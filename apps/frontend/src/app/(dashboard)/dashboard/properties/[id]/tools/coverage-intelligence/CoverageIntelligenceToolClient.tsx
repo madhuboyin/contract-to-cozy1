@@ -1,7 +1,9 @@
 'use client';
 
 import { useEffect } from 'react';
+import Link from 'next/link';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
+import { TrendingUp } from 'lucide-react';
 import HomeToolsRail from '../../components/HomeToolsRail';
 import { track } from '@/lib/analytics/events';
 import CoverageIntelligencePanel from '@/components/ai/CoverageIntelligencePanel';
@@ -9,14 +11,12 @@ import ToolExplainerSection from '@/components/tool-explainer/ToolExplainerSecti
 import { coverageLoopTrust } from '@/lib/trust/trustPresets';
 import ToolWorkspaceTemplate from '../../components/route-templates/ToolWorkspaceTemplate';
 import CoverageOptionsClient from '../coverage-options/CoverageOptionsClient';
-import InsuranceTrendClient from '../insurance-trend/InsuranceTrendClient';
 
-type CoverageTab = 'coverage' | 'options' | 'trend';
+type CoverageTab = 'coverage' | 'options';
 
 const TABS: { key: CoverageTab; label: string }[] = [
   { key: 'coverage', label: 'Coverage' },
   { key: 'options', label: 'Options' },
-  { key: 'trend', label: 'Trend' },
 ];
 
 export default function CoverageIntelligenceToolClient() {
@@ -27,7 +27,7 @@ export default function CoverageIntelligenceToolClient() {
   const guidanceStepKey = searchParams.get('guidanceStepKey');
   const guidanceJourneyId = searchParams.get('guidanceJourneyId');
   const rawTab = searchParams.get('tab') as CoverageTab | null;
-  const activeTab: CoverageTab = rawTab === 'options' || rawTab === 'trend' ? rawTab : 'coverage';
+  const activeTab: CoverageTab = rawTab === 'options' ? 'options' : 'coverage';
   const selectedInventoryItemId =
     searchParams.get('itemId') ?? searchParams.get('inventoryItemId');
   const fromProtect = searchParams.get('from') === 'protect';
@@ -123,13 +123,25 @@ export default function CoverageIntelligenceToolClient() {
 
       {/* Tab content */}
       {activeTab === 'coverage' && (
-        <CoverageIntelligencePanel propertyId={propertyId} />
+        <>
+          <CoverageIntelligencePanel propertyId={propertyId} />
+          <Link
+            href={`/dashboard/properties/${propertyId}/tools/insurance-trend`}
+            className="flex items-center justify-between gap-3 rounded-xl border border-teal-200 bg-teal-50/60 px-4 py-3 text-sm hover:bg-teal-50 transition-colors"
+          >
+            <div className="flex items-center gap-2.5">
+              <TrendingUp className="h-4 w-4 shrink-0 text-teal-700" />
+              <span className="text-teal-900">
+                <span className="font-medium">See how local premiums are trending</span>
+                <span className="ml-1.5 text-teal-700">— compare your estimate against your area in Home Lab</span>
+              </span>
+            </div>
+            <span className="shrink-0 text-teal-700">→</span>
+          </Link>
+        </>
       )}
       {activeTab === 'options' && (
         <CoverageOptionsClient />
-      )}
-      {activeTab === 'trend' && (
-        <InsuranceTrendClient />
       )}
 
     </ToolWorkspaceTemplate>
