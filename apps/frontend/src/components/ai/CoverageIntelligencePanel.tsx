@@ -239,31 +239,6 @@ function getVerdictIcon(verdict?: CoverageAnalysisDTO['overallVerdict']) {
 
 // ─── Desktop sub-components ──────────────────────────────────────────────────
 
-function SnapshotRow({
-  label,
-  value,
-  highlight,
-  muted,
-}: {
-  label: string;
-  value: string;
-  highlight?: boolean;
-  muted?: boolean;
-}) {
-  return (
-    <div className="flex items-center justify-between gap-3 py-2 border-b border-slate-50 last:border-0">
-      <span className="text-xs text-slate-500">{label}</span>
-      <span
-        className={cn(
-          'text-xs font-semibold',
-          highlight ? 'text-slate-900' : muted ? 'text-slate-400' : 'text-slate-700'
-        )}
-      >
-        {value}
-      </span>
-    </div>
-  );
-}
 
 function InsuranceInputTile({ label, value }: { label: string; value: string }) {
   return (
@@ -498,6 +473,24 @@ export default function CoverageIntelligencePanel({
     }
     return counts;
   }, [analysis?.decisionTrace]);
+
+  const analysisBasedOverrides = useMemo<CoverageAnalysisOverrides>(() => {
+    if (!analysis) return EMPTY_OVERRIDES;
+    return {
+      annualPremiumUsd: analysis.insurance.inputsUsed.annualPremiumUsd ?? undefined,
+      deductibleUsd: analysis.insurance.inputsUsed.deductibleUsd ?? undefined,
+      warrantyAnnualCostUsd: analysis.warranty.inputsUsed.warrantyAnnualCostUsd ?? undefined,
+      warrantyServiceFeeUsd: undefined,
+      cashBufferUsd: analysis.insurance.inputsUsed.cashBufferUsd ?? undefined,
+      riskTolerance: 'MEDIUM',
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [analysis?.computedAt]);
+
+  useEffect(() => {
+    setOverrides(analysisBasedOverrides);
+    setHasSimulated(false);
+  }, [analysisBasedOverrides]);
 
   if (loading) {
     return (
@@ -960,201 +953,123 @@ export default function CoverageIntelligencePanel({
           </div>
         </div>
 
-        {/* ─── 2. HERO VERDICT AREA ────────────────────────────────────────── */}
-        {analysis ? (
-          (() => {
-            const verdictIcon = getVerdictIcon(analysis.overallVerdict);
-            const annualDelta = analysis.warranty.expectedNetImpactUsd ?? 0;
-            return (
-              <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_288px]">
-
-                {/* LEFT: Primary Verdict Card */}
-                <section className={cn('rounded-2xl border p-6 md:px-6 md:py-5', verdictHeroClass(analysis.overallVerdict))}>
-                  <p className="text-[11px] font-semibold tracking-normal text-slate-400">
-                    Coverage Insight
-                  </p>
-
-                  <div className="mt-3 flex items-start gap-4">
-                    <span
-                      className={cn(
-                        'mt-0.5 inline-flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl shadow-sm',
-                        verdictIcon.wrap
-                      )}
-                    >
-                      <verdictIcon.Icon className="h-6 w-6" />
-                    </span>
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span
-                          className={cn(
-                            'rounded-full border px-2.5 py-0.5 text-[11px] font-semibold tracking-normal',
-                            verdictBadgeClass(analysis.overallVerdict)
-                          )}
-                        >
-                          {humanizeEnum(analysis.overallVerdict)}
-                        </span>
-                        <StatusChip tone={statusChipTone}>{humanizeEnum(analysis.status)}</StatusChip>
-                      </div>
-                      <h2 className="mt-2.5 text-2xl font-semibold leading-snug tracking-tight text-slate-900">
-                        {verdictHeadline(analysis.overallVerdict)}
-                      </h2>
-                      <p className="mt-1.5 text-sm leading-relaxed text-slate-600">
-                        {analysis.summary || 'Based on your home systems, current coverage, and expected repair exposure.'}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* KPI Tiles */}
-                  <div className="mt-5 grid grid-cols-3 gap-3">
-                    <div className="rounded-xl border border-white/60 bg-white/75 p-4 shadow-sm">
-                      <p className="text-xs font-medium text-slate-500">Expected Repair Cost</p>
-                      <p className="mt-2 text-[1.6rem] font-semibold leading-none tracking-tight text-slate-900">
-                        {money(analysis.warranty.expectedAnnualRepairRiskUsd)}
-                      </p>
-                      <p className="mt-1.5 text-[11px] leading-snug text-slate-400">
-                        based on system age &amp; failure probability
-                      </p>
-                    </div>
-                    <div className="rounded-xl border border-white/60 bg-white/75 p-4 shadow-sm">
-                      <p className="text-xs font-medium text-slate-500">Warranty Cost</p>
-                      <p className="mt-2 text-[1.6rem] font-semibold leading-none tracking-tight text-slate-900">
-                        {money(analysis.warranty.inputsUsed.warrantyAnnualCostUsd)}
-                      </p>
-                      <p className="mt-1.5 text-[11px] leading-snug text-slate-400">annual premium</p>
-                    </div>
-                    <div className="rounded-xl border border-white/60 bg-white/75 p-4 shadow-sm">
-                      <p className="text-xs font-medium text-slate-500">Cost Difference</p>
-                      <p
-                        className={cn(
-                          'mt-2 text-[1.6rem] font-semibold leading-none tracking-tight',
-                          deltaColorClass(annualDelta)
-                        )}
-                      >
-                        {money(annualDelta)}
-                      </p>
-                      <p className="mt-1.5 text-[11px] leading-snug text-slate-400">
-                        {deltaCaptionShort(annualDelta)}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Recommendation Callout */}
-                  <div className="mt-4 flex items-center gap-3 rounded-xl border border-black/[0.07] bg-white/60 px-4 py-3">
-                    <Shield className="h-4 w-4 flex-shrink-0 text-slate-400" />
-                    <span className="text-[11px] font-semibold tracking-normal text-slate-400">
-                      Recommendation
-                    </span>
-                    <span className="mx-0.5 h-3.5 w-px flex-shrink-0 bg-slate-200" />
-                    <span className="text-sm font-medium text-slate-800">
-                      {verdictRecommendation(analysis)}
-                    </span>
-                  </div>
-                </section>
-
-                {/* RIGHT: Snapshot Rail */}
-                <aside className="flex flex-col space-y-3">
-                  {/* Analysis Snapshot card */}
-                  <div className="flex-1 rounded-2xl border border-black/[0.07] bg-white p-5 shadow-sm">
-                    <div className="flex items-center justify-between gap-2">
-                      <div>
-                        <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Property summary</p>
-                        <h3 className="mt-0.5 text-sm font-semibold text-slate-700">Analysis Snapshot</h3>
-                      </div>
-                      <Button
-                        onClick={runNow}
-                        disabled={running}
-                        variant="outline"
-                        size="sm"
-                        className="h-7 gap-1.5 px-2.5 text-xs"
-                      >
-                        {running ? (
-                          <Loader2 className="h-3 w-3 animate-spin" />
-                        ) : (
-                          <RefreshCw className="h-3 w-3" />
-                        )}
-                        {running ? 'Running…' : 'Re-run'}
-                      </Button>
-                    </div>
-                    <div className="mt-4 divide-y divide-slate-50">
-                      <SnapshotRow label="Overall verdict" value={humanizeEnum(analysis.overallVerdict)} highlight />
-                      <SnapshotRow label="Insurance" value={humanizeEnum(analysis.insuranceVerdict)} />
-                      <SnapshotRow label="Warranty" value={humanizeEnum(analysis.warrantyVerdict)} />
-                      <SnapshotRow label="Confidence" value={humanizeEnum(analysis.confidence)} />
-                      <SnapshotRow label="Impact level" value={humanizeEnum(analysis.impactLevel)} />
-                      <SnapshotRow
-                        label="Break-even"
-                        value={
-                          analysis.warranty.breakEvenMonths != null
-                            ? `${analysis.warranty.breakEvenMonths} months`
-                            : '—'
-                        }
-                      />
-                      <SnapshotRow label="Last computed" value={compactDate(analysis.computedAt)} muted />
-                    </div>
-                    {(() => {
-                      const risk = getBiggestRisk(analysis);
-                      if (!risk) return null;
-                      return (
-                        <div className="mt-4 rounded-xl border border-rose-100 bg-rose-50/60 p-3">
-                          <p className="text-[10px] font-semibold tracking-normal text-rose-400">
-                            Biggest risk · {risk.label}
-                          </p>
-                          <p className="mt-1 text-xs font-semibold leading-snug text-slate-800">
-                            {risk.title}
-                          </p>
-                          <p className="mt-1 text-[11px] text-slate-500">
-                            Est. exposure:{' '}
-                            <span className="font-semibold text-slate-700">{risk.exposure}</span>
-                          </p>
-                        </div>
-                      );
-                    })()}
-                    <p className="mt-3 text-[11px] leading-relaxed text-slate-400">
-                      Educational only. Not carrier-specific advice.
-                    </p>
-                  </div>
-
-                  {/* Next Steps card */}
-                  {analysis.nextSteps && analysis.nextSteps.length > 0 && (
-                    <div className="rounded-2xl border border-black/[0.07] bg-white p-4 shadow-sm">
-                      <p className="mb-3 text-[11px] font-semibold tracking-normal text-slate-400">
-                        Next Steps
-                      </p>
-                      <div className="space-y-3">
-                        {analysis.nextSteps.slice(0, 3).map((step, i) => {
-                          const stepAction = step.action;
-                          return (
-                            <div key={i} className="flex items-start gap-2.5">
-                              <span className="mt-1 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-teal-500" />
-                              <div>
-                                <p className="text-xs font-medium text-slate-700">{step.title}</p>
-                                {step.detail && (
-                                  <p className="mt-0.5 text-[11px] leading-relaxed text-slate-500">
-                                    {step.detail}
-                                  </p>
-                                )}
-                                {stepAction ? (
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="mt-2 h-7 rounded-lg px-2.5 text-[11px]"
-                                    onClick={() => router.push(stepAction.href)}
-                                  >
-                                    {stepAction.label}
-                                  </Button>
-                                ) : null}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-                </aside>
+        {/* ─── 2. HERO VERDICT AREA (full-width, no sidebar) ───────────────── */}
+        {analysis ? (() => {
+          const verdictIcon = getVerdictIcon(analysis.overallVerdict);
+          const annualDelta = analysis.warranty.expectedNetImpactUsd ?? 0;
+          const risk = getBiggestRisk(analysis);
+          const metricItems = [
+            { label: 'Overall verdict', value: humanizeEnum(analysis.overallVerdict) },
+            { label: 'Insurance', value: humanizeEnum(analysis.insuranceVerdict) },
+            { label: 'Warranty', value: humanizeEnum(analysis.warrantyVerdict) },
+            { label: 'Confidence', value: humanizeEnum(analysis.confidence) },
+            { label: 'Impact level', value: humanizeEnum(analysis.impactLevel) },
+            {
+              label: 'Break-even',
+              value: analysis.warranty.breakEvenMonths != null
+                ? `${analysis.warranty.breakEvenMonths} mo`
+                : '—',
+            },
+          ];
+          return (
+            <section className={cn('mt-4 rounded-2xl border p-6', verdictHeroClass(analysis.overallVerdict))}>
+              {/* Top row: eyebrow + timestamp + Re-run */}
+              <div className="flex items-center justify-between gap-4">
+                <p className="text-[11px] font-semibold tracking-normal text-slate-400">Coverage Insight</p>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] text-slate-400">{compactDate(analysis.computedAt)}</span>
+                  <Button
+                    onClick={runNow}
+                    disabled={running}
+                    variant="outline"
+                    size="sm"
+                    className="h-7 gap-1.5 bg-white/70 px-2.5 text-xs"
+                  >
+                    {running ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
+                    {running ? 'Running…' : 'Re-run'}
+                  </Button>
+                </div>
               </div>
-            );
-          })()
-        ) : (
+
+              {/* Verdict icon + badges + headline */}
+              <div className="mt-3 flex items-start gap-4">
+                <span className={cn('mt-0.5 inline-flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl shadow-sm', verdictIcon.wrap)}>
+                  <verdictIcon.Icon className="h-6 w-6" />
+                </span>
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className={cn('rounded-full border px-2.5 py-0.5 text-[11px] font-semibold tracking-normal', verdictBadgeClass(analysis.overallVerdict))}>
+                      {humanizeEnum(analysis.overallVerdict)}
+                    </span>
+                    <StatusChip tone={statusChipTone}>{humanizeEnum(analysis.status)}</StatusChip>
+                  </div>
+                  <h2 className="mt-2.5 text-2xl font-semibold leading-snug tracking-tight text-slate-900">
+                    {verdictHeadline(analysis.overallVerdict)}
+                  </h2>
+                  <p className="mt-1.5 text-sm leading-relaxed text-slate-600">
+                    {analysis.summary || 'Based on your home systems, current coverage, and expected repair exposure.'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Compact metric strip */}
+              <dl className="mt-5 grid grid-cols-3 gap-1.5 xl:grid-cols-6">
+                {metricItems.map(({ label, value }) => (
+                  <div key={label} className="rounded-lg border border-white/60 bg-white/70 px-3 py-2 shadow-sm">
+                    <dt className="text-[10px] text-slate-400">{label}</dt>
+                    <dd className="mt-0.5 text-xs font-semibold text-slate-800">{value}</dd>
+                  </div>
+                ))}
+              </dl>
+
+              {/* KPI tiles */}
+              <div className="mt-3 grid grid-cols-3 gap-3">
+                <div className="rounded-xl border border-white/60 bg-white/75 p-4 shadow-sm">
+                  <p className="text-xs font-medium text-slate-500">Expected Repair Cost</p>
+                  <p className="mt-2 text-[1.6rem] font-semibold leading-none tracking-tight text-slate-900">
+                    {money(analysis.warranty.expectedAnnualRepairRiskUsd)}
+                  </p>
+                  <p className="mt-1.5 text-[11px] leading-snug text-slate-400">based on system age &amp; failure probability</p>
+                </div>
+                <div className="rounded-xl border border-white/60 bg-white/75 p-4 shadow-sm">
+                  <p className="text-xs font-medium text-slate-500">Warranty Cost</p>
+                  <p className="mt-2 text-[1.6rem] font-semibold leading-none tracking-tight text-slate-900">
+                    {money(analysis.warranty.inputsUsed.warrantyAnnualCostUsd)}
+                  </p>
+                  <p className="mt-1.5 text-[11px] leading-snug text-slate-400">annual premium</p>
+                </div>
+                <div className="rounded-xl border border-white/60 bg-white/75 p-4 shadow-sm">
+                  <p className="text-xs font-medium text-slate-500">Cost Difference</p>
+                  <p className={cn('mt-2 text-[1.6rem] font-semibold leading-none tracking-tight', deltaColorClass(annualDelta))}>
+                    {money(annualDelta)}
+                  </p>
+                  <p className="mt-1.5 text-[11px] leading-snug text-slate-400">{deltaCaptionShort(annualDelta)}</p>
+                </div>
+              </div>
+
+              {/* Recommendation + Biggest risk */}
+              <div className={cn('mt-3 grid gap-3', risk ? 'xl:grid-cols-2' : 'grid-cols-1')}>
+                <div className="flex items-center gap-3 rounded-xl border border-black/[0.07] bg-white/60 px-4 py-3">
+                  <Shield className="h-4 w-4 flex-shrink-0 text-slate-400" />
+                  <span className="text-[11px] font-semibold tracking-normal text-slate-400">Recommendation</span>
+                  <span className="mx-0.5 h-3.5 w-px flex-shrink-0 bg-slate-200" />
+                  <span className="text-sm font-medium text-slate-800">{verdictRecommendation(analysis)}</span>
+                </div>
+                {risk && (
+                  <div className="rounded-xl border border-rose-100 bg-rose-50/60 px-4 py-3">
+                    <p className="text-[10px] font-semibold tracking-normal text-rose-400">Biggest risk · {risk.label}</p>
+                    <div className="mt-1 flex items-center justify-between gap-2">
+                      <p className="text-xs font-semibold leading-snug text-slate-800">{risk.title}</p>
+                      <p className="flex-shrink-0 text-[11px] text-slate-500">Est. {risk.exposure}</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <p className="mt-3 text-[11px] leading-relaxed text-slate-400">Educational only. Not carrier-specific advice.</p>
+            </section>
+          );
+        })() : (
           /* ─── Empty / no analysis state ─── */
           <div className="mt-4 rounded-2xl border border-black/[0.07] bg-white p-10 text-center shadow-sm">
             <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl border border-teal-100 bg-teal-50">
@@ -1180,6 +1095,46 @@ export default function CoverageIntelligencePanel({
                   </>
                 )}
               </Button>
+            </div>
+          </div>
+        )}
+
+        {/* ─── 3. NEXT STEPS (full-width horizontal cards) ─────────────────── */}
+        {analysis && analysis.nextSteps && analysis.nextSteps.length > 0 && (
+          <div className="mt-4 rounded-2xl border border-black/[0.07] bg-white p-5 shadow-sm">
+            <p className="mb-4 text-[11px] font-semibold uppercase tracking-wider text-slate-400">Next Steps</p>
+            <div className={cn(
+              'grid gap-3',
+              analysis.nextSteps.length === 1 ? 'grid-cols-1'
+                : analysis.nextSteps.length === 2 ? 'xl:grid-cols-2'
+                : 'xl:grid-cols-3'
+            )}>
+              {analysis.nextSteps.slice(0, 3).map((step, i) => {
+                const stepAction = step.action;
+                return (
+                  <div key={i} className="rounded-xl border border-slate-100 bg-slate-50 p-4">
+                    <div className="flex items-start gap-2.5">
+                      <span className="mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-teal-500" />
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-slate-700">{step.title}</p>
+                        {step.detail && (
+                          <p className="mt-0.5 text-[11px] leading-relaxed text-slate-500">{step.detail}</p>
+                        )}
+                        {stepAction && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="mt-3 h-7 rounded-lg px-2.5 text-[11px]"
+                            onClick={() => router.push(stepAction.href)}
+                          >
+                            {stepAction.label}
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
@@ -1319,7 +1274,7 @@ export default function CoverageIntelligencePanel({
                 </label>
                 <div className="flex items-center gap-2">
                   <Button
-                    onClick={() => setOverrides(EMPTY_OVERRIDES)}
+                    onClick={() => { setOverrides(analysisBasedOverrides); setHasSimulated(false); }}
                     variant="ghost"
                     size="sm"
                     className="h-9 text-xs"
