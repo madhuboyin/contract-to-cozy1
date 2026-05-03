@@ -15,10 +15,9 @@ import {
   StatusChip,
 } from '@/components/mobile/dashboard/MobilePrimitives';
 import { GuidanceInlinePanel } from '@/components/guidance/GuidanceInlinePanel';
-import HomeToolsRail from '../../components/HomeToolsRail';
+import PriorityActionHero from '@/components/system/PriorityActionHero';
+import RouteStateCard from '@/components/system/RouteStateCard';
 import { formatEnumLabel } from '@/lib/utils/formatters';
-import CompareTemplate from '../../components/route-templates/CompareTemplate';
-import { coverageLoopTrust } from '@/lib/trust/trustPresets';
 import { buildGuidanceOverviewHref } from '@/lib/navigation/guidanceOverviewHref';
 
 export default function CoverageOptionsClient() {
@@ -27,9 +26,6 @@ export default function CoverageOptionsClient() {
   const searchParams = useSearchParams();
   const guidanceJourneyId = searchParams.get('guidanceJourneyId') ?? undefined;
   const guidanceStepKey = searchParams.get('guidanceStepKey') ?? 'compare_coverage_options';
-  const backHref = guidanceJourneyId
-    ? `/dashboard/properties/${propertyId}/tools/guidance-overview?journeyId=${guidanceJourneyId}`
-    : `/dashboard/properties/${propertyId}`;
 
   const [loading, setLoading] = React.useState(false);
   const [data, setData] = React.useState<any>(null);
@@ -83,6 +79,7 @@ export default function CoverageOptionsClient() {
   const counts = data?.counts ?? {};
   const totalGaps = counts.total ?? 0;
   const topGap = gaps[0] ?? null;
+
   const routeState = loading
     ? {
         kind: 'loading' as const,
@@ -106,25 +103,24 @@ export default function CoverageOptionsClient() {
             title: 'No coverage gaps found',
             description: 'All tracked items currently have coverage. No policy comparisons are needed right now.',
           }
-      : undefined;
-  const trust = coverageLoopTrust({
-    confidenceLabel: 'Medium, based on current item coverage states',
-    freshnessLabel: 'Real-time when coverage records are updated',
-    sourceLabel: 'Inventory coverage gaps + linked warranty/insurance details',
-  });
-  const buildGapGuidanceHref = React.useCallback((gap: any) => buildGuidanceOverviewHref({
-    propertyId,
-    journeyId: guidanceJourneyId ?? null,
-    stepKey: guidanceStepKey,
-    inventoryItemId: gap.inventoryItemId,
-    assetName: gap.itemName ?? null,
-    customIssueLabel: gap.reasons?.[0] || `${gap.itemName || 'Item'} coverage gap`,
-  }), [guidanceJourneyId, guidanceStepKey, propertyId]);
+        : undefined;
+
+  const buildGapGuidanceHref = React.useCallback(
+    (gap: any) =>
+      buildGuidanceOverviewHref({
+        propertyId,
+        journeyId: guidanceJourneyId ?? null,
+        stepKey: guidanceStepKey,
+        inventoryItemId: gap.inventoryItemId,
+        assetName: gap.itemName ?? null,
+        customIssueLabel: gap.reasons?.[0] || `${gap.itemName || 'Item'} coverage gap`,
+      }),
+    [guidanceJourneyId, guidanceStepKey, propertyId]
+  );
 
   React.useEffect(() => {
     if (!propertyId || !guidanceJourneyId || proofCompleted) return;
     if (Number(totalGaps) > 0) return;
-
     let cancelled = false;
     (async () => {
       try {
@@ -145,58 +141,61 @@ export default function CoverageOptionsClient() {
         console.error('[CoverageOptions] failed to auto-complete proof-backed step', error);
       }
     })();
-
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [guidanceJourneyId, guidanceStepKey, proofCompleted, propertyId, totalGaps]);
 
+  // Only surface guidance context when there are gaps to resolve or the user
+  // arrived via an explicit guidance journey link. Avoids contradicting a clean
+  // "no gaps" result with an active-journey card for a different item.
+  const showGuidancePanel = totalGaps > 0 || Boolean(guidanceJourneyId);
+
   return (
-    <CompareTemplate
-      backHref={backHref}
-      backLabel={guidanceJourneyId ? 'Back to guidance' : 'Back to property'}
-      title="Coverage Options"
-      subtitle="Compare warranty and insurance options to close identified coverage gaps."
-      rail={<HomeToolsRail propertyId={propertyId} />}
-      trust={trust}
-      priorityAction={!loading && !err && totalGaps > 0 && topGap ? {
-        title: `You have ${totalGaps} coverage gap${totalGaps !== 1 ? 's' : ''} — highest priority: ${topGap.itemName}`,
-        description: `${formatEnumLabel(topGap.gapType) || 'Gap'} protection is missing on this item. Start here, then work through the remaining ${totalGaps - 1} gap${totalGaps - 1 !== 1 ? 's' : ''}.`,
-        impactLabel: `${formatEnumLabel(topGap.gapType) || 'Gap'} exposure`,
-        confidenceLabel: 'Confidence improves as item-level coverage records stay current',
-        primaryAction: (
-          <Link
-            href={`/dashboard/properties/${propertyId}/inventory/items/${topGap.inventoryItemId}/coverage`}
-            className="inline-flex min-h-[44px] w-full items-center justify-center rounded-xl border border-black bg-black px-3 text-sm font-semibold text-white hover:bg-black/90"
-          >
-            Resolve top gap
-          </Link>
-        ),
-        supportingAction: (
-          <Button variant="outline" asChild className="w-full sm:w-auto">
-            <Link href={buildGapGuidanceHref(topGap)}>
-              Review repair/replace context
+    <div className="space-y-4">
+      {/* Priority action — only when gaps exist */}
+      {!loading && !err && totalGaps > 0 && topGap ? (
+        <PriorityActionHero
+          eyebrow="Compare Decision"
+          title={`You have ${totalGaps} coverage gap${totalGaps !== 1 ? 's' : ''} — highest priority: ${topGap.itemName}`}
+          description={`${formatEnumLabel(topGap.gapType) || 'Gap'} protection is missing on this item. Start here, then work through the remaining ${totalGaps - 1} gap${totalGaps - 1 !== 1 ? 's' : ''}.`}
+          impactLabel={`${formatEnumLabel(topGap.gapType) || 'Gap'} exposure`}
+          confidenceLabel="Confidence improves as item-level coverage records stay current"
+          primaryAction={
+            <Link
+              href={`/dashboard/properties/${propertyId}/inventory/items/${topGap.inventoryItemId}/coverage`}
+              className="inline-flex min-h-[44px] w-full items-center justify-center rounded-xl border border-black bg-black px-3 text-sm font-semibold text-white hover:bg-black/90"
+            >
+              Resolve top gap
             </Link>
-          </Button>
-        ),
-      } : undefined}
-      routeState={routeState}
-      summary={
-        <GuidanceInlinePanel
-          propertyId={propertyId}
-          title="Where This Tool Fits"
-          subtitle="Coverage Options is part of active guidance journeys. Compare options and mark complete when done."
-          toolKey="coverage-options"
-          limit={1}
-          journeyId={guidanceJourneyId}
+          }
+          supportingAction={
+            <Button variant="outline" asChild className="w-full sm:w-auto">
+              <Link href={buildGapGuidanceHref(topGap)}>
+                Review repair/replace context
+              </Link>
+            </Button>
+          }
         />
-      }
-      compareContent={
+      ) : null}
+
+      {/* Coverage gap data — always shown first so data leads the page */}
+      {routeState ? (
+        <RouteStateCard
+          state={routeState.kind}
+          title={routeState.title}
+          description={routeState.description}
+          action={(routeState as any).action}
+          secondaryAction={(routeState as any).secondaryAction}
+        />
+      ) : (
         <>
           <ResultHeroCard
             title="Open Coverage Gaps"
             value={totalGaps}
-            status={<StatusChip tone={totalGaps > 0 ? 'elevated' : 'good'}>{totalGaps > 0 ? 'Review options' : 'Covered'}</StatusChip>}
+            status={
+              <StatusChip tone={totalGaps > 0 ? 'elevated' : 'good'}>
+                {totalGaps > 0 ? 'Review options' : 'Covered'}
+              </StatusChip>
+            }
             summary={`${counts.NO_COVERAGE ?? 0} uncovered · ${(counts.WARRANTY_ONLY ?? 0) + (counts.INSURANCE_ONLY ?? 0)} partially covered`}
           />
 
@@ -213,7 +212,11 @@ export default function CoverageOptionsClient() {
                       title={gap.itemName}
                       subtitle={gap.reasons?.join('. ') || 'Coverage gap detected'}
                       meta={gap.roomName ? `${gap.roomName} · ${gapLabel}` : gapLabel}
-                      status={<StatusChip tone={gap.gapType === 'NO_COVERAGE' ? 'danger' : 'elevated'}>{gapLabel}</StatusChip>}
+                      status={
+                        <StatusChip tone={gap.gapType === 'NO_COVERAGE' ? 'danger' : 'elevated'}>
+                          {gapLabel}
+                        </StatusChip>
+                      }
                     />
                     <ActionPriorityRow
                       primaryAction={
@@ -239,16 +242,30 @@ export default function CoverageOptionsClient() {
             </div>
           </ScenarioInputCard>
         </>
-      }
-      footer={
+      )}
+
+      {/* Guidance panel — below coverage data, only when contextually relevant */}
+      {showGuidancePanel ? (
+        <GuidanceInlinePanel
+          propertyId={propertyId}
+          title="Related Guidance Journey"
+          subtitle="An active plan is tracking this issue — continue from where you left off."
+          toolKey="coverage-options"
+          limit={1}
+          journeyId={guidanceJourneyId}
+        />
+      ) : null}
+
+      {/* Guidance progress — only shown when user arrived via a guidance journey */}
+      {guidanceJourneyId ? (
         <ScenarioInputCard
-          title="Guidance Progress"
-          subtitle="This step auto-completes when proof-backed coverage state is available."
+          title="Mark Step Complete"
+          subtitle="Record that you've compared coverage options for this guidance journey."
         >
           {proofCompleted ? (
             <div className="flex items-center gap-2 text-sm text-green-700">
               <CheckCircle className="h-4 w-4" />
-              Proof-backed completion recorded. Return to your guidance journey to continue.
+              Completion recorded. Return to your guidance journey to continue.
             </div>
           ) : (
             <Button
@@ -260,7 +277,7 @@ export default function CoverageOptionsClient() {
             </Button>
           )}
         </ScenarioInputCard>
-      }
-    />
+      ) : null}
+    </div>
   );
 }

@@ -78,7 +78,11 @@ export function GuidanceActionCard({
             {showSeverityBadge ? <GuidanceStatusBadge kind="severity" value={action.severity ?? null} /> : null}
           </div>
         </div>
-        {action.explanation?.what ? (
+        {action.journey.inventoryItem?.name ? (
+          <p className="mb-0 text-sm font-medium text-foreground">
+            Issue detected with your {action.journey.inventoryItem.name}
+          </p>
+        ) : action.explanation?.what ? (
           <p className="mb-0 text-sm font-medium text-foreground">{action.explanation.what}</p>
         ) : null}
         <p className="mb-0 text-sm text-muted-foreground">{advisorySubtitle}</p>
