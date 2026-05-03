@@ -360,7 +360,7 @@ export default function CoverageOverviewClient() {
                 Analysis indicates a <span className="font-bold text-slate-900">{analysis?.warrantyVerdict ?? '—'}</span> value outcome.
               </p>
               <Button className="h-10 px-6 rounded-xl bg-brand-600 font-semibold text-white hover:bg-brand-700 transition-all active:scale-95 shrink-0" asChild>
-                <Link href={`/dashboard/properties/${propertyId}/tools/coverage-intelligence`}>
+                <Link href={`/dashboard/properties/${propertyId}/tools/coverage-intelligence?from=protect`}>
                   Full Audit Report <ChevronRight className="ml-2 h-4 w-4" />
                 </Link>
               </Button>

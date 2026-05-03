@@ -30,6 +30,7 @@ export default function CoverageIntelligenceToolClient() {
   const activeTab: CoverageTab = rawTab === 'options' || rawTab === 'trend' ? rawTab : 'coverage';
   const selectedInventoryItemId =
     searchParams.get('itemId') ?? searchParams.get('inventoryItemId');
+  const fromProtect = searchParams.get('from') === 'protect';
 
   const isGuidanceContext = Boolean(guidanceJourneyId);
 
@@ -67,7 +68,10 @@ export default function CoverageIntelligenceToolClient() {
     router.replace(`/dashboard/properties/${propertyId}/tools/coverage-intelligence?${next.toString()}`);
   }
 
-  const backHref = `/dashboard/properties/${propertyId}`;
+  const backHref = fromProtect
+    ? `/dashboard/properties/${propertyId}/protect`
+    : `/dashboard/properties/${propertyId}`;
+  const backLabel = fromProtect ? 'Back to Protect' : 'Back to property';
   const trust = coverageLoopTrust({
     confidenceLabel: 'Medium-High, based on linked policy and inventory signals',
     freshnessLabel: 'Updates when coverage documents, warranties, or inventory change',
@@ -97,10 +101,14 @@ export default function CoverageIntelligenceToolClient() {
   return (
     <ToolWorkspaceTemplate
       backHref={backHref}
-      backLabel="Back to property"
-      eyebrow="Home tool"
+      backLabel={backLabel}
+      eyebrow={fromProtect ? 'Full audit report' : 'Home tool'}
       title="Coverage Intelligence"
-      subtitle="Insurance and warranty coverage assessment for this property."
+      subtitle={
+        fromProtect
+          ? 'Full property coverage audit — insurance, warranty economics, and decision trace.'
+          : 'Insurance and warranty coverage assessment for this property.'
+      }
       trust={trust}
       introAction={
         <HomeToolsRail propertyId={propertyId} showDesktop={false} />

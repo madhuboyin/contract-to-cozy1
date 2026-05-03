@@ -305,7 +305,7 @@ function DecisionTraceCard({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h4 className="text-base font-semibold text-gray-900">Decision trace</h4>
-          <p className="mt-1 text-xs text-slate-500">How the recommendation was reached, step by step</p>
+          <p className="mt-1 text-xs text-slate-500">How the property-level recommendation was reached, step by step</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {(['NEUTRAL', 'NEGATIVE', 'POSITIVE'] as const).map((impact) => (
@@ -902,9 +902,9 @@ export default function CoverageIntelligencePanel({
 
           <div className="mx-1 h-8 w-px self-center bg-slate-100" />
 
-          {/* Item selector */}
+          {/* Item selector — for drilling into a specific item's page; does not affect property analysis */}
           <div className="min-w-0 flex-1">
-            <p className="mb-1.5 text-xs font-medium text-slate-600">Coverage item</p>
+            <p className="mb-1.5 text-xs font-medium text-slate-600">Drill into item</p>
             {itemsError ? (
               <p className="text-xs text-rose-600">{itemsError}</p>
             ) : (
@@ -924,22 +924,25 @@ export default function CoverageIntelligencePanel({
             )}
           </div>
 
-          {/* Actions */}
-          <div className="flex flex-shrink-0 items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={openItemCoverage}
-              disabled={!selectedItemId}
-              className="h-9 text-xs"
-            >
-              View Item Coverage
-            </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={openItemCoverage}
+            disabled={!selectedItemId}
+            className="h-9 flex-shrink-0 text-xs"
+          >
+            View Item Coverage
+          </Button>
+
+          <div className="mx-1 h-8 w-px flex-shrink-0 self-center bg-slate-100" />
+
+          {/* Property-level analysis */}
+          <div className="flex flex-shrink-0 flex-col items-end gap-0.5">
             <Button
               onClick={runNow}
               disabled={running}
               size="sm"
-              className="h-9 min-w-[142px] text-xs"
+              className="h-9 min-w-[160px] text-xs"
             >
               {running ? (
                 <>
@@ -949,10 +952,11 @@ export default function CoverageIntelligencePanel({
               ) : (
                 <>
                   <ShieldCheck className="mr-1.5 h-3.5 w-3.5" />
-                  Analyze Coverage
+                  Re-run Property Analysis
                 </>
               )}
             </Button>
+            <p className="text-[10px] text-slate-400">Covers all home systems</p>
           </div>
         </div>
 
@@ -962,7 +966,7 @@ export default function CoverageIntelligencePanel({
             const verdictIcon = getVerdictIcon(analysis.overallVerdict);
             const annualDelta = analysis.warranty.expectedNetImpactUsd ?? 0;
             return (
-              <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_288px] xl:items-start">
+              <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_288px]">
 
                 {/* LEFT: Primary Verdict Card */}
                 <section className={cn('rounded-2xl border p-6 md:px-6 md:py-5', verdictHeroClass(analysis.overallVerdict))}>
@@ -1052,7 +1056,10 @@ export default function CoverageIntelligencePanel({
                   {/* Analysis Snapshot card */}
                   <div className="flex-1 rounded-2xl border border-black/[0.07] bg-white p-5 shadow-sm">
                     <div className="flex items-center justify-between gap-2">
-                      <h3 className="text-sm font-semibold text-slate-700">Analysis Snapshot</h3>
+                      <div>
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Property summary</p>
+                        <h3 className="mt-0.5 text-sm font-semibold text-slate-700">Analysis Snapshot</h3>
+                      </div>
                       <Button
                         onClick={runNow}
                         disabled={running}
@@ -1155,9 +1162,9 @@ export default function CoverageIntelligencePanel({
             </div>
             <h3 className="mt-4 text-lg font-semibold text-slate-800">No analysis yet</h3>
             <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-slate-500">
-              Select a property and item above, then click{' '}
-              <span className="font-medium text-slate-700">Analyze Coverage</span> to generate your
-              coverage intelligence report.
+              Click{' '}
+              <span className="font-medium text-slate-700">Re-run Property Analysis</span> to generate a
+              full coverage report across all your home systems.
             </p>
             <div className="mt-5">
               <Button onClick={runNow} disabled={running}>
@@ -1187,7 +1194,7 @@ export default function CoverageIntelligencePanel({
                 <div>
                   <h3 className="text-base font-semibold text-slate-900">Scenario Simulator</h3>
                   <p className="mt-0.5 text-sm text-slate-500">
-                    Adjust assumptions to explore how the verdict would change.
+                    Adjust property-wide assumptions to explore how the verdict would change.
                   </p>
                 </div>
                 <Sparkles className="mt-0.5 h-4 w-4 flex-shrink-0 text-purple-400" />
