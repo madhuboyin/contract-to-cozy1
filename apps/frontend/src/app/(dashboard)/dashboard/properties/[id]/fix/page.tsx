@@ -366,6 +366,15 @@ export default function ResolutionHubPage() {
         customIssueLabel: 'Something is broken',
       })
     : '/dashboard/replace-repair';
+
+  const emergencyGuidanceHref = propertyId
+    ? buildIssueGuidanceOverviewHref({
+        propertyId,
+        scopeCategory: 'PROPERTY',
+        customIssueLabel: 'Emergency Issue',
+      })
+    : '/dashboard/emergency';
+
   const specialistGuidanceHref = '/dashboard/providers';
   const focusSection = searchParams.get('focus');
   const expectedCount = searchParams.get('expectedCount');
@@ -651,7 +660,7 @@ export default function ResolutionHubPage() {
           </Link>
 
           <Link
-            href={propertyId ? `/dashboard/emergency?propertyId=${propertyId}` : '/dashboard/emergency'}
+            href={emergencyGuidanceHref}
             className="group flex items-center gap-3 rounded-xl border border-red-100/60 bg-white px-3.5 py-3 transition-colors hover:border-red-200 hover:bg-red-50/15"
           >
             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-red-100/70">
