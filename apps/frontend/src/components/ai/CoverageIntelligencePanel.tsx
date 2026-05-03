@@ -889,11 +889,12 @@ export default function CoverageIntelligencePanel({
         {/* ─── 1. CONTROLS ROW ─────────────────────────────────────────────── */}
         <div className="flex items-end gap-3 rounded-2xl border border-black/[0.07] bg-white px-5 py-4 shadow-sm">
           {/* Property selector injected from page */}
-          <div className="w-56 flex-shrink-0">
-            {propertySelector}
-          </div>
-
-          <div className="mx-1 h-8 w-px self-center bg-slate-100" />
+          {propertySelector && (
+            <>
+              <div className="w-56 flex-shrink-0">{propertySelector}</div>
+              <div className="mx-1 h-8 w-px self-center bg-slate-100" />
+            </>
+          )}
 
           {/* Item selector — for drilling into a specific item's page; does not affect property analysis */}
           <div className="min-w-0 flex-1">
