@@ -451,7 +451,7 @@ function resolveActionHref(action: ResolutionActionDTO, propertyId: string): str
     return `/dashboard/insurance?propertyId=${encodeURIComponent(propertyId)}`;
   }
   if ((action.type === 'COVERAGE_GAP' || action.type === 'COVERAGE_PARTIAL') && action.itemId) {
-    return `/dashboard/properties/${propertyId}/inventory?tab=coverage&highlight=${action.itemId}`;
+    return `/dashboard/properties/${propertyId}/inventory/items/${action.itemId}/coverage?returnTo=${encodeURIComponent(`/dashboard/properties/${propertyId}/fix`)}`;
   }
   return `/dashboard/properties/${propertyId}`;
 }
