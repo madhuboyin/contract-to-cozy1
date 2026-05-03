@@ -219,6 +219,7 @@ export default function InventoryClient() {
     const gapCount = items.filter((item) => getCoverageStatus(item) !== 'covered' && getCoverageStatus(item) !== 'waived').length;
     const missingValueCount = items.filter((item) => !hasReplacementValue(item)).length;
     const docCount = items.filter((item) => (item.documents?.length ?? 0) > 0).length;
+    const notRequiredCount = items.filter((item) => item.coverageNotRequired).length;
 
     return {
       totalValue,
@@ -227,6 +228,7 @@ export default function InventoryClient() {
       gapCount,
       missingValueCount,
       docCount,
+      notRequiredCount,
       totalItems: items.length,
     };
   }, [items]);
@@ -254,6 +256,7 @@ export default function InventoryClient() {
       if (activeSmartFilter === 'gaps' && (getCoverageStatus(item) === 'covered' || getCoverageStatus(item) === 'waived')) return false;
       if (activeSmartFilter === 'no-value' && hasReplacementValue(item)) return false;
       if (activeSmartFilter === 'recalls' && !hasRecall) return false;
+      if (activeSmartFilter === 'not-required' && !item.coverageNotRequired) return false;
 
       return true;
     });
@@ -423,6 +426,7 @@ export default function InventoryClient() {
               gapCount={portfolioStats.gapCount}
               missingValueCount={portfolioStats.missingValueCount}
               recallCount={recallCount}
+              notRequiredCount={portfolioStats.notRequiredCount}
               activeFilterCount={activeFilterCount}
               onClearAllFilters={clearAllFilters}
             />
@@ -432,7 +436,7 @@ export default function InventoryClient() {
             <MobileSection>
               <div className="flex items-center gap-2">
                 <span className="rounded-full border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 py-1 text-xs font-medium text-[hsl(var(--mobile-text-secondary))]">
-                  Active filter: {activeSmartFilter === 'no-value' ? 'missing values' : activeSmartFilter}
+                  Active filter: {activeSmartFilter === 'no-value' ? 'missing values' : activeSmartFilter === 'not-required' ? 'not required' : activeSmartFilter}
                 </span>
                 <button
                   type="button"
@@ -585,6 +589,7 @@ export default function InventoryClient() {
             gapCount={portfolioStats.gapCount}
             missingValueCount={portfolioStats.missingValueCount}
             recallCount={recallCount}
+            notRequiredCount={portfolioStats.notRequiredCount}
             activeFilterCount={activeFilterCount}
             onClearAllFilters={clearAllFilters}
           />
@@ -592,7 +597,7 @@ export default function InventoryClient() {
           {activeSmartFilter ? (
             <div className="mb-2 flex items-center gap-2">
               <span className="rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-xs text-gray-600">
-                Active filter: {activeSmartFilter === 'no-value' ? 'missing values' : activeSmartFilter}
+                Active filter: {activeSmartFilter === 'no-value' ? 'missing values' : activeSmartFilter === 'not-required' ? 'not required' : activeSmartFilter}
               </span>
               <button
                 type="button"

@@ -13,6 +13,7 @@ export type PortfolioStats = {
   gapCount: number;
   missingValueCount: number;
   docCount: number;
+  notRequiredCount: number;
   totalItems: number;
 };
 

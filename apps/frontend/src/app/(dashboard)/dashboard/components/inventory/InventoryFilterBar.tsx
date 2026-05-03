@@ -5,7 +5,7 @@ import { Search, X } from 'lucide-react';
 import type { InventoryItemCategory, InventoryRoom } from '@/types';
 import { INVENTORY_CATEGORY_FILTER_OPTIONS } from '@/lib/config/inventoryConfig';
 
-type SmartFilterId = 'gaps' | 'no-value' | 'recalls';
+type SmartFilterId = 'gaps' | 'no-value' | 'recalls' | 'not-required';
 
 type InventoryFilterBarProps = {
   searchQuery: string;
@@ -24,6 +24,7 @@ type InventoryFilterBarProps = {
   gapCount: number;
   missingValueCount: number;
   recallCount: number;
+  notRequiredCount: number;
   activeFilterCount: number;
   onClearAllFilters: () => void;
 };
@@ -67,6 +68,7 @@ export default function InventoryFilterBar({
   gapCount,
   missingValueCount,
   recallCount,
+  notRequiredCount,
   activeFilterCount,
   onClearAllFilters,
 }: InventoryFilterBarProps) {
@@ -93,6 +95,14 @@ export default function InventoryFilterBar({
           label: `${recallCount} safety recall${recallCount !== 1 ? 's' : ''}`,
           color: 'bg-orange-100 border-orange-200 text-orange-700',
           activeColor: 'bg-orange-200 border-orange-300 text-orange-800',
+        }
+      : null,
+    notRequiredCount > 0
+      ? {
+          id: 'not-required' as const,
+          label: `${notRequiredCount} not required`,
+          color: 'bg-slate-100 border-slate-200 text-slate-600',
+          activeColor: 'bg-slate-200 border-slate-300 text-slate-700',
         }
       : null,
   ].filter(Boolean) as Array<{

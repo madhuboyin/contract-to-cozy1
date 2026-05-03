@@ -353,6 +353,7 @@ export function InventoryFiltersPanel({
   gapCount,
   missingValueCount,
   recallCount,
+  notRequiredCount,
   activeFilterCount,
   onClearAllFilters,
 }: {
@@ -372,6 +373,7 @@ export function InventoryFiltersPanel({
   gapCount: number;
   missingValueCount: number;
   recallCount: number;
+  notRequiredCount: number;
   activeFilterCount: number;
   onClearAllFilters: () => void;
 }) {
@@ -384,6 +386,9 @@ export function InventoryFiltersPanel({
       : null,
     recallCount > 0
       ? { id: 'recalls' as const, label: `${recallCount} safety recall${recallCount === 1 ? '' : 's'}` }
+      : null,
+    notRequiredCount > 0
+      ? { id: 'not-required' as const, label: `${notRequiredCount} not required` }
       : null,
   ].filter(Boolean) as Array<{ id: SmartFilterId; label: string }>;
 
@@ -462,12 +467,16 @@ export function InventoryFiltersPanel({
                     ? 'border-rose-300 bg-rose-100 text-rose-700'
                     : filter.id === 'no-value'
                       ? 'border-amber-300 bg-amber-100 text-amber-700'
-                      : 'border-orange-300 bg-orange-100 text-orange-700'
+                      : filter.id === 'not-required'
+                        ? 'border-slate-300 bg-slate-200 text-slate-700'
+                        : 'border-orange-300 bg-orange-100 text-orange-700'
                   : filter.id === 'gaps'
                     ? 'border-rose-200 bg-rose-50 text-rose-700'
                     : filter.id === 'no-value'
                       ? 'border-amber-200 bg-amber-50 text-amber-700'
-                      : 'border-orange-200 bg-orange-50 text-orange-700',
+                      : filter.id === 'not-required'
+                        ? 'border-slate-200 bg-slate-100 text-slate-600'
+                        : 'border-orange-200 bg-orange-50 text-orange-700',
               ].join(' ')}
             >
               {filter.label}
