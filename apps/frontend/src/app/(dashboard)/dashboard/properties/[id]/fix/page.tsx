@@ -370,7 +370,6 @@ export default function ResolutionHubPage() {
   const emergencyGuidanceHref = propertyId
     ? buildIssueGuidanceOverviewHref({
         propertyId,
-        scopeCategory: 'PROPERTY',
         customIssueLabel: 'Emergency Issue',
       })
     : '/dashboard/emergency';
