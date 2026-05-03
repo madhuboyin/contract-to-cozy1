@@ -11,7 +11,7 @@ import {
   getItemCoverageAnalysis,
   runItemCoverageAnalysis,
 } from '@/lib/api/coverageAnalysisApi';
-import { getInventoryItem } from '@/app/(dashboard)/dashboard/inventory/inventoryApi';
+import { getInventoryItem, waiveCoverage } from '@/app/(dashboard)/dashboard/inventory/inventoryApi';
 import { Button } from '@/components/ui/button';
 import { InventoryItem } from '@/types';
 import {
@@ -192,6 +192,7 @@ export default function ItemGetCoverageClient() {
   const [hasAnalysis, setHasAnalysis] = useState(false);
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
+  const [waiving, setWaiving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [overrides, setOverrides] = useState<ItemCoverageAnalysisOverrides>(EMPTY_OVERRIDES);
   const [itemName, setItemName] = useState<string>('Inventory Item');
@@ -288,6 +289,21 @@ export default function ItemGetCoverageClient() {
     }
   };
 
+  const handleSkipCoverage = async () => {
+    if (!propertyId || !itemId) return;
+    setWaiving(true);
+    setError(null);
+    try {
+      await waiveCoverage(propertyId, itemId, true);
+      await queryClient.invalidateQueries({ queryKey: ['inventory', propertyId] });
+      router.push(backHref);
+    } catch (err: any) {
+      setError(err?.message || 'Failed to update coverage status.');
+    } finally {
+      setWaiving(false);
+    }
+  };
+
   const statusTone = useMemo<'good' | 'elevated' | 'danger' | 'info'>(() => {
     if (!analysis) return 'info';
     if (analysis.status === 'STALE') return 'elevated';
@@ -323,14 +339,45 @@ export default function ItemGetCoverageClient() {
           status={<StatusChip tone={analysis ? statusTone : 'info'}>{analysis ? analysis.status : 'Pending'}</StatusChip>}
           summary={analysis?.summary || `${roomName || 'Unassigned room'} • Run scenario inputs to compute recommendation.`}
           actions={
-            analysis?.warranty.recommendation === 'BUY_NOW' ? (
-              <ActionPriorityRow
-                primaryAction={
-                  <Button asChild>
-                    <Link href={addWarrantyHref}>Add warranty coverage</Link>
-                  </Button>
-                }
-              />
+            analysis ? (
+              analysis.overallVerdict === 'NOT_WORTH_IT' ? (
+                <ActionPriorityRow
+                  primaryAction={
+                    <Button
+                      variant="outline"
+                      onClick={handleSkipCoverage}
+                      disabled={waiving}
+                    >
+                      {waiving ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Saving…</> : 'Skip coverage for now'}
+                    </Button>
+                  }
+                />
+              ) : analysis.overallVerdict === 'SITUATIONAL' ? (
+                <ActionPriorityRow
+                  primaryAction={
+                    <Button asChild>
+                      <Link href={addWarrantyHref}>Add warranty coverage</Link>
+                    </Button>
+                  }
+                  secondaryActions={
+                    <Button
+                      variant="ghost"
+                      onClick={handleSkipCoverage}
+                      disabled={waiving}
+                    >
+                      {waiving ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Saving…</> : 'Skip for now'}
+                    </Button>
+                  }
+                />
+              ) : analysis.warranty.recommendation === 'BUY_NOW' ? (
+                <ActionPriorityRow
+                  primaryAction={
+                    <Button asChild>
+                      <Link href={addWarrantyHref}>Add warranty coverage</Link>
+                    </Button>
+                  }
+                />
+              ) : null
             ) : undefined
           }
         />

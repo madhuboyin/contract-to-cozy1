@@ -229,7 +229,7 @@ export default function CoverageTab({ items, rooms, onOpenCoverage, onOpenAction
                       onClick={() => onOpenCoverage(item)}
                       className="rounded-lg bg-teal-600 px-3 py-1 text-xs text-white transition-colors hover:bg-teal-700"
                     >
-                      Get coverage
+                      Review coverage
                     </button>
                   </div>
                 </div>
