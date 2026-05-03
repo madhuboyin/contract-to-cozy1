@@ -1053,11 +1053,26 @@ export default function WarrantiesPage() {
   const closeAddEditModal = () => {
     const wasOpenedFromSetup = openedFromSetup;
     const from = searchParams.get('from');
+    const action = searchParams.get('action');
     setIsAddEditModalOpen(false);
     setEditingWarranty(undefined);
     setCreateModalPrefill(undefined);
     setOpenedFromSetup(false);
-    
+
+    // When the modal was auto-opened via action=new, strip it from the URL so the
+    // useEffect that watches searchParams doesn't immediately re-open the modal.
+    if (action === 'new') {
+      if (safeReturnTo) {
+        router.push(safeReturnTo);
+        return;
+      }
+      const next = new URLSearchParams(searchParams.toString());
+      next.delete('action');
+      next.delete('from');
+      router.replace(`/dashboard/warranties${next.size ? `?${next.toString()}` : ''}`);
+      return;
+    }
+
     if (wasOpenedFromSetup) {
       if (from === 'risk-assessment') {
           const propertyId = properties.length > 0 ? properties[0].id : null;
