@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { useParams, useSearchParams } from 'next/navigation';
+import { useParams, usePathname, useSearchParams } from 'next/navigation';
 import { CheckCircle } from 'lucide-react';
 import { api } from '@/lib/api/client';
 import { recordGuidanceToolStatus } from '@/lib/api/guidanceApi';
@@ -23,8 +23,13 @@ import { buildGuidanceOverviewHref } from '@/lib/navigation/guidanceOverviewHref
 export default function CoverageOptionsClient() {
   const params = useParams<{ id: string }>();
   const propertyId = params.id;
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   const guidanceJourneyId = searchParams.get('guidanceJourneyId') ?? undefined;
+  const currentPathWithQuery = React.useMemo(() => {
+    const qs = searchParams.toString();
+    return qs ? `${pathname}?${qs}` : pathname;
+  }, [pathname, searchParams]);
   const guidanceStepKey = searchParams.get('guidanceStepKey') ?? 'compare_coverage_options';
 
   const [loading, setLoading] = React.useState(false);
@@ -180,7 +185,7 @@ export default function CoverageOptionsClient() {
           confidenceLabel="Confidence improves as item-level coverage records stay current"
           primaryAction={
             <Link
-              href={`/dashboard/properties/${propertyId}/inventory/items/${topGap.inventoryItemId}/coverage`}
+              href={`/dashboard/properties/${propertyId}/inventory/items/${topGap.inventoryItemId}/coverage?returnTo=${encodeURIComponent(currentPathWithQuery)}`}
               className="inline-flex min-h-[44px] w-full items-center justify-center rounded-xl border border-black bg-black px-3 text-sm font-semibold text-white hover:bg-black/90"
             >
               Resolve top gap
@@ -244,7 +249,7 @@ export default function CoverageOptionsClient() {
                     <ActionPriorityRow
                       primaryAction={
                         <Link
-                          href={`/dashboard/properties/${propertyId}/inventory/items/${gap.inventoryItemId}/coverage`}
+                          href={`/dashboard/properties/${propertyId}/inventory/items/${gap.inventoryItemId}/coverage?returnTo=${encodeURIComponent(currentPathWithQuery)}`}
                           className="inline-flex min-h-[40px] w-full items-center justify-center rounded-xl border border-black bg-black px-3 text-sm text-white hover:bg-black/90"
                         >
                           Get coverage

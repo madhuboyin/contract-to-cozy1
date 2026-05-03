@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { FileText, Plus, Loader2, Shield, Trash2, Edit, X, Upload, CalendarDays, ChevronDown, MoreHorizontal, Sparkles, ShieldCheck, Save } from 'lucide-react';
+import { FileText, Plus, Loader2, Shield, Trash2, Edit, X, Upload, CalendarDays, ChevronDown, MoreHorizontal, Sparkles, ShieldCheck, Save, ArrowLeft } from 'lucide-react';
 import { differenceInCalendarDays, format, isPast, isValid, parseISO } from 'date-fns';
 import { api } from '@/lib/api/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -28,6 +28,7 @@ import {
   COVERAGE_MODAL_TWO_COL_GRID_CLASS,
 } from '@/components/shared/coverage-modal-chrome';
 // NEW IMPORTS for Table structure
+import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Table,
@@ -597,6 +598,7 @@ export default function InsurancePage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { selectedPropertyId: dashboardSelectedPropertyId } = usePropertyContext();
+  const returnToHref = sanitizeReturnTo(searchParams.get('returnTo'));
   const createPrefill = useMemo(() => {
     const returnTo = sanitizeReturnTo(searchParams.get('returnTo'));
     const propertyId =
@@ -827,6 +829,17 @@ export default function InsurancePage() {
   return (
     <div className="space-y-5 pb-6 lg:pb-8">
       <OnboardingReturnBanner />
+      {returnToHref && (
+        <MobileCard variant="compact" className="border-slate-200 bg-slate-50 shadow-sm">
+          <Link
+            href={returnToHref}
+            className="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-700 underline underline-offset-2 hover:text-slate-900"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" />
+            Back to previous step
+          </Link>
+        </MobileCard>
+      )}
       <MobilePageIntro
         title="My Insurance"
         subtitle="Track policy coverage, renewal timing, and documents in one place."

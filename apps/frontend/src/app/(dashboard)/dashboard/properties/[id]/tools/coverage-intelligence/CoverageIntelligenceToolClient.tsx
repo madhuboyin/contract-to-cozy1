@@ -126,7 +126,7 @@ export default function CoverageIntelligenceToolClient() {
         <>
           <CoverageIntelligencePanel propertyId={propertyId} />
           <Link
-            href={`/dashboard/properties/${propertyId}/tools/insurance-trend`}
+            href={`/dashboard/properties/${propertyId}/tools/insurance-trend?from=coverage-intelligence`}
             className="flex items-center justify-between gap-3 rounded-xl border border-teal-200 bg-teal-50/60 px-4 py-3 text-sm hover:bg-teal-50 transition-colors"
           >
             <div className="flex items-center gap-2.5">

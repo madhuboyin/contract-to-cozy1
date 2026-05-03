@@ -1157,7 +1157,7 @@ export class CoverageIntelligenceService {
         priority: 'HIGH',
         action: {
           label: 'Update insurance profile',
-          href: `/dashboard/insurance?propertyId=${propertyId}`,
+          href: `/dashboard/insurance?propertyId=${propertyId}&returnTo=${encodeURIComponent(`/dashboard/properties/${propertyId}/tools/coverage-intelligence`)}`,
           targetTool: 'insurance',
         },
       });
@@ -1169,8 +1169,8 @@ export class CoverageIntelligenceService {
         priority: coverageGaps.length >= 3 ? 'HIGH' : 'MEDIUM',
         action: {
           label: 'Review coverage options',
-          href: `/dashboard/properties/${propertyId}/tools/coverage-options`,
-          targetTool: 'coverage-options',
+          href: `/dashboard/properties/${propertyId}/tools/coverage-intelligence?tab=options`,
+          targetTool: 'coverage-intelligence',
         },
       });
     }
@@ -1198,8 +1198,8 @@ export class CoverageIntelligenceService {
         priority: 'LOW',
         action: {
           label: 'Compare warranty paths',
-          href: `/dashboard/properties/${propertyId}/tools/coverage-options?focus=warranty`,
-          targetTool: 'coverage-options',
+          href: `/dashboard/properties/${propertyId}/tools/coverage-intelligence?tab=options&focus=warranty`,
+          targetTool: 'coverage-intelligence',
         },
       });
     }
@@ -1210,7 +1210,7 @@ export class CoverageIntelligenceService {
         priority: 'MEDIUM',
         action: {
           label: 'Find insurance services',
-          href: `/dashboard/providers?propertyId=${propertyId}&category=insurance`,
+          href: `/dashboard/providers?propertyId=${propertyId}&category=insurance&returnTo=${encodeURIComponent(`/dashboard/properties/${propertyId}/tools/coverage-intelligence`)}`,
           targetTool: 'providers',
         },
       });

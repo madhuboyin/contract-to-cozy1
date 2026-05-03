@@ -98,8 +98,16 @@ export default function InsuranceTrendClient() {
 
   return (
     <ToolWorkspaceTemplate
-      backHref={`/dashboard/properties/${propertyId}`}
-      backLabel="Back to property"
+      backHref={
+        searchParams.get('from') === 'coverage-intelligence'
+          ? `/dashboard/properties/${propertyId}/tools/coverage-intelligence`
+          : `/dashboard/properties/${propertyId}`
+      }
+      backLabel={
+        searchParams.get('from') === 'coverage-intelligence'
+          ? 'Back to Coverage Intelligence'
+          : 'Back to property'
+      }
       eyebrow="Estimate"
       title="Insurance Cost Trend"
       subtitle="Based on local trends — not your actual policy data."
