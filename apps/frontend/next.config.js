@@ -41,7 +41,8 @@ const nextConfig = {
       // Vault consolidation
       { source: '/dashboard/inventory', destination: '/dashboard/vault?tab=assets', permanent: false },
       { source: '/dashboard/documents', destination: '/dashboard/vault?tab=documents', permanent: false },
-      { source: '/dashboard/warranties', destination: '/dashboard/vault?tab=coverage', permanent: false },
+      // Redirect /dashboard/warranties to vault except when action=new — the creation form must load directly
+      { source: '/dashboard/warranties', missing: [{ type: 'query', key: 'action' }], destination: '/dashboard/vault?tab=coverage', permanent: false },
       // Resolution Center
       { source: '/dashboard/actions', destination: '/dashboard/resolution-center', permanent: false },
       { source: '/dashboard/maintenance', destination: '/dashboard/resolution-center?filter=preventive', permanent: false },

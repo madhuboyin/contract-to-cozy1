@@ -261,6 +261,7 @@ function getCaseCta(caseItem: ResolutionCase): string {
     case 'incident':
       return 'View Incident';
     case 'coverage_gap':
+      return caseItem.status === 'options_ready' ? 'View Analysis' : 'Review Coverage';
     case 'renewal':
       return 'Review Coverage';
     case 'repair_replace':

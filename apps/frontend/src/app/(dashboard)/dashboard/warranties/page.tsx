@@ -982,9 +982,12 @@ export default function WarrantiesPage() {
         const from = searchParams.get('from');
         const propertyId = searchParams.get('propertyId');
         
+        // If created from coverage analysis, return to the coverage page
+        if (!editingWarranty && from === 'coverage-buy' && safeReturnTo) {
+            router.push(safeReturnTo);
+        }
         // If created from risk assessment page, navigate back with refresh flag
-        if (!editingWarranty && from === 'risk-assessment' && propertyId) {
-            console.log('📍 Navigating back to risk assessment with refresh...');
+        else if (!editingWarranty && from === 'risk-assessment' && propertyId) {
             router.push(`/dashboard/properties/${propertyId}/risk-assessment?refreshed=true`);
         }
         // If opened from maintenance-setup, navigate back there
