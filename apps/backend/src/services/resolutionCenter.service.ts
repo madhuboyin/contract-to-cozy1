@@ -493,17 +493,28 @@ function mapReplaceRepairAnalysesToInsights(
 ): DecisionInsightDTO[] {
   return analyses.map((analysis) => {
     const journey = journeysByItemId?.get(analysis.inventoryItemId);
-    const query = new URLSearchParams();
-    if (journey?.id) query.set('journeyId', journey.id);
-    if (journey?.currentStepKey) {
-      query.set('stepKey', journey.currentStepKey);
+
+    // When an active guidance journey exists, link to guidance-overview in pinned
+    // mode so the user resumes their full journey context. When there is no active
+    // journey (analysis was run directly, or journey is already completed), link
+    // straight to the replace-repair result page — guidance-overview would only
+    // show an intake form or "Journey complete" screen, which is wrong for
+    // "Review Decision".
+    let href: string;
+    if (journey?.id) {
+      const query = new URLSearchParams();
+      query.set('journeyId', journey.id);
+      if (journey.currentStepKey) query.set('stepKey', journey.currentStepKey);
+      query.set('scopeCategory', 'ITEM');
+      query.set('itemId', analysis.inventoryItemId);
+      query.set('inventoryItemId', analysis.inventoryItemId);
+      if (analysis.inventoryItem?.name) query.set('assetName', analysis.inventoryItem.name);
+      if (journey.issueType) query.set('issueType', journey.issueType);
+      if (analysis.summary) query.set('customIssueLabel', analysis.summary);
+      href = `/dashboard/properties/${propertyId}/tools/guidance-overview?${query.toString()}`;
+    } else {
+      href = `/dashboard/properties/${propertyId}/inventory/items/${analysis.inventoryItemId}/replace-repair`;
     }
-    query.set('scopeCategory', 'ITEM');
-    query.set('itemId', analysis.inventoryItemId);
-    query.set('inventoryItemId', analysis.inventoryItemId);
-    if (analysis.inventoryItem?.name) query.set('assetName', analysis.inventoryItem.name);
-    if (journey?.issueType) query.set('issueType', journey.issueType);
-    if (analysis.summary) query.set('customIssueLabel', analysis.summary);
 
     return {
       id: analysis.id,
@@ -512,7 +523,7 @@ function mapReplaceRepairAnalysesToInsights(
       title: 'Repair vs Replace',
       subject: analysis.inventoryItem?.name || 'Inventory Item',
       summary: analysis.summary || 'Our AI has a recommendation for this item.',
-      href: `/dashboard/properties/${propertyId}/tools/guidance-overview?${query.toString()}`,
+      href,
       itemId: analysis.inventoryItemId,
       trust: {
         confidenceLabel: `${analysis.confidence} Confidence`,
