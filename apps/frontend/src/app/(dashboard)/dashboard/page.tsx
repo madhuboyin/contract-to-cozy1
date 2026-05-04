@@ -21,7 +21,7 @@ import {
   AlertCircle,
   Box
 } from 'lucide-react';
-import { Booking, HomeBuyerTask, HomeBuyerChecklist, Warranty, InsurancePolicy, LocalUpdate } from '@/types';
+import { Booking, HomeBuyerTask, HomeBuyerChecklist, Warranty, InsurancePolicy, LocalUpdate, InventoryItem } from '@/types';
 import { ScoredProperty } from './types'; 
 import { differenceInDays, formatDistanceToNowStrict, isPast, parseISO } from 'date-fns'; 
 
@@ -263,6 +263,22 @@ function buildMaintenanceActionMeta(overdueCount: number) {
   );
 }
 
+function buildCoverageGapActionMeta(gapCount: number, exposedValue: number) {
+  const exposedText = exposedValue > 0 ? formatUsd(exposedValue) : `${gapCount} item${gapCount === 1 ? '' : 's'}`;
+  return buildTopCardActionMeta(
+    'Home Vault · Coverage gaps',
+    `Open the inventory to review ${gapCount} item${gapCount === 1 ? '' : 's'} with missing coverage.`,
+    `${exposedText} in unprotected replacement value.`,
+    'Unprotected exposure',
+    `${gapCount} item${gapCount === 1 ? '' : 's'} need coverage`,
+    Math.min(100, Math.max(20, gapCount * 30)),
+  );
+}
+
+function buildCoverageGapBadgeLabel() {
+  return 'Coverage gap detected';
+}
+
 function buildDefaultActionMeta(healthScore: number) {
   return buildTopCardActionMeta(
     'Health Score overview',
@@ -327,6 +343,7 @@ interface DashboardData {
     checklist: HomeBuyerChecklist | null;
     urgentActions: UrgentActionItem[];
     inventoryCount: number;
+    coverageGapExposure: number;
     activeIncidents: IncidentDTO[];
     isLoading: boolean;
     error: string | null;
@@ -347,7 +364,8 @@ const consolidateUrgentActions = (
     checklistItems: ChecklistEntry[],
     warranties: Warranty[],
     insurancePolicies: InsurancePolicy[],
-    incidents: IncidentDTO[]
+    incidents: IncidentDTO[],
+    inventoryItems?: InventoryItem[]
 ): UrgentActionItem[] => {
     const actions: UrgentActionItem[] = [];
     const today = new Date();
@@ -458,10 +476,38 @@ const consolidateUrgentActions = (
         }
     });
 
-    // Sort: Incidents (Highest Priority) > Health > Urgent maintenance > Urgency (daysUntilDue)
+    // 5. Process Inventory Coverage Gaps
+    if (inventoryItems) {
+        inventoryItems.forEach(item => {
+            if (item.coverageNotRequired) return;
+
+            const hasWarranty = Boolean(item.warrantyId);
+            const hasInsurance = Boolean(item.insurancePolicyId);
+            const replacementValue = item.replacementCostCents ? item.replacementCostCents / 100 : 0;
+            const replacementValueText = replacementValue > 0
+                ? `Replacement value: $${replacementValue.toFixed(0)}.`
+                : 'Replacement value has not been added yet.';
+
+            if (!hasWarranty && !hasInsurance) {
+                actions.push({
+                    id: `COVERAGE-GAP-${item.id}`,
+                    type: 'COVERAGE_GAP',
+                    title: `${item.name} needs coverage`,
+                    description: `No warranty or insurance coverage. ${replacementValueText}`,
+                    propertyId: item.propertyId || 'N/A',
+                    severity: 'WARNING',
+                    itemId: item.id,
+                });
+            }
+        });
+    }
+
+    // Sort: Incidents > Coverage Gaps > Health > Urgent maintenance > Urgency (daysUntilDue)
     return actions.sort((a, b) => {
         if (a.type === 'INCIDENT' && b.type !== 'INCIDENT') return -1;
         if (b.type === 'INCIDENT' && a.type !== 'INCIDENT') return 1;
+        if (a.type === 'COVERAGE_GAP' && b.type !== 'COVERAGE_GAP' && b.type !== 'INCIDENT') return -1;
+        if (b.type === 'COVERAGE_GAP' && a.type !== 'COVERAGE_GAP' && a.type !== 'INCIDENT') return 1;
         if (a.daysUntilDue === undefined) return 1;
         if (b.daysUntilDue === undefined) return -1;
         return a.daysUntilDue - b.daysUntilDue;
@@ -509,8 +555,9 @@ export default function DashboardPage() {
     bookings: [],
     properties: [],
     checklist: null,
-    urgentActions: [], 
+    urgentActions: [],
     inventoryCount: 0,
+    coverageGapExposure: 0,
     activeIncidents: [],
     isLoading: true,
     error: null,
@@ -651,15 +698,21 @@ export default function DashboardPage() {
         checklist?.tasks || [],
         warranties,
         policies,
-        activeIncidents
+        activeIncidents,
+        inventoryItems,
       );
   
+      const coverageGapExposure = inventoryItems
+        .filter((item: InventoryItem) => !item.coverageNotRequired && !item.warrantyId && !item.insurancePolicyId)
+        .reduce((sum: number, item: InventoryItem) => sum + Number(item.replacementCostCents || 0) / 100, 0);
+
       setData({
         bookings,
         properties: scoredProperties,
         checklist,
         urgentActions,
         inventoryCount: inventoryItems.length,
+        coverageGapExposure,
         activeIncidents,
         isLoading: false,
         error: null,
@@ -792,7 +845,25 @@ export default function DashboardPage() {
       };
     }
 
-    // 3. Savings > $200
+    // 3. Coverage gaps
+    const coverageGapActions = scopedUrgentActions.filter(a => a.type === 'COVERAGE_GAP');
+    if (coverageGapActions.length > 0) {
+      const gapCount = coverageGapActions.length;
+      const impactLabel = `${gapCount} item${gapCount === 1 ? '' : 's'} unprotected`;
+      const etaLabel = 'ETA 2 min';
+      return {
+        badgeLabel: buildCoverageGapBadgeLabel(),
+        title: `${gapCount} item${gapCount === 1 ? '' : 's'} ${gapCount === 1 ? 'has' : 'have'} no coverage.`,
+        subtitle: 'Chosen because unprotected items represent direct financial exposure with no safety net.',
+        ctaLabel: 'Review coverage gaps',
+        href: buildPropertyAwareDashboardHref(effectiveSelectedPropertyId, `/dashboard/properties/${effectiveSelectedPropertyId}/inventory?tab=items&smart=gaps`),
+        impactLabel,
+        etaLabel,
+        ...buildCoverageGapActionMeta(gapCount, data.coverageGapExposure),
+      };
+    }
+
+    // 4. Savings > $200
     if (annualSavingsPotential >= 200) {
       const impactLabel = `${formatUsd(annualSavingsPotential)}/yr potential`;
       const etaLabel = 'ETA 3 min';
@@ -808,7 +879,7 @@ export default function DashboardPage() {
       };
     }
 
-    // 4. Vault Onboarding (Empty state: < 3 items)
+    // 5. Vault Onboarding (Empty state: < 3 items)
     if (data.inventoryCount < 3) {
       const impactLabel = 'Unlock intelligence';
       const etaLabel = 'ETA 90 sec';
@@ -824,7 +895,7 @@ export default function DashboardPage() {
       };
     }
 
-    // 5. Maintenance Overdue
+    // 6. Maintenance Overdue
     const primaryOverdueAction = scopedUrgentActions.find((action) => action.type === 'MAINTENANCE_OVERDUE');
     if (overdueMaintenanceCount > 0) {
       const impactLabel = 'Preventative win';
@@ -843,19 +914,25 @@ export default function DashboardPage() {
       };
     }
 
-    // 6. Default: All clear
-    const impactLabel = 'HomeScore up to date';
+    // 7. Default: health-score-aware fallback
+    const score = healthScore ?? 0;
+    const isHealthy = score >= 75;
+    const impactLabel = isHealthy ? 'HomeScore up to date' : `Score at ${score} / 100`;
     const etaLabel = 'ETA 1 min';
     return {
       badgeLabel: buildDefaultBadgeLabel(),
-      title: 'All systems healthy.',
-      subtitle: 'Review your score drivers and current health focus to stay ahead of issues.',
+      title: isHealthy
+        ? 'All systems healthy.'
+        : `Home health at ${score} — review score drivers.`,
+      subtitle: isHealthy
+        ? 'Review your score drivers and current health focus to stay ahead of issues.'
+        : 'Your health score has room to improve. Open the full report to see what is dragging it down and what to fix first.',
       ctaLabel: 'View full report',
       href: buildPropertyAwareDashboardHref(effectiveSelectedPropertyId, '/dashboard/health-score'),
       impactLabel,
       etaLabel,
-        ...buildDefaultActionMeta(healthScore ?? 0),
-      };
+      ...buildDefaultActionMeta(score),
+    };
   })();
 
   if (userLoading || data.isLoading || !redirectChecked) {

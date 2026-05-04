@@ -1,7 +1,7 @@
 import { prisma } from '../lib/prisma';
 
-const HIGH_VALUE_THRESHOLD_CENTS = 150000;      // $1,500
-const APPLIANCE_THRESHOLD_CENTS = 75000;        // $750
+const HIGH_VALUE_THRESHOLD_CENTS = 50000;       // $500
+const APPLIANCE_THRESHOLD_CENTS = 25000;        // $250
 
 export type CoverageGapResult = {
   inventoryItemId: string;
