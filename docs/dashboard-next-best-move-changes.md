@@ -1,7 +1,7 @@
 # Dashboard — Next Best Move: Changes Reference
 
-> **Scope:** `apps/frontend/src/app/(dashboard)/dashboard/page.tsx` and `apps/backend/src/services/coverageGap.service.ts`
-> **Commits:** `c7e3e4c` · `f2fd55d` · `a195174` · `cf89a82`
+> **Scope:** `apps/frontend/src/app/(dashboard)/dashboard/page.tsx`, `apps/backend/src/services/coverageGap.service.ts`, and dashboard components: `MobileDashboardHome`, `MorningHomePulseCard`, `RoomsSnapshotSection`, `ExistingOwnerDashboard`
+> **Commits:** `c7e3e4c` · `f2fd55d` · `a195174` · `cf89a82` · `36ce85f` · `6a2be1d`
 
 ---
 
@@ -20,11 +20,11 @@ The card evaluates conditions in this order and renders the first match. The cas
 | 1 | Active incident (CRITICAL or WARNING) | `Priority alert` | `scopedActiveIncidents` |
 | 2 | Health score insight flagged | `Top priority this week` | `scopedUrgentActions` (type: HEALTH_INSIGHT) |
 | 3 | Items with no coverage at all | `Coverage gap detected` | `scopedUrgentActions` (type: COVERAGE_GAP) — shows highest-exposure item |
-| 3b | Items with warranty but no insurance, or vice versa | `Partial coverage detected` | `scopedUrgentActions` (type: COVERAGE_PARTIAL) |
+| 3b | Items with warranty but no insurance, or vice versa | `Partial coverage detected` | `scopedUrgentActions` (type: COVERAGE_PARTIAL) — shows highest-exposure item |
 | 4 | Annual savings opportunity ≥ $200 | `Best savings move` | `homeSavingsSummaryQuery` |
 | 4.5 | Backend risk or cost signal | `Risk signal active` / `Cost pressure detected` | `orchestrationQuery` (reasonCode: RISK_SPIKE / COST_PRESSURE) |
 | 5 | Inventory fewer than 3 items | `Unlock more intelligence` | `data.inventoryCount` |
-| 6 | Overdue maintenance tasks | `Action to take now` | `scopedUrgentActions` (type: MAINTENANCE_OVERDUE) |
+| 6 | Overdue maintenance tasks | `Action to take now` | `scopedUrgentActions` (type: MAINTENANCE_OVERDUE) — names top task |
 | 7 | Fallback | `Next best move` | `healthScore` |
 
 ---
@@ -193,14 +193,94 @@ const orchestrationQuery = useQuery({
 
 ---
 
+### 10. Partial coverage and SignatureRecommendationCard — item-name pattern applied (`36ce85f`)
+
+**Problem — step 3b:** The COVERAGE_PARTIAL step showed a count ("N items have partial coverage") identical in structure to the pre-fix step 3. The `exposureCents` field added in change 9 was not being used to sort or surface the highest-value partial gap.
+
+**Problem — SignatureRecommendationCard:** COVERAGE_GAP and COVERAGE_PARTIAL moves in the recommendation card used `resolveUrgentActionHref()`, which routes to the guidance overview rather than the inventory item panel. `itemId` was available on the action but not wired to `openItemId`.
+
+**Fix — step 3b:**
+- COVERAGE_PARTIAL actions now sort by `exposureCents` descending within the group (same rule as COVERAGE_GAP).
+- Step 3b rewritten with the same structure as step 3:
+
+| Slot | Single partial | Multiple partials |
+|------|---------------|-------------------|
+| Title | `"Your {Item Name} has partial coverage."` | `"Your {Top Item Name} has partial coverage."` |
+| Subtitle | `"{Item} ({$X}) is missing {warranty\|insurance}. One coverage type is missing."` | `"{Item} ({$X}) is missing {type}. {N} other item(s) also have partial coverage."` |
+| CTA label | `"Review {Item Name}"` | `"Review {Item Name} first"` |
+| CTA href | `?openItemId={topItem.itemId}` | Same |
+
+**Fix — SignatureRecommendationCard:**
+- For `COVERAGE_GAP` and `COVERAGE_PARTIAL` actions that have an `itemId`, href resolves to `?tab=items&openItemId={itemId}` instead of the guidance overview.
+- All other action types continue to use `resolveUrgentActionHref`.
+
+---
+
+### 11. Five secondary display and priority gaps resolved (`6a2be1d`)
+
+#### 11a. Step 6 (MAINTENANCE_OVERDUE) — names the top overdue task (`page.tsx`)
+
+**Before:** `"2 maintenance tasks need attention."`
+
+**After:** `primaryOverdueAction.title` (stripped of `"OVERDUE: "` prefix) used directly:
+
+| Count | Title | Subtitle |
+|-------|-------|----------|
+| 1 task | `"Your {task} is overdue."` | `"{Task} is the highest-priority overdue item."` |
+| N tasks | `"Your {task} is overdue (+ N more)."` | `"{Task} is the highest-priority overdue item. N other task(s) also need attention."` |
+
+CTA label also uses the task name: `"Review {task}"`.
+
+#### 11b. Coverage Intelligence tile subtitle — surface worst room (`MobileDashboardHome.tsx`)
+
+**Before:** `"3 gaps detected"`
+
+**After:** Derives the room with the highest `coverageGapsCount` from `roomInsightsQuery.data` and names it:
+
+| Scenario | Subtitle |
+|----------|----------|
+| All gaps in one room | `"3 unprotected items in Kitchen"` |
+| Gaps spread across rooms | `"3 unprotected items — most in Kitchen"` |
+| No gaps | `"No gaps detected"` |
+
+#### 11c. MorningHomePulseCard — financial card annual cost fallback (`MorningHomePulseCard.tsx`)
+
+**Before:** "Annual maintenance cost" row showed `"No data yet"` when `extractCurrency()` found no dollar amount in the summary strings.
+
+**After:** Falls back to `"Score: {N}/100"` (the financial efficiency score, always available) instead of the uninformative stub.
+
+#### 11d. RoomsSnapshotSection — sort by health after insights load (`RoomsSnapshotSection.tsx`)
+
+**Before:** Rooms sorted by user `sortOrder`, then alphabetically — a room with health < 75 stayed buried if the user had sorted it lower.
+
+**After:** A `sortedRooms` memo re-ranks rooms once insights load. Rooms with score < 75 surface before healthy rooms. User `sortOrder` and alphabetical order are preserved as tiebreakers within each health tier. Before insights load, original order is unchanged.
+
+Score source: `insights.healthScore.score` from the backend if present, otherwise `computeHealthScore(insights)` (the local heuristic already used for room cards).
+
+#### 11e. ExistingOwnerDashboard — "What matters most today" names the top task (`ExistingOwnerDashboard.tsx`)
+
+**Before:** `"$8,400 estimated impact needs review"` — aggregate dollar, no task name.
+
+**After:** `maintenanceTasks` (already fetched) sorted by `estimatedCost` descending; top task title used in headline:
+
+| Scenario | Headline |
+|----------|----------|
+| Top task found, multiple tasks | `"Replace HVAC filter — $8,400 at risk (+ 2 more)"` |
+| Top task found, single task | `"Replace HVAC filter — $8,400 at risk"` |
+| No `estimatedCost` data | Falls back to previous aggregate headline |
+
+---
+
 ## Files Changed
 
 | File | Changes |
 |------|---------|
-| `apps/frontend/src/app/(dashboard)/dashboard/page.tsx` | All frontend changes above |
+| `apps/frontend/src/app/(dashboard)/dashboard/page.tsx` | All `page.tsx` changes (changes 1–9, 10a, 11a) |
 | `apps/backend/src/services/coverageGap.service.ts` | Detection thresholds lowered: $1,500 → $500 (general), $750 → $250 (appliances) |
-
-> **Change 9 touches only** `apps/frontend/src/app/(dashboard)/dashboard/page.tsx` — `UrgentActionItem` interface, `consolidateUrgentActions` sort and action pushes, heroNarrative step 3.
+| `apps/frontend/src/app/(dashboard)/dashboard/components/MobileDashboardHome.tsx` | Change 11b — coverage gap subtitle surfaces worst room |
+| `apps/frontend/src/app/(dashboard)/dashboard/components/MorningHomePulseCard.tsx` | Change 11c — financial card annual cost fallback |
+| `apps/frontend/src/app/(dashboard)/dashboard/components/RoomsSnapshotSection.tsx` | Change 11d — rooms sort by health after insights load |
+| `apps/frontend/src/app/(dashboard)/dashboard/components/ExistingOwnerDashboard.tsx` | Change 11e — "What matters most" headline names top task |
 
 ---
 
@@ -232,4 +312,5 @@ The `openItemId` param already causes the inventory page to open the item's side
 |-----|--------|
 | `SCENARIO_CONTINUITY` reasonCode not surfaced | Intentional — pending product decision |
 | Backend `COVERAGE_GAP` DB signal may be stale (requires "Run full scan" to refresh) | Not addressed — signal is DB-backed; live detection in `detectCoverageGaps()` runs fresh each orchestration call |
-| `RoomsSnapshotSection` and `MobileDashboardHome` use a different coverage gap definition than the inventory page (`!warrantyId \|\| !insurancePolicyId` vs frontend `getCoverageStatus`) | Not addressed in this batch |
+| `RoomsSnapshotSection` and `MobileDashboardHome` use a different coverage gap definition than the inventory page (`!warrantyId \|\| !insurancePolicyId` vs frontend `getCoverageStatus`) | Display improved (11b, 11d) but the underlying definition inconsistency is not resolved |
+| `MorningHomePulseCard` annual cost row — no structured cost field in `DailySnapshotDTO`; dollar amount is parsed from summary strings | Fallback improved (11c) but structured data requires a backend `DailySnapshotDTO` change |
