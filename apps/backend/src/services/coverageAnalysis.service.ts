@@ -1886,7 +1886,7 @@ export class CoverageIntelligenceService {
   ): Promise<{ exists: false } | { exists: true; analysis: CoverageAnalysisDTO }> {
     await assertPropertyForUser(propertyId, userId);
 
-    const latest = await prisma.coverageAnalysis.findFirst({
+    const recentAnalyses = await prisma.coverageAnalysis.findMany({
       where: { propertyId },
       orderBy: { computedAt: 'desc' },
       include: {
@@ -1895,7 +1895,13 @@ export class CoverageIntelligenceService {
           take: 10,
         },
       },
+      take: 50,
     });
+
+    // Skip item-scoped analyses — only return property-level results.
+    const latest = recentAnalyses.find(
+      (a) => parseItemIdFromInputsSnapshot(a.inputsSnapshot) === null
+    );
 
     if (!latest) return { exists: false };
 
