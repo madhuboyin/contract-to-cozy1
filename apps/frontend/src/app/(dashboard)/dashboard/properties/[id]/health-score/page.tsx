@@ -4,7 +4,7 @@ import React, { useEffect, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
-import { Activity, ArrowLeft, ArrowRight, BarChart2, Calendar, CheckCircle2, ChevronDown, ClipboardList, Clock3, FileText, Flag, Flame, Gauge, Home, Info, Loader2, Minus, ShieldCheck, TrendingDown, TrendingUp, Wind, Wrench } from "lucide-react";
+import { Activity, ArrowLeft, ArrowRight, BarChart2, Calendar, CheckCircle2, ChevronDown, ClipboardList, Clock3, FileText, Flag, Flame, Gauge, Home, Info, Loader2, ShieldCheck, TrendingDown, TrendingUp, Wind, Wrench } from "lucide-react";
 import { DashboardShell } from "@/components/DashboardShell";
 import { PageHeader, PageHeaderHeading } from "@/components/page-header";
 import { api } from "@/lib/api/client";
@@ -553,7 +553,6 @@ export default function PropertyHealthDetailPage() {
   const propertyHealth = (property as PropertyWithHealth)?.healthScore;
   const latestScore = clampScore(series?.latest?.score ?? asNumber(propertyHealth?.totalScore) ?? 0);
   const scoreMax = 100;
-  const percentage = latestScore;
   const potentialScore = clampScore(asNumber(propertyHealth?.maxPotentialScore) ?? series?.latest?.scoreMax ?? 100);
   const baseScore = asNumber(propertyHealth?.baseScore);
   const unlockedScore = asNumber(propertyHealth?.unlockedScore);
@@ -1074,71 +1073,6 @@ export default function PropertyHealthDetailPage() {
 
         {/* ===== PREMIUM HEALTH SCORE REPORT SECTION ===== */}
         <div className="mt-8 space-y-4">
-
-          {/* Row 1: Premium Gauge Hero Card */}
-          <div className="rounded-2xl border border-slate-200/60 bg-white shadow-[0_4px_20px_rgba(0,0,0,0.06),0_1px_3px_rgba(0,0,0,0.04)] px-8 py-6 transition-shadow hover:shadow-[0_6px_28px_rgba(0,0,0,0.09)]">
-            <div className="flex items-start justify-between gap-6">
-              <div className="flex-1 min-w-0">
-                <h3 className="text-2xl font-semibold text-slate-900">Overall Health Gauge: {healthDetails.level}</h3>
-                <div className="flex items-center gap-3 mt-3 flex-wrap">
-                  <div className="flex items-baseline gap-1.5">
-                    <span className={`text-5xl font-black tabular-nums tracking-tight leading-none ${healthDetails.color}`}>{latestScore.toFixed(0)}</span>
-                    <span className="text-lg text-slate-400 font-medium mb-1">/100</span>
-                  </div>
-                  <span className={`text-base font-semibold ${healthDetails.color}`}>{healthDetails.level}</span>
-                  {/* Delta pill */}
-                  {wowDelta === null || Math.abs(wowDelta) < 0.05 ? (
-                    <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-sm font-medium text-slate-500">
-                      <Minus className="h-3.5 w-3.5" /> 0 vs last week
-                    </span>
-                  ) : wowDelta > 0 ? (
-                    <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-sm font-medium text-emerald-700">
-                      <TrendingUp className="h-3.5 w-3.5" /> +{wowDelta.toFixed(1)} vs last week
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1.5 rounded-full border border-red-200 bg-red-50 px-3 py-1 text-sm font-medium text-red-600">
-                      <TrendingDown className="h-3.5 w-3.5" /> {wowDelta.toFixed(1)} vs last week
-                    </span>
-                  )}
-                </div>
-
-                {/* Premium gauge bar with pointer marker */}
-                <div className="mt-6 relative">
-                  {/* Background track: gradient from red → amber → green */}
-                  <div className="h-3 rounded-full bg-gradient-to-r from-red-200 via-amber-200 to-emerald-200" />
-                  {/* Filled portion */}
-                  <div
-                    className={`absolute inset-y-0 left-0 rounded-full ${healthDetails.progressColor} transition-all duration-700 opacity-90`}
-                    style={{ width: `${percentage}%` }}
-                  />
-                  {/* Pointer marker chip */}
-                  <div
-                    className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 transition-all duration-700"
-                    style={{ left: `${Math.min(98, Math.max(2, percentage))}%` }}
-                  >
-                    <div className="w-7 h-7 rounded-full bg-white border-2 border-slate-300 shadow-[0_2px_8px_rgba(0,0,0,0.15)] flex items-center justify-center">
-                      <span className="text-[9px] font-black tabular-nums text-slate-700">{latestScore.toFixed(0)}</span>
-                    </div>
-                  </div>
-                </div>
-                <div className="flex justify-between text-xs font-medium text-slate-400 mt-2.5">
-                  <span>Needs attention (0)</span>
-                  <span>Excellent (100)</span>
-                </div>
-              </div>
-
-              {/* Right: Score range guide */}
-              <div className="shrink-0 pt-1">
-                <button
-                  onClick={() => setShowScoreModal(true)}
-                  className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 hover:border-slate-300 hover:shadow-sm transition-all"
-                >
-                  <Info className="h-4 w-4 text-slate-400" />
-                  Score range guide
-                </button>
-              </div>
-            </div>
-          </div>
 
           {/* Row 2: Two-column — Trend (65%) + Changes Rail (35%) */}
           <div className="grid gap-4 lg:grid-cols-[65fr_35fr]">
