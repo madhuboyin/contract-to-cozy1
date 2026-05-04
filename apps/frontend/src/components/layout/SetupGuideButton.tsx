@@ -1,59 +1,27 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { Property } from '@/types';
 import { cn } from '@/lib/utils';
-
-interface SetupStep {
-  label: string;
-  done: boolean;
-}
-
-function getSetupSteps(property: Property): SetupStep[] {
-  return [
-    {
-      label: 'Basic details',
-      done: !!(property.propertyType && property.yearBuilt),
-    },
-    {
-      label: 'Home systems',
-      done: !!(property.heatingType && property.coolingType),
-    },
-    {
-      label: 'Roof & water heater',
-      done: !!(property.roofType && property.waterHeaterType),
-    },
-    {
-      label: 'Property size',
-      done: !!property.propertySize,
-    },
-    {
-      label: 'Safety',
-      done: property.hasSmokeDetectors !== null && property.hasCoDetectors !== null,
-    },
-  ];
-}
+import type { OnboardingStatusDTO } from '@/lib/api/onboardingApi';
+import { isOnboardingComplete } from '@/lib/property/onboardingStatus';
 
 interface SetupGuideButtonProps {
-  property: Property | null | undefined;
+  propertyId: string | null | undefined;
+  onboardingStatus: OnboardingStatusDTO | null | undefined;
   className?: string;
 }
 
-export function SetupGuideButton({ property, className }: SetupGuideButtonProps) {
+export function SetupGuideButton({ propertyId, onboardingStatus, className }: SetupGuideButtonProps) {
   const router = useRouter();
 
-  if (!property) return null;
+  if (!propertyId || !onboardingStatus || isOnboardingComplete(onboardingStatus)) return null;
 
-  const steps = getSetupSteps(property);
-  const completed = steps.filter(s => s.done).length;
-  const total = steps.length;
-
-  if (completed >= total) return null;
-
-  const fraction = completed / total;
+  const completed = onboardingStatus.steps.filter(s => s.complete).length;
+  const total = onboardingStatus.steps.length;
+  const fraction = total > 0 ? completed / total : 0;
 
   const handleClick = () => {
-    router.push(`/dashboard/properties/${property.id}/edit`);
+    router.push(`/dashboard/properties/${propertyId}/onboarding`);
   };
 
   return (

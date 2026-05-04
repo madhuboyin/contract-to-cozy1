@@ -13,7 +13,7 @@ import { useNotifications } from '@/lib/notifications/NotificationContext';
 import { CtcCommandSearch } from './CtcCommandSearch';
 import { CtcPropertySelector } from './CtcPropertySelector';
 import { SetupGuideButton } from './SetupGuideButton';
-import { Property } from '@/types';
+import { getOnboardingStatus } from '@/lib/api/onboardingApi';
 
 interface CtcTopCommandBarProps {
   className?: string;
@@ -44,6 +44,14 @@ function usePropertyData() {
     staleTime: 5 * 60 * 1000,
   });
 
+  // Fetch onboarding status to drive the setup ring
+  const { data: onboardingStatus } = useQuery({
+    queryKey: ['onboarding-status', selectedPropertyId],
+    queryFn: () => getOnboardingStatus(selectedPropertyId!),
+    enabled: !!selectedPropertyId,
+    staleTime: 60 * 1000,
+  });
+
   const properties = propertiesResponse?.properties || [];
   const address = property?.address || 'Main Home';
 
@@ -52,6 +60,7 @@ function usePropertyData() {
     propertyAddress: address,
     properties,
     property: property ?? null,
+    onboardingStatus: onboardingStatus ?? null,
   };
 }
 
@@ -87,7 +96,7 @@ function NotificationsButton() {
 export function CtcTopCommandBar({ className }: CtcTopCommandBarProps) {
   const router = useRouter();
   const { setSelectedPropertyId } = usePropertyContext();
-  const { propertyId, propertyAddress, properties, property } = usePropertyData();
+  const { propertyId, propertyAddress, properties, property, onboardingStatus } = usePropertyData();
 
   const handlePropertySelect = (newPropertyId: string) => {
     setSelectedPropertyId(newPropertyId);
@@ -140,7 +149,7 @@ export function CtcTopCommandBar({ className }: CtcTopCommandBarProps) {
 
             {/* Right: Setup guide + Notifications */}
             <div className="flex items-center gap-2 shrink-0">
-              <SetupGuideButton property={property} />
+              <SetupGuideButton propertyId={propertyId} onboardingStatus={onboardingStatus} />
               <NotificationsButton />
             </div>
           </div>
@@ -175,7 +184,7 @@ export function CtcTopCommandBar({ className }: CtcTopCommandBarProps) {
 
             {/* Right Actions */}
             <div className="flex items-center gap-2">
-              <SetupGuideButton property={property} />
+              <SetupGuideButton propertyId={propertyId} onboardingStatus={onboardingStatus} />
               <NotificationsButton />
             </div>
           </div>
