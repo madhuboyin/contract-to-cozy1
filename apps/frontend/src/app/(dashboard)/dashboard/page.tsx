@@ -69,6 +69,7 @@ import { WinCard } from '@/components/shared/WinCard';
 import { ErrorBoundary } from '@/components/system/ErrorBoundary';
 import { Button } from '@/components/ui/button';
 import { buildGuidanceOverviewHref } from '@/lib/navigation/guidanceOverviewHref';
+import { adaptOrchestrationSummary } from '@/adapters/orchestration.adapter';
 import { ConfidenceBadge as PremiumConfidenceBadge, MetricTile, PageHero, SmartCTA, TrustMetaRow } from '@/components/system/PremiumPrimitives';
 import {
   appendGuidanceContinuityToHref,
@@ -292,6 +293,25 @@ function buildCoveragePartialActionMeta(partialCount: number) {
 
 function buildCoveragePartialBadgeLabel() {
   return 'Partial coverage detected';
+}
+
+function buildBackendSignalBadgeLabel(reasonCode: 'RISK_SPIKE' | 'COST_PRESSURE') {
+  return reasonCode === 'RISK_SPIKE' ? 'Risk signal active' : 'Cost pressure detected';
+}
+
+function buildBackendSignalActionMeta(reasonCode: 'RISK_SPIKE' | 'COST_PRESSURE', detail: string) {
+  const toolLabel = reasonCode === 'RISK_SPIKE' ? 'Home Risk Replay' : 'Break-Even Tool';
+  const supportingText = reasonCode === 'RISK_SPIKE'
+    ? 'Open to replay recent conditions and understand what changed in your risk profile.'
+    : 'Open to validate break-even timing with your current financial assumptions.';
+  return buildTopCardActionMeta(
+    toolLabel,
+    detail,
+    supportingText,
+    'Signal strength',
+    reasonCode === 'RISK_SPIKE' ? 'Elevated risk signal' : 'Cost shift detected',
+    72,
+  );
 }
 
 function buildDefaultActionMeta(healthScore: number) {
@@ -672,6 +692,21 @@ export default function DashboardPage() {
     staleTime: 5 * 60 * 1000,
   });
 
+  const orchestrationQuery = useQuery({
+    queryKey: ['dashboard-orchestration-signals', effectiveSelectedPropertyId],
+    queryFn: async () => {
+      if (!effectiveSelectedPropertyId) return null;
+      try {
+        const summary = await api.getOrchestrationSummary(effectiveSelectedPropertyId);
+        return adaptOrchestrationSummary(summary);
+      } catch {
+        return null;
+      }
+    },
+    enabled: Boolean(effectiveSelectedPropertyId),
+    staleTime: 3 * 60 * 1000,
+  });
+
   const fetchDashboardData = useCallback(async () => {
     if (!user) return;
     
@@ -930,6 +965,28 @@ export default function DashboardPage() {
         impactLabel,
         etaLabel,
         ...buildSavingsActionMeta(annualSavingsPotential),
+      };
+    }
+
+    // 4.5 Backend signal pressure: RISK_SPIKE or COST_PRESSURE from orchestration engine
+    // Loaded async (non-blocking) — only surfaces when local signals are all clear
+    const orchestrationMove = orchestrationQuery.data?.nextBestMove ?? null;
+    if (
+      orchestrationMove?.reasonCode === 'RISK_SPIKE' ||
+      orchestrationMove?.reasonCode === 'COST_PRESSURE'
+    ) {
+      const rc = orchestrationMove.reasonCode;
+      const impactLabel = rc === 'RISK_SPIKE' ? 'Risk signal active' : 'Cost shift detected';
+      const etaLabel = 'ETA 3 min';
+      return {
+        badgeLabel: buildBackendSignalBadgeLabel(rc),
+        title: orchestrationMove.title,
+        subtitle: orchestrationMove.detail,
+        ctaLabel: rc === 'RISK_SPIKE' ? 'Replay risk conditions' : 'Review break-even assumptions',
+        href: orchestrationMove.targetPath,
+        impactLabel,
+        etaLabel,
+        ...buildBackendSignalActionMeta(rc, orchestrationMove.detail),
       };
     }
 
