@@ -563,12 +563,16 @@ const consolidateUrgentActions = (
     }
 
     // Sort: Incidents > Coverage Gaps (by exposure desc) > Health > Urgent maintenance > Urgency (daysUntilDue)
+    // Within COVERAGE_GAP and COVERAGE_PARTIAL groups, highest exposure surfaces first.
     return actions.sort((a, b) => {
         if (a.type === 'INCIDENT' && b.type !== 'INCIDENT') return -1;
         if (b.type === 'INCIDENT' && a.type !== 'INCIDENT') return 1;
         if (a.type === 'COVERAGE_GAP' && b.type !== 'COVERAGE_GAP' && b.type !== 'INCIDENT') return -1;
         if (b.type === 'COVERAGE_GAP' && a.type !== 'COVERAGE_GAP' && a.type !== 'INCIDENT') return 1;
         if (a.type === 'COVERAGE_GAP' && b.type === 'COVERAGE_GAP') {
+            return (b.exposureCents ?? 0) - (a.exposureCents ?? 0);
+        }
+        if (a.type === 'COVERAGE_PARTIAL' && b.type === 'COVERAGE_PARTIAL') {
             return (b.exposureCents ?? 0) - (a.exposureCents ?? 0);
         }
         if (a.daysUntilDue === undefined) return 1;
@@ -954,18 +958,33 @@ export default function DashboardPage() {
       };
     }
 
-    // 3b. Partial coverage (warranty XOR insurance)
+    // 3b. Partial coverage (warranty XOR insurance) — show highest-exposure item; [0] sorted by exposureCents desc
     const coveragePartialActions = scopedUrgentActions.filter(a => a.type === 'COVERAGE_PARTIAL');
     if (coveragePartialActions.length > 0) {
+      const topPartial = coveragePartialActions[0];
       const partialCount = coveragePartialActions.length;
-      const impactLabel = `${partialCount} item${partialCount === 1 ? '' : 's'} partially covered`;
+      const remainingCount = partialCount - 1;
+      const topItemName = topPartial.title.replace(/ has partial coverage$/, '');
+      const topExposureCents = topPartial.exposureCents ?? 0;
+      const topExposureText = topExposureCents > 0 ? ` (${formatUsdFromCents(topExposureCents)})` : '';
+      const missingType = topPartial.description.includes('warranty') ? 'warranty' : 'insurance';
+      const impactLabel = topExposureCents > 0
+        ? `${formatUsdFromCents(topExposureCents)} partially exposed`
+        : `${partialCount} item${partialCount === 1 ? '' : 's'} partially covered`;
+      const subtitle = remainingCount > 0
+        ? `${topItemName}${topExposureText} is missing ${missingType}. ${remainingCount} other item${remainingCount === 1 ? '' : 's'} also have partial coverage.`
+        : `${topItemName}${topExposureText} has either a warranty or insurance but not both. One coverage type is missing.`;
+      const ctaLabel = remainingCount > 0 ? `Review ${topItemName} first` : `Review ${topItemName}`;
+      const ctaHref = topPartial.itemId
+        ? buildPropertyAwareDashboardHref(effectiveSelectedPropertyId, `/dashboard/properties/${effectiveSelectedPropertyId}/inventory?tab=items&openItemId=${topPartial.itemId}`)
+        : buildPropertyAwareDashboardHref(effectiveSelectedPropertyId, `/dashboard/properties/${effectiveSelectedPropertyId}/inventory?tab=items&smart=gaps`);
       const etaLabel = 'ETA 2 min';
       return {
         badgeLabel: buildCoveragePartialBadgeLabel(),
-        title: `${partialCount} item${partialCount === 1 ? '' : 's'} ${partialCount === 1 ? 'has' : 'have'} partial coverage.`,
-        subtitle: 'Each item has either a warranty or insurance but not both. Closing the gap reduces your exposure.',
-        ctaLabel: 'Review coverage',
-        href: buildPropertyAwareDashboardHref(effectiveSelectedPropertyId, `/dashboard/properties/${effectiveSelectedPropertyId}/inventory?tab=items&smart=gaps`),
+        title: `Your ${topItemName} has partial coverage.`,
+        subtitle,
+        ctaLabel,
+        href: ctaHref,
         impactLabel,
         etaLabel,
         ...buildCoveragePartialActionMeta(partialCount),
@@ -1116,20 +1135,26 @@ export default function DashboardPage() {
     ? 'All clear'
     : null;
 
-  const signatureRecommendationMoves: RecommendedMove[] = scopedUrgentActions.slice(0, 3).map((action) => ({
-    id: action.id,
-    title: action.title,
-    detail: action.description,
-    href: resolveUrgentActionHref(action, effectiveSelectedPropertyId),
-    impact: action.type === 'INCIDENT' ? 'Active risk — immediate review needed'
-      : action.type === 'COVERAGE_GAP' ? 'Direct financial exposure with no safety net'
-      : action.type === 'COVERAGE_PARTIAL' ? 'Partial protection — one coverage type missing'
-      : action.type === 'MAINTENANCE_OVERDUE' ? 'Overdue — prevents escalation cost'
-      : action.type === 'RENEWAL_EXPIRED' ? 'Coverage lapsed — renew to restore'
-      : action.type === 'RENEWAL_UPCOMING' ? 'Renew within 90 days to maintain protection'
-      : action.type === 'HEALTH_INSIGHT' ? 'Health score driver — review to improve signals'
-      : null,
-  }));
+  const signatureRecommendationMoves: RecommendedMove[] = scopedUrgentActions.slice(0, 3).map((action) => {
+    const isCoverageAction = action.type === 'COVERAGE_GAP' || action.type === 'COVERAGE_PARTIAL';
+    const href = isCoverageAction && action.itemId && effectiveSelectedPropertyId
+      ? buildPropertyAwareDashboardHref(effectiveSelectedPropertyId, `/dashboard/properties/${effectiveSelectedPropertyId}/inventory?tab=items&openItemId=${action.itemId}`)
+      : resolveUrgentActionHref(action, effectiveSelectedPropertyId);
+    return {
+      id: action.id,
+      title: action.title,
+      detail: action.description,
+      href,
+      impact: action.type === 'INCIDENT' ? 'Active risk — immediate review needed'
+        : action.type === 'COVERAGE_GAP' ? 'Direct financial exposure with no safety net'
+        : action.type === 'COVERAGE_PARTIAL' ? 'Partial protection — one coverage type missing'
+        : action.type === 'MAINTENANCE_OVERDUE' ? 'Overdue — prevents escalation cost'
+        : action.type === 'RENEWAL_EXPIRED' ? 'Coverage lapsed — renew to restore'
+        : action.type === 'RENEWAL_UPCOMING' ? 'Renew within 90 days to maintain protection'
+        : action.type === 'HEALTH_INSIGHT' ? 'Health score driver — review to improve signals'
+        : null,
+    };
+  });
 
   const signatureRecommendationSummary = scopedUrgentActions.length === 0
     ? null
