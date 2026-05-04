@@ -401,6 +401,13 @@ export default function MobileDashboardHome({
     (sum, stats) => sum + Number(stats.coverageGapsCount || 0),
     0
   );
+  const worstCoverageRoom = totalCoverageGaps > 0
+    ? previewRooms.reduce<{ name: string; count: number } | null>((worst, room) => {
+        const count = Number(roomInsightsQuery.data?.[room.id]?.coverageGapsCount ?? 0);
+        if (!worst || count > worst.count) return { name: room.name, count };
+        return worst;
+      }, null)
+    : null;
   const roomsHref = buildPropertyAwareHref(propertyId, 'rooms', 'rooms');
   const dailySnapshotHref = `/dashboard/daily-snapshot?propertyId=${encodeURIComponent(propertyId || '')}`;
   const riskRadarHref = buildPropertyAwareDashboardHref(propertyId, '/dashboard/risk-radar');
@@ -446,8 +453,12 @@ export default function MobileDashboardHome({
     {
       title: 'Coverage Intelligence',
       subtitle:
-        totalCoverageGaps > 0
-          ? `${totalCoverageGaps} gap${totalCoverageGaps === 1 ? '' : 's'} detected`
+        totalCoverageGaps > 0 && worstCoverageRoom && worstCoverageRoom.count < totalCoverageGaps
+          ? `${totalCoverageGaps} unprotected items — most in ${worstCoverageRoom.name}`
+          : totalCoverageGaps > 0 && worstCoverageRoom
+          ? `${totalCoverageGaps} unprotected item${totalCoverageGaps === 1 ? '' : 's'} in ${worstCoverageRoom.name}`
+          : totalCoverageGaps > 0
+          ? `${totalCoverageGaps} unprotected item${totalCoverageGaps === 1 ? '' : 's'} detected`
           : 'No gaps detected',
       icon: React.createElement(resolveToolIcon('ai', 'coverage-intelligence'), { className: 'h-5 w-5' }),
       trailingIcon: React.createElement(resolveToolIcon('ai', 'coverage-intelligence'), { className: 'h-5 w-5' }),

@@ -320,6 +320,32 @@ export function RoomsSnapshotSection({ propertyId }: RoomsSnapshotSectionProps) 
     return () => { cancelled = true; };
   }, [propertyId, rooms]);
 
+  // Re-sort rooms once insights load: rooms with health < 75 surface first,
+  // then by user sortOrder, then alphabetically within each tier.
+  const sortedRooms = React.useMemo(() => {
+    if (!rooms.length) return rooms;
+    return [...rooms].sort((a, b) => {
+      const aInsights = roomInsights[a.id];
+      const bInsights = roomInsights[b.id];
+      // Only re-rank when both rooms have loaded insights; otherwise keep original order
+      if (aInsights && bInsights) {
+        const aScore = Number.isFinite(Number(aInsights?.healthScore?.score))
+          ? Number(aInsights.healthScore.score)
+          : computeHealthScore(aInsights);
+        const bScore = Number.isFinite(Number(bInsights?.healthScore?.score))
+          ? Number(bInsights.healthScore.score)
+          : computeHealthScore(bInsights);
+        const aHasIssues = aScore < 75;
+        const bHasIssues = bScore < 75;
+        if (aHasIssues && !bHasIssues) return -1;
+        if (!aHasIssues && bHasIssues) return 1;
+      }
+      const byOrder = (a.sortOrder ?? 0) - (b.sortOrder ?? 0);
+      if (byOrder !== 0) return byOrder;
+      return String(a.name || '').localeCompare(String(b.name || ''));
+    });
+  }, [rooms, roomInsights]);
+
   const scrollBy = (direction: 'left' | 'right') => {
     if (!scrollerRef.current) return;
     const delta = direction === 'left' ? -420 : 420;
@@ -398,7 +424,7 @@ export function RoomsSnapshotSection({ propertyId }: RoomsSnapshotSectionProps) 
             ref={scrollerRef}
             className="flex gap-4 overflow-x-auto pb-2 no-scrollbar snap-x scroll-smooth"
           >
-            {rooms.map((room) => {
+            {sortedRooms.map((room) => {
               const rawType = safeString((room as InventoryRoom & { type?: string }).type);
               const roomType = rawType || guessRoomType(room.name || '');
               const RoomIcon = roomIconFor(roomType);

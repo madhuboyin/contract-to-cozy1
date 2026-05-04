@@ -1045,16 +1045,26 @@ export default function DashboardPage() {
       };
     }
 
-    // 6. Maintenance Overdue
+    // 6. Maintenance Overdue — name the top task, count any remaining
     const primaryOverdueAction = scopedUrgentActions.find((action) => action.type === 'MAINTENANCE_OVERDUE');
     if (overdueMaintenanceCount > 0) {
+      const topTaskName = primaryOverdueAction?.title.replace(/^OVERDUE:\s*/i, '') ?? null;
+      const remainingOverdue = overdueMaintenanceCount - 1;
+      const title = topTaskName
+        ? remainingOverdue > 0
+          ? `Your ${topTaskName} is overdue (+ ${remainingOverdue} more).`
+          : `Your ${topTaskName} is overdue.`
+        : `${overdueMaintenanceCount} maintenance task${overdueMaintenanceCount === 1 ? '' : 's'} need attention.`;
+      const subtitle = remainingOverdue > 0
+        ? `${topTaskName ?? 'This task'} is the highest-priority overdue item. ${remainingOverdue} other task${remainingOverdue === 1 ? '' : 's'} also need attention.`
+        : 'Chosen because this task is overdue and ranked highest for review.';
       const impactLabel = 'Preventative win';
       const etaLabel = 'ETA 2 min';
       return {
         badgeLabel: buildMaintenanceBadgeLabel(),
-        title: `${overdueMaintenanceCount} maintenance task${overdueMaintenanceCount === 1 ? '' : 's'} need attention.`,
-        subtitle: 'Chosen because these items are overdue and ranked highest for review.',
-        ctaLabel: 'Fix overdue tasks',
+        title,
+        subtitle,
+        ctaLabel: topTaskName ? `Review ${topTaskName}` : 'Fix overdue tasks',
         href: primaryOverdueAction
           ? resolveUrgentActionHref(primaryOverdueAction, effectiveSelectedPropertyId)
           : buildPropertyAwareDashboardHref(effectiveSelectedPropertyId, '/dashboard/fix?focus=priority-actions'),

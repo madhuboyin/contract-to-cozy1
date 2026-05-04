@@ -98,12 +98,20 @@ export const ExistingOwnerDashboard = ({
     Number(stats?.total ?? 0) > 0
       ? Math.round(((stats?.completed ?? 0) / Number(stats?.total ?? 1)) * 100)
       : 0;
+  const topCostTask = maintenanceTasks.length > 0
+    ? [...maintenanceTasks].sort((a, b) => (b.estimatedCost ?? 0) - (a.estimatedCost ?? 0))[0]
+    : null;
+  const remainingTaskCount = Math.max(0, totalAttentionItems - 1);
   const attentionHeadline =
-    estimatedImpact > 0
-      ? `${formatUsd(estimatedImpact)} estimated impact needs review`
-      : totalAttentionItems > 0
-        ? `${totalAttentionItems} items may cost more if delayed`
-        : 'Nothing urgent right now';
+    estimatedImpact > 0 && topCostTask?.title
+      ? remainingTaskCount > 0
+        ? `${topCostTask.title} — ${formatUsd(estimatedImpact)} at risk (+ ${remainingTaskCount} more)`
+        : `${topCostTask.title} — ${formatUsd(estimatedImpact)} at risk`
+      : estimatedImpact > 0
+        ? `${formatUsd(estimatedImpact)} estimated impact needs review`
+        : totalAttentionItems > 0
+          ? `${totalAttentionItems} items may cost more if delayed`
+          : 'Nothing urgent right now';
   const attentionSubline =
     totalAttentionItems > 0
       ? 'Top issues are ranked by downside first so one action creates immediate protection.'

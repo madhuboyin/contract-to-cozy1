@@ -442,7 +442,8 @@ export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCar
               ? 1
               : 0;
           const annualCost =
-            extractCurrency(`${row.reason} ${payload.homeWin.detail} ${payload.surprise.detail}`) ?? 'No data yet';
+            extractCurrency(`${row.reason} ${payload.homeWin.detail} ${payload.surprise.detail}`)
+            ?? (scoreValue > 0 ? `Score: ${scoreValue}/100` : 'No data yet');
           const nextRenewal = extractDateLabel(`${payload.surprise.headline} ${payload.surprise.detail}`) ?? 'Not scheduled';
           const detailRows =
             row.kind === 'HEALTH'
