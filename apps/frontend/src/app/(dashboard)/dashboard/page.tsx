@@ -279,6 +279,21 @@ function buildCoverageGapBadgeLabel() {
   return 'Coverage gap detected';
 }
 
+function buildCoveragePartialActionMeta(partialCount: number) {
+  return buildTopCardActionMeta(
+    'Home Vault · Partial coverage',
+    `Open the inventory to review ${partialCount} item${partialCount === 1 ? '' : 's'} with incomplete coverage.`,
+    `${partialCount === 1 ? 'This item has' : 'These items have'} either a warranty or insurance but not both.`,
+    'Partial coverage',
+    `${partialCount} item${partialCount === 1 ? '' : 's'} need review`,
+    Math.min(100, Math.max(20, partialCount * 25)),
+  );
+}
+
+function buildCoveragePartialBadgeLabel() {
+  return 'Partial coverage detected';
+}
+
 function buildDefaultActionMeta(healthScore: number) {
   return buildTopCardActionMeta(
     'Health Score overview',
@@ -403,21 +418,32 @@ const consolidateUrgentActions = (
             });
         });
 
-    // 2. Process Health score Insights (Critical items only)
+    // 2. Process Health score Insights (Critical items only, deduplicated by factor)
     const CRITICAL_INSIGHT_STATUSES = ['Needs attention', 'Needs Review', 'Needs Inspection', 'Missing Data', 'Needs Warranty'];
-    
+
     properties.forEach(p => {
+        const insightsByFactor = new Map<string, { insight: any; statusIndex: number }>();
+
         p.healthScore?.insights
             .filter(i => CRITICAL_INSIGHT_STATUSES.includes(i.status))
-            .forEach((i, index) => {
-                actions.push({
-                    id: `${p.id}-INSIGHT-${index}`,
-                    type: 'HEALTH_INSIGHT',
-                    title: i.factor,
-                    description: `Status: ${i.status}. Requires resolution.`,
-                    propertyId: p.id,
-                });
+            .forEach(i => {
+                const statusIndex = CRITICAL_INSIGHT_STATUSES.indexOf(i.status);
+                const existing = insightsByFactor.get(i.factor);
+                if (!existing || statusIndex < existing.statusIndex) {
+                    insightsByFactor.set(i.factor, { insight: i, statusIndex });
+                }
             });
+
+        insightsByFactor.forEach(({ insight }) => {
+            const factorId = insight.factor.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+            actions.push({
+                id: `${p.id}-INSIGHT-${factorId}`,
+                type: 'HEALTH_INSIGHT',
+                title: insight.factor,
+                description: `Status: ${insight.status}. Requires resolution.`,
+                propertyId: p.id,
+            });
+        });
     });
     
     // 3. Process Maintenance Checklist (Overdue/Unscheduled Tasks)
@@ -496,6 +522,17 @@ const consolidateUrgentActions = (
                     description: `No warranty or insurance coverage. ${replacementValueText}`,
                     propertyId: item.propertyId || 'N/A',
                     severity: 'WARNING',
+                    itemId: item.id,
+                });
+            } else if (!hasWarranty || !hasInsurance) {
+                const missing = !hasWarranty ? 'warranty' : 'insurance';
+                actions.push({
+                    id: `COVERAGE-PARTIAL-${item.id}`,
+                    type: 'COVERAGE_PARTIAL',
+                    title: `${item.name} has partial coverage`,
+                    description: `Missing ${missing} coverage. ${replacementValueText}`,
+                    propertyId: item.propertyId || 'N/A',
+                    severity: 'INFO',
                     itemId: item.id,
                 });
             }
@@ -769,7 +806,7 @@ export default function DashboardPage() {
   const hasCompletionState =
     Boolean(selectedProperty) &&
     scopedUrgentActions.length === 0 &&
-    data.activeIncidents.length === 0 &&
+    scopedActiveIncidents.length === 0 &&
     overdueMaintenanceCount === 0;
 
   useEffect(() => {
@@ -781,8 +818,7 @@ export default function DashboardPage() {
   const heroNarrative = (() => {
     // 1. Open Urgent Incident
     const highSeverityIncident =
-      scopedActiveIncidents.find((incident) => incident.severity === 'CRITICAL' || incident.severity === 'WARNING') ||
-      data.activeIncidents.find((incident) => incident.severity === 'CRITICAL' || incident.severity === 'WARNING');
+      scopedActiveIncidents.find((incident) => incident.severity === 'CRITICAL' || incident.severity === 'WARNING');
     if (highSeverityIncident) {
       const potentialSavings = resolvePriorityAlertSavings(highSeverityIncident);
       return {
@@ -863,6 +899,24 @@ export default function DashboardPage() {
       };
     }
 
+    // 3b. Partial coverage (warranty XOR insurance)
+    const coveragePartialActions = scopedUrgentActions.filter(a => a.type === 'COVERAGE_PARTIAL');
+    if (coveragePartialActions.length > 0) {
+      const partialCount = coveragePartialActions.length;
+      const impactLabel = `${partialCount} item${partialCount === 1 ? '' : 's'} partially covered`;
+      const etaLabel = 'ETA 2 min';
+      return {
+        badgeLabel: buildCoveragePartialBadgeLabel(),
+        title: `${partialCount} item${partialCount === 1 ? '' : 's'} ${partialCount === 1 ? 'has' : 'have'} partial coverage.`,
+        subtitle: 'Each item has either a warranty or insurance but not both. Closing the gap reduces your exposure.',
+        ctaLabel: 'Review coverage',
+        href: buildPropertyAwareDashboardHref(effectiveSelectedPropertyId, `/dashboard/properties/${effectiveSelectedPropertyId}/inventory?tab=items&smart=gaps`),
+        impactLabel,
+        etaLabel,
+        ...buildCoveragePartialActionMeta(partialCount),
+      };
+    }
+
     // 4. Savings > $200
     if (annualSavingsPotential >= 200) {
       const impactLabel = `${formatUsd(annualSavingsPotential)}/yr potential`;
@@ -934,6 +988,81 @@ export default function DashboardPage() {
       ...buildDefaultActionMeta(score),
     };
   })();
+
+  const coverageGapCount = scopedUrgentActions.filter(a => a.type === 'COVERAGE_GAP').length;
+
+  const heroValueTiles: ValueStripTile[] = [
+    ...(healthScore !== null ? [{
+      id: 'health-score',
+      label: 'Health Score',
+      value: `${healthScore} / 100`,
+      icon: Gauge,
+      tone: healthScore >= 75 ? 'teal' : healthScore >= 50 ? 'amber' : 'red',
+      href: buildPropertyAwareDashboardHref(effectiveSelectedPropertyId, '/dashboard/health-score'),
+    } as ValueStripTile] : []),
+    {
+      id: 'coverage',
+      label: coverageGapCount === 0 ? 'Coverage' : `Coverage gap${coverageGapCount === 1 ? '' : 's'}`,
+      value: coverageGapCount === 0 ? 'Protected' : `${coverageGapCount} item${coverageGapCount === 1 ? '' : 's'}`,
+      icon: coverageGapCount > 0 ? ShieldAlert : Shield,
+      tone: coverageGapCount === 0 ? 'teal' : coverageGapCount === 1 ? 'amber' : 'red',
+      href: effectiveSelectedPropertyId
+        ? `/dashboard/properties/${effectiveSelectedPropertyId}/inventory?tab=items&smart=gaps`
+        : undefined,
+    } as ValueStripTile,
+    ...(annualSavingsPotential >= 200 ? [{
+      id: 'savings',
+      label: 'Annual savings',
+      value: formatUsd(annualSavingsPotential),
+      icon: PiggyBank,
+      tone: 'teal',
+      href: buildPropertyAwareDashboardHref(effectiveSelectedPropertyId, '/dashboard/home-savings'),
+    } as ValueStripTile] : []),
+    ...(overdueMaintenanceCount > 0 ? [{
+      id: 'overdue',
+      label: `Overdue task${overdueMaintenanceCount === 1 ? '' : 's'}`,
+      value: String(overdueMaintenanceCount),
+      icon: AlertCircle,
+      tone: 'amber',
+      href: buildPropertyAwareDashboardHref(effectiveSelectedPropertyId, '/dashboard/fix?focus=priority-actions'),
+    } as ValueStripTile] : []),
+    ...(riskExposureGap > 0 ? [{
+      id: 'risk-exposure',
+      label: 'Risk exposure',
+      value: formatUsd(riskExposureGap),
+      icon: ShieldAlert,
+      tone: 'red',
+    } as ValueStripTile] : []),
+  ];
+
+  const heroMomentumLabel = scopedUrgentActions.length === 0 && scopedActiveIncidents.length === 0
+    ? 'All clear'
+    : null;
+
+  const signatureRecommendationMoves: RecommendedMove[] = scopedUrgentActions.slice(0, 3).map((action) => ({
+    id: action.id,
+    title: action.title,
+    detail: action.description,
+    href: resolveUrgentActionHref(action, effectiveSelectedPropertyId),
+    impact: action.type === 'INCIDENT' ? 'Active risk — immediate review needed'
+      : action.type === 'COVERAGE_GAP' ? 'Direct financial exposure with no safety net'
+      : action.type === 'COVERAGE_PARTIAL' ? 'Partial protection — one coverage type missing'
+      : action.type === 'MAINTENANCE_OVERDUE' ? 'Overdue — prevents escalation cost'
+      : action.type === 'RENEWAL_EXPIRED' ? 'Coverage lapsed — renew to restore'
+      : action.type === 'RENEWAL_UPCOMING' ? 'Renew within 90 days to maintain protection'
+      : action.type === 'HEALTH_INSIGHT' ? 'Health score driver — review to improve signals'
+      : null,
+  }));
+
+  const signatureRecommendationSummary = scopedUrgentActions.length === 0
+    ? null
+    : scopedUrgentActions[0]?.type === 'INCIDENT'
+    ? 'An active incident is the top priority right now.'
+    : scopedUrgentActions[0]?.type === 'COVERAGE_GAP'
+    ? 'Unprotected items are the top priority to address.'
+    : scopedUrgentActions[0]?.type === 'HEALTH_INSIGHT'
+    ? 'Property health signals are driving the current recommendation.'
+    : 'Based on your latest risk, maintenance, and coverage signals.';
 
   if (userLoading || data.isLoading || !redirectChecked) {
     return <DashboardRouteState state="loading" title="Preparing your command center" description="Syncing your latest home intelligence..." />;
@@ -1053,8 +1182,12 @@ export default function DashboardPage() {
           sourceLabel="Home analysis"
           secondaryModules={
             <div className="space-y-12">
-               <HeroValueStrip tiles={[]} momentumLabel={null} /> 
-               <SignatureRecommendationCard propertyLabel="Your Home" moves={[]} summary="Analyzing latest data..." />
+               <HeroValueStrip tiles={heroValueTiles} momentumLabel={heroMomentumLabel} />
+               <SignatureRecommendationCard
+                 propertyLabel={selectedProperty?.address || 'Your Home'}
+                 moves={signatureRecommendationMoves}
+                 summary={signatureRecommendationSummary}
+               />
                <RoomsSnapshotSection propertyId={effectiveSelectedPropertyId} />
             </div>
           }
