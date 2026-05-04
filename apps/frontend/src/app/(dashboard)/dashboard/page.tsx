@@ -1181,7 +1181,7 @@ export default function DashboardPage() {
               label="Risk exposure"
               value={riskExposureGap > 0 ? formatUsd(riskExposureGap) : 'None found'}
               hint="Unhedged financial exposure"
-              tone={riskExposureGap > 0 ? 'danger' : 'success'}
+              tone={riskExposureGap > 0 ? 'urgent' : 'success'}
               className="h-full cursor-pointer"
             />
           </Link>
