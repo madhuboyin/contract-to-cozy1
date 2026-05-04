@@ -75,7 +75,7 @@ export class RoomInsightsService {
 
     const replacementTotalCents = items.reduce((sum, it) => sum + (it.replacementCostCents || 0), 0);
 
-    const coverageGapsCount = items.filter((it) => !it.warrantyId || !it.insurancePolicyId).length;
+    const coverageGapsCount = items.filter((it) => !it.warrantyId && !it.insurancePolicyId).length;
 
     const appliancesCount = items.filter((it) => it.category === 'APPLIANCE').length;
 

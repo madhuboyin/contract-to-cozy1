@@ -295,23 +295,27 @@ function buildCoveragePartialBadgeLabel() {
   return 'Partial coverage detected';
 }
 
-function buildBackendSignalBadgeLabel(reasonCode: 'RISK_SPIKE' | 'COST_PRESSURE') {
-  return reasonCode === 'RISK_SPIKE' ? 'Risk signal active' : 'Cost pressure detected';
+type BackendSignalReasonCode = 'RISK_SPIKE' | 'COST_PRESSURE' | 'SCENARIO_CONTINUITY';
+
+function buildBackendSignalBadgeLabel(reasonCode: BackendSignalReasonCode) {
+  if (reasonCode === 'RISK_SPIKE') return 'Risk signal active';
+  if (reasonCode === 'COST_PRESSURE') return 'Cost pressure detected';
+  return 'Scenario in progress';
 }
 
-function buildBackendSignalActionMeta(reasonCode: 'RISK_SPIKE' | 'COST_PRESSURE', detail: string) {
-  const toolLabel = reasonCode === 'RISK_SPIKE' ? 'Home Risk Replay' : 'Break-Even Tool';
+function buildBackendSignalActionMeta(reasonCode: BackendSignalReasonCode, detail: string) {
+  const toolLabel = reasonCode === 'RISK_SPIKE' ? 'Home Risk Replay'
+    : reasonCode === 'COST_PRESSURE' ? 'Break-Even Tool'
+    : 'Financial Scenario';
   const supportingText = reasonCode === 'RISK_SPIKE'
     ? 'Open to replay recent conditions and understand what changed in your risk profile.'
-    : 'Open to validate break-even timing with your current financial assumptions.';
-  return buildTopCardActionMeta(
-    toolLabel,
-    detail,
-    supportingText,
-    'Signal strength',
-    reasonCode === 'RISK_SPIKE' ? 'Elevated risk signal' : 'Cost shift detected',
-    72,
-  );
+    : reasonCode === 'COST_PRESSURE'
+    ? 'Open to validate break-even timing with your current financial assumptions.'
+    : 'Return to your in-progress financial scenario to continue where you left off.';
+  const signalStrengthLabel = reasonCode === 'RISK_SPIKE' ? 'Elevated risk signal'
+    : reasonCode === 'COST_PRESSURE' ? 'Cost shift detected'
+    : 'Scenario active';
+  return buildTopCardActionMeta(toolLabel, detail, supportingText, 'Signal strength', signalStrengthLabel, 72);
 }
 
 function buildDefaultActionMeta(healthScore: number) {
@@ -1012,16 +1016,22 @@ export default function DashboardPage() {
     const orchestrationMove = orchestrationQuery.data?.nextBestMove ?? null;
     if (
       orchestrationMove?.reasonCode === 'RISK_SPIKE' ||
-      orchestrationMove?.reasonCode === 'COST_PRESSURE'
+      orchestrationMove?.reasonCode === 'COST_PRESSURE' ||
+      orchestrationMove?.reasonCode === 'SCENARIO_CONTINUITY'
     ) {
-      const rc = orchestrationMove.reasonCode;
-      const impactLabel = rc === 'RISK_SPIKE' ? 'Risk signal active' : 'Cost shift detected';
+      const rc = orchestrationMove.reasonCode as BackendSignalReasonCode;
+      const impactLabel = rc === 'RISK_SPIKE' ? 'Risk signal active'
+        : rc === 'COST_PRESSURE' ? 'Cost shift detected'
+        : 'Scenario active';
+      const ctaLabel = rc === 'RISK_SPIKE' ? 'Replay risk conditions'
+        : rc === 'COST_PRESSURE' ? 'Review break-even assumptions'
+        : 'Continue scenario';
       const etaLabel = 'ETA 3 min';
       return {
         badgeLabel: buildBackendSignalBadgeLabel(rc),
         title: orchestrationMove.title,
         subtitle: orchestrationMove.detail,
-        ctaLabel: rc === 'RISK_SPIKE' ? 'Replay risk conditions' : 'Review break-even assumptions',
+        ctaLabel,
         href: orchestrationMove.targetPath,
         impactLabel,
         etaLabel,

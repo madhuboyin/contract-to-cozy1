@@ -1,7 +1,7 @@
 # Dashboard — Next Best Move: Changes Reference
 
-> **Scope:** `apps/frontend/src/app/(dashboard)/dashboard/page.tsx`, `apps/backend/src/services/coverageGap.service.ts`, and dashboard components: `MobileDashboardHome`, `MorningHomePulseCard`, `RoomsSnapshotSection`, `ExistingOwnerDashboard`
-> **Commits:** `c7e3e4c` · `f2fd55d` · `a195174` · `cf89a82` · `36ce85f` · `6a2be1d`
+> **Scope:** `apps/frontend/src/app/(dashboard)/dashboard/page.tsx`, `apps/backend/src/services/coverageGap.service.ts`, `apps/backend/src/services/roomInsights.service.ts`, and dashboard components: `MobileDashboardHome`, `MorningHomePulseCard`, `RoomsSnapshotSection`, `ExistingOwnerDashboard`
+> **Commits:** `c7e3e4c` · `f2fd55d` · `a195174` · `cf89a82` · `36ce85f` · `6a2be1d` · `(pending)`
 
 ---
 
@@ -22,7 +22,7 @@ The card evaluates conditions in this order and renders the first match. The cas
 | 3 | Items with no coverage at all | `Coverage gap detected` | `scopedUrgentActions` (type: COVERAGE_GAP) — shows highest-exposure item |
 | 3b | Items with warranty but no insurance, or vice versa | `Partial coverage detected` | `scopedUrgentActions` (type: COVERAGE_PARTIAL) — shows highest-exposure item |
 | 4 | Annual savings opportunity ≥ $200 | `Best savings move` | `homeSavingsSummaryQuery` |
-| 4.5 | Backend risk or cost signal | `Risk signal active` / `Cost pressure detected` | `orchestrationQuery` (reasonCode: RISK_SPIKE / COST_PRESSURE) |
+| 4.5 | Backend risk, cost, or continuity signal | `Risk signal active` / `Cost pressure detected` / `Scenario in progress` | `orchestrationQuery` (reasonCode: RISK_SPIKE / COST_PRESSURE / SCENARIO_CONTINUITY) |
 | 5 | Inventory fewer than 3 items | `Unlock more intelligence` | `data.inventoryCount` |
 | 6 | Overdue maintenance tasks | `Action to take now` | `scopedUrgentActions` (type: MAINTENANCE_OVERDUE) — names top task |
 | 7 | Fallback | `Next best move` | `healthScore` |
@@ -277,8 +277,9 @@ Score source: `insights.healthScore.score` from the backend if present, otherwis
 |------|---------|
 | `apps/frontend/src/app/(dashboard)/dashboard/page.tsx` | All `page.tsx` changes (changes 1–9, 10a, 11a) |
 | `apps/backend/src/services/coverageGap.service.ts` | Detection thresholds lowered: $1,500 → $500 (general), $750 → $250 (appliances) |
+| `apps/backend/src/services/roomInsights.service.ts` | Change 12b — coverage gap definition aligned (`\|\|` → `&&`) |
 | `apps/frontend/src/app/(dashboard)/dashboard/components/MobileDashboardHome.tsx` | Change 11b — coverage gap subtitle surfaces worst room |
-| `apps/frontend/src/app/(dashboard)/dashboard/components/MorningHomePulseCard.tsx` | Change 11c — financial card annual cost fallback |
+| `apps/frontend/src/app/(dashboard)/dashboard/components/MorningHomePulseCard.tsx` | Changes 11c, 12c — financial card annual cost: fallback + structured source |
 | `apps/frontend/src/app/(dashboard)/dashboard/components/RoomsSnapshotSection.tsx` | Change 11d — rooms sort by health after insights load |
 | `apps/frontend/src/app/(dashboard)/dashboard/components/ExistingOwnerDashboard.tsx` | Change 11e — "What matters most" headline names top task |
 
@@ -306,11 +307,40 @@ The `openItemId` param already causes the inventory page to open the item's side
 
 ---
 
+### 12. Known gaps resolved (`pending`)
+
+#### 12a. SCENARIO_CONTINUITY surfaced in heroNarrative step 4.5 (`page.tsx`)
+
+**Before:** Step 4.5 only handled `RISK_SPIKE` and `COST_PRESSURE`. `SCENARIO_CONTINUITY` was present in the orchestration response but silently ignored by the frontend condition.
+
+**After:** `buildBackendSignalBadgeLabel` and `buildBackendSignalActionMeta` expanded to accept a `BackendSignalReasonCode` union type (`RISK_SPIKE | COST_PRESSURE | SCENARIO_CONTINUITY`). Step 4.5 now handles all three:
+
+| reasonCode | Badge | CTA label | Tool label |
+|------------|-------|-----------|------------|
+| `RISK_SPIKE` | `Risk signal active` | `Replay risk conditions` | `Home Risk Replay` |
+| `COST_PRESSURE` | `Cost pressure detected` | `Review break-even assumptions` | `Break-Even Tool` |
+| `SCENARIO_CONTINUITY` | `Scenario in progress` | `Continue scenario` | `Financial Scenario` |
+
+Title, detail, and `targetPath` all come directly from the backend response — no frontend copy needed.
+
+#### 12b. Room insights coverage gap definition aligned with inventory page (`roomInsights.service.ts`)
+
+**Before:** `coverageGapsCount` used `!warrantyId || !insurancePolicyId` — counted items missing *either* coverage type (i.e., included partial coverage as a gap).
+
+**After:** Changed to `!warrantyId && !insurancePolicyId` — counts only items with *no coverage at all*, matching the inventory page's `getCoverageStatus()` definition of `'uncovered'`. Items with partial coverage (one of two types present) are no longer inflating the gap count in room cards and the `RoomsSnapshotSection`.
+
+#### 12c. MorningHomePulseCard annual cost uses structured data (`MorningHomePulseCard.tsx`)
+
+**Before:** Annual maintenance cost was parsed from free-text strings (`row.reason + homeWin.detail + surprise.detail`) using a `$\d+` regex, falling back to `"Score: N/100"` when nothing was found.
+
+**After:** `api.getMaintenanceTaskStats(propertyId)` is fetched in parallel with the recall count inside `loadSnapshot`. `MaintenanceTaskStats.totalEstimatedCost` (the sum of estimated costs for all open/pending tasks) is stored as `annualMaintenanceCost` and used as the primary source. The regex parse and score fallback are preserved in cascade order:
+
+```
+annualMaintenanceCost (structured) → extractCurrency (text parse) → "Score: N/100"
+```
+
+---
+
 ## Known Gaps Not Addressed Here
 
-| Gap | Status |
-|-----|--------|
-| `SCENARIO_CONTINUITY` reasonCode not surfaced | Intentional — pending product decision |
-| Backend `COVERAGE_GAP` DB signal may be stale (requires "Run full scan" to refresh) | Not addressed — signal is DB-backed; live detection in `detectCoverageGaps()` runs fresh each orchestration call |
-| `RoomsSnapshotSection` and `MobileDashboardHome` use a different coverage gap definition than the inventory page (`!warrantyId \|\| !insurancePolicyId` vs frontend `getCoverageStatus`) | Display improved (11b, 11d) but the underlying definition inconsistency is not resolved |
-| `MorningHomePulseCard` annual cost row — no structured cost field in `DailySnapshotDTO`; dollar amount is parsed from summary strings | Fallback improved (11c) but structured data requires a backend `DailySnapshotDTO` change |
+All previously listed gaps have been resolved. No open gaps remain in this batch.

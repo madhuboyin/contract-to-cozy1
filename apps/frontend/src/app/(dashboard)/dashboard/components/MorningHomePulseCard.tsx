@@ -35,6 +35,7 @@ import {
 import Link from 'next/link';
 import { track } from '@/lib/analytics/events';
 import type { CtcTool } from '@/lib/analytics/events';
+import { api } from '@/lib/api/client';
 import { listPropertyRecalls } from '../properties/[id]/recalls/recallsApi';
 
 type MorningHomePulseCardProps = {
@@ -228,6 +229,7 @@ export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCar
   const [actionBusy, setActionBusy] = useState<'COMPLETE' | 'DISMISS' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [actualRecallCount, setActualRecallCount] = useState<number | null>(null);
+  const [annualMaintenanceCost, setAnnualMaintenanceCost] = useState<number | null>(null);
 
   const loadSnapshot = useCallback(async () => {
     if (!propertyId) {
@@ -243,18 +245,24 @@ export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCar
       setSnapshot(data);
       track('morning_brief_opened', { propertyId, itemCount: data.payload.summary.length });
 
-      // 🔑 FIXED: Fetch actual recall count from API instead of parsing text
-      try {
-        const recallsData = await listPropertyRecalls(propertyId);
-        // Count only OPEN and NEEDS_CONFIRMATION recalls (not dismissed or resolved)
-        const activeRecalls = recallsData.matches.filter(
-          match => match.status === 'OPEN' || match.status === 'NEEDS_CONFIRMATION'
+      // Fetch recall count and maintenance cost in parallel — both non-critical
+      const [recallsResult, statsResult] = await Promise.allSettled([
+        listPropertyRecalls(propertyId),
+        api.getMaintenanceTaskStats(propertyId),
+      ]);
+
+      if (recallsResult.status === 'fulfilled') {
+        const activeRecalls = recallsResult.value.matches.filter(
+          (match) => match.status === 'OPEN' || match.status === 'NEEDS_CONFIRMATION'
         );
         setActualRecallCount(activeRecalls.length);
-      } catch (recallError) {
-        // If recalls API fails, don't break the whole card - just hide recall CTA
-        console.warn('Failed to fetch recall count:', recallError);
+      } else {
         setActualRecallCount(null);
+      }
+
+      if (statsResult.status === 'fulfilled' && statsResult.value.success) {
+        const cost = statsResult.value.data.totalEstimatedCost;
+        setAnnualMaintenanceCost(cost > 0 ? cost : null);
       }
     } catch (err: any) {
       setError(err?.message ?? 'Failed to load Morning Home Pulse.');
@@ -441,8 +449,9 @@ export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCar
             : row.kind === 'RISK' && (riskExposurePct ?? 0) >= 60
               ? 1
               : 0;
-          const annualCost =
-            extractCurrency(`${row.reason} ${payload.homeWin.detail} ${payload.surprise.detail}`)
+          const annualCost = annualMaintenanceCost !== null
+            ? new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(annualMaintenanceCost)
+            : extractCurrency(`${row.reason} ${payload.homeWin.detail} ${payload.surprise.detail}`)
             ?? (scoreValue > 0 ? `Score: ${scoreValue}/100` : 'No data yet');
           const nextRenewal = extractDateLabel(`${payload.surprise.headline} ${payload.surprise.detail}`) ?? 'Not scheduled';
           const detailRows =
