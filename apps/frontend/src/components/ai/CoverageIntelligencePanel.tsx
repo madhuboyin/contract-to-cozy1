@@ -492,6 +492,15 @@ export default function CoverageIntelligencePanel({
     setHasSimulated(false);
   }, [analysisBasedOverrides]);
 
+  // Scroll to hash anchor once analysis is loaded (e.g. #scenario-simulator from nextSteps CTA).
+  useEffect(() => {
+    if (loading || !analysis) return;
+    const hash = window.location.hash;
+    if (!hash) return;
+    const el = document.getElementById(hash.slice(1));
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [loading, analysis]);
+
   if (loading) {
     return (
       <div className="rounded-2xl border border-black/10 bg-white p-8 flex items-center justify-center gap-3">
@@ -1145,7 +1154,7 @@ export default function CoverageIntelligencePanel({
           <div className="mt-4 grid gap-4 xl:grid-cols-2 xl:items-start">
 
             {/* LEFT: Scenario Simulator */}
-            <section className="rounded-2xl border border-black/[0.07] bg-white p-6 md:p-5 shadow-sm">
+            <section id="scenario-simulator" className="rounded-2xl border border-black/[0.07] bg-white p-6 md:p-5 shadow-sm">
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <h3 className="text-base font-semibold text-slate-900">Scenario Simulator</h3>
