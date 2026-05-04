@@ -272,13 +272,37 @@ export function CoverageOpportunityCard({
   totalValue,
   onReviewGaps,
   onViewActions,
+  onAdd,
 }: {
   gapCount: number;
   exposedValue: number;
   totalValue: number;
   onReviewGaps: () => void;
   onViewActions: () => void;
+  onAdd?: () => void;
 }) {
+  if (gapCount === 0 && totalValue === 0) {
+    return (
+      <SummaryCard
+        title="Coverage Opportunity"
+        subtitle="Start tracking items to see your coverage health."
+      >
+        <p className="mb-0 text-sm text-[hsl(var(--mobile-text-secondary))]">
+          Add appliances, systems, and valuables to track replacement value and coverage gaps.
+        </p>
+        {onAdd && (
+          <button
+            type="button"
+            onClick={onAdd}
+            className="inline-flex min-h-[42px] w-full items-center justify-center rounded-xl bg-[hsl(var(--mobile-brand-strong))] px-3 py-2 text-sm font-semibold text-white"
+          >
+            + Add your first item
+          </button>
+        )}
+      </SummaryCard>
+    );
+  }
+
   if (gapCount === 0) {
     return (
       <SummaryCard

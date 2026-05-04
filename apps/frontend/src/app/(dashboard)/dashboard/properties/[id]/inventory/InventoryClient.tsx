@@ -405,6 +405,7 @@ export default function InventoryClient() {
               totalValue={portfolioStats.totalValue}
               onReviewGaps={() => setActiveSmartFilter('gaps')}
               onViewActions={() => router.push(`/dashboard/properties/${propertyId}/fix?filter=coverage`)}
+              onAdd={onAdd}
             />
           </MobileSection>
 
@@ -557,6 +558,7 @@ export default function InventoryClient() {
             totalValue={portfolioStats.totalValue}
             onReviewGaps={() => setActiveSmartFilter('gaps')}
             onViewActions={() => router.push(`/dashboard/properties/${propertyId}/fix?filter=coverage`)}
+            onAdd={onAdd}
           />
 
           <PortfolioIntelligenceStrip

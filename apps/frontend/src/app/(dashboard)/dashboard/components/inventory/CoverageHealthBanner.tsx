@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { AlertTriangle, CheckCircle } from 'lucide-react';
+import { AlertTriangle, CheckCircle, PackagePlus } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils/format';
 
 type CoverageHealthBannerProps = {
@@ -10,6 +10,7 @@ type CoverageHealthBannerProps = {
   totalValue: number;
   onReviewGaps: () => void;
   onViewActions: () => void;
+  onAdd?: () => void;
 };
 
 export default function CoverageHealthBanner({
@@ -18,7 +19,33 @@ export default function CoverageHealthBanner({
   totalValue,
   onReviewGaps,
   onViewActions,
+  onAdd,
 }: CoverageHealthBannerProps) {
+  if (gapCount === 0 && totalValue === 0) {
+    return (
+      <div className="mb-4 flex flex-col gap-3 rounded-xl border border-gray-200 bg-gray-50 px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-3">
+          <div className="rounded-full bg-gray-100 p-1.5">
+            <PackagePlus className="h-4 w-4 text-gray-500" />
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-gray-800">No items tracked yet</p>
+            <p className="text-xs text-gray-500">Add appliances, systems, and valuables to track coverage and replacement value.</p>
+          </div>
+        </div>
+        {onAdd && (
+          <button
+            type="button"
+            onClick={onAdd}
+            className="rounded-lg bg-gray-800 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-gray-700 whitespace-nowrap"
+          >
+            + Add item
+          </button>
+        )}
+      </div>
+    );
+  }
+
   if (gapCount === 0) {
     return (
       <div className="mb-4 flex flex-col gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
