@@ -939,9 +939,7 @@ export default function DashboardPage() {
         ? `${topItemName}${topExposureText} is fully exposed. ${remainingCount} other gap${remainingCount === 1 ? '' : 's'} also need coverage — ${formatUsd(data.coverageGapExposure)} total unprotected.`
         : `${topItemName}${topExposureText} has no warranty or insurance. Fully exposed if it fails or is damaged.`;
       const ctaLabel = remainingCount > 0 ? `Review ${topItemName} first` : `Review ${topItemName}`;
-      const ctaHref = topGap.itemId
-        ? buildPropertyAwareDashboardHref(effectiveSelectedPropertyId, `/dashboard/properties/${effectiveSelectedPropertyId}/inventory?tab=items&openItemId=${topGap.itemId}`)
-        : buildPropertyAwareDashboardHref(effectiveSelectedPropertyId, `/dashboard/properties/${effectiveSelectedPropertyId}/inventory?tab=items&smart=gaps`);
+      const ctaHref = buildPropertyAwareDashboardHref(effectiveSelectedPropertyId, `/dashboard/properties/${effectiveSelectedPropertyId}/inventory?tab=items&smart=gaps`);
       const etaLabel = 'ETA 2 min';
       return {
         badgeLabel: buildCoverageGapBadgeLabel(),
@@ -972,9 +970,7 @@ export default function DashboardPage() {
         ? `${topItemName}${topExposureText} is missing ${missingType}. ${remainingCount} other item${remainingCount === 1 ? '' : 's'} also have partial coverage.`
         : `${topItemName}${topExposureText} has either a warranty or insurance but not both. One coverage type is missing.`;
       const ctaLabel = remainingCount > 0 ? `Review ${topItemName} first` : `Review ${topItemName}`;
-      const ctaHref = topPartial.itemId
-        ? buildPropertyAwareDashboardHref(effectiveSelectedPropertyId, `/dashboard/properties/${effectiveSelectedPropertyId}/inventory?tab=items&openItemId=${topPartial.itemId}`)
-        : buildPropertyAwareDashboardHref(effectiveSelectedPropertyId, `/dashboard/properties/${effectiveSelectedPropertyId}/inventory?tab=items&smart=gaps`);
+      const ctaHref = buildPropertyAwareDashboardHref(effectiveSelectedPropertyId, `/dashboard/properties/${effectiveSelectedPropertyId}/inventory?tab=items&smart=gaps`);
       const etaLabel = 'ETA 2 min';
       return {
         badgeLabel: buildCoveragePartialBadgeLabel(),

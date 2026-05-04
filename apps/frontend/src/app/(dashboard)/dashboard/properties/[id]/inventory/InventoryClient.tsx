@@ -96,6 +96,7 @@ export default function InventoryClient() {
   const roomIdFromUrl = searchParams.get('roomId');
   const from = searchParams.get('from');
   const tabFromUrl = searchParams.get('tab');
+  const smartFromUrl = searchParams.get('smart') as SmartFilterId | null;
 
   const [rooms, setRooms] = useState<InventoryRoom[]>([]);
   const [items, setItems] = useState<InventoryItem[]>([]);
@@ -108,7 +109,7 @@ export default function InventoryClient() {
   const [categoryFilter, setCategoryFilter] = useState<InventoryItemCategory | null>(null);
   const [docsFilter, setDocsFilter] = useState<'any' | 'with-docs' | 'no-docs'>('any');
   const [recallFilter, setRecallFilter] = useState<'any' | 'with-recalls' | 'no-recalls'>('any');
-  const [activeSmartFilter, setActiveSmartFilter] = useState<SmartFilterId | null>(null);
+  const [activeSmartFilter, setActiveSmartFilter] = useState<SmartFilterId | null>(smartFromUrl);
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
