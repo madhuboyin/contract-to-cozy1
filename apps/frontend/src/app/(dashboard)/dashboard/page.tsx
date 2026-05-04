@@ -370,6 +370,7 @@ export interface UrgentActionItem {
     severity?: 'INFO' | 'WARNING' | 'CRITICAL';
     entityType?: 'Warranty' | 'Insurance';
     itemId?: string;
+    exposureCents?: number;
 }
 
 interface DashboardData {
@@ -543,6 +544,7 @@ const consolidateUrgentActions = (
                     propertyId: item.propertyId || 'N/A',
                     severity: 'WARNING',
                     itemId: item.id,
+                    exposureCents: item.replacementCostCents ?? 0,
                 });
             } else if (!hasWarranty || !hasInsurance) {
                 const missing = !hasWarranty ? 'warranty' : 'insurance';
@@ -554,17 +556,21 @@ const consolidateUrgentActions = (
                     propertyId: item.propertyId || 'N/A',
                     severity: 'INFO',
                     itemId: item.id,
+                    exposureCents: item.replacementCostCents ?? 0,
                 });
             }
         });
     }
 
-    // Sort: Incidents > Coverage Gaps > Health > Urgent maintenance > Urgency (daysUntilDue)
+    // Sort: Incidents > Coverage Gaps (by exposure desc) > Health > Urgent maintenance > Urgency (daysUntilDue)
     return actions.sort((a, b) => {
         if (a.type === 'INCIDENT' && b.type !== 'INCIDENT') return -1;
         if (b.type === 'INCIDENT' && a.type !== 'INCIDENT') return 1;
         if (a.type === 'COVERAGE_GAP' && b.type !== 'COVERAGE_GAP' && b.type !== 'INCIDENT') return -1;
         if (b.type === 'COVERAGE_GAP' && a.type !== 'COVERAGE_GAP' && a.type !== 'INCIDENT') return 1;
+        if (a.type === 'COVERAGE_GAP' && b.type === 'COVERAGE_GAP') {
+            return (b.exposureCents ?? 0) - (a.exposureCents ?? 0);
+        }
         if (a.daysUntilDue === undefined) return 1;
         if (b.daysUntilDue === undefined) return -1;
         return a.daysUntilDue - b.daysUntilDue;
@@ -916,18 +922,32 @@ export default function DashboardPage() {
       };
     }
 
-    // 3. Coverage gaps
+    // 3. Coverage gaps — show highest-exposure item; [0] is already sorted by exposureCents desc
     const coverageGapActions = scopedUrgentActions.filter(a => a.type === 'COVERAGE_GAP');
     if (coverageGapActions.length > 0) {
+      const topGap = coverageGapActions[0];
       const gapCount = coverageGapActions.length;
-      const impactLabel = `${gapCount} item${gapCount === 1 ? '' : 's'} unprotected`;
+      const remainingCount = gapCount - 1;
+      const topItemName = topGap.title.replace(/ needs coverage$/, '');
+      const topExposureCents = topGap.exposureCents ?? 0;
+      const topExposureText = topExposureCents > 0 ? ` (${formatUsdFromCents(topExposureCents)})` : '';
+      const impactLabel = topExposureCents > 0
+        ? `${formatUsdFromCents(topExposureCents)} unprotected`
+        : `${gapCount} item${gapCount === 1 ? '' : 's'} unprotected`;
+      const subtitle = remainingCount > 0
+        ? `${topItemName}${topExposureText} is fully exposed. ${remainingCount} other gap${remainingCount === 1 ? '' : 's'} also need coverage — ${formatUsd(data.coverageGapExposure)} total unprotected.`
+        : `${topItemName}${topExposureText} has no warranty or insurance. Fully exposed if it fails or is damaged.`;
+      const ctaLabel = remainingCount > 0 ? `Review ${topItemName} first` : `Review ${topItemName}`;
+      const ctaHref = topGap.itemId
+        ? buildPropertyAwareDashboardHref(effectiveSelectedPropertyId, `/dashboard/properties/${effectiveSelectedPropertyId}/inventory?tab=items&openItemId=${topGap.itemId}`)
+        : buildPropertyAwareDashboardHref(effectiveSelectedPropertyId, `/dashboard/properties/${effectiveSelectedPropertyId}/inventory?tab=items&smart=gaps`);
       const etaLabel = 'ETA 2 min';
       return {
         badgeLabel: buildCoverageGapBadgeLabel(),
-        title: `${gapCount} item${gapCount === 1 ? '' : 's'} ${gapCount === 1 ? 'has' : 'have'} no coverage.`,
-        subtitle: 'Chosen because unprotected items represent direct financial exposure with no safety net.',
-        ctaLabel: 'Review coverage gaps',
-        href: buildPropertyAwareDashboardHref(effectiveSelectedPropertyId, `/dashboard/properties/${effectiveSelectedPropertyId}/inventory?tab=items&smart=gaps`),
+        title: `Your ${topItemName} has no coverage.`,
+        subtitle,
+        ctaLabel,
+        href: ctaHref,
         impactLabel,
         etaLabel,
         ...buildCoverageGapActionMeta(gapCount, data.coverageGapExposure),
