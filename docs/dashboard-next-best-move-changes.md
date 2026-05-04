@@ -1,7 +1,7 @@
 # Dashboard — Next Best Move: Changes Reference
 
 > **Scope:** `apps/frontend/src/app/(dashboard)/dashboard/page.tsx` and `apps/backend/src/services/coverageGap.service.ts`
-> **Commits:** `c7e3e4c` · `f2fd55d` · `a195174`
+> **Commits:** `c7e3e4c` · `f2fd55d` · `a195174` · `cf89a82`
 
 ---
 
@@ -19,7 +19,7 @@ The card evaluates conditions in this order and renders the first match. The cas
 |------|-----------|-------|-----------------|
 | 1 | Active incident (CRITICAL or WARNING) | `Priority alert` | `scopedActiveIncidents` |
 | 2 | Health score insight flagged | `Top priority this week` | `scopedUrgentActions` (type: HEALTH_INSIGHT) |
-| 3 | Items with no coverage at all | `Coverage gap detected` | `scopedUrgentActions` (type: COVERAGE_GAP) |
+| 3 | Items with no coverage at all | `Coverage gap detected` | `scopedUrgentActions` (type: COVERAGE_GAP) — shows highest-exposure item |
 | 3b | Items with warranty but no insurance, or vice versa | `Partial coverage detected` | `scopedUrgentActions` (type: COVERAGE_PARTIAL) |
 | 4 | Annual savings opportunity ≥ $200 | `Best savings move` | `homeSavingsSummaryQuery` |
 | 4.5 | Backend risk or cost signal | `Risk signal active` / `Cost pressure detected` | `orchestrationQuery` (reasonCode: RISK_SPIKE / COST_PRESSURE) |
@@ -199,6 +199,30 @@ const orchestrationQuery = useQuery({
 |------|---------|
 | `apps/frontend/src/app/(dashboard)/dashboard/page.tsx` | All frontend changes above |
 | `apps/backend/src/services/coverageGap.service.ts` | Detection thresholds lowered: $1,500 → $500 (general), $750 → $250 (appliances) |
+
+> **Change 9 touches only** `apps/frontend/src/app/(dashboard)/dashboard/page.tsx` — `UrgentActionItem` interface, `consolidateUrgentActions` sort and action pushes, heroNarrative step 3.
+
+---
+
+### 9. Coverage gap card shows highest-exposure item (`cf89a82`)
+
+**Problem:** heroNarrative step 3 showed a count ("N items have no coverage") and linked to the inventory gaps filter. The user had to scan the list to find which item was most important, and the title gave no concrete financial signal.
+
+**Fix:**
+
+- Added `exposureCents?: number` to `UrgentActionItem` — previously `replacementCostCents` was used only to build a display string and was never carried onto the action object.
+- COVERAGE_GAP and COVERAGE_PARTIAL pushes in `consolidateUrgentActions` now store `item.replacementCostCents ?? 0` as `exposureCents`.
+- The sort function now orders COVERAGE_GAP actions by `exposureCents` descending within the group, so `coverageGapActions[0]` is guaranteed to be the highest-dollar gap.
+- heroNarrative step 3 rewritten:
+
+| Slot | Single gap | Multiple gaps |
+|------|-----------|---------------|
+| Title | `"Your {Item Name} has no coverage."` | `"Your {Top Item Name} has no coverage."` |
+| Subtitle | `"{Item} ({$X}) has no warranty or insurance. Fully exposed if it fails or is damaged."` | `"{Item} ({$X}) is fully exposed. {N} other gap(s) also need coverage — {$Y} total unprotected."` |
+| CTA label | `"Review {Item Name}"` | `"Review {Item Name} first"` |
+| CTA href | `?tab=items&openItemId={topItem.itemId}` (opens detail panel directly) | Same — top item's panel |
+
+The `openItemId` param already causes the inventory page to open the item's side panel on load, so the CTA drops the user directly onto the worst offender.
 
 ---
 
