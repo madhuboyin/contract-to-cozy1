@@ -584,6 +584,11 @@ function resolveUrgentActionHref(action: UrgentActionItem, propertyId?: string):
     action.propertyId && action.propertyId !== 'N/A' ? action.propertyId : fallbackPropertyId;
   if (!actionPropertyId) return '/dashboard/resolution-center?filter=urgent';
 
+  if (action.type === 'HEALTH_INSIGHT') {
+    const focus = encodeURIComponent(action.title.trim().toLowerCase());
+    return `/dashboard/properties/${actionPropertyId}/health-score?focus=${focus}`;
+  }
+
   return buildGuidanceOverviewHref({
     propertyId: actionPropertyId,
     inventoryItemId: action.itemId ?? null,
