@@ -240,14 +240,15 @@ function buildSavingsActionMeta(amount: number) {
   );
 }
 
-function buildVaultActionMeta() {
+function buildVaultActionMeta(count: number) {
+  const itemLabel = count === 0 ? '0 items on file' : `${count} item${count === 1 ? '' : 's'} on file`;
   return buildTopCardActionMeta(
     'Home Vault',
     'Start with one receipt, appliance, or service record.',
     'Add one record to unlock better guidance and stronger home context.',
     'Records added',
-    '0 items on file',
-    8,
+    itemLabel,
+    Math.min(100, Math.round((count / 3) * 100)),
   );
 }
 
@@ -616,7 +617,9 @@ export default function DashboardPage() {
         }
       }
 
-      const propId = selectedPropertyId || scoredProperties[0]?.id;
+      const propId = (selectedPropertyId && scoredProperties.some(p => p.id === selectedPropertyId))
+        ? selectedPropertyId
+        : scoredProperties[0]?.id;
 
       const [bookingsRes, checklistRes, warrantiesRes, policiesRes, incidentsRes, inventoryRes] = await Promise.all([
         api.listBookings({ limit: 50, sortBy: 'createdAt', sortOrder: 'desc' })
@@ -817,7 +820,7 @@ export default function DashboardPage() {
         href: buildPropertyAwareDashboardHref(effectiveSelectedPropertyId, '/dashboard/vault'),
         impactLabel,
         etaLabel,
-        ...buildVaultActionMeta(),
+        ...buildVaultActionMeta(data.inventoryCount),
       };
     }
 
