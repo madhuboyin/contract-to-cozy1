@@ -1,7 +1,7 @@
 # Dashboard — Next Best Move: Changes Reference
 
 > **Scope:** `apps/frontend/src/app/(dashboard)/dashboard/page.tsx`, `apps/backend/src/services/coverageGap.service.ts`, `apps/backend/src/services/roomInsights.service.ts`, and dashboard components: `MobileDashboardHome`, `MorningHomePulseCard`, `RoomsSnapshotSection`, `ExistingOwnerDashboard`
-> **Commits:** `c7e3e4c` · `f2fd55d` · `a195174` · `cf89a82` · `36ce85f` · `6a2be1d` · `(pending)`
+> **Commits:** `c7e3e4c` · `f2fd55d` · `a195174` · `cf89a82` · `36ce85f` · `6a2be1d` · `99a0565`
 
 ---
 
@@ -307,7 +307,7 @@ The `openItemId` param already causes the inventory page to open the item's side
 
 ---
 
-### 12. Known gaps resolved (`pending`)
+### 12. Known gaps resolved (`99a0565`)
 
 #### 12a. SCENARIO_CONTINUITY surfaced in heroNarrative step 4.5 (`page.tsx`)
 
