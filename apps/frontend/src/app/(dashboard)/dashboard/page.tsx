@@ -10,16 +10,11 @@ import {
   CalendarClock,
   Gauge,
   Landmark,
-  PiggyBank,
-  Shield,
-  ShieldAlert,
   Sprout,
   TrendingUp,
   Zap,
   ArrowRight,
   CheckCircle2,
-  AlertCircle,
-  Box
 } from 'lucide-react';
 import { Booking, HomeBuyerTask, HomeBuyerChecklist, Warranty, InsurancePolicy, LocalUpdate, InventoryItem } from '@/types';
 import { ScoredProperty } from './types'; 
@@ -59,8 +54,6 @@ import { recordGuidanceToolStatus } from '@/lib/api/guidanceApi';
 import { seasonalAPI } from '@/lib/api/seasonal.api';
 import { getHomeSavingsSummary } from '@/lib/api/homeSavingsApi';
 import { useQuery } from '@tanstack/react-query';
-import { HeroValueStrip, ValueStripTile } from './components/HeroValueStrip';
-import { RecommendedMove, SignatureRecommendationCard } from './components/SignatureRecommendationCard';
 import CommandCenterTemplate from './components/CommandCenterTemplate';
 import SupportingActionCard from './components/SupportingActionCard';
 import DashboardRouteState from './components/DashboardRouteState';
@@ -1105,86 +1098,6 @@ export default function DashboardPage() {
     };
   })();
 
-  const coverageGapCount = scopedUrgentActions.filter(a => a.type === 'COVERAGE_GAP').length;
-
-  const heroValueTiles: ValueStripTile[] = [
-    ...(healthScore !== null ? [{
-      id: 'health-score',
-      label: 'Health Score',
-      value: `${healthScore} / 100`,
-      icon: Gauge,
-      tone: healthScore >= 75 ? 'teal' : healthScore >= 50 ? 'amber' : 'red',
-      href: buildPropertyAwareDashboardHref(effectiveSelectedPropertyId, '/dashboard/health-score'),
-    } as ValueStripTile] : []),
-    {
-      id: 'coverage',
-      label: coverageGapCount === 0 ? 'Coverage' : `Coverage gap${coverageGapCount === 1 ? '' : 's'}`,
-      value: coverageGapCount === 0 ? 'Protected' : `${coverageGapCount} item${coverageGapCount === 1 ? '' : 's'}`,
-      icon: coverageGapCount > 0 ? ShieldAlert : Shield,
-      tone: coverageGapCount === 0 ? 'teal' : coverageGapCount === 1 ? 'amber' : 'red',
-      href: effectiveSelectedPropertyId
-        ? `/dashboard/properties/${effectiveSelectedPropertyId}/inventory?tab=items&smart=gaps`
-        : undefined,
-    } as ValueStripTile,
-    ...(annualSavingsPotential >= 200 ? [{
-      id: 'savings',
-      label: 'Annual savings',
-      value: formatUsd(annualSavingsPotential),
-      icon: PiggyBank,
-      tone: 'teal',
-      href: buildPropertyAwareDashboardHref(effectiveSelectedPropertyId, '/dashboard/home-savings'),
-    } as ValueStripTile] : []),
-    ...(overdueMaintenanceCount > 0 ? [{
-      id: 'overdue',
-      label: `Overdue task${overdueMaintenanceCount === 1 ? '' : 's'}`,
-      value: String(overdueMaintenanceCount),
-      icon: AlertCircle,
-      tone: 'amber',
-      href: buildPropertyAwareDashboardHref(effectiveSelectedPropertyId, '/dashboard/fix?focus=priority-actions'),
-    } as ValueStripTile] : []),
-    ...(riskExposureGap > 0 ? [{
-      id: 'risk-exposure',
-      label: 'Risk exposure',
-      value: formatUsd(riskExposureGap),
-      icon: ShieldAlert,
-      tone: 'red',
-    } as ValueStripTile] : []),
-  ];
-
-  const heroMomentumLabel = scopedUrgentActions.length === 0 && scopedActiveIncidents.length === 0
-    ? 'All clear'
-    : null;
-
-  const signatureRecommendationMoves: RecommendedMove[] = scopedUrgentActions.slice(0, 3).map((action) => {
-    const isCoverageAction = action.type === 'COVERAGE_GAP' || action.type === 'COVERAGE_PARTIAL';
-    const href = isCoverageAction && action.itemId && effectiveSelectedPropertyId
-      ? buildPropertyAwareDashboardHref(effectiveSelectedPropertyId, `/dashboard/properties/${effectiveSelectedPropertyId}/inventory?tab=items&openItemId=${action.itemId}`)
-      : resolveUrgentActionHref(action, effectiveSelectedPropertyId);
-    return {
-      id: action.id,
-      title: action.title,
-      detail: action.description,
-      href,
-      impact: action.type === 'INCIDENT' ? 'Active risk — immediate review needed'
-        : action.type === 'COVERAGE_GAP' ? 'Direct financial exposure with no safety net'
-        : action.type === 'COVERAGE_PARTIAL' ? 'Partial protection — one coverage type missing'
-        : action.type === 'MAINTENANCE_OVERDUE' ? 'Overdue — prevents escalation cost'
-        : action.type === 'RENEWAL_EXPIRED' ? 'Coverage lapsed — renew to restore'
-        : action.type === 'RENEWAL_UPCOMING' ? 'Renew within 90 days to maintain protection'
-        : action.type === 'HEALTH_INSIGHT' ? 'Health score driver — review to improve signals'
-        : null,
-    };
-  });
-
-  const signatureRecommendationSummary = scopedUrgentActions.length === 0
-    ? null
-    : scopedUrgentActions[0]?.type === 'INCIDENT'
-    ? 'An active incident is the top priority right now.'
-    : scopedUrgentActions[0]?.type === 'COVERAGE_GAP'
-    ? 'Unprotected items are the top priority to address.'
-    : scopedUrgentActions[0]?.type === 'HEALTH_INSIGHT'
-    ? 'Property health signals are driving the current recommendation.'
-    : 'Based on your latest risk, maintenance, and coverage signals.';
 
   if (userLoading || data.isLoading || !redirectChecked) {
     return <DashboardRouteState state="loading" title="Preparing your command center" description="Syncing your latest home intelligence..." />;
@@ -1235,7 +1148,7 @@ export default function DashboardPage() {
           />
         }
       >
-        <div className="grid gap-3 md:grid-cols-3">
+        <div className="grid gap-3 md:grid-cols-4">
           <Link href={healthScoreHref} className="block rounded-[24px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2">
             <MetricTile
               label="Health score"
@@ -1260,6 +1173,15 @@ export default function DashboardPage() {
               value={formatUsd(annualSavingsPotential)}
               hint="Verified savings opportunities"
               tone="brand"
+              className="h-full cursor-pointer"
+            />
+          </Link>
+          <Link href={buildPropertyAwareDashboardHref(effectiveSelectedPropertyId, '/dashboard/risk-radar')} className="block rounded-[24px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2">
+            <MetricTile
+              label="Risk exposure"
+              value={riskExposureGap > 0 ? formatUsd(riskExposureGap) : 'None found'}
+              hint="Unhedged financial exposure"
+              tone={riskExposureGap > 0 ? 'danger' : 'success'}
               className="h-full cursor-pointer"
             />
           </Link>
@@ -1303,15 +1225,7 @@ export default function DashboardPage() {
           freshnessLabel="Updated today"
           sourceLabel="Home analysis"
           secondaryModules={
-            <div className="space-y-12">
-               <HeroValueStrip tiles={heroValueTiles} momentumLabel={heroMomentumLabel} />
-               <SignatureRecommendationCard
-                 propertyLabel={selectedProperty?.address || 'Your Home'}
-                 moves={signatureRecommendationMoves}
-                 summary={signatureRecommendationSummary}
-               />
-               <RoomsSnapshotSection propertyId={effectiveSelectedPropertyId} />
-            </div>
+            <RoomsSnapshotSection propertyId={effectiveSelectedPropertyId} />
           }
         />
       </div>
