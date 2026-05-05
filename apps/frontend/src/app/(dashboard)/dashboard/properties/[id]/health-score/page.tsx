@@ -1160,7 +1160,7 @@ export default function PropertyHealthDetailPage() {
                 ))}
               </div>
             )}
-            <div className="px-3 pb-3 space-y-2">
+            <div className="px-3 pb-3 space-y-2 mt-auto">
               <Link href={`/dashboard/properties/${propertyId}/?tab=maintenance&view=insights`} className="block">
                 <div className="rounded-xl bg-teal-800 hover:bg-teal-700 active:scale-[0.99] transition-all px-3 py-2 cursor-pointer flex items-center justify-between gap-2">
                   <p className="text-[12px] font-semibold text-white tracking-normal">View maintenance actions</p>
