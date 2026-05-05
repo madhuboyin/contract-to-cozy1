@@ -812,6 +812,7 @@ const AssetMatrixTable = ({
                                 <button
                                     key={opt.value}
                                     onClick={() => setFilterCategory(opt.value)}
+                                    aria-pressed={filterCategory === opt.value}
                                     className={`h-8 px-3 text-xs font-medium border-r border-input last:border-r-0 transition-colors ${
                                         filterCategory === opt.value
                                             ? 'bg-primary text-primary-foreground'
@@ -836,6 +837,7 @@ const AssetMatrixTable = ({
                                 <button
                                     key={opt.value}
                                     onClick={() => setFilterRisk(opt.value)}
+                                    aria-pressed={filterRisk === opt.value}
                                     className={`h-8 px-3 text-xs font-medium border-r border-input last:border-r-0 transition-colors ${
                                         filterRisk === opt.value
                                             ? 'bg-primary text-primary-foreground'
@@ -858,6 +860,7 @@ const AssetMatrixTable = ({
                                 <button
                                     key={opt.value}
                                     onClick={() => setSortBy(opt.value as 'risk' | 'exposure' | 'age')}
+                                    aria-pressed={sortBy === opt.value}
                                     className={`h-8 px-3 text-xs font-medium border-r border-input last:border-r-0 transition-colors ${
                                         sortBy === opt.value
                                             ? 'bg-primary text-primary-foreground'
@@ -872,12 +875,20 @@ const AssetMatrixTable = ({
                             {filteredDetails.length} of {details.length} item{details.length !== 1 ? 's' : ''}
                         </span>
                         {(filterCategory !== 'ALL' || filterRisk !== 'ALL') && (
-                            <button
-                                onClick={() => { setFilterCategory('ALL'); setFilterRisk('ALL'); }}
-                                className="text-xs text-primary hover:underline"
-                            >
-                                Clear filters
-                            </button>
+                            <>
+                                <span className="inline-flex items-center gap-1 text-xs bg-primary/10 text-primary rounded-full px-2 py-0.5">
+                                    {[
+                                        filterCategory !== 'ALL' ? filterCategory.charAt(0) + filterCategory.slice(1).toLowerCase().replace('_gap', '') : null,
+                                        filterRisk !== 'ALL' ? filterRisk.charAt(0) + filterRisk.slice(1).toLowerCase() : null,
+                                    ].filter(Boolean).join(' · ')}
+                                </span>
+                                <button
+                                    onClick={() => { setFilterCategory('ALL'); setFilterRisk('ALL'); }}
+                                    className="text-xs text-primary hover:underline"
+                                >
+                                    Clear
+                                </button>
+                            </>
                         )}
                     </div>
                 </div>
@@ -893,6 +904,7 @@ const AssetMatrixTable = ({
                         <button
                             key={opt.value}
                             onClick={() => setFilterRisk(opt.value)}
+                            aria-pressed={filterRisk === opt.value}
                             className={`h-7 px-3 text-xs font-medium rounded-full border transition-colors ${
                                 filterRisk === opt.value
                                     ? 'bg-primary text-primary-foreground border-primary'
@@ -960,7 +972,7 @@ const AssetMatrixTable = ({
                                         <span className="font-semibold">{item.age} yrs</span>
                                         <span className="text-muted-foreground"> / {item.expectedLife} yrs</span>
                                         {data.isPastLife && (
-                                            <span className="text-red-500 text-xs block">(Past Life)</span>
+                                            <span className="inline-flex items-center text-[10px] font-medium bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 rounded px-1 py-0.5 mt-0.5">Past Life</span>
                                         )}
                                     </div>
                                     <div>
@@ -1036,7 +1048,7 @@ const AssetMatrixTable = ({
                             <TableRow>
                                 <TableHead className="whitespace-nowrap">Asset</TableHead>
                                 <TableHead className="whitespace-nowrap">Category</TableHead>
-                                <TableHead className="whitespace-nowrap">Age / Expected Life</TableHead>
+                                <TableHead className="whitespace-nowrap">Age / Life</TableHead>
                                 <TableHead className="whitespace-nowrap">Risk Level</TableHead>
                                 <TableHead className="whitespace-nowrap">Out-of-Pocket Exposure</TableHead>
                                 <TableHead className="whitespace-nowrap">Action</TableHead>
@@ -1090,8 +1102,22 @@ const AssetMatrixTable = ({
                                             {displayLabel(item.category)}
                                         </TableCell>
                                         <TableCell className="align-top py-3 whitespace-nowrap">
-                                            <span className="font-semibold">{item.age} yrs</span> / {item.expectedLife} yrs
-                                            {data.isPastLife && <span className="text-red-500 text-xs ml-2">(Past Life)</span>}
+                                            <span className="font-semibold">{item.age} yrs</span>
+                                            <span className="text-muted-foreground"> / {item.expectedLife} yrs</span>
+                                            {data.isPastLife && (
+                                                <span className="ml-2 inline-flex items-center text-[10px] font-medium bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 rounded px-1 py-0.5">Past Life</span>
+                                            )}
+                                            <div className="mt-1.5 w-24 h-1.5 rounded-full bg-muted overflow-hidden">
+                                                <div
+                                                    className={`h-full rounded-full ${
+                                                        data.isPastLife ? 'bg-red-500' :
+                                                        (item.age / item.expectedLife) >= 0.8 ? 'bg-orange-400' :
+                                                        (item.age / item.expectedLife) >= 0.6 ? 'bg-yellow-400' :
+                                                        'bg-green-500'
+                                                    }`}
+                                                    style={{ width: `${Math.min((item.age / item.expectedLife) * 100, 100)}%` }}
+                                                />
+                                            </div>
                                         </TableCell>
                                         <TableCell className="align-top py-3 whitespace-nowrap">
                                             {getRiskBadge(item.riskLevel)}
