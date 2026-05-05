@@ -949,7 +949,14 @@ const AssetMatrixTable = ({
                                             {displayLabel(item.assetName)}
                                         </h4>
                                         <p className="text-xs text-muted-foreground mt-0.5">
-                                            {displayLabel(item.category)} · {displayLabel(item.systemType)}
+                                            {(() => {
+                                                const name = displayLabel(item.assetName).toLowerCase();
+                                                const sys = displayLabel(item.systemType).toLowerCase();
+                                                const showSys = sys && sys !== name && !sys.includes(name) && !name.includes(sys);
+                                                return showSys
+                                                    ? `${displayLabel(item.category)} · ${displayLabel(item.systemType)}`
+                                                    : displayLabel(item.category);
+                                            })()}
                                         </p>
                                     </div>
                                     <div className="flex flex-col items-end gap-0.5 shrink-0">
@@ -1046,7 +1053,7 @@ const AssetMatrixTable = ({
                     <Table className="w-full table-auto">
                         <TableHeader>
                             <TableRow>
-                                <TableHead className="whitespace-nowrap">Asset</TableHead>
+                                <TableHead className="whitespace-nowrap min-w-[200px]">Asset</TableHead>
                                 <TableHead className="whitespace-nowrap">Category</TableHead>
                                 <TableHead className="whitespace-nowrap">Age / Life</TableHead>
                                 <TableHead className="whitespace-nowrap">Risk Level</TableHead>
@@ -1094,7 +1101,11 @@ const AssetMatrixTable = ({
                                                     <Badge variant="outline" className="text-[10px] h-4 px-1 border-purple-400 text-purple-600 dark:text-purple-400 shrink-0">Scheduled</Badge>
                                                 )}
                                             </div>
-                                            {displayLabel(item.systemType) !== displayLabel(item.assetName) && (
+                                            {(() => {
+                                                const name = displayLabel(item.assetName).toLowerCase();
+                                                const sys = displayLabel(item.systemType).toLowerCase();
+                                                return sys && sys !== name && !sys.includes(name) && !name.includes(sys);
+                                            })() && (
                                                 <div className="text-xs text-muted-foreground mt-0.5">{displayLabel(item.systemType)}</div>
                                             )}
                                         </TableCell>
