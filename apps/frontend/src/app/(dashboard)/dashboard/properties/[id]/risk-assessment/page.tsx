@@ -16,7 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { SEVERITY_CHIP } from "@/lib/utils/chipTokens";
 import { useAuth } from "@/lib/auth/AuthContext";
 import { MaintenanceConfigModal } from "../../../maintenance-setup/MaintenanceConfigModal"; 
@@ -524,6 +524,25 @@ const AssetMatrixTable = ({
         issueDomains: RISK_MATRIX_GUIDANCE_DOMAINS,
     });
 
+    const [filterCategory, setFilterCategory] = useState<string>('ALL');
+    const [filterRisk, setFilterRisk] = useState<string>('ALL');
+    const [sortBy, setSortBy] = useState<'risk' | 'exposure' | 'age'>('risk');
+
+    const riskOrder: Record<string, number> = { HIGH: 0, ELEVATED: 1, MODERATE: 2, LOW: 3 };
+
+    const filteredDetails = useMemo(() => {
+        let items = [...details];
+        if (filterCategory !== 'ALL') items = items.filter(d => d.category === filterCategory);
+        if (filterRisk !== 'ALL') items = items.filter(d => d.riskLevel === filterRisk);
+        items.sort((a, b) => {
+            if (sortBy === 'risk') return (riskOrder[a.riskLevel] ?? 4) - (riskOrder[b.riskLevel] ?? 4);
+            if (sortBy === 'exposure') return b.outOfPocketCost - a.outOfPocketCost;
+            if (sortBy === 'age') return (b.age - b.expectedLife) - (a.age - a.expectedLife);
+            return 0;
+        });
+        return items;
+    }, [details, filterCategory, filterRisk, sortBy]);
+
     const getRiskBadge = (level: AssetRiskDetail['riskLevel']) => {
         if (level === 'LOW') return <Badge variant="outline" className={SEVERITY_CHIP.good}>Low</Badge>;
         if (level === 'MODERATE') return <Badge variant="outline" className={SEVERITY_CHIP.medium}>Moderate</Badge>;
@@ -703,9 +722,58 @@ const AssetMatrixTable = ({
                 <CardDescription>A component-by-component breakdown of your home&apos;s risks, exposure, and potential actions.</CardDescription>
             </CardHeader>
             <CardContent>
+                {/* Sort & filter controls — desktop only */}
+                <div className="hidden md:flex items-center gap-3 mb-3 flex-wrap">
+                    <span className="text-xs text-muted-foreground shrink-0">
+                        {filteredDetails.length} of {details.length} item{details.length !== 1 ? 's' : ''}
+                    </span>
+                    <select
+                        value={filterCategory}
+                        onChange={e => setFilterCategory(e.target.value)}
+                        className="text-sm border border-input rounded-md px-2 py-1 bg-background text-foreground"
+                        aria-label="Filter by category"
+                    >
+                        <option value="ALL">All categories</option>
+                        <option value="STRUCTURE">Structure</option>
+                        <option value="SYSTEMS">Systems</option>
+                        <option value="SAFETY">Safety</option>
+                        <option value="FINANCIAL_GAP">Financial Gap</option>
+                    </select>
+                    <select
+                        value={filterRisk}
+                        onChange={e => setFilterRisk(e.target.value)}
+                        className="text-sm border border-input rounded-md px-2 py-1 bg-background text-foreground"
+                        aria-label="Filter by risk level"
+                    >
+                        <option value="ALL">All risk levels</option>
+                        <option value="HIGH">High</option>
+                        <option value="ELEVATED">Elevated</option>
+                        <option value="MODERATE">Moderate</option>
+                        <option value="LOW">Low</option>
+                    </select>
+                    <select
+                        value={sortBy}
+                        onChange={e => setSortBy(e.target.value as 'risk' | 'exposure' | 'age')}
+                        className="text-sm border border-input rounded-md px-2 py-1 bg-background text-foreground"
+                        aria-label="Sort by"
+                    >
+                        <option value="risk">Sort: Risk level</option>
+                        <option value="exposure">Sort: Exposure ↓</option>
+                        <option value="age">Sort: Age vs. life</option>
+                    </select>
+                    {(filterCategory !== 'ALL' || filterRisk !== 'ALL') && (
+                        <button
+                            onClick={() => { setFilterCategory('ALL'); setFilterRisk('ALL'); }}
+                            className="text-xs text-primary hover:underline"
+                        >
+                            Clear filters
+                        </button>
+                    )}
+                </div>
+
                 {/* ===== MOBILE: Card Layout (<md) ===== */}
                 <div className="md:hidden space-y-4">
-                    {details.map((item, index) => {
+                    {filteredDetails.map((item, index) => {
                         const data = getAssetRowData(item);
                         const rowKey =
                             item.inventoryItemId ??
@@ -783,7 +851,7 @@ const AssetMatrixTable = ({
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {details.map((item, index) => {
+                            {filteredDetails.map((item, index) => {
                                 const data = getAssetRowData(item);
                                 const rowKey =
                                     item.inventoryItemId ??
@@ -796,7 +864,9 @@ const AssetMatrixTable = ({
                                             <div className="flex items-center gap-2 flex-wrap">
                                                 <div>
                                                     {displayLabel(item.assetName)}
-                                                    <div className="text-xs text-muted-foreground">{displayLabel(item.systemType)}</div>
+                                                    {displayLabel(item.systemType) !== displayLabel(item.assetName) && (
+                                                        <div className="text-xs text-muted-foreground">{displayLabel(item.systemType)}</div>
+                                                    )}
                                                 </div>
                                                 {renderStatusBadges(data)}
                                             </div>
@@ -1127,6 +1197,8 @@ export default function RiskAssessmentPage() {
         ?.filter(d => d.riskLevel === 'HIGH' || d.riskLevel === 'ELEVATED')
         ?.sort((a, b) => b.outOfPocketCost - a.outOfPocketCost)
         ?.slice(0, 3) ?? [];
+    const potentialSavings = top3HighRisk.reduce((sum, item) => sum + item.outOfPocketCost, 0);
+    const reducedExposure = Math.max(0, exposure - potentialSavings);
 
     // --- PDF Download Handler (omitted for brevity) ---
     const handleDownloadPdf = async () => {
@@ -1476,6 +1548,13 @@ export default function RiskAssessmentPage() {
                                         ? 'Continue maintaining your assets to keep risk low.'
                                         : `Addressing the top items below can reduce your ${formattedExposure} 5-year exposure.`}
                                 </p>
+                                {top3HighRisk.length > 0 && potentialSavings > 0 && (
+                                    <p className="text-sm mt-1">
+                                        Resolving your top {top3HighRisk.length} high-risk item{top3HighRisk.length > 1 ? 's' : ''} could save{' '}
+                                        <span className="font-semibold text-green-600">{formatCurrency(potentialSavings)}</span>
+                                        {' '}— reducing exposure to ~<span className="font-semibold">{formatCurrency(reducedExposure)}</span>.
+                                    </p>
+                                )}
                             </div>
                         </div>
                     </CardContent>
