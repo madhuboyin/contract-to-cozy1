@@ -141,13 +141,12 @@ function getInsightTone(statusValue: string | undefined): "good" | "info" | "ele
 
 function getInsightChipLabel(insight: HealthInsight): string {
   const status = String(insight.status || "");
-  const name = getChipFactorName(insight.factor);
-  if (status === "Missing Data") return `${name} missing`;
-  if (REQUIRED_ACTION_STATUSES.includes(status)) return `${name} needs attention`;
-  if (IN_PROGRESS_STATUSES.includes(status)) return `${name} in progress`;
-  if (WATCH_STATUSES.includes(status)) return `Monitor ${name}`;
-  if (POSITIVE_STATUSES.includes(status)) return `${name} — healthy`;
-  return name;
+  if (status === "Missing Data") return "data missing";
+  if (REQUIRED_ACTION_STATUSES.includes(status)) return "needs attention";
+  if (IN_PROGRESS_STATUSES.includes(status)) return "in progress";
+  if (WATCH_STATUSES.includes(status)) return "monitor";
+  if (POSITIVE_STATUSES.includes(status)) return "healthy";
+  return status.toLowerCase() || "review";
 }
 
 function getInsightDetailsSummary(insight: HealthInsight): string | null {
@@ -328,6 +327,42 @@ function getInsightLeftBorderColor(statusValue: string | undefined): string {
   return "border-l-amber-400";
 }
 
+function getFactorActionHint(factorName: string | undefined, statusValue: string | undefined): string | null {
+  const factor = getDisplayFactorName(factorName);
+  const status = String(statusValue || "");
+  const impact = getInsightImpact(statusValue);
+  if (impact !== "negative") return null;
+  const hints: Record<string, Partial<Record<string, string>>> = {
+    'Water Heater Age': {
+      'Needs Review': 'Schedule a water heater inspection — most cost $75–150.',
+      'Needs attention': 'Get replacement quotes — water heaters typically run $900–2,000 installed.',
+      'Needs Inspection': 'Book a plumbing inspection to assess the unit.',
+    },
+    'HVAC Age': {
+      'Needs Review': 'Schedule HVAC servicing — annual tune-ups typically run $80–150.',
+      'Needs Inspection': 'Have a technician assess the system before next season.',
+      'Needs attention': 'Start planning HVAC replacement — systems typically cost $5,000–12,000 installed.',
+    },
+    'Property Age (Year Built)': {
+      'Needs Review': 'Consider a general home inspection to surface age-related items — typically $300–500.',
+      'Needs attention': 'Schedule a comprehensive inspection to identify and prioritize risks.',
+    },
+    'Roof Age': {
+      'Needs Review': 'Get a roof inspection — many contractors offer free assessments.',
+      'Needs attention': 'Get 2–3 replacement quotes — costs typically range $8,000–20,000.',
+    },
+    'Safety Factor': {
+      'Incomplete': 'Check smoke and CO detectors, fire extinguisher, and security system.',
+      'Needs Review': 'Confirm all safety devices are functional and within service date.',
+    },
+    'Documents Factor': {
+      'Incomplete': 'Upload service records and inspection reports to improve your score.',
+      'Missing Data': 'Add property documents in the Vault to unlock full factor scoring.',
+    },
+  };
+  return hints[factor]?.[status] ?? null;
+}
+
 function getUserFriendlyStatus(status: string | undefined): string {
   const s = String(status || "");
   const map: Record<string, string> = {
@@ -483,10 +518,11 @@ function buildHealthChangeItems(series: PropertyScoreSeries | undefined, latestI
     .filter((insight) => getInsightImpact(insight.status) === "negative")
     .sort((a, b) => (asNumber(a.score) ?? 0) - (asNumber(b.score) ?? 0))[0];
 
-  if (topNegative) {
+  const topNegativeDragScore = asNumber(topNegative?.score) ?? 0;
+  if (topNegative && Math.abs(topNegativeDragScore) >= 0.1) {
     changes.push({
       title: "Top current drag",
-      detail: `${topNegative.factor || "Health factor"} is marked "${topNegative.status || "Review"}" and currently contributes ${(asNumber(topNegative.score) ?? 0).toFixed(1)} points.`,
+      detail: `${topNegative.factor || "Health factor"} is marked "${topNegative.status || "Review"}" and currently contributes ${topNegativeDragScore.toFixed(1)} points.`,
       impact: "negative",
     });
   }
@@ -611,6 +647,7 @@ export default function PropertyHealthDetailPage() {
   const scoreRingColor = { Excellent: "#16a34a", Good: "#2563eb", Fair: "#d97706", "Needs attention": "#dc2626" }[healthDetails.level] ?? "#d97706";
   const scoreStatusDot = { Excellent: "bg-green-500", Good: "bg-blue-500", Fair: "bg-amber-500", "Needs attention": "bg-red-500" }[healthDetails.level] ?? "bg-amber-500";
   const changes = buildHealthChangeItems(series, sortedInsights);
+  const allChangesNeutral = changes.every((c) => c.impact === "neutral");
 
   const previousInsights = getSnapshotInsights(series?.previous);
   const hasPreviousSnapshot = !!series?.previous;
@@ -628,6 +665,18 @@ export default function PropertyHealthDetailPage() {
   const lastTrendScore = trendPoints.length > 0 ? trendPoints[trendPoints.length - 1].score : latestScore;
   const trendDiff = lastTrendScore - firstTrendScore;
   const trendLabel = Math.abs(trendDiff) < 1 ? "Flat" : trendDiff > 0 ? "Rising" : "Declining";
+  const hasMeaningfulTrend = trendPoints.length >= 4;
+  const hasNoScoreMovement = Math.abs(trendDiff) < 1;
+  const activeTrendLabel = trendPoints.length === 0
+    ? "No data"
+    : trendPoints.length < trendWeeks
+    ? `${trendPoints.length} wk${trendPoints.length === 1 ? "" : "s"}`
+    : trendWeeks === 26 ? "6 Months" : "1 Year";
+  const trendSubtitle = !hasMeaningfulTrend
+    ? "Trend will appear once a few weekly snapshots are collected."
+    : trendPoints.length < 26
+    ? `Showing ${trendPoints.length} week${trendPoints.length === 1 ? "" : "s"} of available data.`
+    : `Weekly snapshots for the last ${trendWeeks === 26 ? "6 months" : "1 year"}.`;
   const wowDelta = series?.deltaFromPreviousWeek ?? null;
   const scoreStabilityLabel = wowDelta === null || Math.abs(wowDelta) < 1 ? "Stable" : wowDelta > 0 ? "Improving" : "Declining";
   const stabilitySubtext = wowDelta === null || Math.abs(wowDelta) < 0.05 ? "vs last week" : `${wowDelta > 0 ? "+" : ""}${wowDelta.toFixed(1)} pts`;
@@ -730,8 +779,16 @@ export default function PropertyHealthDetailPage() {
           <p>
             This factor currently contributes{" "}
             <span className="font-semibold text-foreground">{formatSignedPoints(scoreValue)} points</span> to your overall Health score (0-100).
+            {impact === "negative" && scoreValue > 0 && (
+              <span> Resolving this could unlock additional points.</span>
+            )}
           </p>
           <p>{getInsightStatusExplanation(insight.status)}</p>
+          {getFactorActionHint(insight.factor, insight.status) && (
+            <p className="rounded-lg border border-slate-100 bg-slate-50 px-2.5 py-1.5 text-slate-600">
+              {getFactorActionHint(insight.factor, insight.status)}
+            </p>
+          )}
           {detailLines.length > 0 ? (
             <div className="space-y-1">
               <p className="font-medium text-foreground">How this was scored</p>
@@ -753,6 +810,13 @@ export default function PropertyHealthDetailPage() {
               <ArrowRight className="h-3 w-3" />
             </Link>
           )}
+          <Link
+            href={`/dashboard/properties/${propertyId}/home-score`}
+            className="inline-flex items-center gap-1 font-medium text-teal-600 hover:underline"
+          >
+            See full system history
+            <ArrowRight className="h-3 w-3" />
+          </Link>
         </div>
       </details>
     );
@@ -1165,7 +1229,7 @@ export default function PropertyHealthDetailPage() {
                     </div>
                     <div>
                       <h4 className="text-lg font-semibold text-slate-900">Health score Trend</h4>
-                      <p className="text-sm text-slate-500 mt-0.5">Weekly snapshots for the last 6 months or 1 year.</p>
+                      <p className="text-sm text-slate-500 mt-0.5">{trendSubtitle}</p>
                     </div>
                   </div>
                   {/* Premium segmented control */}
@@ -1178,7 +1242,7 @@ export default function PropertyHealthDetailPage() {
                           : "text-slate-600 hover:text-slate-800 hover:bg-slate-100/80"
                       }`}
                     >
-                      6 Months
+                      {trendWeeks === 26 ? activeTrendLabel : "6 Months"}
                     </button>
                     <button
                       onClick={() => setTrendWeeks(52)}
@@ -1188,7 +1252,7 @@ export default function PropertyHealthDetailPage() {
                           : "text-slate-600 hover:text-slate-800 hover:bg-slate-100/80"
                       }`}
                     >
-                      1 Year
+                      {trendWeeks === 52 ? activeTrendLabel : "1 Year"}
                     </button>
                   </div>
                 </div>
@@ -1196,64 +1260,97 @@ export default function PropertyHealthDetailPage() {
 
               {/* Chart area */}
               <div className="px-6 pt-4 pb-2">
-                <ScoreTrendChart points={series?.trend || []} ariaLabel="Property health score trend" />
+                {hasMeaningfulTrend ? (
+                  <ScoreTrendChart points={series?.trend || []} ariaLabel="Property health score trend" />
+                ) : (
+                  <div className="flex flex-col items-center justify-center py-10 text-center space-y-2">
+                    <div className="rounded-full bg-slate-100 p-4">
+                      <TrendingUp className="h-6 w-6 text-slate-400" />
+                    </div>
+                    <p className="text-sm font-semibold text-slate-600">Score trend building</p>
+                    <p className="text-xs text-slate-400 max-w-[220px]">Weekly snapshots will appear here as history builds. Check back next week.</p>
+                  </div>
+                )}
               </div>
 
-              {/* Bottom summary tiles */}
-              <div className="px-6 pb-4">
-                <div className="grid grid-cols-4 gap-3">
-                  {/* Score stability */}
-                  <div className="rounded-xl border border-slate-100 bg-slate-50/60 px-3 py-2.5 flex items-start gap-2.5">
-                    <div className="rounded-lg bg-emerald-50 border border-emerald-100 p-1.5 shrink-0 mt-0.5">
-                      <Activity className="h-3.5 w-3.5 text-emerald-600" />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-[10px] font-medium text-slate-400 leading-tight">Score stability</p>
-                      <p className="text-sm font-bold text-slate-800 mt-0.5">{scoreStabilityLabel}</p>
-                      <p className="text-[10px] text-slate-400 leading-tight">{stabilitySubtext}</p>
-                    </div>
+              {/* Bottom summary tiles and footer — only shown when meaningful trend exists */}
+              {hasMeaningfulTrend && (
+                <>
+                  <div className="px-6 pb-4">
+                    {hasNoScoreMovement ? (
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="rounded-xl border border-slate-100 bg-slate-50/60 px-3 py-2.5 flex items-start gap-2.5">
+                          <div className="rounded-lg bg-emerald-50 border border-emerald-100 p-1.5 shrink-0 mt-0.5">
+                            <Activity className="h-3.5 w-3.5 text-emerald-600" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-[10px] font-medium text-slate-400 leading-tight">Score stability</p>
+                            <p className="text-sm font-bold text-slate-800 mt-0.5">{scoreStabilityLabel}</p>
+                            <p className="text-[10px] text-slate-400 leading-tight">{stabilitySubtext}</p>
+                          </div>
+                        </div>
+                        <div className="rounded-xl border border-slate-100 bg-slate-50/60 px-3 py-2.5 flex items-start gap-2.5">
+                          <div className="rounded-lg bg-teal-50 border border-teal-100 p-1.5 shrink-0 mt-0.5">
+                            <ShieldCheck className="h-3.5 w-3.5 text-teal-600" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-[10px] font-medium text-slate-400 leading-tight">Score confidence</p>
+                            <p className="text-sm font-bold text-slate-800 mt-0.5">{confidenceLabel}</p>
+                            <p className="text-[10px] text-slate-400 leading-tight">{confidencePct}% confidence</p>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-4 gap-3">
+                        <div className="rounded-xl border border-slate-100 bg-slate-50/60 px-3 py-2.5 flex items-start gap-2.5">
+                          <div className="rounded-lg bg-emerald-50 border border-emerald-100 p-1.5 shrink-0 mt-0.5">
+                            <Activity className="h-3.5 w-3.5 text-emerald-600" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-[10px] font-medium text-slate-400 leading-tight">Score stability</p>
+                            <p className="text-sm font-bold text-slate-800 mt-0.5">{scoreStabilityLabel}</p>
+                            <p className="text-[10px] text-slate-400 leading-tight">{stabilitySubtext}</p>
+                          </div>
+                        </div>
+                        <div className="rounded-xl border border-slate-100 bg-slate-50/60 px-3 py-2.5 flex items-start gap-2.5">
+                          <div className="rounded-lg bg-blue-50 border border-blue-100 p-1.5 shrink-0 mt-0.5">
+                            <TrendingUp className="h-3.5 w-3.5 text-blue-600" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-[10px] font-medium text-slate-400 leading-tight">{trendWeeks === 26 ? "6-month" : "1-year"} trend</p>
+                            <p className="text-sm font-bold text-slate-800 mt-0.5">{trendLabel}</p>
+                            <p className="text-[10px] text-slate-400 leading-tight">{trendDiff > 0 ? `+${trendDiff.toFixed(1)} pts` : trendDiff < 0 ? `${trendDiff.toFixed(1)} pts` : "no change"}</p>
+                          </div>
+                        </div>
+                        <div className="rounded-xl border border-slate-100 bg-slate-50/60 px-3 py-2.5 flex items-start gap-2.5">
+                          <div className="rounded-lg bg-violet-50 border border-violet-100 p-1.5 shrink-0 mt-0.5">
+                            <Calendar className="h-3.5 w-3.5 text-violet-600" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-[10px] font-medium text-slate-400 leading-tight">Best score this period</p>
+                            <p className="text-sm font-bold text-slate-800 mt-0.5">{bestScore.toFixed(0)}</p>
+                            <p className="text-[10px] text-slate-400 leading-tight">{bestScore > latestScore ? `↑ ${(bestScore - latestScore).toFixed(0)} above current` : "at current score"}</p>
+                          </div>
+                        </div>
+                        <div className="rounded-xl border border-slate-100 bg-slate-50/60 px-3 py-2.5 flex items-start gap-2.5">
+                          <div className="rounded-lg bg-teal-50 border border-teal-100 p-1.5 shrink-0 mt-0.5">
+                            <ShieldCheck className="h-3.5 w-3.5 text-teal-600" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-[10px] font-medium text-slate-400 leading-tight">Score confidence</p>
+                            <p className="text-sm font-bold text-slate-800 mt-0.5">{confidenceLabel}</p>
+                            <p className="text-[10px] text-slate-400 leading-tight">{confidencePct}% confidence</p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                  {/* 6-month trend */}
-                  <div className="rounded-xl border border-slate-100 bg-slate-50/60 px-3 py-2.5 flex items-start gap-2.5">
-                    <div className="rounded-lg bg-blue-50 border border-blue-100 p-1.5 shrink-0 mt-0.5">
-                      <TrendingUp className="h-3.5 w-3.5 text-blue-600" />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-[10px] font-medium text-slate-400 leading-tight">6-month trend</p>
-                      <p className="text-sm font-bold text-slate-800 mt-0.5">{trendLabel}</p>
-                      <p className="text-[10px] text-slate-400 leading-tight">no change</p>
-                    </div>
+                  <div className="mx-6 mb-5 rounded-xl border border-emerald-100/80 bg-emerald-50/60 px-4 py-3 flex items-center gap-3">
+                    <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+                    <p className="text-sm text-emerald-800 font-medium">{footerInsight}</p>
                   </div>
-                  {/* Best score this period */}
-                  <div className="rounded-xl border border-slate-100 bg-slate-50/60 px-3 py-2.5 flex items-start gap-2.5">
-                    <div className="rounded-lg bg-violet-50 border border-violet-100 p-1.5 shrink-0 mt-0.5">
-                      <Calendar className="h-3.5 w-3.5 text-violet-600" />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-[10px] font-medium text-slate-400 leading-tight">Best score this period</p>
-                      <p className="text-sm font-bold text-slate-800 mt-0.5">{bestScore.toFixed(0)}</p>
-                      <p className="text-[10px] text-slate-400 leading-tight">No change</p>
-                    </div>
-                  </div>
-                  {/* Score confidence */}
-                  <div className="rounded-xl border border-slate-100 bg-slate-50/60 px-3 py-2.5 flex items-start gap-2.5">
-                    <div className="rounded-lg bg-teal-50 border border-teal-100 p-1.5 shrink-0 mt-0.5">
-                      <ShieldCheck className="h-3.5 w-3.5 text-teal-600" />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-[10px] font-medium text-slate-400 leading-tight">Score confidence</p>
-                      <p className="text-sm font-bold text-slate-800 mt-0.5">{confidenceLabel}</p>
-                      <p className="text-[10px] text-slate-400 leading-tight">{confidencePct}% confidence</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Footer insight banner */}
-              <div className="mx-6 mb-5 rounded-xl border border-emerald-100/80 bg-emerald-50/60 px-4 py-3 flex items-center gap-3">
-                <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
-                <p className="text-sm text-emerald-800 font-medium">{footerInsight}</p>
-              </div>
+                </>
+              )}
             </div>
 
             {/* Right: Changes Impacting Score Rail */}
@@ -1263,60 +1360,66 @@ export default function PropertyHealthDetailPage() {
                 <p className="text-sm text-slate-500 mt-0.5">What moved the score since the previous weekly snapshot.</p>
               </div>
 
-              <div className="px-4 py-3 space-y-2">
-                {changes.map((change, idx) => {
-                  const metric = getChangeMetric(change.title);
-                  const ChangeIcon = getChangeCardIcon(change.title);
-                  const isDragCard = change.title.toLowerCase().includes("drag");
-                  const isNegative = change.impact === "negative";
-                  const isPositive = change.impact === "positive";
+              <div className="px-4 py-3">
+                {!hasPreviousSnapshot ? (
+                  <p className="text-sm text-slate-400 italic py-2">Changes will appear here after two weekly snapshots are recorded.</p>
+                ) : allChangesNeutral ? (
+                  <div className="flex items-center gap-2.5 rounded-xl border border-slate-200/70 bg-slate-50/60 px-3 py-3">
+                    <CheckCircle2 className="h-4 w-4 text-slate-400 shrink-0" />
+                    <p className="text-sm text-slate-500">No material changes since last week — your score is stable.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {changes.map((change, idx) => {
+                      const metric = getChangeMetric(change.title);
+                      const ChangeIcon = getChangeCardIcon(change.title);
+                      const isDragCard = change.title.toLowerCase().includes("drag");
+                      const isNegative = change.impact === "negative";
+                      const isPositive = change.impact === "positive";
 
-                  return (
-                    <div
-                      key={`${change.title}-${idx}`}
-                      className={`rounded-xl border px-3 py-2.5 transition-all duration-200 hover:shadow-sm hover:-translate-y-px ${
-                        isDragCard && isNegative
-                          ? "border-red-200/80 bg-red-50/40"
-                          : "border-slate-200/70 bg-white hover:bg-slate-50/60"
-                      }`}
-                    >
-                      <div className="flex items-start gap-2.5">
-                        {/* Icon badge */}
+                      return (
                         <div
-                          className={`rounded-full p-1.5 shrink-0 mt-0.5 ${
-                            isNegative
-                              ? "bg-red-100/80 text-red-600"
-                              : isPositive
-                              ? "bg-emerald-100/80 text-emerald-600"
-                              : "bg-slate-100/80 text-slate-500"
+                          key={`${change.title}-${idx}`}
+                          className={`rounded-xl border px-3 py-2.5 transition-all duration-200 hover:shadow-sm hover:-translate-y-px ${
+                            isDragCard && isNegative
+                              ? "border-red-200/80 bg-red-50/40"
+                              : "border-slate-200/70 bg-white hover:bg-slate-50/60"
                           }`}
                         >
-                          <ChangeIcon className="h-3.5 w-3.5" />
-                        </div>
-
-                        {/* Content */}
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-start justify-between gap-2">
-                            <p className="text-sm font-semibold text-slate-800 leading-snug">{change.title}</p>
-                            {isDragCard && isNegative && (
-                              <span className="inline-flex items-center gap-1 rounded-full bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 shrink-0">
-                                <TrendingDown className="h-2.5 w-2.5" /> Declined
-                              </span>
+                          <div className="flex items-start gap-2.5">
+                            <div
+                              className={`rounded-full p-1.5 shrink-0 mt-0.5 ${
+                                isNegative
+                                  ? "bg-red-100/80 text-red-600"
+                                  : isPositive
+                                  ? "bg-emerald-100/80 text-emerald-600"
+                                  : "bg-slate-100/80 text-slate-500"
+                              }`}
+                            >
+                              <ChangeIcon className="h-3.5 w-3.5" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-start justify-between gap-2">
+                                <p className="text-sm font-semibold text-slate-800 leading-snug">{change.title}</p>
+                                {isDragCard && isNegative && (
+                                  <span className="inline-flex items-center gap-1 rounded-full bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 shrink-0">
+                                    <TrendingDown className="h-2.5 w-2.5" /> Declined
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">{change.detail}</p>
+                            </div>
+                            {metric && (
+                              <div className={`shrink-0 text-sm font-bold tabular-nums ${metric.color}`}>
+                                {metric.value}
+                              </div>
                             )}
                           </div>
-                          <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">{change.detail}</p>
                         </div>
-
-                        {/* Right metric */}
-                        {metric && (
-                          <div className={`shrink-0 text-sm font-bold tabular-nums ${metric.color}`}>
-                            {metric.value}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             </div>
           </div>
