@@ -10,7 +10,7 @@ import { DashboardShell } from "@/components/DashboardShell";
 import { PageHeader, PageHeaderHeading } from "@/components/page-header";
 import { toast } from "@/components/ui/use-toast";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Zap, Shield, Loader2, DollarSign, Download, ArrowLeft, Home, Zap as ZapIcon, Siren, CheckCircle, Calendar, AlertTriangle, ChevronRight } from "lucide-react";
+import { Zap, Shield, Loader2, DollarSign, Download, ArrowLeft, Home, Zap as ZapIcon, Siren, CheckCircle, Calendar, AlertTriangle, ChevronRight, Clock } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -493,6 +493,51 @@ const RiskCategorySummaryCard = ({
     );
 }
 
+// --- Snooze helpers (localStorage-backed, expires automatically) ---
+const SNOOZE_KEY = 'ctc:risk-snoozed';
+
+function loadSnoozed(): Map<string, Date> {
+    if (typeof window === 'undefined') return new Map();
+    try {
+        const raw = localStorage.getItem(SNOOZE_KEY);
+        if (!raw) return new Map();
+        const now = Date.now();
+        return new Map(
+            (Object.entries(JSON.parse(raw) as Record<string, string>))
+                .filter(([, v]) => new Date(v).getTime() > now)
+                .map(([k, v]) => [k, new Date(v)])
+        );
+    } catch { return new Map(); }
+}
+
+function saveSnoozed(map: Map<string, Date>): void {
+    const obj: Record<string, string> = {};
+    map.forEach((date, key) => { obj[key] = date.toISOString(); });
+    localStorage.setItem(SNOOZE_KEY, JSON.stringify(obj));
+}
+
+function snoozeItemKey(item: AssetRiskDetail): string {
+    return item.inventoryItemId ?? item.homeAssetId ?? `${item.systemType}:${item.assetName}`;
+}
+
+function getActionStatus(
+    data: { hasBooking: boolean; hasTask: boolean; isPastLife: boolean },
+    riskLevel: AssetRiskDetail['riskLevel']
+): { label: string; className: string } {
+    if (data.hasBooking) return { label: 'Service Booked', className: 'text-blue-600' };
+    if (data.hasTask) return { label: 'Task Scheduled', className: 'text-green-600' };
+    if (riskLevel === 'HIGH') return { label: 'Act Now', className: 'text-red-600 font-semibold' };
+    if (riskLevel === 'ELEVATED') return { label: 'Review Soon', className: 'text-orange-600' };
+    if (riskLevel === 'MODERATE') return { label: 'Monitor', className: 'text-yellow-600' };
+    return { label: 'Healthy', className: 'text-green-600' };
+}
+
+const SNOOZE_OPTIONS = [
+    { label: '7 days', days: 7 },
+    { label: '30 days', days: 30 },
+    { label: '90 days', days: 90 },
+] as const;
+
 // --- Component for Phase 3.2: Detailed Asset Matrix Table ---
 const AssetMatrixTable = ({ 
     details, 
@@ -530,18 +575,48 @@ const AssetMatrixTable = ({
 
     const riskOrder: Record<string, number> = { HIGH: 0, ELEVATED: 1, MODERATE: 2, LOW: 3 };
 
+    const [snoozedItems, setSnoozedItems] = useState<Map<string, Date>>(() => loadSnoozed());
+    const [openSnoozeFor, setOpenSnoozeFor] = useState<string | null>(null);
+
     const filteredDetails = useMemo(() => {
         let items = [...details];
         if (filterCategory !== 'ALL') items = items.filter(d => d.category === filterCategory);
         if (filterRisk !== 'ALL') items = items.filter(d => d.riskLevel === filterRisk);
         items.sort((a, b) => {
+            const aSnoozed = snoozedItems.has(snoozeItemKey(a)) ? 1 : 0;
+            const bSnoozed = snoozedItems.has(snoozeItemKey(b)) ? 1 : 0;
+            if (aSnoozed !== bSnoozed) return aSnoozed - bSnoozed;
             if (sortBy === 'risk') return (riskOrder[a.riskLevel] ?? 4) - (riskOrder[b.riskLevel] ?? 4);
             if (sortBy === 'exposure') return b.outOfPocketCost - a.outOfPocketCost;
             if (sortBy === 'age') return (b.age - b.expectedLife) - (a.age - a.expectedLife);
             return 0;
         });
         return items;
-    }, [details, filterCategory, filterRisk, sortBy]);
+    }, [details, filterCategory, filterRisk, sortBy, snoozedItems]);
+
+    const handleSnooze = (key: string, days: number) => {
+        const until = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
+        const next = new Map(snoozedItems).set(key, until);
+        setSnoozedItems(next);
+        saveSnoozed(next);
+        setOpenSnoozeFor(null);
+    };
+
+    const handleResume = (key: string) => {
+        const next = new Map(snoozedItems);
+        next.delete(key);
+        setSnoozedItems(next);
+        saveSnoozed(next);
+    };
+
+    useEffect(() => {
+        if (!openSnoozeFor) return;
+        const close = (e: MouseEvent) => {
+            if (!(e.target as HTMLElement).closest('[data-snooze-menu]')) setOpenSnoozeFor(null);
+        };
+        document.addEventListener('mousedown', close);
+        return () => document.removeEventListener('mousedown', close);
+    }, [openSnoozeFor]);
 
     const getRiskBadge = (level: AssetRiskDetail['riskLevel']) => {
         if (level === 'LOW') return <Badge variant="outline" className={SEVERITY_CHIP.good}>Low</Badge>;
@@ -779,16 +854,22 @@ const AssetMatrixTable = ({
                             item.inventoryItemId ??
                             item.homeAssetId ??
                             `${item.systemType}-${item.assetName}-${index}`;
+                        const itemKey = snoozeItemKey(item);
+                        const isSnoozed = snoozedItems.has(itemKey);
+                        const snoozeUntil = snoozedItems.get(itemKey);
+                        const actionStatus = getActionStatus(data, item.riskLevel);
                         return (
                             <div
                                 key={rowKey}
                                 className={`rounded-lg border p-4 space-y-3 ${
-                                    item.riskLevel === 'HIGH'
+                                    isSnoozed
+                                        ? 'border-border opacity-60'
+                                        : item.riskLevel === 'HIGH'
                                         ? 'border-red-200 bg-red-50/50 dark:border-red-800 dark:bg-red-900/10'
                                         : 'border-border'
                                 }`}
                             >
-                                {/* Row 1: Asset name + risk badge */}
+                                {/* Row 1: Asset name + risk badge + action status */}
                                 <div className="flex justify-between items-start gap-2">
                                     <div className="min-w-0 flex-1">
                                         <h4 className="font-semibold text-sm leading-tight">
@@ -798,7 +879,10 @@ const AssetMatrixTable = ({
                                             {displayLabel(item.category)} · {displayLabel(item.systemType)}
                                         </p>
                                     </div>
-                                    {getRiskBadge(item.riskLevel)}
+                                    <div className="flex flex-col items-end gap-0.5 shrink-0">
+                                        {getRiskBadge(item.riskLevel)}
+                                        <span className={`text-xs ${actionStatus.className}`}>{actionStatus.label}</span>
+                                    </div>
                                 </div>
 
                                 {/* Row 2: Status badges */}
@@ -830,8 +914,42 @@ const AssetMatrixTable = ({
                                     </div>
                                 </div>
 
-                                {/* Row 4: CTA button (full width) */}
-                                {renderCtaButton(item, data, true)}
+                                {/* Row 4: CTA / Snoozed state */}
+                                {isSnoozed ? (
+                                    <div className="flex items-center justify-between pt-1">
+                                        <span className="text-xs text-muted-foreground">
+                                            Snoozed until {snoozeUntil!.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                                        </span>
+                                        <button onClick={() => handleResume(itemKey)} className="text-xs text-primary hover:underline">
+                                            Resume
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <>
+                                        {renderCtaButton(item, data, true)}
+                                        {openSnoozeFor === itemKey ? (
+                                            <div className="flex items-center gap-2 flex-wrap pt-1">
+                                                <span className="text-xs text-muted-foreground">Snooze for:</span>
+                                                {SNOOZE_OPTIONS.map(opt => (
+                                                    <button
+                                                        key={opt.days}
+                                                        onClick={() => handleSnooze(itemKey, opt.days)}
+                                                        className="text-xs border border-border rounded px-2 py-1 hover:bg-muted"
+                                                    >
+                                                        {opt.label}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <button
+                                                onClick={() => setOpenSnoozeFor(itemKey)}
+                                                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground pt-1"
+                                            >
+                                                <Clock className="h-3 w-3" /> I&apos;m aware, snooze this
+                                            </button>
+                                        )}
+                                    </>
+                                )}
                             </div>
                         );
                     })}
@@ -857,9 +975,21 @@ const AssetMatrixTable = ({
                                     item.inventoryItemId ??
                                     item.homeAssetId ??
                                     `${item.systemType}-${item.assetName}-${index}`;
+                                const itemKey = snoozeItemKey(item);
+                                const isSnoozed = snoozedItems.has(itemKey);
+                                const snoozeUntil = snoozedItems.get(itemKey);
+                                const actionStatus = getActionStatus(data, item.riskLevel);
 
                                 return (
-                                    <TableRow key={rowKey} className={item.riskLevel === 'HIGH' ? 'bg-red-50/50 dark:bg-red-900/10 hover:bg-red-100 dark:hover:bg-red-900/20' : ''}>
+                                    <TableRow
+                                        key={rowKey}
+                                        className={[
+                                            item.riskLevel === 'HIGH' && !isSnoozed
+                                                ? 'bg-red-50/50 dark:bg-red-900/10 hover:bg-red-100 dark:hover:bg-red-900/20'
+                                                : '',
+                                            isSnoozed ? 'opacity-50' : '',
+                                        ].filter(Boolean).join(' ')}
+                                    >
                                         <TableCell className="font-medium whitespace-normal break-words">
                                             <div className="flex items-center gap-2 flex-wrap">
                                                 <div>
@@ -880,13 +1010,55 @@ const AssetMatrixTable = ({
                                         </TableCell>
                                         <TableCell className="whitespace-nowrap">
                                             {getRiskBadge(item.riskLevel)}
+                                            <div className={`text-xs mt-1 ${actionStatus.className}`}>{actionStatus.label}</div>
                                         </TableCell>
                                         <TableCell className="font-bold text-red-600 whitespace-nowrap">
                                             {formatCurrency(item.outOfPocketCost)}
                                             <div className="text-xs text-muted-foreground whitespace-normal">P: {item.probability.toFixed(2)} / C: {(item.coverageFactor * 100).toFixed(0)}%</div>
                                         </TableCell>
                                         <TableCell className="whitespace-nowrap">
-                                            {renderCtaButton(item, data)}
+                                            {isSnoozed ? (
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-xs text-muted-foreground">
+                                                        Snoozed until {snoozeUntil!.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                                                    </span>
+                                                    <button
+                                                        onClick={() => handleResume(itemKey)}
+                                                        className="text-xs text-primary hover:underline"
+                                                    >
+                                                        Resume
+                                                    </button>
+                                                </div>
+                                            ) : (
+                                                <div className="flex items-center gap-1">
+                                                    {renderCtaButton(item, data)}
+                                                    <div className="relative" data-snooze-menu>
+                                                        <Button
+                                                            size="sm"
+                                                            variant="ghost"
+                                                            className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+                                                            title="Snooze — I'm aware, not acting now"
+                                                            onClick={() => setOpenSnoozeFor(openSnoozeFor === itemKey ? null : itemKey)}
+                                                        >
+                                                            <Clock className="h-3.5 w-3.5" />
+                                                        </Button>
+                                                        {openSnoozeFor === itemKey && (
+                                                            <div className="absolute right-0 top-8 z-10 bg-background border border-border rounded-md shadow-md py-1 min-w-[120px]">
+                                                                <p className="text-xs text-muted-foreground px-3 py-1 border-b">Snooze for...</p>
+                                                                {SNOOZE_OPTIONS.map(opt => (
+                                                                    <button
+                                                                        key={opt.days}
+                                                                        onClick={() => handleSnooze(itemKey, opt.days)}
+                                                                        className="w-full text-left text-xs px-3 py-1.5 hover:bg-muted"
+                                                                    >
+                                                                        {opt.label}
+                                                                    </button>
+                                                                ))}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            )}
                                         </TableCell>
                                     </TableRow>
                                 );
