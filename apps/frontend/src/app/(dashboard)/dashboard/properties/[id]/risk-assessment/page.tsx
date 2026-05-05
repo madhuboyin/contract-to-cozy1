@@ -10,7 +10,7 @@ import { DashboardShell } from "@/components/DashboardShell";
 import { PageHeader, PageHeaderHeading } from "@/components/page-header";
 import { toast } from "@/components/ui/use-toast";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Zap, Shield, Loader2, DollarSign, Download, ArrowLeft, Home, Zap as ZapIcon, Siren, CheckCircle, Calendar } from "lucide-react";
+import { Zap, Shield, Loader2, DollarSign, Download, ArrowLeft, Home, Zap as ZapIcon, Siren, CheckCircle, Calendar, AlertTriangle, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -824,6 +824,9 @@ const AssetMatrixTable = ({
                         </TableBody>
                     </Table>
                 </div>
+                <p className="hidden md:block text-xs text-muted-foreground mt-3 pt-3 border-t">
+                    P = probability of failure this year &nbsp;·&nbsp; C = coverage factor (% of repair costs covered by warranty or insurance)
+                </p>
             </CardContent>
         </Card>
     );
@@ -1116,6 +1119,14 @@ export default function RiskAssessmentPage() {
     
     const formattedExposure = formatCurrency(exposure);
     const riskProgressValue = 100 - score;
+    const hasWeeklyHistory = !!riskSeries?.previous;
+    const highRiskCount = report?.details?.filter(d => d.riskLevel === 'HIGH').length ?? 0;
+    const pastLifeCount = report?.details?.filter(d => d.age > d.expectedLife).length ?? 0;
+    const coverageGapCount = report?.details?.filter(d => d.coverageFactor < 0.3 && d.riskLevel !== 'LOW').length ?? 0;
+    const top3HighRisk = report?.details
+        ?.filter(d => d.riskLevel === 'HIGH' || d.riskLevel === 'ELEVATED')
+        ?.sort((a, b) => b.outOfPocketCost - a.outOfPocketCost)
+        ?.slice(0, 3) ?? [];
 
     // --- PDF Download Handler (omitted for brevity) ---
     const handleDownloadPdf = async () => {
@@ -1231,8 +1242,16 @@ export default function RiskAssessmentPage() {
         if (report && Array.isArray(report.details) && report.details.length > 0) {
             return (
                 <React.Fragment>
-                    <AssetMatrixTable 
-                        details={report.details} 
+                    {/* Category breakdown first so users understand WHY before seeing the full matrix */}
+                    <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-4">
+                        <RiskCategorySummaryCard category={'STRUCTURE'} details={report.details} riskIcon={Home} />
+                        <RiskCategorySummaryCard category={'SYSTEMS'} details={report.details} riskIcon={ZapIcon} />
+                        <RiskCategorySummaryCard category={'SAFETY'} details={report.details} riskIcon={Siren} />
+                        <RiskCategorySummaryCard category={'FINANCIAL_GAP'} details={report.details} riskIcon={DollarSign} />
+                    </div>
+
+                    <AssetMatrixTable
+                        details={report.details}
                         tasksByHomeAssetId={tasksByHomeAssetId}
                         tasksBySystemType={tasksBySystemType}
                         bookingsByInventoryItemId={bookingsByInventoryItemId}
@@ -1244,29 +1263,42 @@ export default function RiskAssessmentPage() {
                         onViewTask={handleViewTask}
                         onViewBooking={handleViewBooking}
                     />
-                    
-                    <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-4">
-                        <RiskCategorySummaryCard 
-                            category={'STRUCTURE'} 
-                            details={report.details} 
-                            riskIcon={Home}
-                        />
-                        <RiskCategorySummaryCard 
-                            category={'SYSTEMS'} 
-                            details={report.details} 
-                            riskIcon={ZapIcon}
-                        />
-                        <RiskCategorySummaryCard 
-                            category={'SAFETY'} 
-                            details={report.details} 
-                            riskIcon={Siren}
-                        />
-                        <RiskCategorySummaryCard 
-                            category={'FINANCIAL_GAP'} 
-                            details={report.details} 
-                            riskIcon={DollarSign}
-                        />
-                    </div>
+
+                    {top3HighRisk.length > 0 && (
+                        <Card>
+                            <CardHeader className="pb-2">
+                                <CardTitle className="text-base font-medium">Top Actions to Reduce Risk</CardTitle>
+                                <CardDescription>
+                                    Highest-impact items to address. Full action plans are in{' '}
+                                    <Link href="/dashboard/today" className="underline underline-offset-2">Today</Link>.
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="divide-y">
+                                    {top3HighRisk.map((item, idx) => (
+                                        <div
+                                            key={item.inventoryItemId ?? item.homeAssetId ?? `top3-${idx}`}
+                                            className="flex items-center justify-between py-3 first:pt-0 last:pb-0"
+                                        >
+                                            <div className="flex items-center gap-3 min-w-0">
+                                                <Badge variant={item.riskLevel === 'HIGH' ? 'destructive' : 'warning' as any} className="shrink-0">
+                                                    {item.riskLevel}
+                                                </Badge>
+                                                <span className="text-sm font-medium truncate">{displayLabel(item.assetName)}</span>
+                                                <span className="text-sm text-red-600 font-semibold shrink-0">{formatCurrency(item.outOfPocketCost)}</span>
+                                            </div>
+                                            <Link
+                                                href={buildAssetGuidanceHref(propertyId, item, item.actionCta || displayLabel(item.assetName))}
+                                                className="flex items-center gap-1 text-xs text-primary hover:underline shrink-0 ml-4"
+                                            >
+                                                Start action <ChevronRight className="h-3 w-3" />
+                                            </Link>
+                                        </div>
+                                    ))}
+                                </div>
+                            </CardContent>
+                        </Card>
+                    )}
                 </React.Fragment>
             );
         }
@@ -1307,7 +1339,7 @@ export default function RiskAssessmentPage() {
                     }
                     summary={
                         <ResultHeroCard
-                            title="Risk Score"
+                            title="Protection Score"
                             value={isCalculating || isQueued ? "..." : `${score}/100`}
                             status={<StatusChip tone={riskTone(level)}>{isQueued ? "Queued" : isCalculating ? "Calculating" : level}</StatusChip>}
                             summary="Projected 5-year exposure and weekly risk movement in one view."
@@ -1338,13 +1370,6 @@ export default function RiskAssessmentPage() {
                     }
                     footer={<BottomSafeAreaReserve size="chatAware" />}
                 >
-                    <GuidanceInlinePanel
-                        propertyId={propertyId}
-                        title="Risk Resolution Steps"
-                        subtitle="Complete these steps before scheduling execution actions."
-                        issueDomains={['ASSET_LIFECYCLE', 'MAINTENANCE', 'SAFETY', 'INSURANCE'] as const}
-                        limit={2}
-                    />
 
                     <div 
                         id="exposure-summary" 
@@ -1430,17 +1455,43 @@ export default function RiskAssessmentPage() {
             </PageHeader>
 
             <div className="hidden md:block">
+            {report && !isCalculating && !isQueued && (
+                <Card className="mb-6 border-l-4 border-l-primary/60 bg-muted/20">
+                    <CardContent className="pt-5 pb-4">
+                        <div className="flex gap-3">
+                            <AlertTriangle className={`h-5 w-5 mt-0.5 shrink-0 ${level === 'LOW' ? 'text-green-500' : level === 'MODERATE' ? 'text-yellow-500' : 'text-red-500'}`} />
+                            <div className="space-y-1">
+                                <p className="text-sm font-semibold text-foreground">
+                                    {level === 'LOW'
+                                        ? 'Your home is well protected'
+                                        : level === 'MODERATE'
+                                        ? 'Your home has moderate risk exposure'
+                                        : 'Your home has high financial exposure'}
+                                </p>
+                                <p className="text-sm text-muted-foreground leading-relaxed">
+                                    {highRiskCount > 0 && `${highRiskCount} asset${highRiskCount > 1 ? 's require' : ' requires'} immediate attention. `}
+                                    {pastLifeCount > 0 && `${pastLifeCount} asset${pastLifeCount > 1 ? 's are' : ' is'} past expected lifespan. `}
+                                    {coverageGapCount > 0 && `${coverageGapCount} item${coverageGapCount > 1 ? 's have' : ' has'} limited warranty or insurance coverage. `}
+                                    {level === 'LOW'
+                                        ? 'Continue maintaining your assets to keep risk low.'
+                                        : `Addressing the top items below can reduce your ${formattedExposure} 5-year exposure.`}
+                                </p>
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
+            )}
             {/* --- Risk Summary Banner --- */}
             <div className="grid gap-4 sm:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
                 <Card className="sm:col-span-1 border-2 border-primary/50">
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-base font-medium">Risk Score</CardTitle>
+                        <CardTitle className="text-base font-medium">Protection Score</CardTitle>
                         <Shield className="h-5 w-5 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
                         {isCalculating || isQueued ? (
                             <div className="flex items-center space-x-2 text-lg text-muted-foreground">
-                                <Loader2 className="h-4 w-4 animate-spin" /> 
+                                <Loader2 className="h-4 w-4 animate-spin" />
                                 {isQueued ? 'Queued for Calculation' : 'Calculating...'}
                             </div>
                         ) : (
@@ -1452,6 +1503,7 @@ export default function RiskAssessmentPage() {
                                 <p className="text-sm text-muted-foreground mt-1">
                                     Status: <Badge variant={getRiskDetails(score).badgeVariant as any}>{level}</Badge>
                                 </p>
+                                <p className="text-xs text-muted-foreground mt-2">100 = fully protected · 0 = maximum exposure</p>
                             </React.Fragment>
                         )}
                     </CardContent>
@@ -1499,12 +1551,6 @@ export default function RiskAssessmentPage() {
                                 {isPremium ? 'Download Full PDF' : 'Upgrade for PDF'}
                             </Button>
                             
-                            {!isPremium && (
-                                <p className="text-xs text-red-500 font-medium text-center">
-                                    *Premium feature (Admin role used as mock check)
-                                </p>
-                            )}
-
                             {/* FIX START: Replace conditional queue logic with explicit Generate/Check Status button */}
                             {isQueued ? (
                                 <Button 
@@ -1540,25 +1586,18 @@ export default function RiskAssessmentPage() {
             </div>
             
             <div className="mt-8 space-y-6">
-                <GuidanceInlinePanel
-                    propertyId={propertyId}
-                    title="Guided Next Steps"
-                    subtitle="Deterministic journey actions to resolve risk drivers before execution."
-                    issueDomains={['ASSET_LIFECYCLE', 'MAINTENANCE', 'SAFETY', 'INSURANCE'] as const}
-                    limit={3}
-                />
 
                 {/* --- Risk Gauge Visualization --- */}
                 <div className="space-y-2">
-                    <h3 className="text-xl font-semibold">Overall Risk Gauge: {level}</h3>
+                    <h3 className="text-xl font-semibold">Overall Protection Level: {level}</h3>
                     <div className="flex justify-between text-xs font-medium text-muted-foreground">
-                        <span>High (0)</span>
-                        <span>Low (100)</span>
+                        <span>Unprotected (0)</span>
+                        <span>Fully Protected (100)</span>
                     </div>
-                    <Progress 
-                        value={riskProgressValue} 
-                        className={`h-4`} 
-                        indicatorClassName={progressClass} 
+                    <Progress
+                        value={riskProgressValue}
+                        className={`h-4`}
+                        indicatorClassName={progressClass}
                     />
                 </div>
 
@@ -1572,8 +1611,8 @@ export default function RiskAssessmentPage() {
                         <CardHeader className="pb-2">
                             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                                 <div>
-                                    <CardTitle className="text-base font-medium">Risk Score Trend</CardTitle>
-                                    <CardDescription>Weekly risk score snapshots with week-over-week delta.</CardDescription>
+                                    <CardTitle className="text-base font-medium">Protection Score Trend</CardTitle>
+                                    <CardDescription>Weekly snapshots with week-over-week delta.</CardDescription>
                                 </div>
                                 <div className="flex items-center gap-2">
                                     <Button size="sm" variant={trendWeeks === 26 ? "default" : "outline"} onClick={() => setTrendWeeks(26)}>
@@ -1586,7 +1625,14 @@ export default function RiskAssessmentPage() {
                             </div>
                         </CardHeader>
                         <CardContent className="space-y-3">
-                            <ScoreTrendChart points={riskTrend} ariaLabel="Property risk score trend" />
+                            {riskTrend.length <= 1 ? (
+                                <div className="flex flex-col items-center justify-center h-32 text-center">
+                                    <p className="text-sm font-medium text-muted-foreground">Not enough history yet</p>
+                                    <p className="text-xs text-muted-foreground mt-1">Complete actions to build your score trend. Check back weekly.</p>
+                                </div>
+                            ) : (
+                                <ScoreTrendChart points={riskTrend} ariaLabel="Property protection score trend" />
+                            )}
                             <ScoreDeltaIndicator delta={riskSeries?.deltaFromPreviousWeek} />
                         </CardContent>
                     </Card>
@@ -1597,25 +1643,32 @@ export default function RiskAssessmentPage() {
                             <CardDescription>Key weekly drivers behind your risk movement.</CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-3">
-                            {riskChanges.map((change, idx) => (
-                                <div key={`${change.title}-${idx}`} className="rounded-lg border border-black/10 px-3 py-2">
-                                    <div className="flex items-center justify-between gap-2">
-                                        <p className="text-sm font-medium">{change.title}</p>
-                                        <Badge
-                                            variant={
-                                                change.impact === 'positive'
-                                                    ? 'success'
-                                                    : change.impact === 'negative'
-                                                    ? 'destructive'
-                                                    : 'secondary'
-                                            }
-                                        >
-                                            {change.impact === 'positive' ? 'Positive' : change.impact === 'negative' ? 'Negative' : 'Neutral'}
-                                        </Badge>
-                                    </div>
-                                    <p className="text-xs text-muted-foreground mt-1">{change.detail}</p>
+                            {!hasWeeklyHistory ? (
+                                <div className="py-4 text-center">
+                                    <p className="text-sm font-medium text-muted-foreground">No weekly history yet</p>
+                                    <p className="text-xs text-muted-foreground mt-1">Complete actions to start tracking weekly improvements here.</p>
                                 </div>
-                            ))}
+                            ) : (
+                                riskChanges.map((change, idx) => (
+                                    <div key={`${change.title}-${idx}`} className="rounded-lg border border-black/10 px-3 py-2">
+                                        <div className="flex items-center justify-between gap-2">
+                                            <p className="text-sm font-medium">{change.title}</p>
+                                            <Badge
+                                                variant={
+                                                    change.impact === 'positive'
+                                                        ? 'success'
+                                                        : change.impact === 'negative'
+                                                        ? 'destructive'
+                                                        : 'secondary'
+                                                }
+                                            >
+                                                {change.impact === 'positive' ? 'Positive' : change.impact === 'negative' ? 'Negative' : 'Neutral'}
+                                            </Badge>
+                                        </div>
+                                        <p className="text-xs text-muted-foreground mt-1">{change.detail}</p>
+                                    </div>
+                                ))
+                            )}
                         </CardContent>
                     </Card>
                 </div>
