@@ -622,7 +622,6 @@ export default function PropertyHealthDetailPage() {
   const latestInsights = snapshotInsights.length > 0 ? snapshotInsights : propertyInsights;
   const usingSnapshotInsights = snapshotInsights.length > 0;
   const sortedInsights = sortInsightsForDisplay(latestInsights);
-  const focusInsights = sortedInsights.slice(0, 5);
   const focusedInsight = focusedFactor
     ? sortedInsights.find(
         (insight) =>
@@ -863,11 +862,11 @@ export default function PropertyHealthDetailPage() {
           />
 
           <ScenarioInputCard
-            title="Current Health Focus"
+            title="Health Factors"
             subtitle={
               usingSnapshotInsights
-                ? "Top actionable and in-progress factors from the latest weekly snapshot."
-                : "Showing latest health factors from your current property profile while weekly history builds."
+                ? "All health factors from the latest weekly snapshot, grouped by impact."
+                : "Health factors from your current property profile while weekly history builds."
             }
             actions={
               <ActionPriorityRow
@@ -878,25 +877,46 @@ export default function PropertyHealthDetailPage() {
                     </Link>
                   </Button>
                 }
+                secondaryActions={
+                  <Button asChild variant="outline" size="sm">
+                    <Link href={`/dashboard/properties/${propertyId}/home-score`}>Full Report</Link>
+                  </Button>
+                }
               />
             }
           >
-            {focusInsights.length === 0 ? (
+            {sortedInsights.length === 0 ? (
               <div className="space-y-2 text-sm text-muted-foreground">
                 <p>No factor details are available yet for this property.</p>
                 <p>
-                  Add property profile fields and documentation to unlock a complete health breakdown:
-                  {" "}
+                  Add property profile fields and documentation to unlock a complete health breakdown:{" "}
                   <Link href={`/dashboard/properties/${propertyId}/edit`} className="underline">Edit property details</Link>
-                  {" "}
-                  or
-                  {" "}
+                  {" "}or{" "}
                   <Link href={`/dashboard/documents?propertyId=${propertyId}`} className="underline">upload documents</Link>.
                 </p>
               </div>
             ) : (
-              <div className="space-y-2">
-                {focusInsights.map((insight, idx) => renderFocusInsightAccordionRow(insight, idx, true, getInsightKey(insight.factor) === focusedFactor || insight.factor?.toLowerCase() === focusedFactor))}
+              <div className="space-y-5">
+                {LEDGER_GROUPS.map((group) => {
+                  const groupInsights = getLedgerInsights(group.key, negativeInsights, neutralInsights, positiveInsights);
+                  if (groupInsights.length === 0) return null;
+                  return (
+                    <div key={group.key} className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{group.title}</p>
+                        <span className={`text-xs font-bold px-1.5 py-0.5 rounded-full ${
+                          group.tone === 'danger' ? 'bg-red-100 text-red-600' :
+                          group.tone === 'elevated' ? 'bg-amber-100 text-amber-700' :
+                          'bg-teal-100 text-teal-700'
+                        }`}>{groupInsights.length}</span>
+                      </div>
+                      {groupInsights.map((insight, idx) =>
+                        renderFocusInsightAccordionRow(insight, idx, false,
+                          getInsightKey(insight.factor) === focusedFactor || insight.factor?.toLowerCase() === focusedFactor)
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             )}
           </ScenarioInputCard>
@@ -930,71 +950,30 @@ export default function PropertyHealthDetailPage() {
           </ScenarioInputCard>
 
           <ScenarioInputCard title="Changes Impacting Score" subtitle="What moved the score since the previous weekly snapshot.">
-            {changes.every((c) => c.impact === "neutral") && (
-              <p className="text-sm text-gray-500 mb-2">No significant changes since last week.</p>
+            {!hasPreviousSnapshot ? (
+              <p className="text-sm text-slate-400 italic">Changes will appear here after two weekly snapshots are recorded.</p>
+            ) : allChangesNeutral ? (
+              <p className="text-sm text-gray-500">No significant changes since last week — your score is stable.</p>
+            ) : (
+              <div className="space-y-2">
+                {changes.map((change, idx) => (
+                  <CompactEntityRow
+                    key={`${change.title}-${idx}`}
+                    title={change.title}
+                    subtitle={change.detail}
+                    status={
+                      change.impact !== "neutral" ? (
+                        <StatusChip tone={change.impact === "positive" ? "good" : "danger"}>
+                          {change.impact === "positive" ? "↑ Improved" : "↓ Declined"}
+                        </StatusChip>
+                      ) : undefined
+                    }
+                  />
+                ))}
+              </div>
             )}
-            <div className="space-y-2">
-              {changes.map((change, idx) => (
-                <CompactEntityRow
-                  key={`${change.title}-${idx}`}
-                  title={change.title}
-                  subtitle={change.detail}
-                  status={
-                    change.impact !== "neutral" ? (
-                      <StatusChip tone={change.impact === "positive" ? "good" : "danger"}>
-                        {change.impact === "positive" ? "↑ Improved" : "↓ Declined"}
-                      </StatusChip>
-                    ) : undefined
-                  }
-                />
-              ))}
-            </div>
           </ScenarioInputCard>
 
-          <ScenarioInputCard
-            title="Health Factor Ledger"
-            subtitle="Full factor-by-factor contributions grouped by impact."
-          >
-            {sortedInsights.length === 0 ? (
-              <div className="space-y-2 text-sm text-muted-foreground">
-                <p>Ledger details are not available yet.</p>
-                <p>Complete property profile fields and upload service records to unlock full factor attribution.</p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {LEDGER_GROUPS.map((group) => {
-                  const groupInsights = getLedgerInsights(group.key, negativeInsights, neutralInsights, positiveInsights);
-                  return (
-                    <div key={group.title} className="space-y-2">
-                      <div>
-                        <p className="text-xs font-semibold text-muted-foreground">
-                          {group.title}
-                          <span className={`ml-1.5 text-xs font-semibold px-1.5 py-0.5 rounded-full ${
-                            group.tone === 'danger' ? 'bg-red-100 text-red-600' :
-                            group.tone === 'elevated' ? 'bg-amber-100 text-amber-700' :
-                            'bg-teal-100 text-teal-700'
-                          }`}>{groupInsights.length}</span>
-                        </p>
-                      </div>
-                      {groupInsights.length === 0 ? (
-                        <p className="text-xs text-muted-foreground">No factors in this category.</p>
-                      ) : (
-                        groupInsights.map((insight, idx) => (
-                          <div key={`${group.title}-${insight.factor || "insight"}-${idx}`} data-insight-key={getInsightKey(insight.factor)} className={`border-l-[3px] ${getInsightLeftBorderColor(insight.status)} pl-2`}>
-                            <CompactEntityRow
-                              title={getDisplayFactorName(insight.factor)}
-                              subtitle={getFactorDescription(insight.factor, insight.status)}
-                              status={<StatusChip tone={getInsightTone(insight.status)}>{getInsightChipLabel(insight)}</StatusChip>}
-                            />
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </ScenarioInputCard>
         </MobileToolWorkspace>
       </div>
 
@@ -1424,18 +1403,18 @@ export default function PropertyHealthDetailPage() {
             </div>
           </div>
 
-          {/* Current Health Focus — refined styling */}
+          {/* Health Factors — grouped by impact */}
           <div className="rounded-2xl border border-slate-200/60 bg-white shadow-[0_2px_12px_rgba(0,0,0,0.05),0_1px_3px_rgba(0,0,0,0.04)] overflow-hidden">
             <div className="px-6 pt-5 pb-4 border-b border-slate-100/80">
-              <h4 className="text-lg font-semibold text-slate-900">Current Health Focus</h4>
+              <h4 className="text-lg font-semibold text-slate-900">Health Factors</h4>
               <p className="text-sm text-slate-500 mt-0.5">
                 {usingSnapshotInsights
-                  ? "Top actionable and in-progress factors from the latest weekly snapshot."
-                  : "Showing latest profile-driven health factors while weekly snapshot history is still building."}
+                  ? "All health factors from the latest weekly snapshot, grouped by impact."
+                  : "Health factors from your current property profile while weekly history builds."}
               </p>
             </div>
             <div className="px-6 py-5">
-              {focusInsights.length === 0 ? (
+              {sortedInsights.length === 0 ? (
                 <div className="space-y-2 text-sm text-muted-foreground">
                   <p>No factor details are available yet for this property.</p>
                   <p>
@@ -1446,15 +1425,27 @@ export default function PropertyHealthDetailPage() {
                   </p>
                 </div>
               ) : (
-                <div className="space-y-2">
-                  {focusInsights.map((insight, idx) =>
-                    renderFocusInsightAccordionRow(
-                      insight,
-                      idx,
-                      false,
-                      getInsightKey(insight.factor) === focusedFactor || insight.factor?.toLowerCase() === focusedFactor
-                    )
-                  )}
+                <div className="space-y-5">
+                  {LEDGER_GROUPS.map((group) => {
+                    const groupInsights = getLedgerInsights(group.key, negativeInsights, neutralInsights, positiveInsights);
+                    if (groupInsights.length === 0) return null;
+                    return (
+                      <div key={group.key} className="space-y-2">
+                        <div className="flex items-center gap-2">
+                          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{group.title}</p>
+                          <span className={`text-xs font-bold px-1.5 py-0.5 rounded-full ${
+                            group.tone === 'danger' ? 'bg-red-100 text-red-600' :
+                            group.tone === 'elevated' ? 'bg-amber-100 text-amber-700' :
+                            'bg-teal-100 text-teal-700'
+                          }`}>{groupInsights.length}</span>
+                        </div>
+                        {groupInsights.map((insight, idx) =>
+                          renderFocusInsightAccordionRow(insight, idx, false,
+                            getInsightKey(insight.factor) === focusedFactor || insight.factor?.toLowerCase() === focusedFactor)
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
               <div className="mt-5">
@@ -1465,60 +1456,23 @@ export default function PropertyHealthDetailPage() {
             </div>
           </div>
 
-          {/* Health Factor Ledger — refined styling */}
-          <div className="rounded-2xl border border-slate-200/60 bg-white shadow-[0_2px_12px_rgba(0,0,0,0.05),0_1px_3px_rgba(0,0,0,0.04)] overflow-hidden">
-            <div className="px-6 pt-5 pb-4 border-b border-slate-100/80">
-              <h4 className="text-lg font-semibold text-slate-900">Health Factor Ledger</h4>
-              <p className="text-sm text-slate-500 mt-0.5">Full factor-by-factor contributions grouped by negative, watch, and positive impact.</p>
-            </div>
-            <div className="px-6 py-5 space-y-4">
-              {sortedInsights.length === 0 ? (
-                <div className="rounded-xl border border-dashed border-slate-200 px-4 py-4 text-sm text-muted-foreground">
-                  No factor-level ledger is available yet. Complete property profile fields and upload service documents to unlock this section.
-                </div>
-              ) : (
-                LEDGER_GROUPS.map((group) => {
-                  const groupInsights = getLedgerInsights(group.key, negativeInsights, neutralInsights, positiveInsights);
-                  return (
-                    <div key={group.title} className="space-y-2">
-                      <p className="text-xs font-semibold text-muted-foreground">
-                        {group.title}
-                        <span className={`ml-1.5 text-xs font-semibold px-1.5 py-0.5 rounded-full ${
-                          group.tone === "danger" ? "bg-red-100 text-red-600" :
-                          group.tone === "elevated" ? "bg-amber-100 text-amber-700" :
-                          "bg-teal-100 text-teal-700"
-                        }`}>{groupInsights.length}</span>
-                      </p>
-                      {groupInsights.length === 0 ? (
-                        <p className="text-xs text-muted-foreground">No factors in this category.</p>
-                      ) : (
-                        groupInsights.map((insight, idx) => (
-                          <div
-                            key={`${group.title}-${insight.factor || "insight"}-${idx}`}
-                            className={`rounded-xl border border-slate-200/70 border-l-[3px] ${getInsightLeftBorderColor(insight.status)} px-4 py-3`}
-                          >
-                            <div className="flex items-center justify-between gap-2">
-                              <p className="text-sm font-medium text-slate-800">{getDisplayFactorName(insight.factor)}</p>
-                              <Badge
-                                variant={
-                                  getInsightImpact(insight.status) === "negative" ? "destructive" :
-                                  getInsightImpact(insight.status) === "positive" ? "success" : "secondary"
-                                }
-                              >
-                                {getInsightChipLabel(insight)}
-                              </Badge>
-                            </div>
-                            <p className="text-xs text-muted-foreground mt-1">
-                              {getFactorDescription(insight.factor, insight.status)}
-                              {getInsightDetailsSummary(insight) ? ` • ${getInsightDetailsSummary(insight)}` : ""}
-                            </p>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  );
-                })
-              )}
+          {/* Phase 8: Bridge CTA — Want the full picture? */}
+          <div className="rounded-2xl border border-teal-200/50 bg-gradient-to-br from-teal-50/60 via-white to-white shadow-[0_2px_12px_rgba(0,0,0,0.05),0_1px_3px_rgba(0,0,0,0.04)] overflow-hidden">
+            <div className="px-6 py-5 flex items-center gap-5">
+              <div className="rounded-xl bg-teal-100 border border-teal-200/60 p-3 shrink-0">
+                <FileText className="h-6 w-6 text-teal-700" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h4 className="text-base font-semibold text-slate-900">Want the full picture?</h4>
+                <p className="text-sm text-slate-500 mt-0.5 leading-snug">
+                  The Home Score Report includes your property timeline, benchmark comparison, system health details, and a personalised improvement plan.
+                </p>
+              </div>
+              <Link href={`/dashboard/properties/${propertyId}/home-score`} className="shrink-0">
+                <Button className="bg-teal-700 hover:bg-teal-600 text-white whitespace-nowrap">
+                  View Full Home Score Report <ArrowRight className="h-4 w-4 ml-1.5" />
+                </Button>
+              </Link>
             </div>
           </div>
         </div>
