@@ -1086,7 +1086,7 @@ export default function PropertyHealthDetailPage() {
                   </p>
                 </div>
               ) : (
-                <div className="space-y-2">
+                <div className="flex flex-col justify-between flex-1 gap-3">
                   <div className="grid grid-cols-3 gap-2">
                     <div className="rounded-[10px] bg-red-50 border border-red-100/60 px-2 pt-2 pb-2 text-center">
                       <p className="text-2xl font-black text-red-600 tabular-nums leading-none">{negativeInsights.length}</p>
@@ -1113,7 +1113,7 @@ export default function PropertyHealthDetailPage() {
                       )}
                     </div>
                   </div>
-                  <div className="space-y-1.5">
+                  <div className="space-y-1.5 mt-auto">
                     <div className="flex items-center gap-2 rounded-lg bg-red-50/50 border border-red-100/50 px-2.5 py-1.5">
                       <span className="h-[6px] w-[6px] rounded-full bg-red-400/80 shrink-0" />
                       <span className="text-[10px] font-bold text-red-600 shrink-0 w-[78px] tracking-normal">Biggest risk</span>
@@ -1149,7 +1149,7 @@ export default function PropertyHealthDetailPage() {
             </div>
             {negativeInsights.length > 0 && (
               <div className="px-3 pb-2 space-y-1">
-                {negativeInsights.slice(0, 2).map((insight, idx) => (
+                {negativeInsights.slice(0, 3).map((insight, idx) => (
                   <div key={`next-step-${idx}`} className="rounded-lg bg-white border border-red-100/60 px-2.5 py-1.5 flex items-start gap-2">
                     <span className="h-1.5 w-1.5 rounded-full bg-red-400 shrink-0 mt-1.5" />
                     <div className="min-w-0">
