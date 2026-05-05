@@ -60,10 +60,10 @@ type PropertyWithHealth = {
 } | null;
 
 const getHealthDetails = (score: number) => {
-  if (score >= 85) return { level: "Excellent", color: "text-green-600", progressColor: "bg-green-500" };
-  if (score >= 70) return { level: "Good", color: "text-blue-600", progressColor: "bg-blue-500" };
-  if (score >= 50) return { level: "Fair", color: "text-yellow-600", progressColor: "bg-yellow-500" };
-  return { level: "Needs attention", color: "text-red-600", progressColor: "bg-red-500" };
+  if (score >= 85) return { level: "Excellent", color: "text-green-600", progressColor: "bg-green-500", grade: "A", gradeBg: "bg-green-100 text-green-700" };
+  if (score >= 70) return { level: "Good", color: "text-blue-600", progressColor: "bg-blue-500", grade: "B", gradeBg: "bg-blue-100 text-blue-700" };
+  if (score >= 50) return { level: "Fair", color: "text-yellow-600", progressColor: "bg-yellow-500", grade: "C", gradeBg: "bg-amber-100 text-amber-700" };
+  return { level: "Needs attention", color: "text-red-600", progressColor: "bg-red-500", grade: "D", gradeBg: "bg-red-100 text-red-700" };
 };
 
 function healthTone(level: string): "good" | "info" | "elevated" | "danger" {
@@ -326,6 +326,29 @@ function getInsightLeftBorderColor(statusValue: string | undefined): string {
   if (impact === "negative") return "border-l-red-400";
   if (impact === "positive") return "border-l-teal-400";
   return "border-l-amber-400";
+}
+
+function getUserFriendlyStatus(status: string | undefined): string {
+  const s = String(status || "");
+  const map: Record<string, string> = {
+    "Modern": "Up to date",
+    "Needs Review": "Review needed",
+    "Needs Inspection": "Inspect soon",
+    "Needs attention": "Action needed",
+    "Needs Warranty": "Warranty needed",
+    "Missing Data": "Data missing",
+    "High Density": "High usage",
+    "Low Density": "Light usage",
+    "Action Pending": "In progress",
+    "Partial": "Partial",
+    "Incomplete": "Incomplete",
+    "Average": "Average",
+    "Standard": "Standard",
+    "Excellent": "Excellent",
+    "Good": "Good",
+    "Complete": "Complete",
+  };
+  return map[s] || s;
 }
 
 function sortInsightsForDisplay(insights: HealthInsight[]): HealthInsight[] {
@@ -957,11 +980,37 @@ export default function PropertyHealthDetailPage() {
                   <div className="flex items-center gap-1.5 mt-1">
                     <span className={`h-[5px] w-[5px] rounded-full shrink-0 ${scoreStatusDot}`} />
                     <span className="text-[10px] font-semibold text-slate-500 tracking-normal">{healthDetails.level}</span>
+                    <span className={`text-[9px] font-bold px-1 py-px rounded ${healthDetails.gradeBg}`}>{healthDetails.grade}</span>
                   </div>
                 </div>
               </div>
               <div className="flex items-center justify-center mt-1">
-                <ScoreDeltaIndicator delta={series?.deltaFromPreviousWeek} />
+                {wowDelta !== null && Math.abs(wowDelta) < 0.05 ? (
+                  <span className="text-[10px] text-slate-400 font-medium">No change this week</span>
+                ) : (
+                  <ScoreDeltaIndicator delta={series?.deltaFromPreviousWeek} />
+                )}
+              </div>
+              {/* Score range strip */}
+              <div className="w-full mt-3 px-1">
+                <div className="relative h-1.5 w-full">
+                  <div className="absolute inset-0 flex rounded-full overflow-hidden">
+                    <div className="h-full bg-red-200" style={{ width: "50%" }} />
+                    <div className="h-full bg-amber-200" style={{ width: "20%" }} />
+                    <div className="h-full bg-blue-200" style={{ width: "15%" }} />
+                    <div className="h-full bg-green-200" style={{ width: "15%" }} />
+                  </div>
+                  <div
+                    className="absolute top-0 h-full w-0.5 bg-slate-700 rounded-full"
+                    style={{ left: `${latestScore}%`, transform: "translateX(-50%)" }}
+                  />
+                </div>
+                <div className="flex text-[8px] text-slate-400 mt-1">
+                  <span style={{ width: "50%" }}>Poor</span>
+                  <span style={{ width: "20%" }}>Fair</span>
+                  <span style={{ width: "15%" }}>Good</span>
+                  <span className="text-right" style={{ width: "15%" }}>Excellent</span>
+                </div>
               </div>
             </div>
             <div className="px-4 py-2 border-t border-slate-100/80 bg-slate-50/60">
@@ -999,6 +1048,7 @@ export default function PropertyHealthDetailPage() {
                     <div className="rounded-[10px] bg-red-50 border border-red-100/60 px-2 pt-2 pb-2 text-center">
                       <p className="text-2xl font-black text-red-600 tabular-nums leading-none">{negativeInsights.length}</p>
                       <p className="text-[10px] font-semibold text-red-500/90 mt-1 leading-tight">Needs attention</p>
+                      <p className="text-[8px] text-red-400/70 mt-0.5 leading-tight">requires action</p>
                       {negDelta !== null && negDelta !== 0 && (
                         <p className="text-[9px] font-medium tabular-nums mt-0.5 text-red-500">{negDelta > 0 ? `↑ ${negDelta}` : `↓ ${Math.abs(negDelta)}`}</p>
                       )}
@@ -1006,6 +1056,7 @@ export default function PropertyHealthDetailPage() {
                     <div className="rounded-[10px] bg-amber-50 border border-amber-100/60 px-2 pt-2 pb-2 text-center">
                       <p className="text-2xl font-black text-amber-500 tabular-nums leading-none">{neutralInsights.length}</p>
                       <p className="text-[10px] font-semibold text-amber-600/90 mt-1 leading-tight">Track these systems</p>
+                      <p className="text-[8px] text-amber-500/70 mt-0.5 leading-tight">watch, no action yet</p>
                       {neutralDelta !== null && neutralDelta !== 0 && (
                         <p className="text-[9px] font-medium tabular-nums mt-0.5 text-amber-600">{neutralDelta > 0 ? `↑ ${neutralDelta}` : `↓ ${Math.abs(neutralDelta)}`}</p>
                       )}
@@ -1013,6 +1064,7 @@ export default function PropertyHealthDetailPage() {
                     <div className="rounded-[10px] bg-emerald-50 border border-emerald-100/60 px-2 pt-2 pb-2 text-center">
                       <p className="text-2xl font-black text-emerald-600 tabular-nums leading-none">{positiveInsights.length}</p>
                       <p className="text-[10px] font-semibold text-emerald-600/90 mt-1 leading-tight">Healthy signals</p>
+                      <p className="text-[8px] text-emerald-500/70 mt-0.5 leading-tight">working for you</p>
                       {positiveDelta !== null && positiveDelta !== 0 && (
                         <p className="text-[9px] font-medium tabular-nums mt-0.5 text-emerald-600">{positiveDelta > 0 ? `↑ ${positiveDelta}` : `↓ ${Math.abs(positiveDelta)}`}</p>
                       )}
@@ -1022,17 +1074,17 @@ export default function PropertyHealthDetailPage() {
                     <div className="flex items-center gap-2 rounded-lg bg-red-50/50 border border-red-100/50 px-2.5 py-1.5">
                       <span className="h-[6px] w-[6px] rounded-full bg-red-400/80 shrink-0" />
                       <span className="text-[10px] font-bold text-red-600 shrink-0 w-[78px] tracking-normal">Biggest risk</span>
-                      <span className="text-[11px] font-medium text-slate-700 truncate flex-1">{topNegativeInsight?.factor || "None currently"}</span>
+                      <span className="text-[11px] font-medium text-slate-700 truncate flex-1">{topNegativeInsight ? getDisplayFactorName(topNegativeInsight.factor) : "None currently"}</span>
                       {topNegativeInsight && (
-                        <span className="text-[9px] text-slate-400 shrink-0 ml-auto">{topNegativeInsight.status}</span>
+                        <span className="text-[9px] text-slate-400 shrink-0 ml-auto">{getUserFriendlyStatus(topNegativeInsight.status)}</span>
                       )}
                     </div>
                     <div className="flex items-center gap-2 rounded-lg bg-teal-50/50 border border-teal-100/50 px-2.5 py-1.5">
                       <span className="h-[6px] w-[6px] rounded-full bg-teal-400/80 shrink-0" />
                       <span className="text-[10px] font-bold text-teal-600 shrink-0 whitespace-nowrap tracking-normal">Best performing</span>
-                      <span className="text-[11px] font-medium text-slate-700 truncate flex-1">{topPositiveInsight?.factor || "Building signal"}</span>
+                      <span className="text-[11px] font-medium text-slate-700 truncate flex-1">{topPositiveInsight ? getDisplayFactorName(topPositiveInsight.factor) : "Building signal"}</span>
                       {topPositiveInsight && (
-                        <span className="text-[9px] text-slate-400 shrink-0 ml-auto">{topPositiveInsight.status}</span>
+                        <span className="text-[9px] text-slate-400 shrink-0 ml-auto">{getUserFriendlyStatus(topPositiveInsight.status)}</span>
                       )}
                     </div>
                   </div>
@@ -1043,10 +1095,29 @@ export default function PropertyHealthDetailPage() {
 
           {/* ── Card 3: Next Steps ── */}
           <div className="rounded-2xl border border-slate-200/50 bg-slate-50/80 shadow-[0_1px_4px_rgba(0,0,0,0.05),0_1px_2px_rgba(0,0,0,0.03)] overflow-hidden flex flex-col">
-            <div className="px-4 pt-3 pb-0">
+            <div className="px-4 pt-3 pb-2">
               <p className="text-[10px] font-bold tracking-normal text-slate-400/80">Next Steps</p>
+              {negativeInsights.length > 0 && (
+                <p className="text-[11px] text-slate-600 mt-0.5 leading-snug">
+                  {negativeInsights.length} item{negativeInsights.length > 1 ? "s" : ""} need{negativeInsights.length === 1 ? "s" : ""} attention
+                  {negativeInsights[0] ? ` — resolving ${getDisplayFactorName(negativeInsights[0].factor)} could improve your score` : ""}.
+                </p>
+              )}
             </div>
-            <div className="px-3 py-3 space-y-2">
+            {negativeInsights.length > 0 && (
+              <div className="px-3 pb-2 space-y-1">
+                {negativeInsights.slice(0, 2).map((insight, idx) => (
+                  <div key={`next-step-${idx}`} className="rounded-lg bg-white border border-red-100/60 px-2.5 py-1.5 flex items-start gap-2">
+                    <span className="h-1.5 w-1.5 rounded-full bg-red-400 shrink-0 mt-1.5" />
+                    <div className="min-w-0">
+                      <p className="text-[11px] font-medium text-slate-700 leading-tight">{getDisplayFactorName(insight.factor)}</p>
+                      <p className="text-[10px] text-slate-400 leading-tight mt-0.5 truncate">{getFactorDescription(insight.factor, insight.status)}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="px-3 pb-3 space-y-2">
               <Link href={`/dashboard/properties/${propertyId}/?tab=maintenance&view=insights`} className="block">
                 <div className="rounded-xl bg-teal-800 hover:bg-teal-700 active:scale-[0.99] transition-all px-3 py-2 cursor-pointer flex items-center justify-between gap-2">
                   <p className="text-[12px] font-semibold text-white tracking-normal">View maintenance actions</p>
@@ -1057,16 +1128,17 @@ export default function PropertyHealthDetailPage() {
                   )}
                 </div>
               </Link>
+              <Link href={`/dashboard/properties/${propertyId}/home-score`} className="block">
+                <div className="rounded-xl border border-teal-200/60 bg-teal-50/60 hover:bg-teal-50 active:scale-[0.99] transition-all px-3 py-2 cursor-pointer flex items-center justify-between gap-2">
+                  <p className="text-[12px] font-medium text-teal-700">View Full Home Score Report</p>
+                  <ArrowRight className="h-3.5 w-3.5 text-teal-600 shrink-0" />
+                </div>
+              </Link>
               <Link href={`/dashboard/properties/${propertyId}/edit`} className="block">
                 <div className="rounded-xl border border-slate-200/80 bg-white hover:bg-slate-50 active:scale-[0.99] transition-all px-3 py-2 cursor-pointer">
                   <p className="text-[12px] font-medium text-slate-600">Edit property details</p>
                 </div>
               </Link>
-            </div>
-            <div className="px-4 pt-2 pb-2.5 border-t border-slate-200/70 mt-auto">
-              <p className="text-[9px] font-semibold tracking-normal text-slate-400/80">
-                {sortedInsights.length > 0 ? `${sortedInsights.length} factors tracked` : "Awaiting data"}
-              </p>
             </div>
           </div>
         </div>
@@ -1359,6 +1431,16 @@ export default function PropertyHealthDetailPage() {
           <p className="text-sm text-gray-500 mt-3">
             Your current score: {baseScore !== null ? baseScore.toFixed(1) : "0.0"} (base) + {unlockedScore !== null ? unlockedScore.toFixed(1) : "0.0"} (extended) = {latestScore.toFixed(1)} / 100
           </p>
+          <div className="mt-4 pt-3 border-t border-slate-100">
+            <Link
+              href={`/dashboard/properties/${propertyId}/home-score`}
+              onClick={() => setShowScoreModal(false)}
+              className="text-sm text-teal-600 font-medium hover:underline flex items-center gap-1"
+            >
+              View full Home Score Report — timeline, benchmarks &amp; improvement plan
+              <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+          </div>
         </DialogContent>
       </Dialog>
     </DashboardShell>
