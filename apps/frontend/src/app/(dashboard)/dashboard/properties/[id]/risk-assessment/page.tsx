@@ -699,7 +699,9 @@ const AssetMatrixTable = ({
 
     // Shared CTA button renderer
     const renderCtaButton = (item: AssetRiskDetail, data: ReturnType<typeof getAssetRowData>, fullWidth = false) => {
-        const { ctaText, ctaVariant, hasBooking, hasTask, existingBooking, existingTask, guidanceAction, guidanceHref } = data;
+        const { ctaVariant, hasBooking, hasTask, existingBooking, existingTask, guidanceAction, guidanceHref } = data;
+        // Strip "Step N: " prefix — ordering metadata that clutters short button labels
+        const ctaText = data.ctaText.replace(/^Step \d+:\s*/i, '');
         const sizeClass = fullWidth ? 'w-full min-h-[44px]' : '';
 
         if (guidanceAction) {
@@ -1115,9 +1117,6 @@ const AssetMatrixTable = ({
                                         <TableCell className="align-top py-3 whitespace-nowrap">
                                             <span className="font-semibold">{item.age} yrs</span>
                                             <span className="text-muted-foreground"> / {item.expectedLife} yrs</span>
-                                            {data.isPastLife && (
-                                                <span className="ml-2 inline-flex items-center text-[10px] font-medium bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 rounded px-1 py-0.5">Past Life</span>
-                                            )}
                                             <div className="mt-1.5 w-24 h-1.5 rounded-full bg-muted overflow-hidden">
                                                 <div
                                                     className={`h-full rounded-full ${
@@ -1129,6 +1128,9 @@ const AssetMatrixTable = ({
                                                     style={{ width: `${Math.min((item.age / item.expectedLife) * 100, 100)}%` }}
                                                 />
                                             </div>
+                                            {data.isPastLife && (
+                                                <span className="mt-1 inline-flex items-center text-[10px] font-medium bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 rounded px-1 py-0.5">Past Life</span>
+                                            )}
                                         </TableCell>
                                         <TableCell className="align-top py-3 whitespace-nowrap">
                                             {getRiskBadge(item.riskLevel)}
