@@ -797,53 +797,89 @@ const AssetMatrixTable = ({
                 <CardDescription>A component-by-component breakdown of your home&apos;s risks, exposure, and potential actions.</CardDescription>
             </CardHeader>
             <CardContent>
-                {/* Sort & filter controls — desktop only */}
-                <div className="hidden md:flex items-center gap-3 mb-3 flex-wrap">
-                    <span className="text-xs text-muted-foreground shrink-0">
-                        {filteredDetails.length} of {details.length} item{details.length !== 1 ? 's' : ''}
-                    </span>
-                    <select
-                        value={filterCategory}
-                        onChange={e => setFilterCategory(e.target.value)}
-                        className="text-sm border border-input rounded-md px-2 py-1 bg-background text-foreground"
-                        aria-label="Filter by category"
-                    >
-                        <option value="ALL">All categories</option>
-                        <option value="STRUCTURE">Structure</option>
-                        <option value="SYSTEMS">Systems</option>
-                        <option value="SAFETY">Safety</option>
-                        <option value="FINANCIAL_GAP">Financial Gap</option>
-                    </select>
-                    <select
-                        value={filterRisk}
-                        onChange={e => setFilterRisk(e.target.value)}
-                        className="text-sm border border-input rounded-md px-2 py-1 bg-background text-foreground"
-                        aria-label="Filter by risk level"
-                    >
-                        <option value="ALL">All risk levels</option>
-                        <option value="HIGH">High</option>
-                        <option value="ELEVATED">Elevated</option>
-                        <option value="MODERATE">Moderate</option>
-                        <option value="LOW">Low</option>
-                    </select>
-                    <select
-                        value={sortBy}
-                        onChange={e => setSortBy(e.target.value as 'risk' | 'exposure' | 'age')}
-                        className="text-sm border border-input rounded-md px-2 py-1 bg-background text-foreground"
-                        aria-label="Sort by"
-                    >
-                        <option value="risk">Sort: Risk level</option>
-                        <option value="exposure">Sort: Exposure ↓</option>
-                        <option value="age">Sort: Age vs. life</option>
-                    </select>
-                    {(filterCategory !== 'ALL' || filterRisk !== 'ALL') && (
-                        <button
-                            onClick={() => { setFilterCategory('ALL'); setFilterRisk('ALL'); }}
-                            className="text-xs text-primary hover:underline"
-                        >
-                            Clear filters
-                        </button>
-                    )}
+                {/* Sort & filter controls — desktop only, segmented button groups */}
+                <div className="hidden md:flex flex-col gap-2 mb-5">
+                    <div className="flex items-center gap-3 flex-wrap">
+                        <span className="text-xs font-medium text-muted-foreground w-16 shrink-0">Category</span>
+                        <div className="flex rounded-md border border-input overflow-hidden">
+                            {[
+                                { value: 'ALL', label: 'All' },
+                                { value: 'STRUCTURE', label: 'Structure' },
+                                { value: 'SYSTEMS', label: 'Systems' },
+                                { value: 'SAFETY', label: 'Safety' },
+                                { value: 'FINANCIAL_GAP', label: 'Financial' },
+                            ].map(opt => (
+                                <button
+                                    key={opt.value}
+                                    onClick={() => setFilterCategory(opt.value)}
+                                    className={`h-8 px-3 text-xs font-medium border-r border-input last:border-r-0 transition-colors ${
+                                        filterCategory === opt.value
+                                            ? 'bg-primary text-primary-foreground'
+                                            : 'bg-background text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                                    }`}
+                                >
+                                    {opt.label}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-3 flex-wrap">
+                        <span className="text-xs font-medium text-muted-foreground w-16 shrink-0">Risk</span>
+                        <div className="flex rounded-md border border-input overflow-hidden">
+                            {[
+                                { value: 'ALL', label: 'All' },
+                                { value: 'HIGH', label: 'High' },
+                                { value: 'ELEVATED', label: 'Elevated' },
+                                { value: 'MODERATE', label: 'Moderate' },
+                                { value: 'LOW', label: 'Low' },
+                            ].map(opt => (
+                                <button
+                                    key={opt.value}
+                                    onClick={() => setFilterRisk(opt.value)}
+                                    className={`h-8 px-3 text-xs font-medium border-r border-input last:border-r-0 transition-colors ${
+                                        filterRisk === opt.value
+                                            ? 'bg-primary text-primary-foreground'
+                                            : 'bg-background text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                                    }`}
+                                >
+                                    {opt.label}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-3 flex-wrap">
+                        <span className="text-xs font-medium text-muted-foreground w-16 shrink-0">Sort</span>
+                        <div className="flex rounded-md border border-input overflow-hidden">
+                            {[
+                                { value: 'risk', label: 'Risk level' },
+                                { value: 'exposure', label: 'Exposure ↓' },
+                                { value: 'age', label: 'Age vs. life' },
+                            ].map(opt => (
+                                <button
+                                    key={opt.value}
+                                    onClick={() => setSortBy(opt.value as 'risk' | 'exposure' | 'age')}
+                                    className={`h-8 px-3 text-xs font-medium border-r border-input last:border-r-0 transition-colors ${
+                                        sortBy === opt.value
+                                            ? 'bg-primary text-primary-foreground'
+                                            : 'bg-background text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                                    }`}
+                                >
+                                    {opt.label}
+                                </button>
+                            ))}
+                        </div>
+                        <span className="text-xs text-muted-foreground">
+                            {filteredDetails.length} of {details.length} item{details.length !== 1 ? 's' : ''}
+                        </span>
+                        {(filterCategory !== 'ALL' || filterRisk !== 'ALL') && (
+                            <button
+                                onClick={() => { setFilterCategory('ALL'); setFilterRisk('ALL'); }}
+                                className="text-xs text-primary hover:underline"
+                            >
+                                Clear filters
+                            </button>
+                        )}
+                    </div>
                 </div>
 
                 {/* ===== MOBILE: Card Layout (<md) ===== */}
@@ -979,6 +1015,11 @@ const AssetMatrixTable = ({
                                 const isSnoozed = snoozedItems.has(itemKey);
                                 const snoozeUntil = snoozedItems.get(itemKey);
                                 const actionStatus = getActionStatus(data, item.riskLevel);
+                                const borderColor =
+                                    item.riskLevel === 'HIGH' ? 'border-l-red-500' :
+                                    item.riskLevel === 'ELEVATED' ? 'border-l-orange-400' :
+                                    item.riskLevel === 'MODERATE' ? 'border-l-yellow-400' :
+                                    'border-l-green-500';
 
                                 return (
                                     <TableRow
@@ -990,33 +1031,41 @@ const AssetMatrixTable = ({
                                             isSnoozed ? 'opacity-50' : '',
                                         ].filter(Boolean).join(' ')}
                                     >
-                                        <TableCell className="font-medium whitespace-normal break-words">
-                                            <div className="flex items-center gap-2 flex-wrap">
-                                                <div>
-                                                    {displayLabel(item.assetName)}
-                                                    {displayLabel(item.systemType) !== displayLabel(item.assetName) && (
-                                                        <div className="text-xs text-muted-foreground">{displayLabel(item.systemType)}</div>
-                                                    )}
-                                                </div>
-                                                {renderStatusBadges(data)}
+                                        <TableCell className={`align-top py-3 font-medium whitespace-normal break-words border-l-4 ${borderColor}`}>
+                                            <div className="flex items-center gap-1.5 flex-wrap">
+                                                <span>{displayLabel(item.assetName)}</span>
+                                                {data.hasBooking && (
+                                                    <Badge variant="outline" className="text-[10px] h-4 px-1 border-blue-400 text-blue-600 dark:text-blue-400 shrink-0">Booked</Badge>
+                                                )}
+                                                {data.hasWarranty && (
+                                                    <Badge variant="outline" className="text-[10px] h-4 px-1 border-green-500 text-green-700 dark:text-green-400 shrink-0">Warranty</Badge>
+                                                )}
+                                                {data.hasTask && !data.hasBooking && (
+                                                    <Badge variant="outline" className="text-[10px] h-4 px-1 border-purple-400 text-purple-600 dark:text-purple-400 shrink-0">Scheduled</Badge>
+                                                )}
                                             </div>
+                                            {displayLabel(item.systemType) !== displayLabel(item.assetName) && (
+                                                <div className="text-xs text-muted-foreground mt-0.5">{displayLabel(item.systemType)}</div>
+                                            )}
                                         </TableCell>
-                                        <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                                        <TableCell className="align-top py-3 text-sm text-muted-foreground whitespace-nowrap">
                                             {displayLabel(item.category)}
                                         </TableCell>
-                                        <TableCell className="whitespace-nowrap">
+                                        <TableCell className="align-top py-3 whitespace-nowrap">
                                             <span className="font-semibold">{item.age} yrs</span> / {item.expectedLife} yrs
                                             {data.isPastLife && <span className="text-red-500 text-xs ml-2">(Past Life)</span>}
                                         </TableCell>
-                                        <TableCell className="whitespace-nowrap">
+                                        <TableCell className="align-top py-3 whitespace-nowrap">
                                             {getRiskBadge(item.riskLevel)}
-                                            <div className={`text-xs mt-1 ${actionStatus.className}`}>{actionStatus.label}</div>
+                                            {(data.hasBooking || data.hasTask) && (
+                                                <div className={`text-xs mt-1 ${actionStatus.className}`}>{actionStatus.label}</div>
+                                            )}
                                         </TableCell>
-                                        <TableCell className="font-bold text-red-600 whitespace-nowrap">
+                                        <TableCell className="align-top py-3 font-bold text-red-600 whitespace-nowrap">
                                             {formatCurrency(item.outOfPocketCost)}
                                             <div className="text-xs text-muted-foreground whitespace-normal">P: {item.probability.toFixed(2)} / C: {(item.coverageFactor * 100).toFixed(0)}%</div>
                                         </TableCell>
-                                        <TableCell className="whitespace-nowrap">
+                                        <TableCell className="align-top py-3 whitespace-nowrap">
                                             {isSnoozed ? (
                                                 <div className="flex items-center gap-2">
                                                     <span className="text-xs text-muted-foreground">
@@ -1032,7 +1081,7 @@ const AssetMatrixTable = ({
                                             ) : (
                                                 <div className="flex items-center gap-1">
                                                     {renderCtaButton(item, data)}
-                                                    <div className="relative" data-snooze-menu>
+                                                    <div className="relative border-l border-border ml-1 pl-1" data-snooze-menu>
                                                         <Button
                                                             size="sm"
                                                             variant="ghost"
