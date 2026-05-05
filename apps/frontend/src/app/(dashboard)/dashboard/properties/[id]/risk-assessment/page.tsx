@@ -882,6 +882,31 @@ const AssetMatrixTable = ({
                     </div>
                 </div>
 
+                {/* ===== MOBILE: Quick risk filter strip ===== */}
+                <div className="md:hidden flex items-center gap-2 mb-4 flex-wrap">
+                    {[
+                        { value: 'ALL', label: 'All' },
+                        { value: 'HIGH', label: 'High' },
+                        { value: 'ELEVATED', label: 'Elevated' },
+                        { value: 'MODERATE', label: 'Moderate' },
+                    ].map(opt => (
+                        <button
+                            key={opt.value}
+                            onClick={() => setFilterRisk(opt.value)}
+                            className={`h-7 px-3 text-xs font-medium rounded-full border transition-colors ${
+                                filterRisk === opt.value
+                                    ? 'bg-primary text-primary-foreground border-primary'
+                                    : 'border-input bg-background text-muted-foreground hover:bg-accent'
+                            }`}
+                        >
+                            {opt.label}
+                        </button>
+                    ))}
+                    <span className="text-xs text-muted-foreground ml-auto">
+                        {filteredDetails.length} item{filteredDetails.length !== 1 ? 's' : ''}
+                    </span>
+                </div>
+
                 {/* ===== MOBILE: Card Layout (<md) ===== */}
                 <div className="md:hidden space-y-4">
                     {filteredDetails.map((item, index) => {
@@ -894,16 +919,16 @@ const AssetMatrixTable = ({
                         const isSnoozed = snoozedItems.has(itemKey);
                         const snoozeUntil = snoozedItems.get(itemKey);
                         const actionStatus = getActionStatus(data, item.riskLevel);
+                        const mobileBorderColor =
+                            isSnoozed ? 'border-border border-l-border opacity-60' :
+                            item.riskLevel === 'HIGH' ? 'border-red-200 border-l-red-500 bg-red-50/50 dark:border-red-800 dark:bg-red-900/10' :
+                            item.riskLevel === 'ELEVATED' ? 'border-border border-l-orange-400' :
+                            item.riskLevel === 'MODERATE' ? 'border-border border-l-yellow-400' :
+                            'border-border border-l-green-500';
                         return (
                             <div
                                 key={rowKey}
-                                className={`rounded-lg border p-4 space-y-3 ${
-                                    isSnoozed
-                                        ? 'border-border opacity-60'
-                                        : item.riskLevel === 'HIGH'
-                                        ? 'border-red-200 bg-red-50/50 dark:border-red-800 dark:bg-red-900/10'
-                                        : 'border-border'
-                                }`}
+                                className={`rounded-lg border border-l-4 p-4 space-y-3 ${mobileBorderColor}`}
                             >
                                 {/* Row 1: Asset name + risk badge + action status */}
                                 <div className="flex justify-between items-start gap-2">
@@ -917,7 +942,9 @@ const AssetMatrixTable = ({
                                     </div>
                                     <div className="flex flex-col items-end gap-0.5 shrink-0">
                                         {getRiskBadge(item.riskLevel)}
-                                        <span className={`text-xs ${actionStatus.className}`}>{actionStatus.label}</span>
+                                        {(data.hasBooking || data.hasTask) && (
+                                            <span className={`text-xs ${actionStatus.className}`}>{actionStatus.label}</span>
+                                        )}
                                     </div>
                                 </div>
 
@@ -941,8 +968,8 @@ const AssetMatrixTable = ({
                                         <span className="font-bold text-red-600">{formatCurrency(item.outOfPocketCost)}</span>
                                     </div>
                                     <div>
-                                        <span className="text-xs text-muted-foreground block">Probability</span>
-                                        <span className="font-medium">{item.probability.toFixed(2)}</span>
+                                        <span className="text-xs text-muted-foreground block">Failure Risk</span>
+                                        <span className="font-medium">{(item.probability * 100).toFixed(0)}%</span>
                                     </div>
                                     <div>
                                         <span className="text-xs text-muted-foreground block">Coverage</span>
@@ -989,6 +1016,17 @@ const AssetMatrixTable = ({
                             </div>
                         );
                     })}
+                    {filteredDetails.length === 0 && (
+                        <div className="text-center py-10 text-muted-foreground text-sm">
+                            No items match your current filters.{' '}
+                            <button
+                                onClick={() => { setFilterCategory('ALL'); setFilterRisk('ALL'); }}
+                                className="text-primary hover:underline"
+                            >
+                                Clear filters
+                            </button>
+                        </div>
+                    )}
                 </div>
 
                 {/* ===== DESKTOP: Table Layout (md+) ===== */}
@@ -1063,7 +1101,7 @@ const AssetMatrixTable = ({
                                         </TableCell>
                                         <TableCell className="align-top py-3 font-bold text-red-600 whitespace-nowrap">
                                             {formatCurrency(item.outOfPocketCost)}
-                                            <div className="text-xs text-muted-foreground whitespace-normal">P: {item.probability.toFixed(2)} / C: {(item.coverageFactor * 100).toFixed(0)}%</div>
+                                            <div className="text-xs text-muted-foreground whitespace-normal">P: {(item.probability * 100).toFixed(0)}% / C: {(item.coverageFactor * 100).toFixed(0)}%</div>
                                         </TableCell>
                                         <TableCell className="align-top py-3 whitespace-nowrap">
                                             {isSnoozed ? (
@@ -1112,6 +1150,19 @@ const AssetMatrixTable = ({
                                     </TableRow>
                                 );
                             })}
+                            {filteredDetails.length === 0 && (
+                                <TableRow>
+                                    <TableCell colSpan={6} className="text-center py-10 text-muted-foreground text-sm">
+                                        No items match your current filters.{' '}
+                                        <button
+                                            onClick={() => { setFilterCategory('ALL'); setFilterRisk('ALL'); }}
+                                            className="text-primary hover:underline"
+                                        >
+                                            Clear filters
+                                        </button>
+                                    </TableCell>
+                                </TableRow>
+                            )}
                         </TableBody>
                     </Table>
                 </div>
