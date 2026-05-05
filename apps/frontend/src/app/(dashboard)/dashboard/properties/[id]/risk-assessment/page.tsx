@@ -174,13 +174,22 @@ const ASSET_CATEGORY_SIGNAL_HINTS: Record<RiskCategory, string[]> = {
     FINANCIAL_GAP: ['financial', 'coverage', 'cost', 'utility', 'energy'],
 };
 
-function buildAssetGuidanceHref(propertyId: string, asset: AssetRiskDetail, issueLabel?: string | null): string {
+function buildAssetGuidanceHref(
+    propertyId: string,
+    asset: AssetRiskDetail,
+    options?: {
+        issueLabel?: string | null;
+        issueType?: string | null;
+    }
+): string {
     return buildGuidanceOverviewHref({
         propertyId,
         inventoryItemId: asset.inventoryItemId ?? null,
         homeAssetId: asset.homeAssetId ?? null,
         assetName: asset.assetName,
-        customIssueLabel: issueLabel || asset.actionCta || `${asset.assetName} needs attention`,
+        issueType: options?.issueType ?? null,
+        customIssueLabel:
+            options?.issueLabel || asset.actionCta || `${asset.assetName} needs attention`,
     });
 }
 
@@ -646,8 +655,6 @@ const AssetMatrixTable = ({
         const hasWarranty = !!existingWarranty;
         const isPastLife = item.age > item.expectedLife;
         const guidanceAction = pickGuidanceActionForAsset(item, guidance.actions);
-        const guidanceHref = guidanceAction?.href ?? null;
-
         let ctaText = '';
         let ctaVariant: 'default' | 'secondary' | 'destructive' | 'outline' = 'secondary';
 
@@ -680,6 +687,13 @@ const AssetMatrixTable = ({
                 ctaVariant = item.riskLevel === 'HIGH' ? 'destructive' : 'secondary';
             }
         }
+
+        const guidanceHref = guidanceAction
+            ? buildAssetGuidanceHref(propertyId, item, {
+                issueLabel: ctaText.replace(/^Step \d+:\s*/i, ''),
+                issueType: guidanceAction.journey.issueType ?? null,
+            })
+            : null;
 
         return {
             insightFactor,

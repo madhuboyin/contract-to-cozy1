@@ -183,7 +183,21 @@ function validateMathAndSafety(input) {
   return { issues, sanitized, shouldSuppress };
 }
 
-function applyTransitionGuard({ step, nextStatus, reasonCode, reasonMessage, producedData, allowBackwardTransition = false }) {
+function isSatisfiedPrerequisiteStep(step) {
+  if (step.status === 'COMPLETED') return true;
+  if (step.status !== 'SKIPPED') return false;
+  return step.skipPolicy === 'ALLOWED';
+}
+
+function applyTransitionGuard({
+  step,
+  nextStatus,
+  reasonCode,
+  reasonMessage,
+  producedData,
+  allowBackwardTransition = false,
+  priorRequiredSteps = [],
+}) {
   if (
     nextStatus === 'PENDING' &&
     ['IN_PROGRESS', 'SKIPPED', 'BLOCKED'].includes(step.status) &&
@@ -198,6 +212,13 @@ function applyTransitionGuard({ step, nextStatus, reasonCode, reasonMessage, pro
 
   if (nextStatus === 'COMPLETED' && step.requiresData && !producedData) {
     return { ok: false, code: 'GUIDANCE_COMPLETION_DATA_REQUIRED' };
+  }
+
+  if (
+    nextStatus === 'COMPLETED' &&
+    priorRequiredSteps.some((priorStep) => !isSatisfiedPrerequisiteStep(priorStep))
+  ) {
+    return { ok: false, code: 'GUIDANCE_PREREQUISITE_INCOMPLETE' };
   }
 
   return { ok: true };
@@ -451,6 +472,33 @@ test('transition guards block silent required-skip and missing completion data',
   });
   assert.equal(missingData.ok, false);
   assert.equal(missingData.code, 'GUIDANCE_COMPLETION_DATA_REQUIRED');
+});
+
+test('transition guards block out-of-order completion when earlier required steps are incomplete', () => {
+  const blocked = applyTransitionGuard({
+    step: { status: 'PENDING', isRequired: true, requiresData: true },
+    nextStatus: 'COMPLETED',
+    producedData: { proofType: 'price_validation', proofId: 'check-1' },
+    priorRequiredSteps: [
+      { stepKey: 'check_coverage', status: 'PENDING', skipPolicy: 'DISALLOWED' },
+      { stepKey: 'repair_replace_decision', status: 'SKIPPED', skipPolicy: 'ALLOWED' },
+    ],
+  });
+
+  assert.equal(blocked.ok, false);
+  assert.equal(blocked.code, 'GUIDANCE_PREREQUISITE_INCOMPLETE');
+
+  const allowed = applyTransitionGuard({
+    step: { status: 'PENDING', isRequired: true, requiresData: true },
+    nextStatus: 'COMPLETED',
+    producedData: { proofType: 'price_validation', proofId: 'check-1' },
+    priorRequiredSteps: [
+      { stepKey: 'repair_replace_decision', status: 'SKIPPED', skipPolicy: 'ALLOWED' },
+      { stepKey: 'check_coverage', status: 'COMPLETED', skipPolicy: 'DISALLOWED' },
+    ],
+  });
+
+  assert.equal(allowed.ok, true);
 });
 
 test('transition guards block backward transitions unless explicitly allowed', () => {

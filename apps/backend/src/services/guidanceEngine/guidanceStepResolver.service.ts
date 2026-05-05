@@ -62,6 +62,13 @@ function requiresCompletionData(step: any) {
   return false;
 }
 
+function isSatisfiedPrerequisiteStep(step: any, journeyTypeKey: string | null | undefined) {
+  const status = step?.status as GuidanceStepStatus | undefined;
+  if (status === 'COMPLETED') return true;
+  if (status !== 'SKIPPED') return false;
+  return getStepSkipPolicy(journeyTypeKey ?? null, step?.stepKey ?? null) === 'ALLOWED';
+}
+
 export class GuidanceStepResolverService {
   async ensureTemplateSteps(params: {
     propertyId: string;
@@ -240,6 +247,36 @@ export class GuidanceStepResolverService {
           'This required step needs completion data before it can be marked completed.',
           400,
           'GUIDANCE_COMPLETION_DATA_REQUIRED'
+        );
+      }
+    }
+
+    if (params.nextStatus === 'COMPLETED' && step.stepOrder > 1) {
+      const priorRequiredSteps = await guidanceJourneyStep.findMany({
+        where: {
+          journeyId: step.journey.id,
+          isRequired: true,
+          stepOrder: { lt: step.stepOrder },
+        },
+        orderBy: [{ stepOrder: 'asc' }],
+      });
+
+      const unmetPrerequisites = priorRequiredSteps.filter(
+        (priorStep: any) => !isSatisfiedPrerequisiteStep(priorStep, step.journey?.journeyTypeKey ?? null)
+      );
+
+      if (unmetPrerequisites.length > 0) {
+        throw new APIError(
+          'Complete earlier required steps before marking this step complete.',
+          400,
+          'GUIDANCE_PREREQUISITE_INCOMPLETE',
+          {
+            unmetPrerequisites: unmetPrerequisites.map((priorStep: any) => ({
+              stepKey: priorStep.stepKey,
+              label: priorStep.label,
+              status: priorStep.status,
+            })),
+          }
         );
       }
     }
