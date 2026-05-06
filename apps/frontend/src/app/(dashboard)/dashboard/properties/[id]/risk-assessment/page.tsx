@@ -174,6 +174,33 @@ const ASSET_CATEGORY_SIGNAL_HINTS: Record<RiskCategory, string[]> = {
     FINANCIAL_GAP: ['financial', 'coverage', 'cost', 'utility', 'energy'],
 };
 
+const RISK_CTA_JOURNEY_SEEDS: Record<
+    string,
+    {
+        issueType: string;
+        issueLabel: string;
+    }
+> = {
+    'compare models and key specs': {
+        issueType: 'replacement_purchase_now',
+        issueLabel: 'Confirm replacement path',
+    },
+    'compare vendors and purchase options': {
+        issueType: 'replacement_purchase_now',
+        issueLabel: 'Confirm replacement path',
+    },
+    'finalize purchase selection': {
+        issueType: 'replacement_purchase_now',
+        issueLabel: 'Confirm replacement path',
+    },
+};
+
+function resolveSeededJourneyEntry(label?: string | null) {
+    const normalized = label?.trim().toLowerCase();
+    if (!normalized) return null;
+    return RISK_CTA_JOURNEY_SEEDS[normalized] ?? null;
+}
+
 function buildAssetGuidanceHref(
     propertyId: string,
     asset: AssetRiskDetail,
@@ -182,14 +209,21 @@ function buildAssetGuidanceHref(
         issueType?: string | null;
     }
 ): string {
+    const seededEntry =
+        resolveSeededJourneyEntry(options?.issueLabel) ??
+        resolveSeededJourneyEntry(asset.actionCta);
     return buildGuidanceOverviewHref({
         propertyId,
         inventoryItemId: asset.inventoryItemId ?? null,
         homeAssetId: asset.homeAssetId ?? null,
         assetName: asset.assetName,
-        issueType: options?.issueType ?? null,
+        issueType: options?.issueType ?? seededEntry?.issueType ?? null,
         customIssueLabel:
-            options?.issueLabel || asset.actionCta || `${asset.assetName} needs attention`,
+            (!options?.issueType && seededEntry?.issueLabel) ||
+            options?.issueLabel ||
+            seededEntry?.issueLabel ||
+            asset.actionCta ||
+            `${asset.assetName} needs attention`,
     });
 }
 
@@ -655,12 +689,17 @@ const AssetMatrixTable = ({
         const hasWarranty = !!existingWarranty;
         const isPastLife = item.age > item.expectedLife;
         const guidanceAction = pickGuidanceActionForAsset(item, guidance.actions);
+        const trustedGuidanceAction =
+            guidanceAction && scoreStableScopeMatch(item, guidanceAction) >= 80
+                ? guidanceAction
+                : null;
+        const seededJourneyEntry = resolveSeededJourneyEntry(item.actionCta);
         let ctaText = '';
         let ctaVariant: 'default' | 'secondary' | 'destructive' | 'outline' = 'secondary';
 
-        if (guidanceAction) {
-            ctaText = buildGuidanceCtaText(guidanceAction);
-            ctaVariant = guidanceAction.executionReadiness === 'READY' ? 'default' : 'outline';
+        if (trustedGuidanceAction) {
+            ctaText = buildGuidanceCtaText(trustedGuidanceAction);
+            ctaVariant = trustedGuidanceAction.executionReadiness === 'READY' ? 'default' : 'outline';
         } else if (hasBooking) {
             ctaText = 'View Booking';
             ctaVariant = 'outline';
@@ -679,6 +718,9 @@ const AssetMatrixTable = ({
             if (item.riskLevel === 'HIGH' && item.outOfPocketCost > 1000) {
                 ctaText = 'Add Home Warranty';
                 ctaVariant = 'destructive';
+            } else if (seededJourneyEntry) {
+                ctaText = seededJourneyEntry.issueLabel;
+                ctaVariant = item.riskLevel === 'HIGH' ? 'destructive' : 'secondary';
             } else if (item.actionCta) {
                 ctaText = item.actionCta;
                 ctaVariant = item.riskLevel === 'HIGH' ? 'destructive' : 'secondary';
@@ -688,10 +730,10 @@ const AssetMatrixTable = ({
             }
         }
 
-        const guidanceHref = guidanceAction
+        const guidanceHref = trustedGuidanceAction || seededJourneyEntry
             ? buildAssetGuidanceHref(propertyId, item, {
                 issueLabel: ctaText.replace(/^Step \d+:\s*/i, ''),
-                issueType: guidanceAction.journey.issueType ?? null,
+                issueType: trustedGuidanceAction?.journey.issueType ?? seededJourneyEntry?.issueType ?? null,
             })
             : null;
 
@@ -704,7 +746,7 @@ const AssetMatrixTable = ({
             existingWarranty,
             hasWarranty,
             isPastLife,
-            guidanceAction,
+            guidanceAction: trustedGuidanceAction,
             guidanceHref,
             ctaText,
             ctaVariant,

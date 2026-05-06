@@ -384,13 +384,17 @@ export default function GuidanceOverviewClient() {
 
   const startJourneyMutation = useMutation({
     mutationFn: () => {
+      const effectiveInventoryItemId =
+        selectedInventoryItemId ?? selectedAssetOption?.inventoryItemId ?? undefined;
       const scopeId =
-        selectedInventoryItemId ?? selectedHomeAssetId ?? selectedServiceKey ?? '';
+        scopeCategory === 'ITEM'
+          ? effectiveInventoryItemId ?? selectedHomeAssetId ?? ''
+          : selectedServiceKey ?? '';
       return startGuidanceJourney(propertyId, {
         scopeCategory: scopeCategory ?? 'ITEM',
         scopeId,
         issueType: selectedIssueType!,
-        inventoryItemId: selectedInventoryItemId ?? undefined,
+        inventoryItemId: effectiveInventoryItemId,
         homeAssetId: selectedHomeAssetId ?? undefined,
         serviceKey: selectedServiceKey ?? undefined,
       });
