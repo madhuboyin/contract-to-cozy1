@@ -750,7 +750,7 @@ const AssetMatrixTable = ({
                     asChild
                     className={`gap-1 ${sizeClass}`}
                 >
-                    <Link href={buildAssetGuidanceHref(propertyId, item, ctaText)}>
+                    <Link href={buildAssetGuidanceHref(propertyId, item, { issueLabel: ctaText })}>
                         {ctaText}
                     </Link>
                 </Button>
@@ -765,9 +765,13 @@ const AssetMatrixTable = ({
                     if (hasBooking) {
                         onViewBooking(existingBooking);
                     } else if (hasTask && existingTask) {
-                        window.location.href = buildAssetGuidanceHref(propertyId, item, existingTask.title || ctaText);
+                        window.location.href = buildAssetGuidanceHref(propertyId, item, {
+                            issueLabel: existingTask.title || ctaText,
+                        });
                     } else if (ctaText === 'Add Home Warranty') {
-                        window.location.href = buildAssetGuidanceHref(propertyId, item, ctaText);
+                        window.location.href = buildAssetGuidanceHref(propertyId, item, {
+                            issueLabel: ctaText,
+                        });
                     } else {
                         onScheduleInspection(item);
                     }
@@ -1583,7 +1587,11 @@ export default function RiskAssessmentPage() {
             return;
         }
         if (asset.actionCta === 'Add Home Warranty' || asset.actionCta?.includes('Schedule') || asset.actionCta?.includes('Book')) {
-            router.push(buildAssetGuidanceHref(propertyId, asset, asset.actionCta || insightFactor));
+            router.push(
+                buildAssetGuidanceHref(propertyId, asset, {
+                    issueLabel: asset.actionCta || insightFactor,
+                })
+            );
             return;
         }
         
@@ -1685,7 +1693,9 @@ export default function RiskAssessmentPage() {
                                                 <span className="text-sm text-red-600 font-semibold shrink-0">{formatCurrency(item.outOfPocketCost)}</span>
                                             </div>
                                             <Link
-                                                href={buildAssetGuidanceHref(propertyId, item, item.actionCta || displayLabel(item.assetName))}
+                                                href={buildAssetGuidanceHref(propertyId, item, {
+                                                    issueLabel: item.actionCta || displayLabel(item.assetName),
+                                                })}
                                                 className="flex items-center gap-1 text-xs text-primary hover:underline shrink-0 ml-4"
                                             >
                                                 Start action <ChevronRight className="h-3 w-3" />
