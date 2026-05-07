@@ -156,8 +156,16 @@ function getFactorDescription(factorName: string | undefined, condition: string 
   return map[factor]?.[cond] ?? `${cond || "Status unavailable"} — review recommended`;
 }
 
-function getInsightStatusExplanation(status: string | undefined): string {
+function getInsightStatusExplanation(status: string | undefined, factorName?: string): string {
   const s = String(status || "");
+  if (s === "Missing Data") {
+    const isAppliance = String(factorName || "").toLowerCase().includes("appliance");
+    if (isAppliance) return "No appliance data has been added yet. Adding items to your inventory lets us track health, coverage, and recall status for each appliance.";
+    return "Data for this factor hasn't been recorded yet. Adding it unlocks a real score for this factor and specific next steps.";
+  }
+  if (s === "Incomplete") {
+    return "This factor is partially set up. Completing the missing information will unlock a more accurate score and targeted guidance.";
+  }
   if (REQUIRED_ACTION_STATUSES.includes(s)) {
     return "This factor needs action. Resolving the recommended maintenance can improve your overall health score.";
   }
@@ -229,14 +237,15 @@ function getPrimaryCta(
 ): { label: string; href: string } {
   const factor = getDisplayFactorName(factorName);
   const s = String(status || "");
+  const isAppliance = String(factorName || "").toLowerCase().includes("appliance");
 
-  if (String(factorName || "").toLowerCase().includes("appliance")) {
-    return {
-      label: "View appliance status board",
-      href: `/dashboard/properties/${propertyId}/status-board?category=APPLIANCE&condition=ACTION_NEEDED`,
-    };
-  }
   if (s === "Missing Data" || s === "Incomplete") {
+    if (isAppliance) {
+      return {
+        label: "Add appliances to inventory",
+        href: `/dashboard/properties/${propertyId}/inventory`,
+      };
+    }
     if (factor.includes("Document")) {
       return {
         label: "Upload property documents",
@@ -244,8 +253,14 @@ function getPrimaryCta(
       };
     }
     return {
-      label: "Edit property details",
+      label: "Complete property setup",
       href: `/dashboard/properties/${propertyId}/edit`,
+    };
+  }
+  if (isAppliance) {
+    return {
+      label: "View appliance status board",
+      href: `/dashboard/properties/${propertyId}/status-board?category=APPLIANCE&condition=ACTION_NEEDED`,
     };
   }
   return {
@@ -1220,7 +1235,7 @@ export default function HealthInsightFocusPage() {
   const impact = getInsightImpact(status);
   const details = insight?.details ?? [];
   const factorDescription = getFactorDescription(insight?.factor, status);
-  const statusExplanation = getInsightStatusExplanation(status);
+  const statusExplanation = getInsightStatusExplanation(status, insight?.factor);
   const actionHint = getFactorActionHint(insight?.factor, status);
   const primaryCta = getPrimaryCta(insight?.factor, status, propertyId);
   const friendlyStatus = getUserFriendlyStatus(status);

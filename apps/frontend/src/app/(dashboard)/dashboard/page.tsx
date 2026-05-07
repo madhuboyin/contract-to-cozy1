@@ -368,6 +368,7 @@ export interface UrgentActionItem {
     entityType?: 'Warranty' | 'Insurance';
     itemId?: string;
     exposureCents?: number;
+    status?: string;
 }
 
 interface DashboardData {
@@ -578,6 +579,13 @@ const consolidateUrgentActions = (
     });
 };
 
+function getHealthInsightSetupRoute(factorTitle: string, propertyId: string): string {
+  const t = factorTitle.toLowerCase();
+  if (t.includes('appliance')) return `/dashboard/properties/${propertyId}/inventory`;
+  if (t.includes('document')) return `/dashboard/documents?propertyId=${propertyId}`;
+  return `/dashboard/properties/${propertyId}/edit`;
+}
+
 function resolveUrgentActionHref(action: UrgentActionItem, propertyId?: string): string {
   const fallbackPropertyId = propertyId || undefined;
   const actionPropertyId =
@@ -585,6 +593,9 @@ function resolveUrgentActionHref(action: UrgentActionItem, propertyId?: string):
   if (!actionPropertyId) return '/dashboard/resolution-center?filter=urgent';
 
   if (action.type === 'HEALTH_INSIGHT') {
+    if (action.status === 'Missing Data' || action.status === 'Incomplete') {
+      return getHealthInsightSetupRoute(action.title, actionPropertyId);
+    }
     const factorSlug = action.title.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
     return `/dashboard/properties/${actionPropertyId}/focus/health/${factorSlug}`;
   }
@@ -925,6 +936,25 @@ export default function DashboardPage() {
             healthScore ?? 0,
             recommendationLabel,
           ),
+        };
+      }
+      const isSetupNeeded = topHealthInsight.status === 'Missing Data' || topHealthInsight.status === 'Incomplete';
+      if (isSetupNeeded && effectiveSelectedPropertyId) {
+        const setupHref = getHealthInsightSetupRoute(topHealthInsight.title, effectiveSelectedPropertyId);
+        const setupCtaLabel = isApplianceInsight ? 'Add appliances' : 'Complete property setup';
+        return {
+          badgeLabel: buildHealthInsightBadgeLabel(),
+          title: isApplianceInsight
+            ? 'Appliance data is missing.'
+            : `${compactHealthInsightTitle} data is missing.`,
+          subtitle: isApplianceInsight
+            ? 'Add your appliances to inventory so we can track health, coverage, and recall status.'
+            : `Adding this information unlocks an accurate score for this factor and specific next steps.`,
+          ctaLabel: setupCtaLabel,
+          href: setupHref,
+          impactLabel,
+          etaLabel,
+          ...buildHealthInsightActionMeta(compactHealthInsightTitle, healthScore ?? 0),
         };
       }
       return {

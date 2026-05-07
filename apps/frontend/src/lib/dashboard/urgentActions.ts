@@ -95,6 +95,7 @@ export function consolidateUrgentActions(
         type: 'HEALTH_INSIGHT',
         title: insight.factor,
         description: `Status: ${insight.status}. Requires resolution.`,
+        status: insight.status,
         propertyId: property.id,
       });
     });
@@ -201,6 +202,13 @@ export function consolidateUrgentActions(
   });
 }
 
+export function getHealthInsightSetupRoute(factorTitle: string, propertyId: string): string {
+  const t = factorTitle.toLowerCase();
+  if (t.includes('appliance')) return `/dashboard/properties/${propertyId}/inventory`;
+  if (t.includes('document')) return `/dashboard/documents?propertyId=${propertyId}`;
+  return `/dashboard/properties/${propertyId}/edit`;
+}
+
 export function resolveUrgentActionHref(action: UrgentActionItem, propertyId?: string): string {
   const fallbackPropertyId = propertyId || undefined;
   const actionPropertyId =
@@ -208,6 +216,9 @@ export function resolveUrgentActionHref(action: UrgentActionItem, propertyId?: s
   if (!actionPropertyId) return '/dashboard/actions';
 
   if (action.type === 'HEALTH_INSIGHT') {
+    if (action.status === 'Missing Data' || action.status === 'Incomplete') {
+      return getHealthInsightSetupRoute(action.title, actionPropertyId);
+    }
     const factorSlug = action.title.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
     return `/dashboard/properties/${actionPropertyId}/focus/health/${factorSlug}`;
   }

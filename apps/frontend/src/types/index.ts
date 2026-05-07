@@ -3082,6 +3082,7 @@ export interface ResolutionCenterAction {
   severity?: 'INFO' | 'WARNING' | 'CRITICAL';
   entityType?: 'Warranty' | 'Insurance';
   itemId?: string;
+  status?: string;
 }
 
 export type ResolutionCaseStatus =
