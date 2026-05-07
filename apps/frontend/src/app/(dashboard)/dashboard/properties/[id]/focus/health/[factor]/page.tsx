@@ -16,10 +16,12 @@ import {
   Gauge,
   Home,
   Info,
+  ListChecks,
   Loader2,
   ShieldCheck,
   Wind,
   Wrench,
+  Zap,
 } from "lucide-react";
 import { DashboardShell } from "@/components/DashboardShell";
 import { api } from "@/lib/api/client";
@@ -47,6 +49,11 @@ function getDisplayFactorName(factorName: string | undefined): string {
   if (factor === "Systems Factor") return "Major Systems Health";
   if (factor === "Usage/Wear Factor") return "Occupancy & Wear";
   return factor || "Health insight";
+}
+
+function isPropertyAgeFactor(factorName: string | undefined): boolean {
+  const f = String(factorName || "").toLowerCase();
+  return f.includes("age factor") || f.includes("property age") || f.includes("year built");
 }
 
 const REQUIRED_ACTION_STATUSES = [
@@ -124,8 +131,7 @@ function getFactorDescription(factorName: string | undefined, condition: string 
       Modern: "Recently serviced — maintain current schedule",
     },
     "Occupancy & Wear": {
-      "High Density":
-        "More occupants for your home's size means faster wear on fixtures and systems",
+      "High Density": "More occupants for your home's size means faster wear on fixtures and systems",
       Average: "Occupancy is in a normal range — standard maintenance schedule applies",
       "Low Density": "Light occupancy — lower day-to-day wear on fixtures and systems",
     },
@@ -248,6 +254,313 @@ function getPrimaryCta(
   };
 }
 
+// ── Age-milestone checklist ───────────────────────────────────────────────────
+
+type AgeTier = "new" | "young" | "mid" | "mature" | "senior";
+type ChecklistUrgency = "act" | "review" | "watch";
+
+type AgeChecklistItem = {
+  id: string;
+  system: string;
+  icon: React.ElementType;
+  ageNote: string;
+  action: string;
+  urgency: ChecklistUrgency;
+};
+
+function getAgeTier(age: number): AgeTier {
+  if (age < 10) return "new";
+  if (age < 20) return "young";
+  if (age < 35) return "mid";
+  if (age < 50) return "mature";
+  return "senior";
+}
+
+function getAgeTierLabel(tier: AgeTier): string {
+  return {
+    new: "New home",
+    young: "Young home",
+    mid: "Mid-life home",
+    mature: "Mature home",
+    senior: "Classic home",
+  }[tier];
+}
+
+function getAgeTierColor(tier: AgeTier): string {
+  return {
+    new: "bg-emerald-100 text-emerald-700 border-emerald-200",
+    young: "bg-blue-100 text-blue-700 border-blue-200",
+    mid: "bg-amber-100 text-amber-700 border-amber-200",
+    mature: "bg-orange-100 text-orange-700 border-orange-200",
+    senior: "bg-red-100 text-red-700 border-red-200",
+  }[tier];
+}
+
+function urgencyLabel(u: ChecklistUrgency): string {
+  return { act: "Act now", review: "Review soon", watch: "Monitor" }[u];
+}
+
+function urgencyColors(u: ChecklistUrgency): string {
+  return {
+    act: "bg-red-50 border-red-200 text-red-700",
+    review: "bg-amber-50 border-amber-200 text-amber-700",
+    watch: "bg-slate-50 border-slate-200 text-slate-600",
+  }[u];
+}
+
+function getAgeChecklistItems(
+  age: number,
+  knownSystems: {
+    hvacInstallYear?: number | null;
+    waterHeaterInstallYear?: number | null;
+    roofReplacementYear?: number | null;
+    electricalPanelAge?: number | null;
+  },
+): AgeChecklistItem[] {
+  const currentYear = new Date().getFullYear();
+  const tier = getAgeTier(age);
+  const items: AgeChecklistItem[] = [];
+
+  if (tier === "new") {
+    items.push(
+      {
+        id: "builder-warranty",
+        system: "Builder warranty",
+        icon: ShieldCheck,
+        ageNote: "New homes typically have a 1-year workmanship and 10-year structural warranty.",
+        action: "Verify your builder warranty is registered and active before it expires.",
+        urgency: "review",
+      },
+      {
+        id: "appliance-registration",
+        system: "Appliance warranties",
+        icon: Wrench,
+        ageNote: "Manufacturer warranties on new appliances run 1–5 years from purchase.",
+        action: "Register all appliances with manufacturers to activate warranty coverage.",
+        urgency: "act",
+      },
+      {
+        id: "hvac-filter",
+        system: "HVAC filter",
+        icon: Wind,
+        ageNote: "First filter replacement is often missed during new-home move-in.",
+        action: "Replace HVAC air filter every 3 months; set a recurring reminder.",
+        urgency: "watch",
+      },
+    );
+  }
+
+  if (tier === "young") {
+    items.push(
+      {
+        id: "hvac-service",
+        system: "HVAC",
+        icon: Wind,
+        ageNote: `At ${age} years, your original HVAC system may be approaching its first major service interval.`,
+        action: "Schedule a full HVAC inspection and filter/belt/coil service — typically $80–150.",
+        urgency: "review",
+      },
+      {
+        id: "roof-mid",
+        system: "Roof",
+        icon: Home,
+        ageNote: "Asphalt shingle roofs hit mid-life around 10–15 years — a good time to check condition.",
+        action: "Walk the attic and check for granule loss in gutters. Book an inspection if unsure.",
+        urgency: "watch",
+      },
+      {
+        id: "water-heater-anode",
+        system: "Water heater",
+        icon: Flame,
+        ageNote: "Anode rods protect tanks from corrosion and should be inspected every 5 years.",
+        action: "Have a plumber check and replace the anode rod if needed — typically $50–100.",
+        urgency: "review",
+      },
+      {
+        id: "caulking",
+        system: "Seals & weatherstripping",
+        icon: Home,
+        ageNote: "Caulking and seals around windows, doors, and tubs dry out in the first decade.",
+        action: "Inspect and re-caulk any cracked or pulling seals to prevent water intrusion.",
+        urgency: "watch",
+      },
+    );
+  }
+
+  if (tier === "mid") {
+    const hvacAge = knownSystems.hvacInstallYear ? currentYear - knownSystems.hvacInstallYear : null;
+    const hvacUrgency: ChecklistUrgency = hvacAge && hvacAge > 15 ? "act" : "review";
+    items.push(
+      {
+        id: "hvac-replacement",
+        system: "HVAC",
+        icon: Wind,
+        ageNote: hvacAge
+          ? `Your HVAC is ${hvacAge} years old. Typical lifespan is 15–20 years.`
+          : "HVAC systems have a typical lifespan of 15–20 years — assess your current system's age.",
+        action: "Get a service inspection and ask the technician for an honest remaining-life assessment.",
+        urgency: hvacUrgency,
+      },
+      {
+        id: "water-heater-replacement",
+        system: "Water heater",
+        icon: Flame,
+        ageNote:
+          knownSystems.waterHeaterInstallYear
+            ? `Installed ${currentYear - knownSystems.waterHeaterInstallYear} years ago. Tank water heaters last 10–15 years.`
+            : "Tank water heaters typically last 10–15 years — check installation date.",
+        action: "If over 12 years old, get a plumber assessment and start comparing replacement costs.",
+        urgency: "review",
+      },
+      {
+        id: "roof-inspection",
+        system: "Roof",
+        icon: Home,
+        ageNote: knownSystems.roofReplacementYear
+          ? `Roof replaced ${currentYear - knownSystems.roofReplacementYear} years ago. Asphalt shingles last 20–30 years.`
+          : "At this home age, the roof may be approaching its replacement window.",
+        action: "Book a roof inspection — many contractors do this free. Get a written report.",
+        urgency: "review",
+      },
+      {
+        id: "polybutylene",
+        system: "Plumbing",
+        icon: Wrench,
+        ageNote: "Homes built 1978–1995 may have polybutylene pipes, which are prone to failure and were subject to class action recalls.",
+        action: "Have a plumber identify your pipe material. If polybutylene, budget for re-piping ($4,000–15,000).",
+        urgency: "act",
+      },
+      {
+        id: "electrical-panel",
+        system: "Electrical panel",
+        icon: Zap,
+        ageNote: "Breaker panels from this era may have known issues. Older panels can also lack arc-fault protection.",
+        action: "Have a licensed electrician inspect the panel and confirm it meets current safety standards.",
+        urgency: "review",
+      },
+    );
+  }
+
+  if (tier === "mature") {
+    items.push(
+      {
+        id: "electrical-panel-mature",
+        system: "Electrical panel",
+        icon: Zap,
+        ageNote: "Homes this age may have Federal Pacific or Zinsco panels — both known safety hazards with documented fire risks.",
+        action: "Have an electrician identify your panel brand. Federal Pacific and Zinsco panels should be replaced.",
+        urgency: "act",
+      },
+      {
+        id: "galvanized-plumbing",
+        system: "Plumbing",
+        icon: Wrench,
+        ageNote: "Galvanized steel pipes common in pre-1980 homes corrode from the inside, reducing water pressure and quality.",
+        action: "Have a plumber assess pipe material and corrosion level. Budget for re-piping if galvanized.",
+        urgency: "act",
+      },
+      {
+        id: "lead-paint",
+        system: "Lead paint",
+        icon: AlertTriangle,
+        ageNote: "Homes built before 1978 commonly contain lead-based paint, especially on trim, windows, and doors.",
+        action: "Test with an EPA-certified lead paint test kit ($30). Critical if children are present or renovations planned.",
+        urgency: "act",
+      },
+      {
+        id: "hvac-mature",
+        system: "HVAC",
+        icon: Wind,
+        ageNote:
+          knownSystems.hvacInstallYear
+            ? `Your HVAC was installed in ${knownSystems.hvacInstallYear} (${currentYear - knownSystems.hvacInstallYear} years ago).`
+            : "A mature home has likely had 2 HVAC systems — confirm the current system's age.",
+        action: "If the current system is over 12 years old, start getting replacement quotes now before an emergency forces a rushed decision.",
+        urgency: "review",
+      },
+      {
+        id: "foundation-mature",
+        system: "Foundation",
+        icon: Home,
+        ageNote: "Settlement cracks are common in homes after 35+ years. Most are cosmetic, but some indicate active movement.",
+        action: "Walk the basement or crawlspace. Cracks wider than 1/4 inch or showing displacement need a structural engineer review.",
+        urgency: "watch",
+      },
+      {
+        id: "insulation-mature",
+        system: "Insulation",
+        icon: Home,
+        ageNote: "Pre-1980 insulation is often inadequate by today's standards and may include outdated materials.",
+        action: "Get an energy audit ($100–400) — it will identify insulation gaps and calculate the ROI on upgrades.",
+        urgency: "watch",
+      },
+      {
+        id: "windows-mature",
+        system: "Windows & doors",
+        icon: Home,
+        ageNote: "Original single-pane windows from this era lose significantly more heat than modern double-pane glass.",
+        action: "Check for drafts and fogging between panes. An energy audit will quantify the savings from upgrading.",
+        urgency: "watch",
+      },
+    );
+  }
+
+  if (tier === "senior") {
+    items.push(
+      {
+        id: "knob-tube",
+        system: "Electrical wiring",
+        icon: Zap,
+        ageNote: "Homes 50+ years old may still have knob-and-tube wiring — a serious fire and insurance hazard.",
+        action: "Have a licensed electrician inspect for knob-and-tube wiring. Replace if found before insulating walls.",
+        urgency: "act",
+      },
+      {
+        id: "asbestos",
+        system: "Asbestos",
+        icon: AlertTriangle,
+        ageNote: "Pre-1980 construction commonly used asbestos in floor tiles, pipe insulation, ceiling tiles, and joint compound.",
+        action: "Test before any renovation that disturbs these materials. Hire a certified asbestos inspector ($250–500).",
+        urgency: "act",
+      },
+      {
+        id: "cast-iron-drains",
+        system: "Drain pipes",
+        icon: Wrench,
+        ageNote: "Cast iron drain pipes corrode and crack after 50+ years, causing slow drains and leaks inside walls.",
+        action: "Request a drain camera inspection ($150–300). Re-piping cost varies widely by scope ($3,000–20,000).",
+        urgency: "review",
+      },
+      {
+        id: "electrical-panel-senior",
+        system: "Electrical panel",
+        icon: Zap,
+        ageNote: "Panels this age are frequently undersized for modern loads and may predate current safety standards.",
+        action: "Have an electrician do a full service evaluation. Plan for a panel upgrade ($1,500–4,000) if over 60 amps.",
+        urgency: "act",
+      },
+      {
+        id: "structural-senior",
+        system: "Structural assessment",
+        icon: Home,
+        ageNote: "50+ year old homes benefit from a full structural review of foundation, load-bearing walls, and roof framing.",
+        action: "Hire a structural engineer for a whole-home assessment ($500–1,500). Invaluable before any major renovation.",
+        urgency: "review",
+      },
+      {
+        id: "lead-paint-senior",
+        system: "Lead paint",
+        icon: AlertTriangle,
+        ageNote: "Lead paint is virtually guaranteed in homes this age. Any renovation that disturbs painted surfaces needs certified abatement.",
+        action: "Use certified lead-safe contractors for any renovation. Test all surfaces before work begins.",
+        urgency: "act",
+      },
+    );
+  }
+
+  return items;
+}
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type HealthInsight = {
@@ -259,6 +572,11 @@ type HealthInsight = {
 
 type PropertyWithHealth = {
   name?: string | null;
+  yearBuilt?: number | null;
+  hvacInstallYear?: number | null;
+  waterHeaterInstallYear?: number | null;
+  roofReplacementYear?: number | null;
+  electricalPanelAge?: number | null;
   healthScore?: {
     totalScore?: unknown;
     insights?: unknown[];
@@ -309,7 +627,8 @@ export default function HealthInsightFocusPage() {
     );
   }
 
-  const raw = (property as PropertyWithHealth)?.healthScore?.insights ?? [];
+  const prop = property as PropertyWithHealth;
+  const raw = prop?.healthScore?.insights ?? [];
   const allInsights = raw.map(normalizeInsight).filter((i): i is HealthInsight => i !== null);
 
   const insight = allInsights.find(
@@ -318,7 +637,7 @@ export default function HealthInsightFocusPage() {
       toSlug(i.factor ?? "") === factorSlug,
   );
 
-  const propertyName = (property as PropertyWithHealth)?.name || "this property";
+  const propertyName = prop?.name || "this property";
   const displayName = getDisplayFactorName(insight?.factor);
   const status = insight?.status;
   const score = asNumber(insight?.score) ?? 0;
@@ -331,6 +650,21 @@ export default function HealthInsightFocusPage() {
   const friendlyStatus = getUserFriendlyStatus(status);
   const healthScoreHref = `/dashboard/properties/${propertyId}/health-score`;
   const FactorIcon = getFactorIcon(insight?.factor);
+
+  // Property age specifics
+  const showAgeDetails = insight ? isPropertyAgeFactor(insight.factor) : false;
+  const yearBuilt = asNumber(prop?.yearBuilt);
+  const currentYear = new Date().getFullYear();
+  const propertyAge = yearBuilt ? currentYear - yearBuilt : null;
+  const ageTier = propertyAge != null ? getAgeTier(propertyAge) : null;
+  const ageChecklistItems = propertyAge != null
+    ? getAgeChecklistItems(propertyAge, {
+        hvacInstallYear: asNumber(prop?.hvacInstallYear),
+        waterHeaterInstallYear: asNumber(prop?.waterHeaterInstallYear),
+        roofReplacementYear: asNumber(prop?.roofReplacementYear),
+        electricalPanelAge: asNumber(prop?.electricalPanelAge),
+      })
+    : [];
 
   const impactColors = {
     negative: {
@@ -404,20 +738,53 @@ export default function HealthInsightFocusPage() {
               </span>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <p className="text-xs font-semibold uppercase tracking-wide opacity-70">
-                    Health factor
-                  </p>
+                  <p className="text-xs font-semibold uppercase tracking-wide opacity-70">Health factor</p>
                   <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${colors.badge}`}>
                     {friendlyStatus}
                   </span>
                 </div>
-                <h1 className="text-xl font-bold text-slate-900 mt-1 leading-snug">
-                  {displayName}
-                </h1>
+                <h1 className="text-xl font-bold text-slate-900 mt-1 leading-snug">{displayName}</h1>
                 <p className="text-sm text-slate-600 mt-1">{factorDescription}</p>
               </div>
             </div>
           </div>
+
+          {/* ── Property age details strip — only for age factor ── */}
+          {showAgeDetails && (
+            <div className="px-5 py-3 bg-slate-50 border-b border-slate-100">
+              {yearBuilt && propertyAge != null && ageTier ? (
+                <div className="flex items-center gap-4 flex-wrap">
+                  <div>
+                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Year built</p>
+                    <p className="text-lg font-black text-slate-900 tabular-nums leading-tight">{yearBuilt}</p>
+                  </div>
+                  <div className="h-8 w-px bg-slate-200 shrink-0" />
+                  <div>
+                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Property age</p>
+                    <p className="text-lg font-black text-slate-900 tabular-nums leading-tight">{propertyAge} years</p>
+                  </div>
+                  <div className="h-8 w-px bg-slate-200 shrink-0" />
+                  <div>
+                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Age tier</p>
+                    <span className={`inline-flex items-center text-xs font-semibold px-2 py-0.5 rounded-full border mt-0.5 ${getAgeTierColor(ageTier)}`}>
+                      {getAgeTierLabel(ageTier)}
+                    </span>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2.5">
+                  <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0" />
+                  <p className="text-sm text-slate-600">
+                    Year built is missing.{" "}
+                    <Link href={`/dashboard/properties/${propertyId}/edit`} className="text-teal-600 font-medium hover:underline">
+                      Add it to your property profile
+                    </Link>{" "}
+                    to unlock age-specific guidance.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Score contribution */}
           <div className="px-5 py-3 bg-slate-50/60 border-b border-slate-100 flex items-center gap-3">
@@ -427,9 +794,7 @@ export default function HealthInsightFocusPage() {
             <div>
               <p className="text-xs font-semibold text-slate-500">pts contributing to health score</p>
               {impact === "negative" && score < 5 && (
-                <p className="text-xs text-red-600 mt-0.5">
-                  Resolving this could unlock additional points
-                </p>
+                <p className="text-xs text-red-600 mt-0.5">Resolving this could unlock additional points</p>
               )}
             </div>
           </div>
@@ -443,18 +808,14 @@ export default function HealthInsightFocusPage() {
 
             {actionHint && (
               <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
-                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">
-                  Suggested next step
-                </p>
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Suggested next step</p>
                 <p className="text-sm text-slate-700">{actionHint}</p>
               </div>
             )}
 
             {details.length > 0 && (
               <div className="rounded-xl border border-slate-100 bg-slate-50/60 px-4 py-3 space-y-2">
-                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                  How this was scored
-                </p>
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">How this was scored</p>
                 <ul className="space-y-1.5">
                   {details.map((line, i) => (
                     <li key={i} className="flex items-start gap-2 text-sm text-slate-600">
@@ -468,11 +829,58 @@ export default function HealthInsightFocusPage() {
           </div>
         </div>
 
+        {/* ── Age-milestone checklist — only for property age factor ── */}
+        {showAgeDetails && ageChecklistItems.length > 0 && ageTier && propertyAge != null && (
+          <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+            <div className="px-5 pt-4 pb-3 border-b border-slate-100 flex items-start gap-3">
+              <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-teal-50 border border-teal-200">
+                <ListChecks className="h-4.5 w-4.5 text-teal-700" />
+              </span>
+              <div>
+                <h2 className="text-sm font-semibold text-slate-900">
+                  At {propertyAge} years, review these systems
+                </h2>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Age-specific checklist for a {getAgeTierLabel(ageTier).toLowerCase()} — items most likely to need attention at this stage.
+                </p>
+              </div>
+            </div>
+            <div className="px-5 py-4 space-y-3">
+              {ageChecklistItems.map((item) => {
+                const ItemIcon = item.icon;
+                return (
+                  <div
+                    key={item.id}
+                    className="rounded-xl border border-slate-100 bg-slate-50/60 px-4 py-3 space-y-1.5"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2">
+                        <ItemIcon className="h-4 w-4 text-slate-500 shrink-0" />
+                        <p className="text-sm font-semibold text-slate-800">{item.system}</p>
+                      </div>
+                      <span className={`shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded-full border ${urgencyColors(item.urgency)}`}>
+                        {urgencyLabel(item.urgency)}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-500 leading-relaxed">{item.ageNote}</p>
+                    <p className="text-xs font-medium text-slate-700 leading-relaxed border-t border-slate-100 pt-1.5">
+                      → {item.action}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="px-5 pb-4">
+              <p className="text-[10px] text-slate-400">
+                Items marked "Act now" are most likely to affect safety or cost significantly if deferred.
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* ── Action panel ── */}
         <div className="rounded-2xl border border-slate-200 bg-white shadow-sm px-5 py-5 space-y-3">
-          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
-            What to do next
-          </p>
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">What to do next</p>
 
           <Link href={primaryCta.href} className="block">
             <div className="rounded-xl bg-teal-800 hover:bg-teal-700 active:scale-[0.99] transition-all px-4 py-3 flex items-center justify-between gap-2 cursor-pointer">
@@ -498,7 +906,6 @@ export default function HealthInsightFocusPage() {
           )}
         </div>
 
-        {/* Footer context */}
         <p className="text-xs text-slate-400 text-center px-2">
           {propertyName} · Health factor: {displayName}
         </p>
