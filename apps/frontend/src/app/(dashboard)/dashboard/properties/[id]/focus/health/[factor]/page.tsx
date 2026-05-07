@@ -1131,11 +1131,33 @@ type PropertyWithHealth = {
   waterHeaterInstallYear?: number | null;
   roofReplacementYear?: number | null;
   electricalPanelAge?: number | null;
+  occupantsCount?: number | null;
+  bedrooms?: number | null;
+  propertySize?: number | null;
+  hasSmokeDetectors?: boolean | null;
+  hasCoDetectors?: boolean | null;
+  hasSecuritySystem?: boolean | null;
+  hasFireExtinguisher?: boolean | null;
   healthScore?: {
     totalScore?: unknown;
     insights?: unknown[];
   };
 } | null;
+
+function isSystemsFactor(factorName: string | undefined): boolean {
+  const f = String(factorName || "").toLowerCase();
+  return f.includes("systems factor") || f.includes("major systems");
+}
+
+function isOccupancyFactor(factorName: string | undefined): boolean {
+  const f = String(factorName || "").toLowerCase();
+  return f.includes("usage") || f.includes("wear") || f.includes("occupancy");
+}
+
+function isSafetyFactor(factorName: string | undefined): boolean {
+  const f = String(factorName || "").toLowerCase();
+  return f.includes("safety");
+}
 
 function normalizeInsight(item: unknown): HealthInsight | null {
   if (!item || typeof item !== "object") return null;
@@ -1233,6 +1255,36 @@ export default function HealthInsightFocusPage() {
   const systemChecklistItems =
     systemKind && systemAge != null ? getSystemChecklistItems(systemAge, systemKind) : [];
   const showSystemAge = systemKind !== null;
+
+  // Major Systems Health summary
+  const showSystemsSummary = isSystemsFactor(insight?.factor);
+  const systemsSummaryItems = showSystemsSummary && prop
+    ? (["hvac", "water-heater", "roof", "electrical-panel"] as SystemKind[]).map((kind) => {
+        const { age, installYear } = getSystemAgeFromProperty(prop, kind, currentYear);
+        const tier = age !== null ? getSystemAgeTier(age, kind) : null;
+        const lifespan = getSystemLifespan(kind);
+        return { label: getSystemKindLabel(kind), kind, age, installYear, tier, lifespan };
+      })
+    : [];
+
+  // Occupancy & Wear details
+  const showOccupancyDetails = isOccupancyFactor(insight?.factor);
+  const occupantsCount = asNumber(prop?.occupantsCount);
+  const bedroomsCount = asNumber(prop?.bedrooms);
+  const occupancyRatio = occupantsCount != null && bedroomsCount != null && bedroomsCount > 0
+    ? Math.round((occupantsCount / bedroomsCount) * 10) / 10
+    : null;
+
+  // Safety Factor details
+  const showSafetyDetails = isSafetyFactor(insight?.factor);
+  const safetyDevices = showSafetyDetails && prop
+    ? [
+        { label: "Smoke detectors", present: prop.hasSmokeDetectors },
+        { label: "CO detectors",    present: prop.hasCoDetectors },
+        { label: "Security system", present: prop.hasSecuritySystem },
+        { label: "Fire extinguisher", present: prop.hasFireExtinguisher },
+      ]
+    : [];
 
   const impactColors = {
     negative: {
@@ -1405,6 +1457,124 @@ export default function HealthInsightFocusPage() {
                     to unlock age-specific guidance.
                   </p>
                 </div>
+              )}
+            </div>
+          )}
+
+          {/* ── Major Systems Health summary strip ── */}
+          {showSystemsSummary && (
+            <div className="px-5 py-3 bg-slate-50 border-b border-slate-100">
+              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-2">Major systems</p>
+              <div className="grid grid-cols-2 gap-2">
+                {systemsSummaryItems.map(({ label, age, tier, lifespan }) => (
+                  <div key={label} className="rounded-lg border border-slate-100 bg-white px-3 py-2">
+                    <p className="text-xs text-slate-500 mb-1">{label.charAt(0).toUpperCase() + label.slice(1)}</p>
+                    {age !== null && tier !== null ? (
+                      <div className="flex items-center justify-between gap-1 flex-wrap">
+                        <span className="text-sm font-bold text-slate-900 tabular-nums">{age} yrs</span>
+                        <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full border ${systemAgeTierConfig[tier].color}`}>
+                          {systemAgeTierConfig[tier].label}
+                        </span>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-slate-400">
+                        Not recorded &middot;{" "}
+                        <Link href={`/dashboard/properties/${propertyId}/edit`} className="text-teal-600 hover:underline">Add it</Link>
+                      </p>
+                    )}
+                    {age !== null && (
+                      <div className="mt-1.5 h-1 rounded-full bg-slate-200 overflow-hidden">
+                        <div
+                          className={`h-full rounded-full ${getLifespanBarColor(Math.round((age / lifespan.max) * 100))}`}
+                          style={{ width: `${Math.min(Math.round((age / lifespan.max) * 100), 100)}%` }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <p className="text-[10px] text-slate-400 mt-2">Lifespan bars show age relative to typical maximum.</p>
+            </div>
+          )}
+
+          {/* ── Occupancy & Wear details strip ── */}
+          {showOccupancyDetails && (
+            <div className="px-5 py-3 bg-slate-50 border-b border-slate-100">
+              {(occupantsCount != null || bedroomsCount != null) ? (
+                <>
+                  <div className="flex items-center gap-6 flex-wrap">
+                    {occupantsCount != null && (
+                      <div>
+                        <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Occupants</p>
+                        <p className="text-lg font-black text-slate-900 tabular-nums leading-tight">{occupantsCount}</p>
+                      </div>
+                    )}
+                    {occupantsCount != null && bedroomsCount != null && (
+                      <div className="h-8 w-px bg-slate-200 shrink-0" />
+                    )}
+                    {bedroomsCount != null && (
+                      <div>
+                        <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Bedrooms</p>
+                        <p className="text-lg font-black text-slate-900 tabular-nums leading-tight">{bedroomsCount}</p>
+                      </div>
+                    )}
+                    {occupancyRatio != null && (
+                      <>
+                        <div className="h-8 w-px bg-slate-200 shrink-0" />
+                        <div>
+                          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Per bedroom</p>
+                          <p className="text-lg font-black text-slate-900 tabular-nums leading-tight">{occupancyRatio}</p>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                  {occupancyRatio != null && (
+                    <p className="text-xs text-slate-500 mt-2">
+                      {occupancyRatio > 1.5
+                        ? "Higher-than-average occupancy for this home size increases wear on fixtures and systems."
+                        : occupancyRatio < 0.8
+                        ? "Light occupancy — lower day-to-day wear on fixtures and systems."
+                        : "Occupancy is within a normal range for this home size."}
+                    </p>
+                  )}
+                </>
+              ) : (
+                <div className="flex items-center gap-2.5">
+                  <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0" />
+                  <p className="text-sm text-slate-600">
+                    Occupant count is missing.{" "}
+                    <Link href={`/dashboard/properties/${propertyId}/edit`} className="text-teal-600 font-medium hover:underline">
+                      Add it to your property profile
+                    </Link>{" "}
+                    to refine this score.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── Safety Factor details strip ── */}
+          {showSafetyDetails && safetyDevices.length > 0 && (
+            <div className="px-5 py-3 bg-slate-50 border-b border-slate-100">
+              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-2">Safety devices</p>
+              <div className="grid grid-cols-2 gap-y-2 gap-x-4">
+                {safetyDevices.map(({ label, present }) => (
+                  <div key={label} className="flex items-center gap-1.5">
+                    {present === true
+                      ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                      : present === false
+                      ? <AlertTriangle className="h-3.5 w-3.5 text-red-400 shrink-0" />
+                      : <span className="h-3.5 w-3.5 rounded-full bg-slate-200 shrink-0 inline-block" />}
+                    <span className={`text-xs ${present === true ? "text-slate-700" : present === false ? "text-red-600 font-medium" : "text-slate-400"}`}>
+                      {label}{present === null ? " (unknown)" : ""}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              {safetyDevices.some(d => d.present === null) && (
+                <p className="text-[10px] text-slate-400 mt-2">
+                  Update your property profile to record which devices are installed.
+                </p>
               )}
             </div>
           )}
