@@ -94,7 +94,7 @@ export default function PropertyHubTemplate({
 
       {tabs}
       {secondaryNav ? secondaryNav : null}
-      <div>{children}</div>
+      <div id="property-tab-panel">{children}</div>
     </section>
   );
 }

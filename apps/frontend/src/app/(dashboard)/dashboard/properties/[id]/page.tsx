@@ -873,6 +873,10 @@ export default function PropertyDetailPage() {
 
     const nextQuery = nextParams.toString();
     router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname, { scroll: false });
+
+    setTimeout(() => {
+      document.getElementById('property-tab-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 50);
   };
 
   useEffect(() => {
