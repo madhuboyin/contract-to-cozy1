@@ -1568,7 +1568,7 @@ export default function HealthInsightFocusPage() {
             </div>
           </Link>
 
-          {impact === "negative" && (
+          {impact === "negative" && !primaryCta.href.includes("tab=maintenance") && (
             <Link href={`/dashboard/properties/${propertyId}/?tab=maintenance&view=insights`} className="block">
               <div className="rounded-xl border border-slate-200 bg-white hover:bg-slate-50 active:scale-[0.99] transition-all px-4 py-3 flex items-center justify-between gap-2 cursor-pointer">
                 <p className="text-sm font-medium text-slate-700">View all maintenance actions</p>
