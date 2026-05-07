@@ -94,7 +94,7 @@ export default function PropertyHubTemplate({
 
       {tabs}
       {secondaryNav ? secondaryNav : null}
-      <div id="property-tab-panel">{children}</div>
+      <div id="property-tab-panel" className="scroll-mt-20 lg:scroll-mt-24">{children}</div>
     </section>
   );
 }
