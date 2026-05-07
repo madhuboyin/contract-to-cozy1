@@ -1,8 +1,8 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import {
   AlertTriangle,
@@ -18,7 +18,8 @@ import { DashboardShell } from "@/components/DashboardShell";
 import { api } from "@/lib/api/client";
 import { Button } from "@/components/ui/button";
 import { navigateBackWithDashboardFallback } from "@/lib/navigation/backNavigation";
-import { getInventoryItem } from "@/app/(dashboard)/dashboard/inventory/inventoryApi";
+import { getInventoryItem, listInventoryRooms } from "@/app/(dashboard)/dashboard/inventory/inventoryApi";
+import InventoryItemDrawer from "@/app/(dashboard)/dashboard/components/inventory/InventoryItemDrawer";
 
 function formatCents(cents: number | null | undefined): string {
   if (!cents) return "Unknown value";
@@ -56,8 +57,11 @@ const conditionConfig: Record<string, { label: string; dot: string }> = {
 export default function CoverageFocusPage() {
   const params = useParams();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const propertyId = (Array.isArray(params.id) ? params.id[0] : params.id) as string;
   const itemId = (Array.isArray(params.itemId) ? params.itemId[0] : params.itemId) as string;
+
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   const { data: item, isLoading: itemLoading } = useQuery({
     queryKey: ["inventory-item", propertyId, itemId],
@@ -76,6 +80,17 @@ export default function CoverageFocusPage() {
     queryFn: () => api.listInsurancePolicies(propertyId),
     enabled: !!propertyId,
   });
+
+  const { data: rooms = [] } = useQuery({
+    queryKey: ["inventory-rooms", propertyId],
+    queryFn: () => listInventoryRooms(propertyId),
+    enabled: !!propertyId,
+  });
+
+  function handleDrawerSaved() {
+    setDrawerOpen(false);
+    queryClient.invalidateQueries({ queryKey: ["inventory-item", propertyId, itemId] });
+  }
 
   if (itemLoading || !propertyId) {
     return (
@@ -277,16 +292,23 @@ export default function CoverageFocusPage() {
             </div>
           </Link>
 
-          <Link href={`/dashboard/properties/${propertyId}/inventory?tab=items&openItemId=${itemId}`} className="block">
-            <div className="rounded-xl border border-slate-200 bg-white hover:bg-slate-50 active:scale-[0.99] transition-all px-4 py-3 flex items-center justify-between gap-2 cursor-pointer">
-              <p className="text-sm font-medium text-slate-700">View item details</p>
-              <ArrowRight className="h-4 w-4 text-slate-400 shrink-0" />
-            </div>
-          </Link>
+          <button onClick={() => setDrawerOpen(true)} className="w-full text-left rounded-xl border border-slate-200 bg-white hover:bg-slate-50 active:scale-[0.99] transition-all px-4 py-3 flex items-center justify-between gap-2">
+            <p className="text-sm font-medium text-slate-700">View item details</p>
+            <ArrowRight className="h-4 w-4 text-slate-400 shrink-0" />
+          </button>
         </div>
 
         <p className="text-xs text-slate-400 text-center px-2">{item.name} · Coverage gap</p>
       </div>
+
+      <InventoryItemDrawer
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        propertyId={propertyId}
+        rooms={rooms}
+        initialItem={item}
+        onSaved={handleDrawerSaved}
+      />
     </DashboardShell>
   );
 }
