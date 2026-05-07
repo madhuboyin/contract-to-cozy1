@@ -5,6 +5,7 @@ import {
   getGuidanceModels,
 } from './guidanceTypes';
 import { guidanceCopyService } from './guidanceCopy.service';
+import { getStepSkipPolicy } from './guidanceTemplateRegistry';
 import { logger } from '../../lib/logger';
 
 function pickExecutionStepsForTarget(targetAction: GuidanceExecutionGuardRequest['targetAction'], steps: any[]) {
@@ -36,6 +37,12 @@ function pickExecutionStepsForTarget(targetAction: GuidanceExecutionGuardRequest
   }
 
   return steps.filter((step) => step.decisionStage === 'EXECUTION');
+}
+
+function isSatisfiedExecutionPrerequisite(step: any, journeyTypeKey: string | null | undefined) {
+  if (step?.status === 'COMPLETED') return true;
+  if (step?.status !== 'SKIPPED') return false;
+  return getStepSkipPolicy(journeyTypeKey ?? null, step?.stepKey ?? null) === 'ALLOWED';
 }
 
 export class GuidanceBookingGuardService {
@@ -116,7 +123,7 @@ export class GuidanceBookingGuardService {
         );
 
         for (const prerequisite of prerequisiteSteps) {
-          if (prerequisite.status === 'COMPLETED') continue;
+          if (isSatisfiedExecutionPrerequisite(prerequisite, journey.journeyTypeKey ?? null)) continue;
 
           missingPrerequisites.push({
             journeyId: journey.id,

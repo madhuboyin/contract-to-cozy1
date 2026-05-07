@@ -69,6 +69,19 @@ function isSatisfiedPrerequisiteStep(step: any, journeyTypeKey: string | null | 
   return getStepSkipPolicy(journeyTypeKey ?? null, step?.stepKey ?? null) === 'ALLOWED';
 }
 
+function findUnmetPriorRequiredSteps(args: {
+  steps: any[];
+  journeyTypeKey: string | null | undefined;
+  beforeStepOrder: number;
+}) {
+  return args.steps.filter(
+    (step: any) =>
+      step.isRequired &&
+      step.stepOrder < args.beforeStepOrder &&
+      !isSatisfiedPrerequisiteStep(step, args.journeyTypeKey)
+  );
+}
+
 export class GuidanceStepResolverService {
   async ensureTemplateSteps(params: {
     propertyId: string;
@@ -251,7 +264,10 @@ export class GuidanceStepResolverService {
       }
     }
 
-    if (params.nextStatus === 'COMPLETED' && step.stepOrder > 1) {
+    if (
+      ['IN_PROGRESS', 'COMPLETED', 'SKIPPED', 'BLOCKED'].includes(params.nextStatus) &&
+      step.stepOrder > 1
+    ) {
       const priorRequiredSteps = await guidanceJourneyStep.findMany({
         where: {
           journeyId: step.journey.id,
@@ -261,13 +277,15 @@ export class GuidanceStepResolverService {
         orderBy: [{ stepOrder: 'asc' }],
       });
 
-      const unmetPrerequisites = priorRequiredSteps.filter(
-        (priorStep: any) => !isSatisfiedPrerequisiteStep(priorStep, step.journey?.journeyTypeKey ?? null)
-      );
+      const unmetPrerequisites = findUnmetPriorRequiredSteps({
+        steps: priorRequiredSteps,
+        journeyTypeKey: step.journey?.journeyTypeKey ?? null,
+        beforeStepOrder: step.stepOrder,
+      });
 
       if (unmetPrerequisites.length > 0) {
         throw new APIError(
-          'Complete earlier required steps before marking this step complete.',
+          'Complete earlier required steps before changing this step.',
           400,
           'GUIDANCE_PREREQUISITE_INCOMPLETE',
           {
@@ -436,12 +454,12 @@ export class GuidanceStepResolverService {
     } else if (!currentStep) {
       nextReadiness = 'TRACKING_ONLY';
     } else if ((currentStep.decisionStage ?? 'AWARENESS') === 'EXECUTION') {
-      const prerequisiteIncomplete = steps.some(
-        (step) =>
-          step.isRequired &&
-          step.stepOrder < currentStep.stepOrder &&
-          step.status !== 'COMPLETED'
-      );
+      const prerequisiteIncomplete =
+        findUnmetPriorRequiredSteps({
+          steps,
+          journeyTypeKey: journey.journeyTypeKey ?? null,
+          beforeStepOrder: currentStep.stepOrder,
+        }).length > 0;
       nextReadiness = prerequisiteIncomplete ? 'NOT_READY' : 'READY';
     } else {
       nextReadiness = 'NEEDS_CONTEXT';
@@ -456,18 +474,17 @@ export class GuidanceStepResolverService {
       nextReadiness = 'NEEDS_CONTEXT';
     }
 
-    const requiredTerminal = steps.every((step) => {
-      if (!step.isRequired) return true;
-      if (step.status === 'COMPLETED') return true;
-      if (step.status !== 'SKIPPED') return false;
-      const stepKey = String(step.stepKey ?? '').toLowerCase();
-      return !CRITICAL_REQUIRED_STEP_KEYS.has(stepKey);
-    });
+    const requiredTerminal = steps.every(
+      (step) => !step.isRequired || isSatisfiedPrerequisiteStep(step, journey.journeyTypeKey ?? null)
+    );
     const hasBlockedRequired = steps.some((step) => step.isRequired && step.status === 'BLOCKED');
     const hasCriticalIncomplete = steps.some((step) => {
       if (!step.isRequired) return false;
       const stepKey = String(step.stepKey ?? '').toLowerCase();
-      return CRITICAL_REQUIRED_STEP_KEYS.has(stepKey) && step.status !== 'COMPLETED';
+      return (
+        CRITICAL_REQUIRED_STEP_KEYS.has(stepKey) &&
+        !isSatisfiedPrerequisiteStep(step, journey.journeyTypeKey ?? null)
+      );
     });
 
     if (hasCriticalIncomplete && nextReadiness === 'TRACKING_ONLY') {
@@ -584,13 +601,11 @@ export class GuidanceStepResolverService {
       };
     }
 
-    const missingPrerequisites = steps
-      .filter(
-        (step) =>
-          step.isRequired &&
-          step.stepOrder < currentStep.stepOrder &&
-          step.status !== 'COMPLETED'
-      )
+    const missingPrerequisites = findUnmetPriorRequiredSteps({
+      steps,
+      journeyTypeKey: updatedJourney.journeyTypeKey ?? null,
+      beforeStepOrder: currentStep.stepOrder,
+    })
       .map((step) => ({
         stepKey: step.stepKey,
         label: step.label,

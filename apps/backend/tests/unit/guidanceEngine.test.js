@@ -189,6 +189,30 @@ function isSatisfiedPrerequisiteStep(step) {
   return step.skipPolicy === 'ALLOWED';
 }
 
+function reconcileOutOfOrderSteps(steps) {
+  const sorted = [...steps].sort((a, b) => a.stepOrder - b.stepOrder);
+  const earliestUnsatisfiedRequired = sorted.find(
+    (step) => step.isRequired && !isSatisfiedPrerequisiteStep(step)
+  );
+
+  if (!earliestUnsatisfiedRequired) {
+    return sorted;
+  }
+
+  return sorted.map((step) => {
+    if (step.stepOrder <= earliestUnsatisfiedRequired.stepOrder) {
+      return step;
+    }
+    if (step.status === 'PENDING') {
+      return step;
+    }
+    return {
+      ...step,
+      status: 'PENDING',
+    };
+  });
+}
+
 function applyTransitionGuard({
   step,
   nextStatus,
@@ -215,7 +239,7 @@ function applyTransitionGuard({
   }
 
   if (
-    nextStatus === 'COMPLETED' &&
+    ['IN_PROGRESS', 'COMPLETED', 'SKIPPED', 'BLOCKED'].includes(nextStatus) &&
     priorRequiredSteps.some((priorStep) => !isSatisfiedPrerequisiteStep(priorStep))
   ) {
     return { ok: false, code: 'GUIDANCE_PREREQUISITE_INCOMPLETE' };
@@ -499,6 +523,51 @@ test('transition guards block out-of-order completion when earlier required step
   });
 
   assert.equal(allowed.ok, true);
+});
+
+test('transition guards also block out-of-order skip attempts when earlier required steps are incomplete', () => {
+  const blocked = applyTransitionGuard({
+    step: { status: 'PENDING', isRequired: false, requiresData: false },
+    nextStatus: 'SKIPPED',
+    reasonCode: 'USER_SKIPPED',
+    priorRequiredSteps: [
+      { stepKey: 'verify_history', status: 'PENDING', skipPolicy: 'DISCOURAGED' },
+      { stepKey: 'repair_replace_decision', status: 'COMPLETED', skipPolicy: 'ALLOWED' },
+    ],
+  });
+
+  assert.equal(blocked.ok, false);
+  assert.equal(blocked.code, 'GUIDANCE_PREREQUISITE_INCOMPLETE');
+});
+
+test('out-of-order journey reconciliation resets later completed steps behind earliest unmet prerequisite', () => {
+  const reconciled = reconcileOutOfOrderSteps([
+    { stepOrder: 1, stepKey: 'verify_history', status: 'PENDING', isRequired: true, skipPolicy: 'DISCOURAGED' },
+    { stepOrder: 2, stepKey: 'repair_replace_decision', status: 'PENDING', isRequired: true, skipPolicy: 'ALLOWED' },
+    { stepOrder: 3, stepKey: 'check_coverage', status: 'COMPLETED', isRequired: true, skipPolicy: 'DISALLOWED' },
+    { stepOrder: 4, stepKey: 'validate_price', status: 'COMPLETED', isRequired: true, skipPolicy: 'DISALLOWED' },
+    { stepOrder: 5, stepKey: 'compare_quotes', status: 'SKIPPED', isRequired: false, skipPolicy: 'ALLOWED' },
+  ]);
+
+  assert.equal(reconciled[0].status, 'PENDING');
+  assert.equal(reconciled[1].status, 'PENDING');
+  assert.equal(reconciled[2].status, 'PENDING');
+  assert.equal(reconciled[3].status, 'PENDING');
+  assert.equal(reconciled[4].status, 'PENDING');
+});
+
+test('out-of-order journey reconciliation preserves allowed skipped prerequisite and only resets later invalid steps', () => {
+  const reconciled = reconcileOutOfOrderSteps([
+    { stepOrder: 1, stepKey: 'repair_replace_decision', status: 'SKIPPED', isRequired: true, skipPolicy: 'ALLOWED' },
+    { stepOrder: 2, stepKey: 'check_coverage', status: 'PENDING', isRequired: true, skipPolicy: 'DISALLOWED' },
+    { stepOrder: 3, stepKey: 'validate_price', status: 'COMPLETED', isRequired: true, skipPolicy: 'DISALLOWED' },
+    { stepOrder: 4, stepKey: 'prepare_negotiation', status: 'COMPLETED', isRequired: false, skipPolicy: 'ALLOWED' },
+  ]);
+
+  assert.equal(reconciled[0].status, 'SKIPPED');
+  assert.equal(reconciled[1].status, 'PENDING');
+  assert.equal(reconciled[2].status, 'PENDING');
+  assert.equal(reconciled[3].status, 'PENDING');
 });
 
 test('transition guards block backward transitions unless explicitly allowed', () => {

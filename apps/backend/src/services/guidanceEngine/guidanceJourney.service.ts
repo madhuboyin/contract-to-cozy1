@@ -1,6 +1,6 @@
 import { APIError } from '../../middleware/error.middleware';
 import { prisma } from '../../lib/prisma';
-import { getGuidanceTemplateBySignalFamily, getDefaultStepKey, getTemplateByIssueType, getTemplateByJourneyTypeKey } from './guidanceTemplateRegistry';
+import { getGuidanceTemplateBySignalFamily, getDefaultStepKey, getStepSkipPolicy, getTemplateByIssueType, getTemplateByJourneyTypeKey } from './guidanceTemplateRegistry';
 import { guidanceSignalResolverService } from './guidanceSignalResolver.service';
 import { guidanceStepResolverService } from './guidanceStepResolver.service';
 import { guidanceFinancialContextService } from './guidanceFinancialContext.service';
@@ -100,6 +100,12 @@ function toNonEmptyString(value: unknown): string | null {
 function asStringArray(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   return value.filter((item): item is string => typeof item === 'string');
+}
+
+function isSatisfiedJourneyStep(step: any, journeyTypeKey: string | null | undefined): boolean {
+  if (step?.status === 'COMPLETED') return true;
+  if (step?.status !== 'SKIPPED') return false;
+  return getStepSkipPolicy(journeyTypeKey ?? null, step?.stepKey ?? null) === 'ALLOWED';
 }
 
 type GuidanceEvidenceScopeSnapshot = {
@@ -1457,6 +1463,95 @@ export class GuidanceJourneyService {
     }
   }
 
+  private async reconcileOutOfOrderStepState(args: {
+    propertyId: string;
+    journey: any;
+  }) {
+    const journey = args.journey;
+    const steps = Array.isArray(journey?.steps) ? [...journey.steps] : [];
+    if (steps.length === 0) return false;
+
+    const sortedSteps = steps.sort((a: any, b: any) => a.stepOrder - b.stepOrder);
+    let earliestUnsatisfiedRequiredOrder: number | null = null;
+
+    for (const step of sortedSteps) {
+      if (!step.isRequired) continue;
+      if (isSatisfiedJourneyStep(step, journey?.journeyTypeKey ?? null)) continue;
+      earliestUnsatisfiedRequiredOrder = step.stepOrder;
+      break;
+    }
+
+    if (earliestUnsatisfiedRequiredOrder == null) {
+      return false;
+    }
+
+    const invalidLaterSteps = sortedSteps.filter((step: any) => {
+      if (step.stepOrder <= earliestUnsatisfiedRequiredOrder!) return false;
+      return step.status !== 'PENDING';
+    });
+
+    if (invalidLaterSteps.length === 0) {
+      return false;
+    }
+
+    const invalidStepIds = new Set(invalidLaterSteps.map((step: any) => step.id));
+    const invalidStepKeys = new Set(invalidLaterSteps.map((step: any) => step.stepKey));
+    const filteredMissingContextKeys = asStringArray(journey.missingContextKeys).filter((key) => {
+      if (!key.startsWith('skipped:')) return true;
+      const skippedStepKey = key.slice('skipped:'.length);
+      return !invalidStepKeys.has(skippedStepKey);
+    });
+
+    await prisma.$transaction(async (tx) => {
+      await (tx as any).guidanceJourneyStep.updateMany({
+        where: {
+          id: { in: Array.from(invalidStepIds) },
+        },
+        data: {
+          status: 'PENDING',
+          startedAt: null,
+          completedAt: null,
+          skippedAt: null,
+          skippedReason: null,
+          skippedReasonCode: null,
+          blockedAt: null,
+          blockedReason: null,
+          blockedReasonCode: null,
+          unblockedAt: null,
+        },
+      });
+
+      await (tx as any).guidanceJourney.update({
+        where: { id: journey.id },
+        data: {
+          isLowContext: filteredMissingContextKeys.length > 0,
+          missingContextKeys: filteredMissingContextKeys,
+          version: { increment: 1 },
+        },
+      });
+    });
+
+    logger.warn(
+      {
+        propertyId: args.propertyId,
+        journeyId: journey.id,
+        journeyTypeKey: journey.journeyTypeKey,
+        earliestUnsatisfiedRequiredOrder,
+        resetStepKeys: invalidLaterSteps.map((step: any) => step.stepKey),
+      },
+      '[GUIDANCE] reset out-of-order journey steps'
+    );
+
+    await guidanceStepResolverService.recomputeJourneyState({
+      propertyId: args.propertyId,
+      journeyId: journey.id,
+      actorUserId: null,
+      signalId: journey.primarySignalId ?? null,
+    });
+
+    return true;
+  }
+
   async getJourneyById(propertyId: string, journeyId: string) {
     const { guidanceJourney } = getGuidanceModels();
 
@@ -1520,7 +1615,15 @@ export class GuidanceJourneyService {
           journey,
         });
 
-    if (didBackfillLegacyEvidence || didReconcileLegacyState) {
+    const didReconcileOutOfOrderState =
+      didBackfillLegacyEvidence || didReconcileLegacyState
+        ? false
+        : await this.reconcileOutOfOrderStepState({
+            propertyId,
+            journey,
+          });
+
+    if (didBackfillLegacyEvidence || didReconcileLegacyState || didReconcileOutOfOrderState) {
       journey = await fetchJourney(journey.id);
     }
 
@@ -1589,7 +1692,15 @@ export class GuidanceJourneyService {
             journey,
           });
 
-      if (didBackfill || didReconcile) {
+      const didReconcileOutOfOrder =
+        didBackfill || didReconcile
+          ? false
+          : await this.reconcileOutOfOrderStepState({
+              propertyId,
+              journey,
+            });
+
+      if (didBackfill || didReconcile || didReconcileOutOfOrder) {
         changed = true;
       }
     }
