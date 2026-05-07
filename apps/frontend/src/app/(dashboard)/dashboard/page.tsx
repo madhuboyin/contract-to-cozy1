@@ -585,8 +585,23 @@ function resolveUrgentActionHref(action: UrgentActionItem, propertyId?: string):
   if (!actionPropertyId) return '/dashboard/resolution-center?filter=urgent';
 
   if (action.type === 'HEALTH_INSIGHT') {
-    const focus = encodeURIComponent(action.title.trim().toLowerCase());
-    return `/dashboard/properties/${actionPropertyId}/health-score?focus=${focus}`;
+    const factorSlug = action.title.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+    return `/dashboard/properties/${actionPropertyId}/focus/health/${factorSlug}`;
+  }
+
+  if (action.type === 'COVERAGE_GAP' || action.type === 'COVERAGE_PARTIAL') {
+    if (action.itemId) {
+      return `/dashboard/properties/${actionPropertyId}/focus/coverage/${action.itemId}`;
+    }
+  }
+
+  if (action.type === 'RENEWAL_EXPIRED' || action.type === 'RENEWAL_UPCOMING') {
+    const typeParam = action.entityType === 'Warranty' ? 'warranty' : 'insurance';
+    return `/dashboard/properties/${actionPropertyId}/focus/renewal/${action.id}?type=${typeParam}`;
+  }
+
+  if (action.type === 'MAINTENANCE_OVERDUE') {
+    return `/dashboard/properties/${actionPropertyId}/focus/maintenance/${action.id}`;
   }
 
   return buildGuidanceOverviewHref({
@@ -944,7 +959,9 @@ export default function DashboardPage() {
         ? `${topItemName}${topExposureText} is fully exposed. ${remainingCount} other gap${remainingCount === 1 ? '' : 's'} also need coverage — ${formatUsd(data.coverageGapExposure)} total unprotected.`
         : `${topItemName}${topExposureText} has no warranty or insurance. Fully exposed if it fails or is damaged.`;
       const ctaLabel = remainingCount > 0 ? `Review ${topItemName} first` : `Review ${topItemName}`;
-      const ctaHref = buildPropertyAwareDashboardHref(effectiveSelectedPropertyId, `/dashboard/properties/${effectiveSelectedPropertyId}/inventory?tab=items&smart=gaps`);
+      const ctaHref = topGap.itemId && effectiveSelectedPropertyId
+        ? `/dashboard/properties/${effectiveSelectedPropertyId}/focus/coverage/${topGap.itemId}`
+        : buildPropertyAwareDashboardHref(effectiveSelectedPropertyId, `/dashboard/properties/${effectiveSelectedPropertyId}/inventory?tab=items&smart=gaps`);
       const etaLabel = 'ETA 2 min';
       return {
         badgeLabel: buildCoverageGapBadgeLabel(),
@@ -975,7 +992,9 @@ export default function DashboardPage() {
         ? `${topItemName}${topExposureText} is missing ${missingType}. ${remainingCount} other item${remainingCount === 1 ? '' : 's'} also have partial coverage.`
         : `${topItemName}${topExposureText} has either a warranty or insurance but not both. One coverage type is missing.`;
       const ctaLabel = remainingCount > 0 ? `Review ${topItemName} first` : `Review ${topItemName}`;
-      const ctaHref = buildPropertyAwareDashboardHref(effectiveSelectedPropertyId, `/dashboard/properties/${effectiveSelectedPropertyId}/inventory?tab=items&smart=gaps`);
+      const ctaHref = topPartial.itemId && effectiveSelectedPropertyId
+        ? `/dashboard/properties/${effectiveSelectedPropertyId}/focus/coverage/${topPartial.itemId}`
+        : buildPropertyAwareDashboardHref(effectiveSelectedPropertyId, `/dashboard/properties/${effectiveSelectedPropertyId}/inventory?tab=items&smart=gaps`);
       const etaLabel = 'ETA 2 min';
       return {
         badgeLabel: buildCoveragePartialBadgeLabel(),

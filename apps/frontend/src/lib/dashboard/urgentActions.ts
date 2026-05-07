@@ -207,6 +207,26 @@ export function resolveUrgentActionHref(action: UrgentActionItem, propertyId?: s
     action.propertyId && action.propertyId !== 'N/A' ? action.propertyId : fallbackPropertyId;
   if (!actionPropertyId) return '/dashboard/actions';
 
+  if (action.type === 'HEALTH_INSIGHT') {
+    const factorSlug = action.title.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+    return `/dashboard/properties/${actionPropertyId}/focus/health/${factorSlug}`;
+  }
+
+  if (action.type === 'COVERAGE_GAP' || action.type === 'COVERAGE_PARTIAL') {
+    if (action.itemId) {
+      return `/dashboard/properties/${actionPropertyId}/focus/coverage/${action.itemId}`;
+    }
+  }
+
+  if (action.type === 'RENEWAL_EXPIRED' || action.type === 'RENEWAL_UPCOMING') {
+    const typeParam = action.entityType === 'Warranty' ? 'warranty' : 'insurance';
+    return `/dashboard/properties/${actionPropertyId}/focus/renewal/${action.id}?type=${typeParam}`;
+  }
+
+  if (action.type === 'MAINTENANCE_OVERDUE') {
+    return `/dashboard/properties/${actionPropertyId}/focus/maintenance/${action.id}`;
+  }
+
   const issueLabel = action.title?.trim() || action.description?.trim() || null;
 
   return buildGuidanceOverviewHref({
