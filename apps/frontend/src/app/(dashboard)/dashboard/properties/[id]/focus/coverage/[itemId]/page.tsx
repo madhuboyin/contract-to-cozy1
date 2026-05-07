@@ -25,6 +25,34 @@ function formatCents(cents: number | null | undefined): string {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(cents / 100);
 }
 
+function formatCategory(category: string): string {
+  const map: Record<string, string> = {
+    APPLIANCE: "Appliance",
+    HVAC: "HVAC",
+    PLUMBING: "Plumbing",
+    ELECTRICAL: "Electrical",
+    ROOF_EXTERIOR: "Roof / Exterior",
+    SAFETY: "Safety",
+    SMART_HOME: "Smart Home",
+    FURNITURE: "Furniture",
+    ELECTRONICS: "Electronics",
+    OTHER: "Other",
+  };
+  return map[category] ?? category;
+}
+
+function formatDate(iso: string): string {
+  return new Date(iso).toLocaleDateString("en-US", { month: "short", year: "numeric" });
+}
+
+const conditionConfig: Record<string, { label: string; dot: string }> = {
+  NEW:     { label: "New",     dot: "bg-emerald-500" },
+  GOOD:    { label: "Good",    dot: "bg-emerald-400" },
+  FAIR:    { label: "Fair",    dot: "bg-amber-400"   },
+  POOR:    { label: "Poor",    dot: "bg-red-500"     },
+  UNKNOWN: { label: "Unknown", dot: "bg-slate-400"   },
+};
+
 export default function CoverageFocusPage() {
   const params = useParams();
   const router = useRouter();
@@ -139,6 +167,41 @@ export default function CoverageFocusPage() {
               </p>
             </div>
           )}
+
+          {/* Item details */}
+          {(() => {
+            const details: { label: string; value: React.ReactNode }[] = [];
+            if (item.room?.name)   details.push({ label: "Room",      value: item.room.name });
+            const cond = conditionConfig[item.condition];
+            if (item.condition && item.condition !== "UNKNOWN") details.push({
+              label: "Condition",
+              value: (
+                <span className="flex items-center gap-1.5">
+                  <span className={`inline-block h-2 w-2 rounded-full shrink-0 ${cond?.dot ?? "bg-slate-400"}`} />
+                  {cond?.label ?? item.condition}
+                </span>
+              ),
+            });
+            details.push({ label: "Category", value: formatCategory(item.category) });
+            if (item.brand)        details.push({ label: "Brand",     value: item.brand });
+            if (item.model)        details.push({ label: "Model",     value: item.model });
+            if (item.installedOn)  details.push({ label: "Installed", value: formatDate(item.installedOn) });
+            if (item.purchasedOn)  details.push({ label: "Purchased", value: formatDate(item.purchasedOn) });
+            if (!details.length) return null;
+            return (
+              <div className="px-5 py-3 border-b border-slate-100 bg-slate-50/40">
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Item details</p>
+                <dl className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-3">
+                  {details.map(({ label, value }) => (
+                    <div key={label}>
+                      <dt className="text-xs text-slate-400">{label}</dt>
+                      <dd className="text-sm font-medium text-slate-700 mt-0.5">{value}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </div>
+            );
+          })()}
 
           {/* Coverage status breakdown */}
           <div className="px-5 py-4 space-y-3">

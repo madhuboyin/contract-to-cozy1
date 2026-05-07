@@ -1,5 +1,5 @@
 // apps/backend/src/services/HomeBuyerTask.service.ts
-import { HomeBuyerTask, HomeBuyerTaskStatus, ServiceCategory } from '@prisma/client';
+import { HomeBuyerTask, HomeBuyerTaskStatus, RecurrenceFrequency, ServiceCategory } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 
 /**
@@ -53,6 +53,7 @@ export class HomeBuyerTaskService {
         title: 'Schedule a Home Inspection',
         description: 'Hire a certified inspector to identify any issues before closing.',
         serviceCategory: ServiceCategory.INSPECTION,
+        estimatedCostCents: 45000,
         sortOrder: 1,
       },
       {
@@ -65,12 +66,14 @@ export class HomeBuyerTaskService {
         title: 'Get a Home Appraisal',
         description: 'Ensure the property value meets lender requirements.',
         serviceCategory: null,
+        estimatedCostCents: 50000,
         sortOrder: 3,
       },
       {
         title: 'Obtain Homeowners Insurance',
         description: 'Get quotes and secure coverage before your closing date.',
         serviceCategory: ServiceCategory.INSURANCE,
+        frequency: RecurrenceFrequency.ANNUALLY,
         sortOrder: 4,
       },
       {
@@ -83,18 +86,21 @@ export class HomeBuyerTaskService {
         title: 'Review Closing Documents',
         description: 'Carefully review all paperwork before signing.',
         serviceCategory: ServiceCategory.ATTORNEY,
+        estimatedCostCents: 25000,
         sortOrder: 6,
       },
       {
         title: 'Schedule Move-In Services',
         description: 'Book movers, cleaners, and any other services needed.',
         serviceCategory: ServiceCategory.MOVING,
+        estimatedCostCents: 150000,
         sortOrder: 7,
       },
       {
         title: 'Change Locks',
         description: 'Ensure your new home is secure by replacing or rekeying locks.',
         serviceCategory: ServiceCategory.LOCKSMITH,
+        estimatedCostCents: 15000,
         sortOrder: 8,
       },
     ];
@@ -183,6 +189,8 @@ export class HomeBuyerTaskService {
       description?: string;
       status?: HomeBuyerTaskStatus;
       serviceCategory?: ServiceCategory | null;
+      frequency?: RecurrenceFrequency | null;
+      estimatedCostCents?: number | null;
     }
   ): Promise<HomeBuyerTask> {
     // Verify ownership
@@ -205,6 +213,8 @@ export class HomeBuyerTaskService {
         ...(data.serviceCategory !== undefined && {
           serviceCategory: data.serviceCategory,
         }),
+        ...(data.frequency !== undefined && { frequency: data.frequency }),
+        ...(data.estimatedCostCents !== undefined && { estimatedCostCents: data.estimatedCostCents }),
       },
     });
 

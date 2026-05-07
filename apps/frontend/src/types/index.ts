@@ -2070,6 +2070,12 @@ export type HomeBuyerTaskServiceCategory =
   | 'HVAC'
   | 'PEST_CONTROL';
 
+export type HomeBuyerTaskFrequency =
+  | 'MONTHLY'
+  | 'QUARTERLY'
+  | 'SEMI_ANNUALLY'
+  | 'ANNUALLY';
+
 export interface HomeBuyerTask {
   id: string;
   checklistId: string;
@@ -2077,6 +2083,8 @@ export interface HomeBuyerTask {
   description: string | null;
   status: HomeBuyerTaskStatus;
   serviceCategory: HomeBuyerTaskServiceCategory | null;
+  frequency: HomeBuyerTaskFrequency | null;
+  estimatedCostCents: number | null;
   sortOrder: number;
   bookingId: string | null;
   completedAt: Date | null;

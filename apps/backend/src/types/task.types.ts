@@ -27,6 +27,8 @@ import {
     description?: string;
     status?: HomeBuyerTaskStatus;
     serviceCategory?: ServiceCategory | null;
+    frequency?: RecurrenceFrequency | null;
+    estimatedCostCents?: number | null;
   }
   
   /**

@@ -24,6 +24,15 @@ function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
 }
 
+function formatDateShort(iso: string): string {
+  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
+function formatCurrency(cents: number | null | undefined): string | null {
+  if (!cents) return null;
+  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(cents / 100);
+}
+
 function expiryStatusLabel(expiryDate: string): { label: string; isExpired: boolean; daysLabel: string } {
   const date = parseISO(expiryDate);
   const expired = isPast(date);
@@ -148,6 +157,43 @@ export default function RenewalFocusPage() {
               </p>
             </div>
           </div>
+
+          {/* Policy details */}
+          {(() => {
+            const details: { label: string; value: string }[] = [];
+            const startDate = entity.startDate;
+            if (startDate) details.push({ label: "Coverage start", value: formatDateShort(startDate) });
+            details.push({ label: "Coverage end", value: formatDateShort(expiryDate) });
+
+            if (entityKind === "warranty") {
+              const w = entity as typeof warranty;
+              if (w?.cost) details.push({ label: "Cost", value: formatCurrency(w.cost * 100) ?? "" });
+              if (w?.coverageDetails) details.push({ label: "Coverage", value: w.coverageDetails });
+            } else {
+              const p = entity as typeof policy;
+              if (p?.premiumAmount) details.push({ label: "Annual premium", value: formatCurrency(p.premiumAmount * 100) ?? "" });
+              if (p?.coverageType) details.push({ label: "Coverage type", value: p.coverageType });
+              const limit = formatCurrency(p?.personalPropertyLimitCents);
+              if (limit) details.push({ label: "Personal property limit", value: limit });
+              const deductible = formatCurrency(p?.deductibleCents);
+              if (deductible) details.push({ label: "Deductible", value: deductible });
+            }
+
+            if (!details.length) return null;
+            return (
+              <div className="px-5 py-3 border-b border-slate-100 bg-slate-50/40">
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Policy details</p>
+                <dl className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-3">
+                  {details.map(({ label, value }) => (
+                    <div key={label} className={label === "Coverage" ? "col-span-2 sm:col-span-3" : ""}>
+                      <dt className="text-xs text-slate-400">{label}</dt>
+                      <dd className="text-sm font-medium text-slate-700 mt-0.5">{value}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </div>
+            );
+          })()}
 
           {/* What's at risk */}
           <div className="px-5 py-4 space-y-3">
