@@ -121,8 +121,8 @@ export default function CoverageFocusPage() {
   const replacementValue = formatCents(item.replacementCostCents);
 
   const inventoryHref = `/dashboard/properties/${propertyId}/inventory?tab=items&smart=gaps`;
-  const warrantyHref = `/dashboard/properties/${propertyId}/inventory?tab=items&focus=${itemId}&addWarranty=true`;
-  const insuranceHref = `/dashboard/properties/${propertyId}/inventory?tab=items&focus=${itemId}&addInsurance=true`;
+  const warrantyHref = `/dashboard/properties/${propertyId}/inventory?tab=items&openItemId=${itemId}&addWarranty=true`;
+  const insuranceHref = `/dashboard/properties/${propertyId}/inventory?tab=items&openItemId=${itemId}&addInsurance=true`;
 
   return (
     <DashboardShell className="pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-8">
@@ -277,7 +277,7 @@ export default function CoverageFocusPage() {
             </div>
           </Link>
 
-          <Link href={`/dashboard/properties/${propertyId}/inventory?tab=items&focus=${itemId}`} className="block">
+          <Link href={`/dashboard/properties/${propertyId}/inventory?tab=items&openItemId=${itemId}`} className="block">
             <div className="rounded-xl border border-slate-200 bg-white hover:bg-slate-50 active:scale-[0.99] transition-all px-4 py-3 flex items-center justify-between gap-2 cursor-pointer">
               <p className="text-sm font-medium text-slate-700">View item details</p>
               <ArrowRight className="h-4 w-4 text-slate-400 shrink-0" />
