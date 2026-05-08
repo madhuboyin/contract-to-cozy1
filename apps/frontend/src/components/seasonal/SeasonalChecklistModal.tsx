@@ -104,14 +104,14 @@ export function SeasonalChecklistModal({ checklistId, onClose }: SeasonalCheckli
               {checklist.tasksCompleted} of {checklist.totalTasks} tasks completed
             </span>
             <span className="text-sm text-gray-600">
-              {Math.round((checklist.tasksCompleted / checklist.totalTasks) * 100)}%
+              {checklist.totalTasks > 0 ? Math.round((checklist.tasksCompleted / checklist.totalTasks) * 100) : 0}%
             </span>
           </div>
           <div className="w-full bg-gray-200 rounded-full h-2">
             <div
               className="bg-green-600 h-2 rounded-full transition-all"
               style={{
-                width: `${(checklist.tasksCompleted / checklist.totalTasks) * 100}%`,
+                width: `${checklist.totalTasks > 0 ? (checklist.tasksCompleted / checklist.totalTasks) * 100 : 0}%`,
               }}
             ></div>
           </div>
@@ -214,21 +214,14 @@ export function SeasonalChecklistModal({ checklistId, onClose }: SeasonalCheckli
 
         {/* Footer - Compact on mobile */}
         <div className="px-4 py-3 border-t border-gray-200 bg-gray-50 flex items-center justify-between gap-2">
-          <label className="flex items-center gap-2 text-xs sm:text-sm text-gray-600 cursor-pointer">
-            <input
-              type="checkbox"
-              onChange={(e) => {
-                if (e.target.checked) {
-                  handleDismissChecklist();
-                }
-              }}
-              className="rounded border-gray-300 text-green-600 focus:ring-green-500 h-4 w-4 shrink-0"
-            />
-            <span className="hidden sm:inline">Don&apos;t show me this again this season</span>
-            <span className="sm:hidden">Hide</span>
-          </label>
-          
-          {/* Buttons - compact */}
+          <button
+            onClick={handleDismissChecklist}
+            disabled={dismissing}
+            className="text-xs sm:text-sm text-gray-500 hover:text-red-600 transition-colors disabled:opacity-50"
+          >
+            {dismissing ? 'Dismissing…' : 'Dismiss this season'}
+          </button>
+
           <div className="flex items-center gap-2 shrink-0">
             <button
               onClick={onClose}

@@ -92,11 +92,14 @@ export default function SeasonalMaintenancePage() {
 
   const checklists: SeasonalChecklist[] = checklistsData?.checklists || [];
   const currentSeason = climateInfo?.currentSeason;
-  const currentYear = new Date().getFullYear();
+
+  const today = new Date();
 
   const filteredChecklists = checklists.filter((checklist) => {
     if (activeTab === 'current') {
-      return checklist.season === currentSeason && checklist.year === currentYear;
+      const start = new Date(checklist.seasonStartDate);
+      const end = new Date(checklist.seasonEndDate);
+      return today >= start && today <= end;
     }
     if (activeTab === 'completed') {
       return checklist.status === 'COMPLETED';
@@ -106,12 +109,18 @@ export default function SeasonalMaintenancePage() {
 
   const groupedChecklists = filteredChecklists.reduce<Record<string, SeasonalChecklist[]>>((acc, checklist) => {
     const key = `${checklist.season}-${checklist.year}`;
-    if (!acc[key]) {
-      acc[key] = [];
-    }
+    if (!acc[key]) acc[key] = [];
     acc[key].push(checklist);
     return acc;
   }, {});
+
+  // Auto-expand the active season group on first render
+  const activeSeasonKey = checklists.find((c) => {
+    const start = new Date(c.seasonStartDate);
+    const end = new Date(c.seasonEndDate);
+    return today >= start && today <= end;
+  });
+  const defaultExpandedKey = activeSeasonKey ? `${activeSeasonKey.season}-${activeSeasonKey.year}` : null;
 
   const toggleSeason = (seasonKey: string) => {
     const nextExpanded = new Set(expandedSeasons);
@@ -122,6 +131,9 @@ export default function SeasonalMaintenancePage() {
     }
     setExpandedSeasons(nextExpanded);
   };
+
+  const isSeasonExpanded = (seasonKey: string) =>
+    expandedSeasons.has(seasonKey) || (expandedSeasons.size === 0 && seasonKey === defaultExpandedKey);
 
   const formatSeasonYearLabel = (checklist: SeasonalChecklist): string => {
     const seasonStart = new Date(checklist.seasonStartDate);
@@ -168,16 +180,16 @@ export default function SeasonalMaintenancePage() {
         </div>
       }
       summary={
-        climateInfo?.data ? (
+        climateInfo ? (
           <ResultHeroCard
             eyebrow="Climate profile"
             title={`${currentSeason || 'Current'} maintenance focus`}
             value={`${completionPercent}%`}
             status={<StatusChip tone={completionPercent >= 75 ? 'good' : completionPercent >= 40 ? 'elevated' : 'needsAction'}>{completionPercent >= 75 ? 'On track' : 'Needs attention'}</StatusChip>}
-            summary={`Region: ${climateInfo.data.climateRegion}. Next season: ${climateInfo.data.nextSeason}.`}
+            summary={`Region: ${climateInfo.climateRegion}. Next season: ${climateInfo.nextSeason}.`}
             highlights={[
               `${completedTasks} of ${totalTasks} tasks completed`,
-              `${climateInfo.data.daysUntilNextSeason} days until ${climateInfo.data.nextSeason}`,
+              `${climateInfo.daysUntilNextSeason} days until ${climateInfo.nextSeason}`,
               `${Object.keys(groupedChecklists).length} seasonal checklist groups available`,
             ]}
           />
@@ -213,7 +225,7 @@ export default function SeasonalMaintenancePage() {
         />
       ) : (
         Object.entries(groupedChecklists).map(([seasonKey, seasonChecklists]) => {
-          const isExpanded = expandedSeasons.has(seasonKey);
+          const isExpanded = isSeasonExpanded(seasonKey);
           const firstChecklist = seasonChecklists[0];
           const season = firstChecklist.season;
           const colors = getSeasonColors(season);
@@ -253,7 +265,7 @@ export default function SeasonalMaintenancePage() {
                           <StatusChip tone={checklist.status === 'COMPLETED' ? 'good' : 'needsAction'}>{checklist.status}</StatusChip>
                           <span className="inline-flex items-center gap-1 text-xs text-slate-500">
                             <Clock className="h-3.5 w-3.5" />
-                            {checklist.daysRemaining !== undefined ? formatDaysRemaining(checklist.daysRemaining) : 'N/A'}
+                            {formatDaysRemaining(Math.max(0, Math.floor((new Date(checklist.seasonEndDate).getTime() - today.getTime()) / (1000 * 60 * 60 * 24))))}
                           </span>
                         </div>
 
