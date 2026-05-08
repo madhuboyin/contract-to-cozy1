@@ -438,7 +438,8 @@ function resolveActionHref(action: ResolutionActionDTO, propertyId: string): str
       params.set('customIssueLabel', action.title);
       return `/dashboard/properties/${propertyId}/tools/guidance-overview?${params.toString()}`;
     }
-    return `/dashboard/properties/${propertyId}/health-score?focus=${encodeURIComponent(action.title.toLowerCase())}`;
+    const factorSlug = action.title.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+    return `/dashboard/properties/${propertyId}/focus/health/${factorSlug}`;
   }
   if (action.type === 'MAINTENANCE_OVERDUE') {
     return `/dashboard/maintenance?propertyId=${encodeURIComponent(propertyId)}&filter=overdue`;
