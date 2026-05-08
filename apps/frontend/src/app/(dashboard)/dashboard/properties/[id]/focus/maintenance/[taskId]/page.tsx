@@ -20,17 +20,6 @@ import { Button } from "@/components/ui/button";
 import { navigateBackWithDashboardFallback } from "@/lib/navigation/backNavigation";
 import { differenceInDays, parseISO, isPast } from "date-fns";
 
-const serviceCategoryLabels: Record<string, string> = {
-  INSPECTION:  "Home Inspection",
-  MOVING:      "Moving Services",
-  INSURANCE:   "Insurance",
-  ATTORNEY:    "Legal / Attorney",
-  CLEANING:    "Cleaning",
-  LOCKSMITH:   "Locksmith",
-  HVAC:        "HVAC",
-  PEST_CONTROL:"Pest Control",
-};
-
 const frequencyLabels: Record<string, string> = {
   MONTHLY:       "Monthly",
   QUARTERLY:     "Quarterly",
@@ -42,13 +31,6 @@ function formatCents(cents: number | null | undefined): string | null {
   if (!cents) return null;
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(cents / 100);
 }
-
-const taskStatusLabels: Record<string, { label: string; classes: string }> = {
-  PENDING:     { label: "Pending",     classes: "bg-slate-100 text-slate-600 border-slate-200" },
-  IN_PROGRESS: { label: "In progress", classes: "bg-blue-100 text-blue-700 border-blue-200"   },
-  COMPLETED:   { label: "Completed",   classes: "bg-emerald-100 text-emerald-700 border-emerald-200" },
-  NOT_NEEDED:  { label: "Not needed",  classes: "bg-slate-100 text-slate-400 border-slate-200" },
-};
 
 function getDaysOverdueLabel(nextDueDate: string | null | undefined): string | null {
   if (!nextDueDate) return null;
@@ -151,21 +133,10 @@ export default function MaintenanceFocusPage() {
           {/* Task details */}
           {(() => {
             const details: { label: string; value: React.ReactNode }[] = [];
-            const catLabel = task.serviceCategory ? serviceCategoryLabels[task.serviceCategory] : null;
-            if (catLabel) details.push({ label: "Service type", value: catLabel });
             const freqLabel = task.frequency ? frequencyLabels[task.frequency] : null;
             if (freqLabel) details.push({ label: "Frequency", value: freqLabel });
             const cost = formatCents(task.estimatedCostCents);
             if (cost) details.push({ label: "Est. cost", value: cost });
-            const statusMeta = taskStatusLabels[task.status];
-            if (statusMeta) details.push({
-              label: "Status",
-              value: (
-                <span className={`inline-block text-xs font-semibold px-2 py-0.5 rounded-full border ${statusMeta.classes}`}>
-                  {statusMeta.label}
-                </span>
-              ),
-            });
             if (!details.length) return null;
             return (
               <div className="px-5 py-3 border-b border-slate-100 bg-slate-50/40">

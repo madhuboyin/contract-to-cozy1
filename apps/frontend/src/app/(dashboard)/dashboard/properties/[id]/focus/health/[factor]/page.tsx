@@ -167,7 +167,7 @@ function getInsightStatusExplanation(status: string | undefined, factorName?: st
     return "This factor is partially set up. Completing the missing information will unlock a more accurate score and targeted guidance.";
   }
   if (REQUIRED_ACTION_STATUSES.includes(s)) {
-    return "This factor needs action. Resolving the recommended maintenance can improve your overall health score.";
+    return "";
   }
   if (IN_PROGRESS_STATUSES.includes(s)) {
     return "Work is already underway on this factor. Its contribution should improve once the task is completed.";
@@ -1594,44 +1594,19 @@ export default function HealthInsightFocusPage() {
             </div>
           )}
 
-          {/* Score contribution */}
-          <div className="px-5 py-3 bg-slate-50/60 border-b border-slate-100 flex items-center gap-3">
-            <div className="text-2xl font-black tabular-nums text-slate-800">
-              {score >= 0 ? `+${score.toFixed(1)}` : score.toFixed(1)}
-            </div>
-            <div>
-              <p className="text-xs font-semibold text-slate-500">pts contributing to health score</p>
-              {impact === "negative" && score < 5 && (
-                <p className="text-xs text-red-600 mt-0.5">Resolving this could unlock additional points</p>
-              )}
-            </div>
-          </div>
-
           {/* Why it matters */}
           <div className="px-5 py-4 space-y-4">
-            <div className="flex items-start gap-2.5">
-              <colors.AlertIcon className={`h-4 w-4 shrink-0 mt-0.5 ${impact === "negative" ? "text-red-500" : impact === "positive" ? "text-emerald-500" : "text-amber-500"}`} />
-              <p className="text-sm text-slate-700 leading-relaxed">{statusExplanation}</p>
-            </div>
+            {statusExplanation && (
+              <div className="flex items-start gap-2.5">
+                <colors.AlertIcon className={`h-4 w-4 shrink-0 mt-0.5 ${impact === "negative" ? "text-red-500" : impact === "positive" ? "text-emerald-500" : "text-amber-500"}`} />
+                <p className="text-sm text-slate-700 leading-relaxed">{statusExplanation}</p>
+              </div>
+            )}
 
             {actionHint && (
               <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
                 <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Suggested next step</p>
                 <p className="text-sm text-slate-700">{actionHint}</p>
-              </div>
-            )}
-
-            {details.length > 0 && (
-              <div className="rounded-xl border border-slate-100 bg-slate-50/60 px-4 py-3 space-y-2">
-                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">How this was scored</p>
-                <ul className="space-y-1.5">
-                  {details.map((line, i) => (
-                    <li key={i} className="flex items-start gap-2 text-sm text-slate-600">
-                      <span className="h-1.5 w-1.5 rounded-full bg-slate-400 shrink-0 mt-1.5" />
-                      {line}
-                    </li>
-                  ))}
-                </ul>
               </div>
             )}
           </div>
