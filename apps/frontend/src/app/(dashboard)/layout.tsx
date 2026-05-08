@@ -28,6 +28,7 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  CalendarRange,
 } from 'lucide-react';
 import { User } from '@/types';
 import { PropertySetupBanner } from '@/components/PropertySetupBanner';
@@ -133,27 +134,55 @@ function PersistentSidebarNav({ user, isCollapsed, onToggleCollapse }: {
                   job.engines.some((e) => (pathname ?? '').includes(e))
                 : false;
 
+          const seasonalHref = resolvedPropertyId
+            ? `/dashboard/seasonal?propertyId=${resolvedPropertyId}`
+            : '/dashboard/seasonal';
+          const isSeasonalActive = pathname?.startsWith('/dashboard/seasonal') ?? false;
+
           return (
-            <Link
-              key={job.key}
-              href={href}
-              title={isCollapsed ? job.name : undefined}
-              className={cn(
-                'group relative flex items-center rounded-[14px] text-sm font-semibold transition-all duration-[180ms] ease-out',
-                isCollapsed ? 'justify-center px-3 py-2.5' : 'gap-3 px-3 py-2.5',
-                isActive
-                  ? 'bg-teal-50/90 text-teal-800 shadow-[inset_0_0_0_1px_rgba(20,184,166,0.22)]'
-                  : 'text-slate-600 hover:-translate-y-px hover:bg-white/80 hover:text-slate-950 hover:shadow-sm'
-              )}
-            >
-              <Icon
+            <React.Fragment key={job.key}>
+              <Link
+                href={href}
+                title={isCollapsed ? job.name : undefined}
                 className={cn(
-                  'h-[18px] w-[18px] flex-shrink-0 transition-colors',
-                  isActive ? 'text-teal-700' : 'text-slate-400 group-hover:text-slate-600'
+                  'group relative flex items-center rounded-[14px] text-sm font-semibold transition-all duration-[180ms] ease-out',
+                  isCollapsed ? 'justify-center px-3 py-2.5' : 'gap-3 px-3 py-2.5',
+                  isActive
+                    ? 'bg-teal-50/90 text-teal-800 shadow-[inset_0_0_0_1px_rgba(20,184,166,0.22)]'
+                    : 'text-slate-600 hover:-translate-y-px hover:bg-white/80 hover:text-slate-950 hover:shadow-sm'
                 )}
-              />
-              {!isCollapsed && <span>{job.name}</span>}
-            </Link>
+              >
+                <Icon
+                  className={cn(
+                    'h-[18px] w-[18px] flex-shrink-0 transition-colors',
+                    isActive ? 'text-teal-700' : 'text-slate-400 group-hover:text-slate-600'
+                  )}
+                />
+                {!isCollapsed && <span>{job.name}</span>}
+              </Link>
+              {job.key === 'fix' && (
+                <Link
+                  href={seasonalHref}
+                  title={isCollapsed ? 'Seasonal' : undefined}
+                  className={cn(
+                    'group flex items-center rounded-[14px] text-sm font-medium transition-all duration-[180ms] ease-out',
+                    isCollapsed ? 'justify-center px-3 py-2' : 'gap-3 py-2',
+                    !isCollapsed && 'pl-9',
+                    isSeasonalActive
+                      ? 'text-teal-700'
+                      : 'text-slate-500 hover:text-slate-800'
+                  )}
+                >
+                  <CalendarRange
+                    className={cn(
+                      'h-4 w-4 flex-shrink-0 transition-colors',
+                      isSeasonalActive ? 'text-teal-600' : 'text-slate-400 group-hover:text-slate-500'
+                    )}
+                  />
+                  {!isCollapsed && <span>Seasonal</span>}
+                </Link>
+              )}
+            </React.Fragment>
           );
         })}
 
@@ -364,24 +393,47 @@ function MobileDrawerNav({ user }: { user: User | null }) {
                   job.engines.some((e) => (pathname ?? '').includes(e))
                 : false;
 
+          const seasonalHref = resolvedPropertyId
+            ? `/dashboard/seasonal?propertyId=${resolvedPropertyId}`
+            : '/dashboard/seasonal';
+          const isSeasonalActive = pathname?.startsWith('/dashboard/seasonal') ?? false;
+
           return (
-            <SheetClose key={job.key} asChild>
-              <Link
-                href={href}
-                className={cn(
-                  'flex items-center gap-3 px-3 py-3 rounded-lg text-sm font-medium transition-colors',
-                  isActive
-                    ? 'bg-teal-50 text-brand-700 font-semibold'
-                    : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900'
-                )}
-              >
-                <Icon className={cn('h-5 w-5 flex-shrink-0', isActive ? 'text-brand-600' : 'text-gray-400')} />
-                <div>
-                  <div>{job.name}</div>
-                  <div className="text-[11px] font-normal text-gray-400">{job.description}</div>
-                </div>
-              </Link>
-            </SheetClose>
+            <React.Fragment key={job.key}>
+              <SheetClose asChild>
+                <Link
+                  href={href}
+                  className={cn(
+                    'flex items-center gap-3 px-3 py-3 rounded-lg text-sm font-medium transition-colors',
+                    isActive
+                      ? 'bg-teal-50 text-brand-700 font-semibold'
+                      : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900'
+                  )}
+                >
+                  <Icon className={cn('h-5 w-5 flex-shrink-0', isActive ? 'text-brand-600' : 'text-gray-400')} />
+                  <div>
+                    <div>{job.name}</div>
+                    <div className="text-[11px] font-normal text-gray-400">{job.description}</div>
+                  </div>
+                </Link>
+              </SheetClose>
+              {job.key === 'fix' && (
+                <SheetClose asChild>
+                  <Link
+                    href={seasonalHref}
+                    className={cn(
+                      'flex items-center gap-3 pl-11 pr-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
+                      isSeasonalActive
+                        ? 'text-teal-700 bg-teal-50/60'
+                        : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'
+                    )}
+                  >
+                    <CalendarRange className={cn('h-4 w-4 flex-shrink-0', isSeasonalActive ? 'text-teal-600' : 'text-gray-400')} />
+                    Seasonal
+                  </Link>
+                </SheetClose>
+              )}
+            </React.Fragment>
           );
         })}
 
