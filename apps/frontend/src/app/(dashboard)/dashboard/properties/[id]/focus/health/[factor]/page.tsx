@@ -243,7 +243,7 @@ function getPrimaryCta(
     if (isAppliance) {
       return {
         label: "Add appliances to inventory",
-        href: `/dashboard/properties/${propertyId}/inventory`,
+        href: `/dashboard/properties/${propertyId}/edit?focus=appliances`,
       };
     }
     if (factor.includes("Document")) {

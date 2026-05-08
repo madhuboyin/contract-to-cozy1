@@ -919,6 +919,16 @@ export default function EditPropertyPage() {
     return () => window.clearTimeout(timeout);
   }, [searchParams]);
 
+  React.useEffect(() => {
+    if (searchParams.get("focus") !== "appliances") return;
+    setAppliancesExpanded(true);
+    const timeout = window.setTimeout(() => {
+      const target = document.getElementById("appliances");
+      target?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 100);
+    return () => window.clearTimeout(timeout);
+  }, [searchParams]);
+
   const mobileSectionLinks: Array<{ id: PropertySectionId; label: string }> = [
     { id: "basics", label: "Basics" },
     { id: "systems", label: "Systems" },
