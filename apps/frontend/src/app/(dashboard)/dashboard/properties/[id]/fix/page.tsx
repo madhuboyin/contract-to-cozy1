@@ -36,6 +36,7 @@ import { filterResolutionActions } from '@/lib/dashboard/resolutionCenterViewMod
 import { filterResolutionCases } from '@/lib/dashboard/resolutionCases';
 import { useGuidance } from '@/features/guidance/hooks/useGuidance';
 import type { GuidanceJourneyDTO } from '@/lib/api/guidanceApi';
+import { startGuidanceJourney } from '@/lib/api/guidanceApi';
 import { buildGuidanceOverviewHref as buildIssueGuidanceOverviewHref } from '@/lib/navigation/guidanceOverviewHref';
 
 // Extracts the real status string from HEALTH_INSIGHT descriptions like
@@ -358,6 +359,7 @@ export default function ResolutionHubPage() {
     },
   });
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [creatingJourneyForItemId, setCreatingJourneyForItemId] = useState<string | null>(null);
 
   const filterParam = searchParams.get('filter');
   const genericIssueGuidanceHref = propertyId
@@ -488,11 +490,31 @@ export default function ResolutionHubPage() {
     return map;
   }, [guidance.journeys]);
 
-  const resolveDecisionInsightHref = useCallback((kind: string, href: string, itemId?: string) => {
-    if (kind !== 'repair_replace' || !propertyId || !itemId) return href;
+  const handleRepairReplaceAction = useCallback(async (
+    itemId: string | undefined,
+    fallbackHref: string,
+    assetName?: string,
+    summary?: string,
+  ) => {
+    if (!itemId || !propertyId) { router.push(fallbackHref); return; }
     const journey = activeJourneyByItemId.get(itemId);
-    return journey ? buildGuidanceOverviewHref(propertyId, journey) : href;
-  }, [activeJourneyByItemId, propertyId]);
+    if (journey) { router.push(buildGuidanceOverviewHref(propertyId, journey)); return; }
+    setCreatingJourneyForItemId(itemId);
+    try {
+      const result = await startGuidanceJourney(propertyId, {
+        scopeCategory: 'ITEM', scopeId: itemId, issueType: 'error_code', inventoryItemId: itemId,
+      });
+      router.push(buildIssueGuidanceOverviewHref({
+        propertyId, journeyId: result.journey.id, stepKey: result.journey.currentStepKey,
+        inventoryItemId: itemId, assetName, issueType: result.journey.issueType ?? 'error_code',
+        customIssueLabel: summary,
+      }));
+    } catch {
+      router.push(fallbackHref);
+    } finally {
+      setCreatingJourneyForItemId(null);
+    }
+  }, [activeJourneyByItemId, propertyId, router]);
 
   return (
     <ErrorBoundary
@@ -831,18 +853,34 @@ export default function ResolutionHubPage() {
                       <Button
                         variant="outline"
                         size="sm"
+                        disabled={creatingJourneyForItemId === caseItem.itemId}
                         className="hidden shrink-0 items-center gap-1 rounded-xl border-slate-200 text-slate-700 transition-all hover:border-teal-300 hover:bg-teal-50 hover:text-teal-700 sm:flex"
-                        onClick={() => router.push(caseItem.href)}
+                        onClick={() =>
+                          caseItem.kind === 'repair_replace'
+                            ? void handleRepairReplaceAction(caseItem.itemId, caseItem.href, caseItem.title, caseItem.summary)
+                            : router.push(caseItem.href)
+                        }
                       >
-                        {getCaseCta(caseItem)}
-                        <ChevronRight className="h-4 w-4" />
+                        {creatingJourneyForItemId === caseItem.itemId ? (
+                          <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Starting…</>
+                        ) : (
+                          <>{getCaseCta(caseItem)}<ChevronRight className="h-4 w-4" /></>
+                        )}
                       </Button>
 
                       <button
                         className="flex shrink-0 items-center sm:hidden"
-                        onClick={() => router.push(caseItem.href)}
+                        onClick={() =>
+                          caseItem.kind === 'repair_replace'
+                            ? void handleRepairReplaceAction(caseItem.itemId, caseItem.href, caseItem.title, caseItem.summary)
+                            : router.push(caseItem.href)
+                        }
                       >
-                        <ChevronRight className="h-5 w-5 text-slate-300" />
+                        {creatingJourneyForItemId === caseItem.itemId ? (
+                          <Loader2 className="h-4 w-4 animate-spin text-slate-400" />
+                        ) : (
+                          <ChevronRight className="h-5 w-5 text-slate-300" />
+                        )}
                       </button>
                     </div>
                   );
@@ -1007,10 +1045,19 @@ export default function ResolutionHubPage() {
                     value={insight.subject}
                     description={insight.summary}
                     actionLabel={
-                      insight.kind === 'coverage_recommendation' ? 'Review Coverage' : 'See Full Estimate'
+                      creatingJourneyForItemId === insight.itemId
+                        ? 'Starting…'
+                        : insight.kind === 'coverage_recommendation'
+                          ? 'Review Coverage'
+                          : 'See Full Estimate'
                     }
+                    actionDisabled={creatingJourneyForItemId === insight.itemId}
                     onAction={() => {
-                      router.push(resolveDecisionInsightHref(insight.kind, insight.href, insight.itemId));
+                      if (insight.kind === 'repair_replace') {
+                        void handleRepairReplaceAction(insight.itemId, insight.href, insight.subject, insight.summary);
+                      } else {
+                        router.push(insight.href);
+                      }
                     }}
                     trust={insight.trust}
                   />

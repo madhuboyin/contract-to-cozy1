@@ -18,6 +18,8 @@ export interface WinCardProps {
   actionLabel?: string;
   /** Callback for when the primary action is clicked */
   onAction?: () => void;
+  /** Disables the action button (e.g. while an async action is in flight) */
+  actionDisabled?: boolean;
   /** Optional supporting label/value pair shown beside a compact CTA */
   actionMetaLabel?: string;
   actionMetaValue?: string;
@@ -52,6 +54,7 @@ export function WinCard({
   value,
   description,
   actionLabel = 'View Details',
+  actionDisabled = false,
   onAction,
   actionMetaLabel,
   actionMetaValue,
@@ -170,6 +173,7 @@ export function WinCard({
 
                 <Button
                   onClick={handleActionClick}
+                  disabled={actionDisabled}
                   className="group min-h-[38px] w-fit self-start rounded-[12px] bg-teal-700 px-4 text-[0.88rem] font-semibold text-white shadow-[0_8px_14px_-14px_rgba(13,148,136,0.55)] transition-all duration-150 hover:-translate-y-0.5 hover:bg-teal-800 hover:shadow-[0_10px_16px_-12px_rgba(13,148,136,0.65)] focus-visible:ring-teal-600/45 focus-visible:ring-offset-white lg:self-center"
                 >
                   {actionLabel}
@@ -201,6 +205,7 @@ export function WinCard({
           ) : (
             <Button
               onClick={handleActionClick}
+              disabled={actionDisabled}
               className="w-full justify-between bg-brand-600 hover:bg-brand-700 text-white rounded-xl h-11 px-4"
             >
               {actionLabel}
