@@ -26,22 +26,6 @@ function formatCents(cents: number | null | undefined): string {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(cents / 100);
 }
 
-function formatCategory(category: string): string {
-  const map: Record<string, string> = {
-    APPLIANCE: "Appliance",
-    HVAC: "HVAC",
-    PLUMBING: "Plumbing",
-    ELECTRICAL: "Electrical",
-    ROOF_EXTERIOR: "Roof / Exterior",
-    SAFETY: "Safety",
-    SMART_HOME: "Smart Home",
-    FURNITURE: "Furniture",
-    ELECTRONICS: "Electronics",
-    OTHER: "Other",
-  };
-  return map[category] ?? category;
-}
-
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString("en-US", { month: "short", year: "numeric" });
 }
@@ -171,18 +155,6 @@ export default function CoverageFocusPage() {
             </div>
           </div>
 
-          {/* Exposure */}
-          {item.replacementCostCents && (
-            <div className="px-5 py-3 bg-slate-50/60 border-b border-slate-100 flex items-center gap-3">
-              <div className={`text-2xl font-black tabular-nums ${isFullGap ? "text-red-700" : "text-amber-700"}`}>
-                {replacementValue}
-              </div>
-              <p className="text-xs font-semibold text-slate-500">
-                {isFullGap ? "fully unprotected" : "partially unprotected replacement value"}
-              </p>
-            </div>
-          )}
-
           {/* Item details */}
           {(() => {
             const details: { label: string; value: React.ReactNode }[] = [];
@@ -197,7 +169,6 @@ export default function CoverageFocusPage() {
                 </span>
               ),
             });
-            details.push({ label: "Category", value: formatCategory(item.category) });
             if (item.brand)        details.push({ label: "Brand",     value: item.brand });
             if (item.model)        details.push({ label: "Model",     value: item.model });
             if (item.installedOn)  details.push({ label: "Installed", value: formatDate(item.installedOn) });

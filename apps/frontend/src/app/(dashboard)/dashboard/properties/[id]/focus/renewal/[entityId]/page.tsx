@@ -24,10 +24,6 @@ function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
 }
 
-function formatDateShort(iso: string): string {
-  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-}
-
 function formatCurrency(cents: number | null | undefined): string | null {
   if (!cents) return null;
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(cents / 100);
@@ -161,9 +157,6 @@ export default function RenewalFocusPage() {
           {/* Policy details */}
           {(() => {
             const details: { label: string; value: string }[] = [];
-            const startDate = entity.startDate;
-            if (startDate) details.push({ label: "Coverage start", value: formatDateShort(startDate) });
-            details.push({ label: "Coverage end", value: formatDateShort(expiryDate) });
 
             if (entityKind === "warranty") {
               const w = entity as typeof warranty;
