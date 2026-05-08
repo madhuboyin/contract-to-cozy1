@@ -46,7 +46,6 @@ const nextConfig = {
       // Resolution Center
       { source: '/dashboard/actions', destination: '/dashboard/resolution-center', permanent: false },
       { source: '/dashboard/maintenance', destination: '/dashboard/resolution-center?filter=preventive', permanent: false },
-      { source: '/dashboard/seasonal', destination: '/dashboard/resolution-center?filter=preventive', permanent: false },
       { source: '/dashboard/checklist', destination: '/dashboard/resolution-center', permanent: false },
       { source: '/dashboard/fix', destination: '/dashboard/resolution-center?filter=urgent', permanent: false },
       { source: '/dashboard/emergency', destination: '/dashboard/resolution-center?filter=urgent', permanent: false },
