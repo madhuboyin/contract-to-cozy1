@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation';
 import {
   AlertCircle,
@@ -217,6 +217,14 @@ export default function ItemGetCoverageClient() {
   const [didAutoPrefill, setDidAutoPrefill] = useState(false);
   const [showInputs, setShowInputs] = useState(false);
 
+  const scenarioSectionRef = useRef<HTMLDivElement>(null);
+  const openScenario = () => {
+    setShowInputs(true);
+    setTimeout(() => {
+      scenarioSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 50);
+  };
+
   const defaultWarrantyCategory = getWarrantyCategoryForInventoryCategory(analysis?.item?.category);
   const addWarrantyHref =
     propertyId && itemId
@@ -259,6 +267,9 @@ export default function ItemGetCoverageClient() {
         setHasAnalysis(true);
         setAnalysis(result.analysis);
         setItemName((prev) => result.analysis.item?.name || prev || 'Inventory Item');
+        if (result.analysis.warranty.recommendation === 'REPLACE_SOON') {
+          setShowInputs(true);
+        }
       } else {
         setHasAnalysis(false);
         setAnalysis(null);
@@ -288,7 +299,7 @@ export default function ItemGetCoverageClient() {
       );
       setHasAnalysis(true);
       setAnalysis(next);
-      setShowInputs(false);
+      setShowInputs(next.warranty.recommendation === 'REPLACE_SOON');
       if (guidanceContext.guidanceJourneyId) {
         await Promise.all([
           queryClient.invalidateQueries({
@@ -327,6 +338,8 @@ export default function ItemGetCoverageClient() {
   const config = analysis
     ? verdictConfig(analysis.overallVerdict, analysis.warranty.recommendation)
     : null;
+
+  const recommendScenarioTesting = analysis?.warranty.recommendation === 'REPLACE_SOON';
 
   const hasFinancialData =
     analysis &&
@@ -559,7 +572,16 @@ export default function ItemGetCoverageClient() {
             </div>
 
             <div className="flex flex-wrap gap-2 pt-1">
-              {analysis.overallVerdict === 'NOT_WORTH_IT' ? (
+              {recommendScenarioTesting ? (
+                <>
+                  <Button onClick={openScenario}>
+                    Try scenario testing
+                  </Button>
+                  <Button variant="ghost" asChild>
+                    <Link href={addWarrantyHref}>Add coverage anyway</Link>
+                  </Button>
+                </>
+              ) : analysis.overallVerdict === 'NOT_WORTH_IT' ? (
                 <Button
                   variant="outline"
                   onClick={handleSkipCoverage}
@@ -641,43 +663,59 @@ export default function ItemGetCoverageClient() {
             <MobileCard className="space-y-3">
               <p className="text-sm font-semibold text-gray-900">What to do next</p>
               <div className="space-y-3">
-                {analysis.nextSteps.map((step, index) => (
-                  <div key={`${step.title}-${index}`} className="flex gap-3 items-start">
-                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-teal-100 text-xs font-semibold text-teal-700 mt-0.5">
-                      {index + 1}
-                    </span>
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-gray-800">{step.title}</p>
-                      {step.detail && (
-                        <p className="text-xs text-gray-500 mt-0.5">{step.detail}</p>
-                      )}
+                {analysis.nextSteps.map((step, index) => {
+                  const isScenarioStep =
+                    recommendScenarioTesting && index === 0;
+                  return (
+                    <div key={`${step.title}-${index}`} className="flex gap-3 items-start">
+                      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-teal-100 text-xs font-semibold text-teal-700 mt-0.5">
+                        {index + 1}
+                      </span>
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-gray-800">{step.title}</p>
+                        {step.detail && (
+                          <p className="text-xs text-gray-500 mt-0.5">{step.detail}</p>
+                        )}
+                        {isScenarioStep && (
+                          <button
+                            type="button"
+                            onClick={openScenario}
+                            className="mt-1.5 text-xs font-medium text-teal-700 hover:text-teal-800 underline underline-offset-2"
+                          >
+                            Try it →
+                          </button>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </MobileCard>
           )}
 
-          {/* Adjust assumptions */}
+          {/* Scenario testing / Adjust assumptions */}
+          <div ref={scenarioSectionRef}>
           <MobileCard className="space-y-3">
             <button
               type="button"
               onClick={() => setShowInputs((v) => !v)}
               className="flex w-full items-center justify-between text-sm font-medium text-gray-700"
             >
-              <span>Adjust assumptions</span>
+              <span>{recommendScenarioTesting ? 'Run a scenario' : 'Adjust assumptions'}</span>
               {showInputs ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
             </button>
             {showInputs && (
               <div className="pt-1 border-t border-gray-100 space-y-3">
                 <p className="text-xs text-gray-500">
-                  Change these values to model a different scenario, then re-run to see how the
-                  recommendation changes.
+                  {recommendScenarioTesting
+                    ? 'Try different cost assumptions to see how the recommendation changes. For example, lower the annual cost to find a price point where coverage becomes worthwhile.'
+                    : 'Change these values to model a different scenario, then re-run to see how the recommendation changes.'}
                 </p>
                 {inputsForm}
               </div>
             )}
           </MobileCard>
+          </div>
         </>
       )}
 
