@@ -1466,6 +1466,7 @@ const ISSUE_TYPE_TO_TEMPLATE_KEY: Record<string, string> = {
   'past_life':                 'asset_lifecycle_resolution',
   'aging':                     'asset_lifecycle_resolution',
   'broken':                    'asset_lifecycle_resolution',
+  'near_end_of_life':          'replacement_purchase_now',
   'maintenance_needed':        'inspection_followup_resolution',
   'inspection_needed':         'general_inspection_journey',
   // Coverage / financial issues

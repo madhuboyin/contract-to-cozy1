@@ -31,6 +31,7 @@ import {
   MobileToolWorkspace,
 } from '@/components/mobile/dashboard/MobilePrimitives';
 import { getWarrantyCategoryForInventoryCategory } from '@/lib/config/serviceCategoryMapping';
+import { buildGuidanceOverviewHref } from '@/lib/navigation/guidanceOverviewHref';
 import { cn } from '@/lib/utils';
 
 const EMPTY_OVERRIDES: ItemCoverageAnalysisOverrides = {
@@ -269,6 +270,16 @@ export default function ItemGetCoverageClient() {
     propertyId && itemId
       ? `/dashboard/warranties?action=new&from=coverage-buy&propertyId=${encodeURIComponent(propertyId)}&homeAssetId=${encodeURIComponent(itemId)}&category=${encodeURIComponent(defaultWarrantyCategory)}&returnTo=${encodeURIComponent(currentPathWithQuery)}`
       : '/dashboard/warranties';
+
+  const replaceHref = propertyId
+    ? buildGuidanceOverviewHref({
+        propertyId,
+        inventoryItemId: itemId,
+        assetName: itemName,
+        issueType: 'near_end_of_life',
+        backTo: currentPathWithQuery,
+      })
+    : '/dashboard';
 
   useEffect(() => {
     setDidAutoPrefill(false);
@@ -781,7 +792,10 @@ export default function ItemGetCoverageClient() {
             <div className="flex flex-wrap gap-2">
               {recommendScenarioTesting ? (
                 <>
-                  <Button onClick={openScenario}>
+                  <Button asChild>
+                    <Link href={replaceHref}>Plan replacement</Link>
+                  </Button>
+                  <Button variant="ghost" onClick={openScenario}>
                     Try scenario testing
                   </Button>
                   <Button variant="ghost" asChild>
