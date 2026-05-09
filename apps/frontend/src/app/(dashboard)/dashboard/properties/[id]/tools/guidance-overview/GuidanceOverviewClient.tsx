@@ -360,8 +360,8 @@ export default function GuidanceOverviewClient() {
 
   // ---- Mutations ----
   const skipStepMutation = useMutation({
-    mutationFn: ({ stepId }: { stepId: string }) =>
-      skipGuidanceStep(propertyId, stepId, { reasonCode: 'USER_SKIPPED' }),
+    mutationFn: ({ stepId, reasonCode }: { stepId: string; reasonCode?: string }) =>
+      skipGuidanceStep(propertyId, stepId, { reasonCode: reasonCode ?? 'USER_SKIPPED' }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['guidance', 'property', propertyId] });
       queryClient.invalidateQueries({ queryKey: ['guidance', 'journey', propertyId] });
@@ -511,6 +511,26 @@ export default function GuidanceOverviewClient() {
     }
     setSelectedJourneyStepKey(activeStep?.stepKey ?? activeJourneySteps[0]?.stepKey ?? null);
   }, [requestedStepKey, selectedJourneyStepKey, activeJourneySteps, activeStep?.stepKey]);
+
+  // Auto-skip step 1 (confirm_replacement_path) for existing near_end_of_life journeys
+  // that were created before the backend auto-skip was deployed.
+  const autoSkippedStepIds = React.useRef(new Set<string>());
+  React.useEffect(() => {
+    if (
+      !activeStep?.id ||
+      autoSkippedStepIds.current.has(activeStep.id) ||
+      selectedIssueType !== 'near_end_of_life' ||
+      !activeHasScopedMatch ||
+      activeStep.stepKey !== 'confirm_replacement_path' ||
+      (activeStep.status !== 'PENDING' && activeStep.status !== 'IN_PROGRESS')
+    ) {
+      return;
+    }
+    autoSkippedStepIds.current.add(activeStep.id);
+    skipStepMutation.mutate({ stepId: activeStep.id, reasonCode: 'DECISION_PRE_CONFIRMED' });
+  // skipStepMutation is stable — omitting it avoids an eslint exhaustive-deps warning on a mutable ref
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedIssueType, activeHasScopedMatch, activeStep]);
 
   const selectJourneyStep = React.useCallback(
     (stepKey: string) => {
