@@ -350,11 +350,22 @@ export default function ItemGetCoverageClient() {
       analysis.warranty.expectedCoverageCostUsd != null);
 
   const netImpact = analysis?.warranty.expectedNetImpactUsd;
+  // Positive netImpact = repair risk > coverage cost = coverage saves money
   const netImpactLabel =
     netImpact != null
-      ? netImpact < 0
-        ? `You'd save ${money(Math.abs(netImpact))}/yr with coverage`
-        : `Coverage costs ${money(netImpact)}/yr more than expected repairs`
+      ? netImpact > 0
+        ? `You'd save ${money(netImpact)}/yr with coverage`
+        : `Coverage costs ${money(Math.abs(netImpact))}/yr more than expected repairs`
+      : null;
+
+  const remainingYears = analysis?.warranty.inputsUsed.expectedRemainingYears;
+  const remainingMonths =
+    remainingYears != null ? Math.round(remainingYears * 12) : null;
+  const coverageInputsUsed = analysis?.warranty.inputsUsed;
+  const serviceFeeContribution =
+    analysis?.warranty.expectedCoverageCostUsd != null &&
+    coverageInputsUsed?.annualCostUsd != null
+      ? analysis.warranty.expectedCoverageCostUsd - coverageInputsUsed.annualCostUsd
       : null;
 
   const inputsForm = (
@@ -571,6 +582,14 @@ export default function ItemGetCoverageClient() {
                 {analysis.summary && (
                   <p className="text-sm text-gray-600 mt-1">{analysis.summary}</p>
                 )}
+                {recommendScenarioTesting && netImpact != null && netImpact > 0 && remainingMonths != null && (
+                  <p className="text-sm text-gray-600 mt-2">
+                    Coverage would save you {money(netImpact)}/yr financially — but this item has only{' '}
+                    <strong>{remainingMonths} {remainingMonths === 1 ? 'month' : 'months'}</strong> of expected life
+                    remaining. Investing in long-term coverage on a near-end-of-life item isn't recommended;
+                    plan to replace it instead.
+                  </p>
+                )}
               </div>
             </div>
 
@@ -630,28 +649,52 @@ export default function ItemGetCoverageClient() {
 
           {/* Financial comparison */}
           {hasFinancialData && (
-            <MobileCard className="space-y-3">
+            <MobileCard className="space-y-4">
               <p className="text-sm font-semibold text-gray-900">The numbers</p>
-              <div className="grid grid-cols-2 gap-2">
-                {analysis.warranty.expectedAnnualRepairRiskUsd != null && (
-                  <div className="rounded-xl bg-gray-50 p-3">
-                    <p className="text-xs text-gray-500">Estimated repair risk</p>
-                    <p className="text-base font-semibold text-gray-900 mt-0.5">
-                      {money(analysis.warranty.expectedAnnualRepairRiskUsd)}/yr
-                    </p>
+
+              {/* Coverage cost breakdown */}
+              {analysis.warranty.expectedCoverageCostUsd != null && (
+                <div className="rounded-xl bg-gray-50 p-3 space-y-2">
+                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">With coverage</p>
+                  {coverageInputsUsed?.annualCostUsd != null && (
+                    <div className="flex justify-between text-sm text-gray-700">
+                      <span>Annual premium</span>
+                      <span>{money(coverageInputsUsed.annualCostUsd)}/yr</span>
+                    </div>
+                  )}
+                  {serviceFeeContribution != null && serviceFeeContribution > 0 && (
+                    <div className="flex justify-between text-sm text-gray-700">
+                      <span>Service fees (per expected claim)</span>
+                      <span>+{money(serviceFeeContribution)}/yr</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between text-sm font-semibold text-gray-900 border-t border-gray-200 pt-2">
+                    <span>Total coverage cost</span>
+                    <span>{money(analysis.warranty.expectedCoverageCostUsd)}/yr</span>
                   </div>
-                )}
-                {analysis.warranty.expectedCoverageCostUsd != null && (
-                  <div className="rounded-xl bg-gray-50 p-3">
-                    <p className="text-xs text-gray-500">Coverage costs</p>
-                    <p className="text-base font-semibold text-gray-900 mt-0.5">
-                      {money(analysis.warranty.expectedCoverageCostUsd)}/yr
-                    </p>
+                </div>
+              )}
+
+              {/* Repair risk */}
+              {analysis.warranty.expectedAnnualRepairRiskUsd != null && (
+                <div className="rounded-xl bg-gray-50 p-3 space-y-1">
+                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Without coverage</p>
+                  <div className="flex justify-between text-sm font-semibold text-gray-900">
+                    <span>Estimated repair risk</span>
+                    <span>{money(analysis.warranty.expectedAnnualRepairRiskUsd)}/yr</span>
                   </div>
-                )}
-              </div>
+                  <p className="text-xs text-gray-400">Based on item age, failure probability, and replacement cost</p>
+                </div>
+              )}
+
+              {/* Net impact */}
               {netImpactLabel && (
-                <p className="text-sm text-gray-700">{netImpactLabel}</p>
+                <p className={cn(
+                  'text-sm font-medium',
+                  netImpact != null && netImpact > 0 ? 'text-teal-700' : 'text-rose-600'
+                )}>
+                  {netImpactLabel}
+                </p>
               )}
               {analysis.warranty.breakEvenMonths != null && (
                 <p className="text-xs text-gray-400">
@@ -732,19 +775,48 @@ export default function ItemGetCoverageClient() {
                   <Check className="h-3.5 w-3.5 text-teal-600" />
                   <span className="text-xs font-medium text-teal-700">Updated</span>
                 </div>
-                <div>
-                  <p className="text-sm font-semibold text-gray-900">{config.headline}</p>
-                  {netImpactLabel && (
-                    <p className="text-sm text-gray-600 mt-1">{netImpactLabel}</p>
-                  )}
-                  {analysis.warranty.breakEvenMonths != null && (
-                    <p className="text-xs text-gray-400 mt-0.5">
-                      Break-even: {analysis.warranty.breakEvenMonths} months
-                    </p>
-                  )}
-                </div>
+
+                {/* Mini cost breakdown */}
+                {analysis.warranty.expectedCoverageCostUsd != null && (
+                  <div className="rounded-lg bg-gray-50 p-3 space-y-1.5 text-xs text-gray-600">
+                    {coverageInputsUsed?.annualCostUsd != null && (
+                      <div className="flex justify-between">
+                        <span>Annual premium</span>
+                        <span>{money(coverageInputsUsed.annualCostUsd)}/yr</span>
+                      </div>
+                    )}
+                    {serviceFeeContribution != null && serviceFeeContribution > 0 && (
+                      <div className="flex justify-between">
+                        <span>Service fees</span>
+                        <span>+{money(serviceFeeContribution)}/yr</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between font-semibold text-gray-800 border-t border-gray-200 pt-1.5">
+                      <span>Total coverage cost</span>
+                      <span>{money(analysis.warranty.expectedCoverageCostUsd)}/yr</span>
+                    </div>
+                    {analysis.warranty.expectedAnnualRepairRiskUsd != null && (
+                      <div className="flex justify-between text-gray-500 pt-0.5">
+                        <span>vs. repair risk without coverage</span>
+                        <span>{money(analysis.warranty.expectedAnnualRepairRiskUsd)}/yr</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {netImpactLabel && (
+                  <p className={cn(
+                    'text-sm font-medium',
+                    netImpact != null && netImpact > 0 ? 'text-teal-700' : 'text-rose-600'
+                  )}>
+                    {netImpactLabel}
+                  </p>
+                )}
+
                 <p className="text-xs text-gray-500">
-                  {analysis.overallVerdict === 'WORTH_IT'
+                  {recommendScenarioTesting && netImpact != null && netImpact > 0 && remainingMonths != null
+                    ? `Coverage saves money financially, but with only ${remainingMonths} ${remainingMonths === 1 ? 'month' : 'months'} remaining on this item, replacement is the better path.`
+                    : analysis.overallVerdict === 'WORTH_IT'
                     ? 'Coverage looks worthwhile at these numbers. Add warranty coverage when ready.'
                     : analysis.overallVerdict === 'NOT_WORTH_IT'
                     ? 'Still not worth it. Try lowering the annual cost to find a price point where it becomes worthwhile.'
