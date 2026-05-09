@@ -1426,7 +1426,7 @@ export default function HealthInsightFocusPage() {
             <div className="px-5 py-3 bg-slate-50 border-b border-slate-100">
               {systemInstallYear && systemAge != null && systemAgeTier && systemLifespan ? (
                 <div className="space-y-2.5">
-                  <div className="flex items-center gap-4 flex-wrap">
+                  <div className="flex items-start gap-4 flex-wrap">
                     <div>
                       <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">
                         {getSystemYearLabel(systemKind!)}
