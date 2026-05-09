@@ -596,23 +596,26 @@ export default function ItemGetCoverageClient() {
       {!loading && hasAnalysis && analysis && config && (
         <>
           {/* Verdict */}
-          <div className={cn('rounded-2xl border p-4 space-y-4', config.bg, config.border)}>
+          <div className={cn('rounded-2xl border p-4 space-y-3', config.bg, config.border)}>
             {/* Headline */}
             <div className="flex items-start gap-3">
               <ShieldCheck className={cn('h-5 w-5 mt-0.5 shrink-0', config.iconColor)} />
               <p className="font-bold text-gray-900 text-base leading-snug">{config.headline}</p>
             </div>
 
-            {/* REPLACE_SOON: 2-column tension layout */}
+            {/* REPLACE_SOON: lightweight 2-column divider row */}
             {recommendScenarioTesting ? (
               <>
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="rounded-xl bg-white/70 border border-gray-200 p-3">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1.5">Financially</p>
+                <div className="grid grid-cols-2 divide-x divide-gray-200 border-t border-b border-gray-200 py-3">
+                  {/* Left — short-term saving, contextualised by remaining life */}
+                  <div className="pr-4">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1">Short-term saving</p>
                     {netImpact != null && netImpact > 0 ? (
                       <>
-                        <p className="text-base font-bold text-teal-700">{money(netImpact)}/yr saved</p>
-                        <p className="text-xs text-gray-500 mt-0.5">Coverage cheaper than repairs</p>
+                        <p className="text-base font-bold text-gray-900">{money(netImpact)}/yr</p>
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          Valid for ~{remainingMonths ?? '?'} {(remainingMonths ?? 2) === 1 ? 'month' : 'months'} only
+                        </p>
                       </>
                     ) : netImpact != null ? (
                       <>
@@ -620,17 +623,18 @@ export default function ItemGetCoverageClient() {
                         <p className="text-xs text-gray-500 mt-0.5">Coverage costs more than repairs</p>
                       </>
                     ) : (
-                      <p className="text-sm text-gray-400">Run a scenario to see</p>
+                      <p className="text-xs text-gray-400">Run a scenario to see</p>
                     )}
                   </div>
-                  <div className="rounded-xl bg-white/70 border border-amber-200 p-3">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1.5">Item risk</p>
+                  {/* Right — item reality */}
+                  <div className="pl-4">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1">Item reality</p>
                     {remainingMonths != null && (
                       <p className="text-base font-bold text-amber-700">
                         {remainingMonths} {remainingMonths === 1 ? 'month' : 'months'} left
                       </p>
                     )}
-                    <div className="mt-1 space-y-0.5">
+                    <div className="mt-0.5 space-y-0.5">
                       {analysis.decisionTrace
                         .filter((t) => t.impact === 'NEGATIVE')
                         .slice(0, 2)
@@ -640,7 +644,7 @@ export default function ItemGetCoverageClient() {
                     </div>
                   </div>
                 </div>
-                <p className="text-sm font-medium text-gray-800 leading-relaxed">
+                <p className="text-sm text-gray-700 leading-relaxed">
                   {strongVerdictRationale(analysis.overallVerdict, analysis.warranty.recommendation, remainingMonths, netImpact)}
                 </p>
               </>
