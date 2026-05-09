@@ -143,7 +143,7 @@ function mergeOverridesWithPrefill(
 function verdictConfig(verdict?: ItemCoverageAnalysisDTO['overallVerdict'], recommendation?: string) {
   if (recommendation === 'REPLACE_SOON') {
     return {
-      headline: 'This item may need replacing soon',
+      headline: "Replace this item — don't cover it",
       bg: 'bg-amber-50',
       border: 'border-amber-200',
       iconColor: 'text-amber-500',
@@ -171,6 +171,28 @@ function verdictConfig(verdict?: ItemCoverageAnalysisDTO['overallVerdict'], reco
     border: 'border-sky-200',
     iconColor: 'text-sky-600',
   };
+}
+
+function strongVerdictRationale(
+  verdict: ItemCoverageAnalysisDTO['overallVerdict'],
+  recommendation: string | undefined,
+  remainingMonths: number | null | undefined,
+  netImpact: number | null | undefined
+): string {
+  if (recommendation === 'REPLACE_SOON') {
+    const mo = remainingMonths ?? 0;
+    if (netImpact != null && netImpact > 0) {
+      return `Coverage saves ${money(netImpact)}/yr on paper — but with only ${mo} ${mo === 1 ? 'month' : 'months'} of expected life left, this item is entering its highest-risk period. Near-end-of-life appliances fail unpredictably, and one repair often uncovers another. A warranty can't fix an aging item. Put that money toward a replacement budget instead.`;
+    }
+    return `With only ${mo} ${mo === 1 ? 'month' : 'months'} of expected life left and coverage already costing more than expected repairs, the case for replacement is clear. Near-end-of-life items fail unpredictably — budget for a new one rather than maintaining a dying item.`;
+  }
+  if (verdict === 'WORTH_IT') {
+    return 'Coverage costs less than your expected repair bills at current rates. Locking in a warranty now protects you from the next unexpected failure.';
+  }
+  if (verdict === 'NOT_WORTH_IT') {
+    return "At current pricing, the warranty costs more than what you'd likely spend on repairs. Self-insure — keep a dedicated repair fund instead and you'll come out ahead.";
+  }
+  return 'The numbers are close. Your risk tolerance is the deciding factor — if an unexpected repair would strain your budget, lean toward coverage.';
 }
 
 function TraceIcon({ impact }: { impact: string }) {
@@ -574,26 +596,67 @@ export default function ItemGetCoverageClient() {
       {!loading && hasAnalysis && analysis && config && (
         <>
           {/* Verdict */}
-          <div className={cn('rounded-2xl border p-4 space-y-3', config.bg, config.border)}>
+          <div className={cn('rounded-2xl border p-4 space-y-4', config.bg, config.border)}>
+            {/* Headline */}
             <div className="flex items-start gap-3">
               <ShieldCheck className={cn('h-5 w-5 mt-0.5 shrink-0', config.iconColor)} />
-              <div>
-                <p className="font-semibold text-gray-900 text-base">{config.headline}</p>
-                {analysis.summary && (
-                  <p className="text-sm text-gray-600 mt-1">{analysis.summary}</p>
-                )}
-                {recommendScenarioTesting && netImpact != null && netImpact > 0 && remainingMonths != null && (
-                  <p className="text-sm text-gray-600 mt-2">
-                    Coverage would save you {money(netImpact)}/yr financially — but this item has only{' '}
-                    <strong>{remainingMonths} {remainingMonths === 1 ? 'month' : 'months'}</strong> of expected life
-                    remaining. Investing in long-term coverage on a near-end-of-life item isn't recommended;
-                    plan to replace it instead.
-                  </p>
-                )}
-              </div>
+              <p className="font-bold text-gray-900 text-base leading-snug">{config.headline}</p>
             </div>
 
-            <div className="flex flex-wrap gap-2 pt-1">
+            {/* REPLACE_SOON: 2-column tension layout */}
+            {recommendScenarioTesting ? (
+              <>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="rounded-xl bg-white/70 border border-gray-200 p-3">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1.5">Financially</p>
+                    {netImpact != null && netImpact > 0 ? (
+                      <>
+                        <p className="text-base font-bold text-teal-700">{money(netImpact)}/yr saved</p>
+                        <p className="text-xs text-gray-500 mt-0.5">Coverage cheaper than repairs</p>
+                      </>
+                    ) : netImpact != null ? (
+                      <>
+                        <p className="text-base font-bold text-rose-600">{money(Math.abs(netImpact))}/yr extra</p>
+                        <p className="text-xs text-gray-500 mt-0.5">Coverage costs more than repairs</p>
+                      </>
+                    ) : (
+                      <p className="text-sm text-gray-400">Run a scenario to see</p>
+                    )}
+                  </div>
+                  <div className="rounded-xl bg-white/70 border border-amber-200 p-3">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1.5">Item risk</p>
+                    {remainingMonths != null && (
+                      <p className="text-base font-bold text-amber-700">
+                        {remainingMonths} {remainingMonths === 1 ? 'month' : 'months'} left
+                      </p>
+                    )}
+                    <div className="mt-1 space-y-0.5">
+                      {analysis.decisionTrace
+                        .filter((t) => t.impact === 'NEGATIVE')
+                        .slice(0, 2)
+                        .map((t, i) => (
+                          <p key={i} className="text-xs text-gray-500 leading-tight">· {t.label}</p>
+                        ))}
+                    </div>
+                  </div>
+                </div>
+                <p className="text-sm font-medium text-gray-800 leading-relaxed">
+                  {strongVerdictRationale(analysis.overallVerdict, analysis.warranty.recommendation, remainingMonths, netImpact)}
+                </p>
+              </>
+            ) : (
+              /* All other verdicts: summary + strong rationale */
+              <>
+                {analysis.summary && (
+                  <p className="text-sm text-gray-600">{analysis.summary}</p>
+                )}
+                <p className="text-sm font-medium text-gray-800 leading-relaxed">
+                  {strongVerdictRationale(analysis.overallVerdict, analysis.warranty.recommendation, remainingMonths, netImpact)}
+                </p>
+              </>
+            )}
+
+            <div className="flex flex-wrap gap-2">
               {recommendScenarioTesting ? (
                 <>
                   <Button onClick={openScenario}>
@@ -771,12 +834,21 @@ export default function ItemGetCoverageClient() {
             {/* Result view — shown after a re-run */}
             {showInputs && scenarioView === 'result' && config && (
               <div className="pt-1 border-t border-gray-100 space-y-3">
+                {/* Updated badge */}
                 <div className="flex items-center gap-1.5">
                   <Check className="h-3.5 w-3.5 text-teal-600" />
                   <span className="text-xs font-medium text-teal-700">Updated</span>
                 </div>
 
-                {/* Mini cost breakdown */}
+                {/* Prominent verdict — first thing user sees after re-run */}
+                <div className={cn('rounded-xl border p-3 space-y-1.5', config.bg, config.border)}>
+                  <p className="text-sm font-bold text-gray-900">{config.headline}</p>
+                  <p className="text-xs font-medium text-gray-700 leading-relaxed">
+                    {strongVerdictRationale(analysis.overallVerdict, analysis.warranty.recommendation, remainingMonths, netImpact)}
+                  </p>
+                </div>
+
+                {/* Cost breakdown */}
                 {analysis.warranty.expectedCoverageCostUsd != null && (
                   <div className="rounded-lg bg-gray-50 p-3 space-y-1.5 text-xs text-gray-600">
                     {coverageInputsUsed?.annualCostUsd != null && (
@@ -806,22 +878,12 @@ export default function ItemGetCoverageClient() {
 
                 {netImpactLabel && (
                   <p className={cn(
-                    'text-sm font-medium',
+                    'text-sm font-semibold',
                     netImpact != null && netImpact > 0 ? 'text-teal-700' : 'text-rose-600'
                   )}>
                     {netImpactLabel}
                   </p>
                 )}
-
-                <p className="text-xs text-gray-500">
-                  {recommendScenarioTesting && netImpact != null && netImpact > 0 && remainingMonths != null
-                    ? `Coverage saves money financially, but with only ${remainingMonths} ${remainingMonths === 1 ? 'month' : 'months'} remaining on this item, replacement is the better path.`
-                    : analysis.overallVerdict === 'WORTH_IT'
-                    ? 'Coverage looks worthwhile at these numbers. Add warranty coverage when ready.'
-                    : analysis.overallVerdict === 'NOT_WORTH_IT'
-                    ? 'Still not worth it. Try lowering the annual cost to find a price point where it becomes worthwhile.'
-                    : 'Results are mixed. Adjust your risk tolerance or costs and re-run to get a clearer picture.'}
-                </p>
               </div>
             )}
 
