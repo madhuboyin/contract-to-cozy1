@@ -143,6 +143,7 @@ export function GuidanceStepCta({
         inventoryItemId={coverageItemId}
         assetName={displayAssetName}
         presentation="guided"
+        journeyTypeKey={activePrimaryAction.journey.journeyTypeKey}
         onComplete={invalidate}
       />
     );

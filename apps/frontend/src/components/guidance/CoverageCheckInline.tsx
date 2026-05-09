@@ -8,7 +8,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, ArrowRight, CheckCircle, RefreshCw, ShieldAlert, ShieldCheck } from 'lucide-react';
+import { AlertTriangle, ArrowRight, CheckCircle, ClipboardCheck, RefreshCw, ShieldAlert, ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   getCoverageAnalysis,
@@ -58,6 +58,7 @@ type CoverageCheckInlineProps = {
   inventoryItemId: string | null;
   assetName?: string;
   presentation?: 'default' | 'guided';
+  journeyTypeKey?: string | null;
   onComplete: () => void;
 };
 
@@ -96,12 +97,14 @@ export function CoverageCheckInline({
   inventoryItemId,
   assetName = 'this item',
   presentation = 'default',
+  journeyTypeKey,
   onComplete,
 }: CoverageCheckInlineProps) {
   const queryClient = useQueryClient();
   const [completing, setCompleting] = React.useState(false);
   const [completeDone, setCompleteDone] = React.useState(false);
   const isGuided = presentation === 'guided';
+  const isReplacementJourney = journeyTypeKey === 'replacement_purchase_now';
 
   const isItemScoped = Boolean(inventoryItemId);
 
@@ -207,6 +210,40 @@ export function CoverageCheckInline({
       <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
         <CheckCircle className="h-4 w-4 shrink-0" />
         Coverage reviewed. Moving to next step.
+      </div>
+    );
+  }
+
+  // ---- Replacement journey — show replacement-specific coverage checklist ----
+  if (isReplacementJourney) {
+    const checklist = [
+      'Check if your home warranty covers appliance replacement costs',
+      'Look for manufacturer or utility rebates on energy-efficient models',
+      'Consider adding a warranty when you purchase the new item',
+    ];
+    return (
+      <div className="space-y-3">
+        <div className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-2.5">
+          <div className="flex items-center gap-2 mb-2">
+            <ClipboardCheck className="h-4 w-4 text-sky-600 shrink-0" />
+            <p className="text-sm font-semibold text-sky-800">Before you buy — check for coverage and savings</p>
+          </div>
+          <ul className="space-y-1.5">
+            {checklist.map((item, i) => (
+              <li key={i} className="flex items-start gap-2 text-xs text-sky-700">
+                <span className="mt-0.5 h-1.5 w-1.5 rounded-full bg-sky-400 shrink-0" />
+                {item}
+              </li>
+            ))}
+          </ul>
+        </div>
+        <Button
+          className="min-h-[48px] w-full rounded-2xl shadow-sm transition-shadow hover:shadow-md"
+          disabled={completing}
+          onClick={handleMarkReviewed}
+        >
+          {completing ? 'Saving…' : 'Confirmed — continue to set priorities'}
+        </Button>
       </div>
     );
   }

@@ -159,7 +159,7 @@ const templates: GuidanceJourneyTemplate[] = [
         executionReadiness: 'NEEDS_CONTEXT',
         isRequired: true,
         toolKey: 'frontend',
-        skipPolicy: 'DISALLOWED',
+        skipPolicy: 'ALLOWED',
       },
       {
         stepOrder: 2,

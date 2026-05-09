@@ -1902,7 +1902,7 @@ export class GuidanceJourneyService {
     const serviceKey = input.serviceKey ?? (input.scopeCategory === 'SERVICE' ? input.scopeId : null) ?? null;
     const template = getTemplateByIssueType(issueType, input.scopeCategory, serviceKey);
 
-    return this.createJourneyFromTemplate({
+    const journey = await this.createJourneyFromTemplate({
       propertyId,
       actorUserId,
       templateKey: template.journeyTypeKey,
@@ -1913,6 +1913,24 @@ export class GuidanceJourneyService {
       homeAssetId,
       serviceKey,
     });
+
+    // When arriving from a coverage analysis REPLACE_SOON verdict, the replacement
+    // decision is already confirmed — auto-skip step 1 (confirm_replacement_path)
+    // so the user lands directly on step 2 (check_replacement_coverage).
+    if (issueType === 'near_end_of_life' && template.journeyTypeKey === 'replacement_purchase_now') {
+      await this.recordToolCompletion({
+        propertyId,
+        actorUserId,
+        journeyId: journey.id,
+        sourceToolKey: 'frontend',
+        stepKey: 'confirm_replacement_path',
+        status: 'SKIPPED',
+        reasonCode: 'DECISION_PRE_CONFIRMED',
+        reasonMessage: 'Replacement decision already confirmed via coverage analysis verdict.',
+      });
+    }
+
+    return journey;
   }
 
   async branchFromRepairReplaceDecision(args: {
