@@ -336,14 +336,14 @@ export default function GuidanceOverviewClient() {
     });
   }, [allActions, hasTargetSelected, scopeCategory, selectedAssetName, selectedHomeAssetId, selectedInventoryItemId, selectedServiceKey]);
 
-  // Further filter by issueType if one is selected (match user-initiated journeys)
+  // Further filter by issueType if one is selected (match user-initiated journeys).
+  // No fallback to all scoped actions — an unmatched issueType must surface the
+  // "Start Journey" path, not resume a journey of a different type.
   const issueFilteredActions = React.useMemo(() => {
     if (!selectedIssueType) return filteredActions;
-    // Prefer journeys matching the issueType; fall back to all scoped actions
-    const withIssue = filteredActions.filter(
+    return filteredActions.filter(
       (a) => a.journey.issueType === selectedIssueType
     );
-    return withIssue.length > 0 ? withIssue : filteredActions;
   }, [filteredActions, selectedIssueType]);
 
   const primaryAction = issueFilteredActions[0] ?? null;
