@@ -506,7 +506,8 @@ export default function GuidanceOverviewClient() {
       setSelectedJourneyStepKey(requestedStepKey);
       return;
     }
-    if (selectedJourneyStepKey && availableKeys.has(selectedJourneyStepKey)) {
+    const selectedStepInJourney = activeJourneySteps.find((s) => s.stepKey === selectedJourneyStepKey);
+    if (selectedJourneyStepKey && availableKeys.has(selectedJourneyStepKey) && selectedStepInJourney?.status !== 'SKIPPED') {
       return;
     }
     setSelectedJourneyStepKey(activeStep?.stepKey ?? activeJourneySteps[0]?.stepKey ?? null);
