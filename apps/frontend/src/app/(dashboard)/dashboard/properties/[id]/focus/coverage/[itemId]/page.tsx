@@ -141,7 +141,7 @@ export default function CoverageFocusPage() {
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
                   <p className="text-xs font-semibold uppercase tracking-wide opacity-70">Coverage gap</p>
-                  <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${isFullGap ? "bg-red-100 text-red-700 border-red-200" : "bg-amber-100 text-amber-700 border-amber-200"}`}>
+                  <span className={`inline-flex items-center text-xs font-semibold px-2 py-0.5 rounded-full border ${isFullGap ? "bg-red-100 text-red-700 border-red-200" : "bg-amber-100 text-amber-700 border-amber-200"}`}>
                     {isFullGap ? "No coverage" : "Partial coverage"}
                   </span>
                 </div>

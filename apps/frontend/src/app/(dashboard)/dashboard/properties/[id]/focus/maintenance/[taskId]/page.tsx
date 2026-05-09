@@ -115,7 +115,7 @@ export default function MaintenanceFocusPage() {
                 <div className="flex items-center gap-2 flex-wrap">
                   <p className="text-xs font-semibold uppercase tracking-wide opacity-70">Maintenance task</p>
                   {overdueLabel && (
-                    <span className="text-xs font-semibold px-2 py-0.5 rounded-full border bg-red-100 text-red-700 border-red-200">
+                    <span className="inline-flex items-center text-xs font-semibold px-2 py-0.5 rounded-full border bg-red-100 text-red-700 border-red-200">
                       {overdueLabel}
                     </span>
                   )}

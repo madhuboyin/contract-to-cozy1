@@ -129,7 +129,7 @@ export default function RenewalFocusPage() {
                   <p className="text-xs font-semibold uppercase tracking-wide opacity-70">
                     {entityKind === "warranty" ? "Warranty" : "Insurance policy"}
                   </p>
-                  <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${isExpired ? "bg-red-100 text-red-700 border-red-200" : "bg-amber-100 text-amber-700 border-amber-200"}`}>
+                  <span className={`inline-flex items-center text-xs font-semibold px-2 py-0.5 rounded-full border ${isExpired ? "bg-red-100 text-red-700 border-red-200" : "bg-amber-100 text-amber-700 border-amber-200"}`}>
                     {statusLabel}
                   </span>
                 </div>

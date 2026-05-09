@@ -1374,7 +1374,7 @@ export default function HealthInsightFocusPage() {
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
                   <p className="text-xs font-semibold uppercase tracking-wide opacity-70">Health factor</p>
-                  <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${colors.badge}`}>
+                  <span className={`inline-flex items-center text-xs font-semibold px-2 py-0.5 rounded-full border ${colors.badge}`}>
                     {friendlyStatus}
                   </span>
                 </div>
@@ -1388,7 +1388,7 @@ export default function HealthInsightFocusPage() {
           {showAgeDetails && (
             <div className="px-5 py-3 bg-slate-50 border-b border-slate-100">
               {yearBuilt && propertyAge != null && ageTier ? (
-                <div className="flex items-center gap-4 flex-wrap">
+                <div className="flex items-start gap-4 flex-wrap">
                   <div>
                     <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Year built</p>
                     <p className="text-lg font-black text-slate-900 tabular-nums leading-tight">{yearBuilt}</p>
