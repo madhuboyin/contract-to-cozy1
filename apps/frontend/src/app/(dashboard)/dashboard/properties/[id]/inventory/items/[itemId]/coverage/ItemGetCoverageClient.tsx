@@ -177,7 +177,9 @@ function strongVerdictRationale(
   verdict: ItemCoverageAnalysisDTO['overallVerdict'],
   recommendation: string | undefined,
   remainingMonths: number | null | undefined,
-  netImpact: number | null | undefined
+  netImpact: number | null | undefined,
+  repairRisk: number | null | undefined,
+  coverageCost: number | null | undefined,
 ): string {
   if (recommendation === 'REPLACE_SOON') {
     const mo = remainingMonths ?? 0;
@@ -187,10 +189,19 @@ function strongVerdictRationale(
     return `With only ${mo} ${mo === 1 ? 'month' : 'months'} of expected life left and coverage already costing more than expected repairs, the case for replacement is clear. Near-end-of-life items fail unpredictably — budget for a new one rather than maintaining a dying item.`;
   }
   if (verdict === 'WORTH_IT') {
+    if (repairRisk != null && coverageCost != null && netImpact != null) {
+      return `Your expected repair risk is ${money(repairRisk)}/yr — coverage costs ${money(coverageCost)}/yr, saving you ${money(netImpact)}/yr. Locking in a warranty now protects you from the next unexpected failure at a net benefit.`;
+    }
     return 'Coverage costs less than your expected repair bills at current rates. Locking in a warranty now protects you from the next unexpected failure.';
   }
   if (verdict === 'NOT_WORTH_IT') {
+    if (repairRisk != null && coverageCost != null && netImpact != null) {
+      return `Coverage costs ${money(coverageCost)}/yr but your expected repair risk is only ${money(repairRisk)}/yr — you'd pay ${money(Math.abs(netImpact))}/yr extra for coverage. Self-insure: keep a dedicated repair fund and you'll come out ahead.`;
+    }
     return "At current pricing, the warranty costs more than what you'd likely spend on repairs. Self-insure — keep a dedicated repair fund instead and you'll come out ahead.";
+  }
+  if (repairRisk != null && coverageCost != null) {
+    return `At ${money(coverageCost)}/yr for coverage vs ${money(repairRisk)}/yr expected repair risk, the numbers are nearly equal. Your risk tolerance is the deciding factor — if an unexpected repair would strain your budget, lean toward coverage.`;
   }
   return 'The numbers are close. Your risk tolerance is the deciding factor — if an unexpected repair would strain your budget, lean toward coverage.';
 }
@@ -393,6 +404,8 @@ export default function ItemGetCoverageClient() {
       analysis.warranty.expectedCoverageCostUsd != null);
 
   const netImpact = analysis?.warranty.expectedNetImpactUsd;
+  const repairRisk = analysis?.warranty.expectedAnnualRepairRiskUsd ?? null;
+  const coverageCost = analysis?.warranty.expectedCoverageCostUsd ?? null;
   // Positive netImpact = repair risk > coverage cost = coverage saves money
   const netImpactLabel =
     netImpact != null
@@ -624,11 +637,11 @@ export default function ItemGetCoverageClient() {
               <p className="font-bold text-gray-900 text-base leading-snug">{config.headline}</p>
             </div>
 
-            {/* REPLACE_SOON: lightweight 2-column divider row */}
-            {recommendScenarioTesting ? (
-              <>
-                <div className="grid grid-cols-2 divide-x divide-gray-200 border-t border-b border-gray-200 py-3">
-                  {/* Left — short-term saving, contextualised by remaining life */}
+            {/* 2-column data row — adapts to verdict type */}
+            <div className="grid grid-cols-2 divide-x divide-gray-200 border-t border-b border-gray-200 py-3">
+              {recommendScenarioTesting ? (
+                <>
+                  {/* REPLACE_SOON left — short-term saving */}
                   <div className="pr-4">
                     <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1">Short-term saving</p>
                     {netImpact != null && netImpact > 0 ? (
@@ -647,7 +660,7 @@ export default function ItemGetCoverageClient() {
                       <p className="text-xs text-gray-400">Run a scenario to see</p>
                     )}
                   </div>
-                  {/* Right — item reality */}
+                  {/* REPLACE_SOON right — item reality */}
                   <div className="pl-4">
                     <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1">Item reality</p>
                     {remainingMonths != null && (
@@ -664,22 +677,106 @@ export default function ItemGetCoverageClient() {
                         ))}
                     </div>
                   </div>
-                </div>
-                <p className="text-sm text-gray-700 leading-relaxed">
-                  {strongVerdictRationale(analysis.overallVerdict, analysis.warranty.recommendation, remainingMonths, netImpact)}
-                </p>
-              </>
-            ) : (
-              /* All other verdicts: summary + strong rationale */
-              <>
-                {analysis.summary && (
-                  <p className="text-sm text-gray-600">{analysis.summary}</p>
-                )}
-                <p className="text-sm font-medium text-gray-800 leading-relaxed">
-                  {strongVerdictRationale(analysis.overallVerdict, analysis.warranty.recommendation, remainingMonths, netImpact)}
-                </p>
-              </>
-            )}
+                </>
+              ) : analysis.overallVerdict === 'WORTH_IT' ? (
+                <>
+                  {/* WORTH_IT left — annual savings */}
+                  <div className="pr-4">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1">Annual savings</p>
+                    {netImpact != null && netImpact > 0 ? (
+                      <>
+                        <p className="text-base font-bold text-teal-700">{money(netImpact)}/yr</p>
+                        <p className="text-xs text-gray-500 mt-0.5">Coverage pays off</p>
+                      </>
+                    ) : (
+                      <p className="text-xs text-gray-400">Run a scenario to see</p>
+                    )}
+                  </div>
+                  {/* WORTH_IT right — repair risk */}
+                  <div className="pl-4">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1">Repair risk</p>
+                    {repairRisk != null ? (
+                      <p className="text-base font-bold text-gray-900">{money(repairRisk)}/yr</p>
+                    ) : (
+                      <p className="text-xs text-gray-400">Not estimated</p>
+                    )}
+                    <div className="mt-0.5 space-y-0.5">
+                      {analysis.decisionTrace
+                        .filter((t) => t.impact === 'POSITIVE')
+                        .slice(0, 2)
+                        .map((t, i) => (
+                          <p key={i} className="text-xs text-gray-500 leading-tight">· {t.label}</p>
+                        ))}
+                    </div>
+                  </div>
+                </>
+              ) : analysis.overallVerdict === 'NOT_WORTH_IT' ? (
+                <>
+                  {/* NOT_WORTH_IT left — extra cost */}
+                  <div className="pr-4">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1">Extra cost</p>
+                    {netImpact != null && netImpact < 0 ? (
+                      <>
+                        <p className="text-base font-bold text-rose-600">{money(Math.abs(netImpact))}/yr extra</p>
+                        <p className="text-xs text-gray-500 mt-0.5">Coverage costs more than repairs</p>
+                      </>
+                    ) : (
+                      <p className="text-xs text-gray-400">Run a scenario to see</p>
+                    )}
+                  </div>
+                  {/* NOT_WORTH_IT right — repair risk */}
+                  <div className="pl-4">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1">Repair risk</p>
+                    {repairRisk != null ? (
+                      <p className="text-base font-bold text-gray-900">{money(repairRisk)}/yr</p>
+                    ) : (
+                      <p className="text-xs text-gray-400">Not estimated</p>
+                    )}
+                    <div className="mt-0.5 space-y-0.5">
+                      {analysis.decisionTrace
+                        .filter((t) => t.impact === 'NEGATIVE')
+                        .slice(0, 2)
+                        .map((t, i) => (
+                          <p key={i} className="text-xs text-gray-500 leading-tight">· {t.label}</p>
+                        ))}
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  {/* SITUATIONAL left — coverage cost */}
+                  <div className="pr-4">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1">Coverage cost</p>
+                    {coverageCost != null ? (
+                      <>
+                        <p className="text-base font-bold text-gray-900">{money(coverageCost)}/yr</p>
+                        <p className="text-xs text-gray-500 mt-0.5">Annual warranty cost</p>
+                      </>
+                    ) : (
+                      <p className="text-xs text-gray-400">Run a scenario to see</p>
+                    )}
+                  </div>
+                  {/* SITUATIONAL right — repair risk */}
+                  <div className="pl-4">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1">Repair risk</p>
+                    {repairRisk != null ? (
+                      <p className="text-base font-bold text-gray-900">{money(repairRisk)}/yr</p>
+                    ) : (
+                      <p className="text-xs text-gray-400">Not estimated</p>
+                    )}
+                    <div className="mt-0.5 space-y-0.5">
+                      {analysis.decisionTrace.slice(0, 2).map((t, i) => (
+                        <p key={i} className="text-xs text-gray-500 leading-tight">· {t.label}</p>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+
+            <p className="text-sm text-gray-700 leading-relaxed">
+              {strongVerdictRationale(analysis.overallVerdict, analysis.warranty.recommendation, remainingMonths, netImpact, repairRisk, coverageCost)}
+            </p>
 
             <div className="flex flex-wrap gap-2">
               {recommendScenarioTesting ? (
@@ -691,25 +788,41 @@ export default function ItemGetCoverageClient() {
                     <Link href={addWarrantyHref}>Add coverage anyway</Link>
                   </Button>
                 </>
-              ) : analysis.overallVerdict === 'NOT_WORTH_IT' ? (
-                <Button
-                  variant="outline"
-                  onClick={handleSkipCoverage}
-                  disabled={waiving}
-                  className="bg-white"
-                >
-                  {waiving ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Saving…</> : 'Mark as skipped'}
-                </Button>
-              ) : (
+              ) : analysis.overallVerdict === 'WORTH_IT' ? (
                 <>
                   <Button asChild>
                     <Link href={addWarrantyHref}>Add warranty coverage</Link>
                   </Button>
-                  {analysis.overallVerdict === 'SITUATIONAL' && (
-                    <Button variant="ghost" onClick={handleSkipCoverage} disabled={waiving}>
-                      {waiving ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Saving…</> : 'Skip for now'}
-                    </Button>
-                  )}
+                  <Button variant="ghost" onClick={openScenario}>
+                    Try scenario testing
+                  </Button>
+                </>
+              ) : analysis.overallVerdict === 'NOT_WORTH_IT' ? (
+                <>
+                  <Button
+                    variant="outline"
+                    onClick={handleSkipCoverage}
+                    disabled={waiving}
+                    className="bg-white"
+                  >
+                    {waiving ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Saving…</> : 'Mark as skipped'}
+                  </Button>
+                  <Button variant="ghost" onClick={openScenario}>
+                    Try scenario testing
+                  </Button>
+                </>
+              ) : (
+                /* SITUATIONAL */
+                <>
+                  <Button asChild>
+                    <Link href={addWarrantyHref}>Add warranty coverage</Link>
+                  </Button>
+                  <Button variant="ghost" onClick={openScenario}>
+                    Try scenario testing
+                  </Button>
+                  <Button variant="ghost" onClick={handleSkipCoverage} disabled={waiving}>
+                    {waiving ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Saving…</> : 'Skip for now'}
+                  </Button>
                 </>
               )}
             </div>
@@ -931,7 +1044,7 @@ export default function ItemGetCoverageClient() {
                 <div className={cn('rounded-xl border p-3 space-y-1.5', config.bg, config.border)}>
                   <p className="text-sm font-bold text-gray-900">{config.headline}</p>
                   <p className="text-xs font-medium text-gray-700 leading-relaxed">
-                    {strongVerdictRationale(analysis.overallVerdict, analysis.warranty.recommendation, remainingMonths, netImpact)}
+                    {strongVerdictRationale(analysis.overallVerdict, analysis.warranty.recommendation, remainingMonths, netImpact, repairRisk, coverageCost)}
                   </p>
                 </div>
 
