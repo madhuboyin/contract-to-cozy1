@@ -216,10 +216,12 @@ export default function ItemGetCoverageClient() {
   const [roomName, setRoomName] = useState<string | null>(null);
   const [didAutoPrefill, setDidAutoPrefill] = useState(false);
   const [showInputs, setShowInputs] = useState(false);
+  const [scenarioView, setScenarioView] = useState<'inputs' | 'result'>('inputs');
 
   const scenarioSectionRef = useRef<HTMLDivElement>(null);
   const openScenario = () => {
     setShowInputs(true);
+    setScenarioView('inputs');
     setTimeout(() => {
       scenarioSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, 50);
@@ -299,7 +301,8 @@ export default function ItemGetCoverageClient() {
       );
       setHasAnalysis(true);
       setAnalysis(next);
-      setShowInputs(next.warranty.recommendation === 'REPLACE_SOON');
+      setShowInputs(true);
+      setScenarioView('result');
       if (guidanceContext.guidanceJourneyId) {
         await Promise.all([
           queryClient.invalidateQueries({
@@ -696,15 +699,62 @@ export default function ItemGetCoverageClient() {
           {/* Scenario testing / Adjust assumptions */}
           <div ref={scenarioSectionRef}>
           <MobileCard className="space-y-3">
-            <button
-              type="button"
-              onClick={() => setShowInputs((v) => !v)}
-              className="flex w-full items-center justify-between text-sm font-medium text-gray-700"
-            >
-              <span>{recommendScenarioTesting ? 'Run a scenario' : 'Adjust assumptions'}</span>
-              {showInputs ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-            </button>
-            {showInputs && (
+            {/* Card header — always visible */}
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium text-gray-700">
+                {recommendScenarioTesting ? 'Run a scenario' : 'Adjust assumptions'}
+              </span>
+              {showInputs && scenarioView === 'result' ? (
+                <button
+                  type="button"
+                  onClick={() => setScenarioView('inputs')}
+                  className="flex items-center gap-1 text-xs font-medium text-teal-700 hover:text-teal-800"
+                >
+                  Edit inputs
+                  <ChevronDown className="h-3.5 w-3.5" />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setShowInputs((v) => !v)}
+                  className="text-gray-400 hover:text-gray-600"
+                  aria-label={showInputs ? 'Collapse' : 'Expand'}
+                >
+                  {showInputs ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                </button>
+              )}
+            </div>
+
+            {/* Result view — shown after a re-run */}
+            {showInputs && scenarioView === 'result' && config && (
+              <div className="pt-1 border-t border-gray-100 space-y-3">
+                <div className="flex items-center gap-1.5">
+                  <Check className="h-3.5 w-3.5 text-teal-600" />
+                  <span className="text-xs font-medium text-teal-700">Updated</span>
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-gray-900">{config.headline}</p>
+                  {netImpactLabel && (
+                    <p className="text-sm text-gray-600 mt-1">{netImpactLabel}</p>
+                  )}
+                  {analysis.warranty.breakEvenMonths != null && (
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      Break-even: {analysis.warranty.breakEvenMonths} months
+                    </p>
+                  )}
+                </div>
+                <p className="text-xs text-gray-500">
+                  {analysis.overallVerdict === 'WORTH_IT'
+                    ? 'Coverage looks worthwhile at these numbers. Add warranty coverage when ready.'
+                    : analysis.overallVerdict === 'NOT_WORTH_IT'
+                    ? 'Still not worth it. Try lowering the annual cost to find a price point where it becomes worthwhile.'
+                    : 'Results are mixed. Adjust your risk tolerance or costs and re-run to get a clearer picture.'}
+                </p>
+              </div>
+            )}
+
+            {/* Input view — shown by default or after clicking "Edit inputs" */}
+            {showInputs && scenarioView === 'inputs' && (
               <div className="pt-1 border-t border-gray-100 space-y-3">
                 <p className="text-xs text-gray-500">
                   {recommendScenarioTesting
