@@ -39,6 +39,9 @@ export type GuidanceStepCtaProps = {
   router: { replace: (url: string, options?: { scroll?: boolean }) => void };
   pathname: string;
   searchParams: URLSearchParams;
+
+  // Called after an inline step completes — parent advances the step selector
+  onStepComplete?: (nextStepKey: string | null) => void;
 };
 
 export function GuidanceStepCta({
@@ -55,6 +58,7 @@ export function GuidanceStepCta({
   router,
   pathname,
   searchParams,
+  onStepComplete,
 }: GuidanceStepCtaProps) {
   const queryClient = useQueryClient();
 
@@ -62,9 +66,16 @@ export function GuidanceStepCta({
 
   const resolvedJourney = journeyForSelectedStepHref;
 
+  const nextStep = activeJourneySteps.find((s) => s.stepOrder === step.stepOrder + 1) ?? null;
+
   function invalidate() {
     queryClient.invalidateQueries({ queryKey: ['guidance', 'property', propertyId] });
     queryClient.invalidateQueries({ queryKey: ['guidance', 'journey', propertyId] });
+  }
+
+  function handleInlineComplete() {
+    invalidate();
+    onStepComplete?.(nextStep?.stepKey ?? null);
   }
 
   // FRD-FR-03/04: Inline verify_history step — render the VerifyHistoryStep form
@@ -88,7 +99,7 @@ export function GuidanceStepCta({
         assetCategory={assetCategory}
         assetName={displayAssetName}
         presentation="guided"
-        onComplete={invalidate}
+        onComplete={handleInlineComplete}
       />
     );
   }
@@ -120,6 +131,8 @@ export function GuidanceStepCta({
               nextParams.delete('stepKey');
               nextParams.delete('guidanceStepKey');
               router.replace(`${pathname}?${nextParams.toString()}`, { scroll: false });
+            } else {
+              onStepComplete?.(nextStep?.stepKey ?? null);
             }
           }}
         />
@@ -144,7 +157,7 @@ export function GuidanceStepCta({
         assetName={displayAssetName}
         presentation="guided"
         journeyTypeKey={activePrimaryAction.journey.journeyTypeKey}
-        onComplete={invalidate}
+        onComplete={handleInlineComplete}
       />
     );
   }
@@ -169,7 +182,7 @@ export function GuidanceStepCta({
         assetName={displayAssetName}
         issueType={resolvedJourney?.issueType ?? selectedIssueType ?? null}
         presentation="guided"
-        onComplete={invalidate}
+        onComplete={handleInlineComplete}
       />
     );
   }
@@ -187,7 +200,7 @@ export function GuidanceStepCta({
         stepKey={step.stepKey}
         toolKey={step.toolKey}
         assetName={displayAssetName}
-        onComplete={invalidate}
+        onComplete={handleInlineComplete}
       />
     );
   }
@@ -232,7 +245,7 @@ export function GuidanceStepCta({
         producedData={step.producedData}
         priorities={priorities}
         selectedModelName={selectedModelNameForVendors}
-        onComplete={invalidate}
+        onComplete={handleInlineComplete}
       />
     );
   }
@@ -254,7 +267,7 @@ export function GuidanceStepCta({
         inventoryItemId={recallItemId}
         assetName={displayAssetName}
         presentation="guided"
-        onComplete={invalidate}
+        onComplete={handleInlineComplete}
       />
     );
   }
@@ -276,7 +289,7 @@ export function GuidanceStepCta({
         assetName={displayAssetName}
         issueType={resolvedJourney?.issueType ?? selectedIssueType ?? null}
         presentation="guided"
-        onComplete={invalidate}
+        onComplete={handleInlineComplete}
       />
     );
   }
@@ -302,7 +315,7 @@ export function GuidanceStepCta({
         guidanceSignalIntentFamily={resolvedJourney?.primarySignal?.signalIntentFamily ?? null}
         assetName={displayAssetName}
         issueType={resolvedJourney?.issueType ?? selectedIssueType ?? null}
-        onComplete={invalidate}
+        onComplete={handleInlineComplete}
       />
     );
   }

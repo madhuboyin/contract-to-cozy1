@@ -543,6 +543,13 @@ export default function GuidanceOverviewClient() {
     [pathname, router, searchParams]
   );
 
+  const handleStepComplete = React.useCallback(
+    (nextStepKey: string | null) => {
+      if (nextStepKey) selectJourneyStep(nextStepKey);
+    },
+    [selectJourneyStep]
+  );
+
   // ---- Render helpers ----
   // Resolve the step href via the shared helper that substitutes :propertyId, :itemId, etc.
   // Never use step.routePath directly — it may contain unresolved template params.
@@ -1084,13 +1091,20 @@ export default function GuidanceOverviewClient() {
     negLow: number,
     negHigh: number,
     ovLow: number,
-    ovHigh: number
+    ovHigh: number,
+    journeyTypeKey: string | null = null
   ): { headline: string | null; body: string | null } {
     const STEP_COPY: Record<string, { headline: string; body: string | null }> = {
-      'coverage-intelligence': {
-        headline: 'Confirm what coverage really protects before you spend more',
-        body: 'Before you pay out of pocket, verify whether warranty or coverage can offset this issue.',
-      },
+      'coverage-intelligence':
+        journeyTypeKey === 'replacement_purchase_now'
+          ? {
+              headline: 'Check for coverage and rebates before buying a replacement',
+              body: 'See if your home warranty covers the replacement cost and look for rebates on energy-efficient models.',
+            }
+          : {
+              headline: 'Confirm what coverage really protects before you spend more',
+              body: 'Before you pay out of pocket, verify whether warranty or coverage can offset this issue.',
+            },
       'replace-repair': {
         headline: 'Decide whether repair or replacement is the smarter next move',
         body: 'We will weigh reliability, lifespan, and cost so you can choose the better path with confidence.',
@@ -1140,7 +1154,8 @@ export default function GuidanceOverviewClient() {
     negotiationLow,
     negotiationHigh,
     overpayLow,
-    overpayHigh
+    overpayHigh,
+    activePrimaryAction?.journey.journeyTypeKey ?? null
   );
   const currentStepHighlightHeadline =
     stepHighlight.headline ?? activePrimaryAction?.explanation?.nextStep ?? currentStepTitle;
@@ -1520,6 +1535,7 @@ export default function GuidanceOverviewClient() {
                       router={router}
                       pathname={pathname}
                       searchParams={searchParams}
+                      onStepComplete={handleStepComplete}
                     />
                   ) : null}
 
