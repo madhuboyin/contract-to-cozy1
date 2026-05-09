@@ -1895,17 +1895,18 @@ export class GuidanceJourneyService {
     input: UserInitiatedJourneyInput,
     actorUserId: string
   ) {
+    const issueType = input.issueType.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
     const scopeId = input.scopeId;
     const inventoryItemId = input.inventoryItemId ?? (input.scopeCategory === 'ITEM' ? input.scopeId : null) ?? null;
     const homeAssetId = input.homeAssetId ?? null;
     const serviceKey = input.serviceKey ?? (input.scopeCategory === 'SERVICE' ? input.scopeId : null) ?? null;
-    const template = getTemplateByIssueType(input.issueType, input.scopeCategory, serviceKey);
+    const template = getTemplateByIssueType(issueType, input.scopeCategory, serviceKey);
 
     return this.createJourneyFromTemplate({
       propertyId,
       actorUserId,
       templateKey: template.journeyTypeKey,
-      issueType: input.issueType,
+      issueType,
       scopeCategory: input.scopeCategory,
       scopeId,
       inventoryItemId,

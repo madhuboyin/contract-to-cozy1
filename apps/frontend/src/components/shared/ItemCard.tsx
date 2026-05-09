@@ -141,7 +141,7 @@ export default function ItemCard({
       inventoryItemId: item.id,
       homeAssetId: item.homeAssetId,
       assetName: item.name,
-      customIssueLabel: `Repair or replace ${item.name}`,
+      issueType: 'past_life',
       backTo: currentPathWithQuery,
     }));
   }

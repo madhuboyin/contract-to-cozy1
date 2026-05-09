@@ -1544,6 +1544,7 @@ export const SUGGESTED_ISSUE_TYPES_ITEM = [
   { key: 'not_heating',      label: 'Not heating' },
   { key: 'leak',             label: 'Leaking or water damage' },
   { key: 'past_life',        label: 'Aging or past expected life' },
+  { key: 'near_end_of_life', label: 'Planning to replace this item' },
   { key: 'broken',           label: 'Broken or damaged' },
   { key: 'inspection_needed',label: 'Needs inspection or maintenance' },
   { key: 'coverage_question',label: 'Coverage or warranty question' },
