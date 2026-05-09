@@ -21,9 +21,9 @@ import {
   getItemCoverageAnalysis,
   runItemCoverageAnalysis,
 } from '@/lib/api/coverageAnalysisApi';
-import { getInventoryItem, waiveCoverage } from '@/app/(dashboard)/dashboard/inventory/inventoryApi';
+import { getInventoryItem, updateInventoryItem, waiveCoverage } from '@/app/(dashboard)/dashboard/inventory/inventoryApi';
 import { Button } from '@/components/ui/button';
-import { InventoryItem } from '@/types';
+import { InventoryItem, InventoryItemCondition } from '@/types';
 import {
   ActionPriorityRow,
   BottomSafeAreaReserve,
@@ -239,6 +239,10 @@ export default function ItemGetCoverageClient() {
   const [didAutoPrefill, setDidAutoPrefill] = useState(false);
   const [showInputs, setShowInputs] = useState(false);
   const [scenarioView, setScenarioView] = useState<'inputs' | 'result'>('inputs');
+  const [itemCondition, setItemCondition] = useState<InventoryItemCondition>('UNKNOWN');
+  const [showConditionEditor, setShowConditionEditor] = useState(false);
+  const [conditionInput, setConditionInput] = useState<InventoryItemCondition>('GOOD');
+  const [savingCondition, setSavingCondition] = useState(false);
 
   const scenarioSectionRef = useRef<HTMLDivElement>(null);
   const openScenario = () => {
@@ -273,6 +277,7 @@ export default function ItemGetCoverageClient() {
         const fetchedItem = itemResult.value;
         setItemName(fetchedItem.name || 'Inventory Item');
         setRoomName(fetchedItem.room?.name || null);
+        setItemCondition((fetchedItem.condition as InventoryItemCondition) || 'UNKNOWN');
         if (!didAutoPrefill) {
           setOverrides((prev) => mergeOverridesWithPrefill(prev, buildPrefillOverrides(fetchedItem)));
           setDidAutoPrefill(true);
@@ -357,6 +362,22 @@ export default function ItemGetCoverageClient() {
       setError(err?.message || 'Failed to update coverage status.');
     } finally {
       setWaiving(false);
+    }
+  };
+
+  const saveConditionAndRerun = async () => {
+    if (!propertyId || !itemId) return;
+    setSavingCondition(true);
+    setError(null);
+    try {
+      await updateInventoryItem(propertyId, itemId, { condition: conditionInput });
+      setItemCondition(conditionInput);
+      setShowConditionEditor(false);
+      await runAnalysis();
+    } catch (err: any) {
+      setError(err?.message || 'Failed to save condition.');
+    } finally {
+      setSavingCondition(false);
     }
   };
 
@@ -699,17 +720,79 @@ export default function ItemGetCoverageClient() {
             <MobileCard className="space-y-3">
               <p className="text-sm font-semibold text-gray-900">Why we recommend this</p>
               <div className="space-y-3">
-                {analysis.decisionTrace.slice(0, 5).map((trace, index) => (
-                  <div key={`${trace.label}-${index}`} className="flex gap-3 items-start">
-                    <TraceIcon impact={trace.impact} />
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-gray-800">{trace.label}</p>
-                      {trace.detail && (
-                        <p className="text-xs text-gray-500 mt-0.5">{trace.detail}</p>
-                      )}
+                {analysis.decisionTrace.slice(0, 5).map((trace, index) => {
+                  const isUnknownConditionRow =
+                    index === 0 && itemCondition === 'UNKNOWN';
+                  return (
+                    <div key={`${trace.label}-${index}`} className="flex gap-3 items-start">
+                      <TraceIcon impact={trace.impact} />
+                      <div className="min-w-0 w-full">
+                        <p className="text-sm font-medium text-gray-800">{trace.label}</p>
+                        {trace.detail && (
+                          <p className="text-xs text-gray-500 mt-0.5">{trace.detail}</p>
+                        )}
+
+                        {/* Inline condition prompt — shown when condition is UNKNOWN */}
+                        {isUnknownConditionRow && !showConditionEditor && (
+                          <button
+                            type="button"
+                            onClick={() => setShowConditionEditor(true)}
+                            className="mt-1.5 inline-flex items-center gap-1 text-xs font-medium text-amber-700 hover:text-amber-800 underline underline-offset-2"
+                          >
+                            Add condition →
+                          </button>
+                        )}
+                        {isUnknownConditionRow && !showConditionEditor && (
+                          <p className="text-xs text-amber-600 mt-0.5">
+                            Condition affects failure probability — adding it improves accuracy.
+                          </p>
+                        )}
+
+                        {isUnknownConditionRow && showConditionEditor && (
+                          <div className="mt-2 rounded-xl border border-amber-200 bg-amber-50 p-3 space-y-2">
+                            <p className="text-xs font-medium text-amber-800">
+                              What condition is this item in?
+                            </p>
+                            <p className="text-xs text-amber-700">
+                              Condition changes how we estimate failure probability and repair risk.
+                            </p>
+                            <select
+                              className="w-full rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm"
+                              value={conditionInput}
+                              onChange={(e) => setConditionInput(e.target.value as InventoryItemCondition)}
+                            >
+                              <option value="NEW">New — like new, no issues</option>
+                              <option value="GOOD">Good — works well, minor wear</option>
+                              <option value="FAIR">Fair — some issues, regular maintenance needed</option>
+                              <option value="POOR">Poor — frequent problems or visible damage</option>
+                            </select>
+                            <div className="flex gap-2">
+                              <Button
+                                size="sm"
+                                onClick={saveConditionAndRerun}
+                                disabled={savingCondition}
+                              >
+                                {savingCondition ? (
+                                  <><Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />Saving…</>
+                                ) : (
+                                  'Save & re-run'
+                                )}
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => setShowConditionEditor(false)}
+                                disabled={savingCondition}
+                              >
+                                Cancel
+                              </Button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </MobileCard>
           )}
