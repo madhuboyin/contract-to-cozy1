@@ -3,7 +3,17 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { AlertCircle, ArrowLeft, Loader2, ShieldCheck } from 'lucide-react';
+import {
+  AlertCircle,
+  ArrowLeft,
+  Check,
+  ChevronDown,
+  ChevronUp,
+  Info,
+  Loader2,
+  ShieldCheck,
+  X,
+} from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   ItemCoverageAnalysisDTO,
@@ -17,17 +27,11 @@ import { InventoryItem } from '@/types';
 import {
   ActionPriorityRow,
   BottomSafeAreaReserve,
-  CompactEntityRow,
-  MobilePageIntro,
+  MobileCard,
   MobileToolWorkspace,
-  ReadOnlySummaryBlock,
-  ResultHeroCard,
-  ScenarioInputCard,
-  StatusChip,
 } from '@/components/mobile/dashboard/MobilePrimitives';
 import { getWarrantyCategoryForInventoryCategory } from '@/lib/config/serviceCategoryMapping';
-
-type TraceImpact = 'POSITIVE' | 'NEGATIVE' | 'NEUTRAL';
+import { cn } from '@/lib/utils';
 
 const EMPTY_OVERRIDES: ItemCoverageAnalysisOverrides = {
   coverageType: 'WARRANTY',
@@ -54,38 +58,12 @@ const CATEGORY_LIFESPAN_YEARS: Record<string, number> = {
 
 function money(value?: number | null) {
   if (value === null || value === undefined || Number.isNaN(value)) return '—';
-  return new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD' }).format(value);
-}
-
-function compactDate(value?: string) {
-  if (!value) return '—';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '—';
-  return date.toLocaleString();
+  return new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(value);
 }
 
 function toInputValue(value?: number) {
   if (value === undefined || Number.isNaN(value)) return '';
   return String(value);
-}
-
-function verdictTone(verdict?: ItemCoverageAnalysisDTO['overallVerdict']): 'good' | 'elevated' | 'danger' {
-  if (verdict === 'WORTH_IT') return 'good';
-  if (verdict === 'NOT_WORTH_IT') return 'danger';
-  return 'elevated';
-}
-
-function impactTone(impact?: TraceImpact): 'good' | 'info' | 'danger' {
-  if (impact === 'POSITIVE') return 'good';
-  if (impact === 'NEGATIVE') return 'danger';
-  return 'info';
-}
-
-function recommendationCopy(recommendation?: ItemCoverageAnalysisDTO['warranty']['recommendation']) {
-  if (recommendation === 'BUY_NOW') return 'Buy coverage now';
-  if (recommendation === 'REPLACE_SOON') return 'Plan replacement soon';
-  if (recommendation === 'WAIT') return 'Wait and monitor';
-  return '—';
 }
 
 function sanitizeReturnTo(raw: string | null): string | null {
@@ -162,6 +140,45 @@ function mergeOverridesWithPrefill(
   };
 }
 
+function verdictConfig(verdict?: ItemCoverageAnalysisDTO['overallVerdict'], recommendation?: string) {
+  if (recommendation === 'REPLACE_SOON') {
+    return {
+      headline: 'This item may need replacing soon',
+      bg: 'bg-amber-50',
+      border: 'border-amber-200',
+      iconColor: 'text-amber-500',
+    };
+  }
+  if (verdict === 'WORTH_IT') {
+    return {
+      headline: 'Coverage is worth getting',
+      bg: 'bg-teal-50',
+      border: 'border-teal-200',
+      iconColor: 'text-teal-600',
+    };
+  }
+  if (verdict === 'NOT_WORTH_IT') {
+    return {
+      headline: "Coverage isn't worth it right now",
+      bg: 'bg-amber-50',
+      border: 'border-amber-200',
+      iconColor: 'text-amber-500',
+    };
+  }
+  return {
+    headline: 'Worth considering for this item',
+    bg: 'bg-sky-50',
+    border: 'border-sky-200',
+    iconColor: 'text-sky-600',
+  };
+}
+
+function TraceIcon({ impact }: { impact: string }) {
+  if (impact === 'POSITIVE') return <Check className="h-4 w-4 text-teal-600 mt-0.5 shrink-0" />;
+  if (impact === 'NEGATIVE') return <X className="h-4 w-4 text-rose-500 mt-0.5 shrink-0" />;
+  return <Info className="h-4 w-4 text-gray-400 mt-0.5 shrink-0" />;
+}
+
 export default function ItemGetCoverageClient() {
   const queryClient = useQueryClient();
   const router = useRouter();
@@ -198,6 +215,8 @@ export default function ItemGetCoverageClient() {
   const [itemName, setItemName] = useState<string>('Inventory Item');
   const [roomName, setRoomName] = useState<string | null>(null);
   const [didAutoPrefill, setDidAutoPrefill] = useState(false);
+  const [showInputs, setShowInputs] = useState(false);
+
   const defaultWarrantyCategory = getWarrantyCategoryForInventoryCategory(analysis?.item?.category);
   const addWarrantyHref =
     propertyId && itemId
@@ -269,6 +288,7 @@ export default function ItemGetCoverageClient() {
       );
       setHasAnalysis(true);
       setAnalysis(next);
+      setShowInputs(false);
       if (guidanceContext.guidanceJourneyId) {
         await Promise.all([
           queryClient.invalidateQueries({
@@ -304,18 +324,146 @@ export default function ItemGetCoverageClient() {
     }
   };
 
-  const statusTone = useMemo<'good' | 'elevated' | 'danger' | 'info'>(() => {
-    if (!analysis) return 'info';
-    if (analysis.status === 'STALE') return 'elevated';
-    if (analysis.status === 'ERROR') return 'danger';
-    return 'good';
-  }, [analysis]);
+  const config = analysis
+    ? verdictConfig(analysis.overallVerdict, analysis.warranty.recommendation)
+    : null;
+
+  const hasFinancialData =
+    analysis &&
+    (analysis.warranty.expectedAnnualRepairRiskUsd != null ||
+      analysis.warranty.expectedCoverageCostUsd != null);
+
+  const netImpact = analysis?.warranty.expectedNetImpactUsd;
+  const netImpactLabel =
+    netImpact != null
+      ? netImpact < 0
+        ? `You'd save ${money(Math.abs(netImpact))}/yr with coverage`
+        : `Coverage costs ${money(netImpact)}/yr more than expected repairs`
+      : null;
+
+  const inputsForm = (
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <label className="text-xs text-gray-600">
+          Coverage type
+          <select
+            className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm bg-white"
+            value={overrides.coverageType ?? 'WARRANTY'}
+            onChange={(e) =>
+              setOverrides((prev) => ({
+                ...prev,
+                coverageType: e.target.value as ItemCoverageAnalysisOverrides['coverageType'],
+              }))
+            }
+          >
+            <option value="WARRANTY">Warranty</option>
+            <option value="SERVICE_PLAN">Service plan</option>
+          </select>
+        </label>
+
+        <label className="text-xs text-gray-600">
+          Annual cost (USD)
+          <input
+            type="number"
+            min={0}
+            className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            value={toInputValue(overrides.annualCostUsd)}
+            onChange={(e) =>
+              setOverrides((prev) => ({
+                ...prev,
+                annualCostUsd: e.target.value === '' ? undefined : Number(e.target.value),
+              }))
+            }
+          />
+        </label>
+
+        <label className="text-xs text-gray-600">
+          Service fee (USD)
+          <input
+            type="number"
+            min={0}
+            className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            value={toInputValue(overrides.serviceFeeUsd)}
+            onChange={(e) =>
+              setOverrides((prev) => ({
+                ...prev,
+                serviceFeeUsd: e.target.value === '' ? undefined : Number(e.target.value),
+              }))
+            }
+          />
+        </label>
+
+        <label className="text-xs text-gray-600">
+          Replacement cost (USD)
+          <input
+            type="number"
+            min={0}
+            className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            value={toInputValue(overrides.replacementCostUsd)}
+            onChange={(e) =>
+              setOverrides((prev) => ({
+                ...prev,
+                replacementCostUsd: e.target.value === '' ? undefined : Number(e.target.value),
+              }))
+            }
+          />
+        </label>
+
+        <label className="text-xs text-gray-600">
+          Expected remaining years
+          <input
+            type="number"
+            min={0}
+            className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            value={toInputValue(overrides.expectedRemainingYears)}
+            onChange={(e) =>
+              setOverrides((prev) => ({
+                ...prev,
+                expectedRemainingYears: e.target.value === '' ? undefined : Number(e.target.value),
+              }))
+            }
+          />
+        </label>
+
+        <label className="text-xs text-gray-600">
+          Risk tolerance
+          <select
+            className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm bg-white"
+            value={overrides.riskTolerance ?? 'MEDIUM'}
+            onChange={(e) =>
+              setOverrides((prev) => ({
+                ...prev,
+                riskTolerance: e.target.value as ItemCoverageAnalysisOverrides['riskTolerance'],
+              }))
+            }
+          >
+            <option value="LOW">Low — I prefer certainty</option>
+            <option value="MEDIUM">Medium — balanced</option>
+            <option value="HIGH">High — comfortable with risk</option>
+          </select>
+        </label>
+      </div>
+
+      <Button onClick={runAnalysis} disabled={running || loading} className="w-full sm:w-auto">
+        {running ? (
+          <>
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            Running…
+          </>
+        ) : hasAnalysis ? (
+          'Re-run with these inputs'
+        ) : (
+          'Run analysis'
+        )}
+      </Button>
+    </div>
+  );
 
   return (
     <MobileToolWorkspace
       className="space-y-6 lg:max-w-7xl lg:px-8 lg:pb-10"
       intro={
-        <div className="space-y-2">
+        <div className="space-y-3">
           <button
             type="button"
             onClick={() => router.push(backHref)}
@@ -324,270 +472,218 @@ export default function ItemGetCoverageClient() {
             <ArrowLeft className="h-4 w-4" />
             Back
           </button>
-          <MobilePageIntro
-            eyebrow="Inventory Decision"
-            title="Get Coverage"
-            subtitle="Evaluate whether coverage is worth buying now for this specific item."
-            action={<ShieldCheck className="h-5 w-5 text-teal-600" />}
-          />
+          <div>
+            <p className="text-[11px] font-medium uppercase tracking-wide text-gray-400">Coverage Analysis</p>
+            <h1 className="text-2xl font-semibold tracking-tight text-gray-900 mt-0.5">{itemName}</h1>
+            {roomName && <p className="text-sm text-gray-500 mt-0.5">{roomName}</p>}
+          </div>
         </div>
-      }
-      summary={
-        <ResultHeroCard
-          title={analysis?.item?.name || itemName}
-          value={analysis ? analysis.overallVerdict.replace('_', ' ') : 'No analysis'}
-          status={<StatusChip tone={analysis ? statusTone : 'info'}>{analysis ? analysis.status : 'Pending'}</StatusChip>}
-          summary={analysis?.summary || `${roomName || 'Unassigned room'} • Run scenario inputs to compute recommendation.`}
-          actions={
-            analysis ? (
-              analysis.overallVerdict === 'NOT_WORTH_IT' ? (
-                <ActionPriorityRow
-                  primaryAction={
-                    <Button
-                      variant="outline"
-                      onClick={handleSkipCoverage}
-                      disabled={waiving}
-                    >
-                      {waiving ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Saving…</> : 'Skip coverage for now'}
-                    </Button>
-                  }
-                />
-              ) : analysis.overallVerdict === 'SITUATIONAL' ? (
-                <ActionPriorityRow
-                  primaryAction={
-                    <Button asChild>
-                      <Link href={addWarrantyHref}>Add warranty coverage</Link>
-                    </Button>
-                  }
-                  secondaryActions={
-                    <Button
-                      variant="ghost"
-                      onClick={handleSkipCoverage}
-                      disabled={waiving}
-                    >
-                      {waiving ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Saving…</> : 'Skip for now'}
-                    </Button>
-                  }
-                />
-              ) : analysis.warranty.recommendation === 'BUY_NOW' ? (
-                <ActionPriorityRow
-                  primaryAction={
-                    <Button asChild>
-                      <Link href={addWarrantyHref}>Add warranty coverage</Link>
-                    </Button>
-                  }
-                />
-              ) : null
-            ) : undefined
-          }
-        />
       }
       footer={<BottomSafeAreaReserve size="chatAware" />}
     >
-      <div className="rounded-2xl border border-sky-100 bg-sky-50 p-4 text-sm text-sky-900">
-        Educational estimate only. This tool does not recommend carriers or guarantee outcomes.
-      </div>
-
-      {error ? (
+      {error && (
         <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 flex items-start gap-2">
-          <AlertCircle className="h-4 w-4 mt-0.5" />
+          <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
           <span>{error}</span>
         </div>
-      ) : null}
+      )}
 
-      <ScenarioInputCard
-        title="Scenario Inputs"
-        subtitle="Optional assumptions used to run your what-if analysis."
-        actions={
-          <ActionPriorityRow
-            primaryAction={
-              <Button onClick={runAnalysis} disabled={running || loading}>
-                {running ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Running…
-                  </>
-                ) : (
-                  'Run analysis'
-                )}
-              </Button>
-            }
-            secondaryActions={<Button variant="ghost" onClick={fetchStatus} disabled={loading}>Refresh</Button>}
-          />
-        }
-      >
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          <label className="text-xs text-gray-600">
-            Coverage type
-            <select
-              className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm bg-white"
-              value={overrides.coverageType ?? 'WARRANTY'}
-              onChange={(e) =>
-                setOverrides((prev) => ({
-                  ...prev,
-                  coverageType: e.target.value as ItemCoverageAnalysisOverrides['coverageType'],
-                }))
-              }
-            >
-              <option value="WARRANTY">Warranty</option>
-              <option value="SERVICE_PLAN">Service plan</option>
-            </select>
-          </label>
-
-          <label className="text-xs text-gray-600">
-            Annual cost (USD)
-            <input
-              type="number"
-              min={0}
-              className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-              value={toInputValue(overrides.annualCostUsd)}
-              onChange={(e) =>
-                setOverrides((prev) => ({
-                  ...prev,
-                  annualCostUsd: e.target.value === '' ? undefined : Number(e.target.value),
-                }))
-              }
-            />
-          </label>
-
-          <label className="text-xs text-gray-600">
-            Service fee (USD)
-            <input
-              type="number"
-              min={0}
-              className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-              value={toInputValue(overrides.serviceFeeUsd)}
-              onChange={(e) =>
-                setOverrides((prev) => ({
-                  ...prev,
-                  serviceFeeUsd: e.target.value === '' ? undefined : Number(e.target.value),
-                }))
-              }
-            />
-          </label>
-
-          <label className="text-xs text-gray-600">
-            Cash buffer (USD)
-            <input
-              type="number"
-              min={0}
-              className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-              value={toInputValue(overrides.cashBufferUsd)}
-              onChange={(e) =>
-                setOverrides((prev) => ({
-                  ...prev,
-                  cashBufferUsd: e.target.value === '' ? undefined : Number(e.target.value),
-                }))
-              }
-            />
-          </label>
-
-          <label className="text-xs text-gray-600">
-            Replacement cost (USD)
-            <input
-              type="number"
-              min={0}
-              className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-              value={toInputValue(overrides.replacementCostUsd)}
-              onChange={(e) =>
-                setOverrides((prev) => ({
-                  ...prev,
-                  replacementCostUsd: e.target.value === '' ? undefined : Number(e.target.value),
-                }))
-              }
-            />
-          </label>
-
-          <label className="text-xs text-gray-600">
-            Expected remaining years
-            <input
-              type="number"
-              min={0}
-              className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-              value={toInputValue(overrides.expectedRemainingYears)}
-              onChange={(e) =>
-                setOverrides((prev) => ({
-                  ...prev,
-                  expectedRemainingYears: e.target.value === '' ? undefined : Number(e.target.value),
-                }))
-              }
-            />
-          </label>
-
-          <label className="text-xs text-gray-600">
-            Risk tolerance
-            <select
-              className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm bg-white"
-              value={overrides.riskTolerance ?? 'MEDIUM'}
-              onChange={(e) =>
-                setOverrides((prev) => ({
-                  ...prev,
-                  riskTolerance: e.target.value as ItemCoverageAnalysisOverrides['riskTolerance'],
-                }))
-              }
-            >
-              <option value="LOW">LOW</option>
-              <option value="MEDIUM">MEDIUM</option>
-              <option value="HIGH">HIGH</option>
-            </select>
-          </label>
-        </div>
-      </ScenarioInputCard>
-
-      {loading ? (
-        <ScenarioInputCard title="Loading analysis" subtitle="Fetching item coverage analysis.">
-          <div className="flex items-center gap-3 text-sm text-gray-600">
-            <Loader2 className="h-5 w-5 animate-spin text-teal-600" />
-            <span>Loading item analysis…</span>
+      {loading && (
+        <MobileCard>
+          <div className="flex items-center gap-3 text-sm text-gray-500 py-2">
+            <Loader2 className="h-5 w-5 animate-spin text-teal-600 shrink-0" />
+            <span>Loading coverage analysis…</span>
           </div>
-        </ScenarioInputCard>
-      ) : !hasAnalysis || !analysis ? (
-        <ScenarioInputCard title="No saved analysis yet" subtitle="Run analysis to evaluate this item.">
-          <p className="text-sm text-muted-foreground">No prior run is stored for this item.</p>
-        </ScenarioInputCard>
-      ) : (
+        </MobileCard>
+      )}
+
+      {!loading && !hasAnalysis && (
         <>
-          <ReadOnlySummaryBlock
-            title="Result Summary"
-            items={[
-              { label: 'Recommendation', value: recommendationCopy(analysis.warranty.recommendation), emphasize: true },
-              { label: 'Expected annual repair risk', value: money(analysis.warranty.expectedAnnualRepairRiskUsd) },
-              { label: 'Expected coverage cost', value: money(analysis.warranty.expectedCoverageCostUsd) },
-              { label: 'Expected net impact', value: money(analysis.warranty.expectedNetImpactUsd) },
-            ]}
-            columns={2}
-          />
-
-          <ScenarioInputCard title="Decision Trace" subtitle="How this recommendation was derived.">
-            <div className="space-y-2">
-              {analysis.decisionTrace.map((trace, index) => (
-                <CompactEntityRow
-                  key={`${trace.label}-${index}`}
-                  title={trace.label}
-                  subtitle={trace.detail}
-                  status={<StatusChip tone={impactTone(trace.impact)}>{trace.impact}</StatusChip>}
-                />
-              ))}
-            </div>
-          </ScenarioInputCard>
-
-          {analysis.nextSteps && analysis.nextSteps.length > 0 ? (
-            <ScenarioInputCard title="Next Steps" subtitle="Suggested follow-up actions.">
-              <div className="space-y-2">
-                {analysis.nextSteps.map((step, index) => (
-                  <CompactEntityRow
-                    key={`${step.title}-${index}`}
-                    title={step.title}
-                    subtitle={step.detail}
-                    meta={step.priority || undefined}
-                  />
-                ))}
+          <MobileCard className="space-y-3">
+            <div className="flex items-start gap-3">
+              <ShieldCheck className="h-5 w-5 text-teal-600 mt-0.5 shrink-0" />
+              <div>
+                <p className="font-semibold text-gray-900">No analysis yet for {itemName}</p>
+                <p className="text-sm text-gray-500 mt-1">
+                  Run the analysis to find out whether coverage is worth it. We'll look at the item's
+                  age, replacement value, and typical repair costs to give you a recommendation.
+                </p>
               </div>
-            </ScenarioInputCard>
-          ) : null}
+            </div>
+            <Button onClick={runAnalysis} disabled={running} className="w-full">
+              {running ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Running analysis…
+                </>
+              ) : (
+                'Run analysis'
+              )}
+            </Button>
+          </MobileCard>
 
+          <MobileCard className="space-y-3">
+            <button
+              type="button"
+              onClick={() => setShowInputs((v) => !v)}
+              className="flex w-full items-center justify-between text-sm font-medium text-gray-700"
+            >
+              <span>Customize inputs</span>
+              {showInputs ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+            </button>
+            {showInputs && (
+              <div className="pt-1 border-t border-gray-100">
+                <p className="text-xs text-gray-500 mb-3">
+                  Adjust these values to match your specific situation. Defaults are estimated from
+                  your item details.
+                </p>
+                {inputsForm}
+              </div>
+            )}
+          </MobileCard>
         </>
       )}
+
+      {!loading && hasAnalysis && analysis && config && (
+        <>
+          {/* Verdict */}
+          <div className={cn('rounded-2xl border p-4 space-y-3', config.bg, config.border)}>
+            <div className="flex items-start gap-3">
+              <ShieldCheck className={cn('h-5 w-5 mt-0.5 shrink-0', config.iconColor)} />
+              <div>
+                <p className="font-semibold text-gray-900 text-base">{config.headline}</p>
+                {analysis.summary && (
+                  <p className="text-sm text-gray-600 mt-1">{analysis.summary}</p>
+                )}
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-2 pt-1">
+              {analysis.overallVerdict === 'NOT_WORTH_IT' ? (
+                <Button
+                  variant="outline"
+                  onClick={handleSkipCoverage}
+                  disabled={waiving}
+                  className="bg-white"
+                >
+                  {waiving ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Saving…</> : 'Mark as skipped'}
+                </Button>
+              ) : (
+                <>
+                  <Button asChild>
+                    <Link href={addWarrantyHref}>Add warranty coverage</Link>
+                  </Button>
+                  {analysis.overallVerdict === 'SITUATIONAL' && (
+                    <Button variant="ghost" onClick={handleSkipCoverage} disabled={waiving}>
+                      {waiving ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Saving…</> : 'Skip for now'}
+                    </Button>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Why we recommend this */}
+          {analysis.decisionTrace.length > 0 && (
+            <MobileCard className="space-y-3">
+              <p className="text-sm font-semibold text-gray-900">Why we recommend this</p>
+              <div className="space-y-3">
+                {analysis.decisionTrace.slice(0, 5).map((trace, index) => (
+                  <div key={`${trace.label}-${index}`} className="flex gap-3 items-start">
+                    <TraceIcon impact={trace.impact} />
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-gray-800">{trace.label}</p>
+                      {trace.detail && (
+                        <p className="text-xs text-gray-500 mt-0.5">{trace.detail}</p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </MobileCard>
+          )}
+
+          {/* Financial comparison */}
+          {hasFinancialData && (
+            <MobileCard className="space-y-3">
+              <p className="text-sm font-semibold text-gray-900">The numbers</p>
+              <div className="grid grid-cols-2 gap-2">
+                {analysis.warranty.expectedAnnualRepairRiskUsd != null && (
+                  <div className="rounded-xl bg-gray-50 p-3">
+                    <p className="text-xs text-gray-500">Estimated repair risk</p>
+                    <p className="text-base font-semibold text-gray-900 mt-0.5">
+                      {money(analysis.warranty.expectedAnnualRepairRiskUsd)}/yr
+                    </p>
+                  </div>
+                )}
+                {analysis.warranty.expectedCoverageCostUsd != null && (
+                  <div className="rounded-xl bg-gray-50 p-3">
+                    <p className="text-xs text-gray-500">Coverage costs</p>
+                    <p className="text-base font-semibold text-gray-900 mt-0.5">
+                      {money(analysis.warranty.expectedCoverageCostUsd)}/yr
+                    </p>
+                  </div>
+                )}
+              </div>
+              {netImpactLabel && (
+                <p className="text-sm text-gray-700">{netImpactLabel}</p>
+              )}
+              {analysis.warranty.breakEvenMonths != null && (
+                <p className="text-xs text-gray-400">
+                  Break-even: {analysis.warranty.breakEvenMonths} months
+                </p>
+              )}
+            </MobileCard>
+          )}
+
+          {/* Next steps */}
+          {analysis.nextSteps && analysis.nextSteps.length > 0 && (
+            <MobileCard className="space-y-3">
+              <p className="text-sm font-semibold text-gray-900">What to do next</p>
+              <div className="space-y-3">
+                {analysis.nextSteps.map((step, index) => (
+                  <div key={`${step.title}-${index}`} className="flex gap-3 items-start">
+                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-teal-100 text-xs font-semibold text-teal-700 mt-0.5">
+                      {index + 1}
+                    </span>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-gray-800">{step.title}</p>
+                      {step.detail && (
+                        <p className="text-xs text-gray-500 mt-0.5">{step.detail}</p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </MobileCard>
+          )}
+
+          {/* Adjust assumptions */}
+          <MobileCard className="space-y-3">
+            <button
+              type="button"
+              onClick={() => setShowInputs((v) => !v)}
+              className="flex w-full items-center justify-between text-sm font-medium text-gray-700"
+            >
+              <span>Adjust assumptions</span>
+              {showInputs ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+            </button>
+            {showInputs && (
+              <div className="pt-1 border-t border-gray-100 space-y-3">
+                <p className="text-xs text-gray-500">
+                  Change these values to model a different scenario, then re-run to see how the
+                  recommendation changes.
+                </p>
+                {inputsForm}
+              </div>
+            )}
+          </MobileCard>
+        </>
+      )}
+
+      <p className="text-xs text-gray-400 px-1">
+        Educational estimate only. This tool does not recommend carriers or guarantee outcomes.
+      </p>
     </MobileToolWorkspace>
   );
 }
