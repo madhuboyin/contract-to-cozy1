@@ -186,10 +186,21 @@ function formatSignedPoints(value: number): string {
   return value > 0 ? `+${abs}` : `-${abs}`;
 }
 
-function getInsightStatusExplanation(statusValue: string | undefined): string {
+function getInsightStatusExplanation(factorName: string | undefined, statusValue: string | undefined): string {
   const status = String(statusValue || "");
   if (REQUIRED_ACTION_STATUSES.includes(status)) {
-    return "This factor needs action. Resolving the recommended maintenance can improve this score contribution.";
+    const factor = getDisplayFactorName(factorName);
+    const contextMap: Record<string, string> = {
+      'Water Heater Age': 'Aging water heaters are a leading cause of home water damage — early inspection limits repair costs.',
+      'HVAC Age': 'An HVAC system past its service life runs less efficiently and is more prone to mid-season failure.',
+      'Property Age (Year Built)': 'Older homes tend to accumulate deferred maintenance — a professional inspection helps prioritize what to address.',
+      'Roof Age': 'Roof issues can escalate into interior water damage quickly — early assessment reduces long-term cost.',
+      'Safety Factor': 'Functional safety systems are the first line of defense against fire and carbon monoxide risk.',
+      'Documents Factor': 'Complete records make it easier to sell, insure, and maintain your home.',
+      'Major Systems Health': 'Aging major systems increase the risk of unexpected failures — a service review helps catch issues early.',
+      'Occupancy & Wear': 'Higher usage accelerates wear on fixtures and systems — more frequent maintenance checks are recommended.',
+    };
+    return contextMap[factor] ?? 'Resolving this factor can improve your score and reduce long-term maintenance risk.';
   }
   if (IN_PROGRESS_STATUSES.includes(status)) {
     return "Work is already underway on this factor. Its contribution should improve once the task is completed.";
@@ -201,6 +212,23 @@ function getInsightStatusExplanation(statusValue: string | undefined): string {
     return "This factor is currently a health strength and is helping hold up your overall score.";
   }
   return "This factor is under review. Add more property records to unlock a more precise score explanation.";
+}
+
+function getFactorEvidenceHint(factorName: string | undefined): string {
+  const factor = getDisplayFactorName(factorName);
+  const hints: Record<string, string> = {
+    'Water Heater Age': 'Add your water heater\'s install date or a recent service record to unlock a more detailed score breakdown.',
+    'HVAC Age': 'Add your HVAC install date or last service record to improve this factor\'s evidence.',
+    'Property Age (Year Built)': 'Confirm your home\'s year built in property details to improve score accuracy.',
+    'Roof Age': 'Add your roof\'s install date or a recent inspection report to improve this factor.',
+    'Safety Factor': 'Log your smoke detector and CO detector checks, or upload an inspection record.',
+    'Documents Factor': 'Upload inspection reports, warranties, or service records in the Vault.',
+    'Occupancy & Wear': 'Update your household occupancy count in your property profile.',
+    'Major Systems Health': 'Add service records for your HVAC, water heater, or plumbing to improve this factor.',
+    'Structure Factor': 'Upload a structural inspection report or recent contractor assessment to unlock evidence.',
+    'Roof Condition': 'Add a recent roof inspection report or contractor notes to improve this factor.',
+  };
+  return hints[factor] ?? 'Add relevant service records or property details to improve score transparency.';
 }
 
 function getInsightIconClasses(statusValue: string | undefined): { container: string; icon: string } {
@@ -782,7 +810,7 @@ export default function PropertyHealthDetailPage() {
               <span> Resolving this could unlock additional points.</span>
             )}
           </p>
-          <p>{getInsightStatusExplanation(insight.status)}</p>
+          <p>{getInsightStatusExplanation(insight.factor, insight.status)}</p>
           {getFactorActionHint(insight.factor, insight.status) && (
             <p className="rounded-lg border border-slate-100 bg-slate-50 px-2.5 py-1.5 text-slate-600">
               {getFactorActionHint(insight.factor, insight.status)}
@@ -798,7 +826,7 @@ export default function PropertyHealthDetailPage() {
               </ul>
             </div>
           ) : (
-            <p>No additional scoring evidence is available yet. Add profile details and service records to improve transparency.</p>
+            <p>{getFactorEvidenceHint(insight.factor)}</p>
           )}
           {isApplianceInsight(insight.factor) && getInsightImpact(insight.status) !== "positive" && (
             <Link
