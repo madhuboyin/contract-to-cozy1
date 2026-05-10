@@ -217,18 +217,41 @@ function getInsightStatusExplanation(factorName: string | undefined, statusValue
 function getFactorEvidenceHint(factorName: string | undefined): string {
   const factor = getDisplayFactorName(factorName);
   const hints: Record<string, string> = {
-    'Water Heater Age': 'Add your water heater\'s install date or a recent service record to unlock a more detailed score breakdown.',
-    'HVAC Age': 'Add your HVAC install date or last service record to improve this factor\'s evidence.',
+    'Water Heater Age': 'No recent service records found for this factor. Adding an inspection or service record improves score transparency.',
+    'HVAC Age': 'No recent service records found for this factor. Adding an inspection or service record improves score transparency.',
     'Property Age (Year Built)': 'Confirm your home\'s year built in property details to improve score accuracy.',
-    'Roof Age': 'Add your roof\'s install date or a recent inspection report to improve this factor.',
-    'Safety Factor': 'Log your smoke detector and CO detector checks, or upload an inspection record.',
-    'Documents Factor': 'Upload inspection reports, warranties, or service records in the Vault.',
+    'Roof Age': 'No recent inspection report found for this factor. Adding one improves score transparency.',
+    'Safety Factor': 'Log your safety device checks or upload an inspection record to provide scoring evidence.',
+    'Documents Factor': 'Upload inspection reports, warranties, or service records in the Vault to unlock full factor scoring.',
     'Occupancy & Wear': 'Update your household occupancy count in your property profile.',
     'Major Systems Health': 'Add service records for your HVAC, water heater, or plumbing to improve this factor.',
     'Structure Factor': 'Upload a structural inspection report or recent contractor assessment to unlock evidence.',
     'Roof Condition': 'Add a recent roof inspection report or contractor notes to improve this factor.',
   };
   return hints[factor] ?? 'Add relevant service records or property details to improve score transparency.';
+}
+
+function getFactorCTALink(
+  factorName: string | undefined,
+  propertyId: string
+): { label: string; href: string } | null {
+  const factor = getDisplayFactorName(factorName);
+  const docsHref = `/dashboard/documents?propertyId=${propertyId}`;
+  const editHref = `/dashboard/properties/${propertyId}/edit`;
+
+  const map: Record<string, { label: string; href: string }> = {
+    'Water Heater Age': { label: 'Add service record', href: docsHref },
+    'HVAC Age': { label: 'Add service record', href: docsHref },
+    'Roof Age': { label: 'Add inspection report', href: docsHref },
+    'Roof Condition': { label: 'Add inspection report', href: docsHref },
+    'Safety Factor': { label: 'Log safety checks', href: docsHref },
+    'Documents Factor': { label: 'Upload to Vault', href: docsHref },
+    'Structure Factor': { label: 'Add inspection report', href: docsHref },
+    'Major Systems Health': { label: 'Add service record', href: docsHref },
+    'Property Age (Year Built)': { label: 'Update property details', href: editHref },
+    'Occupancy & Wear': { label: 'Update property profile', href: editHref },
+  };
+  return map[factor] ?? null;
 }
 
 function getInsightIconClasses(statusValue: string | undefined): { container: string; icon: string } {
@@ -771,6 +794,7 @@ export default function PropertyHealthDetailPage() {
     const scoreValue = asNumber(insight.score) ?? 0;
     const detailLines = insight.details?.length ? insight.details.slice(0, 6) : [];
     const displayFactorName = getDisplayFactorName(insight.factor);
+    const factorCTA = getFactorCTALink(insight.factor, propertyId);
     const impact = getInsightImpact(insight.status);
     const statusBadge = useStatusChip || impact === "neutral" ? (
       <StatusChip tone={getInsightTone(insight.status)}>{getInsightChipLabel(insight)}</StatusChip>
@@ -826,7 +850,18 @@ export default function PropertyHealthDetailPage() {
               </ul>
             </div>
           ) : (
-            <p>{getFactorEvidenceHint(insight.factor)}</p>
+            <div className="space-y-1">
+              <p>{getFactorEvidenceHint(insight.factor)}</p>
+              {factorCTA && (
+                <Link
+                  href={factorCTA.href}
+                  className="inline-flex items-center gap-1 font-medium text-primary hover:underline"
+                >
+                  {factorCTA.label}
+                  <ArrowRight className="h-3 w-3" />
+                </Link>
+              )}
+            </div>
           )}
           {isApplianceInsight(insight.factor) && getInsightImpact(insight.status) !== "positive" && (
             <Link
