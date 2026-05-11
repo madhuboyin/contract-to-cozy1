@@ -21,12 +21,10 @@ export async function POST(req: NextRequest) {
   }
 
   const res = NextResponse.json({ success: true });
-  // Not httpOnly: PreviewModeWrapper (client component) reads this via
-  // document.cookie to decide whether to render the real site.
-  // The security value here is server-side key validation, not cookie flags.
   res.cookies.set('preview_mode', 'true', {
+    httpOnly: true,
     path: '/',
-    maxAge: 60 * 60 * 24 * 365, // 1 year
+    maxAge: 60 * 60 * 24 * 30, // 30 days
     sameSite: 'lax',
     secure: process.env.NODE_ENV === 'production',
   });

@@ -41,10 +41,32 @@ export default function RevealOnboardingPage() {
   ];
 
   useEffect(() => {
-    const savedData = sessionStorage.getItem('onboarding_lookup_data');
-    if (savedData) {
+    let interval: ReturnType<typeof setInterval> | null = null;
+
+    (async () => {
       try {
-        setData(JSON.parse(savedData));
+        const res = await fetch('/api/onboarding-lookup-session', {
+          method: 'GET',
+          cache: 'no-store',
+        });
+        if (!res.ok) {
+          router.push('/onboarding/address');
+          return;
+        }
+
+        const payload = await res.json();
+        setData(payload.data);
+
+        let step = 0;
+        interval = setInterval(() => {
+          if (step < verificationSteps.length - 1) {
+            step++;
+            setVerificationStep(step);
+          } else {
+            if (interval) clearInterval(interval);
+            setTimeout(() => setShowContent(true), 800);
+          }
+        }, 600);
       } catch {
         setData({
           address: 'Your home',
@@ -55,24 +77,22 @@ export default function RevealOnboardingPage() {
           propertySize: null,
           estimatedValue: null,
         });
+        let step = 0;
+        interval = setInterval(() => {
+          if (step < verificationSteps.length - 1) {
+            step++;
+            setVerificationStep(step);
+          } else {
+            if (interval) clearInterval(interval);
+            setTimeout(() => setShowContent(true), 800);
+          }
+        }, 600);
       }
-      
-      // Verification sequence animation
-      let step = 0;
-      const interval = setInterval(() => {
-        if (step < verificationSteps.length - 1) {
-          step++;
-          setVerificationStep(step);
-        } else {
-          clearInterval(interval);
-          setTimeout(() => setShowContent(true), 800);
-        }
-      }, 600);
+    })();
 
-      return () => clearInterval(interval);
-    } else {
-      router.push('/onboarding/address');
-    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
   }, [router]);
 
   if (!data) return null;

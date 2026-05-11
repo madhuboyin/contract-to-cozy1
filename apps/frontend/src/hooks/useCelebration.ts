@@ -10,21 +10,14 @@ interface CelebrationState {
 }
 
 const SESSION_PREFIX = 'c2c_milestone_';
+const shownMilestones = new Set<string>();
 
 function hasBeenShown(key: string): boolean {
-  try {
-    return sessionStorage.getItem(`${SESSION_PREFIX}${key}`) === '1';
-  } catch {
-    return false;
-  }
+  return shownMilestones.has(`${SESSION_PREFIX}${key}`);
 }
 
 function markShown(key: string): void {
-  try {
-    sessionStorage.setItem(`${SESSION_PREFIX}${key}`, '1');
-  } catch {
-    // sessionStorage unavailable (SSR or private browsing)
-  }
+  shownMilestones.add(`${SESSION_PREFIX}${key}`);
 }
 
 /**

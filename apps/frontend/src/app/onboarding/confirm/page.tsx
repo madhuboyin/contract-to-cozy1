@@ -29,12 +29,22 @@ export default function ConfirmOnboardingPage() {
   const [success, setSuccess] = useState(false);
 
   useEffect(() => {
-    const savedData = sessionStorage.getItem('onboarding_lookup_data');
-    if (savedData) {
-      setData(JSON.parse(savedData));
-    } else {
-      router.push('/onboarding/address');
-    }
+    (async () => {
+      try {
+        const res = await fetch('/api/onboarding-lookup-session', {
+          method: 'GET',
+          cache: 'no-store',
+        });
+        if (!res.ok) {
+          router.push('/onboarding/address');
+          return;
+        }
+        const payload = await res.json();
+        setData(payload.data);
+      } catch {
+        router.push('/onboarding/address');
+      }
+    })();
   }, [router]);
 
   const handleConfirm = async () => {
@@ -59,7 +69,7 @@ export default function ConfirmOnboardingPage() {
 
       if (response.success) {
         setSuccess(true);
-        sessionStorage.removeItem('onboarding_lookup_data');
+        await fetch('/api/onboarding-lookup-session', { method: 'DELETE' });
         toast({ title: "Home Claimed!", description: "Welcome to your command center." });
         
         track('property_claimed', {

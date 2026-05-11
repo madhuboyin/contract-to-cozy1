@@ -40,8 +40,14 @@ export default function AddressOnboardingPage() {
       const response = await api.lookupProperty(address, zipCode);
 
       if (response.success && response.data) {
-        // Store data temporarily in session storage for the reveal page
-        sessionStorage.setItem('onboarding_lookup_data', JSON.stringify(response.data));
+        const sessionRes = await fetch('/api/onboarding-lookup-session', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ data: response.data }),
+        });
+        if (!sessionRes.ok) {
+          throw new Error('Unable to prepare onboarding session');
+        }
         router.push('/onboarding/reveal');
       } else {
         toast({
@@ -168,4 +174,3 @@ export default function AddressOnboardingPage() {
     </ErrorBoundary>
   );
 }
-
