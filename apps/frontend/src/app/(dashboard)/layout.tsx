@@ -52,6 +52,7 @@ import {
 
 const PROPERTY_ID_IN_PATH = /\/dashboard\/properties\/([^/]+)/;
 const PROPERTY_SETUP_SKIPPED_KEY = 'propertySetupSkipped';
+const POST_LOGIN_TRANSITION_KEY = 'ctc.postLoginTransition';
 
 function getPropertyIdFromPathname(pathname: string): string | undefined {
   const match = pathname.match(PROPERTY_ID_IN_PATH);
@@ -541,18 +542,22 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
     });
   };
 
-  // Keep transition visible for a minimum duration regardless of how fast auth resolves.
-  const mountTimeRef = React.useRef(Date.now());
-  const [transitionVisible, setTransitionVisible] = useState(loading);
+  const [transitionVisible, setTransitionVisible] = useState(false);
+  const [transitionBootstrapped, setTransitionBootstrapped] = useState(false);
 
   useEffect(() => {
-    if (!loading && transitionVisible) {
-      const elapsed = Date.now() - mountTimeRef.current;
-      const remaining = Math.max(0, MIN_TRANSITION_MS - elapsed);
-      const t = setTimeout(() => setTransitionVisible(false), remaining);
-      return () => clearTimeout(t);
-    }
-  }, [loading, transitionVisible]);
+    if (typeof window === 'undefined') return;
+
+    const shouldShowTransition = window.sessionStorage.getItem(POST_LOGIN_TRANSITION_KEY) === '1';
+    window.sessionStorage.removeItem(POST_LOGIN_TRANSITION_KEY);
+    setTransitionBootstrapped(true);
+
+    if (!shouldShowTransition) return;
+
+    setTransitionVisible(true);
+    const t = window.setTimeout(() => setTransitionVisible(false), MIN_TRANSITION_MS);
+    return () => window.clearTimeout(t);
+  }, []);
 
   useEffect(() => {
     if (
@@ -618,6 +623,10 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
     setRefreshKey((prev) => prev + 1);
     await new Promise((resolve) => setTimeout(resolve, 1000));
   };
+
+  if (!transitionBootstrapped || (loading && !user && !transitionVisible)) {
+    return null;
+  }
 
   if (user?.role === 'PROVIDER') return null;
 

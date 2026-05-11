@@ -10,6 +10,8 @@ import PostLoginTransition from '@/components/system/PostLoginTransition';
 import { APP_CONFIG } from '@/lib/config/appConfig';
 import { UserRole } from '@/types';
 
+const POST_LOGIN_TRANSITION_KEY = 'ctc.postLoginTransition';
+
 export default function LoginPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -88,6 +90,9 @@ export default function LoginPage() {
         }
 
         setIsTransitioning(true);
+        if (typeof window !== 'undefined') {
+          window.sessionStorage.setItem(POST_LOGIN_TRANSITION_KEY, '1');
+        }
 
         redirectTimerRef.current = setTimeout(() => {
           router.replace(destination);
@@ -128,6 +133,9 @@ export default function LoginPage() {
       }
 
       setIsTransitioning(true);
+      if (typeof window !== 'undefined') {
+        window.sessionStorage.setItem(POST_LOGIN_TRANSITION_KEY, '1');
+      }
 
       redirectTimerRef.current = setTimeout(() => {
         router.replace(destination);
