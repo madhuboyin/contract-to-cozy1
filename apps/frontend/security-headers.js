@@ -1,4 +1,5 @@
 const REPORTING_ENDPOINT_NAME = 'csp-endpoint';
+const TRUSTED_TYPES_POLICIES = ['dompurify', 'default', 'nextjs', 'nextjs#bundler'];
 
 function normalizeUrl(url) {
   return typeof url === 'string' && /^https?:\/\//.test(url) ? url : '';
@@ -21,6 +22,8 @@ function buildCsp({ nonce, apiUrl, faroUrl }) {
     `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'`,
     "style-src 'self'",
     `style-src-elem 'self' 'nonce-${nonce}'`,
+    // Temporary compatibility: the app still uses React inline style attributes
+    // extensively for charts, progress bars, and responsive geometry.
     "style-src-attr 'unsafe-inline'",
     "font-src 'self'",
     "img-src 'self' blob: data: https://contracttocozy.com https://*.contracttocozy.com",
@@ -33,10 +36,16 @@ function buildCsp({ nonce, apiUrl, faroUrl }) {
     "media-src 'self'",
     "worker-src 'self' blob:",
     "manifest-src 'self'",
+    "require-trusted-types-for 'script'",
+    `trusted-types ${TRUSTED_TYPES_POLICIES.join(' ')}`,
     'upgrade-insecure-requests',
     `report-uri ${reportUri}`,
     `report-to ${REPORTING_ENDPOINT_NAME}`,
   ].join('; ');
+}
+
+function shouldUseReportOnly() {
+  return process.env.NEXT_PUBLIC_CSP_REPORT_ONLY === 'true';
 }
 
 const STATIC_SECURITY_HEADERS = [
@@ -80,4 +89,5 @@ module.exports = {
   buildCsp,
   buildImageRemotePatterns,
   buildReportingEndpoints,
+  shouldUseReportOnly,
 };

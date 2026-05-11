@@ -2421,6 +2421,12 @@ export interface VaultData {
   serviceTimeline: VaultServiceEntry[];
 }
 
+export interface VaultShareLinkResponse {
+  shareUrl: string;
+  accessToken: string;
+  expiresAt: string;
+}
+
 // =============================================================================
 // HOME EVENT RADAR
 // =============================================================================

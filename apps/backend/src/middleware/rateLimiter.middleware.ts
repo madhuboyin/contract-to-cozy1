@@ -144,6 +144,12 @@ function hashTokenForRateLimit(token: string): string {
   return createHash('sha256').update(token).digest('hex').slice(0, 24);
 }
 
+function propertyScopedIpKey(req: Request, suffix: string): string {
+  const propertyId = typeof req.params?.propertyId === 'string' ? req.params.propertyId : 'unknown';
+  const ip = ipKeyGenerator(req.ip ?? req.socket?.remoteAddress ?? 'unknown');
+  return `${suffix}:property:${propertyId}:ip:${ip}`;
+}
+
 function authRateLimitKey(req: Request): string {
   const path = getPathAtApiBoundary(req);
   const ipKey = `ip:${ipKeyGenerator(req.ip ?? req.socket?.remoteAddress ?? 'unknown')}`;
@@ -234,6 +240,40 @@ export const strictRateLimiter = rateLimit({
     success: false,
     error: {
       message: 'Too many attempts, please try again later',
+      code: 'RATE_LIMIT_EXCEEDED',
+    },
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+export const vaultPasswordRateLimiter = rateLimit({
+  windowMs: strictWindowMs,
+  max: 3,
+  keyGenerator: (req) => propertyScopedIpKey(req, 'vault-password'),
+  skip: (req) => typeof req.body?.accessToken === 'string' && req.body.accessToken.trim().length > 0,
+  store: new RedisRateLimitStore(strictWindowMs),
+  message: {
+    success: false,
+    error: {
+      message: 'Too many vault password attempts, please try again later',
+      code: 'RATE_LIMIT_EXCEEDED',
+    },
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+export const vaultShareAccessRateLimiter = rateLimit({
+  windowMs: strictWindowMs,
+  max: 30,
+  keyGenerator: (req) => propertyScopedIpKey(req, 'vault-share'),
+  skip: (req) => !(typeof req.body?.accessToken === 'string' && req.body.accessToken.trim().length > 0),
+  store: new RedisRateLimitStore(strictWindowMs),
+  message: {
+    success: false,
+    error: {
+      message: 'Too many vault share-link requests, please try again later',
       code: 'RATE_LIMIT_EXCEEDED',
     },
   },

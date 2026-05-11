@@ -36,6 +36,12 @@ interface PurposeTokenPayload extends jwt.JwtPayload {
   role?: string;
 }
 
+interface VaultShareTokenPayload extends jwt.JwtPayload {
+  propertyId: string;
+  passwordVersion: string;
+  purpose: 'vault_share';
+}
+
 const parseBaseAuthPayload = (decoded: jwt.JwtPayload): JWTPayload => {
   const { userId, email, role, tokenVersion, mfaEnabled, mfaVerified } = decoded as any;
   if (typeof userId !== 'string' || typeof email !== 'string' || typeof role !== 'string') {
@@ -293,4 +299,38 @@ export const generateMfaVerifiedTokenPair = (
   refreshSessionId: string
 ): TokenPair => {
   return generateTokenPair({ ...payload, mfaVerified: true }, refreshSessionId);
+};
+
+export const generateVaultShareToken = (
+  propertyId: string,
+  passwordVersion: string,
+  expiresIn: string | number = jwtConfig.vaultShareToken.expiresIn
+): string => {
+  return jwt.sign(
+    { propertyId, passwordVersion, purpose: 'vault_share' },
+    jwtConfig.vaultShareToken.secret,
+    { expiresIn } as jwt.SignOptions
+  );
+};
+
+export const verifyVaultShareToken = (
+  token: string
+): { propertyId: string; passwordVersion: string } => {
+  try {
+    const decoded = jwt.verify(token, jwtConfig.vaultShareToken.secret);
+    if (typeof decoded === 'string') throw new Error('Invalid payload');
+
+    const payload = decoded as VaultShareTokenPayload;
+    if (
+      payload.purpose !== 'vault_share' ||
+      typeof payload.propertyId !== 'string' ||
+      typeof payload.passwordVersion !== 'string'
+    ) {
+      throw new Error('Invalid token purpose');
+    }
+
+    return { propertyId: payload.propertyId, passwordVersion: payload.passwordVersion };
+  } catch {
+    throw new Error('Invalid or expired vault share token');
+  }
 };

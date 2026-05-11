@@ -4,8 +4,9 @@
 // Read-only public "Seller's Vault" — no dashboard navigation.
 // Color palette: Slate (structure), Emerald (verified/health), Amber/Gold (premium).
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { format, differenceInYears, parseISO } from 'date-fns';
+import { useSearchParams } from 'next/navigation';
 import {
   Award,
   CalendarCheck,
@@ -87,14 +88,47 @@ function healthLabel(score: number): { text: string; cls: string } {
 function PasswordGate({
   propertyId,
   onUnlock,
+  initialShareToken,
 }: {
   propertyId: string;
   onUnlock: (data: VaultData) => void;
+  initialShareToken?: string | null;
 }) {
   const [password, setPassword] = useState('');
   const [showPwd, setShowPwd] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!initialShareToken) return;
+
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+
+    void api
+      .getVaultData(propertyId, { accessToken: initialShareToken })
+      .then((res) => {
+        if (cancelled) return;
+        if (res.success && res.data) {
+          onUnlock(res.data);
+          return;
+        }
+        setError(res.message || 'This share link has expired. Enter the vault password to continue.');
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setError('This share link has expired. Enter the vault password to continue.');
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [initialShareToken, onUnlock, propertyId]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -103,7 +137,7 @@ function PasswordGate({
     setError(null);
 
     try {
-      const res = await api.getVaultData(propertyId, password.trim());
+      const res = await api.getVaultData(propertyId, { password: password.trim() });
       if (res.success && res.data) {
         onUnlock(res.data);
       } else {
@@ -444,10 +478,18 @@ function ServiceTimelineSection({ timeline }: { timeline: VaultServiceEntry[] })
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function VaultView({ propertyId }: { propertyId: string }) {
+  const searchParams = useSearchParams();
   const [vaultData, setVaultData] = useState<VaultData | null>(null);
+  const shareToken = searchParams.get('token');
 
   if (!vaultData) {
-    return <PasswordGate propertyId={propertyId} onUnlock={setVaultData} />;
+    return (
+      <PasswordGate
+        propertyId={propertyId}
+        onUnlock={setVaultData}
+        initialShareToken={shareToken}
+      />
+    );
   }
 
   return (

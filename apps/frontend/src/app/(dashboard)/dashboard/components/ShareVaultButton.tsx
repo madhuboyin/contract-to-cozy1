@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { api } from '@/lib/api/client';
+import { VaultShareLinkResponse } from '@/types';
 
 interface ShareVaultButtonProps {
   propertyId: string;
@@ -33,6 +34,9 @@ export function ShareVaultButton({ propertyId, propertyAddress }: ShareVaultButt
   const [copiedUrl, setCopiedUrl] = useState(false);
   const [password, setPassword] = useState('');
   const [showPwd, setShowPwd] = useState(false);
+  const [shareLink, setShareLink] = useState<VaultShareLinkResponse | null>(null);
+  const [shareLinkError, setShareLinkError] = useState<string | null>(null);
+  const [creatingShareLink, setCreatingShareLink] = useState(false);
 
   // Client-side only to avoid SSR/hydration mismatch
   const [vaultUrl, setVaultUrl] = useState(`/vault/${propertyId}`);
@@ -46,6 +50,8 @@ export function ShareVaultButton({ propertyId, propertyAddress }: ShareVaultButt
 
     setModal({ phase: 'loading' });
     setPassword('');
+    setShareLink(null);
+    setShareLinkError(null);
 
     api.getVaultStatus(propertyId).then((res) => {
       if (res.success && res.data?.isConfigured) {
@@ -58,13 +64,43 @@ export function ShareVaultButton({ propertyId, propertyAddress }: ShareVaultButt
     });
   }, [open, propertyId]);
 
+  const refreshShareLink = useCallback(async () => {
+    setCreatingShareLink(true);
+    setShareLinkError(null);
+
+    try {
+      const res = await api.createVaultShareLink(propertyId);
+      if (res.success && res.data) {
+        setShareLink(res.data);
+      } else {
+        setShareLink(null);
+        setShareLinkError(res.message || 'Unable to create a temporary share link right now.');
+      }
+    } catch {
+      setShareLink(null);
+      setShareLinkError('Unable to create a temporary share link right now.');
+    } finally {
+      setCreatingShareLink(false);
+    }
+  }, [propertyId]);
+
+  useEffect(() => {
+    if (!open) return;
+    if (modal.phase !== 'configured' && modal.phase !== 'just-set') return;
+    void refreshShareLink();
+  }, [modal.phase, open, refreshShareLink]);
+
   const handleSetPassword = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     if (modal.phase !== 'set-password' || modal.saving) return;
 
     const trimmed = password.trim();
-    if (trimmed.length < 8) {
-      setModal({ phase: 'set-password', error: 'Password must be at least 8 characters.', saving: false });
+    if (trimmed.length < 14) {
+      setModal({
+        phase: 'set-password',
+        error: 'Use at least 14 characters with uppercase, lowercase, and a number.',
+        saving: false,
+      });
       return;
     }
 
@@ -140,8 +176,8 @@ export function ShareVaultButton({ propertyId, propertyAddress }: ShareVaultButt
                     <p className="break-words text-sm leading-relaxed text-slate-500">
                       Create a password to protect the vault for{' '}
                       <span className="font-medium text-slate-700">{propertyAddress}</span>.
-                      Share it along with the link so buyers and realtors can view your
-                      verified proof-of-care report.
+                      We recommend a unique passphrase with at least 14 characters, plus
+                      uppercase, lowercase, and a number.
                     </p>
                   )}
 
@@ -155,10 +191,10 @@ export function ShareVaultButton({ propertyId, propertyAddress }: ShareVaultButt
                           type={showPwd ? 'text' : 'password'}
                           value={password}
                           onChange={(e) => setPassword(e.target.value)}
-                          placeholder="Min. 8 characters"
+                          placeholder="At least 14 chars, mixed case, number"
                           className="w-full rounded-lg border border-slate-300 bg-slate-50 px-4 py-2.5 pr-10 text-sm text-slate-900 placeholder-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
                           autoComplete="new-password"
-                          minLength={8}
+                          minLength={14}
                           required
                         />
                         <button
@@ -184,7 +220,7 @@ export function ShareVaultButton({ propertyId, propertyAddress }: ShareVaultButt
 
                     <Button
                       type="submit"
-                      disabled={modal.saving || password.trim().length < 8}
+                      disabled={modal.saving || password.trim().length < 14}
                       className="w-full bg-emerald-600 hover:bg-emerald-700"
                     >
                       {modal.saving ? (
@@ -204,15 +240,18 @@ export function ShareVaultButton({ propertyId, propertyAddress }: ShareVaultButt
               {modal.phase === 'just-set' && (
                 <>
                   <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-sm text-emerald-700">
-                    <strong>Vault password set.</strong> Share the link below along with the
-                    password you just created. We do not display your password again — you
-                    can always set a new one by reopening this dialog.
+                    <strong>Vault password set.</strong> We generated a temporary share link below.
+                    It expires automatically, and changing the vault password invalidates old links.
                   </div>
 
                   <VaultLinkBlock
-                    vaultUrl={vaultUrl}
+                    vaultUrl={shareLink?.shareUrl || vaultUrl}
                     copiedUrl={copiedUrl}
-                    onCopy={() => copyToClipboard(vaultUrl)}
+                    onCopy={() => copyToClipboard(shareLink?.shareUrl || vaultUrl)}
+                    expiresAt={shareLink?.expiresAt ?? null}
+                    loading={creatingShareLink}
+                    error={shareLinkError}
+                    onRefresh={() => void refreshShareLink()}
                   />
 
                   <Button
@@ -234,20 +273,25 @@ export function ShareVaultButton({ propertyId, propertyAddress }: ShareVaultButt
                     <p className="break-words text-sm leading-relaxed text-slate-500">
                       Share the link below with realtors and prospective buyers for{' '}
                       <span className="font-medium text-slate-700">{propertyAddress}</span>.
-                      Include the vault password you created when you first set it up.
+                      The temporary link expires automatically, and changing the vault password
+                      invalidates previously generated links.
                     </p>
                   )}
 
                   <VaultLinkBlock
-                    vaultUrl={vaultUrl}
+                    vaultUrl={shareLink?.shareUrl || vaultUrl}
                     copiedUrl={copiedUrl}
-                    onCopy={() => copyToClipboard(vaultUrl)}
+                    onCopy={() => copyToClipboard(shareLink?.shareUrl || vaultUrl)}
+                    expiresAt={shareLink?.expiresAt ?? null}
+                    loading={creatingShareLink}
+                    error={shareLinkError}
+                    onRefresh={() => void refreshShareLink()}
                   />
 
                   <div className="rounded-lg border border-amber-100 bg-amber-50 px-3 py-2.5 text-xs text-amber-700">
-                    <strong>Tip:</strong> Send the link and your vault password together. The
-                    vault is read-only and shows only verified assets and completed service history.
-                    If you have forgotten your password, set a new one below.
+                    <strong>Tip:</strong> The vault is read-only and shows only verified assets
+                    and completed service history. Generate a fresh share link any time you want
+                    to rotate buyer access without changing the underlying property data.
                   </div>
 
                   <Button
@@ -278,22 +322,53 @@ function VaultLinkBlock({
   vaultUrl,
   copiedUrl,
   onCopy,
+  expiresAt,
+  loading,
+  error,
+  onRefresh,
 }: {
   vaultUrl: string;
   copiedUrl: boolean;
   onCopy: () => void;
+  expiresAt: string | null;
+  loading: boolean;
+  error: string | null;
+  onRefresh: () => void;
 }) {
+  const expiresLabel = expiresAt
+    ? new Date(expiresAt).toLocaleString([], {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+      })
+    : null;
+
   return (
     <div className="space-y-1.5">
       <label className="text-xs font-semibold tracking-normal text-slate-500">
-        Shareable Link
+        Temporary Shareable Link
       </label>
       <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
         <p className="break-all text-sm text-slate-700">{vaultUrl}</p>
+        {expiresLabel && (
+          <p className="mt-1 text-xs text-slate-500">Expires {expiresLabel}</p>
+        )}
+        {error && (
+          <p className="mt-2 rounded-md bg-red-50 px-2 py-1 text-xs text-red-600">{error}</p>
+        )}
         <div className="mt-2 flex items-center justify-end gap-1.5">
           <button
             type="button"
+            onClick={onRefresh}
+            disabled={loading}
+            className="inline-flex min-h-[36px] items-center gap-1 rounded-md px-2 text-xs font-medium text-slate-600 transition hover:bg-slate-100 hover:text-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Share2 className="h-4 w-4" />}
+            Refresh
+          </button>
+          <button
+            type="button"
             onClick={onCopy}
+            disabled={loading}
             className="inline-flex min-h-[36px] items-center gap-1 rounded-md px-2 text-xs font-medium text-slate-600 transition hover:bg-slate-100 hover:text-emerald-700"
             aria-label="Copy shareable link"
           >

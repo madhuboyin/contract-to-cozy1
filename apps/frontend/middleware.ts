@@ -11,6 +11,7 @@ import type { NextRequest } from 'next/server';
 import {
   buildCsp,
   buildReportingEndpoints,
+  shouldUseReportOnly,
 } from './security-headers';
 
 const PUBLIC_FILE_PATH_REGEX =
@@ -81,10 +82,13 @@ export function middleware(request: NextRequest) {
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
   const faroUrl = process.env.NEXT_PUBLIC_FARO_URL || '';
   const csp = buildCsp({ nonce, apiUrl, faroUrl });
+  const cspHeaderName = shouldUseReportOnly()
+    ? 'Content-Security-Policy-Report-Only'
+    : 'Content-Security-Policy';
 
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set('x-nonce', nonce);
-  requestHeaders.set('Content-Security-Policy', csp);
+  requestHeaders.set(cspHeaderName, csp);
 
   // ------------------------------------------------------------------
   // 2. Auth routing — bypass for static assets and the Next.js runtime
@@ -98,7 +102,7 @@ export function middleware(request: NextRequest) {
     PUBLIC_FILE_PATH_REGEX.test(pathname)
   ) {
     const response = NextResponse.next({ request: { headers: requestHeaders } });
-    response.headers.set('Content-Security-Policy', csp);
+    response.headers.set(cspHeaderName, csp);
     response.headers.set('Reporting-Endpoints', buildReportingEndpoints(apiUrl));
     return response;
   }
@@ -157,7 +161,7 @@ export function middleware(request: NextRequest) {
   // 3. Build the final response with CSP + Reporting-Endpoints headers
   // ------------------------------------------------------------------
   const response = NextResponse.next({ request: { headers: requestHeaders } });
-  response.headers.set('Content-Security-Policy', csp);
+  response.headers.set(cspHeaderName, csp);
   response.headers.set('Reporting-Endpoints', buildReportingEndpoints(apiUrl));
   return response;
 }

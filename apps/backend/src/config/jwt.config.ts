@@ -85,6 +85,16 @@ export const jwtConfig = {
     }),
     expiresIn: '5m', // 5 minutes — tight window for the TOTP prompt
   },
+
+  // Vault share token — short-lived token embedded in seller-vault share links.
+  // The token is invalidated automatically when the vault password changes.
+  vaultShareToken: {
+    secret: resolveSecret('JWT_VAULT_SHARE_SECRET', {
+      devFallback: 'dev-vault-share-secret-not-for-production',
+      description: 'vault share token signing',
+    }),
+    expiresIn: '72h',
+  },
 };
 
 export const authConfig = {

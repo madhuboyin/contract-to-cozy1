@@ -65,6 +65,7 @@ import {
   CompletionResponseDTO,
   CompletionDataDTO,
   CompletionPhotoDTO,
+  VaultShareLinkResponse,
 
   HomeBuyerChecklist,
   HomeBuyerTask,
@@ -3149,12 +3150,12 @@ class APIClient {
    */
   async getVaultData(
     propertyId: string,
-    password: string
+    credentials: { password?: string; accessToken?: string }
   ): Promise<APIResponse<import('@/types').VaultData>> {
     const res = await fetch(`${this.baseURL}/api/vault/access/${propertyId}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ password }),
+      body: JSON.stringify(credentials),
     });
     return res.json() as Promise<APIResponse<import('@/types').VaultData>>;
   }
@@ -3172,6 +3173,16 @@ class APIClient {
     return this.request<void>(`/api/vault/setup/${propertyId}`, {
       method: 'POST',
       body: JSON.stringify({ password }),
+    });
+  }
+
+  async createVaultShareLink(
+    propertyId: string,
+    expiresInHours = 72
+  ): Promise<APIResponse<VaultShareLinkResponse>> {
+    return this.request<VaultShareLinkResponse>(`/api/vault/share-link/${propertyId}`, {
+      method: 'POST',
+      body: JSON.stringify({ expiresInHours }),
     });
   }
 
