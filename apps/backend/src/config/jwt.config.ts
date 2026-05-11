@@ -90,6 +90,7 @@ export const jwtConfig = {
   // The token is invalidated automatically when the vault password changes.
   vaultShareToken: {
     secret: resolveSecret('JWT_VAULT_SHARE_SECRET', {
+      aliases: ['JWT_ACCESS_SECRET', 'JWT_SECRET'],
       devFallback: 'dev-vault-share-secret-not-for-production',
       description: 'vault share token signing',
     }),
