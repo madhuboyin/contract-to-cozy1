@@ -8,7 +8,6 @@ import { useAuth } from '@/lib/auth/AuthContext';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
 import { api } from '@/lib/api/client';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Info, Loader2, MapPin, Search, Star, Zap } from 'lucide-react';
 import { Provider } from '@/types';
 import { cn } from '@/lib/utils';
@@ -101,22 +100,21 @@ const ServiceFilter = React.memo(
           search={
             <div>
               <label className="mb-1 block text-xs font-medium tracking-normal text-slate-500">Service category</label>
-              <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-                <SelectTrigger className="h-11 w-full text-sm">
-                  <SelectValue placeholder={isHomeBuyer ? 'Inspection (recommended)' : 'Select a category'} />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ALL">All categories</SelectItem>
-                  {displayCategories.map((category) => (
-                    <SelectItem key={category.value} value={category.value}>
-                      <div className="flex items-center gap-2">
-                        <ServiceCategoryIcon icon={category.value} className="h-4 w-4" />
-                        {category.label}
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <select
+                value={selectedCategory}
+                onChange={(e) => setSelectedCategory(e.target.value)}
+                className="flex h-11 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                aria-label="Service category"
+              >
+                <option value="ALL">
+                  {isHomeBuyer ? 'Inspection (recommended)' : 'All categories'}
+                </option>
+                {displayCategories.map((category) => (
+                  <option key={category.value} value={category.value}>
+                    {category.label}
+                  </option>
+                ))}
+              </select>
             </div>
           }
           primaryFilters={
