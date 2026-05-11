@@ -50,6 +50,26 @@ spec:
                 secretKeyRef:
                   name: app-secrets
                   key: JWT_SECRET
+            - name: JWT_REFRESH_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: JWT_REFRESH_SECRET
+            - name: JWT_EMAIL_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: JWT_EMAIL_SECRET
+            - name: JWT_PASSWORD_RESET_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: JWT_PASSWORD_RESET_SECRET
+            - name: JWT_MFA_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: JWT_MFA_SECRET
             - name: LOKI_HOST
               valueFrom:
                 configMapKeyRef:

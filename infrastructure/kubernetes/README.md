@@ -32,6 +32,10 @@ kubectl label node pi-node-6 role=database
 kubectl create secret generic app-secrets \
   --from-literal=DB_PASSWORD='strong-password' \
   --from-literal=JWT_SECRET='random-string' \
+  --from-literal=JWT_REFRESH_SECRET='random-refresh-string' \
+  --from-literal=JWT_EMAIL_SECRET='random-email-token-string' \
+  --from-literal=JWT_PASSWORD_RESET_SECRET='random-password-reset-string' \
+  --from-literal=JWT_MFA_SECRET='random-mfa-string' \
   -n production
 
 kubectl create secret generic postgres-credentials \
