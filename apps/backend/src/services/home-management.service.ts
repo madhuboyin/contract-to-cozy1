@@ -635,6 +635,26 @@ export async function createDocument(
     }
   }
 
+  if (data.warrantyId) {
+    const warranty = await prisma.warranty.findFirst({
+      where: { id: data.warrantyId, homeownerProfileId },
+      select: { id: true },
+    });
+    if (!warranty) {
+      throw new Error('Warranty not found or does not belong to homeowner.');
+    }
+  }
+
+  if (data.policyId) {
+    const policy = await prisma.insurancePolicy.findFirst({
+      where: { id: data.policyId, homeownerProfileId },
+      select: { id: true },
+    });
+    if (!policy) {
+      throw new Error('Policy not found or does not belong to homeowner.');
+    }
+  }
+
   const { key } = await uploadDocumentBuffer({
     buffer: file.buffer,
     fileName: data.name || file.originalname,

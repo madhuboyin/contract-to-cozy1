@@ -74,10 +74,8 @@
  *         data:
  *           type: object
  *           properties:
- *             accessToken:
- *               type: string
- *             refreshToken:
- *               type: string
+ *             sessionEstablished:
+ *               type: boolean
  *             user:
  *               $ref: '#/components/schemas/User'
  * 

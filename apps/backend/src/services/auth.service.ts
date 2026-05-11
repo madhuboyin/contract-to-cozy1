@@ -18,9 +18,9 @@ import {
 } from '../utils/validators';
 import { APIError } from '../middleware/error.middleware';
 import {
-  LoginResponse,
   MfaChallengeResponse,
-  RefreshTokenResponse,
+  RegisterResponse,
+  UserResponse,
 } from '../types/auth.types';
 import {
   issueRefreshSessionTokenPair,
@@ -32,6 +32,89 @@ import { logger, auditLog } from '../lib/logger';
 import { securityTokenReuseTotal } from '../lib/metrics';
 
 export class AuthService {
+  private buildSessionUser(user: {
+    id: string;
+    email: string;
+    firstName: string;
+    lastName: string;
+    role: string;
+    emailVerified: boolean;
+    status: string;
+    mfaEnabled?: boolean;
+    createdAt: Date;
+    homeownerProfile?: { segment: string } | null;
+  }): UserResponse {
+    return {
+      id: user.id,
+      email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      role: user.role as any,
+      emailVerified: user.emailVerified,
+      status: user.status as any,
+      mfaEnabled: user.mfaEnabled,
+      createdAt: user.createdAt.toISOString(),
+      segment: user.homeownerProfile?.segment || 'EXISTING_OWNER',
+    };
+  }
+
+  private getEmailVerificationBaseUrl(): string {
+    const explicitBaseUrl =
+      process.env.EMAIL_VERIFICATION_BASE_URL ||
+      process.env.FRONTEND_BASE_URL ||
+      process.env.APP_BASE_URL;
+
+    if (explicitBaseUrl && explicitBaseUrl.trim().length > 0) {
+      return explicitBaseUrl.trim().replace(/\/+$/, '');
+    }
+
+    const allowedOrigins = (process.env.ALLOWED_ORIGINS ?? '')
+      .split(',')
+      .map((origin) => origin.trim())
+      .filter(Boolean);
+
+    if (allowedOrigins.length > 0) {
+      return allowedOrigins[0].replace(/\/+$/, '');
+    }
+
+    return 'http://localhost:3000';
+  }
+
+  private buildEmailVerificationLink(verificationToken: string): string {
+    const baseUrl = this.getEmailVerificationBaseUrl();
+    return `${baseUrl}/verify-email?token=${encodeURIComponent(verificationToken)}`;
+  }
+
+  private async enqueueVerificationDelivery(user: {
+    id: string;
+    email: string;
+  }, verificationToken: string): Promise<void> {
+    const verifyLink = this.buildEmailVerificationLink(verificationToken);
+
+    await prisma.notification.create({
+      data: {
+        userId: user.id,
+        type: 'EMAIL_VERIFICATION_REQUIRED',
+        title: 'Verify your Contract to Cozy email',
+        message: 'Use the secure link to verify your email address and finish activating your account.',
+        actionUrl: verifyLink,
+        metadata: {
+          priority: 'HIGH',
+          category: 'AUTH',
+          template: 'EMAIL_VERIFICATION',
+        },
+        deliveries: {
+          create: [
+            {
+              channel: NotificationChannel.EMAIL,
+              status: DeliveryStatus.PENDING,
+            },
+          ],
+        },
+      },
+    });
+  }
+
   private async issueAuthTokens(payload: JWTPayload): Promise<{ accessToken: string; refreshToken: string }> {
     const issued = issueRefreshSessionTokenPair(payload);
     await prisma.refreshTokenSession.create({
@@ -107,7 +190,7 @@ export class AuthService {
   /**
    * Register a new user and auto-login
    */
-  async register(data: RegisterInput): Promise<LoginResponse> {
+  async register(data: RegisterInput): Promise<RegisterResponse> {
     // Check if user already exists
     const existingUser = await prisma.user.findUnique({
       where: { email: data.email },
@@ -129,8 +212,8 @@ export class AuthService {
         lastName: data.lastName,
         phone: data.phone,
         role: data.role,
-        status: 'ACTIVE',
-        emailVerified: true,
+        status: 'PENDING_VERIFICATION',
+        emailVerified: false,
       },
     });
 
@@ -176,20 +259,31 @@ export class AuthService {
       );
     }
 
-    // --- AUTO-LOGIN LOGIC ---
-    // Generate access and refresh tokens (tokenVersion starts at 0 for new users)
-    const { accessToken, refreshToken } = await this.issueAuthTokens({
-      userId: user.id,
-      email: user.email,
-      role: user.role,
-      tokenVersion: user.tokenVersion,
-      mfaEnabled: user.mfaEnabled,
-    });
+    const emailVerificationToken = generateEmailVerificationToken(user.id, user.email);
 
-    // Return the same response as the login function
+    if (process.env.NODE_ENV !== 'development') {
+      try {
+        await this.enqueueVerificationDelivery(
+          {
+            id: user.id,
+            email: user.email,
+          },
+          emailVerificationToken
+        );
+      } catch (error: any) {
+        logger.error(
+          {
+            err: error,
+            userId: user.id,
+            stage: 'register_verification_delivery',
+          },
+          'Email verification delivery enqueue failed'
+        );
+      }
+    }
+
     return {
-      accessToken,
-      refreshToken,
+      message: 'Account created. Verify your email before signing in.',
       user: {
         id: user.id,
         email: user.email,
@@ -199,15 +293,17 @@ export class AuthService {
         emailVerified: user.emailVerified,
         status: user.status as any,
         mfaEnabled: user.mfaEnabled,
+        createdAt: user.createdAt.toISOString(),
         segment: segment, // <-- segment included in the response
       },
+      ...(process.env.NODE_ENV === 'development' ? { emailVerificationToken } : {}),
     };
   }
 
   /**
    * Login user
    */
-  async login(data: LoginInput): Promise<LoginResponse | MfaChallengeResponse> {
+  async login(data: LoginInput): Promise<({ accessToken: string; refreshToken: string; user: UserResponse }) | MfaChallengeResponse> {
     // Find user by email AND include the profile segment + MFA state
     const user = await prisma.user.findUnique({
       where: { email: data.email },
@@ -237,6 +333,10 @@ export class AuthService {
       throw new APIError('Account is inactive', 403, 'ACCOUNT_INACTIVE');
     }
 
+    if (!user.emailVerified) {
+      throw new APIError('Email verification required before sign-in', 403, 'EMAIL_NOT_VERIFIED');
+    }
+
     // MFA gate: if the user has TOTP configured, issue a short-lived challenge
     // token instead of full access/refresh tokens. The client must POST this
     // token + a TOTP code to /api/auth/mfa/challenge to obtain real tokens.
@@ -257,17 +357,7 @@ export class AuthService {
     return {
       accessToken,
       refreshToken,
-      user: {
-        id: user.id,
-        email: user.email,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        role: user.role as any,
-        emailVerified: user.emailVerified,
-        status: user.status as any,
-        mfaEnabled: user.mfaEnabled,
-        segment: user.homeownerProfile?.segment || 'EXISTING_OWNER',
-      },
+      user: this.buildSessionUser(user),
     };
   }
 
@@ -294,7 +384,7 @@ export class AuthService {
   /**
    * Refresh access token
    */
-  async refreshToken(refreshToken: string): Promise<RefreshTokenResponse> {
+  async refreshToken(refreshToken: string): Promise<{ accessToken: string; refreshToken: string; sessionRefreshed: true }> {
     // Verify refresh token
     const payload = verifyRefreshToken(refreshToken);
 
@@ -369,6 +459,7 @@ export class AuthService {
     return {
       accessToken: issued.tokens.accessToken,
       refreshToken: issued.tokens.refreshToken,
+      sessionRefreshed: true,
     };
   }
 
@@ -555,13 +646,13 @@ export class AuthService {
   /**
    * Resend verification email
    */
-  async resendVerificationEmail(email: string): Promise<void> {
+  async resendVerificationEmail(userId: string): Promise<{ emailVerificationToken?: string }> {
     const user = await prisma.user.findUnique({
-      where: { email },
+      where: { id: userId },
     });
 
     if (!user) {
-      return;
+      throw new APIError('User not found', 404, 'USER_NOT_FOUND');
     }
 
     if (user.emailVerified) {
@@ -570,6 +661,19 @@ export class AuthService {
 
     const emailVerificationToken = generateEmailVerificationToken(user.id, user.email);
 
+    if (process.env.NODE_ENV !== 'development') {
+      await this.enqueueVerificationDelivery(
+        {
+          id: user.id,
+          email: user.email,
+        },
+        emailVerificationToken
+      );
+    }
+
+    return process.env.NODE_ENV === 'development'
+      ? { emailVerificationToken }
+      : {};
   }
 }
 

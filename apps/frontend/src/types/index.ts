@@ -998,8 +998,7 @@ export interface User {
 // FIX: Add success property to LoginResponse
 export interface LoginResponse {
   success: true; 
-  accessToken: string;
-  refreshToken: string;
+  sessionEstablished: true;
   user: User;
 }
 
@@ -1023,7 +1022,7 @@ export interface MfaRecoveryCodesResponse {
 export interface RegisterResponse {
   success: true;
   message: string;
-  user: User;
+  user: Pick<User, 'id' | 'email' | 'firstName' | 'lastName' | 'role' | 'emailVerified' | 'status' | 'mfaEnabled' | 'segment'>;
   emailVerificationToken?: string;
 }
 

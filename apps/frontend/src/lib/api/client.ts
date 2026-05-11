@@ -487,8 +487,8 @@ class APIClient {
   async verifyMfaChallenge(
     mfaToken: string,
     code: string
-  ): Promise<APIResponse<{ accessToken: string; refreshToken: string }>> {
-    return this.request<{ accessToken: string; refreshToken: string }>('/api/auth/mfa/challenge', {
+  ): Promise<APIResponse<LoginResponse>> {
+    return this.request<LoginResponse>('/api/auth/mfa/challenge', {
       method: 'POST',
       body: { mfaToken, code },
     });
@@ -500,8 +500,8 @@ class APIClient {
   async verifyMfaRecoveryChallenge(
     mfaToken: string,
     recoveryCode: string
-  ): Promise<APIResponse<{ accessToken: string; refreshToken: string }>> {
-    return this.request<{ accessToken: string; refreshToken: string }>('/api/auth/mfa/challenge/recovery', {
+  ): Promise<APIResponse<LoginResponse>> {
+    return this.request<LoginResponse>('/api/auth/mfa/challenge/recovery', {
       method: 'POST',
       body: { mfaToken, recoveryCode },
     });
@@ -667,7 +667,7 @@ class APIClient {
   /**
    * Refresh access token
    */
-  async refreshToken(): Promise<APIResponse<{ accessToken: string; refreshToken: string }>> {
+  async refreshToken(): Promise<APIResponse<{ sessionRefreshed: true }>> {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     };
@@ -2549,7 +2549,7 @@ class APIClient {
     try {
       this.validateFile(file, {
         maxSizeMB: 5,
-        allowedTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/gif'],
+        allowedTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'],
       });
     } catch (e) { return Promise.reject(e); }
     const formData = new FormData();

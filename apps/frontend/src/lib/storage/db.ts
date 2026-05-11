@@ -38,20 +38,6 @@ interface C2CDB extends DBSchema {
       cachedAt: string;
     };
   };
-  'documents': {
-    key: string;
-    value: {
-      id: string;
-      name: string;
-      type: string;
-      size: number;
-      data: Blob;
-      uploadStatus: 'pending' | 'uploading' | 'uploaded' | 'failed';
-      propertyId: string;
-      createdAt: string;
-    };
-    indexes: { 'by-upload-status': string };
-  };
 }
 
 let dbInstance: IDBPDatabase<C2CDB> | null = null;
@@ -59,8 +45,8 @@ let dbInstance: IDBPDatabase<C2CDB> | null = null;
 export async function getDB(): Promise<IDBPDatabase<C2CDB>> {
   if (dbInstance) return dbInstance;
 
-  dbInstance = await openDB<C2CDB>('c2c-offline', 2, {
-    upgrade(db, oldVersion, newVersion, transaction) {
+  dbInstance = await openDB<C2CDB>('c2c-offline', 3, {
+    upgrade(db) {
       // Maintenance tasks store
       if (!db.objectStoreNames.contains('maintenance-tasks')) {
         const taskStore = db.createObjectStore('maintenance-tasks', { keyPath: 'id' });
@@ -78,10 +64,10 @@ export async function getDB(): Promise<IDBPDatabase<C2CDB>> {
         db.createObjectStore('cached-properties', { keyPath: 'id' });
       }
 
-      // Documents for offline upload
-      if (!db.objectStoreNames.contains('documents')) {
-        const docStore = db.createObjectStore('documents', { keyPath: 'id' });
-        docStore.createIndex('by-upload-status', 'uploadStatus');
+      // v1.0 hardening: do not persist raw user documents in IndexedDB.
+      // If an older client created the store, delete it during upgrade.
+      if ((db.objectStoreNames as DOMStringList).contains('documents')) {
+        (db as unknown as IDBDatabase).deleteObjectStore('documents');
       }
     },
   });
@@ -204,48 +190,31 @@ export async function getCachedProperties() {
 }
 
 // ========== DOCUMENTS ==========
+// Raw document persistence is intentionally disabled for v1.0 security hardening.
 
 export async function saveDocumentForUpload(
-  id: string,
-  name: string,
-  type: string,
-  data: Blob,
-  propertyId: string
+  _id: string,
+  _name: string,
+  _type: string,
+  _data: Blob,
+  _propertyId: string
 ) {
-  const db = await getDB();
-  await db.put('documents', {
-    id,
-    name,
-    type,
-    size: data.size,
-    data,
-    uploadStatus: 'pending',
-    propertyId,
-    createdAt: new Date().toISOString(),
-  });
+  throw new Error('Offline document storage is disabled for security reasons.');
 }
 
 export async function getPendingDocuments() {
-  const db = await getDB();
-  return db.getAllFromIndex('documents', 'by-upload-status', 'pending');
+  return [];
 }
 
 export async function updateDocumentStatus(
-  id: string,
-  status: 'pending' | 'uploading' | 'uploaded' | 'failed'
+  _id: string,
+  _status: 'pending' | 'uploading' | 'uploaded' | 'failed'
 ) {
-  const db = await getDB();
-  const doc = await db.get('documents', id);
-  
-  if (doc) {
-    doc.uploadStatus = status;
-    await db.put('documents', doc);
-  }
+  return;
 }
 
-export async function removeDocument(id: string) {
-  const db = await getDB();
-  await db.delete('documents', id);
+export async function removeDocument(_id: string) {
+  return;
 }
 
 // ========== CLEANUP ==========

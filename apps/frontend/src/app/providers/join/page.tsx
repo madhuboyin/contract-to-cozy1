@@ -47,6 +47,7 @@ export default function ProviderJoinPage() {
   const [currentStep, setCurrentStep] = useState<1 | 2>(1);
   const [loading, setLoading] = useState(false);
   const [formError, setFormError] = useState('');
+  const [registrationMessage, setRegistrationMessage] = useState('');
   const [errors, setErrors] = useState<JoinErrors>({});
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -129,6 +130,7 @@ export default function ProviderJoinPage() {
     try {
       setLoading(true);
       setFormError('');
+      setRegistrationMessage('');
 
       const result = await register({
         email: formData.email,
@@ -139,7 +141,7 @@ export default function ProviderJoinPage() {
       });
 
       if (result && result.success) {
-        router.push('/providers/dashboard');
+        setRegistrationMessage('Provider account created. Check your email to verify your address before signing in.');
         return;
       }
 
@@ -199,6 +201,20 @@ export default function ProviderJoinPage() {
           </div>
         </div>
       </div>
+
+      {registrationMessage ? (
+        <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+          {registrationMessage}{' '}
+          <button
+            type="button"
+            onClick={() => router.push('/providers/login')}
+            className="font-medium underline underline-offset-2"
+          >
+            Go to sign in
+          </button>
+          .
+        </div>
+      ) : null}
 
       {formError ? (
         <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">

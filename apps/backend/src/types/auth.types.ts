@@ -45,13 +45,13 @@ export interface UserResponse {
   emailVerified: boolean;
   status: UserStatus;
   mfaEnabled?: boolean;
+  createdAt?: string;
   segment?: string;
 }
 
 // Login response
 export interface LoginResponse {
-  accessToken: string;
-  refreshToken: string;
+  sessionEstablished: true;
   user: UserResponse;
 }
 
@@ -80,14 +80,18 @@ export interface RegisterResponse {
     firstName: string;
     lastName: string;
     role: UserRole;
+    emailVerified: boolean;
+    status: UserStatus;
+    mfaEnabled?: boolean;
+    createdAt?: string;
+    segment?: string;
   };
   emailVerificationToken?: string; // For development/testing
 }
 
 // Refresh token response
 export interface RefreshTokenResponse {
-  accessToken: string;
-  refreshToken: string;
+  sessionRefreshed: true;
 }
 
 // API Error response

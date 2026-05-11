@@ -2,7 +2,7 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { User, LoginInput, RegisterInput, LoginResponse, HomeownerSegment, MfaChallengeResponse } from '@/types';
+import { User, LoginInput, RegisterInput, LoginResponse, RegisterResponse, HomeownerSegment, MfaChallengeResponse } from '@/types';
 import { api } from '@/lib/api/client';
 import { useRouter } from 'next/navigation';
 
@@ -15,7 +15,7 @@ interface AuthContextType {
   completeMfaChallenge: (mfaToken: string, code: string) => Promise<LoginResponse | null>;
   completeMfaRecoveryChallenge: (mfaToken: string, recoveryCode: string) => Promise<LoginResponse | null>;
   logout: () => void;
-  register: (data: RegisterInput) => Promise<LoginResponse | null>;
+  register: (data: RegisterInput) => Promise<RegisterResponse | null>;
   isAuthenticated: boolean;
   isHomeowner: boolean;
   isProvider: boolean;
@@ -97,10 +97,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         return loginData;
       }
 
-      const { accessToken, refreshToken, user } = loginData as LoginResponse;
+      const { user } = loginData as LoginResponse;
 
       setUser(user);
-      return { success: true, accessToken, refreshToken, user };
+      return { success: true, sessionEstablished: true, user };
     }
     return null;
   }, []);
@@ -110,17 +110,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       const response = await api.verifyMfaChallenge(mfaToken, code);
       if (!response.success) return null;
 
-      const freshUser = await fetchCurrentUser();
-      if (!freshUser) return null;
-
-      setUser(freshUser);
-      const tokenData = extractApiData<{ accessToken: string; refreshToken: string }>(response.data);
-      return {
-        success: true,
-        accessToken: tokenData.accessToken,
-        refreshToken: tokenData.refreshToken,
-        user: freshUser,
-      };
+      const loginData = extractApiData<LoginResponse>(response.data);
+      setUser(loginData.user);
+      return { success: true, sessionEstablished: true, user: loginData.user };
     },
     []
   );
@@ -130,40 +122,27 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       const response = await api.verifyMfaRecoveryChallenge(mfaToken, recoveryCode);
       if (!response.success) return null;
 
-      const freshUser = await fetchCurrentUser();
-      if (!freshUser) return null;
-
-      setUser(freshUser);
-      const tokenData = extractApiData<{ accessToken: string; refreshToken: string }>(response.data);
-      return {
-        success: true,
-        accessToken: tokenData.accessToken,
-        refreshToken: tokenData.refreshToken,
-        user: freshUser,
-      };
+      const loginData = extractApiData<LoginResponse>(response.data);
+      setUser(loginData.user);
+      return { success: true, sessionEstablished: true, user: loginData.user };
     },
     []
   );
 
-  const register = useCallback(async (data: RegisterInput): Promise<LoginResponse | null> => {
+  const register = useCallback(async (data: RegisterInput): Promise<RegisterResponse | null> => {
     try {
       const response = await api.register(data);
 
       if (response.success && response.data.user) {
-        // After registration, immediately log them in or grab tokens if provided
-        // For simplicity, assuming the backend immediately gives them a valid session to use 'me' endpoint
-        const loginResponse = await login({ email: data.email, password: data.password });
-        if (loginResponse && !('mfaRequired' in loginResponse)) {
-          return loginResponse;
-        }
-        return null;
+        const registerData = extractApiData<RegisterResponse>(response.data);
+        return registerData;
       }
       return null;
     } catch (error) {
       console.error('Registration failed:', error);
       return null;
     }
-  }, [login]);
+  }, []);
 
 
   // --- Initialization Effect ---

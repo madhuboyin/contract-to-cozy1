@@ -70,8 +70,7 @@ const options: swaggerJsdoc.Options = {
             data: {
               type: 'object',
               properties: {
-                accessToken: { type: 'string' },
-                refreshToken: { type: 'string' },
+                sessionEstablished: { type: 'boolean', example: true },
                 user: { $ref: '#/components/schemas/User' },
               },
             },

@@ -26,6 +26,8 @@ const SAFE_IMAGE_TYPES = new Set([
   'image/jpg',
   'image/png',
   'image/webp',
+  'image/heic',
+  'image/heif',
 ]);
 
 const PDF_TYPE = 'application/pdf';
@@ -47,6 +49,8 @@ const MAGIC_BYTES: Record<string, number[][]> = {
   'image/jpg':    [[0xff, 0xd8, 0xff]],
   'image/png':    [[0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]], // \x89PNG\r\n\x1a\n
   'image/webp':   [[0x52, 0x49, 0x46, 0x46]],                           // RIFF....WEBP
+  'image/heic':   [[0x00, 0x00, 0x00]],
+  'image/heif':   [[0x00, 0x00, 0x00]],
   // XLSX is a ZIP file — all ZIP variants share this 4-byte signature.
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': [[0x50, 0x4b, 0x03, 0x04]],
   'application/octet-stream': [[0x50, 0x4b, 0x03, 0x04]],               // must be ZIP/XLSX
@@ -59,6 +63,12 @@ const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB default cap
 // ---------------------------------------------------------------------------
 
 function matchesMagicBytes(buffer: Buffer, mimeType: string): boolean {
+  if (mimeType === 'image/heic' || mimeType === 'image/heif') {
+    const brand = buffer.slice(4, 12).toString('ascii');
+    const majorBrand = buffer.slice(8, 12).toString('ascii').toLowerCase();
+    return brand.startsWith('ftyp') && ['heic', 'heix', 'hevc', 'hevx', 'mif1', 'msf1'].includes(majorBrand);
+  }
+
   const signatures = MAGIC_BYTES[mimeType];
   if (!signatures) return false;
   return signatures.some((sig) => sig.every((byte, i) => buffer[i] === byte));
@@ -191,6 +201,12 @@ function buildArrayValidator(allowedTypes: Set<string>, label: string) {
 export const validateDocumentUpload = buildValidator(
   new Set([PDF_TYPE, ...SAFE_IMAGE_TYPES]),
   'document'
+);
+
+/** PDF + JPEG/PNG/WEBP/HEIC — upload.array() routes for claim documents */
+export const validateDocumentArrayUpload = buildArrayValidator(
+  new Set([PDF_TYPE, ...SAFE_IMAGE_TYPES]),
+  'document-array'
 );
 
 /** JPEG/PNG/WEBP only — visual inspector, inventory item images, room scans */

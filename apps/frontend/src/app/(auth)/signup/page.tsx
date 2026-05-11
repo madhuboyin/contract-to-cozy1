@@ -30,10 +30,11 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function SignupPage() {
   const router = useRouter();
-  const { register, login } = useAuth();
+  const { register } = useAuth();
 
   const [loading, setLoading] = useState(false);
   const [formError, setFormError] = useState('');
+  const [registrationMessage, setRegistrationMessage] = useState('');
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
 
   const [formData, setFormData] = useState<SignupFormData>({
@@ -81,6 +82,7 @@ export default function SignupPage() {
     try {
       setLoading(true);
       setFormError('');
+      setRegistrationMessage('');
 
       const result = await register({
         email: formData.email,
@@ -92,22 +94,7 @@ export default function SignupPage() {
       });
 
       if (result && result.success) {
-        const loginResult = await login({
-          email: formData.email,
-          password: formData.password,
-        });
-
-        if (loginResult && 'success' in loginResult && loginResult.success) {
-          router.push('/dashboard');
-          return;
-        }
-
-        const errorResponse = loginResult as APIError | null;
-        setFormError(
-          errorResponse?.error?.message ||
-            errorResponse?.message ||
-            'Account created, but we could not sign you in automatically. Please sign in manually.'
-        );
+        setRegistrationMessage('Account created. Check your email to verify your address before signing in.');
         return;
       }
 
@@ -145,6 +132,20 @@ export default function SignupPage() {
       {formError ? (
         <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
           {formError}
+        </div>
+      ) : null}
+
+      {registrationMessage ? (
+        <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+          {registrationMessage}{' '}
+          <button
+            type="button"
+            onClick={() => router.push('/login')}
+            className="font-medium underline underline-offset-2"
+          >
+            Go to sign in
+          </button>
+          .
         </div>
       ) : null}
 

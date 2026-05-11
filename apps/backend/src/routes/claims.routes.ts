@@ -7,6 +7,7 @@ import { authenticate } from '../middleware/auth.middleware';
 import { uploadSingleFile } from '../controllers/claims.controller';
 import { uploadChecklistItemDocument } from '../controllers/claims.controller';
 import { uploadMultipleFiles } from '../controllers/claims.controller';
+import { validateDocumentArrayUpload, validateDocumentUpload } from '../utils/documentValidator.util';
 
 
 const router = Router({ mergeParams: true });
@@ -45,7 +46,8 @@ router.post(
   authenticate,
   propertyAuthMiddleware,
   uploadSingleFile('file'), // ✅ NEW helper (see controller section)
-  ClaimsController.addDocument
+  validateDocumentUpload,
+  uploadChecklistItemDocument
 );
 
 router.get(
@@ -60,6 +62,7 @@ router.post(
   authenticate,
   propertyAuthMiddleware,
   uploadMultipleFiles('files', 10),
+  validateDocumentArrayUpload,
   ClaimsController.bulkUploadClaimDocuments
 );
 
@@ -68,6 +71,7 @@ router.post(
   authenticate,
   propertyAuthMiddleware,
   uploadMultipleFiles('files', 10),
+  validateDocumentArrayUpload,
   ClaimsController.bulkUploadChecklistItemDocuments
 );
 router.get(

@@ -5,8 +5,10 @@
 import { Response, NextFunction } from 'express';
 import { AuthRequest } from '../types/auth.types';
 import { MfaService } from '../services/mfa.service';
+import { authService } from '../services/auth.service';
 import { auditLog } from '../lib/logger';
 import { setAuthCookies } from '../utils/authCookies.util';
+import { verifyAccessToken } from '../utils/jwt.util';
 
 const mfaService = new MfaService();
 
@@ -58,7 +60,9 @@ export async function verifyMfaChallenge(req: AuthRequest, res: Response, next: 
     auditLog('MFA_CHALLENGE_ATTEMPT', null, { ip: req.ip });
     const tokens = await mfaService.verifyChallenge(mfaToken, code);
     setAuthCookies(req, res, tokens);
-    res.status(200).json({ success: true, data: tokens });
+    const payload = verifyAccessToken(tokens.accessToken);
+    const user = await authService.getCurrentUser(payload.userId);
+    res.status(200).json({ success: true, data: { sessionEstablished: true, user } });
   } catch (error) {
     next(error);
   }
@@ -78,7 +82,9 @@ export async function verifyMfaRecoveryChallenge(
     auditLog('MFA_RECOVERY_CHALLENGE_ATTEMPT', null, { ip: req.ip });
     const tokens = await mfaService.verifyRecoveryChallenge(mfaToken, recoveryCode);
     setAuthCookies(req, res, tokens);
-    res.status(200).json({ success: true, data: tokens });
+    const payload = verifyAccessToken(tokens.accessToken);
+    const user = await authService.getCurrentUser(payload.userId);
+    res.status(200).json({ success: true, data: { sessionEstablished: true, user } });
   } catch (error) {
     next(error);
   }

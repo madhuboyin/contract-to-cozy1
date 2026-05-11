@@ -9,6 +9,7 @@ import {
 } from '../controllers/orchestrationCompletion.controller';
 import { authenticate } from '../middleware/auth.middleware';
 import { propertyAuthMiddleware } from '../middleware/propertyAuth.middleware';
+import { validateImageUpload } from '../utils/documentValidator.util';
 
 const router = Router();
 
@@ -34,6 +35,7 @@ router.post(
   authenticate,
   propertyAuthMiddleware,
   uploadMiddleware,
+  validateImageUpload,
   uploadPhotoHandler
 );
 

@@ -28,7 +28,6 @@ export class AuthController {
     const data: RegisterInput = req.body;
     try {
       const result = await authService.register(data);
-      setAuthCookies(req, res, result);
       auditLog('AUTH_REGISTER_SUCCESS', result.user.id, {
         ip: req.ip,
         role: data.role,
@@ -71,7 +70,10 @@ export class AuthController {
       });
       res.status(200).json({
         success: true,
-        data: result,
+        data: {
+          sessionEstablished: true,
+          user: result.user,
+        },
       });
     } catch (error: any) {
       const auditableFailures = ['INVALID_CREDENTIALS', 'ACCOUNT_SUSPENDED', 'ACCOUNT_INACTIVE'];
@@ -263,7 +265,10 @@ export class AuthController {
 
       res.status(200).json({
         success: true,
-        data: result,
+        data: {
+          message: 'Verification email sent',
+          ...result,
+        },
       });
     } catch (error) {
       next(error);
