@@ -28,6 +28,7 @@ import { PriceCheckInline } from '@/components/guidance/PriceCheckInline';
 import { RecallCheckInline } from '@/components/guidance/RecallCheckInline';
 import { NegotiationShieldInline } from '@/components/guidance/NegotiationShieldInline';
 import { ReplacementJourneyInline } from '@/components/guidance/ReplacementJourneyInline';
+import { GuidanceOverviewInlineStep } from '@/app/(dashboard)/dashboard/properties/[id]/tools/guidance-overview/components/GuidanceOverviewInlineStep';
 
 function shellBackHref(propertyId: string, journey: GuidanceJourneyDTO): string {
   const params = new URLSearchParams({ journeyId: journey.id });
@@ -317,6 +318,19 @@ export default function GuidanceStepPageClient() {
           inventoryItemId={inventoryItemId}
           assetName={assetName}
           issueType={issueType}
+          onComplete={refreshGuidance}
+        />
+      );
+    }
+
+    if (targetStep.toolKey === 'guidance-overview') {
+      const nextStepKey =
+        journey.steps.find((step) => step.stepOrder === targetStep.stepOrder + 1)?.stepKey ?? null;
+      return (
+        <GuidanceOverviewInlineStep
+          propertyId={propertyId}
+          step={targetStep}
+          nextStepKey={nextStepKey}
           onComplete={refreshGuidance}
         />
       );

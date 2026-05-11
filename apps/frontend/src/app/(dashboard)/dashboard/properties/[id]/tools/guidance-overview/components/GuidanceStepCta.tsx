@@ -17,6 +17,7 @@ import { ReplacementPrioritiesCapture } from '@/components/guidance/ReplacementP
 import { NegotiationShieldInline } from '@/components/guidance/NegotiationShieldInline';
 import TrustStrip from '../../../components/route-templates/TrustStrip';
 import { guidanceEngineTrust } from '@/lib/trust/trustPresets';
+import { GuidanceOverviewInlineStep } from './GuidanceOverviewInlineStep';
 
 export type GuidanceStepCtaProps = {
   step: GuidanceStepDTO;
@@ -315,6 +316,17 @@ export function GuidanceStepCta({
         guidanceSignalIntentFamily={resolvedJourney?.primarySignal?.signalIntentFamily ?? null}
         assetName={displayAssetName}
         issueType={resolvedJourney?.issueType ?? selectedIssueType ?? null}
+        onComplete={handleInlineComplete}
+      />
+    );
+  }
+
+  if (step.toolKey === 'guidance-overview') {
+    return (
+      <GuidanceOverviewInlineStep
+        propertyId={propertyId}
+        step={step}
+        nextStepKey={nextStep?.stepKey ?? null}
         onComplete={handleInlineComplete}
       />
     );
