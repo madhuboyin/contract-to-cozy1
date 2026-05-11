@@ -14,7 +14,7 @@ interface AuthContextType {
   login: (data: LoginInput) => Promise<AuthLoginResult | null>;
   completeMfaChallenge: (mfaToken: string, code: string) => Promise<LoginResponse | null>;
   completeMfaRecoveryChallenge: (mfaToken: string, recoveryCode: string) => Promise<LoginResponse | null>;
-  logout: () => void;
+  logout: () => Promise<void>;
   register: (data: RegisterInput) => Promise<RegisterResponse | null>;
   isAuthenticated: boolean;
   isHomeowner: boolean;
@@ -69,11 +69,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   // --- Authentication Handlers ---
   
   // FIX 2: Define logout first to be used in refreshUser
-  const logout = useCallback(() => {
-    api.logout().catch(() => undefined);
-    api.clearSessionTokens();
+  const logout = useCallback(async () => {
     setUser(null);
-    router.push('/login');
+    setLoading(false);
+    await api.logout();
+    router.replace('/login');
+    router.refresh();
   }, [router]);
 
   // FIX 3: Define refreshUser using the common fetchCurrentUser logic

@@ -53,10 +53,9 @@ export function BottomNav() {
   const [propertySwitcherOpen, setPropertySwitcherOpen] = React.useState(false);
   const resolvedPropertyId = selectedPropertyId || getPropertyIdFromPathname(pathname || '');
 
-  const handleLogout = React.useCallback(() => {
+  const handleLogout = React.useCallback(async () => {
     setMoreOpen(false);
-    logout();
-    if (typeof window !== 'undefined') window.location.href = '/login';
+    await logout();
   }, [logout]);
 
   const handleCameraCapture = React.useCallback(() => {

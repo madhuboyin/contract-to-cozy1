@@ -105,9 +105,9 @@ export default function ProviderDashboardLayout({
                     </Link>
                     <button
                       type="button"
-                      onClick={() => {
+                      onClick={async () => {
                         setIsAccountMenuOpen(false);
-                        logout();
+                        await logout();
                       }}
                       className="mt-1 block w-full rounded-lg px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
                     >

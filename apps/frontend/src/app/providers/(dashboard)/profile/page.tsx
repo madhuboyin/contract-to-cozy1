@@ -174,7 +174,7 @@ export default function ProviderProfilePage() {
         title: 'Account deactivated',
         description: 'Your provider profile is now inactive.',
       });
-      logout();
+      await logout();
     } catch (error: any) {
       toast({
         title: 'Deactivation failed',
@@ -210,7 +210,7 @@ export default function ProviderProfilePage() {
         title: 'Account deleted',
         description: 'Your account has been removed and access has been revoked.',
       });
-      logout();
+      await logout();
     } catch (error: any) {
       toast({
         title: 'Deletion failed',

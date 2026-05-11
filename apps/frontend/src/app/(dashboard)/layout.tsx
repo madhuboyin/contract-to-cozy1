@@ -91,9 +91,8 @@ function PersistentSidebarNav({ user, isCollapsed, onToggleCollapse }: {
   const { selectedPropertyId } = usePropertyContext();
   const resolvedPropertyId = selectedPropertyId || getPropertyIdFromPathname(pathname || '');
 
-  const handleLogout = () => {
-    logout();
-    if (typeof window !== 'undefined') window.location.href = '/login';
+  const handleLogout = async () => {
+    await logout();
   };
 
   const coreJobs = PRIMARY_JOBS.filter(j => j.key !== 'home-lab');
@@ -364,9 +363,8 @@ function MobileDrawerNav({ user }: { user: User | null }) {
   const { selectedPropertyId } = usePropertyContext();
   const resolvedPropertyId = selectedPropertyId || getPropertyIdFromPathname(pathname || '');
 
-  const handleLogout = () => {
-    logout();
-    if (typeof window !== 'undefined') window.location.href = '/login';
+  const handleLogout = async () => {
+    await logout();
   };
 
   const coreJobs = PRIMARY_JOBS.filter(j => j.key !== 'home-lab');
