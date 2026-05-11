@@ -169,6 +169,19 @@ class APIClient {
     this.baseURL = baseURL;
   }
 
+  private buildQueryString(params?: Record<string, any>): string {
+    if (!params) return '';
+
+    const query = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+      if (value === undefined || value === null) return;
+      query.append(key, String(value));
+    });
+
+    const serialized = query.toString();
+    return serialized ? `?${serialized}` : '';
+  }
+
   private readStoredPropertiesCache(): APIResponse<{ properties: Property[] }> | null {
     if (typeof window === 'undefined') return null;
 
@@ -744,9 +757,7 @@ class APIClient {
     endpoint: string,
     options?: { params?: Record<string, any>; responseType?: 'blob' }
   ): Promise<{ data: T }> {
-    const url = options?.params
-      ? `${endpoint}?${new URLSearchParams(options.params).toString()}`
-      : endpoint;
+    const url = `${endpoint}${this.buildQueryString(options?.params)}`;
 
     // Handle blob responses separately
     if (options?.responseType === 'blob') {
