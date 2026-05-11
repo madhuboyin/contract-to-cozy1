@@ -11,6 +11,27 @@ type GuidanceOverviewHrefOptions = {
   backTo?: string | null;
 };
 
+export function normalizeGuidanceOverviewSearchParams(
+  input: URLSearchParams
+): URLSearchParams {
+  const normalized = new URLSearchParams(input.toString());
+
+  const guidanceJourneyId = normalized.get('guidanceJourneyId');
+  const guidanceStepKey = normalized.get('guidanceStepKey');
+
+  if (!normalized.get('journeyId') && guidanceJourneyId) {
+    normalized.set('journeyId', guidanceJourneyId);
+  }
+  if (!normalized.get('stepKey') && guidanceStepKey) {
+    normalized.set('stepKey', guidanceStepKey);
+  }
+
+  normalized.delete('guidanceJourneyId');
+  normalized.delete('guidanceStepKey');
+
+  return normalized;
+}
+
 export function normalizeGuidanceIssueTypeKey(value: string): string {
   return value
     .trim()

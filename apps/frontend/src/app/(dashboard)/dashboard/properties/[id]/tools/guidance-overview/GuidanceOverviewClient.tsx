@@ -142,7 +142,8 @@ export default function GuidanceOverviewClient() {
   const selectedIssueType = searchParams.get('issueType');
   const selectedCustomIssueLabel = searchParams.get('customIssueLabel')?.trim() ?? '';
   // Phase 6c: direct journey resume — bypasses the wizard when present
-  const pinnedJourneyId = searchParams.get('journeyId');
+  const pinnedJourneyId =
+    searchParams.get('journeyId') ?? searchParams.get('guidanceJourneyId');
   const requestedStepKey =
     searchParams.get('stepKey') ?? searchParams.get('guidanceStepKey');
 
