@@ -28,6 +28,8 @@ interface ConsentState {
 }
 
 interface ConsentContextValue extends ConsentState {
+  /** localStorage has been read and the consent state is ready for rendering. */
+  hydrated: boolean;
   /** Accept all optional categories. */
   grantAll: () => void;
   /** Accept necessary cookies only; deny analytics. */
@@ -60,11 +62,13 @@ function writeStorage(state: ConsentState): void {
 
 export function ConsentProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<ConsentState>({ decided: false, analytics: false });
+  const [hydrated, setHydrated] = useState(false);
 
   // Hydrate from storage once on mount (avoids SSR mismatch)
   useEffect(() => {
     const stored = readStorage();
     if (stored) setState(stored);
+    setHydrated(true);
   }, []);
 
   const grantAll = useCallback(() => {
@@ -80,7 +84,7 @@ export function ConsentProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <ConsentContext.Provider value={{ ...state, grantAll, denyAnalytics }}>
+    <ConsentContext.Provider value={{ ...state, hydrated, grantAll, denyAnalytics }}>
       {children}
     </ConsentContext.Provider>
   );

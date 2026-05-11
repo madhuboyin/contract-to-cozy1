@@ -7,9 +7,9 @@
 import { useConsent } from '@/lib/consent';
 
 export function CookieConsentBanner() {
-  const { decided, grantAll, denyAnalytics } = useConsent();
+  const { hydrated, decided, grantAll, denyAnalytics } = useConsent();
 
-  if (decided) return null;
+  if (!hydrated || decided) return null;
 
   return (
     <div
