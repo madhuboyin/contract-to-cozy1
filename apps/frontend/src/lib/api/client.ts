@@ -144,6 +144,8 @@ function toNumber(value: unknown): number {
  * Uses a class structure for token refresh logic and state management.
  */
 class APIClient {
+  private static readonly PROPERTIES_CACHE_TTL_MS = 60_000;
+  private static readonly PROPERTIES_SESSION_FALLBACK_KEY = 'ctc:properties-cache:v1';
   private baseURL: string;
   private csrfToken: string | null = null;
   private csrfTokenRequest: Promise<string | null> | null = null;
@@ -165,6 +167,35 @@ class APIClient {
 
   constructor(baseURL: string) {
     this.baseURL = baseURL;
+  }
+
+  private readStoredPropertiesCache(): APIResponse<{ properties: Property[] }> | null {
+    if (typeof window === 'undefined') return null;
+
+    try {
+      const raw = window.sessionStorage.getItem(APIClient.PROPERTIES_SESSION_FALLBACK_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw) as {
+        data?: APIResponse<{ properties: Property[] }>;
+      } | null;
+      if (!parsed?.data?.success || !Array.isArray(parsed.data.data?.properties)) return null;
+      return parsed.data;
+    } catch {
+      return null;
+    }
+  }
+
+  private writeStoredPropertiesCache(data: APIResponse<{ properties: Property[] }>): void {
+    if (typeof window === 'undefined') return;
+
+    try {
+      window.sessionStorage.setItem(
+        APIClient.PROPERTIES_SESSION_FALLBACK_KEY,
+        JSON.stringify({ data, savedAt: Date.now() }),
+      );
+    } catch {
+      // Ignore storage failures and continue with in-memory cache.
+    }
   }
 
   private shouldAttachCsrf(endpoint: string, method?: string): boolean {
@@ -399,10 +430,16 @@ class APIClient {
 
     } catch (error) {
       // Critical: Ensure every error path results in a thrown error so the UI catch/finally blocks run
-      console.error('API Request Error:', error);
       if (error instanceof APIError) {
-          throw error;
+        if (error.status === 429) {
+          console.warn('API Request Rate Limited:', error.message);
+        } else {
+          console.error('API Request Error:', error);
+        }
+        throw error;
       }
+
+      console.error('API Request Error:', error);
       // Convert generic network errors (like DNS failure or Timeout) into APIErrors
       throw new APIError('Network error. Please check your connection.', 'NETWORK');
     }
@@ -997,6 +1034,8 @@ class APIClient {
       return this.propertiesCache.data;
     }
 
+    const storedCache = this.readStoredPropertiesCache();
+
     if (this.propertiesRequest) {
       return this.propertiesRequest;
     }
@@ -1006,9 +1045,22 @@ class APIClient {
         const response: APIResponse<{ properties: Property[] }> = { success: true, data: res.data };
         this.propertiesCache = {
           data: response,
-          expiresAt: Date.now() + 15_000,
+          expiresAt: Date.now() + APIClient.PROPERTIES_CACHE_TTL_MS,
         };
+        this.writeStoredPropertiesCache(response);
         return response;
+      })
+      .catch((error) => {
+        const fallback = this.propertiesCache?.data ?? storedCache;
+        const status = error instanceof APIError ? error.status : null;
+        if (fallback && (status === 429 || status === 'NETWORK')) {
+          this.propertiesCache = {
+            data: fallback,
+            expiresAt: Date.now() + APIClient.PROPERTIES_CACHE_TTL_MS,
+          };
+          return fallback;
+        }
+        throw error;
       })
       .finally(() => {
         this.propertiesRequest = null;

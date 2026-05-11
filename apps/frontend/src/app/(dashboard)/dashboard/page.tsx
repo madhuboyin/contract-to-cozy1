@@ -664,6 +664,7 @@ export default function DashboardPage() {
     `dashboard-aha-${user?.id ?? 'anon'}-${selectedPropertyId ?? 'none'}`
   );
   const { data: homeownerSegment } = useHomeownerSegment();
+  const isHomeBuyer = (homeownerSegment ?? user?.segment ?? null) === 'HOME_BUYER';
   const properties = data.properties;
   const effectiveSelectedPropertyId =
     selectedPropertyId && properties.some((property) => property.id === selectedPropertyId)
@@ -781,9 +782,11 @@ export default function DashboardPage() {
       const [bookingsRes, checklistRes, warrantiesRes, policiesRes, incidentsRes, inventoryRes] = await Promise.all([
         api.listBookings({ limit: 50, sortBy: 'createdAt', sortOrder: 'desc' })
           .catch(() => ({ success: false, data: { bookings: [] } })),
-        api.getHomeBuyerChecklist()
-          .then(res => (res.success && res.data ? { success: true, data: res.data } : { success: false, data: null }))
-          .catch(() => ({ success: false, data: null })),
+        isHomeBuyer
+          ? api.getHomeBuyerChecklist()
+              .then(res => (res.success && res.data ? { success: true, data: res.data } : { success: false, data: null }))
+              .catch(() => ({ success: false, data: null }))
+          : Promise.resolve({ success: false as const, data: null }),
         api.listWarranties()
           .catch(() => ({ success: false, data: { warranties: [] } })),
         api.listInsurancePolicies()
@@ -843,7 +846,7 @@ export default function DashboardPage() {
     } finally {
       setRedirectChecked(true);
     }
-  }, [user, selectedPropertyId]);
+  }, [isHomeBuyer, user, selectedPropertyId]);
   
   const hasTrackedFirstView = React.useRef(false);
   useEffect(() => {

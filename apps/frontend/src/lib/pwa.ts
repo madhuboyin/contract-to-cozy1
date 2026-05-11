@@ -4,6 +4,35 @@
  * Register the service worker for PWA functionality.
  * Returns a cleanup function that clears the update interval.
  */
+function isTrustedTypesServiceWorkerError(error: unknown): boolean {
+  return error instanceof TypeError && error.message.includes('TrustedScriptURL');
+}
+
+function buildServiceWorkerUrl(): string | unknown {
+  const serviceWorkerUrl = new URL('/sw.js', window.location.origin).toString();
+  const trustedTypesApi = (window as Window & {
+    trustedTypes?: {
+      createPolicy?: (
+        name: string,
+        rules: { createScriptURL: (input: string) => string }
+      ) => { createScriptURL: (input: string) => unknown };
+    };
+  }).trustedTypes;
+
+  if (!trustedTypesApi?.createPolicy) {
+    return serviceWorkerUrl;
+  }
+
+  try {
+    const policy = trustedTypesApi.createPolicy('ctc-service-worker', {
+      createScriptURL: (input) => input,
+    });
+    return policy.createScriptURL(serviceWorkerUrl);
+  } catch {
+    return serviceWorkerUrl;
+  }
+}
+
 export function registerServiceWorker(): (() => void) | undefined {
   if (typeof window === 'undefined') return undefined;
 
@@ -18,7 +47,7 @@ export function registerServiceWorker(): (() => void) | undefined {
 
   const onLoad = async () => {
     try {
-      swRegistration = await navigator.serviceWorker.register('/sw.js', {
+      swRegistration = await navigator.serviceWorker.register(buildServiceWorkerUrl() as string, {
         scope: '/'
       });
 
@@ -45,6 +74,10 @@ export function registerServiceWorker(): (() => void) | undefined {
       swRegistration.addEventListener('updatefound', updateFoundHandler);
 
     } catch (error) {
+      if (isTrustedTypesServiceWorkerError(error)) {
+        console.warn('Service Worker registration skipped: Trusted Types requires a TrustedScriptURL.');
+        return;
+      }
       console.error('Service Worker registration failed:', error);
     }
   };
