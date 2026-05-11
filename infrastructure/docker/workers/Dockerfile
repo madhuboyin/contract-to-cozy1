@@ -169,6 +169,7 @@ COPY apps/backend/src/services/guidanceEngine/guidancePriority.service.ts src/sh
 COPY apps/backend/src/services/guidanceEngine/guidanceSuppression.service.ts src/shared/backend/services/guidanceEngine/
 COPY apps/backend/src/services/guidanceEngine/guidanceCopy.service.ts src/shared/backend/services/guidanceEngine/
 COPY apps/backend/src/services/guidanceEngine/guidanceValidation.service.ts src/shared/backend/services/guidanceEngine/
+COPY apps/backend/src/services/guidanceEngine/guidanceAdvisor.service.ts src/shared/backend/services/guidanceEngine/
 COPY apps/backend/src/services/guidanceEngine/guidanceMapper.ts src/shared/backend/services/guidanceEngine/
 COPY apps/backend/src/services/guidanceEngine/guidanceBookingGuard.service.ts src/shared/backend/services/guidanceEngine/
 COPY apps/backend/src/services/guidanceEngine/guidanceJourney.service.ts src/shared/backend/services/guidanceEngine/
