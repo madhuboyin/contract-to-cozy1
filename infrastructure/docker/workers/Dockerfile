@@ -176,6 +176,7 @@ COPY apps/backend/src/services/guidanceEngine/guidanceJourney.service.ts src/sha
 # Stubs: replace backend-only deps with workers-safe equivalents
 COPY apps/workers/stubs/error-middleware.ts src/shared/backend/middleware/error.middleware.ts
 COPY apps/workers/stubs/notification-service.ts src/shared/backend/services/notification.service.ts
+COPY apps/workers/stubs/gemini-service.ts src/shared/backend/services/gemini.service.ts
 # Copy worker source code + TS config
 COPY apps/workers/src ./src
 COPY apps/workers/tsconfig.json ./tsconfig.json
