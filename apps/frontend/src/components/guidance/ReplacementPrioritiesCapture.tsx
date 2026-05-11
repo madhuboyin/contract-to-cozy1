@@ -36,10 +36,6 @@ const MUST_HAVE_OPTIONS: { value: MustHave; label: string }[] = [
   { value: 'specific_brand', label: 'Specific brand only' },
 ];
 
-function storageKey(args: { propertyId: string; journeyId: string }) {
-  return ['replacement-priorities', args.propertyId, args.journeyId].join(':');
-}
-
 export function ReplacementPrioritiesCapture({
   propertyId,
   journeyId,
@@ -50,7 +46,6 @@ export function ReplacementPrioritiesCapture({
   onComplete,
 }: ReplacementPrioritiesCaptureProps) {
   const queryClient = useQueryClient();
-  const draftKey = React.useMemo(() => storageKey({ propertyId, journeyId }), [propertyId, journeyId]);
 
   const [budget, setBudget] = React.useState('');
   const [priority, setPriority] = React.useState<PrimaryPriority | null>(null);
@@ -59,26 +54,6 @@ export function ReplacementPrioritiesCapture({
   const [saving, setSaving] = React.useState(false);
   const [completed, setCompleted] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
-
-  // Restore draft from sessionStorage
-  React.useEffect(() => {
-    if (typeof window === 'undefined') return;
-    try {
-      const raw = window.sessionStorage.getItem(draftKey);
-      if (!raw) return;
-      const parsed = JSON.parse(raw);
-      if (typeof parsed.budget === 'string') setBudget(parsed.budget);
-      if (parsed.priority) setPriority(parsed.priority);
-      if (parsed.tenure) setTenure(parsed.tenure);
-      if (Array.isArray(parsed.mustHaves)) setMustHaves(parsed.mustHaves);
-    } catch { /* ignore */ }
-  }, [draftKey]);
-
-  // Persist draft
-  React.useEffect(() => {
-    if (typeof window === 'undefined') return;
-    window.sessionStorage.setItem(draftKey, JSON.stringify({ budget, priority, tenure, mustHaves }));
-  }, [budget, priority, tenure, mustHaves, draftKey]);
 
   function toggleMustHave(value: MustHave) {
     setMustHaves((prev) =>

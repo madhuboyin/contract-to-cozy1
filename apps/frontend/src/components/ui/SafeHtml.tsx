@@ -31,6 +31,7 @@ const ALLOWED_ATTR = ['href', 'title', 'target', 'rel', 'class', 'src', 'alt', '
 const ALLOWED_TARGETS = new Set(['_blank', '_self']);
 const SAFE_URI_PATTERN =
   /^(?:(?:https?:|mailto:|tel:)|\/(?!\/)|#)/i;
+const SAFE_IMAGE_SRC_PATTERN = /^https:\/\//i;
 
 interface SafeHtmlProps {
   html: string;
@@ -75,7 +76,7 @@ export function SafeHtml({ html, as: Tag = 'div', className }: SafeHtmlProps) {
 
     container.querySelectorAll('img').forEach((image) => {
       const src = image.getAttribute('src') || '';
-      if (!/^(?:https?:|\/(?!\/))/i.test(src)) {
+      if (!SAFE_IMAGE_SRC_PATTERN.test(src)) {
         image.remove();
       }
     });

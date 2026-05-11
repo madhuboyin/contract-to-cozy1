@@ -289,7 +289,6 @@ app.get('/api/health', (req: Request, res: Response) => {
     status: 'healthy',
     service: 'backend',
     timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV || 'development',
   });
 });
 
@@ -418,24 +417,7 @@ app.get('/metrics', async (req: Request, res: Response) => {
  *                   type: object
  */
 app.get('/', (req: Request, res: Response) => {
-  res.json({
-    service: 'Contract to Cozy API',
-    version: '1.3.0',
-    status: 'running',
-    documentation: '/api/docs',
-    endpoints: {
-      health: '/api/health',
-      ready: '/api/ready',
-      auth: '/api/auth',
-      providers: '/api/providers',
-      bookings: '/api/bookings',
-      properties: '/api/properties',
-      users: '/api/users',
-      checklist: '/api/checklist',
-      serviceCategories: '/api/service-categories',
-      community: '/api/community',
-    },
-  });
+  res.json({ status: 'ok' });
 });
 
 // =============================================================================

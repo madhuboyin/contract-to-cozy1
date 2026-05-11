@@ -49,24 +49,6 @@ function toMoney(value: string): number | null {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 }
 
-function storageKey(args: { propertyId: string; journeyId: string; stepKey: string }) {
-  return ['replacement-journey-inline', args.propertyId, args.journeyId, args.stepKey].join(':');
-}
-
-function aiShortlistCacheKey(args: { propertyId: string; journeyId: string; priorities?: ReplacementPriorities }) {
-  const prioritySlug = [
-    args.priorities?.primaryPriority ?? 'default',
-    args.priorities?.homeOwnershipYears ?? 'any',
-    args.priorities?.budgetMax?.toString() ?? '0',
-  ].join('-');
-  return ['replacement-ai-shortlist', args.propertyId, args.journeyId, prioritySlug].join(':');
-}
-
-function aiVendorCacheKey(args: { propertyId: string; journeyId: string; modelName?: string }) {
-  const modelSlug = (args.modelName ?? 'default').replace(/[^a-z0-9]/gi, '-').toLowerCase().slice(0, 40);
-  return ['replacement-ai-vendors', args.propertyId, args.journeyId, modelSlug].join(':');
-}
-
 function buildInitialOverrides(vendors: AIVendorSuggestion[]): Record<string, VendorOverride> {
   return Object.fromEntries(
     vendors.map((v) => [
@@ -410,16 +392,6 @@ export function ReplacementJourneyInline({
 }: ReplacementJourneyInlineProps) {
   const queryClient = useQueryClient();
   const issueLabel = formatIssueTypeLabel(issueType);
-  const draftKey = React.useMemo(() => storageKey({ propertyId, journeyId, stepKey }), [propertyId, journeyId, stepKey]);
-  const shortlistCacheKey = React.useMemo(
-    () => aiShortlistCacheKey({ propertyId, journeyId, priorities }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [propertyId, journeyId, priorities?.primaryPriority, priorities?.homeOwnershipYears, priorities?.budgetMax]
-  );
-  const vendorCacheKey = React.useMemo(
-    () => aiVendorCacheKey({ propertyId, journeyId, modelName: selectedModelName }),
-    [propertyId, journeyId, selectedModelName]
-  );
 
   // AI shortlist state (compare_replacement_models)
   const [aiModels, setAiModels] = React.useState<AIModelRecommendation[] | null>(null);
@@ -456,56 +428,9 @@ export function ReplacementJourneyInline({
   const [followUpDate, setFollowUpDate] = React.useState<string>(typeof producedData?.followUpDate === 'string' ? producedData.followUpDate : '');
   const [notes, setNotes] = React.useState<string>(typeof producedData?.notes === 'string' ? producedData.notes : '');
 
-  React.useEffect(() => {
-    if (typeof window === 'undefined') return;
-    try {
-      const raw = window.sessionStorage.getItem(draftKey);
-      if (!raw) return;
-      const parsed = JSON.parse(raw) as {
-        models?: ModelEntry[];
-        selectedModel?: string;
-        selectedVendor?: string;
-        budget?: string;
-        timeline?: string;
-        followUpDate?: string;
-        notes?: string;
-      };
-      if (parsed.models?.length) setModels(parsed.models);
-      if (typeof parsed.selectedModel === 'string') setSelectedModel(parsed.selectedModel);
-      if (typeof parsed.selectedVendor === 'string') setSelectedVendor(parsed.selectedVendor);
-      if (typeof parsed.budget === 'string') setBudget(parsed.budget);
-      if (typeof parsed.timeline === 'string') setTimeline(parsed.timeline);
-      if (typeof parsed.followUpDate === 'string') setFollowUpDate(parsed.followUpDate);
-      if (typeof parsed.notes === 'string') setNotes(parsed.notes);
-    } catch {
-      // Ignore corrupted session draft.
-    }
-  }, [draftKey]);
-
-  React.useEffect(() => {
-    if (typeof window === 'undefined') return;
-    window.sessionStorage.setItem(
-      draftKey,
-      JSON.stringify({ models, selectedModel, selectedVendor, budget, timeline, followUpDate, notes })
-    );
-  }, [budget, draftKey, followUpDate, models, notes, selectedModel, selectedVendor, timeline]);
-
   // Fetch AI model shortlist for compare_replacement_models
   React.useEffect(() => {
     if (stepKey !== 'compare_replacement_models') return;
-
-    if (typeof window !== 'undefined') {
-      const cached = window.sessionStorage.getItem(shortlistCacheKey);
-      if (cached) {
-        try {
-          const parsed = JSON.parse(cached) as AIModelRecommendation[];
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            setAiModels(parsed);
-            return;
-          }
-        } catch { /* ignore */ }
-      }
-    }
 
     setAiLoading(true);
     setAiError(null);
@@ -519,34 +444,17 @@ export function ReplacementJourneyInline({
     })
       .then((result) => {
         setAiModels(result.models);
-        if (typeof window !== 'undefined') {
-          window.sessionStorage.setItem(shortlistCacheKey, JSON.stringify(result.models));
-        }
       })
       .catch(() => {
         setAiError('Could not load AI recommendations. You can still enter a model manually below.');
       })
       .finally(() => setAiLoading(false));
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stepKey, propertyId, assetName, shortlistCacheKey, priorities?.primaryPriority, priorities?.homeOwnershipYears, priorities?.budgetMax]);
+  }, [stepKey, propertyId, assetName, priorities?.primaryPriority, priorities?.homeOwnershipYears, priorities?.budgetMax]);
 
   // Fetch AI vendor suggestions for compare_purchase_options
   React.useEffect(() => {
     if (stepKey !== 'compare_purchase_options') return;
-
-    if (typeof window !== 'undefined') {
-      const cached = window.sessionStorage.getItem(vendorCacheKey);
-      if (cached) {
-        try {
-          const parsed = JSON.parse(cached) as AIVendorSuggestion[];
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            setAiVendors(parsed);
-            setVendorOverrides((prev) => Object.keys(prev).length === 0 ? buildInitialOverrides(parsed) : prev);
-            return;
-          }
-        } catch { /* ignore */ }
-      }
-    }
 
     setAiVendorsLoading(true);
     setAiVendorsError(null);
@@ -558,16 +466,13 @@ export function ReplacementJourneyInline({
       .then((result) => {
         setAiVendors(result.vendors);
         setVendorOverrides(buildInitialOverrides(result.vendors));
-        if (typeof window !== 'undefined') {
-          window.sessionStorage.setItem(vendorCacheKey, JSON.stringify(result.vendors));
-        }
       })
       .catch(() => {
         setAiVendorsError('Could not load vendor suggestions. Enter details manually below.');
       })
       .finally(() => setAiVendorsLoading(false));
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stepKey, propertyId, assetName, vendorCacheKey, selectedModelName, priorities?.budgetMax]);
+  }, [stepKey, propertyId, assetName, selectedModelName, priorities?.budgetMax]);
 
   const activeModels = models.filter((entry) => entry.name.trim());
 

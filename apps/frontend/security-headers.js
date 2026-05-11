@@ -19,7 +19,9 @@ function buildCsp({ nonce, apiUrl, faroUrl }) {
   return [
     "default-src 'self'",
     `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'`,
-    "style-src 'self' 'unsafe-inline'",
+    "style-src 'self'",
+    `style-src-elem 'self' 'nonce-${nonce}'`,
+    "style-src-attr 'unsafe-inline'",
     "font-src 'self'",
     "img-src 'self' blob: data: https://contracttocozy.com https://*.contracttocozy.com",
     `connect-src ${connectSrc.join(' ')}`,
