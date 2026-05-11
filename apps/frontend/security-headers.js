@@ -20,6 +20,7 @@ function buildCsp({ nonce, apiUrl, faroUrl }) {
   return [
     "default-src 'self'",
     `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'`,
+    "script-src-attr 'none'",
     "style-src 'self'",
     `style-src-elem 'self' 'nonce-${nonce}'`,
     // Temporary compatibility: the app still uses React inline style attributes
@@ -55,9 +56,10 @@ const STATIC_SECURITY_HEADERS = [
   { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
   {
     key: 'Permissions-Policy',
-    value: 'camera=(), microphone=(), geolocation=(self), payment=(), usb=(), bluetooth=(), browsing-topics=()',
+    value: 'accelerometer=(), autoplay=(), bluetooth=(), browsing-topics=(), camera=(), display-capture=(), geolocation=(self), gyroscope=(), magnetometer=(), microphone=(), midi=(), payment=(), publickey-credentials-get=(self), screen-wake-lock=(), usb=(), web-share=()',
   },
   { key: 'X-DNS-Prefetch-Control', value: 'off' },
+  { key: 'X-Permitted-Cross-Domain-Policies', value: 'none' },
   { key: 'Cross-Origin-Opener-Policy', value: 'same-origin' },
   { key: 'Cross-Origin-Embedder-Policy', value: 'credentialless' },
   { key: 'Cross-Origin-Resource-Policy', value: 'same-site' },

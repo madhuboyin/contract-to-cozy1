@@ -13,6 +13,7 @@ import {
   uploadChecklistItemDocument,
 } from '@/app/(dashboard)/dashboard/properties/[id]/claims/claimsApi';
 import { toast } from '@/components/ui/use-toast';
+import { toSafeHref } from '@/lib/security/url';
 
 type BlockingEntry = {
   itemId: string;
@@ -326,7 +327,7 @@ export default function ClaimChecklist({
                 <div className="text-xs font-semibold text-gray-700">Documents</div>
                 <div className="mt-2 space-y-1">
                   {docs.map((d: any) => {
-                    const url = d.document?.fileSignedUrl || d.document?.fileUrl;
+                    const url = toSafeHref(d.document?.fileSignedUrl || d.document?.fileUrl, { allowRelative: false });
                     const label = d.title || d.document?.name || 'Document';
                     return (
                       <div key={d.id} className="flex items-center justify-between gap-2">

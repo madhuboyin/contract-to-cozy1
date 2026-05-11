@@ -17,6 +17,29 @@ import {
 const PUBLIC_FILE_PATH_REGEX =
   /\/[^/?]+\.(?:avif|bmp|css|gif|ico|jpe?g|js|json|map|mp3|mp4|ogg|otf|pdf|png|svg|ttf|txt|wav|webm|webmanifest|webp|woff2?|xml)$/i;
 const ACCESS_COOKIE_CANDIDATES = ['__Secure-ctc.at', '__Host-ctc.at', 'ctc.at'] as const;
+const SENSITIVE_PAGE_PREFIXES = [
+  '/dashboard',
+  '/providers/dashboard',
+  '/providers/services',
+  '/providers/bookings',
+  '/providers/calendar',
+  '/providers/portfolio',
+  '/providers/profile',
+  '/admin',
+  '/vault',
+] as const;
+const NO_STORE_PAGE_PREFIXES = [
+  ...SENSITIVE_PAGE_PREFIXES,
+  '/login',
+  '/signup',
+  '/providers/login',
+  '/providers/join',
+  '/forgot-password',
+  '/reset-password',
+  '/verify-email',
+  '/reports/share',
+  '/gazette/share',
+] as const;
 
 // ---------------------------------------------------------------------------
 // Auth helpers
@@ -67,6 +90,37 @@ function getUserRoleFromToken(token: string | undefined): string | null {
   }
 }
 
+function shouldApplyNoStore(pathname: string): boolean {
+  return NO_STORE_PAGE_PREFIXES.some(
+    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)
+  );
+}
+
+function isTokenizedOrSharedPage(pathname: string, searchParams: URLSearchParams): boolean {
+  return (
+    pathname.startsWith('/reports/share/') ||
+    pathname.startsWith('/gazette/share/') ||
+    (pathname.startsWith('/vault/') && searchParams.has('token'))
+  );
+}
+
+function applySensitivePageHeaders(
+  response: NextResponse,
+  pathname: string,
+  searchParams: URLSearchParams
+): void {
+  if (shouldApplyNoStore(pathname)) {
+    response.headers.set('Cache-Control', 'no-store, max-age=0, must-revalidate, private');
+    response.headers.set('Pragma', 'no-cache');
+    response.headers.set('Expires', '0');
+  }
+
+  if (isTokenizedOrSharedPage(pathname, searchParams)) {
+    response.headers.set('Referrer-Policy', 'no-referrer');
+    response.headers.set('X-Robots-Tag', 'noindex, noarchive, nosnippet, noimageindex');
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Middleware
 // ---------------------------------------------------------------------------
@@ -104,6 +158,7 @@ export function middleware(request: NextRequest) {
     const response = NextResponse.next({ request: { headers: requestHeaders } });
     response.headers.set(cspHeaderName, csp);
     response.headers.set('Reporting-Endpoints', buildReportingEndpoints(apiUrl));
+    applySensitivePageHeaders(response, pathname, request.nextUrl.searchParams);
     return response;
   }
 
@@ -163,6 +218,7 @@ export function middleware(request: NextRequest) {
   const response = NextResponse.next({ request: { headers: requestHeaders } });
   response.headers.set(cspHeaderName, csp);
   response.headers.set('Reporting-Endpoints', buildReportingEndpoints(apiUrl));
+  applySensitivePageHeaders(response, pathname, request.nextUrl.searchParams);
   return response;
 }
 

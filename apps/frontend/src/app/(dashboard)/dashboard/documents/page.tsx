@@ -5,6 +5,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { FileText, Plus, Loader2, Trash2, ExternalLink, Filter, X, Save, Upload, Sparkles, FileCheck, ArrowLeft } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { api } from '@/lib/api/client';
+import { toSafeHref } from '@/lib/security/url';
 import { Card, CardContent, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
@@ -779,7 +780,7 @@ export default function DocumentsPage() {
                   <ActionPriorityRow
                     primaryAction={
                       <Button asChild className="w-full min-h-[40px]">
-                        <a href={doc.fileSignedUrl ?? undefined} target="_blank" rel="noopener noreferrer">
+                        <a href={toSafeHref(doc.fileSignedUrl)} target="_blank" rel="noopener noreferrer">
                           <ExternalLink className="w-4 h-4 mr-2" />
                           Open Document
                         </a>
@@ -839,7 +840,7 @@ export default function DocumentsPage() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                         <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600 hover:text-blue-700" asChild>
-                           <a href={doc.fileSignedUrl ?? undefined} target="_blank" rel="noopener noreferrer">
+                           <a href={toSafeHref(doc.fileSignedUrl)} target="_blank" rel="noopener noreferrer">
                               <ExternalLink className="w-4 h-4" />
                            </a>
                         </Button>

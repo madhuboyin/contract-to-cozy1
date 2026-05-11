@@ -3,6 +3,7 @@
 
 import React from 'react';
 import type { ClaimDTO, ClaimDocumentDTO } from '@/types/claims.types';
+import { toSafeHref } from '@/lib/security/url';
 
 function formatDate(iso?: string | null) {
   if (!iso) return null;
@@ -46,7 +47,7 @@ export default function ClaimDocuments({ claim }: { claim: ClaimDTO }) {
       {docs.map((d) => {
         const title = getDisplayTitle(d);
         const created = formatDate(d.createdAt);
-        const docUrl = d.document?.fileSignedUrl || d.document?.fileUrl || null;
+        const docUrl = toSafeHref(d.document?.fileSignedUrl || d.document?.fileUrl, { allowRelative: false });
 
         const chip = d.claimDocumentType ?? 'OTHER';
         const mime = d.document?.mimeType || null;

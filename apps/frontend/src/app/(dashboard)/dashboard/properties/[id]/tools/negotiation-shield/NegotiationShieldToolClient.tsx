@@ -36,6 +36,7 @@ import { Separator } from '@/components/ui/separator';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/components/ui/use-toast';
 import { api } from '@/lib/api/client';
+import { toSafeHref } from '@/lib/security/url';
 import { cn } from '@/lib/utils';
 import type { DocumentType, Property } from '@/types';
 import {
@@ -2602,7 +2603,7 @@ function CaseWorkspace({
                     <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
                       {(document.fileSignedUrl || document.fileUrl) ? (
                         <Button type="button" variant="outline" className="w-full sm:w-auto" asChild>
-                          <a href={document.fileSignedUrl ?? document.fileUrl ?? undefined} target="_blank" rel="noreferrer">
+                          <a href={toSafeHref(document.fileSignedUrl ?? document.fileUrl, { allowRelative: false })} target="_blank" rel="noreferrer">
                             <FileText className="h-4 w-4" />
                             View file
                           </a>

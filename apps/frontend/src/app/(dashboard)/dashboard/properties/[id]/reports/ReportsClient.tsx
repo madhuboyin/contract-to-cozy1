@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { ArrowLeft, Plus } from 'lucide-react';
+import { toSafeHref } from '@/lib/security/url';
 
 import {
   HomeReportExportDTO,
@@ -116,7 +117,11 @@ export default function ReportsClient() {
     setError(null);
     try {
       const { url } = await getDownloadUrl(exportId);
-      window.open(url, '_blank', 'noopener,noreferrer');
+      const safeUrl = toSafeHref(url, { allowRelative: false });
+      if (!safeUrl) {
+        throw new Error('Download URL was rejected by the browser safety policy.');
+      }
+      window.open(safeUrl, '_blank', 'noopener,noreferrer');
     } catch (e: any) {
       setError(e?.message || 'Failed to download');
     }
@@ -253,7 +258,7 @@ export default function ReportsClient() {
               !exp.shareRevokedAt &&
               (!exp.shareExpiresAt || new Date(exp.shareExpiresAt) > new Date());
 
-            const shareUrl = exp.shareToken ? `/reports/share/${exp.shareToken}` : null;
+            const shareUrl = exp.shareToken ? toSafeHref(`/reports/share/${exp.shareToken}`) : null;
 
             return (
               <MobileCard key={exp.id} variant="compact" className="space-y-3">

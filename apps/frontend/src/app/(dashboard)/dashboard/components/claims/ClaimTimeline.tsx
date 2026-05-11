@@ -5,6 +5,7 @@ import React, { useMemo, useState } from 'react';
 import type { ClaimDTO, ClaimTimelineEventDTO } from '@/types/claims.types';
 import { addClaimTimelineEvent } from '@/app/(dashboard)/dashboard/properties/[id]/claims/claimsApi';
 import { toast } from '@/components/ui/use-toast';
+import { toSafeHref } from '@/lib/security/url';
 
 function fmt(ts?: string | null) {
   if (!ts) return '';
@@ -116,10 +117,11 @@ export default function ClaimTimeline({
         <div className="space-y-2">
           {events.map((ev: ClaimTimelineEventDTO & any) => {
             // If your DTO includes nested claimDocument->document->fileUrl, we’ll render it.
-            const fileUrl =
+            const fileUrl = toSafeHref(
               ev?.claimDocument?.document?.fileSignedUrl ||
-              ev?.claimDocument?.document?.fileUrl ||
-              null;
+                ev?.claimDocument?.document?.fileUrl,
+              { allowRelative: false }
+            );
 
             const docLabel =
               ev?.claimDocument?.title ||
