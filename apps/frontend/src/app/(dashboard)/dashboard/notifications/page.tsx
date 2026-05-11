@@ -7,6 +7,7 @@ import { Circle, RotateCcw } from 'lucide-react';
 import { useNotifications } from '@/lib/notifications/NotificationContext';
 import { api } from '@/lib/api/client';
 import { Notification } from '@/lib/notifications/NotificationContext';
+import { toSafeAppPath } from '@/lib/security/url';
 import {
   ActionPriorityRow,
   BottomSafeAreaReserve,
@@ -204,10 +205,25 @@ export default function NotificationsPage() {
                 notification.actionUrl,
                 notification.guidanceContext
               );
+              const safePath = toSafeAppPath(contextAwareActionUrl);
+              if (!safePath) {
+                return (
+                  <div
+                    key={notification.id}
+                    onClick={() => {
+                      if (!notification.isRead) {
+                        markRead(notification.id);
+                      }
+                    }}
+                  >
+                    {innerContent}
+                  </div>
+                );
+              }
               const href =
-                contextAwareActionUrl.startsWith('/') && !contextAwareActionUrl.startsWith('/dashboard')
-                  ? `/dashboard${contextAwareActionUrl}`
-                  : contextAwareActionUrl;
+                safePath.startsWith('/') && !safePath.startsWith('/dashboard')
+                  ? `/dashboard${safePath}`
+                  : safePath;
 
               return (
                 <Link

@@ -19,6 +19,27 @@ import { auditLog } from '../lib/logger';
 
 const router = Router();
 
+function resolveTrustedFrontendOrigin(): string {
+  const candidates = [
+    process.env.FRONTEND_BASE_URL,
+    process.env.APP_BASE_URL,
+    process.env.NEXT_PUBLIC_SITE_URL,
+    process.env.NEXT_PUBLIC_APP_URL,
+    process.env.ALLOWED_ORIGINS?.split(',').map((value) => value.trim()).find(Boolean),
+  ];
+
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+    try {
+      return new URL(candidate).origin;
+    } catch {
+      continue;
+    }
+  }
+
+  return 'http://localhost:3000';
+}
+
 /**
  * @swagger
  * /api/vault/access/{propertyId}:
@@ -221,7 +242,7 @@ router.post(
         userId,
         Number.isFinite(expiresInHoursRaw) ? expiresInHoursRaw : undefined
       );
-      const origin = `${req.protocol}://${req.get('host')}`;
+      const origin = resolveTrustedFrontendOrigin();
       const shareUrl = `${origin}/vault/${propertyId}?token=${encodeURIComponent(accessToken)}`;
 
       auditLog('VAULT_SHARE_LINK_CREATED', userId, {

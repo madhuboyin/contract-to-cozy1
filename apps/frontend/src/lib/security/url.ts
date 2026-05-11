@@ -37,3 +37,46 @@ export function toSafeHref(
     return undefined;
   }
 }
+
+export function toSafeAppPath(raw: string | null | undefined): string | undefined {
+  if (typeof raw !== 'string') return undefined;
+
+  const trimmed = raw.trim();
+  if (!trimmed) return undefined;
+
+  try {
+    const parsed = new URL(trimmed, SAME_ORIGIN_BASE);
+    if (parsed.origin !== SAME_ORIGIN_BASE) {
+      return undefined;
+    }
+
+    return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+  } catch {
+    return undefined;
+  }
+}
+
+export function toSafeExternalHttpUrl(
+  raw: string | null | undefined,
+  options: { allowHttp?: boolean } = {}
+): string | undefined {
+  if (typeof raw !== 'string') return undefined;
+
+  const trimmed = raw.trim();
+  if (!trimmed) return undefined;
+
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.protocol === 'https:') {
+      return parsed.toString();
+    }
+
+    if (parsed.protocol === 'http:' && options.allowHttp) {
+      return parsed.toString();
+    }
+
+    return undefined;
+  } catch {
+    return undefined;
+  }
+}

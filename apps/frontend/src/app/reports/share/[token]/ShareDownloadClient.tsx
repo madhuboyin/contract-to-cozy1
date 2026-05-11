@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import RouteStateCard from '@/components/system/RouteStateCard';
 import { Button } from '@/components/ui/button';
+import { toSafeExternalHttpUrl } from '@/lib/security/url';
 
 async function fetchJSON<T>(url: string, options?: RequestInit): Promise<T> {
   const res = await fetch(url, {
@@ -36,7 +37,13 @@ export default function ShareDownloadClient() {
         // replace fetchJSON with window.location.href = `/api/reports/share/${token}/download`.
         const { url } = await fetchJSON<{ url: string }>(`/api/reports/share/${token}/download`);
         if (cancelled) return;
-        window.location.href = url;
+        const safeUrl = toSafeExternalHttpUrl(url, {
+          allowHttp: process.env.NODE_ENV !== 'production',
+        });
+        if (!safeUrl) {
+          throw new Error('The download URL was rejected by the browser safety policy.');
+        }
+        window.location.href = safeUrl;
       } catch (e: any) {
         if (cancelled) return;
         setError(e?.message || 'This share link is invalid or expired.');

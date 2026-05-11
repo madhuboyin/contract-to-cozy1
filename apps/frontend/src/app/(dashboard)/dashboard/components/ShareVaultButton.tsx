@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { api } from '@/lib/api/client';
+import { toSafeExternalHttpUrl } from '@/lib/security/url';
 import { VaultShareLinkResponse } from '@/types';
 
 interface ShareVaultButtonProps {
@@ -341,6 +342,9 @@ function VaultLinkBlock({
         timeStyle: 'short',
       })
     : null;
+  const safeVaultUrl = toSafeExternalHttpUrl(vaultUrl, {
+    allowHttp: process.env.NODE_ENV !== 'production',
+  });
 
   return (
     <div className="space-y-1.5">
@@ -379,16 +383,18 @@ function VaultLinkBlock({
             )}
             {copiedUrl ? 'Copied' : 'Copy'}
           </button>
-          <a
-            href={vaultUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex min-h-[36px] items-center gap-1 rounded-md px-2 text-xs font-medium text-slate-600 transition hover:bg-slate-100 hover:text-blue-700"
-            title="Open in new tab"
-          >
-            <ExternalLink className="h-4 w-4" />
-            Open
-          </a>
+          {safeVaultUrl ? (
+            <a
+              href={safeVaultUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex min-h-[36px] items-center gap-1 rounded-md px-2 text-xs font-medium text-slate-600 transition hover:bg-slate-100 hover:text-blue-700"
+              title="Open in new tab"
+            >
+              <ExternalLink className="h-4 w-4" />
+              Open
+            </a>
+          ) : null}
         </div>
       </div>
     </div>

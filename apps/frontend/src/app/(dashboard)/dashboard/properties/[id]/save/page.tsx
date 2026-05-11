@@ -24,6 +24,7 @@ import { WinCard } from '@/components/shared/WinCard';
 import { MagicCaptureSheet } from '@/components/orchestration/MagicCaptureSheet';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
 import { getHomeSavingsSummary } from '@/lib/api/homeSavingsApi';
+import { toSafeAppPath } from '@/lib/security/url';
 import { useQuery } from '@tanstack/react-query';
 import { ErrorBoundary } from '@/components/system/ErrorBoundary';
 import { MetricTile, PageHero, SmartCTA, TrustMetaRow } from '@/components/system/PremiumPrimitives';
@@ -197,8 +198,9 @@ export default function SaveHubPage() {
                   }
                   actionLabel="Review savings details"
                   onAction={() => {
-                    if (category.topOpportunity?.actionUrl) {
-                      window.location.href = category.topOpportunity.actionUrl;
+                    const safeActionUrl = toSafeAppPath(category.topOpportunity?.actionUrl);
+                    if (safeActionUrl) {
+                      window.location.href = safeActionUrl;
                       return;
                     }
                     if (propertyId || selectedPropertyId) {
