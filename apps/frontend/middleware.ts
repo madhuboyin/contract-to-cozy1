@@ -15,6 +15,7 @@ import {
 
 const PUBLIC_FILE_PATH_REGEX =
   /\/[^/?]+\.(?:avif|bmp|css|gif|ico|jpe?g|js|json|map|mp3|mp4|ogg|otf|pdf|png|svg|ttf|txt|wav|webm|webmanifest|webp|woff2?|xml)$/i;
+const ACCESS_COOKIE_CANDIDATES = ['__Secure-ctc.at', '__Host-ctc.at', 'ctc.at'] as const;
 
 // ---------------------------------------------------------------------------
 // Auth helpers
@@ -114,7 +115,8 @@ export function middleware(request: NextRequest) {
 
   const isPublicRoute = pathname === '/' || publicRoutes.some((r) => pathname.startsWith(r));
 
-  const token = request.cookies.get('accessToken')?.value;
+  const token =
+    ACCESS_COOKIE_CANDIDATES.map((name) => request.cookies.get(name)?.value).find(Boolean) ?? undefined;
   const userRole = getUserRoleFromToken(token);
 
   // Unauthenticated user on a protected route — redirect to login.

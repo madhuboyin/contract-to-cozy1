@@ -4,10 +4,6 @@ import { createHash } from 'crypto';
 import { authConfig } from '../config/jwt.config';
 import { verifyAccessToken } from '../utils/jwt.util';
 import { redis } from '../lib/redis';
-import {
-  ACCESS_COOKIE_NAME,
-  REFRESH_COOKIE_NAME,
-} from '../utils/authCookies.util';
 
 /**
  * Redis-backed rate-limit store.
@@ -77,7 +73,12 @@ function bearerToken(req: Request): string | null {
 }
 
 function rateLimitKey(req: Request): string {
-  const token = bearerToken(req) || req.cookies?.[ACCESS_COOKIE_NAME] || null;
+  const cookieToken =
+    req.cookies?.['__Secure-ctc.at'] ||
+    req.cookies?.['__Host-ctc.at'] ||
+    req.cookies?.['ctc.at'] ||
+    null;
+  const token = bearerToken(req) || cookieToken;
   if (token) {
     try {
       const payload = verifyAccessToken(token);
@@ -118,7 +119,9 @@ function authRateLimitKey(req: Request): string {
   const refreshToken =
     (typeof body?.refreshToken === 'string' && body.refreshToken.length > 0
       ? body.refreshToken
-      : req.cookies?.[REFRESH_COOKIE_NAME]) || null;
+      : req.cookies?.['__Secure-ctc.rt'] ||
+        req.cookies?.['__Host-ctc.rt'] ||
+        req.cookies?.['ctc.rt']) || null;
   if (path === '/refresh' && refreshToken) {
     return `auth:${path}:rt:${hashTokenForRateLimit(refreshToken)}`;
   }

@@ -28,7 +28,7 @@ export class AuthController {
     const data: RegisterInput = req.body;
     try {
       const result = await authService.register(data);
-      setAuthCookies(res, result);
+      setAuthCookies(req, res, result);
       auditLog('AUTH_REGISTER_SUCCESS', result.user.id, {
         ip: req.ip,
         role: data.role,
@@ -63,7 +63,7 @@ export class AuthController {
         return;
       }
 
-      setAuthCookies(res, result);
+      setAuthCookies(req, res, result);
       auditLog('AUTH_LOGIN_SUCCESS', result.user.id, {
         ip: req.ip,
         email: redactEmail(data.email),
@@ -105,7 +105,7 @@ export class AuthController {
         return;
       }
       const result = await authService.refreshToken(refreshToken);
-      setAuthCookies(res, result);
+      setAuthCookies(req, res, result);
 
       res.status(200).json({
         success: true,
@@ -209,7 +209,7 @@ export class AuthController {
         await authService.logout(maybeRefreshToken);
       }
 
-      clearAuthCookies(res);
+      clearAuthCookies(req, res);
 
       res.status(200).json({
         success: true,

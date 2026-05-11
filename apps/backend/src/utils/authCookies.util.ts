@@ -27,12 +27,56 @@ function durationToMs(duration: string | number): number {
 }
 
 const isProduction = process.env.NODE_ENV === 'production';
-const cookieDomain = process.env.AUTH_COOKIE_DOMAIN?.trim() || undefined;
+const configuredCookieDomain = process.env.AUTH_COOKIE_DOMAIN?.trim() || undefined;
 
-export const ACCESS_COOKIE_NAME = isProduction ? '__Host-ctc.at' : 'ctc.at';
-export const REFRESH_COOKIE_NAME = isProduction ? '__Host-ctc.rt' : 'ctc.rt';
+function isIpAddress(hostname: string): boolean {
+  return /^[\d.:]+$/.test(hostname);
+}
 
-function buildBaseCookieOptions(path: string, maxAge: number): CookieOptions {
+function inferBaseDomain(hostname: string): string | undefined {
+  const normalized = hostname.trim().toLowerCase().replace(/^\.+/, '');
+  if (!normalized || normalized === 'localhost' || isIpAddress(normalized)) {
+    return undefined;
+  }
+
+  const parts = normalized.split('.').filter(Boolean);
+  if (parts.length <= 2) return normalized;
+  return parts.slice(-2).join('.');
+}
+
+function resolveCookieDomain(req?: Request): string | undefined {
+  if (configuredCookieDomain) {
+    return configuredCookieDomain.replace(/^\.+/, '');
+  }
+
+  const origin = req?.headers.origin;
+  if (typeof origin === 'string') {
+    try {
+      return inferBaseDomain(new URL(origin).hostname);
+    } catch {
+      return undefined;
+    }
+  }
+
+  return undefined;
+}
+
+function cookieNames(req?: Request): { access: string; refresh: string } {
+  const domain = resolveCookieDomain(req);
+  if (!isProduction) {
+    return { access: 'ctc.at', refresh: 'ctc.rt' };
+  }
+  if (domain) {
+    return { access: '__Secure-ctc.at', refresh: '__Secure-ctc.rt' };
+  }
+  return { access: '__Host-ctc.at', refresh: '__Host-ctc.rt' };
+}
+
+const ACCESS_COOKIE_CANDIDATES = ['__Secure-ctc.at', '__Host-ctc.at', 'ctc.at'];
+const REFRESH_COOKIE_CANDIDATES = ['__Secure-ctc.rt', '__Host-ctc.rt', 'ctc.rt'];
+
+function buildBaseCookieOptions(path: string, maxAge: number, req?: Request): CookieOptions {
+  const cookieDomain = resolveCookieDomain(req);
   return {
     httpOnly: true,
     secure: isProduction,
@@ -44,24 +88,30 @@ function buildBaseCookieOptions(path: string, maxAge: number): CookieOptions {
 }
 
 export function setAuthCookies(
+  req: Request,
   res: Response,
   tokens: { accessToken: string; refreshToken: string }
 ): void {
+  const names = cookieNames(req);
   res.cookie(
-    ACCESS_COOKIE_NAME,
+    names.access,
     tokens.accessToken,
-    buildBaseCookieOptions('/', durationToMs(jwtConfig.accessToken.expiresIn))
+    buildBaseCookieOptions('/', durationToMs(jwtConfig.accessToken.expiresIn), req)
   );
   res.cookie(
-    REFRESH_COOKIE_NAME,
+    names.refresh,
     tokens.refreshToken,
-    buildBaseCookieOptions('/api/auth', durationToMs(jwtConfig.refreshToken.expiresIn))
+    buildBaseCookieOptions('/api/auth', durationToMs(jwtConfig.refreshToken.expiresIn), req)
   );
 }
 
-export function clearAuthCookies(res: Response): void {
-  res.clearCookie(ACCESS_COOKIE_NAME, buildBaseCookieOptions('/', 0));
-  res.clearCookie(REFRESH_COOKIE_NAME, buildBaseCookieOptions('/api/auth', 0));
+export function clearAuthCookies(req: Request, res: Response): void {
+  for (const cookieName of ACCESS_COOKIE_CANDIDATES) {
+    res.clearCookie(cookieName, buildBaseCookieOptions('/', 0, req));
+  }
+  for (const cookieName of REFRESH_COOKIE_CANDIDATES) {
+    res.clearCookie(cookieName, buildBaseCookieOptions('/api/auth', 0, req));
+  }
 }
 
 export function getAccessTokenFromRequest(req: Request): string | null {
@@ -71,8 +121,13 @@ export function getAccessTokenFromRequest(req: Request): string | null {
     if (token.length > 0) return token;
   }
 
-  const cookieToken = req.cookies?.[ACCESS_COOKIE_NAME];
-  return typeof cookieToken === 'string' && cookieToken.length > 0 ? cookieToken : null;
+  for (const cookieName of ACCESS_COOKIE_CANDIDATES) {
+    const cookieToken = req.cookies?.[cookieName];
+    if (typeof cookieToken === 'string' && cookieToken.length > 0) {
+      return cookieToken;
+    }
+  }
+  return null;
 }
 
 export function getRefreshTokenFromRequest(req: Request): string | null {
@@ -81,6 +136,11 @@ export function getRefreshTokenFromRequest(req: Request): string | null {
     return bodyToken;
   }
 
-  const cookieToken = req.cookies?.[REFRESH_COOKIE_NAME];
-  return typeof cookieToken === 'string' && cookieToken.length > 0 ? cookieToken : null;
+  for (const cookieName of REFRESH_COOKIE_CANDIDATES) {
+    const cookieToken = req.cookies?.[cookieName];
+    if (typeof cookieToken === 'string' && cookieToken.length > 0) {
+      return cookieToken;
+    }
+  }
+  return null;
 }

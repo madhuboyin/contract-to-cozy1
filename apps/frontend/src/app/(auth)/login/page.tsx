@@ -211,6 +211,7 @@ export default function LoginPage() {
                       id="email"
                       name="email"
                       type="email"
+                      autoComplete="username"
                       required
                       value={formData.email}
                       onChange={handleChange}
@@ -231,6 +232,7 @@ export default function LoginPage() {
                       id="password"
                       name="password"
                       type={showPassword ? 'text' : 'password'}
+                      autoComplete="current-password"
                       required
                       value={formData.password}
                       onChange={handleChange}
@@ -285,6 +287,7 @@ export default function LoginPage() {
                     <input
                       id="mfaCode"
                       name="mfaCode"
+                      autoComplete="one-time-code"
                       inputMode="numeric"
                       pattern="[0-9]{6}"
                       maxLength={6}
@@ -303,6 +306,7 @@ export default function LoginPage() {
                     <input
                       id="recoveryCode"
                       name="recoveryCode"
+                      autoComplete="one-time-code"
                       required
                       value={recoveryCode}
                       onChange={(e) => setRecoveryCode(e.target.value)}
