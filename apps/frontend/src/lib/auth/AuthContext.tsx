@@ -27,18 +27,6 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// TODO: Migrate tokens from localStorage to httpOnly cookies set by the backend.
-// localStorage tokens are readable by any JS on the page, making them exfiltrable
-// via XSS. Migration requires:
-//   1. Backend sets httpOnly, Secure, SameSite=Strict cookies on login/refresh
-//   2. Frontend stops reading/writing tokens to localStorage
-//   3. API client removes Authorization header (browser sends cookies automatically)
-//   4. Add CSRF protection (double-submit cookie or Synchronizer Token)
-const USER_STORAGE_KEY = 'user';
-const TOKEN_STORAGE_KEY = 'accessToken';
-
-const isBrowser = typeof window !== 'undefined';
-
 function extractApiData<T>(payload: any): T {
   if (payload && typeof payload === 'object' && 'data' in payload) {
     return payload.data as T;
@@ -47,30 +35,18 @@ function extractApiData<T>(payload: any): T {
 }
 
 /**
- * Fetches the current user data using the stored token.
+ * Fetches the current user data using the active cookie-backed session.
  */
-const fetchCurrentUser = async (token: string | null): Promise<User | null> => {
-  if (!token) return null;
-
+const fetchCurrentUser = async (): Promise<User | null> => {
   try {
-    // We already fixed the client to allow passing the token
-    const response = await api.getCurrentUser(token); 
+    const response = await api.getCurrentUser();
 
     if (response.success) {
-      // Store user data in localStorage to persist minimal info needed for segment check
-      if (isBrowser) {
-        localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(response.data));
-      }
       return response.data;
     }
   } catch (error) {
     console.error('Failed to fetch current user:', error);
-    // If fetching fails (e.g., token expired), clear auth state so middleware
-    // and API client remain in sync.
-    if (isBrowser) {
-      api.clearSessionTokens();
-      localStorage.removeItem(USER_STORAGE_KEY);
-    }
+    api.clearSessionTokens();
   }
   return null;
 };
@@ -94,30 +70,19 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   
   // FIX 2: Define logout first to be used in refreshUser
   const logout = useCallback(() => {
-    if (isBrowser) {
-      api.clearSessionTokens();
-      localStorage.removeItem(USER_STORAGE_KEY);
-    }
+    api.logout().catch(() => undefined);
+    api.clearSessionTokens();
     setUser(null);
     router.push('/login');
   }, [router]);
 
   // FIX 3: Define refreshUser using the common fetchCurrentUser logic
   const refreshUser = useCallback(async () => {
-    if (!isBrowser) return;
-
-    const token = localStorage.getItem(TOKEN_STORAGE_KEY);
-    if (!token) {
-      api.clearSessionTokens();
-      return;
-    }
-    
-    const freshUser = await fetchCurrentUser(token);
+    const freshUser = await fetchCurrentUser();
     if (freshUser) {
       setUser(freshUser);
     } else {
-      // Token failed validation, log out to clear bad token/user data
-      logout(); 
+      setUser(null);
     }
   }, [logout]);
 
@@ -134,11 +99,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
       const { accessToken, refreshToken, user } = loginData as LoginResponse;
 
-      if (isBrowser) {
-        // Access/refresh token persistence + middleware cookie sync are handled
-        // centrally by API client login/refresh flows.
-        localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
-      }
       setUser(user);
       return { success: true, accessToken, refreshToken, user };
     }
@@ -150,10 +110,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       const response = await api.verifyMfaChallenge(mfaToken, code);
       if (!response.success) return null;
 
-      const token = isBrowser ? localStorage.getItem(TOKEN_STORAGE_KEY) : null;
-      if (!token) return null;
-
-      const freshUser = await fetchCurrentUser(token);
+      const freshUser = await fetchCurrentUser();
       if (!freshUser) return null;
 
       setUser(freshUser);
@@ -173,10 +130,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       const response = await api.verifyMfaRecoveryChallenge(mfaToken, recoveryCode);
       if (!response.success) return null;
 
-      const token = isBrowser ? localStorage.getItem(TOKEN_STORAGE_KEY) : null;
-      if (!token) return null;
-
-      const freshUser = await fetchCurrentUser(token);
+      const freshUser = await fetchCurrentUser();
       if (!freshUser) return null;
 
       setUser(freshUser);
@@ -215,33 +169,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   // --- Initialization Effect ---
   useEffect(() => {
     const initializeAuth = async () => {
-      let token: string | null = null;
-
-      if (isBrowser) {
-        token = localStorage.getItem(TOKEN_STORAGE_KEY);
-        const userJson = localStorage.getItem(USER_STORAGE_KEY);
-        if (!token) {
-          api.clearSessionTokens();
-        }
-        if (userJson) {
-          try {
-            JSON.parse(userJson);
-          } catch (e) {
-            console.error('Failed to parse stored user:', e);
-            localStorage.removeItem(USER_STORAGE_KEY);
-          }
-        }
-      }
-
-      // If token exists, try to fetch fresh user data
-      if (token) {
-        const freshUser = await fetchCurrentUser(token);
-        if (freshUser) {
-          setUser(freshUser);
-        } else {
-          // Token failed validation, log out to clear bad token/user data
-          logout();
-        }
+      const freshUser = await fetchCurrentUser();
+      if (freshUser) {
+        setUser(freshUser);
+      } else {
+        setUser(null);
       }
 
       setLoading(false);

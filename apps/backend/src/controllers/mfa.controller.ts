@@ -6,6 +6,7 @@ import { Response, NextFunction } from 'express';
 import { AuthRequest } from '../types/auth.types';
 import { MfaService } from '../services/mfa.service';
 import { auditLog } from '../lib/logger';
+import { setAuthCookies } from '../utils/authCookies.util';
 
 const mfaService = new MfaService();
 
@@ -56,6 +57,7 @@ export async function verifyMfaChallenge(req: AuthRequest, res: Response, next: 
     const { mfaToken, code } = req.body as { mfaToken: string; code: string };
     auditLog('MFA_CHALLENGE_ATTEMPT', null, { ip: req.ip });
     const tokens = await mfaService.verifyChallenge(mfaToken, code);
+    setAuthCookies(res, tokens);
     res.status(200).json({ success: true, data: tokens });
   } catch (error) {
     next(error);
@@ -75,6 +77,7 @@ export async function verifyMfaRecoveryChallenge(
     const { mfaToken, recoveryCode } = req.body as { mfaToken: string; recoveryCode: string };
     auditLog('MFA_RECOVERY_CHALLENGE_ATTEMPT', null, { ip: req.ip });
     const tokens = await mfaService.verifyRecoveryChallenge(mfaToken, recoveryCode);
+    setAuthCookies(res, tokens);
     res.status(200).json({ success: true, data: tokens });
   } catch (error) {
     next(error);

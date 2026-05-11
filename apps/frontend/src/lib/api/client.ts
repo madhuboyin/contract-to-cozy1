@@ -144,6 +144,8 @@ function toNumber(value: unknown): number {
  */
 class APIClient {
   private baseURL: string;
+  private csrfToken: string | null = null;
+  private csrfTokenRequest: Promise<string | null> | null = null;
   private propertiesCache: {
     data: APIResponse<{ properties: Property[] }>;
     expiresAt: number;
@@ -164,21 +166,42 @@ class APIClient {
     this.baseURL = baseURL;
   }
 
-  private getCookieSecurityAttribute(): string {
-    if (typeof window === 'undefined') return '';
-    return window.location.protocol === 'https:' ? '; Secure' : '';
+  private shouldAttachCsrf(endpoint: string, method?: string): boolean {
+    const normalizedMethod = (method || 'GET').toUpperCase();
+    if (['GET', 'HEAD', 'OPTIONS'].includes(normalizedMethod)) return false;
+    return endpoint.startsWith('/api/');
   }
 
-  private setAccessTokenCookie(token: string): void {
-    if (typeof window === 'undefined') return;
-    const secureAttr = this.getCookieSecurityAttribute();
-    document.cookie = `accessToken=${encodeURIComponent(token)}; path=/; SameSite=Lax${secureAttr}`;
+  private async getCsrfToken(): Promise<string | null> {
+    if (this.csrfToken) return this.csrfToken;
+    if (this.csrfTokenRequest) return this.csrfTokenRequest;
+
+    this.csrfTokenRequest = fetch(`${this.baseURL}/api/csrf-token`, {
+      method: 'GET',
+      credentials: 'include',
+      headers: { Accept: 'application/json' },
+    })
+      .then(async (response) => {
+        if (!response.ok) return null;
+        const data = await response.json().catch(() => null);
+        const token =
+          data && typeof data === 'object' && typeof data.csrfToken === 'string'
+            ? data.csrfToken
+            : null;
+        this.csrfToken = token;
+        return token;
+      })
+      .catch(() => null)
+      .finally(() => {
+        this.csrfTokenRequest = null;
+      });
+
+    return this.csrfTokenRequest;
   }
 
-  private clearAccessTokenCookie(): void {
-    if (typeof window === 'undefined') return;
-    const secureAttr = this.getCookieSecurityAttribute();
-    document.cookie = `accessToken=; path=/; max-age=0; SameSite=Lax${secureAttr}`;
+  private clearCsrfToken(): void {
+    this.csrfToken = null;
+    this.csrfTokenRequest = null;
   }
 
   private validateFile(file: File, options?: { maxSizeMB?: number; allowedTypes?: string[] }) {
@@ -201,14 +224,16 @@ class APIClient {
   }
 
   // --- HELPER TO PROCESS WAITING REQUESTS ---
-  private processFailedQueue(error: Error | null, token: string | null = null) {
+  private processFailedQueue(error: Error | null, _token: string | null = null) {
     this.failedQueue.forEach(prom => {
       if (error) {
         prom.reject(error);
       } else {
-        // Re-run the original request with the new token
-        const newHeaders = { ...prom.headers, 'Authorization': `Bearer ${token}` };
-        fetch(`${this.baseURL}${prom.endpoint}`, { ...prom.options, headers: newHeaders })
+        fetch(`${this.baseURL}${prom.endpoint}`, {
+          ...prom.options,
+          credentials: 'include',
+          headers: prom.headers,
+        })
           .then(res => res.json())
           .then(data => {
             // We resolve with the JSON data, assuming the retry was successful.
@@ -224,27 +249,20 @@ class APIClient {
    * Get auth token from localStorage
    */
   private getToken(): string | null {
-    if (typeof window === 'undefined') return null;
-    return localStorage.getItem('accessToken');
+    return null;
   }
 
   /**
    * Set auth token in localStorage
    */
-  private setToken(token: string): void {
-    if (typeof window === 'undefined') return;
-    localStorage.setItem('accessToken', token);
-    this.setAccessTokenCookie(token);
+  private setToken(_token: string): void {
   }
 
   /**
    * Remove auth token from localStorage
    */
   private removeToken(): void {
-    if (typeof window === 'undefined') return;
-    localStorage.removeItem('accessToken');
-    localStorage.removeItem('refreshToken');
-    this.clearAccessTokenCookie();
+    this.clearCsrfToken();
   }
 
   clearSessionTokens(): void {
@@ -260,8 +278,6 @@ class APIClient {
     endpoint: string,
     options: Omit<RequestInit, 'body'> & { body?: any } = {}
   ): Promise<APIResponse<T>> {
-    const token = this.getToken();
-
     let body = options.body;
 
     // ✅ Detect FormData / binary payloads
@@ -292,15 +308,18 @@ class APIClient {
       if (!headers['Content-Type']) headers['Content-Type'] = 'application/json';
     }
     
-    // Attach auth token if present
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
+    if (this.shouldAttachCsrf(endpoint, options.method) && !headers['x-csrf-token']) {
+      const csrfToken = await this.getCsrfToken();
+      if (csrfToken) {
+        headers['x-csrf-token'] = csrfToken;
+      }
     }
 
     try {
       let response = await fetch(`${this.baseURL}${endpoint}`, {
         ...options,
         body,
+        credentials: 'include',
         headers,
       });
 
@@ -309,7 +328,6 @@ class APIClient {
         if (this.isRefreshing) {
           return new Promise((resolve, reject) => {
             const cleanHeaders = { ...headers };
-            delete cleanHeaders['Authorization']; 
             this.failedQueue.push({ resolve, reject, endpoint, options, headers: cleanHeaders });
           });
         }
@@ -318,15 +336,14 @@ class APIClient {
         const refreshResponse = await this.refreshToken();
 
         if (refreshResponse.success) {
-          const newToken = refreshResponse.data.accessToken;
           this.isRefreshing = false;
-          this.processFailedQueue(null, newToken);
+          this.processFailedQueue(null, null);
 
-          const newHeaders = { ...headers, 'Authorization': `Bearer ${newToken}` };
           response = await fetch(`${this.baseURL}${endpoint}`, {
             ...options,
             body: originalBody,
-            headers: newHeaders,
+            credentials: 'include',
+            headers,
           });
         } else {
           this.isRefreshing = false;
@@ -394,19 +411,20 @@ class APIClient {
     endpoint: string,
     formData: FormData
   ): Promise<APIResponse<T>> {
-    const token = this.getToken();
-    
     const headers: Record<string, string> = {};
-    
-    // Authorization header is required
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
+
+    if (this.shouldAttachCsrf(endpoint, 'POST')) {
+      const csrfToken = await this.getCsrfToken();
+      if (csrfToken) {
+        headers['x-csrf-token'] = csrfToken;
+      }
     }
-    
+
     try {
         const response = await fetch(`${this.baseURL}${endpoint}`, {
             method: 'POST', // File uploads are typically POST
             // Do NOT set Content-Type header; let the browser set it for FormData
+            credentials: 'include',
             headers,
             body: formData,
         });
@@ -435,6 +453,10 @@ class APIClient {
     }
   }
 
+  async postFormData<T>(endpoint: string, formData: FormData): Promise<APIResponse<T>> {
+    return this.formDataRequest<T>(endpoint, formData);
+  }
+
   // ==========================================================================
   // AUTH ENDPOINTS 
   // ==========================================================================
@@ -453,32 +475,10 @@ class APIClient {
    * Login user
    */
   async login(input: LoginInput): Promise<APIResponse<AuthLoginResponse>> {
-    const response = await this.request<AuthLoginResponse>('/api/auth/login', {
+    return this.request<AuthLoginResponse>('/api/auth/login', {
       method: 'POST',
       body: input,
     });
-
-    if (response.success) {
-      const payload: any =
-        response.data && typeof response.data === 'object' && 'data' in (response.data as any)
-          ? (response.data as any).data
-          : response.data;
-
-      const hasTokenPair =
-        payload &&
-        typeof payload === 'object' &&
-        typeof payload.accessToken === 'string' &&
-        typeof payload.refreshToken === 'string';
-
-      if (hasTokenPair) {
-        this.setToken(payload.accessToken);
-        if (typeof window !== 'undefined') {
-          localStorage.setItem('refreshToken', payload.refreshToken);
-        }
-      }
-    }
-
-    return response;
   }
 
   /**
@@ -488,26 +488,10 @@ class APIClient {
     mfaToken: string,
     code: string
   ): Promise<APIResponse<{ accessToken: string; refreshToken: string }>> {
-    const response = await this.request<{ accessToken: string; refreshToken: string }>('/api/auth/mfa/challenge', {
+    return this.request<{ accessToken: string; refreshToken: string }>('/api/auth/mfa/challenge', {
       method: 'POST',
       body: { mfaToken, code },
     });
-
-    if (response.success) {
-      const payload: any =
-        response.data && typeof response.data === 'object' && 'data' in (response.data as any)
-          ? (response.data as any).data
-          : response.data;
-
-      if (payload?.accessToken && payload?.refreshToken) {
-        this.setToken(payload.accessToken);
-        if (typeof window !== 'undefined') {
-          localStorage.setItem('refreshToken', payload.refreshToken);
-        }
-      }
-    }
-
-    return response;
   }
 
   /**
@@ -517,26 +501,10 @@ class APIClient {
     mfaToken: string,
     recoveryCode: string
   ): Promise<APIResponse<{ accessToken: string; refreshToken: string }>> {
-    const response = await this.request<{ accessToken: string; refreshToken: string }>('/api/auth/mfa/challenge/recovery', {
+    return this.request<{ accessToken: string; refreshToken: string }>('/api/auth/mfa/challenge/recovery', {
       method: 'POST',
       body: { mfaToken, recoveryCode },
     });
-
-    if (response.success) {
-      const payload: any =
-        response.data && typeof response.data === 'object' && 'data' in (response.data as any)
-          ? (response.data as any).data
-          : response.data;
-
-      if (payload?.accessToken && payload?.refreshToken) {
-        this.setToken(payload.accessToken);
-        if (typeof window !== 'undefined') {
-          localStorage.setItem('refreshToken', payload.refreshToken);
-        }
-      }
-    }
-
-    return response;
   }
 
   /**
@@ -700,23 +668,19 @@ class APIClient {
    * Refresh access token
    */
   async refreshToken(): Promise<APIResponse<{ accessToken: string; refreshToken: string }>> {
-    const refreshToken = typeof window !== 'undefined' 
-      ? localStorage.getItem('refreshToken') 
-      : null;
-
-    if (!refreshToken) {
-      return {
-        success: false,
-        message: 'No refresh token available',
-      };
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    const csrfToken = await this.getCsrfToken();
+    if (csrfToken) {
+      headers['x-csrf-token'] = csrfToken;
     }
 
     const response = await fetch(`${this.baseURL}/api/auth/refresh`, {
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ refreshToken }),
+        credentials: 'include',
+        headers,
+        body: JSON.stringify({}),
     });
 
     const data = await response.json();
@@ -728,13 +692,6 @@ class APIClient {
         };
     }
 
-    // Rely on backend sending { success: true/false, data: { ... } }
-    if (data.success) {
-      this.setToken(data.data.accessToken);
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('refreshToken', data.data.refreshToken);
-      }
-    }
     return data;
   }
 
@@ -755,14 +712,11 @@ class APIClient {
 
     // Handle blob responses separately
     if (options?.responseType === 'blob') {
-      const token = this.getToken();
       const headers: Record<string, string> = {};
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-      }
 
       const response = await fetch(`${this.baseURL}${url}`, {
         method: 'GET',
+        credentials: 'include',
         headers,
       });
 
@@ -1527,17 +1481,11 @@ class APIClient {
    * the raw data directly, not wrapped in {success: true, data: ...}
    */
   async getRiskReportSummary(propertyId: string): Promise<RiskAssessmentReport | 'QUEUED'> {
-    const token = this.getToken();
-    
-    if (!token) {
-      throw new APIError("Authentication required.", 401);
-    }
-
     // Direct fetch to bypass the request() wrapper
     const response = await fetch(`${this.baseURL}/api/risk/report/${propertyId}`, {
       method: 'GET',
+      credentials: 'include',
       headers: {
-        'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json'
       }
     });
@@ -1941,19 +1889,9 @@ class APIClient {
   // ==========================================================================
 
   async downloadRiskReportPdf(propertyId: string): Promise<Blob> {
-    const token = this.getToken();
-    
-    if (!token) {
-        throw new APIError("Authentication required for PDF download.", 401);
-    }
-
-    const headers: Record<string, string> = {
-      'Authorization': `Bearer ${token}`,
-    };
-
     const response = await fetch(`${this.baseURL}/api/risk/report/${propertyId}/pdf`, {
         method: 'GET',
-        headers: headers,
+        credentials: 'include',
     });
 
     if (!response.ok) {
@@ -2018,25 +1956,7 @@ class APIClient {
     formData.append('propertyId', propertyId);
     formData.append('autoCreateWarranty', autoCreateWarranty.toString());
 
-    const token = this.getToken();
-    if (!token) {
-      throw new APIError('Authentication required', 401);
-    }
-
-    const response = await fetch(`${this.baseURL}/api/documents/analyze`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-      body: formData,
-    });
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new APIError(error.message || 'Upload failed', response.status);
-    }
-
-    return response.json();
+    return this.formDataRequest('/api/documents/analyze', formData);
   }
 
   /**
@@ -3203,11 +3123,10 @@ class APIClient {
     );
   }
   async getRaw<T>(endpoint: string): Promise<{ data: T }> {
-    const token = this.getToken();
-    const headers: Record<string, string> = {};
-    if (token) headers['Authorization'] = `Bearer ${token}`;
-  
-    const res = await fetch(`${this.baseURL}${endpoint}`, { method: 'GET', headers });
+    const res = await fetch(`${this.baseURL}${endpoint}`, {
+      method: 'GET',
+      credentials: 'include',
+    });
     if (!res.ok) throw new APIError(`Request failed (${res.status})`, res.status);
   
     return { data: (await res.json()) as T };

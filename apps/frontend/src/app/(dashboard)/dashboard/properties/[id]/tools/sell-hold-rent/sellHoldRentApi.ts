@@ -156,20 +156,14 @@ const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL || // in case you used a different env var name elsewhere
   '';
 
-function getAccessToken(): string | null {
-  if (typeof window === 'undefined') return null;
-  return localStorage.getItem('accessToken');
-}
-
 async function authedFetchJson<T>(path: string): Promise<T> {
-  const token = getAccessToken();
   const url = `${API_BASE_URL}${path}`;
 
   const res = await fetch(url, {
     method: 'GET',
+    credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
   });
 

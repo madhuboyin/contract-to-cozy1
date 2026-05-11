@@ -6,6 +6,7 @@ import { verifyAccessToken } from '../utils/jwt.util';
 import { prisma } from '../lib/prisma';
 import { auditLog } from '../lib/logger';
 import { securityAuthDenialsTotal } from '../lib/metrics';
+import { getAccessTokenFromRequest } from '../utils/authCookies.util';
 
 // NOTE: AuthRequest type is defined in '../types/auth.types' and is assumed
 // to have been updated to include homeownerProfile and providerProfile on req.user.
@@ -24,9 +25,9 @@ async function _authenticate(
   requireEmailVerified: boolean
 ): Promise<void> {
   try {
-    const authHeader = req.headers.authorization;
+    const token = getAccessTokenFromRequest(req);
 
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    if (!token) {
       auditLog('AUTH_NO_TOKEN', null, { ip: req.ip, path: req.path, method: req.method });
       securityAuthDenialsTotal.inc({ surface: 'auth_middleware', status_code: '401', code: 'NO_TOKEN' });
       res.status(401).json({
@@ -38,8 +39,6 @@ async function _authenticate(
       });
       return;
     }
-
-    const token = authHeader.substring(7); // Remove 'Bearer ' prefix
 
     // Verify token
     const decoded = verifyAccessToken(token);

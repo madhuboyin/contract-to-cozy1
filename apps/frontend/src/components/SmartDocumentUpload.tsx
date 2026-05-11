@@ -4,6 +4,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Upload, FileText, CheckCircle, AlertCircle, Loader2, X, FileCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { api } from '@/lib/api/client';
 
 interface DocumentInsights {
   documentType: string;
@@ -97,16 +98,7 @@ export default function SmartDocumentUpload({
     formData.append('autoCreateWarranty', autoCreateWarranty.toString());
 
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch('/api/documents/analyze', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-        body: formData,
-      });
-
-      const data = await response.json();
+      const data = await api.analyzeDocument(file, propertyId, autoCreateWarranty);
 
       if (data.success) {
         setInsights(data.data.insights);

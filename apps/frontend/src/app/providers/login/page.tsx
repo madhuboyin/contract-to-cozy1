@@ -16,29 +16,6 @@ import { APIError, UserRole } from '@/types';
 type FieldName = 'email' | 'password';
 type FieldErrors = Partial<Record<FieldName, string>>;
 
-function resolveRoleFromToken(): UserRole | null {
-  try {
-    const token = localStorage.getItem('accessToken');
-    if (!token) return null;
-
-    const payloadSegment = token.split('.')[1];
-    if (!payloadSegment) return null;
-
-    const base64 = payloadSegment.replace(/-/g, '+').replace(/_/g, '/');
-    const jsonPayload = decodeURIComponent(
-      atob(base64)
-        .split('')
-        .map((char) => `%${`00${char.charCodeAt(0).toString(16)}`.slice(-2)}`)
-        .join('')
-    );
-
-    const decoded = JSON.parse(jsonPayload) as { role?: UserRole };
-    return decoded.role || null;
-  } catch {
-    return null;
-  }
-}
-
 function destinationForRole(role: UserRole): string {
   if (role === 'PROVIDER') return '/providers/dashboard';
   if (role === 'ADMIN') return '/dashboard/knowledge-admin';
@@ -123,7 +100,7 @@ export default function ProviderLoginPage() {
       }
 
       if (result && 'success' in result && result.success) {
-        const resolvedRole = result.user?.role || user?.role || resolveRoleFromToken() || 'PROVIDER';
+        const resolvedRole = result.user?.role || user?.role || 'PROVIDER';
 
         setTransitionRole(resolvedRole);
         setTransitionName(result.user?.firstName || user?.firstName || '');
@@ -163,7 +140,7 @@ export default function ProviderLoginPage() {
         return;
       }
 
-      const resolvedRole = result.user?.role || user?.role || resolveRoleFromToken() || 'PROVIDER';
+      const resolvedRole = result.user?.role || user?.role || 'PROVIDER';
 
       setTransitionRole(resolvedRole);
       setTransitionName(result.user?.firstName || user?.firstName || '');

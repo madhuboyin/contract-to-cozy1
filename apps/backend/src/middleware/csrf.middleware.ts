@@ -24,6 +24,15 @@ import { Request, Response, NextFunction } from 'express';
 import { doubleCsrf } from 'csrf-csrf';
 
 const isProduction = process.env.NODE_ENV === 'production';
+const csrfExemptAuthPaths = new Set([
+  '/auth/login',
+  '/auth/register',
+  '/auth/forgot-password',
+  '/auth/reset-password',
+  '/auth/verify-email',
+  '/auth/mfa/challenge',
+  '/auth/mfa/challenge/recovery',
+]);
 
 if (isProduction && !process.env.CSRF_SECRET) {
   throw new Error('CSRF_SECRET environment variable must be set in production');
@@ -52,13 +61,11 @@ const { generateCsrfToken, doubleCsrfProtection } = doubleCsrf({
   // Skip CSRF for:
   //   1. Bearer-token requests — browsers never auto-send Authorization headers
   //      cross-origin, so they are not CSRF-vulnerable.
-  //   2. Auth endpoints (login, register, forgot/reset password) — these establish
-  //      a session and therefore cannot present a prior CSRF token. They are
-  //      protected by rate limiting and credential checks instead.
+  //   2. Session-establishing auth endpoints that cannot present a prior CSRF token.
   skipCsrfProtection: (req) =>
     (typeof req.headers.authorization === 'string' &&
       req.headers.authorization.startsWith('Bearer ')) ||
-    req.path.startsWith('/auth/'),
+    csrfExemptAuthPaths.has(req.path),
 });
 
 /**

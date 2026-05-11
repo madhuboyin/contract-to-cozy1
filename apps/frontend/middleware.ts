@@ -8,55 +8,13 @@
 
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import {
+  buildCsp,
+  buildReportingEndpoints,
+} from './security-headers';
 
 const PUBLIC_FILE_PATH_REGEX =
   /\/[^/?]+\.(?:avif|bmp|css|gif|ico|jpe?g|js|json|map|mp3|mp4|ogg|otf|pdf|png|svg|ttf|txt|wav|webm|webmanifest|webp|woff2?|xml)$/i;
-
-// ---------------------------------------------------------------------------
-// CSP helpers
-// ---------------------------------------------------------------------------
-
-function buildCsp(nonce: string, apiUrl: string, faroUrl: string): string {
-  const connectSrc = ['self', apiUrl, faroUrl && faroUrl.startsWith('http') ? faroUrl : '']
-    .filter(Boolean)
-    .map((u) => (u === 'self' ? "'self'" : u))
-    .join(' ');
-
-  const reportUri = `${apiUrl}/api/csp-report`;
-
-  return [
-    "default-src 'self'",
-    // 'nonce-{nonce}' allows only scripts that carry this request's nonce.
-    // 'strict-dynamic' propagates trust to scripts loaded by nonced scripts,
-    // which is required for Next.js code-splitting chunks.
-    `script-src 'nonce-${nonce}' 'strict-dynamic'`,
-    // Inline styles cannot be nonced (Tailwind + Radix UI inject styles at
-    // runtime). 'unsafe-inline' is unavoidable until a nonce-compatible
-    // CSS-in-JS solution is adopted.
-    "style-src 'self' 'unsafe-inline'",
-    "font-src 'self'",
-    // data: for base64-encoded inline images; blob: for local previews.
-    "img-src 'self' data: blob: https://contracttocozy.com https://*.contracttocozy.com",
-    `connect-src ${connectSrc}`,
-    "frame-ancestors 'none'",
-    "base-uri 'self'",
-    "form-action 'self'",
-    "object-src 'none'",
-    // PWA: service worker registration + web app manifest fetch.
-    "worker-src 'self'",
-    "manifest-src 'self'",
-    "upgrade-insecure-requests",
-    // NOTE: require-trusted-types-for 'script' is intentionally omitted.
-    // Next.js's webpack/Turbopack runtime chunks use innerHTML and TrustedScriptURL
-    // assignments that are not Trusted Types-compatible and cannot be patched.
-    // Enabling this directive breaks the application at runtime. Revisit when
-    // Next.js ships full Trusted Types support.
-    // Violation reporting — report-uri for broad browser support,
-    // report-to for the modern Reporting API (Chrome 70+, Edge 79+).
-    `report-uri ${reportUri}`,
-    'report-to csp-endpoint',
-  ].join('; ');
-}
 
 // ---------------------------------------------------------------------------
 // Auth helpers
@@ -121,8 +79,7 @@ export function middleware(request: NextRequest) {
   const nonce = Buffer.from(crypto.randomUUID()).toString('base64');
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
   const faroUrl = process.env.NEXT_PUBLIC_FARO_URL || '';
-  const csp = buildCsp(nonce, apiUrl, faroUrl);
-  const reportUri = `${apiUrl}/api/csp-report`;
+  const csp = buildCsp({ nonce, apiUrl, faroUrl });
 
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set('x-nonce', nonce);
@@ -141,7 +98,7 @@ export function middleware(request: NextRequest) {
   ) {
     const response = NextResponse.next({ request: { headers: requestHeaders } });
     response.headers.set('Content-Security-Policy', csp);
-    response.headers.set('Reporting-Endpoints', `csp-endpoint="${reportUri}"`);
+    response.headers.set('Reporting-Endpoints', buildReportingEndpoints(apiUrl));
     return response;
   }
 
@@ -199,7 +156,7 @@ export function middleware(request: NextRequest) {
   // ------------------------------------------------------------------
   const response = NextResponse.next({ request: { headers: requestHeaders } });
   response.headers.set('Content-Security-Policy', csp);
-  response.headers.set('Reporting-Endpoints', `csp-endpoint="${reportUri}"`);
+  response.headers.set('Reporting-Endpoints', buildReportingEndpoints(apiUrl));
   return response;
 }
 

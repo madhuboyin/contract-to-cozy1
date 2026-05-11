@@ -6,7 +6,6 @@ import { authRateLimiter, strictRateLimiter } from '../middleware/rateLimiter.mi
 import {
   registerSchema,
   loginSchema,
-  refreshTokenSchema,
   verifyEmailSchema,
   forgotPasswordSchema,
   resetPasswordSchema,
@@ -148,7 +147,6 @@ router.post(
 router.post(
   '/refresh',
   authRateLimiter,
-  validateBody(refreshTokenSchema),
   authController.refreshToken.bind(authController)
 );
 

@@ -35,6 +35,13 @@ export const metadata: Metadata = {
   title: 'Contract to Cozy - Home Service Marketplace',
   description: 'Your complete property management companion',
   applicationName: 'Contract to Cozy',
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'https://contracttocozy.com'),
+  referrer: 'strict-origin-when-cross-origin',
+  robots: {
+    index: true,
+    follow: true,
+    noarchive: true,
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',

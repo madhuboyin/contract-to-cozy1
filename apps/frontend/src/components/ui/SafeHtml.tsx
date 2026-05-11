@@ -28,6 +28,9 @@ const ALLOWED_TAGS = [
   'img',
 ];
 const ALLOWED_ATTR = ['href', 'title', 'target', 'rel', 'class', 'src', 'alt', 'width', 'height'];
+const ALLOWED_TARGETS = new Set(['_blank', '_self']);
+const SAFE_URI_PATTERN =
+  /^(?:(?:https?:|mailto:|tel:)|\/(?!\/)|#)/i;
 
 interface SafeHtmlProps {
   html: string;
@@ -37,10 +40,48 @@ interface SafeHtmlProps {
 }
 
 export function SafeHtml({ html, as: Tag = 'div', className }: SafeHtmlProps) {
-  const sanitized = useMemo(
-    () => DOMPurify.sanitize(html, { ALLOWED_TAGS, ALLOWED_ATTR, ADD_ATTR: ['target'], FORCE_BODY: true }),
-    [html]
-  );
+  const sanitized = useMemo(() => {
+    const purified = DOMPurify.sanitize(html, {
+      ALLOWED_TAGS,
+      ALLOWED_ATTR,
+      ADD_ATTR: ['target'],
+      FORCE_BODY: true,
+      ALLOW_DATA_ATTR: false,
+      ALLOWED_URI_REGEXP: SAFE_URI_PATTERN,
+    });
+
+    if (typeof window === 'undefined') {
+      return purified;
+    }
+
+    const parser = new window.DOMParser();
+    const doc = parser.parseFromString(`<div>${purified}</div>`, 'text/html');
+    const container = doc.body.firstElementChild;
+    if (!container) return purified;
+
+    container.querySelectorAll('a').forEach((anchor) => {
+      const href = anchor.getAttribute('href') || '';
+      const target = anchor.getAttribute('target');
+      if (!SAFE_URI_PATTERN.test(href)) {
+        anchor.removeAttribute('href');
+      }
+      if (target && !ALLOWED_TARGETS.has(target)) {
+        anchor.removeAttribute('target');
+      }
+      if (anchor.getAttribute('target') === '_blank') {
+        anchor.setAttribute('rel', 'noopener noreferrer nofollow');
+      }
+    });
+
+    container.querySelectorAll('img').forEach((image) => {
+      const src = image.getAttribute('src') || '';
+      if (!/^(?:https?:|\/(?!\/))/i.test(src)) {
+        image.remove();
+      }
+    });
+
+    return container.innerHTML;
+  }, [html]);
 
   return (
     <Tag

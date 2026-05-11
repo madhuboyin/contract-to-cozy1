@@ -9,6 +9,7 @@ import { WinCard } from '@/components/shared/WinCard';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
 import { toast } from '@/components/ui/use-toast';
 import { track } from '@/lib/analytics/events';
+import { api } from '@/lib/api/client';
 import { useRouter } from 'next/navigation';
 import { ConfirmationForm } from './ConfirmationForm';
 import {
@@ -175,24 +176,18 @@ export function MagicCaptureSheet({
       formData.append('propertyId', selectedPropertyId);
 
       try {
-        const token = localStorage.getItem('token');
-        const response = await fetch(
+        const result = await api.postFormData<any>(
           `/api/properties/${selectedPropertyId}/inventory/ocr/label`,
-          {
-            method: 'POST',
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-            body: formData,
-          },
+          formData,
         );
-
-        let result: any = null;
-        try {
-          result = await response.json();
-        } catch {
-          result = null;
-        }
+        const response = {
+          ok: result.success,
+          status: result.success ? 200 : 400,
+          headers: {
+            get: (_name: string) => null,
+          },
+        };
+        const resultAny = result as any;
 
         if (response.ok && result.success) {
           const nextOutcome: CaptureOutcomeData = result.data ?? {};
@@ -209,17 +204,17 @@ export function MagicCaptureSheet({
           return;
         }
 
-        const apiError = result?.error;
+        const apiError = resultAny?.error;
         const message =
           (typeof apiError === 'object' && apiError?.message) ||
           (typeof apiError === 'string' ? apiError : null) ||
-          result?.message ||
+          resultAny?.message ||
           (response.status === 504
             ? 'Document analysis timed out. Please try again.'
             : 'Analysis failed');
         const code =
           (typeof apiError === 'object' && apiError?.code) ||
-          result?.code ||
+          resultAny?.code ||
           (response.status === 504 ? 'AI_TIMEOUT' : undefined);
 
         setStep('error');

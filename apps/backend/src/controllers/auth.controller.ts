@@ -11,6 +11,11 @@ import {
   ChangePasswordInput,
 } from '../utils/validators';
 import { auditLog, redactEmail } from '../lib/logger';
+import {
+  clearAuthCookies,
+  getRefreshTokenFromRequest,
+  setAuthCookies,
+} from '../utils/authCookies.util';
 
 const authService = new AuthService();
 
@@ -23,6 +28,7 @@ export class AuthController {
     const data: RegisterInput = req.body;
     try {
       const result = await authService.register(data);
+      setAuthCookies(res, result);
       auditLog('AUTH_REGISTER_SUCCESS', result.user.id, {
         ip: req.ip,
         role: data.role,
@@ -57,6 +63,7 @@ export class AuthController {
         return;
       }
 
+      setAuthCookies(res, result);
       auditLog('AUTH_LOGIN_SUCCESS', result.user.id, {
         ip: req.ip,
         email: redactEmail(data.email),
@@ -85,8 +92,20 @@ export class AuthController {
    */
   async refreshToken(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const { refreshToken }: RefreshTokenInput = req.body;
+      const refreshToken =
+        getRefreshTokenFromRequest(req) ?? (req.body as RefreshTokenInput | undefined)?.refreshToken;
+      if (!refreshToken) {
+        res.status(400).json({
+          success: false,
+          error: {
+            message: 'Refresh token is required',
+            code: 'REFRESH_TOKEN_REQUIRED',
+          },
+        });
+        return;
+      }
       const result = await authService.refreshToken(refreshToken);
+      setAuthCookies(res, result);
 
       res.status(200).json({
         success: true,
@@ -185,10 +204,12 @@ export class AuthController {
    */
   async logout(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
-      const maybeRefreshToken = req.body?.refreshToken;
+      const maybeRefreshToken = getRefreshTokenFromRequest(req);
       if (typeof maybeRefreshToken === 'string' && maybeRefreshToken.length > 0) {
         await authService.logout(maybeRefreshToken);
       }
+
+      clearAuthCookies(res);
 
       res.status(200).json({
         success: true,
