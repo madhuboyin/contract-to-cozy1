@@ -14,6 +14,8 @@ import { markCoverageAnalysisStale, markItemCoverageAnalysesStale } from './cove
 import { markRiskPremiumOptimizerStale } from './riskPremiumOptimizer.service';
 import { markDoNothingRunsStale } from './doNothingSimulator.service';
 import { logger } from '../lib/logger';
+import { uploadDocumentBuffer } from './storage/reportStorage';
+import { presignGetObject } from './storage/presign';
 
 // Helper interface for safe Decimal conversion (the object must have a toNumber method)
 interface DecimalLike {
@@ -582,6 +584,39 @@ interface CreateDocumentDTO {
   policyId?: string;
 }
 
+type DocumentWithOptionalSignedUrl = Document & {
+  fileSignedUrl?: string | null;
+};
+
+async function buildDocumentResponse(rawDocument: Document): Promise<DocumentWithOptionalSignedUrl> {
+  if (!rawDocument.fileUrl) {
+    return { ...rawDocument, fileSignedUrl: null };
+  }
+
+  if (rawDocument.fileUrl.startsWith('data:')) {
+    return { ...rawDocument, fileSignedUrl: rawDocument.fileUrl };
+  }
+
+  const bucket = process.env.S3_BUCKET;
+  if (!bucket) {
+    logger.warn({ documentId: rawDocument.id }, '[HOME_MANAGEMENT] S3_BUCKET missing; returning document key without presigned URL');
+    return { ...rawDocument, fileSignedUrl: null };
+  }
+
+  try {
+    const fileSignedUrl = await presignGetObject({
+      bucket,
+      key: rawDocument.fileUrl,
+      expiresInSeconds: 3600,
+      downloadFilename: rawDocument.name,
+    });
+    return { ...rawDocument, fileSignedUrl };
+  } catch (error) {
+    logger.error({ err: error, documentId: rawDocument.id }, '[HOME_MANAGEMENT] Failed to presign document URL');
+    return { ...rawDocument, fileSignedUrl: null };
+  }
+}
+
 /**
  * Handles the upload and database record creation for a new document.
  */
@@ -589,13 +624,8 @@ export async function createDocument(
   homeownerProfileId: string, 
   data: CreateDocumentDTO,
   file: Express.Multer.File, // Assuming file is provided by multer middleware
-): Promise<Document> {
-  
-  // 1. Persist inline data URL so uploaded assets are immediately renderable.
-  // Replace with durable object storage URL when storage integration is available.
-  const fileUrl = `data:${file.mimetype};base64,${file.buffer.toString('base64')}`;
-  
-  // 2. INPUT VALIDATION (Simplified check)
+): Promise<DocumentWithOptionalSignedUrl> {
+  // 1. INPUT VALIDATION (Simplified check)
   if (data.propertyId) {
     const property = await prisma.property.findFirst({
       where: { id: data.propertyId, homeownerProfileId },
@@ -605,13 +635,21 @@ export async function createDocument(
     }
   }
 
-  // 3. CREATE DATABASE RECORD
+  const { key } = await uploadDocumentBuffer({
+    buffer: file.buffer,
+    fileName: data.name || file.originalname,
+    mimeType: file.mimetype,
+    userId: homeownerProfileId,
+    propertyId: data.propertyId ?? null,
+  });
+
+  // 2. CREATE DATABASE RECORD
   const rawDocument = await prisma.document.create({
     data: {
       uploadedBy: homeownerProfileId,
       type: data.type as DocumentType, 
       name: data.name,
-      fileUrl: fileUrl,
+      fileUrl: key,
       fileSize: file.size,
       mimeType: file.mimetype,
       description: data.description,
@@ -645,17 +683,17 @@ export async function createDocument(
     }
   }
 
-  return rawDocument as Document;
+  return buildDocumentResponse(rawDocument as Document);
 }
 
 /**
  * Lists all documents uploaded by the homeowner.
  */
-export async function listDocuments(homeownerProfileId: string): Promise<Document[]> {
+export async function listDocuments(homeownerProfileId: string): Promise<DocumentWithOptionalSignedUrl[]> {
     const documents = await prisma.document.findMany({
         where: { uploadedBy: homeownerProfileId },
         orderBy: { createdAt: 'desc' },
     });
-    
-    return documents as Document[];
+
+    return Promise.all(documents.map((document) => buildDocumentResponse(document as Document)));
 }

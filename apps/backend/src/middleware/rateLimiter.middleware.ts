@@ -4,6 +4,7 @@ import { createHash } from 'crypto';
 import { authConfig } from '../config/jwt.config';
 import { verifyAccessToken } from '../utils/jwt.util';
 import { redis } from '../lib/redis';
+import { logger } from '../lib/logger';
 
 /**
  * Redis-backed rate-limit store.
@@ -12,10 +13,13 @@ import { redis } from '../lib/redis';
  * sliding window works correctly across all backend pods, replacing the
  * per-pod MemoryStore that effectively multiplied the limit by replica count.
  *
- * Falls open on Redis errors so a Redis outage never blocks legitimate traffic.
+ * Falls back to a local in-process counter on Redis errors so a Redis outage
+ * does not silently disable brute-force protection across all pods.
  */
 class RedisRateLimitStore implements Store {
   private readonly windowMs: number;
+  private readonly fallback = new Map<string, { hits: number; resetAt: number }>();
+  private redisHealthy = true;
   // localKeys: false tells express-rate-limit this store is shared across instances
   // (pods), so it suppresses the false-positive double-count warning.
   readonly localKeys = false;
@@ -26,6 +30,23 @@ class RedisRateLimitStore implements Store {
 
   private redisKey(key: string): string {
     return `rl:${key}`;
+  }
+
+  private incrementFallback(rKey: string): ClientRateLimitInfo {
+    const now = Date.now();
+    const existing = this.fallback.get(rKey);
+
+    if (!existing || existing.resetAt <= now) {
+      const resetAt = now + this.windowMs;
+      this.fallback.set(rKey, { hits: 1, resetAt });
+      return { totalHits: 1, resetTime: new Date(resetAt) };
+    }
+
+    existing.hits += 1;
+    return {
+      totalHits: existing.hits,
+      resetTime: new Date(existing.resetAt),
+    };
   }
 
   async increment(key: string): Promise<ClientRateLimitInfo> {
@@ -42,26 +63,45 @@ class RedisRateLimitStore implements Store {
       `;
       const result = (await redis.eval(script, 1, rKey, String(this.windowMs))) as [number, number];
       const [totalHits, ttlMs] = result;
+      if (!this.redisHealthy) {
+        logger.warn({ key: rKey }, '[RATE_LIMIT] Redis recovered; disabling in-process fallback');
+      }
+      this.redisHealthy = true;
+      this.fallback.delete(rKey);
       return {
         totalHits,
         resetTime: new Date(Date.now() + (ttlMs > 0 ? ttlMs : this.windowMs)),
       };
-    } catch {
-      // Fail open: treat as 0 hits so the request is never blocked by Redis errors.
-      return { totalHits: 0, resetTime: new Date(Date.now() + this.windowMs) };
+    } catch (error) {
+      if (this.redisHealthy) {
+        logger.error({ err: error }, '[RATE_LIMIT] Redis unavailable; using in-process fallback counters');
+      }
+      this.redisHealthy = false;
+      return this.incrementFallback(rKey);
     }
   }
 
   async decrement(key: string): Promise<void> {
+    const rKey = this.redisKey(key);
     try {
-      await redis.decr(this.redisKey(key));
+      await redis.decr(rKey);
     } catch { /* ignore */ }
+
+    const fallbackEntry = this.fallback.get(rKey);
+    if (fallbackEntry) {
+      fallbackEntry.hits = Math.max(0, fallbackEntry.hits - 1);
+      if (fallbackEntry.hits === 0) {
+        this.fallback.delete(rKey);
+      }
+    }
   }
 
   async resetKey(key: string): Promise<void> {
+    const rKey = this.redisKey(key);
     try {
-      await redis.del(this.redisKey(key));
+      await redis.del(rKey);
     } catch { /* ignore */ }
+    this.fallback.delete(rKey);
   }
 }
 

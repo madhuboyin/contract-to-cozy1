@@ -24,6 +24,7 @@ export interface Document {
   id: string;
   name: string;
   fileUrl: string;
+  fileSignedUrl?: string | null;
   // Added other fields from the Prisma schema for completeness, though list services only select a subset.
   type: DocumentType; 
   description: string | null;

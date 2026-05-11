@@ -2,7 +2,7 @@
 
 import { randomUUID } from 'crypto';
 import jwt from 'jsonwebtoken';
-import { jwtConfig } from '../config/jwt.config'; // Keep import for expiration times and other keys
+import { jwtConfig } from '../config/jwt.config';
 
 type TokenType = 'access' | 'refresh';
 
@@ -35,16 +35,6 @@ interface PurposeTokenPayload extends jwt.JwtPayload {
   purpose: 'email_verification' | 'password_reset' | 'mfa_challenge';
   role?: string;
 }
-
-// CRITICAL HELPER: Ensures we get the secret directly from the environment
-const getJwtSecret = (): string => {
-  const secret = process.env.JWT_SECRET;
-  if (!secret) {
-    // Fail-fast if the master secret is missing
-    throw new Error('FATAL: JWT_SECRET environment variable is missing.');
-  }
-  return secret;
-};
 
 const parseBaseAuthPayload = (decoded: jwt.JwtPayload): JWTPayload => {
   const { userId, email, role, tokenVersion, mfaEnabled, mfaVerified } = decoded as any;
@@ -137,7 +127,7 @@ const verifyPurposeToken = (
 export const generateAccessToken = (payload: JWTPayload): string => {
   return jwt.sign(
     { ...buildBaseClaims(payload), tokenType: 'access' as TokenType },
-    getJwtSecret(),
+    jwtConfig.accessToken.secret,
     {
       expiresIn: jwtConfig.accessToken.expiresIn,
     } as jwt.SignOptions
@@ -148,7 +138,6 @@ export const generateAccessToken = (payload: JWTPayload): string => {
  * Generate refresh token (FIXED to use ENV variable for signing)
  */
 export const generateRefreshToken = (payload: JWTPayload, refreshSessionId: string): string => {
-  // Uses the same main secret for consistency and reliability
   return jwt.sign(
     {
       ...buildBaseClaims(payload),
@@ -156,7 +145,7 @@ export const generateRefreshToken = (payload: JWTPayload, refreshSessionId: stri
       sessionId: refreshSessionId,
       jti: randomUUID(),
     },
-    getJwtSecret(),
+    jwtConfig.refreshToken.secret,
     {
       expiresIn: jwtConfig.refreshToken.expiresIn,
     } as jwt.SignOptions
@@ -178,7 +167,7 @@ export const generateTokenPair = (payload: JWTPayload, refreshSessionId: string)
  */
 export const verifyAccessToken = (token: string): JWTPayload => {
   try {
-    const decoded = jwt.verify(token, getJwtSecret());
+    const decoded = jwt.verify(token, jwtConfig.accessToken.secret);
     return parseAccessPayload(decoded);
   } catch (error) {
     throw new Error('Invalid or expired access token');
@@ -190,7 +179,7 @@ export const verifyAccessToken = (token: string): JWTPayload => {
  */
 export const verifyRefreshToken = (token: string): RefreshTokenPayload => {
   try {
-    const decoded = jwt.verify(token, getJwtSecret());
+    const decoded = jwt.verify(token, jwtConfig.refreshToken.secret);
     return parseRefreshPayload(decoded);
   } catch (error) {
     throw new Error('Invalid or expired refresh token');

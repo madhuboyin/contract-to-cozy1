@@ -1,26 +1,77 @@
+const isProduction = process.env.NODE_ENV === 'production';
+const MIN_PRODUCTION_SECRET_LENGTH = 32;
+
+function resolveSecret(
+  primaryEnvVar: string,
+  options: {
+    aliases?: string[];
+    devFallback: string;
+    description: string;
+  }
+): string {
+  const candidates = [primaryEnvVar, ...(options.aliases ?? [])];
+
+  for (const envVar of candidates) {
+    const value = process.env[envVar]?.trim();
+    if (!value) continue;
+
+    if (isProduction && value.length < MIN_PRODUCTION_SECRET_LENGTH) {
+      throw new Error(
+        `FATAL: ${envVar} must be at least ${MIN_PRODUCTION_SECRET_LENGTH} characters for ${options.description}. ` +
+        'Generate with: openssl rand -hex 32'
+      );
+    }
+
+    return value;
+  }
+
+  if (isProduction) {
+    throw new Error(
+      `FATAL: Missing ${options.description} secret. Set one of: ${candidates.join(', ')}. ` +
+      'Generate with: openssl rand -hex 32'
+    );
+  }
+
+  return options.devFallback;
+}
+
 // JWT Configuration
 export const jwtConfig = {
   // Access token (short-lived)
   accessToken: {
-    secret: process.env.JWT_ACCESS_SECRET || 'your-access-token-secret-change-in-production',
+    secret: resolveSecret('JWT_SECRET', {
+      aliases: ['JWT_ACCESS_SECRET'],
+      devFallback: 'dev-access-token-secret-not-for-production',
+      description: 'access token signing',
+    }),
     expiresIn: '15m', // 15 minutes
   },
-  
+
   // Refresh token (long-lived)
   refreshToken: {
-    secret: process.env.JWT_REFRESH_SECRET || 'your-refresh-token-secret-change-in-production',
+    secret: resolveSecret('JWT_REFRESH_SECRET', {
+      aliases: ['JWT_SECRET'],
+      devFallback: 'dev-refresh-token-secret-not-for-production',
+      description: 'refresh token signing',
+    }),
     expiresIn: '7d', // 7 days
   },
-  
+
   // Email verification token
   emailVerificationToken: {
-    secret: process.env.JWT_EMAIL_SECRET || 'your-email-verification-secret',
+    secret: resolveSecret('JWT_EMAIL_SECRET', {
+      devFallback: 'dev-email-verification-secret-not-for-production',
+      description: 'email verification token signing',
+    }),
     expiresIn: '24h', // 24 hours
   },
-  
+
   // Password reset token
   passwordResetToken: {
-    secret: process.env.JWT_PASSWORD_RESET_SECRET || 'your-password-reset-secret',
+    secret: resolveSecret('JWT_PASSWORD_RESET_SECRET', {
+      devFallback: 'dev-password-reset-secret-not-for-production',
+      description: 'password reset token signing',
+    }),
     expiresIn: '1h', // 1 hour
   },
 
@@ -28,7 +79,10 @@ export const jwtConfig = {
   // TOTP-verified states. Issued after a successful password check when the
   // account has MFA enabled; exchanged for real tokens via POST /api/auth/mfa/challenge.
   mfaChallengeToken: {
-    secret: process.env.JWT_MFA_SECRET || 'your-mfa-challenge-secret',
+    secret: resolveSecret('JWT_MFA_SECRET', {
+      devFallback: 'dev-mfa-challenge-secret-not-for-production',
+      description: 'MFA challenge token signing',
+    }),
     expiresIn: '5m', // 5 minutes — tight window for the TOTP prompt
   },
 };
