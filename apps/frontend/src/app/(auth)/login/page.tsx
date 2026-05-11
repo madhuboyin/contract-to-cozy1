@@ -1,13 +1,11 @@
 // apps/frontend/src/app/(auth)/login/page.tsx
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { Eye, EyeOff, Lock, Mail } from 'lucide-react';
-import PostLoginTransition from '@/components/system/PostLoginTransition';
-import { APP_CONFIG } from '@/lib/config/appConfig';
 import { UserRole } from '@/types';
 
 const POST_LOGIN_TRANSITION_KEY = 'ctc.postLoginTransition';
@@ -22,8 +20,6 @@ export default function LoginPage() {
     sessionExpired ? 'Your session expired. Please sign in again.' : null
   );
   const [showPassword, setShowPassword] = useState(false);
-  const [isTransitioning, setIsTransitioning] = useState(false);
-  const redirectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [formData, setFormData] = useState({
     email: '',
@@ -36,7 +32,7 @@ export default function LoginPage() {
 
   // Redirect if already authenticated — in useEffect to avoid render-time side effects
   useEffect(() => {
-    if (user && !isTransitioning) {
+    if (user) {
       if (user.role === 'PROVIDER') {
         router.replace('/providers/dashboard');
       } else if (user.role === 'ADMIN') {
@@ -45,18 +41,9 @@ export default function LoginPage() {
         router.replace('/dashboard');
       }
     }
-  }, [user, router, isTransitioning]);
+  }, [user, router]);
 
-  useEffect(() => {
-    return () => {
-      if (redirectTimerRef.current) {
-        clearTimeout(redirectTimerRef.current);
-      }
-    };
-  }, []);
-
-  // Show nothing while redirecting (but not if transitioning — that renders the success animation)
-  if (user && !isTransitioning) return null;
+  if (user) return null;
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({
@@ -89,14 +76,10 @@ export default function LoginPage() {
           destination = '/dashboard/knowledge-admin';
         }
 
-        setIsTransitioning(true);
         if (typeof window !== 'undefined') {
           window.sessionStorage.setItem(POST_LOGIN_TRANSITION_KEY, '1');
         }
-
-        redirectTimerRef.current = setTimeout(() => {
-          router.replace(destination);
-        }, APP_CONFIG.postLoginTransitionMs);
+        router.replace(destination);
       } else {
         setError('Invalid email or password.');
       }
@@ -132,24 +115,16 @@ export default function LoginPage() {
         destination = '/dashboard/knowledge-admin';
       }
 
-      setIsTransitioning(true);
       if (typeof window !== 'undefined') {
         window.sessionStorage.setItem(POST_LOGIN_TRANSITION_KEY, '1');
       }
-
-      redirectTimerRef.current = setTimeout(() => {
-        router.replace(destination);
-      }, 12000);
+      router.replace(destination);
     } catch (err: any) {
       setError(err?.message || (useRecoveryCode ? 'Invalid recovery code.' : 'Invalid authentication code.'));
     } finally {
       setLoading(false);
     }
   };
-
-  if (isTransitioning) {
-    return <PostLoginTransition />;
-  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex flex-col">
