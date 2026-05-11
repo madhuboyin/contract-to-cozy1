@@ -235,6 +235,21 @@ const ProviderList = ({
   return (
     <div className="space-y-2.5">
       {providers.map((provider) => {
+        const providerCategories = Array.isArray(provider.serviceCategories)
+          ? provider.serviceCategories
+          : [];
+        const providerTotalReviews =
+          typeof provider.totalReviews === 'number' && Number.isFinite(provider.totalReviews)
+            ? provider.totalReviews
+            : 0;
+        const providerCompletedJobs =
+          typeof provider.totalCompletedJobs === 'number' && Number.isFinite(provider.totalCompletedJobs)
+            ? provider.totalCompletedJobs
+            : 0;
+        const providerAverageRating =
+          typeof provider.averageRating === 'number' && Number.isFinite(provider.averageRating)
+            ? provider.averageRating
+            : 0;
         const queryParams = new URLSearchParams();
         if (targetPropertyId) queryParams.append('propertyId', targetPropertyId);
         if (insightContext) queryParams.append('insightFactor', insightContext);
@@ -267,24 +282,24 @@ const ProviderList = ({
                 <p className="mb-0 truncate text-sm font-semibold text-slate-900">{provider.businessName}</p>
                 <div className="flex items-center gap-2 mt-0.5">
                   <p className="mb-0 text-xs text-slate-500">
-                    {provider.totalReviews} {provider.totalReviews === 1 ? 'review' : 'reviews'}
-                    {provider.totalCompletedJobs > 0 ? ` • ${provider.totalCompletedJobs} jobs` : ''}
+                    {providerTotalReviews} {providerTotalReviews === 1 ? 'review' : 'reviews'}
+                    {providerCompletedJobs > 0 ? ` • ${providerCompletedJobs} jobs` : ''}
                   </p>
-                  {(inventoryItemId || insightContext) && provider.serviceCategories.includes((category || insightContext) as any) && (
+                  {(inventoryItemId || insightContext) && providerCategories.includes((category || insightContext) as any) && (
                     <StatusChip tone="good" className="text-[9px] py-0 px-1.5 h-4">Best Match</StatusChip>
                   )}
                 </div>
               </div>
-              <StatusChip tone={provider.averageRating >= 4.5 ? 'good' : provider.averageRating >= 4 ? 'elevated' : 'info'}>
+              <StatusChip tone={providerAverageRating >= 4.5 ? 'good' : providerAverageRating >= 4 ? 'elevated' : 'info'}>
                 <span className="inline-flex items-center gap-1">
                   <Star className="h-3 w-3 fill-current" />
-                  {provider.averageRating.toFixed(1)}
+                  {providerAverageRating.toFixed(1)}
                 </span>
               </StatusChip>
             </div>
 
             <div className="flex flex-wrap gap-1.5">
-              {provider.serviceCategories.slice(0, 2).map((cat) => (
+              {providerCategories.slice(0, 2).map((cat) => (
                 <StatusChip key={cat} tone="protected" className="text-[10px]">
                   <span className="inline-flex items-center gap-1">
                     <ServiceCategoryIcon icon={cat} className="h-3 w-3" />
@@ -292,7 +307,7 @@ const ProviderList = ({
                   </span>
                 </StatusChip>
               ))}
-              {provider.serviceCategories.length > 2 ? <StatusChip tone="info">+{provider.serviceCategories.length - 2} more</StatusChip> : null}
+              {providerCategories.length > 2 ? <StatusChip tone="info">+{providerCategories.length - 2} more</StatusChip> : null}
             </div>
 
             <ReadOnlySummaryBlock
@@ -309,7 +324,7 @@ const ProviderList = ({
                 },
                 {
                   label: 'Completed jobs',
-                  value: provider.totalCompletedJobs,
+                  value: providerCompletedJobs,
                   emphasize: true,
                 },
               ]}
