@@ -29,19 +29,31 @@ function getInlineStepConfig(step: GuidanceStepDTO): {
         options: [
           {
             label: 'Standard recurring clean',
-            producedData: { selectedCleaningType: 'standard_clean' },
+            producedData: {
+              selectedCleaningType: 'standard_clean',
+              selectedCleaningTypeLabel: 'Standard recurring clean',
+            },
           },
           {
             label: 'One-time deep clean',
-            producedData: { selectedCleaningType: 'deep_clean' },
+            producedData: {
+              selectedCleaningType: 'deep_clean',
+              selectedCleaningTypeLabel: 'One-time deep clean',
+            },
           },
           {
             label: 'Move-in / move-out clean',
-            producedData: { selectedCleaningType: 'move_clean' },
+            producedData: {
+              selectedCleaningType: 'move_clean',
+              selectedCleaningTypeLabel: 'Move-in / move-out clean',
+            },
           },
           {
             label: 'Post-construction clean-up',
-            producedData: { selectedCleaningType: 'post_construction' },
+            producedData: {
+              selectedCleaningType: 'post_construction',
+              selectedCleaningTypeLabel: 'Post-construction clean-up',
+            },
           },
         ],
       };

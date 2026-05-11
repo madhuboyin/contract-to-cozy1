@@ -69,6 +69,13 @@ const GUIDANCE_FOCUSED_TOOL_KEYS = new Set([
   'true-cost',
 ]);
 
+const CLEANING_TYPE_LABELS: Record<string, string> = {
+  standard_clean: 'Standard recurring clean',
+  deep_clean: 'One-time deep clean',
+  move_clean: 'Move-in / move-out clean',
+  post_construction: 'Post-construction clean-up',
+};
+
 function replaceRouteParam(path: string, key: string, value: string | null | undefined): string {
   if (!path.includes(`:${key}`)) return path;
   if (!value) return path;
@@ -86,6 +93,7 @@ function appendGuidanceContext(
   step: GuidanceStepDTO
 ): string {
   const params = new URLSearchParams();
+  const selectedCleaningTypeLabel = getJourneySelectedCleaningTypeLabel(journey);
   params.set('guidanceJourneyId', journey.id);
   params.set('guidanceStepKey', step.stepKey);
   if (journey.primarySignal?.signalIntentFamily) {
@@ -105,6 +113,10 @@ function appendGuidanceContext(
     const assetName = journey.inventoryItem?.name?.trim() ?? null;
     if (assetName) params.set('label', assetName);
   }
+  if (step.toolKey === 'service-price-radar' && journey.serviceKey === 'cleaning_service') {
+    params.set('category', 'CLEANING');
+    if (selectedCleaningTypeLabel) params.set('label', selectedCleaningTypeLabel);
+  }
   // FRD-FR-10: For booking steps, pass asset name and issue description so the
   // booking form can auto-populate the description field.
   if (step.toolKey === 'booking') {
@@ -113,11 +125,32 @@ function appendGuidanceContext(
       (journey.homeAsset?.assetType ? formatEnumLabel(journey.homeAsset.assetType) : null);
     if (assetName) params.set('assetName', assetName);
     if (journey.issueType) params.set('issueDescription', journey.issueType);
+    if (journey.serviceKey === 'cleaning_service') {
+      params.set('category', 'CLEANING');
+      if (selectedCleaningTypeLabel) {
+        params.set('serviceLabel', selectedCleaningTypeLabel);
+        params.set('issueDescription', selectedCleaningTypeLabel);
+      }
+    }
   }
 
   const query = params.toString();
   if (!query) return path;
   return path.includes('?') ? `${path}&${query}` : `${path}?${query}`;
+}
+
+function getJourneySelectedCleaningTypeLabel(journey: GuidanceJourneyDTO): string | null {
+  const selectionStep = journey.steps.find((step) => step.stepKey === 'select_cleaning_type');
+  const explicitLabel =
+    typeof selectionStep?.producedData?.selectedCleaningTypeLabel === 'string'
+      ? selectionStep.producedData.selectedCleaningTypeLabel.trim()
+      : '';
+  if (explicitLabel) return explicitLabel;
+  const selectionKey =
+    typeof selectionStep?.producedData?.selectedCleaningType === 'string'
+      ? selectionStep.producedData.selectedCleaningType
+      : null;
+  return formatSelectedCleaningTypeLabel(selectionKey);
 }
 
 export function formatIssueDomain(domain: GuidanceIssueDomain): string {
@@ -174,6 +207,12 @@ export function formatIssueTypeLabel(issueType: string | null | undefined): stri
   if (!normalized) return null;
   const key = normalized.toLowerCase();
   return ISSUE_TYPE_LABELS[key] ?? formatEnumLabel(normalized) ?? normalized;
+}
+
+export function formatSelectedCleaningTypeLabel(value: string | null | undefined): string | null {
+  const normalized = value?.trim().toLowerCase();
+  if (!normalized) return null;
+  return CLEANING_TYPE_LABELS[normalized] ?? formatEnumLabel(normalized) ?? normalized;
 }
 
 export function resolveGuidanceStepHref(args: {

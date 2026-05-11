@@ -198,6 +198,26 @@ function optionLabel(value: string | null | undefined): string {
   return formatEnumLabel(value);
 }
 
+function normalizeContextLabel(value: string | null | undefined): string {
+  return String(value ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ');
+}
+
+function matchesScopedPrefill(
+  check: ServicePriceRadarCheckSummary,
+  category: string | null,
+  label: string | null
+): boolean {
+  if (category && check.serviceCategory !== category) return false;
+  if (!label) return true;
+  const normalizedCheckLabel = normalizeContextLabel(check.serviceLabelRaw);
+  const normalizedPrefillLabel = normalizeContextLabel(label);
+  return Boolean(normalizedCheckLabel) && normalizedCheckLabel === normalizedPrefillLabel;
+}
+
 function propertyLabel(property: Property | null): string {
   if (!property) return 'Property';
   return (
@@ -878,7 +898,13 @@ export default function ServicePriceRadarClient() {
 
     const [propertyResult, checksResult] = await Promise.allSettled([
       api.getProperty(propertyId),
-      listServicePriceRadarChecks(propertyId, 12),
+      listServicePriceRadarChecks(propertyId, 12, {
+        linkedEntityType:
+          effectiveLinkedEntityType && effectiveLinkedEntityId
+            ? (effectiveLinkedEntityType as ServiceRadarLinkedEntityType)
+            : undefined,
+        linkedEntityId: effectiveLinkedEntityId,
+      }),
     ]);
 
     if (requestId !== loadRef.current) return;
@@ -904,11 +930,21 @@ export default function ServicePriceRadarClient() {
 
     if (checksResult.status === 'fulfilled') {
       const items = checksResult.value;
-      setRecentChecks(items);
+      const scopedItems =
+        isGuidanceContext && !effectiveLinkedEntityId
+          ? items.filter((item) =>
+              matchesScopedPrefill(
+                item,
+                prefilledCategoryValue,
+                searchParams.get('label')?.trim() || null
+              )
+            )
+          : items;
+      setRecentChecks(scopedItems);
       setChecksLoading(false);
-      if (items[0]) {
+      if (scopedItems[0]) {
         try {
-          const latest = await getServicePriceRadarCheck(propertyId, items[0].id);
+          const latest = await getServicePriceRadarCheck(propertyId, scopedItems[0].id);
           if (requestId !== loadRef.current) return;
           setCurrentCheck(latest);
           setForm((current) =>

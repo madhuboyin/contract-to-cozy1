@@ -534,14 +534,23 @@ export default function GuidanceOverviewClient() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedIssueType, activeHasScopedMatch, activeStep]);
 
+  const currentJourneyId =
+    activeJourneyDetail.data?.journey?.id ??
+    activePrimaryAction?.journeyId ??
+    pinnedJourneyId ??
+    null;
+
   const selectJourneyStep = React.useCallback(
     (stepKey: string) => {
       setSelectedJourneyStepKey(stepKey);
       const next = new URLSearchParams(searchParams.toString());
+      if (currentJourneyId) next.set('journeyId', currentJourneyId);
       next.set('stepKey', stepKey);
+      next.delete('guidanceJourneyId');
+      next.delete('guidanceStepKey');
       router.replace(`${pathname}?${next.toString()}`, { scroll: false });
     },
-    [pathname, router, searchParams]
+    [currentJourneyId, pathname, router, searchParams]
   );
 
   const handleStepComplete = React.useCallback(

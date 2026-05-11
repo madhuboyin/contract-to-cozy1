@@ -4,7 +4,10 @@ import React from 'react';
 import Link from 'next/link';
 import { useQueryClient } from '@tanstack/react-query';
 import { type GuidanceActionModel } from '@/features/guidance/utils/guidanceMappers';
-import { resolveGuidanceStepHref } from '@/features/guidance/utils/guidanceDisplay';
+import {
+  formatSelectedCleaningTypeLabel,
+  resolveGuidanceStepHref,
+} from '@/features/guidance/utils/guidanceDisplay';
 import { type GuidanceStepDTO, type GuidanceJourneyDTO, type ReplacementPriorities } from '@/lib/api/guidanceApi';
 import { VerifyHistoryStep } from '@/components/guidance/VerifyHistoryStep';
 import { RepairReplaceGate } from '@/components/guidance/RepairReplaceGate';
@@ -168,7 +171,23 @@ export function GuidanceStepCta({
     const priceItemId = resolvedJourney?.inventoryItemId ?? selectedInventoryItemId ?? null;
     const priceItemCategory =
       resolvedJourney?.inventoryItem?.category ?? selectedAssetOption?.category ?? null;
+    const cleaningSelectionStep = activeJourneySteps.find(
+      (candidate) => candidate.stepKey === 'select_cleaning_type'
+    );
+    const explicitCleaningLabel =
+      typeof cleaningSelectionStep?.producedData?.selectedCleaningTypeLabel === 'string'
+        ? cleaningSelectionStep.producedData.selectedCleaningTypeLabel.trim()
+        : '';
+    const selectedCleaningTypeKey =
+      typeof cleaningSelectionStep?.producedData?.selectedCleaningType === 'string'
+        ? cleaningSelectionStep.producedData.selectedCleaningType
+        : null;
+    const selectedCleaningTypeLabel =
+      explicitCleaningLabel || formatSelectedCleaningTypeLabel(selectedCleaningTypeKey);
+    const isCleaningQuoteStep =
+      resolvedJourney?.serviceKey === 'cleaning_service' || step.stepKey === 'get_cleaning_quotes';
     const displayAssetName =
+      (isCleaningQuoteStep ? selectedCleaningTypeLabel : null) ||
       resolvedJourney?.inventoryItem?.name?.trim() ||
       selectedAssetOption?.assetName ||
       'this item';
@@ -182,6 +201,9 @@ export function GuidanceStepCta({
         inventoryItemCategory={priceItemCategory}
         assetName={displayAssetName}
         issueType={resolvedJourney?.issueType ?? selectedIssueType ?? null}
+        serviceCategoryOverride={isCleaningQuoteStep ? 'CLEANING' : null}
+        serviceContextLabel={isCleaningQuoteStep ? selectedCleaningTypeLabel : null}
+        allowRecentReuse={Boolean(priceItemId)}
         presentation="guided"
         onComplete={handleInlineComplete}
       />

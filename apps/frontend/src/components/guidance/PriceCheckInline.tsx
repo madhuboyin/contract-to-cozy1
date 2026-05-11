@@ -99,9 +99,20 @@ type PriceCheckInlineProps = {
   inventoryItemCategory: string | null;
   assetName?: string;
   issueType?: string | null;
+  serviceCategoryOverride?: ServiceRadarCategory | null;
+  serviceContextLabel?: string | null;
+  allowRecentReuse?: boolean;
   presentation?: 'default' | 'guided';
   onComplete: () => void;
 };
+
+function normalizeLabel(value: string | null | undefined): string {
+  return String(value ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ');
+}
 
 // ---------------------------------------------------------------------------
 // Component
@@ -116,14 +127,19 @@ export function PriceCheckInline({
   inventoryItemCategory,
   assetName = 'this item',
   issueType,
+  serviceCategoryOverride = null,
+  serviceContextLabel = null,
+  allowRecentReuse = true,
   presentation = 'default',
   onComplete,
 }: PriceCheckInlineProps) {
   const queryClient = useQueryClient();
 
-  const defaultCategory = inferCategory(inventoryItemCategory);
+  const normalizedServiceContextLabel = serviceContextLabel?.trim() || null;
+  const defaultCategory = serviceCategoryOverride ?? inferCategory(inventoryItemCategory);
   const issueLabel = formatIssueTypeLabel(issueType);
-  const defaultDescription = [assetName, issueLabel].filter(Boolean).join(' — ');
+  const defaultDescription =
+    normalizedServiceContextLabel || [assetName, issueLabel].filter(Boolean).join(' — ');
 
   const [phase, setPhase] = React.useState<Phase>('loading');
   const [category, setCategory] = React.useState<ServiceRadarCategory>(defaultCategory);
@@ -140,13 +156,27 @@ export function PriceCheckInline({
       'price-radar-checks',
       propertyId,
       'recent-for-guidance',
+      journeyId,
       inventoryItemId ?? 'none',
+      allowRecentReuse ? 'allow-reuse' : 'no-reuse',
+      defaultCategory,
+      normalizedServiceContextLabel ?? 'no-label',
     ],
-    queryFn: () =>
-      listServicePriceRadarChecks(propertyId, 3, {
-        linkedEntityType: inventoryItemId ? 'APPLIANCE' : undefined,
-        linkedEntityId: inventoryItemId,
-      }),
+    queryFn: async () => {
+      if (!allowRecentReuse) return [];
+      const checks =
+        await listServicePriceRadarChecks(propertyId, 5, {
+          linkedEntityType: inventoryItemId ? 'APPLIANCE' : undefined,
+          linkedEntityId: inventoryItemId,
+        });
+      return checks.filter((check) => {
+        if (defaultCategory && check.serviceCategory !== defaultCategory) return false;
+        if (!normalizedServiceContextLabel) return true;
+        const checkLabel = normalizeLabel(check.serviceLabelRaw ?? null);
+        const contextLabel = normalizeLabel(normalizedServiceContextLabel);
+        return Boolean(checkLabel) && checkLabel === contextLabel;
+      });
+    },
     staleTime: 2 * 60_000,
   });
 
@@ -228,7 +258,20 @@ export function PriceCheckInline({
     }
   }
 
-  const fullToolHref = `/dashboard/properties/${propertyId}/tools/service-price-radar?guidanceJourneyId=${journeyId}&guidanceStepKey=${stepKey}${inventoryItemId ? `&linkedEntityType=APPLIANCE&linkedEntityId=${inventoryItemId}&label=${encodeURIComponent(assetName)}` : ''}`;
+  const fullToolParams = new URLSearchParams();
+  fullToolParams.set('guidanceJourneyId', journeyId);
+  fullToolParams.set('guidanceStepKey', stepKey);
+  fullToolParams.set('category', defaultCategory);
+  if (normalizedServiceContextLabel) {
+    fullToolParams.set('label', normalizedServiceContextLabel);
+  } else if (inventoryItemId) {
+    fullToolParams.set('label', assetName);
+  }
+  if (inventoryItemId) {
+    fullToolParams.set('linkedEntityType', 'APPLIANCE');
+    fullToolParams.set('linkedEntityId', inventoryItemId);
+  }
+  const fullToolHref = `/dashboard/properties/${propertyId}/tools/service-price-radar?${fullToolParams.toString()}`;
 
   // ---- Done ----
   if (phase === 'done') {
@@ -269,7 +312,7 @@ export function PriceCheckInline({
       <div className="space-y-3">
         <div className="rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3">
           <p className="text-sm font-medium text-[hsl(var(--mobile-text-primary))]">
-            Recent price check found
+            Recent quote review for this journey found
           </p>
           <p className="mt-0.5 text-xs text-[hsl(var(--mobile-text-secondary))]">
             {priorCheck.serviceLabelRaw ?? priorCheck.serviceCategory} ·{' '}
@@ -303,6 +346,16 @@ export function PriceCheckInline({
   // ---- State A: Form ----
   return (
     <div className="space-y-3">
+      {isGuided && normalizedServiceContextLabel ? (
+        <div className="rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] px-3 py-2.5">
+          <p className="text-sm font-medium text-[hsl(var(--mobile-text-primary))]">
+            Selected cleaning type
+          </p>
+          <p className="mt-0.5 text-xs text-[hsl(var(--mobile-text-secondary))]">
+            {normalizedServiceContextLabel}
+          </p>
+        </div>
+      ) : null}
       {!isGuided ? (
         <div className="rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] px-3 py-2.5">
           <p className="text-sm font-medium text-[hsl(var(--mobile-text-primary))]">
@@ -316,25 +369,37 @@ export function PriceCheckInline({
 
       <div className="space-y-2">
         {/* Category */}
-        <div>
-          <label className="mb-1 block text-xs font-medium text-[hsl(var(--mobile-text-primary))]">
-            Service type
-          </label>
-          <div className="relative">
-            <select
-              value={category}
-              onChange={(e) => setCategory(e.target.value as ServiceRadarCategory)}
-              className="w-full appearance-none rounded-lg border border-[hsl(var(--mobile-border-subtle))] bg-white py-2 pl-3 pr-8 text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--mobile-brand-strong))]/30"
-            >
-              {SERVICE_PRICE_RADAR_CATEGORY_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-            <ChevronDown className="pointer-events-none absolute right-2.5 top-2.5 h-4 w-4 text-[hsl(var(--mobile-text-muted))]" />
+        {isGuided && serviceCategoryOverride ? (
+          <div>
+            <label className="mb-1 block text-xs font-medium text-[hsl(var(--mobile-text-primary))]">
+              Service type
+            </label>
+            <div className="rounded-lg border border-[hsl(var(--mobile-border-subtle))] bg-slate-50 px-3 py-2 text-sm text-[hsl(var(--mobile-text-primary))]">
+              {SERVICE_PRICE_RADAR_CATEGORY_OPTIONS.find((opt) => opt.value === serviceCategoryOverride)?.label ??
+                serviceCategoryOverride}
+            </div>
           </div>
-        </div>
+        ) : (
+          <div>
+            <label className="mb-1 block text-xs font-medium text-[hsl(var(--mobile-text-primary))]">
+              Service type
+            </label>
+            <div className="relative">
+              <select
+                value={category}
+                onChange={(e) => setCategory(e.target.value as ServiceRadarCategory)}
+                className="w-full appearance-none rounded-lg border border-[hsl(var(--mobile-border-subtle))] bg-white py-2 pl-3 pr-8 text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--mobile-brand-strong))]/30"
+              >
+                {SERVICE_PRICE_RADAR_CATEGORY_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-2.5 top-2.5 h-4 w-4 text-[hsl(var(--mobile-text-muted))]" />
+            </div>
+          </div>
+        )}
 
         {/* Description */}
         <div>
@@ -343,7 +408,11 @@ export function PriceCheckInline({
           </label>
           <input
             type="text"
-            placeholder={`e.g. ${assetName} repair, parts and labour`}
+            placeholder={
+              normalizedServiceContextLabel
+                ? `${normalizedServiceContextLabel} quote details`
+                : `e.g. ${assetName} repair, parts and labour`
+            }
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             className="w-full rounded-lg border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 py-2 text-sm placeholder:text-[hsl(var(--mobile-text-muted))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--mobile-brand-strong))]/30"
