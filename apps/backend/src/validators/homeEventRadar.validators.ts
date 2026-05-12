@@ -115,6 +115,9 @@ export const listRadarFeedQuerySchema = z.object({
 export const updateRadarStateBodySchema = z.object({
   state: z.enum(PROPERTY_RADAR_USER_STATES),
   stateMetaJson: z.record(z.string(), z.unknown()).optional().nullable(),
+  guidanceJourneyId: z.string().uuid().optional().nullable(),
+  guidanceStepKey: z.string().trim().min(1).max(120).optional().nullable(),
+  guidanceSignalIntentFamily: z.string().trim().min(1).max(120).optional().nullable(),
 });
 
 /**

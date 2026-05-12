@@ -77,9 +77,17 @@ interface InspectionReport {
 
 interface Props {
   propertyId: string;
+  guidanceJourneyId?: string | null;
+  guidanceStepKey?: string | null;
+  guidanceSignalIntentFamily?: string | null;
 }
 
-export default function InspectionReportAnalyzer({ propertyId }: Props) {
+export default function InspectionReportAnalyzer({
+  propertyId,
+  guidanceJourneyId,
+  guidanceStepKey,
+  guidanceSignalIntentFamily,
+}: Props) {
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -111,6 +119,11 @@ export default function InspectionReportAnalyzer({ propertyId }: Props) {
     const formData = new FormData();
     formData.append('file', file);
     formData.append('propertyId', propertyId);
+    if (guidanceJourneyId) formData.append('guidanceJourneyId', guidanceJourneyId);
+    if (guidanceStepKey) formData.append('guidanceStepKey', guidanceStepKey);
+    if (guidanceSignalIntentFamily) {
+      formData.append('guidanceSignalIntentFamily', guidanceSignalIntentFamily);
+    }
 
     try {
       const response = await api.uploadInspectionReport(formData);

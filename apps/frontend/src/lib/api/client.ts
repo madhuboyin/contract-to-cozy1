@@ -3280,11 +3280,19 @@ class APIClient {
     propertyId: string,
     matchId: string,
     state: RadarUserState,
-    stateMetaJson?: Record<string, unknown>
+    stateMetaJson?: Record<string, unknown>,
+    guidance?: {
+      guidanceJourneyId?: string | null;
+      guidanceStepKey?: string | null;
+      guidanceSignalIntentFamily?: string | null;
+    }
   ): Promise<void> {
     await this.patch(`/api/properties/${propertyId}/radar/matches/${matchId}/state`, {
       state,
       stateMetaJson: stateMetaJson ?? null,
+      guidanceJourneyId: guidance?.guidanceJourneyId ?? null,
+      guidanceStepKey: guidance?.guidanceStepKey ?? null,
+      guidanceSignalIntentFamily: guidance?.guidanceSignalIntentFamily ?? null,
     });
   }
 

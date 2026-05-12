@@ -56,6 +56,9 @@ interface Props {
   propertyId: string;
   onClose: () => void;
   onStateChange?: (matchId: string, state: RadarUserState) => void;
+  guidanceJourneyId?: string | null;
+  guidanceStepKey?: string | null;
+  guidanceSignalIntentFamily?: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -95,7 +98,15 @@ function DetailSection({ title, children }: { title: string; children: React.Rea
 // Main component
 // ---------------------------------------------------------------------------
 
-export function RadarDetailSheet({ item, propertyId, onClose, onStateChange }: Props) {
+export function RadarDetailSheet({
+  item,
+  propertyId,
+  onClose,
+  onStateChange,
+  guidanceJourneyId,
+  guidanceStepKey,
+  guidanceSignalIntentFamily,
+}: Props) {
   const queryClient = useQueryClient();
   const isOpen = item !== null;
   const [isDesktop, setIsDesktop] = React.useState(false);
@@ -169,7 +180,17 @@ export function RadarDetailSheet({ item, propertyId, onClose, onStateChange }: P
   const stateMutation = useMutation({
     mutationFn: async (newState: RadarUserState) => {
       if (!item) return;
-      await api.updateRadarMatchState(propertyId, item.propertyRadarMatchId, newState);
+      await api.updateRadarMatchState(
+        propertyId,
+        item.propertyRadarMatchId,
+        newState,
+        undefined,
+        {
+          guidanceJourneyId,
+          guidanceStepKey,
+          guidanceSignalIntentFamily,
+        }
+      );
     },
     onSuccess: (_data, newState) => {
       if (!item) return;

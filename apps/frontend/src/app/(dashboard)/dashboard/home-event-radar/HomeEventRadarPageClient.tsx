@@ -22,7 +22,6 @@ import { RadarFeedItem } from '@/components/features/homeEventRadar/RadarFeedIte
 import { RadarFeedSkeleton } from '@/components/features/homeEventRadar/RadarFeedSkeleton';
 import { RadarDetailSheet } from '@/components/features/homeEventRadar/RadarDetailSheet';
 import HomeToolHeader from '@/components/tools/HomeToolHeader';
-import { GuidanceStepCompletionCard } from '@/components/guidance/GuidanceStepCompletionCard';
 import { track } from '@/lib/analytics/events';
 import type { Property, RadarFeedItem as RadarFeedItemType, RadarUserState } from '@/types';
 import { buildGuidanceOverviewHref } from '@/lib/navigation/guidanceOverviewHref';
@@ -639,12 +638,13 @@ export default function HomeEventRadarPageClient({ propertyId: propertyIdOverrid
         />
       </div>
 
-      <GuidanceStepCompletionCard
-        propertyId={propertyId}
-        guidanceStepKey={guidanceStepKey}
-        guidanceJourneyId={guidanceJourneyId}
-        actionLabel="Mark radar review complete"
-      />
+      {guidanceJourneyId ? (
+        <MobileSection>
+          <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700">
+            Save, dismiss, or mark an event acted on to complete this guidance step automatically.
+          </div>
+        </MobileSection>
+      ) : null}
 
       {/* Detail sheet */}
       {propertyId && (
@@ -653,6 +653,9 @@ export default function HomeEventRadarPageClient({ propertyId: propertyIdOverrid
           propertyId={propertyId}
           onClose={handleSheetClose}
           onStateChange={handleStateChange}
+          guidanceJourneyId={guidanceJourneyId}
+          guidanceStepKey={guidanceStepKey}
+          guidanceSignalIntentFamily={searchParams.get('guidanceSignalIntentFamily')}
         />
       )}
 

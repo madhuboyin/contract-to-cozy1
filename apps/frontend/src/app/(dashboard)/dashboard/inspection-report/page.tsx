@@ -12,13 +12,13 @@ import { api } from '@/lib/api/client';
 import { useDashboardPropertySelection } from '@/lib/property/useDashboardPropertySelection';
 import { Property } from '@/types';
 import { MobileFilterSurface, MobilePageIntro } from '@/components/mobile/dashboard/MobilePrimitives';
-import { GuidanceStepCompletionCard } from '@/components/guidance/GuidanceStepCompletionCard';
 
 function InspectionReportContent() {
   const searchParams = useSearchParams();
   const propertyIdFromUrl = searchParams.get('propertyId');
   const guidanceStepKey = searchParams.get('guidanceStepKey');
   const guidanceJourneyId = searchParams.get('guidanceJourneyId');
+  const guidanceSignalIntentFamily = searchParams.get('guidanceSignalIntentFamily');
 
   const [properties, setProperties] = useState<Property[]>([]);
   const { selectedPropertyId, setSelectedPropertyId } = useDashboardPropertySelection(propertyIdFromUrl);
@@ -109,7 +109,12 @@ function InspectionReportContent() {
 
       {/* Inspection Analyzer Component */}
       {selectedPropertyId ? (
-        <InspectionReportAnalyzer propertyId={selectedPropertyId} />
+        <InspectionReportAnalyzer
+          propertyId={selectedPropertyId}
+          guidanceJourneyId={guidanceJourneyId}
+          guidanceStepKey={guidanceStepKey}
+          guidanceSignalIntentFamily={guidanceSignalIntentFamily}
+        />
       ) : (
         <div className="text-center py-12 bg-gray-50 rounded-lg">
           <FileText className="w-12 h-12 text-gray-400 mx-auto mb-4" />
@@ -117,12 +122,13 @@ function InspectionReportContent() {
         </div>
       )}
 
-      <GuidanceStepCompletionCard
-        propertyId={propertyIdFromUrl ?? selectedPropertyId}
-        guidanceStepKey={guidanceStepKey}
-        guidanceJourneyId={guidanceJourneyId}
-        actionLabel="Mark inspection findings reviewed"
-      />
+      {guidanceJourneyId ? (
+        <Alert>
+          <AlertDescription>
+            Uploading and analyzing an inspection report completes this guidance step automatically.
+          </AlertDescription>
+        </Alert>
+      ) : null}
     </div>
   );
 }

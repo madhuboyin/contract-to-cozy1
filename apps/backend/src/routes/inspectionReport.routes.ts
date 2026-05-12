@@ -66,7 +66,17 @@ const upload = multer({
 router.post('/upload', authenticate, upload.single('file'), validatePdfUpload, async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user!.userId;
-    const { propertyId } = req.body;
+    const {
+      propertyId,
+      guidanceJourneyId,
+      guidanceStepKey,
+      guidanceSignalIntentFamily,
+    } = req.body as {
+      propertyId?: string;
+      guidanceJourneyId?: string;
+      guidanceStepKey?: string;
+      guidanceSignalIntentFamily?: string;
+    };
 
     if (!propertyId) {
       return res.status(400).json({
@@ -115,16 +125,17 @@ router.post('/upload', authenticate, upload.single('file'), validatePdfUpload, a
         Number(report.highPriorityIssues ?? 0) > 0 ||
         Number(report.totalRepairCost ?? 0) > 0;
 
-      if (shouldEmitGuidanceSignal) {
+      if (shouldEmitGuidanceSignal || guidanceJourneyId || guidanceStepKey) {
         await guidanceJourneyService.recordToolCompletion({
           propertyId,
           actorUserId: userId,
-          signalIntentFamily: 'inspection_followup_needed',
+          journeyId: guidanceJourneyId ?? null,
+          signalIntentFamily: guidanceSignalIntentFamily ?? 'inspection_followup_needed',
           issueDomain: 'MAINTENANCE',
           sourceToolKey: 'inspection-report',
           sourceEntityType: 'INSPECTION_REPORT',
           sourceEntityId: reportId,
-          stepKey: 'assess_urgency',
+          stepKey: guidanceStepKey ?? 'assess_urgency',
           status: 'COMPLETED',
           producedData: {
             proofType: 'inspection_report',

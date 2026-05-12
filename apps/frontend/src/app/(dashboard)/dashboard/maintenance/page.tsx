@@ -64,7 +64,7 @@ import {
   MobileSectionHeader,
 } from '@/components/mobile/dashboard/MobilePrimitives';
 import { GuidanceInlinePanel } from '@/components/guidance/GuidanceInlinePanel';
-import { GuidanceStepCompletionCard } from '@/components/guidance/GuidanceStepCompletionCard';
+import { recordGuidanceToolStatus } from '@/lib/api/guidanceApi';
 
 // Signal families that map to specific maintenance service categories.
 // When a guidance journey routes here via one of these families, the completion
@@ -349,6 +349,7 @@ export default function MaintenancePage() {
   const [viewTask, setViewTask] = useState<PropertyMaintenanceTask | null>(null);
   const [isViewOpen, setIsViewOpen] = useState(false);
   const [hasConsumedTaskParam, setHasConsumedTaskParam] = useState(false);
+  const [guidanceProofCompleted, setGuidanceProofCompleted] = useState(false);
 
   const handleViewModal = (task: PropertyMaintenanceTask) => {
     setViewTask(task);
@@ -365,6 +366,10 @@ export default function MaintenancePage() {
   }, [taskIdFromUrl]);
 
   useEffect(() => {
+    setGuidanceProofCompleted(false);
+  }, [guidanceJourneyId, guidanceStepKey, selectedPropertyId]);
+
+  useEffect(() => {
     if (!taskIdFromUrl || hasConsumedTaskParam || isInitialLoading) return;
 
     const targetTask = allMaintenanceTasks.find((task) => task.id === taskIdFromUrl);
@@ -377,6 +382,48 @@ export default function MaintenancePage() {
     setIsViewOpen(true);
     setHasConsumedTaskParam(true);
   }, [taskIdFromUrl, hasConsumedTaskParam, isInitialLoading, allMaintenanceTasks]);
+
+  useEffect(() => {
+    if (!selectedPropertyId || !guidanceJourneyId || !guidanceStepKey || guidanceProofCompleted) return;
+    if (guidanceScopedOpenTasks.length > 0) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        await recordGuidanceToolStatus(selectedPropertyId, {
+          stepKey: guidanceStepKey,
+          journeyId: guidanceJourneyId,
+          signalIntentFamily: guidanceSignalIntentFamily || undefined,
+          sourceToolKey: 'maintenance',
+          status: 'COMPLETED',
+          producedData: {
+            proofType: 'maintenance_tasks_cleared',
+            proofId: `maintenance-cleared:${guidanceJourneyId}:${guidanceStepKey}`,
+            remainingScopedOpenTasks: 0,
+            scopedServiceCategories:
+              guidanceSignalIntentFamily
+                ? SIGNAL_FAMILY_MAINTENANCE_CATEGORIES[guidanceSignalIntentFamily] ?? null
+                : null,
+            completedAt: new Date().toISOString(),
+          },
+        });
+        if (!cancelled) setGuidanceProofCompleted(true);
+      } catch (error) {
+        console.error('[maintenance] failed to auto-complete proof-backed guidance step', error);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    guidanceJourneyId,
+    guidanceProofCompleted,
+    guidanceScopedOpenTasks.length,
+    guidanceSignalIntentFamily,
+    guidanceStepKey,
+    selectedPropertyId,
+  ]);
 
   const handleCloseModal = () => {
     setIsModalOpen(false);
@@ -1194,13 +1241,12 @@ export default function MaintenancePage() {
         onRemove={modalMode === 'view' ? () => toast({ title: 'View Only', description: 'Completed tasks cannot be removed here.' }) : handleRemoveTask}
       />
 
-      {mainData && guidanceScopedOpenTasks.length === 0 && (
-        <GuidanceStepCompletionCard
-          propertyId={selectedPropertyId}
-          guidanceStepKey={guidanceStepKey}
-          guidanceJourneyId={guidanceJourneyId}
-          actionLabel="Mark checklist complete"
-        />
+      {mainData && guidanceJourneyId && guidanceScopedOpenTasks.length === 0 && (
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+          {guidanceProofCompleted
+            ? 'This guidance step completed automatically after the relevant maintenance tasks were cleared.'
+            : 'All relevant maintenance tasks are cleared. Guidance completion is being recorded automatically.'}
+        </div>
       )}
     </MobilePageContainer>
   );

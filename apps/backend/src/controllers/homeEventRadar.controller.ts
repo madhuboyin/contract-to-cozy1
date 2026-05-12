@@ -5,8 +5,21 @@ import { CustomRequest } from '../types';
 import { HomeEventRadarService } from '../services/homeEventRadar.service';
 import { APIError } from '../middleware/error.middleware';
 import { logger } from '../lib/logger';
+import { guidanceJourneyService } from '../services/guidanceEngine/guidanceJourney.service';
+import { prisma } from '../config/database';
 
 const service = new HomeEventRadarService();
+
+function inferRadarIssueDomain(signalIntentFamily?: string | null): 'WEATHER' | 'ENERGY' | 'OTHER' {
+  const family = String(signalIntentFamily ?? '').trim().toLowerCase();
+  if (['freeze_risk', 'flood_risk', 'heat_risk', 'weather_risk'].includes(family)) {
+    return 'WEATHER';
+  }
+  if (['energy_inefficiency_detected', 'high_utility_cost'].includes(family)) {
+    return 'ENERGY';
+  }
+  return 'OTHER';
+}
 
 function requireUser(req: CustomRequest): { userId: string } {
   const userId = req.user?.userId;
@@ -129,14 +142,62 @@ export async function updateRadarMatchState(req: CustomRequest, res: Response, n
   try {
     const { userId } = requireUser(req);
     const { propertyId, matchId } = req.params;
+    const guidanceJourneyId =
+      typeof req.body?.guidanceJourneyId === 'string' ? req.body.guidanceJourneyId : null;
+    const guidanceStepKey =
+      typeof req.body?.guidanceStepKey === 'string' ? req.body.guidanceStepKey : null;
+    const guidanceSignalIntentFamily =
+      typeof req.body?.guidanceSignalIntentFamily === 'string'
+        ? req.body.guidanceSignalIntentFamily
+        : null;
+    const nextState = req.body.state;
 
     const state = await service.updateMatchState(
       propertyId,
       matchId,
       userId,
-      req.body.state,
+      nextState,
       req.body.stateMetaJson ?? null,
     );
+
+    if (
+      guidanceJourneyId &&
+      guidanceStepKey &&
+      ['saved', 'dismissed', 'acted_on'].includes(String(nextState))
+    ) {
+      try {
+        const match = await prisma.propertyRadarMatch.findFirst({
+          where: { id: matchId, propertyId },
+          include: { radarEvent: true },
+        });
+
+        await guidanceJourneyService.recordToolCompletion({
+          propertyId,
+          actorUserId: userId,
+          journeyId: guidanceJourneyId,
+          signalIntentFamily: guidanceSignalIntentFamily,
+          issueDomain: inferRadarIssueDomain(guidanceSignalIntentFamily),
+          sourceToolKey: 'home-event-radar',
+          sourceEntityType: 'PROPERTY_RADAR_MATCH',
+          sourceEntityId: matchId,
+          stepKey: guidanceStepKey,
+          status: 'COMPLETED',
+          producedData: {
+            proofType: 'radar_event_triage',
+            proofId: `radar-match:${matchId}:${nextState}`,
+            propertyRadarMatchId: matchId,
+            radarEventId: match?.radarEventId ?? null,
+            eventType: match?.radarEvent?.eventType ?? null,
+            severity: match?.radarEvent?.severity ?? null,
+            impactLevel: match?.impactLevel ?? null,
+            selectedState: nextState,
+            completedAt: new Date().toISOString(),
+          },
+        });
+      } catch (guidanceError) {
+        logger.warn({ guidanceError, propertyId, matchId }, '[GUIDANCE] home event radar hook failed');
+      }
+    }
 
     res.json({ success: true, data: { state } });
   } catch (err) {
