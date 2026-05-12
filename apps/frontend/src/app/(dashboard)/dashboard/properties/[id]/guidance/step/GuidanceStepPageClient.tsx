@@ -28,6 +28,7 @@ import { PriceCheckInline } from '@/components/guidance/PriceCheckInline';
 import { RecallCheckInline } from '@/components/guidance/RecallCheckInline';
 import { NegotiationShieldInline } from '@/components/guidance/NegotiationShieldInline';
 import { ReplacementJourneyInline } from '@/components/guidance/ReplacementJourneyInline';
+import { ScopedWorkspaceGuidanceStep } from '@/components/guidance/ScopedWorkspaceGuidanceStep';
 import { GuidanceOverviewInlineStep } from '@/app/(dashboard)/dashboard/properties/[id]/tools/guidance-overview/components/GuidanceOverviewInlineStep';
 
 function shellBackHref(propertyId: string, journey: GuidanceJourneyDTO): string {
@@ -148,6 +149,20 @@ function UnsupportedGuidanceStep({
     </div>
   );
 }
+
+const LIVE_WORKSPACE_BRIDGE_TOOL_KEYS = new Set([
+  'capital-timeline',
+  'coverage-options',
+  'documents',
+  'do-nothing-simulator',
+  'home-event-radar',
+  'home-savings',
+  'inspection-report',
+  'maintenance',
+  'price-finalization',
+  'quote-comparison',
+  'true-cost',
+]);
 
 export default function GuidanceStepPageClient() {
   const params = useParams<{ id: string }>();
@@ -332,6 +347,18 @@ export default function GuidanceStepPageClient() {
           step={targetStep}
           nextStepKey={nextStepKey}
           onComplete={refreshGuidance}
+        />
+      );
+    }
+
+    if (targetStep.toolKey && LIVE_WORKSPACE_BRIDGE_TOOL_KEYS.has(targetStep.toolKey)) {
+      return (
+        <ScopedWorkspaceGuidanceStep
+          propertyId={propertyId}
+          journey={journey}
+          step={targetStep}
+          next={nextQuery.data ?? null}
+          backHref={shellBackHref(propertyId, journey)}
         />
       );
     }
