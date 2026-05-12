@@ -2,9 +2,10 @@
 'use client';
 
 import { useState, useEffect, useCallback, Suspense } from 'react';
+import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import InspectionReportAnalyzer from '@/components/InspectionReportAnalyzer';
-import { FileText, Loader2, Home as HomeIcon } from 'lucide-react';
+import { ArrowLeft, FileText, Loader2, Home as HomeIcon } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -12,18 +13,33 @@ import { api } from '@/lib/api/client';
 import { useDashboardPropertySelection } from '@/lib/property/useDashboardPropertySelection';
 import { Property } from '@/types';
 import { MobileFilterSurface, MobilePageIntro } from '@/components/mobile/dashboard/MobilePrimitives';
+import { buildGuidanceOverviewHref } from '@/lib/navigation/guidanceOverviewHref';
+import { extractGuidanceContinuityContext, hasGuidanceContinuityContext } from '@/features/guidance/utils/guidanceContinuity';
 
 function InspectionReportContent() {
   const searchParams = useSearchParams();
   const propertyIdFromUrl = searchParams.get('propertyId');
-  const guidanceStepKey = searchParams.get('guidanceStepKey');
-  const guidanceJourneyId = searchParams.get('guidanceJourneyId');
+  const guidanceContext = extractGuidanceContinuityContext(searchParams);
+  const guidanceStepKey = guidanceContext.guidanceStepKey ?? null;
+  const guidanceJourneyId = guidanceContext.guidanceJourneyId ?? null;
   const guidanceSignalIntentFamily = searchParams.get('guidanceSignalIntentFamily');
+  const returnTo = searchParams.get('returnTo');
 
   const [properties, setProperties] = useState<Property[]>([]);
   const { selectedPropertyId, setSelectedPropertyId } = useDashboardPropertySelection(propertyIdFromUrl);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const contextualBackHref =
+    returnTo ||
+    (selectedPropertyId && hasGuidanceContinuityContext(guidanceContext)
+      ? buildGuidanceOverviewHref({
+          propertyId: selectedPropertyId,
+          journeyId: guidanceJourneyId,
+          stepKey: guidanceStepKey,
+          inventoryItemId: guidanceContext.itemId ?? null,
+          homeAssetId: guidanceContext.homeAssetId ?? null,
+        })
+      : null);
 
   const loadData = useCallback(async () => {
     try {
@@ -73,6 +89,16 @@ function InspectionReportContent() {
 
   return (
     <div className="mx-auto max-w-7xl space-y-6 p-4 pb-[calc(8rem+env(safe-area-inset-bottom))] sm:p-6 lg:pb-8">
+      {contextualBackHref ? (
+        <Link
+          href={contextualBackHref}
+          className="inline-flex min-h-[44px] items-center gap-1.5 text-sm text-gray-600 transition-colors hover:text-gray-900"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          {guidanceJourneyId ? 'Back to guidance' : 'Back to previous step'}
+        </Link>
+      ) : null}
+
       <MobilePageIntro
         title="Inspection Report Intelligence"
         subtitle="AI-powered analysis of your home inspection report."

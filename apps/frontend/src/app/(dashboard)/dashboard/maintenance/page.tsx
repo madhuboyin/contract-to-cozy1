@@ -65,6 +65,8 @@ import {
 } from '@/components/mobile/dashboard/MobilePrimitives';
 import { GuidanceInlinePanel } from '@/components/guidance/GuidanceInlinePanel';
 import { recordGuidanceToolStatus } from '@/lib/api/guidanceApi';
+import { buildGuidanceOverviewHref } from '@/lib/navigation/guidanceOverviewHref';
+import { extractGuidanceContinuityContext, hasGuidanceContinuityContext } from '@/features/guidance/utils/guidanceContinuity';
 
 // Signal families that map to specific maintenance service categories.
 // When a guidance journey routes here via one of these families, the completion
@@ -162,9 +164,11 @@ export default function MaintenancePage() {
 
   const selectedPropertyId = searchParams.get('propertyId') || dashboardSelectedPropertyId || undefined;
   const taskIdFromUrl = searchParams.get('taskId');
-  const guidanceStepKey = searchParams.get('guidanceStepKey');
-  const guidanceJourneyId = searchParams.get('guidanceJourneyId');
+  const guidanceContext = extractGuidanceContinuityContext(searchParams);
+  const guidanceStepKey = guidanceContext.guidanceStepKey ?? null;
+  const guidanceJourneyId = guidanceContext.guidanceJourneyId ?? null;
   const guidanceSignalIntentFamily = searchParams.get('guidanceSignalIntentFamily');
+  const returnTo = searchParams.get('returnTo');
   const priority = searchParams.get('priority') === 'true';
   const filterOverdue = searchParams.get('filter') === 'overdue';
   const from = searchParams.get('from');
@@ -220,6 +224,24 @@ export default function MaintenancePage() {
   }, [selectedPropertyId, queryClient]);
 
   const getBackLink = () => {
+    if (returnTo) {
+      return {
+        href: returnTo,
+        label: guidanceJourneyId ? 'Back to guidance' : 'Back to previous step',
+      };
+    }
+    if (selectedPropertyId && hasGuidanceContinuityContext(guidanceContext)) {
+      return {
+        href: buildGuidanceOverviewHref({
+          propertyId: selectedPropertyId,
+          journeyId: guidanceJourneyId,
+          stepKey: guidanceStepKey,
+          inventoryItemId: guidanceContext.itemId ?? null,
+          homeAssetId: guidanceContext.homeAssetId ?? null,
+        }),
+        label: guidanceJourneyId ? 'Back to guidance' : 'Back to previous step',
+      };
+    }
     if (from === 'status-board' && selectedPropertyId) {
       return {
         href: `/dashboard/properties/${selectedPropertyId}/status-board`,
