@@ -11,6 +11,7 @@ import ToolExplainerSection from '@/components/tool-explainer/ToolExplainerSecti
 import { coverageLoopTrust } from '@/lib/trust/trustPresets';
 import ToolWorkspaceTemplate from '../../components/route-templates/ToolWorkspaceTemplate';
 import CoverageOptionsClient from '../coverage-options/CoverageOptionsClient';
+import { buildGuidanceOverviewHref } from '@/lib/navigation/guidanceOverviewHref';
 
 type CoverageTab = 'coverage' | 'options';
 
@@ -31,6 +32,16 @@ export default function CoverageIntelligenceToolClient() {
   const selectedInventoryItemId =
     searchParams.get('itemId') ?? searchParams.get('inventoryItemId');
   const fromProtect = searchParams.get('from') === 'protect';
+  const guidanceOverviewHref = guidanceJourneyId
+    ? buildGuidanceOverviewHref({
+        propertyId,
+        journeyId: guidanceJourneyId,
+        stepKey: guidanceStepKey,
+        inventoryItemId: searchParams.get('itemId') ?? searchParams.get('inventoryItemId'),
+        homeAssetId: searchParams.get('homeAssetId'),
+        issueType: searchParams.get('issueType'),
+      })
+    : null;
 
   const isGuidanceContext = Boolean(guidanceJourneyId);
 
@@ -45,14 +56,24 @@ export default function CoverageIntelligenceToolClient() {
     const next = new URLSearchParams(searchParams.toString());
     next.set('itemId', selectedInventoryItemId);
     next.set('inventoryItemId', selectedInventoryItemId);
+    const fallbackReturnParams = new URLSearchParams(searchParams.toString());
+    fallbackReturnParams.delete('itemId');
+    fallbackReturnParams.delete('inventoryItemId');
+    fallbackReturnParams.delete('returnTo');
+    const fallbackReturnQuery = fallbackReturnParams.toString();
     next.set(
       'returnTo',
-      `/dashboard/properties/${propertyId}/tools/coverage-intelligence`
+      guidanceOverviewHref ??
+        (
+          fallbackReturnQuery
+            ? `/dashboard/properties/${propertyId}/tools/coverage-intelligence?${fallbackReturnQuery}`
+            : `/dashboard/properties/${propertyId}/tools/coverage-intelligence`
+        )
     );
     router.replace(
       `/dashboard/properties/${propertyId}/inventory/items/${selectedInventoryItemId}/coverage?${next.toString()}`
     );
-  }, [propertyId, router, searchParams, selectedInventoryItemId]);
+  }, [guidanceOverviewHref, propertyId, router, searchParams, selectedInventoryItemId]);
 
   if (selectedInventoryItemId) {
     return null;
@@ -68,10 +89,16 @@ export default function CoverageIntelligenceToolClient() {
     router.replace(`/dashboard/properties/${propertyId}/tools/coverage-intelligence?${next.toString()}`);
   }
 
-  const backHref = fromProtect
-    ? `/dashboard/properties/${propertyId}/protect`
-    : `/dashboard/properties/${propertyId}`;
-  const backLabel = fromProtect ? 'Back to Protect' : 'Back to property';
+  const backHref = guidanceOverviewHref
+    ? guidanceOverviewHref
+    : fromProtect
+      ? `/dashboard/properties/${propertyId}/protect`
+      : `/dashboard/properties/${propertyId}`;
+  const backLabel = guidanceOverviewHref
+    ? 'Back to guidance'
+    : fromProtect
+      ? 'Back to Protect'
+      : 'Back to property';
   const trust = coverageLoopTrust({
     confidenceLabel: 'Medium-High, based on linked policy and inventory signals',
     freshnessLabel: 'Updates when coverage documents, warranties, or inventory change',

@@ -26,6 +26,7 @@ import {
 import { pricingLoopTrust } from '@/lib/trust/trustPresets';
 import HomeToolsRail from '../../components/HomeToolsRail';
 import CompareTemplate from '../../components/route-templates/CompareTemplate';
+import { buildGuidanceOverviewHref } from '@/lib/navigation/guidanceOverviewHref';
 
 type FormState = {
   serviceCategory: ServiceCategory | '';
@@ -358,7 +359,16 @@ export default function PriceFinalizationToolClient() {
     itemId,
     homeAssetId,
   ]);
-  const backHref = `/dashboard/properties/${propertyId}`;
+  const backHref = guidanceJourneyId
+    ? buildGuidanceOverviewHref({
+        propertyId,
+        journeyId: guidanceJourneyId,
+        stepKey: guidanceStepKey,
+        inventoryItemId: itemId,
+        homeAssetId,
+        issueType: searchParams.get('issueType'),
+      })
+    : `/dashboard/properties/${propertyId}`;
   const trust = pricingLoopTrust({
     confidenceLabel: finalizedDetail
       ? 'High for finalized records; medium for draft entries'
@@ -370,7 +380,7 @@ export default function PriceFinalizationToolClient() {
   return (
     <CompareTemplate
       backHref={backHref}
-      backLabel="Back to property"
+      backLabel={guidanceJourneyId ? 'Back to guidance' : 'Back to property'}
       title="Price Finalization"
       subtitle="Capture accepted quote terms and final price before moving to booking."
       rail={<HomeToolsRail propertyId={propertyId} context="price-finalization" currentToolId="price-finalization" />}

@@ -20,6 +20,7 @@ import {
 import HomeToolsRail from '../../components/HomeToolsRail';
 import CompareTemplate from '../../components/route-templates/CompareTemplate';
 import { pricingLoopTrust } from '@/lib/trust/trustPresets';
+import { buildGuidanceOverviewHref } from '@/lib/navigation/guidanceOverviewHref';
 
 type SearchParamSource = { get(name: string): string | null };
 
@@ -191,6 +192,8 @@ export default function QuoteComparisonWorkspaceClient() {
   const guidanceStepKey = searchParams.get('guidanceStepKey');
   const guidanceJourneyId = searchParams.get('guidanceJourneyId');
   const guidanceSignalIntentFamily = searchParams.get('guidanceSignalIntentFamily');
+  const itemId = searchParams.get('itemId');
+  const homeAssetId = searchParams.get('homeAssetId');
   const contextQuery = buildContextQuery(searchParams);
   const isGuidanceContext = Boolean(guidanceJourneyId);
 
@@ -350,7 +353,16 @@ export default function QuoteComparisonWorkspaceClient() {
     setManualInputError(null);
   };
 
-  const backHref = `/dashboard/properties/${propertyId}`;
+  const backHref = isGuidanceContext
+    ? buildGuidanceOverviewHref({
+        propertyId,
+        journeyId: guidanceJourneyId,
+        stepKey: guidanceStepKey,
+        inventoryItemId: itemId,
+        homeAssetId,
+        issueType: searchParams.get('issueType'),
+      })
+    : `/dashboard/properties/${propertyId}`;
   const trust = pricingLoopTrust({
     confidenceLabel:
       selectedQuotes.length >= 2
@@ -363,7 +375,7 @@ export default function QuoteComparisonWorkspaceClient() {
   return (
     <CompareTemplate
       backHref={backHref}
-      backLabel="Back to property"
+      backLabel={isGuidanceContext ? 'Back to guidance' : 'Back to property'}
       title="Quote Comparison Workspace"
       subtitle="Compare live quote checks side by side and choose the best quote to finalize."
       rail={<HomeToolsRail propertyId={propertyId} context="quote-comparison" currentToolId="quote-comparison" />}

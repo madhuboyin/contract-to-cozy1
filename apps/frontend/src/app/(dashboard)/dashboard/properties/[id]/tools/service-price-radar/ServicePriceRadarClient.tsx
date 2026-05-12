@@ -68,6 +68,7 @@ import type { InventoryItemCategory } from '@/types';
 import TrustStrip from '../../components/route-templates/TrustStrip';
 import { pricingLoopTrust } from '@/lib/trust/trustPresets';
 import { track } from '@/lib/analytics/events';
+import { buildGuidanceOverviewHref } from '@/lib/navigation/guidanceOverviewHref';
 
 // Maps inventory item category to the closest ServiceRadarCategory for pre-selection.
 const INVENTORY_CATEGORY_TO_SERVICE_RADAR: Partial<Record<InventoryItemCategory, ServiceRadarCategory>> = {
@@ -663,6 +664,16 @@ export default function ServicePriceRadarClient() {
   };
   const isGuidanceContext = Boolean(guidanceContext.guidanceJourneyId);
   const guidanceItemId = searchParams.get('itemId');
+  const guidanceBackHref = guidanceContext.guidanceJourneyId
+    ? buildGuidanceOverviewHref({
+        propertyId,
+        journeyId: guidanceContext.guidanceJourneyId,
+        stepKey: guidanceContext.guidanceStepKey,
+        inventoryItemId: guidanceItemId,
+        homeAssetId: searchParams.get('homeAssetId'),
+        issueType: searchParams.get('issueType'),
+      })
+    : null;
   const prefilledCategoryValue = searchParams.get('category');
   const prefilledQuoteAmount = searchParams.get('quoteAmount');
   const prefilledLinkedEntityType = searchParams.get('linkedEntityType');
@@ -1197,9 +1208,9 @@ export default function ServicePriceRadarClient() {
       intro={
         <div className="space-y-3">
           <Button variant="ghost" className="min-h-[44px] w-fit px-0 text-muted-foreground" asChild>
-            <Link href={`/dashboard/properties/${propertyId}`}>
+            <Link href={guidanceBackHref ?? `/dashboard/properties/${propertyId}`}>
               <ArrowLeft className="mr-2 h-4 w-4" />
-              Back to property
+              {guidanceBackHref ? 'Back to guidance' : 'Back to property'}
             </Link>
           </Button>
           <MobilePageIntro

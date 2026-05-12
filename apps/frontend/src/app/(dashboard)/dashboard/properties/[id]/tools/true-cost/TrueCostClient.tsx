@@ -9,6 +9,7 @@ import { GuidanceStepCompletionCard } from '@/components/guidance/GuidanceStepCo
 import { Button } from '@/components/ui/button';
 import ToolWorkspaceTemplate from '../../components/route-templates/ToolWorkspaceTemplate';
 import HomeToolHeader from '@/components/tools/HomeToolHeader';
+import { buildGuidanceOverviewHref } from '@/lib/navigation/guidanceOverviewHref';
 
 // Use the upgraded chart you already shipped (legend + tooltip)
 import MultiLineChart from '../cost-growth/MultiLineChart';
@@ -26,6 +27,16 @@ export default function TrueCostClient() {
   const guidanceStepKey = searchParams.get('guidanceStepKey');
   const guidanceSignalIntentFamily = searchParams.get('guidanceSignalIntentFamily');
   const inventoryItemId = searchParams.get('itemId');
+  const backHref = guidanceJourneyId
+    ? buildGuidanceOverviewHref({
+        propertyId,
+        journeyId: guidanceJourneyId,
+        stepKey: guidanceStepKey,
+        inventoryItemId,
+        homeAssetId: searchParams.get('homeAssetId'),
+        issueType: searchParams.get('issueType'),
+      })
+    : `/dashboard/properties/${propertyId}`;
 
   const [years, setYears] = useState<5 | 10>(5);
   const [loading, setLoading] = useState(false);
@@ -128,8 +139,8 @@ export default function TrueCostClient() {
 
   return (
     <ToolWorkspaceTemplate
-      backHref={`/dashboard/properties/${propertyId}`}
-      backLabel="Back to property"
+      backHref={backHref}
+      backLabel={guidanceJourneyId ? 'Back to guidance' : 'Back to property'}
       eyebrow="Home tool"
       title="True Cost of Home Ownership"
       subtitle={`A ${years}-year reality check including taxes, insurance, maintenance, and utilities.`}

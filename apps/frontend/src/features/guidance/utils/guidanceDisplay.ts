@@ -294,17 +294,26 @@ export function resolveGuidanceStepHref(args: {
   }
 
   if (step.toolKey === 'booking') {
-    let bookingBaseRoute = `/dashboard/providers?propertyId=${encodeURIComponent(propertyId)}`;
-    // B1: Inject weather-signal-derived provider category here, in the booking branch
-    // where it is actually reachable. The same logic below (after stripUnresolvedSegments)
-    // was dead code because this branch always returns first.
+    const bookingBaseRoute =
+      stripUnresolvedSegments(route) ??
+      `/dashboard/providers?propertyId=${encodeURIComponent(propertyId)}`;
+    const bookingUrl = new URL(bookingBaseRoute, 'http://localhost');
+
+    // Preserve template-defined booking filters and only infer a provider
+    // category when the journey needs one and the route did not specify it.
     if (journey.journeyTypeKey === 'weather_risk_resolution') {
       const weatherCategory = journey.primarySignal?.signalIntentFamily
         ? WEATHER_SIGNAL_PROVIDER_CATEGORY[journey.primarySignal.signalIntentFamily] ?? null
         : null;
-      if (weatherCategory) bookingBaseRoute += `&category=${weatherCategory}`;
+      if (weatherCategory && !bookingUrl.searchParams.get('category')) {
+        bookingUrl.searchParams.set('category', weatherCategory);
+      }
     }
-    const bookingRoute = appendGuidanceContext(bookingBaseRoute, journey, step);
+    const bookingRoute = appendGuidanceContext(
+      `${bookingUrl.pathname}${bookingUrl.search}`,
+      journey,
+      step
+    );
     const returnTo = buildGuidanceOverviewHref({
       propertyId,
       journeyId: journey.id,

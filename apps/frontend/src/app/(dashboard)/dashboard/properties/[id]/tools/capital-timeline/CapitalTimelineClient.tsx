@@ -30,6 +30,7 @@ import {
 } from '@/components/mobile/dashboard/MobilePrimitives';
 import { GuidanceStepCompletionCard } from '@/components/guidance/GuidanceStepCompletionCard';
 import ToolWorkspaceTemplate from '../../components/route-templates/ToolWorkspaceTemplate';
+import { buildGuidanceOverviewHref } from '@/lib/navigation/guidanceOverviewHref';
 
 // ─── Helpers ────────────────────────────────────────────────────────
 function money(cents: number | null | undefined) {
@@ -140,6 +141,16 @@ export default function CapitalTimelineClient() {
   const guidanceStepKey = searchParams.get('guidanceStepKey');
   const guidanceJourneyId = searchParams.get('guidanceJourneyId');
   const requestedAssumptionSetId = searchParams.get('assumptionSetId');
+  const backHref = guidanceJourneyId
+    ? buildGuidanceOverviewHref({
+        propertyId,
+        journeyId: guidanceJourneyId,
+        stepKey: guidanceStepKey,
+        inventoryItemId: searchParams.get('itemId'),
+        homeAssetId: searchParams.get('homeAssetId'),
+        issueType: searchParams.get('issueType'),
+      })
+    : `/dashboard/properties/${propertyId}`;
 
   const [horizonYears, setHorizonYears] = useState<5 | 10>(10);
   const [loading, setLoading] = useState(false);
@@ -264,8 +275,8 @@ export default function CapitalTimelineClient() {
 
   return (
     <ToolWorkspaceTemplate
-      backHref={`/dashboard/properties/${propertyId}`}
-      backLabel="Back to property"
+      backHref={backHref}
+      backLabel={guidanceJourneyId ? 'Back to guidance' : 'Back to property'}
       eyebrow="Home tool"
       title="Capital Timeline"
       subtitle={`Predicted major expenses over the next ${horizonYears} years.`}

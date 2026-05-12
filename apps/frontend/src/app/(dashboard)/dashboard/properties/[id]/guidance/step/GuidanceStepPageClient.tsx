@@ -173,7 +173,9 @@ export default function GuidanceStepPageClient() {
     searchParams.get('guidanceJourneyId') ??
     searchParams.get('journeyId') ??
     '';
-  const requestedStepKey = searchParams.get('guidanceStepKey');
+  const requestedStepKey =
+    searchParams.get('guidanceStepKey') ??
+    searchParams.get('stepKey');
 
   const journeyQuery = useQuery({
     queryKey: ['guidance', 'journey', propertyId, journeyId, 'detail'],

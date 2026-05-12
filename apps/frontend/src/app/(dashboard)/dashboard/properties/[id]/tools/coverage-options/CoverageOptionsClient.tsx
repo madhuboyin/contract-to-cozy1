@@ -36,7 +36,6 @@ export default function CoverageOptionsClient() {
   const [data, setData] = React.useState<any>(null);
   const [err, setErr] = React.useState<string | null>(null);
   const [progressing, setProgressing] = React.useState(false);
-  const [progressRecorded, setProgressRecorded] = React.useState(false);
   const [proofCompleted, setProofCompleted] = React.useState(false);
 
   React.useEffect(() => {
@@ -58,23 +57,27 @@ export default function CoverageOptionsClient() {
   }, [propertyId]);
 
   async function handleMarkReviewed() {
-    if (!propertyId) return;
+    if (!propertyId || !guidanceJourneyId) return;
     setProgressing(true);
     try {
       await recordGuidanceToolStatus(propertyId, {
         stepKey: guidanceStepKey,
         journeyId: guidanceJourneyId,
         sourceToolKey: 'coverage-options',
-        status: 'IN_PROGRESS',
+        status: 'COMPLETED',
         producedData: {
-          proofType: 'progress_checkpoint',
-          proofId: 'coverage-options:in-progress',
+          proofType: 'coverage_options_review',
+          proofId: `coverage-options-review:${guidanceJourneyId}:${guidanceStepKey}`,
           reviewedAt: new Date().toISOString(),
+          totalCoverageGaps: Number(totalGaps),
+          topCoverageGapType: topGap?.gapType ?? null,
+          topCoverageGapItemId: topGap?.inventoryItemId ?? null,
+          topCoverageGapItemName: topGap?.itemName ?? null,
         },
       });
-      setProgressRecorded(true);
+      setProofCompleted(true);
     } catch (e) {
-      console.error('[CoverageOptions] failed to record progress', e);
+      console.error('[CoverageOptions] failed to record completion', e);
     } finally {
       setProgressing(false);
     }
@@ -301,7 +304,7 @@ export default function CoverageOptionsClient() {
               onClick={handleMarkReviewed}
               disabled={progressing}
             >
-              {progressing ? 'Saving...' : progressRecorded ? 'Progress recorded' : 'Record progress'}
+              {progressing ? 'Saving...' : 'Complete this step'}
             </Button>
           )}
         </ScenarioInputCard>

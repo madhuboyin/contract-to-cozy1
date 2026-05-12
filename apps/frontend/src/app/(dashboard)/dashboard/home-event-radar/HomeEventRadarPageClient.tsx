@@ -25,6 +25,7 @@ import HomeToolHeader from '@/components/tools/HomeToolHeader';
 import { GuidanceStepCompletionCard } from '@/components/guidance/GuidanceStepCompletionCard';
 import { track } from '@/lib/analytics/events';
 import type { Property, RadarFeedItem as RadarFeedItemType, RadarUserState } from '@/types';
+import { buildGuidanceOverviewHref } from '@/lib/navigation/guidanceOverviewHref';
 
 // ---------------------------------------------------------------------------
 // Filter chip type
@@ -329,6 +330,17 @@ export default function HomeEventRadarPageClient({ propertyId: propertyIdOverrid
   const guidanceStepKey = searchParams.get('guidanceStepKey');
   const guidanceJourneyId = searchParams.get('guidanceJourneyId');
   const launchSurface = normalizeLaunchSurface(searchParams.get('launchSurface'));
+  const guidanceBackHref =
+    propertyId && guidanceJourneyId
+      ? buildGuidanceOverviewHref({
+          propertyId,
+          journeyId: guidanceJourneyId,
+          stepKey: guidanceStepKey,
+          inventoryItemId: searchParams.get('itemId'),
+          homeAssetId: searchParams.get('homeAssetId'),
+          issueType: searchParams.get('issueType'),
+        })
+      : null;
 
   const [filter, setFilter] = React.useState<FilterKey>('all');
   const [selectedItem, setSelectedItem] = React.useState<RadarFeedItemType | null>(null);
@@ -518,10 +530,13 @@ export default function HomeEventRadarPageClient({ propertyId: propertyIdOverrid
 
       <MobileSection className="lg:space-y-4">
         <Link
-          href={propertyId ? `/dashboard?propertyId=${encodeURIComponent(propertyId)}` : '/dashboard'}
+          href={
+            guidanceBackHref ??
+            (propertyId ? `/dashboard?propertyId=${encodeURIComponent(propertyId)}` : '/dashboard')
+          }
           className="no-brand-style inline-flex items-center gap-2 text-sm font-semibold text-[hsl(var(--mobile-brand-strong))]"
         >
-          <ArrowLeft className="h-4 w-4" /> Back to Dashboard
+          <ArrowLeft className="h-4 w-4" /> {guidanceBackHref ? 'Back to guidance' : 'Back to Dashboard'}
         </Link>
       </MobileSection>
 
