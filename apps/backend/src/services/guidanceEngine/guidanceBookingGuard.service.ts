@@ -88,9 +88,20 @@ export class GuidanceBookingGuardService {
         ? journey.missingContextKeys.filter((item: unknown): item is string => typeof item === 'string')
         : [];
 
+      // B6: isLowContext should only block when the execution step actually has required
+      // prerequisites before it. Booking-first journeys (e.g. general_inspection_journey
+      // where schedule_inspection is step 1) have no required steps before the booking
+      // step, so an isLowContext flag from skipping an optional step elsewhere must not
+      // block them. executionReadiness=UNKNOWN always blocks (no context at all).
+      const hasRequiredStepsBeforeExecution = executionSteps.some((exStep) =>
+        steps.some((s) => s.isRequired && s.stepOrder < exStep.stepOrder)
+      );
+      const isLowContextBlocking =
+        Boolean(journey.isLowContext) && hasRequiredStepsBeforeExecution;
+
       if (
         journey.executionReadiness === 'UNKNOWN' ||
-        Boolean(journey.isLowContext) ||
+        isLowContextBlocking ||
         journeyMissingContext.length > 0
       ) {
         const fallbackPrior = steps.find(

@@ -341,11 +341,16 @@ export default function GuidanceStepPageClient() {
     if (targetStep.toolKey === 'guidance-overview') {
       const nextStepKey =
         journey.steps.find((step) => step.stepOrder === targetStep.stepOrder + 1)?.stepKey ?? null;
+      const signalContext =
+        targetStep.description?.trim() ||
+        (journey.primarySignal?.description as string | undefined)?.trim() ||
+        null;
       return (
         <GuidanceOverviewInlineStep
           propertyId={propertyId}
           step={targetStep}
           nextStepKey={nextStepKey}
+          signalContext={signalContext}
           onComplete={refreshGuidance}
         />
       );

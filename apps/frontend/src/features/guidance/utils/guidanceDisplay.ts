@@ -173,6 +173,8 @@ export function formatStepStatusLabel(status: GuidanceStepStatus): string {
 const ISSUE_TYPE_LABELS: Record<string, string> = {
   not_working: 'Not working properly',
   past_life: 'Aging or past expected life',
+  // B5: near_end_of_life was missing — showed as raw enum "Near End Of Life"
+  near_end_of_life: 'Planning to replace this item',
   broken: 'Broken or physically damaged',
   inspection_needed: 'Needs inspection or maintenance',
   coverage_question: 'Coverage or warranty question',
@@ -200,6 +202,28 @@ const ISSUE_TYPE_LABELS: Record<string, string> = {
   gutter_issue: 'Gutter or drainage issue',
   battery_low: 'Low battery or replacement needed',
   connectivity_issue: 'Connectivity or pairing issue',
+  // B5: symptom picker keys that were absent from this map — showed as formatted enums
+  // PLUMBING
+  pipe_noise: 'Banging or rattling pipes',
+  water_discoloration: 'Discolored or smelly water',
+  // ELECTRICAL
+  no_power: 'No power to outlet or circuit',
+  burning_smell: 'Burning smell or warm outlet',
+  gfci_tripping: 'GFCI outlet keeps tripping',
+  panel_upgrade: 'Panel upgrade or capacity concern',
+  // HVAC
+  short_cycling: 'Turning on and off repeatedly',
+  refrigerant_issue: 'Possible refrigerant or freon issue',
+  thermostat_issue: 'Thermostat not responding correctly',
+  filter_clog: 'Filter clogged or overdue for replacement',
+  // ROOF_EXTERIOR
+  missing_shingles: 'Missing or damaged shingles',
+  moss_algae: 'Moss or algae growth',
+  storm_damage: 'Storm or hail damage',
+  // SAFETY
+  false_alarm: 'Frequent false alarms',
+  // SMART_HOME
+  app_issue: 'App or integration not working',
 };
 
 export function formatIssueTypeLabel(issueType: string | null | undefined): string | null {
@@ -270,7 +294,16 @@ export function resolveGuidanceStepHref(args: {
   }
 
   if (step.toolKey === 'booking') {
-    const bookingBaseRoute = `/dashboard/providers?propertyId=${encodeURIComponent(propertyId)}`;
+    let bookingBaseRoute = `/dashboard/providers?propertyId=${encodeURIComponent(propertyId)}`;
+    // B1: Inject weather-signal-derived provider category here, in the booking branch
+    // where it is actually reachable. The same logic below (after stripUnresolvedSegments)
+    // was dead code because this branch always returns first.
+    if (journey.journeyTypeKey === 'weather_risk_resolution') {
+      const weatherCategory = journey.primarySignal?.signalIntentFamily
+        ? WEATHER_SIGNAL_PROVIDER_CATEGORY[journey.primarySignal.signalIntentFamily] ?? null
+        : null;
+      if (weatherCategory) bookingBaseRoute += `&category=${weatherCategory}`;
+    }
     const bookingRoute = appendGuidanceContext(bookingBaseRoute, journey, step);
     const returnTo = buildGuidanceOverviewHref({
       propertyId,
@@ -289,19 +322,7 @@ export function resolveGuidanceStepHref(args: {
 
   const safeRoute = stripUnresolvedSegments(route);
   if (safeRoute) {
-    // Item 21: Inject weather-signal-derived provider category for weather booking steps
-    const routeWithCategory =
-      journey.journeyTypeKey === 'weather_risk_resolution' && step.toolKey === 'booking'
-        ? (() => {
-            const category =
-              journey.primarySignal?.signalIntentFamily
-                ? WEATHER_SIGNAL_PROVIDER_CATEGORY[journey.primarySignal.signalIntentFamily] ?? null
-                : null;
-            if (!category) return safeRoute;
-            return safeRoute.includes('?') ? `${safeRoute}&category=${category}` : `${safeRoute}?category=${category}`;
-          })()
-        : safeRoute;
-    return appendGuidanceContext(routeWithCategory, journey, step);
+    return appendGuidanceContext(safeRoute, journey, step);
   }
 
   if (next?.recommendedToolKey) {

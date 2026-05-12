@@ -14,6 +14,8 @@ type GuidanceOverviewInlineStepProps = {
   step: GuidanceStepDTO;
   onComplete?: (nextStepKey: string | null) => void;
   nextStepKey?: string | null;
+  /** B8: extra context shown below the subtitle for steps that carry signal detail */
+  signalContext?: string | null;
 };
 
 function getInlineStepConfig(step: GuidanceStepDTO): {
@@ -87,6 +89,13 @@ function getInlineStepConfig(step: GuidanceStepDTO): {
         subtitle: 'Use this once the inspection-related repair has been finished and verified.',
         options: [{ label: 'Repair completed' }],
       };
+    // B4: DEFAULT_TEMPLATE review_signal step previously returned null → blank CTA area
+    case 'review_signal':
+      return {
+        title: 'Review this guidance signal',
+        subtitle: 'Acknowledge you have reviewed the details and are ready to proceed.',
+        options: [{ label: 'Signal reviewed' }],
+      };
     default:
       return null;
   }
@@ -97,6 +106,7 @@ export function GuidanceOverviewInlineStep({
   step,
   onComplete,
   nextStepKey,
+  signalContext,
 }: GuidanceOverviewInlineStepProps) {
   const [savingLabel, setSavingLabel] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
@@ -130,6 +140,10 @@ export function GuidanceOverviewInlineStep({
       <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
         <p className="text-sm font-semibold text-slate-900">{config.title}</p>
         <p className="mt-1 text-sm text-slate-600">{config.subtitle}</p>
+        {/* B8: surface signal/step context for compliance and signal-review steps */}
+        {signalContext ? (
+          <p className="mt-2 text-sm text-slate-700 border-t border-slate-200 pt-2">{signalContext}</p>
+        ) : null}
       </div>
 
       <div className="space-y-2">

@@ -1421,6 +1421,13 @@ const JOURNEY_TOOL_STEP_KEY: Record<string, Record<string, string>> = {
     booking: 'book_energy_service',
     'home-event-radar': 'review_energy_signal',
   },
+  // B2: weather journey uses distinct step keys for all four tools
+  weather_risk_resolution: {
+    'home-event-radar': 'weather_safety_check',
+    'coverage-intelligence': 'check_weather_coverage',
+    maintenance: 'protect_exposed_systems',
+    booking: 'schedule_weather_followup',
+  },
 };
 
 /**
@@ -1488,8 +1495,11 @@ const ISSUE_TYPE_TO_TEMPLATE_KEY: Record<string, string> = {
   'broken_part':               'asset_lifecycle_resolution',
   'high_utility_cost':         'energy_efficiency_resolution',
   'near_end_of_life':          'replacement_purchase_now',
-  'maintenance_needed':        'inspection_followup_resolution',
-  'inspection_needed':         'general_inspection_journey',
+  // B3: item-scope "needs maintenance/inspection" means get the item serviced, not
+  // follow up on an existing inspection report. Route to asset_lifecycle so the
+  // user starts with verifying the symptom and deciding repair vs replace.
+  'maintenance_needed':        'asset_lifecycle_resolution',
+  'inspection_needed':         'asset_lifecycle_resolution',
   // Coverage / financial issues
   'coverage_question':         'coverage_gap_resolution',
   'cost_estimate':             'financial_exposure_resolution',
@@ -1648,7 +1658,8 @@ export const SYMPTOM_TYPES_BY_CATEGORY: Record<string, SymptomTypeOption[]> = {
     { key: 'leak',               label: 'Leak or drip' },
     { key: 'low_pressure',       label: 'Low water pressure' },
     { key: 'no_hot_water',       label: 'No hot water' },
-    { key: 'drain_slow',         label: 'Slow or blocked drain' },
+    // B5: use canonical key that matches ISSUE_TYPE_TO_TEMPLATE_KEY and ISSUE_TYPE_LABELS
+    { key: 'slow_drain',         label: 'Slow or blocked drain' },
     { key: 'pipe_noise',         label: 'Banging or rattling pipes' },
     { key: 'water_discoloration',label: 'Discolored or smelly water' },
     { key: 'past_life',          label: 'Aging pipes or fixtures' },
@@ -1657,8 +1668,9 @@ export const SYMPTOM_TYPES_BY_CATEGORY: Record<string, SymptomTypeOption[]> = {
   ],
   ELECTRICAL: [
     { key: 'no_power',           label: 'No power to outlet or circuit' },
-    { key: 'breaker_tripping',   label: 'Breaker keeps tripping' },
-    { key: 'flickering_lights',  label: 'Flickering or dimming lights' },
+    // B5: align keys with canonical registry and label map entries
+    { key: 'tripping_breaker',   label: 'Breaker keeps tripping' },
+    { key: 'flickering',         label: 'Flickering or dimming lights' },
     { key: 'burning_smell',      label: 'Burning smell or warm outlet' },
     { key: 'gfci_tripping',      label: 'GFCI outlet keeps tripping' },
     { key: 'panel_upgrade',      label: 'Panel upgrade or capacity concern' },
