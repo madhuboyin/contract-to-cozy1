@@ -1373,7 +1373,11 @@ const JOURNEY_TOOL_STEP_KEY: Record<string, Record<string, string>> = {
     recalls: 'safety_alert',
     booking: 'schedule_recall_service',
   },
+  // B2: weather journey uses distinct step keys for all four tools
   weather_risk_resolution: {
+    'home-event-radar': 'weather_safety_check',
+    'coverage-intelligence': 'check_weather_coverage',
+    maintenance: 'protect_exposed_systems',
     booking: 'schedule_weather_followup',
   },
   inspection_followup_resolution: {
@@ -1420,13 +1424,6 @@ const JOURNEY_TOOL_STEP_KEY: Record<string, Record<string, string>> = {
     'capital-timeline': 'plan_capital_improvements',
     booking: 'book_energy_service',
     'home-event-radar': 'review_energy_signal',
-  },
-  // B2: weather journey uses distinct step keys for all four tools
-  weather_risk_resolution: {
-    'home-event-radar': 'weather_safety_check',
-    'coverage-intelligence': 'check_weather_coverage',
-    maintenance: 'protect_exposed_systems',
-    booking: 'schedule_weather_followup',
   },
 };
 
