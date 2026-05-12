@@ -596,23 +596,43 @@ export default function GuidanceOverviewClient() {
                   subtitle="Pick up where you left off."
                 >
                   <div className="space-y-1.5">
-                    {inProgressActions.map((action) => (
-                      <Link
-                        key={action.journeyId}
-                        href={`${baseHref}?journeyId=${action.journeyId}`}
-                        className="flex items-center justify-between gap-3 rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 py-2.5 transition-colors hover:border-[hsl(var(--mobile-brand-strong))] hover:bg-[hsl(var(--mobile-brand-strong))]/5"
-                      >
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-medium text-[hsl(var(--mobile-text-primary))]">
-                            {action.title}
-                          </p>
-                          <p className="text-xs text-[hsl(var(--mobile-text-secondary))]">
-                            {action.progress.completedCount} of {action.progress.totalCount} steps done
-                          </p>
-                        </div>
-                        <ChevronRight className="h-4 w-4 shrink-0 text-slate-400" />
-                      </Link>
-                    ))}
+                    {inProgressActions.map((action) => {
+                      const assetLabel = resolveAssetLabel(action);
+                      const itemCategory =
+                        action.journey.inventoryItem?.category ??
+                        action.journey.homeAsset?.assetType ??
+                        '';
+                      const { icon: ItemIcon, bg, color } = getGuidanceItemVisual({
+                        name: action.journey.inventoryItem?.name?.trim() ?? assetLabel,
+                        category: itemCategory,
+                      });
+                      return (
+                        <Link
+                          key={action.journeyId}
+                          href={`${baseHref}?journeyId=${action.journeyId}`}
+                          className="flex items-center gap-3 rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 py-2.5 transition-colors hover:border-[hsl(var(--mobile-brand-strong))] hover:bg-[hsl(var(--mobile-brand-strong))]/5"
+                        >
+                          <span
+                            className={cn(
+                              'shrink-0 inline-flex h-8 w-8 items-center justify-center rounded-lg',
+                              bg,
+                              color
+                            )}
+                          >
+                            <ItemIcon className="h-4 w-4" />
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-medium text-[hsl(var(--mobile-text-primary))]">
+                              {assetLabel}
+                            </p>
+                            <p className="truncate text-xs text-[hsl(var(--mobile-text-secondary))]">
+                              {action.title} · {action.progress.completedCount} of {action.progress.totalCount} steps done
+                            </p>
+                          </div>
+                          <ChevronRight className="h-4 w-4 shrink-0 text-slate-400" />
+                        </Link>
+                      );
+                    })}
                   </div>
                 </ScenarioInputCard>
               ) : null}
