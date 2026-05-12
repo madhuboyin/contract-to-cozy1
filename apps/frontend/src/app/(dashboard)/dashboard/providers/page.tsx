@@ -35,10 +35,12 @@ import ProviderShellTemplate from '@/components/providers/ProviderShellTemplate'
 import { useExecutionGuard } from '@/features/guidance/hooks/useExecutionGuard';
 import { useGuidance } from '@/features/guidance/hooks/useGuidance';
 import { GuidanceWarningBanner } from '@/components/guidance/GuidanceWarningBanner';
+import { buildGuidanceOverviewHref } from '@/lib/navigation/guidanceOverviewHref';
 import {
   buildExecutionGuardDetails,
   buildExecutionGuardMessage,
 } from '@/features/guidance/utils/executionGuardMessaging';
+import { extractGuidanceContinuityContext, hasGuidanceContinuityContext } from '@/features/guidance/utils/guidanceContinuity';
 
 const DEFAULT_RADIUS = 25;
 
@@ -406,6 +408,18 @@ export default function ProvidersPage() {
       inventoryItemId ||
       homeAssetId
   );
+  const guidanceContext = extractGuidanceContinuityContext(searchParams);
+  const derivedReturnTo =
+    !returnTo && targetPropertyId && hasGuidanceContinuityContext(guidanceContext)
+      ? buildGuidanceOverviewHref({
+          propertyId: targetPropertyId,
+          journeyId: guidanceContext.guidanceJourneyId,
+          stepKey: guidanceContext.guidanceStepKey,
+          inventoryItemId: guidanceContext.itemId ?? inventoryItemId ?? null,
+          homeAssetId: guidanceContext.homeAssetId ?? homeAssetId ?? null,
+        })
+      : null;
+  const effectiveReturnTo = returnTo || derivedReturnTo || undefined;
   const providerGuardQuery = useExecutionGuard(targetPropertyId, 'BOOKING', {
     enabled: Boolean(targetPropertyId) && hasGuardScopeContext,
     journeyId: guidanceJourneyId,
@@ -790,7 +804,7 @@ export default function ProvidersPage() {
           category={filters.category === 'ALL' ? undefined : filters.category}
           serviceLabel={serviceLabel}
           fromSource={fromSource}
-          returnTo={returnTo}
+          returnTo={effectiveReturnTo}
           intent={intent}
           actionKey={actionKey}
           predictionId={predictionId}

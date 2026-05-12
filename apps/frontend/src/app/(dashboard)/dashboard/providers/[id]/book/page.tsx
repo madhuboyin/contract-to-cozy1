@@ -31,8 +31,9 @@ import {
   buildExecutionGuardDetails,
   buildExecutionGuardMessage,
 } from '@/features/guidance/utils/executionGuardMessaging';
-
 import { navigateBackWithDashboardFallback } from '@/lib/navigation/backNavigation';
+import { buildGuidanceOverviewHref } from '@/lib/navigation/guidanceOverviewHref';
+import { extractGuidanceContinuityContext, hasGuidanceContinuityContext } from '@/features/guidance/utils/guidanceContinuity';
 function getInitials(firstName: string, lastName: string) {
   return (firstName?.[0] || '') + (lastName?.[0] || '');
 }
@@ -49,10 +50,11 @@ export default function BookProviderPage() {
   const insightFactor = searchParams.get('insightFactor');
   const insightContext = searchParams.get('insightContext');
   const maintenancePredictionId = searchParams.get('predictionId');
-  const inventoryItemId = searchParams.get('itemId');
+  const guidanceContext = extractGuidanceContinuityContext(searchParams);
+  const inventoryItemId = searchParams.get('itemId') || guidanceContext.itemId;
   const homeAssetId = searchParams.get('homeAssetId');
-  const guidanceJourneyId = searchParams.get('guidanceJourneyId');
-  const guidanceStepKey = searchParams.get('guidanceStepKey');
+  const guidanceJourneyId = guidanceContext.guidanceJourneyId ?? null;
+  const guidanceStepKey = guidanceContext.guidanceStepKey ?? null;
   const guidanceSignalIntentFamily = searchParams.get('guidanceSignalIntentFamily');
   const priceFinalizationId = searchParams.get('priceFinalizationId');
   const finalPrice = searchParams.get('finalPrice');
@@ -118,7 +120,19 @@ export default function BookProviderPage() {
   const blockedActionHref =
     blockedAction?.href ??
     (selectedPropertyId ? `/dashboard/properties/${selectedPropertyId}/risk-assessment` : '/dashboard/maintenance');
-  const contextualBackHref = returnTo;
+  const derivedReturnTo =
+    !returnTo && selectedPropertyId && hasGuidanceContinuityContext(guidanceContext)
+      ? buildGuidanceOverviewHref({
+          propertyId: selectedPropertyId,
+          journeyId: guidanceJourneyId,
+          stepKey: guidanceStepKey,
+          inventoryItemId: inventoryItemId ?? null,
+          homeAssetId: homeAssetId ?? null,
+          assetName: guidanceAssetName,
+          issueType: guidanceIssueDescription,
+        })
+      : null;
+  const contextualBackHref = returnTo || derivedReturnTo;
   const contextualBackLabel = guidanceJourneyId ? 'Back to guidance' : 'Back to previous step';
 
   useEffect(() => {
@@ -377,15 +391,35 @@ export default function BookProviderPage() {
 
         const fromParam = searchParams.get('from');
 
-        if (returnTo) {
+        if (contextualBackHref) {
           const returnQuery = new URLSearchParams();
           returnQuery.set('bookingCreated', 'true');
           if (providerId) returnQuery.set('providerId', providerId);
           if (actionKey) returnQuery.set('actionKey', actionKey);
-          const joiner = returnTo.includes('?') ? '&' : '?';
-          router.push(`${returnTo}${joiner}${returnQuery.toString()}`);
+          const joiner = contextualBackHref.includes('?') ? '&' : '?';
+          router.push(`${contextualBackHref}${joiner}${returnQuery.toString()}`);
         } else if (fromParam === 'risk-assessment' && selectedPropertyId) {
           router.push(`/dashboard/properties/${selectedPropertyId}/risk-assessment?refreshed=true`);
+        } else if (guidanceJourneyId && selectedPropertyId) {
+          const bookingDetailParams = new URLSearchParams();
+          bookingDetailParams.set('guidanceJourneyId', guidanceJourneyId);
+          if (guidanceStepKey) bookingDetailParams.set('guidanceStepKey', guidanceStepKey);
+          if (guidanceSignalIntentFamily) {
+            bookingDetailParams.set('guidanceSignalIntentFamily', guidanceSignalIntentFamily);
+          }
+          if (inventoryItemId) bookingDetailParams.set('itemId', inventoryItemId);
+          if (homeAssetId) bookingDetailParams.set('homeAssetId', homeAssetId);
+          const fallbackReturnTo = buildGuidanceOverviewHref({
+            propertyId: selectedPropertyId,
+            journeyId: guidanceJourneyId,
+            stepKey: guidanceStepKey,
+            inventoryItemId: inventoryItemId ?? null,
+            homeAssetId: homeAssetId ?? null,
+            assetName: guidanceAssetName,
+            issueType: guidanceIssueDescription,
+          });
+          bookingDetailParams.set('returnTo', fallbackReturnTo);
+          router.push(`/dashboard/bookings/${response.data.id}?${bookingDetailParams.toString()}`);
         } else {
           router.push('/dashboard/bookings');
         }
@@ -397,7 +431,15 @@ export default function BookProviderPage() {
       const existingBookingId = submitError?.payload?.details?.existingBookingId;
       if (submitError?.status === 409 && typeof existingBookingId === 'string') {
         toast({ title: 'Existing booking found', description: 'Opening your active booking so you can update it.' });
-        router.push(`/dashboard/bookings/${existingBookingId}`);
+        const params = new URLSearchParams();
+        if (guidanceJourneyId) params.set('guidanceJourneyId', guidanceJourneyId);
+        if (guidanceStepKey) params.set('guidanceStepKey', guidanceStepKey);
+        if (guidanceSignalIntentFamily) params.set('guidanceSignalIntentFamily', guidanceSignalIntentFamily);
+        if (inventoryItemId) params.set('itemId', inventoryItemId);
+        if (homeAssetId) params.set('homeAssetId', homeAssetId);
+        if (contextualBackHref) params.set('returnTo', contextualBackHref);
+        const suffix = params.toString();
+        router.push(suffix ? `/dashboard/bookings/${existingBookingId}?${suffix}` : `/dashboard/bookings/${existingBookingId}`);
         return;
       }
       const guardDetails = submitError?.payload?.details as GuidanceExecutionGuardResult | undefined;

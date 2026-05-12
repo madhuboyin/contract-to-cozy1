@@ -22,8 +22,9 @@ import {
   StatusChip,
 } from '@/components/mobile/dashboard/MobilePrimitives';
 import { GuidanceStepCompletionCard } from '@/components/guidance/GuidanceStepCompletionCard';
-
 import { navigateBackWithDashboardFallback } from '@/lib/navigation/backNavigation';
+import { buildGuidanceOverviewHref } from '@/lib/navigation/guidanceOverviewHref';
+import { extractGuidanceContinuityContext, hasGuidanceContinuityContext } from '@/features/guidance/utils/guidanceContinuity';
 const formatDate = (dateString: string | null) => {
   if (!dateString) return 'Not scheduled';
   const date = new Date(dateString);
@@ -68,8 +69,10 @@ export default function BookingDetailsPage() {
   const params = useParams();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const guidanceStepKey = searchParams.get('guidanceStepKey');
-  const guidanceJourneyId = searchParams.get('guidanceJourneyId');
+  const guidanceContext = extractGuidanceContinuityContext(searchParams);
+  const guidanceStepKey = guidanceContext.guidanceStepKey ?? null;
+  const guidanceJourneyId = guidanceContext.guidanceJourneyId ?? null;
+  const returnTo = searchParams.get('returnTo');
   const [booking, setBooking] = useState<Booking | null>(null);
   const [loading, setLoading] = useState(true);
   const [errorState, setErrorState] = useState<{
@@ -161,18 +164,40 @@ export default function BookingDetailsPage() {
   const statusTone = getBookingTone(booking.status);
   const scheduledDateLabel = formatDate(booking.scheduledDate);
   const scheduledTimeLabel = formatTime(booking.scheduledDate) || 'Time TBD';
+  const contextualBackHref =
+    returnTo ||
+    (hasGuidanceContinuityContext(guidanceContext)
+      ? buildGuidanceOverviewHref({
+          propertyId: booking.property.id,
+          journeyId: guidanceJourneyId,
+          stepKey: guidanceStepKey,
+          inventoryItemId: guidanceContext.itemId ?? booking.inventoryItemId ?? null,
+          homeAssetId: guidanceContext.homeAssetId ?? null,
+        })
+      : null);
+  const contextualBackLabel = guidanceJourneyId ? 'Back to guidance' : 'Back to previous step';
 
   return (
     <MobileToolWorkspace className="lg:max-w-7xl lg:px-8 lg:pb-10"
       intro={
         <div className="space-y-3">
-          <button
-            onClick={() => navigateBackWithDashboardFallback(router)}
-            className="flex min-h-[44px] items-center text-sm text-[hsl(var(--mobile-text-secondary))] transition-colors hover:text-[hsl(var(--mobile-text-primary))]"
-          >
-            <ChevronLeft className="mr-1 h-4 w-4" />
-            Back to bookings
-          </button>
+          {contextualBackHref ? (
+            <button
+              onClick={() => router.push(contextualBackHref)}
+              className="flex min-h-[44px] items-center text-sm text-[hsl(var(--mobile-text-secondary))] transition-colors hover:text-[hsl(var(--mobile-text-primary))]"
+            >
+              <ChevronLeft className="mr-1 h-4 w-4" />
+              {contextualBackLabel}
+            </button>
+          ) : (
+            <button
+              onClick={() => navigateBackWithDashboardFallback(router)}
+              className="flex min-h-[44px] items-center text-sm text-[hsl(var(--mobile-text-secondary))] transition-colors hover:text-[hsl(var(--mobile-text-primary))]"
+            >
+              <ChevronLeft className="mr-1 h-4 w-4" />
+              Back to bookings
+            </button>
+          )}
           <MobilePageIntro
             title="Booking Details"
             subtitle="Service, provider, and pricing details in a compact view."
@@ -303,9 +328,15 @@ export default function BookingDetailsPage() {
 
       <ActionPriorityRow
         primaryAction={
-          <Button className="w-full" onClick={() => router.push('/dashboard/bookings')}>
-            Back to bookings
-          </Button>
+          contextualBackHref ? (
+            <Button className="w-full" onClick={() => router.push(contextualBackHref)}>
+              {contextualBackLabel}
+            </Button>
+          ) : (
+            <Button className="w-full" onClick={() => router.push('/dashboard/bookings')}>
+              Back to bookings
+            </Button>
+          )
         }
       />
       <BottomSafeAreaReserve size="chatAware" />

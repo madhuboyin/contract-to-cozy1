@@ -27,11 +27,18 @@ function buildGuidanceParams(context: GuidanceContinuityContext): URLSearchParam
 }
 
 export function extractGuidanceContinuityContext(searchParams: SearchParamLike): GuidanceContinuityContext {
+  const guidanceJourneyId =
+    searchParams.get('guidanceJourneyId') || searchParams.get('journeyId');
+  const guidanceStepKey =
+    searchParams.get('guidanceStepKey') || searchParams.get('stepKey');
+  const itemId =
+    searchParams.get('itemId') || searchParams.get('inventoryItemId');
+
   return {
-    guidanceJourneyId: searchParams.get('guidanceJourneyId'),
-    guidanceStepKey: searchParams.get('guidanceStepKey'),
+    guidanceJourneyId,
+    guidanceStepKey,
     guidanceSignalIntentFamily: searchParams.get('guidanceSignalIntentFamily'),
-    itemId: searchParams.get('itemId'),
+    itemId,
     homeAssetId: searchParams.get('homeAssetId'),
   };
 }

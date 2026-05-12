@@ -28,8 +28,9 @@ import {
   buildExecutionGuardDetails,
   buildExecutionGuardMessage,
 } from '@/features/guidance/utils/executionGuardMessaging';
-
 import { navigateBackWithDashboardFallback } from '@/lib/navigation/backNavigation';
+import { buildGuidanceOverviewHref } from '@/lib/navigation/guidanceOverviewHref';
+import { extractGuidanceContinuityContext, hasGuidanceContinuityContext } from '@/features/guidance/utils/guidanceContinuity';
 interface CompleteUser extends User {
   phone: string | null;
   email: string;
@@ -60,8 +61,9 @@ export default function ProviderDetailPage() {
   const predictionId = searchParams.get('predictionId');
   const itemId = searchParams.get('itemId');
   const homeAssetId = searchParams.get('homeAssetId');
-  const guidanceJourneyId = searchParams.get('guidanceJourneyId');
-  const guidanceStepKey = searchParams.get('guidanceStepKey');
+  const guidanceContext = extractGuidanceContinuityContext(searchParams);
+  const guidanceJourneyId = guidanceContext.guidanceJourneyId ?? null;
+  const guidanceStepKey = guidanceContext.guidanceStepKey ?? null;
   const guidanceSignalIntentFamily = searchParams.get('guidanceSignalIntentFamily');
   const priceFinalizationId = searchParams.get('priceFinalizationId');
   const finalPrice = searchParams.get('finalPrice');
@@ -111,7 +113,17 @@ export default function ProviderDetailPage() {
   const blockedActionHref =
     blockedAction?.href ??
     (propertyId ? `/dashboard/properties/${propertyId}/risk-assessment` : '/dashboard/maintenance');
-  const contextualBackHref = returnTo;
+  const derivedReturnTo =
+    !returnTo && propertyId && hasGuidanceContinuityContext(guidanceContext)
+      ? buildGuidanceOverviewHref({
+          propertyId,
+          journeyId: guidanceJourneyId,
+          stepKey: guidanceStepKey,
+          inventoryItemId: guidanceContext.itemId ?? itemId ?? null,
+          homeAssetId: guidanceContext.homeAssetId ?? homeAssetId ?? null,
+        })
+      : null;
+  const contextualBackHref = returnTo || derivedReturnTo;
   const contextualBackLabel = guidanceJourneyId ? 'Back to guidance' : 'Back to previous step';
 
   const FAVORITES_QUERY_KEY = ['favorites'];
