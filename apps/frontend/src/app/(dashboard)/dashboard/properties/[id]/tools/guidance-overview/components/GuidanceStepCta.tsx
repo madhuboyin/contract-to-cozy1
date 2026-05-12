@@ -346,10 +346,7 @@ export function GuidanceStepCta({
   if (step.toolKey === 'guidance-overview') {
     // B8: pass the step description as signal context so compliance / review steps
     // display their contextual detail rather than a plain acknowledgment prompt.
-    const guidanceOverviewSignalContext =
-      step.description?.trim() ||
-      (resolvedJourney?.primarySignal?.description as string | undefined)?.trim() ||
-      null;
+    const guidanceOverviewSignalContext = step.description?.trim() || null;
     return (
       <GuidanceOverviewInlineStep
         propertyId={propertyId}
