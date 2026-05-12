@@ -431,6 +431,7 @@ export default function ProvidersPage() {
     providerGuardQuery.data ?? null,
     'provider booking'
   );
+  const blockedStepLabel = providerGuardQuery.data?.safeNextStep?.stepLabel?.trim() || null;
   const blockedDetails = buildExecutionGuardDetails(providerGuardQuery.data ?? null);
   const blockedJourneyIds = new Set(
     providerGuardQuery.data?.missingPrerequisites.map((item) => item.journeyId) ?? []
@@ -748,7 +749,11 @@ export default function ProvidersPage() {
 
       {isExecutionBlocked ? (
         <GuidanceWarningBanner
-          title="Provider search is blocked until required guidance steps are complete"
+          title={
+            blockedStepLabel
+              ? `Finish ${blockedStepLabel} before booking`
+              : 'Provider booking is blocked until the required guidance step is complete'
+          }
           message={blockedReason}
           details={blockedDetails}
           actionLabel="Go to required step"

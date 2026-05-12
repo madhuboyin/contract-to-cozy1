@@ -121,9 +121,11 @@ export class GuidanceBookingGuardService {
         const prerequisiteSteps = steps.filter(
           (step) => step.isRequired && step.stepOrder < executionStep.stepOrder
         );
+        let hasUnmetRequiredPrerequisite = false;
 
         for (const prerequisite of prerequisiteSteps) {
           if (isSatisfiedExecutionPrerequisite(prerequisite, journey.journeyTypeKey ?? null)) continue;
+          hasUnmetRequiredPrerequisite = true;
 
           missingPrerequisites.push({
             journeyId: journey.id,
@@ -143,10 +145,14 @@ export class GuidanceBookingGuardService {
               `Execution step ${executionStep.label} is blocked.`
           );
         }
-      }
-
-      if (executionSteps.length > 0 && journey.executionReadiness !== 'READY') {
-        reasons.push('Complete required guidance steps before execution.');
+        if (
+          request.targetAction !== 'BOOKING' &&
+          executionSteps.length > 0 &&
+          journey.executionReadiness !== 'READY' &&
+          hasUnmetRequiredPrerequisite
+        ) {
+          reasons.push('Complete required guidance steps before execution.');
+        }
       }
     }
 
@@ -166,7 +172,10 @@ export class GuidanceBookingGuardService {
 
     const blocked = dedupedMissing.length > 0 || reasons.length > 0;
     const safeNextStep = dedupedMissing[0] ?? null;
-    const blockedReason = Array.from(new Set(reasons))[0] ?? (safeNextStep ? `Complete ${safeNextStep.stepLabel} first.` : null);
+    const blockedReason =
+      safeNextStep
+        ? `Complete ${safeNextStep.stepLabel} first.`
+        : Array.from(new Set(reasons))[0] ?? null;
     if (blocked) {
       logger.info({
         propertyId: request.propertyId,

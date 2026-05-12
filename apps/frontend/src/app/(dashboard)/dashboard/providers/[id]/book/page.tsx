@@ -109,6 +109,7 @@ export default function BookProviderPage() {
     !bookingGuardQuery.data &&
     (bookingGuardQuery.isLoading || bookingGuardQuery.isFetching);
   const blockedReason = buildExecutionGuardMessage(activeGuardDetails, 'booking');
+  const blockedStepLabel = activeGuardDetails?.safeNextStep?.stepLabel?.trim() || null;
   const blockedDetails = buildExecutionGuardDetails(activeGuardDetails);
   const blockedJourneyIds = new Set(
     activeGuardDetails?.missingPrerequisites.map((item) => item.journeyId) ?? []
@@ -598,7 +599,11 @@ export default function BookProviderPage() {
 
       {isExecutionBlocked ? (
         <GuidanceWarningBanner
-          title="Booking blocked until prerequisite steps are complete"
+          title={
+            blockedStepLabel
+              ? `Finish ${blockedStepLabel} before booking`
+              : 'Booking is blocked until the required guidance step is complete'
+          }
           message={blockedReason}
           details={blockedDetails}
           actionLabel={blockedAction?.nextStep ? `Go to Step ${blockedAction.nextStep.stepOrder}` : 'Open required step'}
