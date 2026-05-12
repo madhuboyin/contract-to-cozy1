@@ -19,6 +19,8 @@ export const PROVIDER_SEARCH_CATEGORY_OPTIONS: readonly ProviderCategoryOption[]
   { value: 'HVAC', label: 'HVAC', icon: 'HVAC' },
   { value: 'CLEANING', label: 'Cleaning', icon: 'CLEANING' },
   { value: 'LANDSCAPING', label: 'Landscaping', icon: 'LANDSCAPING' },
+  { value: 'INSURANCE', label: 'Home Insurance', icon: 'INSURANCE' },
+  { value: 'WARRANTY', label: 'Home Warranty', icon: 'WARRANTY' },
 ] as const;
 
 export const ALL_SERVICE_CATEGORIES: readonly ServiceCategory[] = [
@@ -165,6 +167,8 @@ const CATEGORY_DISPLAY_LABELS: Record<string, string> = {
   CLEANING: 'Cleaning',
   PEST_CONTROL: 'Pest Control',
   LOCKSMITH: 'Locksmith',
+  INSURANCE: 'Insurance',
+  WARRANTY: 'Warranty',
   APPLIANCE: 'Appliance',
   ROOF_EXTERIOR: 'Roof / Exterior',
   SAFETY: 'Safety',

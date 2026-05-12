@@ -29,6 +29,7 @@ import {
 import { GuidanceInlinePanel } from '@/components/guidance/GuidanceInlinePanel';
 import TrustStrip from '../../components/route-templates/TrustStrip';
 import { useToast } from '@/components/ui/use-toast';
+import { buildGuidanceOverviewHref } from '@/lib/navigation/guidanceOverviewHref';
 
 export default function CoverageClient({ propertyId }: { propertyId: string }) {
   const apiBase = process.env.NEXT_PUBLIC_API_URL || '';
@@ -47,9 +48,22 @@ export default function CoverageClient({ propertyId }: { propertyId: string }) {
 
   const guidanceJourneyId = searchParams.get('guidanceJourneyId') ?? undefined;
   const guidanceStepKey = searchParams.get('guidanceStepKey') ?? undefined;
+  const guidanceBackHref = guidanceJourneyId
+    ? buildGuidanceOverviewHref({
+        propertyId,
+        journeyId: guidanceJourneyId,
+        stepKey: guidanceStepKey,
+        inventoryItemId: searchParams.get('itemId'),
+        homeAssetId: searchParams.get('homeAssetId'),
+        issueType: searchParams.get('issueType'),
+      })
+    : null;
   const [guidanceProgressing, setGuidanceProgressing] = React.useState(false);
   const [guidanceProgressRecorded, setGuidanceProgressRecorded] = React.useState(false);
   const [guidanceProofCompleted, setGuidanceProofCompleted] = React.useState(false);
+  const isPolicyRecordingStep =
+    guidanceStepKey === 'activate_warranty_coverage' ||
+    guidanceStepKey === 'bind_policy_and_record_documents';
 
   const [quoteOpen, setQuoteOpen] = React.useState(false);
   const [coveredOpen, setCoveredOpen] = React.useState(false);
@@ -156,15 +170,20 @@ export default function CoverageClient({ propertyId }: { propertyId: string }) {
       await recordGuidanceToolStatus(propertyId, {
         stepKey: guidanceStepKey,
         journeyId: guidanceJourneyId,
-        sourceToolKey: 'coverage-options',
-        status: 'IN_PROGRESS',
+        sourceToolKey: isPolicyRecordingStep ? 'documents' : 'coverage-options',
+        status: isPolicyRecordingStep ? 'COMPLETED' : 'IN_PROGRESS',
         producedData: {
-          proofType: 'progress_checkpoint',
+          proofType: isPolicyRecordingStep ? 'coverage_record_update' : 'progress_checkpoint',
           proofId: `${guidanceStepKey}:coverage-progress`,
           progressNotedAt: new Date().toISOString(),
+          updatedPolicyRecord: isPolicyRecordingStep,
         },
       });
-      setGuidanceProgressRecorded(true);
+      if (isPolicyRecordingStep) {
+        setGuidanceProofCompleted(true);
+      } else {
+        setGuidanceProgressRecorded(true);
+      }
     } catch (e) {
       console.error('[CoverageClient] failed to record guidance progress', e);
     } finally {
@@ -208,9 +227,9 @@ export default function CoverageClient({ propertyId }: { propertyId: string }) {
       intro={
         <div className="space-y-2">
           <Button variant="ghost" className="min-h-[44px] w-fit px-0 text-muted-foreground" asChild>
-            <Link href={`/dashboard/properties/${propertyId}/inventory`}>
+            <Link href={guidanceBackHref ?? `/dashboard/properties/${propertyId}/inventory`}>
               <ArrowLeft className="h-4 w-4 mr-2" />
-              Back to inventory
+              {guidanceBackHref ? 'Back to guidance' : 'Back to inventory'}
             </Link>
           </Button>
           <MobilePageIntro
@@ -273,8 +292,12 @@ export default function CoverageClient({ propertyId }: { propertyId: string }) {
           <p className="text-sm font-medium">Guidance Step</p>
           <p className="text-sm text-muted-foreground">
             {guidanceProofCompleted
-              ? 'Proof-backed completion recorded from current coverage state. Return to your guidance journey.'
-              : 'Completion is proof-based. Update policy/documents in the linked tools to complete this step automatically.'}
+              ? isPolicyRecordingStep
+                ? 'Policy details recorded for this guidance step. Return to your guidance journey to continue.'
+                : 'Proof-backed completion recorded from current coverage state. Return to your guidance journey.'
+              : isPolicyRecordingStep
+                ? 'After you record the selected plan details here, mark this policy step complete.'
+                : 'Completion is proof-based. Update policy/documents in the linked tools to complete this step automatically.'}
           </p>
           {!guidanceProofCompleted && (
             <Button
@@ -284,9 +307,11 @@ export default function CoverageClient({ propertyId }: { propertyId: string }) {
             >
               {guidanceProgressing
                 ? 'Saving...'
-                : guidanceProgressRecorded
+                : guidanceProgressRecorded && !isPolicyRecordingStep
                   ? 'Progress recorded'
-                  : 'Record progress'}
+                  : isPolicyRecordingStep
+                    ? 'Complete policy step'
+                    : 'Record progress'}
             </Button>
           )}
         </div>

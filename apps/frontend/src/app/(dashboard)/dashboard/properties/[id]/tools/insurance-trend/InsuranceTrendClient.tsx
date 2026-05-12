@@ -13,6 +13,7 @@ import ToolWorkspaceTemplate from '../../components/route-templates/ToolWorkspac
 import HomeToolHeader from '@/components/tools/HomeToolHeader';
 import { insuranceTrendTrust } from '@/lib/trust/trustPresets';
 import { track } from '@/lib/analytics/events';
+import { buildGuidanceOverviewHref } from '@/lib/navigation/guidanceOverviewHref';
 
 function money(n: number | null | undefined, currency = 'USD') {
   if (n === null || n === undefined) return '—';
@@ -29,6 +30,16 @@ export default function InsuranceTrendClient() {
   const searchParams = useSearchParams();
   const guidanceStepKey = searchParams.get('guidanceStepKey');
   const guidanceJourneyId = searchParams.get('guidanceJourneyId');
+  const guidanceBackHref = guidanceJourneyId
+    ? buildGuidanceOverviewHref({
+        propertyId,
+        journeyId: guidanceJourneyId,
+        stepKey: guidanceStepKey,
+        inventoryItemId: searchParams.get('itemId'),
+        homeAssetId: searchParams.get('homeAssetId'),
+        issueType: searchParams.get('issueType'),
+      })
+    : null;
 
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<InsuranceCostTrendDTO | null>(null);
@@ -99,12 +110,16 @@ export default function InsuranceTrendClient() {
   return (
     <ToolWorkspaceTemplate
       backHref={
-        searchParams.get('from') === 'coverage-intelligence'
+        guidanceBackHref
+          ? guidanceBackHref
+          : searchParams.get('from') === 'coverage-intelligence'
           ? `/dashboard/properties/${propertyId}/tools/coverage-intelligence`
           : `/dashboard/properties/${propertyId}`
       }
       backLabel={
-        searchParams.get('from') === 'coverage-intelligence'
+        guidanceBackHref
+          ? 'Back to guidance'
+          : searchParams.get('from') === 'coverage-intelligence'
           ? 'Back to Coverage Intelligence'
           : 'Back to property'
       }
