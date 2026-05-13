@@ -152,8 +152,29 @@ function getFactorDescription(factorName: string | undefined, condition: string 
       Incomplete: "Some documents are missing",
       "Missing Data": "Property documentation needed",
     },
+    "Structure Factor": {
+      Excellent: "Structural elements are in excellent condition",
+      Good: "Structural elements are in good condition",
+      Standard: "Structure is stable — periodic checks recommended",
+      Aging: "Some structural wear detected — monitoring advised",
+      Incomplete: "Structural assessment incomplete — add records to refine this score",
+      "Missing Data": "Structural condition not recorded",
+      "Needs Review": "Structural review recommended",
+      "Needs attention": "Structural issues require attention",
+    },
+    "Roof Condition": {
+      Excellent: "Roof is in excellent condition",
+      Good: "Roof is in good condition — no issues identified",
+      Standard: "Roof condition is acceptable — monitor for wear",
+      Aging: "Roof showing signs of wear — inspection recommended",
+      "Missing Data": "Roof condition not recorded",
+      "Needs Review": "Roof inspection recommended",
+      "Needs attention": "Roof condition requires immediate attention",
+    },
   };
-  return map[factor]?.[cond] ?? `${cond || "Status unavailable"} — review recommended`;
+  if (map[factor]?.[cond]) return map[factor][cond];
+  if (POSITIVE_STATUSES.includes(cond)) return `${getUserFriendlyStatus(cond)} — no issues flagged`;
+  return `${cond || "Status unavailable"} — review recommended`;
 }
 
 function getInsightStatusExplanation(status: string | undefined, factorName?: string): string {
