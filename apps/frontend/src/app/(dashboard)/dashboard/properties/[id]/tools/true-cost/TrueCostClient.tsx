@@ -2,14 +2,12 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { useParams, useSearchParams } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import HomeToolsRail from '../../components/HomeToolsRail';
 import { getTrueCostOwnership, TrueCostOwnershipDTO } from './trueCostApi';
-import { GuidanceStepCompletionCard } from '@/components/guidance/GuidanceStepCompletionCard';
 import { Button } from '@/components/ui/button';
 import ToolWorkspaceTemplate from '../../components/route-templates/ToolWorkspaceTemplate';
 import HomeToolHeader from '@/components/tools/HomeToolHeader';
-import { buildGuidanceOverviewHref } from '@/lib/navigation/guidanceOverviewHref';
 
 // Use the upgraded chart you already shipped (legend + tooltip)
 import MultiLineChart from '../cost-growth/MultiLineChart';
@@ -21,22 +19,11 @@ function money(n?: number | null, currency = 'USD') {
 
 export default function TrueCostClient() {
   const params = useParams<{ id: string }>();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const propertyId = params.id;
   const guidanceJourneyId = searchParams.get('guidanceJourneyId');
-  const guidanceStepKey = searchParams.get('guidanceStepKey');
-  const guidanceSignalIntentFamily = searchParams.get('guidanceSignalIntentFamily');
-  const inventoryItemId = searchParams.get('itemId');
-  const backHref = guidanceJourneyId
-    ? buildGuidanceOverviewHref({
-        propertyId,
-        journeyId: guidanceJourneyId,
-        stepKey: guidanceStepKey,
-        inventoryItemId,
-        homeAssetId: searchParams.get('homeAssetId'),
-        issueType: searchParams.get('issueType'),
-      })
-    : `/dashboard/properties/${propertyId}`;
+  const backHref = `/dashboard/properties/${propertyId}`;
 
   const [years, setYears] = useState<5 | 10>(5);
   const [loading, setLoading] = useState(false);
@@ -45,17 +32,21 @@ export default function TrueCostClient() {
   const [chartExpanded, setChartExpanded] = useState(false);
   const reqRef = React.useRef(0);
 
+  useEffect(() => {
+    if (!propertyId || !guidanceJourneyId) return;
+    const query = searchParams.toString();
+    router.replace(
+      `/dashboard/properties/${propertyId}/guidance/step${query ? `?${query}` : ''}`
+    );
+  }, [guidanceJourneyId, propertyId, router, searchParams]);
+
   async function load(nextYears: 5 | 10 = years) {
     if (!propertyId) return;
     setLoading(true);
     setError(null);
     const reqId = ++reqRef.current;
     try {
-      const r = await getTrueCostOwnership(
-        propertyId,
-        { guidanceJourneyId, guidanceStepKey, guidanceSignalIntentFamily, inventoryItemId },
-        nextYears,
-      );
+      const r = await getTrueCostOwnership(propertyId, nextYears);
       if (reqId !== reqRef.current) return;
       setData(r);
     } catch (e: unknown) {
@@ -69,7 +60,23 @@ export default function TrueCostClient() {
   useEffect(() => {
     load(years);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [propertyId, guidanceJourneyId, guidanceStepKey, guidanceSignalIntentFamily, inventoryItemId]);
+  }, [propertyId]);
+
+  if (guidanceJourneyId) {
+    return (
+      <ToolWorkspaceTemplate
+        backHref={backHref}
+        backLabel="Back to property"
+        eyebrow="Home tool"
+        title="True Cost"
+        subtitle="Opening the guided version of this step."
+      >
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-600 shadow-sm">
+          Redirecting to the guided step…
+        </div>
+      </ToolWorkspaceTemplate>
+    );
+  }
 
   const allSeries = useMemo(() => {
     const h = data?.history ?? [];
@@ -340,13 +347,6 @@ export default function TrueCostClient() {
         </div>
       )}
 
-      <GuidanceStepCompletionCard
-        propertyId={propertyId}
-        guidanceStepKey={guidanceStepKey}
-        guidanceJourneyId={guidanceJourneyId}
-        actionLabel="Mark cost review complete"
-        producedData={guidanceSignalIntentFamily ? { signalIntentFamily: guidanceSignalIntentFamily } : undefined}
-      />
     </ToolWorkspaceTemplate>
   );
 }

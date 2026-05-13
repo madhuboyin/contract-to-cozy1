@@ -34,32 +34,12 @@ export type TrueCostOwnershipDTO = {
   meta: { generatedAt: string; dataSources: string[]; notes: string[]; confidence: 'HIGH'|'MEDIUM'|'LOW' };
 };
 
-export type GuidanceToolContext = {
-  guidanceJourneyId?: string | null;
-  guidanceStepKey?: string | null;
-  guidanceSignalIntentFamily?: string | null;
-  inventoryItemId?: string | null;
-};
-
 export async function getTrueCostOwnership(
   propertyId: string,
-  guidanceContext?: GuidanceToolContext,
   years: 5 | 10 = 5,
 ) {
   const query = new URLSearchParams();
   query.set('years', String(years));
-  if (guidanceContext?.guidanceJourneyId) {
-    query.set('guidanceJourneyId', guidanceContext.guidanceJourneyId);
-  }
-  if (guidanceContext?.guidanceStepKey) {
-    query.set('guidanceStepKey', guidanceContext.guidanceStepKey);
-  }
-  if (guidanceContext?.guidanceSignalIntentFamily) {
-    query.set('guidanceSignalIntentFamily', guidanceContext.guidanceSignalIntentFamily);
-  }
-  if (guidanceContext?.inventoryItemId) {
-    query.set('inventoryItemId', guidanceContext.inventoryItemId);
-  }
 
   const endpoint = query.toString()
     ? `/api/properties/${propertyId}/tools/true-cost?${query.toString()}`

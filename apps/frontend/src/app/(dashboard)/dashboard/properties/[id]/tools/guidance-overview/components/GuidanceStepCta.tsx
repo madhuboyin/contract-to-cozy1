@@ -18,6 +18,8 @@ import { RecallCheckInline } from '@/components/guidance/RecallCheckInline';
 import { ReplacementJourneyInline } from '@/components/guidance/ReplacementJourneyInline';
 import { ReplacementPrioritiesCapture } from '@/components/guidance/ReplacementPrioritiesCapture';
 import { NegotiationShieldInline } from '@/components/guidance/NegotiationShieldInline';
+import { TrueCostGuidanceStep } from '@/components/guidance/TrueCostGuidanceStep';
+import { CapitalTimelineGuidanceStep } from '@/components/guidance/CapitalTimelineGuidanceStep';
 import TrustStrip from '../../../components/route-templates/TrustStrip';
 import { guidanceEngineTrust } from '@/lib/trust/trustPresets';
 import { GuidanceOverviewInlineStep } from './GuidanceOverviewInlineStep';
@@ -338,6 +340,32 @@ export function GuidanceStepCta({
         guidanceSignalIntentFamily={resolvedJourney?.primarySignal?.signalIntentFamily ?? null}
         assetName={displayAssetName}
         issueType={resolvedJourney?.issueType ?? selectedIssueType ?? null}
+        onComplete={handleInlineComplete}
+      />
+    );
+  }
+
+  if (step.toolKey === 'true-cost' && activePrimaryAction) {
+    const trueCostItemId = resolvedJourney?.inventoryItemId ?? selectedInventoryItemId ?? null;
+    return (
+      <TrueCostGuidanceStep
+        propertyId={propertyId}
+        journeyId={activePrimaryAction.journeyId}
+        stepId={step.id}
+        stepKey={step.stepKey}
+        inventoryItemId={trueCostItemId}
+        onComplete={handleInlineComplete}
+      />
+    );
+  }
+
+  if (step.toolKey === 'capital-timeline' && activePrimaryAction) {
+    return (
+      <CapitalTimelineGuidanceStep
+        propertyId={propertyId}
+        journeyId={activePrimaryAction.journeyId}
+        stepId={step.id}
+        stepKey={step.stepKey}
         onComplete={handleInlineComplete}
       />
     );

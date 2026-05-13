@@ -3,7 +3,7 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useParams, useSearchParams } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import {
   Calendar,
   ChevronDown,
@@ -28,9 +28,7 @@ import { Button } from '@/components/ui/button';
 import {
   MobileActionRow,
 } from '@/components/mobile/dashboard/MobilePrimitives';
-import { GuidanceStepCompletionCard } from '@/components/guidance/GuidanceStepCompletionCard';
 import ToolWorkspaceTemplate from '../../components/route-templates/ToolWorkspaceTemplate';
-import { buildGuidanceOverviewHref } from '@/lib/navigation/guidanceOverviewHref';
 
 // ─── Helpers ────────────────────────────────────────────────────────
 function money(cents: number | null | undefined) {
@@ -137,20 +135,11 @@ function mapTimelineCategoryToRadarCategory(category: string): string {
 export default function CapitalTimelineClient() {
   const params = useParams<{ id: string }>();
   const propertyId = params.id;
+  const router = useRouter();
   const searchParams = useSearchParams();
-  const guidanceStepKey = searchParams.get('guidanceStepKey');
   const guidanceJourneyId = searchParams.get('guidanceJourneyId');
   const requestedAssumptionSetId = searchParams.get('assumptionSetId');
-  const backHref = guidanceJourneyId
-    ? buildGuidanceOverviewHref({
-        propertyId,
-        journeyId: guidanceJourneyId,
-        stepKey: guidanceStepKey,
-        inventoryItemId: searchParams.get('itemId'),
-        homeAssetId: searchParams.get('homeAssetId'),
-        issueType: searchParams.get('issueType'),
-      })
-    : `/dashboard/properties/${propertyId}`;
+  const backHref = `/dashboard/properties/${propertyId}`;
 
   const [horizonYears, setHorizonYears] = useState<5 | 10>(10);
   const [loading, setLoading] = useState(false);
@@ -216,6 +205,12 @@ export default function CapitalTimelineClient() {
   }, [propertyId]);
 
   useEffect(() => {
+    if (!propertyId || !guidanceJourneyId) return;
+    const query = searchParams.toString();
+    router.replace(`/dashboard/properties/${propertyId}/guidance/step${query ? `?${query}` : ''}`);
+  }, [guidanceJourneyId, propertyId, router, searchParams]);
+
+  useEffect(() => {
     if (requestedAssumptionSetId) {
       setActiveAssumptionSetId(requestedAssumptionSetId);
     }
@@ -253,8 +248,6 @@ export default function CapitalTimelineClient() {
         category: mappedCategory,
         label: itemLabel,
       });
-      if (guidanceJourneyId) params.set('guidanceJourneyId', guidanceJourneyId);
-      if (guidanceStepKey) params.set('guidanceStepKey', guidanceStepKey);
 
       return {
         label: `Price-check: ${itemLabel}`,
@@ -276,7 +269,7 @@ export default function CapitalTimelineClient() {
   return (
     <ToolWorkspaceTemplate
       backHref={backHref}
-      backLabel={guidanceJourneyId ? 'Back to guidance' : 'Back to property'}
+      backLabel="Back to property"
       eyebrow="Home tool"
       title="Capital Timeline"
       subtitle={`Predicted major expenses over the next ${horizonYears} years.`}
@@ -318,16 +311,21 @@ export default function CapitalTimelineClient() {
         </div>
       )}
     >
+      {guidanceJourneyId ? (
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-600 shadow-sm">
+          Redirecting to the guided step…
+        </div>
+      ) : null}
 
       {/* Loading */}
-      {(loading || running) && !data && (
+      {!guidanceJourneyId && (loading || running) && !data && (
         <div className="flex h-48 items-center justify-center rounded-2xl border border-white/70 bg-white/65 backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/45">
           <div className="h-10 w-10 animate-spin rounded-full border-b-2 border-slate-900 dark:border-slate-100" />
         </div>
       )}
 
       {/* Error */}
-      {error && (
+      {!guidanceJourneyId && error && (
         <div className="flex items-start gap-3 rounded-2xl border border-red-200/70 bg-red-50/85 p-4 backdrop-blur">
           <AlertTriangle className="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5" />
           <div>
@@ -343,7 +341,7 @@ export default function CapitalTimelineClient() {
       )}
 
       {/* Data */}
-      {data && !loading && (
+      {!guidanceJourneyId && data && !loading && (
         <>
           {/* Summary Bar */}
           <div className="rounded-2xl border border-white/70 bg-gradient-to-br from-white/80 via-slate-50/72 to-teal-50/45 p-4 sm:p-6 shadow-[0_16px_30px_-24px_rgba(15,23,42,0.55)] backdrop-blur-xl dark:border-slate-700/70 dark:from-slate-900/55 dark:via-slate-900/48 dark:to-slate-900/38">
@@ -483,13 +481,6 @@ export default function CapitalTimelineClient() {
           )}
         </>
       )}
-
-      <GuidanceStepCompletionCard
-        propertyId={propertyId}
-        guidanceStepKey={guidanceStepKey}
-        guidanceJourneyId={guidanceJourneyId}
-        actionLabel="Mark capital plan reviewed"
-      />
     </ToolWorkspaceTemplate>
   );
 }

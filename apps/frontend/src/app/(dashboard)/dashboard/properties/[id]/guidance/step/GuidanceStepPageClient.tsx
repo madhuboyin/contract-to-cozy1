@@ -28,6 +28,8 @@ import { PriceCheckInline } from '@/components/guidance/PriceCheckInline';
 import { RecallCheckInline } from '@/components/guidance/RecallCheckInline';
 import { NegotiationShieldInline } from '@/components/guidance/NegotiationShieldInline';
 import { ReplacementJourneyInline } from '@/components/guidance/ReplacementJourneyInline';
+import { TrueCostGuidanceStep } from '@/components/guidance/TrueCostGuidanceStep';
+import { CapitalTimelineGuidanceStep } from '@/components/guidance/CapitalTimelineGuidanceStep';
 import { ScopedWorkspaceGuidanceStep } from '@/components/guidance/ScopedWorkspaceGuidanceStep';
 import { GuidanceOverviewInlineStep } from '@/app/(dashboard)/dashboard/properties/[id]/tools/guidance-overview/components/GuidanceOverviewInlineStep';
 
@@ -151,7 +153,6 @@ function UnsupportedGuidanceStep({
 }
 
 const LIVE_WORKSPACE_BRIDGE_TOOL_KEYS = new Set([
-  'capital-timeline',
   'coverage-options',
   'documents',
   'do-nothing-simulator',
@@ -161,7 +162,6 @@ const LIVE_WORKSPACE_BRIDGE_TOOL_KEYS = new Set([
   'maintenance',
   'price-finalization',
   'quote-comparison',
-  'true-cost',
 ]);
 
 export default function GuidanceStepPageClient() {
@@ -284,6 +284,31 @@ export default function GuidanceStepPageClient() {
           inventoryItemCategory={journey.inventoryItem?.category ?? null}
           assetName={assetName}
           issueType={issueType}
+          onComplete={refreshGuidance}
+        />
+      );
+    }
+
+    if (targetStep.toolKey === 'true-cost') {
+      return (
+        <TrueCostGuidanceStep
+          propertyId={propertyId}
+          journeyId={journey.id}
+          stepId={targetStep.id}
+          stepKey={targetStep.stepKey}
+          inventoryItemId={inventoryItemId}
+          onComplete={refreshGuidance}
+        />
+      );
+    }
+
+    if (targetStep.toolKey === 'capital-timeline') {
+      return (
+        <CapitalTimelineGuidanceStep
+          propertyId={propertyId}
+          journeyId={journey.id}
+          stepId={targetStep.id}
+          stepKey={targetStep.stepKey}
           onComplete={refreshGuidance}
         />
       );
