@@ -173,10 +173,36 @@ function getInsightStatusExplanation(status: string | undefined, factorName?: st
     return "Work is already underway on this factor. Its contribution should improve once the task is completed.";
   }
   if (WATCH_STATUSES.includes(s)) {
-    return "This factor is stable but should be monitored. Keeping records and periodic checks helps protect your score.";
+    const factor = getDisplayFactorName(factorName);
+    const watchMap: Record<string, string> = {
+      'Water Heater Age': 'Your water heater is still working but getting up there in age — a quick annual check helps you spot early issues before they become expensive.',
+      'HVAC Age': 'Your HVAC is running but older systems work harder to keep up — a seasonal tune-up now is cheaper than an emergency repair later.',
+      'Property Age (Year Built)': 'Older homes develop quirks over time — periodic walkthroughs help you stay ahead of small issues before they add up.',
+      'Roof Age': 'Your roof is within its expected lifespan but worth watching — noting any curling shingles or soft spots after storms helps you stay ahead of leaks.',
+      'Safety Factor': 'Your safety devices are in place but could use some attention — testing smoke and CO detectors twice a year keeps your home protected.',
+      'Documents Factor': 'Your documentation is partially there — filling in the gaps makes this factor stronger and helps if you ever sell or make a claim.',
+      'Major Systems Health': 'Your major systems are running but some are showing age — logging service visits as they happen helps you track what\'s been done and what\'s coming up.',
+      'Occupancy & Wear': 'Your home sees active daily use — staying current on routine maintenance keeps wear from piling up over time.',
+      'Structure Factor': 'Your structural elements look okay but warrant a closer look — a periodic inspection every few years is a smart habit for any home.',
+      'Roof Condition': 'Your roof is intact but showing some wear — keeping an eye on it after storms helps you catch issues early.',
+    };
+    return watchMap[factor] ?? 'This area is in decent shape but worth keeping an eye on — periodic checks help you stay ahead of anything that might come up.';
   }
   if (POSITIVE_STATUSES.includes(s)) {
-    return "This factor is currently a health strength and is helping hold up your overall score.";
+    const factor = getDisplayFactorName(factorName);
+    const positiveMap: Record<string, string> = {
+      'Water Heater Age': 'Your water heater is relatively new — it\'s a reliable, low-maintenance part of your home right now.',
+      'HVAC Age': 'Your HVAC system is in its prime years — efficient, reliable, and with plenty of service life ahead.',
+      'Property Age (Year Built)': 'Your home\'s age is working in its favor — newer construction typically means fewer deferred maintenance surprises.',
+      'Roof Age': 'Your roof has plenty of life left — no immediate concerns, just keep up the occasional inspection.',
+      'Safety Factor': 'Your safety devices are up to date — your home and household are well-protected.',
+      'Documents Factor': 'Your home has solid documentation on file — this helps with insurance, resale value, and future planning.',
+      'Major Systems Health': 'Your heating, cooling, and water systems are in good shape — well-maintained systems are one of the strongest signs of a well-cared-for home.',
+      'Occupancy & Wear': 'Your home\'s size is well-matched to your household — lower wear means fixtures and systems last longer and cost less to maintain.',
+      'Structure Factor': 'Your home\'s structural elements are in good condition — a solid foundation protects everything built on top of it.',
+      'Roof Condition': 'Your roof is in good condition — it\'s doing its job keeping weather out and protecting your home.',
+    };
+    return positiveMap[factor] ?? 'This area is in great shape — keep doing what you\'re doing and it should stay that way.';
   }
   return "This factor is under review. Add more property records to unlock a more precise score explanation.";
 }
