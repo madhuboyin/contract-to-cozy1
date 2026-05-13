@@ -84,12 +84,6 @@ export type RunDoNothingSimulationPayload = {
   assumptionSetId?: string;
 };
 
-export type GuidanceToolContext = {
-  guidanceJourneyId?: string | null;
-  guidanceStepKey?: string | null;
-  guidanceSignalIntentFamily?: string | null;
-};
-
 export async function listDoNothingScenarios(propertyId: string): Promise<DoNothingScenarioDTO[]> {
   const res = await api.get<{ scenarios: DoNothingScenarioDTO[] }>(
     `/api/properties/${propertyId}/do-nothing/scenarios`
@@ -146,22 +140,10 @@ export async function getLatestDoNothingRun(
 export async function runDoNothingSimulation(
   propertyId: string,
   payload: RunDoNothingSimulationPayload,
-  guidanceContext?: GuidanceToolContext
 ): Promise<DoNothingRunDTO> {
   const res = await api.post<{ run: DoNothingRunDTO }>(
     `/api/properties/${propertyId}/do-nothing/run`,
-    {
-      ...payload,
-      ...(guidanceContext?.guidanceJourneyId
-        ? { guidanceJourneyId: guidanceContext.guidanceJourneyId }
-        : {}),
-      ...(guidanceContext?.guidanceStepKey
-        ? { guidanceStepKey: guidanceContext.guidanceStepKey }
-        : {}),
-      ...(guidanceContext?.guidanceSignalIntentFamily
-        ? { guidanceSignalIntentFamily: guidanceContext.guidanceSignalIntentFamily }
-        : {}),
-    }
+    payload
   );
   return res.data.run;
 }

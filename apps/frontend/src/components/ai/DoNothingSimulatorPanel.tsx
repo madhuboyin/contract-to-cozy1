@@ -323,10 +323,6 @@ export default function DoNothingSimulatorPanel({ propertyId }: DoNothingSimulat
         horizonMonths: form.horizonMonths,
         inputOverrides: buildOverrides(form),
         ...(requestedAssumptionSetId ? { assumptionSetId: requestedAssumptionSetId } : {}),
-      }, {
-        guidanceJourneyId: searchParams.get('guidanceJourneyId'),
-        guidanceStepKey: searchParams.get('guidanceStepKey'),
-        guidanceSignalIntentFamily: searchParams.get('guidanceSignalIntentFamily'),
       });
 
       setHasRun(true);

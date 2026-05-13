@@ -20,6 +20,8 @@ import { ReplacementPrioritiesCapture } from '@/components/guidance/ReplacementP
 import { NegotiationShieldInline } from '@/components/guidance/NegotiationShieldInline';
 import { TrueCostGuidanceStep } from '@/components/guidance/TrueCostGuidanceStep';
 import { CapitalTimelineGuidanceStep } from '@/components/guidance/CapitalTimelineGuidanceStep';
+import { DoNothingGuidanceStep } from '@/components/guidance/DoNothingGuidanceStep';
+import { HomeSavingsGuidanceStep } from '@/components/guidance/HomeSavingsGuidanceStep';
 import TrustStrip from '../../../components/route-templates/TrustStrip';
 import { guidanceEngineTrust } from '@/lib/trust/trustPresets';
 import { GuidanceOverviewInlineStep } from './GuidanceOverviewInlineStep';
@@ -362,6 +364,30 @@ export function GuidanceStepCta({
   if (step.toolKey === 'capital-timeline' && activePrimaryAction) {
     return (
       <CapitalTimelineGuidanceStep
+        propertyId={propertyId}
+        journeyId={activePrimaryAction.journeyId}
+        stepId={step.id}
+        stepKey={step.stepKey}
+        onComplete={handleInlineComplete}
+      />
+    );
+  }
+
+  if (step.toolKey === 'do-nothing-simulator' && activePrimaryAction) {
+    return (
+      <DoNothingGuidanceStep
+        propertyId={propertyId}
+        journeyId={activePrimaryAction.journeyId}
+        stepId={step.id}
+        stepKey={step.stepKey}
+        onComplete={handleInlineComplete}
+      />
+    );
+  }
+
+  if (step.toolKey === 'home-savings' && activePrimaryAction) {
+    return (
+      <HomeSavingsGuidanceStep
         propertyId={propertyId}
         journeyId={activePrimaryAction.journeyId}
         stepId={step.id}

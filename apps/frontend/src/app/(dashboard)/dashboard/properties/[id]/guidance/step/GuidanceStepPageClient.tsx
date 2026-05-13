@@ -30,6 +30,8 @@ import { NegotiationShieldInline } from '@/components/guidance/NegotiationShield
 import { ReplacementJourneyInline } from '@/components/guidance/ReplacementJourneyInline';
 import { TrueCostGuidanceStep } from '@/components/guidance/TrueCostGuidanceStep';
 import { CapitalTimelineGuidanceStep } from '@/components/guidance/CapitalTimelineGuidanceStep';
+import { DoNothingGuidanceStep } from '@/components/guidance/DoNothingGuidanceStep';
+import { HomeSavingsGuidanceStep } from '@/components/guidance/HomeSavingsGuidanceStep';
 import { ScopedWorkspaceGuidanceStep } from '@/components/guidance/ScopedWorkspaceGuidanceStep';
 import { GuidanceOverviewInlineStep } from '@/app/(dashboard)/dashboard/properties/[id]/tools/guidance-overview/components/GuidanceOverviewInlineStep';
 
@@ -155,9 +157,7 @@ function UnsupportedGuidanceStep({
 const LIVE_WORKSPACE_BRIDGE_TOOL_KEYS = new Set([
   'coverage-options',
   'documents',
-  'do-nothing-simulator',
   'home-event-radar',
-  'home-savings',
   'inspection-report',
   'maintenance',
   'price-finalization',
@@ -305,6 +305,30 @@ export default function GuidanceStepPageClient() {
     if (targetStep.toolKey === 'capital-timeline') {
       return (
         <CapitalTimelineGuidanceStep
+          propertyId={propertyId}
+          journeyId={journey.id}
+          stepId={targetStep.id}
+          stepKey={targetStep.stepKey}
+          onComplete={refreshGuidance}
+        />
+      );
+    }
+
+    if (targetStep.toolKey === 'do-nothing-simulator') {
+      return (
+        <DoNothingGuidanceStep
+          propertyId={propertyId}
+          journeyId={journey.id}
+          stepId={targetStep.id}
+          stepKey={targetStep.stepKey}
+          onComplete={refreshGuidance}
+        />
+      );
+    }
+
+    if (targetStep.toolKey === 'home-savings') {
+      return (
+        <HomeSavingsGuidanceStep
           propertyId={propertyId}
           journeyId={journey.id}
           stepId={targetStep.id}

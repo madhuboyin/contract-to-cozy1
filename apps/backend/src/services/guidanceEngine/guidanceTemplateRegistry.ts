@@ -773,7 +773,7 @@ const templates: GuidanceJourneyTemplate[] = [
         executionReadiness: 'NEEDS_CONTEXT',
         isRequired: true,
         toolKey: 'do-nothing-simulator',
-        routePath: '/dashboard/properties/:propertyId/tools/do-nothing',
+        // Guidance-native step rendered in the focused shell; no standalone route.
         skipPolicy: 'DISCOURAGED',
       },
       // P1-8: Relabeled to reflect what home-savings actually does
@@ -787,7 +787,7 @@ const templates: GuidanceJourneyTemplate[] = [
         executionReadiness: 'NEEDS_CONTEXT',
         isRequired: true,
         toolKey: 'home-savings',
-        routePath: '/dashboard/properties/:propertyId/tools/home-savings',
+        // Guidance-native step rendered in the focused shell; no standalone route.
         skipPolicy: 'DISCOURAGED',
       },
       {
@@ -839,7 +839,7 @@ const templates: GuidanceJourneyTemplate[] = [
         executionReadiness: 'NEEDS_CONTEXT',
         isRequired: true,
         toolKey: 'do-nothing-simulator',
-        routePath: '/dashboard/properties/:propertyId/tools/do-nothing',
+        // Guidance-native step rendered in the focused shell; no standalone route.
         skipPolicy: 'DISALLOWED',
       },
       {
@@ -876,7 +876,7 @@ const templates: GuidanceJourneyTemplate[] = [
         executionReadiness: 'NEEDS_CONTEXT',
         isRequired: false,
         toolKey: 'home-savings',
-        routePath: '/dashboard/properties/:propertyId/tools/home-savings',
+        // Guidance-native step rendered in the focused shell; no standalone route.
         skipPolicy: 'ALLOWED',
       },
       {
@@ -999,7 +999,7 @@ const templates: GuidanceJourneyTemplate[] = [
         executionReadiness: 'NEEDS_CONTEXT',
         isRequired: true,
         toolKey: 'home-savings',
-        routePath: '/dashboard/properties/:propertyId/tools/home-savings',
+        // Guidance-native step rendered in the focused shell; no standalone route.
         skipPolicy: 'DISCOURAGED',
       },
       {

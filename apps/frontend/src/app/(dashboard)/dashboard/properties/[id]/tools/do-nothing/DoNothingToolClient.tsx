@@ -1,26 +1,32 @@
 'use client';
 
-import { useParams, useSearchParams } from 'next/navigation';
+import { useEffect } from 'react';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import HomeToolsRail from '../../components/HomeToolsRail';
 import DoNothingSimulatorPanel from '@/components/ai/DoNothingSimulatorPanel';
 import ToolExplainerSection from '@/components/tool-explainer/ToolExplainerSection';
-import { GuidanceStepCompletionCard } from '@/components/guidance/GuidanceStepCompletionCard';
 import ToolWorkspaceTemplate from '../../components/route-templates/ToolWorkspaceTemplate';
 
 export default function DoNothingToolClient() {
   const params = useParams<{ id: string }>();
   const propertyId = params.id;
+  const router = useRouter();
   const searchParams = useSearchParams();
-  const guidanceStepKey = searchParams.get('guidanceStepKey');
   const guidanceJourneyId = searchParams.get('guidanceJourneyId');
-  const backHref = guidanceJourneyId
-    ? `/dashboard/properties/${propertyId}/tools/guidance-overview?journeyId=${guidanceJourneyId}`
-    : `/dashboard/properties/${propertyId}`;
+  const backHref = `/dashboard/properties/${propertyId}`;
+
+  useEffect(() => {
+    if (!propertyId || !guidanceJourneyId) return;
+    const query = searchParams.toString();
+    router.replace(
+      `/dashboard/properties/${propertyId}/guidance/step${query ? `?${query}` : ''}`
+    );
+  }, [guidanceJourneyId, propertyId, router, searchParams]);
 
   return (
     <ToolWorkspaceTemplate
       backHref={backHref}
-      backLabel={guidanceJourneyId ? 'Back to guidance' : 'Back to property'}
+      backLabel="Back to property"
       eyebrow="Home tool"
       title="Do-Nothing Simulator"
       subtitle="See risk and cost impact if you delay action for 6, 12, 24, or 36 months."
@@ -34,17 +40,17 @@ export default function DoNothingToolClient() {
         <HomeToolsRail propertyId={propertyId} showDesktop={false} />
       }
     >
+      {guidanceJourneyId ? (
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-600 shadow-sm">
+          Redirecting to the guided step…
+        </div>
+      ) : null}
 
-      <ToolExplainerSection toolKey="doNothingSimulator" id="how-it-works" />
+      {!guidanceJourneyId ? (
+        <ToolExplainerSection toolKey="doNothingSimulator" id="how-it-works" />
+      ) : null}
 
-      <DoNothingSimulatorPanel propertyId={propertyId} />
-
-      <GuidanceStepCompletionCard
-        propertyId={propertyId}
-        guidanceStepKey={guidanceStepKey}
-        guidanceJourneyId={guidanceJourneyId}
-        actionLabel="Mark delay cost reviewed"
-      />
+      {!guidanceJourneyId ? <DoNothingSimulatorPanel propertyId={propertyId} /> : null}
     </ToolWorkspaceTemplate>
   );
 }

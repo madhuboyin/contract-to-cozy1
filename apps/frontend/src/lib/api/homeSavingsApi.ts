@@ -104,12 +104,6 @@ export type HomeSavingsAccountUpsertPayload = {
   status?: HomeSavingsAccountStatus;
 };
 
-export type GuidanceToolContext = {
-  guidanceJourneyId?: string | null;
-  guidanceStepKey?: string | null;
-  guidanceSignalIntentFamily?: string | null;
-};
-
 export async function getHomeSavingsCategories(): Promise<HomeSavingsCategoryDTO[]> {
   const res = await api.get<{ categories: HomeSavingsCategoryDTO[] }>('/api/home-savings/categories');
   return res.data.categories;
@@ -145,22 +139,10 @@ export async function upsertHomeSavingsAccount(
 export async function runHomeSavings(
   propertyId: string,
   categoryKey?: HomeSavingsCategoryKey,
-  guidanceContext?: GuidanceToolContext
 ): Promise<{ runId: string; summary: HomeSavingsSummaryDTO }> {
   const res = await api.post<{ runId: string; summary: HomeSavingsSummaryDTO }>(
     `/api/properties/${propertyId}/home-savings/run`,
-    {
-      ...(categoryKey ? { categoryKey } : {}),
-      ...(guidanceContext?.guidanceJourneyId
-        ? { guidanceJourneyId: guidanceContext.guidanceJourneyId }
-        : {}),
-      ...(guidanceContext?.guidanceStepKey
-        ? { guidanceStepKey: guidanceContext.guidanceStepKey }
-        : {}),
-      ...(guidanceContext?.guidanceSignalIntentFamily
-        ? { guidanceSignalIntentFamily: guidanceContext.guidanceSignalIntentFamily }
-        : {}),
-    }
+    categoryKey ? { categoryKey } : {}
   );
   return res.data;
 }

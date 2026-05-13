@@ -1,9 +1,9 @@
 'use client';
 
-import { useParams, useSearchParams } from 'next/navigation';
+import { useEffect } from 'react';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import HomeToolsRail from '../../components/HomeToolsRail';
 import HomeSavingsCheckPanel from '@/components/ai/HomeSavingsCheckPanel';
-import { GuidanceStepCompletionCard } from '@/components/guidance/GuidanceStepCompletionCard';
 import ToolWorkspaceTemplate from '../../components/route-templates/ToolWorkspaceTemplate';
 
 function formatMoney(value: number) {
@@ -13,21 +13,27 @@ function formatMoney(value: number) {
 export default function HomeSavingsToolClient() {
   const params = useParams<{ id: string }>();
   const propertyId = params.id;
+  const router = useRouter();
   const searchParams = useSearchParams();
-  const guidanceStepKey = searchParams.get('guidanceStepKey');
   const guidanceJourneyId = searchParams.get('guidanceJourneyId');
   const expectedMonthly = Number(searchParams.get('expectedMonthly') ?? 0);
   const expectedAnnual = Number(searchParams.get('expectedAnnual') ?? 0);
   const highlightOpportunities = searchParams.get('highlight') === 'opportunities';
 
-  const backHref = guidanceJourneyId
-    ? `/dashboard/properties/${propertyId}/tools/guidance-overview?journeyId=${guidanceJourneyId}`
-    : `/dashboard/properties/${propertyId}`;
+  const backHref = `/dashboard/properties/${propertyId}`;
+
+  useEffect(() => {
+    if (!propertyId || !guidanceJourneyId) return;
+    const query = searchParams.toString();
+    router.replace(
+      `/dashboard/properties/${propertyId}/guidance/step${query ? `?${query}` : ''}`
+    );
+  }, [guidanceJourneyId, propertyId, router, searchParams]);
 
   return (
     <ToolWorkspaceTemplate
       backHref={backHref}
-      backLabel={guidanceJourneyId ? 'Back to guidance' : 'Back to property'}
+      backLabel="Back to property"
       eyebrow="Home tool"
       title="Home Savings Check"
       subtitle="See where you may be overpaying and compare practical savings opportunities."
@@ -41,8 +47,13 @@ export default function HomeSavingsToolClient() {
         <HomeToolsRail propertyId={propertyId} showDesktop={false} />
       }
     >
+      {guidanceJourneyId ? (
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-600 shadow-sm">
+          Redirecting to the guided step…
+        </div>
+      ) : null}
 
-      {highlightOpportunities && expectedMonthly > 0 && (
+      {!guidanceJourneyId && highlightOpportunities && expectedMonthly > 0 && (
         <div className="rounded-xl border border-teal-200 bg-teal-50 px-4 py-3 text-sm text-teal-800">
           Your profile shows up to{' '}
           <span className="font-semibold">{formatMoney(expectedMonthly)}/mo</span>
@@ -53,16 +64,11 @@ export default function HomeSavingsToolClient() {
         </div>
       )}
 
-      <div id="home-savings-opportunities">
-        <HomeSavingsCheckPanel propertyId={propertyId} />
-      </div>
-
-      <GuidanceStepCompletionCard
-        propertyId={propertyId}
-        guidanceStepKey={guidanceStepKey}
-        guidanceJourneyId={guidanceJourneyId}
-        actionLabel="Mark savings review complete"
-      />
+      {!guidanceJourneyId ? (
+        <div id="home-savings-opportunities">
+          <HomeSavingsCheckPanel propertyId={propertyId} />
+        </div>
+      ) : null}
     </ToolWorkspaceTemplate>
   );
 }
