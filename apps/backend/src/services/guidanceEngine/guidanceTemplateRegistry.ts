@@ -747,7 +747,7 @@ const templates: GuidanceJourneyTemplate[] = [
         executionReadiness: 'NEEDS_CONTEXT',
         isRequired: true,
         toolKey: 'true-cost',
-        routePath: '/dashboard/properties/:propertyId/tools/true-cost',
+        // Guidance-native step rendered in the focused shell; no standalone route.
         skipPolicy: 'DISCOURAGED',
       },
       // P1-9: Check coverage to avoid unnecessary out-of-pocket spend
@@ -811,7 +811,7 @@ const templates: GuidanceJourneyTemplate[] = [
         executionReadiness: 'TRACKING_ONLY',
         isRequired: false,
         toolKey: 'capital-timeline',
-        routePath: '/dashboard/properties/:propertyId/tools/capital-timeline',
+        // Guidance-native step rendered in the focused shell; no standalone route.
         skipPolicy: 'ALLOWED',
       },
     ],
@@ -851,7 +851,7 @@ const templates: GuidanceJourneyTemplate[] = [
         executionReadiness: 'NEEDS_CONTEXT',
         isRequired: true,
         toolKey: 'true-cost',
-        routePath: '/dashboard/properties/:propertyId/tools/true-cost',
+        // Guidance-native step rendered in the focused shell; no standalone route.
         skipPolicy: 'DISCOURAGED',
       },
       {
@@ -1025,7 +1025,7 @@ const templates: GuidanceJourneyTemplate[] = [
         executionReadiness: 'NEEDS_CONTEXT',
         isRequired: false,
         toolKey: 'capital-timeline',
-        routePath: '/dashboard/properties/:propertyId/tools/capital-timeline',
+        // Guidance-native step rendered in the focused shell; no standalone route.
         skipPolicy: 'ALLOWED',
       },
       {
