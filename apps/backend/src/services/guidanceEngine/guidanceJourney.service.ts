@@ -48,6 +48,24 @@ const REPLACEMENT_BRANCH_TYPE_BY_CHOICE: Record<
   },
 };
 
+const CLEANING_JOURNEY_SELECTION_BY_ISSUE: Record<
+  string,
+  { selectedCleaningType: string; selectedCleaningTypeLabel: string }
+> = {
+  deep_clean: {
+    selectedCleaningType: 'deep_clean',
+    selectedCleaningTypeLabel: 'One-time deep clean',
+  },
+  move_clean: {
+    selectedCleaningType: 'move_clean',
+    selectedCleaningTypeLabel: 'Move-in / move-out clean',
+  },
+  post_construction: {
+    selectedCleaningType: 'post_construction',
+    selectedCleaningTypeLabel: 'Post-construction clean-up',
+  },
+};
+
 function asRecord(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
   return value as Record<string, unknown>;
@@ -1902,7 +1920,7 @@ export class GuidanceJourneyService {
     const serviceKey = input.serviceKey ?? (input.scopeCategory === 'SERVICE' ? input.scopeId : null) ?? null;
     const template = getTemplateByIssueType(issueType, input.scopeCategory, serviceKey);
 
-    const journey = await this.createJourneyFromTemplate({
+    let journey = await this.createJourneyFromTemplate({
       propertyId,
       actorUserId,
       templateKey: template.journeyTypeKey,
@@ -1927,6 +1945,29 @@ export class GuidanceJourneyService {
         status: 'SKIPPED',
         reasonCode: 'DECISION_PRE_CONFIRMED',
         reasonMessage: 'Replacement decision already confirmed via coverage analysis verdict.',
+      });
+    }
+
+    const cleaningSelection = CLEANING_JOURNEY_SELECTION_BY_ISSUE[issueType];
+    if (
+      cleaningSelection &&
+      template.journeyTypeKey === 'cleaning_service_journey'
+    ) {
+      journey = await this.recordToolCompletion({
+        propertyId,
+        actorUserId,
+        journeyId: journey.id,
+        sourceToolKey: 'guidance-overview',
+        stepKey: 'select_cleaning_type',
+        status: 'COMPLETED',
+        producedData: {
+          proofType: 'guided_overview_checkpoint',
+          proofId: `select_cleaning_type:${cleaningSelection.selectedCleaningType}`,
+          actionLabel: cleaningSelection.selectedCleaningTypeLabel,
+          completedFrom: 'guidance_overview_issue_selection',
+          completedAt: new Date().toISOString(),
+          ...cleaningSelection,
+        },
       });
     }
 

@@ -101,7 +101,6 @@ export default function BookProviderPage() {
   });
   const bookingGuidanceQuery = useGuidance(selectedPropertyId, {
     enabled: Boolean(selectedPropertyId) && hasGuardScopeContext,
-    limit: 3,
   });
 
   const isExecutionBlocked = hasGuardScopeContext && Boolean(bookingGuardQuery.data?.blocked);

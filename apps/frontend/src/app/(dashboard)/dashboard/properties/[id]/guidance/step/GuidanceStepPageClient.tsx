@@ -28,6 +28,7 @@ import { PriceCheckInline } from '@/components/guidance/PriceCheckInline';
 import { RecallCheckInline } from '@/components/guidance/RecallCheckInline';
 import { NegotiationShieldInline } from '@/components/guidance/NegotiationShieldInline';
 import { ReplacementJourneyInline } from '@/components/guidance/ReplacementJourneyInline';
+import { ReplacementPrioritiesCapture } from '@/components/guidance/ReplacementPrioritiesCapture';
 import { TrueCostGuidanceStep } from '@/components/guidance/TrueCostGuidanceStep';
 import { CapitalTimelineGuidanceStep } from '@/components/guidance/CapitalTimelineGuidanceStep';
 import { DoNothingGuidanceStep } from '@/components/guidance/DoNothingGuidanceStep';
@@ -284,6 +285,20 @@ export default function GuidanceStepPageClient() {
           inventoryItemCategory={journey.inventoryItem?.category ?? null}
           assetName={assetName}
           issueType={issueType}
+          onComplete={refreshGuidance}
+        />
+      );
+    }
+
+    if (targetStep.toolKey === 'replacement-priorities-capture') {
+      return (
+        <ReplacementPrioritiesCapture
+          propertyId={propertyId}
+          journeyId={journey.id}
+          stepId={targetStep.id}
+          stepKey={targetStep.stepKey}
+          toolKey={targetStep.toolKey}
+          assetName={assetName}
           onComplete={refreshGuidance}
         />
       );

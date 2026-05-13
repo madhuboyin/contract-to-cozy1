@@ -428,7 +428,6 @@ export default function ProvidersPage() {
   });
   const providerGuidanceQuery = useGuidance(targetPropertyId, {
     enabled: Boolean(targetPropertyId) && hasGuardScopeContext,
-    limit: 3,
   });
 
   const [providers, setProviders] = useState<Provider[]>([]);

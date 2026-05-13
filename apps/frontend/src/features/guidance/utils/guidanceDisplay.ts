@@ -27,6 +27,7 @@ const FALLBACK_TOOL_ROUTE: Record<string, string> = {
   'negotiation-shield': '/dashboard/properties/:propertyId/tools/negotiation-shield',
   'price-finalization': '/dashboard/properties/:propertyId/tools/price-finalization',
   'replacement-model-comparison': '/dashboard/properties/:propertyId/guidance/step',
+  'replacement-priorities-capture': '/dashboard/properties/:propertyId/guidance/step',
   'replacement-purchase-options': '/dashboard/properties/:propertyId/guidance/step',
   'replacement-purchase-finalization': '/dashboard/properties/:propertyId/guidance/step',
   'replacement-planning': '/dashboard/properties/:propertyId/guidance/step',
@@ -60,6 +61,7 @@ const GUIDANCE_FOCUSED_TOOL_KEYS = new Set([
   'quote-comparison',
   'recalls',
   'replace-repair',
+  'replacement-priorities-capture',
   'replacement-model-comparison',
   'replacement-purchase-options',
   'replacement-purchase-finalization',
@@ -124,7 +126,8 @@ function appendGuidanceContext(
       journey.inventoryItem?.name?.trim() ??
       (journey.homeAsset?.assetType ? formatEnumLabel(journey.homeAsset.assetType) : null);
     if (assetName) params.set('assetName', assetName);
-    if (journey.issueType) params.set('issueDescription', journey.issueType);
+    const issueDescription = formatIssueTypeLabel(journey.issueType) ?? journey.issueType ?? null;
+    if (issueDescription) params.set('issueDescription', issueDescription);
     if (journey.serviceKey === 'cleaning_service') {
       params.set('category', 'CLEANING');
       if (selectedCleaningTypeLabel) {

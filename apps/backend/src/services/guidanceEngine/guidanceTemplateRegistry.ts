@@ -2009,7 +2009,7 @@ const ISSUE_TYPE_TO_TEMPLATE_KEY: Record<string, string> = {
   'warranty_renewal':          'warranty_renewal_journey',
   'purchase_insurance':        'insurance_purchase_journey',
   'compare_rates':             'insurance_quote_comparison_journey',
-  'coverage_gap':              'insurance_renewal_journey',
+  'coverage_gap':              'coverage_gap_resolution',
   'policy_renewal':            'insurance_renewal_journey',
   'schedule_inspection':       'general_inspection_journey',
   'pre_purchase_inspection':   'pre_purchase_inspection_journey',

@@ -87,7 +87,6 @@ export default function ProviderDetailPage() {
   });
   const bookingGuidanceQuery = useGuidance(propertyId, {
     enabled: Boolean(propertyId) && hasGuardScopeContext,
-    limit: 3,
   });
 
   const [provider, setProvider] = useState<CompleteProvider | null>(null);
