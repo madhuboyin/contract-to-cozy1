@@ -1,7 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
-import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import HomeToolsRail from '../../components/HomeToolsRail';
 import DoNothingSimulatorPanel from '@/components/ai/DoNothingSimulatorPanel';
 import ToolExplainerSection from '@/components/tool-explainer/ToolExplainerSection';
@@ -10,18 +9,7 @@ import ToolWorkspaceTemplate from '../../components/route-templates/ToolWorkspac
 export default function DoNothingToolClient() {
   const params = useParams<{ id: string }>();
   const propertyId = params.id;
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const guidanceJourneyId = searchParams.get('guidanceJourneyId');
   const backHref = `/dashboard/properties/${propertyId}`;
-
-  useEffect(() => {
-    if (!propertyId || !guidanceJourneyId) return;
-    const query = searchParams.toString();
-    router.replace(
-      `/dashboard/properties/${propertyId}/guidance/step${query ? `?${query}` : ''}`
-    );
-  }, [guidanceJourneyId, propertyId, router, searchParams]);
 
   return (
     <ToolWorkspaceTemplate
@@ -40,17 +28,9 @@ export default function DoNothingToolClient() {
         <HomeToolsRail propertyId={propertyId} showDesktop={false} />
       }
     >
-      {guidanceJourneyId ? (
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-600 shadow-sm">
-          Redirecting to the guided step…
-        </div>
-      ) : null}
+      <ToolExplainerSection toolKey="doNothingSimulator" id="how-it-works" />
 
-      {!guidanceJourneyId ? (
-        <ToolExplainerSection toolKey="doNothingSimulator" id="how-it-works" />
-      ) : null}
-
-      {!guidanceJourneyId ? <DoNothingSimulatorPanel propertyId={propertyId} /> : null}
+      <DoNothingSimulatorPanel propertyId={propertyId} />
     </ToolWorkspaceTemplate>
   );
 }

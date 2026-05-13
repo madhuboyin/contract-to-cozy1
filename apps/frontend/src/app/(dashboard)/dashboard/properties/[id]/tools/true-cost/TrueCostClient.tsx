@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import HomeToolsRail from '../../components/HomeToolsRail';
 import { getTrueCostOwnership, TrueCostOwnershipDTO } from './trueCostApi';
 import { Button } from '@/components/ui/button';
@@ -19,10 +19,7 @@ function money(n?: number | null, currency = 'USD') {
 
 export default function TrueCostClient() {
   const params = useParams<{ id: string }>();
-  const router = useRouter();
-  const searchParams = useSearchParams();
   const propertyId = params.id;
-  const guidanceJourneyId = searchParams.get('guidanceJourneyId');
   const backHref = `/dashboard/properties/${propertyId}`;
 
   const [years, setYears] = useState<5 | 10>(5);
@@ -31,14 +28,6 @@ export default function TrueCostClient() {
   const [error, setError] = useState<string | null>(null);
   const [chartExpanded, setChartExpanded] = useState(false);
   const reqRef = React.useRef(0);
-
-  useEffect(() => {
-    if (!propertyId || !guidanceJourneyId) return;
-    const query = searchParams.toString();
-    router.replace(
-      `/dashboard/properties/${propertyId}/guidance/step${query ? `?${query}` : ''}`
-    );
-  }, [guidanceJourneyId, propertyId, router, searchParams]);
 
   async function load(nextYears: 5 | 10 = years) {
     if (!propertyId) return;
@@ -61,22 +50,6 @@ export default function TrueCostClient() {
     load(years);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [propertyId]);
-
-  if (guidanceJourneyId) {
-    return (
-      <ToolWorkspaceTemplate
-        backHref={backHref}
-        backLabel="Back to property"
-        eyebrow="Home tool"
-        title="True Cost"
-        subtitle="Opening the guided version of this step."
-      >
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-600 shadow-sm">
-          Redirecting to the guided step…
-        </div>
-      </ToolWorkspaceTemplate>
-    );
-  }
 
   const allSeries = useMemo(() => {
     const h = data?.history ?? [];
@@ -147,7 +120,7 @@ export default function TrueCostClient() {
   return (
     <ToolWorkspaceTemplate
       backHref={backHref}
-      backLabel={guidanceJourneyId ? 'Back to guidance' : 'Back to property'}
+      backLabel="Back to property"
       eyebrow="Home tool"
       title="True Cost of Home Ownership"
       subtitle={`A ${years}-year reality check including taxes, insurance, maintenance, and utilities.`}

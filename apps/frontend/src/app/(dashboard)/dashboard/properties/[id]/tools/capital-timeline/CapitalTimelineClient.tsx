@@ -3,7 +3,7 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import {
   Calendar,
   ChevronDown,
@@ -135,9 +135,7 @@ function mapTimelineCategoryToRadarCategory(category: string): string {
 export default function CapitalTimelineClient() {
   const params = useParams<{ id: string }>();
   const propertyId = params.id;
-  const router = useRouter();
   const searchParams = useSearchParams();
-  const guidanceJourneyId = searchParams.get('guidanceJourneyId');
   const requestedAssumptionSetId = searchParams.get('assumptionSetId');
   const backHref = `/dashboard/properties/${propertyId}`;
 
@@ -203,12 +201,6 @@ export default function CapitalTimelineClient() {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [propertyId]);
-
-  useEffect(() => {
-    if (!propertyId || !guidanceJourneyId) return;
-    const query = searchParams.toString();
-    router.replace(`/dashboard/properties/${propertyId}/guidance/step${query ? `?${query}` : ''}`);
-  }, [guidanceJourneyId, propertyId, router, searchParams]);
 
   useEffect(() => {
     if (requestedAssumptionSetId) {
@@ -311,21 +303,15 @@ export default function CapitalTimelineClient() {
         </div>
       )}
     >
-      {guidanceJourneyId ? (
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-600 shadow-sm">
-          Redirecting to the guided step…
-        </div>
-      ) : null}
-
       {/* Loading */}
-      {!guidanceJourneyId && (loading || running) && !data && (
+      {(loading || running) && !data && (
         <div className="flex h-48 items-center justify-center rounded-2xl border border-white/70 bg-white/65 backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/45">
           <div className="h-10 w-10 animate-spin rounded-full border-b-2 border-slate-900 dark:border-slate-100" />
         </div>
       )}
 
       {/* Error */}
-      {!guidanceJourneyId && error && (
+      {error && (
         <div className="flex items-start gap-3 rounded-2xl border border-red-200/70 bg-red-50/85 p-4 backdrop-blur">
           <AlertTriangle className="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5" />
           <div>
@@ -341,7 +327,7 @@ export default function CapitalTimelineClient() {
       )}
 
       {/* Data */}
-      {!guidanceJourneyId && data && !loading && (
+      {data && !loading && (
         <>
           {/* Summary Bar */}
           <div className="rounded-2xl border border-white/70 bg-gradient-to-br from-white/80 via-slate-50/72 to-teal-50/45 p-4 sm:p-6 shadow-[0_16px_30px_-24px_rgba(15,23,42,0.55)] backdrop-blur-xl dark:border-slate-700/70 dark:from-slate-900/55 dark:via-slate-900/48 dark:to-slate-900/38">

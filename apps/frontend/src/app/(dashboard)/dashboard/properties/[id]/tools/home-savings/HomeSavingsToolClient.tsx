@@ -1,7 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
-import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import HomeToolsRail from '../../components/HomeToolsRail';
 import HomeSavingsCheckPanel from '@/components/ai/HomeSavingsCheckPanel';
 import ToolWorkspaceTemplate from '../../components/route-templates/ToolWorkspaceTemplate';
@@ -13,22 +12,12 @@ function formatMoney(value: number) {
 export default function HomeSavingsToolClient() {
   const params = useParams<{ id: string }>();
   const propertyId = params.id;
-  const router = useRouter();
   const searchParams = useSearchParams();
-  const guidanceJourneyId = searchParams.get('guidanceJourneyId');
   const expectedMonthly = Number(searchParams.get('expectedMonthly') ?? 0);
   const expectedAnnual = Number(searchParams.get('expectedAnnual') ?? 0);
   const highlightOpportunities = searchParams.get('highlight') === 'opportunities';
 
   const backHref = `/dashboard/properties/${propertyId}`;
-
-  useEffect(() => {
-    if (!propertyId || !guidanceJourneyId) return;
-    const query = searchParams.toString();
-    router.replace(
-      `/dashboard/properties/${propertyId}/guidance/step${query ? `?${query}` : ''}`
-    );
-  }, [guidanceJourneyId, propertyId, router, searchParams]);
 
   return (
     <ToolWorkspaceTemplate
@@ -47,13 +36,7 @@ export default function HomeSavingsToolClient() {
         <HomeToolsRail propertyId={propertyId} showDesktop={false} />
       }
     >
-      {guidanceJourneyId ? (
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-600 shadow-sm">
-          Redirecting to the guided step…
-        </div>
-      ) : null}
-
-      {!guidanceJourneyId && highlightOpportunities && expectedMonthly > 0 && (
+      {highlightOpportunities && expectedMonthly > 0 && (
         <div className="rounded-xl border border-teal-200 bg-teal-50 px-4 py-3 text-sm text-teal-800">
           Your profile shows up to{' '}
           <span className="font-semibold">{formatMoney(expectedMonthly)}/mo</span>
@@ -64,11 +47,9 @@ export default function HomeSavingsToolClient() {
         </div>
       )}
 
-      {!guidanceJourneyId ? (
-        <div id="home-savings-opportunities">
-          <HomeSavingsCheckPanel propertyId={propertyId} />
-        </div>
-      ) : null}
+      <div id="home-savings-opportunities">
+        <HomeSavingsCheckPanel propertyId={propertyId} />
+      </div>
     </ToolWorkspaceTemplate>
   );
 }
