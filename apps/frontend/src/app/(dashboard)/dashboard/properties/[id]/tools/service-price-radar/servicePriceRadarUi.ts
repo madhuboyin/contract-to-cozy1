@@ -193,18 +193,18 @@ export function buildServicePriceRadarGuardrail(
 
   if (benchmarkMissing && lowConfidence) {
     return {
-      title: 'Directional result',
+      title: 'Estimate is directional',
       description:
-        'This result uses fallback regional assumptions, so it is best treated as a broad guide.',
+        'We used regional pricing data for this estimate. Treat it as a starting point and compare with another quote if the amount matters.',
       tone: 'elevated',
     };
   }
 
   if (benchmarkMissing) {
     return {
-      title: 'Fallback pricing context',
+      title: 'Based on regional averages',
       description:
-        'We used fallback regional assumptions because a direct benchmark was not available.',
+        'No direct benchmark was found for this service and area, so we used regional pricing data. Adding a linked appliance or more service detail can improve accuracy.',
       tone: 'info',
     };
   }

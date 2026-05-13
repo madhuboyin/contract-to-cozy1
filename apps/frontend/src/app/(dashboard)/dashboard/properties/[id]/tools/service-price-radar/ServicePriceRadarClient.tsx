@@ -4,7 +4,6 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
 import {
-  Activity,
   ArrowLeft,
   ChevronDown,
   Home,
@@ -28,7 +27,6 @@ import {
   CompactEntityRow,
   EmptyStateCard,
   IconBadge,
-  MobileCard,
   MobileFilterSurface,
   MobileHorizontalScroller,
   MobilePageIntro,
@@ -464,6 +462,30 @@ function extractBenchmarkMeta(check: ServicePriceRadarCheckDetail): {
   };
 }
 
+function sanitizeExplanationText(text: string | null | undefined): string | null {
+  if (!text) return null;
+  return text
+    .replace(/\. ?This result uses fallback regional assumptions\./gi, '.')
+    .replace(/This result uses fallback regional assumptions for this property\./gi, 'Based on regional pricing data for your area.')
+    .replace(/This result uses fallback regional assumptions\./gi, 'Based on regional pricing data for your area.')
+    .replace(/fallback regional assumptions/gi, 'regional pricing data')
+    .replace(/^Directional result:\s*/i, '')
+    .trim() || null;
+}
+
+const REASON_LABEL_MAP: Record<string, string> = {
+  'Heuristic Fallback': 'Regional pricing data',
+  'Heuristic fallback': 'Regional pricing data',
+  'System Context': 'Property details',
+  'Region Baseline': 'Area pricing',
+  'Service Scope': 'Service type',
+  'Property Size': 'Home size',
+};
+
+function sanitizeReasonLabel(label: string): string {
+  return REASON_LABEL_MAP[label] ?? label;
+}
+
 function QuoteComparisonMeter({
   quoteAmount,
   expectedLow,
@@ -486,14 +508,14 @@ function QuoteComparisonMeter({
 
   return (
     <div className="space-y-2 rounded-2xl border border-[hsl(var(--mobile-border-subtle))] bg-white/80 p-3">
-      <div className="relative h-3 rounded-full bg-slate-100">
+      <div className="relative h-5 rounded-full bg-slate-100">
         <div
-          className="absolute top-0 h-3 rounded-full bg-emerald-200"
+          className="absolute top-0 h-5 rounded-full bg-emerald-200"
           style={{ left: `${expectedStart}%`, width: `${expectedWidth}%` }}
         />
         <div
-          className="absolute top-1/2 h-5 w-1.5 -translate-y-1/2 rounded-full bg-slate-900 shadow-[0_0_0_3px_rgba(255,255,255,0.8)]"
-          style={{ left: `calc(${Math.min(100, Math.max(0, quotePosition))}% - 3px)` }}
+          className="absolute top-1/2 h-7 w-2 -translate-y-1/2 rounded-full bg-slate-900 shadow-[0_0_0_3px_rgba(255,255,255,0.9)]"
+          style={{ left: `calc(${Math.min(100, Math.max(0, quotePosition))}% - 4px)` }}
         />
       </div>
       <div className="flex items-center justify-between gap-3 text-[11px] text-[hsl(var(--mobile-text-secondary))]">
@@ -608,11 +630,6 @@ function RecentCheckRow({
           <p className="mb-0 text-sm tabular-nums text-[hsl(var(--mobile-text-primary))]">{rangeLabel}</p>
         </div>
       </div>
-      {item.explanationShort ? (
-        <p className="mb-0 mt-2 line-clamp-2 text-xs text-[hsl(var(--mobile-text-secondary))]">
-          {item.explanationShort}
-        </p>
-      ) : null}
       {loading ? (
         <p className="mb-0 mt-2 text-xs font-medium text-[hsl(var(--mobile-brand-strong))]">Opening details…</p>
       ) : null}
@@ -1219,21 +1236,6 @@ export default function ServicePriceRadarClient() {
             subtitle="Know if a quote is fair for your home before you book the work."
             action={<Radar className="h-5 w-5 text-[hsl(var(--mobile-brand-strong))] lg:hidden" />}
           />
-          <MobileCard variant="compact" className="border-[hsl(var(--mobile-brand-border))] bg-[linear-gradient(145deg,#ffffff,hsl(var(--mobile-brand-soft)))]">
-            <div className="flex items-start gap-3">
-              <IconBadge tone="brand">
-                <Activity className="h-4 w-4" />
-              </IconBadge>
-              <div className="min-w-0 space-y-1">
-                <p className="mb-0 text-sm font-semibold text-[hsl(var(--mobile-text-primary))]">
-                  Use your property context to compare a service quote against an expected range.
-                </p>
-                <p className="mb-0 text-xs text-[hsl(var(--mobile-text-secondary))]">
-                  Fast, explainable, and built for quick homeowner decisions on mobile.
-                </p>
-              </div>
-            </div>
-          </MobileCard>
         </div>
       }
       filters={
@@ -1283,7 +1285,6 @@ export default function ServicePriceRadarClient() {
           <ScenarioInputCard
             title="Check a quote"
             subtitle="Start with the essentials. Add more context only if you want a tighter estimate."
-            badge={<StatusChip tone="info">USD</StatusChip>}
             actions={
               <ActionPriorityRow
                 primaryAction={
@@ -1486,46 +1487,19 @@ export default function ServicePriceRadarClient() {
             ) : currentCheck ? (
               <>
                 <ResultHeroCard
-                  eyebrow="Latest result"
+                  eyebrow={`Checked ${formatDate(currentCheck.createdAt)}`}
                   title={currentVerdict.title}
                   value={toCurrency(currentCheck.quoteAmount, currentCheck.quoteCurrency)}
                   status={<StatusChip tone={currentVerdict.tone}>{currentVerdict.label}</StatusChip>}
                   summary={
-                    currentCheck.explanationShort ??
-                    'We compared your quote against an expected range for this home.'
+                    sanitizeExplanationText(currentCheck.explanationShort) ??
+                    'We compared your quote against the expected range for this home.'
                   }
-                  highlights={[
-                    currentCheck.expectedLow !== null && currentCheck.expectedHigh !== null
-                      ? `Expected range: ${toCurrency(currentCheck.expectedLow, currentCheck.quoteCurrency)} to ${toCurrency(currentCheck.expectedHigh, currentCheck.quoteCurrency)}`
-                      : 'Expected range still needs more context',
-                    `Confidence: ${currentConfidence.label}`,
-                    `Checked ${formatDate(currentCheck.createdAt)}`,
-                  ]}
                 />
 
-                {currentGuardrail ? (
-                  <MobileCard
-                    variant="compact"
-                    className={`border ${
-                      currentGuardrail.tone === 'elevated'
-                        ? 'border-amber-200 bg-amber-50/80'
-                        : 'border-[hsl(var(--mobile-border-subtle))] bg-white/90'
-                    }`}
-                  >
-                    <div className="space-y-1">
-                      <p className="mb-0 text-sm font-semibold text-[hsl(var(--mobile-text-primary))]">
-                        {currentGuardrail.title}
-                      </p>
-                      <p className="mb-0 text-xs text-[hsl(var(--mobile-text-secondary))]">
-                        {currentGuardrail.description}
-                      </p>
-                    </div>
-                  </MobileCard>
-                ) : null}
-
                 <ScenarioInputCard
-                  title="Quote result"
-                  subtitle="Your quote and the expected range are shown separately so the result stays easy to scan."
+                  title="Estimate breakdown"
+                  subtitle="Your quote plotted against the expected range for this service and area."
                   badge={<StatusChip tone={currentConfidence.tone}>{currentConfidence.label}</StatusChip>}
                 >
                   <QuoteComparisonMeter
@@ -1534,10 +1508,20 @@ export default function ServicePriceRadarClient() {
                     expectedHigh={currentCheck.expectedHigh}
                     quoteCurrency={currentCheck.quoteCurrency}
                   />
+                  {currentGuardrail ? (
+                    <div className={`flex gap-1.5 rounded-xl p-2.5 text-xs leading-snug ${
+                      currentGuardrail.tone === 'elevated'
+                        ? 'bg-amber-50 text-amber-800'
+                        : 'bg-slate-50 text-[hsl(var(--mobile-text-secondary))]'
+                    }`}>
+                      <span className="font-semibold shrink-0">{currentGuardrail.title}:</span>
+                      <span>{currentGuardrail.description}</span>
+                    </div>
+                  ) : null}
                   <ReadOnlySummaryBlock
                     items={[
                       {
-                        label: 'Entered quote',
+                        label: 'Your quote',
                         value: toCurrency(currentCheck.quoteAmount, currentCheck.quoteCurrency),
                         emphasize: true,
                       },
@@ -1550,7 +1534,7 @@ export default function ServicePriceRadarClient() {
                         emphasize: true,
                       },
                       {
-                        label: 'Expected median',
+                        label: 'Typical midpoint',
                         value:
                           currentCheck.expectedMedian !== null
                             ? toCurrency(currentCheck.expectedMedian, currentCheck.quoteCurrency)
@@ -1569,14 +1553,17 @@ export default function ServicePriceRadarClient() {
                     ]}
                     columns={2}
                   />
-                  <p className="mb-0 text-xs text-[hsl(var(--mobile-text-secondary))]">
-                    {currentGuardrail?.tone === 'elevated'
-                      ? 'Consider this a directional read, then compare it with another quote or more system detail.'
-                      : currentCheck.verdict === 'VERY_HIGH'
-                        ? 'If this quote still feels high after a second opinion, you can use Negotiation Shield for a calm response draft.'
-                        : currentCheck.verdict === 'INSUFFICIENT_DATA'
-                          ? 'Adding a linked system, room, or clearer service scope can improve the next estimate.'
-                          : 'This range is a homeowner guide, not a guaranteed market price.'}
+                  {currentConfidence.label !== 'High confidence' && currentConfidence.label !== 'Confidence pending' ? (
+                    <p className="mb-0 text-xs text-[hsl(var(--mobile-text-secondary))]">
+                      Adding a vendor name, service description, or linked home item can move this to high confidence.
+                    </p>
+                  ) : null}
+                  <p className="mb-0 text-xs text-[hsl(var(--mobile-text-muted))]">
+                    {currentCheck.verdict === 'VERY_HIGH'
+                      ? 'If this quote still feels high after a second opinion, Negotiation Shield can help you respond.'
+                      : currentCheck.verdict === 'INSUFFICIENT_DATA'
+                        ? 'Adding a linked system, room, or clearer service scope can improve the next estimate.'
+                        : 'This range is a homeowner guide, not a guaranteed market price.'}
                   </p>
                   <div className="flex flex-wrap gap-2 pt-1">
                     <Button asChild variant="outline" className="min-h-[40px] rounded-xl">
@@ -1593,7 +1580,7 @@ export default function ServicePriceRadarClient() {
                         {handoffStepKey === 'compare_quotes'
                           ? 'Compare quotes'
                           : handoffStepKey === 'finalize_price'
-                            ? 'Finalize accepted price'
+                            ? 'Accept this price'
                             : 'Need help responding?'}
                       </Link>
                     </Button>
@@ -1614,8 +1601,8 @@ export default function ServicePriceRadarClient() {
                   }}
                 >
                   <ScenarioInputCard
-                    title="Why we think this"
-                    subtitle="A compact view of the property, region, and pricing context used."
+                    title="How we estimated this"
+                    subtitle="The property details, area pricing, and signals used to build this estimate."
                     badge={
                       <CollapsibleTrigger asChild>
                         <Button variant="ghost" className="h-9 rounded-full px-3 text-xs">
@@ -1632,7 +1619,7 @@ export default function ServicePriceRadarClient() {
                         <div className="flex flex-wrap gap-2">
                           {currentReasons.map((reason) => (
                             <StatusChip key={reason} tone="info">
-                              {reason}
+                              {sanitizeReasonLabel(reason)}
                             </StatusChip>
                           ))}
                         </div>
@@ -1685,7 +1672,7 @@ export default function ServicePriceRadarClient() {
                               const pricing = asRecord(currentCheck.pricingFactorsJson);
                               const benchmark = asRecord(pricing?.benchmark ?? null);
                               const matched = benchmark?.matched === true;
-                              return matched ? 'Matched benchmark' : 'Fallback assumptions';
+                              return matched ? 'Matched benchmark' : 'Regional averages used';
                             })(),
                           },
                           {
