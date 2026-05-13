@@ -970,24 +970,7 @@ export default function ServicePriceRadarClient() {
           : items;
       setRecentChecks(scopedItems);
       setChecksLoading(false);
-      if (scopedItems[0]) {
-        try {
-          const latest = await getServicePriceRadarCheck(propertyId, scopedItems[0].id);
-          if (requestId !== loadRef.current) return;
-          setCurrentCheck(latest);
-          setForm((current) =>
-            current.serviceCategory || current.quoteAmount || current.serviceSubcategory || current.quoteVendorName || current.serviceLabelRaw
-              ? current
-              : buildFormFromCheck(latest)
-          );
-        } catch (error) {
-          if (requestId !== loadRef.current) return;
-          trackRadarError('detail', error, { source: 'initial_latest_check' });
-          setToolError(getServicePriceRadarUserMessage(error, 'detail').message);
-        }
-      } else {
-        setCurrentCheck(null);
-      }
+      setCurrentCheck(null);
     } else {
       trackRadarError('list', checksResult.reason);
       setRecentChecks([]);
@@ -1245,13 +1228,6 @@ export default function ServicePriceRadarClient() {
       }
       footer={<BottomSafeAreaReserve size="chatAware" />}
     >
-      <TrustStrip
-        variant="footnote"
-        confidenceLabel={pricingTrust.confidenceLabel}
-        freshnessLabel={pricingTrust.freshnessLabel}
-        sourceLabel={pricingTrust.sourceLabel}
-      />
-
       {toolError ? (
         <div
           role="alert"
@@ -1316,21 +1292,16 @@ export default function ServicePriceRadarClient() {
               />
             }
           >
-            <ReadOnlySummaryBlock
-              items={[
-                { label: 'Property', value: propertyLoading ? 'Loading…' : propertyLabel(property), emphasize: true },
-                {
-                  label: 'Context',
-                  value: propertyLoading ? 'Loading…' : propertyContextLine(property),
-                },
-                {
-                  label: 'Location',
-                  value: property
-                    ? [property.city, property.state, property.zipCode].filter(Boolean).join(' ') || 'On file'
-                    : 'Loading…',
-                },
-              ]}
-            />
+            {!propertyLoading && property ? (
+              <p className="mb-0 -mt-1 text-xs text-[hsl(var(--mobile-text-muted))]">
+                {[
+                  [property.city, property.state].filter(Boolean).join(', '),
+                  property.propertyType ? optionLabel(property.propertyType) : null,
+                  property.propertySize ? `${property.propertySize.toLocaleString()} sq ft` : null,
+                  property.yearBuilt ? `Built ${property.yearBuilt}` : null,
+                ].filter(Boolean).join(' · ')}
+              </p>
+            ) : null}
 
             <div className="space-y-2">
               <label className="space-y-1 text-xs font-medium text-[hsl(var(--mobile-text-secondary))]">
@@ -1810,6 +1781,13 @@ export default function ServicePriceRadarClient() {
           </div>
         </div>
       </div>
+
+      <TrustStrip
+        variant="footnote"
+        confidenceLabel={pricingTrust.confidenceLabel}
+        freshnessLabel={pricingTrust.freshnessLabel}
+        sourceLabel={pricingTrust.sourceLabel}
+      />
     </MobileToolWorkspace>
   );
 }
