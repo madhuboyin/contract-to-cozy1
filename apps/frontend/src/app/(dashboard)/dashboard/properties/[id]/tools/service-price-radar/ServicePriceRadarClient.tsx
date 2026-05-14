@@ -1250,14 +1250,8 @@ export default function ServicePriceRadarClient() {
         />
       ) : null}
 
-      <div
-        className={
-          hasResult
-            ? 'grid gap-4 xl:grid-cols-[minmax(0,0.96fr)_minmax(340px,0.88fr)] xl:items-start'
-            : 'space-y-4'
-        }
-      >
-        <div className="space-y-4 xl:col-start-1 xl:row-start-1">
+      <div className="space-y-6">
+        <div className="space-y-4">
           <ScenarioInputCard
             title="Check a quote"
             subtitle="Start with the essentials. Add more context only if you want a tighter estimate."
@@ -1450,7 +1444,7 @@ export default function ServicePriceRadarClient() {
         {hasResult || submitting || loadingCheckId ? (
           <div
             ref={resultRef}
-            className="space-y-4 scroll-mt-24 xl:sticky xl:top-6 xl:col-start-2 xl:row-span-2"
+            className="space-y-4 scroll-mt-24"
             aria-live="polite"
           >
             {submitting || loadingCheckId ? (
@@ -1736,7 +1730,7 @@ export default function ServicePriceRadarClient() {
           </div>
         ) : null}
 
-        <div className="space-y-4 xl:col-start-1 xl:row-start-2">
+        <div className="space-y-4">
           <div className="space-y-3">
             <MobileSectionHeader
               title="Recent checks"
