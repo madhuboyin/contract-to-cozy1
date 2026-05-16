@@ -679,7 +679,7 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
                         <Menu className="h-5 w-5" />
                       </Button>
                     </SheetTrigger>
-                    <SheetContent side="left" className="w-[300px] p-0 flex flex-col">
+                    <SheetContent side="left" className="w-[min(300px,85vw)] p-0 flex flex-col">
                       <div className="h-14 flex items-center px-5 border-b border-gray-100">
                         <Link href="/dashboard" className="flex items-center gap-2.5">
                           <Image src="/favicon.svg" alt="CtC" width={24} height={24} className="h-6 w-6" />

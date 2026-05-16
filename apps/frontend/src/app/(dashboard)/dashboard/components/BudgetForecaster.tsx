@@ -336,7 +336,7 @@ export default function BudgetForecaster({ propertyId }: BudgetForecasterProps) 
 
                   {isExpanded && (
                     <div className="mt-3 pt-3 border-t border-gray-200 space-y-2">
-                      <div className="grid grid-cols-3 gap-4 text-sm">
+                      <div className="grid grid-cols-3 gap-2 text-sm">
                         <div>
                           <p className="text-gray-600">Routine</p>
                           <p className="font-semibold text-gray-900">${month.routine}</p>

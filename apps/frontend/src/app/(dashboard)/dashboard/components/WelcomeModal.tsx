@@ -67,7 +67,7 @@ export function WelcomeModal({ userFirstName }: WelcomeModalProps) {
                         To unlock the full potential of your dashboard, including personalized scores, maintenance alerts, and cost-saving insights, please set up your property profile.
                     </p>
 
-                    <div className="grid grid-cols-3 gap-4 border-t pt-4">
+                    <div className="grid grid-cols-1 gap-4 border-t pt-4 sm:grid-cols-3">
                         <FeatureBlock
                             icon={Shield}
                             title="Property Health score"

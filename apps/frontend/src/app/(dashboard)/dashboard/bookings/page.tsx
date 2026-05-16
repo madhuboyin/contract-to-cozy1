@@ -385,7 +385,7 @@ export default function HomeownerBookingsPage() {
 
         {error && <div className="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-red-800">{error}</div>}
 
-      <div className="sticky top-[calc(env(safe-area-inset-top)+4.25rem)] z-20 -mx-2 bg-white/90 px-2 py-2 backdrop-blur-sm supports-[backdrop-filter]:bg-white/70 md:static md:bg-transparent md:px-0 md:py-0 md:backdrop-blur-none">
+      <div className="sticky top-[calc(env(safe-area-inset-top)+7.75rem)] z-20 -mx-2 bg-white/90 px-2 py-2 backdrop-blur-sm supports-[backdrop-filter]:bg-white/70 md:static md:bg-transparent md:px-0 md:py-0 md:backdrop-blur-none">
         <MobileFilterSurface className="space-y-2 border border-slate-200/80 bg-white p-2.5">
           <p className="px-1 text-[11px] font-medium tracking-normal text-slate-500">
             Filter Bookings

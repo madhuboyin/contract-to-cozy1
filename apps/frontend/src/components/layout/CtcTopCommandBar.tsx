@@ -165,7 +165,7 @@ export function CtcTopCommandBar({ className }: CtcTopCommandBarProps) {
           className
         )}
       >
-        <div className="px-4">
+        <div className="px-4" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
           <div className="flex items-center justify-between h-16 gap-3">
             {/* Logo */}
             <Link 

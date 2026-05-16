@@ -30,7 +30,7 @@ export function AppShell({ leftNav, mobileHeader, topBar, banner, children, side
       {/* Legacy mobile header - only shown if topBar is not provided */}
       {!topBar && mobileHeader}
       
-      <div className="flex min-h-0 flex-1 pt-[72px]">
+      <div className="flex min-h-0 flex-1 lg:pt-[72px]">
         {/* Left sidebar - positioned below top bar, fixed */}
         {leftNav}
 

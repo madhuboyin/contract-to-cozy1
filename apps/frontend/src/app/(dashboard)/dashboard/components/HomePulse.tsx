@@ -268,7 +268,7 @@ function CompactStatsRow({
   selectedPropertyId,
 }: CompactStatsRowProps) {
   return (
-    <div className="grid grid-cols-3 gap-3">
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
       {/* Active Tasks */}
       <Link
         href={`/dashboard/maintenance?propertyId=${selectedPropertyId}`}
