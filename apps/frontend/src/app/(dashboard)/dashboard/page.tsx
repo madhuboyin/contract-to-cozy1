@@ -862,6 +862,14 @@ export default function DashboardPage() {
     }
   }, [userLoading, user, fetchDashboardData]);
 
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 767px)');
+    setIsMobileViewport(mq.matches);
+    const handler = (e: MediaQueryListEvent) => setIsMobileViewport(e.matches);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
+
   const safeFirstName = user?.firstName || 'there';
   const selectedProperty = properties.find(p => p.id === effectiveSelectedPropertyId); 
   const scopedUrgentActions = data.urgentActions.filter(
@@ -1312,9 +1320,8 @@ export default function DashboardPage() {
 
   return (
     <>
-      {/* Mobile — each mobile component is responsible for its own md:hidden wrapper */}
-      {isHomeBuyer ? (
-        <div className="md:hidden">
+      {isMobileViewport ? (
+        isHomeBuyer ? (
           <MobileHomeBuyerDashboard
             userFirstName={safeFirstName}
             properties={properties}
@@ -1324,29 +1331,28 @@ export default function DashboardPage() {
             checklistItems={(data.checklist?.tasks ?? []) as any}
             localUpdates={localUpdates}
           />
-        </div>
+        ) : (
+          <MobileDashboardHome
+            userFirstName={safeFirstName}
+            properties={properties}
+            selectedPropertyId={effectiveSelectedPropertyId}
+            onPropertyChange={setSelectedPropertyId}
+            localUpdates={localUpdates}
+          />
+        )
       ) : (
-        <MobileDashboardHome
-          userFirstName={safeFirstName}
-          properties={properties}
-          selectedPropertyId={effectiveSelectedPropertyId}
-          onPropertyChange={setSelectedPropertyId}
-          localUpdates={localUpdates}
-        />
+        <div className="max-w-7xl mx-auto px-4 md:px-6 w-full">
+          <CommandCenterTemplate
+            primaryAction={primaryActionHero}
+            confidenceLabel="Verified"
+            freshnessLabel="Updated today"
+            sourceLabel="Home analysis"
+            secondaryModules={
+              <RoomsSnapshotSection propertyId={effectiveSelectedPropertyId} />
+            }
+          />
+        </div>
       )}
-
-      {/* Desktop */}
-      <div className="hidden md:block max-w-7xl mx-auto px-4 md:px-6 w-full">
-        <CommandCenterTemplate
-          primaryAction={primaryActionHero}
-          confidenceLabel="Verified"
-          freshnessLabel="Updated today"
-          sourceLabel="Home analysis"
-          secondaryModules={
-            <RoomsSnapshotSection propertyId={effectiveSelectedPropertyId} />
-          }
-        />
-      </div>
 
       <MilestoneCelebration type={celebration.type} isOpen={celebration.isOpen} onClose={dismiss} />
     </>
