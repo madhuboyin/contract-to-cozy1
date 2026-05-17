@@ -514,7 +514,7 @@ export function RoomsSnapshotSection({ propertyId }: RoomsSnapshotSectionProps) 
                     )}
                   </div>
 
-                  <div className="mt-3 grid grid-cols-3 gap-3 border-t border-gray-200/80 pt-3">
+                  <div className="mt-3 grid grid-cols-3 gap-2 border-t border-gray-200/80 pt-3">
                     <div className="space-y-1">
                       <p className="text-[10px] font-medium tracking-normal text-gray-500">
                         Items
