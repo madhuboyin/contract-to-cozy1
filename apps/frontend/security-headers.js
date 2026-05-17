@@ -37,8 +37,11 @@ function buildCsp({ nonce, apiUrl, faroUrl }) {
     "media-src 'self'",
     "worker-src 'self' blob:",
     "manifest-src 'self'",
-    "require-trusted-types-for 'script'",
-    `trusted-types ${TRUSTED_TYPES_POLICIES.join(' ')}`,
+    // Trusted Types enforcement disabled: Turbopack's loadChunkCached sets
+    // script.src without TrustedScriptURL, causing hard-nav fallback + crash.
+    // Re-enable once Next.js ships a Turbopack-compatible TrustedScriptURL policy.
+    // "require-trusted-types-for 'script'",
+    // `trusted-types ${TRUSTED_TYPES_POLICIES.join(' ')}`,
     'upgrade-insecure-requests',
     `report-uri ${reportUri}`,
     `report-to ${REPORTING_ENDPOINT_NAME}`,
