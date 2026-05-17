@@ -701,7 +701,7 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
             ) : null
           }
         >
-          <main className="min-w-0 flex-1 pb-20 lg:pb-8">
+          <main className="min-w-0 flex-1 pb-[calc(5rem+env(safe-area-inset-bottom))] lg:pb-8">
             <PullToRefresh onRefresh={handleRefresh}>
               <div
                 className="mx-auto w-full max-w-[1180px] px-4 py-5 md:px-8 md:py-8"

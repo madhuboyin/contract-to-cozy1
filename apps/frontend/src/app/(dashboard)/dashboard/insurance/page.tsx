@@ -976,7 +976,7 @@ export default function InsurancePage() {
                       <p className="truncate text-sm text-slate-600">{metadataLine}</p>
                     </div>
 
-                    <div className="mt-3 grid grid-cols-[1fr_1fr_auto_auto] items-center border-t border-slate-200/80 px-1.5 py-1">
+                    <div className="mt-3 flex items-center border-t border-slate-200/80 px-1.5 py-1">
                       <Button
                         variant="ghost"
                         className="min-h-[40px] justify-start gap-1.5 px-2 text-sm font-medium text-slate-700 hover:bg-slate-50"

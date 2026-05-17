@@ -996,7 +996,7 @@ export default function HomeRiskReplayClient() {
             <MobileCard className="space-y-4 animate-pulse" aria-hidden="true">
               <div className="h-3 w-28 rounded-full bg-slate-200" />
               <div className="h-5 w-52 rounded-full bg-slate-200" />
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                 <div className="h-20 rounded-2xl bg-slate-100" />
                 <div className="h-20 rounded-2xl bg-slate-100" />
                 <div className="h-20 rounded-2xl bg-slate-100" />
