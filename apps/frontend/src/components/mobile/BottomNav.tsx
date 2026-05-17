@@ -140,8 +140,8 @@ export function BottomNav() {
   React.useEffect(() => { if (!moreOpen) setQuery(''); }, [moreOpen]);
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-gray-200 bg-white/95 backdrop-blur pb-[env(safe-area-inset-bottom)] lg:hidden">
-      <div className="relative flex h-16 items-end">
+    <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-gray-100/80 bg-white/97 backdrop-blur-xl pb-[env(safe-area-inset-bottom)] shadow-[0_-1px_0_rgba(0,0,0,0.04),0_-4px_16px_rgba(15,23,42,0.06)] lg:hidden">
+      <div className="relative flex h-[60px] items-end">
         {/* Left two items */}
         <div className="flex flex-1">
           {leftItems.map((item) => {
@@ -152,26 +152,31 @@ export function BottomNav() {
                 key={item.href}
                 href={item.href}
                 className={cn(
-                  'flex flex-1 min-h-[44px] flex-col items-center justify-center gap-0.5 border-t-2 pb-1 text-[10px] transition-colors',
-                  isActive ? 'border-brand-600 text-brand-600' : 'border-transparent text-gray-500'
+                  'flex flex-1 min-h-[44px] flex-col items-center justify-center gap-0.5 pb-1 text-[10px] transition-colors duration-150',
+                  isActive ? 'text-brand-600' : 'text-gray-400'
                 )}
               >
-                <Icon className={cn('h-6 w-6', isActive && 'text-brand-600')} />
-                <span className={cn('font-medium', isActive && 'font-semibold')}>{item.label}</span>
+                <div className={cn(
+                  'flex h-6 w-6 items-center justify-center rounded-full transition-all duration-150',
+                  isActive && 'bg-brand-50'
+                )}>
+                  <Icon className={cn('h-[22px] w-[22px]', isActive ? 'text-brand-600' : 'text-gray-400')} />
+                </div>
+                <span className={cn('font-medium', isActive && 'font-semibold text-brand-600')}>{item.label}</span>
               </Link>
             );
           })}
         </div>
 
         {/* Center camera FAB — raised above nav bar */}
-        <div className="flex w-16 items-end justify-center pb-1">
+        <div className="flex w-16 items-end justify-center pb-1.5">
           <button
             type="button"
             onClick={handleCameraCapture}
-            className="flex h-14 w-14 -translate-y-3 items-center justify-center rounded-full bg-brand-600 shadow-lg shadow-brand-200/60 active:scale-95 transition-transform"
+            className="flex h-[52px] w-[52px] -translate-y-2.5 items-center justify-center rounded-full bg-brand-600 shadow-[0_4px_16px_rgba(20,184,166,0.35),0_2px_6px_rgba(15,23,42,0.12)] transition-transform active:scale-95"
             aria-label="Capture photo"
           >
-            <Camera className="h-6 w-6 text-white" />
+            <Camera className="h-[22px] w-[22px] text-white" />
           </button>
         </div>
 
@@ -185,12 +190,17 @@ export function BottomNav() {
                 key={item.href}
                 href={item.href}
                 className={cn(
-                  'flex flex-1 min-h-[44px] flex-col items-center justify-center gap-0.5 border-t-2 pb-1 text-[10px] transition-colors',
-                  isActive ? 'border-brand-600 text-brand-600' : 'border-transparent text-gray-500'
+                  'flex flex-1 min-h-[44px] flex-col items-center justify-center gap-0.5 pb-1 text-[10px] transition-colors duration-150',
+                  isActive ? 'text-brand-600' : 'text-gray-400'
                 )}
               >
-                <Icon className={cn('h-6 w-6', isActive && 'text-brand-600')} />
-                <span className={cn('font-medium', isActive && 'font-semibold')}>{item.label}</span>
+                <div className={cn(
+                  'flex h-6 w-6 items-center justify-center rounded-full transition-all duration-150',
+                  isActive && 'bg-brand-50'
+                )}>
+                  <Icon className={cn('h-[22px] w-[22px]', isActive ? 'text-brand-600' : 'text-gray-400')} />
+                </div>
+                <span className={cn('font-medium', isActive && 'font-semibold text-brand-600')}>{item.label}</span>
               </Link>
             );
           })}
@@ -204,12 +214,17 @@ export function BottomNav() {
               <button
                 type="button"
                 className={cn(
-                  'flex flex-1 min-h-[44px] flex-col items-center justify-center gap-0.5 border-t-2 pb-1 text-[10px] transition-colors',
-                  moreActive ? 'border-brand-600 text-brand-600' : 'border-transparent text-gray-500'
+                  'flex flex-1 min-h-[44px] flex-col items-center justify-center gap-0.5 pb-1 text-[10px] transition-colors duration-150',
+                  moreActive ? 'text-brand-600' : 'text-gray-400'
                 )}
               >
-                <Ellipsis className="h-6 w-6" />
-                <span className={cn('font-medium', moreActive && 'font-semibold')}>More</span>
+                <div className={cn(
+                  'flex h-6 w-6 items-center justify-center rounded-full transition-all duration-150',
+                  moreActive && 'bg-brand-50'
+                )}>
+                  <Ellipsis className={cn('h-[22px] w-[22px]', moreActive ? 'text-brand-600' : 'text-gray-400')} />
+                </div>
+                <span className={cn('font-medium', moreActive && 'font-semibold text-brand-600')}>More</span>
               </button>
             </SheetTrigger>
 
