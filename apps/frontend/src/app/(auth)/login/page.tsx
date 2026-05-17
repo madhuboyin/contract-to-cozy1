@@ -1,4 +1,3 @@
-// apps/frontend/src/app/(auth)/login/page.tsx
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -7,6 +6,7 @@ import Link from 'next/link';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { Eye, EyeOff, Lock, Mail } from 'lucide-react';
 import { UserRole } from '@/types';
+import AuthTemplate from '@/components/auth/AuthTemplate';
 
 const POST_LOGIN_TRANSITION_KEY = 'ctc.postLoginTransition';
 
@@ -127,229 +127,181 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex flex-col">
-      {/* Navigation Header with Home Link */}
-      <nav className="bg-white/80 backdrop-blur-md shadow-sm border-b border-gray-100">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            {/* Logo - Links to Home */}
-            <Link href="/" className="flex items-center space-x-2 hover:opacity-80 transition-opacity">
-              <span className="text-2xl">🏠</span>
-              <span className="text-lg font-semibold text-gray-900">Contract to Cozy</span>
-            </Link>
-
-            {/* Right side navigation */}
-            <div className="flex items-center space-x-4">
-              <Link
-                href="/signup"
-                className="text-sm font-medium text-gray-600 hover:text-blue-600 transition-colors"
-              >
-                Sign Up
-              </Link>
-              <Link
-                href="/providers/join"
-                className="text-sm font-medium text-gray-600 hover:text-blue-600 transition-colors"
-              >
-                For Providers
-              </Link>
-            </div>
+    <AuthTemplate
+      title="Welcome back"
+      subtitle="Sign in to your home dashboard"
+      activeRoute="login"
+    >
+      {error && (
+        <div className="mb-6 bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg text-sm">
+          <div className="flex items-center space-x-2">
+            <svg className="w-5 h-5 flex-shrink-0 text-red-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path fillRule="evenodd" d="M9.401 3.003c1.155-1.121 3.2-1.121 4.356 0l4.46 4.321c1.155 1.121 1.155 3.2 0 4.356l-6.666 6.467a3.076 3.076 0 01-4.356 0l-6.666-6.467c-1.155-1.155-1.155-3.2 0-4.356l4.46-4.321zM12 9a.75.75 0 00-.75.75v3.75c0 .414.336.75.75.75s.75-.336.75-.75V9.75A.75.75 0 0012 9zm0 8.25a.75.75 0 100-1.5.75.75 0 000 1.5z" clipRule="evenodd" /></svg>
+            <span>{error}</span>
           </div>
         </div>
-      </nav>
+      )}
 
-      {/* Main Content */}
-      <div className="flex-1 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-md w-full">
-          {/* Card */}
-          <div className="bg-white rounded-2xl shadow-xl p-5 sm:p-8">
-            {/* Header */}
-            <div className="text-center mb-8">
-              <h2 className="text-3xl font-bold text-gray-900">Welcome Back</h2>
-              <p className="mt-2 text-sm text-gray-600">
-                Sign in to your account
-              </p>
+      {!mfaToken ? (
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+              Email Address
+            </label>
+            <div className="relative">
+              <Mail className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-500" />
+              <input
+                id="email"
+                name="email"
+                type="email"
+                autoComplete="username"
+                required
+                value={formData.email}
+                onChange={handleChange}
+                className="w-full pl-11 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="you@example.com"
+              />
             </div>
+          </div>
 
-            {/* Error Message */}
-            {error && (
-              <div className="mb-6 bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg text-sm">
-                <div className="flex items-center space-x-2">
-                  <svg className="w-5 h-5 flex-shrink-0 text-red-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path fillRule="evenodd" d="M9.401 3.003c1.155-1.121 3.2-1.121 4.356 0l4.46 4.321c1.155 1.121 1.155 3.2 0 4.356l-6.666 6.467a3.076 3.076 0 01-4.356 0l-6.666-6.467c-1.155-1.155-1.155-3.2 0-4.356l4.46-4.321zM12 9a.75.75 0 00-.75.75v3.75c0 .414.336.75.75.75s.75-.336.75-.75V9.75A.75.75 0 0012 9zm0 8.25a.75.75 0 100-1.5.75.75 0 000 1.5z" clipRule="evenodd" /></svg>
-                  <span>{error}</span>
-                </div>
-              </div>
-            )}
-
-            {/* Form */}
-            {!mfaToken ? (
-              <form onSubmit={handleSubmit} className="space-y-4">
-                {/* Email */}
-                <div>
-                  <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
-                    Email Address
-                  </label>
-                  <div className="relative">
-                    <Mail className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-500" />
-                    <input
-                      id="email"
-                      name="email"
-                      type="email"
-                      autoComplete="username"
-                      required
-                      value={formData.email}
-                      onChange={handleChange}
-                      className="w-full pl-11 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      placeholder="you@example.com"
-                    />
-                  </div>
-                </div>
-
-                {/* Password with Toggle */}
-                <div>
-                  <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
-                    Password
-                  </label>
-                  <div className="relative">
-                    <Lock className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-500" />
-                    <input
-                      id="password"
-                      name="password"
-                      type={showPassword ? 'text' : 'password'}
-                      autoComplete="current-password"
-                      required
-                      value={formData.password}
-                      onChange={handleChange}
-                      className="w-full pl-11 pr-12 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      placeholder="••••••••"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-1 top-1/2 -translate-y-1/2 p-2 text-gray-500 hover:text-gray-700 focus:outline-none touch-manipulation"
-                      aria-label={showPassword ? 'Hide password' : 'Show password'}
-                    >
-                      {showPassword ? (
-                        <EyeOff className="w-5 h-5" />
-                      ) : (
-                        <Eye className="w-5 h-5" />
-                      )}
-                    </button>
-                  </div>
-                </div>
-
-                {/* Forgot Password */}
-                <div className="text-right">
-                  <Link
-                    href="/forgot-password"
-                    className="text-sm font-medium text-blue-600 hover:text-blue-700"
-                  >
-                    Forgot password?
-                  </Link>
-                </div>
-
-                {/* Submit Button */}
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg"
-                >
-                  {loading ? 'Signing In...' : 'Sign In'}
-                </button>
-              </form>
-            ) : (
-              <form onSubmit={handleMfaSubmit} className="space-y-4">
-                <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
-                  Enter your {useRecoveryCode ? 'recovery code' : '6-digit authenticator code'} to finish signing in.
-                </div>
-
-                {!useRecoveryCode ? (
-                  <div>
-                    <label htmlFor="mfaCode" className="block text-sm font-medium text-gray-700 mb-1">
-                      Authenticator code
-                    </label>
-                    <input
-                      id="mfaCode"
-                      name="mfaCode"
-                      autoComplete="one-time-code"
-                      inputMode="numeric"
-                      pattern="[0-9]{6}"
-                      maxLength={6}
-                      required
-                      value={mfaCode}
-                      onChange={(e) => setMfaCode(e.target.value)}
-                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      placeholder="123456"
-                    />
-                  </div>
+          <div>
+            <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
+              Password
+            </label>
+            <div className="relative">
+              <Lock className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-500" />
+              <input
+                id="password"
+                name="password"
+                type={showPassword ? 'text' : 'password'}
+                autoComplete="current-password"
+                required
+                value={formData.password}
+                onChange={handleChange}
+                className="w-full pl-11 pr-12 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="••••••••"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-1 top-1/2 -translate-y-1/2 p-2 text-gray-500 hover:text-gray-700 focus:outline-none touch-manipulation"
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+              >
+                {showPassword ? (
+                  <EyeOff className="w-5 h-5" />
                 ) : (
-                  <div>
-                    <label htmlFor="recoveryCode" className="block text-sm font-medium text-gray-700 mb-1">
-                      Recovery code
-                    </label>
-                    <input
-                      id="recoveryCode"
-                      name="recoveryCode"
-                      autoComplete="one-time-code"
-                      required
-                      value={recoveryCode}
-                      onChange={(e) => setRecoveryCode(e.target.value)}
-                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      placeholder="ABCD-EF12"
-                    />
-                  </div>
+                  <Eye className="w-5 h-5" />
                 )}
-
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg"
-                >
-                  {loading ? 'Verifying...' : 'Verify and continue'}
-                </button>
-
-                <div className="flex items-center justify-between text-sm">
-                  <button
-                    type="button"
-                    onClick={() => setUseRecoveryCode((prev) => !prev)}
-                    className="font-medium text-blue-600 hover:text-blue-700"
-                  >
-                    {useRecoveryCode ? 'Use authenticator code' : 'Use recovery code'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setMfaToken(null);
-                      setMfaCode('');
-                      setRecoveryCode('');
-                      setUseRecoveryCode(false);
-                      setError(null);
-                    }}
-                    className="font-medium text-gray-600 hover:text-gray-800"
-                  >
-                    Use another account
-                  </button>
-                </div>
-              </form>
-            )}
-
-            {/* Footer Links */}
-            <div className="mt-6 space-y-3 text-center">
-              <p className="text-sm text-gray-600">
-                Don&apos;t have an account?{' '}
-                <Link href="/signup" className="font-medium text-blue-600 hover:text-blue-700">
-                  Sign up
-                </Link>
-              </p>
-              <p className="text-sm text-gray-600">
-                Are you a service provider?{' '}
-                <Link href="/providers/join" className="font-medium text-blue-600 hover:text-blue-700">
-                  Join as provider
-                </Link>
-              </p>
+              </button>
             </div>
           </div>
-        </div>
+
+          <div className="text-right">
+            <Link
+              href="/forgot-password"
+              className="text-sm font-medium text-blue-600 hover:text-blue-700"
+            >
+              Forgot password?
+            </Link>
+          </div>
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg"
+          >
+            {loading ? 'Signing In...' : 'Sign In'}
+          </button>
+        </form>
+      ) : (
+        <form onSubmit={handleMfaSubmit} className="space-y-4">
+          <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+            Enter your {useRecoveryCode ? 'recovery code' : '6-digit authenticator code'} to finish signing in.
+          </div>
+
+          {!useRecoveryCode ? (
+            <div>
+              <label htmlFor="mfaCode" className="block text-sm font-medium text-gray-700 mb-1">
+                Authenticator code
+              </label>
+              <input
+                id="mfaCode"
+                name="mfaCode"
+                autoComplete="one-time-code"
+                inputMode="numeric"
+                pattern="[0-9]{6}"
+                maxLength={6}
+                required
+                value={mfaCode}
+                onChange={(e) => setMfaCode(e.target.value)}
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="123456"
+              />
+            </div>
+          ) : (
+            <div>
+              <label htmlFor="recoveryCode" className="block text-sm font-medium text-gray-700 mb-1">
+                Recovery code
+              </label>
+              <input
+                id="recoveryCode"
+                name="recoveryCode"
+                autoComplete="one-time-code"
+                required
+                value={recoveryCode}
+                onChange={(e) => setRecoveryCode(e.target.value)}
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="ABCD-EF12"
+              />
+            </div>
+          )}
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg"
+          >
+            {loading ? 'Verifying...' : 'Verify and continue'}
+          </button>
+
+          <div className="flex items-center justify-between text-sm">
+            <button
+              type="button"
+              onClick={() => setUseRecoveryCode((prev) => !prev)}
+              className="font-medium text-blue-600 hover:text-blue-700"
+            >
+              {useRecoveryCode ? 'Use authenticator code' : 'Use recovery code'}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setMfaToken(null);
+                setMfaCode('');
+                setRecoveryCode('');
+                setUseRecoveryCode(false);
+                setError(null);
+              }}
+              className="font-medium text-gray-600 hover:text-gray-800"
+            >
+              Use another account
+            </button>
+          </div>
+        </form>
+      )}
+
+      <div className="mt-6 space-y-3 text-center">
+        <p className="text-sm text-gray-600">
+          Don&apos;t have an account?{' '}
+          <Link href="/signup" className="font-medium text-blue-600 hover:text-blue-700">
+            Sign up
+          </Link>
+        </p>
+        <p className="text-sm text-gray-600">
+          Are you a service provider?{' '}
+          <Link href="/providers/join" className="font-medium text-blue-600 hover:text-blue-700">
+            Join as provider
+          </Link>
+        </p>
       </div>
-    </div>
+    </AuthTemplate>
   );
 }

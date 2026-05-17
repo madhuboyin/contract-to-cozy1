@@ -1176,7 +1176,7 @@ export default function PropertyHealthDetailPage() {
                 </div>
               ) : (
                 <div className="flex flex-col justify-between flex-1 gap-3">
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-3 gap-1.5">
                     <div className="rounded-[10px] bg-red-50 border border-red-100/60 px-2 pt-2 pb-2 text-center">
                       <p className="text-2xl font-black text-red-600 tabular-nums leading-none">{negativeInsights.length}</p>
                       <p className="text-[10px] font-semibold text-red-500/90 mt-1 leading-tight">Needs attention</p>
@@ -1369,7 +1369,7 @@ export default function PropertyHealthDetailPage() {
                         </div>
                       </div>
                     ) : (
-                      <div className="grid grid-cols-4 gap-3">
+                      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                         <div className="rounded-xl border border-slate-100 bg-slate-50/60 px-3 py-2.5 flex items-start gap-2.5">
                           <div className="rounded-lg bg-emerald-50 border border-emerald-100 p-1.5 shrink-0 mt-0.5">
                             <Activity className="h-3.5 w-3.5 text-emerald-600" />

@@ -598,7 +598,7 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
   // Mobile bottom padding for bottom nav
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const media = window.matchMedia('(max-width: 767px)');
+    const media = window.matchMedia('(max-width: 1023px)');
     const applyPadding = () => {
       document.body.style.paddingBottom = media.matches
         ? 'calc(4rem + env(safe-area-inset-bottom))'
@@ -642,8 +642,8 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
         <AppShell
           leftNav={
             <aside className={cn(
-              "hidden border-r border-slate-200/70 bg-white/82 shadow-[0_1px_0_rgba(255,255,255,0.9)_inset] backdrop-blur-xl md:fixed md:top-[72px] md:bottom-0 md:z-40 md:flex md:flex-col transition-all duration-300",
-              isCollapsed ? "md:w-[64px]" : "md:w-[246px]"
+              "hidden border-r border-slate-200/70 bg-white/82 shadow-[0_1px_0_rgba(255,255,255,0.9)_inset] backdrop-blur-xl lg:fixed lg:top-[72px] lg:bottom-0 lg:z-40 lg:flex lg:flex-col transition-all duration-300",
+              isCollapsed ? "lg:w-[64px]" : "lg:w-[246px]"
             )}>
               <PersistentSidebarNav user={user} isCollapsed={isCollapsed} onToggleCollapse={toggleCollapse} />
             </aside>
@@ -701,7 +701,7 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
             ) : null
           }
         >
-          <main className="min-w-0 flex-1 pb-20 md:pb-8">
+          <main className="min-w-0 flex-1 pb-20 lg:pb-8">
             <PullToRefresh onRefresh={handleRefresh}>
               <div
                 className="mx-auto w-full max-w-[1180px] px-4 py-5 md:px-8 md:py-8"
