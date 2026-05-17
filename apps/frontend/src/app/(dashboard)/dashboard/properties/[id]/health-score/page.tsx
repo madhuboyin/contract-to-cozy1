@@ -16,14 +16,12 @@ import { Progress } from "@/components/ui/progress";
 import { ScoreDeltaIndicator, ScoreTrendChart } from "@/components/scores/ScoreTrendChart";
 import { PropertyScoreSeries, PropertyScoreTrendPoint } from "@/types";
 import {
-  ActionPriorityRow,
   BottomSafeAreaReserve,
   CompactEntityRow,
-  MobilePageIntro,
+  EmptyStateCard,
+  ExpandableSummaryCard,
+  MobileCard,
   MobileToolWorkspace,
-  ReadOnlySummaryBlock,
-  ResultHeroCard,
-  ScenarioInputCard,
   StatusChip,
 } from "@/components/mobile/dashboard/MobilePrimitives";
 
@@ -910,139 +908,246 @@ export default function PropertyHealthDetailPage() {
     );
   };
 
+  const renderMobileInsightRow = (insight: HealthInsight, idx: number, isFocused = false) => {
+    const scoreValue = asNumber(insight.score) ?? 0;
+    const impact = getInsightImpact(insight.status);
+    const tone = getInsightTone(insight.status);
+    const displayFactorName = getDisplayFactorName(insight.factor);
+    const factorCTA = getFactorCTALink(insight.factor, propertyId);
+    const resolutionHref = buildHealthInsightResolutionHref({
+      propertyId,
+      factor: insight.factor,
+      status: insight.status,
+    });
+    const dotColor =
+      impact === "negative"
+        ? "bg-red-400"
+        : impact === "positive"
+        ? "bg-emerald-400"
+        : "bg-amber-400";
+
+    return (
+      <details
+        key={`mobile-insight-${insight.factor || idx}`}
+        className={`rounded-xl overflow-hidden bg-white${isFocused ? " ring-2 ring-teal-400 ring-offset-1" : ""}`}
+        data-insight-key={getInsightKey(insight.factor)}
+        open={isFocused || undefined}
+      >
+        <summary className="list-none cursor-pointer select-none px-3 py-2.5 flex items-center gap-2.5 min-h-[52px]">
+          <span className={`h-2 w-2 rounded-full shrink-0 ${dotColor}`} aria-hidden="true" />
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium text-slate-800 leading-tight truncate">{displayFactorName}</p>
+            <p className="text-[11px] text-slate-500 leading-tight mt-0.5 truncate">
+              {getFactorDescription(insight.factor, insight.status)}
+            </p>
+          </div>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <StatusChip tone={tone} className="px-1.5 py-0.5 text-[10px] leading-none">
+              {getInsightChipLabel(insight)}
+            </StatusChip>
+            <ChevronDown className="h-3.5 w-3.5 text-slate-400" />
+          </div>
+        </summary>
+        <div className="px-3 pb-3 pt-2 border-t border-slate-100 space-y-2 text-xs text-slate-500">
+          <p className="leading-relaxed">{getInsightStatusExplanation(insight.factor, insight.status)}</p>
+          {getFactorActionHint(insight.factor, insight.status) && (
+            <p className="rounded-lg border border-slate-100 bg-slate-50 px-2.5 py-1.5 text-slate-600">
+              {getFactorActionHint(insight.factor, insight.status)}
+            </p>
+          )}
+          {resolutionHref && impact === "negative" && (
+            <Link href={resolutionHref} className="inline-flex items-center gap-1 font-medium text-teal-600">
+              Take action <ArrowRight className="h-3 w-3" />
+            </Link>
+          )}
+          {!insight.details?.length && factorCTA && impact !== "negative" && (
+            <Link href={factorCTA.href} className="inline-flex items-center gap-1 font-medium text-primary hover:underline">
+              {factorCTA.label} <ArrowRight className="h-3 w-3" />
+            </Link>
+          )}
+          {Math.abs(scoreValue) >= 0.05 && (
+            <p className="text-slate-400">
+              Score contribution:{" "}
+              <span className="font-semibold text-slate-600">{formatSignedPoints(scoreValue)} pts</span>
+            </p>
+          )}
+        </div>
+      </details>
+    );
+  };
+
   return (
     <DashboardShell className="pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-8">
       <div className="md:hidden">
         <MobileToolWorkspace
           intro={
-            <div className="space-y-2">
-              <Button variant="ghost" className="min-h-[44px] w-fit px-0 text-sm text-muted-foreground" onClick={() => navigateBackWithDashboardFallback(router)}>
+            <div className="space-y-3">
+              <Button
+                variant="ghost"
+                className="min-h-[44px] w-fit px-0 text-sm text-muted-foreground"
+                onClick={() => navigateBackWithDashboardFallback(router)}
+              >
                 <ArrowLeft className="h-4 w-4 mr-1" /> Back
               </Button>
-              <MobilePageIntro
-                eyebrow="Property Score"
-                title="Property Health Score"
-                subtitle={`Weekly health summary for ${property?.name || "this property"} — what changed, what needs attention, and what's working.`}
-                action={
-                  <div className="rounded-xl border border-blue-200 bg-blue-50 p-2.5 text-blue-700">
-                    <Activity className="h-5 w-5" />
-                  </div>
-                }
-              />
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <h1 className="text-[1.375rem] font-semibold leading-tight tracking-tight text-[hsl(var(--mobile-text-primary))] mb-0">
+                    Property Health
+                  </h1>
+                  <p className="text-sm text-[hsl(var(--mobile-text-secondary))] mt-1 mb-0">
+                    <span className={`font-semibold ${healthDetails.color}`}>{latestScore.toFixed(0)} / 100</span>
+                    {" · "}
+                    {healthDetails.level}
+                    {" · "}
+                    {wowDelta === null || Math.abs(wowDelta) < 0.05
+                      ? "No change this week"
+                      : `${wowDelta > 0 ? "+" : ""}${wowDelta.toFixed(1)} pts`}
+                  </p>
+                </div>
+                <div className="rounded-xl border border-blue-200 bg-blue-50 p-2.5 text-blue-700 shrink-0">
+                  <Activity className="h-5 w-5" />
+                </div>
+              </div>
             </div>
           }
           summary={
-            <ResultHeroCard
-              title="Health score"
-              value={`${latestScore.toFixed(0)}/${scoreMax}`}
-              status={<StatusChip tone={healthTone(healthDetails.level)}>{healthDetails.level}</StatusChip>}
-              summary={`${latestScore.toFixed(0)} / ${scoreMax} · ${healthDetails.level}`}
-            />
+            sortedInsights.length > 0 ? (
+              <MobileCard variant="compact">
+                <div className="grid grid-cols-3 divide-x divide-slate-100">
+                  <div className="text-center pr-2">
+                    <p className={`text-2xl font-black leading-none tabular-nums ${negativeInsights.length > 0 ? "text-red-600" : "text-slate-300"}`}>
+                      {negativeInsights.length}
+                    </p>
+                    <p className="text-[10px] font-medium text-slate-500 mt-1.5 leading-tight">attention</p>
+                  </div>
+                  <div className="text-center px-2">
+                    <p className={`text-2xl font-black leading-none tabular-nums ${neutralInsights.length > 0 ? "text-amber-500" : "text-slate-300"}`}>
+                      {neutralInsights.length}
+                    </p>
+                    <p className="text-[10px] font-medium text-slate-500 mt-1.5 leading-tight">monitor</p>
+                  </div>
+                  <div className="text-center pl-2">
+                    <p className={`text-2xl font-black leading-none tabular-nums ${positiveInsights.length > 0 ? "text-emerald-600" : "text-slate-300"}`}>
+                      {positiveInsights.length}
+                    </p>
+                    <p className="text-[10px] font-medium text-slate-500 mt-1.5 leading-tight">healthy</p>
+                  </div>
+                </div>
+              </MobileCard>
+            ) : null
           }
           footer={<BottomSafeAreaReserve size="chatAware" />}
         >
-          <ReadOnlySummaryBlock
-            title="Snapshot"
-            items={[
-              { label: "Week delta", value: <ScoreDeltaIndicator delta={series?.deltaFromPreviousWeek} /> },
-              { label: "Status", value: healthDetails.level },
-            ]}
-            columns={2}
-          />
+          {/* ── Health Factors ── */}
+          <div className="space-y-2.5">
+            <div className="flex items-center justify-between gap-2 px-0.5">
+              <h2 className="text-[11px] font-semibold uppercase tracking-wide text-[hsl(var(--mobile-text-muted))]">
+                Health Factors
+              </h2>
+              {negativeInsights.length > 0 && (
+                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-red-100 text-red-600">
+                  {negativeInsights.length} need action
+                </span>
+              )}
+            </div>
 
-          <ScenarioInputCard
-            title="Health Factors"
-            subtitle={
-              usingSnapshotInsights
-                ? "All health factors from the latest weekly snapshot, grouped by impact."
-                : "Health factors from your current property profile while weekly history builds."
-            }
-            actions={
-              <ActionPriorityRow
-                primaryAction={
-                  <Button asChild>
-                    <Link href={focusedInsightActionHref ?? `/dashboard/properties/${propertyId}/?tab=maintenance&view=insights`}>
-                      {focusedInsightActionHref ? 'Review issue options' : 'View maintenance actions'}
-                    </Link>
-                  </Button>
-                }
-                secondaryActions={
-                  <Button asChild variant="outline" size="sm">
-                    <Link href={`/dashboard/properties/${propertyId}/home-score`}>Full Report</Link>
-                  </Button>
+            {sortedInsights.length === 0 ? (
+              <EmptyStateCard
+                title="No factors yet"
+                description="Add property details to unlock your health breakdown."
+                action={
+                  <Link href={`/dashboard/properties/${propertyId}/edit`} className="text-sm font-medium text-teal-600">
+                    Edit property details →
+                  </Link>
                 }
               />
-            }
-          >
-            {sortedInsights.length === 0 ? (
-              <div className="space-y-2 text-sm text-muted-foreground">
-                <p>No factor details are available yet for this property.</p>
-                <p>
-                  Add property profile fields and documentation to unlock a complete health breakdown:{" "}
-                  <Link href={`/dashboard/properties/${propertyId}/edit`} className="underline">Edit property details</Link>
-                  {" "}or{" "}
-                  <Link href={`/dashboard/documents?propertyId=${propertyId}`} className="underline">upload documents</Link>.
-                </p>
-              </div>
             ) : (
-              <div className="space-y-5">
-                {LEDGER_GROUPS.map((group) => {
-                  const groupInsights = getLedgerInsights(group.key, negativeInsights, neutralInsights, positiveInsights);
-                  if (groupInsights.length === 0) return null;
-                  return (
-                    <div key={group.key} className="space-y-2">
-                      <div className="flex items-center gap-2">
-                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{group.title}</p>
-                        <span className={`text-xs font-bold px-1.5 py-0.5 rounded-full ${
-                          group.tone === 'danger' ? 'bg-red-100 text-red-600' :
-                          group.tone === 'elevated' ? 'bg-amber-100 text-amber-700' :
-                          'bg-teal-100 text-teal-700'
-                        }`}>{groupInsights.length}</span>
-                      </div>
-                      {groupInsights.map((insight, idx) =>
-                        renderFocusInsightAccordionRow(insight, idx, false,
-                          getInsightKey(insight.factor) === focusedFactor || insight.factor?.toLowerCase() === focusedFactor)
-                      )}
-                    </div>
-                  );
-                })}
+              <div className="space-y-1">
+                {sortedInsights.map((insight, idx) =>
+                  renderMobileInsightRow(
+                    insight,
+                    idx,
+                    getInsightKey(insight.factor) === focusedFactor || insight.factor?.toLowerCase() === focusedFactor
+                  )
+                )}
               </div>
             )}
-          </ScenarioInputCard>
 
-          <ScenarioInputCard
+            <Link
+              href={focusedInsightActionHref ?? `/dashboard/properties/${propertyId}/?tab=maintenance&view=insights`}
+              className="block"
+            >
+              <div className="rounded-xl bg-teal-800 hover:bg-teal-700 active:scale-[0.99] transition-all px-3 py-3 flex items-center justify-between gap-2">
+                <p className="text-sm font-semibold text-white">
+                  {focusedInsightActionHref ? "Review issue options" : "View maintenance actions"}
+                </p>
+                {negativeInsights.length > 0 && (
+                  <span className="shrink-0 text-[9px] font-bold bg-red-500/90 text-white px-1.5 py-0.5 rounded-full tabular-nums">
+                    {negativeInsights.length}
+                  </span>
+                )}
+              </div>
+            </Link>
+          </div>
+
+          {/* ── Score Trend (collapsed by default) ── */}
+          <ExpandableSummaryCard
             title="Score Trend"
-            subtitle="Weekly snapshots for the last 6 months or 1 year."
-            actions={
-              <ActionPriorityRow
-                secondaryActions={
-                  <>
-                    <Button size="sm" variant={trendWeeks === 26 ? "default" : "outline"} onClick={() => setTrendWeeks(26)}>
-                      6 Months
-                    </Button>
-                    <Button size="sm" variant={trendWeeks === 52 ? "default" : "outline"} onClick={() => setTrendWeeks(52)}>
-                      1 Year
-                    </Button>
-                  </>
-                }
-              />
+            summary={
+              wowDelta === null
+                ? "No trend data yet"
+                : Math.abs(wowDelta) < 0.05
+                ? "Score stable this week"
+                : `${wowDelta > 0 ? "+" : ""}${wowDelta.toFixed(1)} pts this week`
             }
+            metric={activeTrendLabel}
           >
             <div
               id="score-trend-section"
               className={`transition-all duration-300 ${
-                shouldFocusTrends ? 'ring-2 ring-teal-400 rounded-lg shadow-lg p-2 -m-2' : ''
+                shouldFocusTrends ? "ring-2 ring-teal-400 rounded-lg p-2 -m-2" : ""
               }`}
             >
               <ScoreTrendChart points={series?.trend || []} ariaLabel="Property health score trend" />
+              <div className="mt-3 flex gap-2">
+                <Button
+                  size="sm"
+                  variant={trendWeeks === 26 ? "default" : "outline"}
+                  onClick={() => setTrendWeeks(26)}
+                >
+                  6 Months
+                </Button>
+                <Button
+                  size="sm"
+                  variant={trendWeeks === 52 ? "default" : "outline"}
+                  onClick={() => setTrendWeeks(52)}
+                >
+                  1 Year
+                </Button>
+              </div>
             </div>
-          </ScenarioInputCard>
+          </ExpandableSummaryCard>
 
-          <ScenarioInputCard title="Changes Impacting Score" subtitle="What moved the score since the previous weekly snapshot.">
+          {/* ── Changes (collapsed by default) ── */}
+          <ExpandableSummaryCard
+            title="Changes"
+            summary="Score drivers since last snapshot"
+            metric={
+              !hasPreviousSnapshot
+                ? "No data yet"
+                : allChangesNeutral
+                ? "Stable"
+                : `${changes.filter((c) => c.impact !== "neutral").length} signals`
+            }
+          >
             {!hasPreviousSnapshot ? (
-              <p className="text-sm text-slate-400 italic">Changes will appear here after two weekly snapshots are recorded.</p>
+              <p className="text-sm text-slate-400 italic">
+                Changes will appear after two weekly snapshots.
+              </p>
             ) : allChangesNeutral ? (
-              <p className="text-sm text-gray-500">No significant changes since last week — your score is stable.</p>
+              <p className="text-sm text-slate-500">
+                Score stable — no significant changes since last week.
+              </p>
             ) : (
               <div className="space-y-2">
                 {changes.map((change, idx) => (
@@ -1053,7 +1158,7 @@ export default function PropertyHealthDetailPage() {
                     status={
                       change.impact !== "neutral" ? (
                         <StatusChip tone={change.impact === "positive" ? "good" : "danger"}>
-                          {change.impact === "positive" ? "↑ Improved" : "↓ Declined"}
+                          {change.impact === "positive" ? "↑" : "↓"}
                         </StatusChip>
                       ) : undefined
                     }
@@ -1061,8 +1166,7 @@ export default function PropertyHealthDetailPage() {
                 ))}
               </div>
             )}
-          </ScenarioInputCard>
-
+          </ExpandableSummaryCard>
         </MobileToolWorkspace>
       </div>
 
