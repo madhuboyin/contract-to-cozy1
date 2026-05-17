@@ -1312,7 +1312,31 @@ export default function DashboardPage() {
 
   return (
     <>
-      <div className="max-w-7xl mx-auto px-4 md:px-6 w-full">
+      {/* Mobile — each mobile component is responsible for its own md:hidden wrapper */}
+      {isHomeBuyer ? (
+        <div className="md:hidden">
+          <MobileHomeBuyerDashboard
+            userFirstName={safeFirstName}
+            properties={properties}
+            selectedPropertyId={effectiveSelectedPropertyId}
+            onPropertyChange={setSelectedPropertyId}
+            bookings={data.bookings}
+            checklistItems={(data.checklist?.tasks ?? []) as any}
+            localUpdates={localUpdates}
+          />
+        </div>
+      ) : (
+        <MobileDashboardHome
+          userFirstName={safeFirstName}
+          properties={properties}
+          selectedPropertyId={effectiveSelectedPropertyId}
+          onPropertyChange={setSelectedPropertyId}
+          localUpdates={localUpdates}
+        />
+      )}
+
+      {/* Desktop */}
+      <div className="hidden md:block max-w-7xl mx-auto px-4 md:px-6 w-full">
         <CommandCenterTemplate
           primaryAction={primaryActionHero}
           confidenceLabel="Verified"
