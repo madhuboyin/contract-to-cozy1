@@ -100,7 +100,7 @@ export function PageHero({
               {eyebrow}
             </p>
           </div>
-          <h1 className="mb-0 text-[2rem] font-semibold leading-[1.08] tracking-normal text-slate-950 md:text-[2.4rem]">
+          <h1 className="mb-0 text-[1.6rem] font-semibold leading-[1.1] tracking-normal text-slate-950 sm:text-[2rem] md:text-[2.4rem]">
             {title}
           </h1>
           <p className="mb-0 mt-3 max-w-2xl text-[15px] leading-6 text-slate-600 md:text-base">

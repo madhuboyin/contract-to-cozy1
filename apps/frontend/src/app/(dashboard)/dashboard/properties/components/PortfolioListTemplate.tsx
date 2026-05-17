@@ -40,7 +40,7 @@ export default function PortfolioListTemplate({
           {action ? <div className="shrink-0">{action}</div> : null}
         </div>
 
-        <div className="mt-4 grid grid-cols-3 gap-2 rounded-2xl border border-slate-200 bg-[linear-gradient(145deg,#f8fafc,#eef2ff)] p-2">
+        <div className="mt-4 grid grid-cols-3 gap-1 rounded-2xl border border-slate-200 bg-[linear-gradient(145deg,#f8fafc,#eef2ff)] p-2">
           {metrics.slice(0, 3).map((metric) => (
             <div key={metric.label} className="rounded-xl border border-white/80 bg-white/80 px-3 py-2.5">
               <p className="text-[11px] tracking-normal text-slate-500">{metric.label}</p>

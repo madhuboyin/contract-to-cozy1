@@ -166,40 +166,35 @@ export function CtcTopCommandBar({ className }: CtcTopCommandBarProps) {
         )}
       >
         <div className="px-4" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
-          <div className="flex items-center justify-between h-16 gap-3">
+          <div className="flex items-center h-14 gap-2">
             {/* Logo */}
-            <Link 
-              href="/dashboard" 
-              className="flex items-center gap-2 shrink-0"
+            <Link
+              href="/dashboard"
+              className="flex items-center gap-1.5 shrink-0"
             >
               <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-teal-600 text-white">
                 <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" />
                 </svg>
               </div>
-              <span className="text-sm font-semibold text-slate-900 tracking-tight">
-                ContractToCozy
-              </span>
             </Link>
 
-            {/* Right Actions */}
-            <div className="flex items-center gap-2">
-              <SetupGuideButton propertyId={propertyId} onboardingStatus={onboardingStatus} />
-              <NotificationsButton />
-            </div>
-          </div>
-
-          {/* Mobile Property Selector - Horizontal Scroll */}
-          <div className="pb-3 -mx-4 px-4 overflow-x-auto scrollbar-hide">
-            <div className="flex items-center gap-2 min-w-max">
-              <CtcPropertySelector 
+            {/* Property selector inline — scrolls horizontally in remaining space */}
+            <div className="flex-1 min-w-0 overflow-x-auto scrollbar-hide">
+              <CtcPropertySelector
                 propertyAddress={propertyAddress}
                 properties={properties}
                 selectedPropertyId={propertyId}
                 onPropertySelect={handlePropertySelect}
                 onAddProperty={handleAddProperty}
-                className="shrink-0"
+                className="shrink-0 text-xs"
               />
+            </div>
+
+            {/* Right Actions */}
+            <div className="flex items-center gap-1.5 shrink-0">
+              <SetupGuideButton propertyId={propertyId} onboardingStatus={onboardingStatus} />
+              <NotificationsButton />
             </div>
           </div>
         </div>
