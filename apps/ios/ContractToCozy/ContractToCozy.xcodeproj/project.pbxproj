@@ -1,0 +1,350 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		A1B2C3D4E5F6001000000020 /* ContractToCozyApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6001000000030 /* ContractToCozyApp.swift */; };
+		A1B2C3D4E5F6001000000021 /* AppRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6001000000031 /* AppRootView.swift */; };
+		A1B2C3D4E5F6001000000022 /* AppModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6001000000032 /* AppModels.swift */; };
+		A1B2C3D4E5F6001000000023 /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6001000000033 /* APIClient.swift */; };
+		A1B2C3D4E5F6001000000024 /* SessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6001000000034 /* SessionStore.swift */; };
+		A1B2C3D4E5F6001000000025 /* HomeViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6001000000035 /* HomeViewModel.swift */; };
+		A1B2C3D4E5F6001000000026 /* LoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6001000000036 /* LoginView.swift */; };
+		A1B2C3D4E5F6001000000027 /* HomeDashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6001000000037 /* HomeDashboardView.swift */; };
+		A1B2C3D4E5F6001000000028 /* AccountView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6001000000038 /* AccountView.swift */; };
+		A1B2C3D4E5F6001000000029 /* SurfaceCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6001000000039 /* SurfaceCard.swift */; };
+		A1B2C3D4E5F600100000002A /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6001000000041 /* Assets.xcassets */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		A1B2C3D4E5F6001000000013 /* ContractToCozy.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ContractToCozy.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A1B2C3D4E5F6001000000030 /* ContractToCozyApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContractToCozyApp.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F6001000000031 /* AppRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppRootView.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F6001000000032 /* AppModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModels.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F6001000000033 /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F6001000000034 /* SessionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionStore.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F6001000000035 /* HomeViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeViewModel.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F6001000000036 /* LoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginView.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F6001000000037 /* HomeDashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeDashboardView.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F6001000000038 /* AccountView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountView.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F6001000000039 /* SurfaceCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SurfaceCard.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F6001000000040 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		A1B2C3D4E5F6001000000041 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		A1B2C3D4E5F6001000000049 /* Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Debug.xcconfig; sourceTree = "<group>"; };
+		A1B2C3D4E5F600100000004A /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Release.xcconfig; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		A1B2C3D4E5F6001000000010 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		A1B2C3D4E5F6001000000001 = {
+			isa = PBXGroup;
+			children = (
+				A1B2C3D4E5F6001000000042 /* ContractToCozy */,
+				A1B2C3D4E5F6001000000014 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		A1B2C3D4E5F6001000000014 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				A1B2C3D4E5F6001000000013 /* ContractToCozy.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		A1B2C3D4E5F6001000000042 /* ContractToCozy */ = {
+			isa = PBXGroup;
+			children = (
+				A1B2C3D4E5F6001000000030 /* ContractToCozyApp.swift */,
+				A1B2C3D4E5F6001000000031 /* AppRootView.swift */,
+				A1B2C3D4E5F600100000004B /* Config */,
+				A1B2C3D4E5F6001000000043 /* Models */,
+				A1B2C3D4E5F6001000000044 /* Services */,
+				A1B2C3D4E5F6001000000045 /* Features */,
+				A1B2C3D4E5F6001000000046 /* Components */,
+				A1B2C3D4E5F6001000000041 /* Assets.xcassets */,
+				A1B2C3D4E5F6001000000040 /* Info.plist */,
+			);
+			path = ContractToCozy;
+			sourceTree = "<group>";
+		};
+		A1B2C3D4E5F600100000004B /* Config */ = {
+			isa = PBXGroup;
+			children = (
+				A1B2C3D4E5F6001000000049 /* Debug.xcconfig */,
+				A1B2C3D4E5F600100000004A /* Release.xcconfig */,
+			);
+			path = Config;
+			sourceTree = "<group>";
+		};
+		A1B2C3D4E5F6001000000043 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				A1B2C3D4E5F6001000000032 /* AppModels.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		A1B2C3D4E5F6001000000044 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				A1B2C3D4E5F6001000000033 /* APIClient.swift */,
+				A1B2C3D4E5F6001000000034 /* SessionStore.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		A1B2C3D4E5F6001000000045 /* Features */ = {
+			isa = PBXGroup;
+			children = (
+				A1B2C3D4E5F6001000000047 /* Auth */,
+				A1B2C3D4E5F6001000000048 /* Home */,
+			);
+			path = Features;
+			sourceTree = "<group>";
+		};
+		A1B2C3D4E5F6001000000046 /* Components */ = {
+			isa = PBXGroup;
+			children = (
+				A1B2C3D4E5F6001000000039 /* SurfaceCard.swift */,
+			);
+			path = Components;
+			sourceTree = "<group>";
+		};
+		A1B2C3D4E5F6001000000047 /* Auth */ = {
+			isa = PBXGroup;
+			children = (
+				A1B2C3D4E5F6001000000036 /* LoginView.swift */,
+			);
+			path = Auth;
+			sourceTree = "<group>";
+		};
+		A1B2C3D4E5F6001000000048 /* Home */ = {
+			isa = PBXGroup;
+			children = (
+				A1B2C3D4E5F6001000000035 /* HomeViewModel.swift */,
+				A1B2C3D4E5F6001000000037 /* HomeDashboardView.swift */,
+				A1B2C3D4E5F6001000000038 /* AccountView.swift */,
+			);
+			path = Home;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		A1B2C3D4E5F6001000000012 /* ContractToCozy */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A1B2C3D4E5F6001000000017 /* Build configuration list for PBXNativeTarget "ContractToCozy" */;
+			buildPhases = (
+				A1B2C3D4E5F600100000000F /* Sources */,
+				A1B2C3D4E5F6001000000010 /* Frameworks */,
+				A1B2C3D4E5F6001000000011 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = ContractToCozy;
+			productName = ContractToCozy;
+			productReference = A1B2C3D4E5F6001000000013 /* ContractToCozy.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		A1B2C3D4E5F6001000000002 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2600;
+				LastUpgradeCheck = 2600;
+				TargetAttributes = {
+					A1B2C3D4E5F6001000000012 = {
+						CreatedOnToolsVersion = 26.0;
+					};
+				};
+			};
+			buildConfigurationList = A1B2C3D4E5F6001000000015 /* Build configuration list for PBXProject "ContractToCozy" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = A1B2C3D4E5F6001000000001;
+			productRefGroup = A1B2C3D4E5F6001000000014 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				A1B2C3D4E5F6001000000012 /* ContractToCozy */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		A1B2C3D4E5F6001000000011 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A1B2C3D4E5F600100000002A /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		A1B2C3D4E5F600100000000F /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A1B2C3D4E5F6001000000028 /* AccountView.swift in Sources */,
+				A1B2C3D4E5F6001000000023 /* APIClient.swift in Sources */,
+				A1B2C3D4E5F6001000000021 /* AppRootView.swift in Sources */,
+				A1B2C3D4E5F6001000000022 /* AppModels.swift in Sources */,
+				A1B2C3D4E5F6001000000020 /* ContractToCozyApp.swift in Sources */,
+				A1B2C3D4E5F6001000000027 /* HomeDashboardView.swift in Sources */,
+				A1B2C3D4E5F6001000000025 /* HomeViewModel.swift in Sources */,
+				A1B2C3D4E5F6001000000026 /* LoginView.swift in Sources */,
+				A1B2C3D4E5F6001000000024 /* SessionStore.swift in Sources */,
+				A1B2C3D4E5F6001000000029 /* SurfaceCard.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		A1B2C3D4E5F6001000000018 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = A1B2C3D4E5F6001000000049 /* Debug.xcconfig */;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_REQUIRED = NO;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		A1B2C3D4E5F6001000000019 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = A1B2C3D4E5F600100000004A /* Release.xcconfig */;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_REQUIRED = NO;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = "";
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		A1B2C3D4E5F600100000001A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = A1B2C3D4E5F6001000000049 /* Debug.xcconfig */;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_REQUIRED = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = ContractToCozy/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				INFOPLIST_KEY_CFBundleDisplayName = "$(APP_DISPLAY_NAME)";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphonesimulator iphoneos";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		A1B2C3D4E5F600100000001B /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = A1B2C3D4E5F600100000004A /* Release.xcconfig */;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_REQUIRED = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = ContractToCozy/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				INFOPLIST_KEY_CFBundleDisplayName = "$(APP_DISPLAY_NAME)";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphonesimulator iphoneos";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		A1B2C3D4E5F6001000000015 /* Build configuration list for PBXProject "ContractToCozy" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A1B2C3D4E5F6001000000018 /* Debug */,
+				A1B2C3D4E5F6001000000019 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A1B2C3D4E5F6001000000017 /* Build configuration list for PBXNativeTarget "ContractToCozy" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A1B2C3D4E5F600100000001A /* Debug */,
+				A1B2C3D4E5F600100000001B /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = A1B2C3D4E5F6001000000002 /* Project object */;
+}

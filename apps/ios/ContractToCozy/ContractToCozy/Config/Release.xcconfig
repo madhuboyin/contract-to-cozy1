@@ -1,0 +1,3 @@
+PRODUCT_BUNDLE_IDENTIFIER = com.contracttocozy.app
+CTC_API_BASE_URL = https://api.contracttocozy.com
+APP_DISPLAY_NAME = ContractToCozy
