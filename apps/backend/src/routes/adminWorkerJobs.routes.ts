@@ -6,12 +6,10 @@
 import { Router } from 'express';
 import { UserRole } from '../types/auth.types';
 import { authenticate, requireMfa, requireRole } from '../middleware/auth.middleware';
-import { apiRateLimiter } from '../middleware/rateLimiter.middleware';
 import { getWorkerJobsHandler, triggerJobHandler } from '../controllers/adminWorkerJobs.controller';
 
 const router = Router();
 
-router.use(apiRateLimiter);
 router.use('/admin/worker-jobs', authenticate, requireMfa, requireRole(UserRole.ADMIN));
 
 /**

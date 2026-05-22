@@ -3,6 +3,7 @@ import type { Request } from 'express';
 import { createHash } from 'crypto';
 import { authConfig } from '../config/jwt.config';
 import { verifyAccessToken } from '../utils/jwt.util';
+import { getAccessTokenFromRequest } from '../utils/authCookies.util';
 import { redis } from '../lib/redis';
 import { logger } from '../lib/logger';
 
@@ -105,20 +106,8 @@ class RedisRateLimitStore implements Store {
   }
 }
 
-function bearerToken(req: Request): string | null {
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) return null;
-  const token = authHeader.slice('Bearer '.length).trim();
-  return token.length > 0 ? token : null;
-}
-
 function rateLimitKey(req: Request): string {
-  const cookieToken =
-    req.cookies?.['__Secure-ctc.at'] ||
-    req.cookies?.['__Host-ctc.at'] ||
-    req.cookies?.['ctc.at'] ||
-    null;
-  const token = bearerToken(req) || cookieToken;
+  const token = getAccessTokenFromRequest(req);
   if (token) {
     try {
       const payload = verifyAccessToken(token);
@@ -191,7 +180,7 @@ const authenticatedApiMaxRequests = Number(
 );
 
 function resolveApiRateLimitMax(req: Request): number {
-  const token = bearerToken(req);
+  const token = getAccessTokenFromRequest(req);
   if (!token) return apiMaxRequests;
 
   try {

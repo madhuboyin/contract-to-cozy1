@@ -6,7 +6,6 @@
 import { Router } from 'express';
 import { UserRole } from '../types/auth.types';
 import { authenticate, requireMfa, requireRole } from '../middleware/auth.middleware';
-import { apiRateLimiter } from '../middleware/rateLimiter.middleware';
 import { validate } from '../middleware/validate.middleware';
 import {
   OverviewQuerySchema,
@@ -27,7 +26,6 @@ import {
 
 const router = Router();
 
-router.use(apiRateLimiter);
 router.use('/admin/analytics', authenticate, requireMfa, requireRole(UserRole.ADMIN));
 
 /**
