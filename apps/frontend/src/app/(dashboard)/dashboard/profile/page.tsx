@@ -435,6 +435,8 @@ export default function ProfilePage() {
                       value={formData.phone}
                       onChange={handleChange}
                       placeholder="(555) 123-4567"
+                      inputMode="tel"
+                      autoComplete="tel"
                       className={inputClass}
                     />
                   ) : (
@@ -525,6 +527,7 @@ export default function ProfilePage() {
                       value={formData.address}
                       onChange={handleChange}
                       placeholder="123 Main Street"
+                      autoComplete="street-address"
                       className={inputClass}
                     />
                   ) : (
@@ -542,6 +545,7 @@ export default function ProfilePage() {
                       name="city"
                       value={formData.city}
                       onChange={handleChange}
+                      autoComplete="address-level2"
                       className={inputClass}
                       placeholder="City"
                     />
@@ -584,6 +588,8 @@ export default function ProfilePage() {
                       value={formData.zipCode}
                       onChange={handleChange}
                       maxLength={5}
+                      inputMode="numeric"
+                      autoComplete="postal-code"
                       className={inputClass}
                       placeholder="10001"
                     />

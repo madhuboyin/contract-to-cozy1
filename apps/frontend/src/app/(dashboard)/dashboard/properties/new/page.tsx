@@ -398,6 +398,7 @@ export default function NewPropertyPage() {
           onChange={handleChange}
           required
           placeholder="123 Main St"
+          autoComplete="street-address"
           className={inputBaseClass}
         />
       </div>
@@ -415,6 +416,7 @@ export default function NewPropertyPage() {
             onChange={handleChange}
             required
             placeholder="Princeton Junction"
+            autoComplete="address-level2"
             className={inputBaseClass}
           />
         </div>
@@ -452,6 +454,8 @@ export default function NewPropertyPage() {
             placeholder="08550"
             pattern="\d{5}"
             maxLength={5}
+            inputMode="numeric"
+            autoComplete="postal-code"
             className={inputBaseClass}
           />
         </div>
@@ -481,6 +485,8 @@ export default function NewPropertyPage() {
             placeholder="2020"
             pattern="\d{4}"
             maxLength={4}
+            inputMode="numeric"
+            autoComplete="off"
             className={inputBaseClass}
           />
         </div>
@@ -588,6 +594,8 @@ export default function NewPropertyPage() {
                             placeholder="YYYY"
                             pattern="\d{4}"
                             maxLength={4}
+                            inputMode="numeric"
+                            autoComplete="off"
                             className={inputBaseClass}
                         />
                     </div>
@@ -739,19 +747,19 @@ export default function NewPropertyPage() {
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div className="space-y-1.5">
                     <label htmlFor="propertySize" className="block text-sm font-medium text-slate-700">Property Size (sqft)</label>
-                    <input type="number" id="propertySize" name="propertySize" value={formData.propertySize} onChange={handleChange} placeholder="e.g., 2500" className={inputBaseClass} />
+                    <input type="number" id="propertySize" name="propertySize" value={formData.propertySize} onChange={handleChange} placeholder="e.g., 2500" inputMode="numeric" className={inputBaseClass} />
                   </div>
                   <div className="space-y-1.5">
                     <label htmlFor="hvacInstallYear" className="block text-sm font-medium text-slate-700">HVAC Install Year</label>
-                    <input type="text" id="hvacInstallYear" name="hvacInstallYear" value={formData.hvacInstallYear} onChange={handleChange} placeholder="e.g., 2018" pattern="\d{4}" maxLength={4} className={inputBaseClass} />
+                    <input type="text" id="hvacInstallYear" name="hvacInstallYear" value={formData.hvacInstallYear} onChange={handleChange} placeholder="e.g., 2018" pattern="\d{4}" maxLength={4} inputMode="numeric" autoComplete="off" className={inputBaseClass} />
                   </div>
                   <div className="space-y-1.5">
                     <label htmlFor="waterHeaterInstallYear" className="block text-sm font-medium text-slate-700">Water Heater Install Year</label>
-                    <input type="text" id="waterHeaterInstallYear" name="waterHeaterInstallYear" value={formData.waterHeaterInstallYear} onChange={handleChange} placeholder="e.g., 2020" pattern="\d{4}" maxLength={4} className={inputBaseClass} />
+                    <input type="text" id="waterHeaterInstallYear" name="waterHeaterInstallYear" value={formData.waterHeaterInstallYear} onChange={handleChange} placeholder="e.g., 2020" pattern="\d{4}" maxLength={4} inputMode="numeric" autoComplete="off" className={inputBaseClass} />
                   </div>
                   <div className="space-y-1.5">
                     <label htmlFor="roofReplacementYear" className="block text-sm font-medium text-slate-700">Roof Replacement Year</label>
-                    <input type="text" id="roofReplacementYear" name="roofReplacementYear" value={formData.roofReplacementYear} onChange={handleChange} placeholder="e.g., 2010" pattern="\d{4}" maxLength={4} className={inputBaseClass} />
+                    <input type="text" id="roofReplacementYear" name="roofReplacementYear" value={formData.roofReplacementYear} onChange={handleChange} placeholder="e.g., 2010" pattern="\d{4}" maxLength={4} inputMode="numeric" autoComplete="off" className={inputBaseClass} />
                   </div>
                   <SelectInput label="Heating Type" name="heatingType" value={formData.heatingType} options={HEATING_OPTIONS} />
                   <SelectInput label="Cooling Type" name="coolingType" value={formData.coolingType} options={COOLING_OPTIONS} />
@@ -766,7 +774,7 @@ export default function NewPropertyPage() {
                   <SelectInput label="Ownership Status" name="ownershipType" value={formData.ownershipType} options={OWNERSHIP_OPTIONS} />
                   <div className="space-y-1.5">
                     <label htmlFor="occupantsCount" className="block text-sm font-medium text-slate-700">Occupants</label>
-                    <input type="number" id="occupantsCount" name="occupantsCount" value={formData.occupantsCount} onChange={handleChange} placeholder="e.g., 4" className={inputBaseClass} />
+                    <input type="number" id="occupantsCount" name="occupantsCount" value={formData.occupantsCount} onChange={handleChange} placeholder="e.g., 4" inputMode="numeric" className={inputBaseClass} />
                   </div>
                 </div>
 

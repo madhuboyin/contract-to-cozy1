@@ -127,6 +127,8 @@ const ServiceFilter = React.memo(
                 placeholder="e.g., 78701"
                 value={zipCode}
                 onChange={(e) => setZipCode(e.target.value)}
+                inputMode="numeric"
+                autoComplete="postal-code"
                 className="h-11 w-full text-sm"
               />
             </div>

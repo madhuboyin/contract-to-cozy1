@@ -98,7 +98,7 @@ const ExpenseForm = ({ initialData, properties, onSave, onClose, isSubmitting }:
       <div className="grid sm:grid-cols-2 gap-4">
         <div className="grid gap-2">
           <Label htmlFor="amount">Amount ($) *</Label>
-          <Input id="amount" type="number" step="0.01" value={formData.amount ?? ''} onChange={handleChange} required />
+          <Input id="amount" type="number" step="0.01" inputMode="decimal" autoComplete="transaction-amount" value={formData.amount ?? ''} onChange={handleChange} required />
         </div>
         <DateField
           id="transactionDate"

@@ -407,6 +407,7 @@ function ScenarioCalculator({
               min="0.1"
               max="30"
               step="0.125"
+              inputMode="decimal"
               value={targetRate}
               onChange={(e) => setTargetRate(e.target.value)}
               placeholder={contextData.marketRatePct.toFixed(3)}
@@ -445,6 +446,7 @@ function ScenarioCalculator({
               type="number"
               min="0"
               step="100"
+              inputMode="decimal"
               value={closingCost}
               onChange={(e) => setClosingCost(e.target.value)}
               placeholder={`Default: 2.5% of balance (~${usd(contextData.loanBalance * 0.025)})`}
@@ -694,6 +696,7 @@ function MortgageSetupForm({
               type="number"
               min="1"
               step="1000"
+              inputMode="decimal"
               value={balance}
               onChange={(e) => setBalance(e.target.value)}
               placeholder="e.g. 320000"
@@ -711,6 +714,7 @@ function MortgageSetupForm({
               min="0.1"
               max="30"
               step="0.125"
+              inputMode="decimal"
               value={ratePct}
               onChange={(e) => setRatePct(e.target.value)}
               placeholder="e.g. 6.625"
@@ -756,6 +760,7 @@ function MortgageSetupForm({
                 min="1"
                 max="480"
                 step="1"
+                inputMode="numeric"
                 value={customTerm}
                 onChange={(e) => setCustomTerm(e.target.value)}
                 placeholder="Months remaining (e.g. 278)"
@@ -778,6 +783,7 @@ function MortgageSetupForm({
               type="number"
               min="0"
               step="10"
+              inputMode="decimal"
               value={monthlyPayment}
               onChange={(e) => setMonthlyPayment(e.target.value)}
               placeholder="Leave blank to calculate automatically"
