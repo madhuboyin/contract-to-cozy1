@@ -59,7 +59,7 @@ function BudgetContent() {
       {propertyIdFromUrl && (
         <Button 
           variant="link" 
-          className="p-0 h-auto mb-2 text-sm text-muted-foreground"
+          className="min-h-[44px] h-auto mb-2 p-0 text-sm text-muted-foreground"
           onClick={() => navigateBackWithDashboardFallback(router)}
         >
           <ArrowLeft className="h-4 w-4 mr-1" /> Back

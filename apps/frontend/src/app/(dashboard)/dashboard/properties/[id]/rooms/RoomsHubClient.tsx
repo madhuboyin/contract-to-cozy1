@@ -251,7 +251,7 @@ export default function RoomsHubClient() {
           <MobileSection className="pt-0">
             <Link
               href={backHref}
-              className="no-brand-style inline-flex min-h-[40px] w-fit items-center gap-2 rounded-lg border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 text-sm font-medium text-[hsl(var(--mobile-text-primary))]"
+              className="no-brand-style inline-flex min-h-[44px] w-fit items-center gap-2 rounded-lg border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 text-sm font-medium text-[hsl(var(--mobile-text-primary))]"
             >
               <ArrowLeft className="h-3.5 w-3.5" />
               Back to property

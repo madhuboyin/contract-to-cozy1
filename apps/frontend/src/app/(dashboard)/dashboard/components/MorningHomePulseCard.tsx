@@ -634,7 +634,7 @@ export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCar
               <div className="flex shrink-0 items-center gap-1.5">
                 <Button
                   size="sm"
-                  className="h-8 min-h-[32px] bg-brand-600 px-3 text-xs font-medium hover:bg-brand-700"
+                  className="min-h-[44px] bg-brand-600 px-3 text-xs font-medium hover:bg-brand-700"
                   onClick={handleComplete}
                   disabled={actionBusy !== null}
                 >
@@ -650,7 +650,7 @@ export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCar
                 <Button
                   size="sm"
                   variant="ghost"
-                  className="h-8 w-8 p-0 text-gray-400 hover:text-gray-600"
+                  className="min-h-[44px] min-w-[44px] p-0 text-gray-400 hover:text-gray-600"
                   onClick={handleDismiss}
                   disabled={actionBusy !== null}
                   aria-label="Dismiss action"

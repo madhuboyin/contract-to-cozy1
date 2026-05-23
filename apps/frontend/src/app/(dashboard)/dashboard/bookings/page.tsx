@@ -292,7 +292,7 @@ export default function HomeownerBookingsPage() {
         href={`/dashboard/bookings/${booking.id}`}
         aria-label={`View booking ${booking.bookingNumber}`}
         title="View Details"
-        className="inline-flex h-9 w-9 items-center justify-center rounded-md text-gray-500 transition-colors hover:bg-gray-100 hover:text-blue-600"
+        className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md text-gray-500 transition-colors hover:bg-gray-100 hover:text-blue-600"
       >
         <Eye className="h-4 w-4" />
       </Link>
@@ -303,7 +303,7 @@ export default function HomeownerBookingsPage() {
           onClick={() => handleEditClick(booking)}
           aria-label={`Edit booking ${booking.bookingNumber}`}
           title="Edit Booking"
-          className="inline-flex h-9 w-9 items-center justify-center rounded-md text-gray-500 transition-colors hover:bg-gray-100 hover:text-blue-600"
+          className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md text-gray-500 transition-colors hover:bg-gray-100 hover:text-blue-600"
         >
           <Edit className="h-4 w-4" />
         </button>
@@ -315,7 +315,7 @@ export default function HomeownerBookingsPage() {
           onClick={() => handleCancelClick(booking)}
           aria-label={`Cancel booking ${booking.bookingNumber}`}
           title="Cancel Booking"
-          className="inline-flex h-9 w-9 items-center justify-center rounded-md text-gray-500 transition-colors hover:bg-gray-100 hover:text-red-600"
+          className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md text-gray-500 transition-colors hover:bg-gray-100 hover:text-red-600"
         >
           <XCircle className="h-4 w-4" />
         </button>
@@ -401,7 +401,7 @@ export default function HomeownerBookingsPage() {
                     key={status}
                     onClick={() => setFilter(status as BookingStatus | 'all')}
                     className={cn(
-                      'min-h-[36px] whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-medium transition-all',
+                      'min-h-[44px] whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-medium transition-all',
                       isActive ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
                     )}
                   >

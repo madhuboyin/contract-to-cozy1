@@ -161,7 +161,7 @@ const ServiceFilter = React.memo(
               <button
                 type="submit"
                 disabled={isSearching}
-                className="inline-flex min-h-[36px] items-center gap-1.5 rounded-lg bg-brand-primary px-3 text-xs font-semibold text-white hover:bg-brand-primary/90 disabled:opacity-60"
+                className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg bg-brand-primary px-3 text-xs font-semibold text-white hover:bg-brand-primary/90 disabled:opacity-60"
               >
                 {isSearching ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Search className="h-3.5 w-3.5" />}
                 {isSearching ? 'Searching' : 'Search'}
@@ -175,7 +175,7 @@ const ServiceFilter = React.memo(
                     setSelectedCategory('ALL');
                     onFilterChange({ zipCode: '', category: undefined });
                   }}
-                  className="inline-flex min-h-[36px] items-center rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                  className="inline-flex min-h-[44px] items-center rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50"
                 >
                   Clear
                 </button>
@@ -829,7 +829,7 @@ export default function ProvidersPage() {
             <button
               type="button"
               onClick={() => runSearch()}
-              className="inline-flex min-h-[36px] items-center rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+              className="inline-flex min-h-[44px] items-center rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50"
             >
               Retry search
             </button>

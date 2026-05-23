@@ -198,7 +198,7 @@ export function CtcTopCommandBar({ className }: CtcTopCommandBarProps) {
                 type="button"
                 onClick={() => window.dispatchEvent(new CustomEvent('ctc-command-palette-open'))}
                 aria-label="Search"
-                className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-slate-50/50 text-slate-600 active:bg-slate-100"
+                className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg border border-slate-200 bg-slate-50/50 text-slate-600 active:bg-slate-100"
               >
                 <Search className="h-4 w-4" />
               </button>
