@@ -101,6 +101,12 @@ export default function DashboardCommandPalette({ propertyId }: DashboardCommand
     return () => window.removeEventListener('keydown', onKeyDown);
   }, []);
 
+  React.useEffect(() => {
+    const onOpenRequest = () => setOpen(true);
+    window.addEventListener('ctc-command-palette-open', onOpenRequest);
+    return () => window.removeEventListener('ctc-command-palette-open', onOpenRequest);
+  }, []);
+
   const propertyRoomsHref = resolvedPropertyId
     ? `/dashboard/properties/${resolvedPropertyId}/rooms`
     : '/dashboard/properties?navTarget=rooms';

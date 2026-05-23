@@ -127,7 +127,7 @@ export const AIChatWindow = () => {
   };
 
   return (
-    <Card className="h-[500px] flex flex-col">
+    <Card className="flex flex-col h-[min(500px,70dvh)]">
       <CardHeader className="py-3 px-6 border-b">
         <h3 className="text-lg font-semibold flex items-center gap-2">
           <Bot className="w-5 h-5 text-primary" />

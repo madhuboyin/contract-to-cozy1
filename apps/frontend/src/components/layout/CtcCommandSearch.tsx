@@ -12,11 +12,10 @@ interface CtcCommandSearchProps {
 
 export function CtcCommandSearch({ className, onOpen }: CtcCommandSearchProps) {
   const handleClick = () => {
-    // TODO: Open command palette when available
     if (onOpen) {
       onOpen();
     } else {
-      console.log('Command palette not yet implemented');
+      window.dispatchEvent(new CustomEvent('ctc-command-palette-open'));
     }
   };
 

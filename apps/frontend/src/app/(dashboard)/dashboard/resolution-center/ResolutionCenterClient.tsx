@@ -723,7 +723,7 @@ function CompletionCelebration({
   const exposure = item?.exposure ? Math.round(item.exposure) : 0;
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="w-full max-w-lg rounded-t-3xl bg-white p-8 pb-12 shadow-2xl animate-in slide-in-from-bottom-4 duration-300">
+      <div className="w-full max-w-lg rounded-t-3xl bg-white p-8 pb-[max(3rem,calc(env(safe-area-inset-bottom)+2rem))] shadow-2xl animate-in slide-in-from-bottom-4 duration-300">
         <button
           onClick={onClose}
           className="absolute right-5 top-5 rounded-full p-1 text-slate-400 hover:bg-slate-100"

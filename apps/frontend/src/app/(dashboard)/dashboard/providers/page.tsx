@@ -288,7 +288,7 @@ const ProviderList = ({
                     {providerCompletedJobs > 0 ? ` • ${providerCompletedJobs} jobs` : ''}
                   </p>
                   {(inventoryItemId || insightContext) && providerCategories.includes((category || insightContext) as any) && (
-                    <StatusChip tone="good" className="text-[9px] py-0 px-1.5 h-4">Best Match</StatusChip>
+                    <StatusChip tone="good" className="text-[11px] py-0 px-1.5 h-4">Best Match</StatusChip>
                   )}
                 </div>
               </div>

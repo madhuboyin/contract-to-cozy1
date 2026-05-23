@@ -224,7 +224,7 @@ export default function RiskProtectionClient() {
             ) : (
               <div className="w-32 h-32 flex flex-col items-center justify-center rounded-full border-4 border-dashed border-slate-200 bg-slate-50 gap-1">
                 <Loader2 className="h-6 w-6 text-slate-300 animate-spin" />
-                <span className="text-[9px] text-slate-400 tracking-tight">Calculating</span>
+                <span className="text-[11px] text-slate-400 tracking-tight">Calculating</span>
               </div>
             )}
           </div>

@@ -316,6 +316,8 @@ export default function PropertiesPage() {
                               src={coverPhotoUrl}
                               alt={property.name || lineOne}
                               className="h-full w-full object-cover"
+                              loading="lazy"
+                              decoding="async"
                             />
                           ) : (
                             <Home className="h-7 w-7" />
@@ -441,6 +443,8 @@ export default function PropertiesPage() {
                           src={coverPhotoUrl}
                           alt={property.name || property.address}
                           className="h-36 w-full object-cover"
+                          loading="lazy"
+                          decoding="async"
                         />
                       </div>
                     ) : null}

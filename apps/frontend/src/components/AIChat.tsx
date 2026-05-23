@@ -304,7 +304,7 @@ const AIChatInner: React.FC = () => {
       <div
         ref={launcherRef}
         className={cn(
-          'fixed right-3 font-sans transition-all duration-200 bottom-[calc(5.25rem+env(safe-area-inset-bottom))] sm:right-4 md:bottom-6 md:right-6',
+          'fixed right-3 font-sans transition-all duration-200 bottom-[calc(5.25rem+env(safe-area-inset-bottom))] sm:right-4 lg:bottom-6 lg:right-6',
           isOpen ? 'z-[70]' : 'z-40',
           shouldHideLauncher && 'pointer-events-none translate-y-2 opacity-0'
         )}

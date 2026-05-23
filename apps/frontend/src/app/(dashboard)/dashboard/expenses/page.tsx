@@ -306,7 +306,7 @@ export default function ExpensesPage() {
             <Button onClick={() => openEditModal(undefined)}>
               <Plus className="w-4 h-4 mr-2" /> Add Expense
             </Button>
-            <DialogContent className="sm:max-w-[500px]">
+            <DialogContent className="sm:max-w-[500px] max-h-[90dvh] overflow-y-auto">
               <ExpenseForm 
                 initialData={editingExpense}
                 properties={properties}

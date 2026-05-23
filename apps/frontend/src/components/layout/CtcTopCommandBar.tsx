@@ -195,7 +195,7 @@ export function CtcTopCommandBar({ className }: CtcTopCommandBarProps) {
             <div className="flex items-center gap-1.5 shrink-0">
               <button
                 type="button"
-                onClick={() => {/* command palette — same stub as desktop */}}
+                onClick={() => window.dispatchEvent(new CustomEvent('ctc-command-palette-open'))}
                 aria-label="Search"
                 className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-slate-50/50 text-slate-600 active:bg-slate-100"
               >
