@@ -1817,9 +1817,9 @@ export default function EditPropertyPage() {
                   control={form.control}
                   name="bedrooms"
                   render={({ field }) => (
-                    <FormItem className="occupancy-numeric-field w-[80px] min-w-[80px] max-w-[80px]">
+                    <FormItem className="occupancy-numeric-field w-[80px] max-w-[80px]">
                       <FormLabel className="mb-1 block text-xs text-gray-500 dark:text-slate-400">Bedrooms</FormLabel>
-                      <FormControl><Input id="field-bedrooms" className="h-9 w-[80px] min-w-[80px] max-w-[80px] px-3 text-center text-[15px] font-medium focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40" placeholder="3" type="number" {...field} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value === "" ? null : parseInt(e.target.value, 10))} /></FormControl>
+                      <FormControl><Input id="field-bedrooms" className="h-10 w-full px-3 text-center text-[15px] font-medium focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40" placeholder="3" type="number" {...field} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value === "" ? null : parseInt(e.target.value, 10))} /></FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -1828,9 +1828,9 @@ export default function EditPropertyPage() {
                   control={form.control}
                   name="bathrooms"
                   render={({ field }) => (
-                    <FormItem className="occupancy-numeric-field w-[80px] min-w-[80px] max-w-[80px]">
+                    <FormItem className="occupancy-numeric-field w-[80px] max-w-[80px]">
                       <FormLabel className="mb-1 block text-xs text-gray-500 dark:text-slate-400">Bathrooms</FormLabel>
-                      <FormControl><Input id="field-bathrooms" className="h-9 w-[80px] min-w-[80px] max-w-[80px] px-3 text-center text-[15px] font-medium focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40" placeholder="2.5" type="number" step="0.5" {...field} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value === "" ? null : Number(e.target.value))} /></FormControl>
+                      <FormControl><Input id="field-bathrooms" className="h-10 w-full px-3 text-center text-[15px] font-medium focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40" placeholder="2.5" type="number" step="0.5" {...field} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value === "" ? null : Number(e.target.value))} /></FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -1839,9 +1839,9 @@ export default function EditPropertyPage() {
                   control={form.control}
                   name="occupantsCount"
                   render={({ field }) => (
-                    <FormItem className="occupancy-numeric-field w-[80px] min-w-[80px] max-w-[80px]">
+                    <FormItem className="occupancy-numeric-field w-[80px] max-w-[80px]">
                       <FormLabel className="mb-1 block text-xs text-gray-500 dark:text-slate-400">Occupants</FormLabel>
-                      <FormControl><Input id="field-occupantsCount" className="h-9 w-[80px] min-w-[80px] max-w-[80px] px-3 text-center text-[15px] font-medium focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40" placeholder="4" type="number" {...field} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value === "" ? null : parseInt(e.target.value, 10))} /></FormControl>
+                      <FormControl><Input id="field-occupantsCount" className="h-10 w-full px-3 text-center text-[15px] font-medium focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40" placeholder="4" type="number" {...field} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value === "" ? null : parseInt(e.target.value, 10))} /></FormControl>
                       <FormMessage />
                     </FormItem>
                   )}

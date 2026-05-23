@@ -152,7 +152,7 @@ export function BottomNav() {
                 key={item.href}
                 href={item.href}
                 className={cn(
-                  'flex flex-1 min-h-[44px] flex-col items-center justify-center gap-0.5 pb-1 text-xs transition-colors duration-150',
+                  'flex flex-1 min-h-[44px] flex-col items-center justify-center gap-0.5 pb-1 text-xs transition-colors duration-150 active:opacity-60',
                   isActive ? 'text-brand-600' : 'text-gray-400'
                 )}
               >
@@ -190,7 +190,7 @@ export function BottomNav() {
                 key={item.href}
                 href={item.href}
                 className={cn(
-                  'flex flex-1 min-h-[44px] flex-col items-center justify-center gap-0.5 pb-1 text-xs transition-colors duration-150',
+                  'flex flex-1 min-h-[44px] flex-col items-center justify-center gap-0.5 pb-1 text-xs transition-colors duration-150 active:opacity-60',
                   isActive ? 'text-brand-600' : 'text-gray-400'
                 )}
               >
@@ -215,7 +215,7 @@ export function BottomNav() {
                 type="button"
                 aria-label="More navigation options"
                 className={cn(
-                  'flex flex-1 min-h-[44px] flex-col items-center justify-center gap-0.5 pb-1 text-xs transition-colors duration-150',
+                  'flex flex-1 min-h-[44px] flex-col items-center justify-center gap-0.5 pb-1 text-xs transition-colors duration-150 active:opacity-60',
                   moreActive ? 'text-brand-600' : 'text-gray-400'
                 )}
               >
@@ -238,7 +238,7 @@ export function BottomNav() {
               <button
                 type="button"
                 onClick={() => { setMoreOpen(false); setPropertySwitcherOpen(true); }}
-                className="mt-3 flex w-full items-center justify-between gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-left hover:bg-white transition-colors"
+                className="mt-3 flex w-full items-center justify-between gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-left hover:bg-white active:bg-slate-100 transition-colors"
               >
                 <div className="flex items-center gap-2 min-w-0">
                   <Building className="h-4 w-4 shrink-0 text-slate-500" />
@@ -274,7 +274,7 @@ export function BottomNav() {
                             href={item.href}
                             onClick={() => setMoreOpen(false)}
                             className={cn(
-                              'flex min-h-[48px] items-center gap-3 rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-teal-50 hover:text-brand-700 transition-colors',
+                              'flex min-h-[48px] items-center gap-3 rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-teal-50 hover:text-brand-700 active:bg-teal-100 transition-colors',
                               active && 'border-brand-200 bg-teal-50 text-brand-700'
                             )}
                           >
@@ -295,7 +295,7 @@ export function BottomNav() {
                 <Link
                   href="/dashboard/profile"
                   onClick={() => setMoreOpen(false)}
-                  className="flex min-h-[44px] items-center gap-2 rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                  className="flex min-h-[44px] items-center gap-2 rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 active:bg-gray-100"
                 >
                   <Settings className="h-4 w-4" />
                   Profile
@@ -303,7 +303,7 @@ export function BottomNav() {
                 <button
                   type="button"
                   onClick={handleLogout}
-                  className="flex min-h-[44px] w-full items-center gap-2 rounded-xl border border-red-200 px-4 py-2.5 text-left text-sm font-semibold text-red-600 hover:bg-red-50"
+                  className="flex min-h-[44px] w-full items-center gap-2 rounded-xl border border-red-200 px-4 py-2.5 text-left text-sm font-semibold text-red-600 hover:bg-red-50 active:bg-red-100"
                 >
                   <LogOut className="h-4 w-4" />
                   Sign out

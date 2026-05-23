@@ -465,7 +465,7 @@ export function RoomsSnapshotSection({ propertyId }: RoomsSnapshotSectionProps) 
               return (
                 <div
                   key={room.id}
-                  className="snap-start min-w-[92%] flex-shrink-0 rounded-2xl border border-gray-200/85 bg-white p-4 shadow-sm will-change-transform transform-gpu sm:min-w-[72%] sm:p-5 md:min-w-[calc((100%-1rem)/2)] lg:min-w-[calc((100%-2rem)/3)]"
+                  className="snap-start min-w-[88%] flex-shrink-0 rounded-2xl border border-gray-200/85 bg-white p-4 shadow-sm will-change-transform transform-gpu xs:min-w-[80%] sm:min-w-[72%] sm:p-5 md:min-w-[calc((100%-1rem)/2)] lg:min-w-[calc((100%-2rem)/3)]"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex min-w-0 items-center gap-2.5">

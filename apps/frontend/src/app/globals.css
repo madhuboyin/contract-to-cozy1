@@ -512,7 +512,7 @@ html {
 
   .mobile-page-container {
     width: 100%;
-    max-width: 414px;
+    max-width: 100%;
     margin-left: auto;
     margin-right: auto;
     padding-left: 16px;
@@ -635,7 +635,7 @@ html {
 
   .responsive-tool-shell {
     width: 100%;
-    max-width: 414px;
+    max-width: 100%;
     margin-left: auto;
     margin-right: auto;
     padding-left: 16px;
@@ -820,7 +820,7 @@ html {
 
 /* Table column headers — ALL CAPS, wide tracking */
 .col-header {
-  font-size: 10.5px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.07em;
   text-transform: uppercase;
@@ -844,7 +844,7 @@ html {
 
 /* Section eyebrow labels (ALL CAPS small) */
 .label-caps {
-  font-size: 10.5px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.07em;
   text-transform: uppercase;
