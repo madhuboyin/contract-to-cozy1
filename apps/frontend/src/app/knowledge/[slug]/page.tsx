@@ -3,6 +3,7 @@ import { ArrowLeft, ArrowRight } from 'lucide-react';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { DashboardShell } from '@/components/DashboardShell';
+import { KnowledgeMobileHeader } from '@/components/knowledge/KnowledgeMobileHeader';
 import { Badge } from '@/components/ui/badge';
 import { KnowledgeArticleToc } from '@/components/knowledge/KnowledgeArticleToc';
 import { KnowledgeMetaRow } from '@/components/knowledge/KnowledgeMetaRow';
@@ -107,9 +108,10 @@ export default async function KnowledgeArticlePage({ params, searchParams }: Kno
 
   return (
     <div className="min-h-screen bg-[linear-gradient(180deg,#ffffff_0%,#f8fafc_18%,#ffffff_100%)]">
+      <KnowledgeMobileHeader title={article.title} backHref={withKnowledgeProperty('/knowledge', propertyId)} backLabel="Knowledge Hub" />
       <DashboardShell className="space-y-10 py-10 md:space-y-12 md:py-12">
         <div className={`${articlePageFrameClass} space-y-5`}>
-          <Link href={withKnowledgeProperty('/knowledge', propertyId)} className="inline-flex items-center gap-1.5 text-sm text-slate-500 transition-colors hover:text-slate-800">
+          <Link href={withKnowledgeProperty('/knowledge', propertyId)} className="hidden md:inline-flex items-center gap-1.5 text-sm text-slate-500 transition-colors hover:text-slate-800">
             <ArrowLeft className="h-4 w-4" />
             Back to Knowledge Hub
           </Link>

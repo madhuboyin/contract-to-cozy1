@@ -238,7 +238,7 @@ export function PreviewListRow({
   return (
     <Link
       href={href}
-      className={cn('no-brand-style block rounded-xl', MOBILE_INTERACTIVE_FOCUS_RING)}
+      className={cn('no-brand-style block rounded-xl transition-transform active:scale-[0.98]', MOBILE_INTERACTIVE_FOCUS_RING)}
       onClick={onClick}
     >
       {content}
@@ -267,7 +267,7 @@ export function CompactInsightStrip({
 
   if (!href) return content;
   return (
-    <Link href={href} className={cn('no-brand-style block rounded-xl', MOBILE_INTERACTIVE_FOCUS_RING)}>
+    <Link href={href} className={cn('no-brand-style block rounded-xl transition-transform active:scale-[0.98]', MOBILE_INTERACTIVE_FOCUS_RING)}>
       {content}
     </Link>
   );
@@ -808,7 +808,7 @@ export function CompactEntityRow({
 
   if (!href) return content;
   return (
-    <Link href={href} className={cn('no-brand-style block rounded-xl', MOBILE_INTERACTIVE_FOCUS_RING)}>
+    <Link href={href} className={cn('no-brand-style block rounded-xl transition-transform active:scale-[0.98]', MOBILE_INTERACTIVE_FOCUS_RING)}>
       {content}
     </Link>
   );

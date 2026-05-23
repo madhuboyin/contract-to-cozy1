@@ -5,7 +5,7 @@ import React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { Bell } from 'lucide-react';
+import { Bell, Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { api } from '@/lib/api/client';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
@@ -193,6 +193,14 @@ export function CtcTopCommandBar({ className }: CtcTopCommandBarProps) {
 
             {/* Right Actions */}
             <div className="flex items-center gap-1.5 shrink-0">
+              <button
+                type="button"
+                onClick={() => {/* command palette — same stub as desktop */}}
+                aria-label="Search"
+                className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-slate-50/50 text-slate-600 active:bg-slate-100"
+              >
+                <Search className="h-4 w-4" />
+              </button>
               <SetupGuideButton propertyId={propertyId} onboardingStatus={onboardingStatus} />
               <NotificationsButton />
             </div>

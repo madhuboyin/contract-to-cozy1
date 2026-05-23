@@ -191,80 +191,93 @@ function FilterBar({
   );
 
   return (
-    <div className="flex flex-wrap items-center gap-3">
-      {/* Preset buttons */}
-      <div className="flex items-center gap-1 rounded-full border border-slate-200 bg-white px-1 py-1 shadow-sm">
-        {PRESET_RANGES.map((p) => (
-          <button
-            key={p.label}
-            onClick={() => onChange({ ...filters, from: daysAgo(p.days), to: today() })}
-            className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
-              activePreset?.label === p.label
-                ? 'bg-slate-900 text-white'
-                : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'
-            }`}
-          >
-            {p.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Custom date inputs */}
-      <div className="flex items-center gap-1.5">
-        <input
-          type="date"
-          value={filters.from ?? ''}
-          onChange={(e) => onChange({ ...filters, from: e.target.value || undefined })}
-          className="h-8 rounded-lg border border-slate-200 px-2 text-xs text-slate-700 focus:border-slate-400 focus:outline-none"
-          aria-label="Start date"
-        />
-        <span className="text-xs text-slate-400">–</span>
-        <input
-          type="date"
-          value={filters.to ?? ''}
-          onChange={(e) => onChange({ ...filters, to: e.target.value || undefined })}
-          className="h-8 rounded-lg border border-slate-200 px-2 text-xs text-slate-700 focus:border-slate-400 focus:outline-none"
-          aria-label="End date"
-        />
-      </div>
-
-      {/* Module filter */}
-      <div className="relative">
-        <Filter className="pointer-events-none absolute left-2.5 top-1/2 h-3 w-3 -translate-y-1/2 text-slate-400" />
-        <select
-          value={filters.moduleKey ?? ''}
-          onChange={(e) =>
-            onChange({ ...filters, moduleKey: e.target.value || undefined })
-          }
-          className="h-8 appearance-none rounded-lg border border-slate-200 bg-white pl-7 pr-7 text-xs text-slate-700 focus:border-slate-400 focus:outline-none"
-          aria-label="Module filter"
-        >
-          {MODULE_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
+    <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
+      {/* Row 1 (mobile): presets + refresh; Row 1 (desktop): inline with rest */}
+      <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1 rounded-full border border-slate-200 bg-white px-1 py-1 shadow-sm">
+          {PRESET_RANGES.map((p) => (
+            <button
+              key={p.label}
+              onClick={() => onChange({ ...filters, from: daysAgo(p.days), to: today() })}
+              className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
+                activePreset?.label === p.label
+                  ? 'bg-slate-900 text-white'
+                  : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'
+              }`}
+            >
+              {p.label}
+            </button>
           ))}
-        </select>
-        <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3 w-3 -translate-y-1/2 text-slate-400" />
+        </div>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={onRefresh}
+          className="sm:hidden h-8 rounded-full px-3 text-xs text-slate-500 hover:text-slate-900"
+        >
+          <RefreshCw className="h-3 w-3" />
+        </Button>
       </div>
 
-      {/* Active filter indicator */}
-      {filters.moduleKey && (
-        <Badge
-          variant="outline"
-          className="cursor-pointer rounded-full border-slate-200 bg-slate-50 px-2.5 py-0.5 text-[11px] font-semibold tracking-normal text-slate-600 hover:bg-slate-100"
-          onClick={() => onChange({ ...filters, moduleKey: undefined })}
-        >
-          {filters.moduleKey} ×
-        </Badge>
-      )}
+      {/* Row 2 (mobile): date inputs + module filter */}
+      <div className="flex flex-wrap items-center gap-2">
+        {/* Custom date inputs */}
+        <div className="flex items-center gap-1.5">
+          <input
+            type="date"
+            value={filters.from ?? ''}
+            onChange={(e) => onChange({ ...filters, from: e.target.value || undefined })}
+            className="h-9 min-w-0 w-[130px] rounded-lg border border-slate-200 px-2 text-xs text-slate-700 focus:border-slate-400 focus:outline-none"
+            aria-label="Start date"
+          />
+          <span className="text-xs text-slate-400">–</span>
+          <input
+            type="date"
+            value={filters.to ?? ''}
+            onChange={(e) => onChange({ ...filters, to: e.target.value || undefined })}
+            className="h-9 min-w-0 w-[130px] rounded-lg border border-slate-200 px-2 text-xs text-slate-700 focus:border-slate-400 focus:outline-none"
+            aria-label="End date"
+          />
+        </div>
 
-      {/* Refresh */}
+        {/* Module filter */}
+        <div className="relative">
+          <Filter className="pointer-events-none absolute left-2.5 top-1/2 h-3 w-3 -translate-y-1/2 text-slate-400" />
+          <select
+            value={filters.moduleKey ?? ''}
+            onChange={(e) =>
+              onChange({ ...filters, moduleKey: e.target.value || undefined })
+            }
+            className="h-9 appearance-none rounded-lg border border-slate-200 bg-white pl-7 pr-7 text-xs text-slate-700 focus:border-slate-400 focus:outline-none"
+            aria-label="Module filter"
+          >
+            {MODULE_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+          <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3 w-3 -translate-y-1/2 text-slate-400" />
+        </div>
+
+        {/* Active filter indicator */}
+        {filters.moduleKey && (
+          <Badge
+            variant="outline"
+            className="cursor-pointer rounded-full border-slate-200 bg-slate-50 px-2.5 py-0.5 text-[11px] font-semibold tracking-normal text-slate-600 hover:bg-slate-100"
+            onClick={() => onChange({ ...filters, moduleKey: undefined })}
+          >
+            {filters.moduleKey} ×
+          </Badge>
+        )}
+      </div>
+
+      {/* Refresh — desktop only (mobile refresh is inline above) */}
       <Button
         variant="ghost"
         size="sm"
         onClick={onRefresh}
-        className="ml-auto h-8 rounded-full px-3 text-xs text-slate-500 hover:text-slate-900"
+        className="hidden sm:flex ml-auto h-8 rounded-full px-3 text-xs text-slate-500 hover:text-slate-900"
       >
         <RefreshCw className="mr-1.5 h-3 w-3" />
         Refresh

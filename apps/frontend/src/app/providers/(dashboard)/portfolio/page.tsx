@@ -3,6 +3,7 @@
 'use client';
 
 import { useState } from 'react';
+import Image from 'next/image';
 import {
   BottomSafeAreaReserve,
   MobileCard,
@@ -82,7 +83,7 @@ export default function ProviderPortfolioPage() {
           {portfolioItems.map((item) => (
             <MobileCard key={item.id} variant="compact" className="overflow-hidden p-0">
               <div className="relative aspect-video bg-slate-100">
-                <img src={item.imageUrl} alt={item.title} className="h-full w-full object-cover" />
+                <Image src={item.imageUrl} alt={item.title} fill className="object-cover" unoptimized />
                 <div className="absolute left-3 top-3">
                   <StatusChip tone="info">{item.serviceCategory}</StatusChip>
                 </div>

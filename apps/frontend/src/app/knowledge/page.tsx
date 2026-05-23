@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import type { Metadata } from 'next';
 import { DashboardShell } from '@/components/DashboardShell';
+import { KnowledgeMobileHeader } from '@/components/knowledge/KnowledgeMobileHeader';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { KnowledgeArticleCard } from '@/components/knowledge/KnowledgeArticleCard';
@@ -36,9 +37,10 @@ export default async function KnowledgeHubPage({
 
   return (
     <div className="min-h-screen bg-[linear-gradient(180deg,#f8fafc_0%,#ffffff_14%,#f8fafc_100%)]">
+      <KnowledgeMobileHeader title="Knowledge Hub" backHref="/dashboard" backLabel="Dashboard" />
       <DashboardShell className="space-y-10 py-10 md:space-y-12 md:py-12">
         <section className="space-y-5 border-b border-slate-200/80 pb-8 md:pb-10">
-          <Link href="/dashboard" className="inline-flex items-center gap-1.5 text-sm text-slate-500 transition-colors hover:text-slate-800">
+          <Link href="/dashboard" className="hidden md:inline-flex items-center gap-1.5 text-sm text-slate-500 transition-colors hover:text-slate-800">
             <ArrowLeft className="h-4 w-4" />
             Back to dashboard
           </Link>

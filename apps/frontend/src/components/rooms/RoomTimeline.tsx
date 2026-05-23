@@ -2,6 +2,7 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
+import Image from 'next/image';
 import { format } from 'date-fns';
 import { AlertTriangle, Camera, ClipboardCheck, Pencil, Plus, Wrench } from 'lucide-react';
 import { motion } from 'framer-motion';
@@ -228,8 +229,8 @@ export default function RoomTimeline({ propertyId, roomId, roomType, onAddEvent 
                     {beforePhoto || afterPhoto ? (
                       <div className="mt-3 flex gap-2">
                         {beforePhoto ? (
-                          <div className="relative">
-                            <img src={beforePhoto} alt="Before" className="h-16 w-24 rounded-lg object-cover" />
+                          <div className="relative h-16 w-24">
+                            <Image src={beforePhoto} alt="Before" fill className="rounded-lg object-cover" unoptimized />
                             <span className="absolute bottom-1 left-1 rounded bg-black/50 px-1.5 py-0.5 text-[9px] font-bold text-white">
                               Before
                             </span>
@@ -237,8 +238,8 @@ export default function RoomTimeline({ propertyId, roomId, roomType, onAddEvent 
                         ) : null}
 
                         {afterPhoto ? (
-                          <div className="relative">
-                            <img src={afterPhoto} alt="After" className="h-16 w-24 rounded-lg object-cover" />
+                          <div className="relative h-16 w-24">
+                            <Image src={afterPhoto} alt="After" fill className="rounded-lg object-cover" unoptimized />
                             <span className="absolute bottom-1 left-1 rounded bg-black/50 px-1.5 py-0.5 text-[9px] font-bold text-white">
                               After
                             </span>

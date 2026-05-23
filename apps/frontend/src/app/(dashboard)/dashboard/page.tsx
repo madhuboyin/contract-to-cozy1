@@ -639,7 +639,7 @@ export default function DashboardPage() {
   const { toast } = useToast();
   const [redirectChecked, setRedirectChecked] = useState(false);
   const [showWelcomeScreen, setShowWelcomeScreen] = useState(false);
-  const [isMobileViewport, setIsMobileViewport] = useState(false);
+
   const [isReturningVisitor, setIsReturningVisitor] = useState(false);
   const [localUpdates, setLocalUpdates] = useState<LocalUpdate[]>([]);
   const [isScannerOpen, setIsScannerOpen] = useState(false);
@@ -863,13 +863,6 @@ export default function DashboardPage() {
     }
   }, [userLoading, user, fetchDashboardData]);
 
-  useEffect(() => {
-    const mq = window.matchMedia('(max-width: 767px)');
-    setIsMobileViewport(mq.matches);
-    const handler = (e: MediaQueryListEvent) => setIsMobileViewport(e.matches);
-    mq.addEventListener('change', handler);
-    return () => mq.removeEventListener('change', handler);
-  }, []);
 
   const safeFirstName = user?.firstName || 'there';
   const selectedProperty = properties.find(p => p.id === effectiveSelectedPropertyId); 
@@ -1321,8 +1314,9 @@ export default function DashboardPage() {
 
   return (
     <>
-      {isMobileViewport ? (
-        isHomeBuyer ? (
+      {/* Mobile view — CSS hidden on md+ so no layout flash */}
+      <div className="md:hidden">
+        {isHomeBuyer ? (
           <MobileHomeBuyerDashboard
             userFirstName={safeFirstName}
             properties={properties}
@@ -1340,20 +1334,21 @@ export default function DashboardPage() {
             onPropertyChange={setSelectedPropertyId}
             localUpdates={localUpdates}
           />
-        )
-      ) : (
-        <div className="max-w-7xl mx-auto px-4 md:px-6 w-full">
-          <CommandCenterTemplate
-            primaryAction={primaryActionHero}
-            confidenceLabel="Verified"
-            freshnessLabel="Updated today"
-            sourceLabel="Home analysis"
-            secondaryModules={
-              <RoomsSnapshotSection propertyId={effectiveSelectedPropertyId} />
-            }
-          />
-        </div>
-      )}
+        )}
+      </div>
+
+      {/* Desktop view — CSS hidden below md */}
+      <div className="hidden md:block max-w-7xl mx-auto px-4 md:px-6 w-full">
+        <CommandCenterTemplate
+          primaryAction={primaryActionHero}
+          confidenceLabel="Verified"
+          freshnessLabel="Updated today"
+          sourceLabel="Home analysis"
+          secondaryModules={
+            <RoomsSnapshotSection propertyId={effectiveSelectedPropertyId} />
+          }
+        />
+      </div>
 
       <MilestoneCelebration type={celebration.type} isOpen={celebration.isOpen} onClose={dismiss} />
     </>
