@@ -1122,30 +1122,33 @@ export default function InsurancePage() {
                     </TableCell>
                     <TableCell className="text-center">
                       <div className="flex justify-center space-x-1">
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
+                          <Button
+                            variant="ghost"
+                            size="icon"
                             className="h-8 w-8 text-gray-500 hover:text-green-600"
                             onClick={() => openUploadModal(policy.id)}
                             title="Upload Document"
+                            aria-label="Upload document"
                           >
                             <Upload className="w-4 h-4" />
                           </Button>
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
+                          <Button
+                            variant="ghost"
+                            size="icon"
                             className="h-8 w-8 text-gray-500 hover:text-blue-600"
                             onClick={() => openAddEditModal(policy)}
                             title="Edit Policy"
+                            aria-label="Edit policy"
                           >
                             <Edit className="w-4 h-4" />
                           </Button>
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
+                          <Button
+                            variant="ghost"
+                            size="icon"
                             className="h-8 w-8 text-gray-500 hover:text-red-600"
                             onClick={() => handleDelete(policy.id)}
                             title="Delete Policy"
+                            aria-label="Delete policy"
                           >
                             <Trash2 className="w-4 h-4" />
                           </Button>

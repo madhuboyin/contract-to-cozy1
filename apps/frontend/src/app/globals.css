@@ -120,6 +120,16 @@
     --ctc-surface-hover: rgba(248,250,252,0.92);
     --ctc-motion-fast: 180ms;
     --ctc-motion-standard: 240ms;
+
+    /* === Z-INDEX SCALE === */
+    --z-base: 0;
+    --z-raised: 10;
+    --z-sticky: 20;
+    --z-dropdown: 30;
+    --z-overlay: 40;
+    --z-modal: 50;
+    --z-toast: 60;
+    --z-tooltip: 70;
   }
   
   .dark {

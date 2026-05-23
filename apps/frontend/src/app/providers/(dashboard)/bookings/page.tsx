@@ -14,7 +14,11 @@ import {
   StatusChip,
 } from '@/components/mobile/dashboard/MobilePrimitives';
 import ProviderBookingQueueTemplate from '@/components/providers/ProviderBookingQueueTemplate';
-import { MilestoneCelebration } from '@/components/ui/MilestoneCelebration';
+import dynamic from 'next/dynamic';
+const MilestoneCelebration = dynamic(
+  () => import('@/components/ui/MilestoneCelebration').then((m) => m.MilestoneCelebration),
+  { ssr: false },
+);
 import { useToast } from '@/components/ui/use-toast';
 import { useCelebration } from '@/hooks/useCelebration';
 import { api } from '@/lib/api/client';

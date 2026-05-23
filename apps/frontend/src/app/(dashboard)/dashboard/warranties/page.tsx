@@ -1531,30 +1531,33 @@ export default function WarrantiesPage() {
                     </TableCell>
                     <TableCell className="text-center">
                       <div className="flex justify-center space-x-1">
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
+                          <Button
+                            variant="ghost"
+                            size="icon"
                             className="text-gray-500 hover:text-blue-600"
                             onClick={() => openUploadModal(warranty.id)}
                             title="Upload Document"
+                            aria-label="Upload document"
                           >
                             <Upload className="w-4 h-4" />
                           </Button>
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
+                          <Button
+                            variant="ghost"
+                            size="icon"
                             className="text-gray-500 hover:text-blue-600"
                             onClick={() => openAddEditModal(warranty)}
                             title="Edit Warranty"
+                            aria-label="Edit warranty"
                           >
                             <Edit className="w-4 h-4" />
                           </Button>
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
+                          <Button
+                            variant="ghost"
+                            size="icon"
                             className="text-gray-500 hover:text-red-600"
                             onClick={() => handleDelete(warranty.id)}
                             title="Delete Warranty"
+                            aria-label="Delete warranty"
                           >
                             <Trash2 className="w-4 h-4" />
                           </Button>

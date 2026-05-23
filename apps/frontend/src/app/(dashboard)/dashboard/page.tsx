@@ -50,7 +50,10 @@ import dynamic from 'next/dynamic';
 const MobileDashboardHome = dynamic(() => import('./components/MobileDashboardHome'), { ssr: false });
 const MobileHomeBuyerDashboard = dynamic(() => import('./components/MobileHomeBuyerDashboard'), { ssr: false });
 import { useCelebration } from '@/hooks/useCelebration';
-import { MilestoneCelebration } from '@/components/ui/MilestoneCelebration';
+const MilestoneCelebration = dynamic(
+  () => import('@/components/ui/MilestoneCelebration').then((m) => m.MilestoneCelebration),
+  { ssr: false },
+);
 import { recordGuidanceToolStatus } from '@/lib/api/guidanceApi';
 import { seasonalAPI } from '@/lib/api/seasonal.api';
 import { getHomeSavingsSummary } from '@/lib/api/homeSavingsApi';
