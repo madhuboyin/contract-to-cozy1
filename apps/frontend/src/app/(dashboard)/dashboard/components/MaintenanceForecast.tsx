@@ -91,7 +91,7 @@ function TimelineCard({
 
   return (
     <Card
-      className={`min-w-[280px] max-w-[320px] shrink-0 ${
+      className={`min-w-[280px] max-w-[320px] shrink-0 snap-start ${
         overdue ? 'border-red-300 bg-red-50/30' : 'border-gray-200'
       }`}
     >
@@ -436,7 +436,7 @@ export function MaintenanceForecast({ propertyId, mode = 'timeline' }: Maintenan
         </div>
       </div>
 
-      <div className="overflow-x-auto pb-2">
+      <div className="overflow-x-auto pb-2 snap-x snap-mandatory">
         {generationError && (
           <p className="mb-2 text-xs text-amber-700">
             Forecast refresh had a warning: {generationError}

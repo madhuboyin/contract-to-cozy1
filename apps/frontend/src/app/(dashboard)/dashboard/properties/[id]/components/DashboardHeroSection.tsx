@@ -552,7 +552,7 @@ function AttentionItemRow({
       {/* CTA */}
       <div className="shrink-0 pt-0.5">
         {isExecutable ? (
-          <Button asChild size="sm" variant="outline" className="h-8 gap-1 px-2.5 text-xs">
+          <Button asChild size="sm" variant="outline" className="h-10 min-h-[44px] gap-1 px-2.5 text-xs">
             <Link href={action.href!}>
               {ctaLabel}
               <ArrowRight className="h-3 w-3" />
@@ -563,7 +563,7 @@ function AttentionItemRow({
             type="button"
             size="sm"
             variant="ghost"
-            className="h-8 px-2.5 text-xs"
+            className="h-10 min-h-[44px] px-2.5 text-xs"
             onClick={() => onOpenJourney(action)}
           >
             Details

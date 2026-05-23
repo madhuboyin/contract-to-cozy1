@@ -982,8 +982,9 @@ useEffect(() => {
   return createPortal(
     <div className="fixed inset-0 z-50">
       <div className="absolute inset-0 bg-black/30" onClick={props.onClose} />
-      <div className="absolute inset-y-0 right-0 w-full max-w-[640px] bg-white shadow-2xl">
+      <div className="absolute right-0 bottom-0 w-full max-w-full max-h-[90dvh] rounded-t-2xl bg-white shadow-2xl lg:inset-y-0 lg:max-w-[640px] lg:max-h-full lg:rounded-none">
         <div className="flex h-full flex-col">
+          <div className="mx-auto mt-3 h-1 w-10 shrink-0 rounded-full bg-gray-200 lg:hidden" />
           <div className="flex items-start justify-between border-b border-gray-100 px-6 py-4">
             <div>
               <h2 className="text-lg font-semibold text-gray-900">{isEdit ? 'Edit item' : 'Add item'}</h2>

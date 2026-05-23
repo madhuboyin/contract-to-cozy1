@@ -114,7 +114,7 @@ export default function DashboardBreadcrumbs() {
   if (items.length === 0) return null;
 
   return (
-    <div className="mb-3 md:mb-4">
+    <div className="hidden md:block mb-3 md:mb-4">
       <Breadcrumb items={items} />
     </div>
   );

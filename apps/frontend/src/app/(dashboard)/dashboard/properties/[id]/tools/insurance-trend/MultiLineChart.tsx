@@ -118,6 +118,21 @@ export default function MultiLineChart(props: {
     setHoverXPct(px / rect.width);
   }
 
+  function onTouchMove(e: React.TouchEvent<SVGSVGElement>) {
+    const touch = e.touches[0];
+    if (!touch) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const px = clamp(touch.clientX - rect.left, 0, rect.width);
+    const t = px / rect.width;
+    const idx = clamp(
+      Math.round(t * (safe.xLabels.length - 1)),
+      0,
+      safe.xLabels.length - 1
+    );
+    setHoverIdx(idx);
+    setHoverXPct(px / rect.width);
+  }
+
   function dashFor(s: Series, idx: number) {
     return s.dash ?? (idx === 0 ? undefined : idx === 1 ? '6 5' : '2 4');
   }
@@ -181,6 +196,8 @@ export default function MultiLineChart(props: {
           aria-label={props.ariaLabel || 'Trend chart'}
           onMouseMove={onMove}
           onMouseLeave={() => setHoverIdx(null)}
+          onTouchMove={onTouchMove}
+          onTouchEnd={() => setHoverIdx(null)}
         >
           {/* Axes */}
           <line x1={padL} y1={h - padB} x2={w - padR} y2={h - padB} stroke="currentColor" strokeOpacity="0.2" />

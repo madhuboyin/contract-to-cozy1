@@ -90,6 +90,18 @@ export default function MiniLineChartPct(props: {
     setHoverXPct(clamp(px / Math.max(1, rect.width), 0, 1));
   }
 
+  function onTouchMove(e: React.TouchEvent<SVGSVGElement>) {
+    const touch = e.touches[0];
+    if (!touch) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const px = clamp(touch.clientX - rect.left, 0, rect.width);
+    const xView = (px / Math.max(1, rect.width)) * w;
+    const t = (xView - padL) / Math.max(1, w - padL - padR);
+    const idx = clamp(Math.round(t * (safe.xLabels.length - 1)), 0, safe.xLabels.length - 1);
+    setHoverIdx(idx);
+    setHoverXPct(clamp(px / Math.max(1, rect.width), 0, 1));
+  }
+
   function onLeave() {
     setHoverIdx(null);
   }
@@ -119,6 +131,8 @@ export default function MiniLineChartPct(props: {
         aria-label={props.ariaLabel || 'Volatility YoY percent chart'}
         onMouseMove={onMove}
         onMouseLeave={onLeave}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onLeave}
       >
         {/* axes */}
         <line x1={padL} y1={h - padB} x2={w - padR} y2={h - padB} stroke="currentColor" strokeOpacity="0.18" />

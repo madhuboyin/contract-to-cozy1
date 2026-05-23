@@ -72,7 +72,7 @@ export function DigitalTwinPreview({ propertyId }: { propertyId: string }) {
         <div className="relative z-10 rounded-2xl bg-slate-50/50 border border-dashed border-slate-200 p-6 text-center space-y-3">
           <Box className="h-8 w-8 text-slate-300 mx-auto" />
           <p className="text-sm font-medium text-slate-500">No Digital Twin view generated yet.</p>
-          <Button asChild variant="outline" size="sm" className="h-8 text-xs font-bold">
+          <Button asChild variant="outline" size="sm" className="h-10 min-h-[44px] text-xs font-bold">
             <Link href={`/dashboard/properties/${propertyId}/tools/home-digital-twin`}>
               Initialize Model
             </Link>
@@ -145,7 +145,7 @@ export function DigitalTwinPreview({ propertyId }: { propertyId: string }) {
             Completeness Score: <strong className="text-slate-900">{twin ? Math.round((twin.completenessScore ?? 0) * 100) : 0}%</strong>
           </span>
         </div>
-        <Button asChild variant="ghost" className="h-8 px-2 text-[11px] font-bold text-brand-600 hover:bg-brand-50">
+        <Button asChild variant="ghost" className="h-10 min-h-[44px] px-2 text-[11px] font-bold text-brand-600 hover:bg-brand-50">
           <Link href={`/dashboard/properties/${propertyId}/tools/home-digital-twin`}>
             Open Full Model
             <ArrowRight className="ml-1.5 h-3.5 w-3.5" />

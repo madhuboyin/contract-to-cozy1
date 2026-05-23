@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { KnowledgeArticleCard } from '@/components/knowledge/KnowledgeArticleCard';
 import { getPublishedKnowledgeArticles } from '@/lib/knowledge/api';
+import { BottomNav } from '@/components/mobile/BottomNav';
 
 export const metadata: Metadata = {
   title: 'Knowledge Hub | Contract to Cozy',
@@ -36,7 +37,7 @@ export default async function KnowledgeHubPage({
     : articles;
 
   return (
-    <div className="min-h-screen bg-[linear-gradient(180deg,#f8fafc_0%,#ffffff_14%,#f8fafc_100%)]">
+    <div className="min-h-screen bg-[linear-gradient(180deg,#f8fafc_0%,#ffffff_14%,#f8fafc_100%)] pb-[calc(4rem+env(safe-area-inset-bottom))] lg:pb-0">
       <KnowledgeMobileHeader title="Knowledge Hub" backHref="/dashboard" backLabel="Dashboard" />
       <DashboardShell className="space-y-10 py-10 md:space-y-12 md:py-12">
         <section className="space-y-5 border-b border-slate-200/80 pb-8 md:pb-10">
@@ -117,6 +118,7 @@ export default async function KnowledgeHubPage({
           </div>
         )}
       </DashboardShell>
+      <BottomNav />
     </div>
   );
 }
