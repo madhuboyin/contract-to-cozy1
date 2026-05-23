@@ -85,6 +85,9 @@ function buildImageRemotePatterns() {
       : []),
     { protocol: 'https', hostname: 'contracttocozy.com' },
     { protocol: 'https', hostname: '*.contracttocozy.com' },
+    // Placeholder images used in the provider portfolio demo — remove once
+    // real provider-uploaded images are served from the CDN.
+    { protocol: 'https', hostname: 'via.placeholder.com' },
   ];
 }
 

@@ -406,7 +406,7 @@ function EngagementBreakdown({
       <div className="space-y-2">
         {modules.map(([moduleKey, { events, homes }]) => (
           <div key={moduleKey} className="flex items-center gap-3">
-            <div className="w-32 shrink-0 text-xs font-medium capitalize text-slate-600">
+            <div className="w-28 shrink-0 text-xs font-medium capitalize text-slate-600 sm:w-32">
               {moduleKey.replace(/_/g, ' ')}
             </div>
             <div className="flex-1">
@@ -420,7 +420,7 @@ function EngagementBreakdown({
             <div className="w-20 shrink-0 text-right text-xs tabular-nums text-slate-500">
               <span className="font-semibold text-slate-900">{num(events)}</span> events
             </div>
-            <div className="w-20 shrink-0 text-right text-xs tabular-nums text-slate-400">
+            <div className="hidden w-20 shrink-0 text-right text-xs tabular-nums text-slate-400 sm:block">
               {num(homes)} homes
             </div>
           </div>
@@ -477,7 +477,7 @@ function DecisionGuidedSection({
         <div className="space-y-2">
           {topModules.map((m) => (
             <div key={m.moduleKey} className="flex items-center gap-3">
-              <div className="w-32 shrink-0 text-xs font-medium capitalize text-slate-600">
+              <div className="w-28 shrink-0 text-xs font-medium capitalize text-slate-600 sm:w-32">
                 {m.moduleKey.replace(/_/g, ' ')}
               </div>
               <div className="flex-1">

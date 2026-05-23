@@ -14,7 +14,7 @@
  */
 
 import { useEffect } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import type { MilestoneType } from '@/hooks/useCelebration';
 
 // ─── Animation scenes ──────────────────────────────────────────────────────
@@ -434,6 +434,8 @@ interface MilestoneCelebrationProps {
 }
 
 export function MilestoneCelebration({ type, isOpen, onClose }: MilestoneCelebrationProps) {
+  const reducedMotion = useReducedMotion() ?? false;
+
   // Auto-dismiss after 2.5 seconds
   useEffect(() => {
     if (!isOpen) return;
@@ -452,7 +454,8 @@ export function MilestoneCelebration({ type, isOpen, onClose }: MilestoneCelebra
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          transition={{ duration: 0.2 }}
+          transition={reducedMotion ? { duration: 0 } : { duration: 0.2 }}
+          style={{ willChange: 'opacity' }}
           onClick={onClose}
           role="dialog"
           aria-modal="true"
@@ -464,10 +467,11 @@ export function MilestoneCelebration({ type, isOpen, onClose }: MilestoneCelebra
           {/* Card */}
           <motion.div
             className={`relative z-10 flex flex-col items-center gap-5 rounded-2xl border shadow-2xl ring-1 ${config.accent} ${config.ring} max-w-xs w-full p-8`}
-            initial={{ scale: 0.72, y: 24, opacity: 0 }}
-            animate={{ scale: 1, y: 0, opacity: 1 }}
-            exit={{ scale: 0.82, y: -12, opacity: 0 }}
-            transition={{ type: 'spring', stiffness: 310, damping: 26 }}
+            initial={reducedMotion ? { opacity: 0 } : { scale: 0.72, y: 24, opacity: 0 }}
+            animate={reducedMotion ? { opacity: 1 } : { scale: 1, y: 0, opacity: 1 }}
+            exit={reducedMotion ? { opacity: 0 } : { scale: 0.82, y: -12, opacity: 0 }}
+            transition={reducedMotion ? { duration: 0.15 } : { type: 'spring', stiffness: 310, damping: 26 }}
+            style={{ willChange: reducedMotion ? 'opacity' : 'transform, opacity' }}
             onClick={(e) => e.stopPropagation()}
           >
             <AnimationScene />

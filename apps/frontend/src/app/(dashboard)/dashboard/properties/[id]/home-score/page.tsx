@@ -1727,7 +1727,70 @@ export default function HomeScoreReportPage() {
                 })}
               </div>
             </section>
-            <div className="border-t border-slate-200/80 pt-4">
+            {/* Mobile card list — replaces table at <md */}
+            <div className="space-y-3 border-t border-slate-200/80 pt-4 md:hidden">
+              {systemHealthRows.map((row) => {
+                const { normalizedStatus, severity } = deriveSystemHealthSignals(row);
+                const statusHeadline = systemStatusHeadline(normalizedStatus, row.grade, row.serviceWindow);
+                const lifecycleProgress = getLifecycleProgress(row.ageYears, row.serviceWindow);
+                const shortAction = shortenSystemAction(row.nextRecommendedAction);
+                const horizon = riskHorizonPresentation(row.projectedRiskHorizonMonths);
+                const SystemIcon = systemHealthIcon(row.key);
+                const stripTone = getSystemPriorityStripTone(row, normalizedStatus, severity);
+                return (
+                  <div key={row.key} className="relative overflow-hidden rounded-xl border border-slate-200 bg-white">
+                    <span className={cx("absolute inset-y-0 left-0 block w-1.5", priorityStripClass(stripTone))} aria-hidden />
+                    <div className="space-y-3 py-4 pl-5 pr-4">
+                      <div className="flex items-center gap-2">
+                        <SystemIcon className="h-4 w-4 shrink-0 text-slate-400" aria-hidden />
+                        <p className="text-sm font-semibold text-slate-900">{row.label}</p>
+                        {row.isPlaceholder && <span className="text-xs text-slate-500">(Pending)</span>}
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="rounded-lg bg-slate-50 px-3 py-2">
+                          <p className="text-[11px] text-slate-500">Health</p>
+                          <p className={cx("mt-0.5 text-sm font-semibold", gradeToneTextClass(row.grade))}>
+                            {row.grade} · {statusHeadline}
+                          </p>
+                        </div>
+                        <div className="rounded-lg bg-slate-50 px-3 py-2">
+                          <p className="text-[11px] text-slate-500">Risk Horizon</p>
+                          <p className={cx("mt-0.5 text-sm font-semibold", horizon.tone)}>{horizon.value}</p>
+                          <p className="text-[11px] text-slate-500">{horizon.detail}</p>
+                        </div>
+                      </div>
+                      <div className="rounded-lg bg-slate-50 px-3 py-2">
+                        <p className="text-[11px] text-slate-500">Age / Lifecycle</p>
+                        <p className="mt-0.5 text-sm font-medium text-slate-900">
+                          {row.ageYears === null ? "Unknown age" : `${row.ageYears} years`}
+                        </p>
+                        {lifecycleProgress !== null && (
+                          <div className="mt-2 h-1.5 w-full rounded-full bg-slate-200" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={lifecycleProgress}>
+                            <div
+                              className={cx("h-1.5 rounded-full", lifecycleBarClass(lifecycleProgress, severity, normalizedStatus, row.serviceWindow))}
+                              style={{ width: `${Math.max(8, lifecycleProgress)}%` }}
+                            />
+                          </div>
+                        )}
+                        <p className="mt-1 text-xs text-slate-500">{row.serviceWindow || "Service window unavailable"}</p>
+                      </div>
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className={cx("inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium", verificationPillClass(row.verification))}>
+                          {formatConstantLabel(row.verification)}
+                        </span>
+                      </div>
+                      <div className="rounded-lg bg-slate-50 px-3 py-2">
+                        <p className="text-[11px] text-slate-500">Next Action</p>
+                        <p className="mt-0.5 text-sm font-medium text-slate-900" title={row.nextRecommendedAction}>{shortAction}</p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Desktop table — hidden on mobile */}
+            <div className="hidden border-t border-slate-200/80 pt-4 md:block">
               <ScrollFadeX fromColor="from-white" desktopHide={false}>
               <div className="overflow-x-auto">
               <table className="w-full min-w-[900px] text-sm">

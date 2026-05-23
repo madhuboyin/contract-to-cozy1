@@ -13,7 +13,7 @@ export const MOBILE_TYPE_TOKENS = {
   cardTitle: 'text-base leading-tight font-semibold',
   body: 'text-sm leading-[1.45]',
   caption: 'text-xs leading-5',
-  chip: 'text-[11px] leading-none font-medium',
+  chip: 'text-xs leading-none font-medium',
 } as const;
 
 export const MOBILE_CARD_RADIUS = 'rounded-[22px]';

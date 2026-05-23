@@ -93,6 +93,23 @@ export default function AdminAnalyticsLineChart({
     setHoverIdx(closest);
   }
 
+  function handleTouchMove(e: React.TouchEvent<SVGSVGElement>) {
+    const touch = e.touches[0];
+    if (!touch) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const xRel = ((touch.clientX - rect.left) / rect.width) * W;
+    let closest = 0;
+    let minDist = Infinity;
+    safe.labels.forEach((_, i) => {
+      const dist = Math.abs(xFor(i) - xRel);
+      if (dist < minDist) {
+        minDist = dist;
+        closest = i;
+      }
+    });
+    setHoverIdx(closest);
+  }
+
   const tooltip =
     hoverIdx !== null
       ? {
@@ -114,6 +131,8 @@ export default function AdminAnalyticsLineChart({
           aria-label={ariaLabel ?? 'Analytics chart'}
           onMouseMove={handleMouseMove}
           onMouseLeave={() => setHoverIdx(null)}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={() => setHoverIdx(null)}
         >
           {/* Grid lines + Y labels */}
           {yTicks.map((v, i) => (

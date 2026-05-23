@@ -19,7 +19,7 @@ function ProgressBar({ reducedMotion }: { reducedMotion: boolean }) {
         className="h-full w-[45%] rounded-full bg-gradient-to-r from-teal-400 to-cyan-400 dark:from-teal-500 dark:to-cyan-400"
         animate={reducedMotion ? undefined : { x: ['-115%', '260%'] }}
         transition={{ duration: 1.7, repeat: Infinity, ease: 'easeInOut' }}
-        style={reducedMotion ? { width: '100%' } : undefined}
+        style={reducedMotion ? { width: '100%' } : { willChange: 'transform' }}
       />
     </div>
   );
@@ -39,6 +39,7 @@ function ProgressDots({ reducedMotion }: { reducedMotion: boolean }) {
           ].join(' ')}
           animate={reducedMotion ? undefined : { opacity: i === 1 ? [0.6, 1, 0.6] : [0.4, 0.7, 0.4] }}
           transition={{ duration: 1.8, repeat: Infinity, delay: i * 0.3, ease: 'easeInOut' }}
+          style={reducedMotion ? undefined : { willChange: 'opacity' }}
         />
       ))}
     </div>

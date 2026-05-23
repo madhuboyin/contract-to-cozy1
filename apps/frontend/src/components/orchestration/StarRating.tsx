@@ -27,8 +27,8 @@ export const StarRating: React.FC<StarRatingProps> = ({
           type="button"
           disabled={readonly}
           onClick={() => !readonly && onChange(rating)}
-          onMouseEnter={() => !readonly && setHoverValue(rating)}
-          onMouseLeave={() => !readonly && setHoverValue(null)}
+          onPointerEnter={() => !readonly && setHoverValue(rating)}
+          onPointerLeave={() => !readonly && setHoverValue(null)}
           className={cn(
             'p-1.5 transition-colors touch-manipulation',
             !readonly && 'hover:scale-110 cursor-pointer',
