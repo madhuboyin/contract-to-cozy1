@@ -1300,7 +1300,7 @@ export default function WarrantiesPage() {
                   <p className="text-xs text-slate-500">60-day expiry watch</p>
                 </div>
               </div>
-              <div className="grid grid-cols-3 divide-x divide-slate-200 rounded-2xl border border-slate-200/90 bg-[linear-gradient(135deg,rgba(15,118,110,0.06),rgba(245,158,11,0.08),rgba(239,68,68,0.06))]">
+              <div className="grid grid-cols-3 divide-x divide-slate-200 rounded-2xl border border-slate-200/90 bg-[linear-gradient(135deg,rgba(15,118,110,0.06),rgba(245,158,11,0.08),rgba(239,68,68,0.06))] overflow-hidden">
                 <div className="px-3 py-2.5">
                   <p className="text-[11px] tracking-normal text-teal-700">Active</p>
                   <p className="text-lg font-semibold text-slate-900">{activeWarrantyCount}</p>

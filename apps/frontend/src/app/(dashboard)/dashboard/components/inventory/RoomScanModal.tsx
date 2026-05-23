@@ -227,11 +227,16 @@ export default function RoomScanModal({ open, onClose, propertyId, roomId, roomN
   const dupCount = drafts.filter((d) => !!d?.duplicateOfItemId).length;
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4">
+    <div
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4 pt-[max(1rem,env(safe-area-inset-top))]"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="room-scan-modal-title"
+    >
       <div className="w-full max-w-3xl rounded-2xl bg-white shadow-xl border border-black/10">
         <div className="p-4 border-b border-black/10 flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <div className="text-lg font-semibold truncate">AI Scan Room</div>
+            <div id="room-scan-modal-title" className="text-lg font-semibold truncate">AI Scan Room</div>
             <div className="text-sm opacity-70 truncate">
               {roomName ? roomName : 'Room'} · Upload 3–10 photos from different angles.
             </div>

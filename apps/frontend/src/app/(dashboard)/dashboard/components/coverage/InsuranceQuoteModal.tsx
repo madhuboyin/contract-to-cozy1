@@ -64,12 +64,17 @@ export default function InsuranceQuoteModal(props: {
   }
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center">
+    <div
+      className="fixed inset-0 z-[70] flex items-center justify-center p-4 pt-[max(1rem,env(safe-area-inset-top))]"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="insurance-quote-modal-title"
+    >
       <div className="absolute inset-0 bg-black/40" onClick={props.onClose} />
       <div className="relative w-full max-w-xl bg-white rounded-2xl border border-black/10 shadow-xl p-5">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <div className="text-base font-semibold">Get insurance quotes</div>
+            <div id="insurance-quote-modal-title" className="text-base font-semibold">Get insurance quotes</div>
             <div className="text-sm opacity-70">
               We’ll help you compare options for this coverage gap.
             </div>

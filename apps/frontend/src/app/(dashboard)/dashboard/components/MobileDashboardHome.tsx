@@ -704,7 +704,7 @@ export default function MobileDashboardHome({
                 <span className="text-[11px] text-[hsl(var(--mobile-text-muted))]">Updated just now</span>
               </div>
 
-              <div className="grid grid-cols-4 gap-2">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                 {/* Health */}
                 <Link href={healthScoreHref} className="no-brand-style block">
                   <div className="rounded-2xl border border-slate-100 bg-white p-2.5 text-center">

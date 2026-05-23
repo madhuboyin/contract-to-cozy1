@@ -1013,7 +1013,7 @@ export default function PropertyHealthDetailPage() {
           summary={
             sortedInsights.length > 0 ? (
               <MobileCard variant="compact">
-                <div className="grid grid-cols-3 divide-x divide-slate-100">
+                <div className="grid grid-cols-3 divide-x divide-slate-100 overflow-hidden">
                   <div className="text-center pr-2">
                     <p className={`text-2xl font-black leading-none tabular-nums ${negativeInsights.length > 0 ? "text-red-600" : "text-slate-300"}`}>
                       {negativeInsights.length}
@@ -1280,7 +1280,7 @@ export default function PropertyHealthDetailPage() {
                 </div>
               ) : (
                 <div className="flex flex-col justify-between flex-1 gap-3">
-                  <div className="grid grid-cols-3 gap-1.5">
+                  <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-3">
                     <div className="rounded-[10px] bg-red-50 border border-red-100/60 px-2 pt-2 pb-2 text-center">
                       <p className="text-2xl font-black text-red-600 tabular-nums leading-none">{negativeInsights.length}</p>
                       <p className="text-[11px] font-semibold text-red-500/90 mt-1 leading-tight">Needs attention</p>

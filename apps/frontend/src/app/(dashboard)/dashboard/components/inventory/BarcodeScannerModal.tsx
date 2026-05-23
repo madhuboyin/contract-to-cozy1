@@ -122,13 +122,18 @@ export default function BarcodeScannerModal(props: {
   if (!props.open) return null;
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center">
+    <div
+      className="fixed inset-0 z-[60] flex items-center justify-center pt-[env(safe-area-inset-top,0px)]"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="barcode-modal-title"
+    >
       <div className="absolute inset-0 bg-black/50" onClick={props.onClose} />
 
       <div className="relative w-[92vw] max-w-lg rounded-2xl bg-white shadow-xl border border-black/10 overflow-hidden">
         <div className="p-4 flex items-start justify-between gap-3 border-b border-black/5">
           <div>
-            <div className="text-sm font-semibold">Scan barcode</div>
+            <div id="barcode-modal-title" className="text-sm font-semibold">Scan barcode</div>
             <div className="text-xs opacity-70">Point your camera at a UPC/EAN barcode.</div>
           </div>
           <button onClick={props.onClose} className="text-xs underline opacity-80 hover:opacity-100">

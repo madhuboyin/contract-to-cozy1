@@ -76,6 +76,7 @@ function NotificationsButton() {
     <button
       type="button"
       onClick={handleClick}
+      aria-label={unreadCount > 0 ? `Notifications (${unreadCount} unread)` : 'Notifications'}
       className={cn(
         "relative flex items-center justify-center h-12 w-12 rounded-lg",
         "border border-slate-200 bg-slate-50/50 hover:bg-slate-50",

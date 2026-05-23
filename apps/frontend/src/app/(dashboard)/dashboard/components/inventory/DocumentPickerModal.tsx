@@ -57,12 +57,17 @@ export default function DocumentPickerModal(props: {
   if (!props.open) return null;
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center">
+    <div
+      className="fixed inset-0 z-[60] flex items-center justify-center p-4 pt-[max(1rem,env(safe-area-inset-top))]"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="doc-picker-modal-title"
+    >
       <div className="absolute inset-0 bg-black/40" onClick={props.onClose} />
       <div className="relative w-full max-w-2xl bg-white rounded-2xl border border-black/10 shadow-xl p-5">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <div className="text-base font-semibold">Attach existing document</div>
+            <div id="doc-picker-modal-title" className="text-base font-semibold">Attach existing document</div>
             <div className="text-sm opacity-70">Shows documents uploaded for this property.</div>
           </div>
           <button onClick={props.onClose} className="text-sm underline opacity-80 hover:opacity-100">
