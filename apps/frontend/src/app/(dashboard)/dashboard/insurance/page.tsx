@@ -1188,7 +1188,7 @@ export default function InsurancePage() {
       
       {/* Document Upload Dialog (for Insurance Policies) */}
       <Dialog open={isUploadModalOpen} onOpenChange={handleUploadDialogOpenChange}>
-        <DialogContent className="sm:max-w-[500px]">
+        <DialogContent className="sm:max-w-[500px] max-h-[90dvh] overflow-y-auto">
           {uploadingToPolicyId && (
             <DocumentUploadModal 
               parentEntityId={uploadingToPolicyId}

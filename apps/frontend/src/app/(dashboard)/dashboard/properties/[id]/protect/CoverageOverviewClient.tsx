@@ -39,11 +39,10 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Card, CardContent } from '@/components/ui/card';
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
 import {
   Sheet,
   SheetContent,
@@ -289,22 +288,20 @@ export default function CoverageOverviewClient() {
 
             {/* Metrics */}
             <div className="grid grid-cols-2 gap-4 mb-6 sm:flex sm:flex-wrap sm:gap-x-10 sm:gap-y-6">
-              {/* Annual Risk — tooltip */}
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger className="text-left space-y-1">
-                    <p className="flex items-center gap-1 text-[11px] font-black uppercase tracking-widest text-slate-500 mb-1">
-                      Annual Risk <Info className="h-3 w-3" />
-                    </p>
-                    <p className="text-2xl font-bold text-slate-900 tabular-nums">
-                      {formatCurrency(analysis?.warranty.expectedAnnualRepairRiskUsd || 0)}
-                    </p>
-                  </TooltipTrigger>
-                  <TooltipContent className="max-w-[240px] text-xs">
-                    Aggregated statistical risk based on the age, condition, and repair costs of all your tracked home systems.
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
+              {/* Annual Risk — popover (tap-friendly on mobile) */}
+              <Popover>
+                <PopoverTrigger className="text-left space-y-1">
+                  <p className="flex items-center gap-1 text-[11px] font-black uppercase tracking-widest text-slate-500 mb-1">
+                    Annual Risk <Info className="h-3 w-3" />
+                  </p>
+                  <p className="text-2xl font-bold text-slate-900 tabular-nums">
+                    {formatCurrency(analysis?.warranty.expectedAnnualRepairRiskUsd || 0)}
+                  </p>
+                </PopoverTrigger>
+                <PopoverContent className="max-w-[240px] text-xs p-3">
+                  Aggregated statistical risk based on the age, condition, and repair costs of all your tracked home systems.
+                </PopoverContent>
+              </Popover>
 
               {/* Protection Cost */}
               <div className="space-y-1">
@@ -314,44 +311,40 @@ export default function CoverageOverviewClient() {
                 </p>
               </div>
 
-              {/* Net Impact — tooltip with dynamic label */}
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger className="text-left space-y-1">
-                    <p className="flex items-center gap-1 text-[11px] font-black uppercase tracking-widest text-slate-500 mb-1">
-                      {(analysis?.warranty.expectedNetImpactUsd || 0) >= 0 ? 'Projected Savings' : 'Net Cost'} <Info className="h-3 w-3" />
-                    </p>
-                    <p className={cn(
-                      "text-2xl font-bold tabular-nums",
-                      (analysis?.warranty.expectedNetImpactUsd || 0) >= 0 ? "text-emerald-600" : "text-rose-600"
-                    )}>
-                      {formatCurrency(Math.abs(analysis?.warranty.expectedNetImpactUsd || 0))}
-                    </p>
-                  </TooltipTrigger>
-                  <TooltipContent className="max-w-[240px] text-xs">
-                    {(analysis?.warranty.expectedNetImpactUsd || 0) >= 0
-                      ? 'How much a warranty is expected to save you compared to paying for repairs out-of-pocket.'
-                      : 'The estimated extra cost of having a warranty vs. expected out-of-pocket repairs — consider whether the coverage risk is worth it.'}
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
+              {/* Net Impact — popover (tap-friendly on mobile) */}
+              <Popover>
+                <PopoverTrigger className="text-left space-y-1">
+                  <p className="flex items-center gap-1 text-[11px] font-black uppercase tracking-widest text-slate-500 mb-1">
+                    {(analysis?.warranty.expectedNetImpactUsd || 0) >= 0 ? 'Projected Savings' : 'Net Cost'} <Info className="h-3 w-3" />
+                  </p>
+                  <p className={cn(
+                    "text-2xl font-bold tabular-nums",
+                    (analysis?.warranty.expectedNetImpactUsd || 0) >= 0 ? "text-emerald-600" : "text-rose-600"
+                  )}>
+                    {formatCurrency(Math.abs(analysis?.warranty.expectedNetImpactUsd || 0))}
+                  </p>
+                </PopoverTrigger>
+                <PopoverContent className="max-w-[240px] text-xs p-3">
+                  {(analysis?.warranty.expectedNetImpactUsd || 0) >= 0
+                    ? 'How much a warranty is expected to save you compared to paying for repairs out-of-pocket.'
+                    : 'The estimated extra cost of having a warranty vs. expected out-of-pocket repairs — consider whether the coverage risk is worth it.'}
+                </PopoverContent>
+              </Popover>
 
-              {/* Break-even — tooltip */}
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger className="text-left space-y-1">
-                    <p className="flex items-center gap-1 text-[11px] font-black uppercase tracking-widest text-slate-500 mb-1">
-                      Break-even <Info className="h-3 w-3" />
-                    </p>
-                    <p className="text-2xl font-bold text-slate-900 tabular-nums">
-                      {analysis?.warranty.breakEvenMonths || '—'} <span className="text-sm font-semibold text-slate-400">mo</span>
-                    </p>
-                  </TooltipTrigger>
-                  <TooltipContent className="max-w-[240px] text-xs">
-                    Estimated months before probability-adjusted repair costs exceed the warranty premium — the sooner, the stronger the case for coverage.
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
+              {/* Break-even — popover (tap-friendly on mobile) */}
+              <Popover>
+                <PopoverTrigger className="text-left space-y-1">
+                  <p className="flex items-center gap-1 text-[11px] font-black uppercase tracking-widest text-slate-500 mb-1">
+                    Break-even <Info className="h-3 w-3" />
+                  </p>
+                  <p className="text-2xl font-bold text-slate-900 tabular-nums">
+                    {analysis?.warranty.breakEvenMonths || '—'} <span className="text-sm font-semibold text-slate-400">mo</span>
+                  </p>
+                </PopoverTrigger>
+                <PopoverContent className="max-w-[240px] text-xs p-3">
+                  Estimated months before probability-adjusted repair costs exceed the warranty premium — the sooner, the stronger the case for coverage.
+                </PopoverContent>
+              </Popover>
             </div>
 
             {/* Footer */}

@@ -865,7 +865,7 @@ export default function DocumentsPage() {
 
       {/* Upload Dialog with Tabs */}
       <Dialog open={isUploadModalOpen} onOpenChange={setIsUploadModalOpen}>
-        <DialogContent className="sm:max-w-[600px]">
+        <DialogContent className="sm:max-w-[600px] max-h-[90dvh] overflow-y-auto">
           <Tabs value={uploadMode} onValueChange={(v) => setUploadMode(v as 'ai' | 'standard')}>
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="ai" className="flex items-center gap-2">
