@@ -96,7 +96,7 @@ export const DecisionTraceModal: React.FC<Props> = ({
         if (!open) onClose();
       }}
     >
-      <DialogContent className="w-full max-w-2xl">
+      <DialogContent className="w-full max-w-2xl max-h-[90dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>How this recommendation was decided</DialogTitle>
         </DialogHeader>

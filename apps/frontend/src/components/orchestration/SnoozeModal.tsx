@@ -90,7 +90,7 @@ export const SnoozeModal: React.FC<Props> = ({
 
   return (
     <Dialog open={open} onOpenChange={(open) => !open && handleClose()}>
-      <DialogContent className="w-full max-w-md">
+      <DialogContent className="w-full max-w-md max-h-[90dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
             {isExtending ? 'Extend snooze' : 'Snooze this recommendation'}

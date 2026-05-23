@@ -49,7 +49,7 @@ export function ToolCard({
         {description}
       </p>
 
-      <div className="mt-4 flex items-center text-sm font-bold text-brand-600 opacity-0 transition-opacity group-hover:opacity-100">
+      <div className="mt-4 flex items-center text-sm font-bold text-brand-600 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
         Open Tool
         <ArrowRight className="ml-1.5 h-4 w-4" />
       </div>

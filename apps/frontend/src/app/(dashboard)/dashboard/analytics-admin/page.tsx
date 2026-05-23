@@ -1126,6 +1126,11 @@ export default function AnalyticsAdminPage() {
 
   // ── Page ─────────────────────────────────────────────────────────────────
   return (
+    <>
+      {/* Mobile desktop-recommended banner */}
+      <div className="lg:hidden mx-4 mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+        <span className="font-semibold">Best viewed on desktop.</span> This analytics dashboard contains wide data tables that work best on a larger screen.
+      </div>
     <AdminConsoleShell
       title="Admin Analytics"
       subtitle="Monitor activation, engagement, adoption, and value delivery across Contract-to-Cozy."
@@ -1277,5 +1282,6 @@ export default function AnalyticsAdminPage() {
           </p>
         </div>
     </AdminConsoleShell>
+    </>
   );
 }

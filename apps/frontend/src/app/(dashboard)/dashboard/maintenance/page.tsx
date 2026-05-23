@@ -1144,7 +1144,7 @@ export default function MaintenancePage() {
         </div>
       )}
       <Dialog open={isViewOpen} onOpenChange={(open) => (open ? setIsViewOpen(true) : handleCloseView())}>
-        <DialogContent className="sm:max-w-[560px] max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-[560px] max-h-[90dvh] overflow-y-auto">
           <DialogHeader>
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">

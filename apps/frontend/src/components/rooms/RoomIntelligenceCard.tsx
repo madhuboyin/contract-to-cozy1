@@ -320,7 +320,7 @@ export default function RoomIntelligenceCard({
           <p className={`text-2xl font-display font-bold ${docCount === 0 ? 'text-amber-500' : 'text-gray-900'}`}>{animatedDocCount}</p>
           <p className="mt-0.5 text-[11px] font-medium tracking-normal text-gray-400">Documents</p>
           {docCount === 0 ? (
-            <p className="mt-1 text-[11px] text-amber-500 opacity-0 transition-opacity group-hover:opacity-100">{'Add docs ->'}</p>
+            <p className="mt-1 text-[11px] text-amber-500 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">{'Add docs ->'}</p>
           ) : null}
         </button>
 
@@ -332,7 +332,7 @@ export default function RoomIntelligenceCard({
           <p className={`text-2xl font-display font-bold ${gapCount > 0 ? 'text-red-500' : 'text-emerald-600'}`}>{animatedGapCount}</p>
           <p className="mt-0.5 text-[11px] font-medium tracking-normal text-gray-400">Coverage Gaps</p>
           {gapCount > 0 ? (
-            <p className="mt-1 text-[11px] text-red-500 opacity-0 transition-opacity group-hover:opacity-100">{'Review ->'}</p>
+            <p className="mt-1 text-[11px] text-red-500 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">{'Review ->'}</p>
           ) : null}
         </button>
 

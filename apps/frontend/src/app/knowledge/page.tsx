@@ -54,7 +54,7 @@ export default async function KnowledgeHubPage({
                 Homeowner guidance
               </Badge>
             </div>
-            <h1 className="max-w-[52rem] text-[2.35rem] font-semibold tracking-tight text-slate-950 md:text-[2.5rem] md:leading-[1.08]">
+            <h1 className="max-w-[52rem] text-[1.65rem] font-semibold tracking-tight text-slate-950 md:text-[2.35rem] md:leading-[1.08] lg:text-[2.5rem]">
               Calm guidance for the ownership decisions that carry real weight.
             </h1>
             <p className="max-w-[50rem] text-[16px] leading-8 text-slate-600 md:text-[1.05rem]">

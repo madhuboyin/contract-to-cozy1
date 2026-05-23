@@ -36,7 +36,7 @@ export function TaskActionButtons({
           >
             <Youtube className="w-3.5 h-3.5 text-red-600" />
             <span className="font-medium text-red-900">Tutorial</span>
-            <ExternalLink className="w-3 h-3 text-red-600 opacity-0 group-hover:opacity-100 transition-opacity" />
+            <ExternalLink className="w-3 h-3 text-red-600" />
           </a>
         )}
 
@@ -61,7 +61,7 @@ export function TaskActionButtons({
           >
             <Phone className="w-3.5 h-3.5 text-green-600" />
             <span className="font-medium text-green-900">Find Pro</span>
-            <ExternalLink className="w-3 h-3 text-green-600 opacity-0 group-hover:opacity-100 transition-opacity" />
+            <ExternalLink className="w-3 h-3 text-green-600" />
           </Link>
         )}
       </div>

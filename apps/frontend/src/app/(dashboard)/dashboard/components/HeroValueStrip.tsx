@@ -74,7 +74,7 @@ export function HeroValueStrip({ tiles, momentumLabel }: HeroValueStripProps) {
               <div className="text-base font-semibold leading-tight">{tile.value}</div>
               <div className="mt-0.5 text-[11px] text-slate-600">{tile.label}</div>
               {tile.href ? (
-                <div className="mt-1 inline-flex items-center gap-1 text-[11px] font-medium text-slate-700 opacity-0 transition-opacity group-hover:opacity-100">
+                <div className="mt-1 inline-flex items-center gap-1 text-[11px] font-medium text-slate-700 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
                   Open <ArrowUpRight className="h-3 w-3" />
                 </div>
               ) : null}
