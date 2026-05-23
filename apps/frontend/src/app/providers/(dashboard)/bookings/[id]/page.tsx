@@ -136,7 +136,7 @@ export default function ProviderBookingDetailPage() {
         supportingAction: (
           <Link
             href="/providers/calendar"
-            className="inline-flex min-h-[40px] w-full items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+            className="inline-flex min-h-[44px] w-full items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
           >
             Review calendar
           </Link>
@@ -160,7 +160,7 @@ export default function ProviderBookingDetailPage() {
                 <button
                   type="button"
                   onClick={() => bookingQuery.refetch()}
-                  className="inline-flex min-h-[40px] items-center justify-center rounded-lg bg-brand-primary px-4 text-sm font-semibold text-white hover:bg-brand-primary/90"
+                  className="inline-flex min-h-[44px] items-center justify-center rounded-lg bg-brand-primary px-4 text-sm font-semibold text-white hover:bg-brand-primary/90"
                 >
                   Retry
                 </button>
@@ -169,7 +169,7 @@ export default function ProviderBookingDetailPage() {
                 <button
                   type="button"
                   onClick={() => router.push('/providers/bookings')}
-                  className="inline-flex min-h-[36px] items-center rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                  className="inline-flex min-h-[44px] items-center rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50"
                 >
                   Back to queue
                 </button>
@@ -184,7 +184,7 @@ export default function ProviderBookingDetailPage() {
                 <button
                   type="button"
                   onClick={() => router.push('/providers/bookings')}
-                  className="inline-flex min-h-[40px] items-center justify-center rounded-lg bg-brand-primary px-4 text-sm font-semibold text-white hover:bg-brand-primary/90"
+                  className="inline-flex min-h-[44px] items-center justify-center rounded-lg bg-brand-primary px-4 text-sm font-semibold text-white hover:bg-brand-primary/90"
                 >
                   Back to queue
                 </button>
@@ -258,7 +258,7 @@ export default function ProviderBookingDetailPage() {
                   type="button"
                   disabled={confirmMutation.isPending}
                   onClick={() => confirmMutation.mutate(booking.id)}
-                  className="min-h-[40px] w-full rounded-lg bg-brand-primary px-4 text-sm font-semibold text-white hover:bg-brand-primary/90 disabled:opacity-60"
+                  className="min-h-[44px] w-full rounded-lg bg-brand-primary px-4 text-sm font-semibold text-white hover:bg-brand-primary/90 disabled:opacity-60"
                 >
                   Accept booking
                 </button>
@@ -267,7 +267,7 @@ export default function ProviderBookingDetailPage() {
                   type="button"
                   disabled={startMutation.isPending}
                   onClick={() => startMutation.mutate(booking.id)}
-                  className="min-h-[40px] w-full rounded-lg bg-brand-primary px-4 text-sm font-semibold text-white hover:bg-brand-primary/90 disabled:opacity-60"
+                  className="min-h-[44px] w-full rounded-lg bg-brand-primary px-4 text-sm font-semibold text-white hover:bg-brand-primary/90 disabled:opacity-60"
                 >
                   Start job
                 </button>
@@ -276,7 +276,7 @@ export default function ProviderBookingDetailPage() {
                   type="button"
                   disabled={completeMutation.isPending}
                   onClick={() => completeMutation.mutate(booking)}
-                  className="min-h-[40px] w-full rounded-lg bg-brand-primary px-4 text-sm font-semibold text-white hover:bg-brand-primary/90 disabled:opacity-60"
+                  className="min-h-[44px] w-full rounded-lg bg-brand-primary px-4 text-sm font-semibold text-white hover:bg-brand-primary/90 disabled:opacity-60"
                 >
                   Complete job
                 </button>
@@ -284,7 +284,7 @@ export default function ProviderBookingDetailPage() {
                 <button
                   type="button"
                   onClick={() => router.push('/providers/bookings')}
-                  className="min-h-[40px] w-full rounded-lg bg-brand-primary px-4 text-sm font-semibold text-white hover:bg-brand-primary/90"
+                  className="min-h-[44px] w-full rounded-lg bg-brand-primary px-4 text-sm font-semibold text-white hover:bg-brand-primary/90"
                 >
                   Back to queue
                 </button>
@@ -296,7 +296,7 @@ export default function ProviderBookingDetailPage() {
                   type="button"
                   disabled={cancelMutation.isPending}
                   onClick={() => cancelMutation.mutate(booking.id)}
-                  className="inline-flex min-h-[36px] items-center rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+                  className="inline-flex min-h-[44px] items-center rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
                 >
                   {booking.status === 'PENDING' ? 'Decline' : 'Cancel'}
                 </button>

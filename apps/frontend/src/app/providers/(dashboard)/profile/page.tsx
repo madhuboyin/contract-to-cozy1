@@ -253,12 +253,12 @@ export default function ProviderProfilePage() {
           <button
             type="button"
             onClick={() => setIsEditing(false)}
-            className="inline-flex min-h-[40px] w-full items-center justify-center rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+            className="inline-flex min-h-[44px] w-full items-center justify-center rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
           >
             Cancel edits
           </button>
         ) : (
-          <span className="inline-flex min-h-[40px] w-full items-center justify-center rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-600">
+          <span className="inline-flex min-h-[44px] w-full items-center justify-center rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-600">
             Read-only mode
           </span>
         ),
@@ -289,7 +289,7 @@ export default function ProviderProfilePage() {
                   key={tab.key}
                   type="button"
                   onClick={() => setActiveTab(tab.key)}
-                  className={`min-h-[36px] flex-1 rounded-lg px-2 text-xs font-semibold transition-colors ${
+                  className={`min-h-[44px] flex-1 rounded-lg px-2 text-xs font-semibold transition-colors ${
                     active ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
@@ -316,7 +316,7 @@ export default function ProviderProfilePage() {
               <button
                 type="button"
                 onClick={() => handleFileUpload('photo')}
-                className="inline-flex min-h-[36px] items-center rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                className="inline-flex min-h-[44px] items-center rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50"
               >
                 Change
               </button>
@@ -480,7 +480,7 @@ export default function ProviderProfilePage() {
                 <button
                   type="button"
                   onClick={() => handleFileUpload('license')}
-                  className="inline-flex min-h-[40px] items-center rounded-lg border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                  className="inline-flex min-h-[44px] items-center rounded-lg border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 hover:bg-slate-50"
                 >
                   Upload license
                 </button>
@@ -503,7 +503,7 @@ export default function ProviderProfilePage() {
                 <button
                   type="button"
                   onClick={() => handleFileUpload('insurance')}
-                  className="inline-flex min-h-[40px] items-center rounded-lg border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                  className="inline-flex min-h-[44px] items-center rounded-lg border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 hover:bg-slate-50"
                 >
                   Upload certificate
                 </button>
@@ -514,7 +514,7 @@ export default function ProviderProfilePage() {
           <MobileCard variant="compact" className="space-y-2.5">
             <div className="flex items-center justify-between gap-2">
               <p className="mb-0 text-sm font-semibold text-slate-900">Certifications</p>
-              <button className="inline-flex min-h-[36px] items-center rounded-lg bg-brand-primary px-3 text-xs font-semibold text-white hover:bg-brand-primary/90">
+              <button className="inline-flex min-h-[44px] items-center rounded-lg bg-brand-primary px-3 text-xs font-semibold text-white hover:bg-brand-primary/90">
                 + Add
               </button>
             </div>
@@ -561,7 +561,7 @@ export default function ProviderProfilePage() {
             <input type="password" placeholder="Current password" className="h-11 w-full rounded-lg border border-slate-300 px-3 text-sm focus:border-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-primary/20" />
             <input type="password" placeholder="New password" className="h-11 w-full rounded-lg border border-slate-300 px-3 text-sm focus:border-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-primary/20" />
             <input type="password" placeholder="Confirm new password" className="h-11 w-full rounded-lg border border-slate-300 px-3 text-sm focus:border-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-primary/20" />
-            <button className="inline-flex min-h-[40px] items-center rounded-lg bg-brand-primary px-3 text-sm font-semibold text-white hover:bg-brand-primary/90">
+            <button className="inline-flex min-h-[44px] items-center rounded-lg bg-brand-primary px-3 text-sm font-semibold text-white hover:bg-brand-primary/90">
               Update password
             </button>
           </MobileCard>
@@ -582,7 +582,7 @@ export default function ProviderProfilePage() {
                 type="button"
                 onClick={() => void handleDeactivateAccount()}
                 disabled={isDeactivating || isDeleting}
-                className="inline-flex min-h-[36px] items-center rounded-lg border border-rose-300 bg-white px-3 text-xs font-semibold text-rose-700 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
+                className="inline-flex min-h-[44px] items-center rounded-lg border border-rose-300 bg-white px-3 text-xs font-semibold text-rose-700 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {isDeactivating ? 'Deactivating...' : 'Deactivate'}
               </button>
@@ -597,7 +597,7 @@ export default function ProviderProfilePage() {
                 type="button"
                 onClick={() => void handleDeleteAccount()}
                 disabled={isDeleting || isDeactivating}
-                className="inline-flex min-h-[36px] items-center rounded-lg bg-rose-600 px-3 text-xs font-semibold text-white hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
+                className="inline-flex min-h-[44px] items-center rounded-lg bg-rose-600 px-3 text-xs font-semibold text-white hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {isDeleting ? 'Deleting...' : 'Delete'}
               </button>

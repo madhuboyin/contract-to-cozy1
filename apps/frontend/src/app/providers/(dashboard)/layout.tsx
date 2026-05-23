@@ -120,7 +120,7 @@ export default function ProviderDashboardLayout({
               <button
                 type="button"
                 onClick={() => setIsMobileNavOpen((open) => !open)}
-                className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 md:hidden"
+                className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 md:hidden"
                 aria-label="Toggle provider navigation"
               >
                 {isMobileNavOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
@@ -158,7 +158,7 @@ export default function ProviderDashboardLayout({
                   <Link
                     key={item.name}
                     href={item.href}
-                    className={`inline-flex min-h-[40px] items-center gap-2 rounded-md px-3 text-xs font-semibold tracking-normal ${
+                    className={`inline-flex min-h-[44px] items-center gap-2 rounded-md px-3 text-xs font-semibold tracking-normal ${
                       active ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700'
                     }`}
                   >

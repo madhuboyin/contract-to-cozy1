@@ -301,7 +301,7 @@ export default function ProviderServicesPage() {
           <button
             type="button"
             onClick={() => setShowAddModal(true)}
-            className="inline-flex min-h-[40px] items-center rounded-lg bg-brand-primary px-3 py-2 text-sm font-semibold text-white hover:bg-brand-primary/90"
+            className="inline-flex min-h-[44px] items-center rounded-lg bg-brand-primary px-3 py-2 text-sm font-semibold text-white hover:bg-brand-primary/90"
           >
             + Add service
           </button>
@@ -368,7 +368,7 @@ export default function ProviderServicesPage() {
               <button
                 type="button"
                 onClick={() => setShowAddModal(true)}
-                className="inline-flex min-h-[40px] items-center rounded-lg bg-brand-primary px-3 py-2 text-sm font-semibold text-white hover:bg-brand-primary/90"
+                className="inline-flex min-h-[44px] items-center rounded-lg bg-brand-primary px-3 py-2 text-sm font-semibold text-white hover:bg-brand-primary/90"
               >
                 Add service
               </button>
@@ -415,7 +415,7 @@ export default function ProviderServicesPage() {
                     <button
                       type="button"
                       onClick={() => handleEdit(service)}
-                      className="min-h-[40px] w-full rounded-lg bg-brand-primary px-4 text-sm font-semibold text-white hover:bg-brand-primary/90"
+                      className="min-h-[44px] w-full rounded-lg bg-brand-primary px-4 text-sm font-semibold text-white hover:bg-brand-primary/90"
                     >
                       Edit service
                     </button>
@@ -425,14 +425,14 @@ export default function ProviderServicesPage() {
                       <button
                         type="button"
                         onClick={() => toggleServiceStatus(service.id, service.isActive)}
-                        className="inline-flex min-h-[36px] items-center rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                        className="inline-flex min-h-[44px] items-center rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50"
                       >
                         {service.isActive ? 'Deactivate' : 'Activate'}
                       </button>
                       <button
                         type="button"
                         onClick={() => handleDeleteClick(service)}
-                        className="inline-flex min-h-[36px] items-center rounded-lg border border-rose-300 bg-white px-3 text-xs font-semibold text-rose-700 hover:bg-rose-50"
+                        className="inline-flex min-h-[44px] items-center rounded-lg border border-rose-300 bg-white px-3 text-xs font-semibold text-rose-700 hover:bg-rose-50"
                       >
                         Delete
                       </button>
@@ -632,14 +632,14 @@ export default function ProviderServicesPage() {
                   <button
                     type="button"
                     onClick={handleCloseModal}
-                    className="min-h-[42px] rounded-lg border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                    className="min-h-[44px] rounded-lg border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-50"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
                     disabled={saving}
-                    className="min-h-[42px] rounded-lg bg-brand-primary px-4 text-sm font-semibold text-white hover:bg-brand-primary/90 disabled:opacity-60"
+                    className="min-h-[44px] rounded-lg bg-brand-primary px-4 text-sm font-semibold text-white hover:bg-brand-primary/90 disabled:opacity-60"
                   >
                     {saving ? 'Saving...' : editingService ? 'Update service' : 'Add service'}
                   </button>
@@ -679,7 +679,7 @@ export default function ProviderServicesPage() {
                   type="button"
                   onClick={handleDeleteCancel}
                   disabled={saving}
-                  className="min-h-[40px] rounded-lg border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+                  className="min-h-[44px] rounded-lg border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
                 >
                   Cancel
                 </button>
@@ -687,7 +687,7 @@ export default function ProviderServicesPage() {
                   type="button"
                   onClick={handleDeleteConfirm}
                   disabled={saving}
-                  className="min-h-[40px] rounded-lg bg-rose-600 px-4 text-sm font-semibold text-white hover:bg-rose-700 disabled:opacity-60"
+                  className="min-h-[44px] rounded-lg bg-rose-600 px-4 text-sm font-semibold text-white hover:bg-rose-700 disabled:opacity-60"
                 >
                   {saving ? 'Deleting...' : 'Delete'}
                 </button>

@@ -107,7 +107,7 @@ export default function ProviderCalendarPage() {
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-500 transition-colors hover:border-brand-primary hover:bg-brand-primary/5 hover:text-brand-primary"
+                className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg border border-slate-200 text-slate-500 transition-colors hover:border-brand-primary hover:bg-brand-primary/5 hover:text-brand-primary"
                 onClick={() => setViewMonth((prev) => startOfMonth(subMonths(prev, 1)))}
                 aria-label="Previous month"
               >
@@ -115,7 +115,7 @@ export default function ProviderCalendarPage() {
               </button>
               <button
                 type="button"
-                className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-500 transition-colors hover:border-brand-primary hover:bg-brand-primary/5 hover:text-brand-primary"
+                className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg border border-slate-200 text-slate-500 transition-colors hover:border-brand-primary hover:bg-brand-primary/5 hover:text-brand-primary"
                 onClick={() => setViewMonth((prev) => startOfMonth(addMonths(prev, 1)))}
                 aria-label="Next month"
               >
@@ -191,7 +191,7 @@ export default function ProviderCalendarPage() {
 
           <button
             type="button"
-            className="inline-flex min-h-[40px] items-center justify-center rounded-lg border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            className="inline-flex min-h-[44px] items-center justify-center rounded-lg border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-50"
           >
             Block selected date
           </button>
@@ -257,7 +257,7 @@ export default function ProviderCalendarPage() {
           <button
             type="button"
             onClick={handleSaveHours}
-            className="inline-flex min-h-[40px] w-full items-center justify-center rounded-lg bg-brand-primary px-4 text-sm font-semibold text-white transition-colors hover:bg-brand-primary/90"
+            className="inline-flex min-h-[44px] w-full items-center justify-center rounded-lg bg-brand-primary px-4 text-sm font-semibold text-white transition-colors hover:bg-brand-primary/90"
           >
             Save working hours
           </button>
