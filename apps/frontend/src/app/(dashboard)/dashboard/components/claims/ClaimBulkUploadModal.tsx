@@ -278,7 +278,7 @@ export default function ClaimBulkUploadModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
-      <div className="w-full max-w-lg sm:max-w-2xl rounded-2xl border bg-white shadow-xl max-h-[90vh] overflow-y-auto">
+      <div className="w-full max-w-lg sm:max-w-2xl rounded-2xl border bg-white shadow-xl max-h-[90dvh] overflow-y-auto">
         {/* Header */}
         <div className="flex items-start justify-between gap-3 border-b p-5">
           <div>

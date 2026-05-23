@@ -154,6 +154,7 @@ export default function LoginPage() {
                 name="email"
                 type="email"
                 autoComplete="username"
+                enterKeyHint="next"
                 required
                 value={formData.email}
                 onChange={handleChange}
@@ -174,6 +175,7 @@ export default function LoginPage() {
                 name="password"
                 type={showPassword ? 'text' : 'password'}
                 autoComplete="current-password"
+                enterKeyHint="go"
                 required
                 value={formData.password}
                 onChange={handleChange}

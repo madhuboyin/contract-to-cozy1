@@ -361,7 +361,7 @@ const PolicyForm = ({ initialData, properties, providerSuggestions, prefill, onS
   const saveLabel = initialData ? 'Save Changes' : 'Save Policy';
 
   return (
-    <form onSubmit={handleSubmit} className={cn(COVERAGE_MODAL_FORM_CLASS, 'flex h-full max-h-[92vh] flex-col')}>
+    <form onSubmit={handleSubmit} className={cn(COVERAGE_MODAL_FORM_CLASS, 'flex h-full max-h-[92dvh] flex-col')}>
       <div className="flex items-center justify-between border-b border-[#E5E7EB] px-4 py-3 sm:hidden">
         <button type="button" onClick={onClose} className="min-h-[40px] px-1 text-sm font-medium text-[#6B7280]">
           Cancel
@@ -848,7 +848,7 @@ export default function InsurancePage() {
             <Button size="sm" className="min-h-[40px] px-3.5" onClick={() => openAddEditModal(undefined)}>
               <Plus className="w-4 h-4 mr-2" /> Add Policy
             </Button>
-            <DialogContent className="modal-container w-[calc(100vw-2rem)] sm:max-w-[700px] gap-0 overflow-hidden p-0 max-sm:inset-x-0 max-sm:bottom-0 max-sm:top-auto max-sm:w-full max-sm:max-w-none max-sm:max-h-[92vh] max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-b-none max-sm:rounded-t-2xl max-sm:border-x-0 max-sm:border-b-0">
+            <DialogContent className="modal-container w-[calc(100vw-2rem)] sm:max-w-[700px] gap-0 overflow-hidden p-0 max-sm:inset-x-0 max-sm:bottom-0 max-sm:top-auto max-sm:w-full max-sm:max-w-none max-sm:max-h-[92dvh] max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-b-none max-sm:rounded-t-2xl max-sm:border-x-0 max-sm:border-b-0">
               <PolicyForm 
                 initialData={editingPolicy}
                 properties={properties}

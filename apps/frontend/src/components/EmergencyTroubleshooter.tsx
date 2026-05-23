@@ -159,7 +159,7 @@ export default function EmergencyTroubleshooter({ propertyId }: EmergencyTrouble
       )}
 
       <MobileSection>
-        <MobileCard className="space-y-3 max-h-[58vh] overflow-y-auto">
+        <MobileCard className="space-y-3 max-h-[58dvh] overflow-y-auto overscroll-contain">
           {messages.length === 0 ? (
             <div className="py-10 text-center text-gray-500">
               <AlertTriangle className="h-10 w-10 mx-auto mb-3 text-gray-400" />

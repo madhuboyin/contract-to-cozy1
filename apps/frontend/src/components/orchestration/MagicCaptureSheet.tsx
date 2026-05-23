@@ -484,7 +484,7 @@ export function MagicCaptureSheet({
     <Sheet open={isOpen} onOpenChange={handleSheetOpenChange}>
       <SheetContent
         side="bottom"
-        className="px-0 pt-2 pb-8 h-[92vh] max-h-[92vh] flex flex-col rounded-t-3xl border-t-0 shadow-2xl"
+        className="px-0 pt-2 pb-8 h-[92dvh] max-h-[92dvh] flex flex-col rounded-t-3xl border-t-0 shadow-2xl"
       >
         <div className="mx-auto w-12 h-1.5 bg-slate-200 rounded-full mb-2 shrink-0" />
 

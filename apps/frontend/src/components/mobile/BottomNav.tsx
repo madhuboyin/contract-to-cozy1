@@ -229,7 +229,7 @@ export function BottomNav() {
               </button>
             </SheetTrigger>
 
-            <SheetContent side="bottom" className="flex h-[80vh] max-h-[80vh] flex-col rounded-t-2xl">
+            <SheetContent side="bottom" className="flex h-[80dvh] max-h-[80dvh] flex-col rounded-t-2xl">
               <SheetHeader>
                 <SheetTitle>More</SheetTitle>
               </SheetHeader>

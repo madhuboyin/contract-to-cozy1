@@ -105,7 +105,7 @@ export function GuidanceDrawer({ propertyId, action, open, onOpenChange }: Guida
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side={isMobile ? 'bottom' : 'right'}
-        className={isMobile ? 'h-[85vh] overflow-y-auto rounded-t-2xl p-4' : 'w-full sm:max-w-2xl overflow-y-auto'}
+        className={isMobile ? 'h-[85dvh] overflow-y-auto overscroll-contain rounded-t-2xl p-4' : 'w-full sm:max-w-2xl overflow-y-auto'}
       >
         <SheetHeader>
           <SheetTitle>{action.title}</SheetTitle>

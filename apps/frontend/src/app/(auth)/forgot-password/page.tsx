@@ -34,7 +34,7 @@ export default function ForgotPasswordPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex flex-col">
+    <div className="min-h-dvh bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex flex-col">
       {/* Navigation Header with Home Link */}
       <nav className="bg-white/80 backdrop-blur-md shadow-sm border-b border-gray-100">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -102,6 +102,8 @@ export default function ForgotPasswordPage() {
                     id="email"
                     name="email"
                     type="email"
+                    autoComplete="email"
+                    enterKeyHint="go"
                     required
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}

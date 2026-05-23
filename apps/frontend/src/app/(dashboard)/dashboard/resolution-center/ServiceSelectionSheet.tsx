@@ -104,7 +104,7 @@ export function ServiceSelectionSheet({
     >
       <SheetContent
         side="bottom"
-        className="h-[92vh] max-h-[92vh] flex flex-col rounded-t-3xl border-t-0 p-0 shadow-2xl overflow-hidden"
+        className="h-[92dvh] max-h-[92dvh] flex flex-col rounded-t-3xl border-t-0 p-0 shadow-2xl overflow-hidden"
       >
         <div className="mx-auto w-12 h-1.5 bg-slate-200 rounded-full my-3 shrink-0" />
 

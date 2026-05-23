@@ -36,7 +36,7 @@ export default function AuthTemplate({ title, subtitle, activeRoute, children, f
   const BrandIcon = resolveIconByConcept('property');
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top_right,rgba(20,184,166,0.2),transparent_45%),linear-gradient(160deg,#f8fafc,#ecfeff_45%,#f0fdfa)]">
+    <div className="min-h-dvh bg-[radial-gradient(circle_at_top_right,rgba(20,184,166,0.2),transparent_45%),linear-gradient(160deg,#f8fafc,#ecfeff_45%,#f0fdfa)]">
       <nav className="border-b border-slate-200/80 bg-white/90 backdrop-blur">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6 lg:px-8">
           <Link

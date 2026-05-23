@@ -122,6 +122,8 @@ function ResetPasswordForm() {
                 id="newPassword"
                 name="newPassword"
                 type={showPassword ? 'text' : 'password'}
+                autoComplete="new-password"
+                enterKeyHint="next"
                 required
                 value={formData.newPassword}
                 onChange={handleChange}
@@ -154,6 +156,8 @@ function ResetPasswordForm() {
                     id="confirmPassword"
                     name="confirmPassword"
                     type={showPassword ? 'text' : 'password'}
+                    autoComplete="new-password"
+                    enterKeyHint="done"
                     required
                     value={formData.confirmPassword}
                     onChange={handleChange}
@@ -189,7 +193,7 @@ function ResetPasswordForm() {
 // ----------------------------------------------------------------------
 export default function ResetPasswordPage() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex flex-col">
+    <div className="min-h-dvh bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex flex-col">
       {/* Navigation Header with Home Link */}
       <nav className="bg-white/80 backdrop-blur-md shadow-sm border-b border-gray-100">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">

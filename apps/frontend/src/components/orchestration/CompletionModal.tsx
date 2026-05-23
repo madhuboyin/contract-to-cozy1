@@ -85,7 +85,7 @@ export const CompletionModal: React.FC<CompletionModalProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="w-full max-w-2xl max-h-[80vh] overflow-y-auto">
+      <DialogContent className="w-full max-w-2xl max-h-[80dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Confirm Completion</DialogTitle>
           <p className="text-sm text-muted-foreground mt-1">{actionTitle}</p>

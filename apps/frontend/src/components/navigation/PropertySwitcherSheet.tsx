@@ -41,7 +41,7 @@ export function PropertySwitcherSheet({ open, onOpenChange }: PropertySwitcherSh
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="bottom"
-        className="h-auto max-h-[72vh] flex flex-col rounded-t-2xl p-0 overflow-hidden"
+        className="h-auto max-h-[72dvh] flex flex-col rounded-t-2xl p-0 overflow-hidden"
       >
         <div className="mx-auto w-12 h-1.5 bg-slate-200 rounded-full mt-3 mb-1 shrink-0" />
 

@@ -143,7 +143,7 @@ export const DecisionTraceModal: React.FC<Props> = ({
         )}
 
         {/* ================= Trace Body ================= */}
-        <div className="space-y-3 max-h-[60vh] overflow-y-auto">
+        <div className="space-y-3 max-h-[60dvh] overflow-y-auto overscroll-contain">
           {steps.length === 0 && (
             <div className="text-sm text-muted-foreground">
               No decision details are available for this recommendation.

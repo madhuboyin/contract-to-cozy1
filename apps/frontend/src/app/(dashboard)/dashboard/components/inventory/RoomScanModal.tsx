@@ -326,7 +326,7 @@ export default function RoomScanModal({ open, onClose, propertyId, roomId, roomN
                 </label>
               ) : null}
 
-              <div className="max-h-[45vh] overflow-auto rounded-xl border border-black/10">
+              <div className="max-h-[45dvh] overflow-auto overscroll-contain rounded-xl border border-black/10">
                 {drafts.length === 0 ? (
                   <div className="p-4 text-sm opacity-70">No drafts created.</div>
                 ) : (

@@ -197,6 +197,7 @@ export default function SignupPage() {
               name="email"
               type="email"
               autoComplete="email"
+              enterKeyHint="next"
               value={formData.email}
               onChange={(e) => setField('email', e.target.value)}
               className={`pl-9 ${inputErrorClass('email')}`}
@@ -217,6 +218,7 @@ export default function SignupPage() {
                 name="password"
                 type="password"
                 autoComplete="new-password"
+                enterKeyHint="next"
                 value={formData.password}
                 onChange={(e) => setField('password', e.target.value)}
                 className={`pl-9 ${inputErrorClass('password')}`}
@@ -240,6 +242,7 @@ export default function SignupPage() {
                 name="confirmPassword"
                 type="password"
                 autoComplete="new-password"
+                enterKeyHint="done"
                 value={formData.confirmPassword}
                 onChange={(e) => setField('confirmPassword', e.target.value)}
                 className={`pl-9 ${inputErrorClass('confirmPassword')}`}
