@@ -232,7 +232,7 @@ export default function HomeCostGrowthClient() {
                 {appreciationOverridePct !== null && (
                   <button
                     type="button"
-                    className="text-[10px] font-medium text-slate-500 underline decoration-dotted hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+                    className="text-[11px] font-medium text-slate-500 underline decoration-dotted hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
                     onClick={() => {
                       setAppreciationOverridePct(null);
                       void getAndSet(trendYears, null);
@@ -248,9 +248,9 @@ export default function HomeCostGrowthClient() {
                   {sliderPct.toFixed(1)}%
                 </span>
                 {appreciationOverridePct !== null ? (
-                  <span className="text-[10px] text-amber-600 dark:text-amber-400">custom</span>
+                  <span className="text-[11px] text-amber-600 dark:text-amber-400">custom</span>
                 ) : (
-                  <span className="text-[10px] text-slate-400 dark:text-slate-500">estimated rate</span>
+                  <span className="text-[11px] text-slate-400 dark:text-slate-500">estimated rate</span>
                 )}
               </div>
 
@@ -273,7 +273,7 @@ export default function HomeCostGrowthClient() {
                 aria-label="Appreciation rate override"
               />
 
-              <div className="mt-1 flex justify-between text-[10px] text-slate-400 dark:text-slate-500">
+              <div className="mt-1 flex justify-between text-[11px] text-slate-400 dark:text-slate-500">
                 <span>0%</span>
                 <span>5%</span>
                 <span>10%</span>

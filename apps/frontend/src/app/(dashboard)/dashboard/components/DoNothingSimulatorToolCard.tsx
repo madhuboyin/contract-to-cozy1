@@ -189,7 +189,7 @@ export default function DoNothingSimulatorToolCard({
         )}
       </div>
 
-      <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[10px] text-gray-600">
+      <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[11px] text-gray-600">
         <span>{hasRun && run ? `${run.horizonMonths} mo horizon` : '12 mo horizon'}</span>
         <span aria-hidden className="text-gray-300">
           ·

@@ -94,7 +94,7 @@ export default function DesktopOnboardingTimeline({
                       Step {step.step}
                     </p>
                     {isComplete ? (
-                      <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold tracking-normal text-emerald-700">
+                      <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold tracking-normal text-emerald-700">
                         Done
                       </span>
                     ) : null}

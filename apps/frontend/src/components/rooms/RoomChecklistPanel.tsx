@@ -413,9 +413,9 @@ export default function RoomChecklistPanel({ propertyId, roomId, roomType, bedro
             return (
               <div key={frequency} className="space-y-2">
                 <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-semibold tracking-normal text-gray-400">{FREQUENCY_LABELS[frequency]}</span>
+                  <span className="text-[11px] font-semibold tracking-normal text-gray-400">{FREQUENCY_LABELS[frequency]}</span>
                   <div className="h-px flex-1 bg-gray-100" />
-                  <span className="text-[10px] text-gray-400">{tasks.length}</span>
+                  <span className="text-[11px] text-gray-400">{tasks.length}</span>
                 </div>
 
                 <div className="space-y-1.5">
@@ -440,7 +440,7 @@ export default function RoomChecklistPanel({ propertyId, roomId, roomType, bedro
 
                         <span className="flex-1 text-sm text-gray-700">{task.title}</span>
 
-                        <span className="text-[10px] font-medium text-gray-400">{FREQUENCY_LABELS[task.frequency]}</span>
+                        <span className="text-[11px] font-medium text-gray-400">{FREQUENCY_LABELS[task.frequency]}</span>
 
                         <button
                           type="button"

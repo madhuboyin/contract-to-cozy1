@@ -580,7 +580,7 @@ export default function RoomDetailClient() {
                 ].join(' ')}
               >
                 <span className={`text-sm font-semibold ${tab === tabKey ? 'text-gray-900' : 'text-gray-500'}`}>{tabMeta[tabKey].label}</span>
-                <span className={`text-[10px] font-medium ${tab === tabKey ? tabMeta[tabKey].badgeColor : 'text-gray-400'}`}>
+                <span className={`text-[11px] font-medium ${tab === tabKey ? tabMeta[tabKey].badgeColor : 'text-gray-400'}`}>
                   {tabMeta[tabKey].badge}
                 </span>
               </button>
@@ -636,7 +636,7 @@ export default function RoomDetailClient() {
                             <p className="mb-0 truncate text-xs font-medium text-gray-800">
                               {recommendation.plantName}
                             </p>
-                            <span className="text-[10px] tracking-normal text-gray-500">
+                            <span className="text-[11px] tracking-normal text-gray-500">
                               {recommendation.status}
                             </span>
                           </div>

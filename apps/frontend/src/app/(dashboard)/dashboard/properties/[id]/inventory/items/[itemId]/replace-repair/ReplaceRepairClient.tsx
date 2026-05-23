@@ -517,7 +517,7 @@ export default function ReplaceRepairClient() {
                     <button
                       type="button"
                       aria-label="What is cash buffer"
-                      className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-gray-300 text-[10px] font-semibold text-gray-600 hover:bg-gray-100"
+                      className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-gray-300 text-[11px] font-semibold text-gray-600 hover:bg-gray-100"
                     >
                       i
                     </button>

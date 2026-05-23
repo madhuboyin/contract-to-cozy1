@@ -46,10 +46,10 @@ export function AdminConsoleShell({
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="space-y-1.5">
             <div className="flex items-center gap-2">
-              <Badge className="rounded px-2 py-0.5 text-[10px] font-semibold tracking-normal">
+              <Badge className="rounded px-2 py-0.5 text-[11px] font-semibold tracking-normal">
                 Admin
               </Badge>
-              <span className="inline-flex items-center gap-1 rounded border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold tracking-normal text-slate-500">
+              <span className="inline-flex items-center gap-1 rounded border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-semibold tracking-normal text-slate-500">
                 <Shield className="h-3 w-3" />
                 Operations
               </span>

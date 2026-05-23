@@ -108,7 +108,7 @@ export default function HomeLabPage() {
     <div className="space-y-8 pb-12">
       <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div className="space-y-1">
-          <div className="flex items-center gap-2 text-brand-600 font-bold text-[10px] tracking-normal">
+          <div className="flex items-center gap-2 text-brand-600 font-bold text-[11px] tracking-normal">
             <LayoutGrid className="h-3.5 w-3.5" />
             Home Lab
           </div>

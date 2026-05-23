@@ -1132,7 +1132,7 @@ export default function ResolutionHubPage() {
                         <h4 className="font-bold text-slate-900">{executionItem.title}</h4>
                         <p className="text-xs text-slate-500">{executionItem.subtitle}</p>
                       </div>
-                      <div className="rounded-full bg-teal-50 px-2 py-0.5 text-[10px] font-bold tracking-normal text-teal-700">
+                      <div className="rounded-full bg-teal-50 px-2 py-0.5 text-[11px] font-bold tracking-normal text-teal-700">
                         {executionItem.statusLabel}
                       </div>
                     </div>

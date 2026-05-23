@@ -91,7 +91,7 @@ export default function RoomListCard({
 
         <p className={`mb-3 text-center text-xs font-bold ${statusColor}`}>{statusLabel}</p>
 
-        <div className="mb-3 flex items-center justify-center gap-3 text-[10px] text-gray-400">
+        <div className="mb-3 flex items-center justify-center gap-3 text-[11px] text-gray-400">
           <span className="flex items-center gap-1">
             <Package className="h-3 w-3" />
             {itemCount}
@@ -107,7 +107,7 @@ export default function RoomListCard({
         </div>
 
         <div className="mb-3">
-          <div className="mb-1.5 flex items-center justify-between text-[10px] text-gray-400">
+          <div className="mb-1.5 flex items-center justify-between text-[11px] text-gray-400">
             <span className="tracking-normal">Completeness</span>
             <span className="font-semibold text-gray-600">{completenessPercent}%</span>
           </div>
@@ -119,7 +119,7 @@ export default function RoomListCard({
           </div>
         </div>
 
-        <p className="text-center text-[10px] italic leading-relaxed text-gray-500">{tipText}</p>
+        <p className="text-center text-[11px] italic leading-relaxed text-gray-500">{tipText}</p>
 
         <div className="mt-4 flex flex-wrap items-center gap-2">
           <Link

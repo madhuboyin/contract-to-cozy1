@@ -291,7 +291,7 @@ export default function RevealOnboardingPage() {
                     className="bg-white/5 border border-white/10 rounded-2xl p-4 text-center hover:bg-white/10 transition-colors cursor-default"
                   >
                     <stat.icon className="h-4 w-4 text-slate-500 mx-auto mb-2" />
-                    <p className="text-[10px] font-bold text-slate-500 tracking-normal">{stat.label}</p>
+                    <p className="text-[11px] font-bold text-slate-500 tracking-normal">{stat.label}</p>
                     <p className="text-lg font-black text-white">{stat.value}</p>
                   </motion.div>
                 ))}

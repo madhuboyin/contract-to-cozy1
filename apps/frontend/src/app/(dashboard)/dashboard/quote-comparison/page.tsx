@@ -211,7 +211,7 @@ export default function QuoteComparisonPage() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <Label className="text-[10px] font-bold tracking-normal text-slate-400">
+                  <Label className="text-[11px] font-bold tracking-normal text-slate-400">
                     Vendor Name (optional)
                   </Label>
                   <Input
@@ -222,7 +222,7 @@ export default function QuoteComparisonPage() {
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-[10px] font-bold tracking-normal text-slate-400">
+                  <Label className="text-[11px] font-bold tracking-normal text-slate-400">
                     Quote Amount ($)
                   </Label>
                   <div className="relative">
@@ -313,7 +313,7 @@ export default function QuoteComparisonPage() {
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 mb-1">
-                        <span className="text-[10px] font-bold text-slate-400">#{idx + 1}</span>
+                        <span className="text-[11px] font-bold text-slate-400">#{idx + 1}</span>
                         <p className="text-sm font-bold text-slate-900 truncate">
                           {r.vendorName || 'Unnamed vendor'}
                         </p>
@@ -336,7 +336,7 @@ export default function QuoteComparisonPage() {
                           </StatusChip>
                         </div>
                         {r.result?.expectedMedian && (
-                          <p className="text-[10px] text-slate-500">
+                          <p className="text-[11px] text-slate-500">
                             Market median: ${r.result.expectedMedian.toLocaleString()}
                           </p>
                         )}

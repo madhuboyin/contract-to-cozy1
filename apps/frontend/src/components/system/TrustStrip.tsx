@@ -74,21 +74,21 @@ export default function TrustStrip({
 
       <div className="flex flex-wrap items-center gap-3">
         <div className="space-y-1.5">
-          <p className="text-[10px] font-bold tracking-normal text-slate-400 ml-1">Confidence</p>
+          <p className="text-[11px] font-bold tracking-normal text-slate-400 ml-1">Confidence</p>
           <ConfidenceBadge level={confidenceLevel} score={confidenceLevel === 'high' ? 96 : confidenceLevel === 'medium' ? 78 : 42} />
         </div>
         
         <div className="h-8 w-px bg-slate-100 mx-1 hidden sm:block" />
 
         <div className="space-y-1.5">
-          <p className="text-[10px] font-bold tracking-normal text-slate-400 ml-1">Source</p>
+          <p className="text-[11px] font-bold tracking-normal text-slate-400 ml-1">Source</p>
           <SourceChip source={sourceLabel} />
         </div>
 
         <div className="h-8 w-px bg-slate-100 mx-1 hidden sm:block" />
 
         <div className="space-y-1.5">
-          <p className="text-[10px] font-bold tracking-normal text-slate-400 ml-1">Updated</p>
+          <p className="text-[11px] font-bold tracking-normal text-slate-400 ml-1">Updated</p>
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-50 text-[11px] font-semibold text-slate-600 border border-slate-100">
             <Clock className="h-3 w-3 text-slate-400" />
             {freshnessLabel}

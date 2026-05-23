@@ -241,7 +241,7 @@ function PersistentSidebarNav({ user, isCollapsed, onToggleCollapse }: {
         {user?.role === 'ADMIN' && (
           <div className="pt-2 border-t border-gray-100 space-y-0.5">
             {!isCollapsed && (
-              <p className="px-3 pt-1 pb-0.5 text-[10px] tracking-normal text-gray-400 font-semibold">
+              <p className="px-3 pt-1 pb-0.5 text-[11px] tracking-normal text-gray-400 font-semibold">
                 Admin
               </p>
             )}

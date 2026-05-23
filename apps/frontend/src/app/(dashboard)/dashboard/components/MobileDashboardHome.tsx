@@ -712,8 +712,8 @@ export default function MobileDashboardHome({
                     <p className="mb-0 text-[17px] font-bold leading-none text-slate-900">
                       {homeScore > 0 ? homeScore : '—'}
                     </p>
-                    <p className="mb-0 mt-1 text-[10px] text-slate-500">Health</p>
-                    <p className="mb-0 text-[10px] text-slate-400">{getScoreLabel(homeScore)}</p>
+                    <p className="mb-0 mt-1 text-[11px] text-slate-500">Health</p>
+                    <p className="mb-0 text-[11px] text-slate-400">{getScoreLabel(homeScore)}</p>
                   </div>
                 </Link>
 
@@ -724,8 +724,8 @@ export default function MobileDashboardHome({
                     <p className="mb-0 text-[17px] font-bold leading-none text-slate-900">
                       {formatCurrencyCompact(monthlySavings * 12)}
                     </p>
-                    <p className="mb-0 mt-1 text-[10px] text-slate-500">Savings</p>
-                    <p className="mb-0 text-[10px] text-slate-400">Opp.</p>
+                    <p className="mb-0 mt-1 text-[11px] text-slate-500">Savings</p>
+                    <p className="mb-0 text-[11px] text-slate-400">Opp.</p>
                   </div>
                 </Link>
 
@@ -736,8 +736,8 @@ export default function MobileDashboardHome({
                     <p className="mb-0 text-[17px] font-bold leading-none text-slate-900">
                       {formatCurrencyCompact(riskExposure)}
                     </p>
-                    <p className="mb-0 mt-1 text-[10px] text-slate-500">Risk</p>
-                    <p className="mb-0 text-[10px] text-slate-400">
+                    <p className="mb-0 mt-1 text-[11px] text-slate-500">Risk</p>
+                    <p className="mb-0 text-[11px] text-slate-400">
                       {riskExposure > 0 ? 'Unhedged' : 'Protected'}
                     </p>
                   </div>
@@ -760,10 +760,10 @@ export default function MobileDashboardHome({
                     >
                       {urgentActionCount}
                     </p>
-                    <p className="mb-0 mt-1 text-[10px] text-slate-500">Actions</p>
+                    <p className="mb-0 mt-1 text-[11px] text-slate-500">Actions</p>
                     <p
                       className={cn(
-                        'mb-0 text-[10px]',
+                        'mb-0 text-[11px]',
                         urgentActionCount > 0 ? 'text-teal-500' : 'text-slate-400'
                       )}
                     >

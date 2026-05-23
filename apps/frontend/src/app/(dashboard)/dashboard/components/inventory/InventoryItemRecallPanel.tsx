@@ -118,7 +118,7 @@ export default function InventoryItemRecallPanel(props: {
       <div className="flex items-center justify-between">
         <h3 className="font-semibold text-slate-900 text-sm">Safety / Recall Alerts</h3>
         {loading && (
-          <span className="text-[10px] text-slate-400 animate-pulse font-medium tracking-normal">
+          <span className="text-[11px] text-slate-400 animate-pulse font-medium tracking-normal">
             Scanning...
           </span>
         )}
@@ -131,7 +131,7 @@ export default function InventoryItemRecallPanel(props: {
       {!loading && visibleRows.length === 0 ? (
         <div className="rounded-xl border border-slate-100 bg-slate-50/50 p-6 text-center">
           <p className="text-xs text-slate-500 font-medium">No active recalls found</p>
-          <p className="mt-1 text-[10px] text-slate-400">We monitor CPSC data for your appliance models.</p>
+          <p className="mt-1 text-[11px] text-slate-400">We monitor CPSC data for your appliance models.</p>
         </div>
       ) : (
         <div className="space-y-3">
@@ -143,7 +143,7 @@ export default function InventoryItemRecallPanel(props: {
               <div className="flex items-start justify-between gap-3">
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
-                    <span className="text-[10px] font-bold text-red-600 tracking-normal">Recall Alert</span>
+                    <span className="text-[11px] font-bold text-red-600 tracking-normal">Recall Alert</span>
                     <RecallStatusBadge status={m.status} />
                   </div>
                   <TooltipProvider delayDuration={200}>
@@ -218,7 +218,7 @@ export default function InventoryItemRecallPanel(props: {
                 ) : null}
 
                 {m.maintenanceTaskId && (
-                  <div className="text-[10px] font-bold text-slate-400 tracking-tight">• Linked to Task</div>
+                  <div className="text-[11px] font-bold text-slate-400 tracking-tight">• Linked to Task</div>
                 )}
               </div>
             </div>

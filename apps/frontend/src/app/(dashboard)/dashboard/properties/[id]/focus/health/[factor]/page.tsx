@@ -1437,17 +1437,17 @@ export default function HealthInsightFocusPage() {
               {yearBuilt && propertyAge != null && ageTier ? (
                 <div className="flex items-start gap-4 flex-wrap">
                   <div>
-                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Year built</p>
+                    <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">Year built</p>
                     <p className="text-lg font-black text-slate-900 tabular-nums leading-tight">{yearBuilt}</p>
                   </div>
                   <div className="h-8 w-px bg-slate-200 shrink-0" />
                   <div>
-                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Property age</p>
+                    <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">Property age</p>
                     <p className="text-lg font-black text-slate-900 tabular-nums leading-tight">{propertyAge} years</p>
                   </div>
                   <div className="h-8 w-px bg-slate-200 shrink-0" />
                   <div>
-                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Age tier</p>
+                    <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">Age tier</p>
                     <span className={`inline-flex items-center text-xs font-semibold px-2 py-0.5 rounded-full border mt-0.5 ${getAgeTierColor(ageTier)}`}>
                       {getAgeTierLabel(ageTier)}
                     </span>
@@ -1475,7 +1475,7 @@ export default function HealthInsightFocusPage() {
                 <div className="space-y-2.5">
                   <div className="flex items-start gap-4 flex-wrap">
                     <div>
-                      <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">
+                      <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">
                         {getSystemYearLabel(systemKind!)}
                       </p>
                       <p className="text-lg font-black text-slate-900 tabular-nums leading-tight">
@@ -1484,19 +1484,19 @@ export default function HealthInsightFocusPage() {
                     </div>
                     <div className="h-8 w-px bg-slate-200 shrink-0" />
                     <div>
-                      <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">System age</p>
+                      <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">System age</p>
                       <p className="text-lg font-black text-slate-900 tabular-nums leading-tight">{systemAge} years</p>
                     </div>
                     <div className="h-8 w-px bg-slate-200 shrink-0" />
                     <div>
-                      <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Condition</p>
+                      <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">Condition</p>
                       <span className={`inline-flex items-center text-xs font-semibold px-2 py-0.5 rounded-full border mt-0.5 ${systemAgeTierConfig[systemAgeTier].color}`}>
                         {systemAgeTierConfig[systemAgeTier].label}
                       </span>
                     </div>
                   </div>
                   <div className="space-y-1">
-                    <div className="flex justify-between text-[10px] text-slate-400">
+                    <div className="flex justify-between text-[11px] text-slate-400">
                       <span>0 yrs</span>
                       <span>Typical lifespan: {systemLifespan.label}</span>
                     </div>
@@ -1526,7 +1526,7 @@ export default function HealthInsightFocusPage() {
           {/* ── Major Systems Health summary strip ── */}
           {showSystemsSummary && (
             <div className="px-5 py-3 bg-slate-50 border-b border-slate-100">
-              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-2">Major systems</p>
+              <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide mb-2">Major systems</p>
               <div className="grid grid-cols-2 gap-2">
                 {systemsSummaryItems.map(({ label, age, tier, lifespan }) => (
                   <div key={label} className="rounded-lg border border-slate-100 bg-white px-3 py-2">
@@ -1534,7 +1534,7 @@ export default function HealthInsightFocusPage() {
                     {age !== null && tier !== null ? (
                       <div className="flex items-center justify-between gap-1 flex-wrap">
                         <span className="text-sm font-bold text-slate-900 tabular-nums">{age} yrs</span>
-                        <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full border ${systemAgeTierConfig[tier].color}`}>
+                        <span className={`text-[11px] font-semibold px-1.5 py-0.5 rounded-full border ${systemAgeTierConfig[tier].color}`}>
                           {systemAgeTierConfig[tier].label}
                         </span>
                       </div>
@@ -1555,7 +1555,7 @@ export default function HealthInsightFocusPage() {
                   </div>
                 ))}
               </div>
-              <p className="text-[10px] text-slate-400 mt-2">Lifespan bars show age relative to typical maximum.</p>
+              <p className="text-[11px] text-slate-400 mt-2">Lifespan bars show age relative to typical maximum.</p>
             </div>
           )}
 
@@ -1567,7 +1567,7 @@ export default function HealthInsightFocusPage() {
                   <div className="flex items-center gap-6 flex-wrap">
                     {occupantsCount != null && (
                       <div>
-                        <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Occupants</p>
+                        <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">Occupants</p>
                         <p className="text-lg font-black text-slate-900 tabular-nums leading-tight">{occupantsCount}</p>
                       </div>
                     )}
@@ -1576,7 +1576,7 @@ export default function HealthInsightFocusPage() {
                     )}
                     {bedroomsCount != null && (
                       <div>
-                        <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Bedrooms</p>
+                        <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">Bedrooms</p>
                         <p className="text-lg font-black text-slate-900 tabular-nums leading-tight">{bedroomsCount}</p>
                       </div>
                     )}
@@ -1584,7 +1584,7 @@ export default function HealthInsightFocusPage() {
                       <>
                         <div className="h-8 w-px bg-slate-200 shrink-0" />
                         <div>
-                          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Per bedroom</p>
+                          <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">Per bedroom</p>
                           <p className="text-lg font-black text-slate-900 tabular-nums leading-tight">{occupancyRatio}</p>
                         </div>
                       </>
@@ -1618,7 +1618,7 @@ export default function HealthInsightFocusPage() {
           {/* ── Safety Factor details strip ── */}
           {showSafetyDetails && safetyDevices.length > 0 && (
             <div className="px-5 py-3 bg-slate-50 border-b border-slate-100">
-              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-2">Safety devices</p>
+              <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide mb-2">Safety devices</p>
               <div className="grid grid-cols-2 gap-y-2 gap-x-4">
                 {safetyDevices.map(({ label, present }) => (
                   <div key={label} className="flex items-center gap-1.5">
@@ -1634,7 +1634,7 @@ export default function HealthInsightFocusPage() {
                 ))}
               </div>
               {safetyDevices.some(d => d.present === null) && (
-                <p className="text-[10px] text-slate-400 mt-2">
+                <p className="text-[11px] text-slate-400 mt-2">
                   Update your property profile to record which devices are installed.
                 </p>
               )}
@@ -1688,7 +1688,7 @@ export default function HealthInsightFocusPage() {
                         <ItemIcon className="h-4 w-4 text-slate-500 shrink-0" />
                         <p className="text-sm font-semibold text-slate-800">{item.system}</p>
                       </div>
-                      <span className={`shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded-full border ${urgencyColors(item.urgency)}`}>
+                      <span className={`shrink-0 text-[11px] font-bold px-1.5 py-0.5 rounded-full border ${urgencyColors(item.urgency)}`}>
                         {urgencyLabel(item.urgency)}
                       </span>
                     </div>
@@ -1701,7 +1701,7 @@ export default function HealthInsightFocusPage() {
               })}
             </div>
             <div className="px-5 pb-4">
-              <p className="text-[10px] text-slate-400">
+              <p className="text-[11px] text-slate-400">
                 Items marked "Act now" are most likely to affect safety or cost significantly if deferred.
               </p>
             </div>
@@ -1737,7 +1737,7 @@ export default function HealthInsightFocusPage() {
                         <ItemIcon className="h-4 w-4 text-slate-500 shrink-0" />
                         <p className="text-sm font-semibold text-slate-800">{item.system}</p>
                       </div>
-                      <span className={`shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded-full border ${urgencyColors(item.urgency)}`}>
+                      <span className={`shrink-0 text-[11px] font-bold px-1.5 py-0.5 rounded-full border ${urgencyColors(item.urgency)}`}>
                         {urgencyLabel(item.urgency)}
                       </span>
                     </div>
@@ -1750,7 +1750,7 @@ export default function HealthInsightFocusPage() {
               })}
             </div>
             <div className="px-5 pb-4">
-              <p className="text-[10px] text-slate-400">
+              <p className="text-[11px] text-slate-400">
                 Items marked &quot;Act now&quot; carry the highest risk or cost if deferred.
               </p>
             </div>

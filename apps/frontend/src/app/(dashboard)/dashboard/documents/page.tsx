@@ -839,7 +839,7 @@ export default function DocumentsPage() {
                          {format(parseISO(doc.createdAt), 'MMM dd, yyyy')}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600 hover:text-blue-700" asChild>
+                        <Button variant="ghost" size="icon" aria-label="View document" className="h-8 w-8 text-blue-600 hover:text-blue-700" asChild>
                            <a href={toSafeHref(doc.fileSignedUrl)} target="_blank" rel="noopener noreferrer">
                               <ExternalLink className="w-4 h-4" />
                            </a>
@@ -847,6 +847,7 @@ export default function DocumentsPage() {
                         <Button
                           variant="ghost"
                           size="icon"
+                          aria-label="Delete document"
                           className="h-8 w-8 text-red-600 hover:bg-red-50 hover:text-red-700"
                           onClick={() => handleDelete(doc.id)}
                         >

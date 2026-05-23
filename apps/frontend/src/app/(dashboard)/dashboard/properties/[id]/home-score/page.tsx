@@ -1203,7 +1203,7 @@ export default function HomeScoreReportPage() {
           <div className="space-y-5 border-t border-slate-200 px-4 py-4 md:px-5 md:py-5">
         <section className="border border-slate-200 bg-white">
           <div className="border-b border-slate-200 px-6 py-4">
-            <p className="text-[10px] tracking-normal text-slate-500">Report Header</p>
+            <p className="text-[11px] tracking-normal text-slate-500">Report Header</p>
             <h1 className="mt-2 text-[2rem] font-semibold tracking-tight text-slate-950">
               {meta?.reportTitle || "Contract-to-Cozy Certified HomeScore Report"}
             </h1>
@@ -1221,7 +1221,7 @@ export default function HomeScoreReportPage() {
               { label: "Year Built", value: meta?.yearBuilt || propertyQuery.data?.yearBuilt || "Not available" },
             ].map((item) => (
               <div key={item.label} className="border-t border-slate-200 px-6 py-3 sm:[&:nth-child(odd)]:border-r lg:[&:not(:nth-child(3n))]:border-r">
-                <p className="text-[10px] tracking-normal text-slate-500">{item.label}</p>
+                <p className="text-[11px] tracking-normal text-slate-500">{item.label}</p>
                 <p className="mt-1 text-sm font-medium text-slate-900">{item.value}</p>
               </div>
             ))}
@@ -1329,7 +1329,7 @@ export default function HomeScoreReportPage() {
         <section className="border border-slate-200 bg-white p-5">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
-              <p className="text-[10px] tracking-normal text-slate-500">HomeScore Snapshot</p>
+              <p className="text-[11px] tracking-normal text-slate-500">HomeScore Snapshot</p>
               <p className="mt-1.5 text-sm text-slate-600">{meta?.propertyAddress || propertyQuery.data?.address}</p>
               <div className="mt-3 flex flex-wrap gap-2">
                 <Badge variant="outline" className={gradeBadgeClass(executive?.grade || "F")}>
@@ -1629,7 +1629,7 @@ export default function HomeScoreReportPage() {
                                 <li key={event.id} className="flex flex-col gap-1 text-sm text-slate-700 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
                                   <span className="min-w-0 truncate">{event.title}</span>
                                   <div className="flex flex-wrap items-center gap-2 text-xs">
-                                    <Badge variant="outline" className={cx("text-[10px] font-medium", provenanceBadgeClass(event.provenance))}>
+                                    <Badge variant="outline" className={cx("text-[11px] font-medium", provenanceBadgeClass(event.provenance))}>
                                       {formatConstantLabel(event.provenance)}
                                     </Badge>
                                     <span className="text-slate-500">{formatTimelineEventDate(event)}</span>

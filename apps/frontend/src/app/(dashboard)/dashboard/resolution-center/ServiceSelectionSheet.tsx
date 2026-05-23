@@ -138,7 +138,7 @@ export function ServiceSelectionSheet({
                     <div className="space-y-2">
                       <Label
                         htmlFor="quoteAmount"
-                        className="text-[10px] font-bold tracking-normal text-slate-400"
+                        className="text-[11px] font-bold tracking-normal text-slate-400"
                       >
                         Quote Amount ($)
                       </Label>
@@ -158,7 +158,7 @@ export function ServiceSelectionSheet({
                     <div className="space-y-2">
                       <Label
                         htmlFor="vendorName"
-                        className="text-[10px] font-bold tracking-normal text-slate-400"
+                        className="text-[11px] font-bold tracking-normal text-slate-400"
                       >
                         Provider Name (Optional)
                       </Label>
@@ -236,7 +236,7 @@ export function ServiceSelectionSheet({
               <div className="space-y-6">
                 <div className="grid grid-cols-2 gap-3">
                   <div className="rounded-2xl bg-slate-50 p-4 border border-slate-100">
-                    <p className="text-[10px] font-bold tracking-normal text-slate-400 mb-1">
+                    <p className="text-[11px] font-bold tracking-normal text-slate-400 mb-1">
                       Your Quote
                     </p>
                     <p className="text-lg font-bold text-slate-900">
@@ -244,7 +244,7 @@ export function ServiceSelectionSheet({
                     </p>
                   </div>
                   <div className="rounded-2xl bg-slate-50 p-4 border border-slate-100">
-                    <p className="text-[10px] font-bold tracking-normal text-slate-400 mb-1">
+                    <p className="text-[11px] font-bold tracking-normal text-slate-400 mb-1">
                       Market Median
                     </p>
                     <p className="text-lg font-bold text-slate-900">

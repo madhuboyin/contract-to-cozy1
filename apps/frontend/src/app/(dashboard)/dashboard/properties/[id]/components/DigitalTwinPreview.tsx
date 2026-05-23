@@ -56,7 +56,7 @@ export function DigitalTwinPreview({ propertyId }: { propertyId: string }) {
 
       <div className="relative z-10 flex items-center justify-between">
         <div className="space-y-1">
-          <div className="flex items-center gap-2 text-brand-600 font-bold text-[10px] tracking-normal">
+          <div className="flex items-center gap-2 text-brand-600 font-bold text-[11px] tracking-normal">
             <Box className="h-3.5 w-3.5" />
             Digital Twin Model
           </div>
@@ -64,7 +64,7 @@ export function DigitalTwinPreview({ propertyId }: { propertyId: string }) {
         </div>
         <div className="text-right hidden sm:block">
           <p className="text-2xl font-black text-slate-900 leading-none">{components.length}</p>
-          <p className="text-[10px] font-bold tracking-normal text-slate-400">Tracked Nodes</p>
+          <p className="text-[11px] font-bold tracking-normal text-slate-400">Tracked Nodes</p>
         </div>
       </div>
 
@@ -89,7 +89,7 @@ export function DigitalTwinPreview({ propertyId }: { propertyId: string }) {
               <div className={cn("h-2.5 w-2.5 rounded-full shadow-sm", getStatusColor(getSystemStatus(structural)))} />
             </div>
             <div>
-              <p className="text-[10px] font-bold tracking-normal text-slate-400">Structural</p>
+              <p className="text-[11px] font-bold tracking-normal text-slate-400">Structural</p>
               <p className="text-xs font-bold text-slate-900 mt-0.5">{structural.length} Assets</p>
             </div>
           </div>
@@ -103,7 +103,7 @@ export function DigitalTwinPreview({ propertyId }: { propertyId: string }) {
               <div className={cn("h-2.5 w-2.5 rounded-full shadow-sm", getStatusColor(getSystemStatus(hvac)))} />
             </div>
             <div>
-              <p className="text-[10px] font-bold tracking-normal text-slate-400">Climate</p>
+              <p className="text-[11px] font-bold tracking-normal text-slate-400">Climate</p>
               <p className="text-xs font-bold text-slate-900 mt-0.5">{hvac.length} Assets</p>
             </div>
           </div>
@@ -117,7 +117,7 @@ export function DigitalTwinPreview({ propertyId }: { propertyId: string }) {
               <div className={cn("h-2.5 w-2.5 rounded-full shadow-sm", getStatusColor(getSystemStatus(plumbing)))} />
             </div>
             <div>
-              <p className="text-[10px] font-bold tracking-normal text-slate-400">Water</p>
+              <p className="text-[11px] font-bold tracking-normal text-slate-400">Water</p>
               <p className="text-xs font-bold text-slate-900 mt-0.5">{plumbing.length} Assets</p>
             </div>
           </div>
@@ -131,7 +131,7 @@ export function DigitalTwinPreview({ propertyId }: { propertyId: string }) {
               <div className={cn("h-2.5 w-2.5 rounded-full shadow-sm", getStatusColor(getSystemStatus(electrical)))} />
             </div>
             <div>
-              <p className="text-[10px] font-bold tracking-normal text-slate-400">Power</p>
+              <p className="text-[11px] font-bold tracking-normal text-slate-400">Power</p>
               <p className="text-xs font-bold text-slate-900 mt-0.5">{electrical.length} Assets</p>
             </div>
           </div>

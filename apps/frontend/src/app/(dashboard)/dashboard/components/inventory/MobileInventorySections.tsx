@@ -695,7 +695,7 @@ export function MobileInventoryItemCard({
 
         <div className="grid grid-cols-2 gap-2">
           <div className="rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 py-2">
-            <p className="mb-0 text-[10px] font-semibold tracking-normal text-[hsl(var(--mobile-text-muted))]">
+            <p className="mb-0 text-[11px] font-semibold tracking-normal text-[hsl(var(--mobile-text-muted))]">
               Replacement Value
             </p>
             {hasValue ? (
@@ -717,7 +717,7 @@ export function MobileInventoryItemCard({
           </div>
 
           <div className="rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 py-2">
-            <p className="mb-0 text-[10px] font-semibold tracking-normal text-[hsl(var(--mobile-text-muted))]">
+            <p className="mb-0 text-[11px] font-semibold tracking-normal text-[hsl(var(--mobile-text-muted))]">
               Coverage
             </p>
             <p className="mb-0 mt-1 text-lg font-semibold text-[hsl(var(--mobile-text-primary))]">

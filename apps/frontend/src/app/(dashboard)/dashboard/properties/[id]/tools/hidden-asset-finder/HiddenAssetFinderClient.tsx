@@ -551,7 +551,7 @@ function HiddenAssetDetailSheet({
             <ol className="space-y-2">
               {APPLY_STEPS[match.category]?.map((step, i) => (
                 <li key={i} className="flex gap-2.5 text-xs text-[hsl(var(--foreground))]">
-                  <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-blue-100 text-[10px] font-bold text-blue-700">
+                  <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-blue-100 text-[11px] font-bold text-blue-700">
                     {i + 1}
                   </span>
                   {step}

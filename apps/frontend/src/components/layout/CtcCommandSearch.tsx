@@ -45,10 +45,10 @@ export function CtcCommandSearch({ className, onOpen }: CtcCommandSearchProps) {
         Ask your home anything…
       </span>
       <div className="flex items-center gap-1 shrink-0">
-        <kbd className="hidden sm:inline-flex h-5 min-w-[20px] items-center justify-center rounded border border-slate-200 bg-white px-1.5 text-[10px] font-medium text-slate-500">
+        <kbd className="hidden sm:inline-flex h-5 min-w-[20px] items-center justify-center rounded border border-slate-200 bg-white px-1.5 text-[11px] font-medium text-slate-500">
           <Command className="h-2.5 w-2.5" />
         </kbd>
-        <kbd className="hidden sm:inline-flex h-5 min-w-[20px] items-center justify-center rounded border border-slate-200 bg-white px-1.5 text-[10px] font-medium text-slate-500">
+        <kbd className="hidden sm:inline-flex h-5 min-w-[20px] items-center justify-center rounded border border-slate-200 bg-white px-1.5 text-[11px] font-medium text-slate-500">
           K
         </kbd>
       </div>

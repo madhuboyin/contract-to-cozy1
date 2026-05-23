@@ -369,7 +369,7 @@ function HealthScoreBlock({
 
   return (
     <section className="rounded-[22px] border border-slate-200/80 bg-white/88 px-3 py-4 shadow-[var(--ctc-shadow-card)]">
-      <h2 className="mb-3 text-[10px] font-semibold text-slate-400 tracking-normal">Health score</h2>
+      <h2 className="mb-3 text-[11px] font-semibold text-slate-400 tracking-normal">Health score</h2>
       <div className="flex flex-col items-center text-center">
         <svg width="80" height="80" viewBox="0 0 80 80" aria-label={`Home health score ${score}`}>
           <circle cx="40" cy="40" r={radius} stroke="#f3f4f6" strokeWidth="7" fill="none" />
@@ -435,7 +435,7 @@ function SnapshotBlock({
 
   return (
     <section className="rounded-[22px] border border-slate-200/80 bg-white/88 px-3 py-3 shadow-[var(--ctc-shadow-card)]">
-      <h2 className="text-[10px] font-semibold text-slate-400 tracking-normal">Intelligence brief</h2>
+      <h2 className="text-[11px] font-semibold text-slate-400 tracking-normal">Intelligence brief</h2>
       <div className="mt-2">
         <SnapshotRow label="Total at risk" value={formatCompactUsd(Math.round(atRisk))} className="text-amber-600" />
         <SnapshotRow
@@ -536,7 +536,7 @@ function DynamicActionsBlock({
   return (
     <section className="rounded-[22px] border border-slate-200/80 bg-white/88 px-3 py-3 shadow-[var(--ctc-shadow-card)]">
       <div className="flex items-center justify-between gap-2">
-        <h2 className="text-[10px] font-semibold text-slate-400 tracking-normal">Contextual actions</h2>
+        <h2 className="text-[11px] font-semibold text-slate-400 tracking-normal">Contextual actions</h2>
         <span className="text-[9px] text-slate-400">{subtitle}</span>
       </div>
       <div className="mt-2">
@@ -571,7 +571,7 @@ function DynamicActionsBlock({
                     </span>
                   )}
                 </div>
-                <span className="block truncate text-[10px] text-slate-500">{action.description}</span>
+                <span className="block truncate text-[11px] text-slate-500">{action.description}</span>
                 {action.confidenceLabel && (
                   <span className="mt-0.5 block text-[9px] text-slate-400">
                     {action.confidenceLabel}
@@ -651,7 +651,7 @@ export function RightSidebar() {
   return (
     <aside className="sticky top-0 hidden h-screen w-[248px] shrink-0 flex-col gap-3 overflow-y-auto border-l border-slate-200/70 bg-white/70 px-3 py-4 backdrop-blur-xl lg:flex">
       <section className="rounded-[22px] border border-slate-200/80 bg-white/88 p-3 shadow-[var(--ctc-shadow-card)]">
-        <p className="mb-2 text-[10px] font-semibold tracking-normal text-slate-400">{routeLabel}</p>
+        <p className="mb-2 text-[11px] font-semibold tracking-normal text-slate-400">{routeLabel}</p>
         <div className="flex items-start gap-2.5">
           <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-teal-50 text-teal-700 ring-1 ring-teal-200">
             <RouteIcon className="h-4 w-4" />

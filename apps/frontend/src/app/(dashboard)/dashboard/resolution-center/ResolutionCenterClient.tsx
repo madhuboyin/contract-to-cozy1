@@ -742,7 +742,7 @@ function CompletionCelebration({
         </div>
 
         <div className="mt-6 rounded-2xl bg-slate-50 border border-slate-100 p-4 space-y-2">
-          <p className="text-[10px] font-bold tracking-normal text-slate-400">
+          <p className="text-[11px] font-bold tracking-normal text-slate-400">
             What this means
           </p>
           <p className="text-sm text-slate-700 flex items-center gap-2">
@@ -997,12 +997,12 @@ function TriageActionCard({
           {hasFinancialRow && (
             <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
               <div className="space-y-0.5">
-                <p className="text-[10px] font-medium text-slate-500">Cost now</p>
+                <p className="text-[11px] font-medium text-slate-500">Cost now</p>
                 <p className="text-[15px] font-semibold text-amber-600">{formatCompactUsd(Math.round(exposure))}</p>
               </div>
               <ArrowRight className="h-4 w-4 text-slate-400 shrink-0" />
               <div className="space-y-0.5">
-                <p className="text-[10px] font-medium text-slate-500">If delayed</p>
+                <p className="text-[11px] font-medium text-slate-500">If delayed</p>
                 <p className="text-[15px] font-semibold text-red-600">{formatCompactUsd(Math.round(exposure * 1.4))}</p>
               </div>
               <div className="ml-auto shrink-0">
@@ -1051,7 +1051,7 @@ function TriageActionCard({
 
           {journey === 'repair-vs-replace' && item.replaceRepairAnalysis && (
             <div className="rounded-xl border border-orange-200/70 bg-orange-50/60 p-3">
-              <p className="text-[10px] font-medium text-orange-700">Latest replace vs repair signal</p>
+              <p className="text-[11px] font-medium text-orange-700">Latest replace vs repair signal</p>
               <p className="mt-1 text-sm font-semibold text-slate-900">{verdictLabel(item.replaceRepairAnalysis.verdict)}</p>
               <p className="mt-1 text-xs text-slate-600">
                 {item.replaceRepairAnalysis.summary ||

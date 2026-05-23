@@ -101,7 +101,7 @@ function MiniStat({
           value ?? 'N/A'
         )}
       </div>
-      <div className="mt-0.5 text-[10px] text-[#6B8499]">{label}</div>
+      <div className="mt-0.5 text-[11px] text-[#6B8499]">{label}</div>
     </div>
   );
 }
@@ -148,7 +148,7 @@ export default function AhaHero({
   return (
     <section className="relative overflow-hidden rounded-2xl bg-[#0f1f2e] p-6">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <span suppressHydrationWarning className="text-[10px] tracking-normal text-[#6ECFA8]">
+        <span suppressHydrationWarning className="text-[11px] tracking-normal text-[#6ECFA8]">
           {formattedDate} · {isReturningVisitor ? `${daypartLabel} Home Pulse` : 'Personalized Home Brief'}
         </span>
         {safeStreak > 0 && (

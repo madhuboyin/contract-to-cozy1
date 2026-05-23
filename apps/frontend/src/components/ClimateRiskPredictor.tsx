@@ -219,10 +219,10 @@ export default function ClimateRiskPredictor({ propertyId }: ClimateRiskPredicto
                         <div className={`text-xs font-semibold px-2 py-1 rounded ${getRiskColor(risk.riskLevel)}`}>
                           {risk.riskLevel}
                         </div>
-                        <div className="mt-1 text-[10px] tracking-normal text-gray-500">
+                        <div className="mt-1 text-[11px] tracking-normal text-gray-500">
                           {risk.source === 'AI_ESTIMATE' ? 'AI estimate' : 'State heuristic'}
                         </div>
-                        <div className="mt-1 text-[10px] tracking-normal text-gray-500">
+                        <div className="mt-1 text-[11px] tracking-normal text-gray-500">
                           Confidence {Math.round((risk.confidenceScore || 0) * 100)}%
                         </div>
                       </div>

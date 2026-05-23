@@ -78,8 +78,8 @@ export default function ProviderDashboardLayout({
                 Contract to Cozy
               </Link>
               <div className="mt-0.5 flex items-center gap-1.5">
-                <p className="text-[10px] font-medium tracking-normal text-slate-500">Provider Ops</p>
-                <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold tracking-normal text-slate-600">
+                <p className="text-[11px] font-medium tracking-normal text-slate-500">Provider Ops</p>
+                <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-semibold tracking-normal text-slate-600">
                   Dense Mode
                 </span>
               </div>

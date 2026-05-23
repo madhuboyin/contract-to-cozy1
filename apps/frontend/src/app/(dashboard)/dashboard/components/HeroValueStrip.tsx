@@ -66,7 +66,7 @@ export function HeroValueStrip({ tiles, momentumLabel }: HeroValueStripProps) {
                   <Icon className="h-3.5 w-3.5" />
                 </div>
                 {tile.delta ? (
-                  <span className="text-[10px] font-semibold tracking-normal text-slate-600">
+                  <span className="text-[11px] font-semibold tracking-normal text-slate-600">
                     {tile.delta}
                   </span>
                 ) : null}

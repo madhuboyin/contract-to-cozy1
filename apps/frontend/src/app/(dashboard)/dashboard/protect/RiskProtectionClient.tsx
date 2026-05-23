@@ -216,7 +216,7 @@ export default function RiskProtectionClient() {
                 </svg>
                 <div className="absolute inset-0 flex flex-col items-center justify-center">
                   <span className="text-3xl font-black text-slate-900 leading-none">{riskScore}</span>
-                  <span className="text-[10px] font-bold text-slate-400 tracking-tighter">
+                  <span className="text-[11px] font-bold text-slate-400 tracking-tighter">
                     Protection
                   </span>
                 </div>
@@ -307,7 +307,7 @@ export default function RiskProtectionClient() {
                         <div className="flex items-center gap-2 flex-wrap">
                           <span
                             className={cn(
-                              'px-2 py-0.5 rounded-full text-[10px] font-bold tracking-normal',
+                              'px-2 py-0.5 rounded-full text-[11px] font-bold tracking-normal',
                               incident.severity === 'CRITICAL'
                                 ? 'bg-red-100 text-red-700'
                                 : 'bg-orange-100 text-orange-700',
@@ -387,7 +387,7 @@ export default function RiskProtectionClient() {
                   <div className="flex items-start justify-between gap-4">
                     <div className="space-y-1">
                       <div className="flex items-center gap-2">
-                        <span className="px-2 py-0.5 rounded-full bg-red-100 text-red-700 text-[10px] font-bold tracking-normal">
+                        <span className="px-2 py-0.5 rounded-full bg-red-100 text-red-700 text-[11px] font-bold tracking-normal">
                           Active Recall
                         </span>
                         <span className="text-[11px] font-medium text-slate-400">
@@ -460,7 +460,7 @@ export default function RiskProtectionClient() {
               >
                 <div className="flex items-center justify-between gap-3">
                   <div>
-                    <p className="text-[10px] font-bold tracking-normal text-slate-400 mb-1">
+                    <p className="text-[11px] font-bold tracking-normal text-slate-400 mb-1">
                       Coverage Intelligence
                     </p>
                     <h3 className="text-base font-bold text-slate-900">
@@ -471,7 +471,7 @@ export default function RiskProtectionClient() {
                   </div>
                   <span
                     className={cn(
-                      'shrink-0 px-2.5 py-1 rounded-full text-[10px] font-bold tracking-normal',
+                      'shrink-0 px-2.5 py-1 rounded-full text-[11px] font-bold tracking-normal',
                       cvVerdict.cls,
                     )}
                   >
@@ -620,7 +620,7 @@ export default function RiskProtectionClient() {
                   Fire Risk
                 </p>
                 <p className="text-sm font-bold text-slate-900">Moderate</p>
-                <p className="text-[10px] text-slate-500 mt-1 leading-tight">
+                <p className="text-[11px] text-slate-500 mt-1 leading-tight">
                   Dry conditions forecast for next 14 days.
                 </p>
               </div>
@@ -634,7 +634,7 @@ export default function RiskProtectionClient() {
                   Flood Zone
                 </p>
                 <p className="text-sm font-bold text-slate-900">Zone X (Low)</p>
-                <p className="text-[10px] text-slate-500 mt-1 leading-tight">
+                <p className="text-[11px] text-slate-500 mt-1 leading-tight">
                   No change in elevation certificate data.
                 </p>
               </div>
@@ -648,7 +648,7 @@ export default function RiskProtectionClient() {
                   Pollen Spike
                 </p>
                 <p className="text-sm font-bold text-slate-900">High</p>
-                <p className="text-[10px] text-slate-500 mt-1 leading-tight">
+                <p className="text-[11px] text-slate-500 mt-1 leading-tight">
                   HVAC filter change recommended soon.
                 </p>
               </div>

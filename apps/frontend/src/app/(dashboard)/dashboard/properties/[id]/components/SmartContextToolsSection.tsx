@@ -47,8 +47,8 @@ function ToolRow({ recommendation, propertyId, showExplainability = false }: Too
               variant="outline"
               className={
                 confidence === 'HIGH'
-                  ? 'border-emerald-200 bg-emerald-50 text-[10px] font-medium text-emerald-700'
-                  : 'border-slate-200 bg-slate-50 text-[10px] font-medium text-slate-600'
+                  ? 'border-emerald-200 bg-emerald-50 text-[11px] font-medium text-emerald-700'
+                  : 'border-slate-200 bg-slate-50 text-[11px] font-medium text-slate-600'
               }
             >
               {confidence === 'HIGH' ? 'Recommended' : 'Worth a look'}

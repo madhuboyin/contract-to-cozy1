@@ -234,7 +234,7 @@ export default function InsuranceTrendClient() {
             {/* Right column — supporting panel, desktop only */}
             {isOverpaying ? (
               <div className="hidden lg:flex lg:flex-col lg:justify-center lg:rounded-2xl lg:border lg:border-emerald-200/60 lg:bg-emerald-50/40 lg:px-5 lg:py-5 dark:lg:border-emerald-700/40 dark:lg:bg-emerald-950/20">
-                <div className="text-[10px] font-semibold tracking-normal text-slate-500 dark:text-slate-400">
+                <div className="text-[11px] font-semibold tracking-normal text-slate-500 dark:text-slate-400">
                   Potential savings
                 </div>
                 <div className="mt-1.5 text-[2rem] font-bold leading-none text-slate-800 dark:text-slate-200">
@@ -246,7 +246,7 @@ export default function InsuranceTrendClient() {
               </div>
             ) : (
               <div className="hidden lg:flex lg:flex-col lg:justify-center lg:rounded-2xl lg:border lg:border-emerald-200/60 lg:bg-emerald-50/40 lg:px-5 lg:py-5 dark:lg:border-emerald-700/40 dark:lg:bg-emerald-950/20">
-                <div className="text-[10px] font-semibold tracking-normal text-slate-500 dark:text-slate-400">
+                <div className="text-[11px] font-semibold tracking-normal text-slate-500 dark:text-slate-400">
                   vs local average
                 </div>
                 <div className="mt-1.5 text-[1.75rem] font-semibold leading-none tabular-nums text-emerald-800 dark:text-emerald-300">
@@ -282,7 +282,7 @@ export default function InsuranceTrendClient() {
             <div className="mt-2.5 flex items-center gap-2">
               <span className="text-xs text-slate-400 dark:text-slate-500">per year</span>
               {data?.meta?.confidence && (
-                <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium ${
+                <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${
                   data.meta.confidence === 'HIGH'
                     ? 'border-emerald-200/70 bg-emerald-50 text-emerald-700 dark:border-emerald-700/50 dark:bg-emerald-950/40 dark:text-emerald-300'
                     : 'border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400'
@@ -424,7 +424,7 @@ export default function InsuranceTrendClient() {
                 Extra paid over {trendYears}y
               </div>
               {(data?.rollup?.totalDeltaVsState ?? 0) > 0 && (
-                <span className="shrink-0 rounded-full border border-amber-200/70 bg-amber-100/80 px-2 py-0.5 text-[10px] font-semibold text-amber-700 dark:border-amber-700/50 dark:bg-amber-950/50 dark:text-amber-300">
+                <span className="shrink-0 rounded-full border border-amber-200/70 bg-amber-100/80 px-2 py-0.5 text-[11px] font-semibold text-amber-700 dark:border-amber-700/50 dark:bg-amber-950/50 dark:text-amber-300">
                   opportunity
                 </span>
               )}
@@ -462,7 +462,7 @@ export default function InsuranceTrendClient() {
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="text-sm font-medium text-slate-800 dark:text-slate-100">{d.factor}</div>
-                    <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
+                    <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-semibold ${
                       d.impact === 'HIGH'
                         ? 'border-amber-200/70 bg-amber-50 text-amber-700 dark:border-amber-700/60 dark:bg-amber-950/40 dark:text-amber-300'
                         : d.impact === 'MEDIUM'
@@ -605,7 +605,7 @@ export default function InsuranceTrendClient() {
 
             {(data?.meta?.dataSources?.length ?? 0) > 0 && (
               <div className="mt-4 rounded-xl border border-slate-100 bg-slate-50/80 px-3 py-2.5 dark:border-slate-700/50 dark:bg-slate-900/48">
-                <p className="text-[10px] font-semibold tracking-normal text-slate-400 dark:text-slate-500">
+                <p className="text-[11px] font-semibold tracking-normal text-slate-400 dark:text-slate-500">
                   Data sources
                 </p>
                 <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">

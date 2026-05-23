@@ -516,7 +516,7 @@ export function RoomsSnapshotSection({ propertyId }: RoomsSnapshotSectionProps) 
 
                   <div className="mt-3 grid grid-cols-3 gap-2 border-t border-gray-200/80 pt-3">
                     <div className="space-y-1">
-                      <p className="text-[10px] font-medium tracking-normal text-gray-500">
+                      <p className="text-[11px] font-medium tracking-normal text-gray-500">
                         Items
                       </p>
                       <p className="inline-flex items-center gap-1 text-sm font-semibold text-gray-900">
@@ -525,7 +525,7 @@ export function RoomsSnapshotSection({ propertyId }: RoomsSnapshotSectionProps) 
                       </p>
                     </div>
                     <div className="space-y-1">
-                      <p className="text-[10px] font-medium tracking-normal text-gray-500">
+                      <p className="text-[11px] font-medium tracking-normal text-gray-500">
                         Docs
                       </p>
                       <p className="inline-flex items-center gap-1 text-sm font-semibold text-gray-900">
@@ -534,7 +534,7 @@ export function RoomsSnapshotSection({ propertyId }: RoomsSnapshotSectionProps) 
                       </p>
                     </div>
                     <div className="space-y-1">
-                      <p className="text-[10px] font-medium tracking-normal text-gray-500">
+                      <p className="text-[11px] font-medium tracking-normal text-gray-500">
                         Gaps
                       </p>
                       <p className={cn('inline-flex items-center gap-1 text-sm font-semibold', metadataValueClass)}>

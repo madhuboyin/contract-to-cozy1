@@ -654,7 +654,7 @@ export default function ItemGetCoverageClient() {
                 <>
                   {/* REPLACE_SOON left — short-term saving */}
                   <div className="pr-4">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1">Short-term saving</p>
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-1">Short-term saving</p>
                     {netImpact != null && netImpact > 0 ? (
                       <>
                         <p className="text-base font-bold text-gray-900">{money(netImpact)}/yr</p>
@@ -673,7 +673,7 @@ export default function ItemGetCoverageClient() {
                   </div>
                   {/* REPLACE_SOON right — item reality */}
                   <div className="pl-4">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1">Item reality</p>
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-1">Item reality</p>
                     {remainingMonths != null && (
                       <p className="text-base font-bold text-amber-700">
                         {remainingMonths} {remainingMonths === 1 ? 'month' : 'months'} left
@@ -693,7 +693,7 @@ export default function ItemGetCoverageClient() {
                 <>
                   {/* WORTH_IT left — annual savings */}
                   <div className="pr-4">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1">Annual savings</p>
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-1">Annual savings</p>
                     {netImpact != null && netImpact > 0 ? (
                       <>
                         <p className="text-base font-bold text-teal-700">{money(netImpact)}/yr</p>
@@ -705,7 +705,7 @@ export default function ItemGetCoverageClient() {
                   </div>
                   {/* WORTH_IT right — repair risk */}
                   <div className="pl-4">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1">Repair risk</p>
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-1">Repair risk</p>
                     {repairRisk != null ? (
                       <p className="text-base font-bold text-gray-900">{money(repairRisk)}/yr</p>
                     ) : (
@@ -725,7 +725,7 @@ export default function ItemGetCoverageClient() {
                 <>
                   {/* NOT_WORTH_IT left — extra cost */}
                   <div className="pr-4">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1">Extra cost</p>
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-1">Extra cost</p>
                     {netImpact != null && netImpact < 0 ? (
                       <>
                         <p className="text-base font-bold text-rose-600">{money(Math.abs(netImpact))}/yr extra</p>
@@ -737,7 +737,7 @@ export default function ItemGetCoverageClient() {
                   </div>
                   {/* NOT_WORTH_IT right — repair risk */}
                   <div className="pl-4">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1">Repair risk</p>
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-1">Repair risk</p>
                     {repairRisk != null ? (
                       <p className="text-base font-bold text-gray-900">{money(repairRisk)}/yr</p>
                     ) : (
@@ -757,7 +757,7 @@ export default function ItemGetCoverageClient() {
                 <>
                   {/* SITUATIONAL left — coverage cost */}
                   <div className="pr-4">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1">Coverage cost</p>
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-1">Coverage cost</p>
                     {coverageCost != null ? (
                       <>
                         <p className="text-base font-bold text-gray-900">{money(coverageCost)}/yr</p>
@@ -769,7 +769,7 @@ export default function ItemGetCoverageClient() {
                   </div>
                   {/* SITUATIONAL right — repair risk */}
                   <div className="pl-4">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1">Repair risk</p>
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-1">Repair risk</p>
                     {repairRisk != null ? (
                       <p className="text-base font-bold text-gray-900">{money(repairRisk)}/yr</p>
                     ) : (

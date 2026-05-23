@@ -1041,7 +1041,7 @@ const AssetMatrixTable = ({
                                         <span className="font-semibold">{item.age} yrs</span>
                                         <span className="text-muted-foreground"> / {item.expectedLife} yrs</span>
                                         {data.isPastLife && (
-                                            <span className="inline-flex items-center text-[10px] font-medium bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 rounded px-1 py-0.5 mt-0.5">Past Life</span>
+                                            <span className="inline-flex items-center text-[11px] font-medium bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 rounded px-1 py-0.5 mt-0.5">Past Life</span>
                                         )}
                                     </div>
                                     <div>
@@ -1154,13 +1154,13 @@ const AssetMatrixTable = ({
                                             <div className="flex items-center gap-1.5 flex-wrap">
                                                 <span>{displayLabel(item.assetName)}</span>
                                                 {data.hasBooking && (
-                                                    <Badge variant="outline" className="text-[10px] h-4 px-1 border-blue-400 text-blue-600 dark:text-blue-400 shrink-0">Booked</Badge>
+                                                    <Badge variant="outline" className="text-[11px] h-4 px-1 border-blue-400 text-blue-600 dark:text-blue-400 shrink-0">Booked</Badge>
                                                 )}
                                                 {data.hasWarranty && (
-                                                    <Badge variant="outline" className="text-[10px] h-4 px-1 border-green-500 text-green-700 dark:text-green-400 shrink-0">Warranty</Badge>
+                                                    <Badge variant="outline" className="text-[11px] h-4 px-1 border-green-500 text-green-700 dark:text-green-400 shrink-0">Warranty</Badge>
                                                 )}
                                                 {data.hasTask && !data.hasBooking && (
-                                                    <Badge variant="outline" className="text-[10px] h-4 px-1 border-purple-400 text-purple-600 dark:text-purple-400 shrink-0">Scheduled</Badge>
+                                                    <Badge variant="outline" className="text-[11px] h-4 px-1 border-purple-400 text-purple-600 dark:text-purple-400 shrink-0">Scheduled</Badge>
                                                 )}
                                             </div>
                                             {(() => {
@@ -1189,7 +1189,7 @@ const AssetMatrixTable = ({
                                                 />
                                             </div>
                                             {data.isPastLife && (
-                                                <span className="mt-1 inline-flex items-center text-[10px] font-medium bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 rounded px-1 py-0.5">Past Life</span>
+                                                <span className="mt-1 inline-flex items-center text-[11px] font-medium bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 rounded px-1 py-0.5">Past Life</span>
                                             )}
                                         </TableCell>
                                         <TableCell className="align-top py-3 whitespace-nowrap">

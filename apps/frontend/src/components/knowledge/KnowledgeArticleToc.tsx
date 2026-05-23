@@ -139,7 +139,7 @@ export function KnowledgeArticleToc({
     return (
       <section className="space-y-4">
         <div className="space-y-1">
-          <p className="text-[10px] font-semibold tracking-normal text-slate-500">In this article</p>
+          <p className="text-[11px] font-semibold tracking-normal text-slate-500">In this article</p>
           <h2 className="text-sm font-medium text-slate-900">A quick read map</h2>
         </div>
         <div className="border-l border-slate-200/70 pl-4">{nav}</div>

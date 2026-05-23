@@ -216,7 +216,7 @@ export default function CoverageOverviewClient() {
                   shieldTone === 'emerald' ? "text-emerald-500" : "text-rose-500"
                 )} />
              </div>
-             <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Shield Score</p>
+             <p className="text-[11px] font-black uppercase tracking-widest text-slate-400">Shield Score</p>
           </Card>
 
           {/* AI Insights */}
@@ -234,7 +234,7 @@ export default function CoverageOverviewClient() {
                       <Loader2 className="h-6 w-6 text-white animate-spin" />
                     </div>
                     <div className="space-y-1">
-                      <span className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-100">Coverage Take</span>
+                      <span className="text-[11px] font-black uppercase tracking-[0.2em] text-brand-100">Coverage Take</span>
                       <p className="text-lg font-bold leading-tight lg:text-xl font-poppins italic text-brand-100">
                         Analyzing your protection profile…
                       </p>
@@ -254,7 +254,7 @@ export default function CoverageOverviewClient() {
                       {adviceIsAI ? <Wand2 className="h-6 w-6 text-white" /> : <ShieldCheck className="h-6 w-6 text-white" />}
                     </div>
                     <div className="space-y-1">
-                      <span className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-100">
+                      <span className="text-[11px] font-black uppercase tracking-[0.2em] text-brand-100">
                         {adviceIsAI ? 'AI Intelligence Take' : 'Coverage Summary'}
                       </span>
                       <p className="text-lg font-bold leading-tight lg:text-xl font-poppins italic">
@@ -288,12 +288,12 @@ export default function CoverageOverviewClient() {
             </div>
 
             {/* Metrics */}
-            <div className="flex flex-wrap gap-x-10 gap-y-6 mb-6">
+            <div className="grid grid-cols-2 gap-4 mb-6 sm:flex sm:flex-wrap sm:gap-x-10 sm:gap-y-6">
               {/* Annual Risk — tooltip */}
               <TooltipProvider>
                 <Tooltip>
-                  <TooltipTrigger className="text-left space-y-1 min-w-[120px]">
-                    <p className="flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1">
+                  <TooltipTrigger className="text-left space-y-1">
+                    <p className="flex items-center gap-1 text-[11px] font-black uppercase tracking-widest text-slate-500 mb-1">
                       Annual Risk <Info className="h-3 w-3" />
                     </p>
                     <p className="text-2xl font-bold text-slate-900 tabular-nums">
@@ -307,8 +307,8 @@ export default function CoverageOverviewClient() {
               </TooltipProvider>
 
               {/* Protection Cost */}
-              <div className="space-y-1 min-w-[120px]">
-                <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1">Protection Cost</p>
+              <div className="space-y-1">
+                <p className="text-[11px] font-black uppercase tracking-widest text-slate-500 mb-1">Protection Cost</p>
                 <p className="text-2xl font-bold text-slate-900 tabular-nums">
                   {formatCurrency(analysis?.warranty.inputsUsed.warrantyAnnualCostUsd || 0)}
                 </p>
@@ -317,8 +317,8 @@ export default function CoverageOverviewClient() {
               {/* Net Impact — tooltip with dynamic label */}
               <TooltipProvider>
                 <Tooltip>
-                  <TooltipTrigger className="text-left space-y-1 min-w-[120px]">
-                    <p className="flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1">
+                  <TooltipTrigger className="text-left space-y-1">
+                    <p className="flex items-center gap-1 text-[11px] font-black uppercase tracking-widest text-slate-500 mb-1">
                       {(analysis?.warranty.expectedNetImpactUsd || 0) >= 0 ? 'Projected Savings' : 'Net Cost'} <Info className="h-3 w-3" />
                     </p>
                     <p className={cn(
@@ -339,8 +339,8 @@ export default function CoverageOverviewClient() {
               {/* Break-even — tooltip */}
               <TooltipProvider>
                 <Tooltip>
-                  <TooltipTrigger className="text-left space-y-1 min-w-[90px]">
-                    <p className="flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1">
+                  <TooltipTrigger className="text-left space-y-1">
+                    <p className="flex items-center gap-1 text-[11px] font-black uppercase tracking-widest text-slate-500 mb-1">
                       Break-even <Info className="h-3 w-3" />
                     </p>
                     <p className="text-2xl font-bold text-slate-900 tabular-nums">
@@ -389,7 +389,7 @@ export default function CoverageOverviewClient() {
                         <Shield className="h-6 w-6" />
                       </div>
                       <div>
-                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-0.5">Homeowners Insurance</p>
+                        <p className="text-[11px] font-black uppercase tracking-widest text-slate-400 mb-0.5">Homeowners Insurance</p>
                         {active ? (
                           <p className="text-base font-bold text-slate-900">{formatCurrency(premium)} / yr</p>
                         ) : (
@@ -423,7 +423,7 @@ export default function CoverageOverviewClient() {
                         <TrendingUp className="h-6 w-6" />
                       </div>
                       <div>
-                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-0.5">Home Warranty</p>
+                        <p className="text-[11px] font-black uppercase tracking-widest text-slate-400 mb-0.5">Home Warranty</p>
                         {active ? (
                           <p className="text-base font-bold text-slate-900">{formatCurrency(cost)} / yr</p>
                         ) : (

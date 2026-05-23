@@ -216,13 +216,13 @@ export default function HomeSavingsCheckToolCard({ propertyId }: HomeSavingsChec
       </div>
 
       <div className="mt-1.5 space-y-1">
-        <p className="text-[10px] font-normal leading-snug text-gray-600">
+        <p className="text-[11px] font-normal leading-snug text-gray-600">
           <span className="font-normal text-gray-600">
             {summary ? `${configuredCount}/${summary.categories.length}` : '—'}
           </span>{' '}
           categories connected
         </p>
-        <p className="truncate text-[10px] font-normal leading-snug text-gray-600" title={topOpportunity?.headline ?? ''}>
+        <p className="truncate text-[11px] font-normal leading-snug text-gray-600" title={topOpportunity?.headline ?? ''}>
           {topOpportunity ? (
             <>
               Top opportunity:{' '}

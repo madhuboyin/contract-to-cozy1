@@ -239,7 +239,7 @@ export function NegotiationShieldInline({
                   <p className="text-xs font-medium text-[hsl(var(--mobile-text-primary))]">
                     {lp.title}
                     {lp.strength && (
-                      <span className="ml-1.5 rounded-full bg-sky-100 px-1.5 py-0.5 text-[10px] font-medium text-sky-700">
+                      <span className="ml-1.5 rounded-full bg-sky-100 px-1.5 py-0.5 text-[11px] font-medium text-sky-700">
                         {lp.strength}
                       </span>
                     )}

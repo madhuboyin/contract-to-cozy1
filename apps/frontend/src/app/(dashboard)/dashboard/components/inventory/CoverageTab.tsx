@@ -116,7 +116,7 @@ export default function CoverageTab({ items, rooms, onOpenCoverage, onOpenAction
               <div className="h-full w-full rounded-full" style={donutStyle} />
               <div className="absolute inset-4 flex flex-col items-center justify-center rounded-full bg-white">
                 <span className="text-sm font-semibold text-gray-700">{Math.round(breakdown.coveredPercent)}%</span>
-                <span className="text-[10px] text-gray-400">covered</span>
+                <span className="text-[11px] text-gray-400">covered</span>
               </div>
             </div>
 
@@ -219,7 +219,7 @@ export default function CoverageTab({ items, rooms, onOpenCoverage, onOpenAction
                   <div className="flex items-center gap-2">
                     <Icon className="h-3.5 w-3.5 text-gray-400" />
                     <span className="text-sm text-gray-700">{item.name}</span>
-                    <span className="text-[10px] text-gray-400">{item.room?.name || 'Unassigned'}</span>
+                    <span className="text-[11px] text-gray-400">{item.room?.name || 'Unassigned'}</span>
                   </div>
 
                   <div className="flex items-center gap-3">

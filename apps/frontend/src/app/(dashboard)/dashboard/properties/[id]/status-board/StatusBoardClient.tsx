@@ -729,7 +729,7 @@ export default function StatusBoardClient() {
                   {CONDITION_LABELS[item.condition]}
                 </Badge>
                 {item.overrideCondition && (
-                  <span className="ml-1 text-[10px] text-muted-foreground">(override)</span>
+                  <span className="ml-1 text-[11px] text-muted-foreground">(override)</span>
                 )}
               </>
             )}
@@ -852,7 +852,7 @@ export default function StatusBoardClient() {
                   >
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <span className="inline-flex items-center gap-1 rounded-full border border-slate-200/80 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold tracking-normal text-slate-600 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300">
+                        <span className="inline-flex items-center gap-1 rounded-full border border-slate-200/80 bg-slate-50 px-2 py-0.5 text-[11px] font-semibold tracking-normal text-slate-600 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300">
                           <Clock className="h-3 w-3" />
                           Installed
                         </span>
@@ -864,7 +864,7 @@ export default function StatusBoardClient() {
                   <div className={DETAIL_BENTO_TILE_CLASS}>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <span className="inline-flex items-center gap-1 rounded-full border border-slate-200/80 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold tracking-normal text-slate-600 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300">
+                        <span className="inline-flex items-center gap-1 rounded-full border border-slate-200/80 bg-slate-50 px-2 py-0.5 text-[11px] font-semibold tracking-normal text-slate-600 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300">
                           <RefreshCw className="h-3 w-3" />
                           Last Computed
                         </span>
@@ -876,7 +876,7 @@ export default function StatusBoardClient() {
                   <div className={DETAIL_BENTO_TILE_CLASS}>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <span className="inline-flex items-center gap-1 rounded-full border border-slate-200/80 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold tracking-normal text-slate-600 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300">
+                        <span className="inline-flex items-center gap-1 rounded-full border border-slate-200/80 bg-slate-50 px-2 py-0.5 text-[11px] font-semibold tracking-normal text-slate-600 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300">
                           <Shield className="h-3 w-3" />
                           Warranty
                         </span>
@@ -890,7 +890,7 @@ export default function StatusBoardClient() {
                   <div className={DETAIL_BENTO_TILE_CLASS}>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <span className="inline-flex items-center gap-1 rounded-full border border-slate-200/80 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold tracking-normal text-slate-600 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300">
+                        <span className="inline-flex items-center gap-1 rounded-full border border-slate-200/80 bg-slate-50 px-2 py-0.5 text-[11px] font-semibold tracking-normal text-slate-600 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300">
                           <Wrench className="h-3 w-3" />
                           Pending Tasks
                         </span>
@@ -902,7 +902,7 @@ export default function StatusBoardClient() {
                   <div className={DETAIL_BENTO_TILE_CLASS}>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <span className="inline-flex items-center gap-1 rounded-full border border-slate-200/80 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold tracking-normal text-slate-600 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300">
+                        <span className="inline-flex items-center gap-1 rounded-full border border-slate-200/80 bg-slate-50 px-2 py-0.5 text-[11px] font-semibold tracking-normal text-slate-600 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300">
                           <Home className="h-3 w-3" />
                           Room
                         </span>
@@ -941,7 +941,7 @@ export default function StatusBoardClient() {
                                   style={{ width: `${healthScore}%` }}
                                 />
                               </span>
-                              <span className="text-[10px] font-semibold text-emerald-700 dark:text-emerald-300">
+                              <span className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-300">
                                 {healthScore}%
                               </span>
                             </span>
@@ -1739,11 +1739,11 @@ export default function StatusBoardClient() {
               <div className="flex items-center gap-3">
                 <Box className="h-4 w-4 shrink-0 text-slate-400 dark:text-slate-500" />
                 <div className="text-left">
-                  <p className="text-[10px] tracking-normal text-slate-400 dark:text-slate-500">All</p>
+                  <p className="text-[11px] tracking-normal text-slate-400 dark:text-slate-500">All</p>
                   <p className="stat-number mt-0.5 text-slate-800 dark:text-slate-100">
                     {summary.total}
                   </p>
-                  <p className="mt-1 text-[10px] text-slate-400 dark:text-slate-500 opacity-80">items monitored</p>
+                  <p className="mt-1 text-[11px] text-slate-400 dark:text-slate-500 opacity-80">items monitored</p>
                 </div>
               </div>
               {conditionFilter === "all" && (
@@ -1763,11 +1763,11 @@ export default function StatusBoardClient() {
               <div className="flex items-center gap-3">
                 <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500 dark:text-emerald-400" />
                 <div className="text-left">
-                  <p className="text-[10px] tracking-normal text-emerald-500 dark:text-emerald-400">Good</p>
+                  <p className="text-[11px] tracking-normal text-emerald-500 dark:text-emerald-400">Good</p>
                   <p className="stat-number mt-0.5 text-emerald-700 dark:text-emerald-300">
                     {summary.good}
                   </p>
-                  <p className="mt-1 text-[10px] text-emerald-500 dark:text-emerald-400 opacity-75">no action needed</p>
+                  <p className="mt-1 text-[11px] text-emerald-500 dark:text-emerald-400 opacity-75">no action needed</p>
                 </div>
               </div>
               {conditionFilter === "GOOD" && (
@@ -1787,11 +1787,11 @@ export default function StatusBoardClient() {
               <div className="flex items-center gap-3">
                 <Clock className="h-4 w-4 shrink-0 text-amber-500 dark:text-amber-400" />
                 <div className="text-left">
-                  <p className="text-[10px] tracking-normal text-amber-500 dark:text-amber-400">Monitor</p>
+                  <p className="text-[11px] tracking-normal text-amber-500 dark:text-amber-400">Monitor</p>
                   <p className="stat-number mt-0.5 text-amber-700 dark:text-amber-300">
                     {summary.monitor}
                   </p>
-                  <p className="mt-1 text-[10px] text-amber-500 dark:text-amber-400 opacity-75">watch closely</p>
+                  <p className="mt-1 text-[11px] text-amber-500 dark:text-amber-400 opacity-75">watch closely</p>
                 </div>
               </div>
               {conditionFilter === "MONITOR" && (
@@ -1824,7 +1824,7 @@ export default function StatusBoardClient() {
                 <div className="text-left">
                   <p
                     className={cn(
-                      "text-[10px] tracking-normal",
+                      "text-[11px] tracking-normal",
                       summary.actionNeeded > 0 ? "text-white/80" : "text-emerald-500 dark:text-emerald-400",
                     )}
                   >
@@ -1839,7 +1839,7 @@ export default function StatusBoardClient() {
                     {summary.actionNeeded > 0 ? summary.actionNeeded : "✓"}
                   </p>
                   <p className={cn(
-                    "mt-1 text-[10px] opacity-75",
+                    "mt-1 text-[11px] opacity-75",
                     summary.actionNeeded > 0 ? "text-white/70" : "text-emerald-500 dark:text-emerald-400"
                   )}>
                     {summary.actionNeeded > 0 ? "require attention" : "all stable"}
@@ -1947,7 +1947,7 @@ export default function StatusBoardClient() {
               )}
             >
               {label}
-              <span className="rounded-full bg-white/60 px-1.5 py-0.5 text-[10px] font-bold dark:bg-black/20">
+              <span className="rounded-full bg-white/60 px-1.5 py-0.5 text-[11px] font-bold dark:bg-black/20">
                 {count}
               </span>
             </button>

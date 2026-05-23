@@ -500,10 +500,10 @@ export default function ExpensesPage() {
                         {getPropertyDisplay(expense.propertyId)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600 hover:text-blue-700" onClick={() => openEditModal(expense)}>
+                        <Button variant="ghost" size="icon" aria-label="Edit expense" className="h-8 w-8 text-blue-600 hover:text-blue-700" onClick={() => openEditModal(expense)}>
                           <Edit className="w-4 h-4" />
                         </Button>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-red-600 hover:bg-red-50 hover:text-red-700" onClick={() => handleDelete(expense.id)}>
+                        <Button variant="ghost" size="icon" aria-label="Delete expense" className="h-8 w-8 text-red-600 hover:bg-red-50 hover:text-red-700" onClick={() => handleDelete(expense.id)}>
                           <Trash2 className="w-4 h-4" />
                         </Button>
                       </td>

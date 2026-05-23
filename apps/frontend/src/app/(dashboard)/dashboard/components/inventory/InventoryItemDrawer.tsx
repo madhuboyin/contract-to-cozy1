@@ -1069,7 +1069,7 @@ useEffect(() => {
                     <BadgeCheck className="h-3.5 w-3.5" />
                     {verifying ? 'Verifying...' : 'Mark as Verified'}
                   </button>
-                  <p className="text-[10px] leading-relaxed text-amber-500">
+                  <p className="text-[11px] leading-relaxed text-amber-500">
                     Fill identifiers in Product identifiers below to auto-verify
                   </p>
                 </div>

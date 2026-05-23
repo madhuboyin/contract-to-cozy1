@@ -281,7 +281,7 @@ export default function SaveHubPage() {
                 </div>
 
                 <div className="pt-4 opacity-50 grayscale hover:opacity-100 hover:grayscale-0 transition-all">
-                  <div className="flex items-center gap-2 text-[10px] font-bold tracking-normal text-slate-400 mb-3 px-1">
+                  <div className="flex items-center gap-2 text-[11px] font-bold tracking-normal text-slate-400 mb-3 px-1">
                     <Sparkles className="h-3 w-3" />
                     Potential Win in your area
                   </div>

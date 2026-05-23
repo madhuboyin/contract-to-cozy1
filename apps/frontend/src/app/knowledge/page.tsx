@@ -102,7 +102,7 @@ export default async function KnowledgeHubPage({
             {remainingArticles.length > 0 ? (
               <section className="space-y-5">
                 <div className="space-y-2">
-                  <p className="text-[10px] font-semibold tracking-normal text-slate-500">Latest articles</p>
+                  <p className="text-[11px] font-semibold tracking-normal text-slate-500">Latest articles</p>
                   <h2 className="text-2xl font-semibold tracking-tight text-slate-950">Practical reads for the next home decision</h2>
                 </div>
                 <div className="grid gap-5 lg:grid-cols-2">

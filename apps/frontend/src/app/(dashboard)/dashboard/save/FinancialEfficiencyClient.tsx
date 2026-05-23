@@ -63,7 +63,7 @@ function StatusBadge({
   return (
     <div
       className={cn(
-        'px-2 py-0.5 rounded-full text-[10px] font-bold tracking-normal',
+        'px-2 py-0.5 rounded-full text-[11px] font-bold tracking-normal',
         status === 'positive'
           ? 'bg-emerald-100 text-emerald-700'
           : status === 'warning'
@@ -284,7 +284,7 @@ export default function FinancialEfficiencyClient() {
                     )}
                   </div>
                   {match.matchReasons && match.matchReasons.length > 0 && (
-                    <p className="text-[10px] text-slate-400 leading-snug">
+                    <p className="text-[11px] text-slate-400 leading-snug">
                       ✓ {match.matchReasons[0]}
                     </p>
                   )}
@@ -495,7 +495,7 @@ export default function FinancialEfficiencyClient() {
             <div className="lg:col-span-2 rounded-2xl border-2 border-slate-50 bg-white p-6 space-y-6">
               <div className="flex items-end justify-between">
                 <div className="space-y-1">
-                  <p className="text-[10px] font-bold tracking-normal text-slate-400">
+                  <p className="text-[11px] font-bold tracking-normal text-slate-400">
                     Current Valuation
                   </p>
                   <div className="flex items-baseline gap-2">
@@ -515,7 +515,7 @@ export default function FinancialEfficiencyClient() {
               <div className="h-48 w-full bg-slate-50/50 rounded-xl border border-dashed border-slate-200 flex items-center justify-center">
                 <div className="flex flex-col items-center space-y-2 opacity-40">
                   <BarChart3 className="h-8 w-8" />
-                  <span className="text-[10px] font-bold tracking-tighter">
+                  <span className="text-[11px] font-bold tracking-tighter">
                     Market Trend Engine Active
                   </span>
                 </div>
@@ -563,7 +563,7 @@ export default function FinancialEfficiencyClient() {
                     </div>
                     <div>
                       <p className="text-xs font-bold text-slate-900">Tax Appeal Window</p>
-                      <p className="text-[10px] text-slate-500">
+                      <p className="text-[11px] text-slate-500">
                         Assessment data typically arrives in Feb.
                       </p>
                     </div>
@@ -574,7 +574,7 @@ export default function FinancialEfficiencyClient() {
                     </div>
                     <div>
                       <p className="text-xs font-bold text-slate-900">Property Tax Tool</p>
-                      <p className="text-[10px] text-slate-500">Check if you qualify for an appeal.</p>
+                      <p className="text-[11px] text-slate-500">Check if you qualify for an appeal.</p>
                     </div>
                   </div>
                 </div>

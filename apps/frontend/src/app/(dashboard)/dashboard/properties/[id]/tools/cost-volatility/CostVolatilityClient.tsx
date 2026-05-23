@@ -258,13 +258,13 @@ export default function CostVolatilityClient() {
               )}
             </div>
 
-            <div className="mt-2 flex items-center gap-1 text-[10px] text-slate-400 dark:text-slate-500">
+            <div className="mt-2 flex items-center gap-1 text-[11px] text-slate-400 dark:text-slate-500">
               <span>0 = very stable</span>
               <span className="flex-1 mx-1 border-t border-dotted border-slate-300 dark:border-slate-600" />
               <span>100 = highly unpredictable</span>
             </div>
 
-            <div className="mt-1 text-[10px] text-slate-400 dark:text-slate-500">
+            <div className="mt-1 text-[11px] text-slate-400 dark:text-slate-500">
               Typical US home ≈ 30
             </div>
 

@@ -185,7 +185,7 @@ export default function CoverageIntelligenceToolCard({
         )}
       </div>
 
-      <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] text-gray-600">
+      <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-gray-600">
         <span className="font-medium capitalize text-gray-800">{confidence}</span>
         <span>confidence</span>
         <span aria-hidden className="text-gray-300">

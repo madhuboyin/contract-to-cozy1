@@ -520,11 +520,11 @@ function AttentionItemRow({
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <p className="text-sm font-semibold text-foreground">{safeTitle}</p>
           {urgency ? (
-            <span className="inline-flex items-center rounded-full bg-rose-50 px-2 py-0.5 text-[10px] font-medium text-rose-700">
+            <span className="inline-flex items-center rounded-full bg-rose-50 px-2 py-0.5 text-[11px] font-medium text-rose-700">
               {urgency}
             </span>
           ) : costChip ? (
-            <span className="inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700">
+            <span className="inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700">
               {costChip}
             </span>
           ) : null}
@@ -594,7 +594,7 @@ function TodayAttentionSection({ actions, onOpenJourney }: TodayAttentionSection
           <p className="text-sm font-semibold text-foreground">Today&apos;s attention</p>
           <p className="text-xs text-muted-foreground">Highest-value items to keep your home on track.</p>
         </div>
-        <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-1 text-[10px] font-medium text-amber-700">
+        <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] font-medium text-amber-700">
           <AlertCircle className="h-3 w-3" />
           {actions.length} item{actions.length === 1 ? '' : 's'}
         </span>

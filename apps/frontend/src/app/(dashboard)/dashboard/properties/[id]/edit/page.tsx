@@ -1086,7 +1086,7 @@ export default function EditPropertyPage() {
           </div>
           {confidenceScore === 100 ? (
             <div className="mt-2 flex items-center gap-2 text-sm font-semibold text-teal-700 dark:text-teal-300">
-              <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-teal-500 text-[10px] font-bold text-white">✓</span>
+              <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-teal-500 text-[11px] font-bold text-white">✓</span>
               <span>Your property profile is complete!</span>
             </div>
           ) : (

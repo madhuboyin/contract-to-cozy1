@@ -28,7 +28,7 @@ export function TrustMetadataBar({ metadata, className, showLastUpdated = true }
       <SourceChip source={metadata.source} />
       
       {showLastUpdated && hasValidLastUpdated && (
-        <div className="flex items-center gap-1.5 text-[10px] font-medium text-slate-400">
+        <div className="flex items-center gap-1.5 text-[11px] font-medium text-slate-400">
           <Clock className="h-3 w-3" />
           <span>
             Updated {formatDistanceToNow(lastUpdatedDate as Date, { addSuffix: true })}

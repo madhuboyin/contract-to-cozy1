@@ -742,9 +742,9 @@ export default function MaintenancePage() {
                             <Button
                               variant="ghost"
                               size="icon"
+                              aria-label="Mark complete"
                               className="h-8 w-8 text-gray-500 hover:text-green-600"
                               onClick={() => handleMarkComplete.mutate(task)}
-                              title="Mark Complete"
                             >
                               <CheckCircle className="w-4 h-4" />
                             </Button>
@@ -755,9 +755,9 @@ export default function MaintenancePage() {
                             <Button
                               variant="ghost"
                               size="icon"
+                              aria-label="View task"
                               className="h-8 w-8 text-gray-500 hover:text-gray-900"
                               onClick={() => handleViewModal(task)}
-                              title="View Task"
                             >
                               <Eye className="w-4 h-4" />
                             </Button>
@@ -765,9 +765,9 @@ export default function MaintenancePage() {
                             <Button
                               variant="ghost"
                               size="icon"
+                              aria-label="Edit task"
                               className="h-8 w-8 text-gray-500 hover:text-blue-600"
                               onClick={() => handleOpenModal(task)}
-                              title="Edit Task"
                             >
                               <Edit className="w-4 h-4" />
                             </Button>
@@ -796,7 +796,7 @@ export default function MaintenancePage() {
                   <Badge
                     className={cn(
                       PRIORITY_CHIP[task.priority.toLowerCase() as PriorityLevel],
-                      'rounded-full text-[10px] px-1.5 py-0 border'
+                      'rounded-full text-[11px] px-1.5 py-0 border'
                     )}
                   >
                     {formatEnumLabel(task.priority)}
@@ -809,7 +809,7 @@ export default function MaintenancePage() {
 
                 <div className="flex justify-between items-center text-sm border-t pt-3">
                   <div className="flex flex-col">
-                    <span className="text-[10px] text-muted-foreground">Next Due</span>
+                    <span className="text-[11px] text-muted-foreground">Next Due</span>
                     <span className={cn("font-semibold", dueDateInfo.color)}>{dueDateInfo.text}</span>
                   </div>
                   
@@ -918,9 +918,9 @@ export default function MaintenancePage() {
                               <Button
                                 variant="ghost"
                                 size="icon"
+                                aria-label="Mark complete"
                                 className="h-8 w-8 text-gray-500 hover:text-green-600"
                                 onClick={() => handleMarkComplete.mutate(task)}
-                                title="Mark complete"
                               >
                                 <CheckCircle className="w-4 h-4" />
                               </Button>
@@ -928,9 +928,9 @@ export default function MaintenancePage() {
                               <Button
                                 variant="ghost"
                                 size="icon"
+                                aria-label="Edit task"
                                 className="h-8 w-8 text-gray-500 hover:text-blue-600"
                                 onClick={() => handleOpenModal(task)}
-                                title="Edit task"
                               >
                                 <Edit className="w-4 h-4" />
                               </Button>
@@ -957,7 +957,7 @@ export default function MaintenancePage() {
                           className={cn(
                             task.priority === 'URGENT' && 'bg-red-100 text-red-700',
                             task.priority === 'HIGH' && 'bg-orange-100 text-orange-700',
-                            'text-[10px] px-1.5 py-0 shrink-0'
+                            'text-[11px] px-1.5 py-0 shrink-0'
                           )}
                         >
                           {task.priority}
@@ -970,7 +970,7 @@ export default function MaintenancePage() {
 
                       <div className="flex justify-between items-center text-sm border-t pt-3">
                         <div className="flex flex-col">
-                          <span className="text-[10px] text-muted-foreground">Next due</span>
+                          <span className="text-[11px] text-muted-foreground">Next due</span>
                           <span className={cn('font-semibold', dueDateInfo.color)}>{dueDateInfo.text}</span>
                         </div>
 
@@ -1079,9 +1079,9 @@ export default function MaintenancePage() {
                               <Button
                                 variant="ghost"
                                 size="icon"
+                                aria-label="View task"
                                 className="h-8 w-8 text-gray-500 hover:text-gray-900"
                                 onClick={() => handleViewModal(task)}
-                                title="View Task"
                               >
                                 <Eye className="w-4 h-4" />
                               </Button>
@@ -1107,7 +1107,7 @@ export default function MaintenancePage() {
                           className={cn(
                             task.priority === 'URGENT' && 'bg-red-100 text-red-700',
                             task.priority === 'HIGH' && 'bg-orange-100 text-orange-700',
-                            'text-[10px] px-1.5 py-0 shrink-0'
+                            'text-[11px] px-1.5 py-0 shrink-0'
                           )}
                         >
                           {task.priority}
@@ -1120,7 +1120,7 @@ export default function MaintenancePage() {
 
                       <div className="flex justify-between items-center text-sm border-t pt-3">
                         <div className="flex flex-col">
-                          <span className="text-[10px] text-muted-foreground">Next Due</span>
+                          <span className="text-[11px] text-muted-foreground">Next Due</span>
                           <span className={cn('font-semibold', dueDateInfo.color)}>{dueDateInfo.text}</span>
                         </div>
 

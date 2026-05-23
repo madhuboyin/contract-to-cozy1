@@ -959,7 +959,7 @@ export default function CoverageIntelligencePanel({
                 </>
               )}
             </Button>
-            <p className="text-[10px] text-slate-400">Covers all home systems</p>
+            <p className="text-[11px] text-slate-400">Covers all home systems</p>
           </div>
         </div>
 
@@ -987,7 +987,7 @@ export default function CoverageIntelligencePanel({
               <div className="flex items-center justify-between gap-4">
                 <p className="text-[11px] font-semibold tracking-normal text-slate-400">Coverage Insight</p>
                 <div className="flex items-center gap-2">
-                  <span className="text-[10px] text-slate-400">{compactDate(analysis.computedAt)}</span>
+                  <span className="text-[11px] text-slate-400">{compactDate(analysis.computedAt)}</span>
                   <Button
                     onClick={runNow}
                     disabled={running}
@@ -1026,7 +1026,7 @@ export default function CoverageIntelligencePanel({
               <dl className="mt-5 grid grid-cols-3 gap-1.5 xl:grid-cols-6">
                 {metricItems.map(({ label, value }) => (
                   <div key={label} className="rounded-lg border border-white/60 bg-white/70 px-3 py-2 shadow-sm">
-                    <dt className="text-[10px] text-slate-400">{label}</dt>
+                    <dt className="text-[11px] text-slate-400">{label}</dt>
                     <dd className="mt-0.5 text-xs font-semibold text-slate-800">{value}</dd>
                   </div>
                 ))}
@@ -1067,7 +1067,7 @@ export default function CoverageIntelligencePanel({
                 </div>
                 {risk && (
                   <div className="rounded-xl border border-rose-100 bg-rose-50/60 px-4 py-3">
-                    <p className="text-[10px] font-semibold tracking-normal text-rose-400">Biggest risk · {risk.label}</p>
+                    <p className="text-[11px] font-semibold tracking-normal text-rose-400">Biggest risk · {risk.label}</p>
                     <div className="mt-1 flex items-center justify-between gap-2">
                       <p className="text-xs font-semibold leading-snug text-slate-800">{risk.title}</p>
                       <p className="flex-shrink-0 text-[11px] text-slate-500">Est. {risk.exposure}</p>
@@ -1313,12 +1313,12 @@ export default function CoverageIntelligencePanel({
               {hasSimulated && (
                 <div className={cn('mt-4 rounded-xl border p-3.5', verdictPanelClass(analysis.overallVerdict))}>
                   <div className="flex items-center justify-between gap-2">
-                    <p className="text-[10px] font-semibold tracking-normal text-slate-500">
+                    <p className="text-[11px] font-semibold tracking-normal text-slate-500">
                       Simulation result
                     </p>
                     <span
                       className={cn(
-                        'rounded-full border px-2 py-0.5 text-[10px] font-semibold tracking-normal',
+                        'rounded-full border px-2 py-0.5 text-[11px] font-semibold tracking-normal',
                         verdictBadgeClass(analysis.overallVerdict)
                       )}
                     >

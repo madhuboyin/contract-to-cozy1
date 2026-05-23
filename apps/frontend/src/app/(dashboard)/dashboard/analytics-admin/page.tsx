@@ -252,7 +252,7 @@ function FilterBar({
       {filters.moduleKey && (
         <Badge
           variant="outline"
-          className="cursor-pointer rounded-full border-slate-200 bg-slate-50 px-2.5 py-0.5 text-[10px] font-semibold tracking-normal text-slate-600 hover:bg-slate-100"
+          className="cursor-pointer rounded-full border-slate-200 bg-slate-50 px-2.5 py-0.5 text-[11px] font-semibold tracking-normal text-slate-600 hover:bg-slate-100"
           onClick={() => onChange({ ...filters, moduleKey: undefined })}
         >
           {filters.moduleKey} ×
@@ -326,7 +326,7 @@ function FunnelSection({ filters, enabled }: { filters: AdminAnalyticsFilters; e
                 />
               </div>
               {stage.dropoffFromPrevious != null && stage.dropoffFromPrevious > 0 && (
-                <p className="mt-0.5 text-right text-[10px] text-slate-400">
+                <p className="mt-0.5 text-right text-[11px] text-slate-400">
                   −{num(stage.dropoffFromPrevious)} dropped off
                 </p>
               )}
@@ -1139,7 +1139,7 @@ export default function AnalyticsAdminPage() {
             Internal
           </Badge>
           {lastFetched ? (
-            <span className="rounded bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600">
+            <span className="rounded bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
               Refreshed {lastFetched.toLocaleTimeString()}
             </span>
           ) : null}

@@ -659,7 +659,7 @@ export const ActionCenter: React.FC<Props> = ({
               <span className="text-xs font-semibold text-gray-400">
                 Aging Actions ({otherStale.length})
               </span>
-              <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-500">
+              <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-500">
                 90+ days open — snooze or complete to clear
               </span>
             </div>

@@ -152,7 +152,7 @@ export function BottomNav() {
                 key={item.href}
                 href={item.href}
                 className={cn(
-                  'flex flex-1 min-h-[44px] flex-col items-center justify-center gap-0.5 pb-1 text-[10px] transition-colors duration-150',
+                  'flex flex-1 min-h-[44px] flex-col items-center justify-center gap-0.5 pb-1 text-xs transition-colors duration-150',
                   isActive ? 'text-brand-600' : 'text-gray-400'
                 )}
               >
@@ -190,7 +190,7 @@ export function BottomNav() {
                 key={item.href}
                 href={item.href}
                 className={cn(
-                  'flex flex-1 min-h-[44px] flex-col items-center justify-center gap-0.5 pb-1 text-[10px] transition-colors duration-150',
+                  'flex flex-1 min-h-[44px] flex-col items-center justify-center gap-0.5 pb-1 text-xs transition-colors duration-150',
                   isActive ? 'text-brand-600' : 'text-gray-400'
                 )}
               >
@@ -213,8 +213,9 @@ export function BottomNav() {
             <SheetTrigger asChild>
               <button
                 type="button"
+                aria-label="More navigation options"
                 className={cn(
-                  'flex flex-1 min-h-[44px] flex-col items-center justify-center gap-0.5 pb-1 text-[10px] transition-colors duration-150',
+                  'flex flex-1 min-h-[44px] flex-col items-center justify-center gap-0.5 pb-1 text-xs transition-colors duration-150',
                   moreActive ? 'text-brand-600' : 'text-gray-400'
                 )}
               >
@@ -260,7 +261,7 @@ export function BottomNav() {
               <div className="mt-4 min-h-0 flex-1 space-y-5 overflow-y-auto pb-4">
                 {filteredSections.map((section) => (
                   <div key={section.group}>
-                    <p className="mb-2 text-[10px] font-semibold tracking-normal text-gray-400">
+                    <p className="mb-2 text-[11px] font-semibold tracking-normal text-gray-400">
                       {section.group}
                     </p>
                     <div className="space-y-1.5">

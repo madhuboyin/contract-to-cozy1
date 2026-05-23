@@ -46,7 +46,7 @@ export function KnowledgeCtaCard({ cta, propertyId, variant = 'compact' }: Knowl
             {eyebrow}
           </Badge>
           {cta.dataPromptKey ? (
-            <Badge className="rounded-full bg-amber-100 px-2.5 py-1 text-[10px] font-semibold tracking-normal text-amber-700 hover:bg-amber-100">
+            <Badge className="rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-semibold tracking-normal text-amber-700 hover:bg-amber-100">
               Guided
             </Badge>
           ) : null}

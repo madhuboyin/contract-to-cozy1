@@ -1425,7 +1425,7 @@ export function KnowledgeArticleEditor({ articleId }: KnowledgeArticleEditorProp
                             <div className="flex flex-wrap items-center gap-2">
                               <p className="text-sm font-medium text-slate-900">{tag.name}</p>
                               {tag.tagGroup ? (
-                                <Badge variant="outline" className="rounded-full border-slate-200 bg-slate-50 px-2.5 py-0.5 text-[10px] font-medium tracking-normal text-slate-500">
+                                <Badge variant="outline" className="rounded-full border-slate-200 bg-slate-50 px-2.5 py-0.5 text-[11px] font-medium tracking-normal text-slate-500">
                                   {tag.tagGroup.replace(/_/g, ' ')}
                                 </Badge>
                               ) : null}

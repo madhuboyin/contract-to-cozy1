@@ -68,7 +68,7 @@ export function WelcomeSection({
       <div className="max-w-7xl mx-auto px-4 md:px-6 w-full pt-3 md:pt-4 pb-2">
         <div className="rounded-xl border border-slate-200/80 bg-white/90 px-3 py-2.5 shadow-sm md:px-4 md:py-3">
           <div className="min-w-0">
-            <p className="text-[10px] font-medium text-gray-400 tracking-normal">
+            <p className="text-[11px] font-medium text-gray-400 tracking-normal">
               Property workspace
             </p>
             <div className="mt-2 flex flex-wrap items-center gap-1.5">

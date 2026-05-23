@@ -203,8 +203,8 @@ export const FavoriteProvidersCard = ({ className }: { className?: string }) => 
                     <div className="flex items-center gap-2 shrink-0">
                         {/* FIX 1: Use optional chaining to safely access provider.user.phone */}
                         {provider.user?.phone && (
-                            <Button variant="ghost" size="icon" className="min-h-[44px] min-w-[44px]" asChild>
-                                <a href={`tel:${provider.user.phone}`} title={`Call ${displayName}`}>
+                            <Button variant="ghost" size="icon" aria-label={`Call ${displayName}`} className="min-h-[44px] min-w-[44px]" asChild>
+                                <a href={`tel:${provider.user.phone}`}>
                                     <Phone className="h-4 w-4 text-gray-500 hover:text-brand-primary" />
                                 </a>
                             </Button>

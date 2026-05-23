@@ -300,7 +300,7 @@ const ProviderList = ({
 
             <div className="flex flex-wrap gap-1.5">
               {providerCategories.slice(0, 2).map((cat) => (
-                <StatusChip key={cat} tone="protected" className="text-[10px]">
+                <StatusChip key={cat} tone="protected" className="text-[11px]">
                   <span className="inline-flex items-center gap-1">
                     <ServiceCategoryIcon icon={cat} className="h-3 w-3" />
                     {formatEnumLabel(cat)}

@@ -81,7 +81,7 @@ export default function HomeToolHeader({
             <Icon className="h-5 w-5" />
           </span>
           <div className="min-w-0">
-            <p className="mb-0 text-[10px] font-semibold tracking-normal text-slate-500">
+            <p className="mb-0 text-[11px] font-semibold tracking-normal text-slate-500">
               Home tool
             </p>
             <h2 className="mb-0 mt-0.5 text-base font-semibold leading-snug tracking-tight text-slate-900">

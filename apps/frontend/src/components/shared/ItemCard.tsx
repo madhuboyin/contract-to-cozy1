@@ -181,26 +181,26 @@ export default function ItemCard({
               <p className={`truncate font-semibold leading-tight text-gray-900 ${isCompact ? 'text-sm' : 'text-base'}`}>
                 {item.name || 'Untitled'}
               </p>
-              <p className="mt-0.5 text-[10px] text-gray-400">
+              <p className="mt-0.5 text-[11px] text-gray-400">
                 {titleCaseCategory(String(item.category || 'OTHER'))} · {getRoomLabel(item)}
               </p>
             </div>
           </div>
 
           {coverageStatus === 'gap' ? (
-            <span className="whitespace-nowrap rounded-full border border-red-200 bg-red-100 px-2 py-0.5 text-[10px] font-semibold text-red-700">
+            <span className="whitespace-nowrap rounded-full border border-red-200 bg-red-100 px-2 py-0.5 text-[11px] font-semibold text-red-700">
               Coverage gap
             </span>
           ) : coverageStatus === 'partial' ? (
-            <span className="whitespace-nowrap rounded-full border border-amber-200 bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+            <span className="whitespace-nowrap rounded-full border border-amber-200 bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
               Partial coverage
             </span>
           ) : coverageStatus === 'waived' ? (
-            <span className="whitespace-nowrap rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-500">
+            <span className="whitespace-nowrap rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-500">
               Not required
             </span>
           ) : (
-            <span className="flex flex-shrink-0 items-center gap-1 rounded-full border border-emerald-200 bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+            <span className="flex flex-shrink-0 items-center gap-1 rounded-full border border-emerald-200 bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
               <CheckCircle className="h-2.5 w-2.5" />
               Covered
             </span>
@@ -208,7 +208,7 @@ export default function ItemCard({
         </div>
 
         <div className="flex min-h-[26px] items-center justify-between">
-          <span className="text-[10px] font-semibold tracking-normal text-gray-400">Replacement</span>
+          <span className="text-[11px] font-semibold tracking-normal text-gray-400">Replacement</span>
           {hasReplacementValue ? (
             <span className="text-sm font-bold text-gray-800">{formatCurrency(replacementValue)}</span>
           ) : (
@@ -224,7 +224,7 @@ export default function ItemCard({
         </div>
 
         <div>
-          <div className="mb-1 flex items-center justify-between text-[10px]">
+          <div className="mb-1 flex items-center justify-between text-[11px]">
             <span className="flex items-center gap-1 text-gray-400">
               Covered
               <TooltipProvider>
@@ -284,7 +284,7 @@ export default function ItemCard({
         </div>
 
         <div className="flex items-center justify-between">
-          <span className="text-[10px] font-semibold tracking-normal text-gray-400">Documents</span>
+          <span className="text-[11px] font-semibold tracking-normal text-gray-400">Documents</span>
           {documentCount > 0 ? (
             <span className="text-xs font-semibold text-gray-700">{documentCount} attached</span>
           ) : (
@@ -332,12 +332,12 @@ export default function ItemCard({
             <>
               <div className="flex flex-1 items-center gap-1.5">
                 {hasWarranty ? (
-                  <span className="rounded-full border border-violet-200 bg-violet-50 px-2 py-1 text-[10px] font-medium text-violet-700">
+                  <span className="rounded-full border border-violet-200 bg-violet-50 px-2 py-1 text-[11px] font-medium text-violet-700">
                     Warranty
                   </span>
                 ) : null}
                 {hasInsurance ? (
-                  <span className="rounded-full border border-blue-200 bg-blue-50 px-2 py-1 text-[10px] font-medium text-blue-700">
+                  <span className="rounded-full border border-blue-200 bg-blue-50 px-2 py-1 text-[11px] font-medium text-blue-700">
                     Insurance
                   </span>
                 ) : null}

@@ -942,7 +942,7 @@ export default function PropertyHealthDetailPage() {
             </p>
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
-            <StatusChip tone={tone} className="px-1.5 py-0.5 text-[10px] leading-none">
+            <StatusChip tone={tone} className="px-1.5 py-0.5 text-[11px] leading-none">
               {getInsightChipLabel(insight)}
             </StatusChip>
             <ChevronDown className="h-3.5 w-3.5 text-slate-400" />
@@ -1018,19 +1018,19 @@ export default function PropertyHealthDetailPage() {
                     <p className={`text-2xl font-black leading-none tabular-nums ${negativeInsights.length > 0 ? "text-red-600" : "text-slate-300"}`}>
                       {negativeInsights.length}
                     </p>
-                    <p className="text-[10px] font-medium text-slate-500 mt-1.5 leading-tight">attention</p>
+                    <p className="text-[11px] font-medium text-slate-500 mt-1.5 leading-tight">attention</p>
                   </div>
                   <div className="text-center px-2">
                     <p className={`text-2xl font-black leading-none tabular-nums ${neutralInsights.length > 0 ? "text-amber-500" : "text-slate-300"}`}>
                       {neutralInsights.length}
                     </p>
-                    <p className="text-[10px] font-medium text-slate-500 mt-1.5 leading-tight">monitor</p>
+                    <p className="text-[11px] font-medium text-slate-500 mt-1.5 leading-tight">monitor</p>
                   </div>
                   <div className="text-center pl-2">
                     <p className={`text-2xl font-black leading-none tabular-nums ${positiveInsights.length > 0 ? "text-emerald-600" : "text-slate-300"}`}>
                       {positiveInsights.length}
                     </p>
-                    <p className="text-[10px] font-medium text-slate-500 mt-1.5 leading-tight">healthy</p>
+                    <p className="text-[11px] font-medium text-slate-500 mt-1.5 leading-tight">healthy</p>
                   </div>
                 </div>
               </MobileCard>
@@ -1045,7 +1045,7 @@ export default function PropertyHealthDetailPage() {
                 Health Factors
               </h2>
               {negativeInsights.length > 0 && (
-                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-red-100 text-red-600">
+                <span className="text-[11px] font-bold px-1.5 py-0.5 rounded-full bg-red-100 text-red-600">
                   {negativeInsights.length} need action
                 </span>
               )}
@@ -1188,7 +1188,7 @@ export default function PropertyHealthDetailPage() {
           {/* ── Card 1: Health score ── */}
           <div className="rounded-2xl border border-slate-200/50 bg-gradient-to-br from-white via-white to-slate-50/60 shadow-[0_1px_4px_rgba(0,0,0,0.05),0_1px_2px_rgba(0,0,0,0.03)] overflow-hidden flex flex-col">
             <div className="px-4 pt-3 pb-0">
-              <p className="text-[10px] font-bold tracking-normal text-slate-400/80">Health score</p>
+              <p className="text-[11px] font-bold tracking-normal text-slate-400/80">Health score</p>
             </div>
             <div className="flex flex-col items-center justify-center flex-1 px-4 py-2">
               <div
@@ -1211,18 +1211,18 @@ export default function PropertyHealthDetailPage() {
                 <div className="absolute inset-0 flex flex-col items-center justify-center" aria-hidden="true">
                   <div className="flex items-end gap-0.5 leading-none">
                     <span className={`text-[36px] font-black tabular-nums leading-none tracking-tight ${healthDetails.color}`}>{latestScore.toFixed(0)}</span>
-                    <span className="text-[10px] font-semibold text-slate-400 mb-1 ml-0.5">/100</span>
+                    <span className="text-[11px] font-semibold text-slate-400 mb-1 ml-0.5">/100</span>
                   </div>
                   <div className="flex items-center gap-1.5 mt-1">
                     <span className={`h-[5px] w-[5px] rounded-full shrink-0 ${scoreStatusDot}`} />
-                    <span className="text-[10px] font-semibold text-slate-500 tracking-normal">{healthDetails.level}</span>
+                    <span className="text-[11px] font-semibold text-slate-500 tracking-normal">{healthDetails.level}</span>
                     <span className={`text-[9px] font-bold px-1 py-px rounded ${healthDetails.gradeBg}`}>{healthDetails.grade}</span>
                   </div>
                 </div>
               </div>
               <div className="flex items-center justify-center mt-1">
                 {wowDelta !== null && Math.abs(wowDelta) < 0.05 ? (
-                  <span className="text-[10px] text-slate-400 font-medium">No change this week</span>
+                  <span className="text-[11px] text-slate-400 font-medium">No change this week</span>
                 ) : (
                   <ScoreDeltaIndicator delta={series?.deltaFromPreviousWeek} />
                 )}
@@ -1283,7 +1283,7 @@ export default function PropertyHealthDetailPage() {
                   <div className="grid grid-cols-3 gap-1.5">
                     <div className="rounded-[10px] bg-red-50 border border-red-100/60 px-2 pt-2 pb-2 text-center">
                       <p className="text-2xl font-black text-red-600 tabular-nums leading-none">{negativeInsights.length}</p>
-                      <p className="text-[10px] font-semibold text-red-500/90 mt-1 leading-tight">Needs attention</p>
+                      <p className="text-[11px] font-semibold text-red-500/90 mt-1 leading-tight">Needs attention</p>
                       <p className="text-[8px] text-red-400/70 mt-0.5 leading-tight">requires action</p>
                       {negDelta !== null && negDelta !== 0 && (
                         <p className="text-[9px] font-medium tabular-nums mt-0.5 text-red-500">{negDelta > 0 ? `↑ ${negDelta}` : `↓ ${Math.abs(negDelta)}`}</p>
@@ -1291,7 +1291,7 @@ export default function PropertyHealthDetailPage() {
                     </div>
                     <div className="rounded-[10px] bg-amber-50 border border-amber-100/60 px-2 pt-2 pb-2 text-center">
                       <p className="text-2xl font-black text-amber-500 tabular-nums leading-none">{neutralInsights.length}</p>
-                      <p className="text-[10px] font-semibold text-amber-600/90 mt-1 leading-tight">Track these systems</p>
+                      <p className="text-[11px] font-semibold text-amber-600/90 mt-1 leading-tight">Track these systems</p>
                       <p className="text-[8px] text-amber-500/70 mt-0.5 leading-tight">watch, no action yet</p>
                       {neutralDelta !== null && neutralDelta !== 0 && (
                         <p className="text-[9px] font-medium tabular-nums mt-0.5 text-amber-600">{neutralDelta > 0 ? `↑ ${neutralDelta}` : `↓ ${Math.abs(neutralDelta)}`}</p>
@@ -1299,7 +1299,7 @@ export default function PropertyHealthDetailPage() {
                     </div>
                     <div className="rounded-[10px] bg-emerald-50 border border-emerald-100/60 px-2 pt-2 pb-2 text-center">
                       <p className="text-2xl font-black text-emerald-600 tabular-nums leading-none">{positiveInsights.length}</p>
-                      <p className="text-[10px] font-semibold text-emerald-600/90 mt-1 leading-tight">Healthy signals</p>
+                      <p className="text-[11px] font-semibold text-emerald-600/90 mt-1 leading-tight">Healthy signals</p>
                       <p className="text-[8px] text-emerald-500/70 mt-0.5 leading-tight">working for you</p>
                       {positiveDelta !== null && positiveDelta !== 0 && (
                         <p className="text-[9px] font-medium tabular-nums mt-0.5 text-emerald-600">{positiveDelta > 0 ? `↑ ${positiveDelta}` : `↓ ${Math.abs(positiveDelta)}`}</p>
@@ -1309,7 +1309,7 @@ export default function PropertyHealthDetailPage() {
                   <div className="space-y-1.5 mt-auto">
                     <div className="flex items-center gap-2 rounded-lg bg-red-50/50 border border-red-100/50 px-2.5 py-1.5">
                       <span className="h-[6px] w-[6px] rounded-full bg-red-400/80 shrink-0" />
-                      <span className="text-[10px] font-bold text-red-600 shrink-0 w-[78px] tracking-normal">Biggest risk</span>
+                      <span className="text-[11px] font-bold text-red-600 shrink-0 w-[78px] tracking-normal">Biggest risk</span>
                       <span className="text-[11px] font-medium text-slate-700 truncate flex-1">{topNegativeInsight ? getDisplayFactorName(topNegativeInsight.factor) : "None currently"}</span>
                       {topNegativeInsight && (
                         <span className="text-[9px] text-slate-400 shrink-0 ml-auto">{getUserFriendlyStatus(topNegativeInsight.status)}</span>
@@ -1317,7 +1317,7 @@ export default function PropertyHealthDetailPage() {
                     </div>
                     <div className="flex items-center gap-2 rounded-lg bg-teal-50/50 border border-teal-100/50 px-2.5 py-1.5">
                       <span className="h-[6px] w-[6px] rounded-full bg-teal-400/80 shrink-0" />
-                      <span className="text-[10px] font-bold text-teal-600 shrink-0 whitespace-nowrap tracking-normal">Best performing</span>
+                      <span className="text-[11px] font-bold text-teal-600 shrink-0 whitespace-nowrap tracking-normal">Best performing</span>
                       <span className="text-[11px] font-medium text-slate-700 truncate flex-1">{topPositiveInsight ? getDisplayFactorName(topPositiveInsight.factor) : "Building signal"}</span>
                       {topPositiveInsight && (
                         <span className="text-[9px] text-slate-400 shrink-0 ml-auto">{getUserFriendlyStatus(topPositiveInsight.status)}</span>
@@ -1332,7 +1332,7 @@ export default function PropertyHealthDetailPage() {
           {/* ── Card 3: Next Steps ── */}
           <div className="rounded-2xl border border-slate-200/50 bg-slate-50/80 shadow-[0_1px_4px_rgba(0,0,0,0.05),0_1px_2px_rgba(0,0,0,0.03)] overflow-hidden flex flex-col">
             <div className="px-4 pt-3 pb-2">
-              <p className="text-[10px] font-bold tracking-normal text-slate-400/80">Next Steps</p>
+              <p className="text-[11px] font-bold tracking-normal text-slate-400/80">Next Steps</p>
               {negativeInsights.length > 0 && (
                 <p className="text-[11px] text-slate-600 mt-0.5 leading-snug">
                   {negativeInsights.length} item{negativeInsights.length > 1 ? "s" : ""} need{negativeInsights.length === 1 ? "s" : ""} attention
@@ -1347,7 +1347,7 @@ export default function PropertyHealthDetailPage() {
                     <span className="h-1.5 w-1.5 rounded-full bg-red-400 shrink-0 mt-1.5" />
                     <div className="min-w-0">
                       <p className="text-[11px] font-medium text-slate-700 leading-tight">{getDisplayFactorName(insight.factor)}</p>
-                      <p className="text-[10px] text-slate-400 leading-tight mt-0.5 truncate">{getFactorDescription(insight.factor, insight.status)}</p>
+                      <p className="text-[11px] text-slate-400 leading-tight mt-0.5 truncate">{getFactorDescription(insight.factor, insight.status)}</p>
                     </div>
                   </div>
                 ))}
@@ -1456,9 +1456,9 @@ export default function PropertyHealthDetailPage() {
                             <Activity className="h-3.5 w-3.5 text-emerald-600" />
                           </div>
                           <div className="min-w-0">
-                            <p className="text-[10px] font-medium text-slate-400 leading-tight">Score stability</p>
+                            <p className="text-[11px] font-medium text-slate-400 leading-tight">Score stability</p>
                             <p className="text-sm font-bold text-slate-800 mt-0.5">{scoreStabilityLabel}</p>
-                            <p className="text-[10px] text-slate-400 leading-tight">{stabilitySubtext}</p>
+                            <p className="text-[11px] text-slate-400 leading-tight">{stabilitySubtext}</p>
                           </div>
                         </div>
                         <div className="rounded-xl border border-slate-100 bg-slate-50/60 px-3 py-2.5 flex items-start gap-2.5">
@@ -1466,9 +1466,9 @@ export default function PropertyHealthDetailPage() {
                             <ShieldCheck className="h-3.5 w-3.5 text-teal-600" />
                           </div>
                           <div className="min-w-0">
-                            <p className="text-[10px] font-medium text-slate-400 leading-tight">Score confidence</p>
+                            <p className="text-[11px] font-medium text-slate-400 leading-tight">Score confidence</p>
                             <p className="text-sm font-bold text-slate-800 mt-0.5">{confidenceLabel}</p>
-                            <p className="text-[10px] text-slate-400 leading-tight">{confidencePct}% confidence</p>
+                            <p className="text-[11px] text-slate-400 leading-tight">{confidencePct}% confidence</p>
                           </div>
                         </div>
                       </div>
@@ -1479,9 +1479,9 @@ export default function PropertyHealthDetailPage() {
                             <Activity className="h-3.5 w-3.5 text-emerald-600" />
                           </div>
                           <div className="min-w-0">
-                            <p className="text-[10px] font-medium text-slate-400 leading-tight">Score stability</p>
+                            <p className="text-[11px] font-medium text-slate-400 leading-tight">Score stability</p>
                             <p className="text-sm font-bold text-slate-800 mt-0.5">{scoreStabilityLabel}</p>
-                            <p className="text-[10px] text-slate-400 leading-tight">{stabilitySubtext}</p>
+                            <p className="text-[11px] text-slate-400 leading-tight">{stabilitySubtext}</p>
                           </div>
                         </div>
                         <div className="rounded-xl border border-slate-100 bg-slate-50/60 px-3 py-2.5 flex items-start gap-2.5">
@@ -1489,9 +1489,9 @@ export default function PropertyHealthDetailPage() {
                             <TrendingUp className="h-3.5 w-3.5 text-blue-600" />
                           </div>
                           <div className="min-w-0">
-                            <p className="text-[10px] font-medium text-slate-400 leading-tight">{trendWeeks === 26 ? "6-month" : "1-year"} trend</p>
+                            <p className="text-[11px] font-medium text-slate-400 leading-tight">{trendWeeks === 26 ? "6-month" : "1-year"} trend</p>
                             <p className="text-sm font-bold text-slate-800 mt-0.5">{trendLabel}</p>
-                            <p className="text-[10px] text-slate-400 leading-tight">{trendDiff > 0 ? `+${trendDiff.toFixed(1)} pts` : trendDiff < 0 ? `${trendDiff.toFixed(1)} pts` : "no change"}</p>
+                            <p className="text-[11px] text-slate-400 leading-tight">{trendDiff > 0 ? `+${trendDiff.toFixed(1)} pts` : trendDiff < 0 ? `${trendDiff.toFixed(1)} pts` : "no change"}</p>
                           </div>
                         </div>
                         <div className="rounded-xl border border-slate-100 bg-slate-50/60 px-3 py-2.5 flex items-start gap-2.5">
@@ -1499,9 +1499,9 @@ export default function PropertyHealthDetailPage() {
                             <Calendar className="h-3.5 w-3.5 text-violet-600" />
                           </div>
                           <div className="min-w-0">
-                            <p className="text-[10px] font-medium text-slate-400 leading-tight">Best score this period</p>
+                            <p className="text-[11px] font-medium text-slate-400 leading-tight">Best score this period</p>
                             <p className="text-sm font-bold text-slate-800 mt-0.5">{bestScore.toFixed(0)}</p>
-                            <p className="text-[10px] text-slate-400 leading-tight">{bestScore > latestScore ? `↑ ${(bestScore - latestScore).toFixed(0)} above current` : "at current score"}</p>
+                            <p className="text-[11px] text-slate-400 leading-tight">{bestScore > latestScore ? `↑ ${(bestScore - latestScore).toFixed(0)} above current` : "at current score"}</p>
                           </div>
                         </div>
                         <div className="rounded-xl border border-slate-100 bg-slate-50/60 px-3 py-2.5 flex items-start gap-2.5">
@@ -1509,9 +1509,9 @@ export default function PropertyHealthDetailPage() {
                             <ShieldCheck className="h-3.5 w-3.5 text-teal-600" />
                           </div>
                           <div className="min-w-0">
-                            <p className="text-[10px] font-medium text-slate-400 leading-tight">Score confidence</p>
+                            <p className="text-[11px] font-medium text-slate-400 leading-tight">Score confidence</p>
                             <p className="text-sm font-bold text-slate-800 mt-0.5">{confidenceLabel}</p>
-                            <p className="text-[10px] text-slate-400 leading-tight">{confidencePct}% confidence</p>
+                            <p className="text-[11px] text-slate-400 leading-tight">{confidencePct}% confidence</p>
                           </div>
                         </div>
                       </div>
@@ -1574,7 +1574,7 @@ export default function PropertyHealthDetailPage() {
                               <div className="flex items-start justify-between gap-2">
                                 <p className="text-sm font-semibold text-slate-800 leading-snug">{change.title}</p>
                                 {isDragCard && isNegative && (
-                                  <span className="inline-flex items-center gap-1 rounded-full bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 shrink-0">
+                                  <span className="inline-flex items-center gap-1 rounded-full bg-red-500 text-white text-[11px] font-bold px-2 py-0.5 shrink-0">
                                     <TrendingDown className="h-2.5 w-2.5" /> Declined
                                   </span>
                                 )}

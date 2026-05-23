@@ -34,7 +34,7 @@ export function ConfidenceBadge({ level, score, className }: ConfidenceBadgeProp
 
   return (
     <div className={cn(
-      "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[10px] font-bold tracking-normal",
+      "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-bold tracking-normal",
       config.styles,
       className
     )}>

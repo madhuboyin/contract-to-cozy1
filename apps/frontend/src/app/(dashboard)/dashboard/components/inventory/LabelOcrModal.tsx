@@ -140,7 +140,7 @@ export default function LabelOcrModal(props: {
                   <span className="absolute right-0 top-0 h-6 w-6 border-r-[3px] border-t-[3px] border-white/90" />
                   <span className="absolute bottom-0 left-0 h-6 w-6 border-b-[3px] border-l-[3px] border-white/90" />
                   <span className="absolute bottom-0 right-0 h-6 w-6 border-b-[3px] border-r-[3px] border-white/90" />
-                  <span className="absolute bottom-1 left-1/2 -translate-x-1/2 rounded bg-black/50 px-2 py-0.5 text-[10px] text-white/80">
+                  <span className="absolute bottom-1 left-1/2 -translate-x-1/2 rounded bg-black/50 px-2 py-0.5 text-[11px] text-white/80">
                     Center label here
                   </span>
                 </div>

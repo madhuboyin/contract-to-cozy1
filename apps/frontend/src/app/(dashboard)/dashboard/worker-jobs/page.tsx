@@ -183,7 +183,7 @@ function JobCard({
 
           {/* Type chip */}
           <span
-            className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold ${
+            className={`shrink-0 rounded px-1.5 py-0.5 text-[11px] font-semibold ${
               triggerType === 'Queue'
                 ? 'bg-blue-50 text-blue-700'
                 : triggerType === 'Event-driven'
@@ -287,7 +287,7 @@ function JobCard({
 
         {/* ── Row 5: recent runs (secondary) ── */}
         <div className="mt-3 border-t border-slate-100 pt-2.5">
-          <p className="mb-1 text-[10px] font-semibold tracking-normal text-slate-300">
+          <p className="mb-1 text-[11px] font-semibold tracking-normal text-slate-300">
             Recent runs
           </p>
           {job.recentRuns.length === 0 ? (
@@ -346,7 +346,7 @@ function CategorySection({
 }) {
   return (
     <div>
-      <h2 className="mb-2 text-[10px] font-semibold tracking-normal text-slate-400">
+      <h2 className="mb-2 text-[11px] font-semibold tracking-normal text-slate-400">
         {CATEGORY_LABELS[category]}
       </h2>
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -506,30 +506,30 @@ export default function WorkerJobsPage() {
       }
       chips={
         <>
-          <span className="inline-flex items-center gap-1 rounded bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600">
+          <span className="inline-flex items-center gap-1 rounded bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
             <Cpu className="h-3 w-3" />
             {jobs.length} jobs
           </span>
-          <span className="inline-flex items-center gap-1 rounded bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600">
+          <span className="inline-flex items-center gap-1 rounded bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
             {jobs.filter((j) => j.triggerSupported).length} triggerable
           </span>
           {failing > 0 ? (
-            <span className="inline-flex items-center gap-1 rounded bg-rose-50 px-2 py-0.5 text-[10px] font-semibold text-rose-600">
+            <span className="inline-flex items-center gap-1 rounded bg-rose-50 px-2 py-0.5 text-[11px] font-semibold text-rose-600">
               {failing} failing
             </span>
           ) : null}
           {warning > 0 ? (
-            <span className="inline-flex items-center gap-1 rounded bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-600">
+            <span className="inline-flex items-center gap-1 rounded bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-600">
               {warning} warning
             </span>
           ) : null}
           {failing === 0 && warning === 0 ? (
-            <span className="inline-flex items-center gap-1 rounded bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+            <span className="inline-flex items-center gap-1 rounded bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
               All healthy
             </span>
           ) : null}
           {lastRefreshed ? (
-            <span className="inline-flex items-center gap-1 rounded bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-500">
+            <span className="inline-flex items-center gap-1 rounded bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-500">
               Refreshed {fmtRefreshedAt(lastRefreshed)}
             </span>
           ) : null}
@@ -581,7 +581,7 @@ export default function WorkerJobsPage() {
 
       {/* Footer note */}
       {!jobsQ.isLoading && !jobsQ.isError && jobs.length > 0 && (
-        <p className="mt-8 text-[10px] text-slate-400 text-center">
+        <p className="mt-8 text-[11px] text-slate-400 text-center">
           Cron jobs run on schedule via node-cron. Queue stats and run history available for BullMQ-backed jobs only. Run Job available for recall jobs only.
         </p>
       )}

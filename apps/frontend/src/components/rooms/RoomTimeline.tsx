@@ -206,7 +206,7 @@ export default function RoomTimeline({ propertyId, roomId, roomType, onAddEvent 
                         </div>
                         <div>
                           <p className="text-sm font-semibold text-gray-800">{event.title}</p>
-                          <p className="text-[10px] text-gray-400">
+                          <p className="text-[11px] text-gray-400">
                             {eventDate ? format(eventDate, 'MMM d, yyyy') : '-'} · {eventLabel}
                             {event.status ? ` · ${titleCase(String(event.status).replace(/_/g, ' '))}` : ''}
                           </p>

@@ -34,7 +34,7 @@ export function EstimatedSavingsBadge({ upside, className }: EstimatedSavingsBad
         <div className="rounded-full bg-emerald-100 p-1">
           <PiggyBank className="h-3.5 w-3.5 text-emerald-700" />
         </div>
-        <span className="text-[10px] font-bold tracking-normal text-emerald-800">
+        <span className="text-[11px] font-bold tracking-normal text-emerald-800">
           Estimated Savings
         </span>
       </div>
@@ -46,7 +46,7 @@ export function EstimatedSavingsBadge({ upside, className }: EstimatedSavingsBad
           {periodLabel}
         </span>
       </div>
-      <p className="mt-1 text-[10px] text-emerald-700/70 font-medium border-t border-emerald-100 pt-1">
+      <p className="mt-1 text-[11px] text-emerald-700/70 font-medium border-t border-emerald-100 pt-1">
         Based on: {upside.basis}
       </p>
     </div>

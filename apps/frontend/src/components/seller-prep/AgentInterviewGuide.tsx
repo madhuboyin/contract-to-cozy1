@@ -133,11 +133,11 @@ export function AgentInterviewGuide({ propertyId, interviews, onInterviewsChange
                 {DEFAULT_QUESTIONS.map(q => (
                   <div key={q.id} className="group relative space-y-1">
                     <div className="flex items-center justify-between">
-                      <label className="text-[10px] font-bold text-muted-foreground">{q.label}</label>
+                      <label className="text-[11px] font-bold text-muted-foreground">{q.label}</label>
                       {agent.isDefault && !agent.isDefault[q.id] && (
                         <button 
                           onClick={() => resetToDefault(agent.id, q.id)} 
-                          className="text-[10px] text-blue-600 hover:underline flex items-center gap-1"
+                          className="text-[11px] text-blue-600 hover:underline flex items-center gap-1"
                         >
                           <RotateCcw className="h-3 w-3" /> Reset
                         </button>
@@ -174,7 +174,7 @@ export function AgentInterviewGuide({ propertyId, interviews, onInterviewsChange
                     <td className="p-4 border font-medium bg-muted/10">
                       <div className="flex flex-col">
                         <span className="text-gray-900">{q.label}</span>
-                        <span className="text-[10px] text-muted-foreground font-normal">{q.question}</span>
+                        <span className="text-[11px] text-muted-foreground font-normal">{q.question}</span>
                       </div>
                     </td>
                     {interviews.map((a: any) => (

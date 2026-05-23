@@ -431,7 +431,7 @@ const PropertyOverview = ({ property }: { property: Property }) => {
                 Property Snapshot
               </h4>
               <Link href={`/dashboard/properties/${property.id}/edit`}>
-                <Button variant="ghost" size="sm" className="h-8 px-2 text-[10px] font-bold text-slate-500 hover:bg-slate-50 hover:text-brand-600">
+                <Button variant="ghost" size="sm" className="h-8 px-2 text-[11px] font-bold text-slate-500 hover:bg-slate-50 hover:text-brand-600">
                   <Edit className="h-3 w-3 mr-1" />
                   Edit
                 </Button>
