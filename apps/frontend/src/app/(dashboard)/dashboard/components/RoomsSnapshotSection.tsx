@@ -25,6 +25,7 @@ import RoomHealthScoreRing from '@/components/rooms/RoomHealthScoreRing';
 import { cn } from '@/lib/utils';
 import type { InventoryRoom } from '@/types';
 import { BadgeStatus, StatusBadge } from '@/components/ui/StatusBadge';
+import { ScrollFadeX } from '@/components/ui/ScrollFadeX';
 
 interface RoomsSnapshotSectionProps {
   propertyId?: string;
@@ -420,6 +421,7 @@ export function RoomsSnapshotSection({ propertyId }: RoomsSnapshotSectionProps) 
         </div>
       ) : (
         <>
+          <ScrollFadeX fromColor="from-gray-50">
           <div
             ref={scrollerRef}
             className="flex gap-4 overflow-x-auto pb-2 no-scrollbar snap-x scroll-smooth"
@@ -557,6 +559,7 @@ export function RoomsSnapshotSection({ propertyId }: RoomsSnapshotSectionProps) 
               );
             })}
           </div>
+          </ScrollFadeX>
 
           <div className="mt-3">
             <Link

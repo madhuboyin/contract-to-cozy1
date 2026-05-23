@@ -13,6 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
 import humanizeActionType from '@/lib/utils/humanize';
+import { ScrollFadeX } from '@/components/ui/ScrollFadeX';
 
 type MaintenanceForecastMode = 'timeline' | 'next-up';
 
@@ -436,6 +437,7 @@ export function MaintenanceForecast({ propertyId, mode = 'timeline' }: Maintenan
         </div>
       </div>
 
+      <ScrollFadeX fromColor="from-white">
       <div className="overflow-x-auto pb-2 snap-x snap-mandatory">
         {generationError && (
           <p className="mb-2 text-xs text-amber-700">
@@ -459,6 +461,7 @@ export function MaintenanceForecast({ propertyId, mode = 'timeline' }: Maintenan
           ))}
         </div>
       </div>
+      </ScrollFadeX>
     </section>
   );
 }

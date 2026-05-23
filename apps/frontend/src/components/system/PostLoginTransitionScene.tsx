@@ -26,6 +26,7 @@ export function PostLoginTransitionScene({ reducedMotion }: Props) {
           src={transitionImg}
           alt="ContractToCozy — home intelligence dashboard"
           priority
+          sizes="(max-width: 768px) calc(100vw - 2rem), 680px"
           className="w-full h-auto
             rounded-2xl
             shadow-[0_6px_32px_-6px_rgba(13,148,136,0.18),0_2px_8px_-2px_rgba(0,0,0,0.05)]

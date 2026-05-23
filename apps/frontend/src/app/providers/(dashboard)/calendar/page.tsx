@@ -137,10 +137,11 @@ export default function ProviderCalendarPage() {
             }}
           />
 
-          <div className="grid grid-cols-7 gap-1.5">
+          <div className="grid grid-cols-7 gap-0.5 sm:gap-1.5">
             {WEEKDAY_LABELS.map((day) => (
-              <div key={day} className="py-1 text-center text-[11px] font-semibold tracking-normal text-slate-500">
-                {day}
+              <div key={day} className="py-1 text-center text-[9px] sm:text-[11px] font-semibold tracking-normal text-slate-500">
+                <span className="sm:hidden">{day.slice(0, 1)}</span>
+                <span className="hidden sm:inline">{day}</span>
               </div>
             ))}
             {calendarCells.map((cell, index) => {
@@ -157,7 +158,7 @@ export default function ProviderCalendarPage() {
                   disabled={!cell.isCurrentMonth}
                   onClick={() => setSelectedDate(cell.date)}
                   className={cn(
-                    'aspect-square rounded-lg border p-1.5 text-center transition-colors',
+                    'aspect-square rounded-lg border p-0.5 sm:p-1.5 text-center transition-colors',
                     cell.isCurrentMonth
                       ? 'border-slate-200 bg-white text-slate-800 hover:border-brand-primary/40 hover:bg-brand-primary/5'
                       : 'border-transparent bg-slate-50 text-slate-300',
@@ -165,7 +166,7 @@ export default function ProviderCalendarPage() {
                     isToday && 'ring-1 ring-brand-primary/50'
                   )}
                 >
-                  <div className="text-sm font-medium">{dayNumber}</div>
+                  <div className="text-[11px] sm:text-sm font-medium">{dayNumber}</div>
                   {hasBooking ? <div className="mx-auto mt-1 h-1.5 w-1.5 rounded-full bg-brand-primary" /> : null}
                   {isBlocked ? <div className="mx-auto mt-1 h-1.5 w-1.5 rounded-full bg-rose-500" /> : null}
                 </button>

@@ -56,6 +56,7 @@ import {
   extractGuidanceContinuityContext,
   hasGuidanceContinuityContext,
 } from '@/features/guidance/utils/guidanceContinuity';
+import { ScrollFadeX } from '@/components/ui/ScrollFadeX';
 
 type MobileDashboardHomeProps = {
   userFirstName: string;
@@ -826,6 +827,7 @@ export default function MobileDashboardHome({
                   title="Rooms"
                   badge={totalCoverageGaps > 0 ? `${totalCoverageGaps} gap${totalCoverageGaps > 1 ? 's' : ''}` : `${rooms.length} room${rooms.length > 1 ? 's' : ''}`}
                 >
+                  <ScrollFadeX fromColor="from-white">
                   <div className="flex snap-x snap-mandatory gap-2.5 overflow-x-auto pb-1 no-scrollbar">
                     {previewRooms.map((room) => {
                       const stats = roomInsightsQuery.data?.[room.id];
@@ -853,6 +855,7 @@ export default function MobileDashboardHome({
                       );
                     })}
                   </div>
+                  </ScrollFadeX>
                   <Link
                     href={roomsHref}
                     className="no-brand-style mt-1 flex min-h-[44px] items-center justify-center gap-1 rounded-xl bg-slate-50 text-[13px] font-semibold text-[hsl(var(--mobile-brand-strong))]"

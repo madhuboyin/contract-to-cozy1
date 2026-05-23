@@ -69,6 +69,7 @@ export default function MarketingHeroTemplate({
                 src={screenshotSrc}
                 alt={screenshotAlt}
                 fill
+                sizes="(max-width: 640px) calc(100vw - 3rem), (max-width: 1024px) 50vw, 600px"
                 className="object-cover object-top"
                 priority
               />

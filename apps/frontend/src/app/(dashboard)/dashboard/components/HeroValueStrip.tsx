@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { ArrowUpRight, LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { ScrollFadeX } from '@/components/ui/ScrollFadeX';
 
 export type ValueStripTone = 'teal' | 'amber' | 'red' | 'blue' | 'slate';
 
@@ -52,6 +53,7 @@ export function HeroValueStrip({ tiles, momentumLabel }: HeroValueStripProps) {
           </span>
         ) : null}
       </div>
+      <ScrollFadeX fromColor="from-white" className="sm:hidden">
       <div className="no-scrollbar flex gap-2 overflow-x-auto pb-1 sm:grid sm:grid-cols-2 lg:grid-cols-5 sm:overflow-visible">
         {tiles.map((tile) => {
           const Icon = tile.icon;
@@ -96,6 +98,7 @@ export function HeroValueStrip({ tiles, momentumLabel }: HeroValueStripProps) {
           );
         })}
       </div>
+      </ScrollFadeX>
     </section>
   );
 }
