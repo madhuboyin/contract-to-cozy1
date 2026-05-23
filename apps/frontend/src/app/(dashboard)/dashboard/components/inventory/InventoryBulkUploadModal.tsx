@@ -113,7 +113,7 @@ export default function InventoryBulkUploadModal(props: {
               Download the template, fill it, upload, then validate/import. Partial imports are supported.
             </div>
           </div>
-          <button onClick={props.onClose} className="text-sm underline opacity-80 hover:opacity-100">
+          <button onClick={props.onClose} className="inline-flex min-h-[44px] items-center text-sm underline opacity-80 hover:opacity-100">
             Close
           </button>
         </div>

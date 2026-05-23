@@ -358,7 +358,7 @@ const AIChatInner: React.FC = () => {
                   <p className="text-xs text-stone-300">AI Home Concierge</p>
                 </div>
               </div>
-              <button onClick={closeChat} className="text-stone-400 hover:text-white" aria-label="Close chat">
+              <button onClick={closeChat} className="flex h-10 w-10 items-center justify-center rounded-full text-stone-400 hover:bg-stone-700 hover:text-white transition-colors" aria-label="Close chat">
                 <X className="w-5 h-5" />
               </button>
             </div>

@@ -136,7 +136,7 @@ export default function BarcodeScannerModal(props: {
             <div id="barcode-modal-title" className="text-sm font-semibold">Scan barcode</div>
             <div className="text-xs opacity-70">Point your camera at a UPC/EAN barcode.</div>
           </div>
-          <button onClick={props.onClose} className="text-xs underline opacity-80 hover:opacity-100">
+          <button onClick={props.onClose} className="inline-flex min-h-[44px] items-center text-xs underline opacity-80 hover:opacity-100">
             Close
           </button>
         </div>

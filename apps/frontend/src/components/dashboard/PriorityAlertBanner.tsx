@@ -72,7 +72,7 @@ export default function PriorityAlertBanner({ propertyId }: PriorityAlertBannerP
           type="button"
           aria-label="Dismiss priority banner"
           onClick={dismiss}
-          className="float-right inline-flex h-8 w-8 items-center justify-center rounded-md text-red-700 hover:bg-red-100"
+          className="float-right inline-flex h-11 w-11 items-center justify-center rounded-md text-red-700 hover:bg-red-100"
         >
           <X className="h-4 w-4" />
         </button>

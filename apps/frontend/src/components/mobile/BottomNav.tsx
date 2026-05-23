@@ -258,7 +258,7 @@ export function BottomNav() {
                 />
               </div>
 
-              <div className="mt-4 min-h-0 flex-1 space-y-5 overflow-y-auto pb-4">
+              <div className="mt-4 min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain pb-4">
                 {filteredSections.map((section) => (
                   <div key={section.group}>
                     <p className="mb-2 text-[11px] font-semibold tracking-normal text-gray-400">

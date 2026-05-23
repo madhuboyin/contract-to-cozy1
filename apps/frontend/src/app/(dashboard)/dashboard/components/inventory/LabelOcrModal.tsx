@@ -127,7 +127,7 @@ export default function LabelOcrModal(props: {
             <div id="label-ocr-modal-title" className="text-sm font-semibold">Scan appliance label</div>
             <div className="text-xs opacity-70">Take a clear photo of the model/serial plate.</div>
           </div>
-          <button onClick={props.onClose} className="text-xs underline opacity-80 hover:opacity-100">
+          <button onClick={props.onClose} className="inline-flex min-h-[44px] items-center text-xs underline opacity-80 hover:opacity-100">
             Close
           </button>
         </div>

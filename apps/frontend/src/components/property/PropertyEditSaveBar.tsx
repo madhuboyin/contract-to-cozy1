@@ -27,7 +27,7 @@ function getSaveBarCopy(completionPercent: number): string {
 export default function PropertyEditSaveBar({ isSaving, completionPct, onSave, onCancel }: PropertyEditSaveBarProps) {
   const copy = getSaveBarCopy(completionPct);
   return (
-    <div className="sticky bottom-0 z-30 border-t border-black/10 bg-white/95 px-4 py-3 shadow-[0_-4px_16px_rgba(0,0,0,0.08)] backdrop-blur-sm dark:border-white/10 dark:bg-slate-950/90 md:hidden">
+    <div className="sticky bottom-[calc(60px+env(safe-area-inset-bottom))] z-30 border-t border-black/10 bg-white/95 px-4 py-3 shadow-[0_-4px_16px_rgba(0,0,0,0.08)] backdrop-blur-sm dark:border-white/10 dark:bg-slate-950/90 md:hidden">
       <p className="mb-2 text-center text-xs text-gray-700 dark:text-slate-300">{copy}</p>
       <div className="flex items-center gap-2 max-[640px]:flex-col">
         <Button

@@ -25,6 +25,7 @@ import HomeToolHeader from '@/components/tools/HomeToolHeader';
 import { track } from '@/lib/analytics/events';
 import type { Property, RadarFeedItem as RadarFeedItemType, RadarUserState } from '@/types';
 import { buildGuidanceOverviewHref } from '@/lib/navigation/guidanceOverviewHref';
+import { ScrollFadeX } from '@/components/ui/ScrollFadeX';
 
 // ---------------------------------------------------------------------------
 // Filter chip type
@@ -197,6 +198,7 @@ function FilterChips({
   onChange: (k: FilterKey) => void;
 }) {
   return (
+    <ScrollFadeX fromColor="from-white">
     <div className="flex snap-x snap-mandatory gap-2 overflow-x-auto no-scrollbar pb-0.5">
       {FILTER_OPTIONS.map((opt) => (
         <button
@@ -216,6 +218,7 @@ function FilterChips({
         </button>
       ))}
     </div>
+    </ScrollFadeX>
   );
 }
 

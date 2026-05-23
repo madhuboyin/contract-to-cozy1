@@ -58,6 +58,7 @@ import {
   extractGuidanceContinuityContext,
   hasGuidanceContinuityContext,
 } from '@/features/guidance/utils/guidanceContinuity';
+import { ScrollFadeX } from '@/components/ui/ScrollFadeX';
 
 // ============================================================================
 // DISPLAY CONSTANTS
@@ -216,6 +217,7 @@ function FilterTabs({
   ];
 
   return (
+    <ScrollFadeX fromColor="from-white">
     <div className="flex gap-2 overflow-x-auto pb-0.5 no-scrollbar">
       {tabs.map((tab) => (
         <button
@@ -233,6 +235,7 @@ function FilterTabs({
         </button>
       ))}
     </div>
+    </ScrollFadeX>
   );
 }
 

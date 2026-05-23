@@ -521,6 +521,8 @@ export default function NewPropertyPage() {
               src={propertyPhotoPreviewUrl}
               alt="Property photo preview"
               className="h-40 w-full object-cover"
+              loading="lazy"
+              decoding="async"
             />
           </div>
         ) : null}

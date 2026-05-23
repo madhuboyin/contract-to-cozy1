@@ -993,14 +993,14 @@ useEffect(() => {
             <button
               type="button"
               onClick={props.onClose}
-              className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
+              className="flex h-11 w-11 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
               aria-label="Close drawer"
             >
               <X className="h-5 w-5" />
             </button>
           </div>
 
-          <div className="flex-1 space-y-6 overflow-y-auto overflow-x-hidden px-6 py-5">
+          <div className="flex-1 space-y-6 overflow-y-auto overscroll-contain overflow-x-hidden px-6 py-5">
             {isUnverified ? (
               <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
                 <div className="mb-1 flex items-center gap-2">

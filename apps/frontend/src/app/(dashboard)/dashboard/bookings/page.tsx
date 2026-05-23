@@ -12,6 +12,7 @@ import { housePulseAnimation } from '@/components/animations/lottieData';
 import { formatEnumLabel } from '@/lib/utils/formatters';
 import { cn } from '@/lib/utils';
 import { StatusBadge } from '@/components/bookings/StatusBadge';
+import { ScrollFadeX } from '@/components/ui/ScrollFadeX';
 import {
   BottomSafeAreaReserve,
   MobileFilterSurface,
@@ -390,6 +391,7 @@ export default function HomeownerBookingsPage() {
           <p className="px-1 text-[11px] font-medium tracking-normal text-slate-500">
             Filter Bookings
           </p>
+          <ScrollFadeX fromColor="from-white">
           <div className="-mx-1 overflow-x-auto px-1 pb-1 scrollbar-none">
             <div className="inline-flex gap-1.5 rounded-xl bg-gray-100 p-1">
               {['all', 'DRAFT', 'PENDING', 'CONFIRMED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'].map((status) => {
@@ -409,6 +411,7 @@ export default function HomeownerBookingsPage() {
               })}
             </div>
           </div>
+          </ScrollFadeX>
         </MobileFilterSurface>
       </div>
 

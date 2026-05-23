@@ -82,7 +82,7 @@ export function PropertySetupBanner({ show, onDismiss }: PropertySetupBannerProp
           
           <button
             onClick={handleDismiss}
-            className="p-2 text-gray-400 hover:text-gray-600 transition-colors touch-manipulation"
+            className="flex h-11 w-11 items-center justify-center rounded-md text-gray-400 hover:text-gray-600 transition-colors touch-manipulation"
             aria-label="Dismiss banner"
           >
             <X className="h-4 w-4" />

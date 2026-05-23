@@ -713,6 +713,20 @@ html {
   .animate-fade-in-up {
     animation: none;
   }
+  /* Stop all Tailwind animate-* utilities for users who prefer reduced motion */
+  [class*="animate-"] {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+  /* Collapse transitions to instant */
+  [class*="transition"] {
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Prevent scroll chaining out of horizontal carousels on iOS */
+.snap-x {
+  overscroll-behavior-x: contain;
 }
 
 .score-card-status-tinted {

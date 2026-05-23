@@ -94,10 +94,12 @@ function MiniLineChart({
   };
 
   return (
+    <div className="w-full" style={{ aspectRatio: `${w}/${h}` }}>
     <svg
       viewBox={`0 0 ${w} ${h}`}
-      className="h-[180px] w-full text-slate-600 dark:text-slate-300"
-      preserveAspectRatio="none"
+      width="100%"
+      height="100%"
+      className="block text-slate-600 dark:text-slate-300"
       role="img"
       aria-label="Property tax trend chart"
     >
@@ -134,6 +136,7 @@ function MiniLineChart({
         );
       })}
     </svg>
+    </div>
   );
 }
 

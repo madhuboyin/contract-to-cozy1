@@ -1403,6 +1403,8 @@ export default function EditPropertyPage() {
                         src={activeCoverPhotoUrl}
                         alt="Property photo preview"
                         className="h-40 w-full object-cover"
+                        loading="lazy"
+                        decoding="async"
                       />
                     </div>
                   ) : null}

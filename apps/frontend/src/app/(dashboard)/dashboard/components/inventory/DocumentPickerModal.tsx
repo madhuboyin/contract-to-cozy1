@@ -70,7 +70,7 @@ export default function DocumentPickerModal(props: {
             <div id="doc-picker-modal-title" className="text-base font-semibold">Attach existing document</div>
             <div className="text-sm opacity-70">Shows documents uploaded for this property.</div>
           </div>
-          <button onClick={props.onClose} className="text-sm underline opacity-80 hover:opacity-100">
+          <button onClick={props.onClose} className="inline-flex min-h-[44px] items-center text-sm underline opacity-80 hover:opacity-100">
             Close
           </button>
         </div>

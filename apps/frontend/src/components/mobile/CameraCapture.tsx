@@ -173,7 +173,7 @@ export function FloatingCameraButton({ onClick }: { onClick: () => void }) {
     <button
       onClick={onClick}
       className={cn(
-        "fixed bottom-20 right-4 md:bottom-6",
+        "fixed bottom-[calc(60px+env(safe-area-inset-bottom)+1rem)] right-4 lg:bottom-6",
         "w-14 h-14 rounded-full",
         "bg-blue-600 text-white shadow-lg",
         "flex items-center justify-center",

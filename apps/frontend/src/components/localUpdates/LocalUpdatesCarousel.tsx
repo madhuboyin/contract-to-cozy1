@@ -91,7 +91,7 @@ export function LocalUpdatesCarousel({
             <button
               type="button"
               onClick={() => onDismiss(current.id)}
-              className="shrink-0 rounded-md px-2 py-1 text-slate-400 hover:bg-white hover:text-slate-700"
+              className="shrink-0 flex h-11 w-11 items-center justify-center rounded-md text-slate-400 hover:bg-white hover:text-slate-700"
               aria-label="Dismiss update"
             >
               ✕

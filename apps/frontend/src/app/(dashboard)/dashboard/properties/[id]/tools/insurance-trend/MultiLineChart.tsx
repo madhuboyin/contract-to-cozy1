@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 
 type Series = {
   key: string;
@@ -35,9 +35,22 @@ export default function MultiLineChart(props: {
   verticalMarkerLabel?: string;
   eventMarkers?: Array<{ idx: number; label: string }>;
 }) {
-  const w = 720;
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [containerW, setContainerW] = useState(720);
+  const w = containerW;
   const h = 260;
   const padL = 64, padR = 32, padT = 24, padB = 42;
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const obs = new ResizeObserver((entries) => {
+      const w = entries[0]?.contentRect.width;
+      if (w && w > 0) setContainerW(w);
+    });
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, []);
 
   // Subtle load animation — fade + slight opacity reveal
   const [mounted, setMounted] = useState(false);
@@ -186,12 +199,13 @@ export default function MultiLineChart(props: {
   }, [props.annotation, safe.series, minY, maxY, spanY]);
 
   return (
-    <div className="w-full">
+    <div className="w-full" ref={containerRef}>
       <div className="relative">
         <svg
           viewBox={`0 0 ${w} ${h}`}
-          className="h-[260px] w-full text-slate-600 dark:text-slate-300"
-          preserveAspectRatio="none"
+          width="100%"
+          height={h}
+          className="block text-slate-600 dark:text-slate-300"
           role="img"
           aria-label={props.ariaLabel || 'Trend chart'}
           onMouseMove={onMove}
@@ -345,7 +359,7 @@ export default function MultiLineChart(props: {
         {tooltip && (
           <div
             className="pointer-events-none absolute top-2 rounded-xl border border-white/80 bg-white/95 px-3 py-2.5 text-xs shadow-lg backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/95"
-            style={{ left: `calc(${hoverXPct * 100}% - 90px)`, width: 188 }}
+            style={{ left: `clamp(4px, calc(${hoverXPct * 100}% - 94px), calc(100% - 192px))`, width: 188 }}
           >
             <div className="mb-2 font-semibold text-slate-800 dark:text-slate-100">{tooltip.year}</div>
             {tooltip.rows.map((r) => (

@@ -70,17 +70,17 @@ function ExistingOwnerSeasonalBanner({ propertyId }: SeasonalBannerProps) {
               <p className="text-gray-700 text-sm mb-3">
                 We&apos;ve prepared {upcomingChecklist.totalTasks} maintenance tasks to get your home ready.
               </p>
-              <div className="flex space-x-3">
+              <div className="flex flex-wrap gap-2">
                 <button
                   onClick={handleViewChecklist}
-                  className={`inline-flex items-center px-4 py-2 rounded-md bg-gradient-to-r ${colors.gradient} text-white font-medium text-sm hover:shadow-md transition-shadow`}
+                  className={`inline-flex min-h-[44px] items-center px-4 py-2 rounded-md bg-gradient-to-r ${colors.gradient} text-white font-medium text-sm hover:shadow-md transition-shadow`}
                 >
                   <Calendar className="w-4 h-4 mr-2" />
                   View {colors.name} Checklist
                 </button>
                 <button
                   onClick={handleDismiss}
-                  className="inline-flex items-center px-4 py-2 rounded-md border border-gray-300 bg-white text-gray-700 font-medium text-sm hover:bg-gray-50"
+                  className="inline-flex min-h-[44px] items-center px-4 py-2 rounded-md border border-gray-300 bg-white text-gray-700 font-medium text-sm hover:bg-gray-50"
                 >
                   Remind me in 3 days
                 </button>
@@ -89,7 +89,8 @@ function ExistingOwnerSeasonalBanner({ propertyId }: SeasonalBannerProps) {
           </div>
           <button
             onClick={handleDismiss}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
+            aria-label="Dismiss seasonal banner"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
           >
             <X className="w-5 h-5" />
           </button>

@@ -66,7 +66,7 @@ export function FeedbackWidget({ propertyId }: FeedbackWidgetProps) {
 
   return (
     // FIXED: Positioned fixed to bottom-left (left-6) to avoid blocking AI Chat on the right
-    <div className="fixed bottom-6 left-6 z-40 flex flex-col items-start gap-4">
+    <div className="fixed bottom-[calc(60px+env(safe-area-inset-bottom)+1rem)] left-6 z-40 flex flex-col items-start gap-4 lg:bottom-6">
       {isOpen && !submitted && (
         <Card className="w-72 shadow-xl border-blue-100 animate-in fade-in slide-in-from-left-4 duration-200">
           <CardContent className="p-4 space-y-4">

@@ -159,7 +159,7 @@ export function SeasonalWidget({ propertyId }: SeasonalWidgetProps) {
         {/* Action Button */}
         <button
           onClick={handleViewChecklist}
-          className="w-full flex items-center justify-center space-x-2 px-4 py-2 rounded-md bg-green-600 text-white font-medium text-sm hover:bg-green-700 transition-colors"
+          className="w-full flex min-h-[44px] items-center justify-center space-x-2 px-4 py-2 rounded-md bg-green-600 text-white font-medium text-sm hover:bg-green-700 transition-colors"
         >
           <Calendar className="w-4 h-4" />
           <span>View all seasonal tasks</span>

@@ -1,7 +1,7 @@
 // apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/cost-volatility/MiniLineChartPct.tsx
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 
 function clamp(n: number, min: number, max: number) {
   return Math.max(min, Math.min(max, n));
@@ -21,9 +21,22 @@ export default function MiniLineChartPct(props: {
   // ✅ Phase-2 additive
   events?: ChartEvent[];
 }) {
-  const w = 720;
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [containerW, setContainerW] = useState(720);
+  const w = containerW;
   const h = 200;
   const padL = 60, padR = 14, padT = 12, padB = 34;
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const obs = new ResizeObserver((entries) => {
+      const cw = entries[0]?.contentRect.width;
+      if (cw && cw > 0) setContainerW(cw);
+    });
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, []);
 
   const safe = useMemo(() => {
     const xLabels = props.xLabels.length >= 2 ? props.xLabels : ['—', '—'];
@@ -122,11 +135,12 @@ export default function MiniLineChartPct(props: {
   }
 
   return (
-    <div className="relative w-full">
+    <div className="relative w-full" ref={containerRef}>
       <svg
         viewBox={`0 0 ${w} ${h}`}
-        className="h-[200px] w-full text-slate-600 dark:text-slate-300"
-        preserveAspectRatio="none"
+        width="100%"
+        height={h}
+        className="block text-slate-600 dark:text-slate-300"
         role="img"
         aria-label={props.ariaLabel || 'Volatility YoY percent chart'}
         onMouseMove={onMove}
@@ -214,7 +228,7 @@ export default function MiniLineChartPct(props: {
       {tooltip && (
         <div
           className="absolute top-2 z-10 rounded-xl border border-white/70 bg-white/85 px-3 py-2 shadow-sm backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/80"
-          style={{ left: `calc(${Math.round(hoverXPct * 100)}% - 90px)`, width: 180, pointerEvents: 'none' }}
+          style={{ left: `clamp(4px, calc(${Math.round(hoverXPct * 100)}% - 90px), calc(100% - 184px))`, width: 180, pointerEvents: 'none' }}
         >
           <div className="text-xs font-medium text-slate-800 dark:text-slate-100">{tooltip.year}</div>
           <div className="mt-1 flex items-center justify-between text-xs text-slate-600 dark:text-slate-300">

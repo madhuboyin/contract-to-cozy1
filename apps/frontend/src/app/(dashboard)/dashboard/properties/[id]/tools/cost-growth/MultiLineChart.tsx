@@ -29,7 +29,9 @@ export default function MultiLineChart(props: {
   series: Series[];
   ariaLabel?: string;
 }) {
-  const w = 720;
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [containerW, setContainerW] = useState(720);
+  const w = containerW;
   const h = 200;
   const padL = 60, padR = 14, padT = 12, padB = 34;
 
@@ -90,6 +92,17 @@ export default function MultiLineChart(props: {
 
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
   const [hoverXPct, setHoverXPct] = useState(0);
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const obs = new ResizeObserver((entries) => {
+      const w = entries[0]?.contentRect.width;
+      if (w && w > 0) setContainerW(w);
+    });
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, []);
+
   const isMounted = useRef(true);
 
   useEffect(() => {
@@ -145,12 +158,13 @@ export default function MultiLineChart(props: {
         };
 
   return (
-    <div className="w-full">
+    <div className="w-full" ref={containerRef}>
       <div className="relative">
         <svg
           viewBox={`0 0 ${w} ${h}`}
-          className="h-[200px] w-full text-slate-600 dark:text-slate-300"
-          preserveAspectRatio="none"
+          width="100%"
+          height={h}
+          className="block text-slate-600 dark:text-slate-300"
           role="img"
           aria-label={props.ariaLabel || 'Cost growth trend'}
           onMouseMove={onMove}
@@ -209,7 +223,7 @@ export default function MultiLineChart(props: {
         {tooltip && (
           <div
             className="absolute top-2 rounded-xl border border-white/70 bg-white/85 px-3 py-2 text-xs shadow-sm backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/80"
-            style={{ left: `calc(${hoverXPct * 100}% - 90px)`, width: 180, pointerEvents: 'none' }}
+            style={{ left: `clamp(4px, calc(${hoverXPct * 100}% - 90px), calc(100% - 184px))`, width: 180, pointerEvents: 'none' }}
           >
             <div className="mb-1 font-medium text-slate-800 dark:text-slate-100">{tooltip.year}</div>
             {tooltip.rows.map((r) => (

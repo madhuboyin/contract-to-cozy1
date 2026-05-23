@@ -106,7 +106,7 @@ export default function QrScannerModal(props: {
               Point at a QR sticker on the device/manual to autofill details.
             </div>
           </div>
-          <button onClick={props.onClose} className="text-xs underline opacity-80 hover:opacity-100">
+          <button onClick={props.onClose} className="inline-flex min-h-[44px] items-center text-xs underline opacity-80 hover:opacity-100">
             Close
           </button>
         </div>

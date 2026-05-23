@@ -74,7 +74,7 @@ export function GuidanceResumeBanner({ propertyId, className }: GuidanceResumeBa
         type="button"
         onClick={() => setDismissed(true)}
         aria-label="Dismiss guidance banner"
-        className="shrink-0 rounded p-1 text-sky-500 hover:bg-sky-100 hover:text-sky-700 transition-colors"
+        className="shrink-0 flex h-11 w-11 items-center justify-center rounded text-sky-500 hover:bg-sky-100 hover:text-sky-700 transition-colors"
       >
         <X className="h-4 w-4" />
       </button>

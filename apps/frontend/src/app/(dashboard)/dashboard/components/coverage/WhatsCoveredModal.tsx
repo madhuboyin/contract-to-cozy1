@@ -69,7 +69,7 @@ export default function WhatsCoveredModal(props: {
               Warranty and insurance typically cover different things. Here’s what we found for this item.
             </div>
           </div>
-          <button onClick={props.onClose} className="text-sm underline opacity-80 hover:opacity-100">
+          <button onClick={props.onClose} className="inline-flex min-h-[44px] items-center text-sm underline opacity-80 hover:opacity-100">
             Close
           </button>
         </div>

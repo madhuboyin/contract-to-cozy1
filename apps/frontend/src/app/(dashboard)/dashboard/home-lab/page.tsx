@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
 import { MOBILE_HOME_TOOL_LINKS } from '@/components/mobile/dashboard/mobileToolCatalog';
 import { ToolCard } from './components/ToolCard';
+import { ScrollFadeX } from '@/components/ui/ScrollFadeX';
 
 const HOME_TOOL_GROUPS = [
   {
@@ -129,6 +130,7 @@ export default function HomeLabPage() {
             className="h-11 pl-10 pr-4 rounded-xl border-slate-200 bg-white shadow-sm focus:ring-brand-500"
           />
         </div>
+        <ScrollFadeX fromColor="from-white">
         <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0 scrollbar-hide">
           <SlidersHorizontal className="h-4 w-4 text-slate-400 mr-1 flex-shrink-0" />
           {CATEGORIES.map((category) => (
@@ -146,6 +148,7 @@ export default function HomeLabPage() {
             </button>
           ))}
         </div>
+        </ScrollFadeX>
       </div>
 
       {filteredTools.length > 0 ? (

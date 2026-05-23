@@ -85,7 +85,7 @@ export function InstallPrompt() {
   if (!showPrompt || dismissed) return null;
 
   return (
-    <div className="fixed bottom-20 left-4 right-4 md:bottom-6 bg-white rounded-xl shadow-2xl p-5 z-40 border-2 border-blue-100 animate-in slide-in-from-bottom duration-500">
+    <div className="fixed bottom-[calc(60px+env(safe-area-inset-bottom)+1rem)] left-4 right-4 lg:bottom-6 bg-white rounded-xl shadow-2xl p-5 z-40 border-2 border-blue-100 animate-in slide-in-from-bottom duration-500">
       <button
         onClick={handleDismiss}
         className="absolute top-3 right-3 text-gray-400 hover:text-gray-600 transition-colors"

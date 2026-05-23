@@ -50,6 +50,7 @@ import {
 } from "@/types";
 
 import { navigateBackWithDashboardFallback } from '@/lib/navigation/backNavigation';
+import { ScrollFadeX } from '@/components/ui/ScrollFadeX';
 function cx(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
 }
@@ -1727,6 +1728,7 @@ export default function HomeScoreReportPage() {
               </div>
             </section>
             <div className="border-t border-slate-200/80 pt-4">
+              <ScrollFadeX fromColor="from-white" desktopHide={false}>
               <div className="overflow-x-auto">
               <table className="w-full min-w-[900px] text-sm">
                 <thead>
@@ -1809,6 +1811,7 @@ export default function HomeScoreReportPage() {
                 </tbody>
               </table>
               </div>
+              </ScrollFadeX>
             </div>
           </div>
         </SectionCard>
