@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import dynamic from 'next/dynamic';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -8,8 +9,9 @@ import { Booking } from '@/types';
 import { format, isPast } from 'date-fns';
 import Link from 'next/link';
 import { Calendar, ArrowRight, House } from 'lucide-react';
-import LottieBadge from '@/components/ui/LottieBadge';
 import { housePulseAnimation } from '@/components/animations/lottieData';
+
+const LottieBadge = dynamic(() => import('@/components/ui/LottieBadge'), { ssr: false });
 
 const getStatusBadge = (status: string) => {
   switch (status.toUpperCase()) {

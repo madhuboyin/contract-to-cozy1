@@ -33,7 +33,7 @@ export default function ResolveRecallModal({ open, onClose, onSubmit }: Props) {
       <div className="w-full max-w-lg rounded-2xl bg-white p-4 shadow-lg">
         <div className="flex items-center justify-between">
           <h2 className="text-base font-semibold">Resolve recall</h2>
-          <button className="inline-flex min-h-[44px] items-center text-sm text-slate-600 hover:text-slate-900" onClick={onClose}>
+          <button className="inline-flex min-h-[44px] items-center text-sm text-slate-600 hover:text-slate-900 active:opacity-70" onClick={onClose}>
             Close
           </button>
         </div>

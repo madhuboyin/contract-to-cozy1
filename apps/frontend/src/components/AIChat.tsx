@@ -90,7 +90,7 @@ const AIChatInner: React.FC = () => {
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
-    const isMobileViewport = () => window.innerWidth < 1024;
+    const isMobileViewport = () => window.matchMedia('(max-width: 1023px)').matches;
     const isFocusableField = (target: EventTarget | null) => {
       if (!(target instanceof HTMLElement)) return false;
       if (launcherRef.current?.contains(target)) return false;
@@ -126,7 +126,7 @@ const AIChatInner: React.FC = () => {
     const viewport = window.visualViewport;
 
     const handleViewportChange = () => {
-      if (window.innerWidth >= 1024) {
+      if (window.matchMedia('(min-width: 1024px)').matches) {
         setIsKeyboardVisible(false);
         return;
       }
@@ -267,7 +267,7 @@ const AIChatInner: React.FC = () => {
   };
 
   const showTooltipWithDelay = () => {
-    if (typeof window !== 'undefined' && window.innerWidth < 1024) return;
+    if (typeof window !== 'undefined' && window.matchMedia('(max-width: 1023px)').matches) return;
     if (tooltipTimerRef.current) clearTimeout(tooltipTimerRef.current);
     tooltipTimerRef.current = setTimeout(() => setShowTooltip(true), 500);
   };
@@ -344,7 +344,7 @@ const AIChatInner: React.FC = () => {
 
         {isOpen && (
           <div className={cn(
-              "mt-3 bg-white rounded-2xl shadow-2xl w-[min(350px,calc(100vw-1.5rem))] md:w-[400px] flex flex-col overflow-hidden border border-stone-200 h-[min(500px,70vh)] sm:h-[500px]",
+              "mt-3 bg-white rounded-2xl shadow-2xl w-[min(350px,calc(100vw-1.5rem))] md:w-[400px] flex flex-col overflow-hidden border border-stone-200 h-[min(500px,70dvh)] sm:h-[500px]",
               "animate-in fade-in slide-in-from-bottom-10 duration-300"
           )}>
             {/* Header */}

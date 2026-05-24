@@ -13,6 +13,7 @@ import { useNotifications } from '@/lib/notifications/NotificationContext';
 import { CtcCommandSearch } from './CtcCommandSearch';
 import { CtcPropertySelector } from './CtcPropertySelector';
 import { SetupGuideButton } from './SetupGuideButton';
+import { ScrollFadeX } from '@/components/ui/ScrollFadeX';
 import { getOnboardingStatus } from '@/lib/api/onboardingApi';
 
 interface CtcTopCommandBarProps {
@@ -181,7 +182,8 @@ export function CtcTopCommandBar({ className }: CtcTopCommandBarProps) {
             </Link>
 
             {/* Property selector inline — scrolls horizontally in remaining space */}
-            <div className="flex-1 min-w-0 overflow-x-auto scrollbar-hide">
+            <ScrollFadeX className="flex-1 min-w-0">
+            <div className="overflow-x-auto scrollbar-hide">
               <CtcPropertySelector
                 propertyAddress={propertyAddress}
                 properties={properties}
@@ -191,6 +193,7 @@ export function CtcTopCommandBar({ className }: CtcTopCommandBarProps) {
                 className="shrink-0 text-xs"
               />
             </div>
+            </ScrollFadeX>
 
             {/* Right Actions */}
             <div className="flex items-center gap-1.5 shrink-0">

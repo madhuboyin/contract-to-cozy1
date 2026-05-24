@@ -34,14 +34,14 @@ export function OfflineBanner() {
   return (
     <>
       {!isOnline ? (
-        <div className="fixed top-0 left-0 right-0 bg-red-500 text-white px-4 py-3 text-center text-sm font-medium z-[60] shadow-lg animate-in slide-in-from-top duration-300">
+        <div className="fixed top-0 left-0 right-0 bg-red-500 text-white px-4 pt-[calc(env(safe-area-inset-top)+0.75rem)] pb-3 text-center text-sm font-medium z-[60] shadow-lg animate-in slide-in-from-top duration-300">
           <div className="flex items-center justify-center gap-2">
             <WifiOff className="h-4 w-4 animate-pulse" />
             <span>You&apos;re offline. Changes will sync when reconnected.</span>
           </div>
         </div>
       ) : wasOffline ? (
-        <div className="fixed top-0 left-0 right-0 bg-green-500 text-white px-4 py-3 text-center text-sm font-medium z-[60] shadow-lg animate-in slide-in-from-top duration-300">
+        <div className="fixed top-0 left-0 right-0 bg-green-500 text-white px-4 pt-[calc(env(safe-area-inset-top)+0.75rem)] pb-3 text-center text-sm font-medium z-[60] shadow-lg animate-in slide-in-from-top duration-300">
           <div className="flex items-center justify-center gap-2">
             <Wifi className="h-4 w-4" />
             <span>Back online! Syncing your changes...</span>
@@ -60,7 +60,7 @@ export function SlowConnectionBanner() {
   if (!isSlowConnection || dismissed) return null;
 
   return (
-    <div className="fixed top-0 left-0 right-0 bg-yellow-500 text-white px-4 py-2 text-center text-sm font-medium z-[59] shadow-md">
+    <div className="fixed top-0 left-0 right-0 bg-yellow-500 text-white px-4 pt-[calc(env(safe-area-inset-top)+0.5rem)] pb-2 text-center text-sm font-medium z-[59] shadow-md">
       <div className="flex items-center justify-center gap-2">
         <AlertCircle className="h-4 w-4" />
         <span>Slow connection detected. Some features may be limited.</span>

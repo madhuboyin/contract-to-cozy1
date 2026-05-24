@@ -33,10 +33,11 @@ export function GuidanceDrawer({ propertyId, action, open, onOpenChange }: Guida
   const journeyDetail = useJourney(propertyId, open && action ? action.journeyId : null);
 
   useEffect(() => {
-    const update = () => setIsMobile(window.innerWidth < 1024);
+    const mq = window.matchMedia('(max-width: 1023px)');
+    const update = () => setIsMobile(mq.matches);
     update();
-    window.addEventListener('resize', update);
-    return () => window.removeEventListener('resize', update);
+    mq.addEventListener('change', update);
+    return () => mq.removeEventListener('change', update);
   }, []);
 
   // Derive step/journey fields before early return so all hooks are called unconditionally.

@@ -1,9 +1,18 @@
-const CACHE_NAME = 'c2c-v1.1.1';
+const CACHE_NAME = 'c2c-v1.2.0';
 
 // Only cache immutable Next.js static chunks — never HTML, RSC, or API responses.
 function isImmutableAsset(url) {
   const path = new URL(url).pathname;
   return path.startsWith('/_next/static/');
+}
+
+// Prune oldest entries when a cache exceeds maxEntries.
+async function trimCache(cacheName, maxEntries) {
+  const cache = await caches.open(cacheName);
+  const keys = await cache.keys();
+  if (keys.length > maxEntries) {
+    await Promise.all(keys.slice(0, keys.length - maxEntries).map((k) => cache.delete(k)));
+  }
 }
 
 // Install — nothing to precache, just activate immediately.
@@ -51,7 +60,10 @@ self.addEventListener('fetch', (event) => {
         return fetch(event.request).then((response) => {
           if (response.ok) {
             const clone = response.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+            caches.open(CACHE_NAME).then((cache) => {
+              cache.put(event.request, clone);
+              trimCache(CACHE_NAME, 200);
+            });
           }
           return response;
         });
@@ -77,7 +89,10 @@ self.addEventListener('fetch', (event) => {
       .then((response) => {
         if (response.ok) {
           const clone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+          caches.open(CACHE_NAME).then((cache) => {
+            cache.put(event.request, clone);
+            trimCache(CACHE_NAME, 60);
+          });
         }
         return response;
       })

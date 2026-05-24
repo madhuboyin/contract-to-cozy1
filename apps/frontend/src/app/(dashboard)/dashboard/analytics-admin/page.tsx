@@ -48,6 +48,7 @@ import {
 } from '@/components/admin-analytics/AdminAnalyticsSkeleton';
 import type { AdminAnalyticsFilters } from '@/lib/api/adminAnalytics';
 import { AdminAccessState, AdminConsoleShell, AdminRouteState, useAdminOnlineStatus } from '@/components/ops/AdminConsoleShell';
+import { ScrollFadeX } from '@/components/ui/ScrollFadeX';
 
 // ============================================================================
 // HELPERS
@@ -606,6 +607,7 @@ function AhaJourneySection({
         />
       </div>
 
+      <ScrollFadeX>
       <div className="overflow-x-auto">
         <Table>
           <TableHeader>
@@ -638,6 +640,7 @@ function AhaJourneySection({
           </TableBody>
         </Table>
       </div>
+      </ScrollFadeX>
     </Section>
   );
 }
@@ -718,6 +721,7 @@ function FeatureAdoptionTable({
           No feature activity found for this date range.
         </div>
       ) : (
+        <ScrollFadeX>
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>
@@ -762,6 +766,7 @@ function FeatureAdoptionTable({
             </TableBody>
           </Table>
         </div>
+        </ScrollFadeX>
       )}
     </Section>
   );
@@ -806,6 +811,7 @@ function TopToolsTable({
           No tool usage data for this period.
         </div>
       ) : (
+        <ScrollFadeX>
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>
@@ -836,6 +842,7 @@ function TopToolsTable({
             </TableBody>
           </Table>
         </div>
+        </ScrollFadeX>
       )}
     </Section>
   );
@@ -905,6 +912,7 @@ function CohortTable({ enabled }: { enabled: boolean }) {
           Not enough data yet to show cohort retention. Cohorts build over time.
         </div>
       ) : (
+        <ScrollFadeX>
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
             <thead>
@@ -956,6 +964,7 @@ function CohortTable({ enabled }: { enabled: boolean }) {
             </tbody>
           </table>
         </div>
+        </ScrollFadeX>
       )}
     </Section>
   );

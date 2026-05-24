@@ -400,6 +400,7 @@ export default function ProfilePage() {
                     <Input
                       type="text"
                       name="firstName"
+                      autoComplete="given-name"
                       value={formData.firstName}
                       onChange={handleChange}
                       className={inputClass}
@@ -416,6 +417,7 @@ export default function ProfilePage() {
                     <Input
                       type="text"
                       name="lastName"
+                      autoComplete="family-name"
                       value={formData.lastName}
                       onChange={handleChange}
                       className={inputClass}

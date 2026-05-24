@@ -56,22 +56,66 @@ interface SheetContentProps
 const SheetContent = React.forwardRef<
   React.ElementRef<typeof SheetPrimitive.Content>,
   SheetContentProps
->(({ side = "right", className, children, ...props }, ref) => (
-  <SheetPortal>
-    <SheetOverlay />
-    <SheetPrimitive.Content
-      ref={ref}
-      className={cn(sheetVariants({ side }), className)}
-      {...props}
-    >
-      <SheetPrimitive.Close className="absolute right-3 top-3 h-11 w-11 inline-flex items-center justify-center rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-secondary touch-manipulation">
-        <X className="h-4 w-4" />
-        <span className="sr-only">Close</span>
-      </SheetPrimitive.Close>
-      {children}
-    </SheetPrimitive.Content>
-  </SheetPortal>
-))
+>(({ side = "right", className, children, ...props }, ref) => {
+  const closeRef = React.useRef<HTMLButtonElement>(null);
+  const dragStartY = React.useRef<number | null>(null);
+  const [dragOffset, setDragOffset] = React.useState(0);
+
+  const handlePointerDown = React.useCallback(
+    (e: React.PointerEvent) => {
+      if (side !== "bottom") return;
+      dragStartY.current = e.clientY;
+    },
+    [side]
+  );
+
+  const handlePointerMove = React.useCallback((e: React.PointerEvent) => {
+    if (dragStartY.current === null) return;
+    setDragOffset(Math.max(0, e.clientY - dragStartY.current));
+  }, []);
+
+  const handlePointerUp = React.useCallback((e: React.PointerEvent) => {
+    if (dragStartY.current === null) return;
+    const delta = e.clientY - dragStartY.current;
+    dragStartY.current = null;
+    setDragOffset(0);
+    if (delta > 80) closeRef.current?.click();
+  }, []);
+
+  return (
+    <SheetPortal>
+      <SheetOverlay />
+      <SheetPrimitive.Content
+        ref={ref}
+        className={cn(sheetVariants({ side }), className)}
+        style={
+          side === "bottom" && dragOffset > 0
+            ? { transform: `translateY(${dragOffset}px)`, transition: "none" }
+            : undefined
+        }
+        onPointerDown={side === "bottom" ? handlePointerDown : undefined}
+        onPointerMove={side === "bottom" ? handlePointerMove : undefined}
+        onPointerUp={side === "bottom" ? handlePointerUp : undefined}
+        {...props}
+      >
+        {side === "bottom" && (
+          <div
+            aria-hidden="true"
+            className="mx-auto mb-2 mt-1 h-1.5 w-10 rounded-full bg-muted-foreground/25"
+          />
+        )}
+        <SheetPrimitive.Close
+          ref={closeRef}
+          className="absolute right-3 top-3 h-11 w-11 inline-flex items-center justify-center rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-secondary touch-manipulation"
+        >
+          <X className="h-4 w-4" />
+          <span className="sr-only">Close</span>
+        </SheetPrimitive.Close>
+        {children}
+      </SheetPrimitive.Content>
+    </SheetPortal>
+  );
+})
 SheetContent.displayName = SheetPrimitive.Content.displayName
 
 const SheetHeader = ({

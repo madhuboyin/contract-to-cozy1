@@ -255,7 +255,7 @@ export default function SellHoldRentClient() {
       {error && (
         <div className="flex items-start gap-3 rounded-2xl border border-red-200/70 bg-red-50/85 p-3 backdrop-blur">
           <div className="flex-1 text-sm text-red-600">{error}</div>
-          <button onClick={() => loadSimulator(years)} className="shrink-0 text-sm font-medium text-red-700 hover:text-red-900">Retry</button>
+          <button onClick={() => loadSimulator(years)} className="shrink-0 text-sm font-medium text-red-700 hover:text-red-900 active:opacity-70">Retry</button>
         </div>
       )}
 

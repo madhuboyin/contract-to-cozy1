@@ -8,6 +8,7 @@ import Link from 'next/link';
 import { Camera, Calendar, LayoutDashboard, Menu, UserCircle2, Wrench, X } from 'lucide-react';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { resolveProviderNavigationIcon } from '@/lib/icons';
+import { ScrollFadeX } from '@/components/ui/ScrollFadeX';
 
 export default function ProviderDashboardLayout({
   children,
@@ -74,7 +75,7 @@ export default function ProviderDashboardLayout({
         <div className="mx-auto max-w-7xl px-4 py-2.5 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
-              <Link href="/providers/dashboard" className="text-base font-semibold text-slate-900 hover:text-brand-primary">
+              <Link href="/providers/dashboard" className="text-base font-semibold text-slate-900 hover:text-brand-primary active:opacity-70">
                 Contract to Cozy
               </Link>
               <div className="mt-0.5 flex items-center gap-1.5">
@@ -90,7 +91,7 @@ export default function ProviderDashboardLayout({
                 <button
                   type="button"
                   onClick={() => setIsAccountMenuOpen((open) => !open)}
-                  className="inline-flex h-10 items-center gap-2 rounded-full border border-slate-200 bg-white px-2.5 pr-3 text-sm text-slate-700 hover:bg-slate-50"
+                  className="inline-flex h-10 items-center gap-2 rounded-full border border-slate-200 bg-white px-2.5 pr-3 text-sm text-slate-700 hover:bg-slate-50 active:bg-slate-100"
                 >
                   <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-brand-primary text-xs font-semibold text-white">
                     {user.firstName?.charAt(0) || 'P'}
@@ -100,7 +101,7 @@ export default function ProviderDashboardLayout({
 
                 {isAccountMenuOpen ? (
                   <div className="absolute right-0 mt-2 w-48 rounded-xl border border-slate-200 bg-white p-1.5 shadow-lg">
-                    <Link href="/providers/profile" className="block rounded-lg px-3 py-2 text-sm text-slate-700 hover:bg-slate-50">
+                    <Link href="/providers/profile" className="block rounded-lg px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 active:bg-slate-100">
                       Profile
                     </Link>
                     <button
@@ -109,7 +110,7 @@ export default function ProviderDashboardLayout({
                         setIsAccountMenuOpen(false);
                         await logout();
                       }}
-                      className="mt-1 block w-full rounded-lg px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
+                      className="mt-1 block w-full rounded-lg px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 active:bg-slate-100"
                     >
                       Sign out
                     </button>
@@ -120,7 +121,7 @@ export default function ProviderDashboardLayout({
               <button
                 type="button"
                 onClick={() => setIsMobileNavOpen((open) => !open)}
-                className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 md:hidden"
+                className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 active:bg-slate-100 md:hidden"
                 aria-label="Toggle provider navigation"
               >
                 {isMobileNavOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
@@ -128,6 +129,7 @@ export default function ProviderDashboardLayout({
             </div>
           </div>
 
+          <ScrollFadeX desktopHide={false}>
           <nav className="mt-2 hidden items-center gap-1.5 overflow-x-auto pb-1 md:flex">
             {navigation.map((item) => {
               const Icon = item.icon;
@@ -136,8 +138,8 @@ export default function ProviderDashboardLayout({
                 <Link
                   key={item.name}
                   href={item.href}
-                  className={`inline-flex min-h-[34px] items-center gap-1.5 rounded-md px-2.5 text-xs font-semibold tracking-normal transition-colors ${
-                    active ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                  className={`inline-flex min-h-[44px] items-center gap-1.5 rounded-md px-2.5 text-xs font-semibold tracking-normal transition-colors ${
+                    active ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200 active:bg-slate-300'
                   }`}
                 >
                   <Icon className="h-4 w-4" />
@@ -146,6 +148,7 @@ export default function ProviderDashboardLayout({
               );
             })}
           </nav>
+          </ScrollFadeX>
         </div>
 
         {isMobileNavOpen ? (
@@ -177,7 +180,7 @@ export default function ProviderDashboardLayout({
       <button
         type="button"
         onClick={handleCameraFabClick}
-        className="fixed bottom-6 right-4 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-brand-600 text-white shadow-lg shadow-brand-200/60 transition-transform active:scale-95 md:hidden"
+        className="fixed bottom-[calc(env(safe-area-inset-bottom)+1.5rem)] right-4 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-brand-600 text-white shadow-lg shadow-brand-200/60 transition-transform active:scale-95 md:hidden"
         aria-label="Open camera capture"
       >
         <Camera className="h-6 w-6" />

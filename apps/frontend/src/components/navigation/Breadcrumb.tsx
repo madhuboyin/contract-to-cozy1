@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { ScrollFadeX } from '@/components/ui/ScrollFadeX';
 
 type Crumb = {
   label: string;
@@ -7,6 +8,7 @@ type Crumb = {
 
 export function Breadcrumb({ items }: { items: Crumb[] }) {
   return (
+    <ScrollFadeX>
     <nav aria-label="Breadcrumb" className="overflow-x-auto text-sm text-muted-foreground">
       <ol className="flex min-w-max items-center space-x-2">
         {items.map((item, idx) => (
@@ -15,7 +17,7 @@ export function Breadcrumb({ items }: { items: Crumb[] }) {
             {item.href ? (
               <Link
                 href={item.href}
-                className="whitespace-nowrap hover:text-gray-900 transition-colors"
+                className="whitespace-nowrap hover:text-gray-900 active:opacity-70 transition-colors"
               >
                 {item.label}
               </Link>
@@ -28,5 +30,6 @@ export function Breadcrumb({ items }: { items: Crumb[] }) {
         ))}
       </ol>
     </nav>
+    </ScrollFadeX>
   );
 }

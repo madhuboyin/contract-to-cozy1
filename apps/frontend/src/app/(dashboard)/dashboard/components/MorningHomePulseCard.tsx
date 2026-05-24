@@ -1,5 +1,6 @@
 'use client';
 
+import dynamic from 'next/dynamic';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
@@ -28,7 +29,6 @@ import {
 import { Button } from '@/components/ui/button';
 import { ScoreRing } from '@/components/dashboard/ScoreRing';
 import humanizeActionType from '@/lib/utils/humanize';
-import LottieBadge from '@/components/ui/LottieBadge';
 import {
   snowflakePulseAnimation,
 } from '@/components/animations/lottieData';
@@ -37,6 +37,8 @@ import { track } from '@/lib/analytics/events';
 import type { CtcTool } from '@/lib/analytics/events';
 import { api } from '@/lib/api/client';
 import { listPropertyRecalls } from '../properties/[id]/recalls/recallsApi';
+
+const LottieBadge = dynamic(() => import('@/components/ui/LottieBadge'), { ssr: false });
 
 type MorningHomePulseCardProps = {
   propertyId?: string;

@@ -1,5 +1,5 @@
 .canvas {
-  min-height: 100vh;
+  min-height: 100dvh;
   background: #060a17;
   color: #e8eefc;
 }
@@ -7,7 +7,7 @@
 .hero {
   position: relative;
   overflow: hidden;
-  min-height: min(92vh, 820px);
+  min-height: min(92dvh, 820px);
   background:
     radial-gradient(1000px 520px at 12% -8%, rgba(8, 145, 178, 0.42), transparent 58%),
     radial-gradient(720px 400px at 88% 10%, rgba(45, 212, 191, 0.24), transparent 62%),

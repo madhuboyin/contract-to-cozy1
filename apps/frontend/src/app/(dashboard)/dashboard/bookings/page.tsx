@@ -2,12 +2,12 @@
 
 'use client';
 
+import dynamic from 'next/dynamic';
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/api/client';
 import { Booking, BookingStatus, CreateBookingInput } from '@/types';
 import { CalendarClock, Edit, Eye, House, XCircle } from 'lucide-react';
-import LottieBadge from '@/components/ui/LottieBadge';
 import { housePulseAnimation } from '@/components/animations/lottieData';
 import { formatEnumLabel } from '@/lib/utils/formatters';
 import { cn } from '@/lib/utils';
@@ -21,6 +21,8 @@ import {
   MobilePageIntro,
   MobileToolWorkspace,
 } from '@/components/mobile/dashboard/MobilePrimitives';
+
+const LottieBadge = dynamic(() => import('@/components/ui/LottieBadge'), { ssr: false });
 
 interface EditFormData {
   scheduledDate: string;
