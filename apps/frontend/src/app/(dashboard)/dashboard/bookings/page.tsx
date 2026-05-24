@@ -583,8 +583,8 @@ export default function HomeownerBookingsPage() {
       </MobileToolWorkspace>
 
       {showEditModal && editingBooking && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black bg-opacity-50 p-2 sm:items-center sm:p-4">
-          <div className="max-h-[80dvh] w-full max-w-2xl overflow-y-auto rounded-lg bg-white sm:max-h-[90dvh]">
+        <div className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto bg-black bg-opacity-50 p-0 sm:items-center sm:p-4">
+          <div className="max-h-[90dvh] w-full max-w-2xl overflow-y-auto rounded-t-xl bg-white sm:max-h-[90dvh] sm:rounded-xl">
             <div className="p-4 sm:p-6">
               <div className="mb-4 flex items-center justify-between sm:mb-6">
                 <h2 className="text-xl font-bold text-gray-900 sm:text-2xl">Edit Booking</h2>
@@ -668,8 +668,8 @@ export default function HomeownerBookingsPage() {
       )}
 
       {showCancelModal && cancellingBooking && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black bg-opacity-50 p-2 sm:items-center sm:p-4">
-          <div className="max-h-[80dvh] w-full max-w-md overflow-y-auto rounded-lg bg-white sm:max-h-[90dvh]">
+        <div className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto bg-black bg-opacity-50 p-0 sm:items-center sm:p-4">
+          <div className="max-h-[90dvh] w-full max-w-md overflow-y-auto rounded-t-xl bg-white sm:max-h-[90dvh] sm:rounded-xl">
             <div className="p-4 sm:p-6">
               <div className="mb-4 flex items-center justify-between sm:mb-6">
                 <h2 className="text-xl font-bold text-gray-900 sm:text-2xl">Cancel Booking</h2>

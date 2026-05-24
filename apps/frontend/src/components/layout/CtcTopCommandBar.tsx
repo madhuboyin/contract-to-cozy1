@@ -86,8 +86,11 @@ function NotificationsButton() {
       )}
     >
       <Bell className="h-5 w-5 text-slate-600" />
+      <span aria-live="polite" aria-atomic="true" className="sr-only">
+        {unreadCount > 0 ? `${unreadCount} unread notification${unreadCount > 1 ? 's' : ''}` : ''}
+      </span>
       {unreadCount > 0 && (
-        <span className="absolute -top-1 -right-1 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-500 px-1.5 text-[11px] font-bold text-white">
+        <span className="absolute -top-1 -right-1 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-500 px-1.5 text-[11px] font-bold text-white" aria-hidden="true">
           {unreadCount > 9 ? '9+' : unreadCount}
         </span>
       )}

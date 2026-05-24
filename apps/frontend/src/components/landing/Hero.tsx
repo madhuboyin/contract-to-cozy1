@@ -21,7 +21,7 @@ export default function Hero() {
 
   return (
     <div className="relative w-full overflow-hidden bg-white">
-      <nav className="sticky top-0 z-50 border-b border-slate-200/80 bg-white/92 backdrop-blur">
+      <nav className="fixed top-0 left-0 right-0 z-50 border-b border-slate-200/80 bg-white/92 backdrop-blur">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6 lg:px-8">
           <Link href="/" className="no-brand-style inline-flex items-center gap-2 text-slate-900">
             <BrandIcon className="h-6 w-6 text-brand-primary" />
@@ -51,7 +51,7 @@ export default function Hero() {
 
           <button
             onClick={() => setIsMenuOpen((prev) => !prev)}
-            className="rounded-lg p-2 text-slate-600 hover:bg-slate-100 md:hidden"
+            className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg text-slate-600 hover:bg-slate-100 md:hidden"
             aria-label="Toggle navigation"
           >
             {isMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
@@ -60,20 +60,20 @@ export default function Hero() {
 
         {isMenuOpen ? (
           <div className="border-t border-slate-200 bg-white md:hidden">
-            <div className="space-y-3 px-4 py-5">
-              <button onClick={() => scrollToSection('features')} className="block w-full text-left text-sm font-medium text-slate-700">
+            <div className="space-y-1 px-4 py-4">
+              <button onClick={() => scrollToSection('features')} className="flex min-h-[44px] w-full items-center text-left text-sm font-medium text-slate-700">
                 Product
               </button>
-              <button onClick={() => scrollToSection('how-it-works')} className="block w-full text-left text-sm font-medium text-slate-700">
+              <button onClick={() => scrollToSection('how-it-works')} className="flex min-h-[44px] w-full items-center text-left text-sm font-medium text-slate-700">
                 How it works
               </button>
-              <button onClick={() => scrollToSection('calculator')} className="block w-full text-left text-sm font-medium text-slate-700">
+              <button onClick={() => scrollToSection('calculator')} className="flex min-h-[44px] w-full items-center text-left text-sm font-medium text-slate-700">
                 Savings
               </button>
-              <Link href="/providers/join" onClick={() => setIsMenuOpen(false)} className="block text-sm font-medium text-slate-700">
+              <Link href="/providers/join" onClick={() => setIsMenuOpen(false)} className="flex min-h-[44px] items-center text-sm font-medium text-slate-700">
                 For providers
               </Link>
-              <Link href="/login" onClick={() => setIsMenuOpen(false)} className="block text-sm font-medium text-slate-700">
+              <Link href="/login" onClick={() => setIsMenuOpen(false)} className="flex min-h-[44px] items-center text-sm font-medium text-slate-700">
                 Sign in
               </Link>
               <Link
@@ -88,6 +88,7 @@ export default function Hero() {
         ) : null}
       </nav>
 
+      <div className="pt-16">
       <MarketingHeroTemplate
         eyebrow="Homeowner confidence, minus the guesswork"
         title={
@@ -114,6 +115,7 @@ export default function Hero() {
           },
         ]}
       />
+      </div>
     </div>
   );
 }

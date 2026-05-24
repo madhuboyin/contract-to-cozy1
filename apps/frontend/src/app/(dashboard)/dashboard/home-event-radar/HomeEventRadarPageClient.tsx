@@ -291,7 +291,7 @@ function normalizeLaunchSurface(value: string | null): RadarLaunchSurface {
 
 function deviceContext(): 'mobile' | 'desktop' {
   if (typeof window === 'undefined') return 'desktop';
-  return window.matchMedia('(max-width: 767px)').matches ? 'mobile' : 'desktop';
+  return window.matchMedia('(max-width: 1023px)').matches ? 'mobile' : 'desktop';
 }
 
 function eventCountBucket(n: number): '0' | '1' | '2_5' | '6_10' | '10_plus' {

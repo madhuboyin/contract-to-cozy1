@@ -47,10 +47,10 @@ export default async function KnowledgeHubPage({
           </Link>
           <div className="max-w-[56rem] space-y-4">
             <div className="flex flex-wrap items-center gap-2.5">
-              <Badge className="rounded-full bg-slate-950 px-3 py-1 text-[9px] font-semibold tracking-normal text-white hover:bg-slate-950">
+              <Badge className="rounded-full bg-slate-950 px-3 py-1 text-[11px] font-semibold tracking-normal text-white hover:bg-slate-950">
                 Knowledge Hub
               </Badge>
-              <Badge variant="outline" className="rounded-full border-slate-200 bg-white/70 px-3 py-1 text-[9px] font-semibold tracking-normal text-slate-500">
+              <Badge variant="outline" className="rounded-full border-slate-200 bg-white/70 px-3 py-1 text-[11px] font-semibold tracking-normal text-slate-500">
                 Homeowner guidance
               </Badge>
             </div>

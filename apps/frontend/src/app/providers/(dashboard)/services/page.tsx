@@ -449,10 +449,10 @@ export default function ProviderServicesPage() {
 
       {(showAddModal || showEditModal) ? (
         <div className="fixed inset-0 z-50 overflow-y-auto">
-          <div className="flex min-h-screen items-center justify-center p-3 sm:p-4">
+          <div className="flex min-h-[100dvh] items-end justify-center p-0 sm:items-center sm:p-4">
             <div className="fixed inset-0 bg-black/50" onClick={handleCloseModal} />
 
-            <div className="relative max-h-[90dvh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-xl">
+            <div className="relative max-h-[92dvh] w-full max-w-2xl overflow-y-auto rounded-t-2xl rounded-b-none border border-slate-200 bg-white shadow-xl sm:rounded-2xl">
               <div className="sticky top-0 z-10 border-b border-slate-200 bg-white px-5 py-4">
                 <div className="flex items-center justify-between gap-3">
                   <h2 className="text-lg font-semibold text-slate-900">
@@ -569,7 +569,8 @@ export default function ProviderServicesPage() {
                       step="0.01"
                       min="0"
                       placeholder="0.00"
-                      className="h-11 w-full rounded-lg border border-slate-300 px-3 text-sm focus:border-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-primary/20"
+                      inputMode="decimal"
+                      className="h-11 w-full rounded-lg border border-slate-300 px-3 text-base md:text-sm focus:border-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-primary/20"
                     />
                   </div>
 
@@ -599,7 +600,8 @@ export default function ProviderServicesPage() {
                       step="0.01"
                       min="0"
                       placeholder="Optional"
-                      className="h-11 w-full rounded-lg border border-slate-300 px-3 text-sm focus:border-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-primary/20"
+                      inputMode="decimal"
+                      className="h-11 w-full rounded-lg border border-slate-300 px-3 text-base md:text-sm focus:border-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-primary/20"
                     />
                   </div>
 
@@ -612,7 +614,8 @@ export default function ProviderServicesPage() {
                       onChange={handleInputChange}
                       min="0"
                       placeholder="Optional"
-                      className="h-11 w-full rounded-lg border border-slate-300 px-3 text-sm focus:border-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-primary/20"
+                      inputMode="numeric"
+                      className="h-11 w-full rounded-lg border border-slate-300 px-3 text-base md:text-sm focus:border-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-primary/20"
                     />
                   </div>
                 </div>
@@ -652,10 +655,10 @@ export default function ProviderServicesPage() {
 
       {showDeleteConfirm && deletingService ? (
         <div className="fixed inset-0 z-50 overflow-y-auto">
-          <div className="flex min-h-screen items-center justify-center p-4">
+          <div className="flex min-h-[100dvh] items-end justify-center p-0 sm:items-center sm:p-4">
             <div className="fixed inset-0 bg-black/50" onClick={handleDeleteCancel} />
 
-            <div className="relative w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-xl">
+            <div className="relative w-full max-w-md rounded-t-2xl rounded-b-none border border-slate-200 bg-white p-5 shadow-xl sm:rounded-2xl">
               <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-rose-100">
                 <svg className="h-5 w-5 text-rose-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path

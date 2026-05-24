@@ -72,7 +72,7 @@ export function KnowledgeToolCard({ toolLink, propertyId, variant = 'compact' }:
               <Badge
                 variant="outline"
                 className={cn(
-                  'rounded-full border-slate-200 bg-white/80 px-2.5 py-1 text-[9px] font-semibold tracking-normal text-slate-500',
+                  'rounded-full border-slate-200 bg-white/80 px-2.5 py-1 text-[11px] font-semibold tracking-normal text-slate-500',
                   isFeature && 'border-teal-100 bg-white/80 text-teal-900'
                 )}
               >

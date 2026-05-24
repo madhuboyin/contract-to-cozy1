@@ -662,6 +662,7 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
                     alt="ContractToCozy"
                     width={24}
                     height={24}
+                    sizes="24px"
                     className="h-6 w-6 flex-shrink-0"
                     priority
                   />

@@ -1,5 +1,6 @@
 'use client';
 
+import 'react-circular-progressbar/dist/styles.css';
 import React from 'react';
 import {
   Tooltip,

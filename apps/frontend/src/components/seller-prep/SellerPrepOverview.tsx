@@ -169,17 +169,17 @@ export default function SellerPrepOverview({
       <div className="lg:col-span-8 space-y-6">
         <Tabs defaultValue="checklist" className="w-full">
           {/* Layout Fix: Single row grid-cols-4 */}
-          <TabsList className="grid w-full grid-cols-4 mb-6 h-auto p-1 bg-muted/50">
-            <TabsTrigger value="checklist" className="flex items-center gap-2 text-xs md:text-sm py-2 px-1">
+          <TabsList className="no-scrollbar mb-6 flex h-auto overflow-x-auto p-1 bg-muted/50 md:grid md:w-full md:grid-cols-4">
+            <TabsTrigger value="checklist" className="flex shrink-0 items-center gap-2 text-xs md:text-sm py-2 px-3 md:px-1">
               <Hammer className="h-4 w-4 hidden sm:inline" /> <span>Tasks</span>
             </TabsTrigger>
-            <TabsTrigger value="financials" className="flex items-center gap-2 text-xs md:text-sm py-2 px-1">
+            <TabsTrigger value="financials" className="flex shrink-0 items-center gap-2 text-xs md:text-sm py-2 px-3 md:px-1">
               <DollarSign className="h-4 w-4 hidden sm:inline" /> <span>Finance</span>
             </TabsTrigger>
-            <TabsTrigger value="market" className="flex items-center gap-2 text-xs md:text-sm py-2 px-1">
+            <TabsTrigger value="market" className="flex shrink-0 items-center gap-2 text-xs md:text-sm py-2 px-3 md:px-1">
               <TrendingUp className="h-4 w-4 hidden sm:inline" /> <span>Market</span>
             </TabsTrigger>
-            <TabsTrigger value="agents" className="flex items-center gap-2 text-xs md:text-sm py-2 px-1">
+            <TabsTrigger value="agents" className="flex shrink-0 items-center gap-2 text-xs md:text-sm py-2 px-3 md:px-1">
               <Users className="h-4 w-4 hidden sm:inline" /> <span>Agents</span>
             </TabsTrigger>
           </TabsList>

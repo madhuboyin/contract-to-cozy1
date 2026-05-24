@@ -107,14 +107,7 @@
         "purpose": "maskable"
       }
     ],
-    "screenshots": [
-      {
-        "src": "/screenshots/dashboard.png",
-        "sizes": "1080x2340",
-        "type": "image/png",
-        "form_factor": "narrow"
-      }
-    ],
+    "screenshots": [],
     "shortcuts": [
       {
         "name": "Dashboard",

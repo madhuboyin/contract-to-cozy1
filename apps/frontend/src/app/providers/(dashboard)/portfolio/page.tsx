@@ -83,7 +83,7 @@ export default function ProviderPortfolioPage() {
           {portfolioItems.map((item) => (
             <MobileCard key={item.id} variant="compact" className="overflow-hidden p-0">
               <div className="relative aspect-video bg-slate-100">
-                <Image src={item.imageUrl} alt={item.title} fill className="object-cover" />
+                <Image src={item.imageUrl} alt={item.title} fill sizes="(max-width: 1023px) 100vw, 50vw" className="object-cover" />
                 <div className="absolute left-3 top-3">
                   <StatusChip tone="info">{item.serviceCategory}</StatusChip>
                 </div>

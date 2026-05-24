@@ -1399,11 +1399,12 @@ useEffect(() => {
                       max={CURRENT_YEAR + 1}
                       step="1"
                       placeholder="e.g. 2019"
+                      inputMode="numeric"
                       value={installYear}
                       onChange={(e) => setInstallYear(e.target.value)}
                       required={category === 'APPLIANCE'}
                       className={[
-                        'w-full rounded-xl border px-3 py-2 text-sm',
+                        'w-full rounded-xl border px-3 py-2 text-base md:text-sm',
                         category === 'APPLIANCE' && !installYear ? 'border-red-300' : 'border-gray-200',
                       ].join(' ')}
                     />
@@ -1433,9 +1434,10 @@ useEffect(() => {
                     step="0.01"
                     min="0"
                     placeholder="0"
+                    inputMode="decimal"
                     value={purchaseCost}
                     onChange={(e) => setPurchaseCost(e.target.value)}
-                    className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm"
+                    className="w-full rounded-xl border border-gray-200 px-3 py-2 text-base md:text-sm"
                   />
                 </div>
 
@@ -1446,9 +1448,10 @@ useEffect(() => {
                     step="0.01"
                     min="0"
                     placeholder="0"
+                    inputMode="decimal"
                     value={replacementCost}
                     onChange={(e) => setReplacementCost(e.target.value)}
-                    className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm"
+                    className="w-full rounded-xl border border-gray-200 px-3 py-2 text-base md:text-sm"
                   />
                 </div>
               </div>

@@ -77,8 +77,8 @@ export default function DashboardShowcase() {
             </Link>
           </div>
 
-          {/* Right Column - Dashboard Mockup (Sleek internal padding) */}
-          <div className="relative">
+          {/* Right Column - Dashboard Mockup (desktop only; too dense to read at mobile widths) */}
+          <div className="relative hidden lg:block">
             {/* Reduced outer padding (p-8 to p-6) */}
             <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-6 shadow-xl border border-gray-200">
               {/* Mock Dashboard */}

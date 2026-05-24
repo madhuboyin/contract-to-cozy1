@@ -121,7 +121,7 @@ export default function SavingsCalculator() {
               <h3 className="text-lg font-semibold text-gray-900 mb-4 text-center">
                 Your Potential Savings
               </h3>
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="text-center p-3 bg-white rounded-lg shadow-sm">
                   <div className="text-2xl font-bold text-blue-600">${results.moneySaved}</div>
                   <div className="text-xs text-gray-600 mt-1">Money Saved</div>

@@ -5,7 +5,6 @@ import { Fraunces, Inter, Poppins } from 'next/font/google';
 import { headers } from 'next/headers';
 import { Providers } from './providers';
 import './globals.css';
-import 'react-circular-progressbar/dist/styles.css';
 
 // Inter for body text
 const inter = Inter({

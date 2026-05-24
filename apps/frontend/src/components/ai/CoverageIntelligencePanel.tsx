@@ -1023,7 +1023,7 @@ export default function CoverageIntelligencePanel({
               </div>
 
               {/* Compact metric strip */}
-              <dl className="mt-5 grid grid-cols-3 gap-1.5 xl:grid-cols-6">
+              <dl className="mt-5 grid grid-cols-2 sm:grid-cols-3 gap-1.5 xl:grid-cols-6">
                 {metricItems.map(({ label, value }) => (
                   <div key={label} className="rounded-lg border border-white/60 bg-white/70 px-3 py-2 shadow-sm">
                     <dt className="text-[11px] text-slate-400">{label}</dt>
@@ -1033,7 +1033,7 @@ export default function CoverageIntelligencePanel({
               </dl>
 
               {/* KPI tiles */}
-              <div className="mt-3 grid grid-cols-3 gap-3">
+              <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="rounded-xl border border-white/60 bg-white/75 p-4 shadow-sm">
                   <p className="text-xs font-medium text-slate-500">Expected Repair Cost</p>
                   <p className="mt-2 text-[1.6rem] font-semibold leading-none tracking-tight text-slate-900">

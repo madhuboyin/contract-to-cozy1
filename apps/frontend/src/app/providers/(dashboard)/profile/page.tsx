@@ -62,7 +62,7 @@ function TextField({
       value={value}
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
-      className="h-11 w-full rounded-lg border border-slate-300 px-3 text-sm text-slate-900 focus:border-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-primary/20"
+      className="h-11 w-full rounded-lg border border-slate-300 px-3 text-base md:text-sm text-slate-900 focus:border-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-primary/20"
     />
   );
 }
@@ -90,7 +90,7 @@ function TextAreaField({
       value={value}
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
-      className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm text-slate-900 focus:border-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-primary/20"
+      className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-base md:text-sm text-slate-900 focus:border-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-primary/20"
     />
   );
 }
@@ -399,7 +399,7 @@ export default function ProviderProfilePage() {
                       }
                     }}
                     placeholder="Add city or ZIP"
-                    className="h-11 flex-1 rounded-lg border border-slate-300 px-3 text-sm focus:border-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-primary/20"
+                    className="h-11 flex-1 rounded-lg border border-slate-300 px-3 text-base md:text-sm focus:border-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-primary/20"
                   />
                   <button
                     type="button"
@@ -558,9 +558,9 @@ export default function ProviderProfilePage() {
 
           <MobileCard variant="compact" className="space-y-3">
             <p className="mb-0 text-sm font-semibold text-slate-900">Change password</p>
-            <input type="password" autoComplete="current-password" placeholder="Current password" className="h-11 w-full rounded-lg border border-slate-300 px-3 text-sm focus:border-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-primary/20" />
-            <input type="password" autoComplete="new-password" placeholder="New password" className="h-11 w-full rounded-lg border border-slate-300 px-3 text-sm focus:border-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-primary/20" />
-            <input type="password" autoComplete="new-password" placeholder="Confirm new password" className="h-11 w-full rounded-lg border border-slate-300 px-3 text-sm focus:border-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-primary/20" />
+            <input type="password" autoComplete="current-password" placeholder="Current password" className="h-11 w-full rounded-lg border border-slate-300 px-3 text-base md:text-sm focus:border-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-primary/20" />
+            <input type="password" autoComplete="new-password" placeholder="New password" className="h-11 w-full rounded-lg border border-slate-300 px-3 text-base md:text-sm focus:border-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-primary/20" />
+            <input type="password" autoComplete="new-password" placeholder="Confirm new password" className="h-11 w-full rounded-lg border border-slate-300 px-3 text-base md:text-sm focus:border-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-primary/20" />
             <button className="inline-flex min-h-[44px] items-center rounded-lg bg-brand-primary px-3 text-sm font-semibold text-white hover:bg-brand-primary/90">
               Update password
             </button>

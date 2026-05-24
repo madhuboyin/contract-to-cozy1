@@ -120,7 +120,7 @@ export default async function KnowledgeArticlePage({ params, searchParams }: Kno
             <div className="max-w-[60rem] space-y-5">
               <div className="flex flex-wrap items-center gap-2.5">
                 {article.featured ? (
-                  <Badge className="rounded-full bg-slate-950 px-3 py-1 text-[9px] font-semibold tracking-normal text-white hover:bg-slate-950">
+                  <Badge className="rounded-full bg-slate-950 px-3 py-1 text-[11px] font-semibold tracking-normal text-white hover:bg-slate-950">
                     Featured article
                   </Badge>
                 ) : null}
@@ -128,7 +128,7 @@ export default async function KnowledgeArticlePage({ params, searchParams }: Kno
                   <Badge
                     key={category.slug}
                     variant="outline"
-                    className="rounded-full border-slate-200 bg-white/80 px-3 py-1 text-[9px] font-semibold tracking-normal text-slate-500"
+                    className="rounded-full border-slate-200 bg-white/80 px-3 py-1 text-[11px] font-semibold tracking-normal text-slate-500"
                   >
                     {category.name}
                   </Badge>
@@ -166,7 +166,7 @@ export default async function KnowledgeArticlePage({ params, searchParams }: Kno
                     <Badge
                       key={tag.slug}
                       variant="outline"
-                      className="rounded-full border-slate-200 bg-transparent px-2.5 py-1 text-[9px] font-medium tracking-normal text-slate-500"
+                      className="rounded-full border-slate-200 bg-transparent px-2.5 py-1 text-[11px] font-medium tracking-normal text-slate-500"
                     >
                       {tag.name}
                     </Badge>

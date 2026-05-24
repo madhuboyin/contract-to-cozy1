@@ -189,7 +189,7 @@ export function RepairReplaceGate({
 
         {/* Key metrics */}
         {(repairCost || replaceCost || displayAnalysis.remainingYears != null) && (
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
             {repairCost != null && (
               <div className="rounded-lg border border-[hsl(var(--mobile-border-subtle))] bg-white p-2 text-center">
                 <p className="text-xs text-[hsl(var(--mobile-text-muted))]">Est. repair</p>

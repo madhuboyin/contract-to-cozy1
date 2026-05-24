@@ -1301,17 +1301,17 @@ export default function WarrantiesPage() {
                 </div>
               </div>
               <div className="grid grid-cols-3 divide-x divide-slate-200 rounded-2xl border border-slate-200/90 bg-[linear-gradient(135deg,rgba(15,118,110,0.06),rgba(245,158,11,0.08),rgba(239,68,68,0.06))] overflow-hidden">
-                <div className="px-3 py-2.5">
-                  <p className="text-[11px] tracking-normal text-teal-700">Active</p>
-                  <p className="text-lg font-semibold text-slate-900">{activeWarrantyCount}</p>
+                <div className="px-2 py-2 sm:px-3 sm:py-2.5 text-center sm:text-left">
+                  <p className="text-[10px] sm:text-[11px] tracking-normal text-teal-700">Active</p>
+                  <p className="text-base sm:text-lg font-semibold text-slate-900">{activeWarrantyCount}</p>
                 </div>
-                <div className="px-3 py-2.5">
-                  <p className="text-[11px] tracking-normal text-amber-700">Expiring</p>
-                  <p className="text-lg font-semibold text-slate-900">{expiringSoonWarrantyCount}</p>
+                <div className="px-2 py-2 sm:px-3 sm:py-2.5 text-center sm:text-left">
+                  <p className="text-[10px] sm:text-[11px] tracking-normal text-amber-700">Expiring</p>
+                  <p className="text-base sm:text-lg font-semibold text-slate-900">{expiringSoonWarrantyCount}</p>
                 </div>
-                <div className="px-3 py-2.5">
-                  <p className="text-[11px] tracking-normal text-rose-700">Expired</p>
-                  <p className="text-lg font-semibold text-slate-900">{expiredWarrantyCount}</p>
+                <div className="px-2 py-2 sm:px-3 sm:py-2.5 text-center sm:text-left">
+                  <p className="text-[10px] sm:text-[11px] tracking-normal text-rose-700">Expired</p>
+                  <p className="text-base sm:text-lg font-semibold text-slate-900">{expiredWarrantyCount}</p>
                 </div>
               </div>
               <p className="text-sm text-slate-600">

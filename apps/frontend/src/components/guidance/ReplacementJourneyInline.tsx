@@ -292,7 +292,7 @@ function AIVendorCard({
       </div>
 
       {/* Editable price fields */}
-      <div className="mt-3 grid grid-cols-3 gap-2">
+      <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-2">
         <label className="space-y-1">
           <span className="text-[11px] font-medium text-slate-500">Unit price</span>
           <div className="relative">
@@ -925,7 +925,7 @@ export function ReplacementJourneyInline({
                         className="h-9 w-full rounded-lg border border-black/10 bg-white px-3 text-sm"
                       />
                     </label>
-                    <div className="grid grid-cols-3 gap-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                       <label className="space-y-1">
                         <span className="text-[11px] font-medium text-slate-500">Unit price</span>
                         <input

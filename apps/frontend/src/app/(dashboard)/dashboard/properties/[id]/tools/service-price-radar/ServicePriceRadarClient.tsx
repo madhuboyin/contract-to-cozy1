@@ -273,7 +273,7 @@ function confidenceBand(score: number | null | undefined): 'low' | 'medium' | 'h
 
 function deviceContext(): 'mobile' | 'desktop' {
   if (typeof window === 'undefined') return 'desktop';
-  return window.matchMedia('(max-width: 767px)').matches ? 'mobile' : 'desktop';
+  return window.matchMedia('(max-width: 1023px)').matches ? 'mobile' : 'desktop';
 }
 
 function errorType(error: unknown): 'network' | 'validation' | 'unauthorized' | 'unknown' {

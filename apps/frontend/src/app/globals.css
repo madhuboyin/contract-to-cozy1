@@ -722,11 +722,30 @@ html {
   [class*="transition"] {
     transition-duration: 0.01ms !important;
   }
+  /* Framer Motion respects this — also zero out any lingering transform/opacity transitions
+     on elements that framer-motion targets via inline style */
+  [style*="transform"],
+  [style*="opacity"] {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
 }
 
 /* Prevent scroll chaining out of horizontal carousels on iOS */
 .snap-x {
   overscroll-behavior-x: contain;
+}
+
+/* Prevent pull-to-refresh scroll chaining on mobile — set on the page root */
+@media (max-width: 1023px) {
+  body {
+    overscroll-behavior-y: contain;
+  }
+}
+
+/* Utility: constrain touch to vertical pan (use on horizontal scroll containers) */
+.touch-pan-y {
+  touch-action: pan-y;
 }
 
 .score-card-status-tinted {

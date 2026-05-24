@@ -39,7 +39,7 @@ export function KnowledgeCtaCard({ cta, propertyId, variant = 'compact' }: Knowl
           <Badge
             variant="outline"
             className={cn(
-              'rounded-full border-slate-200 bg-white/80 px-2.5 py-1 text-[9px] font-semibold tracking-normal text-slate-600',
+              'rounded-full border-slate-200 bg-white/80 px-2.5 py-1 text-[11px] font-semibold tracking-normal text-slate-600',
               isFeature && 'bg-white/80'
             )}
           >

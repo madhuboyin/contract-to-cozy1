@@ -17,6 +17,7 @@ export default function NotFound() {
                 alt="ContractToCozy"
                 width={20}
                 height={20}
+                sizes="20px"
                 className="h-5 w-5"
               />
               <p className="mb-0 text-sm font-semibold tracking-normal text-slate-500">

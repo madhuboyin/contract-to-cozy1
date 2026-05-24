@@ -1,5 +1,6 @@
 'use client';
 
+import 'react-circular-progressbar/dist/styles.css';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,

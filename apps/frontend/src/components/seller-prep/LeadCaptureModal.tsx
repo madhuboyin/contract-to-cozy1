@@ -264,6 +264,8 @@ export function LeadCaptureModal({
               <Input
                 id="fullName"
                 required
+                autoComplete="name"
+                enterKeyHint="next"
                 value={formData.fullName}
                 onChange={(e) =>
                   setFormData({ ...formData, fullName: e.target.value })
@@ -280,6 +282,8 @@ export function LeadCaptureModal({
                   id="email"
                   type="email"
                   required
+                  autoComplete="email"
+                  enterKeyHint="next"
                   value={formData.email}
                   onChange={(e) =>
                     setFormData({ ...formData, email: e.target.value })
@@ -295,6 +299,9 @@ export function LeadCaptureModal({
                   id="phone"
                   type="tel"
                   required
+                  autoComplete="tel"
+                  inputMode="tel"
+                  enterKeyHint="done"
                   value={formData.phone}
                   onChange={(e) =>
                     setFormData({ ...formData, phone: e.target.value })

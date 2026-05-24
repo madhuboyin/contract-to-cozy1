@@ -142,7 +142,7 @@ function classifyReplayError(error: unknown): 'network' | 'validation' | 'unauth
 
 function deviceContext(): 'mobile' | 'desktop' {
   if (typeof window === 'undefined') return 'desktop';
-  return window.matchMedia('(max-width: 767px)').matches ? 'mobile' : 'desktop';
+  return window.matchMedia('(max-width: 1023px)').matches ? 'mobile' : 'desktop';
 }
 
 function compactPropertyLabel(property: Property | null | undefined): string {

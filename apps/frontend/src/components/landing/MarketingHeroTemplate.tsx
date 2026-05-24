@@ -37,10 +37,10 @@ export default function MarketingHeroTemplate({
             {eyebrow || 'Homeowner Intelligence'}
           </div>
 
-          <h1 className="mt-4 text-4xl font-semibold leading-tight tracking-tight text-slate-950 sm:text-5xl lg:text-[3.35rem]">
+          <h1 className="mt-4 text-balance text-4xl font-semibold leading-tight tracking-tight text-slate-950 sm:text-5xl lg:text-[3.35rem]">
             {title}
           </h1>
-          <p className="mt-4 max-w-xl text-base text-slate-600 sm:text-lg">{subtitle}</p>
+          <p className="mt-4 max-w-xl text-pretty text-base text-slate-600 sm:text-lg">{subtitle}</p>
 
           <div className="mt-7">
             <Link

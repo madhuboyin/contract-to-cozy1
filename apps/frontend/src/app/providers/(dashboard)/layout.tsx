@@ -5,7 +5,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
-import { Camera, Calendar, LayoutDashboard, Menu, UserCircle2, Wrench, X } from 'lucide-react';
+import { Camera, Calendar, LayoutDashboard, UserCircle2, Wrench } from 'lucide-react';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { resolveProviderNavigationIcon } from '@/lib/icons';
 import { ScrollFadeX } from '@/components/ui/ScrollFadeX';
@@ -19,7 +19,6 @@ export default function ProviderDashboardLayout({
   const router = useRouter();
   const pathname = usePathname();
 
-  const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
   const handleCameraFabClick = () => {
     router.push('/providers/portfolio?capture=1');
@@ -34,7 +33,6 @@ export default function ProviderDashboardLayout({
   }, [user, loading, router]);
 
   useEffect(() => {
-    setIsMobileNavOpen(false);
     setIsAccountMenuOpen(false);
   }, [pathname]);
 
@@ -117,15 +115,6 @@ export default function ProviderDashboardLayout({
                   </div>
                 ) : null}
               </div>
-
-              <button
-                type="button"
-                onClick={() => setIsMobileNavOpen((open) => !open)}
-                className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 active:bg-slate-100 md:hidden"
-                aria-label="Toggle provider navigation"
-              >
-                {isMobileNavOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-              </button>
             </div>
           </div>
 
@@ -151,39 +140,42 @@ export default function ProviderDashboardLayout({
           </ScrollFadeX>
         </div>
 
-        {isMobileNavOpen ? (
-          <div className="border-t border-slate-200 bg-white px-4 py-3 md:hidden">
-            <div className="grid grid-cols-2 gap-2">
-              {navigation.map((item) => {
-                const Icon = item.icon;
-                const active = pathname === item.href || pathname?.startsWith(item.href + '/');
-                return (
-                  <Link
-                    key={item.name}
-                    href={item.href}
-                    className={`inline-flex min-h-[44px] items-center gap-2 rounded-md px-3 text-xs font-semibold tracking-normal ${
-                      active ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700'
-                    }`}
-                  >
-                    <Icon className="h-4 w-4" />
-                    <span>{item.name}</span>
-                  </Link>
-                );
-              })}
-            </div>
-          </div>
-        ) : null}
       </header>
 
-      <main className="mx-auto w-full max-w-7xl px-4 py-4 sm:px-6 lg:px-8">{children}</main>
+      <main className="mx-auto w-full max-w-7xl px-4 py-4 pb-[calc(5rem+env(safe-area-inset-bottom))] sm:px-6 md:pb-4 lg:px-8">{children}</main>
+
+      {/* Mobile bottom tab nav */}
+      <nav
+        className="fixed inset-x-0 bottom-0 z-50 border-t border-slate-200 bg-white md:hidden"
+        aria-label="Provider navigation"
+      >
+        <div className="flex items-stretch pb-[env(safe-area-inset-bottom,0px)]">
+          {navigation.slice(0, 5).map((item) => {
+            const Icon = item.icon;
+            const active = pathname === item.href || pathname?.startsWith(item.href + '/');
+            return (
+              <Link
+                key={item.name}
+                href={item.href}
+                className={`flex flex-1 flex-col items-center justify-center gap-0.5 min-h-[56px] touch-manipulation transition-colors ${
+                  active ? 'text-brand-600' : 'text-slate-500 active:text-slate-800'
+                }`}
+              >
+                <Icon className="h-5 w-5" />
+                <span className="text-[10px] font-medium leading-none">{item.name}</span>
+              </Link>
+            );
+          })}
+        </div>
+      </nav>
 
       <button
         type="button"
         onClick={handleCameraFabClick}
-        className="fixed bottom-[calc(env(safe-area-inset-bottom)+1.5rem)] right-4 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-brand-600 text-white shadow-lg shadow-brand-200/60 transition-transform active:scale-95 md:hidden"
+        className="fixed bottom-[calc(env(safe-area-inset-bottom)+4.5rem)] right-4 z-50 flex h-12 w-12 items-center justify-center rounded-full bg-brand-600 text-white shadow-lg shadow-brand-200/60 transition-transform active:scale-95 md:hidden"
         aria-label="Open camera capture"
       >
-        <Camera className="h-6 w-6" />
+        <Camera className="h-5 w-5" />
       </button>
     </div>
   );
