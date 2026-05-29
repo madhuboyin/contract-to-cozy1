@@ -542,6 +542,7 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
 
   const [transitionVisible, setTransitionVisible] = useState(false);
   const [transitionBootstrapped, setTransitionBootstrapped] = useState(false);
+  const enablePullToRefresh = pathname === '/dashboard' || Boolean(pathname?.match(/^\/dashboard\/properties\/[^/]+$/));
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -704,7 +705,7 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
           }
         >
           <main className="min-w-0 flex-1 pb-[calc(5rem+env(safe-area-inset-bottom))] lg:pb-8">
-            <PullToRefresh onRefresh={handleRefresh}>
+            <PullToRefresh onRefresh={handleRefresh} disabled={!enablePullToRefresh}>
               <div
                 className="mx-auto w-full max-w-[1180px] px-4 py-5 md:px-8 md:py-8"
                 key={refreshKey}

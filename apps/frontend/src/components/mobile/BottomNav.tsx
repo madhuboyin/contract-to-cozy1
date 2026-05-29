@@ -52,6 +52,20 @@ export function BottomNav() {
   const [query, setQuery] = React.useState('');
   const [propertySwitcherOpen, setPropertySwitcherOpen] = React.useState(false);
   const resolvedPropertyId = selectedPropertyId || getPropertyIdFromPathname(pathname || '');
+  const showCameraFab = React.useMemo(() => {
+    const currentPath = pathname || '';
+
+    return [
+      /^\/dashboard$/,
+      /^\/dashboard\/properties$/,
+      /^\/dashboard\/protect(?:\/.*)?$/,
+      /^\/dashboard\/vault(?:\/.*)?$/,
+      /^\/dashboard\/save(?:\/.*)?$/,
+      /^\/dashboard\/fix(?:\/.*)?$/,
+      /^\/dashboard\/seasonal(?:\/.*)?$/,
+      /^\/dashboard\/community-events(?:\/.*)?$/,
+    ].some((pattern) => pattern.test(currentPath));
+  }, [pathname]);
 
   const handleLogout = React.useCallback(async () => {
     setMoreOpen(false);
@@ -170,14 +184,18 @@ export function BottomNav() {
 
         {/* Center camera FAB — raised above nav bar */}
         <div className="flex w-16 items-end justify-center pb-1.5">
-          <button
-            type="button"
-            onClick={handleCameraCapture}
-            className="flex h-[52px] w-[52px] -translate-y-2.5 items-center justify-center rounded-full bg-brand-600 shadow-[0_4px_16px_rgba(20,184,166,0.35),0_2px_6px_rgba(15,23,42,0.12)] transition-transform active:scale-95"
-            aria-label="Capture photo"
-          >
-            <Camera className="h-[22px] w-[22px] text-white" />
-          </button>
+          {showCameraFab ? (
+            <button
+              type="button"
+              onClick={handleCameraCapture}
+              className="flex h-14 w-14 -translate-y-2.5 touch-manipulation items-center justify-center rounded-full bg-brand-600 shadow-[0_4px_16px_rgba(20,184,166,0.35),0_2px_6px_rgba(15,23,42,0.12)] transition-transform active:scale-95"
+              aria-label="Capture photo"
+            >
+              <Camera className="h-[22px] w-[22px] text-white" />
+            </button>
+          ) : (
+            <div aria-hidden="true" className="h-14 w-14" />
+          )}
         </div>
 
         {/* Right item + More */}
