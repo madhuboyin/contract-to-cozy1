@@ -12,6 +12,7 @@ const nextConfig = {
   poweredByHeader: false,
   output: 'standalone',
   images: {
+    formats: ['image/avif', 'image/webp'],
     remotePatterns: buildImageRemotePatterns(),
   },
   env: {

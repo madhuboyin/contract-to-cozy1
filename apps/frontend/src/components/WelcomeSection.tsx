@@ -157,7 +157,6 @@ export function WelcomeSection({
                   src={coverPhotoUrl}
                   alt={selectedProperty?.name || selectedProperty?.address || 'Property photo'}
                   fill
-                  unoptimized
                   sizes="192px"
                   className="object-cover"
                   onError={() => setHasCoverPhotoError(true)}
@@ -167,9 +166,8 @@ export function WelcomeSection({
                   src="/images/home-cozy-illustration.png" 
                   alt="Cozy Home" 
                   fill
-                  sizes="192px"
+                  sizes="(max-width: 767px) 0px, 192px"
                   className="object-contain object-right p-2"
-                  priority
                 />
               )}
             </div>

@@ -13,6 +13,9 @@ export const metadata: Metadata = {
   title: 'Knowledge Hub | Contract to Cozy',
   description:
     'Explore practical guidance on maintenance, property value, insurance, climate exposure, and homeowner risk inside Contract-to-Cozy.',
+  alternates: {
+    canonical: '/knowledge',
+  },
 };
 
 export const dynamic = 'force-dynamic';

@@ -485,7 +485,6 @@ export function HeroSummaryCard({
               src={resolvedMediaSrc}
               alt={mediaAlt || `${title} image`}
               fill
-              unoptimized
               sizes="96px"
               className={showPrimaryMedia ? 'object-cover' : 'object-contain p-1.5'}
               onError={() => {
