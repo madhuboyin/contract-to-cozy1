@@ -30,6 +30,7 @@ import {
   TrendingUp,
   MapPin,
   Sparkles,
+  LayoutGrid,
 } from "lucide-react";
 import { toast } from "@/components/ui/use-toast";
 import { FileDown } from "lucide-react";
@@ -46,6 +47,7 @@ import {
   SheetFooter,
   SheetHeader,
   SheetTitle,
+  SheetTrigger,
 } from "@/components/ui/sheet";
 import {
   BottomSafeAreaReserve,
@@ -802,6 +804,19 @@ const PROPERTY_HUB_TABS = [
 
 type PropertyHubTab = (typeof PROPERTY_HUB_TABS)[number];
 
+const PROPERTY_HUB_TAB_OPTIONS: Array<{
+  value: PropertyHubTab;
+  label: string;
+  shortLabel: string;
+  icon: typeof Home;
+}> = [
+  { value: 'overview', label: 'Overview', shortLabel: 'Info', icon: Home },
+  { value: 'maintenance', label: 'Maintenance Plan', shortLabel: 'Maint.', icon: Zap },
+  { value: 'incidents', label: 'Incidents', shortLabel: 'Alerts', icon: ShieldAlert },
+  { value: 'risk-protection', label: 'Risk & Protection', shortLabel: 'Risk', icon: Shield },
+  { value: 'financial-efficiency', label: 'Financial Efficiency', shortLabel: 'Finance', icon: DollarSign },
+];
+
 function resolvePropertyHubTab(rawValue: string | null): PropertyHubTab {
   if (rawValue && PROPERTY_HUB_TABS.includes(rawValue as PropertyHubTab)) {
     return rawValue as PropertyHubTab;
@@ -821,6 +836,8 @@ export default function PropertyDetailPage() {
   const [nudgeFieldKey, setNudgeFieldKey] = useState<string | null>(null);
   const [nudgeFieldValue, setNudgeFieldValue] = useState('');
   const [isSavingNudge, setIsSavingNudge] = useState(false);
+  const [isMobileSectionSheetOpen, setIsMobileSectionSheetOpen] = useState(false);
+  const [isMobileMoreSheetOpen, setIsMobileMoreSheetOpen] = useState(false);
   const askCozyDockVisible = !nudgeFieldKey;
   const tabTriggerClassName =
     "flex min-h-[40px] items-center gap-1.5 whitespace-nowrap rounded-full px-3 text-slate-600 data-[state=active]:bg-emerald-50 data-[state=active]:text-emerald-700 data-[state=active]:shadow-none";
@@ -978,19 +995,59 @@ export default function PropertyDetailPage() {
     scoredProperty.healthScore?.insights?.filter((insight) =>
       HIGH_PRIORITY_STATUSES.includes(insight.status)
     ).length ?? 0;
-  const propertyHubMeta = [
-    property.isPrimary ? "Primary home" : propertyTypeLabel,
-    property.yearBuilt ? `Built ${property.yearBuilt}` : null,
-    property.propertySize ? `${property.propertySize.toLocaleString()} sqft` : null,
-  ].filter(Boolean) as string[];
-  const tabPanelClassName = askCozyDockVisible
-    ? "mt-4 pb-[calc(8rem+env(safe-area-inset-bottom))] md:pb-0"
-    : "mt-4";
   const propertyHubPath = `/dashboard/properties/${property.id}`;
   const withBackToPropertyHub = (href: string) => {
     const separator = href.includes("?") ? "&" : "?";
     return `${href}${separator}backTo=${encodeURIComponent(propertyHubPath)}`;
   };
+  const propertyHubMeta = [
+    property.isPrimary ? "Primary home" : propertyTypeLabel,
+    property.yearBuilt ? `Built ${property.yearBuilt}` : null,
+    property.propertySize ? `${property.propertySize.toLocaleString()} sqft` : null,
+  ].filter(Boolean) as string[];
+  const activeTabConfig = PROPERTY_HUB_TAB_OPTIONS.find((tab) => tab.value === activeTab) ?? PROPERTY_HUB_TAB_OPTIONS[0];
+  const ActiveTabIcon = activeTabConfig.icon;
+  const propertyHubMoreLinks = [
+    {
+      href: withBackToPropertyHub(`/dashboard/properties/${property.id}/rooms`),
+      label: 'Rooms',
+      description: 'Inspect room-by-room context and inventory.',
+      icon: Home,
+    },
+    {
+      href: withBackToPropertyHub(`/dashboard/properties/${property.id}/timeline`),
+      label: 'Timeline',
+      description: 'Review major home events and history.',
+      icon: Calendar,
+    },
+    {
+      href: withBackToPropertyHub(`/dashboard/properties/${property.id}/status-board`),
+      label: 'Status Board',
+      description: 'See the daily operational snapshot.',
+      icon: History,
+    },
+    {
+      href: `/dashboard/properties/${property.id}/reports`,
+      label: 'Reports',
+      description: 'Generate printable home report packs.',
+      icon: FileDown,
+    },
+    {
+      href: `/dashboard/properties/${property.id}/claims`,
+      label: 'Claims',
+      description: 'Manage insurance and warranty claim workflows.',
+      icon: ClipboardCheck,
+    },
+    {
+      href: `/dashboard/properties/${property.id}/edit`,
+      label: 'Documents & Edit',
+      description: 'Update profile data and attached documents.',
+      icon: FileText,
+    },
+  ] as const;
+  const tabPanelClassName = askCozyDockVisible
+    ? "mt-4 pb-[calc(8rem+env(safe-area-inset-bottom))] md:pb-0"
+    : "mt-4";
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 py-4 sm:gap-5 sm:px-6 lg:px-8">
@@ -1097,97 +1154,169 @@ export default function PropertyDetailPage() {
           }
           tabs={
             <MobileFilterSurface className="border-slate-200/80 bg-white/95 p-2.5 shadow-[0_12px_30px_-24px_rgba(15,23,42,0.5)] md:border-0 md:bg-transparent md:p-0 md:shadow-none">
-              <div className="md:hidden px-1">
-                <p className="text-xs tracking-normal text-slate-500">Core Sections</p>
+              <div className="grid gap-2 md:hidden">
+                <div className="px-1">
+                  <p className="text-xs tracking-normal text-slate-500">Current section</p>
+                </div>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <Sheet open={isMobileSectionSheetOpen} onOpenChange={setIsMobileSectionSheetOpen}>
+                    <SheetTrigger asChild>
+                      <button
+                        type="button"
+                        className="flex min-h-[48px] w-full items-center justify-between rounded-2xl border border-slate-200 bg-slate-50/90 px-4 text-left shadow-sm"
+                      >
+                        <span className="inline-flex min-w-0 items-center gap-2.5">
+                          <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700">
+                            <ActiveTabIcon className="h-4 w-4" />
+                          </span>
+                          <span className="min-w-0">
+                            <span className="block text-xs font-medium tracking-normal text-slate-500">Active</span>
+                            <span className="block truncate text-sm font-semibold text-slate-900">{activeTabConfig.label}</span>
+                          </span>
+                        </span>
+                        <ChevronRight className="h-4 w-4 shrink-0 text-slate-400" />
+                      </button>
+                    </SheetTrigger>
+                    <SheetContent side="bottom" className="max-h-[80dvh] rounded-t-2xl">
+                      <SheetHeader>
+                        <SheetTitle>Switch section</SheetTitle>
+                        <SheetDescription>Move between the core property hub views.</SheetDescription>
+                      </SheetHeader>
+                      <div className="mt-4 space-y-2">
+                        {PROPERTY_HUB_TAB_OPTIONS.map((tab) => {
+                          const TabIcon = tab.icon;
+                          const isActive = tab.value === activeTab;
+                          return (
+                            <button
+                              key={tab.value}
+                              type="button"
+                              onClick={() => {
+                                handleTabChange(tab.value);
+                                setIsMobileSectionSheetOpen(false);
+                              }}
+                              className={`flex min-h-[52px] w-full items-center gap-3 rounded-2xl border px-4 py-3 text-left ${
+                                isActive
+                                  ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                                  : 'border-slate-200 bg-white text-slate-800'
+                              }`}
+                            >
+                              <span className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${
+                                isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'
+                              }`}>
+                                <TabIcon className="h-4 w-4" />
+                              </span>
+                              <span className="min-w-0 flex-1">
+                                <span className="block text-sm font-semibold">{tab.label}</span>
+                                <span className="block text-xs text-slate-500">
+                                  {tab.value === 'overview'
+                                    ? 'Snapshot, setup status, and hub overview.'
+                                    : tab.value === 'maintenance'
+                                      ? 'Priorities, health insights, and planning.'
+                                      : tab.value === 'incidents'
+                                        ? 'Alerts, incident activity, and tracking.'
+                                        : tab.value === 'risk-protection'
+                                          ? 'Coverage, claims, and protection posture.'
+                                          : 'Savings, costs, and financial guidance.'}
+                                </span>
+                              </span>
+                              {isActive ? <StatusChip tone="good">Viewing</StatusChip> : null}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </SheetContent>
+                  </Sheet>
+
+                  <Sheet open={isMobileMoreSheetOpen} onOpenChange={setIsMobileMoreSheetOpen}>
+                    <SheetTrigger asChild>
+                      <button
+                        type="button"
+                        className="flex min-h-[48px] w-full items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 text-left shadow-sm"
+                      >
+                        <span className="inline-flex min-w-0 items-center gap-2.5">
+                          <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-600">
+                            <LayoutGrid className="h-4 w-4" />
+                          </span>
+                          <span className="min-w-0">
+                            <span className="block text-xs font-medium tracking-normal text-slate-500">Secondary destinations</span>
+                            <span className="block truncate text-sm font-semibold text-slate-900">More sections</span>
+                          </span>
+                        </span>
+                        <ChevronRight className="h-4 w-4 shrink-0 text-slate-400" />
+                      </button>
+                    </SheetTrigger>
+                    <SheetContent side="bottom" className="max-h-[80dvh] rounded-t-2xl">
+                      <SheetHeader>
+                        <SheetTitle>More sections</SheetTitle>
+                        <SheetDescription>Open related property workflows without crowding the main tab bar.</SheetDescription>
+                      </SheetHeader>
+                      <div className="mt-4 space-y-2">
+                        {propertyHubMoreLinks.map((item) => {
+                          const Icon = item.icon;
+                          return (
+                            <Link
+                              key={item.href}
+                              href={item.href}
+                              onClick={() => setIsMobileMoreSheetOpen(false)}
+                              className="no-brand-style flex min-h-[52px] items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3"
+                            >
+                              <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-600">
+                                <Icon className="h-4 w-4" />
+                              </span>
+                              <span className="min-w-0 flex-1">
+                                <span className="block text-sm font-semibold text-slate-900">{item.label}</span>
+                                <span className="block text-xs text-slate-500">{item.description}</span>
+                              </span>
+                              <ChevronRight className="h-4 w-4 shrink-0 text-slate-400" />
+                            </Link>
+                          );
+                        })}
+                      </div>
+                    </SheetContent>
+                  </Sheet>
+                </div>
               </div>
-              <div className="relative">
+
+              <div className="relative hidden md:block">
                 <div className="absolute left-0 top-0 bottom-0 z-10 w-8 bg-gradient-to-r from-background to-transparent pointer-events-none md:hidden" />
                 <div className="absolute right-0 top-0 bottom-0 z-10 w-8 bg-gradient-to-l from-background to-transparent pointer-events-none md:hidden" />
 
                 <div className="overflow-x-auto scrollbar-hide snap-x snap-mandatory pb-1">
                   <TabsList className="inline-flex w-max [&>*]:snap-start rounded-full border border-slate-200 bg-slate-50/80 p-1 md:border-transparent md:bg-transparent">
-                    <TabsTrigger value="overview" className={tabTriggerClassName}>
-                      <Home className="h-4 w-4 shrink-0" />
-                      <span className="hidden sm:inline">Overview</span>
-                      <span className="sm:hidden">Info</span>
-                    </TabsTrigger>
-
-                    <TabsTrigger value="maintenance" className={tabTriggerClassName}>
-                      <Zap className="h-4 w-4 shrink-0" />
-                      <span className="hidden sm:inline">Maintenance Plan</span>
-                      <span className="sm:hidden">Maint.</span>
-                    </TabsTrigger>
-
-                    <TabsTrigger value="incidents" className={tabTriggerClassName}>
-                      <ShieldAlert className="h-4 w-4 shrink-0" />
-                      <span className="hidden sm:inline">Incidents</span>
-                      <span className="sm:hidden">Alerts</span>
-                    </TabsTrigger>
-
-                    <TabsTrigger value="risk-protection" className={tabTriggerClassName}>
-                      <Shield className="h-4 w-4 shrink-0" />
-                      <span className="hidden sm:inline">Risk & Protection</span>
-                      <span className="sm:hidden">Risk</span>
-                    </TabsTrigger>
-
-                    <TabsTrigger value="financial-efficiency" className={tabTriggerClassName}>
-                      <DollarSign className="h-4 w-4 shrink-0" />
-                      <span className="hidden sm:inline">Financial Efficiency</span>
-                      <span className="sm:hidden">Finance</span>
-                    </TabsTrigger>
+                    {PROPERTY_HUB_TAB_OPTIONS.map((tab) => {
+                      const TabIcon = tab.icon;
+                      return (
+                        <TabsTrigger key={tab.value} value={tab.value} className={tabTriggerClassName}>
+                          <TabIcon className="h-4 w-4 shrink-0" />
+                          <span className="hidden sm:inline">{tab.label}</span>
+                          <span className="sm:hidden">{tab.shortLabel}</span>
+                        </TabsTrigger>
+                      );
+                    })}
                   </TabsList>
                 </div>
               </div>
             </MobileFilterSurface>
           }
           secondaryNav={
-            <MobileFilterSurface className="border-slate-200/80 bg-white p-3 shadow-sm">
+            <MobileFilterSurface className="hidden border-slate-200/80 bg-white p-3 shadow-sm md:block">
               <p className="mb-2 text-xs font-semibold tracking-normal text-slate-500">
                 More Sections
               </p>
               <div className="flex flex-wrap gap-2">
-                <Link
-                  href={withBackToPropertyHub(`/dashboard/properties/${property.id}/rooms`)}
-                  className="no-brand-style inline-flex min-h-[36px] items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-3 text-xs font-semibold text-slate-700"
-                >
-                  <Home className="h-3.5 w-3.5" />
-                  Rooms
-                </Link>
-                <Link
-                  href={withBackToPropertyHub(`/dashboard/properties/${property.id}/timeline`)}
-                  className="no-brand-style inline-flex min-h-[36px] items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-3 text-xs font-semibold text-slate-700"
-                >
-                  <Calendar className="h-3.5 w-3.5" />
-                  Timeline
-                </Link>
-                <Link
-                  href={withBackToPropertyHub(`/dashboard/properties/${property.id}/status-board`)}
-                  className="no-brand-style inline-flex min-h-[36px] items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-3 text-xs font-semibold text-slate-700"
-                >
-                  <History className="h-3.5 w-3.5" />
-                  Status Board
-                </Link>
-                <Link
-                  href={`/dashboard/properties/${property.id}/reports`}
-                  className="no-brand-style inline-flex min-h-[36px] items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-3 text-xs font-semibold text-slate-700"
-                >
-                  <FileDown className="h-3.5 w-3.5" />
-                  Reports
-                </Link>
-                <Link
-                  href={`/dashboard/properties/${property.id}/claims`}
-                  className="no-brand-style inline-flex min-h-[36px] items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-3 text-xs font-semibold text-slate-700"
-                >
-                  <ClipboardCheck className="h-3.5 w-3.5" />
-                  Claims
-                </Link>
-                <Link
-                  href={`/dashboard/properties/${property.id}/edit`}
-                  className="no-brand-style inline-flex min-h-[36px] items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-3 text-xs font-semibold text-slate-700"
-                >
-                  <FileText className="h-3.5 w-3.5" />
-                  Documents & Edit
-                </Link>
+                {propertyHubMoreLinks.map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      className="no-brand-style inline-flex min-h-[36px] items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-3 text-xs font-semibold text-slate-700"
+                    >
+                      <Icon className="h-3.5 w-3.5" />
+                      {item.label}
+                    </Link>
+                  );
+                })}
               </div>
             </MobileFilterSurface>
           }

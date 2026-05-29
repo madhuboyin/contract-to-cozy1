@@ -2,6 +2,7 @@
 
 import { ReactNode } from 'react';
 import PriorityActionHero, { PriorityActionHeroProps } from '@/components/system/PriorityActionHero';
+import { ExpandableSummaryCard, ReadOnlySummaryBlock } from '@/components/mobile/dashboard/MobilePrimitives';
 
 interface PropertyHubTemplateProps {
   title: string;
@@ -32,7 +33,67 @@ export default function PropertyHubTemplate({
 }: PropertyHubTemplateProps) {
   return (
     <section className="space-y-4">
-      <header className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:p-5">
+      <header className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:hidden">
+        <div className="space-y-3">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="mb-1 text-xs font-semibold tracking-normal text-slate-500">
+                Property Hub
+              </p>
+              <h1 className="mb-0 text-[1.65rem] font-semibold tracking-tight leading-tight text-slate-900">
+                {title}
+              </h1>
+              <p className="mt-1.5 mb-0 text-sm text-slate-600">{context}</p>
+            </div>
+            {statusLabel ? (
+              <span className="inline-flex shrink-0 items-center rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">
+                {statusLabel}
+              </span>
+            ) : null}
+          </div>
+
+          {meta.length > 0 ? (
+            <ExpandableSummaryCard
+              title="Home snapshot"
+              summary={meta.slice(0, 2).join(' • ')}
+              metric={`${meta.length} details`}
+            >
+              <ReadOnlySummaryBlock
+                className="border-slate-200 bg-slate-50"
+                columns={2}
+                items={meta.map((item, index) => ({
+                  label: `Detail ${index + 1}`,
+                  value: item,
+                }))}
+              />
+            </ExpandableSummaryCard>
+          ) : null}
+
+          {priorityAction ? (
+            <div className="space-y-2">
+              <PriorityActionHero
+                title={priorityAction.title}
+                description={priorityAction.description}
+                primaryAction={priorityAction.primaryAction}
+                supportingAction={priorityAction.supportingAction}
+                impactLabel={priorityAction.impactLabel}
+                confidenceLabel={priorityAction.confidenceLabel}
+                eyebrow={priorityAction.eyebrow || 'Property Priority'}
+              />
+              {supportingAction ? <div>{supportingAction}</div> : null}
+              {utilityAction ? <div>{utilityAction}</div> : null}
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <div>{primaryAction}</div>
+              {supportingAction ? <div>{supportingAction}</div> : null}
+              {utilityAction ? <div>{utilityAction}</div> : null}
+            </div>
+          )}
+        </div>
+      </header>
+
+      <header className="hidden rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:block md:p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="mb-1 text-xs font-semibold tracking-normal text-slate-500">
