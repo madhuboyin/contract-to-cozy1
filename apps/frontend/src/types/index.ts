@@ -3210,3 +3210,107 @@ export interface MaterialSpecExport {
   createdAt: string; updatedAt: string;
   signedUrl?: string | null;
 }
+
+// ============================================================================
+// HOUSEHOLD COLLABORATION TYPES
+// ============================================================================
+
+export type HouseholdRole = 'OWNER' | 'CONTRIBUTOR' | 'VIEWER';
+export type HouseholdInviteStatus = 'PENDING' | 'ACCEPTED' | 'EXPIRED' | 'REVOKED';
+export type HouseholdActivityType =
+  | 'MEMBER_INVITED' | 'MEMBER_JOINED' | 'MEMBER_REMOVED' | 'MEMBER_ROLE_CHANGED'
+  | 'TASK_ASSIGNED' | 'TASK_COMPLETED' | 'TASK_CREATED'
+  | 'HOME_EVENT_LOGGED' | 'INVENTORY_ITEM_ADDED' | 'INCIDENT_UPDATED'
+  | 'CLAIM_FILED' | 'DOCUMENT_UPLOADED' | 'GUIDANCE_STEP_COMPLETED' | 'NOTE_ADDED';
+
+export interface HouseholdNotificationPrefs {
+  notifyOnRiskChange: boolean;
+  notifyOnTaskDue: boolean;
+  notifyOnTaskAssigned: boolean;
+  notifyOnGuidanceUpdate: boolean;
+  notifyOnIncident: boolean;
+  notifyOnHomeEvent: boolean;
+  notifyOnAlerts: boolean;
+}
+
+export interface HouseholdMemberUser {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  avatar?: string | null;
+  lastLoginAt?: string | null;
+}
+
+export interface HouseholdMember {
+  id: string;
+  propertyId: string;
+  userId: string;
+  role: HouseholdRole;
+  isPrimaryOwner: boolean;
+  displayName?: string | null;
+  notifyOnRiskChange: boolean;
+  notifyOnTaskDue: boolean;
+  notifyOnTaskAssigned: boolean;
+  notifyOnGuidanceUpdate: boolean;
+  notifyOnIncident: boolean;
+  notifyOnHomeEvent: boolean;
+  notifyOnAlerts: boolean;
+  joinedAt: string;
+  createdAt: string;
+  updatedAt: string;
+  user: HouseholdMemberUser;
+}
+
+export interface HouseholdInvite {
+  id: string;
+  propertyId: string;
+  invitedByUserId: string;
+  inviteeEmail: string;
+  inviteeUserId?: string | null;
+  role: HouseholdRole;
+  status: HouseholdInviteStatus;
+  token: string;
+  expiresAt: string;
+  acceptedAt?: string | null;
+  revokedAt?: string | null;
+  createdAt: string;
+}
+
+export interface InvitePreview {
+  propertyAddressSnippet: string;
+  invitedByName: string;
+  role: HouseholdRole;
+  expiresAt: string;
+  isExpired: boolean;
+}
+
+export interface HouseholdActivityItem {
+  id: string;
+  propertyId: string;
+  actorUserId: string;
+  activityType: HouseholdActivityType;
+  targetUserId?: string | null;
+  entityType?: string | null;
+  entityId?: string | null;
+  summaryText: string;
+  metaJson?: Record<string, unknown> | null;
+  createdAt: string;
+  actorUser: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    avatar?: string | null;
+  };
+}
+
+export interface SendInvitePayload {
+  email: string;
+  role: HouseholdRole;
+}
+
+export interface ActivityFeedParams {
+  limit?: number;
+  cursor?: string;
+  activityTypes?: HouseholdActivityType[];
+}

@@ -30,24 +30,38 @@ export const propertyAuthMiddleware = async (
   }
 
   try {
+    // Check household membership first (covers owners who have a member row + contributors/viewers)
+    const member = await prisma.householdMember.findUnique({
+      where: { propertyId_userId: { propertyId, userId } },
+      select: { role: true },
+    });
+
+    if (member) {
+      req.property = { id: propertyId } as any;
+      req.householdRole = member.role;
+      return next();
+    }
+
+    // Fall back: property ownership check for users who pre-date the household feature
     const property = await prisma.property.findFirst({
       where: {
         id: propertyId,
         homeownerProfile: { userId },
       },
-      select: { id: true }, // add more fields only if needed
+      select: { id: true },
     });
 
-    if (!property) {
-      securityPropertyScopeDenialsTotal.inc({
-        source: 'property_auth_middleware',
-        status_code: '404',
-      });
-      return res.status(404).json({ message: 'Property not found or access denied.' });
+    if (property) {
+      req.property = property as any;
+      req.householdRole = 'OWNER';
+      return next();
     }
 
-    req.property = property as any;
-    return next();
+    securityPropertyScopeDenialsTotal.inc({
+      source: 'property_auth_middleware',
+      status_code: '404',
+    });
+    return res.status(404).json({ message: 'Property not found or access denied.' });
   } catch (error) {
     logger.error({ err: error }, 'Property Auth Error');
     return res

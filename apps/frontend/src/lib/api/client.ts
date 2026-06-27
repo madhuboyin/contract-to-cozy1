@@ -3596,6 +3596,117 @@ class APIClient {
     }
     return res.data.session;
   }
+
+  // ── Household Collaboration ───────────────────────────────────────────────────
+
+  async listHouseholdMembers(propertyId: string): Promise<import('@/types').HouseholdMember[]> {
+    const res = await this.get<{ members: import('@/types').HouseholdMember[] }>(
+      `/api/properties/${propertyId}/household/members`,
+    );
+    return res.data?.members ?? [];
+  }
+
+  async getMyHouseholdMembership(propertyId: string): Promise<import('@/types').HouseholdMember> {
+    const res = await this.get<{ member: import('@/types').HouseholdMember }>(
+      `/api/properties/${propertyId}/household/members/me`,
+    );
+    if (!res.data?.member) throw new APIError('Membership not found', 404);
+    return res.data.member;
+  }
+
+  async updateHouseholdMemberRole(
+    propertyId: string,
+    memberId: string,
+    updates: { role?: import('@/types').HouseholdRole; displayName?: string | null },
+  ): Promise<import('@/types').HouseholdMember> {
+    const res = await this.patch<{ member: import('@/types').HouseholdMember }>(
+      `/api/properties/${propertyId}/household/members/${memberId}`,
+      updates,
+    );
+    if (!res.data?.member) throw new APIError('Failed to update member', 500);
+    return res.data.member;
+  }
+
+  async removeHouseholdMember(propertyId: string, memberId: string): Promise<void> {
+    await this.delete(`/api/properties/${propertyId}/household/members/${memberId}`);
+  }
+
+  async updateMyNotificationPreferences(
+    propertyId: string,
+    prefs: Partial<import('@/types').HouseholdNotificationPrefs>,
+  ): Promise<void> {
+    await this.patch(
+      `/api/properties/${propertyId}/household/members/me/notifications`,
+      prefs,
+    );
+  }
+
+  async sendHouseholdInvite(
+    propertyId: string,
+    payload: import('@/types').SendInvitePayload,
+  ): Promise<import('@/types').HouseholdInvite> {
+    const res = await this.post<{ invite: import('@/types').HouseholdInvite }>(
+      `/api/properties/${propertyId}/household/invites`,
+      payload,
+    );
+    if (!res.data?.invite) throw new APIError('Failed to send invite', 500);
+    return res.data.invite;
+  }
+
+  async listHouseholdInvites(propertyId: string): Promise<import('@/types').HouseholdInvite[]> {
+    const res = await this.get<{ invites: import('@/types').HouseholdInvite[] }>(
+      `/api/properties/${propertyId}/household/invites`,
+    );
+    return res.data?.invites ?? [];
+  }
+
+  async revokeHouseholdInvite(propertyId: string, inviteId: string): Promise<void> {
+    await this.delete(`/api/properties/${propertyId}/household/invites/${inviteId}`);
+  }
+
+  async previewInvite(token: string): Promise<import('@/types').InvitePreview> {
+    const res = await this.get<{ preview: import('@/types').InvitePreview }>(
+      `/api/household/invites/${token}`,
+    );
+    if (!res.data?.preview) throw new APIError('Invite not found', 404);
+    return res.data.preview;
+  }
+
+  async acceptInvite(token: string): Promise<{ propertyId: string }> {
+    const res = await this.post<{ propertyId: string }>(
+      `/api/household/invites/${token}/accept`,
+      {},
+    );
+    if (!res.data?.propertyId) throw new APIError('Failed to accept invite', 500);
+    return res.data;
+  }
+
+  async getHouseholdActivity(
+    propertyId: string,
+    params?: import('@/types').ActivityFeedParams,
+  ): Promise<{ items: import('@/types').HouseholdActivityItem[]; nextCursor?: string }> {
+    const query = new URLSearchParams();
+    if (params?.limit) query.set('limit', String(params.limit));
+    if (params?.cursor) query.set('cursor', params.cursor);
+    if (params?.activityTypes?.length) query.set('activityTypes', params.activityTypes.join(','));
+    const qs = query.toString();
+    const res = await this.get<{ items: import('@/types').HouseholdActivityItem[]; nextCursor?: string }>(
+      `/api/properties/${propertyId}/household/activity${qs ? `?${qs}` : ''}`,
+    );
+    return { items: res.data?.items ?? [], nextCursor: res.data?.nextCursor };
+  }
+
+  async assignTask(
+    propertyId: string,
+    taskId: string,
+    taskType: 'MAINTENANCE' | 'SEASONAL' | 'BUYER',
+    assigneeUserId: string | null,
+  ): Promise<void> {
+    await this.patch(`/api/properties/${propertyId}/tasks/${taskId}/assign`, {
+      taskType,
+      assigneeUserId,
+    });
+  }
 }
 
 // Export singleton instance
