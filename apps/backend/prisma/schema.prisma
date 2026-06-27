@@ -1388,6 +1388,16 @@ model User {
   // Material Spec Registry
   materialSpecExports MaterialSpecExport[]
 
+  // Household Collaboration
+  householdMemberships             HouseholdMember[]
+  householdInvitesSent             HouseholdInvite[]             @relation("HouseholdInviteSentBy")
+  householdInvitesReceived         HouseholdInvite[]             @relation("HouseholdInviteReceiver")
+  householdActivityActed           HouseholdActivityLog[]        @relation("HouseholdActivityActor")
+  householdActivityTargeted        HouseholdActivityLog[]        @relation("HouseholdActivityTarget")
+  maintenanceTasksAssigned         PropertyMaintenanceTask[]     @relation("MaintenanceTaskAssignee")
+  seasonalChecklistItemsAssigned   SeasonalChecklistItem[]       @relation("SeasonalTaskAssignee")
+  homeBuyerTasksAssigned           HomeBuyerTask[]               @relation("HomeBuyerTaskAssignee")
+
   @@index([email])
   @@index([role])
   @@index([status])
@@ -1713,6 +1723,10 @@ model HomeBuyerTask {
   // Completion tracking
   completedAt DateTime?
 
+  // Task assignment
+  assignedToUserId String?
+  assignedTo       User?   @relation("HomeBuyerTaskAssignee", fields: [assignedToUserId], references: [id])
+
   // Display
   sortOrder Int @default(0)
 
@@ -1724,6 +1738,7 @@ model HomeBuyerTask {
 
   @@index([checklistId])
   @@index([status])
+  @@index([assignedToUserId])
   @@map("home_buyer_tasks")
 }
 
@@ -1782,6 +1797,10 @@ model PropertyMaintenanceTask {
   homeAssetId String?
   homeAsset   HomeAsset? @relation(fields: [homeAssetId], references: [id], onDelete: SetNull)
 
+  // Task assignment
+  assignedToUserId String?
+  assignedTo       User?   @relation("MaintenanceTaskAssignee", fields: [assignedToUserId], references: [id])
+
   // Relations
   property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
 
@@ -1803,6 +1822,7 @@ model PropertyMaintenanceTask {
   @@index([source])
   @@index([nextDueDate])
   @@index([assetType])
+  @@index([assignedToUserId])
   @@map("property_maintenance_tasks")
 }
 
@@ -2021,6 +2041,11 @@ model Property {
   // Material Spec Registry
   materialSpecs        MaterialSpec[]
   materialSpecExports  MaterialSpecExport[]
+
+  // Household Collaboration
+  householdMembers     HouseholdMember[]
+  householdInvites     HouseholdInvite[]
+  householdActivityLog HouseholdActivityLog[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -3973,6 +3998,10 @@ model SeasonalChecklistItem {
   createdAt              DateTime           @default(now()) @map("created_at")
   updatedAt              DateTime           @updatedAt @map("updated_at")
 
+  // Task assignment
+  assignedToUserId String? @map("assigned_to_user_id")
+  assignedTo       User?   @relation("SeasonalTaskAssignee", fields: [assignedToUserId], references: [id])
+
   // Relations
   seasonalChecklist    SeasonalChecklist    @relation(fields: [seasonalChecklistId], references: [id], onDelete: Cascade)
   seasonalTaskTemplate SeasonalTaskTemplate @relation(fields: [seasonalTaskTemplateId], references: [id])
@@ -3985,6 +4014,7 @@ model SeasonalChecklistItem {
   @@index([seasonalChecklistId])
   @@index([propertyId, status])
   @@index([checklistItemId])
+  @@index([assignedToUserId])
   @@map("seasonal_checklist_items")
 }
 
@@ -10201,4 +10231,123 @@ model MaterialSpecExport {
 
   @@index([propertyId, createdAt])
   @@map("material_spec_exports")
+}
+
+// ============================================================================
+// HOUSEHOLD COLLABORATION
+// ============================================================================
+
+enum HouseholdRole {
+  OWNER
+  CONTRIBUTOR
+  VIEWER
+}
+
+enum HouseholdInviteStatus {
+  PENDING
+  ACCEPTED
+  EXPIRED
+  REVOKED
+}
+
+enum HouseholdActivityType {
+  MEMBER_INVITED
+  MEMBER_JOINED
+  MEMBER_REMOVED
+  MEMBER_ROLE_CHANGED
+  TASK_ASSIGNED
+  TASK_COMPLETED
+  TASK_CREATED
+  HOME_EVENT_LOGGED
+  INVENTORY_ITEM_ADDED
+  INCIDENT_UPDATED
+  CLAIM_FILED
+  DOCUMENT_UPLOADED
+  GUIDANCE_STEP_COMPLETED
+  NOTE_ADDED
+}
+
+model HouseholdMember {
+  id         String        @id @default(cuid())
+  propertyId String
+  userId     String
+  role       HouseholdRole @default(CONTRIBUTOR)
+
+  isPrimaryOwner Boolean @default(false)
+  displayName    String?
+
+  // Per-member notification preferences
+  notifyOnRiskChange     Boolean @default(false)
+  notifyOnTaskDue        Boolean @default(true)
+  notifyOnTaskAssigned   Boolean @default(true)
+  notifyOnGuidanceUpdate Boolean @default(false)
+  notifyOnIncident       Boolean @default(true)
+  notifyOnHomeEvent      Boolean @default(false)
+  notifyOnAlerts         Boolean @default(true)
+
+  joinedAt  DateTime @default(now())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([propertyId, userId])
+  @@index([propertyId])
+  @@index([userId])
+  @@index([role])
+  @@map("household_members")
+}
+
+model HouseholdInvite {
+  id         String @id @default(cuid())
+  propertyId String
+
+  invitedByUserId String
+  inviteeEmail    String
+  inviteeUserId   String?
+
+  role   HouseholdRole
+  status HouseholdInviteStatus @default(PENDING)
+
+  token     String   @unique
+  expiresAt DateTime
+
+  acceptedAt DateTime?
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+
+  property      Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  invitedByUser User     @relation("HouseholdInviteSentBy", fields: [invitedByUserId], references: [id])
+  inviteeUser   User?    @relation("HouseholdInviteReceiver", fields: [inviteeUserId], references: [id])
+
+  @@index([propertyId])
+  @@index([inviteeEmail])
+  @@index([token])
+  @@index([status])
+  @@map("household_invites")
+}
+
+model HouseholdActivityLog {
+  id         String                @id @default(cuid())
+  propertyId String
+  actorUserId String
+
+  activityType  HouseholdActivityType
+  targetUserId  String?
+  entityType    String?
+  entityId      String?
+  summaryText   String
+  metaJson      Json?
+
+  createdAt DateTime @default(now())
+
+  property    Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  actorUser   User     @relation("HouseholdActivityActor", fields: [actorUserId], references: [id])
+  targetUser  User?    @relation("HouseholdActivityTarget", fields: [targetUserId], references: [id])
+
+  @@index([propertyId, createdAt])
+  @@index([actorUserId])
+  @@index([entityType, entityId])
+  @@map("household_activity_log")
 }
