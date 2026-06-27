@@ -133,8 +133,7 @@ async function computeEquity(propertyId: string) {
   });
 
   if (property?.lastAppraisedValue) {
-    // lastAppraisedValue on Property is in dollars (existing field) — convert to cents
-    estimatedValueCents = property.lastAppraisedValue * 100;
+    estimatedValueCents = property.lastAppraisedValue;
     estimatedValueSource = 'APPRECIATION_TRACKER';
   } else if (profile?.purchasePriceCents) {
     estimatedValueCents = profile.purchasePriceCents;
