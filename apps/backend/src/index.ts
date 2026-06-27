@@ -128,6 +128,7 @@ import homeRenovationAdvisorRoutes from './homeRenovationAdvisor/homeRenovationA
 import refinanceRadarRoutes from './refinanceRadar/refinanceRadar.routes';
 import gazetteRoutes from './modules/gazette/gazette.routes';
 import gazetteInternalRoutes from './modules/gazette/gazetteInternal.routes';
+import materialSpecRoutes from './routes/materialSpec.routes';
 import sharedDataRoutes from './routes/sharedData.routes';
 import releaseGateRoutes from './routes/releaseGate.routes';
 import mfaRoutes from './routes/mfa.routes';
@@ -526,6 +527,7 @@ app.use('/api', homeRenovationAdvisorRoutes);
 app.use('/api', refinanceRadarRoutes);
 app.use('/api', gazetteRoutes);
 app.use('/api', gazetteInternalRoutes);
+app.use('/api', materialSpecRoutes);
 app.use('/api/weather', weatherRoutes);
 app.use('/api/admin/release-gates', authenticate, requireMfa, requireRole(UserRole.ADMIN), releaseGateRoutes);
 
