@@ -1398,6 +1398,9 @@ model User {
   seasonalChecklistItemsAssigned   SeasonalChecklistItem[]       @relation("SeasonalTaskAssignee")
   homeBuyerTasksAssigned           HomeBuyerTask[]               @relation("HomeBuyerTaskAssignee")
 
+  // Home Improvement Financing Center
+  financingScenarios FinancingScenario[]
+
   @@index([email])
   @@index([role])
   @@index([status])
@@ -2046,6 +2049,11 @@ model Property {
   householdMembers     HouseholdMember[]
   householdInvites     HouseholdInvite[]
   householdActivityLog HouseholdActivityLog[]
+
+  // Home Improvement Financing Center
+  financingProfile   PropertyFinancingProfile?
+  equityPositions    EquityPosition[]
+  financingScenarios FinancingScenario[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -4079,13 +4087,17 @@ model ReplaceRepairAnalysis {
   expectedAnnualOwnershipDeltaCents Int? // optional: replace vs repair yearly delta
   breakEvenMonths                   Int?
 
+  // Bidirectional link to a saved financing scenario
+  linkedFinancingScenarioId String?
+
   computedAt DateTime @default(now())
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
-  homeownerProfile HomeownerProfile @relation(fields: [homeownerProfileId], references: [id], onDelete: Cascade)
-  property         Property         @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-  inventoryItem    InventoryItem    @relation(fields: [inventoryItemId], references: [id], onDelete: Cascade)
+  homeownerProfile    HomeownerProfile   @relation(fields: [homeownerProfileId], references: [id], onDelete: Cascade)
+  property            Property           @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  inventoryItem       InventoryItem      @relation(fields: [inventoryItemId], references: [id], onDelete: Cascade)
+  linkedFinancingScenario FinancingScenario? @relation("ReplaceRepairLinkedScenario", fields: [linkedFinancingScenarioId], references: [id], onDelete: SetNull)
 
   @@index([inventoryItemId, computedAt(sort: Desc)])
   @@index([propertyId, inventoryItemId, currentMarker])
@@ -10350,4 +10362,144 @@ model HouseholdActivityLog {
   @@index([actorUserId])
   @@index([entityType, entityId])
   @@map("household_activity_log")
+}
+
+// ============================================================================
+// HOME IMPROVEMENT FINANCING CENTER
+// ============================================================================
+
+enum FinancingOptionType {
+  HELOC
+  HOME_EQUITY_LOAN
+  PERSONAL_LOAN
+  CONTRACTOR_FINANCING
+  PAY_CASH
+}
+
+enum MortgageType {
+  FIXED_30
+  FIXED_15
+  FIXED_20
+  ARM_5
+  ARM_7
+  OTHER
+}
+
+enum FinancingScenarioStatus {
+  DRAFT
+  SAVED
+  ARCHIVED
+}
+
+enum FinancingEntryPoint {
+  REPLACE_REPAIR
+  CAPITAL_TIMELINE
+  BUDGET_FORECASTER
+  DIGITAL_TWIN
+  DIRECT
+  GUIDANCE_STEP
+}
+
+enum RateConfigType {
+  HELOC_RATE
+  HOME_EQUITY_LOAN_RATE
+  PERSONAL_LOAN_RATE_MIN
+  PERSONAL_LOAN_RATE_MAX
+  CONTRACTOR_PROMO_MONTHS
+  CONTRACTOR_ONGOING_APR
+  OPPORTUNITY_COST_RATE
+}
+
+// One row per property. Created when the homeowner first fills in mortgage details.
+model PropertyFinancingProfile {
+  id         String @id @default(cuid())
+  propertyId String @unique
+
+  purchasePriceCents              Int?
+  purchaseDate                    DateTime?
+  mortgageType                    MortgageType?
+  originalMortgageBalanceCents    Int?
+  currentMortgageBalanceCents     Int?
+  mortgageBalanceAsOfDate         DateTime?
+  interestRateBps                 Int?
+  monthlyPaymentCents             Int?
+  hasSecondMortgage               Boolean       @default(false)
+  secondMortgageBalanceCents      Int?
+  hasPMI                          Boolean       @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@map("property_financing_profiles")
+}
+
+// One row per RateConfigType. Updated by admins when market rates shift.
+model FinancingRateConfig {
+  id            String         @id @default(cuid())
+  type          RateConfigType @unique
+  valueBps      Int
+  label         String
+  sourceNote    String?
+  effectiveDate DateTime
+  updatedAt     DateTime       @updatedAt
+
+  @@map("financing_rate_configs")
+}
+
+// A saved financing analysis for a homeowner project.
+model FinancingScenario {
+  id          String                 @id @default(cuid())
+  propertyId  String
+  userId      String
+  status      FinancingScenarioStatus @default(DRAFT)
+  title       String
+  projectDescription          String?
+  projectCostCents            Int
+  entryPoint                  FinancingEntryPoint
+  sourceEntityType            String?
+  sourceEntityId              String?
+  equitySnapshotCents         Int?
+  helocCapacitySnapshotCents  Int?
+  rateSnapshotJson            Json
+  resultsJson                 Json
+  selectedOption              FinancingOptionType?
+  notes                       String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Backref from ReplaceRepairAnalysis
+  linkedReplaceRepairAnalyses ReplaceRepairAnalysis[] @relation("ReplaceRepairLinkedScenario")
+
+  @@index([propertyId, createdAt(sort: Desc)])
+  @@index([userId])
+  @@index([status])
+  @@index([entryPoint])
+  @@map("financing_scenarios")
+}
+
+// Computed equity snapshot (append-only). A new row is written on each equity refresh.
+model EquityPosition {
+  id                    String  @id @default(cuid())
+  propertyId            String
+  estimatedValueCents   Int
+  estimatedValueSource  String  // APPRECIATION_TRACKER | PURCHASE_PRICE | USER_ENTERED
+  mortgageBalanceCents  Int
+  secondMortgageBalanceCents Int
+  equityCents           Int
+  equityPercent         Decimal @db.Decimal(5, 2)
+  ltvPercent            Decimal @db.Decimal(5, 2)
+  helocCapacityCents    Int
+  helocEligible         Boolean
+  computedAt            DateTime @default(now())
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId, computedAt(sort: Desc)])
+  @@map("equity_positions")
 }
