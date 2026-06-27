@@ -16,6 +16,7 @@ import { hasPendingCriticalAssetVerification } from './inventoryVerification.ser
 import { incrementStreak } from './gamification.service';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from './analytics';
 import { generateHabitsForProperty } from './homeHabitCoach/habitGenerationEngine';
+import { HouseholdService } from './household.service';
 
 import { prisma } from '../lib/prisma';
 import { logger } from '../lib/logger';
@@ -496,6 +497,9 @@ export async function createProperty(userId: string, data: CreatePropertyData): 
       yearBuilt: data.yearBuilt ?? null,
     },
   });
+
+  // Auto-create primary owner HouseholdMember row
+  await new HouseholdService().ensurePrimaryOwnerMember(property.id, userId);
 
   // Fire-and-forget: seed initial habits for the new property
   generateHabitsForProperty(property.id).catch((err) =>
