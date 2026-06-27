@@ -26,10 +26,18 @@ export async function upsertFinancingProfile(req: CustomRequest, res: Response, 
 
 // ─── Equity Position ──────────────────────────────────────────────────────────
 
+function serializeEquity(e: Awaited<ReturnType<typeof svc.getLatestEquity>>) {
+  return {
+    ...e,
+    equityPercent: Number(e.equityPercent),
+    ltvPercent: Number(e.ltvPercent),
+  };
+}
+
 export async function getEquityPosition(req: CustomRequest, res: Response, next: NextFunction) {
   try {
     const equity = await svc.getLatestEquity(req.params.propertyId);
-    res.json({ success: true, data: { equity } });
+    res.json({ success: true, data: { equity: serializeEquity(equity) } });
   } catch (err) {
     next(err);
   }
@@ -38,7 +46,7 @@ export async function getEquityPosition(req: CustomRequest, res: Response, next:
 export async function refreshEquityPosition(req: CustomRequest, res: Response, next: NextFunction) {
   try {
     const equity = await svc.refreshEquity(req.params.propertyId);
-    res.status(201).json({ success: true, data: { equity } });
+    res.status(201).json({ success: true, data: { equity: serializeEquity(equity) } });
   } catch (err) {
     next(err);
   }
@@ -47,7 +55,7 @@ export async function refreshEquityPosition(req: CustomRequest, res: Response, n
 export async function getEquityHistory(req: CustomRequest, res: Response, next: NextFunction) {
   try {
     const history = await svc.getEquityHistory(req.params.propertyId);
-    res.json({ success: true, data: { history } });
+    res.json({ success: true, data: { history: history.map(serializeEquity) } });
   } catch (err) {
     next(err);
   }

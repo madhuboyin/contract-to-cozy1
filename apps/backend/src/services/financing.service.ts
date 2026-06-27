@@ -154,11 +154,12 @@ async function computeEquity(propertyId: string) {
 
   const equityPercent =
     estimatedValueCents > 0
-      ? parseFloat(((equityCents / estimatedValueCents) * 100).toFixed(2))
+      ? Math.min(100, parseFloat(((equityCents / estimatedValueCents) * 100).toFixed(2)))
       : 0;
+  // Cap at 999.99 to fit Decimal(5,2) even in deeply-underwater cases
   const ltvPercent =
     estimatedValueCents > 0
-      ? parseFloat(((totalLiabilityCents / estimatedValueCents) * 100).toFixed(2))
+      ? Math.min(999.99, parseFloat(((totalLiabilityCents / estimatedValueCents) * 100).toFixed(2)))
       : 0;
   const helocCapacityCents = Math.max(
     0,

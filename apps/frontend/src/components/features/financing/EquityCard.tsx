@@ -50,6 +50,58 @@ export default function EquityCard({
     );
   }
 
+  // Profile exists but equity couldn't be computed (e.g. missing home value, DB not migrated)
+  if (!equity && profile) {
+    return (
+      <div className="overflow-hidden rounded-2xl border border-white/70 bg-gradient-to-br from-white/80 via-slate-50/72 to-emerald-50/40 shadow-[0_16px_30px_-24px_rgba(15,23,42,0.45)] backdrop-blur-xl dark:border-slate-700/70 dark:from-slate-900/55 dark:via-slate-900/48 dark:to-slate-900/38">
+        <div className="flex items-start justify-between border-b border-slate-100/70 px-5 py-4 dark:border-slate-800/60">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+            Equity Position
+          </p>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 w-8 p-0 text-slate-400 hover:text-slate-700"
+            onClick={onRefresh}
+            disabled={refreshing}
+            title="Refresh equity"
+          >
+            <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+          </Button>
+        </div>
+        <div className="px-5 py-5">
+          <div className="flex items-start gap-3 rounded-xl border border-amber-100 bg-amber-50/80 px-4 py-3 dark:border-amber-900/40 dark:bg-amber-950/30">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+            <div>
+              <p className="text-sm font-medium text-amber-800 dark:text-amber-300">
+                Equity data unavailable
+              </p>
+              <p className="mt-0.5 text-xs text-amber-700 dark:text-amber-400">
+                Add your home&apos;s estimated value and current mortgage balance to your profile, then tap refresh.
+              </p>
+              <div className="mt-3 flex items-center gap-3">
+                <Button asChild size="sm" variant="outline" className="h-7 text-xs">
+                  <Link href={`/dashboard/properties/${propertyId}/tools/financing/profile`}>
+                    Update profile
+                  </Link>
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 text-xs text-slate-600"
+                  onClick={onRefresh}
+                  disabled={refreshing}
+                >
+                  {refreshing ? 'Refreshing…' : 'Try again'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const equityPct = equity ? Number(equity.equityPercent) : null;
   const ltvPct = equity ? Number(equity.ltvPercent) : null;
 
