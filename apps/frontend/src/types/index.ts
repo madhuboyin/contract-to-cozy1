@@ -1117,6 +1117,7 @@ export interface Property {
   state: string;
   zipCode: string;
   isPrimary: boolean;
+  householdRole?: HouseholdRole | null; // Present when user is a household member (not the owner)
   
   // New Basic/Migrated Fields
   propertyType: PropertyType | null; // Use new type
@@ -2205,7 +2206,10 @@ export interface PropertyMaintenanceTask {
   
   // Action Center Integration
   actionKey: string | null;
-  
+
+  // Task assignment (Household Collaboration)
+  assignedToUserId?: string | null;
+
   // Metadata
   createdAt: Date;
   updatedAt: Date;

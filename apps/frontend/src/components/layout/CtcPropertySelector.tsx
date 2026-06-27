@@ -12,6 +12,13 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Property } from '@/types';
+import type { HouseholdRole } from '@/types';
+
+const ROLE_BADGE: Record<HouseholdRole, { label: string; className: string }> = {
+  OWNER: { label: 'Owner', className: 'bg-amber-100 text-amber-700' },
+  CONTRIBUTOR: { label: 'Contributor', className: 'bg-blue-100 text-blue-700' },
+  VIEWER: { label: 'Viewer', className: 'bg-gray-100 text-gray-600' },
+};
 
 interface CtcPropertySelectorProps {
   propertyAddress?: string;
@@ -22,7 +29,7 @@ interface CtcPropertySelectorProps {
   className?: string;
 }
 
-export function CtcPropertySelector({ 
+export function CtcPropertySelector({
   propertyAddress = 'Main Home',
   properties = [],
   selectedPropertyId,
@@ -30,8 +37,6 @@ export function CtcPropertySelector({
   onAddProperty,
   className,
 }: CtcPropertySelectorProps) {
-  const hasMultipleProperties = properties.length > 1;
-
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -52,32 +57,39 @@ export function CtcPropertySelector({
           <ChevronDown className="h-4 w-4 text-slate-400 shrink-0" />
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="center" className="w-[240px]">
+      <DropdownMenuContent align="center" className="w-[260px]">
         {properties.map((property) => {
           const isSelected = property.id === selectedPropertyId;
           const displayAddress = property.address || property.name || 'Unnamed Property';
-          
+          const role = property.householdRole;
+          const badge = role && role !== 'OWNER' ? ROLE_BADGE[role] : null;
+
           return (
             <DropdownMenuItem
               key={property.id}
               onClick={() => onPropertySelect?.(property.id)}
               className="flex items-center gap-2 cursor-pointer"
             >
-              <Check 
+              <Check
                 className={cn(
                   "h-4 w-4 shrink-0",
                   isSelected ? "text-teal-600" : "text-transparent"
-                )} 
+                )}
               />
               <span className="flex-1 truncate text-sm">
                 {displayAddress}
               </span>
+              {badge && (
+                <span className={cn('text-[10px] font-semibold px-1.5 py-0.5 rounded-full shrink-0', badge.className)}>
+                  {badge.label}
+                </span>
+              )}
             </DropdownMenuItem>
           );
         })}
-        
+
         {properties.length > 0 && <DropdownMenuSeparator />}
-        
+
         <DropdownMenuItem
           onClick={onAddProperty}
           className="flex items-center gap-2 cursor-pointer text-teal-600"

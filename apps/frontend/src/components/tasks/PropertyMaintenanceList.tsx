@@ -3,8 +3,8 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Loader2, AlertCircle } from 'lucide-react';
 import { api } from '@/lib/api/client';
+import { Plus, Loader2, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -55,6 +55,15 @@ export function PropertyMaintenanceList({
     },
     enabled: !!propertyId,
   });
+
+  // Check if property has household members (enables task assignment)
+  const { data: householdMembers } = useQuery({
+    queryKey: ['household-members', propertyId],
+    queryFn: () => api.listHouseholdMembers(propertyId),
+    enabled: !!propertyId,
+    staleTime: 5 * 60 * 1000,
+  });
+  const hasHouseholdMembers = (householdMembers?.length ?? 0) > 1;
 
   // Fetch statistics
   const { data: statsData } = useQuery({
@@ -309,6 +318,7 @@ export function PropertyMaintenanceList({
                   onEdit={onEditTask}
                   onDelete={handleDelete}
                   onStatusChange={handleStatusChange}
+                  showAssign={hasHouseholdMembers}
                 />
               ))}
             </div>

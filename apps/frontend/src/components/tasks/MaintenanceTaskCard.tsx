@@ -16,6 +16,7 @@ import {
   Wrench,
   Camera,
   Shield,
+  UserCheck,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -32,6 +33,7 @@ import { TaskStatusBadge } from './TaskStatusBadge';
 import { TaskPriorityBadge } from './TaskPriorityBadge';
 import { PropertyMaintenanceTask } from '@/types';
 import humanizeActionType from '@/lib/utils/humanize';
+import AssignTaskSheet from '@/components/features/household/AssignTaskSheet';
 
 interface MaintenanceTaskCardProps {
   task: PropertyMaintenanceTask;
@@ -40,6 +42,7 @@ interface MaintenanceTaskCardProps {
   onStatusChange?: (task: PropertyMaintenanceTask, newStatus: string) => void;
   onLinkBooking?: (task: PropertyMaintenanceTask) => void;
   compact?: boolean;
+  showAssign?: boolean; // Show assign option when household has members
 }
 
 export function MaintenanceTaskCard({
@@ -49,9 +52,12 @@ export function MaintenanceTaskCard({
   onStatusChange,
   onLinkBooking,
   compact = false,
+  showAssign = false,
 }: MaintenanceTaskCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [showPostCompletionNudge, setShowPostCompletionNudge] = useState(false);
+  const [assignSheetOpen, setAssignSheetOpen] = useState(false);
+  const [assigneeUserId, setAssigneeUserId] = useState<string | null>(task.assignedToUserId ?? null);
 
   // Auto-dismiss post-completion nudge after 10 seconds
   useEffect(() => {
@@ -179,6 +185,15 @@ export function MaintenanceTaskCard({
                       }
                     }}>
                       Mark Complete
+                    </DropdownMenuItem>
+                  </>
+                )}
+                {showAssign && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => setAssignSheetOpen(true)}>
+                      <UserCheck className="h-4 w-4 mr-2" />
+                      {assigneeUserId ? 'Reassign Task' : 'Assign Task'}
                     </DropdownMenuItem>
                   </>
                 )}
@@ -328,6 +343,14 @@ export function MaintenanceTaskCard({
           )}
         </div>
 
+        {/* Assignee chip */}
+        {assigneeUserId && (
+          <div className="flex items-center gap-1.5 mt-2 pt-2 border-t border-gray-100">
+            <UserCheck className="h-3.5 w-3.5 text-blue-500" />
+            <span className="text-xs text-blue-600 font-medium">Assigned</span>
+          </div>
+        )}
+
         {/* Post-completion verification nudge */}
         {showPostCompletionNudge && (
           <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg animate-in fade-in slide-in-from-top-1">
@@ -367,6 +390,19 @@ export function MaintenanceTaskCard({
           </div>
         )}
       </CardContent>
+
+      {showAssign && (
+        <AssignTaskSheet
+          propertyId={task.propertyId}
+          taskId={task.id}
+          taskType="MAINTENANCE"
+          taskTitle={readableTitle}
+          currentAssigneeId={assigneeUserId}
+          open={assignSheetOpen}
+          onOpenChange={setAssignSheetOpen}
+          onAssigned={(uid) => setAssigneeUserId(uid)}
+        />
+      )}
     </Card>
   );
 }

@@ -160,6 +160,7 @@ export interface PropertyWithAssets extends Property {
 
 export interface ScoredProperty extends PropertyWithAssets {
     healthScore: HealthScoreResult;
+    householdRole?: string | null; // Present when the caller is a household member (not the owner)
 }
 
 // [NEW INTERFACE] Defines the minimal subset of Risk Report data needed for AI context.
@@ -378,26 +379,36 @@ async function resolveCoverPhotoDocumentIdForProperty(args: {
 export async function getUserProperties(userId: string): Promise<ScoredProperty[]> {
   const homeownerProfileId = await getHomeownerProfileId(userId);
 
-  const properties = await prisma.property.findMany({
+  // Owned properties
+  const ownedProperties = await prisma.property.findMany({
     where: { homeownerProfileId },
-    orderBy: [
-      { isPrimary: 'desc' },
-      { createdAt: 'desc' },
-    ],
-    include: {
-      homeownerProfile: true,
-      //homeAssets: true, 
-      // FIX 3: Include warranties in the fetch query
-      warranties: true, 
-      coverPhoto: true,
-    }
+    orderBy: [{ isPrimary: 'desc' }, { createdAt: 'desc' }],
+    include: { homeownerProfile: true, warranties: true, coverPhoto: true },
   });
-  
-  // MAP REQUIRED: Calculate and attach score for all properties
-  const hydrated = await Promise.all(properties.map(hydrateHomeAssetsFromInventory));
-  const scoredProperties = await Promise.all(hydrated.map(attachHealthScore));
 
-  return scoredProperties;
+  const hydrated = await Promise.all(ownedProperties.map(hydrateHomeAssetsFromInventory));
+  const scored = await Promise.all(hydrated.map(attachHealthScore));
+
+  // Household member properties (other owners' properties the user has been invited to)
+  const memberships = await prisma.householdMember.findMany({
+    where: {
+      userId,
+      property: { homeownerProfileId: { not: homeownerProfileId } },
+    },
+    include: {
+      property: { include: { warranties: true, coverPhoto: true } },
+    },
+  });
+
+  const memberProperties = await Promise.all(
+    memberships.map(async (m) => {
+      const hydratedMember = await hydrateHomeAssetsFromInventory(m.property as any);
+      const scoredMember = await attachHealthScore(hydratedMember as PropertyWithAssets);
+      return { ...scoredMember, householdRole: m.role };
+    })
+  );
+
+  return [...scored, ...memberProperties];
 }
 
 /**
@@ -534,29 +545,33 @@ export async function createProperty(userId: string, data: CreatePropertyData): 
 }
 
 /**
- * Get a property by ID (verify ownership)
+ * Get a property by ID — accepts owner or active household member
  */
 export async function getPropertyById(propertyId: string, userId: string): Promise<ScoredProperty | null> {
   const homeownerProfileId = await getHomeownerProfileId(userId);
 
-  const property = await prisma.property.findFirst({
-    where: {
-      id: propertyId,
-      homeownerProfileId,
-    },
-    include: {
-      //homeAssets: true, 
-      // FIX 5: Include warranties in the fetch query
-      warranties: true, 
-      coverPhoto: true,
-    }
+  // Primary path: user owns the property
+  let property = await prisma.property.findFirst({
+    where: { id: propertyId, homeownerProfileId },
+    include: { warranties: true, coverPhoto: true },
   });
 
-  if (!property) return null;
+  let householdRole: string | null = null;
 
-  // ATTACH SCORE: Calculate and attach score before returning
+  if (!property) {
+    // Fallback: user is a household member of this property
+    const membership = await prisma.householdMember.findUnique({
+      where: { propertyId_userId: { propertyId, userId } },
+      include: { property: { include: { warranties: true, coverPhoto: true } } },
+    });
+    if (!membership) return null;
+    property = membership.property as any;
+    householdRole = membership.role;
+  }
+
   const hydrated = await hydrateHomeAssetsFromInventory(property as any);
-return attachHealthScore(hydrated as PropertyWithAssets);
+  const scored = await attachHealthScore(hydrated as PropertyWithAssets);
+  return { ...scored, householdRole };
 }
 
 export async function getNextPropertyNudge(propertyId: string): Promise<PropertyNudge | null> {
