@@ -3173,3 +3173,40 @@ export interface ResolutionCenterData {
 export interface ResolutionCenterPayload extends ResolutionCenterData {
   urgentActions: ResolutionCenterAction[];
 }
+
+// ============================================================================
+// MATERIAL SPEC REGISTRY TYPES
+// ============================================================================
+
+export type MaterialCategory = 'PAINT' | 'TILE' | 'FLOORING' | 'GROUT' | 'COUNTERTOP' | 'CABINET' | 'HARDWARE' | 'TRIM_MOLDING' | 'WALLPAPER' | 'ROOFING' | 'SIDING' | 'WINDOW' | 'DOOR' | 'INSULATION' | 'OTHER';
+export type MaterialScopeLevel = 'ROOM' | 'PROPERTY';
+export type MaterialSurface = 'WALLS' | 'CEILING' | 'FLOOR' | 'BACKSPLASH' | 'SHOWER_WALLS' | 'SHOWER_FLOOR' | 'TUB_SURROUND' | 'COUNTERTOP' | 'EXTERIOR_FACADE' | 'TRIM' | 'DOORS' | 'WINDOWS' | 'CABINETRY' | 'OTHER';
+export type MaterialSpecExportStatus = 'PENDING' | 'GENERATING' | 'COMPLETED' | 'FAILED';
+
+export interface MaterialSpecPhoto {
+  id: string; materialSpecId: string; propertyId: string;
+  photoUrl: string; fileKey: string; caption?: string | null; sortOrder: number; createdAt: string;
+}
+
+export interface MaterialSpec {
+  id: string; propertyId: string; roomId?: string | null;
+  scopeLevel: MaterialScopeLevel; category: MaterialCategory; surface?: MaterialSurface | null;
+  label: string; manufacturer?: string | null; productLine?: string | null; productName?: string | null;
+  sku?: string | null; colorCode?: string | null; colorHex?: string | null; finish?: string | null;
+  dimensions?: string | null; material?: string | null; supplier?: string | null; supplierUrl?: string | null;
+  purchaseDate?: string | null; quantityPurchased?: string | null; lotBatch?: string | null;
+  notes?: string | null; isActive: boolean;
+  linkedInventoryItemId?: string | null; linkedHomeAssetId?: string | null;
+  createdAt: string; updatedAt: string;
+  photos: MaterialSpecPhoto[];
+  room?: { id: string; name: string } | null;
+}
+
+export interface MaterialSpecExport {
+  id: string; propertyId: string; requestedByUserId: string;
+  status: MaterialSpecExportStatus; scopeType: string; title: string;
+  totalSpecs?: number | null; fileUrl?: string | null; fileKey?: string | null;
+  expiresAt?: string | null; errorMessage?: string | null;
+  createdAt: string; updatedAt: string;
+  signedUrl?: string | null;
+}
