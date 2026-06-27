@@ -495,6 +495,7 @@ model InventoryRoom {
   homeItems            HomeItem[]
   plantProfiles        RoomPlantProfile[]
   plantRecommendations RoomPlantRecommendation[]
+  materialSpecs        MaterialSpec[]
 
   @@unique([propertyId, name])
   @@index([propertyId])
@@ -597,6 +598,7 @@ model InventoryItem {
   homeCapitalTimelineOverrides HomeCapitalTimelineOverride[]
   maintenancePredictions       MaintenancePrediction[]
   bookings                     Booking[]
+  materialSpecs                MaterialSpec[]
 
   @@unique([propertyId, sourceHash])
   @@index([manufacturerNorm, modelNumberNorm])
@@ -1383,6 +1385,9 @@ model User {
   incidentUserPreferences             IncidentUserPreference[]
   incidentAutoResolutionNotifications IncidentAutoResolutionNotification[]
 
+  // Material Spec Registry
+  materialSpecExports MaterialSpecExport[]
+
   @@index([email])
   @@index([role])
   @@index([status])
@@ -2012,6 +2017,10 @@ model Property {
 
   // Incident Lifecycle Management
   incidentAutoResolutionNotifications IncidentAutoResolutionNotification[]
+
+  // Material Spec Registry
+  materialSpecs        MaterialSpec[]
+  materialSpecExports  MaterialSpecExport[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -2659,6 +2668,7 @@ model HomeAsset {
   guidanceStepEvidences     GuidanceStepEvidence[]
   quoteComparisonWorkspaces QuoteComparisonWorkspace[]
   priceFinalizations        PriceFinalization[]
+  materialSpecs             MaterialSpec[]
 
   @@unique([propertyId, assetType]) // Usually only one furnace per house
   @@index([manufacturerNorm, modelNumberNorm])
@@ -9817,6 +9827,55 @@ enum GazetteAiStatus {
   FAILED // AI generation was attempted but failed
 }
 
+// ─── Material Spec Registry Enums ────────────────────────────────────────────
+
+enum MaterialCategory {
+  PAINT
+  TILE
+  FLOORING
+  GROUT
+  COUNTERTOP
+  CABINET
+  HARDWARE
+  TRIM_MOLDING
+  WALLPAPER
+  ROOFING
+  SIDING
+  WINDOW
+  DOOR
+  INSULATION
+  OTHER
+}
+
+enum MaterialScopeLevel {
+  ROOM
+  PROPERTY
+}
+
+enum MaterialSurface {
+  WALLS
+  CEILING
+  FLOOR
+  BACKSPLASH
+  SHOWER_WALLS
+  SHOWER_FLOOR
+  TUB_SURROUND
+  COUNTERTOP
+  EXTERIOR_FACADE
+  TRIM
+  DOORS
+  WINDOWS
+  CABINETRY
+  OTHER
+}
+
+enum MaterialSpecExportStatus {
+  PENDING
+  GENERATING
+  COMPLETED
+  FAILED
+}
+
 // ─── Models ──────────────────────────────────────────────────────────────────
 
 // A. One weekly Gazette edition per property.
@@ -10056,4 +10115,90 @@ model GazetteShareLink {
   @@index([editionId, status])
   @@index([propertyId, status])
   @@map("gazette_share_links")
+}
+
+// ─── Material Spec Registry Models ───────────────────────────────────────────
+
+model MaterialSpec {
+  id         String             @id @default(uuid())
+  propertyId String
+  roomId     String?
+  scopeLevel MaterialScopeLevel
+  category   MaterialCategory
+  surface    MaterialSurface?
+  label      String
+
+  manufacturer  String?
+  productLine   String?
+  productName   String?
+  sku           String?
+  colorCode     String?
+  colorHex      String?
+  finish        String?
+  dimensions    String?
+  material      String?
+  supplier      String?
+  supplierUrl   String?
+  purchaseDate  DateTime?
+  quantityPurchased String?
+  lotBatch      String?
+  notes         String?
+  isActive      Boolean @default(true)
+
+  linkedInventoryItemId String?
+  linkedHomeAssetId     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  property      Property       @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  room          InventoryRoom? @relation(fields: [roomId], references: [id], onDelete: SetNull)
+  inventoryItem InventoryItem? @relation(fields: [linkedInventoryItemId], references: [id], onDelete: SetNull)
+  homeAsset     HomeAsset?     @relation(fields: [linkedHomeAssetId], references: [id], onDelete: SetNull)
+  photos        MaterialSpecPhoto[]
+
+  @@index([propertyId])
+  @@index([roomId])
+  @@index([category])
+  @@index([propertyId, category])
+  @@index([isActive])
+  @@map("material_specs")
+}
+
+model MaterialSpecPhoto {
+  id             String @id @default(uuid())
+  materialSpecId String
+  propertyId     String
+  photoUrl       String
+  fileKey        String
+  caption        String?
+  sortOrder      Int    @default(0)
+  createdAt      DateTime @default(now())
+
+  materialSpec MaterialSpec @relation(fields: [materialSpecId], references: [id], onDelete: Cascade)
+
+  @@index([materialSpecId])
+  @@map("material_spec_photos")
+}
+
+model MaterialSpecExport {
+  id                String                   @id @default(uuid())
+  propertyId        String
+  requestedByUserId String
+  status            MaterialSpecExportStatus
+  scopeType         String
+  title             String
+  totalSpecs        Int?
+  fileUrl           String?
+  fileKey           String?
+  expiresAt         DateTime?
+  errorMessage      String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  property    Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  requestedBy User     @relation(fields: [requestedByUserId], references: [id])
+
+  @@index([propertyId, createdAt])
+  @@map("material_spec_exports")
 }

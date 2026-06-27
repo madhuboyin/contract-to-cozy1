@@ -394,6 +394,7 @@ model InventoryRoom {
   scanSessions   InventoryRoomScanSession[]
   inventoryDrafts InventoryDraftItem[]
   homeItems HomeItem[]
+  materialSpecs  MaterialSpec[]
 
   @@index([propertyId])
   @@unique([propertyId, name])
@@ -488,6 +489,7 @@ model InventoryItem {
   homeCapitalTimelineOverrides HomeCapitalTimelineOverride[]
   maintenancePredictions MaintenancePrediction[]
   bookings Booking[]
+  materialSpecs MaterialSpec[]
 
   @@index([manufacturerNorm, modelNumberNorm])
   @@index([upc])
@@ -496,7 +498,7 @@ model InventoryItem {
   @@index([isVerified]) // NEW: Index added for performant nudge filtering
   @@index([propertyId, category])
   @@index([propertyId, roomId])
-  
+
   @@unique([propertyId, sourceHash])
 
   @@map("inventory_items")
@@ -1185,9 +1187,12 @@ model User {
   negotiationShieldCasesCreated NegotiationShieldCase[] @relation("NegotiationShieldCaseCreatedBy")
   radarStates    PropertyRadarState[]
 
+  // Material Spec Registry
+  materialSpecExports MaterialSpecExport[]
+
   @@index([email])
   @@index([role])
-  
+
   @@index([status])
   @@map("users")
 }
@@ -1702,12 +1707,16 @@ model Property {
   hiddenAssetMatches  PropertyHiddenAssetMatch[]
   hiddenAssetScanRuns PropertyHiddenAssetScanRun[]
 
+  // Material Spec Registry
+  materialSpecs       MaterialSpec[]
+  materialSpecExports MaterialSpecExport[]
+
   estimatedMaintenancePremiumCents Int @default(0)
   isEquityVerified      Boolean @default(false)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  
+
   @@index([homeownerProfileId])
   @@index([coverPhotoDocumentId])
   @@map("properties")
@@ -2335,9 +2344,10 @@ model HomeAsset {
 
   recallMatches   RecallMatch[]
   homeItems HomeItem[]
+  materialSpecs MaterialSpec[]
 
   @@index([manufacturerNorm, modelNumberNorm])
-  
+
   @@index([propertyId])
   @@unique([propertyId, assetType]) // Usually only one furnace per house
 }
@@ -6740,4 +6750,139 @@ model PropertyHiddenAssetScanRun {
   @@index([propertyId, status])
   @@index([startedAt])
   @@map("property_hidden_asset_scan_runs")
+}
+
+// ─── Material Spec Registry Enums ────────────────────────────────────────────
+
+enum MaterialCategory {
+  PAINT
+  TILE
+  FLOORING
+  GROUT
+  COUNTERTOP
+  CABINET
+  HARDWARE
+  TRIM_MOLDING
+  WALLPAPER
+  ROOFING
+  SIDING
+  WINDOW
+  DOOR
+  INSULATION
+  OTHER
+}
+
+enum MaterialScopeLevel {
+  ROOM
+  PROPERTY
+}
+
+enum MaterialSurface {
+  WALLS
+  CEILING
+  FLOOR
+  BACKSPLASH
+  SHOWER_WALLS
+  SHOWER_FLOOR
+  TUB_SURROUND
+  COUNTERTOP
+  EXTERIOR_FACADE
+  TRIM
+  DOORS
+  WINDOWS
+  CABINETRY
+  OTHER
+}
+
+enum MaterialSpecExportStatus {
+  PENDING
+  GENERATING
+  COMPLETED
+  FAILED
+}
+
+// ─── Material Spec Registry Models ───────────────────────────────────────────
+
+model MaterialSpec {
+  id         String             @id @default(uuid())
+  propertyId String
+  roomId     String?
+  scopeLevel MaterialScopeLevel
+  category   MaterialCategory
+  surface    MaterialSurface?
+  label      String
+
+  manufacturer      String?
+  productLine       String?
+  productName       String?
+  sku               String?
+  colorCode         String?
+  colorHex          String?
+  finish            String?
+  dimensions        String?
+  material          String?
+  supplier          String?
+  supplierUrl       String?
+  purchaseDate      DateTime?
+  quantityPurchased String?
+  lotBatch          String?
+  notes             String?
+  isActive          Boolean @default(true)
+
+  linkedInventoryItemId String?
+  linkedHomeAssetId     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  property      Property       @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  room          InventoryRoom? @relation(fields: [roomId], references: [id], onDelete: SetNull)
+  inventoryItem InventoryItem? @relation(fields: [linkedInventoryItemId], references: [id], onDelete: SetNull)
+  homeAsset     HomeAsset?     @relation(fields: [linkedHomeAssetId], references: [id], onDelete: SetNull)
+  photos        MaterialSpecPhoto[]
+
+  @@index([propertyId])
+  @@index([roomId])
+  @@index([category])
+  @@index([propertyId, category])
+  @@index([isActive])
+  @@map("material_specs")
+}
+
+model MaterialSpecPhoto {
+  id             String @id @default(uuid())
+  materialSpecId String
+  propertyId     String
+  photoUrl       String
+  fileKey        String
+  caption        String?
+  sortOrder      Int    @default(0)
+  createdAt      DateTime @default(now())
+
+  materialSpec MaterialSpec @relation(fields: [materialSpecId], references: [id], onDelete: Cascade)
+
+  @@index([materialSpecId])
+  @@map("material_spec_photos")
+}
+
+model MaterialSpecExport {
+  id                String                   @id @default(uuid())
+  propertyId        String
+  requestedByUserId String
+  status            MaterialSpecExportStatus
+  scopeType         String
+  title             String
+  totalSpecs        Int?
+  fileUrl           String?
+  fileKey           String?
+  expiresAt         DateTime?
+  errorMessage      String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  property    Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  requestedBy User     @relation(fields: [requestedByUserId], references: [id])
+
+  @@index([propertyId, createdAt])
+  @@map("material_spec_exports")
 }
