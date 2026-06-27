@@ -3483,3 +3483,245 @@ export interface UpdateScenarioPayload {
   selectedOption?: FinancingOptionType;
   status?: FinancingScenarioStatus;
 }
+
+// ─── DIY Project Center ────────────────────────────────────────────────────────
+
+export type DiyProjectCategory = 'HVAC' | 'PLUMBING' | 'ELECTRICAL' | 'PAINTING' | 'GENERAL' | 'EXTERIOR' | 'FLOORING' | 'APPLIANCE' | 'LANDSCAPING' | 'OTHER';
+export type DiySkillLevel = 'BEGINNER' | 'INTERMEDIATE' | 'ADVANCED';
+export type DiyDifficultyLevel = 'EASY' | 'MODERATE' | 'HARD' | 'EXPERT_ONLY';
+export type DiyProjectStatus = 'PLANNING' | 'IN_PROGRESS' | 'COMPLETED' | 'ABANDONED' | 'HIRED_OUT';
+export type DiyDecisionVerdict = 'DIY_RECOMMENDED' | 'BORDERLINE' | 'HIRE_RECOMMENDED' | 'HIRE_REQUIRED';
+export type DiyStepStatus = 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'SKIPPED';
+export type DiyToolAction = 'ALREADY_OWNED' | 'RENT' | 'BUY';
+export type DiySafetyLevel = 'LOW' | 'MODERATE' | 'HIGH';
+export type DiyAiGuideStatus = 'PENDING' | 'GENERATING' | 'COMPLETED' | 'FAILED';
+
+export interface DiySkillProfile {
+  id: string;
+  hvac: DiySkillLevel;
+  plumbing: DiySkillLevel;
+  electrical: DiySkillLevel;
+  painting: DiySkillLevel;
+  general: DiySkillLevel;
+  exterior: DiySkillLevel;
+  flooring: DiySkillLevel;
+  appliance: DiySkillLevel;
+  landscaping: DiySkillLevel;
+  toolsOwnedJson: string[];
+  assessedAt: string;
+}
+
+export interface DiySkillProfilePayload {
+  hvac: DiySkillLevel;
+  plumbing: DiySkillLevel;
+  electrical: DiySkillLevel;
+  painting: DiySkillLevel;
+  general: DiySkillLevel;
+  exterior: DiySkillLevel;
+  flooring: DiySkillLevel;
+  appliance: DiySkillLevel;
+  landscaping: DiySkillLevel;
+  toolsOwnedJson?: string[];
+  quizAnswersJson?: object;
+}
+
+export interface DiyTemplateSummary {
+  id: string;
+  slug: string;
+  title: string;
+  shortDescription: string;
+  category: DiyProjectCategory;
+  difficultyLevel: DiyDifficultyLevel;
+  requiredSkillLevel: DiySkillLevel;
+  safetyLevel: DiySafetyLevel;
+  estimatedMinutes: number;
+  estimatedMaterialCostMinCents?: number;
+  estimatedMaterialCostMaxCents?: number;
+  professionalCostMinCents?: number;
+  professionalCostMaxCents?: number;
+  tags: string[];
+  featuredOrder?: number;
+}
+
+export interface DiyTemplateStep {
+  id: string;
+  stepNumber: number;
+  title: string;
+  description: string;
+  estimatedMinutes?: number;
+  safetyNote?: string;
+  tipNote?: string;
+  imageUrl?: string;
+  isOptional: boolean;
+}
+
+export interface DiyTemplateMaterial {
+  id: string;
+  name: string;
+  unit: string;
+  quantityFormula: string;
+  unitPriceCents: number;
+  isOptional: boolean;
+  purchaseNote?: string;
+}
+
+export interface DiyTemplateTool {
+  id: string;
+  name: string;
+  canonicalId?: string;
+  isRequired: boolean;
+  defaultToolAction: DiyToolAction;
+  rentDailyPriceCents?: number;
+  buyEstimatePriceCents?: number;
+}
+
+export interface DiyTemplateDetail extends DiyTemplateSummary {
+  longDescription?: string;
+  permitRequirement: string;
+  steps: DiyTemplateStep[];
+  materials: DiyTemplateMaterial[];
+  tools: DiyTemplateTool[];
+}
+
+export interface DiyDecisionFactor {
+  code: string;
+  label: string;
+  effect: 'positive' | 'negative' | 'neutral';
+  contributionPoints: number;
+  description: string;
+}
+
+export interface DiyDecisionResult {
+  verdict: DiyDecisionVerdict;
+  score: number;
+  factors: DiyDecisionFactor[];
+  blockers: string[];
+  savingsEstimateCents: number;
+  reasoning: string;
+}
+
+export interface DiyDecisionInput {
+  projectCategory: DiyProjectCategory;
+  difficultyLevel: DiyDifficultyLevel;
+  safetyLevel: DiySafetyLevel;
+  permitRequirement: string;
+  requiredSkillLevel: DiySkillLevel;
+  estimatedMinutes: number;
+  requiredToolCanonicalIds: string[];
+  estimatedMaterialCostMinCents?: number;
+  estimatedMaterialCostMaxCents?: number;
+  professionalCostMinCents?: number;
+  professionalCostMaxCents?: number;
+}
+
+export interface DiyProjectSummary {
+  id: string;
+  title: string;
+  category: DiyProjectCategory;
+  status: DiyProjectStatus;
+  decisionVerdict?: DiyDecisionVerdict;
+  requiredStepCount: number;
+  completedStepCount: number;
+  templateId?: string;
+  startedAt?: string;
+  completedAt?: string;
+  createdAt: string;
+}
+
+export interface DiyProjectStep {
+  id: string;
+  stepNumber: number;
+  title: string;
+  description: string;
+  estimatedMinutes?: number;
+  safetyNote?: string;
+  tipNote?: string;
+  isOptional: boolean;
+  status: DiyStepStatus;
+  notes?: string;
+  completedAt?: string;
+}
+
+export interface DiyProjectMaterial {
+  id: string;
+  name: string;
+  unit: string;
+  quantity: number;
+  unitPriceCents: number;
+  totalEstimateCents: number;
+  isOptional: boolean;
+  purchaseNote?: string;
+  isPurchased: boolean;
+}
+
+export interface DiyProjectTool {
+  id: string;
+  name: string;
+  isRequired: boolean;
+  defaultToolAction: DiyToolAction;
+  userToolAction?: DiyToolAction;
+  rentDailyPriceCents?: number;
+  buyEstimatePriceCents?: number;
+}
+
+export interface DiyProjectDetail extends DiyProjectSummary {
+  description?: string;
+  maintenanceTaskId?: string;
+  incidentId?: string;
+  inventoryItemId?: string;
+  homeEventId?: string;
+  notesJson: { text: string; createdAt: string }[];
+  photoUrls: string[];
+  actualMinutes?: number;
+  actualMaterialCostCents?: number;
+  steps: DiyProjectStep[];
+  materials: DiyProjectMaterial[];
+  tools: DiyProjectTool[];
+}
+
+export interface DiyAiGuide {
+  id: string;
+  status: DiyAiGuideStatus;
+  userPrompt: string;
+  category?: DiyProjectCategory;
+  generatedTitle?: string;
+  generatedSummary?: string;
+  stepsJson?: object[];
+  materialsJson?: object[];
+  toolsJson?: object[];
+  decisionVerdict?: DiyDecisionVerdict;
+  safetyWarningsJson?: string[];
+  errorMessage?: string;
+  createdAt: string;
+}
+
+export interface DiyTemplateListParams {
+  category?: string | string[];
+  difficulty?: string | string[];
+  maxSkillLevel?: DiySkillLevel;
+  search?: string;
+  limit?: number;
+  cursor?: string;
+}
+
+export interface DiyProjectListParams {
+  status?: string | string[];
+  category?: string | string[];
+  limit?: number;
+  cursor?: string;
+}
+
+export interface CreateDiyProjectPayload {
+  templateId?: string;
+  aiGuideId?: string;
+  maintenanceTaskId?: string;
+  incidentId?: string;
+  inventoryItemId?: string;
+  decisionVerdict?: DiyDecisionVerdict;
+  decisionScoreJson?: object;
+}
+
+export interface UpdateDiyProjectPayload {
+  notesJson?: { text: string; createdAt: string }[];
+  photoUrls?: string[];
+}

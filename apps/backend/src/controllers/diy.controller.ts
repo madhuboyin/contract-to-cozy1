@@ -1,0 +1,156 @@
+// apps/backend/src/controllers/diy.controller.ts
+import { Response, NextFunction } from 'express';
+import { CustomRequest as Request } from '../types';
+import { diyService } from '../services/diy.service';
+import { diyDecisionService } from '../services/diyDecision.service';
+import { diyAiGuideService } from '../services/diyAiGuide.service';
+
+// ── Skill Profile ─────────────────────────────────────────────────────────────
+
+export async function getSkillProfile(req: Request, res: Response, next: NextFunction) {
+  try {
+    const profile = await diyService.getSkillProfile(req.user!.userId);
+    res.json({ success: true, data: { profile } });
+  } catch (err) { next(err); }
+}
+
+export async function upsertSkillProfile(req: Request, res: Response, next: NextFunction) {
+  try {
+    const profile = await diyService.upsertSkillProfile(req.user!.userId, req.body);
+    res.json({ success: true, data: { profile } });
+  } catch (err) { next(err); }
+}
+
+// ── Template Library ──────────────────────────────────────────────────────────
+
+export async function listTemplates(req: Request, res: Response, next: NextFunction) {
+  try {
+    const result = await diyService.listTemplates(req.query as any);
+    res.json({ success: true, data: result });
+  } catch (err) { next(err); }
+}
+
+export async function getFeaturedTemplates(req: Request, res: Response, next: NextFunction) {
+  try {
+    const templates = await diyService.getFeaturedTemplates();
+    res.json({ success: true, data: { templates } });
+  } catch (err) { next(err); }
+}
+
+export async function getTemplateDetail(req: Request, res: Response, next: NextFunction) {
+  try {
+    const template = await diyService.getTemplateDetail(req.params.templateId);
+    res.json({ success: true, data: { template } });
+  } catch (err) { next(err); }
+}
+
+// ── Decision Engine ────────────────────────────────────────────────────────────
+
+export async function getDiyDecision(req: Request, res: Response, next: NextFunction) {
+  try {
+    const result = await diyDecisionService.score({ ...req.body, userId: req.user!.userId });
+    res.json({ success: true, data: result });
+  } catch (err) { next(err); }
+}
+
+// ── Projects ──────────────────────────────────────────────────────────────────
+
+export async function createProject(req: Request, res: Response, next: NextFunction) {
+  try {
+    const project = await diyService.createProject(req.params.propertyId, req.user!.userId, req.body);
+    res.status(201).json({ success: true, data: { project } });
+  } catch (err) { next(err); }
+}
+
+export async function listProjects(req: Request, res: Response, next: NextFunction) {
+  try {
+    const result = await diyService.listProjects(req.params.propertyId, req.query as any);
+    res.json({ success: true, data: result });
+  } catch (err) { next(err); }
+}
+
+export async function getProject(req: Request, res: Response, next: NextFunction) {
+  try {
+    const project = await diyService.getProjectDetail(req.params.projectId, req.params.propertyId);
+    res.json({ success: true, data: { project } });
+  } catch (err) { next(err); }
+}
+
+export async function updateProject(req: Request, res: Response, next: NextFunction) {
+  try {
+    const project = await diyService.updateProject(req.params.projectId, req.params.propertyId, req.body);
+    res.json({ success: true, data: { project } });
+  } catch (err) { next(err); }
+}
+
+export async function updateStep(req: Request, res: Response, next: NextFunction) {
+  try {
+    const step = await diyService.updateStep(
+      req.params.projectId, req.params.propertyId, req.params.stepId, req.body,
+    );
+    res.json({ success: true, data: { step } });
+  } catch (err) { next(err); }
+}
+
+export async function completeProject(req: Request, res: Response, next: NextFunction) {
+  try {
+    const project = await diyService.completeProject(req.params.projectId, req.params.propertyId, req.body);
+    res.json({ success: true, data: { homeEventId: project.homeEventId } });
+  } catch (err) { next(err); }
+}
+
+export async function abandonProject(req: Request, res: Response, next: NextFunction) {
+  try {
+    await diyService.abandonProject(req.params.projectId, req.params.propertyId, req.body.hireOut ?? false);
+    res.status(204).send();
+  } catch (err) { next(err); }
+}
+
+// ── AI Guide ──────────────────────────────────────────────────────────────────
+
+export async function generateAiGuide(req: Request, res: Response, next: NextFunction) {
+  try {
+    const guideId = await diyAiGuideService.initiateGeneration(
+      req.user!.userId, req.params.propertyId, req.body.userPrompt,
+    );
+    res.status(201).json({ success: true, data: { guideId } });
+  } catch (err) { next(err); }
+}
+
+export async function getAiGuide(req: Request, res: Response, next: NextFunction) {
+  try {
+    const guide = await diyAiGuideService.getGuide(req.params.guideId, req.params.propertyId);
+    if (!guide) { res.status(404).json({ success: false, error: 'Guide not found' }); return; }
+    res.json({ success: true, data: { guide } });
+  } catch (err) { next(err); }
+}
+
+// ── Admin ─────────────────────────────────────────────────────────────────────
+
+export async function adminListTemplates(req: Request, res: Response, next: NextFunction) {
+  try {
+    const result = await diyService.adminListTemplates(req.query as any);
+    res.json({ success: true, data: result });
+  } catch (err) { next(err); }
+}
+
+export async function adminCreateTemplate(req: Request, res: Response, next: NextFunction) {
+  try {
+    const template = await diyService.adminCreateTemplate(req.body);
+    res.status(201).json({ success: true, data: { template } });
+  } catch (err) { next(err); }
+}
+
+export async function adminUpdateTemplate(req: Request, res: Response, next: NextFunction) {
+  try {
+    const template = await diyService.adminUpdateTemplate(req.params.templateId, req.body);
+    res.json({ success: true, data: { template } });
+  } catch (err) { next(err); }
+}
+
+export async function adminUpdateTemplateStatus(req: Request, res: Response, next: NextFunction) {
+  try {
+    const template = await diyService.adminUpdateTemplateStatus(req.params.templateId, req.body.status);
+    res.json({ success: true, data: { template } });
+  } catch (err) { next(err); }
+}

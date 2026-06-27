@@ -1,0 +1,172 @@
+'use client';
+import { useEffect, useState, useCallback } from 'react';
+import { useParams, useSearchParams, useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { ChevronLeft } from 'lucide-react';
+import { api } from '@/lib/api/client';
+import type { DiyProjectDetail, DiyStepStatus, DiyToolAction } from '@/types';
+import ProjectStepList from '@/components/features/diy/ProjectStepList';
+import MaterialsChecklist from '@/components/features/diy/MaterialsChecklist';
+import ToolsList from '@/components/features/diy/ToolsList';
+import ProjectCompleteSheet from '@/components/features/diy/ProjectCompleteSheet';
+import { STATUS_LABELS, STATUS_COLOR, CATEGORY_EMOJI } from '@/components/features/diy/DiyUtils';
+
+export default function ProjectTrackerPage() {
+  const params = useParams<{ id: string }>();
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const propertyId = searchParams.get('propertyId') ?? '';
+
+  const [project, setProject] = useState<DiyProjectDetail | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [showComplete, setShowComplete] = useState(false);
+  const [abandoning, setAbandoning] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    if (!propertyId) return;
+    const p = await api.getDiyProject(propertyId, params.id).catch(() => null);
+    setProject(p);
+    setLoading(false);
+  }, [propertyId, params.id]);
+
+  useEffect(() => { load(); }, [load]);
+
+  async function handleStepUpdate(stepId: string, status: DiyStepStatus, notes?: string) {
+    if (!propertyId || !project) return;
+    await api.updateDiyProjectStep(propertyId, project.id, stepId, { status, notes });
+    await load();
+  }
+
+  async function handleAbandon() {
+    if (!propertyId || !project) return;
+    if (!confirm('Stop this project?')) return;
+    setAbandoning(true);
+    await api.abandonDiyProject(propertyId, project.id, { hireOut: false }).catch(() => null);
+    router.push(`/dashboard/diy?propertyId=${propertyId}`);
+  }
+
+  if (loading) {
+    return (
+      <div className="flex h-48 items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-neutral-200 border-t-[hsl(var(--mobile-brand-strong))]" />
+      </div>
+    );
+  }
+
+  if (!project) {
+    return <div className="p-4 text-sm text-neutral-500">Project not found</div>;
+  }
+
+  const requiredSteps = project.steps.filter((s) => !s.isOptional);
+  const completedRequired = requiredSteps.filter((s) => s.status === 'COMPLETED').length;
+  const allDone = requiredSteps.length > 0 && completedRequired === requiredSteps.length;
+  const progressPct = requiredSteps.length > 0 ? Math.round((completedRequired / requiredSteps.length) * 100) : 0;
+  const isFinished = project.status === 'COMPLETED' || project.status === 'ABANDONED' || project.status === 'HIRED_OUT';
+
+  return (
+    <div className="space-y-4 p-4 pb-32">
+      {/* Nav */}
+      <div className="flex items-center gap-2">
+        <Link href={`/dashboard/diy?propertyId=${propertyId}`}>
+          <ChevronLeft className="h-5 w-5 text-neutral-500" />
+        </Link>
+        <span className="text-xs text-[hsl(var(--mobile-text-muted))]">DIY Projects</span>
+      </div>
+
+      {/* Header */}
+      <div>
+        <div className="flex items-center gap-2">
+          <span className="text-xl">{CATEGORY_EMOJI[project.category]}</span>
+          <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_COLOR[project.status]}`}>
+            {STATUS_LABELS[project.status]}
+          </span>
+        </div>
+        <h1 className="mt-1 text-lg font-bold">{project.title}</h1>
+      </div>
+
+      {/* Progress */}
+      {!isFinished && (
+        <div>
+          <div className="flex justify-between text-xs text-[hsl(var(--mobile-text-muted))] mb-1">
+            <span>{completedRequired}/{requiredSteps.length} required steps</span>
+            <span>{progressPct}%</span>
+          </div>
+          <div className="h-2 rounded-full bg-neutral-100">
+            <div className="h-full rounded-full bg-[hsl(var(--mobile-brand-strong))]" style={{ width: `${progressPct}%` }} />
+          </div>
+        </div>
+      )}
+
+      {/* Steps */}
+      <section>
+        <p className="mb-2 text-sm font-semibold">Steps</p>
+        <ProjectStepList
+          steps={project.steps}
+          onUpdateStep={handleStepUpdate}
+          disabled={isFinished}
+        />
+      </section>
+
+      {/* Materials */}
+      {project.materials.length > 0 && (
+        <section>
+          <MaterialsChecklist materials={project.materials} />
+        </section>
+      )}
+
+      {/* Tools */}
+      {project.tools.length > 0 && (
+        <section>
+          <ToolsList tools={project.tools} />
+        </section>
+      )}
+
+      {error && <p className="text-sm text-red-600">{error}</p>}
+
+      {/* Fixed bottom actions */}
+      {!isFinished && (
+        <div className="fixed bottom-0 left-0 right-0 bg-white border-t p-4 space-y-2">
+          {allDone && (
+            <button
+              type="button"
+              onClick={() => setShowComplete(true)}
+              className="w-full rounded-xl bg-green-600 py-3 text-sm font-semibold text-white"
+            >
+              Complete Project
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={handleAbandon}
+            disabled={abandoning}
+            className="w-full text-center text-sm text-neutral-400 disabled:opacity-50"
+          >
+            I'll hire a pro instead
+          </button>
+        </div>
+      )}
+
+      {project.status === 'COMPLETED' && project.homeEventId && (
+        <div className="rounded-xl border border-green-200 bg-green-50 p-4">
+          <p className="text-sm font-semibold text-green-800">Project logged to your home timeline!</p>
+          <Link href="/dashboard/home-events" className="mt-1 text-xs text-green-700 underline">
+            View Home Timeline →
+          </Link>
+        </div>
+      )}
+
+      {showComplete && propertyId && (
+        <ProjectCompleteSheet
+          propertyId={propertyId}
+          projectId={project.id}
+          onCompleted={async () => {
+            setShowComplete(false);
+            await load();
+          }}
+          onClose={() => setShowComplete(false)}
+        />
+      )}
+    </div>
+  );
+}

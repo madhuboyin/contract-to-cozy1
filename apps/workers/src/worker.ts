@@ -42,6 +42,8 @@ import { runSharedDataBackfillJob } from './jobs/sharedDataBackfill.job';
 import { runSharedDataConsistencyAuditJob } from './jobs/sharedDataConsistencyAudit.job';
 import { runSharedSignalRefreshJob } from './jobs/sharedSignalRefresh.job';
 import { runSharedSignalHealthAuditJob } from './jobs/sharedSignalHealthAudit.job';
+import { generateDiyAiGuideJob, GENERATE_DIY_AI_GUIDE_JOB } from './jobs/generateDiyAiGuide.job';
+import { DIY_AI_GUIDE_QUEUE } from '../../backend/src/services/diyAiGuide.service';
 import { JOB_REGISTRY } from '../../backend/src/config/workerJobRegistry';
 import { prisma } from './lib/prisma';
 import { HiddenAssetService } from '../../backend/src/services/hiddenAssets.service';
@@ -975,6 +977,24 @@ setupScheduledJobs().catch(logger.error);
 logger.info(`[RECALL-WORKER] Recall Worker started for queue: ${RECALL_QUEUE_NAME}`);
 
 // Coverage lapse + freeze risk incidents are scheduled via scheduleCronJobs() above.
+
+// =============================================================================
+// DIY AI GUIDE QUEUE — user-triggered Gemini guide generation
+// =============================================================================
+const diyAiGuideWorker = new Worker<{ guideId: string }>(
+  DIY_AI_GUIDE_QUEUE,
+  async (job) => {
+    if (job.name === GENERATE_DIY_AI_GUIDE_JOB) {
+      await generateDiyAiGuideJob(job.data.guideId);
+    }
+  },
+  { connection: redisConnection, concurrency: 3 },
+);
+
+diyAiGuideWorker.on('ready', () => logger.info(`[DIY-GUIDE-WORKER] Ready on queue: ${DIY_AI_GUIDE_QUEUE}`));
+diyAiGuideWorker.on('completed', (job) => logger.info(`[DIY-GUIDE-WORKER] Guide ${job.data.guideId} completed`));
+diyAiGuideWorker.on('failed', (job, err) => logger.error({ err }, `[DIY-GUIDE-WORKER] Guide ${job?.data?.guideId} failed`));
+
 
 // =============================================================================
 // DUMMY RADAR INGEST (QA / E2E)

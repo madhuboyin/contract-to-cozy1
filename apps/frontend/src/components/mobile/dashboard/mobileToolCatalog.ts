@@ -46,6 +46,7 @@ export type MobileAiToolKey =
   | 'home-digital-will'
   | 'material-specs'
   | 'financing'
+  | 'diy'
   | 'view-all';
 
 export type MobileAiToolGroup = 'core' | 'wealth' | 'monitoring' | 'planning';
@@ -878,5 +879,16 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
     icon: Layers,
     isActive: (pathname) =>
       /^\/dashboard\/properties\/[^/]+\/materials(\/|$)/.test(pathname),
+  },
+  {
+    key: 'diy',
+    name: 'DIY Project Center',
+    description: 'Step-by-step guides for projects you can do yourself',
+    desktopDescription: 'Skill-matched DIY guides with step-by-step instructions, materials lists, and cost estimates — with a clear hire-or-DIY verdict before you start.',
+    hrefSuffix: 'tools/diy',
+    navTarget: 'tool:diy',
+    icon: resolveToolIcon('home', 'diy'),
+    isActive: (pathname) =>
+      /^\/dashboard\/(properties\/[^/]+\/tools\/diy|diy)(\/|$)/.test(pathname),
   },
 ];

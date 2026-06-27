@@ -3813,6 +3813,92 @@ class APIClient {
   async archiveFinancingScenario(propertyId: string, scenarioId: string): Promise<void> {
     await this.delete(`/api/properties/${propertyId}/financing/scenarios/${scenarioId}`);
   }
+
+  // ─── DIY Project Center ────────────────────────────────────────────────────
+
+  async getDiySkillProfile(): Promise<import('@/types').DiySkillProfile | null> {
+    const res = await this.get<{ profile: import('@/types').DiySkillProfile | null }>('/api/users/me/diy/skill-profile');
+    return res.data?.profile ?? null;
+  }
+
+  async upsertDiySkillProfile(payload: import('@/types').DiySkillProfilePayload): Promise<import('@/types').DiySkillProfile> {
+    const res = await this.put<{ profile: import('@/types').DiySkillProfile }>('/api/users/me/diy/skill-profile', payload);
+    if (!res.data?.profile) throw new APIError('Failed to save skill profile', 500);
+    return res.data.profile;
+  }
+
+  async listDiyTemplates(params?: import('@/types').DiyTemplateListParams): Promise<{ items: import('@/types').DiyTemplateSummary[]; nextCursor?: string }> {
+    const res = await this.get<{ items: import('@/types').DiyTemplateSummary[]; nextCursor?: string }>('/api/diy/templates', params as Record<string, any>);
+    return { items: res.data?.items ?? [], nextCursor: res.data?.nextCursor };
+  }
+
+  async getFeaturedDiyTemplates(): Promise<import('@/types').DiyTemplateSummary[]> {
+    const res = await this.get<{ templates: import('@/types').DiyTemplateSummary[] }>('/api/diy/templates/featured');
+    return res.data?.templates ?? [];
+  }
+
+  async getDiyTemplateDetail(templateId: string): Promise<import('@/types').DiyTemplateDetail> {
+    const res = await this.get<{ template: import('@/types').DiyTemplateDetail }>(`/api/diy/templates/${templateId}`);
+    if (!res.data?.template) throw new APIError('Template not found', 404);
+    return res.data.template;
+  }
+
+  async getDiyDecision(propertyId: string, payload: import('@/types').DiyDecisionInput): Promise<import('@/types').DiyDecisionResult> {
+    const res = await this.post<import('@/types').DiyDecisionResult>(`/api/properties/${propertyId}/diy/decision`, payload);
+    if (!res.data) throw new APIError('Decision failed', 500);
+    return res.data;
+  }
+
+  async createDiyProject(propertyId: string, payload: import('@/types').CreateDiyProjectPayload): Promise<import('@/types').DiyProjectDetail> {
+    const res = await this.post<{ project: import('@/types').DiyProjectDetail }>(`/api/properties/${propertyId}/diy/projects`, payload);
+    if (!res.data?.project) throw new APIError('Failed to create project', 500);
+    return res.data.project;
+  }
+
+  async listDiyProjects(propertyId: string, params?: import('@/types').DiyProjectListParams): Promise<{ items: import('@/types').DiyProjectSummary[]; nextCursor?: string }> {
+    const res = await this.get<{ items: import('@/types').DiyProjectSummary[]; nextCursor?: string }>(`/api/properties/${propertyId}/diy/projects`, params as Record<string, any>);
+    return { items: res.data?.items ?? [], nextCursor: res.data?.nextCursor };
+  }
+
+  async getDiyProject(propertyId: string, projectId: string): Promise<import('@/types').DiyProjectDetail> {
+    const res = await this.get<{ project: import('@/types').DiyProjectDetail }>(`/api/properties/${propertyId}/diy/projects/${projectId}`);
+    if (!res.data?.project) throw new APIError('Project not found', 404);
+    return res.data.project;
+  }
+
+  async updateDiyProject(propertyId: string, projectId: string, patch: import('@/types').UpdateDiyProjectPayload): Promise<import('@/types').DiyProjectDetail> {
+    const res = await this.patch<{ project: import('@/types').DiyProjectDetail }>(`/api/properties/${propertyId}/diy/projects/${projectId}`, patch);
+    if (!res.data?.project) throw new APIError('Failed to update project', 500);
+    return res.data.project;
+  }
+
+  async updateDiyProjectStep(propertyId: string, projectId: string, stepId: string, patch: { status: import('@/types').DiyStepStatus; notes?: string }): Promise<import('@/types').DiyProjectStep> {
+    const res = await this.patch<{ step: import('@/types').DiyProjectStep }>(`/api/properties/${propertyId}/diy/projects/${projectId}/steps/${stepId}`, patch);
+    if (!res.data?.step) throw new APIError('Failed to update step', 500);
+    return res.data.step;
+  }
+
+  async completeDiyProject(propertyId: string, projectId: string, payload: { actualMinutes?: number; actualMaterialCostCents?: number; notes?: string }): Promise<{ homeEventId: string }> {
+    const res = await this.post<{ homeEventId: string }>(`/api/properties/${propertyId}/diy/projects/${projectId}/complete`, payload);
+    if (!res.data) throw new APIError('Failed to complete project', 500);
+    return res.data;
+  }
+
+  async abandonDiyProject(propertyId: string, projectId: string, payload: { hireOut?: boolean }): Promise<void> {
+    await this.post(`/api/properties/${propertyId}/diy/projects/${projectId}/abandon`, payload);
+  }
+
+  async generateDiyAiGuide(propertyId: string, userPrompt: string): Promise<{ guideId: string }> {
+    const res = await this.post<{ guideId: string }>(`/api/properties/${propertyId}/diy/ai-guide`, { userPrompt });
+    if (!res.data?.guideId) throw new APIError('Failed to start AI guide generation', 500);
+    return res.data;
+  }
+
+  async getDiyAiGuide(propertyId: string, guideId: string): Promise<import('@/types').DiyAiGuide> {
+    const res = await this.get<{ guide: import('@/types').DiyAiGuide }>(`/api/properties/${propertyId}/diy/ai-guide/${guideId}`);
+    if (!res.data?.guide) throw new APIError('Guide not found', 404);
+    return res.data.guide;
+  }
 }
 
 // Export singleton instance
