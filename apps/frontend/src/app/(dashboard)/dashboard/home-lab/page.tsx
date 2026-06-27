@@ -56,6 +56,11 @@ const HOME_TOOL_GROUPS = [
     title: 'Home Habits',
     toolKeys: ['home-habit-coach', 'plant-advisor'],
   },
+  {
+    key: 'records',
+    title: 'Property Records',
+    toolKeys: ['material-specs'],
+  },
 ] as const;
 
 const TOOL_BY_KEY = new Map(MOBILE_HOME_TOOL_LINKS.map((t) => [t.key, t]));

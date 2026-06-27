@@ -1,4 +1,5 @@
 import type { ElementType } from 'react';
+import { Layers } from 'lucide-react';
 import { AI_TOOL_ARTWORK, type AIToolArtworkKey } from './aiToolArtwork';
 import { resolveToolIcon } from '@/lib/icons';
 
@@ -43,6 +44,7 @@ export type MobileAiToolKey =
   | 'negotiation-shield'
   | 'home-renovation-risk-advisor'
   | 'home-digital-will'
+  | 'material-specs'
   | 'view-all';
 
 export type MobileAiToolGroup = 'core' | 'wealth' | 'monitoring' | 'planning';
@@ -853,5 +855,16 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
     icon: resolveToolIcon('home', 'guidance-overview'),
     isActive: (pathname) =>
       /^\/dashboard\/properties\/[^/]+\/tools\/guidance-overview(\/|$)/.test(pathname),
+  },
+  {
+    key: 'material-specs',
+    name: 'Material Specs',
+    description: "Track finishes, colors & products used across your home",
+    desktopDescription: "A searchable registry of every paint color, tile, flooring, and material used in your home — with supplier details and export to PDF.",
+    hrefSuffix: 'materials',
+    navTarget: 'tool:material-specs',
+    icon: Layers,
+    isActive: (pathname) =>
+      /^\/dashboard\/properties\/[^/]+\/materials(\/|$)/.test(pathname),
   },
 ];
