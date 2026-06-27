@@ -525,9 +525,9 @@ app.use('/api', adminSharedDataRoutes);
 app.use('/api', homeHabitCoachRoutes);
 app.use('/api', homeRenovationAdvisorRoutes);
 app.use('/api', refinanceRadarRoutes);
+app.use('/api', materialSpecRoutes);
 app.use('/api', gazetteRoutes);
 app.use('/api', gazetteInternalRoutes);
-app.use('/api', materialSpecRoutes);
 app.use('/api/weather', weatherRoutes);
 app.use('/api/admin/release-gates', authenticate, requireMfa, requireRole(UserRole.ADMIN), releaseGateRoutes);
 
