@@ -39,6 +39,7 @@ const HOME_TOOL_GROUPS = [
       'cost-volatility',
       'break-even',
       'mortgage-refinance-radar',
+      'financing',
     ],
   },
   {
