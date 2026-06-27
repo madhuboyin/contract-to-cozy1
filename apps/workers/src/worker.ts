@@ -19,6 +19,7 @@ import { sendSeasonalNotifications } from './jobs/seasonalNotification.job';
 import { expireSeasonalChecklists } from './jobs/seasonalChecklistExpiration.job';
 import { runHomeReportExportPoller } from './runners/homeReportExport.poller';
 import { runReportExportCleanup } from './runners/reportExport.cleanup';
+import { runMaterialSpecExportPoller } from './runners/materialSpecExport.poller';
 import { startDomainEventsPoller } from './runners/domainEvents.poller';
 import { startHighPriorityEmailEnqueuePoller } from './runners/highPriorityEmailEnqueue.poller';
 import { startClaimFollowUpDuePoller } from './runners/claimFollowUpDue.poller';
@@ -879,6 +880,7 @@ function restartAfterDelay(name: string, fn: () => Promise<void>, delayMs = 30_0
 
 restartAfterDelay('Report export poller', runHomeReportExportPoller);
 restartAfterDelay('Report export cleanup', runReportExportCleanup);
+restartAfterDelay('Material spec export poller', runMaterialSpecExportPoller);
 
 startHighPriorityEmailEnqueuePoller({
   intervalMs: 10_000,
