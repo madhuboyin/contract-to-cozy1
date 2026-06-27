@@ -31,6 +31,7 @@ import {
   MapPin,
   Sparkles,
   LayoutGrid,
+  Users,
 } from "lucide-react";
 import { toast } from "@/components/ui/use-toast";
 import { FileDown } from "lucide-react";
@@ -432,12 +433,20 @@ const PropertyOverview = ({ property }: { property: Property }) => {
                 <Home className="h-4 w-4 text-brand-600" />
                 Property Snapshot
               </h4>
-              <Link href={`/dashboard/properties/${property.id}/edit`}>
-                <Button variant="ghost" size="sm" className="h-10 min-h-[44px] px-2 text-[11px] font-bold text-slate-500 hover:bg-slate-50 hover:text-brand-600">
-                  <Edit className="h-3 w-3 mr-1" />
-                  Edit
-                </Button>
-              </Link>
+              <div className="flex items-center gap-1">
+                <Link href={`/dashboard/properties/${property.id}/household`}>
+                  <Button variant="ghost" size="sm" className="h-10 min-h-[44px] px-2 text-[11px] font-bold text-slate-500 hover:bg-slate-50 hover:text-brand-600">
+                    <Users className="h-3 w-3 mr-1" />
+                    Household
+                  </Button>
+                </Link>
+                <Link href={`/dashboard/properties/${property.id}/edit`}>
+                  <Button variant="ghost" size="sm" className="h-10 min-h-[44px] px-2 text-[11px] font-bold text-slate-500 hover:bg-slate-50 hover:text-brand-600">
+                    <Edit className="h-3 w-3 mr-1" />
+                    Edit
+                  </Button>
+                </Link>
+              </div>
             </div>
             
             <div className="space-y-3">
