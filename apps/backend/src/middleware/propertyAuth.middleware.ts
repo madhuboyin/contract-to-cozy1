@@ -3,10 +3,13 @@ import { Response, NextFunction } from 'express';
 import { prisma } from '../lib/prisma';
 import { CustomRequest } from '../types';
 import { logger } from '../lib/logger';
+import { HouseholdService } from '../services/household.service';
 import {
   securityAuthDenialsTotal,
   securityPropertyScopeDenialsTotal,
 } from '../lib/metrics';
+
+const householdService = new HouseholdService();
 
 export const propertyAuthMiddleware = async (
   req: CustomRequest,
@@ -52,6 +55,8 @@ export const propertyAuthMiddleware = async (
     });
 
     if (property) {
+      // Auto-create the primary owner HouseholdMember row (migration path for pre-household properties)
+      await householdService.ensurePrimaryOwnerMember(property.id, userId);
       req.property = property as any;
       req.householdRole = 'OWNER';
       return next();
