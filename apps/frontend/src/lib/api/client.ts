@@ -3707,6 +3707,112 @@ class APIClient {
       assigneeUserId,
     });
   }
+
+  // ─── Home Improvement Financing Center ─────────────────────────────────────
+
+  async getFinancingProfile(propertyId: string): Promise<import('@/types').PropertyFinancingProfile | null> {
+    const res = await this.get<{ profile: import('@/types').PropertyFinancingProfile | null }>(
+      `/api/properties/${propertyId}/financing/profile`,
+    );
+    return res.data?.profile ?? null;
+  }
+
+  async upsertFinancingProfile(
+    propertyId: string,
+    payload: import('@/types').FinancingProfilePayload,
+  ): Promise<import('@/types').PropertyFinancingProfile> {
+    const res = await this.put<{ profile: import('@/types').PropertyFinancingProfile }>(
+      `/api/properties/${propertyId}/financing/profile`,
+      payload,
+    );
+    if (!res.data?.profile) throw new APIError('Failed to save financing profile', 500);
+    return res.data.profile;
+  }
+
+  async getEquityPosition(propertyId: string): Promise<import('@/types').EquityPosition> {
+    const res = await this.get<{ equity: import('@/types').EquityPosition }>(
+      `/api/properties/${propertyId}/financing/equity`,
+    );
+    if (!res.data?.equity) throw new APIError('Equity position not found', 404);
+    return res.data.equity;
+  }
+
+  async refreshEquityPosition(propertyId: string): Promise<import('@/types').EquityPosition> {
+    const res = await this.post<{ equity: import('@/types').EquityPosition }>(
+      `/api/properties/${propertyId}/financing/equity/refresh`,
+      {},
+    );
+    if (!res.data?.equity) throw new APIError('Failed to refresh equity', 500);
+    return res.data.equity;
+  }
+
+  async getEquityHistory(propertyId: string): Promise<import('@/types').EquityPosition[]> {
+    const res = await this.get<{ history: import('@/types').EquityPosition[] }>(
+      `/api/properties/${propertyId}/financing/equity/history`,
+    );
+    return res.data?.history ?? [];
+  }
+
+  async calculateFinancing(
+    propertyId: string,
+    projectCostCents: number,
+  ): Promise<import('@/types').FinancingResultSet> {
+    const res = await this.post<{ results: import('@/types').FinancingResultSet }>(
+      `/api/properties/${propertyId}/financing/calculate`,
+      { projectCostCents },
+    );
+    if (!res.data?.results) throw new APIError('Financing calculation failed', 500);
+    return res.data.results;
+  }
+
+  async listFinancingScenarios(
+    propertyId: string,
+  ): Promise<import('@/types').FinancingScenarioSummary[]> {
+    const res = await this.get<{ scenarios: import('@/types').FinancingScenarioSummary[] }>(
+      `/api/properties/${propertyId}/financing/scenarios`,
+    );
+    return res.data?.scenarios ?? [];
+  }
+
+  async createFinancingScenario(
+    propertyId: string,
+    payload: import('@/types').CreateScenarioPayload,
+  ): Promise<import('@/types').FinancingScenario> {
+    const res = await this.post<{ scenario: import('@/types').FinancingScenario }>(
+      `/api/properties/${propertyId}/financing/scenarios`,
+      payload,
+    );
+    if (!res.data?.scenario) throw new APIError('Failed to create scenario', 500);
+    return res.data.scenario;
+  }
+
+  async getFinancingScenario(
+    propertyId: string,
+    scenarioId: string,
+  ): Promise<import('@/types').FinancingScenario> {
+    const res = await this.get<{ scenario: import('@/types').FinancingScenario }>(
+      `/api/properties/${propertyId}/financing/scenarios/${scenarioId}`,
+    );
+    if (!res.data?.scenario) throw new APIError('Scenario not found', 404);
+    return res.data.scenario;
+  }
+
+  async updateFinancingScenario(
+    propertyId: string,
+    scenarioId: string,
+    patch: import('@/types').UpdateScenarioPayload,
+  ): Promise<import('@/types').FinancingScenario> {
+    const res = await this.patch<{ scenario: import('@/types').FinancingScenario }>(
+      `/api/properties/${propertyId}/financing/scenarios/${scenarioId}`,
+      patch,
+    );
+    if (!res.data?.scenario) throw new APIError('Failed to update scenario', 500);
+    return res.data.scenario;
+  }
+
+  async archiveFinancingScenario(propertyId: string, scenarioId: string): Promise<void> {
+    await this.delete(`/api/properties/${propertyId}/financing/scenarios/${scenarioId}`);
+  }
 }
 
 // Export singleton instance

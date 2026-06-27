@@ -3318,3 +3318,168 @@ export interface ActivityFeedParams {
   cursor?: string;
   activityTypes?: HouseholdActivityType[];
 }
+
+// ─── Home Improvement Financing Center ───────────────────────────────────────
+
+export type FinancingOptionType =
+  | 'HELOC'
+  | 'HOME_EQUITY_LOAN'
+  | 'PERSONAL_LOAN'
+  | 'CONTRACTOR_FINANCING'
+  | 'PAY_CASH';
+
+export type MortgageType =
+  | 'FIXED_30'
+  | 'FIXED_15'
+  | 'FIXED_20'
+  | 'ARM_5'
+  | 'ARM_7'
+  | 'OTHER';
+
+export type FinancingScenarioStatus = 'DRAFT' | 'SAVED' | 'ARCHIVED';
+
+export type FinancingEntryPoint =
+  | 'REPLACE_REPAIR'
+  | 'CAPITAL_TIMELINE'
+  | 'BUDGET_FORECASTER'
+  | 'DIGITAL_TWIN'
+  | 'DIRECT'
+  | 'GUIDANCE_STEP';
+
+export interface PropertyFinancingProfile {
+  id: string;
+  propertyId: string;
+  purchasePriceCents?: number;
+  purchaseDate?: string;
+  mortgageType?: MortgageType;
+  originalMortgageBalanceCents?: number;
+  currentMortgageBalanceCents?: number;
+  mortgageBalanceAsOfDate?: string;
+  interestRateBps?: number;
+  monthlyPaymentCents?: number;
+  hasSecondMortgage: boolean;
+  secondMortgageBalanceCents?: number;
+  hasPMI: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface EquityPosition {
+  id: string;
+  propertyId: string;
+  estimatedValueCents: number;
+  estimatedValueSource: 'APPRECIATION_TRACKER' | 'PURCHASE_PRICE' | 'USER_ENTERED';
+  mortgageBalanceCents: number;
+  secondMortgageBalanceCents: number;
+  equityCents: number;
+  equityPercent: number;
+  ltvPercent: number;
+  helocCapacityCents: number;
+  helocEligible: boolean;
+  computedAt: string;
+}
+
+export interface HELOCResult {
+  drawMonthlyPaymentCents: number;
+  repaymentMonthlyPaymentCents: number;
+  totalCostCents: number;
+  totalInterestCents: number;
+  rateBps: number;
+}
+
+export interface HomeEquityLoanResult {
+  monthlyPaymentCents: number;
+  totalInterestCents: number;
+  termYears: number;
+  rateBps: number;
+}
+
+export interface PersonalLoanScenario {
+  termYears: number;
+  rateBps: number;
+  monthlyPaymentCents: number;
+  totalInterestCents: number;
+}
+
+export interface PersonalLoanResult {
+  scenarios: PersonalLoanScenario[];
+}
+
+export interface ContractorFinancingResult {
+  promoMonths: number;
+  promoMonthlyIfPaidInFullCents: number;
+  deferredInterestRiskCents: number;
+  ongoingMonthlyIfNotPaidCents: number;
+  ongoingAprBps: number;
+  warningText: string;
+}
+
+export interface PayCashResult {
+  opportunityCostFiveYearCents: number;
+  opportunityCostTenYearCents: number;
+  opportunityCostRateBps: number;
+}
+
+export interface FinancingResultSet {
+  projectCostCents: number;
+  helocEligible: boolean;
+  helocCapacityCents: number;
+  heloc: HELOCResult;
+  homeEquityLoan: HomeEquityLoanResult;
+  personalLoan: PersonalLoanResult;
+  contractorFinancing: ContractorFinancingResult;
+  payCash: PayCashResult;
+  ratesAsOf: string;
+  disclaimer: string;
+}
+
+export interface FinancingScenarioSummary {
+  id: string;
+  title: string;
+  projectCostCents: number;
+  status: FinancingScenarioStatus;
+  entryPoint: FinancingEntryPoint;
+  selectedOption?: FinancingOptionType;
+  createdAt: string;
+}
+
+export interface FinancingScenario extends FinancingScenarioSummary {
+  projectDescription?: string;
+  sourceEntityType?: string;
+  sourceEntityId?: string;
+  equitySnapshotCents?: number;
+  helocCapacitySnapshotCents?: number;
+  resultsJson: FinancingResultSet;
+  notes?: string;
+}
+
+export interface FinancingProfilePayload {
+  purchasePriceCents?: number;
+  purchaseDate?: string;
+  mortgageType?: MortgageType;
+  originalMortgageBalanceCents?: number;
+  currentMortgageBalanceCents?: number;
+  mortgageBalanceAsOfDate?: string;
+  interestRateBps?: number;
+  monthlyPaymentCents?: number;
+  hasSecondMortgage?: boolean;
+  secondMortgageBalanceCents?: number;
+  hasPMI?: boolean;
+}
+
+export interface CreateScenarioPayload {
+  title: string;
+  projectDescription?: string;
+  projectCostCents: number;
+  entryPoint: FinancingEntryPoint;
+  sourceEntityType?: string;
+  sourceEntityId?: string;
+  notes?: string;
+}
+
+export interface UpdateScenarioPayload {
+  title?: string;
+  notes?: string;
+  selectedOption?: FinancingOptionType;
+  status?: FinancingScenarioStatus;
+}

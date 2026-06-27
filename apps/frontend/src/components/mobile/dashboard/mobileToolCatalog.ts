@@ -45,6 +45,7 @@ export type MobileAiToolKey =
   | 'home-renovation-risk-advisor'
   | 'home-digital-will'
   | 'material-specs'
+  | 'financing'
   | 'view-all';
 
 export type MobileAiToolGroup = 'core' | 'wealth' | 'monitoring' | 'planning';
@@ -822,6 +823,17 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
     icon: resolveToolIcon('home', 'mortgage-refinance-radar'),
     isActive: (pathname) =>
       /^\/dashboard\/properties\/[^/]+\/tools\/mortgage-refinance-radar(\/|$)/.test(pathname),
+  },
+  {
+    key: 'financing',
+    name: 'Financing Center',
+    description: 'Equity position and payment options for home projects',
+    desktopDescription: 'See your live equity position and compare HELOC, loan, and cash options for any home project.',
+    hrefSuffix: 'tools/financing',
+    navTarget: 'tool:financing',
+    icon: resolveToolIcon('home', 'financing'),
+    isActive: (pathname) =>
+      /^\/dashboard\/(properties\/[^/]+\/tools\/financing|financing)(\/|$)/.test(pathname),
   },
   {
     key: 'home-gazette',

@@ -34,6 +34,7 @@ export const TOOL_IDS = [
   'home-gazette',
   'coverage-options',
   'guidance-overview',
+  'financing',
 ] as const;
 
 export type ToolId = (typeof TOOL_IDS)[number];

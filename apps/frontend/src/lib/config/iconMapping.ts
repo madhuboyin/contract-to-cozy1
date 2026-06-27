@@ -229,6 +229,7 @@ const HOME_TOOL_ICON_OVERRIDES: Record<string, IconName> = {
   'HOME-HABIT-COACH': 'ListChecks',
   MORTGAGE_REFINANCE_RADAR: 'BarChart2',
   'MORTGAGE-REFINANCE-RADAR': 'BarChart2',
+  FINANCING: 'TrendingUp',
 };
 
 const CORE_NAV_ALIASES: Record<string, CoreNavKey> = {

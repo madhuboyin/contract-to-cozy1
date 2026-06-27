@@ -70,4 +70,6 @@ export const CONTEXT_TOOL_MAPPINGS: ContextToolMapping = {
   'coverage-options': ['insurance-trend', 'home-risk-replay', 'status-board'],
   // Guidance overview should connect to the main monitoring and planning hub.
   'guidance-overview': ['status-board', 'home-event-radar', 'home-risk-replay'],
+  // Financing center pairs naturally with capital planning and the refinance radar.
+  'financing': ['capital-timeline', 'mortgage-refinance-radar', 'break-even'],
 };
