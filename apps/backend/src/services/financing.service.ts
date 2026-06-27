@@ -167,20 +167,31 @@ async function computeEquity(propertyId: string) {
   );
   const helocEligible = ltvPercent <= 85 && equityPercent >= HELOC_MIN_EQUITY_PCT;
 
-  return prisma.equityPosition.create({
-    data: {
-      propertyId,
-      estimatedValueCents,
-      estimatedValueSource,
-      mortgageBalanceCents: mortgageBalance,
-      secondMortgageBalanceCents: secondMortgageBalance,
-      equityCents,
-      equityPercent,
-      ltvPercent,
-      helocCapacityCents,
-      helocEligible,
-    },
-  });
+  const equityData = {
+    propertyId,
+    estimatedValueCents,
+    estimatedValueSource,
+    mortgageBalanceCents: mortgageBalance,
+    secondMortgageBalanceCents: secondMortgageBalance,
+    equityCents,
+    equityPercent,
+    ltvPercent,
+    helocCapacityCents,
+    helocEligible,
+  };
+
+  try {
+    return await prisma.equityPosition.create({ data: equityData });
+  } catch (dbErr) {
+    // DB write failed (schema drift, missing column, etc.) — return an ephemeral object
+    // so the caller can still display equity data. The id/computedAt will be synthetic.
+    console.error('[financing] equityPosition.create failed, returning ephemeral result:', dbErr);
+    return {
+      id: 'ephemeral',
+      computedAt: new Date(),
+      ...equityData,
+    } as any;
+  }
 }
 
 export async function getLatestEquity(propertyId: string) {

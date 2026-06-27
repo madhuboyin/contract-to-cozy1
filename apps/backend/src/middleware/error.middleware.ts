@@ -148,6 +148,16 @@ export const errorHandler = (
       });
       return;
     }
+
+    // Fallthrough: surface the Prisma error code (safe to expose — not sensitive data)
+    res.status(500).json({
+      success: false,
+      error: {
+        message: `Database error (${error.code})`,
+        code: `PRISMA_${error.code}`,
+      },
+    });
+    return;
   }
 
   // Prisma validation errors
