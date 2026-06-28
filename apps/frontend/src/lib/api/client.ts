@@ -3817,12 +3817,12 @@ class APIClient {
   // ─── DIY Project Center ────────────────────────────────────────────────────
 
   async getDiySkillProfile(): Promise<import('@/types').DiySkillProfile | null> {
-    const res = await this.get<{ profile: import('@/types').DiySkillProfile | null }>('/api/users/me/diy/skill-profile');
+    const res = await this.get<{ profile: import('@/types').DiySkillProfile | null }>('/api/diy/skill-profile');
     return res.data?.profile ?? null;
   }
 
   async upsertDiySkillProfile(payload: import('@/types').DiySkillProfilePayload): Promise<import('@/types').DiySkillProfile> {
-    const res = await this.put<{ profile: import('@/types').DiySkillProfile }>('/api/users/me/diy/skill-profile', payload);
+    const res = await this.put<{ profile: import('@/types').DiySkillProfile }>('/api/diy/skill-profile', payload);
     if (!res.data?.profile) throw new APIError('Failed to save skill profile', 500);
     return res.data.profile;
   }

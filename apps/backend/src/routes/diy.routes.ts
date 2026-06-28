@@ -50,8 +50,8 @@ router.use(apiRateLimiter);
 router.use(authenticate);
 
 // ── Skill Profile ─────────────────────────────────────────────────────────────
-router.get('/users/me/diy/skill-profile', getSkillProfile);
-router.put('/users/me/diy/skill-profile', validateBody(UpsertSkillProfileSchema), upsertSkillProfile);
+router.get('/diy/skill-profile', getSkillProfile);
+router.put('/diy/skill-profile', validateBody(UpsertSkillProfileSchema), upsertSkillProfile);
 
 // ── Template Library ──────────────────────────────────────────────────────────
 router.get('/diy/templates', validate(ListTemplatesSchema.transform((q) => ({ query: q }))), listTemplates);
