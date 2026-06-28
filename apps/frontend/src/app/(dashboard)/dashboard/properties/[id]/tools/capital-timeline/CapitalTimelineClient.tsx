@@ -61,6 +61,23 @@ function windowLabel(item: TimelineItemDTO) {
   return s === e ? String(s) : `${s} – ${e}`;
 }
 
+function monthsUntil(isoDate: string): number {
+  const target = new Date(isoDate);
+  const now = new Date();
+  return (
+    (target.getFullYear() - now.getFullYear()) * 12 +
+    (target.getMonth() - now.getMonth())
+  );
+}
+
+function windowStartLabel(iso: string): string {
+  const d = new Date(iso);
+  const mo = d.getMonth();
+  const yr = d.getFullYear();
+  const period = mo < 4 ? 'early' : mo < 8 ? 'mid' : 'late';
+  return `${period} ${yr}`;
+}
+
 function categoryIcon(cat: string) {
   switch (cat) {
     case 'ROOF':
@@ -425,6 +442,234 @@ function TimelineChart({
   );
 }
 
+// ─── Year-by-Year Cost Table ─────────────────────────────────────────
+function YearCostTable({
+  items,
+  horizonYears,
+}: {
+  items: TimelineItemDTO[];
+  horizonYears: number;
+}) {
+  const now = new Date();
+  const startYear = now.getFullYear();
+  const years = Array.from({ length: horizonYears }, (_, i) => startYear + i);
+
+  // Map each year → items active in that year
+  const yearItems = new Map<number, TimelineItemDTO[]>();
+  for (const yr of years) yearItems.set(yr, []);
+
+  for (const item of items) {
+    const s = new Date(item.windowStart).getFullYear();
+    const e = new Date(item.windowEnd).getFullYear();
+    for (let yr = s; yr <= e; yr++) {
+      if (yr >= startYear && yr < startYear + horizonYears) {
+        yearItems.get(yr)!.push(item);
+      }
+    }
+  }
+
+  // Prorate mid-cost per year per item
+  function proratedCost(item: TimelineItemDTO, yr: number): number {
+    if (item.estimatedCostMinCents == null || item.estimatedCostMaxCents == null) return 0;
+    const mid = (item.estimatedCostMinCents + item.estimatedCostMaxCents) / 2;
+    const s = new Date(item.windowStart).getFullYear();
+    const e = new Date(item.windowEnd).getFullYear();
+    const span = Math.max(1, e - s + 1);
+    return mid / span;
+  }
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b border-slate-200/60 dark:border-slate-700/40">
+            <th className="pb-2 text-left text-xs font-medium text-slate-500 dark:text-slate-400">Year</th>
+            <th className="pb-2 text-left text-xs font-medium text-slate-500 dark:text-slate-400">Projects</th>
+            <th className="pb-2 text-right text-xs font-medium text-slate-500 dark:text-slate-400">Est. Cost</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-100/60 dark:divide-slate-800/40">
+          {years.map((yr) => {
+            const yrItems = yearItems.get(yr) ?? [];
+            const total = yrItems.reduce((s, item) => s + proratedCost(item, yr), 0);
+            const isEmpty = yrItems.length === 0;
+            const hasHigh = yrItems.some((i) => i.priority === 'HIGH');
+            return (
+              <tr key={yr} className={isEmpty ? 'opacity-35' : ''}>
+                <td className="py-2.5 pr-4 font-semibold text-slate-700 dark:text-slate-300">
+                  {yr}
+                  {yr === startYear && (
+                    <span className="ml-1.5 text-[10px] font-normal text-teal-600 dark:text-teal-400">Now</span>
+                  )}
+                </td>
+                <td className="py-2.5 pr-4">
+                  {isEmpty ? (
+                    <span className="text-slate-400 dark:text-slate-600">—</span>
+                  ) : (
+                    <div className="flex flex-wrap gap-1">
+                      {yrItems.map((item) => (
+                        <span
+                          key={item.id}
+                          className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                            item.priority === 'HIGH'
+                              ? 'bg-red-100/80 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+                              : item.priority === 'MEDIUM'
+                              ? 'bg-amber-100/80 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
+                              : 'bg-emerald-100/80 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
+                          }`}
+                        >
+                          {item.inventoryItem?.name || categoryLabel(item.category)}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </td>
+                <td className={`py-2.5 text-right font-semibold ${
+                  hasHigh
+                    ? 'text-red-600 dark:text-red-400'
+                    : total > 0
+                    ? 'text-slate-800 dark:text-slate-200'
+                    : 'text-slate-400 dark:text-slate-600'
+                }`}>
+                  {total > 0 ? money(Math.round(total)) : '—'}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// ─── Bundle Opportunity Card ──────────────────────────────────────────
+function BundleOpportunityCard({
+  items,
+  propertyId,
+}: {
+  items: TimelineItemDTO[];
+  propertyId: string;
+}) {
+  // Find HIGH/MEDIUM items and group those whose window start years are within 2 years of each other
+  const candidates = items.filter((i) => i.priority === 'HIGH' || i.priority === 'MEDIUM');
+  if (candidates.length < 2) return null;
+
+  // Sort by windowStart
+  const sorted = [...candidates].sort(
+    (a, b) => new Date(a.windowStart).getTime() - new Date(b.windowStart).getTime()
+  );
+
+  // Find the largest cluster within a 2-year span
+  let bestGroup: TimelineItemDTO[] = [];
+  for (let i = 0; i < sorted.length; i++) {
+    const anchor = new Date(sorted[i].windowStart).getFullYear();
+    const group = sorted.filter(
+      (item) => Math.abs(new Date(item.windowStart).getFullYear() - anchor) <= 2
+    );
+    if (group.length > bestGroup.length) bestGroup = group;
+  }
+
+  if (bestGroup.length < 2) return null;
+
+  const totalMid = bestGroup.reduce((s, item) => {
+    return s + ((item.estimatedCostMinCents ?? 0) + (item.estimatedCostMaxCents ?? 0)) / 2;
+  }, 0);
+
+  const startYr = new Date(bestGroup[0].windowStart).getFullYear();
+  const endYr = new Date(bestGroup[bestGroup.length - 1].windowStart).getFullYear();
+  const yearRange = startYr === endYr ? String(startYr) : `${startYr}–${endYr}`;
+
+  // Build service-price-radar link with the first item as context
+  const first = bestGroup[0];
+  const mappedCat = (() => {
+    switch (first.category) {
+      case 'HVAC': return 'HVAC';
+      case 'WATER_HEATER': return 'WATER_HEATER';
+      case 'PLUMBING': return 'PLUMBING';
+      case 'ELECTRICAL': return 'ELECTRICAL';
+      case 'ROOF':
+      case 'EXTERIOR': return 'ROOFING';
+      default: return 'GENERAL_HANDYMAN';
+    }
+  })();
+  const p = new URLSearchParams({
+    launchSurface: 'capital_timeline_bundle',
+    category: mappedCat,
+    label: first.inventoryItem?.name || categoryLabel(first.category),
+  });
+  const radarHref = `/dashboard/properties/${propertyId}/tools/service-price-radar?${p.toString()}`;
+
+  return (
+    <div className="rounded-2xl border border-amber-200/70 bg-amber-50/80 p-4 shadow-sm backdrop-blur dark:border-amber-700/50 dark:bg-amber-900/20">
+      <div className="flex items-start gap-3">
+        <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900/50">
+          <DollarSign className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">
+            Bundle opportunity · {yearRange}
+          </p>
+          <p className="mt-0.5 text-xs text-amber-700 dark:text-amber-400">
+            {bestGroup.length} projects totalling ~{money(Math.round(totalMid))} are due around the same time.
+            Bundling them can cut contractor mobilization costs.
+          </p>
+          <div className="mt-2 flex flex-wrap gap-1">
+            {bestGroup.map((item) => (
+              <span
+                key={item.id}
+                className="rounded-full bg-amber-100/80 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/50 dark:text-amber-300"
+              >
+                {item.inventoryItem?.name || categoryLabel(item.category)}
+              </span>
+            ))}
+          </div>
+          <Button
+            asChild
+            variant="outline"
+            className="mt-3 h-8 rounded-xl border-amber-300/70 bg-white/70 px-3 text-xs font-medium text-amber-800 hover:bg-amber-50 dark:border-amber-700/60 dark:bg-amber-900/30 dark:text-amber-300"
+          >
+            <Link href={radarHref}>Price-check this bundle</Link>
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Monthly Savings Row ─────────────────────────────────────────────
+function MonthlySavingsRow({ item }: { item: TimelineItemDTO }) {
+  if (item.estimatedCostMinCents == null || item.estimatedCostMaxCents == null) return null;
+  const midCents = (item.estimatedCostMinCents + item.estimatedCostMaxCents) / 2;
+  const months = monthsUntil(item.windowStart);
+
+  if (months <= 0) {
+    return (
+      <p className="text-xs font-medium text-red-600 dark:text-red-400">
+        This window is open — plan your budget now
+      </p>
+    );
+  }
+  if (months < 6) {
+    return (
+      <p className="text-xs font-medium text-amber-600 dark:text-amber-400">
+        Coming up in {months} month{months === 1 ? '' : 's'} — consider setting aside a lump sum
+      </p>
+    );
+  }
+  const monthly = midCents / months;
+  const label = windowStartLabel(item.windowStart);
+  return (
+    <p className="text-xs text-slate-500 dark:text-slate-400">
+      Save{' '}
+      <span className="font-semibold text-teal-700 dark:text-teal-400">
+        {money(Math.ceil(monthly))}
+        <span className="font-normal">/mo</span>
+      </span>{' '}
+      to be ready by {label}
+    </p>
+  );
+}
+
 // ─── Confidence Nudges ───────────────────────────────────────────────
 function ConfidenceNudge({
   item,
@@ -746,6 +991,8 @@ export default function CapitalTimelineClient() {
   const [editingItem, setEditingItem] = useState<{ id: string; focus?: 'cost' | 'age' } | null>(null);
   const [overridesByInventoryItemId, setOverridesByInventoryItemId] = useState<Map<string, OverrideDTO[]>>(new Map());
   const [showChart, setShowChart] = useState(true);
+  const [chartView, setChartView] = useState<'gantt' | 'table'>('gantt');
+  const [alertsSent, setAlertsSent] = useState(false);
 
   const reqRef = React.useRef(0);
 
@@ -777,6 +1024,10 @@ export default function CapitalTimelineClient() {
       setData(next.analysis);
       if (next.assumptionSetId) setActiveAssumptionSetId(next.assumptionSetId);
       await loadOverrides();
+      const highCount = (next.analysis?.items ?? []).filter(
+        (i) => i.priority === 'HIGH' && monthsUntil(i.windowStart) <= 18
+      ).length;
+      if (highCount > 0) setAlertsSent(true);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to compute timeline');
     } finally {
@@ -843,6 +1094,16 @@ export default function CapitalTimelineClient() {
   const totalMax = items.reduce((s, i) => s + (i.estimatedCostMaxCents ?? 0), 0);
   const highPriorityCount = items.filter((i) => i.priority === 'HIGH').length;
 
+  const totalMonthlySavings = items
+    .filter((i) => i.priority === 'HIGH' || i.priority === 'MEDIUM')
+    .reduce((sum, item) => {
+      if (item.estimatedCostMinCents == null || item.estimatedCostMaxCents == null) return sum;
+      const midCents = (item.estimatedCostMinCents + item.estimatedCostMaxCents) / 2;
+      const months = monthsUntil(item.windowStart);
+      if (months <= 0) return sum;
+      return sum + midCents / months;
+    }, 0);
+
   const nextAction = (() => {
     if (!propertyId || !data) return null;
     const firstHighPriority = items.find((item) => item.priority === 'HIGH');
@@ -901,14 +1162,22 @@ export default function CapitalTimelineClient() {
               ))}
             </div>
 
-            <button
-              onClick={() => doRun(horizonYears)}
-              disabled={running}
-              className="inline-flex h-10 items-center justify-center gap-1.5 rounded-full border border-slate-300/70 bg-white/85 px-4 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:bg-white disabled:opacity-50 dark:border-slate-700/70 dark:bg-slate-900/55 dark:text-slate-200 dark:hover:bg-slate-900"
-            >
-              <RefreshCw className={`h-4 w-4 ${running ? 'animate-spin' : ''}`} />
-              Re-analyze
-            </button>
+            <div className="flex flex-col items-end gap-1">
+              <button
+                onClick={() => doRun(horizonYears)}
+                disabled={running}
+                className="inline-flex h-10 items-center justify-center gap-1.5 rounded-full border border-slate-300/70 bg-white/85 px-4 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:bg-white disabled:opacity-50 dark:border-slate-700/70 dark:bg-slate-900/55 dark:text-slate-200 dark:hover:bg-slate-900"
+              >
+                <RefreshCw className={`h-4 w-4 ${running ? 'animate-spin' : ''}`} />
+                Re-analyze
+              </button>
+              {alertsSent && (
+                <span className="flex items-center gap-1 text-[10px] font-medium text-teal-600 dark:text-teal-400">
+                  <BadgeCheck className="h-3 w-3" />
+                  Alerts set for upcoming items
+                </span>
+              )}
+            </div>
           </MobileActionRow>
         </div>
       )}
@@ -972,6 +1241,22 @@ export default function CapitalTimelineClient() {
                 {data.summary}
               </p>
             )}
+            {totalMonthlySavings > 0 && (
+              <div className="mt-4 flex items-center justify-between rounded-2xl border border-teal-200/70 bg-teal-50/80 px-4 py-3 shadow-sm backdrop-blur dark:border-teal-700/60 dark:bg-teal-900/30">
+                <div>
+                  <p className="text-xs font-medium tracking-normal text-teal-700 dark:text-teal-400">
+                    Recommended monthly set-aside
+                  </p>
+                  <p className="text-xs text-teal-600/80 dark:text-teal-500">
+                    Across all high &amp; medium priority items
+                  </p>
+                </div>
+                <p className="text-2xl font-bold text-teal-700 dark:text-teal-300">
+                  {money(Math.ceil(totalMonthlySavings))}
+                  <span className="ml-0.5 text-sm font-normal">/mo</span>
+                </p>
+              </div>
+            )}
             {nextAction && (
               <div className="mt-4 rounded-2xl border border-white/70 bg-white/72 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/55">
                 <p className="mb-0 text-xs tracking-normal text-slate-500 dark:text-slate-300">Next action</p>
@@ -986,10 +1271,36 @@ export default function CapitalTimelineClient() {
           {/* Visual Timeline Chart */}
           {items.length > 0 && (
             <div className="rounded-2xl border border-white/70 bg-gradient-to-br from-white/80 via-slate-50/72 to-teal-50/45 p-4 shadow-[0_14px_28px_-22px_rgba(15,23,42,0.65)] backdrop-blur dark:border-slate-700/70 dark:from-slate-900/55 dark:via-slate-900/48 dark:to-slate-900/38 sm:p-5">
-              <div className="mb-3 flex items-center justify-between">
-                <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                  Visual Timeline
-                </p>
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                    {chartView === 'gantt' ? 'Visual Timeline' : 'Year-by-Year Cost'}
+                  </p>
+                  {showChart && (
+                    <div className="flex items-center rounded-full border border-slate-200/70 bg-white/70 p-0.5 text-xs dark:border-slate-700/60 dark:bg-slate-900/55">
+                      <button
+                        onClick={() => setChartView('gantt')}
+                        className={`rounded-full px-2.5 py-0.5 font-medium transition-all ${
+                          chartView === 'gantt'
+                            ? 'bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900'
+                            : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
+                        }`}
+                      >
+                        Gantt
+                      </button>
+                      <button
+                        onClick={() => setChartView('table')}
+                        className={`rounded-full px-2.5 py-0.5 font-medium transition-all ${
+                          chartView === 'table'
+                            ? 'bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900'
+                            : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
+                        }`}
+                      >
+                        Table
+                      </button>
+                    </div>
+                  )}
+                </div>
                 <button
                   onClick={() => setShowChart((v) => !v)}
                   className="inline-flex items-center gap-1 text-xs font-medium text-slate-400 transition-colors hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300"
@@ -1001,8 +1312,18 @@ export default function CapitalTimelineClient() {
                   )}
                 </button>
               </div>
-              {showChart && <TimelineChart items={items} horizonYears={horizonYears} />}
+              {showChart && chartView === 'gantt' && (
+                <TimelineChart items={items} horizonYears={horizonYears} />
+              )}
+              {showChart && chartView === 'table' && (
+                <YearCostTable items={items} horizonYears={horizonYears} />
+              )}
             </div>
+          )}
+
+          {/* Bundle Opportunity */}
+          {items.length > 1 && propertyId && (
+            <BundleOpportunityCard items={items} propertyId={propertyId} />
           )}
 
           {/* Timeline Items */}
@@ -1094,7 +1415,7 @@ export default function CapitalTimelineClient() {
                         </div>
                       </div>
 
-                      {/* Confidence nudges + Why toggle — hidden while editing */}
+                      {/* Confidence nudges + Savings row + Why toggle — hidden while editing */}
                       {!isEditing && (
                         <>
                           <ConfidenceNudge
@@ -1102,6 +1423,7 @@ export default function CapitalTimelineClient() {
                             propertyId={propertyId}
                             onOpenEdit={(focus) => setEditingItem({ id: item.id, focus })}
                           />
+                          <MonthlySavingsRow item={item} />
                           <button
                             onClick={() => toggleExpand(item.id)}
                             className="mt-3 -ml-2 inline-flex min-h-[44px] items-center gap-1.5 rounded-full px-2 text-xs font-medium text-slate-500 transition-colors hover:text-slate-700 touch-manipulation dark:text-slate-300 dark:hover:text-slate-100"

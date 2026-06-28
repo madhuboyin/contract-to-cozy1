@@ -18,6 +18,7 @@ import {
   deriveExpenseGrowthRate,
 } from './financialAssumption.service';
 import { projectValueAtYear } from './tools/financialProjectionMath';
+import { NotificationService } from './notification.service';
 
 // ─── Phase-3: Seasonal/climate wear adjustment by state ────────────
 // Multiplicative factor applied to lifespan (<1 shortens, >1 lengthens).
@@ -560,7 +561,37 @@ export class HomeCapitalTimelineService {
       },
     });
 
-    return attachMissingFactors(analysis);
+    // Fire-and-forget in-app alerts for HIGH priority items due within 18 months
+    const enriched = attachMissingFactors(analysis);
+    if (options?.createdByUserId) {
+      const cutoff = new Date();
+      cutoff.setMonth(cutoff.getMonth() + 18);
+      const urgentItems = (enriched.items ?? []).filter(
+        (item: any) =>
+          item.priority === 'HIGH' && new Date(item.windowStart) <= cutoff
+      );
+      if (urgentItems.length > 0) {
+        const userId = options.createdByUserId;
+        Promise.all(
+          urgentItems.map((item: any) => {
+            const name = item.inventoryItem?.name || String(item.category).replace(/_/g, ' ');
+            const startYear = new Date(item.windowStart).getFullYear();
+            return NotificationService.create({
+              userId,
+              type: 'CAPITAL_TIMELINE_ALERT',
+              title: `Upcoming capital expense: ${name}`,
+              message: `Your ${name} is projected for replacement around ${startYear}. Start planning now to avoid surprises.`,
+              actionUrl: `/dashboard/properties/${propertyId}/tools/capital-timeline`,
+              entityType: 'HOME_CAPITAL_TIMELINE',
+              entityId: enriched.id,
+              metadata: { itemId: item.id, category: item.category, windowStart: item.windowStart },
+            });
+          })
+        ).catch(() => {/* never throw — notifications are best-effort */});
+      }
+    }
+
+    return enriched;
   }
 
   // ── Overrides CRUD ────────────────────────────────────────────────
