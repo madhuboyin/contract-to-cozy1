@@ -8,6 +8,7 @@ import {
   Calendar,
   ChevronDown,
   ChevronRight,
+  ChevronUp,
   RefreshCw,
   AlertTriangle,
   Thermometer,
@@ -246,6 +247,182 @@ async function persistOverrides(
   }
 
   await Promise.all(ops);
+}
+
+// ─── Timeline Chart ──────────────────────────────────────────────────
+function TimelineChart({
+  items,
+  horizonYears,
+}: {
+  items: TimelineItemDTO[];
+  horizonYears: number;
+}) {
+  if (items.length === 0) return null;
+
+  const now = new Date();
+  const chartStartYear = now.getFullYear();
+  const chartEndYear = chartStartYear + horizonYears;
+  const chartStart = new Date(chartStartYear, 0, 1);
+  const chartEnd = new Date(chartEndYear, 0, 1);
+  const totalMs = chartEnd.getTime() - chartStart.getTime();
+  const years = Array.from({ length: horizonYears }, (_, i) => chartStartYear + i);
+
+  function toPct(date: Date): number {
+    return Math.max(0, Math.min(100, ((date.getTime() - chartStart.getTime()) / totalMs) * 100));
+  }
+
+  const todayPct = toPct(now);
+
+  function barBg(priority: string) {
+    if (priority === 'HIGH') return 'bg-red-400/80 border-red-300/80';
+    if (priority === 'MEDIUM') return 'bg-amber-400/80 border-amber-300/80';
+    return 'bg-emerald-400/80 border-emerald-300/80';
+  }
+  function barText(priority: string) {
+    if (priority === 'HIGH') return 'text-red-950 dark:text-red-900';
+    if (priority === 'MEDIUM') return 'text-amber-950 dark:text-amber-900';
+    return 'text-emerald-950 dark:text-emerald-900';
+  }
+
+  // Prorate each item's mid-cost across the years it spans
+  const yearCosts = new Map<number, number>();
+  for (const item of items) {
+    if (item.estimatedCostMinCents == null || item.estimatedCostMaxCents == null) continue;
+    const midCost = (item.estimatedCostMinCents + item.estimatedCostMaxCents) / 2;
+    const startYr = new Date(item.windowStart).getFullYear();
+    const endYr = new Date(item.windowEnd).getFullYear();
+    const span = Math.max(1, endYr - startYr + 1);
+    for (let yr = startYr; yr <= endYr; yr++) {
+      if (yr >= chartStartYear && yr < chartEndYear) {
+        yearCosts.set(yr, (yearCosts.get(yr) ?? 0) + midCost / span);
+      }
+    }
+  }
+
+  const maxYearCost = yearCosts.size > 0 ? Math.max(...yearCosts.values()) : 0;
+  const colPct = 100 / horizonYears;
+  const minWidth = Math.max(480, horizonYears * 90);
+
+  return (
+    <div className="overflow-x-auto -mx-1 px-1">
+      <div style={{ minWidth: `${minWidth}px` }}>
+
+        {/* Year header */}
+        <div className="relative flex border-b border-slate-200/60 pb-2 dark:border-slate-700/40">
+          {years.map((yr) => (
+            <div
+              key={yr}
+              style={{ width: `${colPct}%` }}
+              className="text-center text-xs font-medium text-slate-400 dark:text-slate-500"
+            >
+              {yr}
+            </div>
+          ))}
+        </div>
+
+        {/* Bars + grid */}
+        <div className="relative pb-1 pt-5">
+
+          {/* Grid column lines */}
+          {years.map((_, i) => (
+            <div
+              key={i}
+              className="absolute bottom-0 top-0 border-l border-slate-100/80 dark:border-slate-800/50"
+              style={{ left: `${(i / horizonYears) * 100}%` }}
+            />
+          ))}
+
+          {/* Today marker */}
+          {todayPct > 0.5 && todayPct < 99 && (
+            <div
+              className="absolute bottom-0 top-0 z-10 border-l-2 border-teal-500/80 dark:border-teal-400/70"
+              style={{ left: `${todayPct}%` }}
+            >
+              <span className="absolute left-1.5 top-0 whitespace-nowrap text-[10px] font-semibold leading-tight text-teal-600 dark:text-teal-400">
+                Today
+              </span>
+            </div>
+          )}
+
+          {/* Item bars */}
+          <div className="space-y-1.5">
+            {items.map((item) => {
+              const startPct = toPct(new Date(item.windowStart));
+              const endPct = toPct(new Date(item.windowEnd));
+              const widthPct = Math.max(1.5, endPct - startPct);
+              const name = item.inventoryItem?.name || categoryLabel(item.category);
+              const isNarrow = widthPct < 7;
+
+              return (
+                <div key={item.id} className="relative h-7">
+                  <div
+                    className={`absolute top-0.5 h-6 rounded-full border ${barBg(item.priority)} flex items-center overflow-hidden transition-opacity hover:opacity-80`}
+                    style={{ left: `${startPct}%`, width: `${widthPct}%` }}
+                    title={`${name} · ${windowLabel(item)} · ${money(item.estimatedCostMinCents)} – ${money(item.estimatedCostMaxCents)}`}
+                  >
+                    {!isNarrow && (
+                      <span className={`truncate px-2.5 text-xs font-medium ${barText(item.priority)}`}>
+                        {name}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Annual cost row */}
+        <div className="flex border-t border-slate-200/60 pt-2 dark:border-slate-700/40">
+          {years.map((yr) => {
+            const cost = yearCosts.get(yr);
+            const isHeaviest = cost != null && maxYearCost > 0 && cost / maxYearCost >= 0.9;
+            return (
+              <div
+                key={yr}
+                style={{ width: `${colPct}%` }}
+                className={`text-center text-xs ${
+                  cost
+                    ? isHeaviest
+                      ? 'font-bold text-red-600 dark:text-red-400'
+                      : 'font-medium text-slate-600 dark:text-slate-300'
+                    : 'text-slate-300 dark:text-slate-600'
+                }`}
+              >
+                {cost ? money(Math.round(cost)) : '—'}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Legend */}
+        <div className="mt-2.5 flex flex-wrap items-center gap-3 px-0.5">
+          {(
+            [
+              { label: 'High priority', color: 'bg-red-400/80' },
+              { label: 'Medium', color: 'bg-amber-400/80' },
+              { label: 'Low', color: 'bg-emerald-400/80' },
+            ] as const
+          ).map(({ label, color }) => (
+            <span key={label} className="flex items-center gap-1.5 text-[10px] text-slate-400 dark:text-slate-500">
+              <span className={`inline-block h-2.5 w-5 rounded-full ${color}`} />
+              {label}
+            </span>
+          ))}
+          {todayPct > 0.5 && todayPct < 99 && (
+            <span className="flex items-center gap-1.5 text-[10px] text-slate-400 dark:text-slate-500">
+              <span className="inline-block h-2.5 w-0.5 rounded-full bg-teal-500/80" />
+              Today
+            </span>
+          )}
+          <span className="ml-auto text-[10px] text-slate-400 dark:text-slate-500">
+            Est. annual spend (mid)
+          </span>
+        </div>
+
+      </div>
+    </div>
+  );
 }
 
 // ─── Confidence Nudges ───────────────────────────────────────────────
@@ -568,6 +745,7 @@ export default function CapitalTimelineClient() {
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
   const [editingItem, setEditingItem] = useState<{ id: string; focus?: 'cost' | 'age' } | null>(null);
   const [overridesByInventoryItemId, setOverridesByInventoryItemId] = useState<Map<string, OverrideDTO[]>>(new Map());
+  const [showChart, setShowChart] = useState(true);
 
   const reqRef = React.useRef(0);
 
@@ -804,6 +982,28 @@ export default function CapitalTimelineClient() {
               </div>
             )}
           </div>
+
+          {/* Visual Timeline Chart */}
+          {items.length > 0 && (
+            <div className="rounded-2xl border border-white/70 bg-gradient-to-br from-white/80 via-slate-50/72 to-teal-50/45 p-4 shadow-[0_14px_28px_-22px_rgba(15,23,42,0.65)] backdrop-blur dark:border-slate-700/70 dark:from-slate-900/55 dark:via-slate-900/48 dark:to-slate-900/38 sm:p-5">
+              <div className="mb-3 flex items-center justify-between">
+                <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                  Visual Timeline
+                </p>
+                <button
+                  onClick={() => setShowChart((v) => !v)}
+                  className="inline-flex items-center gap-1 text-xs font-medium text-slate-400 transition-colors hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300"
+                >
+                  {showChart ? (
+                    <><ChevronUp className="h-3.5 w-3.5" />Hide</>
+                  ) : (
+                    <><ChevronDown className="h-3.5 w-3.5" />Show</>
+                  )}
+                </button>
+              </div>
+              {showChart && <TimelineChart items={items} horizonYears={horizonYears} />}
+            </div>
+          )}
 
           {/* Timeline Items */}
           {items.length === 0 ? (
