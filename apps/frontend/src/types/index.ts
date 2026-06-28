@@ -3725,3 +3725,206 @@ export interface UpdateDiyProjectPayload {
   notesJson?: { text: string; createdAt: string }[];
   photoUrls?: string[];
 }
+
+// ─── Permit History & Unpermitted Work Tracker ───────────────────────────────
+
+export type PermitRecordCategory =
+  | 'BUILDING' | 'ELECTRICAL' | 'PLUMBING' | 'MECHANICAL' | 'STRUCTURAL'
+  | 'ROOFING' | 'ZONING' | 'DEMOLITION' | 'GRADING' | 'FIRE' | 'OTHER';
+
+export type PermitWorkType =
+  | 'HVAC_NEW' | 'HVAC_REPLACEMENT' | 'ELECTRICAL_PANEL' | 'ELECTRICAL_WIRING'
+  | 'PLUMBING_NEW' | 'PLUMBING_REPAIR' | 'ROOF_REPLACEMENT' | 'ROOF_REPAIR'
+  | 'ROOM_ADDITION' | 'GARAGE_CONVERSION' | 'ADU' | 'BASEMENT_FINISH' | 'DECK_PATIO'
+  | 'FENCE' | 'SWIMMING_POOL' | 'SOLAR' | 'WINDOWS_DOORS' | 'FIREPLACE'
+  | 'SEWER_WATER_LINE' | 'STRUCTURAL_REPAIR' | 'INTERIOR_REMODEL' | 'EXTERIOR_REMODEL'
+  | 'DEMOLITION' | 'GRADING_DRAINAGE' | 'OTHER';
+
+export type PermitRecordStatus =
+  | 'APPLIED' | 'ISSUED' | 'INSPECTION_PENDING' | 'INSPECTION_FAILED'
+  | 'FINALED' | 'EXPIRED' | 'VOIDED' | 'UNKNOWN';
+
+export type PermitRecordSource = 'OPEN_DATA_API' | 'MANUAL_ENTRY' | 'DOCUMENT_UPLOAD';
+
+export type PermitInspectionStatus =
+  | 'NOT_SCHEDULED' | 'SCHEDULED' | 'PASSED' | 'FAILED' | 'PARTIAL' | 'CANCELLED';
+
+export type PermitUnpermittedFlagStatus =
+  | 'FLAGGED' | 'INVESTIGATING' | 'CONFIRMED_PERMITTED' | 'CONFIRMED_UNPERMITTED'
+  | 'WILL_REMEDIATE' | 'REMEDIATED' | 'DISMISSED';
+
+export type PermitDisclosureRisk = 'LOW' | 'MEDIUM' | 'HIGH';
+
+export type PermitFetchJobStatus =
+  | 'QUEUED' | 'RUNNING' | 'COMPLETED' | 'FAILED' | 'NO_DATA_SOURCE';
+
+export interface PermitFetchJobSummary {
+  id: string;
+  status: PermitFetchJobStatus;
+  dataSourceName?: string;
+  permitsFound?: number;
+  permitsInserted?: number;
+  errorMessage?: string;
+  startedAt: string;
+  completedAt?: string;
+}
+
+export interface PermitSummary {
+  id: string;
+  permitNumber?: string;
+  category: PermitRecordCategory;
+  workTypes: PermitWorkType[];
+  description?: string;
+  status: PermitRecordStatus;
+  source: PermitRecordSource;
+  issueDate?: string;
+  finaledDate?: string;
+  expirationDate?: string;
+  contractorName?: string;
+  isVerified: boolean;
+  hasOpenInspections: boolean;
+}
+
+export interface InspectionMilestone {
+  id: string;
+  stageName: string;
+  stageType: string;
+  status: PermitInspectionStatus;
+  scheduledDate?: string;
+  inspectedDate?: string;
+  inspectorNotes?: string;
+  isRequired: boolean;
+  sortOrder: number;
+  isOverdue: boolean;
+}
+
+export interface PermitDetail extends PermitSummary {
+  applicantName?: string;
+  contractorLicense?: string;
+  workLocation?: string;
+  applicationDate?: string;
+  estimatedCostCents?: number;
+  finalCostCents?: number;
+  notes?: string;
+  documentIds: string[];
+  inspectionMilestones: InspectionMilestone[];
+  renovationAdvisorSessionId?: string;
+}
+
+export interface PermitFlagItem {
+  id: string;
+  workType: PermitWorkType;
+  triggerType: string;
+  flagReason: string;
+  status: PermitUnpermittedFlagStatus;
+  disclosureRisk: PermitDisclosureRisk;
+  homeAssetId?: string;
+  inventoryItemId?: string;
+  resolvedByPermitId?: string;
+  resolvedByPermitNumber?: string;
+  resolutionNotes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PermitHubSummary {
+  totalPermits: number;
+  activePermits: number;
+  finaledPermits: number;
+  openFlags: number;
+  highRiskFlags: number;
+  hasFetchData: boolean;
+  jurisdictionHasOpenData: boolean;
+  lastFetchAt?: string;
+}
+
+export interface PermitDisclosureExportItem {
+  id: string;
+  status: 'PENDING' | 'GENERATING' | 'COMPLETED' | 'FAILED';
+  totalPermits?: number;
+  openFlags?: number;
+  fileUrl?: string;
+  expiresAt?: string;
+  errorMessage?: string;
+  createdAt: string;
+}
+
+export interface PermitListParams {
+  category?: string | string[];
+  status?: string | string[];
+  source?: string | string[];
+  workType?: string | string[];
+  from?: string;
+  to?: string;
+  limit?: number;
+  cursor?: string;
+}
+
+export interface FlagListParams {
+  status?: string | string[];
+  risk?: string | string[];
+  limit?: number;
+  cursor?: string;
+}
+
+export interface CreatePermitPayload {
+  permitNumber?: string;
+  category: PermitRecordCategory;
+  workTypes: PermitWorkType[];
+  description?: string;
+  status: PermitRecordStatus;
+  applicantName?: string;
+  contractorName?: string;
+  contractorLicense?: string;
+  workLocation?: string;
+  applicationDate?: string;
+  issueDate?: string;
+  expirationDate?: string;
+  finaledDate?: string;
+  estimatedCostCents?: number;
+  finalCostCents?: number;
+  documentIds?: string[];
+  notes?: string;
+}
+
+export interface UpdatePermitPayload {
+  permitNumber?: string;
+  category?: PermitRecordCategory;
+  workTypes?: PermitWorkType[];
+  description?: string;
+  status?: PermitRecordStatus;
+  contractorName?: string;
+  notes?: string;
+  isVerified?: boolean;
+}
+
+export interface AddMilestonePayload {
+  stageName: string;
+  stageType: string;
+  status?: PermitInspectionStatus;
+  scheduledDate?: string;
+  isRequired?: boolean;
+}
+
+export interface UpdateMilestonePayload {
+  status?: PermitInspectionStatus;
+  scheduledDate?: string;
+  inspectedDate?: string;
+  inspectorNotes?: string;
+  stageName?: string;
+}
+
+export interface UpdateFlagPayload {
+  status?: PermitUnpermittedFlagStatus;
+  disclosureRisk?: PermitDisclosureRisk;
+  resolvedByPermitId?: string;
+  resolutionNotes?: string;
+}
+
+export interface CreateFlagPayload {
+  workType: PermitWorkType;
+  flagReason: string;
+  disclosureRisk: PermitDisclosureRisk;
+  homeAssetId?: string;
+  inventoryItemId?: string;
+}

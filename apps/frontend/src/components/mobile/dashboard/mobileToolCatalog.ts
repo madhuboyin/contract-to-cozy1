@@ -891,4 +891,15 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
     isActive: (pathname) =>
       /^\/dashboard\/(properties\/[^/]+\/tools\/diy|diy)(\/|$)/.test(pathname),
   },
+  {
+    key: 'permits',
+    name: 'Permit Tracker',
+    description: 'Permit history, active tracking, and disclosure export',
+    desktopDescription: 'Pull permit records from municipal open data, track active inspection milestones, detect potential unpermitted work, and generate a disclosure PDF for resale.',
+    hrefSuffix: 'tools/permits',
+    navTarget: 'tool:permits',
+    icon: resolveToolIcon('home', 'permits'),
+    isActive: (pathname) =>
+      /^\/dashboard\/(properties\/[^/]+\/tools\/permits|permits)(\/|$)/.test(pathname),
+  },
 ];

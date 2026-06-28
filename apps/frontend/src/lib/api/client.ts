@@ -3899,6 +3899,107 @@ class APIClient {
     if (!res.data?.guide) throw new APIError('Guide not found', 404);
     return res.data.guide;
   }
+
+  // ─── Permit History & Unpermitted Work Tracker ──────────────────────────────
+
+  async triggerPermitFetch(propertyId: string): Promise<{ fetchJobId: string }> {
+    const res = await this.post<{ fetchJobId: string }>(`/api/properties/${propertyId}/permits/fetch`, {});
+    if (!res.data?.fetchJobId) throw new APIError('Failed to trigger permit fetch', 500);
+    return res.data;
+  }
+
+  async getPermitFetchStatus(propertyId: string): Promise<import('@/types').PermitFetchJobSummary | null> {
+    const res = await this.get<{ fetchJob: import('@/types').PermitFetchJobSummary | null }>(`/api/properties/${propertyId}/permits/fetch/status`);
+    return res.data?.fetchJob ?? null;
+  }
+
+  async getPermitSummary(propertyId: string): Promise<import('@/types').PermitHubSummary> {
+    const res = await this.get<import('@/types').PermitHubSummary>(`/api/properties/${propertyId}/permits/summary`);
+    if (!res.data) throw new APIError('Failed to load permit summary', 500);
+    return res.data;
+  }
+
+  async listPermits(propertyId: string, params?: import('@/types').PermitListParams): Promise<{ items: import('@/types').PermitSummary[]; nextCursor?: string }> {
+    const res = await this.get<{ items: import('@/types').PermitSummary[]; nextCursor?: string }>(`/api/properties/${propertyId}/permits`, params as Record<string, any>);
+    return res.data ?? { items: [] };
+  }
+
+  async createManualPermit(propertyId: string, payload: import('@/types').CreatePermitPayload): Promise<import('@/types').PermitDetail> {
+    const res = await this.post<{ permit: import('@/types').PermitDetail }>(`/api/properties/${propertyId}/permits`, payload);
+    if (!res.data?.permit) throw new APIError('Failed to create permit', 500);
+    return res.data.permit;
+  }
+
+  async getPermitDetail(propertyId: string, permitId: string): Promise<import('@/types').PermitDetail> {
+    const res = await this.get<{ permit: import('@/types').PermitDetail }>(`/api/properties/${propertyId}/permits/${permitId}`);
+    if (!res.data?.permit) throw new APIError('Permit not found', 404);
+    return res.data.permit;
+  }
+
+  async updatePermit(propertyId: string, permitId: string, patch: import('@/types').UpdatePermitPayload): Promise<import('@/types').PermitDetail> {
+    const res = await this.patch<{ permit: import('@/types').PermitDetail }>(`/api/properties/${propertyId}/permits/${permitId}`, patch);
+    if (!res.data?.permit) throw new APIError('Failed to update permit', 500);
+    return res.data.permit;
+  }
+
+  async deletePermit(propertyId: string, permitId: string): Promise<void> {
+    await this.delete(`/api/properties/${propertyId}/permits/${permitId}`);
+  }
+
+  async addInspectionMilestone(propertyId: string, permitId: string, payload: import('@/types').AddMilestonePayload): Promise<import('@/types').InspectionMilestone> {
+    const res = await this.post<{ milestone: import('@/types').InspectionMilestone }>(`/api/properties/${propertyId}/permits/${permitId}/inspections`, payload);
+    if (!res.data?.milestone) throw new APIError('Failed to add milestone', 500);
+    return res.data.milestone;
+  }
+
+  async updateInspectionMilestone(propertyId: string, permitId: string, milestoneId: string, patch: import('@/types').UpdateMilestonePayload): Promise<import('@/types').InspectionMilestone> {
+    const res = await this.patch<{ milestone: import('@/types').InspectionMilestone }>(`/api/properties/${propertyId}/permits/${permitId}/inspections/${milestoneId}`, patch);
+    if (!res.data?.milestone) throw new APIError('Failed to update milestone', 500);
+    return res.data.milestone;
+  }
+
+  async deleteInspectionMilestone(propertyId: string, permitId: string, milestoneId: string): Promise<void> {
+    await this.delete(`/api/properties/${propertyId}/permits/${permitId}/inspections/${milestoneId}`);
+  }
+
+  async listPermitFlags(propertyId: string, params?: import('@/types').FlagListParams): Promise<{ items: import('@/types').PermitFlagItem[]; nextCursor?: string }> {
+    const res = await this.get<{ items: import('@/types').PermitFlagItem[]; nextCursor?: string }>(`/api/properties/${propertyId}/permits/flags`, params as Record<string, any>);
+    return res.data ?? { items: [] };
+  }
+
+  async updatePermitFlag(propertyId: string, flagId: string, patch: import('@/types').UpdateFlagPayload): Promise<import('@/types').PermitFlagItem> {
+    const res = await this.patch<{ flag: import('@/types').PermitFlagItem }>(`/api/properties/${propertyId}/permits/flags/${flagId}`, patch);
+    if (!res.data?.flag) throw new APIError('Failed to update flag', 500);
+    return res.data.flag;
+  }
+
+  async createManualFlag(propertyId: string, payload: import('@/types').CreateFlagPayload): Promise<import('@/types').PermitFlagItem> {
+    const res = await this.post<{ flag: import('@/types').PermitFlagItem }>(`/api/properties/${propertyId}/permits/flags`, payload);
+    if (!res.data?.flag) throw new APIError('Failed to create flag', 500);
+    return res.data.flag;
+  }
+
+  async runPermitDetectionScan(propertyId: string): Promise<{ flagsCreated: number }> {
+    const res = await this.post<{ flagsCreated: number }>(`/api/properties/${propertyId}/permits/flags/scan`, {});
+    return res.data ?? { flagsCreated: 0 };
+  }
+
+  async requestDisclosureExport(propertyId: string): Promise<{ exportId: string }> {
+    const res = await this.post<{ exportId: string }>(`/api/properties/${propertyId}/permits/disclosure`, {});
+    if (!res.data?.exportId) throw new APIError('Failed to request disclosure export', 500);
+    return res.data;
+  }
+
+  async getDisclosureExport(propertyId: string, exportId: string): Promise<import('@/types').PermitDisclosureExportItem> {
+    const res = await this.get<{ export: import('@/types').PermitDisclosureExportItem }>(`/api/properties/${propertyId}/permits/disclosure/${exportId}`);
+    if (!res.data?.export) throw new APIError('Export not found', 404);
+    return res.data.export;
+  }
+
+  async listDisclosureExports(propertyId: string): Promise<import('@/types').PermitDisclosureExportItem[]> {
+    const res = await this.get<{ exports: import('@/types').PermitDisclosureExportItem[] }>(`/api/properties/${propertyId}/permits/disclosure`);
+    return res.data?.exports ?? [];
+  }
 }
 
 // Export singleton instance
