@@ -252,6 +252,11 @@ enum InventoryItemCategory {
   FURNITURE
   ELECTRONICS
   OTHER
+  // Home systems added for Live Project Execution Tracker
+  INTERIOR
+  STRUCTURAL
+  EXTERIOR
+  SITE
 }
 
 enum InventoryItemCondition {
@@ -496,6 +501,7 @@ model InventoryRoom {
   plantProfiles        RoomPlantProfile[]
   plantRecommendations RoomPlantRecommendation[]
   materialSpecs        MaterialSpec[]
+  projectProgressLogs  ProjectProgressLog[]
 
   @@unique([propertyId, name])
   @@index([propertyId])
@@ -1414,6 +1420,13 @@ model User {
   // Inspection Report Intelligence
   inspectionWriteBacks InspectionWriteBack[]
 
+  // Live Project Execution Tracker
+  projectMilestonesCompleted  ProjectMilestone[]   @relation("ProjectMilestoneCompletedBy")
+  projectChangeOrdersApproved ProjectChangeOrder[] @relation("ProjectChangeOrderApprovedBy")
+  projectIssuesResolved       ProjectIssue[]       @relation("ProjectIssueResolvedBy")
+  projectProgressLogsCreated  ProjectProgressLog[] @relation("ProjectProgressLoggedBy")
+  projectWriteBacksApplied    ProjectWriteBack[]   @relation("ProjectWriteBackAppliedBy")
+
   @@index([email])
   @@index([role])
   @@index([status])
@@ -2081,6 +2094,9 @@ model Property {
   permitFetchJobs         PermitFetchJob[]
   permitDisclosureExports PermitDisclosureExport[]
 
+  // Live Project Execution Tracker
+  projectRecords ProjectRecord[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -2176,6 +2192,9 @@ model ProviderProfile {
 
   // FIX: ADD THE INVERSE RELATION FIELD
   favorites Favorite[]
+
+  // Live Project Execution Tracker
+  projectRecords ProjectRecord[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -2356,6 +2375,7 @@ model Booking {
   inventoryItemId   String?
   inventoryItem     InventoryItem?     @relation(fields: [inventoryItemId], references: [id])
   priceFinalization PriceFinalization?
+  projectRecords    ProjectRecord[]   @relation("ProjectFromBooking")
 
   // Normalized execution scope for preventing duplicate active bookings across
   // item-linked and generic service workflows.
@@ -6713,7 +6733,8 @@ model PriceFinalization {
   serviceRadarCheck        ServiceRadarCheck?        @relation(fields: [serviceRadarCheckId], references: [id], onDelete: SetNull)
   quoteComparisonWorkspace QuoteComparisonWorkspace? @relation(fields: [quoteComparisonWorkspaceId], references: [id], onDelete: SetNull)
 
-  terms PriceFinalizationTerm[]
+  terms          PriceFinalizationTerm[]
+  projectRecords ProjectRecord[]
 
   @@index([propertyId, createdAt(sort: Desc)])
   @@index([propertyId, status])
@@ -11104,8 +11125,9 @@ model PermitInspectionMilestone {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  permitRecord PropertyPermitRecord @relation(fields: [permitRecordId], references: [id], onDelete: Cascade)
-  property     Property             @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  permitRecord      PropertyPermitRecord @relation(fields: [permitRecordId], references: [id], onDelete: Cascade)
+  property          Property             @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  projectMilestones ProjectMilestone[]
 
   @@index([permitRecordId])
   @@index([propertyId, status])
@@ -11365,18 +11387,22 @@ model InspectionFinding {
   inventoryItemId String?
   recallMatchId   String?
 
+  // Link to project that resolved this finding (set during project completion write-back)
+  resolvedByProjectId String?
+
   // S3 keys for photos extracted from the source PDF
   photoKeys String[] @default([])
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  report        InspectionReport       @relation(fields: [reportId], references: [id], onDelete: Cascade)
-  property      Property               @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-  permitFlag    PermitUnpermittedFlag? @relation(fields: [permitFlagId], references: [id], onDelete: SetNull)
-  inventoryItem InventoryItem?         @relation(fields: [inventoryItemId], references: [id], onDelete: SetNull)
-  recallMatch   RecallMatch?           @relation(fields: [recallMatchId], references: [id], onDelete: SetNull)
-  writeBacks    InspectionWriteBack[]
+  report            InspectionReport       @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  property          Property               @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  permitFlag        PermitUnpermittedFlag? @relation(fields: [permitFlagId], references: [id], onDelete: SetNull)
+  inventoryItem     InventoryItem?         @relation(fields: [inventoryItemId], references: [id], onDelete: SetNull)
+  recallMatch       RecallMatch?           @relation(fields: [recallMatchId], references: [id], onDelete: SetNull)
+  writeBacks        InspectionWriteBack[]
+  resolvedByProject ProjectRecord?         @relation("InspectionFindingResolvedByProject", fields: [resolvedByProjectId], references: [id], onDelete: SetNull)
 
   @@index([reportId])
   @@index([propertyId, severity])
@@ -11385,6 +11411,7 @@ model InspectionFinding {
   @@index([permitFlagId])
   @@index([inventoryItemId])
   @@index([recallMatchId])
+  @@index([resolvedByProjectId])
   @@map("inspection_findings")
 }
 
@@ -11412,4 +11439,436 @@ model InspectionWriteBack {
   @@index([appliedByUserId])
   @@index([targetSystem, appliedAt])
   @@map("inspection_write_backs")
+}
+
+// ============================================================================
+// LIVE PROJECT EXECUTION TRACKER — ENUMS
+// ============================================================================
+
+enum ProjectRecordStatus {
+  DRAFT
+  PLANNING
+  IN_PROGRESS
+  PAUSED
+  COMPLETED
+  CANCELLED
+  DISPUTED
+}
+
+enum ProjectSourceType {
+  PRICE_FINALIZATION
+  BOOKING
+  MANUAL
+}
+
+enum ProjectType {
+  ROOF_REPLACEMENT
+  HVAC_REPLACEMENT
+  HVAC_REPAIR
+  KITCHEN_REMODEL
+  BATHROOM_REMODEL
+  ELECTRICAL_PANEL
+  PLUMBING_REPIPING
+  WATER_HEATER
+  FOUNDATION_WORK
+  WINDOW_REPLACEMENT
+  FLOORING
+  PAINTING_INTERIOR
+  PAINTING_EXTERIOR
+  DECK_PATIO
+  ADDITION
+  SEWER_LINE
+  SOLAR_INSTALLATION
+  LANDSCAPING_MAJOR
+  GENERAL_REPAIR
+  CUSTOM
+}
+
+enum ProjectMilestoneType {
+  STANDARD
+  PERMIT_INSPECTION
+  PAYMENT_TRIGGER
+  CUSTOM
+}
+
+enum ProjectMilestoneStatus {
+  UPCOMING
+  IN_PROGRESS
+  COMPLETE
+  DELAYED
+  DISPUTED
+  BLOCKED
+}
+
+enum ProjectPaymentTriggerType {
+  MILESTONE
+  DATE
+  MANUAL
+}
+
+enum ProjectPaymentStatus {
+  PENDING
+  DUE
+  PAID
+  OVERDUE
+  DISPUTED
+  ON_HOLD
+}
+
+enum ProjectChangeOrderCategory {
+  HOMEOWNER_REQUEST
+  UNFORESEEN_CONDITION
+  MATERIAL_SUBSTITUTION
+  DESIGN_CHANGE
+  ERROR_CORRECTION
+  OTHER
+}
+
+enum ProjectChangeOrderStatus {
+  PROPOSED
+  APPROVED
+  REJECTED
+  VOIDED
+}
+
+enum ProjectProgressLogEntryType {
+  MILESTONE_PHOTO
+  DAILY_NOTE
+  ISSUE_PHOTO
+  MATERIAL_DELIVERY
+}
+
+enum ProjectIssueSeverity {
+  MINOR
+  MAJOR
+  BLOCKING
+}
+
+enum ProjectIssueCategory {
+  QUALITY_CONCERN
+  SCOPE_DISPUTE
+  TIMELINE_DISPUTE
+  COMMUNICATION
+  SAFETY
+  DAMAGE
+  PAYMENT_DISPUTE
+  OTHER
+}
+
+enum ProjectIssueStatus {
+  OPEN
+  ACKNOWLEDGED
+  RESOLVED
+  ESCALATED
+}
+
+enum ProjectWriteBackTarget {
+  DIGITAL_TWIN
+  CAPITAL_TIMELINE
+  MATERIAL_SPECS
+  HOME_TIMELINE
+  HOME_EVENTS
+  PERMIT_TRACKER
+  VAULT
+  INSPECTION_FINDINGS
+}
+
+enum ProjectWriteBackAction {
+  CREATED
+  UPDATED
+  RESET
+  LINKED
+  RESOLVED
+}
+
+// ============================================================================
+// LIVE PROJECT EXECUTION TRACKER — MODELS
+// ============================================================================
+
+// Top-level record representing one contractor-executed project on a property.
+model ProjectRecord {
+  id         String @id @default(uuid())
+  propertyId String
+
+  // Contractor info (denormalized so the record survives contractor directory changes)
+  contractorId      String? // FK → ProviderProfile; null if contractor not in directory
+  contractorName    String
+  contractorLicense String?
+  contractorPhone   String?
+  contractorEmail   String?
+
+  projectType ProjectType
+  name        String
+  description String?     @db.Text
+  status      ProjectRecordStatus @default(DRAFT)
+  sourceType  ProjectSourceType   @default(MANUAL)
+
+  // Source linkages — typed FKs instead of polymorphic sourceId
+  priceFinalizationId String? // set when sourceType = PRICE_FINALIZATION
+  bookingId           String? // set when sourceType = BOOKING
+
+  // Financial tracking (all amounts in cents)
+  contractAmountCents           Int @default(0)
+  approvedChangeOrderDeltaCents Int @default(0) // sum of APPROVED change order deltas; updated on each approval
+  currentContractAmountCents    Int @default(0) // contractAmountCents + approvedChangeOrderDeltaCents
+  paidToDateCents               Int @default(0) // sum of PAID payment amounts
+
+  // Timeline
+  startDate       DateTime  @db.Date
+  expectedEndDate DateTime? @db.Date
+  actualEndDate   DateTime? @db.Date
+
+  // Home systems this project will affect — drives write-back targets on completion
+  homeSystemsAffected InventoryItemCategory[]
+  serviceCategory     ServiceCategory?
+
+  // Document S3 keys
+  contractDocumentKey String?
+  completionRecordKey String? // generated PDF on completion
+  warrantyDocumentKey String?
+
+  // Warranty tracking
+  warrantyPeriodMonths Int?
+  warrantyExpiresAt    DateTime?
+
+  // Contractor ratings — entered during completion workflow; posted to directory on confirmation
+  contractorRatingQuality  Int? // 1–5
+  contractorRatingTimeline Int? // 1–5
+  contractorRatingComms    Int? // 1–5
+  contractorRatingBudget   Int? // 1–5
+  contractorReviewText     String? @db.Text
+
+  // Timestamp of when completion write-backs were applied
+  writeBackAppliedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  property          Property           @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  contractorProfile ProviderProfile?   @relation(fields: [contractorId], references: [id], onDelete: SetNull)
+  priceFinalization PriceFinalization? @relation(fields: [priceFinalizationId], references: [id], onDelete: SetNull)
+  bookingSource     Booking?           @relation("ProjectFromBooking", fields: [bookingId], references: [id], onDelete: SetNull)
+
+  milestones         ProjectMilestone[]
+  payments           ProjectPayment[]
+  changeOrders       ProjectChangeOrder[]
+  progressLogs       ProjectProgressLog[]
+  issues             ProjectIssue[]
+  writeBacks         ProjectWriteBack[]
+  inspectionFindings InspectionFinding[] @relation("InspectionFindingResolvedByProject")
+
+  @@index([propertyId, status])
+  @@index([propertyId, createdAt(sort: Desc)])
+  @@index([contractorId])
+  @@index([priceFinalizationId])
+  @@index([bookingId])
+  @@map("project_records")
+}
+
+// A single checkpoint within a project — forms the project timeline backbone.
+model ProjectMilestone {
+  id         String @id @default(uuid())
+  projectId  String
+  propertyId String // denormalized for direct property-level queries
+
+  position      Int
+  name          String
+  description   String?                @db.Text
+  milestoneType ProjectMilestoneType   @default(STANDARD)
+  status        ProjectMilestoneStatus @default(UPCOMING)
+
+  scheduledDate       DateTime? @db.Date
+  actualCompletedDate DateTime? @db.Date
+  completionNotes     String?   @db.Text
+  completedByUserId   String?
+
+  requiresPhotoEvidence Boolean @default(false)
+
+  // Optional hard dependency — this milestone cannot start until the referenced one is COMPLETE
+  dependsOnMilestoneId String?
+
+  // For PERMIT_INSPECTION type: synced with the Permit Tracker inspection record
+  linkedPermitMilestoneId String?
+
+  // Delay tracking
+  daysDelayed Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  project               ProjectRecord              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  completedBy           User?                      @relation("ProjectMilestoneCompletedBy", fields: [completedByUserId], references: [id], onDelete: SetNull)
+  dependsOn             ProjectMilestone?          @relation("MilestoneDependency", fields: [dependsOnMilestoneId], references: [id], onDelete: SetNull)
+  dependents            ProjectMilestone[]         @relation("MilestoneDependency")
+  linkedPermitMilestone PermitInspectionMilestone? @relation(fields: [linkedPermitMilestoneId], references: [id], onDelete: SetNull)
+
+  // Payments whose release is gated on this milestone completing (back-relation)
+  triggeredPayments ProjectPayment[] @relation("PaymentTriggerMilestone")
+  progressLogs      ProjectProgressLog[]
+
+  @@index([projectId, position])
+  @@index([projectId, status])
+  @@index([dependsOnMilestoneId])
+  @@index([linkedPermitMilestoneId])
+  @@map("project_milestones")
+}
+
+// A single payment installment in the project's payment schedule.
+model ProjectPayment {
+  id        String @id @default(uuid())
+  projectId String
+
+  description String
+  amountCents Int
+  triggerType ProjectPaymentTriggerType @default(MANUAL)
+
+  // For MILESTONE trigger: the milestone whose completion releases this payment
+  triggerMilestoneId String?
+  dueDate            DateTime?            @db.Date
+  status             ProjectPaymentStatus @default(PENDING)
+
+  paidDate           DateTime? @db.Date
+  paymentMethod      String?
+  receiptDocumentKey String?
+  notes              String?   @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  project          ProjectRecord     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  triggerMilestone ProjectMilestone? @relation("PaymentTriggerMilestone", fields: [triggerMilestoneId], references: [id], onDelete: SetNull)
+
+  @@index([projectId, status])
+  @@index([triggerMilestoneId])
+  @@map("project_payments")
+}
+
+// A formal record of any change to the agreed scope or price after contract signing.
+model ProjectChangeOrder {
+  id        String @id @default(uuid())
+  projectId String
+
+  changeNumber   Int // Sequential within the project; assigned by service layer
+  title          String
+  description    String                     @db.Text
+  category       ProjectChangeOrderCategory
+  costDeltaCents Int // Positive = price increase, negative = credit/decrease
+  status         ProjectChangeOrderStatus   @default(PROPOSED)
+
+  proposedByName        String
+  supportingDocumentKey String?
+  approvedByUserId      String?
+  approvedAt            DateTime?
+  notes                 String?   @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  project    ProjectRecord @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  approvedBy User?         @relation("ProjectChangeOrderApprovedBy", fields: [approvedByUserId], references: [id], onDelete: SetNull)
+
+  @@unique([projectId, changeNumber])
+  @@index([projectId, status])
+  @@index([approvedByUserId])
+  @@map("project_change_orders")
+}
+
+// A single entry in the progress log — photo, daily note, material delivery, or issue photo.
+model ProjectProgressLog {
+  id          String  @id @default(uuid())
+  projectId   String
+  milestoneId String? // Null for daily notes not tied to a specific milestone
+
+  entryDate DateTime                    @db.Date
+  entryType ProjectProgressLogEntryType
+
+  notes     String?  @db.Text
+  photoKeys String[] // S3 keys
+
+  // Optional room tag — links the photo to Room Insights
+  roomId String?
+
+  // Material delivery fields — pre-populate Material Specs Registry on project completion
+  materialType     String?
+  materialBrand    String?
+  materialModel    String?
+  materialColor    String?
+  materialSupplier String?
+  materialQuantity String?
+
+  loggedByUserId String
+
+  createdAt DateTime @default(now())
+
+  // Relations
+  project    ProjectRecord     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  milestone  ProjectMilestone? @relation(fields: [milestoneId], references: [id], onDelete: SetNull)
+  room       InventoryRoom?    @relation(fields: [roomId], references: [id], onDelete: SetNull)
+  loggedBy   User              @relation("ProjectProgressLoggedBy", fields: [loggedByUserId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, entryDate(sort: Desc)])
+  @@index([milestoneId])
+  @@index([roomId])
+  @@index([loggedByUserId])
+  @@map("project_progress_logs")
+}
+
+// A formal problem record — ranges from minor communication issues to BLOCKING structural problems.
+model ProjectIssue {
+  id        String @id @default(uuid())
+  projectId String
+
+  title       String
+  description String @db.Text
+
+  severity      ProjectIssueSeverity
+  category      ProjectIssueCategory
+  status        ProjectIssueStatus   @default(OPEN)
+  blocksPayment Boolean              @default(false) // Auto-true for BLOCKING severity
+
+  resolutionNotes  String?   @db.Text
+  resolvedAt       DateTime?
+  resolvedByUserId String?
+
+  attachmentKeys String[] // S3 keys for photos and documents used as evidence
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  project    ProjectRecord @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  resolvedBy User?         @relation("ProjectIssueResolvedBy", fields: [resolvedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([projectId, status])
+  @@index([projectId, severity])
+  @@index([resolvedByUserId])
+  @@map("project_issues")
+}
+
+// Append-only audit log of every write-back applied when a project is marked COMPLETED.
+model ProjectWriteBack {
+  id        String @id @default(uuid())
+  projectId String
+
+  targetSystem   ProjectWriteBackTarget
+  targetRecordId String? // ID of the record created or updated in the target system
+  action         ProjectWriteBackAction
+
+  payload Json // Snapshot of what was written — immutable audit record
+
+  appliedAt       DateTime @default(now())
+  appliedByUserId String
+
+  // Relations
+  project   ProjectRecord @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  appliedBy User          @relation("ProjectWriteBackAppliedBy", fields: [appliedByUserId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([appliedByUserId])
+  @@index([targetSystem, appliedAt])
+  @@map("project_write_backs")
 }
