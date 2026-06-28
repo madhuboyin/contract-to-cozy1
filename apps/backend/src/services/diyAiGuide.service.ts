@@ -20,12 +20,15 @@ export const diyAiGuideQueue = new Queue<{ guideId: string }>(DIY_AI_GUIDE_QUEUE
 });
 
 class DiyAiGuideService {
-  private ai: GoogleGenAI;
+  private ai: GoogleGenAI | null = null;
 
-  constructor() {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) throw new Error('GEMINI_API_KEY is not set');
-    this.ai = new GoogleGenAI({ apiKey });
+  private getAi(): GoogleGenAI {
+    if (!this.ai) {
+      const apiKey = process.env.GEMINI_API_KEY;
+      if (!apiKey) throw new Error('GEMINI_API_KEY is not set');
+      this.ai = new GoogleGenAI({ apiKey });
+    }
+    return this.ai;
   }
 
   async initiateGeneration(userId: string, propertyId: string, userPrompt: string): Promise<string> {
@@ -83,7 +86,7 @@ Respond with a JSON object matching this exact schema (no markdown, raw JSON onl
 
 If the project involves main electrical panels, gas lines, load-bearing structural elements, or anything requiring a licensed contractor in most US jurisdictions, set verdict to HIRE_REQUIRED and explain in safetyWarnings. Do not generate steps for those tasks.`;
 
-      const response = await this.ai.models.generateContent({
+      const response = await this.getAi().models.generateContent({
         model: LLM_MODEL_CONFIG.DEFAULT_MODEL,
         contents: [{ role: 'user', parts: [{ text: prompt }] }],
         config: { maxOutputTokens: 4096, temperature: 0.3 },
