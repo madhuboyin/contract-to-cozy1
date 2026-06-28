@@ -4295,3 +4295,67 @@ export interface ProjectCompletionChecklist {
   checks: ProjectCompletionCheck[];
   allPassed: boolean;
 }
+
+// ============================================================================
+// NEIGHBOURHOOD TRUST NETWORK
+// ============================================================================
+
+export interface NeighbourhoodStats {
+  totalEndorsements: number;
+  activeProviders: number;
+  recentJobs: number;
+}
+
+export interface NeighbourhoodZipInfo {
+  zipCode: string;
+  city: string;
+  state: string;
+  stats: NeighbourhoodStats;
+}
+
+export interface NeighbourhoodTrustSummary {
+  zipCode: string;
+  totalJobs: number;
+  verifiedJobs: number;
+  avgRating: number;
+  avgQualityRating: number | null;
+  avgCommunicationRating: number | null;
+  avgValueRating: number | null;
+  lastJobAt: string | null;
+}
+
+export interface NeighbourhoodProvider {
+  trustProfile: NeighbourhoodTrustSummary;
+  provider: {
+    id: string;
+    businessName: string;
+    description: string | null;
+    averageRating: number;
+    totalCompletedJobs: number;
+    insuranceVerified: boolean;
+    licenseVerified: boolean;
+    serviceCategories: string[];
+    yearsInBusiness: number | null;
+  };
+}
+
+export interface NeighbourhoodFeedEntry {
+  id: string;
+  zipCode: string;
+  entryType: 'JOB_COMPLETED' | 'ENDORSEMENT_ADDED' | 'PROVIDER_FIRST_JOB';
+  providerBusinessName: string;
+  serviceCategory: string;
+  starRating: number | null;
+  highlightTags: string[];
+  jobCompletedAt: string | null;
+  createdAt: string;
+}
+
+export interface NeighbourhoodEndorsement {
+  id: string;
+  bookingId: string;
+  wouldHireAgain: boolean;
+  highlightTags: string[];
+  anonymousToNeighbors: boolean;
+  createdAt: string;
+}

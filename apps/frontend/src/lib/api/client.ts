@@ -4414,6 +4414,37 @@ class APIClient {
     if (!res.data) throw new APIError('Failed to confirm completion', 500);
     return res.data;
   }
+  // ── Neighbourhood Trust Network ──────────────────────────────────────────
+
+  async getNeighbourhoodZipInfo(): Promise<APIResponse<import('@/types').NeighbourhoodZipInfo>> {
+    return this.request('/api/neighbourhood/zip-info');
+  }
+
+  async getNeighbourhoodFeed(params?: { limit?: number }): Promise<APIResponse<{ feed: import('@/types').NeighbourhoodFeedEntry[]; zipCode: string }>> {
+    const q = params?.limit ? `?limit=${params.limit}` : '';
+    return this.request(`/api/neighbourhood/feed${q}`);
+  }
+
+  async getNeighbourhoodProviders(params?: { category?: string; limit?: number }): Promise<APIResponse<{ providers: import('@/types').NeighbourhoodProvider[]; zipCode: string }>> {
+    const p = new URLSearchParams();
+    if (params?.category) p.append('category', params.category);
+    if (params?.limit) p.append('limit', String(params.limit));
+    const q = p.toString() ? `?${p.toString()}` : '';
+    return this.request(`/api/neighbourhood/providers${q}`);
+  }
+
+  async submitNeighbourhoodEndorsement(
+    bookingId: string,
+    payload: { wouldHireAgain: boolean; highlightTags: string[]; anonymousToNeighbors?: boolean }
+  ): Promise<APIResponse<{ endorsement: import('@/types').NeighbourhoodEndorsement }>> {
+    return this.request(`/api/bookings/${bookingId}/endorse`, { method: 'POST', body: payload });
+  }
+
+  async getNeighbourhoodEndorsement(
+    bookingId: string
+  ): Promise<APIResponse<{ endorsement: import('@/types').NeighbourhoodEndorsement | null }>> {
+    return this.request(`/api/bookings/${bookingId}/endorsement`);
+  }
 }
 
 // Export singleton instance

@@ -1,9 +1,9 @@
-import { 
-  Home, 
-  Shield, 
-  DollarSign, 
-  Wrench, 
-  Box, 
+import {
+  Home,
+  Shield,
+  DollarSign,
+  Wrench,
+  Box,
   Building,
   Activity,
   AlertTriangle,
@@ -11,7 +11,8 @@ import {
   Search,
   FileText,
   PieChart,
-  LifeBuoy
+  LifeBuoy,
+  Users
 } from 'lucide-react';
 import { ElementType } from 'react';
 
@@ -115,6 +116,14 @@ export const PRIMARY_JOBS: NavJob[] = [
     icon: Box,
     description: 'Your home’s memory layer',
     engines: ['inventory', 'documents', 'rooms', 'inspection-report', 'home-digital-will'],
+  },
+  {
+    key: 'neighbourhood-trust',
+    name: 'Neighbours',
+    href: '/dashboard/neighbourhood-trust',
+    icon: Users,
+    description: 'Trusted contractors in your neighbourhood',
+    engines: ['neighbourhood-trust', 'neighbourhood-feed', 'endorsements'],
   },
   {
     key: 'home-lab',
