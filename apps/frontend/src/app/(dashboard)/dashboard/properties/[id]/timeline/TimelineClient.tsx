@@ -41,28 +41,21 @@ function iconForType(type?: string) {
 }
 
 function shortImportanceLabel(importance: HomeEvent['importance'] | null | undefined) {
-  if (!importance) return null;
-  return importance === 'HIGHLIGHT' ? 'High Priority' : importance;
+  if (!importance || importance === 'NORMAL' || importance === 'LOW') return null;
+  return importance === 'HIGHLIGHT' ? 'High Priority' : null;
 }
 
 function toHomeEventFromTimelineEntry(entry: TimelineProjectionEntry): HomeEvent {
-  const signalKey = entry.signalKey ?? undefined;
-  const summaryPrefix = entry.kind === 'SIGNAL' && signalKey ? `${signalKey.replace(/_/g, ' ')}: ` : '';
-  const derivedImportance: HomeEvent['importance'] =
-    entry.kind === 'SIGNAL' && (signalKey === 'RISK_SPIKE' || signalKey === 'COST_ANOMALY' || signalKey === 'COVERAGE_GAP')
-      ? 'HIGHLIGHT'
-      : 'NORMAL';
-
   return {
     id: entry.id,
     propertyId: '',
     type: (entry.eventType as HomeEvent['type']) ?? 'MILESTONE',
-    subtype: entry.kind === 'SIGNAL' ? signalKey ?? null : entry.eventType,
-    importance: derivedImportance,
+    subtype: null, // never expose raw signal keys or internal codes as visible badges
+    importance: 'NORMAL',
     occurredAt: entry.occurredAt,
     endAt: null,
     title: entry.title,
-    summary: entry.summary ? `${summaryPrefix}${entry.summary}` : entry.kind === 'SIGNAL' ? 'Derived from shared signals.' : null,
+    summary: entry.summary ?? null,
     amount: null,
     currency: null,
     valueDelta: null,

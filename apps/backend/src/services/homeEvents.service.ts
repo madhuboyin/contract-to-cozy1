@@ -200,27 +200,25 @@ export class HomeEventsService {
     return timelineEntryFromEvent(envelope, String(event.title || 'Home event'), event.summary ?? null);
   }
 
-  private async buildSignalTimelineEntries(propertyId: string, take: number): Promise<TimelineProjectionEntry[]> {
-    const relevantSignalKeys = new Set<SharedSignalKey>([
+  private async buildSignalTimelineEntries(propertyId: string, _take: number): Promise<TimelineProjectionEntry[]> {
+    // Only surface signals that represent real ownership moments, not internal analysis artifacts.
+    // RISK_SPIKE, COST_ANOMALY, RISK_ACCUMULATION, SYSTEM_DEGRADATION, COST_PRESSURE_PATTERN are
+    // emitted every analysis run and produce noisy, technical-sounding clutter.
+    const milestoneSignalKeys: SharedSignalKey[] = [
       'MAINT_ADHERENCE',
       'COVERAGE_GAP',
       'SAVINGS_REALIZATION',
-      'RISK_SPIKE',
-      'COST_ANOMALY',
-      'RISK_ACCUMULATION',
-      'SYSTEM_DEGRADATION',
-      'COST_PRESSURE_PATTERN',
       'FINANCIAL_DISCIPLINE',
-    ]);
+    ];
 
-    const sharedSignals = await signalService.listSignals(propertyId, {
-      freshOnly: false,
-      limit: Math.min(200, Math.max(40, take * 2)),
+    // getLatestSignalsByKey returns at most one entry per key — no spam.
+    const latestByKey = await signalService.getLatestSignalsByKey(propertyId, milestoneSignalKeys, {
+      freshOnly: true,
     });
 
-    return sharedSignals
-      .filter((signal) => relevantSignalKeys.has(signal.signalKey as SharedSignalKey))
-      .map((signal) => timelineEntryFromSignal(signal));
+    return Object.values(latestByKey)
+      .filter((signal): signal is NonNullable<typeof signal> => Boolean(signal))
+      .map((signal) => timelineEntryFromSignal(signal!));
   }
 
   private canonicalPurchaseKey(event: any): string | null {

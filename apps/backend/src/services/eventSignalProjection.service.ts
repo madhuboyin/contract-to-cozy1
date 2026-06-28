@@ -53,25 +53,15 @@ function toRecord(value: Prisma.JsonValue | null | undefined): Record<string, un
 function signalTitle(signalKey: string): string {
   switch (signalKey) {
     case 'MAINT_ADHERENCE':
-      return 'Maintenance adherence updated';
+      return 'Maintenance milestone reached';
     case 'COVERAGE_GAP':
-      return 'Coverage gap signal updated';
+      return 'Insurance coverage gap flagged';
     case 'SAVINGS_REALIZATION':
-      return 'Savings realization updated';
-    case 'RISK_SPIKE':
-      return 'Risk spike detected';
-    case 'COST_ANOMALY':
-      return 'Cost anomaly detected';
-    case 'RISK_ACCUMULATION':
-      return 'Risk accumulation pattern detected';
-    case 'SYSTEM_DEGRADATION':
-      return 'System degradation pattern detected';
-    case 'COST_PRESSURE_PATTERN':
-      return 'Recurring cost pressure pattern detected';
+      return 'Home savings goal achieved';
     case 'FINANCIAL_DISCIPLINE':
-      return 'Financial discipline pattern strengthened';
+      return 'Strong financial habits recognized';
     default:
-      return `${signalKey.replace(/_/g, ' ')} signal updated`;
+      return 'Home insight updated';
   }
 }
 
@@ -105,21 +95,24 @@ export function timelineEntryFromEvent(event: UnifiedEventEnvelope, title: strin
   };
 }
 
+function friendlySignalSummary(signalKey: string): string | null {
+  switch (signalKey) {
+    case 'MAINT_ADHERENCE':
+      return 'You have been keeping up with home maintenance tasks.';
+    case 'COVERAGE_GAP':
+      return 'A gap was identified in your home insurance or warranty coverage. Review your policies to stay protected.';
+    case 'SAVINGS_REALIZATION':
+      return 'Your proactive home care has resulted in measurable savings.';
+    case 'FINANCIAL_DISCIPLINE':
+      return 'Your home spending patterns show consistent financial discipline.';
+    default:
+      return null;
+  }
+}
+
 export function timelineEntryFromSignal(signal: SignalDTO): TimelineProjectionEntry {
   const payload = toRecord(signal.valueJson);
-  const toOptionalString = (value: unknown): string | null =>
-    typeof value === 'string' && value.trim().length > 0 ? value : null;
-  const explainability = signal.explainability;
-  const freshnessState = signal.freshnessState ?? (signal.validUntil ? (new Date(signal.validUntil) < new Date() ? 'STALE' : 'FRESH') : 'FRESH');
-  const reasonSummary =
-    toOptionalString(explainability?.why?.[0]) ??
-    toOptionalString(payload?.summary) ??
-    toOptionalString(payload?.message) ??
-    null;
-  const summary =
-    freshnessState === 'STALE'
-      ? [reasonSummary, 'Signal is stale and shown for historical context.'].filter(Boolean).join(' ')
-      : reasonSummary ?? signal.valueText ?? null;
+  const summary = friendlySignalSummary(signal.signalKey);
 
   return {
     id: `signal:${signal.id}`,
