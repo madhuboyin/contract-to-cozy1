@@ -74,7 +74,7 @@ export class InspectionAnalysisService {
     logger.info(`[INSPECTION] Extracted ${pdfText.length} characters from PDF`);
 
     // Create inspection report record
-    const report = await prisma.inspectionReport.create({
+    const report = await prisma.legacyInspectionReport.create({
       data: {
         propertyId,
         userId,
@@ -111,7 +111,7 @@ export class InspectionAnalysisService {
         maintenanceFrequency: issue.maintenanceFrequency,
       }));
 
-      await prisma.inspectionIssue.createMany({
+      await prisma.legacyInspectionIssue.createMany({
         data: issuesData,
       });
 
@@ -125,7 +125,7 @@ export class InspectionAnalysisService {
       const cosmeticCount = analysis.issues.filter(i => i.severity === 'COSMETIC').length;
 
       // Update report with analysis results
-      await prisma.inspectionReport.update({
+      await prisma.legacyInspectionReport.update({
         where: { id: report.id },
         data: {
           overallScore: analysis.overallScore,
@@ -154,7 +154,7 @@ export class InspectionAnalysisService {
       logger.error({ err: error }, '[INSPECTION] Analysis failed');
       
       // Update report with error
-      await prisma.inspectionReport.update({
+      await prisma.legacyInspectionReport.update({
         where: { id: report.id },
         data: {
           analysisCompleted: false,
@@ -287,7 +287,7 @@ CRITICAL: Extract at least 95% of all issues. Match inspector severity. Cost est
    * Get inspection report by ID
    */
   async getInspectionReport(reportId: string, userId: string) {
-    const report = await prisma.inspectionReport.findFirst({
+    const report = await prisma.legacyInspectionReport.findFirst({
       where: {
         id: reportId,
         userId: userId,
@@ -315,7 +315,7 @@ CRITICAL: Extract at least 95% of all issues. Match inspector severity. Cost est
    * Get all reports for a property
    */
   async getPropertyReports(propertyId: string, userId: string) {
-    const reports = await prisma.inspectionReport.findMany({
+    const reports = await prisma.legacyInspectionReport.findMany({
       where: {
         propertyId,
         userId,
