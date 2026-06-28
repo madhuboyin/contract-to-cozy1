@@ -4033,3 +4033,184 @@ export interface InspectionFixDisclosureItem extends Pick<InspectionFinding,
     sellerNote?: string;
   } | null;
 }
+
+// ============================================================================
+// LIVE PROJECT EXECUTION TRACKER
+// ============================================================================
+
+export type ProjectStatus = 'DRAFT' | 'PLANNING' | 'IN_PROGRESS' | 'PAUSED' | 'COMPLETED' | 'CANCELLED' | 'DISPUTED';
+
+export type ProjectType =
+  | 'ROOF_REPLACEMENT' | 'HVAC_REPLACEMENT' | 'HVAC_REPAIR' | 'KITCHEN_REMODEL'
+  | 'BATHROOM_REMODEL' | 'ELECTRICAL_PANEL' | 'PLUMBING_REPIPING' | 'WATER_HEATER'
+  | 'FOUNDATION_WORK' | 'WINDOW_REPLACEMENT' | 'FLOORING' | 'PAINTING_INTERIOR'
+  | 'PAINTING_EXTERIOR' | 'DECK_PATIO' | 'ADDITION' | 'SEWER_LINE'
+  | 'SOLAR_INSTALLATION' | 'LANDSCAPING_MAJOR' | 'GENERAL_REPAIR' | 'CUSTOM';
+
+export type ProjectMilestoneStatus = 'UPCOMING' | 'IN_PROGRESS' | 'COMPLETE' | 'DELAYED' | 'DISPUTED' | 'BLOCKED';
+export type ProjectMilestoneType = 'STANDARD' | 'PERMIT_INSPECTION' | 'PAYMENT_TRIGGER' | 'CUSTOM';
+export type ProjectPaymentStatus = 'PENDING' | 'DUE' | 'PAID' | 'OVERDUE' | 'DISPUTED' | 'ON_HOLD';
+export type ProjectPaymentTriggerType = 'MILESTONE' | 'DATE' | 'MANUAL';
+export type ProjectChangeOrderStatus = 'PROPOSED' | 'APPROVED' | 'REJECTED' | 'VOIDED';
+export type ProjectChangeOrderCategory =
+  | 'HOMEOWNER_REQUEST' | 'UNFORESEEN_CONDITION' | 'MATERIAL_SUBSTITUTION'
+  | 'DESIGN_CHANGE' | 'ERROR_CORRECTION' | 'OTHER';
+export type ProjectIssueSeverity = 'MINOR' | 'MAJOR' | 'BLOCKING';
+export type ProjectIssueStatus = 'OPEN' | 'ACKNOWLEDGED' | 'RESOLVED' | 'ESCALATED';
+export type ProjectProgressLogEntryType = 'MILESTONE_PHOTO' | 'DAILY_NOTE' | 'ISSUE_PHOTO' | 'MATERIAL_DELIVERY';
+
+export interface ProjectMilestoneSummary {
+  id: string;
+  name: string;
+  milestoneType: ProjectMilestoneType;
+  status: ProjectMilestoneStatus;
+  scheduledDate?: string | null;
+  actualCompletedDate?: string | null;
+  requiresPhotoEvidence: boolean;
+  position: number;
+  daysDelayed?: number | null;
+  linkedPermitMilestoneId?: string | null;
+}
+
+export interface ProjectMilestone extends ProjectMilestoneSummary {
+  projectId: string;
+  propertyId: string;
+  description?: string | null;
+  completionNotes?: string | null;
+  completedByUserId?: string | null;
+  dependsOnMilestoneId?: string | null;
+  daysDelayed?: number | null;
+  createdAt: string;
+  updatedAt: string;
+  triggeredPayments?: Array<{ id: string; description: string; amountCents: number; status: ProjectPaymentStatus }>;
+}
+
+export interface ProjectPayment {
+  id: string;
+  projectId: string;
+  description: string;
+  amountCents: number;
+  triggerType: ProjectPaymentTriggerType;
+  triggerMilestoneId?: string | null;
+  dueDate?: string | null;
+  status: ProjectPaymentStatus;
+  paidDate?: string | null;
+  paymentMethod?: string | null;
+  receiptDocumentKey?: string | null;
+  notes?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  triggerMilestone?: { id: string; name: string; status: ProjectMilestoneStatus } | null;
+}
+
+export interface ProjectChangeOrder {
+  id: string;
+  projectId: string;
+  changeNumber: number;
+  title: string;
+  description: string;
+  category: ProjectChangeOrderCategory;
+  costDeltaCents: number;
+  status: ProjectChangeOrderStatus;
+  proposedByName: string;
+  supportingDocumentKey?: string | null;
+  approvedByUserId?: string | null;
+  approvedAt?: string | null;
+  notes?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ProjectProgressLog {
+  id: string;
+  projectId: string;
+  milestoneId?: string | null;
+  entryDate: string;
+  entryType: ProjectProgressLogEntryType;
+  notes?: string | null;
+  photoKeys: string[];
+  roomId?: string | null;
+  materialType?: string | null;
+  materialBrand?: string | null;
+  materialModel?: string | null;
+  materialColor?: string | null;
+  materialSupplier?: string | null;
+  materialQuantity?: string | null;
+  loggedByUserId: string;
+  createdAt: string;
+  milestone?: { id: string; name: string } | null;
+  room?: { id: string; name: string } | null;
+}
+
+export interface ProjectIssue {
+  id: string;
+  projectId: string;
+  title: string;
+  description: string;
+  severity: ProjectIssueSeverity;
+  category: string;
+  status: ProjectIssueStatus;
+  blocksPayment: boolean;
+  resolutionNotes?: string | null;
+  resolvedAt?: string | null;
+  attachmentKeys: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ProjectRecord {
+  id: string;
+  propertyId: string;
+  contractorId?: string | null;
+  contractorName: string;
+  contractorLicense?: string | null;
+  contractorPhone?: string | null;
+  contractorEmail?: string | null;
+  projectType: ProjectType;
+  name: string;
+  description?: string | null;
+  status: ProjectStatus;
+  sourceType: 'PRICE_FINALIZATION' | 'BOOKING' | 'MANUAL';
+  priceFinalizationId?: string | null;
+  bookingId?: string | null;
+  contractAmountCents: number;
+  approvedChangeOrderDeltaCents: number;
+  currentContractAmountCents: number;
+  paidToDateCents: number;
+  startDate: string;
+  expectedEndDate?: string | null;
+  actualEndDate?: string | null;
+  homeSystemsAffected: string[];
+  serviceCategory?: string | null;
+  contractDocumentKey?: string | null;
+  completionRecordKey?: string | null;
+  warrantyDocumentKey?: string | null;
+  warrantyPeriodMonths?: number | null;
+  warrantyExpiresAt?: string | null;
+  contractorRatingQuality?: number | null;
+  contractorRatingTimeline?: number | null;
+  contractorRatingComms?: number | null;
+  contractorRatingBudget?: number | null;
+  contractorReviewText?: string | null;
+  writeBackAppliedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  // Included in detail view
+  milestones?: ProjectMilestone[];
+  payments?: ProjectPayment[];
+  changeOrders?: ProjectChangeOrder[];
+  issues?: ProjectIssue[];
+  _count?: { milestones: number; issues: number; progressLogs: number };
+}
+
+export interface ProjectCompletionCheck {
+  key: string;
+  label: string;
+  passed: boolean;
+  blockers: string[];
+}
+
+export interface ProjectCompletionChecklist {
+  checks: ProjectCompletionCheck[];
+  allPassed: boolean;
+}

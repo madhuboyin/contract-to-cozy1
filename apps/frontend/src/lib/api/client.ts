@@ -4157,6 +4157,226 @@ class APIClient {
   ): Promise<void> {
     await this.patch(`/api/properties/${propertyId}/inspection-hub/reports/${reportId}/fix-disclose`, { decisions });
   }
+
+  // ── Project Tracker ──────────────────────────────────────────────────────────
+
+  async listProjects(propertyId: string): Promise<import('@/types').ProjectRecord[]> {
+    const res = await this.get<import('@/types').ProjectRecord[]>(`/api/properties/${propertyId}/projects`);
+    return res.data ?? [];
+  }
+
+  async createProject(propertyId: string, payload: {
+    name: string;
+    projectType: string;
+    contractorName: string;
+    contractorLicense?: string;
+    contractorPhone?: string;
+    contractorEmail?: string;
+    contractorId?: string;
+    description?: string;
+    sourceType?: string;
+    priceFinalizationId?: string;
+    bookingId?: string;
+    contractAmountCents: number;
+    startDate: string;
+    expectedEndDate?: string;
+    homeSystemsAffected?: string[];
+    contractDocumentKey?: string;
+    milestones?: Array<{ name: string; position: number; milestoneType?: string; scheduledDate?: string; requiresPhotoEvidence?: boolean }>;
+  }): Promise<import('@/types').ProjectRecord> {
+    const res = await this.post<import('@/types').ProjectRecord>(`/api/properties/${propertyId}/projects`, payload);
+    if (!res.data) throw new APIError('Failed to create project', 500);
+    return res.data;
+  }
+
+  async getProject(propertyId: string, projectId: string): Promise<import('@/types').ProjectRecord> {
+    const res = await this.get<import('@/types').ProjectRecord>(`/api/properties/${propertyId}/projects/${projectId}`);
+    if (!res.data) throw new APIError('Project not found', 404);
+    return res.data;
+  }
+
+  async updateProject(propertyId: string, projectId: string, patch: Partial<import('@/types').ProjectRecord>): Promise<import('@/types').ProjectRecord> {
+    const res = await this.patch<import('@/types').ProjectRecord>(`/api/properties/${propertyId}/projects/${projectId}`, patch);
+    if (!res.data) throw new APIError('Failed to update project', 500);
+    return res.data;
+  }
+
+  async cancelProject(propertyId: string, projectId: string): Promise<void> {
+    await this.delete(`/api/properties/${propertyId}/projects/${projectId}`);
+  }
+
+  async getMilestoneTemplates(projectType: string): Promise<Array<{ name: string; position: number; requiresPhotoEvidence: boolean }>> {
+    const res = await this.get<{ templates: Array<{ name: string; position: number; requiresPhotoEvidence: boolean }> }>(`/api/projects/milestone-templates`, { projectType });
+    return res.data?.templates ?? [];
+  }
+
+  // Milestones
+  async listMilestones(propertyId: string, projectId: string): Promise<import('@/types').ProjectMilestone[]> {
+    const res = await this.get<import('@/types').ProjectMilestone[]>(`/api/properties/${propertyId}/projects/${projectId}/milestones`);
+    return res.data ?? [];
+  }
+
+  async createMilestone(propertyId: string, projectId: string, payload: {
+    name: string; description?: string; milestoneType?: string; scheduledDate?: string;
+    requiresPhotoEvidence?: boolean; position?: number; dependsOnMilestoneId?: string; linkedPermitMilestoneId?: string;
+  }): Promise<import('@/types').ProjectMilestone> {
+    const res = await this.post<import('@/types').ProjectMilestone>(`/api/properties/${propertyId}/projects/${projectId}/milestones`, payload);
+    if (!res.data) throw new APIError('Failed to create milestone', 500);
+    return res.data;
+  }
+
+  async updateMilestone(propertyId: string, projectId: string, milestoneId: string, patch: object): Promise<import('@/types').ProjectMilestone> {
+    const res = await this.patch<import('@/types').ProjectMilestone>(`/api/properties/${propertyId}/projects/${projectId}/milestones/${milestoneId}`, patch);
+    if (!res.data) throw new APIError('Failed to update milestone', 500);
+    return res.data;
+  }
+
+  async completeMilestone(propertyId: string, projectId: string, milestoneId: string, payload?: { completionNotes?: string; actualCompletedDate?: string }): Promise<import('@/types').ProjectMilestone> {
+    const res = await this.post<import('@/types').ProjectMilestone>(`/api/properties/${propertyId}/projects/${projectId}/milestones/${milestoneId}/complete`, payload ?? {});
+    if (!res.data) throw new APIError('Failed to complete milestone', 500);
+    return res.data;
+  }
+
+  async deleteMilestone(propertyId: string, projectId: string, milestoneId: string): Promise<void> {
+    await this.delete(`/api/properties/${propertyId}/projects/${projectId}/milestones/${milestoneId}`);
+  }
+
+  // Payments
+  async listPayments(propertyId: string, projectId: string): Promise<import('@/types').ProjectPayment[]> {
+    const res = await this.get<import('@/types').ProjectPayment[]>(`/api/properties/${propertyId}/projects/${projectId}/payments`);
+    return res.data ?? [];
+  }
+
+  async createPayment(propertyId: string, projectId: string, payload: {
+    description: string; amountCents: number; triggerType?: string;
+    triggerMilestoneId?: string; dueDate?: string; notes?: string;
+  }): Promise<import('@/types').ProjectPayment> {
+    const res = await this.post<import('@/types').ProjectPayment>(`/api/properties/${propertyId}/projects/${projectId}/payments`, payload);
+    if (!res.data) throw new APIError('Failed to create payment', 500);
+    return res.data;
+  }
+
+  async updatePayment(propertyId: string, projectId: string, paymentId: string, patch: object): Promise<import('@/types').ProjectPayment> {
+    const res = await this.patch<import('@/types').ProjectPayment>(`/api/properties/${propertyId}/projects/${projectId}/payments/${paymentId}`, patch);
+    if (!res.data) throw new APIError('Failed to update payment', 500);
+    return res.data;
+  }
+
+  async markPaymentPaid(propertyId: string, projectId: string, paymentId: string, payload?: { paidDate?: string; paymentMethod?: string; receiptDocumentKey?: string }): Promise<import('@/types').ProjectPayment> {
+    const res = await this.post<import('@/types').ProjectPayment>(`/api/properties/${propertyId}/projects/${projectId}/payments/${paymentId}/mark-paid`, payload ?? {});
+    if (!res.data) throw new APIError('Failed to mark payment paid', 500);
+    return res.data;
+  }
+
+  async deletePayment(propertyId: string, projectId: string, paymentId: string): Promise<void> {
+    await this.delete(`/api/properties/${propertyId}/projects/${projectId}/payments/${paymentId}`);
+  }
+
+  // Change Orders
+  async listChangeOrders(propertyId: string, projectId: string): Promise<import('@/types').ProjectChangeOrder[]> {
+    const res = await this.get<import('@/types').ProjectChangeOrder[]>(`/api/properties/${propertyId}/projects/${projectId}/change-orders`);
+    return res.data ?? [];
+  }
+
+  async createChangeOrder(propertyId: string, projectId: string, payload: {
+    title: string; description: string; category: string; costDeltaCents: number;
+    proposedByName: string; notes?: string;
+  }): Promise<import('@/types').ProjectChangeOrder> {
+    const res = await this.post<import('@/types').ProjectChangeOrder>(`/api/properties/${propertyId}/projects/${projectId}/change-orders`, payload);
+    if (!res.data) throw new APIError('Failed to create change order', 500);
+    return res.data;
+  }
+
+  async approveChangeOrder(propertyId: string, projectId: string, changeOrderId: string): Promise<import('@/types').ProjectChangeOrder> {
+    const res = await this.post<import('@/types').ProjectChangeOrder>(`/api/properties/${propertyId}/projects/${projectId}/change-orders/${changeOrderId}/approve`, {});
+    if (!res.data) throw new APIError('Failed to approve change order', 500);
+    return res.data;
+  }
+
+  async rejectChangeOrder(propertyId: string, projectId: string, changeOrderId: string): Promise<import('@/types').ProjectChangeOrder> {
+    const res = await this.post<import('@/types').ProjectChangeOrder>(`/api/properties/${propertyId}/projects/${projectId}/change-orders/${changeOrderId}/reject`, {});
+    if (!res.data) throw new APIError('Failed to reject change order', 500);
+    return res.data;
+  }
+
+  async voidChangeOrder(propertyId: string, projectId: string, changeOrderId: string): Promise<import('@/types').ProjectChangeOrder> {
+    const res = await this.post<import('@/types').ProjectChangeOrder>(`/api/properties/${propertyId}/projects/${projectId}/change-orders/${changeOrderId}/void`, {});
+    if (!res.data) throw new APIError('Failed to void change order', 500);
+    return res.data;
+  }
+
+  // Progress Log
+  async listProjectLogEntries(propertyId: string, projectId: string, params?: {
+    milestoneId?: string; entryType?: string; from?: string; to?: string; limit?: number; cursor?: string;
+  }): Promise<{ entries: import('@/types').ProjectProgressLog[]; nextCursor: string | null }> {
+    const res = await this.get<{ entries: import('@/types').ProjectProgressLog[]; nextCursor: string | null }>(
+      `/api/properties/${propertyId}/projects/${projectId}/log`, params as Record<string, any>
+    );
+    return res.data ?? { entries: [], nextCursor: null };
+  }
+
+  async createProjectLogEntry(propertyId: string, projectId: string, payload: {
+    entryDate: string; entryType: string; notes?: string; photoKeys?: string[];
+    milestoneId?: string; roomId?: string; materialType?: string; materialBrand?: string;
+    materialModel?: string; materialColor?: string; materialSupplier?: string; materialQuantity?: string;
+  }): Promise<import('@/types').ProjectProgressLog> {
+    const res = await this.post<import('@/types').ProjectProgressLog>(`/api/properties/${propertyId}/projects/${projectId}/log`, payload);
+    if (!res.data) throw new APIError('Failed to create log entry', 500);
+    return res.data;
+  }
+
+  async deleteProjectLogEntry(propertyId: string, projectId: string, logId: string): Promise<void> {
+    await this.delete(`/api/properties/${propertyId}/projects/${projectId}/log/${logId}`);
+  }
+
+  // Issues
+  async listProjectIssues(propertyId: string, projectId: string): Promise<import('@/types').ProjectIssue[]> {
+    const res = await this.get<import('@/types').ProjectIssue[]>(`/api/properties/${propertyId}/projects/${projectId}/issues`);
+    return res.data ?? [];
+  }
+
+  async createProjectIssue(propertyId: string, projectId: string, payload: {
+    title: string; description: string; severity: string; category: string;
+    blocksPayment?: boolean; attachmentKeys?: string[];
+  }): Promise<import('@/types').ProjectIssue> {
+    const res = await this.post<import('@/types').ProjectIssue>(`/api/properties/${propertyId}/projects/${projectId}/issues`, payload);
+    if (!res.data) throw new APIError('Failed to create issue', 500);
+    return res.data;
+  }
+
+  async updateProjectIssue(propertyId: string, projectId: string, issueId: string, patch: object): Promise<import('@/types').ProjectIssue> {
+    const res = await this.patch<import('@/types').ProjectIssue>(`/api/properties/${propertyId}/projects/${projectId}/issues/${issueId}`, patch);
+    if (!res.data) throw new APIError('Failed to update issue', 500);
+    return res.data;
+  }
+
+  async resolveProjectIssue(propertyId: string, projectId: string, issueId: string, resolutionNotes: string): Promise<import('@/types').ProjectIssue> {
+    const res = await this.post<import('@/types').ProjectIssue>(`/api/properties/${propertyId}/projects/${projectId}/issues/${issueId}/resolve`, { resolutionNotes });
+    if (!res.data) throw new APIError('Failed to resolve issue', 500);
+    return res.data;
+  }
+
+  // Completion
+  async getProjectCompletionChecklist(propertyId: string, projectId: string): Promise<import('@/types').ProjectCompletionChecklist> {
+    const res = await this.get<import('@/types').ProjectCompletionChecklist>(`/api/properties/${propertyId}/projects/${projectId}/completion/checklist`);
+    if (!res.data) throw new APIError('Failed to load checklist', 500);
+    return res.data;
+  }
+
+  async confirmProjectCompletion(propertyId: string, projectId: string, payload: {
+    actualEndDate?: string;
+    contractorRatingQuality: number;
+    contractorRatingTimeline: number;
+    contractorRatingComms: number;
+    contractorRatingBudget: number;
+    contractorReviewText?: string;
+    warrantyPeriodMonths?: number;
+    warrantyDocumentKey?: string;
+  }): Promise<{ project: import('@/types').ProjectRecord }> {
+    const res = await this.post<{ project: import('@/types').ProjectRecord }>(`/api/properties/${propertyId}/projects/${projectId}/completion/confirm`, payload);
+    if (!res.data) throw new APIError('Failed to confirm completion', 500);
+    return res.data;
+  }
 }
 
 // Export singleton instance

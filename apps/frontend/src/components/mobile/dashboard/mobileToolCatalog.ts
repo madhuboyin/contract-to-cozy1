@@ -47,6 +47,7 @@ export type MobileAiToolKey =
   | 'material-specs'
   | 'financing'
   | 'diy'
+  | 'project-tracker'
   | 'view-all';
 
 export type MobileAiToolGroup = 'core' | 'wealth' | 'monitoring' | 'planning';
@@ -912,5 +913,16 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
     icon: resolveToolIcon('home', 'inspection-hub'),
     isActive: (pathname) =>
       /^\/dashboard\/properties\/[^/]+\/inspection-hub(\/|$)/.test(pathname),
+  },
+  {
+    key: 'project-tracker',
+    name: 'Project Tracker',
+    description: 'Track contractor projects from contract to completion',
+    desktopDescription: 'Manage every active renovation or repair project — milestone timeline, payment gating, change order log, progress photos, and issue tracking — with completion write-back to your home record.',
+    hrefSuffix: 'projects',
+    navTarget: 'tool:project-tracker',
+    icon: resolveToolIcon('home', 'project-tracker'),
+    isActive: (pathname) =>
+      /^\/dashboard\/properties\/[^/]+\/projects(\/|$)/.test(pathname),
   },
 ];
