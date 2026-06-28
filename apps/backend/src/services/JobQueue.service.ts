@@ -69,6 +69,35 @@ export const smsNotificationQueue = new Queue<SmsNotificationJobPayload>(
   { connection }
 );
 
+// Permit History & Unpermitted Work Tracker queues
+export interface PermitFetchJobPayload {
+  fetchJobId: string;
+  propertyId: string;
+}
+
+export interface DetectUnpermittedWorkJobPayload {
+  propertyId: string;
+}
+
+export interface GeneratePermitDisclosureJobPayload {
+  exportId: string;
+  propertyId: string;
+}
+
+export const permitFetchQueue = new Queue<PermitFetchJobPayload>(
+  'permit-fetch-queue',
+  { connection }
+);
+
+export const detectUnpermittedWorkQueue = new Queue<DetectUnpermittedWorkJobPayload>(
+  'detect-unpermitted-work-queue',
+  { connection }
+);
+
+export const generatePermitDisclosureQueue = new Queue<GeneratePermitDisclosureJobPayload>(
+  'generate-permit-disclosure-queue',
+  { connection }
+);
 
 // -----------------------------------------------------------------------------
 // Services
