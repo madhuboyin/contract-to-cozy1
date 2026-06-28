@@ -364,4 +364,17 @@ export const JOB_REGISTRY: JobRegistryEntry[] = [
     type: 'cron',
     triggerSupported: false,
   },
+
+  // ── Permit Tracker (cron) ─────────────────────────────────────────────────
+  {
+    key: 'permit-inspection-reminders',
+    name: 'Permit Inspection Reminders',
+    description:
+      'Sends in-app notifications to homeowners for inspection milestones scheduled within the next 3 days that have not yet been notified.',
+    category: 'MAINTENANCE',
+    schedule: 'Daily at 8:00 AM EST',
+    cronExpression: '0 8 * * *',
+    type: 'cron',
+    triggerSupported: false,
+  },
 ];

@@ -44,6 +44,10 @@ import { runSharedSignalRefreshJob } from './jobs/sharedSignalRefresh.job';
 import { runSharedSignalHealthAuditJob } from './jobs/sharedSignalHealthAudit.job';
 import { generateDiyAiGuideJob, GENERATE_DIY_AI_GUIDE_JOB } from './jobs/generateDiyAiGuide.job';
 import { DIY_AI_GUIDE_QUEUE } from '../../backend/src/services/diyAiGuide.service';
+import { fetchPermitHistoryJob, FETCH_PERMIT_HISTORY_JOB } from './jobs/fetchPermitHistory.job';
+import { detectUnpermittedWorkJob, DETECT_UNPERMITTED_WORK_JOB } from './jobs/detectUnpermittedWork.job';
+import { generatePermitDisclosureJob, GENERATE_PERMIT_DISCLOSURE_JOB } from './jobs/generatePermitDisclosure.job';
+import { permitInspectionReminderJob } from './jobs/permitInspectionReminder.job';
 import { JOB_REGISTRY } from '../../backend/src/config/workerJobRegistry';
 import { prisma } from './lib/prisma';
 import { HiddenAssetService } from '../../backend/src/services/hiddenAssets.service';
@@ -678,6 +682,7 @@ const CRON_HANDLERS: Record<string, () => Promise<void>> = {
   'shared-signal-refresh':           async () => { await runSharedSignalRefreshJob(); },
   'shared-signal-health-audit':      async () => { await runSharedSignalHealthAuditJob(); },
   'expire-guidance-signals':         async () => { await expireGuidanceSignalsJob(); },
+  'permit-inspection-reminders':     async () => { await permitInspectionReminderJob(); },
 };
 
 // Per-job cron expression overrides (env-var-based schedules)
@@ -995,6 +1000,48 @@ diyAiGuideWorker.on('ready', () => logger.info(`[DIY-GUIDE-WORKER] Ready on queu
 diyAiGuideWorker.on('completed', (job) => logger.info(`[DIY-GUIDE-WORKER] Guide ${job.data.guideId} completed`));
 diyAiGuideWorker.on('failed', (job, err) => logger.error({ err }, `[DIY-GUIDE-WORKER] Guide ${job?.data?.guideId} failed`));
 
+// =============================================================================
+// PERMIT HISTORY & UNPERMITTED WORK TRACKER — BullMQ workers
+// =============================================================================
+
+const permitFetchWorker = new Worker<{ fetchJobId: string; propertyId: string }>(
+  'permit-fetch-queue',
+  async (job) => {
+    if (job.name === FETCH_PERMIT_HISTORY_JOB) {
+      await fetchPermitHistoryJob(job.data.fetchJobId);
+    }
+  },
+  { connection: redisConnection, concurrency: 3 },
+);
+permitFetchWorker.on('ready', () => logger.info('[PERMIT-FETCH-WORKER] Ready on queue: permit-fetch-queue'));
+permitFetchWorker.on('completed', (job) => logger.info(`[PERMIT-FETCH-WORKER] fetchJob ${job.data.fetchJobId} completed`));
+permitFetchWorker.on('failed', (job, err) => logger.error({ err }, `[PERMIT-FETCH-WORKER] fetchJob ${job?.data?.fetchJobId} failed`));
+
+const detectUnpermittedWorker = new Worker<{ propertyId: string }>(
+  'detect-unpermitted-work-queue',
+  async (job) => {
+    if (job.name === DETECT_UNPERMITTED_WORK_JOB) {
+      await detectUnpermittedWorkJob(job.data.propertyId);
+    }
+  },
+  { connection: redisConnection, concurrency: 5 },
+);
+detectUnpermittedWorker.on('ready', () => logger.info('[DETECT-UNPERMITTED-WORKER] Ready on queue: detect-unpermitted-work-queue'));
+detectUnpermittedWorker.on('completed', (job) => logger.info(`[DETECT-UNPERMITTED-WORKER] property ${job.data.propertyId} completed`));
+detectUnpermittedWorker.on('failed', (job, err) => logger.error({ err }, `[DETECT-UNPERMITTED-WORKER] property ${job?.data?.propertyId} failed`));
+
+const permitDisclosureWorker = new Worker<{ exportId: string; propertyId: string }>(
+  'generate-permit-disclosure-queue',
+  async (job) => {
+    if (job.name === GENERATE_PERMIT_DISCLOSURE_JOB) {
+      await generatePermitDisclosureJob(job.data.exportId);
+    }
+  },
+  { connection: redisConnection, concurrency: 2 },
+);
+permitDisclosureWorker.on('ready', () => logger.info('[PERMIT-DISCLOSURE-WORKER] Ready on queue: generate-permit-disclosure-queue'));
+permitDisclosureWorker.on('completed', (job) => logger.info(`[PERMIT-DISCLOSURE-WORKER] export ${job.data.exportId} completed`));
+permitDisclosureWorker.on('failed', (job, err) => logger.error({ err }, `[PERMIT-DISCLOSURE-WORKER] export ${job?.data?.exportId} failed`));
 
 // =============================================================================
 // DUMMY RADAR INGEST (QA / E2E)
