@@ -1427,6 +1427,9 @@ model User {
   projectProgressLogsCreated  ProjectProgressLog[] @relation("ProjectProgressLoggedBy")
   projectWriteBacksApplied    ProjectWriteBack[]   @relation("ProjectWriteBackAppliedBy")
 
+  // Neighbourhood Trust Network
+  neighbourhoodEndorsementsAuthored NeighbourhoodEndorsement[] @relation("NeighbourhoodEndorsementAuthor")
+
   @@index([email])
   @@index([role])
   @@index([status])
@@ -2097,6 +2100,9 @@ model Property {
   // Live Project Execution Tracker
   projectRecords ProjectRecord[]
 
+  // Neighbourhood Trust Network
+  neighbourhoodEndorsements NeighbourhoodEndorsement[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -2195,6 +2201,12 @@ model ProviderProfile {
 
   // Live Project Execution Tracker
   projectRecords ProjectRecord[]
+
+  // Neighbourhood Trust Network
+  neighbourhoodTrustProfiles NeighbourhoodTrustProfile[]
+  neighbourhoodEndorsements  NeighbourhoodEndorsement[]
+  neighbourhoodFeedEntries   NeighbourhoodFeedEntry[]
+  serviceZones               ProviderServiceZone[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -2374,8 +2386,9 @@ model Booking {
 
   inventoryItemId   String?
   inventoryItem     InventoryItem?     @relation(fields: [inventoryItemId], references: [id])
-  priceFinalization PriceFinalization?
-  projectRecords    ProjectRecord[]   @relation("ProjectFromBooking")
+  priceFinalization         PriceFinalization?
+  projectRecords            ProjectRecord[]            @relation("ProjectFromBooking")
+  neighbourhoodEndorsement  NeighbourhoodEndorsement?
 
   // Normalized execution scope for preventing duplicate active bookings across
   // item-linked and generic service workflows.
@@ -11871,4 +11884,149 @@ model ProjectWriteBack {
   @@index([appliedByUserId])
   @@index([targetSystem, appliedAt])
   @@map("project_write_backs")
+}
+
+// ============================================================================
+// NEIGHBOURHOOD TRUST NETWORK
+// ============================================================================
+
+enum NeighbourhoodFeedEntryType {
+  JOB_COMPLETED
+  ENDORSEMENT_ADDED
+  PROVIDER_FIRST_JOB
+}
+
+// Pre-computed trust aggregate for a provider within a specific zip code.
+// Updated by a background worker whenever a booking is completed + reviewed
+// in that zip. Powers the "X neighbors used this contractor" display.
+model NeighbourhoodTrustProfile {
+  id                      String   @id @default(uuid())
+  providerProfileId       String
+  zipCode                 String
+  city                    String
+  state                   String
+
+  // Aggregate metrics (recomputed on each new review in this zip)
+  totalJobs               Int      @default(0)
+  verifiedJobs            Int      @default(0)   // completed bookings with an approved review
+  avgRating               Float    @default(0)   @db.Real
+  avgQualityRating        Float?                 @db.Real
+  avgCommunicationRating  Float?                 @db.Real
+  avgValueRating          Float?                 @db.Real
+  avgProfessionalismRating Float?                @db.Real
+
+  // Freshness signals
+  firstJobAt              DateTime?
+  lastJobAt               DateTime?
+  lastComputedAt          DateTime @default(now())
+
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  providerProfile         ProviderProfile @relation(fields: [providerProfileId], references: [id], onDelete: Cascade)
+
+  @@unique([providerProfileId, zipCode])
+  @@index([zipCode, avgRating(sort: Desc)])
+  @@index([zipCode, totalJobs(sort: Desc)])
+  @@index([providerProfileId])
+  @@map("neighbourhood_trust_profiles")
+}
+
+// A homeowner's explicit endorsement of a contractor, gated on a real
+// completed booking. Anonymous to neighbours by default — only the zip
+// code is shared, not the homeowner's name or exact address.
+model NeighbourhoodEndorsement {
+  id                    String   @id @default(uuid())
+  bookingId             String   @unique          // enforces one endorsement per booking
+  homeownerId           String
+  propertyId            String
+  providerProfileId     String
+
+  // Denormalised from Property at creation time for fast neighbourhood queries
+  zipCode               String
+  city                  String
+  state                 String
+
+  wouldHireAgain        Boolean  @default(true)
+  // Free-form tags, e.g. ["QUALITY_WORK", "FAIR_PRICE", "ON_TIME", "CLEAN_SITE", "CLEAR_COMMUNICATION", "HONEST_ESTIMATE"]
+  highlightTags         String[]
+
+  // Privacy control — hides homeowner identity from neighbours
+  anonymousToNeighbors  Boolean  @default(true)
+  visibleToNeighbors    Boolean  @default(true)
+
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  booking               Booking        @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  homeowner             User           @relation("NeighbourhoodEndorsementAuthor", fields: [homeownerId], references: [id], onDelete: Cascade)
+  property              Property       @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  providerProfile       ProviderProfile @relation(fields: [providerProfileId], references: [id], onDelete: Cascade)
+
+  @@index([zipCode, providerProfileId])
+  @@index([zipCode, createdAt(sort: Desc)])
+  @@index([providerProfileId])
+  @@index([homeownerId])
+  @@index([propertyId])
+  @@map("neighbourhood_endorsements")
+}
+
+// Anonymised activity feed entries scoped to a zip code.
+// Created by a background worker when a booking is completed or an
+// endorsement is submitted. Drives the neighbourhood feed UI.
+model NeighbourhoodFeedEntry {
+  id                  String                     @id @default(uuid())
+  zipCode             String
+  city                String
+  state               String
+
+  entryType           NeighbourhoodFeedEntryType
+  providerProfileId   String
+
+  // Optional back-references (nullable — not all entry types have both)
+  bookingId           String?
+  endorsementId       String?  @unique
+
+  // Cached display snapshot (denormalised at creation, immutable after)
+  providerBusinessName  String
+  serviceCategory       String                   // e.g. "HVAC", "Plumbing"
+  starRating            Int?                     // 1–5, null if not yet reviewed
+  highlightTags         String[]                 // copied from endorsement if present
+  jobCompletedAt        DateTime?
+
+  createdAt           DateTime @default(now())
+  // Feed entries auto-expire after 12 months to keep the feed fresh
+  expiresAt           DateTime
+
+  providerProfile     ProviderProfile @relation(fields: [providerProfileId], references: [id], onDelete: Cascade)
+
+  @@index([zipCode, createdAt(sort: Desc)])
+  @@index([zipCode, entryType, createdAt(sort: Desc)])
+  @@index([providerProfileId])
+  @@index([expiresAt])
+  @@map("neighbourhood_feed_entries")
+}
+
+// Tracks the specific zip codes where a provider has actually completed work,
+// derived from booking history. More precise than the global serviceRadius.
+model ProviderServiceZone {
+  id                String   @id @default(uuid())
+  providerProfileId String
+  zipCode           String
+  city              String
+  state             String
+
+  totalJobs         Int      @default(1)
+  firstJobAt        DateTime?
+  lastJobAt         DateTime?
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  providerProfile   ProviderProfile @relation(fields: [providerProfileId], references: [id], onDelete: Cascade)
+
+  @@unique([providerProfileId, zipCode])
+  @@index([zipCode])
+  @@index([providerProfileId])
+  @@map("provider_service_zones")
 }
