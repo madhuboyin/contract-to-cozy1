@@ -600,6 +600,7 @@ model InventoryItem {
   bookings                     Booking[]
   materialSpecs                MaterialSpec[]
   permitUnpermittedFlags       PermitUnpermittedFlag[]
+  inspectionFindings           InspectionFinding[]
 
   @@unique([propertyId, sourceHash])
   @@index([manufacturerNorm, modelNumberNorm])
@@ -1410,6 +1411,9 @@ model User {
   // Permit History & Unpermitted Work Tracker
   permitDisclosureExports PermitDisclosureExport[]
 
+  // Inspection Report Intelligence
+  inspectionWriteBacks InspectionWriteBack[]
+
   @@index([email])
   @@index([role])
   @@index([status])
@@ -1933,8 +1937,10 @@ model Property {
   riskReport RiskAssessmentReport? @relation(name: "PropertyRiskReport")
 
   // 1.3 NEW RELATION FOR FINANCIAL EFFICIENCY (Phase 2):
-  financialReport   FinancialEfficiencyReport? @relation(name: "PropertyFinancialReport")
-  inspectionReports InspectionReport[]
+  financialReport          FinancialEfficiencyReport? @relation(name: "PropertyFinancialReport")
+  legacyInspectionReports  LegacyInspectionReport[]
+  inspectionReports        InspectionReport[]
+  inspectionFindings       InspectionFinding[]
 
   seasonalChecklists     SeasonalChecklist[]
   seasonalChecklistItems SeasonalChecklistItem[]
@@ -2876,7 +2882,7 @@ model AgentInterview {
 // INSPECTION REPORTS (HOME_BUYER FEATURE)
 // ============================================================================
 
-model InspectionReport {
+model LegacyInspectionReport {
   id         String @id @default(uuid())
   propertyId String
   userId     String
@@ -2921,18 +2927,18 @@ model InspectionReport {
   analysisError     String?
 
   // Relations
-  property Property          @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-  issues   InspectionIssue[]
+  property Property                @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  issues   LegacyInspectionIssue[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([propertyId])
   @@index([userId])
-  @@map("inspection_reports")
+  @@map("legacy_inspection_reports")
 }
 
-model InspectionIssue {
+model LegacyInspectionIssue {
   id       String @id @default(uuid())
   reportId String
 
@@ -2966,7 +2972,7 @@ model InspectionIssue {
   maintenanceFrequency     String?
 
   // Relations
-  report InspectionReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  report LegacyInspectionReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -2974,7 +2980,7 @@ model InspectionIssue {
   @@index([reportId])
   @@index([severity])
   @@index([category])
-  @@map("inspection_issues")
+  @@map("legacy_inspection_issues")
 }
 
 model LocalUpdate {
@@ -7022,11 +7028,12 @@ model RecallMatch {
   updatedAt         DateTime @updatedAt
 
   // relations
-  property        Property                 @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-  inventoryItem   InventoryItem?           @relation(fields: [inventoryItemId], references: [id], onDelete: SetNull)
-  homeAsset       HomeAsset?               @relation(fields: [homeAssetId], references: [id], onDelete: SetNull)
-  maintenanceTask PropertyMaintenanceTask? @relation(fields: [maintenanceTaskId], references: [id], onDelete: SetNull)
-  notifications   Notification[]
+  property           Property                 @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  inventoryItem      InventoryItem?           @relation(fields: [inventoryItemId], references: [id], onDelete: SetNull)
+  homeAsset          HomeAsset?               @relation(fields: [homeAssetId], references: [id], onDelete: SetNull)
+  maintenanceTask    PropertyMaintenanceTask? @relation(fields: [maintenanceTaskId], references: [id], onDelete: SetNull)
+  notifications      Notification[]
+  inspectionFindings InspectionFinding[]
 
   // Prevent duplicates for same recall+asset within a property (important for idempotency)
   @@unique([propertyId, recallId, inventoryItemId])
@@ -11126,10 +11133,11 @@ model PermitUnpermittedFlag {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  property         Property              @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-  homeAsset        HomeAsset?            @relation(fields: [homeAssetId], references: [id], onDelete: SetNull)
-  inventoryItem    InventoryItem?        @relation(fields: [inventoryItemId], references: [id], onDelete: SetNull)
-  resolvedByPermit PropertyPermitRecord? @relation("ResolvedByPermit", fields: [resolvedByPermitId], references: [id], onDelete: SetNull)
+  property           Property              @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  homeAsset          HomeAsset?            @relation(fields: [homeAssetId], references: [id], onDelete: SetNull)
+  inventoryItem      InventoryItem?        @relation(fields: [inventoryItemId], references: [id], onDelete: SetNull)
+  resolvedByPermit   PropertyPermitRecord? @relation("ResolvedByPermit", fields: [resolvedByPermitId], references: [id], onDelete: SetNull)
+  inspectionFindings InspectionFinding[]
 
   @@index([propertyId, status])
   @@index([propertyId, disclosureRisk])
@@ -11185,4 +11193,223 @@ model PermitDisclosureExport {
 
   @@index([propertyId, createdAt])
   @@map("permit_disclosure_exports")
+}
+
+// ============================================================================
+// INSPECTION REPORT INTELLIGENCE — ENUMS
+// ============================================================================
+
+enum InspectionReportType {
+  GENERAL
+  ROOF
+  HVAC
+  SEWER
+  ELECTRICAL
+  FOUNDATION
+  PRE_PURCHASE
+  PRE_LISTING
+  ANNUAL
+  OTHER
+}
+
+enum InspectionReportStatus {
+  PROCESSING
+  REVIEW_PENDING
+  CONFIRMED
+  ARCHIVED
+}
+
+enum InspectionHomeSystem {
+  ROOF
+  EXTERIOR
+  FOUNDATION
+  BASEMENT_CRAWLSPACE
+  STRUCTURAL
+  ELECTRICAL
+  PLUMBING
+  HVAC
+  INTERIOR
+  ATTIC_INSULATION
+  APPLIANCES
+  GARAGE
+  SITE_GRADING
+}
+
+enum InspectionConditionRating {
+  GOOD
+  FAIR
+  POOR
+  SAFETY_CONCERN
+}
+
+enum InspectionFindingSeverity {
+  SAFETY
+  MAJOR
+  MINOR
+  MONITOR
+  INFORMATIONAL
+}
+
+enum InspectionInspectorRecommendation {
+  MONITOR
+  REPAIR
+  REPLACE
+  FURTHER_EVALUATION
+  SAFETY_IMMEDIATE
+}
+
+enum InspectionExtractionConfidence {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum InspectionFindingStatus {
+  OPEN
+  RESOLVED
+  DISMISSED
+  ACCEPTED_AS_IS
+}
+
+enum InspectionResolutionMethod {
+  CONTRACTOR_WORK
+  DIY
+  SELLER_REPAIR
+  CREDITED_AT_CLOSING
+  DISMISSED
+}
+
+enum InspectionWriteBackTarget {
+  DIGITAL_TWIN
+  CAPITAL_TIMELINE
+  PERMIT_TRACKER
+  COVERAGE_INTELLIGENCE
+  RECALL_MATCHING
+  RESERVE_SCORE
+}
+
+enum InspectionWriteBackAction {
+  CREATED
+  UPDATED
+  FLAGGED
+  LINKED
+}
+
+// ============================================================================
+// INSPECTION REPORT INTELLIGENCE — MODELS
+// ============================================================================
+
+// One uploaded PDF per record. Status moves: PROCESSING → REVIEW_PENDING → CONFIRMED.
+model InspectionReport {
+  id         String @id @default(uuid())
+  propertyId String
+
+  reportType       InspectionReportType
+  inspectionDate   DateTime
+  inspectorName    String?
+  inspectorLicense String?
+  inspectorCompany String?
+  sourceFileKey    String // S3 key for original PDF
+
+  status         InspectionReportStatus @default(PROCESSING)
+  totalFindings  Int                    @default(0)
+  openFindings   Int                    @default(0)
+  safetyFindings Int                    @default(0)
+  majorFindings  Int                    @default(0)
+  extractionModel String?
+
+  createdAt   DateTime  @default(now())
+  processedAt DateTime?
+  confirmedAt DateTime?
+  updatedAt   DateTime  @updatedAt
+
+  property   Property              @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  findings   InspectionFinding[]
+  writeBacks InspectionWriteBack[]
+
+  @@index([propertyId, inspectionDate(sort: Desc)])
+  @@index([propertyId, status])
+  @@map("inspection_reports")
+}
+
+// One row per extracted finding. Survives across the life of the property record.
+model InspectionFinding {
+  id         String @id @default(uuid())
+  reportId   String
+  propertyId String // denormalized for direct property-level queries
+
+  homeSystem String // InspectionHomeSystem value stored as string for flexibility
+  subsystem  String?
+  location   String?
+
+  conditionRating         InspectionConditionRating
+  severity                InspectionFindingSeverity
+  inspectorDescription    String                            @db.Text
+  inspectorRecommendation InspectionInspectorRecommendation
+  aiInterpretation        String                            @db.Text
+
+  estimatedCostCentsLow  Int?
+  estimatedCostCentsHigh Int?
+
+  extractionConfidence InspectionExtractionConfidence @default(HIGH)
+
+  status              InspectionFindingStatus     @default(OPEN)
+  resolvedAt          DateTime?
+  resolutionMethod    InspectionResolutionMethod?
+  resolutionNotes     String?
+  resolutionCostCents Int?
+  warrantyExpiresAt   DateTime?
+
+  // Links set during write-back on confirmation
+  permitFlagId    String?
+  inventoryItemId String?
+  recallMatchId   String?
+
+  // S3 keys for photos extracted from the source PDF
+  photoKeys String[] @default([])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  report        InspectionReport       @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  property      Property               @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  permitFlag    PermitUnpermittedFlag? @relation(fields: [permitFlagId], references: [id], onDelete: SetNull)
+  inventoryItem InventoryItem?         @relation(fields: [inventoryItemId], references: [id], onDelete: SetNull)
+  recallMatch   RecallMatch?           @relation(fields: [recallMatchId], references: [id], onDelete: SetNull)
+  writeBacks    InspectionWriteBack[]
+
+  @@index([reportId])
+  @@index([propertyId, severity])
+  @@index([propertyId, status])
+  @@index([propertyId, homeSystem])
+  @@index([permitFlagId])
+  @@index([inventoryItemId])
+  @@index([recallMatchId])
+  @@map("inspection_findings")
+}
+
+// Append-only audit log of every write-back applied when a report is confirmed.
+model InspectionWriteBack {
+  id        String  @id @default(uuid())
+  reportId  String
+  findingId String?
+
+  targetSystem   InspectionWriteBackTarget
+  targetRecordId String?
+  action         InspectionWriteBackAction
+
+  payload Json // snapshot of what was written
+
+  appliedAt       DateTime @default(now())
+  appliedByUserId String
+
+  report    InspectionReport   @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  finding   InspectionFinding? @relation(fields: [findingId], references: [id], onDelete: SetNull)
+  appliedBy User               @relation(fields: [appliedByUserId], references: [id], onDelete: Cascade)
+
+  @@index([reportId])
+  @@index([findingId])
+  @@index([appliedByUserId])
+  @@index([targetSystem, appliedAt])
+  @@map("inspection_write_backs")
 }
