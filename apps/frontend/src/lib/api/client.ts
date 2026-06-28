@@ -2372,16 +2372,11 @@ class APIClient {
       method: 'DELETE',
     });
   }
-  /**
-   * Upload and analyze inspection report PDF
-   */
-  async uploadInspectionReport(formData: FormData): Promise<APIResponse<any>> {
+  async uploadLegacyInspectionReport(formData: FormData): Promise<APIResponse<any>> {
     return this.formDataRequest<any>('/api/inspection-reports/upload', formData);
   }
-  /**
-   * Get inspection report by ID
-   */
-  async getInspectionReport(reportId: string): Promise<APIResponse<any>> {
+
+  async getLegacyInspectionReport(reportId: string): Promise<APIResponse<any>> {
     return this.request(`/api/inspection-reports/${reportId}`, {
       method: 'GET',
     });
@@ -3999,6 +3994,168 @@ class APIClient {
   async listDisclosureExports(propertyId: string): Promise<import('@/types').PermitDisclosureExportItem[]> {
     const res = await this.get<{ exports: import('@/types').PermitDisclosureExportItem[] }>(`/api/properties/${propertyId}/permits/disclosure`);
     return res.data?.exports ?? [];
+  }
+
+  // ─── Inspection Hub ──────────────────────────────────────────────────────────
+
+  async getInspectionHub(propertyId: string): Promise<import('@/types').InspectionHubSummary> {
+    const res = await this.get<import('@/types').InspectionHubSummary>(`/api/properties/${propertyId}/inspection-hub`);
+    if (!res.data) throw new APIError('Failed to load inspection hub', 500);
+    return res.data;
+  }
+
+  async listInspectionReports(propertyId: string): Promise<import('@/types').InspectionReportSummary[]> {
+    const res = await this.get<{ reports: import('@/types').InspectionReportSummary[] }>(`/api/properties/${propertyId}/inspection-hub/reports`);
+    return res.data?.reports ?? [];
+  }
+
+  async uploadInspectionReport(
+    propertyId: string,
+    file: File,
+    meta: {
+      reportType: string;
+      inspectionDate: string;
+      inspectorName?: string;
+      inspectorLicense?: string;
+      inspectorCompany?: string;
+    },
+  ): Promise<{ reportId: string }> {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('reportType', meta.reportType);
+    formData.append('inspectionDate', meta.inspectionDate);
+    if (meta.inspectorName) formData.append('inspectorName', meta.inspectorName);
+    if (meta.inspectorLicense) formData.append('inspectorLicense', meta.inspectorLicense);
+    if (meta.inspectorCompany) formData.append('inspectorCompany', meta.inspectorCompany);
+    const res = await this.formDataRequest<{ data: { reportId: string } }>(
+      `/api/properties/${propertyId}/inspection-hub/reports`,
+      formData,
+    );
+    const reportId = (res as any)?.data?.reportId ?? (res as any)?.reportId;
+    if (!reportId) throw new APIError('Upload failed', 500);
+    return { reportId };
+  }
+
+  async getInspectionReport(propertyId: string, reportId: string): Promise<import('@/types').InspectionReportSummary> {
+    const res = await this.get<{ report: import('@/types').InspectionReportSummary }>(`/api/properties/${propertyId}/inspection-hub/reports/${reportId}`);
+    if (!res.data?.report) throw new APIError('Report not found', 404);
+    return res.data.report;
+  }
+
+  async archiveInspectionReport(propertyId: string, reportId: string): Promise<void> {
+    await this.delete(`/api/properties/${propertyId}/inspection-hub/reports/${reportId}`);
+  }
+
+  async listInspectionFindings(propertyId: string, reportId: string, grouped = false): Promise<import('@/types').InspectionFinding[] | Record<string, import('@/types').InspectionFinding[]>> {
+    const res = await this.get<{ findings: import('@/types').InspectionFinding[] | Record<string, import('@/types').InspectionFinding[]> }>(
+      `/api/properties/${propertyId}/inspection-hub/reports/${reportId}/findings${grouped ? '?grouped=true' : ''}`,
+    );
+    return res.data?.findings ?? (grouped ? {} : []);
+  }
+
+  async updateInspectionFinding(
+    propertyId: string,
+    reportId: string,
+    findingId: string,
+    patch: Partial<Pick<import('@/types').InspectionFinding, 'homeSystem' | 'subsystem' | 'location' | 'conditionRating' | 'severity' | 'aiInterpretation' | 'estimatedCostCentsLow' | 'estimatedCostCentsHigh'>>,
+  ): Promise<import('@/types').InspectionFinding> {
+    const res = await this.patch<{ finding: import('@/types').InspectionFinding }>(
+      `/api/properties/${propertyId}/inspection-hub/reports/${reportId}/findings/${findingId}`,
+      patch,
+    );
+    if (!res.data?.finding) throw new APIError('Failed to update finding', 500);
+    return res.data.finding;
+  }
+
+  async dismissInspectionFinding(propertyId: string, reportId: string, findingId: string, reason?: string): Promise<void> {
+    await this.post(`/api/properties/${propertyId}/inspection-hub/reports/${reportId}/findings/${findingId}/dismiss`, { reason });
+  }
+
+  async getInspectionWriteBackPreview(propertyId: string, reportId: string): Promise<import('@/types').InspectionWriteBackPreview> {
+    const res = await this.get<{ preview: import('@/types').InspectionWriteBackPreview }>(
+      `/api/properties/${propertyId}/inspection-hub/reports/${reportId}/write-back-preview`,
+    );
+    if (!res.data?.preview) throw new APIError('Failed to load preview', 500);
+    return res.data.preview;
+  }
+
+  async confirmInspectionReport(propertyId: string, reportId: string): Promise<{ writeBackCount: number }> {
+    const res = await this.post<{ writeBackCount: number }>(
+      `/api/properties/${propertyId}/inspection-hub/reports/${reportId}/confirm`,
+      {},
+    );
+    return res.data ?? { writeBackCount: 0 };
+  }
+
+  async listInspectionOpenItems(
+    propertyId: string,
+    params?: { severity?: string; homeSystem?: string; reportId?: string; limit?: number; cursor?: string },
+  ): Promise<{ findings: import('@/types').InspectionFinding[]; hasMore: boolean; nextCursor?: string }> {
+    const res = await this.get<{ findings: import('@/types').InspectionFinding[]; hasMore: boolean; nextCursor?: string }>(
+      `/api/properties/${propertyId}/inspection-hub/open-items`,
+      params as Record<string, any>,
+    );
+    return res.data ?? { findings: [], hasMore: false };
+  }
+
+  async resolveInspectionFinding(
+    propertyId: string,
+    findingId: string,
+    data: {
+      resolutionMethod: import('@/types').InspectionResolutionMethod;
+      resolutionNotes?: string;
+      resolutionCostCents?: number;
+      warrantyExpiresAt?: string;
+    },
+  ): Promise<import('@/types').InspectionFinding> {
+    const res = await this.post<{ finding: import('@/types').InspectionFinding }>(
+      `/api/properties/${propertyId}/inspection-hub/findings/${findingId}/resolve`,
+      data,
+    );
+    if (!res.data?.finding) throw new APIError('Failed to resolve finding', 500);
+    return res.data.finding;
+  }
+
+  async compareInspectionReports(propertyId: string, reportAId: string, reportBId: string) {
+    const res = await this.get<any>(
+      `/api/properties/${propertyId}/inspection-hub/compare`,
+      { params: { reportA: reportAId, reportB: reportBId } },
+    );
+    return res.data;
+  }
+
+  async generateNegotiationPackage(
+    propertyId: string,
+    reportId: string,
+    findingIds: string[],
+    decisions: Record<string, 'negotiate_credit' | 'request_repair' | 'accept_as_is'>,
+  ): Promise<import('@/types').InspectionNegotiationPackage> {
+    const res = await this.post<import('@/types').InspectionNegotiationPackage>(
+      `/api/properties/${propertyId}/inspection-hub/reports/${reportId}/negotiation-package`,
+      { findingIds, decisions },
+    );
+    if (!res.data) throw new APIError('Failed to generate package', 500);
+    return res.data;
+  }
+
+  async getFixDisclosureDecisions(propertyId: string, reportId: string): Promise<import('@/types').InspectionFixDisclosureItem[]> {
+    const res = await this.get<{ findings: import('@/types').InspectionFixDisclosureItem[] }>(
+      `/api/properties/${propertyId}/inspection-hub/reports/${reportId}/fix-disclose`,
+    );
+    return res.data?.findings ?? [];
+  }
+
+  async saveFixDisclosureDecisions(
+    propertyId: string,
+    reportId: string,
+    decisions: Array<{
+      findingId: string;
+      decision: 'FIX' | 'DISCLOSE_PRICE_ADJUST' | 'DISCLOSE_CREDIT';
+      estimatedFixCostCents?: number;
+      sellerNote?: string;
+    }>,
+  ): Promise<void> {
+    await this.patch(`/api/properties/${propertyId}/inspection-hub/reports/${reportId}/fix-disclose`, { decisions });
   }
 }
 

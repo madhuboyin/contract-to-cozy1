@@ -3928,3 +3928,108 @@ export interface CreateFlagPayload {
   homeAssetId?: string;
   inventoryItemId?: string;
 }
+
+// ─── Inspection Report Intelligence ─────────────────────────────────────────
+
+export type InspectionReportType =
+  | 'GENERAL' | 'ROOF' | 'HVAC' | 'SEWER' | 'ELECTRICAL' | 'FOUNDATION'
+  | 'PRE_PURCHASE' | 'PRE_LISTING' | 'ANNUAL' | 'OTHER';
+
+export type InspectionReportStatus = 'PROCESSING' | 'REVIEW_PENDING' | 'CONFIRMED' | 'ARCHIVED';
+
+export type InspectionHomeSystem =
+  | 'ROOF' | 'EXTERIOR' | 'FOUNDATION' | 'BASEMENT_CRAWLSPACE' | 'STRUCTURAL'
+  | 'ELECTRICAL' | 'PLUMBING' | 'HVAC' | 'INTERIOR' | 'ATTIC_INSULATION'
+  | 'APPLIANCES' | 'GARAGE' | 'SITE_GRADING';
+
+export type InspectionFindingSeverity = 'SAFETY' | 'MAJOR' | 'MINOR' | 'MONITOR' | 'INFORMATIONAL';
+export type InspectionConditionRating = 'GOOD' | 'FAIR' | 'POOR' | 'SAFETY_CONCERN';
+export type InspectionFindingStatus = 'OPEN' | 'RESOLVED' | 'DISMISSED' | 'ACCEPTED_AS_IS';
+export type InspectionExtractionConfidence = 'HIGH' | 'MEDIUM' | 'LOW';
+export type InspectionResolutionMethod =
+  | 'CONTRACTOR_WORK' | 'DIY' | 'SELLER_REPAIR' | 'CREDITED_AT_CLOSING' | 'DISMISSED';
+
+export interface InspectionReportSummary {
+  id: string;
+  reportType: InspectionReportType;
+  inspectionDate: string;
+  inspectorName?: string;
+  inspectorCompany?: string;
+  status: InspectionReportStatus;
+  totalFindings: number;
+  openFindings: number;
+  safetyFindings: number;
+  majorFindings: number;
+  confirmedAt?: string;
+  processedAt?: string;
+  createdAt: string;
+}
+
+export interface InspectionFinding {
+  id: string;
+  reportId: string;
+  propertyId: string;
+  homeSystem: InspectionHomeSystem;
+  subsystem?: string;
+  location?: string;
+  conditionRating: InspectionConditionRating;
+  severity: InspectionFindingSeverity;
+  inspectorDescription: string;
+  inspectorRecommendation: string;
+  aiInterpretation: string;
+  estimatedCostCentsLow?: number;
+  estimatedCostCentsHigh?: number;
+  extractionConfidence: InspectionExtractionConfidence;
+  status: InspectionFindingStatus;
+  resolvedAt?: string;
+  resolutionMethod?: InspectionResolutionMethod;
+  resolutionNotes?: string;
+  resolutionCostCents?: number;
+  warrantyExpiresAt?: string;
+  photoKeys: string[];
+  createdAt: string;
+  updatedAt: string;
+  // populated on open-items fetch
+  report?: Pick<InspectionReportSummary, 'reportType' | 'inspectionDate' | 'inspectorName'>;
+}
+
+export interface InspectionHubSummary {
+  reports: InspectionReportSummary[];
+  openCount: number;
+  safetyCount: number;
+  majorCount: number;
+}
+
+export interface InspectionWriteBackPreview {
+  digitalTwinUpdates: number;
+  permitFlagsToCreate: number;
+  coverageGapsToFlag: number;
+  findingCount: number;
+}
+
+export interface InspectionNegotiationPackage {
+  report: Pick<InspectionReportSummary, 'id' | 'inspectionDate' | 'inspectorName' | 'inspectorCompany'>;
+  negotiateCredit: InspectionNegotiationItem[];
+  requestRepair: InspectionNegotiationItem[];
+  acceptAsIs: InspectionNegotiationItem[];
+  requestedCreditTotalCents: number;
+  requestedCreditTotalDollars: string;
+}
+
+export interface InspectionNegotiationItem extends Pick<InspectionFinding,
+  'id' | 'homeSystem' | 'subsystem' | 'severity' | 'inspectorDescription' | 'aiInterpretation' | 'estimatedCostCentsLow' | 'estimatedCostCentsHigh'
+> {
+  findingId: string;
+  decision: 'negotiate_credit' | 'request_repair' | 'accept_as_is';
+}
+
+export interface InspectionFixDisclosureItem extends Pick<InspectionFinding,
+  'homeSystem' | 'subsystem' | 'severity' | 'inspectorDescription' | 'aiInterpretation' | 'estimatedCostCentsLow' | 'estimatedCostCentsHigh' | 'status'
+> {
+  findingId: string;
+  fixDisclosureDecision?: {
+    fixDisclosure: 'FIX' | 'DISCLOSE_PRICE_ADJUST' | 'DISCLOSE_CREDIT';
+    estimatedFixCostCents?: number;
+    sellerNote?: string;
+  } | null;
+}

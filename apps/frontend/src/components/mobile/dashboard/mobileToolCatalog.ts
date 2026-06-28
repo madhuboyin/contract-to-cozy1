@@ -902,4 +902,15 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
     isActive: (pathname) =>
       /^\/dashboard\/(properties\/[^/]+\/tools\/permits|permits)(\/|$)/.test(pathname),
   },
+  {
+    key: 'inspection-hub',
+    name: 'Inspection Hub',
+    description: 'Upload inspection reports and track open findings',
+    desktopDescription: 'Upload inspection PDFs and let AI extract every finding into structured, trackable records — with write-back to your Digital Twin, Permit Tracker, and Coverage Intelligence.',
+    hrefSuffix: 'inspection-hub',
+    navTarget: 'tool:inspection-hub',
+    icon: resolveToolIcon('home', 'inspection-hub'),
+    isActive: (pathname) =>
+      /^\/dashboard\/properties\/[^/]+\/inspection-hub(\/|$)/.test(pathname),
+  },
 ];

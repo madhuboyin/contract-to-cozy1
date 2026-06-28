@@ -126,11 +126,11 @@ export default function InspectionReportAnalyzer({
     }
 
     try {
-      const response = await api.uploadInspectionReport(formData);
-      
+      const response = await api.uploadLegacyInspectionReport(formData);
+
       if (response.success && response.data?.reportId) {
         // Fetch the full report
-        const reportResponse = await api.getInspectionReport(response.data.reportId);
+        const reportResponse = await api.getLegacyInspectionReport(response.data.reportId);
         if (reportResponse.success && reportResponse.data) {
           setReport(reportResponse.data);
           setFile(null);
