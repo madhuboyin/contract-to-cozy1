@@ -4206,7 +4206,7 @@ class APIClient {
   }
 
   async getMilestoneTemplates(projectType: string): Promise<Array<{ name: string; position: number; requiresPhotoEvidence: boolean }>> {
-    const res = await this.get<{ templates: Array<{ name: string; position: number; requiresPhotoEvidence: boolean }> }>(`/api/projects/milestone-templates`, { projectType });
+    const res = await this.get<{ templates: Array<{ name: string; position: number; requiresPhotoEvidence: boolean }> }>(`/api/projects/milestone-templates`, { params: { projectType } });
     return res.data?.templates ?? [];
   }
 
