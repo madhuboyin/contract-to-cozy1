@@ -3356,4 +3356,42 @@ export class HomeScoreReportService {
       expiresAt: shareToken.expiresAt.toISOString(),
     };
   }
+
+  async getBuyerReportPreview(propertyId: string, userId: string): Promise<{
+    report: Pick<
+      HomeScoreReportDTO,
+      | 'reportMeta'
+      | 'executiveSummary'
+      | 'radar'
+      | 'systemHealth'
+      | 'timeline'
+      | 'trustAndVerification'
+      | 'methodology'
+      | 'generatedAt'
+      | 'confidence'
+    >;
+  }> {
+    const full = await this.getReport(propertyId, userId);
+
+    const filteredTimeline = {
+      ...full.timeline,
+      events: (full.timeline?.events ?? []).filter(
+        (e) => e.provenance !== 'USER_REPORTED' && e.provenance !== 'INFERRED'
+      ),
+    };
+
+    return {
+      report: {
+        reportMeta: full.reportMeta,
+        executiveSummary: full.executiveSummary,
+        radar: full.radar,
+        systemHealth: full.systemHealth,
+        timeline: filteredTimeline,
+        trustAndVerification: full.trustAndVerification,
+        methodology: full.methodology,
+        generatedAt: full.generatedAt,
+        confidence: full.confidence,
+      },
+    };
+  }
 }

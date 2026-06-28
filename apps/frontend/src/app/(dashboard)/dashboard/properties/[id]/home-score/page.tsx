@@ -15,6 +15,7 @@ import {
   ChevronRight,
   FileDown,
   FileText,
+  Eye,
   Gauge,
   Hammer,
   Home,
@@ -1389,6 +1390,17 @@ export default function HomeScoreReportPage() {
               </div>
             </div>
             <div className="flex flex-wrap gap-2 print:hidden">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  trackEvent("BUYER_PREVIEW_CLICKED", "share-card");
+                  window.open(`/dashboard/properties/${propertyId}/home-score/buyer-preview`, '_blank');
+                }}
+              >
+                <Eye className="mr-2 h-4 w-4" />
+                Preview as Buyer
+              </Button>
               <Button
                 variant="outline"
                 size="sm"

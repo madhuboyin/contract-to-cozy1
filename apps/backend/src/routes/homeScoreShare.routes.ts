@@ -6,6 +6,7 @@ import {
   createBuyerShareToken,
   revokeBuyerShareToken,
   getBuyerReport,
+  getBuyerReportPreview,
 } from '../controllers/homeScoreShare.controller';
 
 const router = Router();
@@ -32,6 +33,18 @@ router.post(
   authenticate,
   propertyAuthMiddleware,
   revokeBuyerShareToken
+);
+
+/**
+ * Authenticated preview — owner sees exactly what buyers will see, no token required.
+ * GET /api/properties/:propertyId/home-score/buyer-preview
+ */
+router.get(
+  '/properties/:propertyId/home-score/buyer-preview',
+  apiRateLimiter,
+  authenticate,
+  propertyAuthMiddleware,
+  getBuyerReportPreview
 );
 
 /**

@@ -4455,6 +4455,10 @@ class APIClient {
   async revokeBuyerShareToken(propertyId: string): Promise<APIResponse<void>> {
     return this.request(`/api/properties/${propertyId}/home-score/share/revoke`, { method: 'POST' });
   }
+
+  async getBuyerReportPreview(propertyId: string): Promise<APIResponse<{ report: import('@/types').BuyerReportData }>> {
+    return this.request(`/api/properties/${propertyId}/home-score/buyer-preview`);
+  }
 }
 
 // Export singleton instance

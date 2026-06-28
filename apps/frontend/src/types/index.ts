@@ -4359,3 +4359,15 @@ export interface NeighbourhoodEndorsement {
   anonymousToNeighbors: boolean;
   createdAt: string;
 }
+
+export interface BuyerReportData {
+  reportMeta: HomeScoreReportMeta;
+  executiveSummary: HomeScoreExecutiveSummary;
+  radar: HomeScoreRadar;
+  systemHealth: HomeScoreSystemHealthRow[];
+  timeline: { events: HomeScoreTimelineEvent[]; emptyState: { title: string; detail: string } | null };
+  trustAndVerification: HomeScoreTrustAndVerification;
+  methodology: HomeScoreMethodology;
+  generatedAt: string;
+  confidence: string;
+}

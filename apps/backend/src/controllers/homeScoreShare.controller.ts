@@ -61,3 +61,20 @@ export async function getBuyerReport(req: Request, res: Response) {
     return res.status(status).json({ success: false, message: error.message || 'Failed to load buyer report.' });
   }
 }
+
+export async function getBuyerReportPreview(req: CustomRequest, res: Response) {
+  try {
+    const propertyId = req.params.propertyId;
+    const userId = req.user?.userId;
+    if (!userId) {
+      return res.status(401).json({ success: false, message: 'Authentication required.' });
+    }
+
+    const result = await service.getBuyerReportPreview(propertyId, userId);
+    return res.json({ success: true, data: result });
+  } catch (error: any) {
+    logger.error({ err: error }, '[getBuyerReportPreview] Error');
+    const status = error.statusCode || 500;
+    return res.status(status).json({ success: false, message: error.message || 'Failed to load preview.' });
+  }
+}
