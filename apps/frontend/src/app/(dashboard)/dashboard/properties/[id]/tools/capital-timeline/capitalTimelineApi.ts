@@ -1,6 +1,8 @@
 // apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/capital-timeline/capitalTimelineApi.ts
 import { api } from '@/lib/api/client';
 
+export type ConfidenceFactor = 'INSTALL_DATE' | 'CONDITION' | 'REPLACEMENT_COST';
+
 export type TimelineItemDTO = {
   id: string;
   inventoryItemId: string | null;
@@ -14,6 +16,7 @@ export type TimelineItemDTO = {
   confidence: 'HIGH' | 'MEDIUM' | 'LOW';
   priority: 'HIGH' | 'MEDIUM' | 'LOW';
   why: string;
+  missingFactors: ConfidenceFactor[];
   inventoryItem?: { name: string; brand?: string | null; model?: string | null } | null;
 };
 
@@ -39,10 +42,18 @@ export type TimelineAnalysisResult = {
   nextAction: TimelineNextAction | null;
 };
 
+export type OverrideType =
+  | 'PLANNED_DATE'
+  | 'PLANNED_WINDOW'
+  | 'COST_OVERRIDE'
+  | 'DISABLE_ITEM'
+  | 'ADJUST_REMAINING_LIFE'
+  | 'NOTE';
+
 export type OverrideDTO = {
   id: string;
   inventoryItemId: string | null;
-  type: string;
+  type: OverrideType;
   payload: Record<string, unknown>;
   note: string | null;
 };
@@ -72,21 +83,31 @@ export async function runTimeline(
   };
 }
 
-export async function listOverrides(propertyId: string) {
+export async function listOverrides(propertyId: string): Promise<OverrideDTO[]> {
   const res = await api.get(`/api/properties/${propertyId}/capital-timeline/overrides`);
-  return res.data?.overrides as OverrideDTO[];
+  return (res.data?.overrides as OverrideDTO[]) ?? [];
 }
 
-export async function createOverride(propertyId: string, body: Omit<OverrideDTO, 'id'>) {
+export async function createOverride(
+  propertyId: string,
+  body: Omit<OverrideDTO, 'id'>
+): Promise<OverrideDTO> {
   const res = await api.post(`/api/properties/${propertyId}/capital-timeline/overrides`, body);
   return res.data?.override as OverrideDTO;
 }
 
-export async function updateOverride(propertyId: string, overrideId: string, body: Partial<OverrideDTO>) {
-  const res = await api.patch(`/api/properties/${propertyId}/capital-timeline/overrides/${overrideId}`, body);
+export async function updateOverride(
+  propertyId: string,
+  overrideId: string,
+  body: Partial<Pick<OverrideDTO, 'payload' | 'note'>>
+): Promise<OverrideDTO> {
+  const res = await api.patch(
+    `/api/properties/${propertyId}/capital-timeline/overrides/${overrideId}`,
+    body
+  );
   return res.data?.override as OverrideDTO;
 }
 
-export async function deleteOverride(propertyId: string, overrideId: string) {
+export async function deleteOverride(propertyId: string, overrideId: string): Promise<void> {
   await api.delete(`/api/properties/${propertyId}/capital-timeline/overrides/${overrideId}`);
 }

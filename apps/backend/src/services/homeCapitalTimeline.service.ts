@@ -151,6 +151,48 @@ function overallConfidence(confidences: HomeCapitalTimelineConfidence[]): HomeCa
   return 'HIGH';
 }
 
+// ─── Confidence factor helpers ───────────────────────────────────────
+const INVENTORY_CONFIDENCE_SELECT = {
+  name: true,
+  brand: true,
+  model: true,
+  installedOn: true,
+  purchasedOn: true,
+  condition: true,
+  replacementCostCents: true,
+} as const;
+
+function computeMissingFactors(inv: {
+  installedOn: Date | null;
+  purchasedOn: Date | null;
+  condition: string;
+  replacementCostCents: number | null;
+} | null): string[] {
+  if (!inv) return [];
+  const missing: string[] = [];
+  if (!inv.installedOn && !inv.purchasedOn) missing.push('INSTALL_DATE');
+  if (inv.condition === 'UNKNOWN') missing.push('CONDITION');
+  if (inv.replacementCostCents == null) missing.push('REPLACEMENT_COST');
+  return missing;
+}
+
+// Strips the extra confidence-select fields from inventoryItem and attaches
+// missingFactors directly on each timeline item before returning to the controller.
+function attachMissingFactors(analysis: any): any {
+  if (!analysis) return analysis;
+  return {
+    ...analysis,
+    items: (analysis.items ?? []).map((item: any) => {
+      const inv = item.inventoryItem ?? null;
+      return {
+        ...item,
+        inventoryItem: inv ? { name: inv.name, brand: inv.brand, model: inv.model } : null,
+        missingFactors: computeMissingFactors(inv),
+      };
+    }),
+  };
+}
+
 // ─── Service ────────────────────────────────────────────────────────
 export class HomeCapitalTimelineService {
   private financialAssumptionService = new FinancialAssumptionService();
@@ -164,12 +206,12 @@ export class HomeCapitalTimelineService {
         items: {
           orderBy: { windowStart: 'asc' },
           include: {
-            inventoryItem: { select: { name: true, brand: true, model: true } },
+            inventoryItem: { select: INVENTORY_CONFIDENCE_SELECT },
           },
         },
       },
     });
-    return analysis;
+    return attachMissingFactors(analysis);
   }
 
   // ── Run timeline computation ──────────────────────────────────────
@@ -512,13 +554,13 @@ export class HomeCapitalTimelineService {
         items: {
           orderBy: { windowStart: 'asc' },
           include: {
-            inventoryItem: { select: { name: true, brand: true, model: true } },
+            inventoryItem: { select: INVENTORY_CONFIDENCE_SELECT },
           },
         },
       },
     });
 
-    return analysis;
+    return attachMissingFactors(analysis);
   }
 
   // ── Overrides CRUD ────────────────────────────────────────────────
