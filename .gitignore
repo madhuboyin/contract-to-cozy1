@@ -92,3 +92,7 @@ npm-debug.log*
 
 # Docker
 # .dockerignore files are intentionally tracked (they control build context)
+
+# Claude Code — local settings have machine-specific absolute paths
+.claude/settings.local.json
+.claude/worktrees/
