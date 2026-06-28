@@ -383,6 +383,14 @@ function TimelineChart({
                       </span>
                     )}
                   </div>
+                  {isNarrow && (
+                    <span
+                      className={`absolute top-0.5 flex h-6 items-center whitespace-nowrap text-xs font-medium text-slate-600 dark:text-slate-300`}
+                      style={{ left: `calc(${startPct}% + ${widthPct}% + 4px)` }}
+                    >
+                      {name}
+                    </span>
+                  )}
                 </div>
               );
             })}
