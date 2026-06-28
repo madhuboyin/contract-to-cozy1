@@ -599,6 +599,7 @@ model InventoryItem {
   maintenancePredictions       MaintenancePrediction[]
   bookings                     Booking[]
   materialSpecs                MaterialSpec[]
+  permitUnpermittedFlags       PermitUnpermittedFlag[]
 
   @@unique([propertyId, sourceHash])
   @@index([manufacturerNorm, modelNumberNorm])
@@ -1406,6 +1407,9 @@ model User {
   diyProjects     DiyProject[]
   diyAiGuides     DiyAiGuide[]
 
+  // Permit History & Unpermitted Work Tracker
+  permitDisclosureExports PermitDisclosureExport[]
+
   @@index([email])
   @@index([role])
   @@index([status])
@@ -2064,6 +2068,13 @@ model Property {
   diyProjects DiyProject[]
   diyAiGuides DiyAiGuide[]
 
+  // Permit History & Unpermitted Work Tracker
+  permitRecords           PropertyPermitRecord[]
+  permitMilestones        PermitInspectionMilestone[]
+  permitUnpermittedFlags  PermitUnpermittedFlag[]
+  permitFetchJobs         PermitFetchJob[]
+  permitDisclosureExports PermitDisclosureExport[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -2711,6 +2722,7 @@ model HomeAsset {
   quoteComparisonWorkspaces QuoteComparisonWorkspace[]
   priceFinalizations        PriceFinalization[]
   materialSpecs             MaterialSpec[]
+  permitUnpermittedFlags    PermitUnpermittedFlag[]
 
   @@unique([propertyId, assetType]) // Usually only one furnace per house
   @@index([manufacturerNorm, modelNumberNorm])
@@ -9365,6 +9377,7 @@ model HomeRenovationAdvisorSession {
   assumptions         HomeRenovationAdvisorAssumption[]
   dataPoints          HomeRenovationAdvisorDataPoint[]
   complianceChecklist HomeRenovationComplianceChecklist?
+  permitRecords       PropertyPermitRecord[]
 
   @@index([propertyId, createdAt])
   @@index([propertyId, renovationType])
@@ -10842,4 +10855,334 @@ model DiyAiGuide {
   @@index([propertyId])
   @@index([status])
   @@map("diy_ai_guides")
+}
+
+// ============================================================================
+// PERMIT HISTORY & UNPERMITTED WORK TRACKER
+// ============================================================================
+
+enum PermitRecordCategory {
+  BUILDING
+  ELECTRICAL
+  PLUMBING
+  MECHANICAL
+  STRUCTURAL
+  ROOFING
+  ZONING
+  DEMOLITION
+  GRADING
+  FIRE
+  OTHER
+}
+
+enum PermitWorkType {
+  HVAC_NEW
+  HVAC_REPLACEMENT
+  ELECTRICAL_PANEL
+  ELECTRICAL_WIRING
+  PLUMBING_NEW
+  PLUMBING_REPAIR
+  ROOF_REPLACEMENT
+  ROOF_REPAIR
+  ROOM_ADDITION
+  GARAGE_CONVERSION
+  ADU
+  BASEMENT_FINISH
+  DECK_PATIO
+  FENCE
+  SWIMMING_POOL
+  SOLAR
+  WINDOWS_DOORS
+  FIREPLACE
+  SEWER_WATER_LINE
+  STRUCTURAL_REPAIR
+  INTERIOR_REMODEL
+  EXTERIOR_REMODEL
+  DEMOLITION
+  GRADING_DRAINAGE
+  OTHER
+}
+
+enum PermitRecordStatus {
+  APPLIED
+  ISSUED
+  INSPECTION_PENDING
+  INSPECTION_FAILED
+  FINALED
+  EXPIRED
+  VOIDED
+  UNKNOWN
+}
+
+enum PermitRecordSource {
+  OPEN_DATA_API
+  MANUAL_ENTRY
+  DOCUMENT_UPLOAD
+}
+
+enum PermitInspectionStatus {
+  NOT_SCHEDULED
+  SCHEDULED
+  PASSED
+  FAILED
+  PARTIAL
+  CANCELLED
+}
+
+enum PermitUnpermittedFlagStatus {
+  FLAGGED
+  INVESTIGATING
+  CONFIRMED_PERMITTED
+  CONFIRMED_UNPERMITTED
+  WILL_REMEDIATE
+  REMEDIATED
+  DISMISSED
+}
+
+enum PermitUnpermittedFlagTrigger {
+  ASSET_CROSS_REFERENCE
+  INVENTORY_CROSS_REFERENCE
+  INSPECTION_REPORT_FINDING
+  MANUAL
+}
+
+enum PermitDisclosureRisk {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum PermitDataSourceAdapter {
+  SOCRATA
+  ACCELA
+  CUSTOM
+}
+
+enum PermitDataSourceCoverageType {
+  CITY
+  COUNTY
+  STATE
+}
+
+enum PermitDataSourceStatus {
+  ACTIVE
+  INACTIVE
+  ERROR
+  RATE_LIMITED
+}
+
+enum PermitFetchTrigger {
+  PROPERTY_ONBOARDING
+  USER_REQUEST
+  SCHEDULED
+}
+
+enum PermitFetchJobStatus {
+  QUEUED
+  RUNNING
+  COMPLETED
+  FAILED
+  NO_DATA_SOURCE
+}
+
+enum PermitDisclosureExportStatus {
+  PENDING
+  GENERATING
+  COMPLETED
+  FAILED
+}
+
+// Admin-managed municipal open data config. One row per supported municipality.
+model PermitDataSource {
+  id   String @id @default(uuid())
+  name String
+  slug String @unique
+
+  status      PermitDataSourceStatus
+  adapterType PermitDataSourceAdapter
+
+  baseUrl      String
+  datasetId    String?
+  apiKeyEnvVar String?
+
+  coverageType          PermitDataSourceCoverageType
+  normalizedCoverageKey String                       @unique
+  fieldMappingJson      Json
+  queryFilterJson       Json?
+
+  lastFetchAt         DateTime?
+  lastFetchError      String?
+  totalPermitsFetched Int       @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  permitRecords PropertyPermitRecord[]
+  fetchJobs     PermitFetchJob[]
+
+  @@map("permit_data_sources")
+}
+
+// One row per permit record — API-sourced or manually entered.
+model PropertyPermitRecord {
+  id         String @id @default(uuid())
+  propertyId String
+
+  permitNumber String?
+  category     PermitRecordCategory
+  workTypes    PermitWorkType[]
+  description  String?
+  status       PermitRecordStatus
+
+  applicantName     String?
+  contractorName    String?
+  contractorLicense String?
+  workLocation      String?
+
+  applicationDate DateTime?
+  issueDate       DateTime?
+  expirationDate  DateTime?
+  finaledDate     DateTime?
+
+  estimatedCostCents Int?
+  finalCostCents     Int?
+
+  source       PermitRecordSource
+  dataSourceId String?
+  externalId   String?
+  dedupeKey    String?            @unique
+
+  rawDataJson Json?
+  documentIds String[]  @default([])
+  notes       String?
+  isVerified  Boolean   @default(false)
+  isActive    Boolean   @default(true)
+
+  renovationAdvisorSessionId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  property                 Property                       @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  dataSource               PermitDataSource?              @relation(fields: [dataSourceId], references: [id], onDelete: SetNull)
+  renovationAdvisorSession HomeRenovationAdvisorSession?  @relation(fields: [renovationAdvisorSessionId], references: [id], onDelete: SetNull)
+
+  inspectionMilestones PermitInspectionMilestone[]
+  unpermittedFlags     PermitUnpermittedFlag[]     @relation("ResolvedByPermit")
+
+  @@index([propertyId])
+  @@index([category])
+  @@index([status])
+  @@index([source])
+  @@index([issueDate])
+  @@map("property_permit_records")
+}
+
+// Inspection milestone checkpoints for actively tracked permits.
+model PermitInspectionMilestone {
+  id             String @id @default(uuid())
+  permitRecordId String
+  propertyId     String
+
+  stageName          String
+  stageType          RenovationInspectionStageType
+  status             PermitInspectionStatus        @default(NOT_SCHEDULED)
+  scheduledDate      DateTime?
+  inspectedDate      DateTime?
+  inspectorNotes     String?
+  isRequired         Boolean                       @default(true)
+  sortOrder          Int
+  notificationSentAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  permitRecord PropertyPermitRecord @relation(fields: [permitRecordId], references: [id], onDelete: Cascade)
+  property     Property             @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([permitRecordId])
+  @@index([propertyId, status])
+  @@map("permit_inspection_milestones")
+}
+
+// Detected or declared gap in permit coverage.
+model PermitUnpermittedFlag {
+  id         String @id @default(uuid())
+  propertyId String
+
+  workType       PermitWorkType
+  triggerType    PermitUnpermittedFlagTrigger
+  flagReason     String
+  status         PermitUnpermittedFlagStatus @default(FLAGGED)
+  disclosureRisk PermitDisclosureRisk
+
+  homeAssetId        String?
+  inventoryItemId    String?
+  resolvedByPermitId String?
+  resolutionNotes    String?
+
+  dedupeKey String @unique
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  property         Property              @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  homeAsset        HomeAsset?            @relation(fields: [homeAssetId], references: [id], onDelete: SetNull)
+  inventoryItem    InventoryItem?        @relation(fields: [inventoryItemId], references: [id], onDelete: SetNull)
+  resolvedByPermit PropertyPermitRecord? @relation("ResolvedByPermit", fields: [resolvedByPermitId], references: [id], onDelete: SetNull)
+
+  @@index([propertyId, status])
+  @@index([propertyId, disclosureRisk])
+  @@index([homeAssetId])
+  @@index([inventoryItemId])
+  @@map("permit_unpermitted_flags")
+}
+
+// Append-only audit log of open data fetch attempts per property.
+model PermitFetchJob {
+  id           String  @id @default(uuid())
+  propertyId   String
+  dataSourceId String?
+
+  trigger         PermitFetchTrigger
+  status          PermitFetchJobStatus @default(QUEUED)
+  permitsFound    Int?
+  permitsInserted Int?
+  errorMessage    String?
+  durationMs      Int?
+
+  startedAt   DateTime  @default(now())
+  completedAt DateTime?
+
+  property   Property          @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  dataSource PermitDataSource? @relation(fields: [dataSourceId], references: [id], onDelete: SetNull)
+
+  @@index([propertyId, startedAt])
+  @@index([dataSourceId])
+  @@map("permit_fetch_jobs")
+}
+
+// Generated disclosure pack for resale / broker review.
+model PermitDisclosureExport {
+  id                String @id @default(uuid())
+  propertyId        String
+  requestedByUserId String
+
+  status       PermitDisclosureExportStatus @default(PENDING)
+  totalPermits Int?
+  openFlags    Int?
+  fileUrl      String?
+  fileKey      String?
+  expiresAt    DateTime?
+  snapshotJson Json?
+  errorMessage String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  property        Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  requestedByUser User     @relation(fields: [requestedByUserId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId, createdAt])
+  @@map("permit_disclosure_exports")
 }
