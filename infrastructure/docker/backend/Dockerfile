@@ -1,50 +1,56 @@
 # Backend Dockerfile - Node.js API
 # Multi-stage build optimized for Raspberry Pi (ARM64)
 
-# Stage 1: Dependencies
+# Stage 1: Production dependencies only
 FROM node:22-alpine AS deps
 WORKDIR /app
 
-# Install build dependencies and OpenSSL
 RUN apk add --no-cache python3 make g++ openssl openssl-dev
 
-# Copy package files
 COPY package*.json ./
+RUN npm ci --only=production && npm cache clean --force
 
-# Install production dependencies
-RUN npm ci --only=production && \
-    npm cache clean --force
+# Stage 2: Prisma generation (isolated — only schema + packages, no source)
+FROM node:22-alpine AS prisma-gen
+WORKDIR /app
 
-# Stage 2: Builder
+RUN apk add --no-cache python3 make g++ openssl openssl-dev
+
+COPY package*.json ./
+RUN npm ci
+
+# Copy ONLY the prisma directory — no src, no local node_modules
+COPY prisma ./prisma
+
+# Generate Prisma client on the clean npm ci install
+RUN npx prisma generate --schema=./prisma/schema.prisma
+
+# Stage 3: TypeScript compilation (source only — no COPY .)
 FROM node:22-alpine AS builder
 WORKDIR /app
 
-# Install build dependencies and OpenSSL
 RUN apk add --no-cache python3 make g++ openssl openssl-dev
 
-# Copy package files
 COPY package*.json ./
 COPY tsconfig*.json ./
-
-# Install all dependencies
 RUN npm ci
 
-# Copy source code (includes prisma directory)
-COPY . .
+# Bring in the generated Prisma client so tsc can resolve @prisma/client types
+COPY --from=prisma-gen /app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=prisma-gen /app/node_modules/@prisma ./node_modules/@prisma
 
-# Generate Prisma Client
-RUN npx prisma generate
+# Copy only source files — never node_modules from local machine
+COPY src ./src
+COPY prisma ./prisma
 
-# Build TypeScript
 RUN npm run build
 
-# Stage 3: Runner
+# Stage 4: Runner
 FROM node:22-alpine AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
 
-# Install runtime dependencies INCLUDING OpenSSL
 RUN apk add --no-cache \
     postgresql-client \
     curl \
@@ -52,33 +58,30 @@ RUN apk add --no-cache \
     openssl-dev \
     libc6-compat \
     leptonica-dev
-    
-# Create non-root user
+
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 nodejs
 
-# Copy dependencies from deps stage
+# Production node_modules from the clean deps stage
 COPY --from=deps /app/node_modules ./node_modules
 
-# Copy built application from builder
+# Prisma client from the isolated generation stage
+COPY --from=prisma-gen /app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=prisma-gen /app/node_modules/@prisma ./node_modules/@prisma
+
+# Compiled application
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/package*.json ./
 
-# Copy Prisma files
-COPY --from=builder /app/prisma ./prisma
+# Prisma schema (needed for migrations / runtime)
+COPY prisma ./prisma
 
-# Copy generated Prisma Client
-COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
-COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
-
-# Set correct permissions
 RUN chown -R nodejs:nodejs /app
 
 USER nodejs
 
 EXPOSE 8080
 
-# Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
   CMD curl -f http://localhost:8080/api/health || exit 1
 
