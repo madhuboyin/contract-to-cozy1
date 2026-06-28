@@ -2935,7 +2935,7 @@ model LegacyInspectionReport {
 
   @@index([propertyId])
   @@index([userId])
-  @@map("legacy_inspection_reports")
+  @@map("inspection_reports")
 }
 
 model LegacyInspectionIssue {
@@ -2980,7 +2980,7 @@ model LegacyInspectionIssue {
   @@index([reportId])
   @@index([severity])
   @@index([category])
-  @@map("legacy_inspection_issues")
+  @@map("inspection_issues")
 }
 
 model LocalUpdate {
@@ -11329,7 +11329,7 @@ model InspectionReport {
 
   @@index([propertyId, inspectionDate(sort: Desc)])
   @@index([propertyId, status])
-  @@map("inspection_reports")
+  @@map("inspection_reports_v2")
 }
 
 // One row per extracted finding. Survives across the life of the property record.
