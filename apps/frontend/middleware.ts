@@ -39,6 +39,7 @@ const NO_STORE_PAGE_PREFIXES = [
   '/verify-email',
   '/reports/share',
   '/gazette/share',
+  '/home-score/share',
 ] as const;
 
 // ---------------------------------------------------------------------------

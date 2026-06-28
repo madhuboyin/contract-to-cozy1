@@ -3212,4 +3212,148 @@ export class HomeScoreReportService {
     }
     return result.report;
   }
+
+  async createBuyerShareToken(
+    propertyId: string,
+    userId: string,
+    expiresInDays = 30
+  ): Promise<{ token: string; expiresAt: Date }> {
+    await this.assertPropertyAccess(propertyId, userId);
+
+    const report = await prisma.homeScoreReport.findFirst({
+      where: { propertyId, reportMode: 'HOMEOWNER', status: 'FINAL' },
+      orderBy: { generatedAt: 'desc' },
+      select: { id: true },
+    });
+
+    if (!report) {
+      throw new Error('No report found for this property. Refresh the report first.');
+    }
+
+    const plainToken = require('crypto').randomUUID() as string;
+    const tokenHash = createHash('sha256').update(plainToken).digest('hex');
+    const expiresAt = new Date(Date.now() + expiresInDays * 24 * 60 * 60 * 1000);
+
+    await prisma.$transaction(async (tx) => {
+      await tx.homeScoreShareToken.updateMany({
+        where: {
+          reportId: report.id,
+          audienceMode: 'BUYER',
+          revokedAt: null,
+        },
+        data: { revokedAt: new Date() },
+      });
+
+      await tx.homeScoreShareToken.create({
+        data: {
+          reportId: report.id,
+          tokenHash,
+          audienceMode: 'BUYER',
+          expiresAt,
+          createdByUserId: userId,
+        },
+      });
+    });
+
+    return { token: plainToken, expiresAt };
+  }
+
+  async revokeBuyerShareToken(propertyId: string, userId: string): Promise<void> {
+    await this.assertPropertyAccess(propertyId, userId);
+
+    const report = await prisma.homeScoreReport.findFirst({
+      where: { propertyId, reportMode: 'HOMEOWNER', status: 'FINAL' },
+      orderBy: { generatedAt: 'desc' },
+      select: { id: true },
+    });
+
+    if (!report) return;
+
+    await prisma.homeScoreShareToken.updateMany({
+      where: {
+        reportId: report.id,
+        audienceMode: 'BUYER',
+        revokedAt: null,
+      },
+      data: { revokedAt: new Date() },
+    });
+  }
+
+  async getBuyerReport(plainToken: string): Promise<{
+    report: Pick<
+      HomeScoreReportDTO,
+      | 'reportMeta'
+      | 'executiveSummary'
+      | 'radar'
+      | 'systemHealth'
+      | 'timeline'
+      | 'trustAndVerification'
+      | 'methodology'
+      | 'generatedAt'
+      | 'confidence'
+    >;
+    expiresAt: string;
+  }> {
+    const tokenHash = createHash('sha256').update(plainToken).digest('hex');
+    const shareToken = await prisma.homeScoreShareToken.findUnique({
+      where: { tokenHash },
+      include: {
+        report: {
+          select: {
+            propertyId: true,
+            generatedByUserId: true,
+          },
+        },
+      },
+    });
+
+    if (!shareToken) {
+      const err = new Error('Share link not found.') as Error & { statusCode: number };
+      err.statusCode = 404;
+      throw err;
+    }
+
+    if (shareToken.revokedAt) {
+      const err = new Error('This share link has been revoked by the owner.') as Error & { statusCode: number };
+      err.statusCode = 410;
+      throw err;
+    }
+
+    if (shareToken.expiresAt < new Date()) {
+      const err = new Error('This share link has expired.') as Error & { statusCode: number };
+      err.statusCode = 410;
+      throw err;
+    }
+
+    const { propertyId, generatedByUserId } = shareToken.report;
+    if (!generatedByUserId) {
+      const err = new Error('Report data unavailable.') as Error & { statusCode: number };
+      err.statusCode = 404;
+      throw err;
+    }
+
+    const full = await this.getReport(propertyId, generatedByUserId);
+
+    const filteredTimeline = {
+      ...full.timeline,
+      events: (full.timeline?.events ?? []).filter(
+        (e) => e.provenance !== 'USER_REPORTED' && e.provenance !== 'INFERRED'
+      ),
+    };
+
+    return {
+      report: {
+        reportMeta: full.reportMeta,
+        executiveSummary: full.executiveSummary,
+        radar: full.radar,
+        systemHealth: full.systemHealth,
+        timeline: filteredTimeline,
+        trustAndVerification: full.trustAndVerification,
+        methodology: full.methodology,
+        generatedAt: full.generatedAt,
+        confidence: full.confidence,
+      },
+      expiresAt: shareToken.expiresAt.toISOString(),
+    };
+  }
 }

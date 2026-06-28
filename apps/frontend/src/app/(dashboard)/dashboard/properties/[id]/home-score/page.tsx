@@ -751,6 +751,9 @@ export default function HomeScoreReportPage() {
   const [copyState, setCopyState] = useState<"idle" | "copied" | "error">("idle");
   const [showFullReport, setShowFullReport] = useState(false);
   const viewedRef = useRef<string | null>(null);
+  const [buyerShareUrl, setBuyerShareUrl] = useState<string | null>(null);
+  const [buyerShareExpiresAt, setBuyerShareExpiresAt] = useState<string | null>(null);
+  const [buyerShareState, setBuyerShareState] = useState<"idle" | "loading" | "copied" | "error">("idle");
 
   const trackEvent = useCallback((event: string, section?: string, metadata?: Record<string, unknown>) => {
     if (!propertyId) return;
@@ -1075,6 +1078,43 @@ export default function HomeScoreReportPage() {
     }
   };
 
+  const generateBuyerShareLink = async () => {
+    if (buyerShareState === "loading") return;
+    trackEvent("BUYER_SHARE_INITIATED", "share-card");
+    setBuyerShareState("loading");
+    try {
+      const res = await fetch(`/api/properties/${propertyId}/home-score/share`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ expiresInDays: 30 }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) throw new Error(json.message || "Failed to generate link");
+      const url: string = json.data.shareUrl;
+      setBuyerShareUrl(url);
+      setBuyerShareExpiresAt(json.data.expiresAt);
+      await navigator.clipboard.writeText(url);
+      setBuyerShareState("copied");
+      trackEvent("BUYER_SHARE_LINK_GENERATED", "share-card");
+      window.setTimeout(() => setBuyerShareState("idle"), 2500);
+    } catch {
+      setBuyerShareState("error");
+      window.setTimeout(() => setBuyerShareState("idle"), 2500);
+    }
+  };
+
+  const revokeBuyerShareLink = async () => {
+    try {
+      await fetch(`/api/properties/${propertyId}/home-score/share/revoke`, { method: "POST" });
+      setBuyerShareUrl(null);
+      setBuyerShareExpiresAt(null);
+      setBuyerShareState("idle");
+      trackEvent("BUYER_SHARE_REVOKED", "share-card");
+    } catch {
+      // silently ignore revoke errors
+    }
+  };
+
   const onSectionToggle = (sectionId: string, open: boolean) => {
     trackEvent(open ? "SECTION_EXPANDED" : "SECTION_COLLAPSED", sectionId);
   };
@@ -1357,17 +1397,28 @@ export default function HomeScoreReportPage() {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => {
-                  trackEvent("SHARE_ACTION_CLICKED", "share-card", { action: "open_reports" });
-                  router.push(`/dashboard/properties/${propertyId}/reports`);
-                }}
+                disabled={buyerShareState === "loading"}
+                onClick={generateBuyerShareLink}
               >
-                <Share2 className="mr-2 h-4 w-4" /> Share report
+                <Share2 className="mr-2 h-4 w-4" />
+                {buyerShareState === "loading"
+                  ? "Generating…"
+                  : buyerShareState === "copied"
+                  ? "Link copied!"
+                  : buyerShareState === "error"
+                  ? "Failed — retry"
+                  : "Share with Buyer"}
               </Button>
-              <Button variant="outline" size="sm" onClick={copyShareLink}>
-                <Copy className="mr-2 h-4 w-4" />
-                {copyState === "copied" ? "Link copied" : copyState === "error" ? "Copy failed" : "Copy share link"}
-              </Button>
+              {buyerShareUrl && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-rose-600 hover:text-rose-700"
+                  onClick={revokeBuyerShareLink}
+                >
+                  Revoke link
+                </Button>
+              )}
               <Button
                 variant="outline"
                 size="sm"
@@ -1390,6 +1441,25 @@ export default function HomeScoreReportPage() {
                 <Link2 className="mr-2 h-4 w-4" /> Print
               </Button>
             </div>
+            {buyerShareUrl && buyerShareExpiresAt && (
+              <div className="mt-3 flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm">
+                <Copy className="h-4 w-4 shrink-0 text-emerald-600" />
+                <span className="flex-1 truncate font-mono text-xs text-slate-700">{buyerShareUrl}</span>
+                <button
+                  className="shrink-0 text-xs text-emerald-700 hover:underline"
+                  onClick={async () => {
+                    await navigator.clipboard.writeText(buyerShareUrl);
+                    setBuyerShareState("copied");
+                    window.setTimeout(() => setBuyerShareState("idle"), 1800);
+                  }}
+                >
+                  Copy
+                </button>
+                <span className="shrink-0 text-xs text-slate-400">
+                  Expires {new Date(buyerShareExpiresAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                </span>
+              </div>
+            )}
           </div>
         </section>
 
