@@ -118,7 +118,7 @@ function PersistentSidebarNav({ user, isCollapsed, onToggleCollapse }: {
         {coreJobs.map((job) => {
           const Icon = job.icon;
           const href =
-            job.href === '/dashboard' || job.href === '/dashboard/properties'
+            job.globalHref || job.href === '/dashboard' || job.href === '/dashboard/properties'
               ? job.href
               : buildPropertyAwareHref(
                   resolvedPropertyId,
@@ -376,7 +376,7 @@ function MobileDrawerNav({ user }: { user: User | null }) {
         {coreJobs.map((job) => {
           const Icon = job.icon;
           const href =
-            job.href === '/dashboard' || job.href === '/dashboard/properties'
+            job.globalHref || job.href === '/dashboard' || job.href === '/dashboard/properties'
               ? job.href
               : buildPropertyAwareHref(
                   resolvedPropertyId,

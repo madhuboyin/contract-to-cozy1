@@ -23,6 +23,7 @@ export interface NavJob {
   icon: ElementType;
   description: string;
   engines: string[]; // Keys of tools/engines that belong to this job
+  globalHref?: boolean; // true = href is not property-scoped; use as-is regardless of selected property
 }
 
 export const PRIMARY_JOBS: NavJob[] = [
@@ -124,6 +125,7 @@ export const PRIMARY_JOBS: NavJob[] = [
     icon: Users,
     description: 'Trusted contractors in your neighbourhood',
     engines: ['neighbourhood-trust', 'neighbourhood-feed', 'endorsements'],
+    globalHref: true,
   },
   {
     key: 'home-lab',
