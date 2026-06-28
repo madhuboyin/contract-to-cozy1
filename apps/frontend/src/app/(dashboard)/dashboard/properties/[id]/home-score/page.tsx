@@ -1083,16 +1083,11 @@ export default function HomeScoreReportPage() {
     trackEvent("BUYER_SHARE_INITIATED", "share-card");
     setBuyerShareState("loading");
     try {
-      const res = await fetch(`/api/properties/${propertyId}/home-score/share`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ expiresInDays: 30 }),
-      });
-      const json = await res.json();
-      if (!res.ok || !json.success) throw new Error(json.message || "Failed to generate link");
-      const url: string = json.data.shareUrl;
+      const res = await api.createBuyerShareToken(propertyId);
+      if (!res.success) throw new Error((res as any).message || "Failed to generate link");
+      const url: string = res.data.shareUrl;
       setBuyerShareUrl(url);
-      setBuyerShareExpiresAt(json.data.expiresAt);
+      setBuyerShareExpiresAt(res.data.expiresAt);
       await navigator.clipboard.writeText(url);
       setBuyerShareState("copied");
       trackEvent("BUYER_SHARE_LINK_GENERATED", "share-card");
@@ -1105,7 +1100,7 @@ export default function HomeScoreReportPage() {
 
   const revokeBuyerShareLink = async () => {
     try {
-      await fetch(`/api/properties/${propertyId}/home-score/share/revoke`, { method: "POST" });
+      await api.revokeBuyerShareToken(propertyId);
       setBuyerShareUrl(null);
       setBuyerShareExpiresAt(null);
       setBuyerShareState("idle");

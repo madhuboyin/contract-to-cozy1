@@ -4445,6 +4445,16 @@ class APIClient {
   ): Promise<APIResponse<{ endorsement: import('@/types').NeighbourhoodEndorsement | null }>> {
     return this.request(`/api/bookings/${bookingId}/endorsement`);
   }
+
+  async createBuyerShareToken(
+    propertyId: string
+  ): Promise<APIResponse<{ shareUrl: string; expiresAt: string; token: string }>> {
+    return this.request(`/api/properties/${propertyId}/home-score/share`, { method: 'POST' });
+  }
+
+  async revokeBuyerShareToken(propertyId: string): Promise<APIResponse<void>> {
+    return this.request(`/api/properties/${propertyId}/home-score/share/revoke`, { method: 'POST' });
+  }
 }
 
 // Export singleton instance
