@@ -45,7 +45,7 @@ const HOME_TOOL_GROUPS = [
   {
     key: 'renovation',
     title: 'Renovation Planning',
-    toolKeys: ['home-renovation-risk-advisor'],
+    toolKeys: ['home-renovation-risk-advisor', 'diy'],
   },
   {
     key: 'timeline',
