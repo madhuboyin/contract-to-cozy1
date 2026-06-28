@@ -66,7 +66,8 @@ RUN mkdir -p src/shared/backend/utils \
              src/shared/backend/neighborhoodIntelligence \
              src/shared/backend/refinanceRadar/engine \
              src/shared/backend/refinanceRadar/config \
-             src/shared/backend/refinanceRadar/types
+             src/shared/backend/refinanceRadar/types \
+             src/shared/backend/services/permitAdapters
 
 COPY apps/backend/src/utils/riskCalculator.util.ts src/shared/backend/utils/
 COPY apps/backend/src/utils/FinancialCalculator.util.ts src/shared/backend/utils/
@@ -173,6 +174,14 @@ COPY apps/backend/src/services/guidanceEngine/guidanceAdvisor.service.ts src/sha
 COPY apps/backend/src/services/guidanceEngine/guidanceMapper.ts src/shared/backend/services/guidanceEngine/
 COPY apps/backend/src/services/guidanceEngine/guidanceBookingGuard.service.ts src/shared/backend/services/guidanceEngine/
 COPY apps/backend/src/services/guidanceEngine/guidanceJourney.service.ts src/shared/backend/services/guidanceEngine/
+# Copy DIY AI guide service (used by generateDiyAiGuide.job.ts)
+COPY apps/backend/src/services/diyAiGuide.service.ts src/shared/backend/services/
+# Copy permit services and adapters (used by permit worker jobs)
+COPY apps/backend/src/services/permitAdapters/permitNormalizer.ts src/shared/backend/services/permitAdapters/
+COPY apps/backend/src/services/permitAdapters/socrata.adapter.ts src/shared/backend/services/permitAdapters/
+COPY apps/backend/src/services/permitAdapters/accela.adapter.ts src/shared/backend/services/permitAdapters/
+COPY apps/backend/src/services/permitFetch.service.ts src/shared/backend/services/
+COPY apps/backend/src/services/permitDetection.service.ts src/shared/backend/services/
 # Stubs: replace backend-only deps with workers-safe equivalents
 COPY apps/workers/stubs/error-middleware.ts src/shared/backend/middleware/error.middleware.ts
 COPY apps/workers/stubs/notification-service.ts src/shared/backend/services/notification.service.ts
@@ -209,6 +218,15 @@ RUN sed -i 's/\.\.\/\.\.\/backend\/src\/utils\/riskCalculator\.util/\.\/shared\/
     sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/guidanceEngine\/guidanceJourney\.service/\.\.\/shared\/backend\/services\/guidanceEngine\/guidanceJourney\.service/g' src/jobs/coverageLapseIncidents.job.ts && \
     sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/guidanceEngine\/guidanceJourney\.service/\.\.\/shared\/backend\/services\/guidanceEngine\/guidanceJourney\.service/g' src/jobs/freezeRiskIncidents.job.ts && \
     sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/guidanceEngine\/guidanceJourney\.service/\.\.\/shared\/backend\/services\/guidanceEngine\/guidanceJourney\.service/g' src/jobs/neighborhoodChangeNotification.job.ts
+
+# Rewrite paths introduced by DIY and permit features
+RUN sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/diyAiGuide\.service/\.\.\/shared\/backend\/services\/diyAiGuide\.service/g' src/jobs/generateDiyAiGuide.job.ts && \
+    sed -i 's/\.\.\/\.\.\/backend\/src\/services\/diyAiGuide\.service/\.\/shared\/backend\/services\/diyAiGuide\.service/g' src/worker.ts && \
+    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/storage\/reportStorage/\.\.\/shared\/backend\/services\/storage\/reportStorage/g' src/jobs/generateMaterialSpecExport.job.ts && \
+    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/permitFetch\.service/\.\.\/shared\/backend\/services\/permitFetch\.service/g' src/jobs/fetchPermitHistory.job.ts && \
+    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/permitDetection\.service/\.\.\/shared\/backend\/services\/permitDetection\.service/g' src/jobs/detectUnpermittedWork.job.ts && \
+    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/storage\/reportStorage/\.\.\/shared\/backend\/services\/storage\/reportStorage/g' src/jobs/generatePermitDisclosure.job.ts && \
+    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/notification\.service/\.\.\/shared\/backend\/services\/notification\.service/g' src/jobs/permitInspectionReminder.job.ts
 
 # Compile TS -> dist/
 RUN npx tsc --project ./tsconfig.json

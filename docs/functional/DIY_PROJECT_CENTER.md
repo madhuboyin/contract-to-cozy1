@@ -1194,6 +1194,449 @@ Guide ready → "Start Project from AI Guide"
 
 ---
 
+## Admin UI — Template Management
+
+### Overview
+
+The Admin UI is the internal content management surface for DIY Project Center templates. It allows users with the `ADMIN` role to create, edit, publish, archive, and restore templates without requiring a code deployment. It is the primary mechanism for populating the template library in production.
+
+All four backend admin endpoints are already implemented and production-ready. This section specifies the frontend pages, forms, and UX flows that expose those endpoints.
+
+---
+
+### Access Control
+
+- All admin pages check `req.user.role === ADMIN` server-side via `requireRole(UserRole.ADMIN)` (already enforced on all `/api/admin/diy/*` routes).
+- On the frontend, pages redirect to `/dashboard` if the authenticated user does not have the `ADMIN` role. The role is available in `AuthContext`.
+- Admin pages live under `/dashboard/admin/diy/` — a route group separate from homeowner-facing `/dashboard/diy/`.
+
+---
+
+### Page Inventory
+
+| Route | Purpose |
+|---|---|
+| `/dashboard/admin/diy/templates` | Template list — all statuses, filter, search, status actions |
+| `/dashboard/admin/diy/templates/new` | Create template — full form with nested steps, materials, tools |
+| `/dashboard/admin/diy/templates/[id]/edit` | Edit template — same form pre-populated with existing data |
+
+---
+
+### Template List Page (`/dashboard/admin/diy/templates`)
+
+**API call:** `GET /api/admin/diy/templates` (returns all statuses)
+
+#### Layout
+
+1. **Header row**
+   - Page title: "DIY Templates"
+   - `+ New Template` button (top-right) → navigates to `/dashboard/admin/diy/templates/new`
+
+2. **Filter bar**
+   - Status filter: All / Draft / Active / Archived (tab row)
+   - Category filter: dropdown (All + 9 categories)
+   - Search input: debounced, searches on title
+
+3. **Template table**
+
+   | Column | Notes |
+   |---|---|
+   | Title | Clickable — opens edit page |
+   | Category | Category chip |
+   | Difficulty | Chip |
+   | Required Skill | Badge |
+   | Steps | Count |
+   | Status | Coloured badge: Draft (grey) / Active (green) / Archived (muted) |
+   | Featured | Star icon if `featuredOrder` is set |
+   | Actions | Context menu: Edit, Publish / Archive / Restore, Duplicate |
+
+4. **Status action rules**
+   - DRAFT → "Publish" action available
+   - ACTIVE → "Archive" action available; "Unpublish to Draft" available
+   - ARCHIVED → "Restore to Active" action available
+   - All statuses → "Duplicate" creates a DRAFT copy with "(copy)" appended to title
+
+5. **Empty state**
+   - "No templates yet. Create your first template to populate the Project Library."
+
+---
+
+### Template Create/Edit Form
+
+**Create:** `POST /api/admin/diy/templates`
+**Edit:** `GET /api/admin/diy/templates` (list, then navigate to edit), `PUT /api/admin/diy/templates/:templateId`
+
+The create and edit pages use the same form component. The edit page pre-populates all fields from the existing template.
+
+#### Form sections
+
+---
+
+##### Section 1 — Core Details
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| Title | Text | Yes | Max 150 chars. Auto-generates slug on first keystroke. |
+| Slug | Text | Yes | Lowercase, hyphens only. Auto-generated from title; editable. Unique per DB. Example: `hvac-filter-replacement` |
+| Category | Select | Yes | HVAC / Plumbing / Electrical / Painting / General / Exterior / Flooring / Appliance / Landscaping / Other |
+| Short Description | Text | Yes | One-line summary for template cards. Max 200 chars. Char counter shown. |
+| Long Description | Textarea | No | Full description shown on template detail page. Supports markdown. |
+
+---
+
+##### Section 2 — Difficulty and Safety
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| Difficulty Level | Select | Yes | Easy / Moderate / Hard / Expert Only |
+| Required Skill Level | Select | Yes | Beginner / Intermediate / Advanced. Sets the threshold for DIY_RECOMMENDED verdict. |
+| Safety Level | Select | Yes | Low / Moderate / High. High triggers safety banner on template detail page. |
+| Permit Requirement | Select | Yes | Not Required / Likely Not Required / Unknown / Likely Required / Required / Data Unavailable |
+
+Inline help text under Safety Level: "HIGH triggers a red safety banner for homeowners and causes HIRE_REQUIRED for BEGINNER users regardless of other scores."
+
+---
+
+##### Section 3 — Time and Cost
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| Estimated Minutes | Number | Yes | Min 1. Display helper shows converted hours: "90 min (1h 30m)" |
+| Material Cost Min | Dollar amount | No | Stored as cents. Input as dollars (e.g. `12.50`). |
+| Material Cost Max | Dollar amount | No | Must be ≥ Min if both are set. |
+| Professional Cost Min | Dollar amount | No | Typical pro cost — used to calculate savings display for homeowners. |
+| Professional Cost Max | Dollar amount | No | Must be ≥ Min if both are set. |
+
+---
+
+##### Section 4 — Discovery
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| Tags | Tag input | No | Comma or enter to add. Displayed as removable chips. Used for search. Example: `filter`, `HVAC`, `seasonal`, `1-inch` |
+| Featured Order | Number | No | Integer. If set, template appears in the featured strip on the DIY hub, sorted ascending. Leave blank for non-featured. |
+| Gemini Prompt Hint | Textarea | No | Optional context appended to the Gemini prompt when a user generates a custom guide that references this template. Max 500 chars. |
+
+---
+
+##### Section 5 — Steps
+
+Each step corresponds to one `DiyTemplateStep` row. Steps are copied into user projects at project creation time, so edits to steps after a project is created do not affect in-progress projects.
+
+**Controls:**
+- `+ Add Step` button appends a new step at the end
+- Each step has a drag handle for reorder (or ↑ / ↓ buttons as fallback)
+- Each step has a `×` remove button
+- Step number is auto-assigned from position (1-indexed)
+- Step rows are collapsed by default showing step number + title; clicking expands the full form
+
+**Per-step fields:**
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| Title | Text | Yes | Short step label. Max 120 chars. Shown collapsed. |
+| Description | Textarea | Yes | Full instruction text. Supports markdown. |
+| Estimated Minutes | Number | No | Time estimate for this step. |
+| Safety Note | Textarea | No | Rendered as amber/red warning callout on the project tracker. Leave blank if no safety concern. |
+| Tip Note | Textarea | No | Rendered as green tip callout. |
+| Image URL | Text | No | S3 URL for a step illustration (e.g. diagram, photo). |
+| Is Optional | Checkbox | — | Optional steps are shown but not required to mark project complete. |
+
+**Validation:** At least 1 step is required to publish (DRAFT can be saved with 0 steps).
+
+---
+
+##### Section 6 — Materials
+
+Each material corresponds to one `DiyTemplateMaterial` row.
+
+**Controls:**
+- `+ Add Material` button
+- Drag handle or ↑ / ↓ buttons for reorder
+- `×` remove button per row
+- Rows collapsed by default showing name + quantity formula
+
+**Per-material fields:**
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| Name | Text | Yes | E.g. "HVAC Filter 16×25×1 (1-inch)". Max 150 chars. |
+| Description | Text | No | Brand notes or spec clarification. |
+| Unit | Select | Yes | `each` / `sq ft` / `linear ft` / `oz` / `gal` / `pack` |
+| Quantity Formula | Text | Yes | Fixed number (`"1"`) or formula referencing property data. See formula reference below. |
+| Unit Price | Dollar amount | Yes | Retail price per unit. Stored as cents. |
+| Is Optional | Checkbox | — | |
+| Purchase Note | Text | No | Where to buy or brand recommendations. Shown on materials checklist. |
+
+**Quantity formula reference** (inline help panel toggled by "?" icon):
+
+| Token | Resolves to |
+|---|---|
+| `ceiling_sqft` | Room ceiling area (if rooms added to inventory) |
+| `floor_sqft` | Room floor area |
+| `perimeter_ft` | Room perimeter |
+| `wall_sqft` | Total wall area (excludes windows/doors) |
+| Fallback | If formula references a token but no room data exists, the formula evaluates to a conservative default defined per token |
+
+Example: `"ceiling_sqft * 0.35"` for spray primer on a ceiling. If no room data, uses `100 * 0.35 = 35 oz`.
+
+---
+
+##### Section 7 — Tools
+
+Each tool corresponds to one `DiyTemplateTool` row.
+
+**Controls:**
+- `+ Add Tool` button
+- Drag handle or ↑ / ↓ buttons for reorder
+- `×` remove button
+
+**Per-tool fields:**
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| Name | Text | Yes | E.g. "Cordless Drill", "Toilet Flapper Wrench". |
+| Canonical ID | Text | No | Stable key matching entries in `DiySkillProfile.toolsOwnedJson` (e.g. `cordless_drill`, `multimeter`). When set, the project tracker auto-marks the tool as ALREADY_OWNED for users who flagged it in the skill quiz. |
+| Description | Text | No | Additional context. |
+| Is Required | Checkbox | — | Unchecked = "nice to have". |
+| Default Action | Select | Yes | ALREADY_OWNED / RENT / BUY — admin recommendation shown to homeowner. |
+| Rent Daily Price | Dollar amount | No | Average tool rental cost per day. |
+| Buy Estimate | Dollar amount | No | Estimated purchase price. |
+
+---
+
+#### Form Actions (Save Bar — sticky bottom)
+
+| Action | Behaviour |
+|---|---|
+| **Save as Draft** | Saves with `status = DRAFT`. Always available. No validation on step/material counts. |
+| **Publish** | Saves with `status = ACTIVE`. Validates: title, slug, category, difficulty, safety level, permit requirement, estimated minutes, at least 1 step. Shows confirmation dialog if template already has active projects linked. |
+| **Discard Changes** | Navigates back without saving. Confirmation dialog if form is dirty. |
+
+On edit page, additional actions:
+
+| Action | Behaviour |
+|---|---|
+| **Archive** | `PATCH .../status { status: 'ARCHIVED' }`. Confirmation: "Existing projects will not be affected. New users will not see this template." |
+| **Unpublish to Draft** | `PATCH .../status { status: 'DRAFT' }`. Template disappears from user-facing library. |
+| **Duplicate** | Creates a new DRAFT with all fields copied and "(copy)" appended to the title. Navigates to the new template's edit page. |
+
+---
+
+### Status Lifecycle
+
+```
+DRAFT ──── Publish ────▶ ACTIVE ──── Archive ────▶ ARCHIVED
+  ▲                        │                           │
+  │                        │                           │
+  └──── Unpublish ─────────┘        Restore ──────────┘
+                                    (back to ACTIVE)
+```
+
+- Templates in DRAFT are only visible to admin users via `/api/admin/diy/templates`.
+- Templates in ACTIVE appear in the homeowner-facing template library and featured strip.
+- Templates in ARCHIVED are hidden from homeowners but retained in the DB. Existing `DiyProject` rows that reference the template still have their step copies and are unaffected.
+
+---
+
+### Slug Validation
+
+- Slug must be unique across all templates (enforced by DB unique constraint on `DiyProjectTemplate.slug`).
+- The form auto-generates a slug from the title: lowercase, spaces → hyphens, strip non-alphanumeric characters except hyphens.
+- If the auto-generated slug conflicts with an existing template, append a numeric suffix (`hvac-filter-replacement-2`).
+- Slug is validated on form submit via `POST /api/admin/diy/templates` (server returns 409 on conflict).
+
+---
+
+### Frontend Files
+
+| File | Purpose |
+|---|---|
+| `frontend/src/app/(dashboard)/dashboard/admin/diy/templates/page.tsx` | Template list page |
+| `frontend/src/app/(dashboard)/dashboard/admin/diy/templates/new/page.tsx` | Create form page |
+| `frontend/src/app/(dashboard)/dashboard/admin/diy/templates/[id]/edit/page.tsx` | Edit form page |
+| `frontend/src/components/features/diy/admin/AdminTemplateTable.tsx` | Sortable/filterable table component |
+| `frontend/src/components/features/diy/admin/TemplateForm.tsx` | Shared create/edit form with all sections |
+| `frontend/src/components/features/diy/admin/StepEditor.tsx` | Ordered step list with drag-and-drop and expand/collapse |
+| `frontend/src/components/features/diy/admin/MaterialEditor.tsx` | Ordered material list with formula helper |
+| `frontend/src/components/features/diy/admin/ToolEditor.tsx` | Ordered tool list |
+| `frontend/src/components/features/diy/admin/StatusBadge.tsx` | Draft / Active / Archived badge |
+| `frontend/src/components/features/diy/admin/TemplateStatusActions.tsx` | Publish / Archive / Restore / Duplicate action menu |
+
+---
+
+### API Client Methods (additions to `client.ts`)
+
+```typescript
+// Admin — template management
+adminListDiyTemplates(params?: {
+  status?: DiyTemplateStatus | DiyTemplateStatus[];
+  category?: DiyProjectCategory;
+  search?: string;
+}): Promise<{ items: AdminDiyTemplateSummary[] }>
+
+adminGetDiyTemplate(templateId: string): Promise<AdminDiyTemplateDetail>
+
+adminCreateDiyTemplate(
+  payload: AdminDiyTemplatePayload
+): Promise<AdminDiyTemplateDetail>
+
+adminUpdateDiyTemplate(
+  templateId: string,
+  payload: AdminDiyTemplatePayload
+): Promise<AdminDiyTemplateDetail>
+
+adminUpdateDiyTemplateStatus(
+  templateId: string,
+  status: DiyTemplateStatus
+): Promise<AdminDiyTemplateSummary>
+```
+
+> Note: `adminGetDiyTemplate` calls `GET /api/diy/templates/:templateId` (the existing public detail endpoint, which returns steps/materials/tools). No new backend endpoint is needed for the edit page pre-population.
+
+---
+
+### TypeScript Interfaces (additions to `types/index.ts`)
+
+```typescript
+type DiyTemplateStatus = 'DRAFT' | 'ACTIVE' | 'ARCHIVED'
+
+// List row — used in the admin table
+interface AdminDiyTemplateSummary {
+  id: string
+  slug: string
+  title: string
+  category: DiyProjectCategory
+  difficultyLevel: DiyDifficultyLevel
+  requiredSkillLevel: DiySkillLevel
+  safetyLevel: DiySafetyLevel
+  status: DiyTemplateStatus
+  featuredOrder?: number
+  stepCount: number
+  createdAt: string
+  updatedAt: string
+}
+
+// Full detail — used to pre-populate the edit form
+interface AdminDiyTemplateDetail extends DiyTemplateDetail {
+  slug: string
+  status: DiyTemplateStatus
+  permitRequirement: string
+  tags: string[]
+  featuredOrder?: number
+  geminiPromptHint?: string
+}
+
+// Step input shape for create/update payload
+interface DiyTemplateStepInput {
+  title: string
+  description: string
+  estimatedMinutes?: number
+  safetyNote?: string
+  tipNote?: string
+  imageUrl?: string
+  isOptional: boolean
+}
+
+// Material input shape
+interface DiyTemplateMaterialInput {
+  name: string
+  description?: string
+  unit: string
+  quantityFormula: string
+  unitPriceCents: number
+  isOptional: boolean
+  purchaseNote?: string
+}
+
+// Tool input shape
+interface DiyTemplateToolInput {
+  name: string
+  canonicalId?: string
+  description?: string
+  isRequired: boolean
+  defaultToolAction: DiyToolAction
+  rentDailyPriceCents?: number
+  buyEstimatePriceCents?: number
+}
+
+// Create and update use the same payload shape
+interface AdminDiyTemplatePayload {
+  slug: string
+  title: string
+  shortDescription: string
+  longDescription?: string
+  category: DiyProjectCategory
+  difficultyLevel: DiyDifficultyLevel
+  requiredSkillLevel: DiySkillLevel
+  safetyLevel: DiySafetyLevel
+  permitRequirement: string
+  estimatedMinutes: number
+  estimatedMaterialCostMinCents?: number
+  estimatedMaterialCostMaxCents?: number
+  professionalCostMinCents?: number
+  professionalCostMaxCents?: number
+  tags: string[]
+  featuredOrder?: number
+  geminiPromptHint?: string
+  steps: DiyTemplateStepInput[]
+  materials: DiyTemplateMaterialInput[]
+  tools: DiyTemplateToolInput[]
+}
+```
+
+---
+
+### Validation Rules (client-side, mirrored server-side)
+
+| Rule | Condition |
+|---|---|
+| Title required | Non-empty, max 150 chars |
+| Slug required | Non-empty, lowercase alphanumeric + hyphens only, max 100 chars |
+| Short description required | Non-empty, max 200 chars |
+| Category required | Must be a valid `DiyProjectCategory` value |
+| Difficulty required | Must be a valid `DiyDifficultyLevel` value |
+| Skill level required | Must be a valid `DiySkillLevel` value |
+| Safety level required | Must be a valid `DiySafetyLevel` value |
+| Permit requirement required | Must be a valid `PermitRequirementStatus` value |
+| Estimated minutes required | Integer ≥ 1 |
+| Cost range consistency | If both min and max are set, max ≥ min |
+| At least 1 step to publish | Enforced only on Publish action; Draft can be saved with 0 steps |
+| Step title required | Each step must have a non-empty title |
+| Step description required | Each step must have a non-empty description |
+| Material name required | Non-empty |
+| Material quantity formula required | Non-empty; basic expression validation (numeric or known tokens) |
+| Material unit price required | Number ≥ 0 |
+| Tool name required | Non-empty |
+
+---
+
+### UX Details
+
+**Slug auto-generation:** As the admin types the title, the slug field auto-populates in real time (lowercase, spaces to hyphens, strip special chars). The slug field becomes manually editable on first user interaction; thereafter it is no longer auto-synced from the title.
+
+**Dollar input handling:** All cost fields display and accept dollar amounts (e.g. `12.50`). On submit, values are multiplied by 100 and sent as cents integers. On pre-population from the API, cents are divided by 100 for display.
+
+**Step reorder:** Drag-and-drop via mouse/touch. `stepNumber` is derived from array index on submit — admin does not set it explicitly. The ↑ / ↓ buttons provide a keyboard-accessible fallback.
+
+**Unsaved changes guard:** Before navigating away from a dirty form (any field changed), show a browser-native `beforeunload` prompt or a custom modal: "You have unsaved changes. Leave without saving?"
+
+**Publish confirmation dialog:**
+
+```
+Publish "Replace HVAC Air Filter"?
+
+This template will become visible to all homeowners in the Project Library.
+You can archive it at any time to remove it from the library without
+deleting it.
+
+[Cancel]  [Publish]
+```
+
+**Duplicate action:** Copies all template fields and all nested steps, materials, and tools into a new DRAFT. Title is suffixed with " (copy)". Admin is redirected to the new template's edit page immediately.
+
+---
+
 ## Current Limitations
 
 - Template library is admin-curated and has no self-service homeowner submission path. Phase 2 can add community-submitted templates with admin review.
