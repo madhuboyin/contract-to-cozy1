@@ -3895,6 +3895,43 @@ class APIClient {
     return res.data.guide;
   }
 
+  // ─── DIY Admin ──────────────────────────────────────────────────────────────
+
+  async adminListDiyTemplates(params?: {
+    status?: import('@/types').DiyTemplateStatus | import('@/types').DiyTemplateStatus[];
+    category?: import('@/types').DiyProjectCategory;
+    search?: string;
+    limit?: number;
+    cursor?: string;
+  }): Promise<{ items: import('@/types').AdminDiyTemplateSummary[]; nextCursor?: string }> {
+    const res = await this.get<{ items: import('@/types').AdminDiyTemplateSummary[]; nextCursor?: string }>('/api/admin/diy/templates', params as Record<string, any>);
+    return res.data ?? { items: [] };
+  }
+
+  async adminGetDiyTemplate(templateId: string): Promise<import('@/types').AdminDiyTemplateDetail> {
+    const res = await this.get<{ template: import('@/types').AdminDiyTemplateDetail }>(`/api/admin/diy/templates/${templateId}`);
+    if (!res.data?.template) throw new APIError('Template not found', 404);
+    return res.data.template;
+  }
+
+  async adminCreateDiyTemplate(payload: import('@/types').AdminDiyTemplatePayload): Promise<import('@/types').AdminDiyTemplateDetail> {
+    const res = await this.post<{ template: import('@/types').AdminDiyTemplateDetail }>('/api/admin/diy/templates', payload);
+    if (!res.data?.template) throw new APIError('Failed to create template', 500);
+    return res.data.template;
+  }
+
+  async adminUpdateDiyTemplate(templateId: string, payload: Partial<import('@/types').AdminDiyTemplatePayload>): Promise<import('@/types').AdminDiyTemplateDetail> {
+    const res = await this.put<{ template: import('@/types').AdminDiyTemplateDetail }>(`/api/admin/diy/templates/${templateId}`, payload);
+    if (!res.data?.template) throw new APIError('Failed to update template', 500);
+    return res.data.template;
+  }
+
+  async adminUpdateDiyTemplateStatus(templateId: string, status: import('@/types').DiyTemplateStatus): Promise<import('@/types').AdminDiyTemplateSummary> {
+    const res = await this.patch<{ template: import('@/types').AdminDiyTemplateSummary }>(`/api/admin/diy/templates/${templateId}/status`, { status });
+    if (!res.data?.template) throw new APIError('Failed to update template status', 500);
+    return res.data.template;
+  }
+
   // ─── Permit History & Unpermitted Work Tracker ──────────────────────────────
 
   async triggerPermitFetch(propertyId: string): Promise<{ fetchJobId: string }> {

@@ -423,12 +423,17 @@ export class DiyService {
   }
 
   // ── Admin ──────────────────────────────────────────────────────────────────────
-  async adminListTemplates(params: { limit?: number; cursor?: string; status?: string }) {
-    const { limit = 50, cursor, status } = params;
+  async adminListTemplates(params: { limit?: number; cursor?: string; status?: string; category?: string; search?: string }) {
+    const { limit = 50, cursor, status, category, search } = params;
     const statuses = status ? [status as DiyTemplateStatus] : ['DRAFT', 'ACTIVE', 'ARCHIVED'] as DiyTemplateStatus[];
 
     const templates = await prisma.diyProjectTemplate.findMany({
-      where: { status: { in: statuses } },
+      where: {
+        status: { in: statuses },
+        ...(category && { category: category as any }),
+        ...(search && { title: { contains: search, mode: 'insensitive' as any } }),
+      },
+      include: { _count: { select: { steps: true } } },
       orderBy: { createdAt: 'desc' },
       take: limit + 1,
       ...(cursor && { cursor: { id: cursor }, skip: 1 }),
@@ -436,7 +441,21 @@ export class DiyService {
 
     const hasMore = templates.length > limit;
     if (hasMore) templates.pop();
-    return { items: templates, nextCursor: hasMore ? templates[templates.length - 1]?.id : undefined };
+    const items = templates.map(({ _count, ...t }) => ({ ...t, stepCount: _count.steps }));
+    return { items, nextCursor: hasMore ? items[items.length - 1]?.id : undefined };
+  }
+
+  async adminGetTemplate(templateId: string) {
+    const template = await prisma.diyProjectTemplate.findUnique({
+      where: { id: templateId },
+      include: {
+        steps: { orderBy: { stepNumber: 'asc' } },
+        materials: { orderBy: { sortOrder: 'asc' } },
+        tools: { orderBy: { sortOrder: 'asc' } },
+      },
+    });
+    if (!template) throw new APIError('Template not found', 404);
+    return template;
   }
 
   async adminCreateTemplate(payload: any) {

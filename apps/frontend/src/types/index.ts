@@ -3726,6 +3726,87 @@ export interface UpdateDiyProjectPayload {
   photoUrls?: string[];
 }
 
+// ─── DIY Admin ───────────────────────────────────────────────────────────────
+
+export type DiyTemplateStatus = 'DRAFT' | 'ACTIVE' | 'ARCHIVED';
+
+export interface AdminDiyTemplateSummary {
+  id: string;
+  slug: string;
+  title: string;
+  category: DiyProjectCategory;
+  difficultyLevel: DiyDifficultyLevel;
+  requiredSkillLevel: DiySkillLevel;
+  safetyLevel: DiySafetyLevel;
+  status: DiyTemplateStatus;
+  featuredOrder?: number;
+  stepCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AdminDiyTemplateDetail extends DiyTemplateDetail {
+  slug: string;
+  status: DiyTemplateStatus;
+  permitRequirement: string;
+  tags: string[];
+  featuredOrder?: number;
+  geminiPromptHint?: string;
+}
+
+export interface DiyTemplateStepInput {
+  title: string;
+  description: string;
+  estimatedMinutes?: number;
+  safetyNote?: string;
+  tipNote?: string;
+  imageUrl?: string;
+  isOptional: boolean;
+}
+
+export interface DiyTemplateMaterialInput {
+  name: string;
+  description?: string;
+  unit: string;
+  quantityFormula: string;
+  unitPriceCents: number;
+  isOptional: boolean;
+  purchaseNote?: string;
+}
+
+export interface DiyTemplateToolInput {
+  name: string;
+  canonicalId?: string;
+  description?: string;
+  isRequired: boolean;
+  defaultToolAction: DiyToolAction;
+  rentDailyPriceCents?: number;
+  buyEstimatePriceCents?: number;
+}
+
+export interface AdminDiyTemplatePayload {
+  slug: string;
+  title: string;
+  shortDescription: string;
+  longDescription?: string;
+  category: DiyProjectCategory;
+  difficultyLevel: DiyDifficultyLevel;
+  requiredSkillLevel: DiySkillLevel;
+  safetyLevel: DiySafetyLevel;
+  permitRequirement: string;
+  estimatedMinutes: number;
+  estimatedMaterialCostMinCents?: number;
+  estimatedMaterialCostMaxCents?: number;
+  professionalCostMinCents?: number;
+  professionalCostMaxCents?: number;
+  tags: string[];
+  featuredOrder?: number;
+  geminiPromptHint?: string;
+  steps: DiyTemplateStepInput[];
+  materials: DiyTemplateMaterialInput[];
+  tools: DiyTemplateToolInput[];
+}
+
 // ─── Permit History & Unpermitted Work Tracker ───────────────────────────────
 
 export type PermitRecordCategory =

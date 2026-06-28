@@ -24,6 +24,7 @@ import {
   generateAiGuide,
   getAiGuide,
   adminListTemplates,
+  adminGetTemplate,
   adminCreateTemplate,
   adminUpdateTemplate,
   adminUpdateTemplateStatus,
@@ -76,6 +77,7 @@ router.get('/properties/:propertyId/diy/ai-guide/:guideId', propertyAuthMiddlewa
 
 // ── Admin ─────────────────────────────────────────────────────────────────────
 router.get('/admin/diy/templates', requireRole(UserRole.ADMIN), adminListTemplates);
+router.get('/admin/diy/templates/:templateId', requireRole(UserRole.ADMIN), adminGetTemplate);
 router.post('/admin/diy/templates', requireRole(UserRole.ADMIN), validateBody(AdminCreateTemplateSchema), adminCreateTemplate);
 router.put('/admin/diy/templates/:templateId', requireRole(UserRole.ADMIN), validateBody(AdminUpdateTemplateSchema), adminUpdateTemplate);
 router.patch('/admin/diy/templates/:templateId/status', requireRole(UserRole.ADMIN), adminUpdateTemplateStatus);

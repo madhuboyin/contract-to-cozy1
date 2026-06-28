@@ -134,6 +134,13 @@ export async function adminListTemplates(req: Request, res: Response, next: Next
   } catch (err) { next(err); }
 }
 
+export async function adminGetTemplate(req: Request, res: Response, next: NextFunction) {
+  try {
+    const template = await diyService.adminGetTemplate(req.params.templateId);
+    res.json({ success: true, data: { template } });
+  } catch (err) { next(err); }
+}
+
 export async function adminCreateTemplate(req: Request, res: Response, next: NextFunction) {
   try {
     const template = await diyService.adminCreateTemplate(req.body);
