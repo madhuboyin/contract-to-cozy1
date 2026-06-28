@@ -3,10 +3,12 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { ArrowLeft, Camera, CheckCircle2, Clock } from 'lucide-react';
+import { ArrowLeft, Camera, CheckCircle2, Clock, Plus } from 'lucide-react';
 import { api } from '@/lib/api/client';
 import type { ProjectMilestone } from '@/types';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import {
   EmptyStateCard,
   MobileCard,
@@ -39,6 +41,7 @@ export default function MilestonesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [completing, setCompleting] = useState<string | null>(null);
+  const [showForm, setShowForm] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -82,9 +85,24 @@ export default function MilestonesPage() {
         </Link>
       </Button>
 
-      <h1 className="text-2xl font-bold text-slate-900">Milestones</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold text-slate-900">Milestones</h1>
+        <Button size="sm" className="gap-1.5 h-9" onClick={() => setShowForm(v => !v)}>
+          <Plus className="h-4 w-4" />{showForm ? 'Cancel' : 'Add'}
+        </Button>
+      </div>
 
       <ProjectNav propertyId={propertyId} projectId={projectId} />
+
+      {showForm && (
+        <AddMilestoneForm
+          propertyId={propertyId}
+          projectId={projectId}
+          nextPosition={milestones.length + 1}
+          onSaved={() => { setShowForm(false); load(); }}
+          onCancel={() => setShowForm(false)}
+        />
+      )}
 
       {error && <ErrorBanner msg={error} />}
       {loading ? <Spinner /> : null}
@@ -92,7 +110,7 @@ export default function MilestonesPage() {
       {!loading && milestones.length === 0 && (
         <EmptyStateCard
           title="No milestones"
-          description="Milestones were not loaded automatically. Add them manually using the Add button."
+          description="Add milestones manually or edit the project to load a template for this project type."
         />
       )}
 
@@ -131,6 +149,106 @@ export default function MilestonesPage() {
         </section>
       )}
     </MobilePageContainer>
+  );
+}
+
+function AddMilestoneForm({ propertyId, projectId, nextPosition, onSaved, onCancel }: {
+  propertyId: string;
+  projectId: string;
+  nextPosition: number;
+  onSaved: () => void;
+  onCancel: () => void;
+}) {
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [form, setForm] = useState({
+    name: '',
+    milestoneType: 'STANDARD',
+    scheduledDate: '',
+    requiresPhotoEvidence: false,
+  });
+  const set = (f: string, v: string | boolean) => setForm(p => ({ ...p, [f]: v }));
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!form.name.trim()) { setErr('Name is required'); return; }
+    setSaving(true);
+    setErr(null);
+    try {
+      await api.createMilestone(propertyId, projectId, {
+        name: form.name.trim(),
+        milestoneType: form.milestoneType,
+        scheduledDate: form.scheduledDate || undefined,
+        requiresPhotoEvidence: form.requiresPhotoEvidence,
+        position: nextPosition,
+      });
+      onSaved();
+    } catch (e: any) {
+      setErr(e?.message ?? 'Failed to save');
+      setSaving(false);
+    }
+  }
+
+  return (
+    <MobileCard className="space-y-3">
+      <h3 className="text-sm font-semibold text-slate-700">Add milestone</h3>
+      {err && <ErrorBanner msg={err} />}
+      <form onSubmit={submit} className="space-y-3">
+        <div className="space-y-1.5">
+          <Label htmlFor="mName">Name *</Label>
+          <Input
+            id="mName"
+            value={form.name}
+            onChange={e => set('name', e.target.value)}
+            placeholder="e.g. Rough-in inspection"
+            className="h-10"
+          />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1.5">
+            <Label htmlFor="mType">Type</Label>
+            <select
+              id="mType"
+              value={form.milestoneType}
+              onChange={e => set('milestoneType', e.target.value)}
+              className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+            >
+              <option value="STANDARD">Standard</option>
+              <option value="PERMIT_INSPECTION">Permit inspection</option>
+              <option value="PAYMENT_TRIGGER">Payment trigger</option>
+              <option value="CUSTOM">Custom</option>
+            </select>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="mDate">Scheduled date</Label>
+            <Input
+              id="mDate"
+              type="date"
+              value={form.scheduledDate}
+              onChange={e => set('scheduledDate', e.target.value)}
+              className="h-10"
+            />
+          </div>
+        </div>
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={form.requiresPhotoEvidence}
+            onChange={e => set('requiresPhotoEvidence', e.target.checked)}
+            className="h-4 w-4 rounded border-slate-300"
+          />
+          <span className="text-sm text-slate-700">Requires photo evidence to complete</span>
+        </label>
+        <div className="flex gap-2">
+          <Button type="submit" disabled={saving} className="flex-1 h-10">
+            {saving ? 'Saving…' : 'Add milestone'}
+          </Button>
+          <Button type="button" variant="outline" onClick={onCancel} className="flex-1 h-10">
+            Cancel
+          </Button>
+        </div>
+      </form>
+    </MobileCard>
   );
 }
 
