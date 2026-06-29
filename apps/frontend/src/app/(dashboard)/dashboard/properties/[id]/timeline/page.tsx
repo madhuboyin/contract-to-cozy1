@@ -3,12 +3,12 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Plus, Search, X } from 'lucide-react';
 import { useParams, useSearchParams } from 'next/navigation';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import TimelineClient from './TimelineClient';
-import { listHomeEvents, TimelineProjectionEntry } from './homeEventsApi';
+import { listHomeEvents, createHomeEvent, TimelineProjectionEntry, HomeEventType } from './homeEventsApi';
 import { formatEnumLabel } from '@/lib/utils/formatters';
 import {
   ActionPriorityRow,
@@ -74,8 +74,8 @@ function toTimelineEvent(entry: TimelineProjectionEntry) {
     summary:
       entry.summary ??
       (entry.kind === 'SIGNAL' ? 'Derived from shared signal context.' : null),
-    amount: null,
-    valueDelta: null,
+    amount: (entry.payloadJson?.amount as string | null) ?? null,
+    valueDelta: (entry.payloadJson?.valueDelta as string | null) ?? null,
     documents: [],
     meta: {
       timelineProjectionKind: entry.kind,
@@ -84,6 +84,7 @@ function toTimelineEvent(entry: TimelineProjectionEntry) {
     },
   };
 }
+
 function useOneShotGlow(active: boolean, durationMs = 600) {
   const [on, setOn] = useState(false);
 
@@ -145,6 +146,7 @@ function groupByYear(events: any[]) {
   const years = Array.from(map.keys()).sort((a, b) => b - a);
   return years.map((y) => ({ year: y, events: map.get(y) ?? [] }));
 }
+
 function TimelineEventRow({
   e,
   replayOn,
@@ -153,8 +155,6 @@ function TimelineEventRow({
   replayOn: boolean;
 }) {
   const highlight = e.importance === 'HIGHLIGHT';
-
-  // ✅ Hook is now inside a component (legal)
   const glow = useOneShotGlow(replayOn && highlight);
 
   return (
@@ -183,9 +183,11 @@ function TimelineEventRow({
 
               <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                 <span>{formatDate(e.occurredAt)}</span>
-                {e.type && <Badge>{e.type}</Badge>}
-                {e.importance && <Badge>{e.importance}</Badge>}
-                {e.subtype && <Badge>{e.subtype}</Badge>}
+                {e.type && <Badge>{formatEnumLabel(e.type)}</Badge>}
+                {e.importance === 'HIGHLIGHT' && <Badge>Highlight</Badge>}
+                {e.subtype && e.subtype !== e.type && (
+                  <Badge>{formatEnumLabel(e.subtype)}</Badge>
+                )}
               </div>
 
               {e.summary ? (
@@ -196,7 +198,7 @@ function TimelineEventRow({
                 <div className="mt-3 flex flex-wrap gap-2">
                   {e.documents.slice(0, 6).map((d: any) => (
                     <Badge key={d.id}>
-                      {d.kind || 'DOC'}: {d.document?.name || 'Attachment'}
+                      {formatEnumLabel(d.kind) || 'Doc'}: {d.document?.name || 'Attachment'}
                     </Badge>
                   ))}
                   {e.documents.length > 6 ? <Badge>+{e.documents.length - 6} more</Badge> : null}
@@ -209,19 +211,67 @@ function TimelineEventRow({
               {e.valueDelta != null ? <Badge>Δ {e.valueDelta}</Badge> : null}
             </div>
           </div>
-
-          {e?.meta?.semantic ? (
-            <div className="mt-3 text-xs text-muted-foreground">
-              Semantic: {e.meta.semantic.promoted ? 'promoted' : 'not promoted'}
-              {e.meta.semantic.confidence != null ? ` · conf=${e.meta.semantic.confidence}` : ''}
-              {e.meta.semantic.reason ? ` · ${e.meta.semantic.reason}` : ''}
-            </div>
-          ) : null}
         </div>
       </div>
     </RevealIn>
   );
 }
+
+function ReplaySummaryCard({ events }: { events: any[] }) {
+  const yearRange = useMemo(() => {
+    if (events.length === 0) return null;
+    const years = events.map((e) => new Date(e.occurredAt).getFullYear());
+    return { min: Math.min(...years), max: Math.max(...years) };
+  }, [events]);
+
+  const typeCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const e of events) {
+      if (e.type) counts[e.type] = (counts[e.type] ?? 0) + 1;
+    }
+    return Object.entries(counts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3);
+  }, [events]);
+
+  const financialTotal = useMemo(() => {
+    let total = 0;
+    for (const e of events) {
+      const n = parseFloat(e.amount ?? '');
+      if (!isNaN(n)) total += n;
+    }
+    return total > 0 ? total : null;
+  }, [events]);
+
+  if (events.length === 0) return null;
+
+  return (
+    <div className="rounded-lg border border-primary/20 bg-primary/5 p-4 text-sm">
+      <div className="font-semibold text-primary mb-2">Your home&apos;s story — complete</div>
+      <div className="space-y-1 text-muted-foreground">
+        <div>
+          {events.length} event{events.length !== 1 ? 's' : ''} across{' '}
+          {yearRange ? (yearRange.min === yearRange.max ? String(yearRange.min) : `${yearRange.min}–${yearRange.max}`) : ''}
+        </div>
+        {typeCounts.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 mt-2">
+            {typeCounts.map(([type, count]) => (
+              <span key={type} className="inline-flex items-center rounded-full border px-2 py-0.5 text-xs">
+                {iconForType(type)} {formatEnumLabel(type)} × {count}
+              </span>
+            ))}
+          </div>
+        )}
+        {financialTotal != null && (
+          <div className="mt-1">
+            Total logged spend: ${financialTotal.toLocaleString()}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function TimelineVisual({
   events,
   replayOn,
@@ -248,7 +298,6 @@ function TimelineVisual({
 
   const visibleChronological = useMemo(() => {
     if (!replayOn) return chronological;
-    // show at least 1 item once replay starts
     const n = Math.max(0, Math.min(replayIndex, chronological.length));
     return chronological.slice(0, n);
   }, [replayOn, replayIndex, chronological]);
@@ -259,7 +308,6 @@ function TimelineVisual({
     if (!replayRunning) return;
 
     if (replayIndex >= chronological.length) {
-      // stop at the end (MVP)
       setReplayRunning(false);
       return;
     }
@@ -279,6 +327,7 @@ function TimelineVisual({
   }, [replayOn, replayIndex]);
 
   const groups = useMemo(() => groupByYear(visibleChronological), [visibleChronological]);
+  const replayDone = replayOn && !replayRunning && replayIndex >= chronological.length && chronological.length > 0;
 
   return (
     <div className="space-y-8">
@@ -298,30 +347,50 @@ function TimelineVisual({
                 <TimelineEventRow key={e.id} e={e} replayOn={replayOn} />
               ))}
 
-              {/* attach ref INSIDE returned JSX */}
               <div ref={endRef} />
             </div>
           </div>
         </div>
       ))}
+
+      {replayDone && (
+        <div className="pt-2">
+          <ReplaySummaryCard events={chronological} />
+        </div>
+      )}
     </div>
   );
 }
+
+const LOG_EVENT_TYPES: { value: HomeEventType; label: string }[] = [
+  { value: 'MAINTENANCE', label: 'Maintenance' },
+  { value: 'REPAIR', label: 'Repair' },
+  { value: 'IMPROVEMENT', label: 'Improvement' },
+  { value: 'INSPECTION', label: 'Inspection' },
+  { value: 'PURCHASE', label: 'Purchase' },
+  { value: 'CLAIM', label: 'Claim' },
+  { value: 'DOCUMENT', label: 'Document' },
+  { value: 'VALUE_UPDATE', label: 'Value Update' },
+  { value: 'MILESTONE', label: 'Milestone' },
+  { value: 'NOTE', label: 'Note' },
+  { value: 'OTHER', label: 'Other' },
+];
 
 export default function Page() {
   const params = useParams<{ id: string }>();
   const searchParams = useSearchParams();
   const propertyId = params.id;
+  const queryClient = useQueryClient();
   const backHref = useMemo(
     () => resolveDashboardBackHref(searchParams.get('backTo'), `/dashboard/properties/${propertyId}`),
     [propertyId, searchParams]
   );
 
-  // Replay state MUST be declared before any effects that use it
+  // Replay state
   const [replayOn, setReplayOn] = useState(false);
   const [replayRunning, setReplayRunning] = useState(false);
   const [replayIndex, setReplayIndex] = useState(0);
-  const [replaySpeedMs, setReplaySpeedMs] = useState(650); // calm default
+  const [replaySpeedMs, setReplaySpeedMs] = useState(650);
 
   function resetReplay() {
     setReplayIndex(0);
@@ -354,16 +423,40 @@ export default function Page() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode]);
 
-  const [type, setType] = useState<string>(''); // filter shared between modes
+  // Filter state
+  const [type, setType] = useState<string>('');
   const [limit, setLimit] = useState<number>(80);
+  const [search, setSearch] = useState<string>('');
+  const [fromDate, setFromDate] = useState<string>('');
+  const [toDate, setToDate] = useState<string>('');
 
-  const queryKey = useMemo(() => ['homeEvents', propertyId, type || 'ALL', limit], [propertyId, type, limit]);
+  // Log event form state
+  const [showLogForm, setShowLogForm] = useState(false);
+  const [logType, setLogType] = useState<HomeEventType>('MAINTENANCE');
+  const [logTitle, setLogTitle] = useState('');
+  const [logDate, setLogDate] = useState('');
+  const [logAmount, setLogAmount] = useState('');
+  const [logSummary, setLogSummary] = useState('');
+  const [logSubmitting, setLogSubmitting] = useState(false);
+  const [logError, setLogError] = useState<string | null>(null);
+
+  const today = new Date().toISOString().split('T')[0];
+
+  const queryKey = useMemo(
+    () => ['homeEvents', propertyId, type || 'ALL', limit, fromDate, toDate],
+    [propertyId, type, limit, fromDate, toDate]
+  );
 
   const { data: events = [], isLoading, error, refetch, isFetching } = useQuery({
     queryKey,
     enabled: !!propertyId,
     queryFn: async () => {
-      const res: any = await listHomeEvents(propertyId, { type: type || undefined, limit });
+      const res: any = await listHomeEvents(propertyId, {
+        type: type || undefined,
+        limit,
+        from: fromDate || undefined,
+        to: toDate || undefined,
+      });
       const payload = res?.data ?? res;
       const inner = payload?.data ?? payload;
       const timelineEntries = inner?.timelineEntries ?? [];
@@ -375,10 +468,52 @@ export default function Page() {
     },
   });
 
+  // Client-side keyword search
+  const filteredEvents = useMemo(() => {
+    if (!search.trim()) return events;
+    const q = search.toLowerCase();
+    return events.filter(
+      (e: any) =>
+        (e.title ?? '').toLowerCase().includes(q) ||
+        (e.summary ?? '').toLowerCase().includes(q)
+    );
+  }, [events, search]);
+
+  async function handleLogSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!logTitle.trim() || !logDate) return;
+    setLogSubmitting(true);
+    setLogError(null);
+    try {
+      await createHomeEvent(propertyId, {
+        type: logType,
+        title: logTitle.trim(),
+        occurredAt: new Date(logDate).toISOString(),
+        summary: logSummary.trim() || null,
+        amount: logAmount ? parseFloat(logAmount) : null,
+      });
+      setLogTitle('');
+      setLogDate('');
+      setLogAmount('');
+      setLogSummary('');
+      setShowLogForm(false);
+      queryClient.invalidateQueries({ queryKey: ['homeEvents', propertyId] });
+      refetch();
+    } catch {
+      setLogError('Failed to save event. Please try again.');
+    } finally {
+      setLogSubmitting(false);
+    }
+  }
+
   const replayProgress = replayOn ? `${Math.min(replayIndex, events.length)}/${events.length}` : null;
   const hasCustomLimit = limit !== 80;
-  const hasFiltersApplied = Boolean(type) || hasCustomLimit || mode === 'VISUAL' || replayOn;
+  const hasActiveSearch = Boolean(search.trim());
+  const hasDateFilter = Boolean(fromDate) || Boolean(toDate);
+  const hasFiltersApplied = Boolean(type) || hasActiveSearch || hasDateFilter || hasCustomLimit || mode === 'VISUAL' || replayOn;
   const typeLabel = type ? formatEnumLabel(type) : 'All event types';
+
+  const isSearchEmpty = filteredEvents.length === 0 && events.length > 0;
 
   return (
     <MobileToolWorkspace
@@ -411,7 +546,7 @@ export default function Page() {
           <ResultHeroCard
             eyebrow="Property History"
             title={mode === 'VISUAL' ? 'Visual Timeline' : 'Event Timeline'}
-            value={`${events.length} events`}
+            value={`${filteredEvents.length}${hasActiveSearch ? ` of ${events.length}` : ''} event${filteredEvents.length !== 1 ? 's' : ''}`}
             status={<StatusChip tone={isFetching ? 'info' : 'good'}>{isFetching ? 'Refreshing' : 'Synced'}</StatusChip>}
             summary={
               replayOn
@@ -429,7 +564,8 @@ export default function Page() {
       filters={
         <MobileFilterStack
           search={
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* Mode toggle */}
               <div className="inline-flex min-h-[40px] rounded-lg border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] p-1">
                 <button
                   className={clsx(
@@ -454,6 +590,8 @@ export default function Page() {
                   Visual
                 </button>
               </div>
+
+              {/* Refresh */}
               <button
                 type="button"
                 className="min-h-[40px] rounded-lg border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 text-sm font-medium text-[hsl(var(--mobile-text-primary))]"
@@ -462,10 +600,38 @@ export default function Page() {
               >
                 {isFetching ? 'Refreshing…' : 'Refresh'}
               </button>
+
+              {/* Log event button */}
+              <button
+                type="button"
+                className={clsx(
+                  'inline-flex min-h-[40px] items-center gap-1.5 rounded-lg px-3 text-sm font-medium',
+                  showLogForm
+                    ? 'border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] text-[hsl(var(--mobile-text-secondary))]'
+                    : 'bg-[hsl(var(--mobile-brand-strong))] text-white'
+                )}
+                onClick={() => setShowLogForm((v) => !v)}
+              >
+                {showLogForm ? <X className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
+                {showLogForm ? 'Cancel' : 'Log Event'}
+              </button>
             </div>
           }
           primaryFilters={
             <>
+              {/* Keyword search */}
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[hsl(var(--mobile-text-muted))]" />
+                <input
+                  type="search"
+                  placeholder="Search events…"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="min-h-[40px] w-full rounded-lg border border-[hsl(var(--mobile-border-subtle))] bg-white pl-8 pr-3 text-sm"
+                />
+              </div>
+
+              {/* Event type filter */}
               <select
                 className="min-h-[40px] w-full rounded-lg border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 text-sm"
                 value={type}
@@ -484,17 +650,44 @@ export default function Page() {
                 <option value="NOTE">Note</option>
                 <option value="OTHER">Other</option>
               </select>
-              <div className="flex items-center gap-2 rounded-lg border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 py-2">
-                <span className="text-sm text-[hsl(var(--mobile-text-secondary))]">Limit</span>
-                <input
-                  className="w-20 rounded-md border border-[hsl(var(--mobile-border-subtle))] px-2 py-1.5 text-sm"
-                  type="number"
-                  min={10}
-                  max={200}
-                  value={limit}
-                  onChange={(e) => setLimit(Number(e.target.value))}
-                />
+
+              {/* Date range */}
+              <div className="flex items-center gap-2">
+                <div className="flex-1">
+                  <label className="mb-1 block text-xs text-[hsl(var(--mobile-text-muted))]">From</label>
+                  <input
+                    type="date"
+                    value={fromDate}
+                    max={toDate || today}
+                    onChange={(e) => setFromDate(e.target.value)}
+                    className="min-h-[40px] w-full rounded-lg border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 text-sm"
+                  />
+                </div>
+                <div className="flex-1">
+                  <label className="mb-1 block text-xs text-[hsl(var(--mobile-text-muted))]">To</label>
+                  <input
+                    type="date"
+                    value={toDate}
+                    min={fromDate || undefined}
+                    max={today}
+                    onChange={(e) => setToDate(e.target.value)}
+                    className="min-h-[40px] w-full rounded-lg border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 text-sm"
+                  />
+                </div>
               </div>
+
+              {/* Limit — preset select */}
+              <select
+                className="min-h-[40px] w-full rounded-lg border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 text-sm"
+                value={limit}
+                onChange={(e) => setLimit(Number(e.target.value))}
+              >
+                <option value={25}>Last 25 events</option>
+                <option value={50}>Last 50 events</option>
+                <option value={80}>Last 80 events</option>
+                <option value={150}>Last 150 events</option>
+                <option value={200}>All events (up to 200)</option>
+              </select>
             </>
           }
           secondaryLabel="Replay controls"
@@ -561,7 +754,14 @@ export default function Page() {
           chips={
             <>
               <StatusChip tone={type ? 'protected' : 'info'}>{typeLabel}</StatusChip>
-              <StatusChip tone={hasCustomLimit ? 'elevated' : 'info'}>Limit {limit}</StatusChip>
+              {hasActiveSearch && (
+                <StatusChip tone="elevated">Search: &ldquo;{search}&rdquo;</StatusChip>
+              )}
+              {fromDate && <StatusChip tone="elevated">From {formatDate(fromDate)}</StatusChip>}
+              {toDate && <StatusChip tone="elevated">To {formatDate(toDate)}</StatusChip>}
+              <StatusChip tone={hasCustomLimit ? 'elevated' : 'info'}>
+                {hasCustomLimit ? `Limit ${limit}` : 'Default limit'}
+              </StatusChip>
               <StatusChip tone={mode === 'VISUAL' ? 'protected' : 'good'}>
                 {mode === 'VISUAL' ? 'Visual mode' : 'List mode'}
               </StatusChip>
@@ -576,6 +776,9 @@ export default function Page() {
                 onClick={() => {
                   setType('');
                   setLimit(80);
+                  setSearch('');
+                  setFromDate('');
+                  setToDate('');
                   setMode('LIST');
                   setReplayOn(false);
                   resetReplay();
@@ -588,6 +791,119 @@ export default function Page() {
         />
       }
     >
+      {/* Log event form */}
+      {showLogForm && (
+        <div className="rounded-2xl border border-[hsl(var(--mobile-border-subtle))] bg-white p-4">
+          <div className="mb-3 text-sm font-semibold text-[hsl(var(--mobile-text-primary))]">
+            Log a home event
+          </div>
+          <form onSubmit={handleLogSubmit} className="space-y-3">
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="mb-1 block text-xs text-[hsl(var(--mobile-text-muted))]">
+                  Type <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={logType}
+                  onChange={(e) => setLogType(e.target.value as HomeEventType)}
+                  className="min-h-[40px] w-full rounded-lg border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 text-sm"
+                  disabled={logSubmitting}
+                >
+                  {LOG_EVENT_TYPES.map((t) => (
+                    <option key={t.value} value={t.value}>{t.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs text-[hsl(var(--mobile-text-muted))]">
+                  Date <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="date"
+                  value={logDate}
+                  max={today}
+                  onChange={(e) => setLogDate(e.target.value)}
+                  required
+                  className="min-h-[40px] w-full rounded-lg border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 text-sm"
+                  disabled={logSubmitting}
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="mb-1 block text-xs text-[hsl(var(--mobile-text-muted))]">
+                Title <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. Replaced water heater anode rod"
+                value={logTitle}
+                onChange={(e) => setLogTitle(e.target.value)}
+                required
+                className="min-h-[40px] w-full rounded-lg border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 text-sm"
+                disabled={logSubmitting}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="mb-1 block text-xs text-[hsl(var(--mobile-text-muted))]">
+                  Cost (optional)
+                </label>
+                <div className="relative">
+                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-[hsl(var(--mobile-text-muted))]">$</span>
+                  <input
+                    type="number"
+                    placeholder="0"
+                    min={0}
+                    step="0.01"
+                    value={logAmount}
+                    onChange={(e) => setLogAmount(e.target.value)}
+                    className="min-h-[40px] w-full rounded-lg border border-[hsl(var(--mobile-border-subtle))] bg-white pl-6 pr-3 text-sm"
+                    disabled={logSubmitting}
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs text-[hsl(var(--mobile-text-muted))]">
+                  Notes (optional)
+                </label>
+                <input
+                  type="text"
+                  placeholder="Brief details…"
+                  value={logSummary}
+                  onChange={(e) => setLogSummary(e.target.value)}
+                  className="min-h-[40px] w-full rounded-lg border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 text-sm"
+                  disabled={logSubmitting}
+                />
+              </div>
+            </div>
+
+            {logError && (
+              <p className="text-xs text-red-600">{logError}</p>
+            )}
+
+            <div className="flex items-center gap-2">
+              <button
+                type="submit"
+                disabled={logSubmitting || !logTitle.trim() || !logDate}
+                className="min-h-[40px] rounded-lg bg-[hsl(var(--mobile-brand-strong))] px-4 text-sm font-semibold text-white disabled:opacity-50"
+              >
+                {logSubmitting ? 'Saving…' : 'Save event'}
+              </button>
+              <button
+                type="button"
+                onClick={() => { setShowLogForm(false); setLogError(null); }}
+                className="min-h-[40px] rounded-lg border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 text-sm font-medium text-[hsl(var(--mobile-text-primary))]"
+                disabled={logSubmitting}
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
       {isLoading ? (
         <div className="rounded-2xl border border-[hsl(var(--mobile-border-subtle))] bg-white p-4 text-sm text-[hsl(var(--mobile-text-secondary))]">
           Loading timeline…
@@ -597,13 +913,32 @@ export default function Page() {
           Failed to load timeline.
           <div className="mt-2 text-xs text-rose-600">{(error as any)?.message ?? 'Unknown error'}</div>
         </div>
-      ) : events.length === 0 ? (
+      ) : isSearchEmpty ? (
         <div className="rounded-2xl border border-[hsl(var(--mobile-border-subtle))] bg-white p-4 text-sm text-[hsl(var(--mobile-text-secondary))]">
-          No timeline events yet. Add expenses, documents, claims, or maintenance events to build your home story.
+          No events match &ldquo;{search}&rdquo;.{' '}
+          <button
+            type="button"
+            className="underline"
+            onClick={() => setSearch('')}
+          >
+            Clear search
+          </button>
+        </div>
+      ) : filteredEvents.length === 0 ? (
+        <div className="rounded-2xl border border-[hsl(var(--mobile-border-subtle))] bg-white p-4 text-sm text-[hsl(var(--mobile-text-secondary))]">
+          No timeline events yet.{' '}
+          <button
+            type="button"
+            className="underline"
+            onClick={() => setShowLogForm(true)}
+          >
+            Log your first event
+          </button>{' '}
+          to start building your home story.
         </div>
       ) : mode === 'LIST' ? (
         <TimelineClient
-          events={events}
+          events={filteredEvents}
           isLoading={isLoading}
           error={error}
           isFetching={isFetching}
@@ -613,7 +948,7 @@ export default function Page() {
         />
       ) : (
         <TimelineVisual
-          events={events}
+          events={filteredEvents}
           replayOn={replayOn}
           replayRunning={replayRunning}
           replayIndex={replayIndex}

@@ -6,6 +6,7 @@ import { useParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 
 import { listHomeEvents, HomeEvent, TimelineProjectionEntry } from './homeEventsApi';
+import { formatEnumLabel } from '@/lib/utils/formatters';
 import { EmptyStateCard } from '@/components/mobile/dashboard/MobilePrimitives';
 import DetailTemplate from '../components/route-templates/DetailTemplate';
 import TableToMobileCards from '../components/route-templates/TableToMobileCards';
@@ -42,7 +43,17 @@ function iconForType(type?: string) {
 
 function shortImportanceLabel(importance: HomeEvent['importance'] | null | undefined) {
   if (!importance || importance === 'NORMAL' || importance === 'LOW') return null;
-  return importance === 'HIGHLIGHT' ? 'High Priority' : null;
+  return importance === 'HIGHLIGHT' ? 'Highlight' : null;
+}
+
+function groupEventsByYear(events: HomeEvent[]): Array<{ year: number; events: HomeEvent[] }> {
+  const map = new Map<number, HomeEvent[]>();
+  for (const e of events) {
+    const y = new Date(e.occurredAt).getFullYear();
+    map.set(y, [...(map.get(y) ?? []), e]);
+  }
+  const years = Array.from(map.keys()).sort((a, b) => b - a);
+  return years.map((y) => ({ year: y, events: map.get(y) ?? [] }));
 }
 
 function toHomeEventFromTimelineEntry(entry: TimelineProjectionEntry): HomeEvent {
@@ -196,69 +207,80 @@ export default function TimelineClient(props: TimelineClientProps = {}) {
       description="Create an item, add an expense, upload a document, or open a claim and your story will appear here."
     />
   ) : (
-    <TableToMobileCards
-      rows={events}
-      getRowKey={(event) => event.id}
-      title={(event) => (
-        <span className="inline-flex items-center gap-2">
-          <span aria-hidden>{iconForType(event.type)}</span>
-          <span>{event.title}</span>
-        </span>
-      )}
-      subtitle={(event) => formatDate(event.occurredAt)}
-      columns={[
-        {
-          key: 'classification',
-          label: 'Classification',
-          render: (event) => (
-            <div className="flex flex-wrap gap-1.5">
-              {event.type ? <Badge>{event.type}</Badge> : null}
-              {shortImportanceLabel(event.importance) ? <Badge>{shortImportanceLabel(event.importance)}</Badge> : null}
-              {event.subtype ? <Badge>{event.subtype}</Badge> : null}
-            </div>
-          ),
-        },
-        {
-          key: 'summary',
-          label: 'Summary',
-          render: (event) => event.summary ? (
-            <p className="mb-0 text-sm text-slate-700">{event.summary}</p>
-          ) : (
-            <p className="mb-0 text-sm text-slate-500">No additional summary</p>
-          ),
-        },
-        {
-          key: 'documents',
-          label: 'Documents',
-          render: (event) => Array.isArray(event.documents) && event.documents.length > 0 ? (
-            <div className="flex flex-wrap gap-1.5">
-              {event.documents.slice(0, 4).map((doc) => (
-                <Badge key={doc.id}>
-                  {doc.kind || 'DOC'}: {doc.document?.name || 'Attachment'}
-                </Badge>
-              ))}
-              {event.documents.length > 4 ? <Badge>+{event.documents.length - 4} more</Badge> : null}
-            </div>
-          ) : (
-            <p className="mb-0 text-sm text-slate-500">None attached</p>
-          ),
-        },
-        {
-          key: 'financial',
-          label: 'Financial',
-          render: (event) => (
-            <div className="space-y-1">
-              <p className="mb-0 text-sm text-slate-700">
-                Amount: {event.amount != null ? `$${event.amount}` : '—'}
-              </p>
-              <p className="mb-0 text-sm text-slate-700">
-                Delta: {event.valueDelta != null ? `${event.valueDelta}` : '—'}
-              </p>
-            </div>
-          ),
-        },
-      ]}
-    />
+    <div className="space-y-6">
+      {groupEventsByYear(events).map(({ year, events: yearEvents }) => (
+        <div key={year}>
+          <div className="mb-3 flex items-center gap-3">
+            <div className="text-sm font-semibold text-slate-500">{year}</div>
+            <div className="flex-1 border-t border-slate-200/80" />
+            <div className="text-xs text-slate-400">{yearEvents.length} event{yearEvents.length !== 1 ? 's' : ''}</div>
+          </div>
+          <TableToMobileCards
+            rows={yearEvents}
+            getRowKey={(event) => event.id}
+            title={(event) => (
+              <span className="inline-flex items-center gap-2">
+                <span aria-hidden>{iconForType(event.type)}</span>
+                <span>{event.title}</span>
+              </span>
+            )}
+            subtitle={(event) => formatDate(event.occurredAt)}
+            columns={[
+              {
+                key: 'classification',
+                label: 'Classification',
+                render: (event) => (
+                  <div className="flex flex-wrap gap-1.5">
+                    {event.type ? <Badge>{formatEnumLabel(event.type)}</Badge> : null}
+                    {shortImportanceLabel(event.importance) ? <Badge>{shortImportanceLabel(event.importance)}</Badge> : null}
+                    {event.subtype && event.subtype !== event.type ? <Badge>{formatEnumLabel(event.subtype)}</Badge> : null}
+                  </div>
+                ),
+              },
+              {
+                key: 'summary',
+                label: 'Summary',
+                render: (event) => event.summary ? (
+                  <p className="mb-0 text-sm text-slate-700">{event.summary}</p>
+                ) : (
+                  <p className="mb-0 text-sm text-slate-500">No additional summary</p>
+                ),
+              },
+              {
+                key: 'documents',
+                label: 'Documents',
+                render: (event) => Array.isArray(event.documents) && event.documents.length > 0 ? (
+                  <div className="flex flex-wrap gap-1.5">
+                    {event.documents.slice(0, 4).map((doc) => (
+                      <Badge key={doc.id}>
+                        {formatEnumLabel(doc.kind) || 'Doc'}: {doc.document?.name || 'Attachment'}
+                      </Badge>
+                    ))}
+                    {event.documents.length > 4 ? <Badge>+{event.documents.length - 4} more</Badge> : null}
+                  </div>
+                ) : (
+                  <p className="mb-0 text-sm text-slate-500">None attached</p>
+                ),
+              },
+              {
+                key: 'financial',
+                label: 'Financial',
+                render: (event) => (
+                  <div className="space-y-1">
+                    <p className="mb-0 text-sm text-slate-700">
+                      Amount: {event.amount != null ? `$${event.amount}` : '—'}
+                    </p>
+                    <p className="mb-0 text-sm text-slate-700">
+                      Delta: {event.valueDelta != null ? `${event.valueDelta}` : '—'}
+                    </p>
+                  </div>
+                ),
+              },
+            ]}
+          />
+        </div>
+      ))}
+    </div>
   );
 
   return (
