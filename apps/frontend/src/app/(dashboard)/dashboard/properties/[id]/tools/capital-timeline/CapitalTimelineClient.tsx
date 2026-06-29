@@ -373,24 +373,16 @@ function TimelineChart({
               return (
                 <div key={item.id} className="relative h-7">
                   <div
-                    className={`absolute top-0.5 h-6 rounded-full border ${barBg(item.priority)} flex items-center overflow-hidden transition-opacity hover:opacity-80`}
-                    style={{ left: `${startPct}%`, width: `${widthPct}%` }}
+                    className={`absolute top-0.5 h-6 rounded-full border ${barBg(item.priority)} flex items-center transition-opacity hover:opacity-80 ${isNarrow ? '' : 'overflow-hidden'}`}
+                    style={isNarrow
+                      ? { left: `${startPct}%`, minWidth: `${widthPct}%` }
+                      : { left: `${startPct}%`, width: `${widthPct}%` }}
                     title={`${name} · ${windowLabel(item)} · ${money(item.estimatedCostMinCents)} – ${money(item.estimatedCostMaxCents)}`}
                   >
-                    {!isNarrow && (
-                      <span className={`truncate px-2.5 text-xs font-medium ${barText(item.priority)}`}>
-                        {name}
-                      </span>
-                    )}
-                  </div>
-                  {isNarrow && (
-                    <span
-                      className={`absolute top-0.5 flex h-6 items-center whitespace-nowrap text-xs font-medium text-slate-600 dark:text-slate-300`}
-                      style={{ left: `calc(${startPct}% + ${widthPct}% + 4px)` }}
-                    >
+                    <span className={`px-2.5 text-xs font-medium ${barText(item.priority)} ${isNarrow ? 'whitespace-nowrap' : 'truncate'}`}>
                       {name}
                     </span>
-                  )}
+                  </div>
                 </div>
               );
             })}
