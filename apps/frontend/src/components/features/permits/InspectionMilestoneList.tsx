@@ -1,8 +1,9 @@
 'use client';
 import { useState } from 'react';
-import { CheckCircle2, XCircle, Clock, AlertTriangle, Plus, Trash2 } from 'lucide-react';
+import { CheckCircle2, XCircle, Clock, AlertTriangle, Plus, Trash2, Camera } from 'lucide-react';
 import type { InspectionMilestone, PermitInspectionStatus } from '@/types';
 import { INSPECTION_STATUS_LABELS, INSPECTION_STATUS_COLOR, formatDate } from './PermitUtils';
+import { READINESS_CHECKABLE_STAGE_TYPES } from './readinessCheckableStages';
 
 interface Props {
   milestones: InspectionMilestone[];
@@ -11,6 +12,7 @@ interface Props {
   onUpdate: (milestoneId: string, patch: { status?: PermitInspectionStatus; scheduledDate?: string; inspectedDate?: string; inspectorNotes?: string }) => Promise<void>;
   onAdd: (payload: { stageName: string; stageType: string; scheduledDate?: string }) => Promise<void>;
   onDelete: (milestoneId: string) => Promise<void>;
+  onCheckReadiness: (milestone: InspectionMilestone) => void;
 }
 
 function StatusIcon({ status }: { status: PermitInspectionStatus }) {
@@ -20,7 +22,7 @@ function StatusIcon({ status }: { status: PermitInspectionStatus }) {
   return <div className="h-5 w-5 rounded-full border-2 border-neutral-300" />;
 }
 
-export default function InspectionMilestoneList({ milestones, propertyId, permitId, onUpdate, onAdd, onDelete }: Props) {
+export default function InspectionMilestoneList({ milestones, propertyId, permitId, onUpdate, onAdd, onDelete, onCheckReadiness }: Props) {
   const [adding, setAdding] = useState(false);
   const [newStage, setNewStage] = useState('');
   const [saving, setSaving] = useState<string | null>(null);
@@ -103,6 +105,15 @@ export default function InspectionMilestoneList({ milestones, propertyId, permit
                   )}
 
                   <div className="flex flex-wrap gap-1.5">
+                    {(ms.status === 'NOT_SCHEDULED' || ms.status === 'SCHEDULED') &&
+                      READINESS_CHECKABLE_STAGE_TYPES.has(ms.stageType) && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); onCheckReadiness(ms); }}
+                          className="flex items-center gap-1 rounded-xl border border-[hsl(var(--mobile-brand-strong))]/30 bg-[hsl(var(--mobile-brand-strong))]/10 px-2.5 py-1 text-xs font-medium text-[hsl(var(--mobile-brand-strong))]"
+                        >
+                          <Camera className="h-3 w-3" /> Check Readiness
+                        </button>
+                      )}
                     {(['SCHEDULED', 'PASSED', 'FAILED', 'PARTIAL'] as PermitInspectionStatus[])
                       .filter((s) => s !== ms.status)
                       .map((s) => (

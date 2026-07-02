@@ -7,6 +7,7 @@ import { api } from '@/lib/api/client';
 import type { PermitDetail, InspectionMilestone, PermitInspectionStatus } from '@/types';
 import PermitStatusBadge from '@/components/features/permits/PermitStatusBadge';
 import InspectionMilestoneList from '@/components/features/permits/InspectionMilestoneList';
+import InspectionReadinessModal from '@/components/features/permits/InspectionReadinessModal';
 import {
   CATEGORY_LABELS, WORK_TYPE_LABELS, SOURCE_LABELS,
   formatDate, formatCents,
@@ -28,6 +29,7 @@ export default function PermitDetailPage() {
   const [editingNotes, setEditingNotes] = useState(false);
   const [notes, setNotes] = useState('');
   const [deleting, setDeleting] = useState(false);
+  const [readinessMilestone, setReadinessMilestone] = useState<InspectionMilestone | null>(null);
 
   useEffect(() => {
     api.getPermitDetail(propertyId, permitId)
@@ -222,9 +224,18 @@ export default function PermitDetailPage() {
             onUpdate={handleMilestoneUpdate}
             onAdd={handleMilestoneAdd}
             onDelete={handleMilestoneDelete}
+            onCheckReadiness={setReadinessMilestone}
           />
         </section>
       )}
+
+      <InspectionReadinessModal
+        open={readinessMilestone != null}
+        onClose={() => setReadinessMilestone(null)}
+        propertyId={propertyId}
+        permitId={permitId}
+        milestone={readinessMilestone}
+      />
 
       {/* Notes */}
       <div className="rounded-2xl border bg-[hsl(var(--mobile-card-bg))] p-4">

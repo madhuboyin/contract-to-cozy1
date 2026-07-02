@@ -1,8 +1,10 @@
 import { Router } from 'express';
+import multer from 'multer';
 import { authenticate, requireRole } from '../middleware/auth.middleware';
 import { propertyAuthMiddleware } from '../middleware/propertyAuth.middleware';
 import { validateBody, validate } from '../middleware/validate.middleware';
-import { apiRateLimiter } from '../middleware/rateLimiter.middleware';
+import { apiRateLimiter, expensiveAiRateLimiter } from '../middleware/rateLimiter.middleware';
+import { validateImageArrayUpload } from '../utils/documentValidator.util';
 import { UserRole } from '../types/auth.types';
 
 import {
@@ -34,6 +36,12 @@ import {
 } from '../controllers/permitTracker.controller';
 
 import {
+  runInspectionReadinessCheck,
+  listInspectionReadinessChecks,
+  getInspectionReadinessCheck,
+} from '../controllers/inspectionReadiness.controller';
+
+import {
   CreateManualPermitSchema,
   UpdatePermitSchema,
   AddInspectionMilestoneSchema,
@@ -51,6 +59,24 @@ const router = Router();
 
 router.use(apiRateLimiter);
 router.use(authenticate);
+
+// Configure multer for readiness-check photo uploads
+const readinessUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB max per file
+    files: 12, // one inspection stage, not a whole property
+  },
+  fileFilter: (_req, file, cb) => {
+    // Explicit allowlist — SVG excluded (it executes JS when rendered as <img>)
+    const allowed = new Set(['image/jpeg', 'image/jpg', 'image/png', 'image/webp']);
+    if (allowed.has(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only JPEG, PNG, and WEBP image files are allowed'));
+    }
+  },
+});
 
 // ── Open Data Fetch ────────────────────────────────────────────────────────────
 router.post('/properties/:propertyId/permits/fetch', propertyAuthMiddleware, triggerPermitFetch);
@@ -105,6 +131,26 @@ router.delete(
   '/properties/:propertyId/permits/:permitId/inspections/:milestoneId',
   propertyAuthMiddleware,
   deleteInspectionMilestone,
+);
+
+// ── Inspection Readiness Checks ─────────────────────────────────────────────────
+router.post(
+  '/properties/:propertyId/permits/:permitId/inspections/:milestoneId/readiness-checks',
+  propertyAuthMiddleware,
+  expensiveAiRateLimiter,
+  readinessUpload.array('photos', 12),
+  validateImageArrayUpload,
+  runInspectionReadinessCheck,
+);
+router.get(
+  '/properties/:propertyId/permits/:permitId/inspections/:milestoneId/readiness-checks',
+  propertyAuthMiddleware,
+  listInspectionReadinessChecks,
+);
+router.get(
+  '/properties/:propertyId/permits/:permitId/inspections/:milestoneId/readiness-checks/:checkId',
+  propertyAuthMiddleware,
+  getInspectionReadinessCheck,
 );
 
 // ── Unpermitted Flags ──────────────────────────────────────────────────────────

@@ -3,6 +3,7 @@
 import { GoogleGenAI } from "@google/genai";
 import { prisma } from '../config/database';
 import { logger } from '../lib/logger';
+import { analyzeImagesWithPrompt } from './ai/geminiImageAnalysis.util';
 
 interface DetectedIssue {
   title: string;
@@ -191,31 +192,13 @@ Provide cost estimates in USD.
 
 Return ONLY valid JSON (no markdown, no explanation).`;
 
-    const imageData = {
-      inlineData: {
-        data: file.buffer.toString('base64'),
-        mimeType: file.mimetype,
-      }
-    };
-
-    const response = await this.ai.models.generateContent({
-      model: "gemini-2.0-flash",
-      contents: [{ 
-        role: "user", 
-        parts: [
-          { text: prompt },
-          imageData
-        ] 
-      }],
-      config: { maxOutputTokens: 2000, temperature: 0.3 }
-    });
-
-    if (!response.text) {
-      throw new Error('AI service returned an empty response');
-    }
-
-    const text = response.text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-    const analysis = JSON.parse(text);
+    const { parsed: analysis } = await analyzeImagesWithPrompt<{
+      overallCondition: ImageAnalysis['overallCondition'];
+      conditionScore: number;
+      detectedIssues?: DetectedIssue[];
+      positiveFeatures?: string[];
+      generalObservations?: string[];
+    }>(this.ai, [{ buffer: file.buffer, mimeType: file.mimetype }], prompt);
 
     return {
       imageId: `img_${imageIndex}`,

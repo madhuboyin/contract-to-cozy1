@@ -2091,11 +2091,12 @@ model Property {
   diyAiGuides DiyAiGuide[]
 
   // Permit History & Unpermitted Work Tracker
-  permitRecords           PropertyPermitRecord[]
-  permitMilestones        PermitInspectionMilestone[]
-  permitUnpermittedFlags  PermitUnpermittedFlag[]
-  permitFetchJobs         PermitFetchJob[]
-  permitDisclosureExports PermitDisclosureExport[]
+  permitRecords             PropertyPermitRecord[]
+  permitMilestones          PermitInspectionMilestone[]
+  permitUnpermittedFlags    PermitUnpermittedFlag[]
+  permitFetchJobs           PermitFetchJob[]
+  permitDisclosureExports   PermitDisclosureExport[]
+  inspectionReadinessChecks InspectionReadinessCheck[]
 
   // Live Project Execution Tracker
   projectRecords ProjectRecord[]
@@ -11108,8 +11109,9 @@ model PropertyPermitRecord {
   dataSource               PermitDataSource?              @relation(fields: [dataSourceId], references: [id], onDelete: SetNull)
   renovationAdvisorSession HomeRenovationAdvisorSession?  @relation(fields: [renovationAdvisorSessionId], references: [id], onDelete: SetNull)
 
-  inspectionMilestones PermitInspectionMilestone[]
-  unpermittedFlags     PermitUnpermittedFlag[]     @relation("ResolvedByPermit")
+  inspectionMilestones      PermitInspectionMilestone[]
+  unpermittedFlags          PermitUnpermittedFlag[]     @relation("ResolvedByPermit")
+  inspectionReadinessChecks InspectionReadinessCheck[]
 
   @@index([propertyId])
   @@index([category])
@@ -11141,10 +11143,54 @@ model PermitInspectionMilestone {
   permitRecord      PropertyPermitRecord @relation(fields: [permitRecordId], references: [id], onDelete: Cascade)
   property          Property             @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   projectMilestones ProjectMilestone[]
+  readinessChecks   InspectionReadinessCheck[]
 
   @@index([permitRecordId])
   @@index([propertyId, status])
   @@map("permit_inspection_milestones")
+}
+
+enum InspectionReadinessVerdict {
+  READY
+  NOT_READY
+  NEEDS_REVIEW // AI couldn't reach a confident verdict (poor photos, ambiguous stage)
+}
+
+enum InspectionReadinessChecklistVerdict {
+  MET
+  NOT_MET
+  UNABLE_TO_VERIFY // not visible in submitted photos
+}
+
+// AI-assisted readiness review for a specific PermitInspectionMilestone, run
+// against completed-work photos before the homeowner calls for the real
+// inspection. A milestone can have many runs as gaps get fixed and re-photographed.
+model InspectionReadinessCheck {
+  id             String @id @default(uuid())
+  milestoneId    String
+  propertyId     String
+  permitRecordId String
+
+  stageType        RenovationInspectionStageType // denormalized copy of milestone.stageType at run time
+  checklistVersion String // key into INSPECTION_READINESS_CHECKLISTS, e.g. "v1"
+
+  photoDocumentIds String[] @default([]) // Document.id[]
+
+  overallVerdict    InspectionReadinessVerdict
+  overallSummary    String? // 1-2 sentence AI summary shown in the UI
+  checklistResults  Json // ChecklistItemResult[]
+  rawAiResponseJson Json? // full raw Gemini response for debugging/audit
+
+  ranByUserId String
+  createdAt   DateTime @default(now())
+
+  milestone    PermitInspectionMilestone @relation(fields: [milestoneId], references: [id], onDelete: Cascade)
+  property     Property                  @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  permitRecord PropertyPermitRecord      @relation(fields: [permitRecordId], references: [id], onDelete: Cascade)
+
+  @@index([milestoneId, createdAt])
+  @@index([propertyId])
+  @@map("inspection_readiness_checks")
 }
 
 // Detected or declared gap in permit coverage.

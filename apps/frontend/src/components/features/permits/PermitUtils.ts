@@ -1,4 +1,4 @@
-import type { PermitRecordCategory, PermitWorkType, PermitRecordStatus, PermitInspectionStatus, PermitUnpermittedFlagStatus, PermitDisclosureRisk, PermitRecordSource } from '@/types';
+import type { PermitRecordCategory, PermitWorkType, PermitRecordStatus, PermitInspectionStatus, PermitUnpermittedFlagStatus, PermitDisclosureRisk, PermitRecordSource, InspectionReadinessVerdict, InspectionReadinessChecklistVerdict } from '@/types';
 
 export const CATEGORY_LABELS: Record<PermitRecordCategory, string> = {
   BUILDING: 'Building',
@@ -132,6 +132,30 @@ export const SOURCE_LABELS: Record<PermitRecordSource, string> = {
   OPEN_DATA_API: 'Open Data',
   MANUAL_ENTRY: 'Manual Entry',
   DOCUMENT_UPLOAD: 'Document Upload',
+};
+
+export const READINESS_VERDICT_LABELS: Record<InspectionReadinessVerdict, string> = {
+  READY: 'Ready for Inspection',
+  NOT_READY: 'Not Ready Yet',
+  NEEDS_REVIEW: 'Needs Clearer Photos',
+};
+
+export const READINESS_VERDICT_COLOR: Record<InspectionReadinessVerdict, string> = {
+  READY: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  NOT_READY: 'bg-red-50 text-red-700 border-red-200',
+  NEEDS_REVIEW: 'bg-amber-50 text-amber-700 border-amber-200',
+};
+
+export const CHECKLIST_VERDICT_LABELS: Record<InspectionReadinessChecklistVerdict, string> = {
+  MET: 'Met',
+  NOT_MET: 'Not Met',
+  UNABLE_TO_VERIFY: 'Unclear',
+};
+
+export const CHECKLIST_VERDICT_COLOR: Record<InspectionReadinessChecklistVerdict, string> = {
+  MET: 'text-emerald-600',
+  NOT_MET: 'text-red-600',
+  UNABLE_TO_VERIFY: 'text-amber-600',
 };
 
 export function formatCents(cents?: number | null): string {

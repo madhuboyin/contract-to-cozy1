@@ -3994,6 +3994,19 @@ class APIClient {
     await this.delete(`/api/properties/${propertyId}/permits/${permitId}/inspections/${milestoneId}`);
   }
 
+  async runInspectionReadinessCheck(propertyId: string, permitId: string, milestoneId: string, photos: File[]): Promise<import('@/types').InspectionReadinessCheckResult> {
+    const formData = new FormData();
+    photos.forEach((photo) => formData.append('photos', photo));
+    const res = await this.postFormData<{ check: import('@/types').InspectionReadinessCheckResult }>(`/api/properties/${propertyId}/permits/${permitId}/inspections/${milestoneId}/readiness-checks`, formData);
+    if (!res.success || !res.data?.check) throw new APIError('Failed to run readiness check', 500);
+    return res.data.check;
+  }
+
+  async listInspectionReadinessChecks(propertyId: string, permitId: string, milestoneId: string): Promise<import('@/types').InspectionReadinessCheckResult[]> {
+    const res = await this.get<{ checks: import('@/types').InspectionReadinessCheckResult[] }>(`/api/properties/${propertyId}/permits/${permitId}/inspections/${milestoneId}/readiness-checks`);
+    return res.data?.checks ?? [];
+  }
+
   async listPermitFlags(propertyId: string, params?: import('@/types').FlagListParams): Promise<{ items: import('@/types').PermitFlagItem[]; nextCursor?: string }> {
     const res = await this.get<{ items: import('@/types').PermitFlagItem[]; nextCursor?: string }>(`/api/properties/${propertyId}/permits/flags`, params as Record<string, any>);
     return res.data ?? { items: [] };

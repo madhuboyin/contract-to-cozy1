@@ -3879,6 +3879,32 @@ export interface InspectionMilestone {
   isOverdue: boolean;
 }
 
+export type InspectionReadinessVerdict = 'READY' | 'NOT_READY' | 'NEEDS_REVIEW';
+
+export type InspectionReadinessChecklistVerdict = 'MET' | 'NOT_MET' | 'UNABLE_TO_VERIFY';
+
+export interface ChecklistItemResult {
+  itemKey: string;
+  itemLabel: string;
+  verdict: InspectionReadinessChecklistVerdict;
+  aiNote: string;
+}
+
+export interface InspectionReadinessCheckResult {
+  id: string;
+  milestoneId: string;
+  propertyId: string;
+  permitRecordId: string;
+  stageType: string;
+  checklistVersion: string;
+  photoDocumentIds: string[];
+  overallVerdict: InspectionReadinessVerdict;
+  overallSummary?: string;
+  checklistResults: ChecklistItemResult[];
+  ranByUserId: string;
+  createdAt: string;
+}
+
 export interface PermitDetail extends PermitSummary {
   applicantName?: string;
   contractorLicense?: string;
