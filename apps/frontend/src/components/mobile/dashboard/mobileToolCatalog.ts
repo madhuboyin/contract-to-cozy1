@@ -895,8 +895,8 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
   {
     key: 'permits',
     name: 'Permit Tracker',
-    description: 'Permit history, active tracking, and disclosure export',
-    desktopDescription: 'Pull permit records from municipal open data, track active inspection milestones, detect potential unpermitted work, and generate a disclosure PDF for resale.',
+    description: 'Permit history, inspection readiness checks, and disclosure export',
+    desktopDescription: 'Pull permit records from municipal open data, track active inspection milestones, run an AI photo-based readiness check before you call for an inspection, detect potential unpermitted work, and generate a disclosure PDF for resale.',
     hrefSuffix: 'tools/permits',
     navTarget: 'tool:permits',
     icon: resolveToolIcon('home', 'permits'),
