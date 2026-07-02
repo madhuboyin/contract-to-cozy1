@@ -607,6 +607,7 @@ const AssetMatrixTable = ({
     onViewTask: (task: PropertyMaintenanceTask) => void;
     onViewBooking: (booking: any) => void;
 }) => {
+    const router = useRouter();
     const guidance = useGuidance(propertyId, {
         enabled: Boolean(propertyId),
         issueDomains: RISK_MATRIX_GUIDANCE_DOMAINS,
@@ -807,13 +808,13 @@ const AssetMatrixTable = ({
                     if (hasBooking) {
                         onViewBooking(existingBooking);
                     } else if (hasTask && existingTask) {
-                        window.location.href = buildAssetGuidanceHref(propertyId, item, {
+                        router.push(buildAssetGuidanceHref(propertyId, item, {
                             issueLabel: existingTask.title || ctaText,
-                        });
+                        }));
                     } else if (ctaText === 'Add Home Warranty') {
-                        window.location.href = buildAssetGuidanceHref(propertyId, item, {
+                        router.push(buildAssetGuidanceHref(propertyId, item, {
                             issueLabel: ctaText,
-                        });
+                        }));
                     } else {
                         onScheduleInspection(item);
                     }
@@ -1450,8 +1451,8 @@ export default function RiskAssessmentPage() {
         // The result of the queryFn is either RiskReportFull or 'QUEUED'
         refetchInterval: (query) => (query.state.data === 'QUEUED' ? 5000 : false),
         enabled: !!propertyId,
-        staleTime: 0, // Always consider data stale
-        gcTime: 0, // Don't cache results (renamed from cacheTime in v5+)
+        staleTime: 5 * 60 * 1000, // serve cached data for 5 min
+        gcTime: 30 * 60 * 1000, // keep in cache for 30 min
     });
 
     const scoreSnapshotQuery = useQuery({
@@ -1504,29 +1505,17 @@ export default function RiskAssessmentPage() {
 
     const isQueued = currentStatus === 'QUEUED';
     const isLoadingReport = riskQuery.isLoading;
-    
-    // --- Loading and Error States ---
-    if (isLoadingProperty || !propertyId) {
-        return (
-            <DashboardShell>
-                <div className="h-64 rounded-lg bg-gray-100 animate-pulse flex items-center justify-center">
-                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                </div>
-            </DashboardShell>
-        );
-    }
-    
     const isCalculating = isLoadingReport && !report;
 
     // 🔑 NEW: Scroll to exposure section when focus parameter is present
+    // NOTE: these effects must run before any early return below so hook order stays stable across renders.
     useEffect(() => {
         if (shouldFocusExposure && !isCalculating && !isQueued) {
             // Wait for DOM to render, then scroll to exposure section
             const timer = setTimeout(() => {
-                const exposureElement = document.getElementById('exposure-summary');
-                if (exposureElement) {
-                    exposureElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }
+                const isMobile = window.innerWidth < 768;
+                const id = isMobile ? 'exposure-summary-mobile' : 'exposure-summary-desktop';
+                document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
             }, 300);
             return () => clearTimeout(timer);
         }
@@ -1537,14 +1526,46 @@ export default function RiskAssessmentPage() {
         if (shouldFocusTrends && !isCalculating && !isQueued) {
             // Wait for DOM to render, then scroll to trends section
             const timer = setTimeout(() => {
-                const trendsElement = document.getElementById('risk-trends-section');
-                if (trendsElement) {
-                    trendsElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }
+                const isMobile = window.innerWidth < 768;
+                const id = isMobile ? 'risk-trends-mobile' : 'risk-trends-desktop';
+                document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
             }, 300);
             return () => clearTimeout(timer);
         }
     }, [shouldFocusTrends, isCalculating, isQueued]);
+
+    // --- Loading and Error States ---
+    if (isLoadingProperty || !propertyId) {
+        return (
+            <DashboardShell>
+                <div className="h-64 rounded-lg bg-gray-100 animate-pulse flex items-center justify-center">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                </div>
+            </DashboardShell>
+        );
+    }
+
+    if (riskQuery.isError) {
+        return (
+            <DashboardShell>
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2 text-destructive">
+                            <AlertTriangle className="h-5 w-5" />
+                            Failed to Load Risk Report
+                        </CardTitle>
+                        <CardDescription>There was a problem retrieving your risk assessment.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <Button onClick={() => riskQuery.refetch()} disabled={riskQuery.isFetching}>
+                            {riskQuery.isFetching && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                            Try Again
+                        </Button>
+                    </CardContent>
+                </Card>
+            </DashboardShell>
+        );
+    }
 
     const score = report?.riskScore || 0;
     const { level, color, progressClass } = getRiskDetails(score);
@@ -1820,8 +1841,8 @@ export default function RiskAssessmentPage() {
                     footer={<BottomSafeAreaReserve size="chatAware" />}
                 >
 
-                    <div 
-                        id="exposure-summary" 
+                    <div
+                        id="exposure-summary-mobile"
                         className={`transition-all duration-300 ${
                             shouldFocusExposure ? 'ring-2 ring-teal-400 rounded-lg shadow-lg' : ''
                         }`}
@@ -1839,7 +1860,7 @@ export default function RiskAssessmentPage() {
                     </div>
 
                     <div
-                        id="risk-trends-section"
+                        id="risk-trends-mobile"
                         className={`transition-all duration-300 ${
                             shouldFocusTrends ? 'ring-2 ring-teal-400 rounded-lg shadow-lg' : ''
                         }`}
@@ -1965,8 +1986,8 @@ export default function RiskAssessmentPage() {
                     </CardContent>
                 </Card>
 
-                <Card 
-                    id="exposure-summary" 
+                <Card
+                    id="exposure-summary-desktop"
                     className={`sm:col-span-2 lg:col-span-2 transition-all duration-300 ${
                         shouldFocusExposure ? 'ring-2 ring-teal-400 shadow-lg' : ''
                     }`}
@@ -2058,8 +2079,8 @@ export default function RiskAssessmentPage() {
                 </div>
 
                 <div className="grid gap-4 lg:grid-cols-3">
-                    <Card 
-                        id="risk-trends-section"
+                    <Card
+                        id="risk-trends-desktop"
                         className={`lg:col-span-2 transition-all duration-300 ${
                             shouldFocusTrends ? 'ring-2 ring-teal-400 shadow-lg' : ''
                         }`}

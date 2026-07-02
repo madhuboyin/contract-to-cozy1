@@ -46,37 +46,7 @@ class RiskAssessmentController {
   }
 
   /**
-   * GET /api/risk/report/:propertyId
-   * Fetches full detailed report (same logic as summary, but returns the raw report or 'QUEUED')
-   */
-  async getRiskReport(req: AuthRequest, res: Response, next: NextFunction) {
-    try {
-      const auth = this.checkAuthAndProfile(req, res);
-      if (!auth) return;
-      const { homeownerProfileId } = auth;
-      
-      const { propertyId } = req.params;
-      
-      // Authorization check: ensure property belongs to the homeowner
-      const property: Property | null = await prisma.property.findUnique({
-        where: { id: propertyId, homeownerProfileId: homeownerProfileId },
-      });
-
-      if (!property) {
-        return res.status(404).json({ message: 'Property not found or access denied.' });
-      }
-
-      const report = await RiskAssessmentService.getOrCreateRiskReport(propertyId);
-      
-      return res.status(200).json(report);
-    } catch (error) {
-      next(error);
-    }
-  }
-
-  /**
    * GET /api/risk/report/:propertyId - Fetches status/summary
-   * NOTE: This endpoint is often redundant with getRiskReport but kept for legacy/specific status checks.
    */
   async getRiskReportSummary(req: AuthRequest, res: Response, next: NextFunction) {
     try {
