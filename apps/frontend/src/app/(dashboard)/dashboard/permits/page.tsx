@@ -92,7 +92,7 @@ export default function PermitHubPage() {
         <p className="text-xs text-[hsl(var(--mobile-text-muted))]">Home Tool</p>
         <h1 className="text-xl font-bold">Permit Tracker</h1>
         <p className="text-sm text-[hsl(var(--mobile-text-secondary))]">
-          Permit history, active tracking, and disclosure export
+          Permit history, inspection readiness checks, and disclosure export
         </p>
       </div>
 
