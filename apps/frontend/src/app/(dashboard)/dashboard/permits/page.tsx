@@ -164,12 +164,35 @@ export default function PermitHubPage() {
       )}
 
       {permits.length === 0 && (
-        <div className="flex flex-col items-center gap-3 py-12 text-center">
+        <div className="flex flex-col items-center gap-4 py-10 text-center">
           <FileSearch className="h-10 w-10 text-neutral-300" />
-          <p className="text-sm text-[hsl(var(--mobile-text-secondary))]">No permit records yet.</p>
-          <p className="text-xs text-[hsl(var(--mobile-text-muted))]">
-            Try looking up permits above or add one manually.
-          </p>
+          <div>
+            <p className="text-sm text-[hsl(var(--mobile-text-secondary))]">No permit records yet.</p>
+            <p className="text-xs text-[hsl(var(--mobile-text-muted))]">
+              Try looking up permits above or add one manually.
+            </p>
+          </div>
+
+          <div className="w-full rounded-2xl border bg-[hsl(var(--mobile-card-bg))] p-4 text-left">
+            <p className="mb-2 text-sm font-semibold">Already finished renovation work?</p>
+            <p className="mb-3 text-xs text-[hsl(var(--mobile-text-muted))]">
+              Here&apos;s how to check if it&apos;s ready for the real inspection:
+            </p>
+            <ol className="space-y-2 text-xs text-[hsl(var(--mobile-text-secondary))]">
+              <li className="flex gap-2">
+                <span className="shrink-0 font-semibold text-[hsl(var(--mobile-brand-strong))]">1.</span>
+                Tap <span className="font-medium text-foreground">Add Permit</span> below and enter the permit for your work
+              </li>
+              <li className="flex gap-2">
+                <span className="shrink-0 font-semibold text-[hsl(var(--mobile-brand-strong))]">2.</span>
+                Open it and find the inspection stage you&apos;re about to call for (Framing, Rough-In, Final, etc.)
+              </li>
+              <li className="flex gap-2">
+                <span className="shrink-0 font-semibold text-[hsl(var(--mobile-brand-strong))]">3.</span>
+                Tap <span className="font-medium text-foreground">Check Readiness</span> on that stage, upload photos of the completed work, and get an AI readiness verdict before you call the inspector
+              </li>
+            </ol>
+          </div>
         </div>
       )}
 
