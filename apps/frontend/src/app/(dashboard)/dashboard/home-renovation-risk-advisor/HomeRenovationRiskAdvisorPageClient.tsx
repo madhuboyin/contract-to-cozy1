@@ -21,6 +21,7 @@ import { MOBILE_TYPE_TOKENS, MOBILE_CARD_RADIUS } from '@/components/mobile/dash
 import { AdvisorInputCard } from '@/components/features/homeRenovationAdvisor/AdvisorInputCard';
 import { AdvisorSummaryCard } from '@/components/features/homeRenovationAdvisor/AdvisorSummaryCard';
 import { AdvisorPermitCard } from '@/components/features/homeRenovationAdvisor/AdvisorPermitCard';
+import { AdvisorHoaNudgeCard } from '@/components/features/homeRenovationAdvisor/AdvisorHoaNudgeCard';
 import { AdvisorTaxCard } from '@/components/features/homeRenovationAdvisor/AdvisorTaxCard';
 import { AdvisorLicensingCard } from '@/components/features/homeRenovationAdvisor/AdvisorLicensingCard';
 import { AdvisorAssumptionsCard } from '@/components/features/homeRenovationAdvisor/AdvisorAssumptionsCard';
@@ -480,6 +481,7 @@ export default function HomeRenovationRiskAdvisorPageClient({
               {currentSession.permit && (
                 <AdvisorPermitCard permit={currentSession.permit} />
               )}
+              <AdvisorHoaNudgeCard renovationType={currentSession.renovationType} propertyId={propertyId} />
               {currentSession.taxImpact && (
                 <AdvisorTaxCard taxImpact={currentSession.taxImpact} />
               )}

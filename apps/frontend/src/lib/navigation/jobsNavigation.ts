@@ -62,7 +62,8 @@ export const PRIMARY_JOBS: NavJob[] = [
       'claims',
       'recalls',
       'insurance-trend',
-      'home-habit-coach'
+      'home-habit-coach',
+      'hoa-compliance'
     ],
   },
   {

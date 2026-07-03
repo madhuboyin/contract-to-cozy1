@@ -102,6 +102,7 @@ function mapIncidentTypeToGuidance(typeKey: string): {
     | 'MAINTENANCE'
     | 'ASSET_LIFECYCLE'
     | 'FINANCIAL'
+    | 'COMPLIANCE'
     | 'OTHER';
   readiness: 'READY' | 'NEEDS_CONTEXT' | 'UNKNOWN';
   sourceToolKey: string;
@@ -132,6 +133,15 @@ function mapIncidentTypeToGuidance(typeKey: string): {
       issueDomain: 'INSURANCE',
       readiness: 'NEEDS_CONTEXT',
       sourceToolKey: 'coverage-intelligence',
+    };
+  }
+
+  if (normalized.includes('HOA')) {
+    return {
+      signalIntentFamily: 'hoa_violation_detected',
+      issueDomain: 'COMPLIANCE',
+      readiness: 'NEEDS_CONTEXT',
+      sourceToolKey: 'hoa-compliance',
     };
   }
 

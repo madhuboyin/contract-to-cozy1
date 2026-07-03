@@ -904,6 +904,17 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
       /^\/dashboard\/(properties\/[^/]+\/tools\/permits|permits)(\/|$)/.test(pathname),
   },
   {
+    key: 'hoa-compliance',
+    name: 'HOA Compliance',
+    description: 'Track HOA approvals and violations before they turn into fines',
+    desktopDescription: 'Track your HOA/association details and dues, submit and track architectural-review approvals for renovations, and log violation notices so they surface as guided next steps.',
+    hrefSuffix: 'tools/hoa',
+    navTarget: 'tool:hoa-compliance',
+    icon: resolveToolIcon('home', 'hoa-compliance'),
+    isActive: (pathname) =>
+      /^\/dashboard\/(properties\/[^/]+\/tools\/hoa|hoa)(\/|$)/.test(pathname),
+  },
+  {
     key: 'inspection-hub',
     name: 'Inspection Hub',
     description: 'Upload inspection reports and track open findings',

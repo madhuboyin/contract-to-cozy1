@@ -3994,6 +3994,42 @@ class APIClient {
     await this.delete(`/api/properties/${propertyId}/permits/${permitId}/inspections/${milestoneId}`);
   }
 
+  async getHoaAssociation(propertyId: string): Promise<import('@/types').HoaAssociation | null> {
+    const res = await this.get<{ association: import('@/types').HoaAssociation | null }>(`/api/properties/${propertyId}/hoa`);
+    return res.data?.association ?? null;
+  }
+
+  async upsertHoaAssociation(propertyId: string, payload: import('@/types').UpsertHoaAssociationPayload): Promise<import('@/types').HoaAssociation> {
+    const res = await this.put<{ association: import('@/types').HoaAssociation }>(`/api/properties/${propertyId}/hoa`, payload);
+    if (!res.data?.association) throw new APIError('Failed to save HOA details', 500);
+    return res.data.association;
+  }
+
+  async listHoaApprovalRecords(propertyId: string): Promise<import('@/types').HoaApprovalRecord[]> {
+    const res = await this.get<{ records: import('@/types').HoaApprovalRecord[] }>(`/api/properties/${propertyId}/hoa/approvals`);
+    return res.data?.records ?? [];
+  }
+
+  async createHoaApprovalRecord(propertyId: string, payload: import('@/types').CreateHoaApprovalRecordPayload): Promise<import('@/types').HoaApprovalRecord> {
+    const res = await this.post<{ record: import('@/types').HoaApprovalRecord }>(`/api/properties/${propertyId}/hoa/approvals`, payload);
+    if (!res.data?.record) throw new APIError('Failed to create approval record', 500);
+    return res.data.record;
+  }
+
+  async updateHoaApprovalRecord(propertyId: string, recordId: string, patch: import('@/types').UpdateHoaApprovalRecordPayload): Promise<import('@/types').HoaApprovalRecord> {
+    const res = await this.patch<{ record: import('@/types').HoaApprovalRecord }>(`/api/properties/${propertyId}/hoa/approvals/${recordId}`, patch);
+    if (!res.data?.record) throw new APIError('Failed to update approval record', 500);
+    return res.data.record;
+  }
+
+  async deleteHoaApprovalRecord(propertyId: string, recordId: string): Promise<void> {
+    await this.delete(`/api/properties/${propertyId}/hoa/approvals/${recordId}`);
+  }
+
+  async reportHoaViolation(propertyId: string, payload: import('@/types').ReportHoaViolationPayload): Promise<void> {
+    await this.post(`/api/properties/${propertyId}/hoa/violations`, payload);
+  }
+
   async runInspectionReadinessCheck(propertyId: string, permitId: string, milestoneId: string, photos: File[]): Promise<import('@/types').InspectionReadinessCheckResult> {
     const formData = new FormData();
     photos.forEach((photo) => formData.append('photos', photo));

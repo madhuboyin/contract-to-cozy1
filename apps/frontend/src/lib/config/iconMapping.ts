@@ -230,6 +230,7 @@ const HOME_TOOL_ICON_OVERRIDES: Record<string, IconName> = {
   MORTGAGE_REFINANCE_RADAR: 'BarChart2',
   'MORTGAGE-REFINANCE-RADAR': 'BarChart2',
   FINANCING: 'TrendingUp',
+  HOA_COMPLIANCE: 'ShieldCheck',
 };
 
 const CORE_NAV_ALIASES: Record<string, CoreNavKey> = {

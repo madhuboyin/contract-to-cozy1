@@ -2098,6 +2098,10 @@ model Property {
   permitDisclosureExports   PermitDisclosureExport[]
   inspectionReadinessChecks InspectionReadinessCheck[]
 
+  // HOA / Community Rules Compliance Tracker
+  hoaAssociation     HoaAssociation?
+  hoaApprovalRecords HoaApprovalRecord[]
+
   // Live Project Execution Tracker
   projectRecords ProjectRecord[]
 
@@ -9420,6 +9424,7 @@ model HomeRenovationAdvisorSession {
   dataPoints          HomeRenovationAdvisorDataPoint[]
   complianceChecklist HomeRenovationComplianceChecklist?
   permitRecords       PropertyPermitRecord[]
+  hoaApprovalRecords  HoaApprovalRecord[]
 
   @@index([propertyId, createdAt])
   @@index([propertyId, renovationType])
@@ -11274,6 +11279,103 @@ model PermitDisclosureExport {
 
   @@index([propertyId, createdAt])
   @@map("permit_disclosure_exports")
+}
+
+// ============================================================================
+// HOA / COMMUNITY RULES COMPLIANCE TRACKER
+// ============================================================================
+
+enum HoaDuesFrequency {
+  MONTHLY
+  QUARTERLY
+  ANNUAL
+}
+
+enum HoaWorkType {
+  EXTERIOR_PAINT
+  FENCE
+  ROOFING
+  ROOM_ADDITION
+  DECK_PATIO
+  LANDSCAPING
+  SOLAR
+  WINDOWS_DOORS
+  DRIVEWAY
+  SHED_OUTBUILDING
+  POOL
+  SATELLITE_ANTENNA
+  OTHER
+}
+
+enum HoaApprovalStatus {
+  NOT_SUBMITTED
+  SUBMITTED
+  UNDER_REVIEW
+  APPROVED
+  APPROVED_WITH_CONDITIONS
+  DENIED
+  EXPIRED
+}
+
+// One HOA/community association per property.
+model HoaAssociation {
+  id                String @id @default(uuid())
+  propertyId        String @unique
+  name              String
+  managementCompany String?
+  contactName       String?
+  contactEmail      String?
+  contactPhone      String?
+  duesAmountCents   Int?
+  duesFrequency     HoaDuesFrequency?
+  nextDueDate       DateTime?
+  documentIds       String[] @default([]) // CC&Rs / bylaws uploads -> Document.id[]
+  notes             String?
+  isActive          Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  property        Property            @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  approvalRecords HoaApprovalRecord[]
+
+  @@map("hoa_associations")
+}
+
+// Architectural-review / approval record for HOA-regulated work — the
+// proactive counterpart to reported violations (see Incident typeKey
+// HOA_VIOLATION_DETECTED, bridged into the Guidance Engine's
+// compliance_resolution journey template).
+model HoaApprovalRecord {
+  id               String @id @default(uuid())
+  propertyId       String
+  hoaAssociationId String
+
+  workType    HoaWorkType
+  description String?
+  status      HoaApprovalStatus @default(NOT_SUBMITTED)
+
+  submittedDate       DateTime?
+  decisionDate        DateTime?
+  approvalConditions  String?
+  denialReason        String?
+  expirationDate      DateTime?
+
+  documentIds String[] @default([])
+  notes       String?
+
+  renovationAdvisorSessionId String? // optional link, same pattern as PropertyPermitRecord.renovationAdvisorSessionId
+
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  property                 Property                      @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  hoaAssociation           HoaAssociation                @relation(fields: [hoaAssociationId], references: [id], onDelete: Cascade)
+  renovationAdvisorSession HomeRenovationAdvisorSession? @relation(fields: [renovationAdvisorSessionId], references: [id], onDelete: SetNull)
+
+  @@index([propertyId])
+  @@index([hoaAssociationId, status])
+  @@map("hoa_approval_records")
 }
 
 // ============================================================================

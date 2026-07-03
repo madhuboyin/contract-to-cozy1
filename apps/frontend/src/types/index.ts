@@ -3918,6 +3918,98 @@ export interface PermitDetail extends PermitSummary {
   renovationAdvisorSessionId?: string;
 }
 
+export type HoaDuesFrequency = 'MONTHLY' | 'QUARTERLY' | 'ANNUAL';
+
+export type HoaWorkType =
+  | 'EXTERIOR_PAINT' | 'FENCE' | 'ROOFING' | 'ROOM_ADDITION' | 'DECK_PATIO'
+  | 'LANDSCAPING' | 'SOLAR' | 'WINDOWS_DOORS' | 'DRIVEWAY' | 'SHED_OUTBUILDING'
+  | 'POOL' | 'SATELLITE_ANTENNA' | 'OTHER';
+
+export type HoaApprovalStatus =
+  | 'NOT_SUBMITTED' | 'SUBMITTED' | 'UNDER_REVIEW' | 'APPROVED'
+  | 'APPROVED_WITH_CONDITIONS' | 'DENIED' | 'EXPIRED';
+
+export interface HoaAssociation {
+  id: string;
+  propertyId: string;
+  name: string;
+  managementCompany?: string;
+  contactName?: string;
+  contactEmail?: string;
+  contactPhone?: string;
+  duesAmountCents?: number;
+  duesFrequency?: HoaDuesFrequency;
+  nextDueDate?: string;
+  documentIds: string[];
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface HoaApprovalRecord {
+  id: string;
+  propertyId: string;
+  hoaAssociationId: string;
+  workType: HoaWorkType;
+  description?: string;
+  status: HoaApprovalStatus;
+  submittedDate?: string;
+  decisionDate?: string;
+  approvalConditions?: string;
+  denialReason?: string;
+  expirationDate?: string;
+  documentIds: string[];
+  notes?: string;
+  renovationAdvisorSessionId?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UpsertHoaAssociationPayload {
+  name: string;
+  managementCompany?: string;
+  contactName?: string;
+  contactEmail?: string;
+  contactPhone?: string;
+  duesAmountCents?: number;
+  duesFrequency?: HoaDuesFrequency;
+  nextDueDate?: string;
+  documentIds?: string[];
+  notes?: string;
+}
+
+export interface CreateHoaApprovalRecordPayload {
+  workType: HoaWorkType;
+  description?: string;
+  status?: HoaApprovalStatus;
+  submittedDate?: string;
+  documentIds?: string[];
+  notes?: string;
+  renovationAdvisorSessionId?: string;
+}
+
+export interface UpdateHoaApprovalRecordPayload {
+  workType?: HoaWorkType;
+  description?: string;
+  status?: HoaApprovalStatus;
+  submittedDate?: string;
+  decisionDate?: string;
+  approvalConditions?: string;
+  denialReason?: string;
+  expirationDate?: string;
+  documentIds?: string[];
+  notes?: string;
+}
+
+export interface ReportHoaViolationPayload {
+  workType?: HoaWorkType;
+  summary: string;
+  description?: string;
+  cureDeadline?: string;
+  fineAmountCents?: number;
+  severity?: 'INFO' | 'WARNING' | 'CRITICAL';
+}
+
 export interface PermitFlagItem {
   id: string;
   workType: PermitWorkType;
