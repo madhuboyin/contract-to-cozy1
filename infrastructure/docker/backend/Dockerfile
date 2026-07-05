@@ -11,10 +11,16 @@ COPY package*.json ./
 RUN npm ci --only=production && npm cache clean --force
 
 # Stage 2: Prisma generation (isolated — only schema + packages, no source)
-FROM node:22-alpine AS prisma-gen
+# Uses a glibc (Debian slim) base instead of Alpine/musl for this stage only —
+# generating the client for this schema (270+ models, ~2MB output file) hit a
+# silent short-write truncation on Alpine when built natively on the
+# Raspberry Pi cluster; glibc doesn't exhibit the same issue.
+FROM node:22-slim AS prisma-gen
 WORKDIR /app
 
-RUN apk add --no-cache python3 make g++ openssl openssl-dev
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 make g++ openssl libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY package*.json ./
 RUN npm ci

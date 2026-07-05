@@ -3,7 +3,13 @@
 // PostgreSQL with Prisma ORM
 
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  // "native" covers local dev (macOS/Linux glibc). The prisma-gen Docker stage
+  // now generates on a glibc (Debian) base — see infrastructure/docker/backend/Dockerfile
+  // — but the builder/runner stages are still Alpine (musl), so the musl
+  // engine binary must be requested explicitly or the runtime container
+  // won't have a matching query engine.
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
 }
 
 datasource db {
