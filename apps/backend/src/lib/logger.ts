@@ -38,39 +38,24 @@ function getTransport() {
     };
   }
 
-  // Ship to Loki AND stdout — Loki is a separate network hop (gateway, auth,
-  // tenant routing) that can fail independently of the process itself. Without
-  // a stdout target, a Loki outage silently drops every log line with no local
-  // fallback, leaving `kubectl logs` showing nothing but the transport's own
-  // connection errors.
   return {
-    targets: [
-      {
-        target: require.resolve('pino-loki'),
-        level: process.env.LOG_LEVEL || 'info',
-        options: {
-          host: process.env.LOKI_HOST || 'http://loki-gateway.monitoring.svc.cluster.local',
-          basicAuth: {
-            username: process.env.LOKI_USERNAME || '',
-            password: process.env.LOKI_PASSWORD || '',
-          },
-          headers: {
-            'X-Scope-OrgID': process.env.LOKI_TENANT_ID || 'fake',
-          },
-          labels: {
-            app: 'backend',
-            env: process.env.NODE_ENV || 'production',
-          },
-          batching: true,
-          interval: 5,
-        },
+    target: require.resolve('pino-loki'),
+    options: {
+      host: process.env.LOKI_HOST || 'http://loki-gateway.monitoring.svc.cluster.local',
+      basicAuth: {
+        username: process.env.LOKI_USERNAME || '',
+        password: process.env.LOKI_PASSWORD || '',
       },
-      {
-        target: 'pino/file',
-        level: process.env.LOG_LEVEL || 'info',
-        options: { destination: 1 }, // stdout
+      headers: {
+        'X-Scope-OrgID': process.env.LOKI_TENANT_ID || 'fake',
       },
-    ],
+      labels: {
+        app: 'backend',
+        env: process.env.NODE_ENV || 'production',
+      },
+      batching: true,
+      interval: 5,
+    },
   };
 }
 
