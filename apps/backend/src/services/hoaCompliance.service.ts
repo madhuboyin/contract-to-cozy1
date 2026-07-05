@@ -113,21 +113,53 @@ class HoaComplianceService {
     // frontend can deep-link straight into the journey instead of the
     // generic guidance-overview landing page, where a low-priority journey
     // can be crowded out of the "in progress" preview list.
+    //
+    // Repeat HOA violations on the same property all reuse ONE merged journey
+    // (guidanceJourneyService.findReusableJourney matches on
+    // mergedSignalGroupKey, which is identical for every hoa_violation_detected
+    // signal on a given property since none carry an inventoryItemId/homeAssetId).
+    // So this can't be a simple incident->journey.primarySignalId join — that
+    // only ever matches whichever incident happened to create the journey
+    // first. Instead, join through each signal's own duplicateGroupKey (the
+    // same value the journey stores as mergedSignalGroupKey).
     const incidentIds = incidents.map((incident) => incident.id);
-    const journeys = incidentIds.length
-      ? await prisma.guidanceJourney.findMany({
+    const signals = incidentIds.length
+      ? await prisma.guidanceSignal.findMany({
           where: {
-            propertyId,
-            primarySignal: { sourceEntityType: 'INCIDENT', sourceEntityId: { in: incidentIds } },
+            sourceEntityType: 'INCIDENT',
+            sourceEntityId: { in: incidentIds },
           },
-          select: { id: true, primarySignal: { select: { sourceEntityId: true } } },
+          select: { sourceEntityId: true, duplicateGroupKey: true },
         })
       : [];
 
-    const journeyIdByIncidentId = new Map(
+    const groupKeyByIncidentId = new Map(
+      signals
+        .filter((signal) => signal.sourceEntityId && signal.duplicateGroupKey)
+        .map((signal) => [signal.sourceEntityId as string, signal.duplicateGroupKey as string])
+    );
+
+    const groupKeys = Array.from(new Set(groupKeyByIncidentId.values()));
+    const journeys = groupKeys.length
+      ? await prisma.guidanceJourney.findMany({
+          where: {
+            propertyId,
+            mergedSignalGroupKey: { in: groupKeys },
+          },
+          select: { id: true, mergedSignalGroupKey: true },
+        })
+      : [];
+
+    const journeyIdByGroupKey = new Map(
       journeys
-        .filter((journey) => journey.primarySignal?.sourceEntityId)
-        .map((journey) => [journey.primarySignal!.sourceEntityId as string, journey.id])
+        .filter((journey) => journey.mergedSignalGroupKey)
+        .map((journey) => [journey.mergedSignalGroupKey as string, journey.id])
+    );
+
+    const journeyIdByIncidentId = new Map(
+      Array.from(groupKeyByIncidentId.entries())
+        .map(([incidentId, groupKey]) => [incidentId, journeyIdByGroupKey.get(groupKey) ?? null] as const)
+        .filter((entry): entry is [string, string] => Boolean(entry[1]))
     );
 
     return incidents.map((incident) => {
