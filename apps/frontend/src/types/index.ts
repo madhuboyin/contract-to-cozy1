@@ -4010,6 +4010,23 @@ export interface ReportHoaViolationPayload {
   severity?: 'INFO' | 'WARNING' | 'CRITICAL';
 }
 
+export type HoaViolationStatus =
+  | 'DETECTED' | 'EVALUATED' | 'ACTIVE' | 'ACTIONED' | 'MITIGATED'
+  | 'RESOLVED' | 'SUPPRESSED' | 'EXPIRED';
+
+export interface HoaViolationSummary {
+  id: string;
+  title: string;
+  summary?: string;
+  status: HoaViolationStatus;
+  severity?: 'INFO' | 'WARNING' | 'CRITICAL';
+  description?: string;
+  cureDeadline?: string;
+  fineAmountCents?: number;
+  openedAt: string;
+  resolvedAt?: string;
+}
+
 export interface PermitFlagItem {
   id: string;
   workType: PermitWorkType;

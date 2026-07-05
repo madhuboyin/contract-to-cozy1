@@ -11,6 +11,7 @@ import {
   createApprovalRecord,
   updateApprovalRecord,
   deleteApprovalRecord,
+  listViolations,
   reportViolation,
 } from '../controllers/hoaCompliance.controller';
 
@@ -52,6 +53,7 @@ router.patch(
 router.delete('/properties/:propertyId/hoa/approvals/:id', propertyAuthMiddleware, deleteApprovalRecord);
 
 // ── Violations ──────────────────────────────────────────────────────────────
+router.get('/properties/:propertyId/hoa/violations', propertyAuthMiddleware, listViolations);
 router.post(
   '/properties/:propertyId/hoa/violations',
   propertyAuthMiddleware,

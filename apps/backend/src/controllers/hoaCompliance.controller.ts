@@ -48,6 +48,13 @@ export async function deleteApprovalRecord(req: Request, res: Response, next: Ne
   } catch (err) { next(err); }
 }
 
+export async function listViolations(req: Request, res: Response, next: NextFunction) {
+  try {
+    const violations = await hoaComplianceService.listViolations(req.params.propertyId);
+    res.json({ success: true, data: { violations } });
+  } catch (err) { next(err); }
+}
+
 export async function reportViolation(req: Request, res: Response, next: NextFunction) {
   try {
     const incident = await hoaComplianceService.reportViolation(

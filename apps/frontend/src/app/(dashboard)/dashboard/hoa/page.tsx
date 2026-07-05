@@ -7,6 +7,7 @@ import { api } from '@/lib/api/client';
 import type {
   HoaAssociation,
   HoaApprovalRecord,
+  HoaViolationSummary,
   UpsertHoaAssociationPayload,
   CreateHoaApprovalRecordPayload,
   UpdateHoaApprovalRecordPayload,
@@ -14,6 +15,7 @@ import type {
 import HoaAssociationCard from '@/components/features/hoa/HoaAssociationCard';
 import ApprovalRecordList from '@/components/features/hoa/ApprovalRecordList';
 import ReportViolationModal from '@/components/features/hoa/ReportViolationModal';
+import ViolationHistoryList from '@/components/features/hoa/ViolationHistoryList';
 
 export default function HoaCompliancePage() {
   const searchParams = useSearchParams();
@@ -21,17 +23,25 @@ export default function HoaCompliancePage() {
 
   const [association, setAssociation] = useState<HoaAssociation | null>(null);
   const [records, setRecords] = useState<HoaApprovalRecord[]>([]);
+  const [violations, setViolations] = useState<HoaViolationSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [reportingViolation, setReportingViolation] = useState(false);
 
   const load = useCallback(async () => {
     if (!propertyId) return;
-    const [a, r] = await Promise.all([
+    const [a, r, v] = await Promise.all([
       api.getHoaAssociation(propertyId).catch(() => null),
       api.listHoaApprovalRecords(propertyId).catch(() => []),
+      api.listHoaViolations(propertyId).catch(() => []),
     ]);
     setAssociation(a);
     setRecords(r);
+    setViolations(v);
+  }, [propertyId]);
+
+  const refreshViolations = useCallback(async () => {
+    const v = await api.listHoaViolations(propertyId).catch(() => []);
+    setViolations(v);
   }, [propertyId]);
 
   useEffect(() => {
@@ -117,12 +127,18 @@ export default function HoaCompliancePage() {
               onDelete={handleDeleteRecord}
             />
           </section>
+
+          <section>
+            <p className="mb-2 text-sm font-semibold">Violation History</p>
+            <ViolationHistoryList violations={violations} propertyId={propertyId} />
+          </section>
         </>
       )}
 
       <ReportViolationModal
         open={reportingViolation}
         onClose={() => setReportingViolation(false)}
+        onReported={refreshViolations}
         propertyId={propertyId}
       />
     </div>

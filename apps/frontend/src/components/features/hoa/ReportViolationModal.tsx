@@ -16,12 +16,13 @@ import { WORK_TYPE_LABELS } from './HoaUtils';
 interface Props {
   open: boolean;
   onClose: () => void;
+  onReported?: () => void;
   propertyId: string;
 }
 
 const WORK_TYPES = Object.keys(WORK_TYPE_LABELS) as HoaWorkType[];
 
-export default function ReportViolationModal({ open, onClose, propertyId }: Props) {
+export default function ReportViolationModal({ open, onClose, onReported, propertyId }: Props) {
   const [workType, setWorkType] = useState<HoaWorkType | ''>('');
   const [summary, setSummary] = useState('');
   const [description, setDescription] = useState('');
@@ -62,6 +63,7 @@ export default function ReportViolationModal({ open, onClose, propertyId }: Prop
         fineAmountCents: fineAmount ? Math.round(parseFloat(fineAmount) * 100) : undefined,
       });
       setSubmitted(true);
+      onReported?.();
     } catch (err: any) {
       setError(err?.message || 'Failed to report the violation. Please try again.');
     } finally {

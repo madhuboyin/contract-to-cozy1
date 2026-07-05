@@ -102,6 +102,29 @@ class HoaComplianceService {
 
   // ── Violations — bridges into the Guidance Engine via Incident ────────────
 
+  async listViolations(propertyId: string) {
+    const incidents = await prisma.incident.findMany({
+      where: { propertyId, typeKey: 'HOA_VIOLATION_DETECTED' },
+      orderBy: { openedAt: 'desc' },
+    });
+
+    return incidents.map((incident) => {
+      const details = (incident.details as Record<string, unknown> | null) ?? {};
+      return {
+        id: incident.id,
+        title: incident.title,
+        summary: incident.summary,
+        status: incident.status,
+        severity: incident.severity,
+        description: (details.description as string | null) ?? null,
+        cureDeadline: (details.cureDeadline as string | null) ?? null,
+        fineAmountCents: (details.fineAmountCents as number | null) ?? null,
+        openedAt: incident.openedAt,
+        resolvedAt: incident.resolvedAt,
+      };
+    });
+  }
+
   async reportViolation(propertyId: string, userId: string, payload: any) {
     const incident = await IncidentService.upsertIncident({
       propertyId,

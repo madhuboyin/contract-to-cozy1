@@ -1,4 +1,4 @@
-import type { HoaWorkType, HoaApprovalStatus, HoaDuesFrequency } from '@/types';
+import type { HoaWorkType, HoaApprovalStatus, HoaDuesFrequency, HoaViolationStatus } from '@/types';
 
 export { formatCents, formatDate, relativeTime } from '../permits/PermitUtils';
 
@@ -42,4 +42,26 @@ export const DUES_FREQUENCY_LABELS: Record<HoaDuesFrequency, string> = {
   MONTHLY: 'Monthly',
   QUARTERLY: 'Quarterly',
   ANNUAL: 'Annual',
+};
+
+export const VIOLATION_STATUS_LABELS: Record<HoaViolationStatus, string> = {
+  DETECTED: 'Reported',
+  EVALUATED: 'Under Review',
+  ACTIVE: 'Needs Attention',
+  ACTIONED: 'Action Taken',
+  MITIGATED: 'Mitigated',
+  RESOLVED: 'Resolved',
+  SUPPRESSED: 'Dismissed',
+  EXPIRED: 'Expired',
+};
+
+export const VIOLATION_STATUS_COLOR: Record<HoaViolationStatus, string> = {
+  DETECTED: 'bg-blue-50 text-blue-700',
+  EVALUATED: 'bg-blue-50 text-blue-700',
+  ACTIVE: 'bg-amber-50 text-amber-700',
+  ACTIONED: 'bg-amber-50 text-amber-700',
+  MITIGATED: 'bg-blue-50 text-blue-700',
+  RESOLVED: 'bg-emerald-50 text-emerald-700',
+  SUPPRESSED: 'bg-neutral-100 text-neutral-500',
+  EXPIRED: 'bg-neutral-100 text-neutral-500',
 };

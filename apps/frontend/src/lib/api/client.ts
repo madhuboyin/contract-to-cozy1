@@ -4030,6 +4030,11 @@ class APIClient {
     await this.post(`/api/properties/${propertyId}/hoa/violations`, payload);
   }
 
+  async listHoaViolations(propertyId: string): Promise<import('@/types').HoaViolationSummary[]> {
+    const res = await this.get<{ violations: import('@/types').HoaViolationSummary[] }>(`/api/properties/${propertyId}/hoa/violations`);
+    return res.data?.violations ?? [];
+  }
+
   async runInspectionReadinessCheck(propertyId: string, permitId: string, milestoneId: string, photos: File[]): Promise<import('@/types').InspectionReadinessCheckResult> {
     const formData = new FormData();
     photos.forEach((photo) => formData.append('photos', photo));
