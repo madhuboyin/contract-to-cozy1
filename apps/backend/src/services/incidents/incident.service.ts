@@ -23,6 +23,7 @@ import { logIncidentEvent } from './incident.events';
 import { evaluateIncident } from './incident.evaluator';
 import { orchestrateIncident } from './incident.orchestrator';
 import { guidanceJourneyService } from '../guidanceEngine/guidanceJourney.service';
+import type { GuidanceSeverity } from '../guidanceEngine/guidanceTypes';
 import { logger } from '../../lib/logger';
 
 function computeStatusTimestamps(nextStatus: IncidentStatus) {
@@ -91,6 +92,40 @@ function normalizeIncidentTypeKey(typeKey: string): string {
 function asRecord(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
   return value as Record<string, unknown>;
+}
+
+// Incident.severity (IncidentSeverity: INFO/WARNING/CRITICAL) and
+// GuidanceSignal.severity (GuidanceSeverity: INFO/LOW/MEDIUM/HIGH/CRITICAL/UNKNOWN)
+// are different enums that don't share all values -- WARNING has no direct
+// equivalent. Passing incident.severity straight through throws a Prisma
+// enum-validation error, which bridgeIncidentToGuidance silently swallows.
+const GUIDANCE_SEVERITY_BY_INCIDENT_SEVERITY: Record<string, GuidanceSeverity> = {
+  INFO: 'INFO',
+  WARNING: 'MEDIUM',
+  CRITICAL: 'CRITICAL',
+};
+
+function toGuidanceSeverity(incidentSeverity: string | null | undefined): GuidanceSeverity | null {
+  if (!incidentSeverity) return null;
+  return GUIDANCE_SEVERITY_BY_INCIDENT_SEVERITY[incidentSeverity] ?? 'UNKNOWN';
+}
+
+// Same enum-mismatch issue as severity above: Incident.sourceType
+// (IncidentSourceType) and GuidanceSignal.sourceType (SignalSourceType) are
+// different enums. MANUAL/COVERAGE happen to overlap, but MODEL/SYSTEM/WEATHER
+// don't exist in SignalSourceType and would throw the same silent failure.
+const GUIDANCE_SOURCE_TYPE_BY_INCIDENT_SOURCE_TYPE: Record<string, string> = {
+  WEATHER: 'EXTERNAL',
+  COVERAGE: 'COVERAGE',
+  MODEL: 'INTELLIGENCE',
+  IOT: 'SENSOR',
+  MANUAL: 'MANUAL',
+  SYSTEM: 'SCHEDULED',
+};
+
+function toGuidanceSourceType(incidentSourceType: string | null | undefined): string {
+  if (!incidentSourceType) return 'SCHEDULED';
+  return GUIDANCE_SOURCE_TYPE_BY_INCIDENT_SOURCE_TYPE[incidentSourceType] ?? 'SCHEDULED';
 }
 
 function mapIncidentTypeToGuidance(typeKey: string): {
@@ -224,10 +259,10 @@ async function bridgeIncidentToGuidance(incident: any) {
     signalIntentFamily: mapped.signalIntentFamily,
     issueDomain: mapped.issueDomain,
     executionReadiness: mapped.readiness,
-    severity: incident.severity ?? null,
+    severity: toGuidanceSeverity(incident.severity),
     severityScore: incident.severityScore ?? null,
     confidenceScore: incident.confidence ?? null,
-    sourceType: incident.sourceType ?? 'INCIDENT',
+    sourceType: toGuidanceSourceType(incident.sourceType),
     sourceFeatureKey: 'incident-service',
     sourceToolKey: mapped.sourceToolKey,
     sourceEntityType: 'INCIDENT',
