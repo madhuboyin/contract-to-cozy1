@@ -108,6 +108,28 @@ class HoaComplianceService {
       orderBy: { openedAt: 'desc' },
     });
 
+    // Violations only carry next-step guidance via the journey the incident
+    // bridged into (see bridgeIncidentToGuidance) — look those up so the
+    // frontend can deep-link straight into the journey instead of the
+    // generic guidance-overview landing page, where a low-priority journey
+    // can be crowded out of the "in progress" preview list.
+    const incidentIds = incidents.map((incident) => incident.id);
+    const journeys = incidentIds.length
+      ? await prisma.guidanceJourney.findMany({
+          where: {
+            propertyId,
+            primarySignal: { sourceEntityType: 'INCIDENT', sourceEntityId: { in: incidentIds } },
+          },
+          select: { id: true, primarySignal: { select: { sourceEntityId: true } } },
+        })
+      : [];
+
+    const journeyIdByIncidentId = new Map(
+      journeys
+        .filter((journey) => journey.primarySignal?.sourceEntityId)
+        .map((journey) => [journey.primarySignal!.sourceEntityId as string, journey.id])
+    );
+
     return incidents.map((incident) => {
       const details = (incident.details as Record<string, unknown> | null) ?? {};
       return {
@@ -121,6 +143,7 @@ class HoaComplianceService {
         fineAmountCents: (details.fineAmountCents as number | null) ?? null,
         openedAt: incident.openedAt,
         resolvedAt: incident.resolvedAt,
+        journeyId: journeyIdByIncidentId.get(incident.id) ?? null,
       };
     });
   }

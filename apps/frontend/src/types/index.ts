@@ -4025,6 +4025,7 @@ export interface HoaViolationSummary {
   fineAmountCents?: number;
   openedAt: string;
   resolvedAt?: string;
+  journeyId?: string | null;
 }
 
 export interface PermitFlagItem {

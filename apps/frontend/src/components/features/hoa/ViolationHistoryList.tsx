@@ -50,7 +50,11 @@ export default function ViolationHistoryList({ violations, propertyId }: Props) 
               {v.fineAmountCents != null && <p>Fine: {formatCents(v.fineAmountCents)}</p>}
               {v.resolvedAt && <p>Resolved: {formatDate(v.resolvedAt)}</p>}
               <a
-                href={`/dashboard/properties/${propertyId}/tools/guidance-overview`}
+                href={
+                  v.journeyId
+                    ? `/dashboard/properties/${propertyId}/tools/guidance-overview?journeyId=${v.journeyId}`
+                    : `/dashboard/properties/${propertyId}/tools/guidance-overview`
+                }
                 onClick={(e) => e.stopPropagation()}
                 className="inline-block text-[hsl(var(--mobile-brand-strong))] hover:underline"
               >
