@@ -178,7 +178,7 @@ export async function freezeRiskIncidentsJob() {
         severity: score >= 80 ? 'HIGH' : score >= 60 ? 'MEDIUM' : 'LOW',
         severityScore: score,
         confidenceScore: 0.70,
-        sourceType: 'WEATHER',
+        sourceType: 'EXTERNAL',
         sourceFeatureKey: 'freeze-risk-incidents',
         sourceEntityType: 'INCIDENT',
         sourceProvenanceId: `property:${p.id}|FREEZE_RISK`,

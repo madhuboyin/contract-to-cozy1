@@ -205,7 +205,7 @@ export async function severeWeatherAlertsJob() {
           severity: isWarningLevel(alert.severity) ? 'HIGH' : 'MEDIUM',
           severityScore: isWarningLevel(alert.severity) ? 85 : 55,
           confidenceScore: 0.7,
-          sourceType: 'WEATHER',
+          sourceType: 'EXTERNAL',
           sourceFeatureKey: 'severe-weather-alerts',
           sourceEntityType: 'INCIDENT',
           sourceProvenanceId: fingerprint,
