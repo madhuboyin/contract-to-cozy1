@@ -101,6 +101,9 @@ COPY apps/backend/src/services/incidents/incident.orchestrator.ts src/shared/bac
 COPY apps/backend/src/services/incidents/incident.scoring.ts src/shared/backend/services/incidents/
 COPY apps/backend/src/services/incidents/incident.events.ts src/shared/backend/services/incidents/
 COPY apps/backend/src/services/incidents/integrations/incidentNotification.service.ts src/shared/backend/services/incidents/integrations/
+# Copy severe weather alert service (used by severeWeatherAlerts.job.ts) + its SSRF guard dependency
+COPY apps/backend/src/services/severeWeatherAlert.service.ts src/shared/backend/services/
+COPY apps/backend/src/utils/ssrfGuard.ts src/shared/backend/utils/
 COPY apps/backend/src/services/hiddenAssets.service.ts src/shared/backend/services/
 # Risk assessment service chain (RiskAssessment.service → riskAssessmentIntegration → PropertyMaintenanceTask)
 COPY apps/backend/src/config/risk-job-types.ts src/shared/backend/config/
@@ -227,6 +230,11 @@ RUN sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/diyAiGuide\.service/\.\.
     sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/permitDetection\.service/\.\.\/shared\/backend\/services\/permitDetection\.service/g' src/jobs/detectUnpermittedWork.job.ts && \
     sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/storage\/reportStorage/\.\.\/shared\/backend\/services\/storage\/reportStorage/g' src/jobs/generatePermitDisclosure.job.ts && \
     sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/notification\.service/\.\.\/shared\/backend\/services\/notification\.service/g' src/jobs/permitInspectionReminder.job.ts
+
+# Rewrite paths introduced by the severe weather alerts job
+RUN sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/incidents\/incident\.service/\.\.\/shared\/backend\/services\/incidents\/incident\.service/g' src/jobs/severeWeatherAlerts.job.ts && \
+    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/guidanceEngine\/guidanceJourney\.service/\.\.\/shared\/backend\/services\/guidanceEngine\/guidanceJourney\.service/g' src/jobs/severeWeatherAlerts.job.ts && \
+    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/severeWeatherAlert\.service/\.\.\/shared\/backend\/services\/severeWeatherAlert\.service/g' src/jobs/severeWeatherAlerts.job.ts
 
 # Compile TS -> dist/
 RUN npx tsc --project ./tsconfig.json
