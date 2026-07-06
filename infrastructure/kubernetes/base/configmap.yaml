@@ -69,3 +69,7 @@ data:
   # Email Configuration (non-sensitive)
   EMAIL_FROM: "noreply@contracttocozy.com"
   EMAIL_REPLY_TO: "support@contracttocozy.com"
+
+  # Severe weather alerts (NOAA/NWS, api.weather.gov) — identifying User-Agent
+  # required by NWS API usage policy; not a secret.
+  NWS_USER_AGENT: "(contracttocozy.com, ops@contracttocozy.com)"

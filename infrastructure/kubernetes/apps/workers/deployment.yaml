@@ -87,6 +87,11 @@ spec:
                 configMapKeyRef:
                   name: app-config
                   key: CPSC_RECALL_FEED_URL
+            - name: NWS_USER_AGENT
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: NWS_USER_AGENT
             - name: RADAR_DUMMY_INGEST_ENABLED
               value: "true"
             - name: RADAR_DUMMY_INGEST_CRON
