@@ -38,6 +38,7 @@ type MorningHomePulsePayload = {
     headline: string;
     detail: string;
     severity: InsightSeverity;
+    code: WeatherInsightCode;
   };
   microAction: {
     actionId: string;
@@ -193,6 +194,15 @@ function severityToInsight(severity: IncidentSeverity | null | undefined): Insig
   return 'LOW';
 }
 
+type WeatherInsightCode = 'FREEZE' | 'STORM' | 'FLOOD' | 'HEATWAVE' | 'SNOW' | 'NONE';
+
+const HAZARD_FAMILY_TO_CODE: Record<string, WeatherInsightCode> = {
+  FLOOD: 'FLOOD',
+  STORM: 'STORM',
+  HEATWAVE: 'HEATWAVE',
+  SNOW: 'SNOW',
+};
+
 function buildWeatherFromLiveForecast(args: {
   cityName: string | null;
   state: string | null | undefined;
@@ -201,7 +211,7 @@ function buildWeatherFromLiveForecast(args: {
   headline: string;
   detail: string;
   severity: InsightSeverity;
-  code: 'FREEZE' | 'STORM' | 'NONE';
+  code: WeatherInsightCode;
 } {
   const hasFreeze = args.signals.includes(SignalType.WEATHER_FORECAST_MIN_TEMP);
   const hasHeavyRain = args.signals.includes(SignalType.WEATHER_FORECAST_HEAVY_RAIN);
@@ -248,7 +258,7 @@ function buildWeatherUnavailableFallback(): {
   headline: string;
   detail: string;
   severity: InsightSeverity;
-  code: 'FREEZE' | 'STORM' | 'NONE';
+  code: WeatherInsightCode;
 } {
   return {
     headline: 'Weather signal currently unavailable',
@@ -520,7 +530,7 @@ export class DailyHomePulseService {
     propertyId: string;
     userId: string;
     dateKey: string;
-    weatherInsight: { headline: string; detail: string; severity: InsightSeverity; code: 'FREEZE' | 'STORM' | 'NONE' };
+    weatherInsight: { headline: string; detail: string; severity: InsightSeverity; code: WeatherInsightCode };
     overdueTasks: Array<{
       id: string;
       title: string;
@@ -880,9 +890,11 @@ export class DailyHomePulseService {
           },
           orderBy: [{ severityScore: 'desc' }, { updatedAt: 'desc' }],
           select: {
+            typeKey: true,
             title: true,
             summary: true,
             severity: true,
+            details: true,
           },
         }),
         prisma.recallMatch.findMany({
@@ -972,12 +984,21 @@ export class DailyHomePulseService {
 
     const weatherInsight = (() => {
       if (weatherIncident) {
+        const incidentDetails = safeObject(weatherIncident.details);
+        const hazardFamily =
+          typeof incidentDetails.hazardFamily === 'string' ? incidentDetails.hazardFamily : null;
+        const code: WeatherInsightCode =
+          weatherIncident.typeKey === 'FREEZE_RISK'
+            ? 'FREEZE'
+            : (hazardFamily && HAZARD_FAMILY_TO_CODE[hazardFamily]) ||
+              (weatherIncident.title.toLowerCase().includes('freeze') ? 'FREEZE' : 'STORM');
+
         return {
           headline: weatherIncident.title,
           detail: weatherIncident.summary || 'Weather-driven risk signal detected for your area.',
           severity: severityToInsight(weatherIncident.severity),
-          code: weatherIncident.title.toLowerCase().includes('freeze') ? 'FREEZE' : 'STORM',
-        } as const;
+          code,
+        };
       }
 
       if (liveForecastMeta.isAvailable) {
@@ -1105,6 +1126,7 @@ export class DailyHomePulseService {
         headline: weatherInsight.headline,
         detail: weatherInsight.detail,
         severity: weatherInsight.severity,
+        code: weatherInsight.code,
       },
       microAction: {
         actionId: microAction.id,

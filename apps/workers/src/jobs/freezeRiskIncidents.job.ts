@@ -4,8 +4,7 @@ import { IncidentStatus } from '@prisma/client';
 import { IncidentService } from '../../../backend/src/services/incidents/incident.service';
 import { guidanceJourneyService } from '../../../backend/src/services/guidanceEngine/guidanceJourney.service';
 import { logger } from '../lib/logger';
-
-type Geo = { lat: number; lon: number; name?: string; admin1?: string; country?: string };
+import { geocodeZip, Geo } from '../lib/geocodeZip';
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 const OPEN_FREEZE_STATUSES: IncidentStatus[] = [
@@ -25,27 +24,6 @@ function scoreFromMinF(minF: number) {
 
 function cToF(c: number) {
   return (c * 9) / 5 + 32;
-}
-
-async function geocodeZip(zip: string, countryCode = 'US'): Promise<Geo | null> {
-  const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(
-    zip
-  )}&count=1&language=en&format=json&country_code=${countryCode}`;
-
-  const res = await fetch(url, { method: 'GET' });
-  if (!res.ok) return null;
-
-  const json: any = await res.json();
-  const r = json?.results?.[0];
-  if (!r || typeof r.latitude !== 'number' || typeof r.longitude !== 'number') return null;
-
-  return {
-    lat: r.latitude,
-    lon: r.longitude,
-    name: r.name,
-    admin1: r.admin1,
-    country: r.country,
-  };
 }
 
 /**

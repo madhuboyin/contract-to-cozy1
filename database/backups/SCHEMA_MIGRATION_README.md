@@ -48,9 +48,6 @@ model HomeownerProfile {
 This makes your schema available inside the cluster:
 
 cd ~/git/contract-to-cozy1/apps/backend
-kubectl create configmap prisma-schema -n production \
-  --from-file=schema.prisma=prisma/schema.prisma \
-  --dry-run=client -o yaml | kubectl apply -f -
 
 kubectl create configmap prisma-schema -n production \
   --from-file=schema.prisma=prisma/schema.prisma \
@@ -90,8 +87,10 @@ spec:
           - -c
           - |
             echo "Applying LOCAL schema from ConfigMap..."
-            # Point prisma directly to the mounted ConfigMap schema
-            npx prisma db push --accept-data-loss --skip-generate --schema=/config/schema.prisma
+            echo "Architecture: $(uname -m)"
+            echo "Memory available:"
+            free -h 2>/dev/null || cat /proc/meminfo | head -5
+            npx prisma@5.7.1 db push --accept-data-loss --skip-generate --schema=/config/schema.prisma
         env:
         - name: DATABASE_URL
           value: "postgresql://postgres:${PASSWORD}@postgres.production.svc.cluster.local:5432/contracttocozy?schema=public"
@@ -103,6 +102,7 @@ spec:
         configMap:
           name: prisma-schema
 EOF
+
 
 Step 4: Watch Logs
 
@@ -184,13 +184,13 @@ Open: http://localhost:5555
 
 ## Why This Approach Works
 
-| Issue | Traditional Method | Our Solution |
-|-------|-------------------|--------------|
-| **Connection Stability** | Port-forward drops frequently | Direct cluster access via service DNS |
-| **Network Reliability** | Depends on local network | Internal cluster network (100% reliable) |
-| **Application Impact** | Service modifications affect app | Zero impact - no service changes |
-| **Speed** | Slow over port-forward | Fast internal connection |
-| **Repeatability** | Manual, error-prone | Automated via Job |
+| Issue                    | Traditional Method               | Our Solution                             |
+|--------------------------|----------------------------------|------------------------------------------|
+| **Connection Stability** | Port-forward drops frequently    | Direct cluster access via service DNS    |
+| **Network Reliability**  | Depends on local network         | Internal cluster network (100% reliable) |
+| **Application Impact**   | Service modifications affect app | Zero impact - no service changes         |
+| **Speed**                | Slow over port-forward           | Fast internal connection                 |
+| **Repeatability**        | Manual, error-prone              | Automated via Job                        |
 
 ---
 

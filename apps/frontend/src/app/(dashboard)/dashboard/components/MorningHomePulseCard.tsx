@@ -8,12 +8,14 @@ import {
   CheckCircle2,
   Clock3,
   Cloud,
+  CloudRain,
   CloudSun,
   DollarSign,
   Loader2,
   Shield,
   Snowflake,
   Sparkles,
+  ThermometerSun,
   TrendingDown,
   TrendingUp,
   Wind,
@@ -341,9 +343,15 @@ export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCar
   const secondaryDetail = showWeatherAsPrimary
     ? payload.weatherInsight.detail
     : payload.surprise.detail;
-  const freezeRiskMatch = /freeze|frost|snow|ice|blizzard|pipe/i.test(
-    `${secondaryHeadline} ${secondaryDetail}`
-  );
+  // `code` is the authoritative hazard classification computed server-side
+  // (dailyHomePulse.service.ts). Older cached snapshots predate that field,
+  // so fall back to text-sniffing the headline/detail for those only.
+  const weatherCode = payload.weatherInsight.code;
+  const freezeRiskMatch = weatherCode
+    ? weatherCode === 'FREEZE' || weatherCode === 'SNOW'
+    : /freeze|frost|snow|ice|blizzard|pipe/i.test(`${secondaryHeadline} ${secondaryDetail}`);
+  const WeatherHazardIcon =
+    weatherCode === 'FLOOD' ? CloudRain : weatherCode === 'HEATWAVE' ? ThermometerSun : Wind;
   const freezeTone = freezeLottieTone(payload.weatherInsight.severity);
   const dailyStreak = snapshot.streaks.dailyPulseCheckin;
   const nextStreakMilestone = getNextMilestone(dailyStreak);
@@ -369,7 +377,7 @@ export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCar
             reducedMotionBgClassName={freezeTone.reducedBgClass}
           />
         ) : showWeatherAsPrimary ? (
-          <Wind className="mt-0.5 h-4 w-4 shrink-0" />
+          <WeatherHazardIcon className="mt-0.5 h-4 w-4 shrink-0" />
         ) : (
           <Sparkles className="mt-0.5 h-4 w-4 shrink-0" />
         )}

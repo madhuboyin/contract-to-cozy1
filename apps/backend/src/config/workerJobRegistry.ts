@@ -205,6 +205,17 @@ export const JOB_REGISTRY: JobRegistryEntry[] = [
     triggerSupported: false,
   },
   {
+    key: 'severe-weather-alerts',
+    name: 'Severe Weather Alerts',
+    description:
+      'Polls live NOAA/NWS alerts (flash flood, severe thunderstorm, tornado, high wind, excessive heat, winter storm) per property and creates incidents for active warnings.',
+    category: 'RISK_SAFETY',
+    schedule: 'Every 15 minutes',
+    cronExpression: '*/15 * * * *',
+    type: 'cron',
+    triggerSupported: false,
+  },
+  {
     key: 'weekly-score-snapshots',
     name: 'Weekly Score Snapshots',
     description:

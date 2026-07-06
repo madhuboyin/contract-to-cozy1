@@ -27,6 +27,7 @@ import { recallIngestJob, RECALL_INGEST_JOB } from './jobs/recallIngest.job';
 import { recallMatchJob, RECALL_MATCH_JOB } from './jobs/recallMatch.job';
 import { coverageLapseIncidentsJob } from './jobs/coverageLapseIncidents.job';
 import { freezeRiskIncidentsJob } from './jobs/freezeRiskIncidents.job';
+import { severeWeatherAlertsJob } from './jobs/severeWeatherAlerts.job';
 import { cleanupInventoryDraftsJob } from './jobs/cleanupInventoryDrafts.job';
 import { ingestRadarSignalsJob } from './jobs/ingestRadarSignals.job';
 import { ingestHomeRiskEventsJob } from './jobs/ingestHomeRiskEvents.job';
@@ -666,6 +667,7 @@ const CRON_HANDLERS: Record<string, () => Promise<void>> = {
   'hidden-asset-refresh':            async () => { await runHiddenAssetRefreshJob(); },
   'coverage-lapse-incidents':        async () => { await coverageLapseIncidentsJob(); },
   'freeze-risk-incidents':           async () => { await freezeRiskIncidentsJob(); },
+  'severe-weather-alerts':           async () => { await severeWeatherAlertsJob(); },
   'neighborhood-change-notifications': async () => { await neighborhoodChangeNotificationJob(); },
   'neighborhood-radar-refresh':      async () => { await refreshNeighborhoodEventsJob(); },
   'inventory-draft-cleanup':         async () => { await cleanupInventoryDraftsJob(); },

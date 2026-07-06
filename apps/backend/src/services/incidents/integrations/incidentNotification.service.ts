@@ -227,11 +227,13 @@ export class IncidentNotificationService {
       guidanceContext
     );
 
+    const title = sev === IncidentSeverity.CRITICAL ? `⚠️ ${args.incident.title}` : args.incident.title;
+
     const notification = await prisma.notification.create({
       data: {
         userId: recipientUserId,
         type,
-        title: args.incident.title,
+        title,
         message: args.incident.summary ?? 'New incident detected.',
         actionUrl,
         entityType: 'Incident',
@@ -243,6 +245,10 @@ export class IncidentNotificationService {
           propertyId: args.incident.propertyId,
           typeKey: args.incident.typeKey,
           guidanceContext,
+          // CRITICAL incidents (severe weather, etc.) skip the once-daily
+          // digest and go out via the immediate-send path instead — see
+          // highPriorityEmailEnqueue.poller.ts + sendEmailNotification.job.ts.
+          ...(sev === IncidentSeverity.CRITICAL ? { priority: 'HIGH' } : {}),
         },
       },
     });

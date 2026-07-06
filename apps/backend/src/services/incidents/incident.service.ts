@@ -128,7 +128,22 @@ function toGuidanceSourceType(incidentSourceType: string | null | undefined): st
   return GUIDANCE_SOURCE_TYPE_BY_INCIDENT_SOURCE_TYPE[incidentSourceType] ?? 'SCHEDULED';
 }
 
-function mapIncidentTypeToGuidance(typeKey: string): {
+// SEVERE_WEATHER_ALERT covers several distinct hazard families (see
+// severeWeatherAlerts.job.ts); each maps to its own signalIntentFamily within
+// the weather_risk_resolution guidance journey (guidanceTemplateRegistry.ts)
+// rather than being collapsed into freeze_risk like every other WEATHER
+// incident below.
+const SEVERE_WEATHER_HAZARD_FAMILY_INTENT: Record<string, string> = {
+  FLOOD: 'flood_risk',
+  STORM: 'wind_risk',
+  HEATWAVE: 'heat_risk',
+  SNOW: 'freeze_risk',
+};
+
+function mapIncidentTypeToGuidance(
+  typeKey: string,
+  details?: Record<string, unknown> | null
+): {
   signalIntentFamily: string;
   issueDomain:
     | 'WEATHER'
@@ -143,6 +158,16 @@ function mapIncidentTypeToGuidance(typeKey: string): {
   sourceToolKey: string;
 } {
   const normalized = normalizeIncidentTypeKey(typeKey);
+
+  if (normalized === 'SEVERE_WEATHER_ALERT') {
+    const hazardFamily = typeof details?.hazardFamily === 'string' ? details.hazardFamily : null;
+    return {
+      signalIntentFamily: (hazardFamily && SEVERE_WEATHER_HAZARD_FAMILY_INTENT[hazardFamily]) || 'freeze_risk',
+      issueDomain: 'WEATHER',
+      readiness: 'READY',
+      sourceToolKey: 'home-event-radar',
+    };
+  }
 
   if (normalized.includes('RECALL')) {
     return {
@@ -240,8 +265,8 @@ async function bridgeIncidentToGuidance(incident: any) {
     return;
   }
 
-  const mapped = mapIncidentTypeToGuidance(incident.typeKey);
   const details = asRecord(incident.details);
+  const mapped = mapIncidentTypeToGuidance(incident.typeKey, details);
   const inventoryItemId =
     typeof details.inventoryItemId === 'string' && details.inventoryItemId.trim().length > 0
       ? details.inventoryItemId
