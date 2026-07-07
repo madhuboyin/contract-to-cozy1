@@ -31,6 +31,55 @@ export const jobsActiveGauge = new Gauge({
   registers: [register],
 });
 
+// ─── node-cron job metrics ───────────────────────────────────────────────────
+// Registry-driven cron jobs (scheduleCronJobs() in worker.ts) don't run
+// through BullMQ, so they get none of the metrics above. These cover every
+// job in workerJobRegistry.ts generically, not just the weather jobs.
+
+export const cronJobRunsTotal = new Counter({
+  name: 'cron_job_runs_total',
+  help: 'Total number of node-cron job runs, by outcome',
+  labelNames: ['job_key', 'status'] as const, // status: success|failure
+  registers: [register],
+});
+
+export const cronJobDurationSeconds = new Histogram({
+  name: 'cron_job_duration_seconds',
+  help: 'node-cron job run duration in seconds',
+  labelNames: ['job_key'] as const,
+  buckets: [0.1, 0.5, 1, 5, 10, 30, 60, 120, 300, 600],
+  registers: [register],
+});
+
+// Unix timestamp (seconds) of each job's last successful run — the standard
+// "dead man's switch" metric: alert on
+// `time() - cron_job_last_success_timestamp_seconds{job_key="..."} > threshold`
+// to catch a job that has silently stopped succeeding (e.g. an upstream API
+// rejecting our requests, a regression that always throws) well before
+// anyone notices on the dashboard.
+export const cronJobLastSuccessTimestamp = new Gauge({
+  name: 'cron_job_last_success_timestamp_seconds',
+  help: 'Unix timestamp of each cron job\'s last successful run',
+  labelNames: ['job_key'] as const,
+  registers: [register],
+});
+
+// ─── Severe weather alerts job metrics ───────────────────────────────────────
+
+export const nwsFetchOutcomeTotal = new Counter({
+  name: 'nws_fetch_outcome_total',
+  help: 'Outcome of each NWS alerts/active fetch call',
+  labelNames: ['outcome'] as const, // ok|http_error|timeout|error
+  registers: [register],
+});
+
+export const severeWeatherIncidentsTotal = new Counter({
+  name: 'severe_weather_incidents_total',
+  help: 'Severe-weather incidents created/updated or resolved by severeWeatherAlertsJob',
+  labelNames: ['action'] as const, // created_or_updated|resolved
+  registers: [register],
+});
+
 // ─── Metrics HTTP server ─────────────────────────────────────────────────────
 
 const METRICS_PORT = Number(process.env.METRICS_PORT) || 9091;

@@ -54,7 +54,15 @@ import { prisma } from './lib/prisma';
 import { HiddenAssetService } from '../../backend/src/services/hiddenAssets.service';
 import RiskAssessmentService from '../../backend/src/services/RiskAssessment.service';
 import { logger } from './lib/logger';
-import { startMetricsServer, jobsProcessedTotal, jobDurationSeconds, jobsActiveGauge } from './lib/metrics';
+import {
+  startMetricsServer,
+  jobsProcessedTotal,
+  jobDurationSeconds,
+  jobsActiveGauge,
+  cronJobRunsTotal,
+  cronJobDurationSeconds,
+  cronJobLastSuccessTimestamp,
+} from './lib/metrics';
 
 const hiddenAssetService = new HiddenAssetService();
 
@@ -713,12 +721,18 @@ function scheduleCronJobs(): void {
     cron.schedule(
       cronExpr,
       async () => {
+        const stopTimer = cronJobDurationSeconds.startTimer({ job_key: entry.key });
         try {
           logger.info(`[${entry.key}] Starting: ${entry.name}`);
           await handler();
           logger.info(`[${entry.key}] ✅ Completed`);
+          cronJobRunsTotal.inc({ job_key: entry.key, status: 'success' });
+          cronJobLastSuccessTimestamp.set({ job_key: entry.key }, Date.now() / 1000);
         } catch (err) {
           logger.error({ err }, `[${entry.key}] ❌ Failed`);
+          cronJobRunsTotal.inc({ job_key: entry.key, status: 'failure' });
+        } finally {
+          stopTimer();
         }
       },
       { timezone: 'America/New_York' },

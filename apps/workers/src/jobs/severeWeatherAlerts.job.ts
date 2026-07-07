@@ -11,14 +11,21 @@ import { IncidentService } from '../../../backend/src/services/incidents/inciden
 import { guidanceJourneyService } from '../../../backend/src/services/guidanceEngine/guidanceJourney.service';
 import {
   severeWeatherAlertService,
-  HazardFamily,
-  NwsSeverity,
   SevereWeatherAlert,
 } from '../../../backend/src/services/severeWeatherAlert.service';
 import { Geo } from '../lib/geocodeZip';
 import { getPropertyGeo } from '../lib/propertyGeo';
 import { iterateAllProperties } from '../lib/paginateProperties';
 import { logger } from '../lib/logger';
+import {
+  HAZARD_INTENT_FAMILY,
+  HAZARD_CATEGORY,
+  isWarningLevel,
+  initialScoreFor,
+  scoringInputsFor,
+  summaryFor,
+} from './severeWeatherAlerts.scoring';
+import { nwsFetchOutcomeTotal, severeWeatherIncidentsTotal } from '../lib/metrics';
 
 const TYPE_KEY = 'SEVERE_WEATHER_ALERT';
 
@@ -29,74 +36,6 @@ const OPEN_SEVERE_WEATHER_STATUSES: IncidentStatus[] = [
   IncidentStatus.ACTIONED,
   IncidentStatus.MITIGATED,
 ];
-
-const HAZARD_INTENT_FAMILY: Record<HazardFamily, string> = {
-  FLOOD: 'flood_risk',
-  STORM: 'wind_risk',
-  HEATWAVE: 'heat_risk',
-  SNOW: 'freeze_risk',
-};
-
-const HAZARD_CATEGORY: Record<HazardFamily, string> = {
-  FLOOD: 'EXTERIOR',
-  STORM: 'EXTERIOR',
-  HEATWAVE: 'HVAC',
-  SNOW: 'EXTERIOR',
-};
-
-// Rough exposure defaults per hazard family (Warning-level NWS severity).
-const HAZARD_EXPOSURE_USD: Record<HazardFamily, number> = {
-  FLOOD: 8000,
-  STORM: 5000,
-  HEATWAVE: 1000,
-  SNOW: 2000,
-};
-
-function isWarningLevel(sev: NwsSeverity): boolean {
-  return sev === 'Extreme' || sev === 'Severe';
-}
-
-// Initial estimate only — evaluateIncident() recomputes the authoritative
-// severityScore from the scoring inputs (exposureUsd/safetyCritical/etc.)
-// immediately after upsertIncident() creates/updates the row.
-function initialScoreFor(sev: NwsSeverity): number {
-  switch (sev) {
-    case 'Extreme': return 90;
-    case 'Severe': return 75;
-    case 'Moderate': return 55;
-    default: return 35;
-  }
-}
-
-function isSafetyCritical(alert: SevereWeatherAlert): boolean {
-  if (alert.hazardFamily === 'FLOOD' || alert.hazardFamily === 'STORM') return true;
-  if (alert.hazardFamily === 'HEATWAVE' && alert.severity === 'Extreme') return true;
-  return false;
-}
-
-function scoringInputsFor(alert: SevereWeatherAlert) {
-  const warningLevel = isWarningLevel(alert.severity);
-  const baseExposure = HAZARD_EXPOSURE_USD[alert.hazardFamily];
-
-  const expiresAt = alert.expires ? new Date(alert.expires) : null;
-  const timeWindowHours =
-    expiresAt && !Number.isNaN(expiresAt.getTime())
-      ? Math.max(1, Math.round((expiresAt.getTime() - Date.now()) / 3_600_000))
-      : 6; // sane default if NWS omits expires
-
-  return {
-    safetyCritical: isSafetyCritical(alert),
-    exposureUsd: warningLevel ? baseExposure : Math.round(baseExposure / 2),
-    probabilityPct: warningLevel ? 90 : 50,
-    timeWindowHours,
-  };
-}
-
-function summaryFor(alert: SevereWeatherAlert): string {
-  const firstSentence = (alert.headline || alert.description || '').split(/(?<=[.!?])\s/)[0];
-  const sender = alert.senderName ? ` — ${alert.senderName}` : '';
-  return firstSentence ? `${firstSentence}${sender}` : `${alert.event} in effect${sender}`;
-}
 
 export async function severeWeatherAlertsJob() {
   let createdOrUpdated = 0;
@@ -119,7 +58,9 @@ export async function severeWeatherAlertsJob() {
 
     let alerts = alertsCache.get(zip);
     if (alerts === undefined) {
-      alerts = await severeWeatherAlertService.getActiveAlerts(geo.lat, geo.lon);
+      alerts = await severeWeatherAlertService.getActiveAlerts(geo.lat, geo.lon, (outcome) => {
+        nwsFetchOutcomeTotal.inc({ outcome });
+      });
       alertsCache.set(zip, alerts);
     }
 
@@ -284,6 +225,9 @@ export async function severeWeatherAlertsJob() {
     await IncidentService.setStatus(incident.id, IncidentStatus.RESOLVED);
     resolved++;
   }
+
+  severeWeatherIncidentsTotal.inc({ action: 'created_or_updated' }, createdOrUpdated);
+  severeWeatherIncidentsTotal.inc({ action: 'resolved' }, resolved);
 
   return { createdOrUpdated, resolved };
 }

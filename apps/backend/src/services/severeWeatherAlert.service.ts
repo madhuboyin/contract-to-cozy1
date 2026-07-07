@@ -87,12 +87,24 @@ const EVENT_TO_HAZARD_FAMILY: Record<string, HazardFamily> = {
 // SevereWeatherAlertService
 // ─────────────────────────────────────────────────────────────────────────────
 
+export type NwsFetchOutcome = 'ok' | 'http_error' | 'timeout' | 'error';
+
 export class SevereWeatherAlertService {
   /**
    * Returns currently active, in-scope NWS alerts for a lat/lon point.
    * Returns [] on any error, timeout, or unrecognized event type — never throws.
+   *
+   * `onOutcome`, if provided, is called once with how the fetch went. This is
+   * dependency-injection rather than a direct metrics import so this
+   * backend-tree service stays decoupled from the workers app's prom-client
+   * registry — the caller (severeWeatherAlerts.job.ts) supplies the hook and
+   * records it on its own metrics.
    */
-  async getActiveAlerts(lat: number, lon: number): Promise<SevereWeatherAlert[]> {
+  async getActiveAlerts(
+    lat: number,
+    lon: number,
+    onOutcome?: (outcome: NwsFetchOutcome) => void
+  ): Promise<SevereWeatherAlert[]> {
     if (typeof lat !== 'number' || typeof lon !== 'number' || Number.isNaN(lat) || Number.isNaN(lon)) {
       logger.warn('[NWS] getActiveAlerts called with invalid lat/lon');
       return [];
@@ -119,6 +131,7 @@ export class SevereWeatherAlertService {
         if (!res.ok) {
           const body = await res.text().catch(() => '');
           logger.error(`[NWS] alerts/active returned ${res.status} for point=${lat},${lon}: ${body}`);
+          onOutcome?.('http_error');
           return [];
         }
         data = (await res.json()) as NwsAlertsResponse;
@@ -132,12 +145,15 @@ export class SevereWeatherAlertService {
           .map(a => a.event)
           .join(', ')}]`
       );
+      onOutcome?.('ok');
       return alerts;
     } catch (error: any) {
       if (error?.name === 'AbortError') {
         logger.error(`[NWS] Fetch timed out for point=${lat},${lon}`);
+        onOutcome?.('timeout');
       } else {
         logger.error({ err: error }, `[NWS] Fetch failed for point=${lat},${lon}`);
+        onOutcome?.('error');
       }
       return [];
     }
