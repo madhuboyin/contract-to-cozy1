@@ -244,8 +244,11 @@ export default function ReserveFundClient() {
     setLoading(true);
     setError(null);
     try {
-      const [fundResult, lineItemsResult, contributionsResult, suggestionsResult] = await Promise.all([
-        getFund(propertyId),
+      // getFund is awaited first, not raced in parallel with the rest — every one
+      // of these endpoints lazily creates the fund row on first access, so firing
+      // them all at once on a brand-new property had them all race to create it.
+      const fundResult = await getFund(propertyId);
+      const [lineItemsResult, contributionsResult, suggestionsResult] = await Promise.all([
         listLineItems(propertyId),
         listContributions(propertyId, { limit: 20 }),
         listReconciliationSuggestions(propertyId),

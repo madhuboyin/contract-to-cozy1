@@ -89,8 +89,18 @@ export class HomeReserveFundCalculationService {
       throw new APIError('Property not found', 404, 'PROPERTY_NOT_FOUND');
     }
 
-    return prisma.homeReserveFund.create({
-      data: { propertyId, homeownerProfileId: resolvedHomeownerProfileId },
+    // upsert (not create) — the frontend's first load fires getFund/listLineItems/
+    // listContributions/listReconciliationSuggestions in parallel, and each calls
+    // getOrCreateFund. On a brand-new property, all of them race past the
+    // findUnique check above before any has committed a row, so a plain create()
+    // here throws a unique constraint violation on propertyId for every request
+    // after the first to land. Postgres executes Prisma's upsert as an atomic
+    // INSERT ... ON CONFLICT DO UPDATE, so concurrent callers safely converge on
+    // the same row instead of racing.
+    return prisma.homeReserveFund.upsert({
+      where: { propertyId },
+      update: {},
+      create: { propertyId, homeownerProfileId: resolvedHomeownerProfileId },
     });
   }
 
