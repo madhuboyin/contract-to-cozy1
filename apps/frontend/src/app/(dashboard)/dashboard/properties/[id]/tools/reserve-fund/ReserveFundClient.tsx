@@ -367,6 +367,12 @@ export default function ReserveFundClient() {
   const visibleSuggestions = suggestions.filter(
     (s) => !dismissedSuggestionKeys.has(`${s.lineItemId}:${s.expenseId}`)
   );
+  // No Capital Timeline items → recommendedMonthlyContributionCents and
+  // currentShortfallCents are both 0 because there's nothing to compute from,
+  // not because the homeowner is actually on track. Render that as a distinct
+  // "no data" state instead of the reassuring green "$0/mo · You're covered"
+  // cards, which would otherwise look identical to a genuinely funded property.
+  const hasTimelineData = activeLineItems.length > 0;
 
   const targetTotalCents = activeLineItems.reduce((sum, li) => sum + li.targetCostCents, 0);
   const progressPct =
@@ -453,42 +459,76 @@ export default function ReserveFundClient() {
             </div>
 
             <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div className="rounded-2xl border border-teal-200/70 bg-teal-50/80 px-4 py-3 shadow-sm backdrop-blur dark:border-teal-700/60 dark:bg-teal-900/30">
-                <p className="text-xs font-medium tracking-normal text-teal-700 dark:text-teal-400">
-                  Recommended monthly set-aside
-                </p>
-                <p className="mt-1 text-2xl font-bold text-teal-700 dark:text-teal-300">
-                  {money(fund.recommendedMonthlyContributionCents)}
-                  <span className="ml-0.5 text-sm font-normal">/mo</span>
-                </p>
-              </div>
-              <div
-                className={`rounded-2xl border px-4 py-3 shadow-sm backdrop-blur ${
-                  fund.currentShortfallCents > 0
-                    ? 'border-red-200/70 bg-red-50/80 dark:border-red-700/60 dark:bg-red-900/20'
-                    : 'border-emerald-200/70 bg-emerald-50/80 dark:border-emerald-700/60 dark:bg-emerald-900/20'
-                }`}
-              >
-                <p
-                  className={`text-xs font-medium tracking-normal ${
+              {hasTimelineData ? (
+                <div className="rounded-2xl border border-teal-200/70 bg-teal-50/80 px-4 py-3 shadow-sm backdrop-blur dark:border-teal-700/60 dark:bg-teal-900/30">
+                  <p className="text-xs font-medium tracking-normal text-teal-700 dark:text-teal-400">
+                    Recommended monthly set-aside
+                  </p>
+                  <p className="mt-1 text-2xl font-bold text-teal-700 dark:text-teal-300">
+                    {money(fund.recommendedMonthlyContributionCents)}
+                    <span className="ml-0.5 text-sm font-normal">/mo</span>
+                  </p>
+                </div>
+              ) : (
+                <div className="rounded-2xl border border-slate-200/70 bg-slate-50/80 px-4 py-3 shadow-sm backdrop-blur dark:border-slate-700/60 dark:bg-slate-800/40">
+                  <p className="text-xs font-medium tracking-normal text-slate-500 dark:text-slate-400">
+                    Recommended monthly set-aside
+                  </p>
+                  <p className="mt-1 text-lg font-semibold text-slate-400 dark:text-slate-500">
+                    No data yet
+                  </p>
+                </div>
+              )}
+              {hasTimelineData ? (
+                <div
+                  className={`rounded-2xl border px-4 py-3 shadow-sm backdrop-blur ${
                     fund.currentShortfallCents > 0
-                      ? 'text-red-700 dark:text-red-400'
-                      : 'text-emerald-700 dark:text-emerald-400'
+                      ? 'border-red-200/70 bg-red-50/80 dark:border-red-700/60 dark:bg-red-900/20'
+                      : 'border-emerald-200/70 bg-emerald-50/80 dark:border-emerald-700/60 dark:bg-emerald-900/20'
                   }`}
                 >
-                  {fund.currentShortfallCents > 0 ? 'Near-term shortfall (next 6 months)' : 'No near-term shortfall'}
-                </p>
-                <p
-                  className={`mt-1 text-2xl font-bold ${
-                    fund.currentShortfallCents > 0
-                      ? 'text-red-700 dark:text-red-300'
-                      : 'text-emerald-700 dark:text-emerald-300'
-                  }`}
-                >
-                  {fund.currentShortfallCents > 0 ? money(fund.currentShortfallCents) : "You're covered"}
-                </p>
-              </div>
+                  <p
+                    className={`text-xs font-medium tracking-normal ${
+                      fund.currentShortfallCents > 0
+                        ? 'text-red-700 dark:text-red-400'
+                        : 'text-emerald-700 dark:text-emerald-400'
+                    }`}
+                  >
+                    {fund.currentShortfallCents > 0 ? 'Near-term shortfall (next 6 months)' : 'No near-term shortfall'}
+                  </p>
+                  <p
+                    className={`mt-1 text-2xl font-bold ${
+                      fund.currentShortfallCents > 0
+                        ? 'text-red-700 dark:text-red-300'
+                        : 'text-emerald-700 dark:text-emerald-300'
+                    }`}
+                  >
+                    {fund.currentShortfallCents > 0 ? money(fund.currentShortfallCents) : "You're covered"}
+                  </p>
+                </div>
+              ) : (
+                <div className="rounded-2xl border border-slate-200/70 bg-slate-50/80 px-4 py-3 shadow-sm backdrop-blur dark:border-slate-700/60 dark:bg-slate-800/40">
+                  <p className="text-xs font-medium tracking-normal text-slate-500 dark:text-slate-400">
+                    Near-term shortfall
+                  </p>
+                  <p className="mt-1 text-lg font-semibold text-slate-400 dark:text-slate-500">
+                    No data yet
+                  </p>
+                </div>
+              )}
             </div>
+            {!hasTimelineData && (
+              <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">
+                These figures are blank, not zero — run{' '}
+                <Link
+                  href={`/dashboard/properties/${propertyId}/tools/capital-timeline`}
+                  className="font-medium text-teal-700 underline dark:text-teal-400"
+                >
+                  Capital Timeline
+                </Link>{' '}
+                below to generate a real target.
+              </p>
+            )}
           </div>
 
           {/* Reconciliation suggestions */}
