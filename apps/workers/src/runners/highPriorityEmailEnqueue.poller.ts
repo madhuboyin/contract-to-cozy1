@@ -74,7 +74,9 @@ export function startHighPriorityEmailEnqueuePoller(opts?: {
           await queue.add(
             JOB_NAME,
             { notificationDeliveryId: deliveryId },
-            { jobId: `email:${deliveryId}`, removeOnComplete: true, removeOnFail: false }
+            // BullMQ rejects ":" in custom job IDs ("Custom Id cannot contain :") —
+            // confirmed live this was silently failing every single enqueue attempt.
+            { jobId: `email-${deliveryId}`, removeOnComplete: true, removeOnFail: false }
           );
           succeeded++;
         } catch (err) {
