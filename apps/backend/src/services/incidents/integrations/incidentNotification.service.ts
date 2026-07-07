@@ -33,6 +33,23 @@ function asStringOrNull(value: unknown): string | null {
 }
 
 /**
+ * Property-level incidents created by automated jobs (freeze-risk,
+ * severe-weather-alerts, coverage-lapse, etc.) are created with
+ * userId: null — they're not tied to a specific user action. Without this
+ * fallback, notifyIncidentActivated/notifyAfterActionExecuted silently
+ * returned before creating any notification at all (recipientUserId would
+ * resolve to an empty string, which is falsy) — no IN_APP row, no EMAIL row,
+ * nothing. Resolve the property's owner as the recipient in that case.
+ */
+async function resolvePropertyOwnerUserId(propertyId: string): Promise<string | null> {
+  const property = await prisma.property.findUnique({
+    where: { id: propertyId },
+    select: { homeownerProfile: { select: { userId: true } } },
+  });
+  return property?.homeownerProfile?.userId ?? null;
+}
+
+/**
  * If this incident's details carry severe-weather fields (set by
  * severeWeatherAlerts.job.ts), returns a compact sub-object the email
  * builders (buildWeatherAlertCardHtml) use to render a hazard-specific card
@@ -226,7 +243,8 @@ export class IncidentNotificationService {
     const sev = args.incident.severity ?? IncidentSeverity.INFO;
     if (!shouldSendInApp(sev) && !shouldSendEmail(sev)) return;
 
-    const recipientUserId = args.incident.userId ?? args.userId;
+    const recipientUserId =
+      args.incident.userId || args.userId || (await resolvePropertyOwnerUserId(args.incident.propertyId));
     if (!recipientUserId) return;
 
     const type = 'INCIDENT_ACTIVATED';
@@ -312,7 +330,8 @@ export class IncidentNotificationService {
     action: { id: string; type: string; entityType: string | null; entityId: string | null };
     severity: IncidentSeverity;
   }) {
-    const recipientUserId = args.incident.userId ?? args.userId;
+    const recipientUserId =
+      args.incident.userId || args.userId || (await resolvePropertyOwnerUserId(args.incident.propertyId));
     if (!recipientUserId) return;
 
     const type = 'INCIDENT_ACTION_CREATED';
