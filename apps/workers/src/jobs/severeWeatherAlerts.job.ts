@@ -15,7 +15,9 @@ import {
   NwsSeverity,
   SevereWeatherAlert,
 } from '../../../backend/src/services/severeWeatherAlert.service';
-import { geocodeZip, Geo } from '../lib/geocodeZip';
+import { Geo } from '../lib/geocodeZip';
+import { getPropertyGeo } from '../lib/propertyGeo';
+import { iterateAllProperties } from '../lib/paginateProperties';
 import { logger } from '../lib/logger';
 
 const TYPE_KEY = 'SEVERE_WEATHER_ALERT';
@@ -97,29 +99,22 @@ function summaryFor(alert: SevereWeatherAlert): string {
 }
 
 export async function severeWeatherAlertsJob() {
-  const props = await prisma.property.findMany({
-    where: { zipCode: { not: undefined } },
-    select: { id: true, zipCode: true, city: true, state: true },
-    take: 500,
-  });
-
   let createdOrUpdated = 0;
   let resolved = 0;
   const now = new Date();
 
-  // In-run caches so properties sharing a zip don't repeat geocoding/NWS calls.
-  const geoCache = new Map<string, Geo | null>();
+  // In-run cache so properties sharing an as-yet-uncached zip within this run
+  // don't each trigger their own geocode call. getPropertyGeo also persists
+  // resolved coordinates onto Property.latitude/longitude, so future runs
+  // skip geocoding entirely for properties whose zip hasn't changed.
+  const geoRunCache = new Map<string, Geo | null>();
   const alertsCache = new Map<string, SevereWeatherAlert[]>();
 
-  for (const p of props) {
+  for await (const p of iterateAllProperties()) {
     const zip = (p.zipCode ?? '').trim();
     if (!zip) continue;
 
-    let geo = geoCache.get(zip);
-    if (geo === undefined) {
-      geo = await geocodeZip(zip, 'US');
-      geoCache.set(zip, geo);
-    }
+    const geo = await getPropertyGeo(p, geoRunCache);
     if (!geo) continue;
 
     let alerts = alertsCache.get(zip);

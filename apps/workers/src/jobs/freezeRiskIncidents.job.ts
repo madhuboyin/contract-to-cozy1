@@ -4,7 +4,9 @@ import { IncidentStatus } from '@prisma/client';
 import { IncidentService } from '../../../backend/src/services/incidents/incident.service';
 import { guidanceJourneyService } from '../../../backend/src/services/guidanceEngine/guidanceJourney.service';
 import { logger } from '../lib/logger';
-import { geocodeZip, Geo } from '../lib/geocodeZip';
+import { Geo } from '../lib/geocodeZip';
+import { getPropertyGeo } from '../lib/propertyGeo';
+import { iterateAllProperties } from '../lib/paginateProperties';
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 const OPEN_FREEZE_STATUSES: IncidentStatus[] = [
@@ -72,28 +74,21 @@ async function getForecastMinF(lat: number, lon: number): Promise<number | null>
 }
 
 export async function freezeRiskIncidentsJob() {
-  const props = await prisma.property.findMany({
-    where: { zipCode: { not: undefined } },
-    select: { id: true, zipCode: true, city: true, state: true },
-    take: 500,
-  });
-
   let createdOrUpdated = 0;
   let resolved = 0;
   const now = new Date();
 
-  // Simple in-memory cache so we don’t geocode the same zip repeatedly in a run
-  const geoCache = new Map<string, Geo | null>();
+  // In-run cache so properties sharing an as-yet-uncached zip within this run
+  // don't each trigger their own geocode call. getPropertyGeo also persists
+  // resolved coordinates onto Property.latitude/longitude, so future runs
+  // skip geocoding entirely for properties whose zip hasn't changed.
+  const geoRunCache = new Map<string, Geo | null>();
 
-  for (const p of props) {
+  for await (const p of iterateAllProperties()) {
     const zip = (p.zipCode ?? '').trim();
     if (!zip) continue;
 
-    let geo = geoCache.get(zip);
-    if (geo === undefined) {
-      geo = await geocodeZip(zip, 'US');
-      geoCache.set(zip, geo);
-    }
+    const geo = await getPropertyGeo(p, geoRunCache);
     if (!geo) continue;
 
     const minF = await getForecastMinF(geo.lat, geo.lon);

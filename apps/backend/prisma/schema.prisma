@@ -1876,6 +1876,14 @@ model Property {
   state   String
   zipCode String
 
+  // Cached geocode result for weather jobs (freeze-risk, severe-weather-alerts).
+  // Avoids re-geocoding the same zip on every 15-min job run. geocodedZipCode
+  // records which zip these coordinates correspond to, so a zip change
+  // automatically invalidates the cache on the next job run.
+  latitude        Float?
+  longitude       Float?
+  geocodedZipCode String?
+
   isPrimary Boolean @default(true)
 
   propertyType PropertyType?
