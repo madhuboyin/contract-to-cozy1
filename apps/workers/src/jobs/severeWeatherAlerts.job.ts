@@ -208,7 +208,6 @@ export async function severeWeatherAlertsJob() {
           sourceType: 'EXTERNAL',
           sourceFeatureKey: 'severe-weather-alerts',
           sourceEntityType: 'INCIDENT',
-          sourceProvenanceId: fingerprint,
           payloadJson: {
             hazardFamily: alert.hazardFamily,
             event: alert.event,

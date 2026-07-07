@@ -181,7 +181,6 @@ export async function freezeRiskIncidentsJob() {
         sourceType: 'EXTERNAL',
         sourceFeatureKey: 'freeze-risk-incidents',
         sourceEntityType: 'INCIDENT',
-        sourceProvenanceId: `property:${p.id}|FREEZE_RISK`,
         payloadJson: { minF, timeWindowHours: 36, zip, provider: 'open-meteo' },
         expiresAt: new Date(Date.now() + 36 * 60 * 60 * 1000),
       });
