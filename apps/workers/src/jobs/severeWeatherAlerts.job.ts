@@ -238,10 +238,9 @@ export async function severeWeatherAlertsJob() {
       const details = (incident.details as Record<string, unknown> | null) ?? {};
       const nwsAlertId = typeof details.nwsAlertId === 'string' ? details.nwsAlertId : null;
       if (nwsAlertId && !activeAlertIds.has(nwsAlertId)) {
-        await prisma.incident.update({
-          where: { id: incident.id },
-          data: { status: IncidentStatus.RESOLVED, resolvedAt: now },
-        });
+        // Route through IncidentService.setStatus (not a raw prisma update) so its
+        // RESOLVED-transition hook archives the linked guidance journey/signal too.
+        await IncidentService.setStatus(incident.id, IncidentStatus.RESOLVED);
         resolved++;
       }
     }
@@ -250,7 +249,7 @@ export async function severeWeatherAlertsJob() {
   // Safety net: resolve lingering stale severe-weather incidents that were not
   // refreshed recently (e.g. property dropped out of the list, job failures).
   const staleCutoff = new Date(now.getTime() - 48 * 60 * 60 * 1000);
-  const staleResolveResult = await prisma.incident.updateMany({
+  const staleIncidents = await prisma.incident.findMany({
     where: {
       sourceType: 'WEATHER',
       typeKey: TYPE_KEY,
@@ -258,12 +257,12 @@ export async function severeWeatherAlertsJob() {
       status: { in: OPEN_SEVERE_WEATHER_STATUSES },
       updatedAt: { lt: staleCutoff },
     },
-    data: {
-      status: IncidentStatus.RESOLVED,
-      resolvedAt: now,
-    },
+    select: { id: true },
   });
-  resolved += staleResolveResult.count;
+  for (const incident of staleIncidents) {
+    await IncidentService.setStatus(incident.id, IncidentStatus.RESOLVED);
+    resolved++;
+  }
 
   return { createdOrUpdated, resolved };
 }

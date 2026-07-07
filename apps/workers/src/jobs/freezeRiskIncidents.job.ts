@@ -102,7 +102,9 @@ export async function freezeRiskIncidentsJob() {
     // trigger: < 28F
     if (minF >= 28) {
       // Forecast no longer indicates freeze risk; resolve active/open freeze incidents.
-      const resolveResult = await prisma.incident.updateMany({
+      // Routed through IncidentService.setStatus (not a raw prisma update) so its
+      // RESOLVED-transition hook archives the linked guidance journey/signal too.
+      const openFreezeIncidents = await prisma.incident.findMany({
         where: {
           propertyId: p.id,
           sourceType: 'WEATHER',
@@ -110,12 +112,12 @@ export async function freezeRiskIncidentsJob() {
           isSuppressed: false,
           status: { in: OPEN_FREEZE_STATUSES },
         },
-        data: {
-          status: IncidentStatus.RESOLVED,
-          resolvedAt: now,
-        },
+        select: { id: true },
       });
-      resolved += resolveResult.count;
+      for (const incident of openFreezeIncidents) {
+        await IncidentService.setStatus(incident.id, IncidentStatus.RESOLVED);
+        resolved++;
+      }
       continue;
     }
 
@@ -194,7 +196,7 @@ export async function freezeRiskIncidentsJob() {
 
   // Safety net: resolve lingering stale freeze incidents that were not refreshed recently.
   const staleCutoff = new Date(now.getTime() - 48 * 60 * 60 * 1000);
-  const staleResolveResult = await prisma.incident.updateMany({
+  const staleFreezeIncidents = await prisma.incident.findMany({
     where: {
       sourceType: 'WEATHER',
       typeKey: 'FREEZE_RISK',
@@ -202,12 +204,12 @@ export async function freezeRiskIncidentsJob() {
       status: { in: OPEN_FREEZE_STATUSES },
       updatedAt: { lt: staleCutoff },
     },
-    data: {
-      status: IncidentStatus.RESOLVED,
-      resolvedAt: now,
-    },
+    select: { id: true },
   });
-  resolved += staleResolveResult.count;
+  for (const incident of staleFreezeIncidents) {
+    await IncidentService.setStatus(incident.id, IncidentStatus.RESOLVED);
+    resolved++;
+  }
 
   return { createdOrUpdated, resolved };
 }
