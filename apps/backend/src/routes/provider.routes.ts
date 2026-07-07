@@ -263,6 +263,11 @@ router.delete(
  *         schema:
  *           type: boolean
  *       - in: query
+ *         name: verifiedOnly
+ *         schema:
+ *           type: boolean
+ *         description: Restrict to providers verified for the requested category (or any category, if none given)
+ *       - in: query
  *         name: page
  *         schema:
  *           type: integer
@@ -360,6 +365,35 @@ router.get('/:id', ProviderController.getProviderById);
  *         description: Provider not found
  */
 router.get('/:id/services', ProviderController.getProviderServices);
+
+/**
+ * @swagger
+ * /api/providers/{id}/verification-summary:
+ *   get:
+ *     summary: Public-safe credential verification summary ("Verified Pro" badge)
+ *     tags: [Providers]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: Provider ID
+ *     responses:
+ *       200:
+ *         description: Verified/unverified categories and credential types present (no document/number detail)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ */
+router.get('/:id/verification-summary', ProviderController.getVerificationSummary);
 
 /**
  * @swagger

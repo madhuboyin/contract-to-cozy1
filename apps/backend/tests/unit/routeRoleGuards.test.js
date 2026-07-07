@@ -65,6 +65,7 @@ test('provider management routes require PROVIDER or ADMIN role', () => {
       getProviderById: () => {},
       getProviderServices: () => {},
       getProviderReviews: () => {},
+      getVerificationSummary: () => {},
     },
   });
 

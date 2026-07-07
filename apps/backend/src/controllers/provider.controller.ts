@@ -152,6 +152,37 @@ export class ProviderController {
   }
 
   /**
+   * Public/homeowner-safe verification summary — powers the "Verified Pro" badge
+   * GET /api/providers/:id/verification-summary
+   */
+  static async getVerificationSummary(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
+    try {
+      const { id } = req.params;
+
+      if (!id) {
+        res.status(400).json({
+          success: false,
+          message: 'Provider ID is required',
+        });
+        return;
+      }
+
+      const summary = await ProviderService.getVerificationSummary(id);
+
+      res.status(200).json({
+        success: true,
+        data: summary,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
    * Get reviews for a provider
    * GET /api/providers/:id/reviews
    */

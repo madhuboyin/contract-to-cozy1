@@ -19,7 +19,11 @@ export const providerSearchSchema = z.object({
   category: z.nativeEnum(ServiceCategory).optional(),
   inspectionType: z.nativeEnum(InspectionType).optional(),
   handymanType: z.nativeEnum(HandymanType).optional(),
-  
+  // Provider Trust & Compliance Verification — restrict to providers verified
+  // (ProviderCategoryEligibility.isEligible) for the requested category, or
+  // for at least one category if none was specified.
+  verifiedOnly: z.coerce.boolean().optional(),
+
   // Rating & sorting
   minRating: z.coerce.number().min(0).max(5).optional(),
   sortBy: z.enum(['rating', 'distance', 'reviews', 'price']).default('rating'),
@@ -123,6 +127,17 @@ export interface ProviderDetails {
     imageUrl: string;
     category: ServiceCategory;
   }[];
+}
+
+/**
+ * Public/homeowner-safe verification summary — booleans and category lists
+ * only, never credentialNumber/documentId/issuingAuthority (FRD Section 12).
+ * Powers the "Verified Pro" badge.
+ */
+export interface ProviderVerificationSummary {
+  verifiedCategories: ServiceCategory[];
+  unverifiedCategories: ServiceCategory[];
+  credentialTypesPresent: ProviderCredentialType[];
 }
 
 export interface ProviderServiceDetails {

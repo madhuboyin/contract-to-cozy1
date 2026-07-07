@@ -9,11 +9,13 @@ import {
   ProviderServiceDetails,
   ProviderReview,
   ProviderReviewsResponse,
+  ProviderVerificationSummary,
   PaginationQuery,
 } from '../types/provider.types';
 
 import { prisma } from '../lib/prisma';
 import { logger } from '../lib/logger';
+import { providerCredentialService } from './providerCredential.service';
 
 /**
  * Calculate distance between two coordinates using Haversine formula
@@ -154,7 +156,20 @@ export class ProviderService {
         };
       }
     }
-    
+
+    // Provider Trust & Compliance Verification — restrict to providers
+    // verified for the requested category, or for at least one category
+    // if none was specified (Section 9).
+    if (query.verifiedOnly) {
+      filters.push({
+        categoryEligibility: {
+          some: query.category
+            ? { serviceCategory: query.category, isEligible: true }
+            : { isEligible: true },
+        },
+      });
+    }
+
     // Combine all filters into the final WHERE clause
     const where: Prisma.ProviderProfileWhereInput = { AND: filters };
 
@@ -590,5 +605,14 @@ export class ProviderService {
       default:
         return { averageRating: 'desc' };
     }
+  }
+
+  /**
+   * Public/homeowner-safe verification summary — powers the "Verified Pro"
+   * badge (FRD Section 9). Never exposes credentialNumber/documentId/
+   * issuingAuthority (Section 12).
+   */
+  static async getVerificationSummary(providerId: string): Promise<ProviderVerificationSummary> {
+    return providerCredentialService.getVerificationSummary(providerId);
   }
 }
