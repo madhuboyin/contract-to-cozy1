@@ -125,6 +125,43 @@ export async function severeWeatherAlertsJob() {
 
     const activeAlertIds = new Set(alerts.map(a => a.nwsAlertId));
 
+    // Fetch this property's currently-open severe-weather incidents once —
+    // used both to resolve incidents explicitly superseded by a newer alert
+    // (a Watch upgraded to a Warning, or a warning re-issued/extended under a
+    // new alert id, signaled via that new alert's `references`) and, further
+    // below, to resolve incidents whose alert has simply dropped out of the
+    // active feed.
+    const openIncidents = await prisma.incident.findMany({
+      where: {
+        propertyId: p.id,
+        sourceType: 'WEATHER',
+        typeKey: TYPE_KEY,
+        isSuppressed: false,
+        status: { in: OPEN_SEVERE_WEATHER_STATUSES },
+      },
+      select: { id: true, details: true },
+    });
+
+    const openIncidentIdByAlertId = new Map<string, string>();
+    for (const incident of openIncidents) {
+      const details = (incident.details as Record<string, unknown> | null) ?? {};
+      const nwsAlertId = typeof details.nwsAlertId === 'string' ? details.nwsAlertId : null;
+      if (nwsAlertId) openIncidentIdByAlertId.set(nwsAlertId, incident.id);
+    }
+
+    const supersededIncidentIds = new Set<string>();
+    for (const alert of alerts) {
+      for (const referencedAlertId of alert.referencedAlertIds) {
+        const supersededIncidentId = openIncidentIdByAlertId.get(referencedAlertId);
+        if (supersededIncidentId) supersededIncidentIds.add(supersededIncidentId);
+      }
+    }
+    for (const incidentId of supersededIncidentIds) {
+      // Same archival-hook rationale as the resolves below.
+      await IncidentService.setStatus(incidentId, IncidentStatus.RESOLVED);
+      resolved++;
+    }
+
     for (const alert of alerts) {
       const scoring = scoringInputsFor(alert);
       const fingerprint = `property:${p.id}|${TYPE_KEY}|${alert.nwsAlertId}`;
@@ -216,26 +253,15 @@ export async function severeWeatherAlertsJob() {
       }
     }
 
-    // Resolve any open severe-weather incidents for this property that are no
-    // longer represented in the currently active alert list.
-    const openIncidents = await prisma.incident.findMany({
-      where: {
-        propertyId: p.id,
-        sourceType: 'WEATHER',
-        typeKey: TYPE_KEY,
-        isSuppressed: false,
-        status: { in: OPEN_SEVERE_WEATHER_STATUSES },
-      },
-      select: { id: true, details: true },
-    });
-
-    for (const incident of openIncidents) {
-      const details = (incident.details as Record<string, unknown> | null) ?? {};
-      const nwsAlertId = typeof details.nwsAlertId === 'string' ? details.nwsAlertId : null;
-      if (nwsAlertId && !activeAlertIds.has(nwsAlertId)) {
+    // Resolve any remaining open severe-weather incidents for this property
+    // that are no longer represented in the currently active alert list
+    // (already-superseded ones were handled above and are skipped here).
+    for (const [nwsAlertId, incidentId] of openIncidentIdByAlertId) {
+      if (supersededIncidentIds.has(incidentId)) continue;
+      if (!activeAlertIds.has(nwsAlertId)) {
         // Route through IncidentService.setStatus (not a raw prisma update) so its
         // RESOLVED-transition hook archives the linked guidance journey/signal too.
-        await IncidentService.setStatus(incident.id, IncidentStatus.RESOLVED);
+        await IncidentService.setStatus(incidentId, IncidentStatus.RESOLVED);
         resolved++;
       }
     }

@@ -28,6 +28,17 @@ export interface SevereWeatherAlert {
   effective: string | null;
   expires: string | null;
   senderName: string | null;
+  /**
+   * nwsAlertId values of prior alerts this one supersedes (e.g. a Watch
+   * upgraded to a Warning, or a warning re-issued/extended under a new id).
+   * Lets callers resolve the superseded incident immediately instead of
+   * waiting for it to age out of the active feed.
+   */
+  referencedAlertIds: string[];
+}
+
+interface NwsAlertReference {
+  identifier?: string;
 }
 
 interface NwsAlertFeature {
@@ -42,6 +53,7 @@ interface NwsAlertFeature {
     effective?: string | null;
     expires?: string | null;
     senderName?: string | null;
+    references?: NwsAlertReference[];
   };
 }
 
@@ -148,6 +160,10 @@ export class SevereWeatherAlertService {
       const nwsAlertId = props?.id ?? feature?.id;
       if (!nwsAlertId) continue;
 
+      const referencedAlertIds = (props?.references ?? [])
+        .map(r => r.identifier)
+        .filter((id): id is string => Boolean(id));
+
       alerts.push({
         nwsAlertId,
         hazardFamily,
@@ -159,6 +175,7 @@ export class SevereWeatherAlertService {
         effective: props?.effective ?? null,
         expires: props?.expires ?? null,
         senderName: props?.senderName ?? null,
+        referencedAlertIds,
       });
     }
 
