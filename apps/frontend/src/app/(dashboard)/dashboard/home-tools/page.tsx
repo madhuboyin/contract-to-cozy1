@@ -92,7 +92,7 @@ const HOME_TOOL_GROUPS = [
     key: 'timeline',
     title: 'Readiness + Timeline',
     summary: 'Capital planning, prep, and timeline execution',
-    toolKeys: ['capital-timeline', 'seller-prep', 'home-timeline', 'status-board'],
+    toolKeys: ['capital-timeline', 'reserve-fund', 'seller-prep', 'home-timeline', 'status-board'],
   },
   {
     key: 'habits',
