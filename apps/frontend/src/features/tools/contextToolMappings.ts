@@ -36,7 +36,9 @@ export const CONTEXT_TOOL_MAPPINGS: ContextToolMapping = {
   'home-timeline': ['home-risk-replay', 'home-event-radar', 'seller-prep'],
   'seller-prep': ['sell-hold-rent', 'home-timeline', 'capital-timeline'],
   'status-board': ['home-event-radar', 'home-risk-replay', 'home-timeline'],
-  'capital-timeline': ['home-timeline', 'seller-prep', 'cost-growth'],
+  'capital-timeline': ['reserve-fund', 'home-timeline', 'seller-prep'],
+  // Reserve Fund is sourced entirely from Capital Timeline, so it stays close.
+  'reserve-fund': ['capital-timeline', 'true-cost', 'break-even'],
 
   // Property-level contexts should surface the strongest monitoring + planning helpers only.
   'property-detail': ['home-event-radar', 'home-risk-replay', 'status-board'],

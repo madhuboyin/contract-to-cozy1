@@ -19,6 +19,7 @@ import {
   History,
   Gift,
   Star,
+  Wallet,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { MetricTile, PageHero, SmartCTA, TrustMetaRow } from '@/components/system/PremiumPrimitives';
@@ -33,6 +34,7 @@ import { MagicCaptureSheet } from '@/components/orchestration/MagicCaptureSheet'
 import { usePropertyContext } from '@/lib/property/PropertyContext';
 import { getHomeSavingsSummary } from '@/lib/api/homeSavingsApi';
 import { getRadarStatus } from '../properties/[id]/tools/mortgage-refinance-radar/mortgageRefinanceRadarApi';
+import { getFund as getReserveFund } from '../properties/[id]/tools/reserve-fund/reserveFundApi';
 import { cn } from '@/lib/utils';
 import { ConfidenceBadge, SourceChip } from '@/components/trust';
 import { api } from '@/lib/api/client';
@@ -120,6 +122,13 @@ export default function FinancialEfficiencyClient() {
         : Promise.resolve(null),
     enabled: !!selectedPropertyId,
     staleTime: 10 * 60 * 1000,
+  });
+
+  const reserveFundQuery = useQuery({
+    queryKey: ['reserve-fund-summary', selectedPropertyId],
+    queryFn: () =>
+      selectedPropertyId ? getReserveFund(selectedPropertyId) : Promise.resolve(null as any),
+    enabled: !!selectedPropertyId,
   });
 
   useEffect(() => {
@@ -476,6 +485,83 @@ export default function FinancialEfficiencyClient() {
             </div>
           )}
         </section>
+
+        {/* ── Pillar 3.5: Reserve Fund ── */}
+        {reserveFundQuery.data && (
+          <section className="space-y-5">
+            <div className="flex items-start gap-4 px-1">
+              <div className="mt-1 p-2 rounded-xl bg-teal-50 border-2 border-teal-100 text-teal-600">
+                <Wallet className="h-5 w-5" />
+              </div>
+              <div className="space-y-1">
+                <h2 className="text-xl font-bold text-slate-900">Reserve Fund</h2>
+                <p className="text-sm text-slate-500">
+                  What your Capital Timeline says you should be setting aside for the roof, HVAC,
+                  and other big-ticket items — before they&apos;re due.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="p-5 bg-white rounded-2xl border-2 border-slate-50 space-y-1">
+                <p className="text-[11px] font-bold tracking-normal text-slate-400">
+                  Current balance
+                </p>
+                <p className="text-2xl font-bold text-slate-900">
+                  ${Math.round(reserveFundQuery.data.currentBalanceCents / 100).toLocaleString()}
+                </p>
+              </div>
+              <div className="p-5 bg-white rounded-2xl border-2 border-teal-50 space-y-1">
+                <p className="text-[11px] font-bold tracking-normal text-teal-600">
+                  Recommended monthly set-aside
+                </p>
+                <p className="text-2xl font-bold text-teal-700">
+                  ${Math.round(reserveFundQuery.data.recommendedMonthlyContributionCents / 100).toLocaleString()}
+                  <span className="ml-0.5 text-sm font-normal">/mo</span>
+                </p>
+              </div>
+              <div
+                className={cn(
+                  'p-5 rounded-2xl border-2 space-y-1',
+                  reserveFundQuery.data.currentShortfallCents > 0
+                    ? 'bg-red-50 border-red-100'
+                    : 'bg-emerald-50 border-emerald-100',
+                )}
+              >
+                <p
+                  className={cn(
+                    'text-[11px] font-bold tracking-normal',
+                    reserveFundQuery.data.currentShortfallCents > 0 ? 'text-red-600' : 'text-emerald-600',
+                  )}
+                >
+                  Near-term shortfall
+                </p>
+                <p
+                  className={cn(
+                    'text-2xl font-bold',
+                    reserveFundQuery.data.currentShortfallCents > 0 ? 'text-red-700' : 'text-emerald-700',
+                  )}
+                >
+                  {reserveFundQuery.data.currentShortfallCents > 0
+                    ? `$${Math.round(reserveFundQuery.data.currentShortfallCents / 100).toLocaleString()}`
+                    : 'Covered'}
+                </p>
+              </div>
+            </div>
+
+            <Button
+              variant="ghost"
+              onClick={() =>
+                selectedPropertyId &&
+                router.push(`/dashboard/properties/${selectedPropertyId}/tools/reserve-fund`)
+              }
+              className="justify-between h-9 px-2 text-[11px] font-bold text-teal-700 hover:bg-teal-50 rounded-lg"
+            >
+              View full reserve fund report
+              <ChevronRight className="h-3.5 w-3.5" />
+            </Button>
+          </section>
+        )}
 
         {/* ── Pillar 4: Equity & Market Value ── */}
         <section className="space-y-5">

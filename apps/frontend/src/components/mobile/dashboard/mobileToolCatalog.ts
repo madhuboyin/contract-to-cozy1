@@ -711,6 +711,16 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
     isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/tools\/capital-timeline(\/|$)/.test(pathname),
   },
   {
+    key: 'reserve-fund',
+    name: 'Reserve Fund Planner',
+    description: "Save for upcoming capital costs",
+    desktopDescription: "Turn your Capital Timeline into a monthly savings target, so you're never caught short.",
+    hrefSuffix: 'tools/reserve-fund',
+    navTarget: 'tool:reserve-fund',
+    icon: resolveToolIcon('home', 'reserve-fund'),
+    isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/tools\/reserve-fund(\/|$)/.test(pathname),
+  },
+  {
     key: 'seller-prep',
     name: 'Seller Prep',
     description: "Prep high-ROI improvements",

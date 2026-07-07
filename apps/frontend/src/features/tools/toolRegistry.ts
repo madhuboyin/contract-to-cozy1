@@ -20,6 +20,7 @@ export const TOOL_IDS = [
   'cost-volatility',
   'break-even',
   'capital-timeline',
+  'reserve-fund',
   'seller-prep',
   'home-timeline',
   'status-board',

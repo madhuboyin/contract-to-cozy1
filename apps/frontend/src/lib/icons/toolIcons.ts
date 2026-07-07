@@ -40,6 +40,7 @@ export const TOOL_ICON_MAP = {
     'cost-volatility': { concept: 'risk', icon: 'shield-alert', category: 'home' },
     'break-even': { concept: 'recommendations', icon: 'lightbulb', category: 'home' },
     'capital-timeline': { concept: 'calendar', icon: 'calendar', category: 'home' },
+    'reserve-fund': { concept: 'expenses', icon: 'dollar-sign', category: 'home' },
     'seller-prep': { concept: 'tasks', icon: 'list-checks', category: 'home' },
     'home-timeline': { concept: 'calendar', icon: 'calendar', category: 'home' },
     'status-board': { concept: 'status-board', icon: 'layout-grid', category: 'home' },
