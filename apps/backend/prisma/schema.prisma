@@ -1305,6 +1305,43 @@ enum ProviderStatus {
   SUSPENDED
 }
 
+// Provider Trust & Compliance Verification
+enum ProviderCredentialType {
+  TRADE_LICENSE
+  LIABILITY_INSURANCE
+  WORKERS_COMP_INSURANCE
+  BONDING
+  CERTIFICATION
+  BACKGROUND_CHECK
+}
+
+enum ProviderCredentialStatus {
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
+  EXPIRED
+  REVOKED
+}
+
+enum ProviderComplianceAlertType {
+  EXPIRING_SOON
+  EXPIRED_NO_BOOKING_IMPACT
+  REJECTED
+  MISSING_REQUIRED_CREDENTIAL
+}
+
+enum ProviderComplianceAlertSeverity {
+  INFO
+  WARNING
+  CRITICAL
+}
+
+enum ProviderComplianceAlertStatus {
+  NEW
+  ACKNOWLEDGED
+  RESOLVED
+}
+
 // NEW ENUM for tracking different types of homeowner expenses
 enum ExpenseCategory {
   REPAIR_SERVICE
@@ -2214,12 +2251,14 @@ model ProviderProfile {
   stripeOnboarded Boolean @default(false)
 
   // Relations
-  user            User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  services        Service[]
-  certifications  Certification[]
-  portfolioImages ProviderPortfolio[]
-  bookings        Booking[]
-  availability    ProviderAvailability[]
+  user                User                          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  services            Service[]
+  credentials         ProviderCredential[]
+  categoryEligibility ProviderCategoryEligibility[]
+  complianceAlerts    ProviderComplianceAlert[]
+  portfolioImages     ProviderPortfolio[]
+  bookings            Booking[]
+  availability        ProviderAvailability[]
 
   // FIX: ADD THE INVERSE RELATION FIELD
   favorites Favorite[]
@@ -2241,26 +2280,105 @@ model ProviderProfile {
   @@map("provider_profiles")
 }
 
-model Certification {
+// Provider Trust & Compliance Verification — replaces the unused Certification model
+model ProviderCredential {
   id                String @id @default(uuid())
   providerProfileId String
 
-  name              String
-  issuingAuthority  String
-  certificateNumber String?
-  issueDate         DateTime
-  expiryDate        DateTime?
-  documentUrl       String?
-  verified          Boolean   @default(false)
+  type              ProviderCredentialType
+  serviceCategories ServiceCategory[]
+  status            ProviderCredentialStatus @default(PENDING_REVIEW)
+
+  issuingAuthority String
+  credentialNumber String?
+  issueDate        DateTime?
+  expiryDate       DateTime?
+
+  reviewedByUserId String?
+  reviewedAt       DateTime?
+  rejectionReason  String?
+
+  renewalOfCredentialId String? @unique
 
   // Relations
-  providerProfile ProviderProfile @relation(fields: [providerProfileId], references: [id], onDelete: Cascade)
+  providerProfile     ProviderProfile           @relation(fields: [providerProfileId], references: [id], onDelete: Cascade)
+  documents           Document[]
+  renewalOfCredential ProviderCredential?       @relation("ProviderCredentialRenewal", fields: [renewalOfCredentialId], references: [id])
+  renewedByCredential ProviderCredential?       @relation("ProviderCredentialRenewal")
+  complianceAlerts    ProviderComplianceAlert[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([providerProfileId])
-  @@map("certifications")
+  @@index([providerProfileId, status])
+  @@index([expiryDate])
+  @@index([status])
+  @@map("provider_credentials")
+}
+
+model ProviderCredentialRequirement {
+  id String @id @default(uuid())
+
+  serviceCategory ServiceCategory
+  credentialType  ProviderCredentialType
+  isRequired      Boolean                @default(true)
+  stateCode       String?
+  notes           String?
+  isActive        Boolean                @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([serviceCategory, credentialType, stateCode])
+  @@index([serviceCategory])
+  @@map("provider_credential_requirements")
+}
+
+model ProviderCategoryEligibility {
+  id                String @id @default(uuid())
+  providerProfileId String
+
+  serviceCategory        ServiceCategory
+  isEligible             Boolean                  @default(false)
+  missingCredentialTypes ProviderCredentialType[]
+  computedAt             DateTime                 @default(now())
+
+  // Relations
+  providerProfile ProviderProfile @relation(fields: [providerProfileId], references: [id], onDelete: Cascade)
+
+  @@unique([providerProfileId, serviceCategory])
+  @@index([providerProfileId])
+  @@index([serviceCategory, isEligible])
+  @@map("provider_category_eligibility")
+}
+
+model ProviderComplianceAlert {
+  id                String  @id @default(uuid())
+  providerProfileId String
+  credentialId      String?
+
+  alertType ProviderComplianceAlertType
+  severity  ProviderComplianceAlertSeverity
+  status    ProviderComplianceAlertStatus @default(NEW)
+
+  title   String
+  summary String?
+
+  dedupeKey String @unique
+
+  resolvedAt DateTime?
+
+  // Relations
+  providerProfile ProviderProfile     @relation(fields: [providerProfileId], references: [id], onDelete: Cascade)
+  credential      ProviderCredential? @relation(fields: [credentialId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([providerProfileId, status])
+  @@index([credentialId])
+  @@map("provider_compliance_alerts")
 }
 
 model ProviderPortfolio {
@@ -2505,11 +2623,12 @@ model Payment {
 // ============================================================================
 
 model Document {
-  id         String  @id @default(uuid())
-  bookingId  String?
-  propertyId String? // NEW: Link to general home documents
-  warrantyId String? // NEW: Link to a Warranty record
-  policyId   String? // NEW: Link to an InsurancePolicy record
+  id                   String  @id @default(uuid())
+  bookingId            String?
+  propertyId           String? // NEW: Link to general home documents
+  warrantyId           String? // NEW: Link to a Warranty record
+  policyId             String? // NEW: Link to an InsurancePolicy record
+  providerCredentialId String? // NEW: Link to a ProviderCredential record
 
   uploadedBy String // userId
 
@@ -2541,6 +2660,7 @@ model Document {
   coverForProperties         Property[]                  @relation("PropertyCoverPhoto")
   warranty                   Warranty?                   @relation(fields: [warrantyId], references: [id], onDelete: Cascade)
   insurancePolicy            InsurancePolicy?            @relation(fields: [policyId], references: [id], onDelete: Cascade)
+  providerCredential         ProviderCredential?         @relation(fields: [providerCredentialId], references: [id], onDelete: Cascade)
   inventoryItemId            String? // NEW: Link to an InventoryItem record
   inventoryItem              InventoryItem?              @relation(fields: [inventoryItemId], references: [id], onDelete: SetNull)
   homeReportExports          HomeReportExport[]
@@ -2570,6 +2690,7 @@ model Document {
   @@index([sha256])
   @@index([warrantyId]) // NEW INDEX
   @@index([policyId]) // NEW INDEX
+  @@index([providerCredentialId]) // NEW INDEX
   @@index([inventoryItemId]) // NEW INDEX
   @@map("documents")
 }
