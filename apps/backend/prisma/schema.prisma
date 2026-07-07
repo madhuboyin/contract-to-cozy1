@@ -1628,6 +1628,9 @@ model HomeownerProfile {
   homeSavingsAccounts             HomeSavingsAccount[]
   preferenceProfiles              PreferenceProfile[]
 
+  // Home Reserve / Sinking Fund Planner
+  reserveFunds HomeReserveFund[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -1953,6 +1956,9 @@ model Property {
   // Relations
   homeownerProfile HomeownerProfile @relation(fields: [homeownerProfileId], references: [id], onDelete: Cascade)
   bookings         Booking[]
+
+  // Home Reserve / Sinking Fund Planner
+  reserveFund HomeReserveFund?
 
   // NEW RELATIONS
   warranties        Warranty[]
@@ -2740,6 +2746,9 @@ model Expense {
   property         Property?        @relation(fields: [propertyId], references: [id])
   booking          Booking?         @relation(fields: [bookingId], references: [id])
   homeEvents       HomeEvent[]
+
+  // Home Reserve / Sinking Fund Planner — withdrawal reconciled against this expense
+  reserveFundContributions HomeReserveFundContribution[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -5646,6 +5655,9 @@ model HomeCapitalTimelineAnalysis {
 
   items HomeCapitalTimelineItem[]
 
+  // Home Reserve / Sinking Fund Planner — funds computed from this analysis run
+  reserveFunds HomeReserveFund[]
+
   @@index([homeownerProfileId])
   @@index([propertyId, computedAt(sort: Desc)])
   @@index([propertyId, status])
@@ -5692,6 +5704,9 @@ model HomeCapitalTimelineItem {
   // Home Renovation Risk Advisor linkage (back-reference)
   renovationAdvisorSessions HomeRenovationAdvisorSession[]
 
+  // Home Reserve / Sinking Fund Planner — per-fund allocation against this item
+  reserveFundLineItems HomeReserveFundLineItem[]
+
   @@index([analysisId])
   @@index([propertyId, windowStart])
   @@index([propertyId, category])
@@ -5727,6 +5742,166 @@ model HomeCapitalTimelineOverride {
   @@index([inventoryItemId])
   @@index([propertyId, type])
   @@map("home_capital_timeline_overrides")
+}
+
+// ============================================================================
+// Home Reserve / Sinking Fund Planner
+// ============================================================================
+// See docs/functional/HOME_RESERVE_FUND_PLANNER_FRD.md
+//
+// Sourced solely from HomeCapitalTimelineItem — the only one of this platform's
+// three future-cost forecasting engines (Home Capital Timeline, Appliance Oracle,
+// Maintenance Prediction) that carries a `confidence` model, an override system,
+// and no "not safe for financial planning" disclaimer (Appliance Oracle's output
+// explicitly sets financialPlanningSafe: false; Maintenance Prediction has no
+// cost field at all).
+//
+// `posture` below is a distinct axis from PreferenceProfile.cashBufferPosture
+// (TIGHT/MODERATE/STRONG — how much cash buffer to hold overall). This instead
+// controls which end of a timeline item's cost range to plan against and how
+// aggressively to smooth the contribution schedule. Kept separate per the FRD's
+// open question; a future unification into one homeowner-level risk posture is
+// possible but not assumed here.
+
+enum HomeReserveFundPosture {
+  CONSERVATIVE // use estimatedCostMaxCents, shorter smoothing window
+  MODERATE // use the midpoint of the cost range (default)
+  AGGRESSIVE // use estimatedCostMinCents, longer smoothing window
+}
+
+enum HomeReserveFundLineItemStatus {
+  ACTIVE // still contributing toward this item
+  FUNDED // allocated balance has reached its target
+  RETIRED // evidence of completion seen; no longer contributing
+  OVERDUE // windowEnd has passed with no evidence and item still ACTIVE
+}
+
+enum HomeReserveFundContributionType {
+  DEPOSIT
+  WITHDRAWAL
+  BALANCE_CORRECTION // user reconciling a self-reported balance, not a real transaction
+}
+
+enum HomeReserveFundRecalculationTrigger {
+  TIMELINE_REFRESH // fired because HomeCapitalTimelineAnalysis was regenerated
+  MANUAL
+  SCHEDULED // monthly safety-net recompute even if the timeline didn't change
+  RECONCILIATION // fired because a line item was retired/marked funded
+}
+
+enum HomeReserveFundRetiredReason {
+  LINKED_HOME_EVENT
+  MATCHED_EXPENSE
+  MANUAL
+}
+
+model HomeReserveFund {
+  id                 String @id @default(uuid())
+  propertyId         String @unique
+  homeownerProfileId String
+
+  posture      HomeReserveFundPosture @default(MODERATE)
+  horizonYears Int                    @default(10)
+
+  currentBalanceCents                 Int @default(0)
+  recommendedMonthlyContributionCents Int @default(0)
+  currentShortfallCents               Int @default(0)
+
+  lastRecalculatedAt DateTime?
+  sourceAnalysisId   String?
+
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  property         Property                    @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  homeownerProfile HomeownerProfile             @relation(fields: [homeownerProfileId], references: [id], onDelete: Cascade)
+  sourceAnalysis   HomeCapitalTimelineAnalysis? @relation(fields: [sourceAnalysisId], references: [id], onDelete: SetNull)
+
+  lineItems      HomeReserveFundLineItem[]
+  contributions  HomeReserveFundContribution[]
+  recalculations HomeReserveFundRecalculation[]
+
+  @@index([homeownerProfileId])
+  @@index([sourceAnalysisId])
+  @@map("home_reserve_funds")
+}
+
+model HomeReserveFundLineItem {
+  id             String @id @default(uuid())
+  fundId         String
+  timelineItemId String
+
+  status HomeReserveFundLineItemStatus @default(ACTIVE)
+
+  targetCostCents       Int
+  allocatedMonthlyCents Int @default(0)
+  allocatedBalanceCents Int @default(0)
+
+  retiredAt          DateTime?
+  retiredReason      HomeReserveFundRetiredReason?
+  retiredEvidenceRef String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  fund         HomeReserveFund         @relation(fields: [fundId], references: [id], onDelete: Cascade)
+  timelineItem HomeCapitalTimelineItem @relation(fields: [timelineItemId], references: [id], onDelete: Cascade)
+
+  contributions HomeReserveFundContribution[]
+
+  @@unique([fundId, timelineItemId])
+  @@index([fundId])
+  @@index([timelineItemId])
+  @@index([status])
+  @@map("home_reserve_fund_line_items")
+}
+
+model HomeReserveFundContribution {
+  id     String @id @default(uuid())
+  fundId String
+
+  type        HomeReserveFundContributionType
+  amountCents Int
+  occurredAt  DateTime @default(now())
+  note        String?
+
+  linkedExpenseId  String?
+  linkedLineItemId String?
+
+  createdAt DateTime @default(now())
+
+  fund           HomeReserveFund          @relation(fields: [fundId], references: [id], onDelete: Cascade)
+  linkedExpense  Expense?                 @relation(fields: [linkedExpenseId], references: [id], onDelete: SetNull)
+  linkedLineItem HomeReserveFundLineItem? @relation(fields: [linkedLineItemId], references: [id], onDelete: SetNull)
+
+  @@index([fundId, occurredAt])
+  @@index([linkedExpenseId])
+  @@index([linkedLineItemId])
+  @@map("home_reserve_fund_contributions")
+}
+
+model HomeReserveFundRecalculation {
+  id     String @id @default(uuid())
+  fundId String
+
+  trigger HomeReserveFundRecalculationTrigger
+
+  previousMonthlyContributionCents Int
+  newMonthlyContributionCents      Int
+  previousShortfallCents           Int
+  newShortfallCents                Int
+
+  itemsAdded   Int @default(0)
+  itemsRetired Int @default(0)
+
+  computedAt DateTime @default(now())
+
+  fund HomeReserveFund @relation(fields: [fundId], references: [id], onDelete: Cascade)
+
+  @@index([fundId, computedAt])
+  @@map("home_reserve_fund_recalculations")
 }
 
 // ============================================================================
