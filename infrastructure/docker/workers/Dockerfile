@@ -69,37 +69,37 @@ RUN mkdir -p src/shared/backend/utils \
              src/shared/backend/refinanceRadar/types \
              src/shared/backend/services/permitAdapters
 
-COPY apps/backend/src/utils/riskCalculator.util.ts src/shared/backend/utils/
-COPY apps/backend/src/utils/FinancialCalculator.util.ts src/shared/backend/utils/
-COPY apps/backend/src/config/risk-constants.ts src/shared/backend/config/
-COPY apps/backend/src/config/workerJobRegistry.ts src/shared/backend/config/
-COPY apps/backend/src/services/homeEventRadarMatcher.service.ts src/shared/backend/services/
-COPY apps/backend/src/services/eventSignalProjection.service.ts src/shared/backend/services/
-COPY apps/backend/src/services/sharedDataObservability.service.ts src/shared/backend/services/
-COPY apps/backend/src/services/coverageGap.service.ts src/shared/backend/services/
-COPY apps/backend/src/services/signal.service.ts src/shared/backend/services/
-COPY apps/backend/src/services/signalPriorityBoost.service.ts src/shared/backend/services/
-COPY apps/backend/src/services/assumptionSet.service.ts src/shared/backend/services/
-COPY apps/backend/src/services/preferenceProfile.service.ts src/shared/backend/services/
-COPY apps/backend/src/services/financialAssumption.service.ts src/shared/backend/services/
-COPY apps/backend/src/services/sharedDataBackfill.service.ts src/shared/backend/services/
-COPY apps/backend/src/services/storage/reportStorage.ts src/shared/backend/services/storage/
-COPY apps/backend/src/services/storage/s3Client.ts src/shared/backend/services/storage/
+COPY apps/backend/src/utils/riskCalculator.util.ts apps/backend/src/utils/FinancialCalculator.util.ts src/shared/backend/utils/
+COPY apps/backend/src/config/risk-constants.ts apps/backend/src/config/workerJobRegistry.ts src/shared/backend/config/
+COPY apps/backend/src/services/homeEventRadarMatcher.service.ts \
+     apps/backend/src/services/eventSignalProjection.service.ts \
+     apps/backend/src/services/sharedDataObservability.service.ts \
+     apps/backend/src/services/coverageGap.service.ts \
+     apps/backend/src/services/signal.service.ts \
+     apps/backend/src/services/signalPriorityBoost.service.ts \
+     apps/backend/src/services/assumptionSet.service.ts \
+     apps/backend/src/services/preferenceProfile.service.ts \
+     apps/backend/src/services/financialAssumption.service.ts \
+     apps/backend/src/services/sharedDataBackfill.service.ts \
+     src/shared/backend/services/
+COPY apps/backend/src/services/storage/reportStorage.ts apps/backend/src/services/storage/s3Client.ts src/shared/backend/services/storage/
 COPY apps/backend/src/services/pdf/renderHomeReportPackPdf.ts src/shared/backend/services/pdf/
 COPY apps/backend/src/services/pdf/templates/homeReportPackHtml.ts src/shared/backend/services/pdf/templates/
 COPY apps/backend/src/services/domainEvents/domainEvents.service.ts src/shared/backend/services/domainEvents/
-COPY apps/backend/src/lib/prisma.ts src/shared/backend/lib/
-COPY apps/backend/src/lib/logger.ts src/shared/backend/lib/
-COPY apps/backend/src/lib/requestContext.ts src/shared/backend/lib/
+COPY apps/backend/src/lib/prisma.ts \
+     apps/backend/src/lib/logger.ts \
+     apps/backend/src/lib/requestContext.ts \
+     src/shared/backend/lib/
 COPY apps/backend/src/services/incidents/incident.service.ts src/shared/backend/services/incidents/
 COPY apps/backend/src/types/incidents.types.ts src/shared/backend/types/
-COPY apps/backend/src/services/incidents/incident.utils.ts src/shared/backend/services/incidents/
-COPY apps/backend/src/services/incidents/incident.events.ts src/shared/backend/services/incidents/
-COPY apps/backend/src/services/incidents/incident.evaluator.ts src/shared/backend/services/incidents/
-COPY apps/backend/src/services/incidents/incident.orchestrator.ts src/shared/backend/services/incidents/
 # Copy the missing dependencies for the incident evaluator
-COPY apps/backend/src/services/incidents/incident.scoring.ts src/shared/backend/services/incidents/
-COPY apps/backend/src/services/incidents/incident.events.ts src/shared/backend/services/incidents/
+COPY apps/backend/src/services/incidents/incident.utils.ts \
+     apps/backend/src/services/incidents/incident.events.ts \
+     apps/backend/src/services/incidents/incident.evaluator.ts \
+     apps/backend/src/services/incidents/incident.orchestrator.ts \
+     apps/backend/src/services/incidents/incident.scoring.ts \
+     apps/backend/src/services/incidents/incident.events.ts \
+     src/shared/backend/services/incidents/
 COPY apps/backend/src/services/incidents/integrations/incidentNotification.service.ts src/shared/backend/services/incidents/integrations/
 # Copy severe weather alert service (used by severeWeatherAlerts.job.ts) + its SSRF guard dependency
 COPY apps/backend/src/services/severeWeatherAlert.service.ts src/shared/backend/services/
@@ -107,87 +107,99 @@ COPY apps/backend/src/utils/ssrfGuard.ts src/shared/backend/utils/
 COPY apps/backend/src/services/hiddenAssets.service.ts src/shared/backend/services/
 # Risk assessment service chain (RiskAssessment.service → riskAssessmentIntegration → PropertyMaintenanceTask)
 COPY apps/backend/src/config/risk-job-types.ts src/shared/backend/config/
-COPY apps/backend/src/services/PropertyMaintenanceTask.service.ts src/shared/backend/services/
-COPY apps/backend/src/services/riskAssessmentIntegration.service.ts src/shared/backend/services/
-COPY apps/backend/src/services/RiskAssessment.service.ts src/shared/backend/services/
+COPY apps/backend/src/services/PropertyMaintenanceTask.service.ts \
+     apps/backend/src/services/riskAssessmentIntegration.service.ts \
+     apps/backend/src/services/RiskAssessment.service.ts \
+     src/shared/backend/services/
 # Stub: breaks the JobQueue.service ↔ RiskAssessment.service circular import
 COPY apps/workers/stubs/job-queue-service.ts src/shared/backend/services/JobQueue.service.ts
-COPY apps/backend/src/services/hiddenAssets/ruleEngine.ts src/shared/backend/services/hiddenAssets/
-COPY apps/backend/src/services/hiddenAssets/categoryConfig.ts src/shared/backend/services/hiddenAssets/
-COPY apps/backend/src/services/hiddenAssets/types.ts src/shared/backend/services/hiddenAssets/
+COPY apps/backend/src/services/hiddenAssets/ruleEngine.ts \
+     apps/backend/src/services/hiddenAssets/categoryConfig.ts \
+     apps/backend/src/services/hiddenAssets/types.ts \
+     src/shared/backend/services/hiddenAssets/
 # Copy homeHabitCoach service files needed by habitGeneration.job.ts
-COPY apps/backend/src/services/homeHabitCoach/habitGenerationEngine.ts src/shared/backend/services/homeHabitCoach/
-COPY apps/backend/src/services/homeHabitCoach/habitRankingEngine.ts src/shared/backend/services/homeHabitCoach/
-COPY apps/backend/src/services/homeHabitCoach/habitRuleEvaluator.ts src/shared/backend/services/homeHabitCoach/
+COPY apps/backend/src/services/homeHabitCoach/habitGenerationEngine.ts \
+     apps/backend/src/services/homeHabitCoach/habitRankingEngine.ts \
+     apps/backend/src/services/homeHabitCoach/habitRuleEvaluator.ts \
+     src/shared/backend/services/homeHabitCoach/
 # Copy analytics service needed by hiddenAssets.service.ts and incident.service.ts
-COPY apps/backend/src/services/analytics/index.ts src/shared/backend/services/analytics/
-COPY apps/backend/src/services/analytics/emitter.ts src/shared/backend/services/analytics/
-COPY apps/backend/src/services/analytics/service.ts src/shared/backend/services/analytics/
-COPY apps/backend/src/services/analytics/repository.ts src/shared/backend/services/analytics/
-COPY apps/backend/src/services/analytics/taxonomy.ts src/shared/backend/services/analytics/
+COPY apps/backend/src/services/analytics/index.ts \
+     apps/backend/src/services/analytics/emitter.ts \
+     apps/backend/src/services/analytics/service.ts \
+     apps/backend/src/services/analytics/repository.ts \
+     apps/backend/src/services/analytics/taxonomy.ts \
+     src/shared/backend/services/analytics/
 # Replace zod-dependent schemas.ts with a typed pass-through stub (zod is not a workers dependency)
 COPY apps/workers/stubs/analytics-schemas.ts src/shared/backend/services/analytics/schemas.ts
 # Copy neighborhood intelligence files needed by refreshNeighborhoodEvents.job.ts
 # and ingestNeighborhoodDummyEvents.job.ts
-COPY apps/backend/src/neighborhoodIntelligence/neighborhoodPropertyMatchService.ts src/shared/backend/neighborhoodIntelligence/
-COPY apps/backend/src/neighborhoodIntelligence/neighborhoodImpactEngine.ts src/shared/backend/neighborhoodIntelligence/
-COPY apps/backend/src/neighborhoodIntelligence/impactRules.ts src/shared/backend/neighborhoodIntelligence/
-COPY apps/backend/src/neighborhoodIntelligence/geoUtils.ts src/shared/backend/neighborhoodIntelligence/
-COPY apps/backend/src/neighborhoodIntelligence/types.ts src/shared/backend/neighborhoodIntelligence/
-COPY apps/backend/src/neighborhoodIntelligence/eventConfidence.ts src/shared/backend/neighborhoodIntelligence/
+COPY apps/backend/src/neighborhoodIntelligence/neighborhoodPropertyMatchService.ts \
+     apps/backend/src/neighborhoodIntelligence/neighborhoodImpactEngine.ts \
+     apps/backend/src/neighborhoodIntelligence/impactRules.ts \
+     apps/backend/src/neighborhoodIntelligence/geoUtils.ts \
+     apps/backend/src/neighborhoodIntelligence/types.ts \
+     apps/backend/src/neighborhoodIntelligence/eventConfidence.ts \
+     src/shared/backend/neighborhoodIntelligence/
 # Copy refinanceRadar files needed by ingestMortgageRates.job.ts
 COPY apps/backend/src/refinanceRadar/engine/mortgageRate.service.ts src/shared/backend/refinanceRadar/engine/
 COPY apps/backend/src/refinanceRadar/config/refinanceRadar.config.ts src/shared/backend/refinanceRadar/config/
 COPY apps/backend/src/refinanceRadar/types/refinanceRadar.types.ts src/shared/backend/refinanceRadar/types/
 # Copy gazette module files needed by gazetteGeneration.job.ts
-COPY apps/backend/src/modules/gazette/services/gazetteGenerationJobRunner.service.ts src/shared/backend/modules/gazette/services/
-COPY apps/backend/src/modules/gazette/services/gazetteSignalCollector.service.ts src/shared/backend/modules/gazette/services/
-COPY apps/backend/src/modules/gazette/services/gazetteCandidateFactory.service.ts src/shared/backend/modules/gazette/services/
-COPY apps/backend/src/modules/gazette/services/gazetteRankingEngine.service.ts src/shared/backend/modules/gazette/services/
-COPY apps/backend/src/modules/gazette/services/gazetteEditionAssembler.service.ts src/shared/backend/modules/gazette/services/
-COPY apps/backend/src/modules/gazette/services/gazettePublish.service.ts src/shared/backend/modules/gazette/services/
-COPY apps/backend/src/modules/gazette/editorial/GazetteEditorialService.ts src/shared/backend/modules/gazette/editorial/
-COPY apps/backend/src/modules/gazette/editorial/GazetteHeadlineGenerator.ts src/shared/backend/modules/gazette/editorial/
-COPY apps/backend/src/modules/gazette/editorial/GazetteSummaryGenerator.ts src/shared/backend/modules/gazette/editorial/
-COPY apps/backend/src/modules/gazette/editorial/GazetteEditorialFallbackBuilder.ts src/shared/backend/modules/gazette/editorial/
-COPY apps/backend/src/modules/gazette/editorial/GazetteEditorialPromptBuilder.ts src/shared/backend/modules/gazette/editorial/
-COPY apps/backend/src/modules/gazette/editorial/GazetteEditorialValidator.ts src/shared/backend/modules/gazette/editorial/
-COPY apps/backend/src/modules/gazette/editorial/GazetteEditorialTypes.ts src/shared/backend/modules/gazette/editorial/
-COPY apps/backend/src/modules/gazette/editorial/GazetteTickerGenerator.ts src/shared/backend/modules/gazette/editorial/
-COPY apps/backend/src/modules/gazette/editorial/gazetteFallbackEditorial.ts src/shared/backend/modules/gazette/editorial/
+COPY apps/backend/src/modules/gazette/services/gazetteGenerationJobRunner.service.ts \
+     apps/backend/src/modules/gazette/services/gazetteSignalCollector.service.ts \
+     apps/backend/src/modules/gazette/services/gazetteCandidateFactory.service.ts \
+     apps/backend/src/modules/gazette/services/gazetteRankingEngine.service.ts \
+     apps/backend/src/modules/gazette/services/gazetteEditionAssembler.service.ts \
+     apps/backend/src/modules/gazette/services/gazettePublish.service.ts \
+     src/shared/backend/modules/gazette/services/
+COPY apps/backend/src/modules/gazette/editorial/GazetteEditorialService.ts \
+     apps/backend/src/modules/gazette/editorial/GazetteHeadlineGenerator.ts \
+     apps/backend/src/modules/gazette/editorial/GazetteSummaryGenerator.ts \
+     apps/backend/src/modules/gazette/editorial/GazetteEditorialFallbackBuilder.ts \
+     apps/backend/src/modules/gazette/editorial/GazetteEditorialPromptBuilder.ts \
+     apps/backend/src/modules/gazette/editorial/GazetteEditorialValidator.ts \
+     apps/backend/src/modules/gazette/editorial/GazetteEditorialTypes.ts \
+     apps/backend/src/modules/gazette/editorial/GazetteTickerGenerator.ts \
+     apps/backend/src/modules/gazette/editorial/gazetteFallbackEditorial.ts \
+     src/shared/backend/modules/gazette/editorial/
 COPY apps/backend/src/modules/gazette/types/gazette.types.ts src/shared/backend/modules/gazette/types/
 COPY apps/backend/src/modules/gazette/dto/gazette.dto.ts src/shared/backend/modules/gazette/dto/
 COPY apps/backend/src/modules/gazette/mappers/gazette.mapper.ts src/shared/backend/modules/gazette/mappers/
 COPY apps/backend/src/config/ai-constants.ts src/shared/backend/config/
 # Copy guidance engine service files needed by coverageLapseIncidents, freezeRiskIncidents,
 # neighborhoodChangeNotification jobs and by incident.service.ts
-COPY apps/backend/src/services/guidanceEngine/guidanceTypes.ts src/shared/backend/services/guidanceEngine/
-COPY apps/backend/src/services/guidanceEngine/guidanceTemplateRegistry.ts src/shared/backend/services/guidanceEngine/
-COPY apps/backend/src/services/guidanceEngine/guidanceCompletionHooks.service.ts src/shared/backend/services/guidanceEngine/
-COPY apps/backend/src/services/guidanceEngine/guidanceSignalResolver.service.ts src/shared/backend/services/guidanceEngine/
-COPY apps/backend/src/services/guidanceEngine/guidanceStepResolver.service.ts src/shared/backend/services/guidanceEngine/
-COPY apps/backend/src/services/guidanceEngine/guidanceDerivedData.service.ts src/shared/backend/services/guidanceEngine/
-COPY apps/backend/src/services/guidanceEngine/guidanceFinancialContext.service.ts src/shared/backend/services/guidanceEngine/
-COPY apps/backend/src/services/guidanceEngine/guidanceConfidence.service.ts src/shared/backend/services/guidanceEngine/
-COPY apps/backend/src/services/guidanceEngine/guidancePriority.service.ts src/shared/backend/services/guidanceEngine/
-COPY apps/backend/src/services/guidanceEngine/guidanceSuppression.service.ts src/shared/backend/services/guidanceEngine/
-COPY apps/backend/src/services/guidanceEngine/guidanceCopy.service.ts src/shared/backend/services/guidanceEngine/
-COPY apps/backend/src/services/guidanceEngine/guidanceValidation.service.ts src/shared/backend/services/guidanceEngine/
-COPY apps/backend/src/services/guidanceEngine/guidanceAdvisor.service.ts src/shared/backend/services/guidanceEngine/
-COPY apps/backend/src/services/guidanceEngine/guidanceMapper.ts src/shared/backend/services/guidanceEngine/
-COPY apps/backend/src/services/guidanceEngine/guidanceBookingGuard.service.ts src/shared/backend/services/guidanceEngine/
-COPY apps/backend/src/services/guidanceEngine/guidanceJourney.service.ts src/shared/backend/services/guidanceEngine/
+COPY apps/backend/src/services/guidanceEngine/guidanceTypes.ts \
+     apps/backend/src/services/guidanceEngine/guidanceTemplateRegistry.ts \
+     apps/backend/src/services/guidanceEngine/guidanceCompletionHooks.service.ts \
+     apps/backend/src/services/guidanceEngine/guidanceSignalResolver.service.ts \
+     apps/backend/src/services/guidanceEngine/guidanceStepResolver.service.ts \
+     apps/backend/src/services/guidanceEngine/guidanceDerivedData.service.ts \
+     apps/backend/src/services/guidanceEngine/guidanceFinancialContext.service.ts \
+     apps/backend/src/services/guidanceEngine/guidanceConfidence.service.ts \
+     apps/backend/src/services/guidanceEngine/guidancePriority.service.ts \
+     apps/backend/src/services/guidanceEngine/guidanceSuppression.service.ts \
+     apps/backend/src/services/guidanceEngine/guidanceCopy.service.ts \
+     apps/backend/src/services/guidanceEngine/guidanceValidation.service.ts \
+     apps/backend/src/services/guidanceEngine/guidanceAdvisor.service.ts \
+     apps/backend/src/services/guidanceEngine/guidanceMapper.ts \
+     apps/backend/src/services/guidanceEngine/guidanceBookingGuard.service.ts \
+     apps/backend/src/services/guidanceEngine/guidanceJourney.service.ts \
+     src/shared/backend/services/guidanceEngine/
 # Copy DIY AI guide service (used by generateDiyAiGuide.job.ts)
 COPY apps/backend/src/services/diyAiGuide.service.ts src/shared/backend/services/
 # Copy permit services and adapters (used by permit worker jobs)
-COPY apps/backend/src/services/permitAdapters/permitNormalizer.ts src/shared/backend/services/permitAdapters/
-COPY apps/backend/src/services/permitAdapters/socrata.adapter.ts src/shared/backend/services/permitAdapters/
-COPY apps/backend/src/services/permitAdapters/accela.adapter.ts src/shared/backend/services/permitAdapters/
-COPY apps/backend/src/services/permitFetch.service.ts src/shared/backend/services/
-COPY apps/backend/src/services/permitDetection.service.ts src/shared/backend/services/
-# Copy Home Reserve Fund Planner services (used by reserve fund worker jobs)
-COPY apps/backend/src/services/homeReserveFundCalculation.service.ts src/shared/backend/services/
-COPY apps/backend/src/services/homeReserveFundReconciliation.service.ts src/shared/backend/services/
+COPY apps/backend/src/services/permitAdapters/permitNormalizer.ts \
+     apps/backend/src/services/permitAdapters/socrata.adapter.ts \
+     apps/backend/src/services/permitAdapters/accela.adapter.ts \
+     src/shared/backend/services/permitAdapters/
+# Permit services (used by permit worker jobs, continued) + Home Reserve Fund
+# Planner services (used by reserve fund worker jobs) — merged into one COPY
+# since they share a destination directory
+COPY apps/backend/src/services/permitFetch.service.ts \
+     apps/backend/src/services/permitDetection.service.ts \
+     apps/backend/src/services/homeReserveFundCalculation.service.ts \
+     apps/backend/src/services/homeReserveFundReconciliation.service.ts \
+     src/shared/backend/services/
 # Stubs: replace backend-only deps with workers-safe equivalents
 COPY apps/workers/stubs/error-middleware.ts src/shared/backend/middleware/error.middleware.ts
 COPY apps/workers/stubs/notification-service.ts src/shared/backend/services/notification.service.ts
