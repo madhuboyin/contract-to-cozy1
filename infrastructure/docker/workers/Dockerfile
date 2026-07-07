@@ -185,6 +185,9 @@ COPY apps/backend/src/services/permitAdapters/socrata.adapter.ts src/shared/back
 COPY apps/backend/src/services/permitAdapters/accela.adapter.ts src/shared/backend/services/permitAdapters/
 COPY apps/backend/src/services/permitFetch.service.ts src/shared/backend/services/
 COPY apps/backend/src/services/permitDetection.service.ts src/shared/backend/services/
+# Copy Home Reserve Fund Planner services (used by reserve fund worker jobs)
+COPY apps/backend/src/services/homeReserveFundCalculation.service.ts src/shared/backend/services/
+COPY apps/backend/src/services/homeReserveFundReconciliation.service.ts src/shared/backend/services/
 # Stubs: replace backend-only deps with workers-safe equivalents
 COPY apps/workers/stubs/error-middleware.ts src/shared/backend/middleware/error.middleware.ts
 COPY apps/workers/stubs/notification-service.ts src/shared/backend/services/notification.service.ts
@@ -235,6 +238,12 @@ RUN sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/diyAiGuide\.service/\.\.
 RUN sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/incidents\/incident\.service/\.\.\/shared\/backend\/services\/incidents\/incident\.service/g' src/jobs/severeWeatherAlerts.job.ts && \
     sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/guidanceEngine\/guidanceJourney\.service/\.\.\/shared\/backend\/services\/guidanceEngine\/guidanceJourney\.service/g' src/jobs/severeWeatherAlerts.job.ts && \
     sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/severeWeatherAlert\.service/\.\.\/shared\/backend\/services\/severeWeatherAlert\.service/g' src/jobs/severeWeatherAlerts.job.ts
+
+# Rewrite paths introduced by the Home Reserve Fund Planner jobs
+RUN sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/homeReserveFundCalculation\.service/\.\.\/shared\/backend\/services\/homeReserveFundCalculation\.service/g' src/jobs/recalculateReserveFunds.job.ts && \
+    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/homeReserveFundReconciliation\.service/\.\.\/shared\/backend\/services\/homeReserveFundReconciliation\.service/g' src/jobs/reserveFundReconciliation.job.ts && \
+    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/notification\.service/\.\.\/shared\/backend\/services\/notification\.service/g' src/jobs/reserveFundReconciliation.job.ts && \
+    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/notification\.service/\.\.\/shared\/backend\/services\/notification\.service/g' src/jobs/reserveFundBalanceReminder.job.ts
 
 # Compile TS -> dist/
 RUN npx tsc --project ./tsconfig.json
