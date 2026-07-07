@@ -10,7 +10,7 @@
 // zero cross-app dependencies and needs no Docker build wiring. Keep them in
 // sync if the source enum ever changes.
 
-export type HazardFamily = 'FLOOD' | 'STORM' | 'HEATWAVE' | 'SNOW';
+export type HazardFamily = 'FLOOD' | 'STORM' | 'HURRICANE' | 'HEATWAVE' | 'SNOW' | 'WILDFIRE';
 export type NwsSeverity = 'Extreme' | 'Severe' | 'Moderate' | 'Minor' | 'Unknown';
 
 export interface ScorableAlert {
@@ -26,23 +26,29 @@ export interface ScorableAlert {
 export const HAZARD_INTENT_FAMILY: Record<HazardFamily, string> = {
   FLOOD: 'flood_risk',
   STORM: 'wind_risk',
+  HURRICANE: 'hurricane_risk',
   HEATWAVE: 'heat_risk',
   SNOW: 'freeze_risk',
+  WILDFIRE: 'wildfire_risk',
 };
 
 export const HAZARD_CATEGORY: Record<HazardFamily, string> = {
   FLOOD: 'EXTERIOR',
   STORM: 'EXTERIOR',
+  HURRICANE: 'EXTERIOR',
   HEATWAVE: 'HVAC',
   SNOW: 'EXTERIOR',
+  WILDFIRE: 'EXTERIOR',
 };
 
 // Rough exposure defaults per hazard family (Warning-level NWS severity).
 const HAZARD_EXPOSURE_USD: Record<HazardFamily, number> = {
   FLOOD: 8000,
   STORM: 5000,
+  HURRICANE: 20000,
   HEATWAVE: 1000,
   SNOW: 2000,
+  WILDFIRE: 25000,
 };
 
 export function isWarningLevel(sev: NwsSeverity): boolean {
@@ -62,7 +68,14 @@ export function initialScoreFor(sev: NwsSeverity): number {
 }
 
 export function isSafetyCritical(alert: Pick<ScorableAlert, 'hazardFamily' | 'severity'>): boolean {
-  if (alert.hazardFamily === 'FLOOD' || alert.hazardFamily === 'STORM') return true;
+  if (
+    alert.hazardFamily === 'FLOOD' ||
+    alert.hazardFamily === 'STORM' ||
+    alert.hazardFamily === 'HURRICANE' ||
+    alert.hazardFamily === 'WILDFIRE'
+  ) {
+    return true;
+  }
   if (alert.hazardFamily === 'HEATWAVE' && alert.severity === 'Extreme') return true;
   return false;
 }

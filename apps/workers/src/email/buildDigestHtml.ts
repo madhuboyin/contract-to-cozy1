@@ -1,5 +1,6 @@
 // apps/workers/src/email/buildDigestHtml.ts
 import { Notification } from '@prisma/client';
+import { buildWeatherAlertCardHtml, isWeatherCardMetadata } from './buildWeatherAlertCardHtml';
 
 export function escapeHtml(value: string) {
   return value
@@ -24,6 +25,16 @@ export function buildDigestHtml(
         ${notifications
           .map(
             (n) => {
+              const weather = (n.metadata as any)?.weather;
+              if (isWeatherCardMetadata(weather)) {
+                const card = buildWeatherAlertCardHtml({
+                  title: n.title,
+                  actionUrl: n.actionUrl,
+                  weather,
+                });
+                return `<li style="margin-bottom: 12px; list-style: none;">${card}</li>`;
+              }
+
               const safeTitle = escapeHtml(n.title);
               const safeMessage = escapeHtml(n.message);
               const safeUrl = n.actionUrl ? escapeHtml(n.actionUrl) : '';

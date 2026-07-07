@@ -194,13 +194,15 @@ function severityToInsight(severity: IncidentSeverity | null | undefined): Insig
   return 'LOW';
 }
 
-type WeatherInsightCode = 'FREEZE' | 'STORM' | 'FLOOD' | 'HEATWAVE' | 'SNOW' | 'NONE';
+type WeatherInsightCode = 'FREEZE' | 'STORM' | 'HURRICANE' | 'FLOOD' | 'HEATWAVE' | 'SNOW' | 'WILDFIRE' | 'NONE';
 
 const HAZARD_FAMILY_TO_CODE: Record<string, WeatherInsightCode> = {
   FLOOD: 'FLOOD',
   STORM: 'STORM',
+  HURRICANE: 'HURRICANE',
   HEATWAVE: 'HEATWAVE',
   SNOW: 'SNOW',
+  WILDFIRE: 'WILDFIRE',
 };
 
 function buildWeatherFromLiveForecast(args: {

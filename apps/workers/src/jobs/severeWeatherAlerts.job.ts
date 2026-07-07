@@ -124,6 +124,7 @@ export async function severeWeatherAlertsJob() {
             senderName: alert.senderName,
             effective: alert.effective,
             expires: alert.expires,
+            headline: alert.headline,
             instruction: alert.instruction,
             description: alert.description,
             geoHint: {

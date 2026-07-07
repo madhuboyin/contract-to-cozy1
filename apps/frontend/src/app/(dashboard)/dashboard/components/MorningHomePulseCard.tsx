@@ -11,11 +11,13 @@ import {
   CloudRain,
   CloudSun,
   DollarSign,
+  Flame,
   Loader2,
   Shield,
   Snowflake,
   Sparkles,
   ThermometerSun,
+  Tornado,
   TrendingDown,
   TrendingUp,
   Wind,
@@ -351,7 +353,11 @@ export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCar
     ? weatherCode === 'FREEZE' || weatherCode === 'SNOW'
     : /freeze|frost|snow|ice|blizzard|pipe/i.test(`${secondaryHeadline} ${secondaryDetail}`);
   const WeatherHazardIcon =
-    weatherCode === 'FLOOD' ? CloudRain : weatherCode === 'HEATWAVE' ? ThermometerSun : Wind;
+    weatherCode === 'FLOOD' ? CloudRain
+    : weatherCode === 'HEATWAVE' ? ThermometerSun
+    : weatherCode === 'HURRICANE' ? Tornado
+    : weatherCode === 'WILDFIRE' ? Flame
+    : Wind;
   const freezeTone = freezeLottieTone(payload.weatherInsight.severity);
   const dailyStreak = snapshot.streaks.dailyPulseCheckin;
   const nextStreakMilestone = getNextMilestone(dailyStreak);

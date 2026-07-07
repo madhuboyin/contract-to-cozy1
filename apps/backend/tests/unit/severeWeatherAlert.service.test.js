@@ -53,6 +53,50 @@ test('maps an in-scope NWS event to the correct hazard family', async () => {
   assert.equal(alerts[0].event, 'Flash Flood Warning');
 });
 
+test('maps Watch-tier events to the same hazard family as their Warning counterpart', async () => {
+  mockFetch({
+    features: [
+      alertFeature({ id: 'urn:oid:watch-1', event: 'Flood Watch' }),
+      alertFeature({ id: 'urn:oid:watch-2', event: 'Severe Thunderstorm Watch' }),
+      alertFeature({ id: 'urn:oid:watch-3', event: 'Winter Storm Watch' }),
+    ],
+  });
+  const alerts = await severeWeatherAlertService.getActiveAlerts(40.0, -75.0);
+  assert.equal(alerts.length, 3);
+  assert.equal(alerts.find(a => a.event === 'Flood Watch').hazardFamily, 'FLOOD');
+  assert.equal(alerts.find(a => a.event === 'Severe Thunderstorm Watch').hazardFamily, 'STORM');
+  assert.equal(alerts.find(a => a.event === 'Winter Storm Watch').hazardFamily, 'SNOW');
+});
+
+test('maps hurricane/tropical/storm-surge events to the HURRICANE hazard family', async () => {
+  mockFetch({
+    features: [
+      alertFeature({ id: 'urn:oid:h1', event: 'Hurricane Warning' }),
+      alertFeature({ id: 'urn:oid:h2', event: 'Tropical Storm Watch' }),
+      alertFeature({ id: 'urn:oid:h3', event: 'Storm Surge Warning' }),
+    ],
+  });
+  const alerts = await severeWeatherAlertService.getActiveAlerts(40.0, -75.0);
+  assert.equal(alerts.length, 3);
+  for (const alert of alerts) {
+    assert.equal(alert.hazardFamily, 'HURRICANE');
+  }
+});
+
+test('maps fire-weather events to the WILDFIRE hazard family', async () => {
+  mockFetch({
+    features: [
+      alertFeature({ id: 'urn:oid:f1', event: 'Red Flag Warning' }),
+      alertFeature({ id: 'urn:oid:f2', event: 'Fire Weather Watch' }),
+    ],
+  });
+  const alerts = await severeWeatherAlertService.getActiveAlerts(40.0, -75.0);
+  assert.equal(alerts.length, 2);
+  for (const alert of alerts) {
+    assert.equal(alert.hazardFamily, 'WILDFIRE');
+  }
+});
+
 test('ignores NWS event types outside the tracked hazard list', async () => {
   mockFetch({
     features: [alertFeature({ id: 'urn:oid:test-alert-2', event: 'Air Quality Alert' })],

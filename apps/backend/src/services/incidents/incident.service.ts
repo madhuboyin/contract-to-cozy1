@@ -136,8 +136,10 @@ function toGuidanceSourceType(incidentSourceType: string | null | undefined): st
 const SEVERE_WEATHER_HAZARD_FAMILY_INTENT: Record<string, string> = {
   FLOOD: 'flood_risk',
   STORM: 'wind_risk',
+  HURRICANE: 'hurricane_risk',
   HEATWAVE: 'heat_risk',
   SNOW: 'freeze_risk',
+  WILDFIRE: 'wildfire_risk',
 };
 
 function mapIncidentTypeToGuidance(

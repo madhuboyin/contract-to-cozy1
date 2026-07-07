@@ -18,7 +18,7 @@ export type MorningHomePulsePayload = {
     headline: string;
     detail: string;
     severity: PulseSeverity;
-    code?: 'FREEZE' | 'STORM' | 'FLOOD' | 'HEATWAVE' | 'SNOW' | 'NONE';
+    code?: 'FREEZE' | 'STORM' | 'HURRICANE' | 'FLOOD' | 'HEATWAVE' | 'SNOW' | 'WILDFIRE' | 'NONE';
   };
   microAction: {
     actionId: string;

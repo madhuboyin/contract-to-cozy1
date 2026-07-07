@@ -3,6 +3,7 @@ import { prisma } from '../lib/prisma';
 import { sendEmail } from '../email/email.service';
 import { DeliveryStatus, NotificationChannel } from '@prisma/client';
 import { buildDigestHtml, escapeHtml } from '../email/buildDigestHtml';
+import { buildWeatherAlertCardHtml, isWeatherCardMetadata } from '../email/buildWeatherAlertCardHtml';
 import { logger } from '../lib/logger';
 
 const MAX_NOTIFICATIONS_PER_EMAIL = 10;
@@ -66,6 +67,16 @@ export async function sendEmailNotificationJob(
   // 3️⃣ Build email HTML
   const cardsHtml = deliveries
     .map(({ notification }) => {
+      const weather = (notification.metadata as any)?.weather;
+      if (isWeatherCardMetadata(weather)) {
+        const card = buildWeatherAlertCardHtml({
+          title: notification.title,
+          actionUrl: notification.actionUrl,
+          weather,
+        });
+        return `<tr><td style="padding:12px 0;">${card}</td></tr>`;
+      }
+
       const safeTitle = escapeHtml(notification.title);
       const safeMessage = escapeHtml(notification.message);
       const safeUrl = notification.actionUrl

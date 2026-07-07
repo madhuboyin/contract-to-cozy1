@@ -28,6 +28,31 @@ function asRecord(value: unknown): Record<string, unknown> {
   return value as Record<string, unknown>;
 }
 
+function asStringOrNull(value: unknown): string | null {
+  return typeof value === 'string' && value.trim().length > 0 ? value : null;
+}
+
+/**
+ * If this incident's details carry severe-weather fields (set by
+ * severeWeatherAlerts.job.ts), returns a compact sub-object the email
+ * builders (buildWeatherAlertCardHtml) use to render a hazard-specific card
+ * instead of the generic title/message one. Returns null for every other
+ * incident type.
+ */
+function buildWeatherMetadata(typeKey: string, details: Record<string, unknown>) {
+  const hazardFamily = asStringOrNull(details.hazardFamily);
+  if (typeKey !== 'SEVERE_WEATHER_ALERT' || !hazardFamily) return null;
+
+  return {
+    hazardFamily,
+    nwsEvent: asStringOrNull(details.nwsEvent),
+    senderName: asStringOrNull(details.senderName),
+    headline: asStringOrNull(details.headline),
+    description: asStringOrNull(details.description),
+    instruction: asStringOrNull(details.instruction),
+  };
+}
+
 function hasGuidanceContext(context: GuidanceContextBadge | null | undefined): context is GuidanceContextBadge {
   if (!context) return false;
   return Boolean(
@@ -228,6 +253,7 @@ export class IncidentNotificationService {
     );
 
     const title = sev === IncidentSeverity.CRITICAL ? `⚠️ ${args.incident.title}` : args.incident.title;
+    const weather = buildWeatherMetadata(args.incident.typeKey, asRecord(args.incident.details));
 
     const notification = await prisma.notification.create({
       data: {
@@ -245,6 +271,9 @@ export class IncidentNotificationService {
           propertyId: args.incident.propertyId,
           typeKey: args.incident.typeKey,
           guidanceContext,
+          // Used by buildWeatherAlertCardHtml (email builders) to render a
+          // hazard-specific card instead of the generic title/message one.
+          ...(weather ? { weather } : {}),
           // CRITICAL incidents (severe weather, etc.) skip the once-daily
           // digest and go out via the immediate-send path instead — see
           // highPriorityEmailEnqueue.poller.ts + sendEmailNotification.job.ts.

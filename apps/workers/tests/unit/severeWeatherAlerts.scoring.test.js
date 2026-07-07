@@ -29,9 +29,11 @@ test('initialScoreFor maps NWS severity to a rough initial score', () => {
   assert.equal(initialScoreFor('Unknown'), 35);
 });
 
-test('isSafetyCritical: flood and storm are always safety-critical', () => {
+test('isSafetyCritical: flood, storm, hurricane, and wildfire are always safety-critical', () => {
   assert.equal(isSafetyCritical({ hazardFamily: 'FLOOD', severity: 'Minor' }), true);
   assert.equal(isSafetyCritical({ hazardFamily: 'STORM', severity: 'Minor' }), true);
+  assert.equal(isSafetyCritical({ hazardFamily: 'HURRICANE', severity: 'Minor' }), true);
+  assert.equal(isSafetyCritical({ hazardFamily: 'WILDFIRE', severity: 'Minor' }), true);
 });
 
 test('isSafetyCritical: heatwave only at Extreme severity', () => {
@@ -115,10 +117,22 @@ test('summaryFor: falls back to a generic "in effect" message when both are miss
 });
 
 test('HAZARD_INTENT_FAMILY and HAZARD_CATEGORY cover every hazard family', () => {
-  for (const family of ['FLOOD', 'STORM', 'HEATWAVE', 'SNOW']) {
+  for (const family of ['FLOOD', 'STORM', 'HURRICANE', 'HEATWAVE', 'SNOW', 'WILDFIRE']) {
     assert.ok(HAZARD_INTENT_FAMILY[family], `missing intent family for ${family}`);
     assert.ok(HAZARD_CATEGORY[family], `missing category for ${family}`);
   }
   assert.equal(HAZARD_INTENT_FAMILY.SNOW, 'freeze_risk');
+  assert.equal(HAZARD_INTENT_FAMILY.HURRICANE, 'hurricane_risk');
+  assert.equal(HAZARD_INTENT_FAMILY.WILDFIRE, 'wildfire_risk');
   assert.equal(HAZARD_CATEGORY.HEATWAVE, 'HVAC');
+});
+
+test('scoringInputsFor: hurricane and wildfire use their own higher exposure defaults', () => {
+  const hurricane = scoringInputsFor({ hazardFamily: 'HURRICANE', severity: 'Severe', expires: null });
+  assert.equal(hurricane.exposureUsd, 20000);
+  assert.equal(hurricane.safetyCritical, true);
+
+  const wildfire = scoringInputsFor({ hazardFamily: 'WILDFIRE', severity: 'Moderate', expires: null });
+  assert.equal(wildfire.exposureUsd, 12500); // 25000 / 2 (Watch-tier severity)
+  assert.equal(wildfire.safetyCritical, true);
 });

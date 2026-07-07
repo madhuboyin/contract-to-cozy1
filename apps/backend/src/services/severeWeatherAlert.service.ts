@@ -13,7 +13,7 @@ import { logger } from '../lib/logger';
 // Types
 // ─────────────────────────────────────────────────────────────────────────────
 
-export type HazardFamily = 'FLOOD' | 'STORM' | 'HEATWAVE' | 'SNOW';
+export type HazardFamily = 'FLOOD' | 'STORM' | 'HURRICANE' | 'HEATWAVE' | 'SNOW' | 'WILDFIRE';
 
 export type NwsSeverity = 'Extreme' | 'Severe' | 'Moderate' | 'Minor' | 'Unknown';
 
@@ -70,17 +70,45 @@ const DEFAULT_USER_AGENT = '(contracttocozy.com, ops@contracttocozy.com)';
 
 // NWS `event` string -> our hazard family. Anything not listed here is ignored
 // (e.g. Air Quality Alert, Small Craft Advisory — out of scope for this feature).
+// Watch-tier events are included alongside their Warning-tier counterparts —
+// NWS assigns `severity` per alert independent of Watch/Warning wording, so
+// scoringInputsFor() already scores a typical Watch lower than a Warning
+// without any special-casing here.
 const EVENT_TO_HAZARD_FAMILY: Record<string, HazardFamily> = {
   'Flash Flood Warning': 'FLOOD',
   'Flood Warning': 'FLOOD',
+  'Flash Flood Watch': 'FLOOD',
+  'Flood Watch': 'FLOOD',
+
   'Severe Thunderstorm Warning': 'STORM',
   'Tornado Warning': 'STORM',
   'High Wind Warning': 'STORM',
+  'Severe Thunderstorm Watch': 'STORM',
+  'Tornado Watch': 'STORM',
+  'High Wind Watch': 'STORM',
+
+  // Distinct from STORM: the guidance journey (guidanceTemplateRegistry.ts)
+  // already declares a separate `hurricane_risk` signal intent family.
+  'Hurricane Warning': 'HURRICANE',
+  'Tropical Storm Warning': 'HURRICANE',
+  'Storm Surge Warning': 'HURRICANE',
+  'Hurricane Watch': 'HURRICANE',
+  'Tropical Storm Watch': 'HURRICANE',
+  'Storm Surge Watch': 'HURRICANE',
+
   'Excessive Heat Warning': 'HEATWAVE',
   'Heat Advisory': 'HEATWAVE',
+
   'Winter Storm Warning': 'SNOW',
   'Blizzard Warning': 'SNOW',
   'Winter Weather Advisory': 'SNOW',
+  'Winter Storm Watch': 'SNOW',
+
+  // Distinct from STORM: the guidance journey already declares a separate
+  // `wildfire_risk` signal intent family. NWS's fire-weather products (not
+  // wildfire detection itself) are Red Flag Warning / Fire Weather Watch.
+  'Red Flag Warning': 'WILDFIRE',
+  'Fire Weather Watch': 'WILDFIRE',
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
