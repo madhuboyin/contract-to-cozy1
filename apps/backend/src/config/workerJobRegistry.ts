@@ -279,6 +279,47 @@ export const JOB_REGISTRY: JobRegistryEntry[] = [
     jobName: 'mortgage-rate-ingest',
     triggerSupported: true,
   },
+  {
+    key: 'reserve-fund-recalculation',
+    name: 'Reserve Fund Recalculation',
+    description:
+      'Safety-net sweep for the Home Reserve / Sinking Fund Planner. The primary trigger is ' +
+      'event-driven (fired when a property\'s Capital Timeline is regenerated); this sweep catches ' +
+      'any funds that missed that trigger and recomputes any fund not touched in 35+ days. ' +
+      'Override schedule via RESERVE_FUND_SWEEP_CRON env var.',
+    category: 'FINANCIAL_MARKET',
+    schedule: 'Monthly, 1st at 4:00 AM',
+    cronExpression: '0 4 1 * *',
+    type: 'cron',
+    triggerSupported: false,
+  },
+  {
+    key: 'reserve-fund-reconciliation',
+    name: 'Reserve Fund Reconciliation',
+    description:
+      'Computes fuzzy expense-match suggestions for open Reserve Fund line items and notifies the ' +
+      'homeowner when any exist. Suggestions are computed live (not persisted), so this runs weekly ' +
+      'rather than daily to avoid re-notifying for the same still-open suggestion too often. ' +
+      'Override schedule via RESERVE_FUND_RECONCILIATION_CRON env var.',
+    category: 'FINANCIAL_MARKET',
+    schedule: 'Sundays at 5:00 AM EST',
+    cronExpression: '0 5 * * 0',
+    type: 'cron',
+    triggerSupported: false,
+  },
+  {
+    key: 'reserve-fund-balance-reminder',
+    name: 'Reserve Fund Balance Reminder',
+    description:
+      'Nudges homeowners whose Reserve Fund balance has gone 45+ days without a logged deposit or ' +
+      'withdrawal — balances are entirely self-reported (no bank-linking integration exists), so a ' +
+      'stale fund silently drifts from reality otherwise.',
+    category: 'FINANCIAL_MARKET',
+    schedule: 'Monthly, 1st at 9:00 AM EST',
+    cronExpression: '0 9 1 * *',
+    type: 'cron',
+    triggerSupported: false,
+  },
 
   // ── Home Intelligence (cron) ──────────────────────────────────────────────
   {

@@ -19,6 +19,8 @@ import {
 } from './financialAssumption.service';
 import { projectValueAtYear } from './tools/financialProjectionMath';
 import { NotificationService } from './notification.service';
+import { homeReserveFundCalculationService } from './homeReserveFundCalculation.service';
+import { logger } from '../lib/logger';
 
 // ─── Phase-3: Seasonal/climate wear adjustment by state ────────────
 // Multiplicative factor applied to lifespan (<1 shortens, >1 lengthens).
@@ -590,6 +592,16 @@ export class HomeCapitalTimelineService {
         ).catch(() => {/* never throw — notifications are best-effort */});
       }
     }
+
+    // Fire-and-forget: keep the Reserve Fund Planner's target in sync with this
+    // fresh timeline. See docs/functional/HOME_RESERVE_FUND_PLANNER_FRD.md —
+    // this is the "event-driven" trigger; recalculateReserveFunds.job.ts is
+    // only the safety net for cases this call is ever missed.
+    homeReserveFundCalculationService
+      .recalculate(propertyId, 'TIMELINE_REFRESH')
+      .catch((err) =>
+        logger.warn({ err, propertyId }, '[HomeCapitalTimeline] reserve fund recalculation failed')
+      );
 
     return enriched;
   }

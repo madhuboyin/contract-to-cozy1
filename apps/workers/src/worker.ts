@@ -49,6 +49,9 @@ import { fetchPermitHistoryJob, FETCH_PERMIT_HISTORY_JOB } from './jobs/fetchPer
 import { detectUnpermittedWorkJob, DETECT_UNPERMITTED_WORK_JOB } from './jobs/detectUnpermittedWork.job';
 import { generatePermitDisclosureJob, GENERATE_PERMIT_DISCLOSURE_JOB } from './jobs/generatePermitDisclosure.job';
 import { permitInspectionReminderJob } from './jobs/permitInspectionReminder.job';
+import { recalculateReserveFundsJob } from './jobs/recalculateReserveFunds.job';
+import { reserveFundReconciliationJob } from './jobs/reserveFundReconciliation.job';
+import { reserveFundBalanceReminderJob } from './jobs/reserveFundBalanceReminder.job';
 import { JOB_REGISTRY } from '../../backend/src/config/workerJobRegistry';
 import { prisma } from './lib/prisma';
 import { HiddenAssetService } from '../../backend/src/services/hiddenAssets.service';
@@ -693,6 +696,9 @@ const CRON_HANDLERS: Record<string, () => Promise<void>> = {
   'shared-signal-health-audit':      async () => { await runSharedSignalHealthAuditJob(); },
   'expire-guidance-signals':         async () => { await expireGuidanceSignalsJob(); },
   'permit-inspection-reminders':     async () => { await permitInspectionReminderJob(); },
+  'reserve-fund-recalculation':      async () => { await recalculateReserveFundsJob(); },
+  'reserve-fund-reconciliation':     async () => { await reserveFundReconciliationJob(); },
+  'reserve-fund-balance-reminder':   async () => { await reserveFundBalanceReminderJob(); },
 };
 
 // Per-job cron expression overrides (env-var-based schedules)
@@ -703,6 +709,8 @@ const CRON_ENV_OVERRIDES: Record<string, string | undefined> = {
   'shared-data-consistency-audit': process.env.SHARED_DATA_CONSISTENCY_AUDIT_CRON,
   'shared-signal-refresh':      process.env.SHARED_SIGNAL_REFRESH_CRON,
   'shared-signal-health-audit': process.env.SHARED_SIGNAL_HEALTH_AUDIT_CRON,
+  'reserve-fund-recalculation': process.env.RESERVE_FUND_SWEEP_CRON,
+  'reserve-fund-reconciliation': process.env.RESERVE_FUND_RECONCILIATION_CRON,
 };
 
 function scheduleCronJobs(): void {
