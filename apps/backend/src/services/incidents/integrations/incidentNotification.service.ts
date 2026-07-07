@@ -315,7 +315,13 @@ export class IncidentNotificationService {
         notificationId: notification.id,
         channel: NotificationChannel.EMAIL,
         status: DeliveryStatus.PENDING,
-        enqueuedAt: new Date(),
+        // Deliberately NOT setting enqueuedAt here — highPriorityEmailEnqueue.poller.ts
+        // only selects deliveries where enqueuedAt IS NULL. Setting it at creation
+        // (as this used to) made every fresh delivery permanently invisible to that
+        // poller, silently defeating the immediate-send path for every CRITICAL
+        // incident app-wide — confirmed live, enqueuedAt matched createdAt to the
+        // millisecond. Only the once-daily digest (which ignores enqueuedAt) was
+        // ever actually delivering these.
       });
     }
 
@@ -388,11 +394,16 @@ export class IncidentNotificationService {
     ];
 
     if (args.severity === IncidentSeverity.CRITICAL) {
+      // Same enqueuedAt fix as notifyIncidentActivated above — leave it null so
+      // the poller can actually find this row. Note this delivery's metadata
+      // doesn't set priority: 'HIGH' (unlike notifyIncidentActivated's), so
+      // even with this fix it still only goes out via the daily digest, not
+      // the immediate path — flagging that as a separate, pre-existing
+      // inconsistency for a product decision, not fixing it here.
       deliveries.push({
         notificationId: notification.id,
         channel: NotificationChannel.EMAIL,
         status: DeliveryStatus.PENDING,
-        enqueuedAt: new Date(),
       });
     }
 
