@@ -32,6 +32,7 @@ import {
   StatusChip,
 } from '@/components/mobile/dashboard/MobilePrimitives';
 import ProviderShellTemplate from '@/components/providers/ProviderShellTemplate';
+import { VerifiedProBadge } from '@/components/features/providerTrust/VerifiedProBadge';
 import { useExecutionGuard } from '@/features/guidance/hooks/useExecutionGuard';
 import { useGuidance } from '@/features/guidance/hooks/useGuidance';
 import { GuidanceWarningBanner } from '@/components/guidance/GuidanceWarningBanner';
@@ -252,6 +253,10 @@ const ProviderList = ({
           typeof provider.averageRating === 'number' && Number.isFinite(provider.averageRating)
             ? provider.averageRating
             : 0;
+        const verifiedCategories = Array.isArray(provider.verifiedCategories) ? provider.verifiedCategories : [];
+        const isVerifiedForContext = category
+          ? verifiedCategories.includes(category as any)
+          : verifiedCategories.length > 0;
         const queryParams = new URLSearchParams();
         if (targetPropertyId) queryParams.append('propertyId', targetPropertyId);
         if (insightContext) queryParams.append('insightFactor', insightContext);
@@ -290,6 +295,7 @@ const ProviderList = ({
                   {(inventoryItemId || insightContext) && providerCategories.includes((category || insightContext) as any) && (
                     <StatusChip tone="good" className="text-[11px] py-0 px-1.5 h-4">Best Match</StatusChip>
                   )}
+                  <VerifiedProBadge isVerified={isVerifiedForContext} showWhenUnverified={false} />
                 </div>
               </div>
               <StatusChip tone={providerAverageRating >= 4.5 ? 'good' : providerAverageRating >= 4 ? 'elevated' : 'info'}>

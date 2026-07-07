@@ -21,6 +21,7 @@ import {
   StatusChip,
 } from '@/components/mobile/dashboard/MobilePrimitives';
 import ProviderShellTemplate from '@/components/providers/ProviderShellTemplate';
+import { VerifiedProBadge } from '@/components/features/providerTrust/VerifiedProBadge';
 import { useExecutionGuard } from '@/features/guidance/hooks/useExecutionGuard';
 import { useGuidance } from '@/features/guidance/hooks/useGuidance';
 import { GuidanceWarningBanner } from '@/components/guidance/GuidanceWarningBanner';
@@ -91,6 +92,7 @@ export default function ProviderDetailPage() {
 
   const [provider, setProvider] = useState<CompleteProvider | null>(null);
   const [services, setServices] = useState<Service[]>([]);
+  const [verifiedCategories, setVerifiedCategories] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
   const isExecutionBlocked = hasGuardScopeContext && Boolean(bookingGuardQuery.data?.blocked);
@@ -206,7 +208,11 @@ export default function ProviderDetailPage() {
 
   const loadData = async () => {
     try {
-      const [providerRes, servicesRes] = await Promise.all([api.getProvider(providerId), api.getProviderServices(providerId)]);
+      const [providerRes, servicesRes, verificationSummary] = await Promise.all([
+        api.getProvider(providerId),
+        api.getProviderServices(providerId),
+        api.getProviderVerificationSummary(providerId).catch(() => null),
+      ]);
 
       if (providerRes.success) {
         setProvider(providerRes.data as CompleteProvider);
@@ -216,6 +222,10 @@ export default function ProviderDetailPage() {
 
       if (servicesRes.success) {
         setServices(servicesRes.data.services);
+      }
+
+      if (verificationSummary) {
+        setVerifiedCategories(verificationSummary.verifiedCategories);
       }
     } catch (loadError) {
       console.error('Failed to load provider data:', loadError);
@@ -405,18 +415,21 @@ export default function ProviderDetailPage() {
         rationale: 'Visible trust signals reduce uncertainty and help homeowners book confidently.',
       }}
       summary={
-        <ResultHeroCard
-          eyebrow="Service Pro"
-          title={provider.businessName}
-          value={ratingValue}
-          status={<StatusChip tone={isFavorited ? 'danger' : 'info'}>{isFavorited ? 'My Pro' : 'Not saved'}</StatusChip>}
-          summary={`${provider.user.firstName} ${provider.user.lastName} • ${provider.totalReviews} reviews`}
-          highlights={[
-            `${provider.totalCompletedJobs} completed jobs`,
-            `Serves ${provider.serviceRadius} miles`,
-            ...categoryHighlights,
-          ]}
-        />
+        <div className="space-y-2">
+          <ResultHeroCard
+            eyebrow="Service Pro"
+            title={provider.businessName}
+            value={ratingValue}
+            status={<StatusChip tone={isFavorited ? 'danger' : 'info'}>{isFavorited ? 'My Pro' : 'Not saved'}</StatusChip>}
+            summary={`${provider.user.firstName} ${provider.user.lastName} • ${provider.totalReviews} reviews`}
+            highlights={[
+              `${provider.totalCompletedJobs} completed jobs`,
+              `Serves ${provider.serviceRadius} miles`,
+              ...categoryHighlights,
+            ]}
+          />
+          <VerifiedProBadge isVerified={verifiedCategories.length > 0} showWhenUnverified={false} />
+        </div>
       }
     >
       {contextualBackHref ? (

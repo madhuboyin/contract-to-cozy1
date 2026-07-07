@@ -84,6 +84,9 @@ export interface ProviderWithDistance {
     basePrice: string;
     priceUnit: string;
   }[];
+  // Provider Trust & Compliance Verification — categories this provider is
+  // currently eligible (verified) for, powering the "Verified Pro" badge.
+  verifiedCategories: ServiceCategory[];
 }
 
 export interface ProviderDetails {

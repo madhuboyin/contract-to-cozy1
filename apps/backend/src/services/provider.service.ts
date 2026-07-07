@@ -239,6 +239,12 @@ export class ProviderService {
           },
           take: 5, // Limit to top 5 services per provider
         },
+        // Provider Trust & Compliance Verification — cheap indexed read so
+        // the "Verified Pro" badge can render per-card without an N+1 call.
+        categoryEligibility: {
+          where: { isEligible: true },
+          select: { serviceCategory: true },
+        },
       },
       orderBy: this.getSortOrder(sortBy, sortOrder),
     });
@@ -290,6 +296,7 @@ export class ProviderService {
           basePrice: service.basePrice.toString(),
           priceUnit: service.priceUnit,
         })),
+        verifiedCategories: provider.categoryEligibility.map((e) => e.serviceCategory),
       };
     });
 

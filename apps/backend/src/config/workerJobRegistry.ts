@@ -237,6 +237,39 @@ export const JOB_REGISTRY: JobRegistryEntry[] = [
     type: 'cron',
     triggerSupported: false,
   },
+  {
+    key: 'provider-credential-expire',
+    name: 'Provider Credential Expire',
+    description:
+      'Transitions approved provider credentials past their expiry date to EXPIRED and recomputes affected providers\' category eligibility.',
+    category: 'RISK_SAFETY',
+    schedule: 'Daily at 6:00 AM EST',
+    cronExpression: '0 6 * * *',
+    type: 'cron',
+    triggerSupported: false,
+  },
+  {
+    key: 'provider-credential-lapse',
+    name: 'Provider Credential Lapse',
+    description:
+      'Detects provider credentials expiring within 30 days. Creates a homeowner-visible incident when an already-scheduled booking is at risk, otherwise a provider/admin compliance alert.',
+    category: 'RISK_SAFETY',
+    schedule: 'Daily at 7:00 AM EST',
+    cronExpression: '0 7 * * *',
+    type: 'cron',
+    triggerSupported: false,
+  },
+  {
+    key: 'provider-missing-credential-sweep',
+    name: 'Provider Missing Credential Sweep',
+    description:
+      'Flags providers who list a service category but never submitted its required credential type.',
+    category: 'RISK_SAFETY',
+    schedule: 'Sundays at 6:00 AM EST',
+    cronExpression: '0 6 * * 0',
+    type: 'cron',
+    triggerSupported: false,
+  },
 
   // ── Neighborhood (cron) ───────────────────────────────────────────────────
   {

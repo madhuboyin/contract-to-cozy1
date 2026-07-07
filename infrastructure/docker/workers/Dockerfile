@@ -200,6 +200,11 @@ COPY apps/backend/src/services/permitFetch.service.ts \
      apps/backend/src/services/homeReserveFundCalculation.service.ts \
      apps/backend/src/services/homeReserveFundReconciliation.service.ts \
      src/shared/backend/services/
+# Provider Trust & Compliance Verification — only providerCompliance.service.ts
+# and the lapse adapter are needed here; providerCredential.service.ts (CRUD,
+# submission) is only used by backend routes/controllers, not worker jobs.
+COPY apps/backend/src/services/providerCompliance.service.ts src/shared/backend/services/
+COPY apps/backend/src/services/incidents/integrations/providerCredentialLapse.adapter.ts src/shared/backend/services/incidents/integrations/
 # Stubs: replace backend-only deps with workers-safe equivalents
 COPY apps/workers/stubs/error-middleware.ts src/shared/backend/middleware/error.middleware.ts
 COPY apps/workers/stubs/notification-service.ts src/shared/backend/services/notification.service.ts
@@ -256,6 +261,10 @@ RUN sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/homeReserveFundCalculati
     sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/homeReserveFundReconciliation\.service/\.\.\/shared\/backend\/services\/homeReserveFundReconciliation\.service/g' src/jobs/reserveFundReconciliation.job.ts && \
     sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/notification\.service/\.\.\/shared\/backend\/services\/notification\.service/g' src/jobs/reserveFundReconciliation.job.ts && \
     sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/notification\.service/\.\.\/shared\/backend\/services\/notification\.service/g' src/jobs/reserveFundBalanceReminder.job.ts
+
+# Rewrite paths introduced by the Provider Trust & Compliance Verification jobs
+RUN sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/providerCompliance\.service/\.\.\/shared\/backend\/services\/providerCompliance\.service/g' src/jobs/providerCredentialExpire.job.ts && \
+    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/incidents\/integrations\/providerCredentialLapse\.adapter/\.\.\/shared\/backend\/services\/incidents\/integrations\/providerCredentialLapse\.adapter/g' src/jobs/providerCredentialLapse.job.ts
 
 # Compile TS -> dist/
 RUN npx tsc --project ./tsconfig.json

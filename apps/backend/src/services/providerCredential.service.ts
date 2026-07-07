@@ -9,7 +9,17 @@ import { logger } from '../lib/logger';
 import { APIError } from '../middleware/error.middleware';
 import { NotificationService } from './notification.service';
 import { providerComplianceService } from './providerCompliance.service';
-import { ProviderCredentialType, ServiceCategory, UserRole } from '@prisma/client';
+import { uploadDocumentBuffer } from './storage/reportStorage';
+import { DocumentType, ProviderCredentialType, ServiceCategory, UserRole } from '@prisma/client';
+
+const DOCUMENT_TYPE_BY_CREDENTIAL_TYPE: Record<ProviderCredentialType, DocumentType> = {
+  TRADE_LICENSE: DocumentType.LICENSE,
+  LIABILITY_INSURANCE: DocumentType.INSURANCE_CERTIFICATE,
+  WORKERS_COMP_INSURANCE: DocumentType.INSURANCE_CERTIFICATE,
+  BONDING: DocumentType.OTHER,
+  CERTIFICATION: DocumentType.OTHER,
+  BACKGROUND_CHECK: DocumentType.OTHER,
+};
 
 export type SubmitCredentialInput = {
   type: ProviderCredentialType;
@@ -202,6 +212,42 @@ class ProviderCredentialService {
       unverifiedCategories: eligibility.filter((e) => !e.isEligible).map((e) => e.serviceCategory),
       credentialTypesPresent: approvedCredentials.map((c) => c.type),
     };
+  }
+
+  /**
+   * Uploads the credential's evidence document to storage and creates its
+   * Document row, ahead of submit()/renew() linking it via
+   * documentId (Section 3: "Create Document row, link via providerCredentialId").
+   * Providers have no other document-upload surface — the existing one at
+   * /api/home-management/documents/upload is homeowner-only.
+   */
+  async createCredentialDocument(
+    userId: string,
+    file: { buffer: Buffer; originalname: string; mimetype: string; size: number },
+    credentialType?: ProviderCredentialType
+  ) {
+    const { key } = await uploadDocumentBuffer({
+      buffer: file.buffer,
+      fileName: file.originalname,
+      mimeType: file.mimetype,
+      userId,
+      propertyId: null,
+    });
+
+    const type = credentialType ? DOCUMENT_TYPE_BY_CREDENTIAL_TYPE[credentialType] : DocumentType.OTHER;
+
+    const document = await prisma.document.create({
+      data: {
+        uploadedBy: userId,
+        type,
+        name: file.originalname,
+        fileUrl: key,
+        fileSize: file.size,
+        mimeType: file.mimetype,
+      },
+    });
+
+    return document;
   }
 
   private async linkDocument(credentialId: string, documentId: string, providerProfileId: string) {

@@ -52,6 +52,9 @@ import { permitInspectionReminderJob } from './jobs/permitInspectionReminder.job
 import { recalculateReserveFundsJob } from './jobs/recalculateReserveFunds.job';
 import { reserveFundReconciliationJob } from './jobs/reserveFundReconciliation.job';
 import { reserveFundBalanceReminderJob } from './jobs/reserveFundBalanceReminder.job';
+import { providerCredentialExpireJob } from './jobs/providerCredentialExpire.job';
+import { providerCredentialLapseJob } from './jobs/providerCredentialLapse.job';
+import { providerMissingCredentialSweepJob } from './jobs/providerMissingCredentialSweep.job';
 import { JOB_REGISTRY } from '../../backend/src/config/workerJobRegistry';
 import { prisma } from './lib/prisma';
 import { HiddenAssetService } from '../../backend/src/services/hiddenAssets.service';
@@ -699,6 +702,9 @@ const CRON_HANDLERS: Record<string, () => Promise<void>> = {
   'reserve-fund-recalculation':      async () => { await recalculateReserveFundsJob(); },
   'reserve-fund-reconciliation':     async () => { await reserveFundReconciliationJob(); },
   'reserve-fund-balance-reminder':   async () => { await reserveFundBalanceReminderJob(); },
+  'provider-credential-expire':      async () => { await providerCredentialExpireJob(); },
+  'provider-credential-lapse':       async () => { await providerCredentialLapseJob(); },
+  'provider-missing-credential-sweep': async () => { await providerMissingCredentialSweepJob(); },
 };
 
 // Per-job cron expression overrides (env-var-based schedules)

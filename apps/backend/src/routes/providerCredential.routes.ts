@@ -8,9 +8,11 @@
 // fully qualified.
 
 import { Router } from 'express';
+import multer from 'multer';
 import { authenticate, requireMfa, requireRole } from '../middleware/auth.middleware';
 import { validateBody } from '../middleware/validate.middleware';
-import { apiRateLimiter } from '../middleware/rateLimiter.middleware';
+import { validateDocumentUpload } from '../utils/documentValidator.util';
+import { apiRateLimiter, uploadRateLimiter } from '../middleware/rateLimiter.middleware';
 import { UserRole } from '../types/auth.types';
 import { ProviderCredentialController } from '../controllers/providerCredential.controller';
 import {
@@ -20,6 +22,19 @@ import {
   RevokeCredentialSchema,
 } from '../validators/providerCredential.validators';
 
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+  fileFilter: (_req, file, cb) => {
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'application/pdf'];
+    if (allowedTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Invalid file type. Only JPEG, PNG, WEBP, and PDF documents are allowed.'));
+    }
+  },
+});
+
 const router = Router();
 
 router.use(apiRateLimiter);
@@ -28,6 +43,13 @@ router.use(apiRateLimiter);
 router.use('/providers/me', authenticate, requireRole(UserRole.PROVIDER, UserRole.ADMIN));
 
 router.get('/providers/me/credentials', ProviderCredentialController.list);
+router.post(
+  '/providers/me/credentials/documents',
+  uploadRateLimiter,
+  upload.single('file'),
+  validateDocumentUpload,
+  ProviderCredentialController.uploadDocument
+);
 router.post(
   '/providers/me/credentials',
   validateBody(SubmitCredentialSchema),

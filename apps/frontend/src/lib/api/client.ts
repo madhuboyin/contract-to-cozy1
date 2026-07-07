@@ -880,6 +880,7 @@ class APIClient {
     radius?: number;
     category?: string;
     minRating?: number;
+    verifiedOnly?: boolean;
     page?: number;
     limit?: number;
   }): Promise<APIResponse<{
@@ -924,8 +925,126 @@ class APIClient {
     return this.request(`/api/providers/${id}/reviews?${queryParams.toString()}`);
   }
 
+  /**
+   * Public/homeowner-safe verification summary — powers the "Verified Pro" badge
+   */
+  async getProviderVerificationSummary(
+    id: string
+  ): Promise<import('@/types').ProviderVerificationSummary> {
+    const res = await this.get<import('@/types').ProviderVerificationSummary>(
+      `/api/providers/${id}/verification-summary`
+    );
+    return res.data ?? { verifiedCategories: [], unverifiedCategories: [], credentialTypesPresent: [] };
+  }
+
   // ==========================================================================
-  // BOOKING ENDPOINTS 
+  // PROVIDER TRUST & COMPLIANCE VERIFICATION
+  // ==========================================================================
+
+  async listProviderCredentials(): Promise<import('@/types').ProviderCredential[]> {
+    const res = await this.get<import('@/types').ProviderCredential[]>('/api/providers/me/credentials');
+    return res.data ?? [];
+  }
+
+  async submitProviderCredential(
+    payload: import('@/types').SubmitProviderCredentialPayload
+  ): Promise<import('@/types').ProviderCredential> {
+    const res = await this.post<import('@/types').ProviderCredential>('/api/providers/me/credentials', payload);
+    if (!res.data) throw new APIError('Failed to submit credential', 500);
+    return res.data;
+  }
+
+  async renewProviderCredential(
+    credentialId: string,
+    payload: import('@/types').RenewProviderCredentialPayload
+  ): Promise<import('@/types').ProviderCredential> {
+    const res = await this.post<import('@/types').ProviderCredential>(
+      `/api/providers/me/credentials/${credentialId}/renew`,
+      payload
+    );
+    if (!res.data) throw new APIError('Failed to submit renewal', 500);
+    return res.data;
+  }
+
+  /**
+   * Uploads the credential's evidence document (PDF/image) and returns its
+   * documentId, to be passed as SubmitProviderCredentialPayload.documentId.
+   */
+  async uploadProviderCredentialDocument(
+    file: File,
+    credentialType?: import('@/types').ProviderCredentialType
+  ): Promise<string> {
+    const formData = new FormData();
+    formData.append('file', file);
+    if (credentialType) formData.append('credentialType', credentialType);
+
+    const res = await this.formDataRequest<{ id: string }>(
+      '/api/providers/me/credentials/documents',
+      formData
+    );
+    if (!res.success || !res.data?.id) throw new APIError('Failed to upload document', 500);
+    return res.data.id;
+  }
+
+  async getProviderCategoryEligibility(): Promise<import('@/types').ProviderCategoryEligibility[]> {
+    const res = await this.get<import('@/types').ProviderCategoryEligibility[]>(
+      '/api/providers/me/category-eligibility'
+    );
+    return res.data ?? [];
+  }
+
+  async listProviderComplianceAlerts(): Promise<import('@/types').ProviderComplianceAlert[]> {
+    const res = await this.get<import('@/types').ProviderComplianceAlert[]>(
+      '/api/providers/me/compliance-alerts'
+    );
+    return res.data ?? [];
+  }
+
+  async adminListProviderCredentialQueue(filters?: {
+    type?: import('@/types').ProviderCredentialType;
+    serviceCategory?: import('@/types').ServiceCategory;
+  }): Promise<import('@/types').ProviderCredential[]> {
+    const res = await this.get<import('@/types').ProviderCredential[]>(
+      '/api/admin/provider-credentials/queue',
+      { params: filters }
+    );
+    return res.data ?? [];
+  }
+
+  async adminApproveProviderCredential(credentialId: string): Promise<import('@/types').ProviderCredential> {
+    const res = await this.post<import('@/types').ProviderCredential>(
+      `/api/admin/provider-credentials/${credentialId}/approve`
+    );
+    if (!res.data) throw new APIError('Failed to approve credential', 500);
+    return res.data;
+  }
+
+  async adminRejectProviderCredential(
+    credentialId: string,
+    rejectionReason: string
+  ): Promise<import('@/types').ProviderCredential> {
+    const res = await this.post<import('@/types').ProviderCredential>(
+      `/api/admin/provider-credentials/${credentialId}/reject`,
+      { rejectionReason }
+    );
+    if (!res.data) throw new APIError('Failed to reject credential', 500);
+    return res.data;
+  }
+
+  async adminRevokeProviderCredential(
+    credentialId: string,
+    reason: string
+  ): Promise<import('@/types').ProviderCredential> {
+    const res = await this.post<import('@/types').ProviderCredential>(
+      `/api/admin/provider-credentials/${credentialId}/revoke`,
+      { reason }
+    );
+    if (!res.data) throw new APIError('Failed to revoke credential', 500);
+    return res.data;
+  }
+
+  // ==========================================================================
+  // BOOKING ENDPOINTS
   // ==========================================================================
   async createBooking(input: CreateBookingInput): Promise<APIResponse<Booking>> {
     return this.request<Booking>('/api/bookings', {

@@ -29,13 +29,29 @@ export type BookingStatus =
 /**
  * Service Category - Synced with Backend Enum
  */
-export type ServiceCategory = 
+export type ServiceCategory =
   | 'INSPECTION'
   | 'HANDYMAN'
+  | 'GENERAL_HANDYMAN'
   | 'PLUMBING'
   | 'ELECTRICAL'
   | 'HVAC'
+  | 'ROOFING'
+  | 'WATER_HEATER'
+  | 'FOUNDATION'
+  | 'WINDOWS_DOORS'
+  | 'INSULATION'
   | 'LANDSCAPING'
+  | 'LANDSCAPING_DRAINAGE'
+  | 'GUTTERS'
+  | 'SOLAR'
+  | 'FLOORING'
+  | 'PAINTING'
+  | 'SIDING'
+  | 'MOLD_REMEDIATION'
+  | 'APPLIANCE_REPAIR'
+  | 'APPLIANCE_REPLACEMENT'
+  | 'SECURITY_SAFETY'
   | 'CLEANING'
   | 'MOVING'
   | 'PEST_CONTROL'
@@ -44,7 +60,8 @@ export type ServiceCategory =
   | 'ATTORNEY'
   | 'FINANCE'
   | 'WARRANTY'
-  | 'ADMIN';
+  | 'ADMIN'
+  | 'OTHER';
 
   export type WarrantyCategory = 
   | 'APPLIANCE'
@@ -1051,6 +1068,8 @@ export interface Provider {
   /** Typical response time label, e.g. "Within 2 hours". Populated by backend when available. */
   responseTime?: string | null;
   website?: string | null;
+  /** Provider Trust & Compliance Verification — categories this provider is currently verified for. */
+  verifiedCategories?: ServiceCategory[];
 }
 
 /**
@@ -1316,6 +1335,15 @@ export interface Booking {
   timeline: BookingTimelineEntry[];
   createdAt: string;
   updatedAt: string;
+  /**
+   * Provider Trust & Compliance Verification — non-blocking warning set only
+   * on the createBooking response when the provider isn't currently verified
+   * for this category. Absent/null otherwise.
+   */
+  providerEligibilityWarning?: {
+    serviceCategory: ServiceCategory;
+    missingCredentialTypes: ProviderCredentialType[];
+  } | null;
 }
 
 /**
@@ -4506,4 +4534,91 @@ export interface BuyerReportData {
   methodology: HomeScoreMethodology;
   generatedAt: string;
   confidence: string;
+}
+
+// ============================================================================
+// PROVIDER TRUST & COMPLIANCE VERIFICATION
+// ============================================================================
+
+export type ProviderCredentialType =
+  | 'TRADE_LICENSE'
+  | 'LIABILITY_INSURANCE'
+  | 'WORKERS_COMP_INSURANCE'
+  | 'BONDING'
+  | 'CERTIFICATION'
+  | 'BACKGROUND_CHECK';
+
+export type ProviderCredentialStatus = 'PENDING_REVIEW' | 'APPROVED' | 'REJECTED' | 'EXPIRED' | 'REVOKED';
+
+export type ProviderComplianceAlertType =
+  | 'EXPIRING_SOON'
+  | 'EXPIRED_NO_BOOKING_IMPACT'
+  | 'REJECTED'
+  | 'MISSING_REQUIRED_CREDENTIAL';
+
+export type ProviderComplianceAlertSeverity = 'INFO' | 'WARNING' | 'CRITICAL';
+export type ProviderComplianceAlertStatus = 'NEW' | 'ACKNOWLEDGED' | 'RESOLVED';
+
+export interface ProviderCredential {
+  id: string;
+  providerProfileId: string;
+  type: ProviderCredentialType;
+  serviceCategories: ServiceCategory[];
+  status: ProviderCredentialStatus;
+  issuingAuthority: string;
+  credentialNumber?: string | null;
+  issueDate?: string | null;
+  expiryDate?: string | null;
+  reviewedByUserId?: string | null;
+  reviewedAt?: string | null;
+  rejectionReason?: string | null;
+  renewalOfCredentialId?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  providerProfile?: {
+    id: string;
+    businessName: string;
+    userId: string;
+  };
+}
+
+export interface ProviderCategoryEligibility {
+  id: string;
+  providerProfileId: string;
+  serviceCategory: ServiceCategory;
+  isEligible: boolean;
+  missingCredentialTypes: ProviderCredentialType[];
+  computedAt: string;
+}
+
+export interface ProviderComplianceAlert {
+  id: string;
+  providerProfileId: string;
+  credentialId?: string | null;
+  alertType: ProviderComplianceAlertType;
+  severity: ProviderComplianceAlertSeverity;
+  status: ProviderComplianceAlertStatus;
+  title: string;
+  summary?: string | null;
+  resolvedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SubmitProviderCredentialPayload {
+  type: ProviderCredentialType;
+  serviceCategories: ServiceCategory[];
+  issuingAuthority: string;
+  credentialNumber?: string;
+  issueDate?: string;
+  expiryDate?: string;
+  documentId?: string;
+}
+
+export type RenewProviderCredentialPayload = Partial<SubmitProviderCredentialPayload>;
+
+export interface ProviderVerificationSummary {
+  verifiedCategories: ServiceCategory[];
+  unverifiedCategories: ServiceCategory[];
+  credentialTypesPresent: ProviderCredentialType[];
 }

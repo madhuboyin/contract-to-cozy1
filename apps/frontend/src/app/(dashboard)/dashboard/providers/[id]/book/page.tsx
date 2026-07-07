@@ -25,6 +25,8 @@ import ProviderShellTemplate from '@/components/providers/ProviderShellTemplate'
 import { useExecutionGuard } from '@/features/guidance/hooks/useExecutionGuard';
 import { useGuidance } from '@/features/guidance/hooks/useGuidance';
 import { GuidanceWarningBanner } from '@/components/guidance/GuidanceWarningBanner';
+import { VerifiedProBadge } from '@/components/features/providerTrust/VerifiedProBadge';
+import { BookingEligibilityWarning } from '@/components/features/booking/BookingEligibilityWarning';
 import { track } from '@/lib/analytics/events';
 import type { GuidanceExecutionGuardResult } from '@/lib/api/guidanceApi';
 import {
@@ -76,6 +78,9 @@ export default function BookProviderPage() {
   const [provider, setProvider] = useState<Provider | null>(null);
   const [services, setServices] = useState<Service[]>([]);
   const [properties, setProperties] = useState<Property[]>([]);
+  const [verificationSummary, setVerificationSummary] = useState<import('@/types').ProviderVerificationSummary | null>(
+    null
+  );
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string>('');
@@ -190,14 +195,19 @@ export default function BookProviderPage() {
 
   const loadData = async () => {
     try {
-      const [providerRes, servicesRes, propertiesRes] = await Promise.all([
+      const [providerRes, servicesRes, propertiesRes, verificationSummaryRes] = await Promise.all([
         api.getProvider(providerId),
         api.getProviderServices(providerId),
         api.getProperties(),
+        api.getProviderVerificationSummary(providerId).catch(() => null),
       ]);
 
       if (providerRes.success) {
         setProvider(providerRes.data);
+      }
+
+      if (verificationSummaryRes) {
+        setVerificationSummary(verificationSummaryRes);
       }
 
       if (servicesRes.success) {
@@ -386,7 +396,16 @@ export default function BookProviderPage() {
           queryClient.invalidateQueries({ queryKey: ['property', selectedPropertyId] }),
         ]);
 
-        toast({ title: 'Booking created successfully!' });
+        toast(
+          response.data.providerEligibilityWarning
+            ? {
+                title: 'Booking created — provider not yet verified',
+                description: `This provider's credentials for ${formatEnumLabel(
+                  response.data.providerEligibilityWarning.serviceCategory
+                )} haven't been reviewed and approved yet.`,
+              }
+            : { title: 'Booking created successfully!' }
+        );
 
         const fromParam = searchParams.get('from');
 
@@ -592,22 +611,28 @@ export default function BookProviderPage() {
         rationale: 'Showing booking prerequisites and context early prevents failed submissions and surprise delays.',
       }}
       summary={
-        <ResultHeroCard
-          eyebrow="Booking Setup"
-          title={provider.businessName}
-          value={estimatedPrice > 0 ? `$${estimatedPrice.toFixed(2)}` : '$0.00'}
-          status={
-            <StatusChip tone={selectedService ? 'protected' : 'info'}>
-              {selectedService ? formatEnumLabel(selectedService.category) : 'Select a service'}
-            </StatusChip>
-          }
-          summary={`${provider.user?.firstName ?? ''} ${provider.user?.lastName ?? ''}`}
-          highlights={[
-            selectedService ? selectedService.name : 'Choose service and property',
-            selectedPropertyId ? 'Property selected' : 'Select a property',
-            'Final price confirmed by provider',
-          ]}
-        />
+        <div className="space-y-2">
+          <ResultHeroCard
+            eyebrow="Booking Setup"
+            title={provider.businessName}
+            value={estimatedPrice > 0 ? `$${estimatedPrice.toFixed(2)}` : '$0.00'}
+            status={
+              <StatusChip tone={selectedService ? 'protected' : 'info'}>
+                {selectedService ? formatEnumLabel(selectedService.category) : 'Select a service'}
+              </StatusChip>
+            }
+            summary={`${provider.user?.firstName ?? ''} ${provider.user?.lastName ?? ''}`}
+            highlights={[
+              selectedService ? selectedService.name : 'Choose service and property',
+              selectedPropertyId ? 'Property selected' : 'Select a property',
+              'Final price confirmed by provider',
+            ]}
+          />
+          <VerifiedProBadge
+            isVerified={(verificationSummary?.verifiedCategories.length ?? 0) > 0}
+            showWhenUnverified={false}
+          />
+        </div>
       }
     >
       {contextualBackHref ? (
@@ -649,6 +674,13 @@ export default function BookProviderPage() {
           details={blockedDetails}
           actionLabel={blockedAction?.nextStep ? `Go to Step ${blockedAction.nextStep.stepOrder}` : 'Open required step'}
           actionHref={blockedActionHref}
+        />
+      ) : null}
+
+      {selectedService && verificationSummary?.unverifiedCategories.includes(selectedService.category) ? (
+        <BookingEligibilityWarning
+          serviceCategory={selectedService.category}
+          missingCredentialTypes={[]}
         />
       ) : null}
 

@@ -52,6 +52,30 @@ export class ProviderCredentialController {
     }
   }
 
+  static async uploadDocument(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const userId = req.user?.userId;
+      if (!userId) {
+        res.status(401).json({ success: false, message: 'Authentication required' });
+        return;
+      }
+
+      const file = (req as any).file as
+        | { buffer: Buffer; originalname: string; mimetype: string; size: number }
+        | undefined;
+      if (!file) {
+        res.status(400).json({ success: false, message: 'File is required' });
+        return;
+      }
+
+      const credentialType = req.body?.credentialType;
+      const document = await providerCredentialService.createCredentialDocument(userId, file, credentialType);
+      res.status(201).json({ success: true, data: { id: document.id } });
+    } catch (error) {
+      handleError(error, res, next);
+    }
+  }
+
   static async submit(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       const providerProfileId = req.user?.providerProfile?.id;
