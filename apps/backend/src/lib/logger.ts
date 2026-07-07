@@ -9,6 +9,7 @@
 //   jq 'select(.audit == true)' <log-stream>
 
 import pino from 'pino';
+import pinoLoki from 'pino-loki';
 import { getRequestId } from './requestContext';
 
 // Pino v10 has strict overload types that reject logger.info-style
@@ -26,40 +27,34 @@ export interface AppLogger {
 
 const isDev = process.env.NODE_ENV !== 'production';
 
-function getTransport() {
-  if (isDev) {
-    return {
-      target: 'pino-pretty',
-      options: {
-        colorize: true,
-        translateTime: 'SYS:HH:MM:ss',
-        ignore: 'pid,hostname,service,env',
-      },
-    };
-  }
-
-  return {
-    target: require.resolve('pino-loki'),
-    options: {
-      host: process.env.LOKI_HOST || 'http://loki-gateway.monitoring.svc.cluster.local',
-      basicAuth: {
-        username: process.env.LOKI_USERNAME || '',
-        password: process.env.LOKI_PASSWORD || '',
-      },
-      headers: {
-        'X-Scope-OrgID': process.env.LOKI_TENANT_ID || 'fake',
-      },
-      labels: {
-        app: 'backend',
-        env: process.env.NODE_ENV || 'production',
-      },
-      batching: true,
-      interval: 5,
+// Loki gateway outages (observed in prod) used to mean zero log lines
+// anywhere, since pino-loki was the sole destination. Piping both stdout
+// and Loki through pino.multistream() keeps them in the main thread — unlike
+// pino.transport({ targets: [...] }), which spawns one worker_threads
+// instance per target and segfaulted this cluster's Raspberry Pi pods
+// (see memory: fix_production_logging_pino_loki_no_stdout).
+function createProdStream() {
+  const lokiStream = pinoLoki({
+    host: process.env.LOKI_HOST || 'http://loki-gateway.monitoring.svc.cluster.local',
+    basicAuth: {
+      username: process.env.LOKI_USERNAME || '',
+      password: process.env.LOKI_PASSWORD || '',
     },
-  };
+    headers: {
+      'X-Scope-OrgID': process.env.LOKI_TENANT_ID || 'fake',
+    },
+    labels: {
+      app: 'backend',
+      env: process.env.NODE_ENV || 'production',
+    },
+    batching: true,
+    interval: 5,
+  });
+
+  return pino.multistream([{ stream: process.stdout }, { stream: lokiStream }]);
 }
 
-export const logger: AppLogger = pino({
+const options = {
   level: process.env.LOG_LEVEL || 'info',
   base: {
     service: 'backend',
@@ -83,13 +78,26 @@ export const logger: AppLogger = pino({
     ],
     censor: '[REDACTED]',
   },
-  transport: getTransport(),
   // Automagically inject requestId from context into EVERY log line.
   mixin: () => {
     const requestId = getRequestId();
     return requestId ? { requestId } : {};
   },
-});
+};
+
+export const logger: AppLogger = isDev
+  ? pino({
+      ...options,
+      transport: {
+        target: 'pino-pretty',
+        options: {
+          colorize: true,
+          translateTime: 'SYS:HH:MM:ss',
+          ignore: 'pid,hostname,service,env',
+        },
+      },
+    })
+  : pino(options, createProdStream());
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Security audit helpers
