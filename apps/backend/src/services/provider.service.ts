@@ -344,16 +344,17 @@ export class ProviderService {
             },
           },
         },
-        certifications: {
+        credentials: {
           select: {
             id: true,
-            name: true,
+            type: true,
+            serviceCategories: true,
             issuingAuthority: true,
             issueDate: true,
             expiryDate: true,
-            verified: true,
           },
           where: {
+            status: 'APPROVED',
             OR: [
               { expiryDate: null },
               { expiryDate: { gte: new Date() } },
@@ -392,7 +393,7 @@ export class ProviderService {
       totalCompletedJobs: provider.totalCompletedJobs,
       status: provider.status,
       user: provider.user,
-      certifications: provider.certifications,
+      credentials: provider.credentials,
       portfolioImages: provider.portfolioImages,
     };
   }

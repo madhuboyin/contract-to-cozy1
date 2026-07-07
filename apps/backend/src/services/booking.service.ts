@@ -30,6 +30,7 @@ import { mapInventoryToServiceCategory } from '../utils/inventoryServiceCategory
 import { priceFinalizationService } from './priceFinalization.service';
 // Phase 5 (TR-03): fire-and-forget guidance step advancement on service completion
 import { guidanceJourneyService } from './guidanceEngine/guidanceJourney.service';
+import { bookingEligibilityService } from './bookingEligibility.service';
 import { logger } from '../lib/logger';
 
 const ACTIVE_BOOKING_STATUSES: BookingStatus[] = [
@@ -179,6 +180,14 @@ export class BookingService {
     if (input.providerId !== service.providerProfileId) {
       throw new Error('Provider ID does not match service provider');
     }
+
+    // Soft check only — a homeowner window-shopping isn't blocked from creating
+    // the booking, but the response surfaces a clear warning rather than
+    // silently proceeding (Section 7.1). The hard gate is at confirmation.
+    const providerEligibility = await bookingEligibilityService.checkProviderEligibility(
+      service.providerProfileId,
+      service.category
+    );
 
     // Validate predictive-maintenance links if provided
     let linkedPrediction:
@@ -490,7 +499,15 @@ export class BookingService {
     }
     // --- PHASE 3 IMPLEMENTATION END ---
 
-    return this.formatBookingResponse(booking);
+    return {
+      ...this.formatBookingResponse(booking),
+      providerEligibilityWarning: providerEligibility.isEligible
+        ? null
+        : {
+            serviceCategory: booking.category,
+            missingCredentialTypes: providerEligibility.missingCredentialTypes,
+          },
+    };
   }
 
   
@@ -730,6 +747,11 @@ export class BookingService {
     if (!this.canTransitionTo(booking.status, 'CONFIRMED')) {
       throw new Error(`Cannot confirm booking with status ${booking.status}`);
     }
+
+    // Hard gate (Section 7.2) — a provider eligible when the homeowner started
+    // booking may have lost eligibility (credential expired) before
+    // confirmation; this is the last point that can still catch it.
+    await bookingEligibilityService.assertProviderEligible(booking.providerProfileId, booking.category);
 
     const updated = await prisma.booking.update({
       where: { id: bookingId },

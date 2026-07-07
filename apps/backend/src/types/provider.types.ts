@@ -1,7 +1,7 @@
 // apps/backend/src/types/provider.types.ts
 
 import { z } from 'zod';
-import { ServiceCategory, InspectionType, HandymanType, ProviderStatus } from '@prisma/client';
+import { ServiceCategory, InspectionType, HandymanType, ProviderStatus, ProviderCredentialType } from '@prisma/client';
 
 /**
  * Provider Search Query Schema
@@ -108,13 +108,13 @@ export interface ProviderDetails {
       zipCode: string;
     } | null;
   };
-  certifications: {
+  credentials: {
     id: string;
-    name: string;
+    type: ProviderCredentialType;
+    serviceCategories: ServiceCategory[];
     issuingAuthority: string;
-    issueDate: Date;
+    issueDate: Date | null;
     expiryDate: Date | null;
-    verified: boolean;
   }[];
   portfolioImages: {
     id: string;

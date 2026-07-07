@@ -1,7 +1,7 @@
 // apps/backend/src/types/booking.types.ts
 
 import { z } from 'zod';
-import { BookingStatus, ServiceCategory } from '@prisma/client';
+import { BookingStatus, ProviderCredentialType, ServiceCategory } from '@prisma/client';
 
 /**
  * Create Booking Schema
@@ -184,6 +184,14 @@ export interface BookingResponse {
   // Metadata
   createdAt: Date;
   updatedAt: Date;
+
+  // Provider Trust & Compliance Verification — non-blocking warning surfaced
+  // at creation time when the provider isn't currently verified for this
+  // category (Section 7.1). Only set by createBooking; absent elsewhere.
+  providerEligibilityWarning?: {
+    serviceCategory: ServiceCategory;
+    missingCredentialTypes: ProviderCredentialType[];
+  } | null;
 }
 
 export interface BookingTimelineEntry {
