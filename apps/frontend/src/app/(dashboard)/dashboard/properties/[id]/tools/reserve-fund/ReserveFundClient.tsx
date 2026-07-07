@@ -19,6 +19,8 @@ import {
   Trash2,
   CheckCircle2,
   X,
+  ChevronDown,
+  ChevronRight,
 } from 'lucide-react';
 import HomeToolsRail from '../../components/HomeToolsRail';
 import {
@@ -238,6 +240,19 @@ export default function ReserveFundClient() {
   const [error, setError] = useState<string | null>(null);
   const [contributionSubmitting, setContributionSubmitting] = useState(false);
   const [dismissedSuggestionKeys, setDismissedSuggestionKeys] = useState<Set<string>>(new Set());
+  const [expandedLineItems, setExpandedLineItems] = useState<Set<string>>(new Set());
+
+  function toggleExpand(lineItemId: string) {
+    setExpandedLineItems((prev) => {
+      const next = new Set(prev);
+      if (next.has(lineItemId)) {
+        next.delete(lineItemId);
+      } else {
+        next.add(lineItemId);
+      }
+      return next;
+    });
+  }
 
   async function load() {
     if (!propertyId) return;
@@ -597,50 +612,83 @@ export default function ReserveFundClient() {
               </div>
             ) : (
               <div className="space-y-2">
-                {activeLineItems.map((li) => (
-                  <div
-                    key={li.id}
-                    className="rounded-2xl border border-white/70 bg-gradient-to-br from-white/80 via-slate-50/72 to-teal-50/45 p-4 shadow-[0_14px_28px_-22px_rgba(15,23,42,0.65)] backdrop-blur dark:border-slate-700/70 dark:from-slate-900/55 dark:via-slate-900/48 dark:to-slate-900/38"
-                  >
-                    <div className="flex items-start gap-3">
-                      <div className="flex-shrink-0 rounded-xl border border-white/70 bg-white/75 p-2 text-slate-600 shadow-sm dark:border-slate-700/70 dark:bg-slate-900/55 dark:text-slate-300">
-                        {categoryIcon(li.timelineItem.category)}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-start justify-between gap-2">
-                          <div>
-                            <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-                              {categoryLabel(li.timelineItem.category)}
-                            </h3>
-                            <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
-                              Due {windowLabel(li.timelineItem.windowStart, li.timelineItem.windowEnd)}
-                            </p>
+                {activeLineItems.map((li) => {
+                  const isExpanded = expandedLineItems.has(li.id);
+                  const itemName = li.timelineItem.inventoryItem?.name || categoryLabel(li.timelineItem.category);
+                  const hasCostRange =
+                    li.timelineItem.estimatedCostMinCents != null && li.timelineItem.estimatedCostMaxCents != null;
+                  return (
+                    <div
+                      key={li.id}
+                      className="overflow-hidden rounded-2xl border border-white/70 bg-gradient-to-br from-white/80 via-slate-50/72 to-teal-50/45 shadow-[0_14px_28px_-22px_rgba(15,23,42,0.65)] backdrop-blur dark:border-slate-700/70 dark:from-slate-900/55 dark:via-slate-900/48 dark:to-slate-900/38"
+                    >
+                      <div className="p-4">
+                        <div className="flex items-start gap-3">
+                          <div className="flex-shrink-0 rounded-xl border border-white/70 bg-white/75 p-2 text-slate-600 shadow-sm dark:border-slate-700/70 dark:bg-slate-900/55 dark:text-slate-300">
+                            {categoryIcon(li.timelineItem.category)}
                           </div>
-                          {statusBadge(li.status)}
-                        </div>
-                        <div className="mt-2 flex flex-col gap-1 text-sm sm:flex-row sm:items-center sm:gap-6">
-                          <div>
-                            <span className="text-slate-500 dark:text-slate-300">Target: </span>
-                            <span className="font-medium text-slate-900 dark:text-slate-100">
-                              {money(li.targetCostCents)}
-                            </span>
-                          </div>
-                          {li.allocatedMonthlyCents > 0 && (
-                            <div>
-                              <span className="text-slate-500 dark:text-slate-300">Set aside: </span>
-                              <span className="font-medium text-teal-700 dark:text-teal-400">
-                                {money(li.allocatedMonthlyCents)}/mo
-                              </span>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-start justify-between gap-2">
+                              <div>
+                                <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                                  {itemName}
+                                </h3>
+                                <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+                                  {categoryLabel(li.timelineItem.category)} · Due{' '}
+                                  {windowLabel(li.timelineItem.windowStart, li.timelineItem.windowEnd)}
+                                </p>
+                              </div>
+                              {statusBadge(li.status)}
                             </div>
-                          )}
+                            <div className="mt-2 flex flex-col gap-1 text-sm sm:flex-row sm:items-center sm:gap-6">
+                              <div>
+                                <span className="text-slate-500 dark:text-slate-300">Target: </span>
+                                <span className="font-medium text-slate-900 dark:text-slate-100">
+                                  {money(li.targetCostCents)}
+                                </span>
+                              </div>
+                              {li.allocatedMonthlyCents > 0 && (
+                                <div>
+                                  <span className="text-slate-500 dark:text-slate-300">Set aside: </span>
+                                  <span className="font-medium text-teal-700 dark:text-teal-400">
+                                    {money(li.allocatedMonthlyCents)}/mo
+                                  </span>
+                                </div>
+                              )}
+                              {hasCostRange && (
+                                <div>
+                                  <span className="text-slate-500 dark:text-slate-300">Est. cost: </span>
+                                  <span className="font-medium text-slate-900 dark:text-slate-100">
+                                    {money(li.timelineItem.estimatedCostMinCents)} &ndash;{' '}
+                                    {money(li.timelineItem.estimatedCostMaxCents)}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                            <button
+                              onClick={() => toggleExpand(li.id)}
+                              className="mt-2 -ml-2 inline-flex min-h-[36px] items-center gap-1.5 rounded-full px-2 text-xs font-medium text-slate-500 transition-colors hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+                            >
+                              {isExpanded ? (
+                                <ChevronDown className="h-3.5 w-3.5" />
+                              ) : (
+                                <ChevronRight className="h-3.5 w-3.5" />
+                              )}
+                              Why this estimate?
+                            </button>
+                          </div>
                         </div>
-                        <p className="mt-2 text-xs leading-relaxed text-slate-500 dark:text-slate-400">
-                          {li.timelineItem.why}
-                        </p>
                       </div>
+                      {isExpanded && (
+                        <div className="px-4 pb-4">
+                          <div className="rounded-xl border border-white/70 bg-white/72 p-3 text-xs leading-relaxed text-slate-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/55 dark:text-slate-300">
+                            {li.timelineItem.why}
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
 
@@ -656,7 +704,7 @@ export default function ReserveFundClient() {
                       className="flex items-center justify-between rounded-xl border border-slate-200/60 bg-slate-50/60 px-3 py-2 text-xs dark:border-slate-700/50 dark:bg-slate-900/40"
                     >
                       <span className="text-slate-600 dark:text-slate-300">
-                        {categoryLabel(li.timelineItem.category)}
+                        {li.timelineItem.inventoryItem?.name || categoryLabel(li.timelineItem.category)}
                       </span>
                       {statusBadge(li.status)}
                     </div>

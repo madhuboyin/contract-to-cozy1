@@ -24,7 +24,10 @@ export type TimelineItemSummary = {
   eventType: string;
   windowStart: string;
   windowEnd: string;
+  estimatedCostMinCents: number | null;
+  estimatedCostMaxCents: number | null;
   why: string;
+  inventoryItem?: { name: string } | null;
 };
 
 export type ReserveFundLineItemDTO = {

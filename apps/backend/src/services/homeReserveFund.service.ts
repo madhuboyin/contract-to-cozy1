@@ -58,7 +58,11 @@ export class HomeReserveFundService {
         fundId: fund.id,
         ...(filters?.status ? { status: filters.status } : {}),
       },
-      include: { timelineItem: true },
+      include: {
+        timelineItem: {
+          include: { inventoryItem: { select: { name: true } } },
+        },
+      },
       orderBy: { timelineItem: { windowStart: 'asc' } },
     });
   }
