@@ -93,6 +93,7 @@ export const AnalyticsFeature = {
   FINANCIAL_EFFICIENCY:     'financial_efficiency',
   COVERAGE_ANALYSIS:        'coverage_analysis',
   REPLACE_REPAIR:           'replace_repair',
+  RESERVE_FUND:             'reserve_fund',
 
   // Admin
   ADMIN_ANALYTICS_DASHBOARD: 'admin_analytics_dashboard',

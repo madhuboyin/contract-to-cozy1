@@ -2,6 +2,7 @@
 import { Response, NextFunction } from 'express';
 import { CustomRequest } from '../types';
 import { HomeCapitalTimelineService } from '../services/homeCapitalTimeline.service';
+import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
 
 type TimelineNextAction = { href: string; label: string; reason: string };
 
@@ -53,6 +54,16 @@ export async function getLatestTimeline(req: CustomRequest, res: Response, next:
     const assumptionSetId =
       typeof snapshot.assumptionSetId === 'string' ? snapshot.assumptionSetId : null;
     const nextAction = buildTimelineNextAction(propertyId, analysis);
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.TOOL_USED,
+      userId: req.user?.userId,
+      propertyId,
+      moduleKey: AnalyticsModule.FINANCIAL,
+      featureKey: AnalyticsFeature.HOME_CAPITAL_TIMELINE,
+      metadataJson: { confidence: analysis?.confidence ?? null },
+    });
+
     res.json({ success: true, data: { analysis, assumptionSetId, nextAction } });
   } catch (err) {
     next(err);
@@ -86,6 +97,16 @@ export async function runTimeline(req: CustomRequest, res: Response, next: NextF
     const assumptionSetId =
       typeof snapshot.assumptionSetId === 'string' ? snapshot.assumptionSetId : null;
     const nextAction = buildTimelineNextAction(propertyId, analysis);
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.ACTION_COMPLETED,
+      userId,
+      propertyId,
+      moduleKey: AnalyticsModule.FINANCIAL,
+      featureKey: AnalyticsFeature.HOME_CAPITAL_TIMELINE,
+      metadataJson: { actionType: 'run_timeline', horizonYears },
+    });
+
     res.status(201).json({ success: true, data: { analysis, assumptionSetId, nextAction } });
   } catch (err) {
     next(err);

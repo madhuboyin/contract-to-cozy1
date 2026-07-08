@@ -3,10 +3,22 @@ import { Response, NextFunction } from 'express';
 import { CustomRequest } from '../types';
 import { homeReserveFundService } from '../services/homeReserveFund.service';
 import { homeReserveFundReconciliationService } from '../services/homeReserveFundReconciliation.service';
+import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
 
 export async function getFund(req: CustomRequest, res: Response, next: NextFunction) {
   try {
-    const fund = await homeReserveFundService.getSummary(req.params.propertyId);
+    const propertyId = req.params.propertyId;
+    const fund = await homeReserveFundService.getSummary(propertyId);
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.TOOL_USED,
+      userId: req.user?.userId,
+      propertyId,
+      moduleKey: AnalyticsModule.FINANCIAL,
+      featureKey: AnalyticsFeature.RESERVE_FUND,
+      metadataJson: { posture: fund.posture },
+    });
+
     res.json({ success: true, data: { fund } });
   } catch (err) {
     next(err);
@@ -31,7 +43,18 @@ export async function updateFund(req: CustomRequest, res: Response, next: NextFu
 
 export async function recalculateFund(req: CustomRequest, res: Response, next: NextFunction) {
   try {
-    const fund = await homeReserveFundService.recalculate(req.params.propertyId);
+    const propertyId = req.params.propertyId;
+    const fund = await homeReserveFundService.recalculate(propertyId);
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.ACTION_COMPLETED,
+      userId: req.user?.userId,
+      propertyId,
+      moduleKey: AnalyticsModule.FINANCIAL,
+      featureKey: AnalyticsFeature.RESERVE_FUND,
+      metadataJson: { actionType: 'recalculate' },
+    });
+
     res.json({ success: true, data: { fund } });
   } catch (err) {
     next(err);
@@ -76,7 +99,8 @@ export async function listContributions(req: CustomRequest, res: Response, next:
 
 export async function addContribution(req: CustomRequest, res: Response, next: NextFunction) {
   try {
-    const contribution = await homeReserveFundService.addContribution(req.params.propertyId, {
+    const propertyId = req.params.propertyId;
+    const contribution = await homeReserveFundService.addContribution(propertyId, {
       type: req.body.type,
       amountCents: req.body.amountCents,
       occurredAt: req.body.occurredAt,
@@ -84,6 +108,16 @@ export async function addContribution(req: CustomRequest, res: Response, next: N
       linkedExpenseId: req.body.linkedExpenseId,
       linkedLineItemId: req.body.linkedLineItemId,
     });
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.ACTION_COMPLETED,
+      userId: req.user?.userId,
+      propertyId,
+      moduleKey: AnalyticsModule.FINANCIAL,
+      featureKey: AnalyticsFeature.RESERVE_FUND,
+      metadataJson: { actionType: 'log_contribution', contributionType: req.body.type },
+    });
+
     res.status(201).json({ success: true, data: { contribution } });
   } catch (err) {
     next(err);

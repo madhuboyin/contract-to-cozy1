@@ -49,16 +49,16 @@ Don't trust this list alone — it's carried over from prior session notes and h
 - Only **12 of 238 backend services** emit an analytics event.
 - The infrastructure and taxonomy were clearly built with real intent (event names like `outcome_win_generated`, `savings_verified`, `property_onboarded`, `return_visit` are exactly what a pitch deck needs) — they're just not being fired from most surfaces yet.
 
-### Plan
-1. **Instrumentation coverage sprint.** Wire `track('tool_opened', ...)` on load and `track('action_taken'/'workflow_completed', ...)` on completion into every one of the 36 tool pages — use the 8 existing call sites as the template. This is mechanical, low-risk work, and it's the single highest-leverage thing on this list because it directly produces the data a raise pitch needs.
-2. **Decide pilot success metrics now, before the pilot starts** — not retroactively. Recommended set, all of which map onto events that already exist in the taxonomy:
-   - Activation: time from `property_onboarded` to `first_wow_moment`.
-   - Retention: `return_visit` at 7/14/30 days.
-   - Engagement depth: distinct `tool_opened` values per user (breadth of adoption).
-   - Outcome trust: counts of `outcome_win_generated` and `savings_verified`.
-3. **Prioritize backend event emission by wedge**, not blanket coverage — instrument the services behind whichever tool becomes the fundraise "wedge" story first, then expand outward.
-4. **Verify the `analytics-admin` dashboard actually renders a usable funnel/retention view.** If it's a stub, finishing it is probably 1-2 days of work and produces a genuinely strong investor artifact ("here's our live product dashboard") — better ROI than most new features right now.
-5. **Start a weekly retention/activation report** (even a manual query against the analytics event table) so that by pitch time you're quoting real numbers, not describing infrastructure.
+### Plan — status as of 2026-07-08
+1. ✅ **Instrumentation coverage sprint.** Done — all 36 tools fire `workflow_started` on mount and, where a real action exists, `action_completed`/`workflow_completed`/`outcome_action_taken` on completion.
+2. ✅ **Pilot success metrics wired**, not just decided:
+   - Activation: `property_onboarded` (fires on property creation, with real `durationSeconds`) → `first_wow_moment` (fires when the onboarding reveal page's win cards render).
+   - Retention: `return_visit` + `session_started`, fired once per browser session in the dashboard layout via localStorage.
+   - Engagement depth: `workflow_started` per tool (from item 1) gives distinct-tool-per-user breadth.
+   - Outcome trust: `outcome_win_generated` (hidden-asset-finder, on new match discovery) and `savings_verified` (Home Savings, on "mark as done") are both wired.
+3. ✅ **Backend event emission — started on the wedge, not blanket coverage.** Reserve Fund and Capital Timeline (the two tools that got the most iteration this session, and the closest thing to a de facto wedge) now emit `TOOL_USED`/`ACTION_COMPLETED` server-side via `analyticsEmitter` — up from 12 to 14 of 238 backend services instrumented. Added a `RESERVE_FUND` feature key to the taxonomy (`HOME_CAPITAL_TIMELINE` already existed, unused until now). Still not blanket — the other 224 services remain un-instrumented by design; expand outward from here as the wedge gets confirmed.
+4. ⚠️ **`analytics-admin` dashboard still not verified live** — same status as before, substantive-looking code, not loaded in a browser.
+5. ✅ **Weekly retention/activation report built.** `apps/backend/scripts/weekly-retention-report.ts` (run via `npm run report:weekly`) queries `ProductAnalyticsEvent` for: active properties/users this week, week-over-week property retention, event counts by type, and event counts by feature. Couldn't verify against live data in this environment (no reachable dev Postgres here), but it compiled and ran through ts-node to the point of actually issuing the Prisma query — failure was purely a local DB-credentials issue, not the script. **Important scope note the script itself prints:** it only covers server-side events (14 services); the six lifecycle events from item 2 above are frontend-only via Faro RUM → Grafana/Loki, not in this Postgres table, so retention/activation numbers from *those* still require a separate Grafana query until/unless they're also emitted server-side.
 
 ---
 
