@@ -3,7 +3,7 @@
 // Raw Prisma queries against product_analytics_events for admin metrics.
 //
 // ADMIN EVENT EXCLUSION:
-//   Events with module_key = 'admin_analytics' are excluded from all interaction
+//   Events with moduleKey = 'admin_analytics' are excluded from all interaction
 //   counts (WAH, MAH, totalEvents, eventsPerProperty). This prevents admin users
 //   loading the analytics dashboard from inflating engagement metrics.
 //
@@ -82,13 +82,13 @@ export async function countEventsPerProperty(
   // set on large tables. The median calculation in metricsService.ts processes
   // all returned rows in memory, so this caps memory usage too.
   return prisma.$queryRaw<Array<{ propertyId: string; count: bigint }>>`
-    SELECT "property_id" AS "propertyId", COUNT(*)::bigint AS count
+    SELECT "propertyId", COUNT(*)::bigint AS count
     FROM "product_analytics_events"
-    WHERE "property_id" IS NOT NULL
-      AND "occurred_at" >= ${range.from}
-      AND "occurred_at" <= ${range.to}
-      AND "module_key" != ${ADMIN_MODULE_KEY}
-    GROUP BY "property_id"
+    WHERE "propertyId" IS NOT NULL
+      AND "occurredAt" >= ${range.from}
+      AND "occurredAt" <= ${range.to}
+      AND "moduleKey" != ${ADMIN_MODULE_KEY}
+    GROUP BY "propertyId"
     LIMIT 50000
   `;
 }
@@ -101,12 +101,12 @@ export async function countDecisionsGuided(
   range: DateRange,
 ): Promise<Array<{ moduleKey: string | null; count: bigint }>> {
   return prisma.$queryRaw<Array<{ moduleKey: string | null; count: bigint }>>`
-    SELECT "module_key" AS "moduleKey", COUNT(*)::bigint AS count
+    SELECT "moduleKey", COUNT(*)::bigint AS count
     FROM "product_analytics_events"
-    WHERE "event_type" = 'DECISION_GUIDED'
-      AND "occurred_at" >= ${range.from}
-      AND "occurred_at" <= ${range.to}
-    GROUP BY "module_key"
+    WHERE "eventType" = 'DECISION_GUIDED'
+      AND "occurredAt" >= ${range.from}
+      AND "occurredAt" <= ${range.to}
+    GROUP BY "moduleKey"
     ORDER BY count DESC
   `;
 }
@@ -124,14 +124,14 @@ export interface DailyEventRow {
 export async function getDailyEventCounts(range: DateRange): Promise<DailyEventRow[]> {
   return prisma.$queryRaw<DailyEventRow[]>`
     SELECT
-      DATE_TRUNC('day', "occurred_at") AS day,
+      DATE_TRUNC('day', "occurredAt") AS day,
       COUNT(*) ::bigint AS "eventCount",
-      COUNT(DISTINCT "property_id") ::bigint AS "activeProperties"
+      COUNT(DISTINCT "propertyId") ::bigint AS "activeProperties"
     FROM "product_analytics_events"
-    WHERE "occurred_at" >= ${range.from}
-      AND "occurred_at" <= ${range.to}
-      AND "module_key" != ${ADMIN_MODULE_KEY}
-    GROUP BY DATE_TRUNC('day', "occurred_at")
+    WHERE "occurredAt" >= ${range.from}
+      AND "occurredAt" <= ${range.to}
+      AND "moduleKey" != ${ADMIN_MODULE_KEY}
+    GROUP BY DATE_TRUNC('day', "occurredAt")
     ORDER BY day ASC
   `;
 }
@@ -154,31 +154,31 @@ export async function getFeatureUsage(
   if (moduleKey) {
     return prisma.$queryRaw<FeatureUsageRow[]>`
       SELECT
-        "module_key"   AS "moduleKey",
-        "feature_key"  AS "featureKey",
-        COUNT(DISTINCT "property_id") ::bigint AS "uniqueHomes",
+        "moduleKey",
+        "featureKey",
+        COUNT(DISTINCT "propertyId") ::bigint AS "uniqueHomes",
         COUNT(*) ::bigint AS "totalEvents"
       FROM "product_analytics_events"
-      WHERE "occurred_at" >= ${range.from}
-        AND "occurred_at" <= ${range.to}
-        AND "feature_key" IS NOT NULL
-        AND "module_key" = ${moduleKey}
-      GROUP BY "module_key", "feature_key"
+      WHERE "occurredAt" >= ${range.from}
+        AND "occurredAt" <= ${range.to}
+        AND "featureKey" IS NOT NULL
+        AND "moduleKey" = ${moduleKey}
+      GROUP BY "moduleKey", "featureKey"
       ORDER BY "uniqueHomes" DESC
     `;
   }
 
   return prisma.$queryRaw<FeatureUsageRow[]>`
     SELECT
-      "module_key"   AS "moduleKey",
-      "feature_key"  AS "featureKey",
-      COUNT(DISTINCT "property_id") ::bigint AS "uniqueHomes",
+      "moduleKey",
+      "featureKey",
+      COUNT(DISTINCT "propertyId") ::bigint AS "uniqueHomes",
       COUNT(*) ::bigint AS "totalEvents"
     FROM "product_analytics_events"
-    WHERE "occurred_at" >= ${range.from}
-      AND "occurred_at" <= ${range.to}
-      AND "feature_key" IS NOT NULL
-    GROUP BY "module_key", "feature_key"
+    WHERE "occurredAt" >= ${range.from}
+      AND "occurredAt" <= ${range.to}
+      AND "featureKey" IS NOT NULL
+    GROUP BY "moduleKey", "featureKey"
     ORDER BY "uniqueHomes" DESC
   `;
 }
@@ -209,42 +209,42 @@ export async function getFunnelCounts(range: DateRange): Promise<FunnelCountRow[
     SELECT stage, COUNT(*) ::bigint AS count FROM (
       SELECT DISTINCT p.id, 'properties_created' AS stage
       FROM "properties" p
-      WHERE p."created_at" <= ${range.to}
+      WHERE p."createdAt" <= ${range.to}
 
       UNION ALL
 
       -- Stage 2: properties with ANY analytics activity in range (excluding admin module)
-      SELECT DISTINCT e."property_id", 'has_analytics_activity' AS stage
+      SELECT DISTINCT e."propertyId", 'has_analytics_activity' AS stage
       FROM "product_analytics_events" e
-      WHERE e."occurred_at" >= ${range.from}
-        AND e."occurred_at" <= ${range.to}
-        AND e."property_id" IS NOT NULL
-        AND e."module_key" != ${ADMIN_MODULE_KEY}
+      WHERE e."occurredAt" >= ${range.from}
+        AND e."occurredAt" <= ${range.to}
+        AND e."propertyId" IS NOT NULL
+        AND e."moduleKey" != ${ADMIN_MODULE_KEY}
 
       UNION ALL
 
-      SELECT DISTINCT e."property_id", 'first_feature_opened' AS stage
+      SELECT DISTINCT e."propertyId", 'first_feature_opened' AS stage
       FROM "product_analytics_events" e
-      WHERE e."event_type" = 'FEATURE_OPENED'
-        AND e."occurred_at" >= ${range.from}
-        AND e."occurred_at" <= ${range.to}
-        AND e."property_id" IS NOT NULL
+      WHERE e."eventType" = 'FEATURE_OPENED'
+        AND e."occurredAt" >= ${range.from}
+        AND e."occurredAt" <= ${range.to}
+        AND e."propertyId" IS NOT NULL
 
       UNION ALL
 
-      SELECT DISTINCT e."property_id", 'decision_guided' AS stage
+      SELECT DISTINCT e."propertyId", 'decision_guided' AS stage
       FROM "product_analytics_events" e
-      WHERE e."event_type" = 'DECISION_GUIDED'
-        AND e."occurred_at" >= ${range.from}
-        AND e."occurred_at" <= ${range.to}
-        AND e."property_id" IS NOT NULL
+      WHERE e."eventType" = 'DECISION_GUIDED'
+        AND e."occurredAt" >= ${range.from}
+        AND e."occurredAt" <= ${range.to}
+        AND e."propertyId" IS NOT NULL
 
       UNION ALL
 
       SELECT DISTINCT p.id, 'property_activated' AS stage
       FROM "properties" p
-      WHERE p."activation_status" = 'ACTIVATED'
-        AND (p."activated_at" IS NULL OR (p."activated_at" >= ${range.from} AND p."activated_at" <= ${range.to}))
+      WHERE p."activationStatus" = 'ACTIVATED'
+        AND (p."activatedAt" IS NULL OR (p."activatedAt" >= ${range.from} AND p."activatedAt" <= ${range.to}))
     ) stages
     GROUP BY stage
   `;
@@ -265,19 +265,19 @@ export async function getMonthlyCohortRetention(limitCohorts: number): Promise<C
   return prisma.$queryRaw<CohortWeekRow[]>`
     WITH cohorts AS (
       SELECT
-        TO_CHAR(p."created_at", 'YYYY-MM') AS "cohortKey",
+        TO_CHAR(p."createdAt", 'YYYY-MM') AS "cohortKey",
         p.id AS "propertyId",
-        DATE_TRUNC('month', p."created_at") AS "cohortStart"
+        DATE_TRUNC('month', p."createdAt") AS "cohortStart"
       FROM "properties" p
-      WHERE p."created_at" >= (NOW() - INTERVAL '1 month' * ${limitCohorts})
+      WHERE p."createdAt" >= (NOW() - INTERVAL '1 month' * ${limitCohorts})
     ),
     activity AS (
       SELECT
-        e."property_id",
-        DATE_TRUNC('week', e."occurred_at") AS "activityWeek"
+        e."propertyId",
+        DATE_TRUNC('week', e."occurredAt") AS "activityWeek"
       FROM "product_analytics_events" e
-      WHERE e."property_id" IS NOT NULL
-      GROUP BY e."property_id", DATE_TRUNC('week', e."occurred_at")
+      WHERE e."propertyId" IS NOT NULL
+      GROUP BY e."propertyId", DATE_TRUNC('week', e."occurredAt")
     )
     SELECT
       c."cohortKey",
@@ -285,9 +285,9 @@ export async function getMonthlyCohortRetention(limitCohorts: number): Promise<C
       FLOOR(
         EXTRACT(EPOCH FROM (a."activityWeek" - c."cohortStart")) / 604800
       )::int AS "weekOffset",
-      COUNT(DISTINCT a."property_id") ::bigint AS "activeCount"
+      COUNT(DISTINCT a."propertyId") ::bigint AS "activeCount"
     FROM cohorts c
-    JOIN activity a ON a."property_id" = c."propertyId"
+    JOIN activity a ON a."propertyId" = c."propertyId"
     WHERE a."activityWeek" >= c."cohortStart"
       AND a."activityWeek" <= c."cohortStart" + INTERVAL '12 weeks'
     GROUP BY c."cohortKey", c."cohortStart", a."activityWeek"
@@ -299,19 +299,19 @@ export async function getWeeklyCohortRetention(limitCohorts: number): Promise<Co
   return prisma.$queryRaw<CohortWeekRow[]>`
     WITH cohorts AS (
       SELECT
-        TO_CHAR(DATE_TRUNC('week', p."created_at"), 'IYYY-"W"IW') AS "cohortKey",
+        TO_CHAR(DATE_TRUNC('week', p."createdAt"), 'IYYY-"W"IW') AS "cohortKey",
         p.id AS "propertyId",
-        DATE_TRUNC('week', p."created_at") AS "cohortStart"
+        DATE_TRUNC('week', p."createdAt") AS "cohortStart"
       FROM "properties" p
-      WHERE p."created_at" >= (NOW() - INTERVAL '1 week' * ${limitCohorts})
+      WHERE p."createdAt" >= (NOW() - INTERVAL '1 week' * ${limitCohorts})
     ),
     activity AS (
       SELECT
-        e."property_id",
-        DATE_TRUNC('week', e."occurred_at") AS "activityWeek"
+        e."propertyId",
+        DATE_TRUNC('week', e."occurredAt") AS "activityWeek"
       FROM "product_analytics_events" e
-      WHERE e."property_id" IS NOT NULL
-      GROUP BY e."property_id", DATE_TRUNC('week', e."occurred_at")
+      WHERE e."propertyId" IS NOT NULL
+      GROUP BY e."propertyId", DATE_TRUNC('week', e."occurredAt")
     )
     SELECT
       c."cohortKey",
@@ -319,9 +319,9 @@ export async function getWeeklyCohortRetention(limitCohorts: number): Promise<Co
       FLOOR(
         EXTRACT(EPOCH FROM (a."activityWeek" - c."cohortStart")) / 604800
       )::int AS "weekOffset",
-      COUNT(DISTINCT a."property_id") ::bigint AS "activeCount"
+      COUNT(DISTINCT a."propertyId") ::bigint AS "activeCount"
     FROM cohorts c
-    JOIN activity a ON a."property_id" = c."propertyId"
+    JOIN activity a ON a."propertyId" = c."propertyId"
     WHERE a."activityWeek" >= c."cohortStart"
       AND a."activityWeek" <= c."cohortStart" + INTERVAL '8 weeks'
     GROUP BY c."cohortKey", c."cohortStart", a."activityWeek"
@@ -343,16 +343,16 @@ export interface TopToolRow {
 export async function getTopTools(range: DateRange, topN: number): Promise<TopToolRow[]> {
   return prisma.$queryRaw<TopToolRow[]>`
     SELECT
-      "module_key"  AS "moduleKey",
-      "feature_key" AS "featureKey",
-      COUNT(DISTINCT "property_id") ::bigint AS "uniqueHomes",
+      "moduleKey",
+      "featureKey",
+      COUNT(DISTINCT "propertyId") ::bigint AS "uniqueHomes",
       COUNT(*) ::bigint AS "totalEvents"
     FROM "product_analytics_events"
-    WHERE "occurred_at" >= ${range.from}
-      AND "occurred_at" <= ${range.to}
-      AND "feature_key" IS NOT NULL
-      AND "property_id" IS NOT NULL
-    GROUP BY "module_key", "feature_key"
+    WHERE "occurredAt" >= ${range.from}
+      AND "occurredAt" <= ${range.to}
+      AND "featureKey" IS NOT NULL
+      AND "propertyId" IS NOT NULL
+    GROUP BY "moduleKey", "featureKey"
     ORDER BY "uniqueHomes" DESC, "totalEvents" DESC
     LIMIT ${topN}
   `;
