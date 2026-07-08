@@ -21,6 +21,7 @@ import {
   X,
   ChevronDown,
   ChevronRight,
+  Eye,
 } from 'lucide-react';
 import HomeToolsRail from '../../components/HomeToolsRail';
 import {
@@ -44,6 +45,9 @@ import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { MobileActionRow } from '@/components/mobile/dashboard/MobilePrimitives';
 import ToolWorkspaceTemplate from '../../components/route-templates/ToolWorkspaceTemplate';
+import InventoryItemDrawer from '../../../../components/inventory/InventoryItemDrawer';
+import { getInventoryItem, listInventoryRooms } from '../../../../inventory/inventoryApi';
+import { InventoryItem, InventoryRoom } from '@/types';
 
 // ─── Helpers ────────────────────────────────────────────────────────
 function money(cents: number | null | undefined) {
@@ -77,6 +81,19 @@ function categoryIcon(cat: string) {
 
 function categoryLabel(cat: string) {
   return cat.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function eventTypeVerb(eventType: string) {
+  switch (eventType) {
+    case 'REPLACE':
+      return 'Replacement';
+    case 'MAJOR_REPAIR':
+      return 'Major repair';
+    case 'INSPECTION':
+      return 'Inspection';
+    default:
+      return categoryLabel(eventType);
+  }
 }
 
 function windowLabel(startIso: string, endIso: string) {
@@ -241,6 +258,37 @@ export default function ReserveFundClient() {
   const [contributionSubmitting, setContributionSubmitting] = useState(false);
   const [dismissedSuggestionKeys, setDismissedSuggestionKeys] = useState<Set<string>>(new Set());
   const [expandedLineItems, setExpandedLineItems] = useState<Set<string>>(new Set());
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [drawerItem, setDrawerItem] = useState<InventoryItem | null>(null);
+  const [drawerRooms, setDrawerRooms] = useState<InventoryRoom[]>([]);
+  const [viewingItemId, setViewingItemId] = useState<string | null>(null);
+
+  async function handleViewItem(inventoryItemId: string) {
+    if (!propertyId) return;
+    setViewingItemId(inventoryItemId);
+    try {
+      const [invItem, rooms] = await Promise.all([
+        getInventoryItem(propertyId, inventoryItemId),
+        listInventoryRooms(propertyId),
+      ]);
+      setDrawerItem(invItem);
+      setDrawerRooms(rooms);
+      setDrawerOpen(true);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to load item details');
+    } finally {
+      setViewingItemId(null);
+    }
+  }
+
+  async function handleDrawerSaved() {
+    setDrawerOpen(false);
+    setDrawerItem(null);
+    if (propertyId) {
+      const refreshedLineItems = await listLineItems(propertyId);
+      setLineItems(refreshedLineItems);
+    }
+  }
 
   function toggleExpand(lineItemId: string) {
     setExpandedLineItems((prev) => {
@@ -634,7 +682,7 @@ export default function ReserveFundClient() {
                                   {itemName}
                                 </h3>
                                 <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
-                                  {categoryLabel(li.timelineItem.category)} · Due{' '}
+                                  {eventTypeVerb(li.timelineItem.eventType)} due{' '}
                                   {windowLabel(li.timelineItem.windowStart, li.timelineItem.windowEnd)}
                                 </p>
                               </div>
@@ -665,17 +713,29 @@ export default function ReserveFundClient() {
                                 </div>
                               )}
                             </div>
-                            <button
-                              onClick={() => toggleExpand(li.id)}
-                              className="mt-2 -ml-2 inline-flex min-h-[36px] items-center gap-1.5 rounded-full px-2 text-xs font-medium text-slate-500 transition-colors hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
-                            >
-                              {isExpanded ? (
-                                <ChevronDown className="h-3.5 w-3.5" />
-                              ) : (
-                                <ChevronRight className="h-3.5 w-3.5" />
+                            <div className="mt-2 -ml-2 flex flex-wrap items-center gap-1">
+                              <button
+                                onClick={() => toggleExpand(li.id)}
+                                className="inline-flex min-h-[36px] items-center gap-1.5 rounded-full px-2 text-xs font-medium text-slate-500 transition-colors hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+                              >
+                                {isExpanded ? (
+                                  <ChevronDown className="h-3.5 w-3.5" />
+                                ) : (
+                                  <ChevronRight className="h-3.5 w-3.5" />
+                                )}
+                                Why this estimate?
+                              </button>
+                              {li.timelineItem.inventoryItemId && (
+                                <button
+                                  onClick={() => handleViewItem(li.timelineItem.inventoryItemId as string)}
+                                  disabled={viewingItemId === li.timelineItem.inventoryItemId}
+                                  className="inline-flex min-h-[36px] items-center gap-1.5 rounded-full px-2 text-xs font-medium text-slate-500 transition-colors hover:text-slate-700 disabled:opacity-50 dark:text-slate-400 dark:hover:text-slate-200"
+                                >
+                                  <Eye className="h-3.5 w-3.5" />
+                                  {viewingItemId === li.timelineItem.inventoryItemId ? 'Loading…' : 'View details'}
+                                </button>
                               )}
-                              Why this estimate?
-                            </button>
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -759,6 +819,18 @@ export default function ReserveFundClient() {
           </div>
         </>
       )}
+
+      <InventoryItemDrawer
+        open={drawerOpen}
+        onClose={() => {
+          setDrawerOpen(false);
+          setDrawerItem(null);
+        }}
+        propertyId={propertyId}
+        rooms={drawerRooms}
+        initialItem={drawerItem}
+        onSaved={handleDrawerSaved}
+      />
     </ToolWorkspaceTemplate>
   );
 }

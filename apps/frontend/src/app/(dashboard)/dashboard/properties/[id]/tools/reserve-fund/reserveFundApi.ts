@@ -20,6 +20,7 @@ export type ReserveFundDTO = {
 
 export type TimelineItemSummary = {
   id: string;
+  inventoryItemId: string | null;
   category: string;
   eventType: string;
   windowStart: string;
