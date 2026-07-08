@@ -22,6 +22,7 @@ import {
   AlertCircle,
   DollarSign,
   Clock,
+  Eye,
 } from 'lucide-react';
 import HomeToolsRail from '../../components/HomeToolsRail';
 import {
@@ -40,6 +41,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { MobileActionRow } from '@/components/mobile/dashboard/MobilePrimitives';
 import ToolWorkspaceTemplate from '../../components/route-templates/ToolWorkspaceTemplate';
+import InventoryItemDrawer from '../../../../components/inventory/InventoryItemDrawer';
+import { getInventoryItem, listInventoryRooms } from '../../../../inventory/inventoryApi';
+import { InventoryItem, InventoryRoom } from '@/types';
 
 // ─── Helpers ────────────────────────────────────────────────────────
 function money(cents: number | null | undefined) {
@@ -673,12 +677,12 @@ function MonthlySavingsRow({ item }: { item: TimelineItemDTO }) {
 // ─── Confidence Nudges ───────────────────────────────────────────────
 function ConfidenceNudge({
   item,
-  propertyId,
   onOpenEdit,
+  onViewItem,
 }: {
   item: TimelineItemDTO;
-  propertyId: string;
   onOpenEdit: (focus: 'cost' | 'age') => void;
+  onViewItem: (inventoryItemId: string) => void;
 }) {
   const missing = item.missingFactors ?? [];
   if (missing.length === 0 || item.confidence === 'HIGH') return null;
@@ -709,14 +713,14 @@ function ConfidenceNudge({
         </button>
       )}
       {missing.includes('CONDITION') && item.inventoryItemId && (
-        <Link
-          href={`/dashboard/properties/${propertyId}/inventory/items/${item.inventoryItemId}`}
+        <button
+          onClick={() => onViewItem(item.inventoryItemId as string)}
           className={`${chipBase} border-slate-200/70 bg-slate-50/85 text-slate-600 hover:bg-slate-100/90 dark:border-slate-700/50 dark:bg-slate-900/50 dark:text-slate-400 dark:hover:bg-slate-800/50`}
         >
           <AlertCircle className="h-3 w-3 flex-shrink-0" />
           Condition unknown — update in inventory
           <ChevronRight className="h-3 w-3 flex-shrink-0 opacity-50" />
-        </Link>
+        </button>
       )}
     </div>
   );
@@ -993,6 +997,10 @@ export default function CapitalTimelineClient() {
   const [showChart, setShowChart] = useState(true);
   const [chartView, setChartView] = useState<'gantt' | 'table'>('gantt');
   const [alertsSent, setAlertsSent] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [drawerItem, setDrawerItem] = useState<InventoryItem | null>(null);
+  const [drawerRooms, setDrawerRooms] = useState<InventoryRoom[]>([]);
+  const [viewingItemId, setViewingItemId] = useState<string | null>(null);
 
   const reqRef = React.useRef(0);
 
@@ -1085,6 +1093,30 @@ export default function CapitalTimelineClient() {
 
   async function handleOverrideSaved() {
     setEditingItem(null);
+    await doRun(horizonYears);
+  }
+
+  async function handleViewItem(inventoryItemId: string) {
+    if (!propertyId) return;
+    setViewingItemId(inventoryItemId);
+    try {
+      const [invItem, rooms] = await Promise.all([
+        getInventoryItem(propertyId, inventoryItemId),
+        listInventoryRooms(propertyId),
+      ]);
+      setDrawerItem(invItem);
+      setDrawerRooms(rooms);
+      setDrawerOpen(true);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to load item details');
+    } finally {
+      setViewingItemId(null);
+    }
+  }
+
+  async function handleDrawerSaved() {
+    setDrawerOpen(false);
+    setDrawerItem(null);
     await doRun(horizonYears);
   }
 
@@ -1380,9 +1412,21 @@ export default function CapitalTimelineClient() {
                               {priorityBadge(item.priority)}
                               {canEdit && (
                                 <button
+                                  onClick={() => handleViewItem(item.inventoryItemId as string)}
+                                  disabled={viewingItemId === item.inventoryItemId}
+                                  aria-label="View item details"
+                                  title="View item details"
+                                  className="inline-flex min-h-[36px] min-w-[36px] items-center justify-center rounded-full border border-slate-200/70 bg-white/70 p-1.5 text-xs font-medium text-slate-400 transition-all hover:border-slate-300/70 hover:bg-white hover:text-slate-600 disabled:opacity-40 dark:border-slate-700/70 dark:bg-slate-900/55 dark:text-slate-500 dark:hover:text-slate-300"
+                                >
+                                  <Eye className="h-3.5 w-3.5" />
+                                </button>
+                              )}
+                              {canEdit && (
+                                <button
                                   onClick={() => setEditingItem(isEditing ? null : { id: item.id })}
                                   disabled={running}
                                   aria-label={isEditing ? 'Close editor' : 'Edit this estimate'}
+                                  title={isEditing ? 'Close editor' : 'Edit this estimate'}
                                   className={`inline-flex min-h-[36px] min-w-[36px] items-center justify-center rounded-full border p-1.5 text-xs font-medium transition-all disabled:opacity-40 ${
                                     isEditing
                                       ? 'border-teal-300/70 bg-teal-100/80 text-teal-700 dark:border-teal-700/70 dark:bg-teal-900/55 dark:text-teal-300'
@@ -1420,8 +1464,8 @@ export default function CapitalTimelineClient() {
                         <>
                           <ConfidenceNudge
                             item={item}
-                            propertyId={propertyId}
                             onOpenEdit={(focus) => setEditingItem({ id: item.id, focus })}
+                            onViewItem={handleViewItem}
                           />
                           <MonthlySavingsRow item={item} />
                           <button
@@ -1466,6 +1510,18 @@ export default function CapitalTimelineClient() {
           )}
         </>
       )}
+
+      <InventoryItemDrawer
+        open={drawerOpen}
+        onClose={() => {
+          setDrawerOpen(false);
+          setDrawerItem(null);
+        }}
+        propertyId={propertyId}
+        rooms={drawerRooms}
+        initialItem={drawerItem}
+        onSaved={handleDrawerSaved}
+      />
     </ToolWorkspaceTemplate>
   );
 }
