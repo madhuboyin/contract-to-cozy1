@@ -12,6 +12,7 @@ require.cache[controllerModulePath] = {
     listProperties: () => {},
     lookupProperty: () => {},
     getPropertyResolutions: () => {},
+    getPropertyResolutionCenter: () => {},
     createProperty: () => {},
     getProperty: () => {},
     getPropertyDashboardBootstrap: () => {},

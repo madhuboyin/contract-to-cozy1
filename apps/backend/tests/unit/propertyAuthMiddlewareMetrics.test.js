@@ -9,6 +9,9 @@ const metricCalls = {
 };
 
 const prismaMock = {
+  householdMember: {
+    findUnique: async () => null,
+  },
   property: {
     findFirst: async () => null,
   },
@@ -105,4 +108,42 @@ test('propertyAuthMiddleware increments scope denial metric when property owners
   assert.deepEqual(metricCalls.scope, [
     { source: 'property_auth_middleware', status_code: '404' },
   ]);
+});
+
+test('propertyAuthMiddleware denies a user with household access to a different property (cross-property access attempt)', async () => {
+  metricCalls.auth.length = 0;
+  metricCalls.scope.length = 0;
+
+  // user-3 is a household member of property-A only, and is not the owner of
+  // property-B — both lookups for property-B must independently miss.
+  prismaMock.householdMember.findUnique = async ({ where }) => {
+    if (where.propertyId_userId.propertyId === 'property-A') {
+      return { role: 'OWNER' };
+    }
+    return null;
+  };
+  prismaMock.property.findFirst = async ({ where }) => {
+    if (where.id === 'property-A' && where.homeownerProfile.userId === 'user-3') {
+      return { id: 'property-A' };
+    }
+    return null;
+  };
+
+  const req = {
+    params: { propertyId: 'property-B' },
+    user: { userId: 'user-3' },
+  };
+  const res = createRes();
+
+  await propertyAuthMiddleware(req, res, () => {});
+
+  assert.equal(res.statusCode, 404);
+  assert.equal(res.payload?.message, 'Property not found or access denied.');
+  assert.deepEqual(metricCalls.scope, [
+    { source: 'property_auth_middleware', status_code: '404' },
+  ]);
+
+  // Reset shared mocks back to the denial-by-default state for any later tests.
+  prismaMock.householdMember.findUnique = async () => null;
+  prismaMock.property.findFirst = async () => null;
 });

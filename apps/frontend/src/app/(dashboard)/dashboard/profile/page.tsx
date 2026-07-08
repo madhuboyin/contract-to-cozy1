@@ -96,11 +96,58 @@ function ProfileAvatar({ firstName, lastName }: { firstName: string; lastName: s
 }
 
 export default function ProfilePage() {
-  const { user, refreshUser } = useAuth();
+  const { user, refreshUser, logout } = useAuth();
   const [editingSection, setEditingSection] = useState<EditableSection | null>(null);
   const [savingSection, setSavingSection] = useState<EditableSection | null>(null);
   const [isSendingPasswordReset, setIsSendingPasswordReset] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [isDeactivating, setIsDeactivating] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const handleDeactivateAccount = async () => {
+    if (isDeactivating || isDeleting) return;
+    const confirmed = window.confirm(
+      'Deactivate your account? Your dashboard will be hidden until support reactivates it.',
+    );
+    if (!confirmed) return;
+
+    setIsDeactivating(true);
+    try {
+      const response = await api.deactivateMyAccount();
+      if (!response.success) {
+        throw new Error(response.message || 'Unable to deactivate account.');
+      }
+      await logout();
+    } catch (error: any) {
+      setMessage({ type: 'error', text: error?.message || 'Deactivation failed. Please try again.' });
+    } finally {
+      setIsDeactivating(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (isDeleting || isDeactivating) return;
+    const typed = window.prompt('Type DELETE to permanently remove this account.');
+    if (typed !== 'DELETE') {
+      if (typed !== null) {
+        setMessage({ type: 'error', text: 'Type DELETE exactly to confirm account deletion.' });
+      }
+      return;
+    }
+
+    setIsDeleting(true);
+    try {
+      const response = await api.deleteMyAccount();
+      if (!response.success) {
+        throw new Error(response.message || 'Unable to delete account.');
+      }
+      await logout();
+    } catch (error: any) {
+      setMessage({ type: 'error', text: error?.message || 'Deletion failed. Please try again.' });
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   const [formData, setFormData] = useState<ProfileFormData>({
     firstName: '',
@@ -329,6 +376,42 @@ export default function ProfilePage() {
           <MobileSection>
             <MobileCard variant="compact">
               <MfaSettingsPanel />
+            </MobileCard>
+          </MobileSection>
+
+          <MobileSection>
+            <MobileCard variant="compact" className="space-y-3 border-rose-200 bg-rose-50/40">
+              <p className="mb-0 text-sm font-semibold text-rose-900">Danger zone</p>
+
+              <div className="flex items-center justify-between gap-2 rounded-lg border border-rose-200 bg-white px-3 py-2.5">
+                <div>
+                  <p className="mb-0 text-sm font-medium text-slate-900">Deactivate account</p>
+                  <p className="mb-0 text-xs text-slate-500">Temporarily disable your dashboard</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void handleDeactivateAccount()}
+                  disabled={isDeactivating || isDeleting}
+                  className="inline-flex min-h-[44px] items-center rounded-lg border border-rose-300 bg-white px-3 text-xs font-semibold text-rose-700 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isDeactivating ? 'Deactivating...' : 'Deactivate'}
+                </button>
+              </div>
+
+              <div className="flex items-center justify-between gap-2 rounded-lg border border-rose-200 bg-white px-3 py-2.5">
+                <div>
+                  <p className="mb-0 text-sm font-medium text-slate-900">Delete account</p>
+                  <p className="mb-0 text-xs text-slate-500">Permanently remove account and data</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void handleDeleteAccount()}
+                  disabled={isDeleting || isDeactivating}
+                  className="inline-flex min-h-[44px] items-center rounded-lg bg-rose-600 px-3 text-xs font-semibold text-white hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isDeleting ? 'Deleting...' : 'Delete'}
+                </button>
+              </div>
             </MobileCard>
           </MobileSection>
         </MobilePageContainer>
@@ -629,6 +712,40 @@ export default function ProfilePage() {
 
             <SectionCard className="h-full xl:col-span-2" title="Security">
               <MfaSettingsPanel />
+            </SectionCard>
+
+            <SectionCard className="h-full xl:col-span-2 border-rose-200" title="Danger Zone">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between gap-2 rounded-lg border border-rose-200 bg-rose-50/40 px-4 py-3">
+                  <div>
+                    <p className="mb-0 text-sm font-medium text-gray-900">Deactivate account</p>
+                    <p className="mb-0 text-xs text-gray-500">Temporarily disable your dashboard</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void handleDeactivateAccount()}
+                    disabled={isDeactivating || isDeleting}
+                    className="inline-flex min-h-[44px] items-center rounded-lg border border-rose-300 bg-white px-4 text-sm font-semibold text-rose-700 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {isDeactivating ? 'Deactivating...' : 'Deactivate'}
+                  </button>
+                </div>
+
+                <div className="flex items-center justify-between gap-2 rounded-lg border border-rose-200 bg-rose-50/40 px-4 py-3">
+                  <div>
+                    <p className="mb-0 text-sm font-medium text-gray-900">Delete account</p>
+                    <p className="mb-0 text-xs text-gray-500">Permanently remove account and data</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void handleDeleteAccount()}
+                    disabled={isDeleting || isDeactivating}
+                    className="inline-flex min-h-[44px] items-center rounded-lg bg-rose-600 px-4 text-sm font-semibold text-white hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {isDeleting ? 'Deleting...' : 'Delete'}
+                  </button>
+                </div>
+              </div>
             </SectionCard>
           </div>
         </div>
