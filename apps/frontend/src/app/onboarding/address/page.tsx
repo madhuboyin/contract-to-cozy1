@@ -26,6 +26,11 @@ export default function AddressOnboardingPage() {
   // Mount tracking
   React.useEffect(() => {
     track('landing_page_viewed', { source: 'onboarding_address', deviceType: 'web' });
+    // Marks the start of the onboarding flow — read back at completion in
+    // /onboarding/confirm to compute property_onboarded's durationSeconds.
+    if (!sessionStorage.getItem('onboarding_started_at')) {
+      sessionStorage.setItem('onboarding_started_at', String(Date.now()));
+    }
   }, []);
 
   const handleLookup = async (e: React.FormEvent) => {

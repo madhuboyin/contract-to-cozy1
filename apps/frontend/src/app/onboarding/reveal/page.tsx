@@ -95,6 +95,18 @@ export default function RevealOnboardingPage() {
     };
   }, [router]);
 
+  useEffect(() => {
+    if (!showContent || !data) return;
+    const hasLookup =
+      typeof data.yearBuilt === 'number' &&
+      typeof data.propertySize === 'number' &&
+      typeof data.estimatedValue === 'number';
+    track('first_wow_moment', {
+      insightId: `onboarding-reveal:${data.address || 'unknown'}`,
+      insightType: hasLookup ? 'protection_and_savings_preview' : 'baseline_preview',
+    });
+  }, [showContent, data]);
+
   if (!data) return null;
 
   const hasStructuredLookup =

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AlertCircle, CheckCircle2, Loader2, PiggyBank, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { track } from '@/lib/analytics/events';
 import {
   getHomeSavingsCategory,
   getHomeSavingsSummary,
@@ -294,6 +295,16 @@ export default function HomeSavingsCheckPanel({ propertyId }: HomeSavingsCheckPa
     setError(null);
     try {
       await setHomeSavingsOpportunityStatus(opportunityId, status);
+      if (status === 'APPLIED') {
+        const opportunity = detail?.opportunities.find((o) => o.id === opportunityId);
+        if (opportunity?.estimatedAnnualSavings != null) {
+          track('savings_verified', {
+            tool: 'home-savings',
+            amountUsd: opportunity.estimatedAnnualSavings,
+            propertyId,
+          });
+        }
+      }
       await loadSummary();
       await loadDetail(selectedCategory);
     } catch (err: any) {

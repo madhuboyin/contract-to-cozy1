@@ -71,12 +71,21 @@ export default function ConfirmOnboardingPage() {
         setSuccess(true);
         await fetch('/api/onboarding-lookup-session', { method: 'DELETE' });
         toast({ title: "Home Claimed!", description: "Welcome to your command center." });
-        
+
         track('property_claimed', {
           zipCode: data.zipCode,
           yearBuilt: data.yearBuilt || 0,
           source: 'API'
         });
+
+        const startedAt = Number(sessionStorage.getItem('onboarding_started_at'));
+        if (response.data?.id) {
+          track('property_onboarded', {
+            propertyId: response.data.id,
+            durationSeconds: startedAt ? Math.max(0, Math.round((Date.now() - startedAt) / 1000)) : 0,
+          });
+        }
+        sessionStorage.removeItem('onboarding_started_at');
 
         // Brief celebration delay before redirecting to dashboard
         setTimeout(() => router.push('/dashboard'), 2000);

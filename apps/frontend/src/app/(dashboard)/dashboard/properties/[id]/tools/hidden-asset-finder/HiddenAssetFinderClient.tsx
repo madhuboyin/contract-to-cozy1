@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -649,6 +649,18 @@ export default function HiddenAssetFinderClient() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [propertyId]);
+
+  // First time a real match is found for this property, that's a genuine
+  // discovered win (money potentially available) — distinct from the user
+  // acting on it (tracked as outcome_action_taken when claimed, above).
+  const winGeneratedTrackedRef = useRef(false);
+  useEffect(() => {
+    if (!propertyId || !data || winGeneratedTrackedRef.current) return;
+    if (data.matches.some((m) => m.status === 'DETECTED')) {
+      winGeneratedTrackedRef.current = true;
+      track('outcome_win_generated', { type: 'SAVINGS', sourceEngine: 'hidden-asset-finder', propertyId });
+    }
+  }, [propertyId, data]);
 
   // Auto-close detail sheet when the selected match is no longer in the visible
   // list (expired, inactivated, filtered out, or dismissed after background refresh).

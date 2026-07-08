@@ -33,6 +33,7 @@ import {
 import { User } from '@/types';
 import { PropertySetupBanner } from '@/components/PropertySetupBanner';
 import { api } from '@/lib/api/client';
+import { track } from '@/lib/analytics/events';
 import { AIChat } from '@/components/AIChat';
 import { PropertyProvider, usePropertyContext } from '@/lib/property/PropertyContext';
 import { NotificationProvider } from '@/lib/notifications/NotificationContext';
@@ -595,6 +596,40 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
       router.replace('/providers/dashboard');
     }
   }, [loading, user, router]);
+
+  // Session/retention tracking — fires once per browser tab session, the
+  // first time an authenticated user lands in the dashboard.
+  useEffect(() => {
+    if (loading || !user) return;
+    if (typeof window === 'undefined') return;
+    if (window.sessionStorage.getItem('ctc_session_tracked')) return;
+    window.sessionStorage.setItem('ctc_session_tracked', '1');
+
+    const LAST_VISIT_KEY = 'ctc_last_visit_at';
+    const SESSION_COUNT_KEY = 'ctc_session_count';
+
+    const now = Date.now();
+    const lastVisit = localStorage.getItem(LAST_VISIT_KEY);
+    const sessionCount = Number(localStorage.getItem(SESSION_COUNT_KEY) || '0') + 1;
+    localStorage.setItem(SESSION_COUNT_KEY, String(sessionCount));
+    localStorage.setItem(LAST_VISIT_KEY, String(now));
+
+    if (lastVisit) {
+      const daysSinceLastVisit = Math.max(0, Math.round((now - Number(lastVisit)) / (1000 * 60 * 60 * 24)));
+      track('return_visit', { sessionCount, daysSinceLastVisit });
+    }
+
+    api
+      .getProperties()
+      .then((response) => {
+        track('session_started', {
+          propertyCount: response.success ? response.data.properties.length : 0,
+        });
+      })
+      .catch(() => {
+        track('session_started', { propertyCount: 0 });
+      });
+  }, [loading, user]);
 
   // Mobile bottom padding for bottom nav
   useEffect(() => {
