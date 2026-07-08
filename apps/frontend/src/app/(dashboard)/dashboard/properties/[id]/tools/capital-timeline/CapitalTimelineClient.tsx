@@ -1001,6 +1001,7 @@ export default function CapitalTimelineClient() {
   const [drawerItem, setDrawerItem] = useState<InventoryItem | null>(null);
   const [drawerRooms, setDrawerRooms] = useState<InventoryRoom[]>([]);
   const [viewingItemId, setViewingItemId] = useState<string | null>(null);
+  const [showCalcExplainer, setShowCalcExplainer] = useState(false);
 
   const reqRef = React.useRef(0);
 
@@ -1135,6 +1136,21 @@ export default function CapitalTimelineClient() {
       if (months <= 0) return sum;
       return sum + midCents / months;
     }, 0);
+
+  // Items already due (window open) are excluded from the smoothed monthly
+  // rate above — there's no time left to spread their cost. Surfaced
+  // separately so that money isn't just invisible from the summary.
+  const alreadyDueItems = items.filter(
+    (i) =>
+      (i.priority === 'HIGH' || i.priority === 'MEDIUM') &&
+      i.estimatedCostMinCents != null &&
+      i.estimatedCostMaxCents != null &&
+      monthsUntil(i.windowStart) <= 0
+  );
+  const alreadyDueCents = alreadyDueItems.reduce(
+    (sum, item) => sum + ((item.estimatedCostMinCents as number) + (item.estimatedCostMaxCents as number)) / 2,
+    0
+  );
 
   const nextAction = (() => {
     if (!propertyId || !data) return null;
@@ -1273,21 +1289,78 @@ export default function CapitalTimelineClient() {
                 {data.summary}
               </p>
             )}
-            {totalMonthlySavings > 0 && (
-              <div className="mt-4 flex items-center justify-between rounded-2xl border border-teal-200/70 bg-teal-50/80 px-4 py-3 shadow-sm backdrop-blur dark:border-teal-700/60 dark:bg-teal-900/30">
-                <div>
-                  <p className="text-xs font-medium tracking-normal text-teal-700 dark:text-teal-400">
-                    Recommended monthly set-aside
-                  </p>
-                  <p className="text-xs text-teal-600/80 dark:text-teal-500">
-                    Across all high &amp; medium priority items
-                  </p>
-                </div>
-                <p className="text-2xl font-bold text-teal-700 dark:text-teal-300">
-                  {money(Math.ceil(totalMonthlySavings))}
-                  <span className="ml-0.5 text-sm font-normal">/mo</span>
-                </p>
+            {(totalMonthlySavings > 0 || alreadyDueCents > 0) && (
+              <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                {totalMonthlySavings > 0 && (
+                  <div className="rounded-2xl border border-teal-200/70 bg-teal-50/80 px-4 py-3 shadow-sm backdrop-blur dark:border-teal-700/60 dark:bg-teal-900/30">
+                    <p className="text-xs font-medium tracking-normal text-teal-700 dark:text-teal-400">
+                      Recommended monthly set-aside
+                    </p>
+                    <p className="text-xs text-teal-600/80 dark:text-teal-500">
+                      Across all high &amp; medium priority items
+                    </p>
+                    <p className="mt-1 text-2xl font-bold text-teal-700 dark:text-teal-300">
+                      {money(Math.ceil(totalMonthlySavings))}
+                      <span className="ml-0.5 text-sm font-normal">/mo</span>
+                    </p>
+                  </div>
+                )}
+                {alreadyDueCents > 0 && (
+                  <div className="rounded-2xl border border-red-200/70 bg-red-50/80 px-4 py-3 shadow-sm backdrop-blur dark:border-red-700/60 dark:bg-red-900/20">
+                    <p className="text-xs font-medium tracking-normal text-red-700 dark:text-red-400">
+                      Already due — not in the monthly figure
+                    </p>
+                    <p className="text-xs text-red-600/80 dark:text-red-500">
+                      {alreadyDueItems.length} item{alreadyDueItems.length === 1 ? '' : 's'} whose window is already
+                      open
+                    </p>
+                    <p className="mt-1 text-2xl font-bold text-red-700 dark:text-red-300">
+                      {money(Math.round(alreadyDueCents))}
+                    </p>
+                  </div>
+                )}
               </div>
+            )}
+            {(totalMonthlySavings > 0 || alreadyDueCents > 0) && (
+              <>
+                <button
+                  onClick={() => setShowCalcExplainer((v) => !v)}
+                  className="mt-3 -ml-2 inline-flex min-h-[36px] items-center gap-1.5 rounded-full px-2 text-xs font-medium text-slate-500 transition-colors hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+                >
+                  {showCalcExplainer ? (
+                    <ChevronDown className="h-3.5 w-3.5" />
+                  ) : (
+                    <ChevronRight className="h-3.5 w-3.5" />
+                  )}
+                  How is this calculated?
+                </button>
+                {showCalcExplainer && (
+                  <div className="mt-1 rounded-xl border border-white/70 bg-white/72 p-3 text-xs leading-relaxed text-slate-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/55 dark:text-slate-300">
+                    <p>
+                      <span className="font-semibold text-slate-800 dark:text-slate-100">
+                        Recommended monthly set-aside
+                      </span>{' '}
+                      is the sum of (estimated cost midpoint ÷ months until due) for every high or medium
+                      priority item whose window hasn&apos;t opened yet — a smoothed monthly rate per item,
+                      added together. Low priority items aren&apos;t included.
+                    </p>
+                    <p className="mt-2">
+                      <span className="font-semibold text-slate-800 dark:text-slate-100">
+                        Already due
+                      </span>{' '}
+                      items are excluded from that monthly rate — there&apos;s no time left to spread their cost,
+                      so their full estimated cost is shown separately instead. See each flagged item below for
+                      details.
+                    </p>
+                    <p className="mt-2 text-slate-400 dark:text-slate-500">
+                      This uses a different method than the Reserve Fund Planner&apos;s monthly figure, which is
+                      based on your selected savings posture and a 6-month near-term cutoff rather than
+                      priority. The two numbers won&apos;t match — use Reserve Fund Planner for a single
+                      combined savings target.
+                    </p>
+                  </div>
+                )}
+              </>
             )}
             {nextAction && (
               <div className="mt-4 rounded-2xl border border-white/70 bg-white/72 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/55">
