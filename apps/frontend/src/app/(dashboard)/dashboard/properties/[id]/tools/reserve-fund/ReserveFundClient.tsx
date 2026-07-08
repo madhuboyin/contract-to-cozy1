@@ -262,6 +262,7 @@ export default function ReserveFundClient() {
   const [drawerItem, setDrawerItem] = useState<InventoryItem | null>(null);
   const [drawerRooms, setDrawerRooms] = useState<InventoryRoom[]>([]);
   const [viewingItemId, setViewingItemId] = useState<string | null>(null);
+  const [showCalcExplainer, setShowCalcExplainer] = useState(false);
 
   async function handleViewItem(inventoryItemId: string) {
     if (!propertyId) return;
@@ -592,6 +593,50 @@ export default function ReserveFundClient() {
                 below to generate a real target.
               </p>
             )}
+            {hasTimelineData && (
+              <>
+                <button
+                  onClick={() => setShowCalcExplainer((v) => !v)}
+                  className="mt-3 -ml-2 inline-flex min-h-[36px] items-center gap-1.5 rounded-full px-2 text-xs font-medium text-slate-500 transition-colors hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+                >
+                  {showCalcExplainer ? (
+                    <ChevronDown className="h-3.5 w-3.5" />
+                  ) : (
+                    <ChevronRight className="h-3.5 w-3.5" />
+                  )}
+                  How is this calculated?
+                </button>
+                {showCalcExplainer && (
+                  <div className="mt-1 rounded-xl border border-white/70 bg-white/72 p-3 text-xs leading-relaxed text-slate-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/55 dark:text-slate-300">
+                    <p>
+                      Based on your{' '}
+                      <span className="font-semibold text-slate-800 dark:text-slate-100">
+                        {POSTURE_OPTIONS.find((o) => o.value === fund.posture)?.label}
+                      </span>{' '}
+                      posture — {POSTURE_OPTIONS.find((o) => o.value === fund.posture)?.hint.toLowerCase()}.
+                    </p>
+                    <p className="mt-2">
+                      <span className="font-semibold text-slate-800 dark:text-slate-100">
+                        Recommended monthly set-aside
+                      </span>{' '}
+                      is the sum of (estimated cost ÷ months until due) for every active item due more than 6
+                      months from now — a smoothed monthly rate per item, added together.
+                    </p>
+                    <p className="mt-2">
+                      <span className="font-semibold text-slate-800 dark:text-slate-100">
+                        Near-term shortfall
+                      </span>{' '}
+                      covers items due within the next 6 months. There isn&apos;t enough runway to smooth these
+                      into a monthly rate, so each item&apos;s cost — minus your proportional share of the
+                      current balance — is shown as a lump sum instead.
+                    </p>
+                    <p className="mt-2 text-slate-400 dark:text-slate-500">
+                      Both figures update when you recalculate, change posture, or your Capital Timeline changes.
+                    </p>
+                  </div>
+                )}
+              </>
+            )}
           </div>
 
           {/* Reconciliation suggestions */}
@@ -665,6 +710,7 @@ export default function ReserveFundClient() {
                   const itemName = li.timelineItem.inventoryItem?.name || categoryLabel(li.timelineItem.category);
                   const hasCostRange =
                     li.timelineItem.estimatedCostMinCents != null && li.timelineItem.estimatedCostMaxCents != null;
+                  const isInMonthlyBucket = li.allocatedMonthlyCents > 0;
                   return (
                     <div
                       key={li.id}
@@ -713,6 +759,11 @@ export default function ReserveFundClient() {
                                 </div>
                               )}
                             </div>
+                            <p className="mt-1.5 text-xs text-slate-400 dark:text-slate-500">
+                              {isInMonthlyBucket
+                                ? 'Counted in Recommended monthly set-aside'
+                                : 'Counted in Near-term shortfall'}
+                            </p>
                             <div className="mt-2 -ml-2 flex flex-wrap items-center gap-1">
                               <button
                                 onClick={() => toggleExpand(li.id)}
