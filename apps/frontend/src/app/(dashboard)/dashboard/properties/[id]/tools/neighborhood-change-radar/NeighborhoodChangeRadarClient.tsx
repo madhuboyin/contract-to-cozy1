@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -54,6 +54,7 @@ import {
   getNeighborhoodRadarTrends,
 } from './neighborhoodRadarApi';
 import { recordGuidanceToolStatus } from '@/lib/api/guidanceApi';
+import { track } from '@/lib/analytics/events';
 import {
   extractGuidanceContinuityContext,
   hasGuidanceContinuityContext,
@@ -713,6 +714,16 @@ export default function NeighborhoodChangeRadarClient() {
   const propertyId = params.id;
   const guidanceContext = extractGuidanceContinuityContext(searchParams);
   const hasGuidanceContext = hasGuidanceContinuityContext(guidanceContext);
+
+  useEffect(() => {
+    if (!propertyId) return;
+    track('workflow_started', {
+      tool: 'neighborhood-change-radar',
+      propertyId,
+      entryPoint: hasGuidanceContext ? 'guidance' : 'direct',
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [propertyId]);
 
   const [filterEffect, setFilterEffect] = useState<FilterEffect>('ALL');
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);

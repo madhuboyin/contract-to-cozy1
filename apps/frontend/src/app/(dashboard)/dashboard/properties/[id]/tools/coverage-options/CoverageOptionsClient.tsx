@@ -19,6 +19,7 @@ import PriorityActionHero from '@/components/system/PriorityActionHero';
 import RouteStateCard from '@/components/system/RouteStateCard';
 import { formatEnumLabel } from '@/lib/utils/formatters';
 import { buildGuidanceOverviewHref } from '@/lib/navigation/guidanceOverviewHref';
+import { track } from '@/lib/analytics/events';
 
 export default function CoverageOptionsClient() {
   const params = useParams<{ id: string }>();
@@ -40,6 +41,11 @@ export default function CoverageOptionsClient() {
 
   React.useEffect(() => {
     if (!propertyId) return;
+    track('workflow_started', {
+      tool: 'coverage-options',
+      propertyId,
+      entryPoint: guidanceJourneyId ? 'guidance' : 'direct',
+    });
     let cancelled = false;
     (async () => {
       try {
@@ -54,6 +60,7 @@ export default function CoverageOptionsClient() {
       }
     })();
     return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [propertyId]);
 
   async function handleMarkReviewed() {
@@ -76,6 +83,7 @@ export default function CoverageOptionsClient() {
         },
       });
       setProofCompleted(true);
+      track('workflow_completed', { tool: 'coverage-options', propertyId });
     } catch (e) {
       console.error('[CoverageOptions] failed to record completion', e);
     } finally {

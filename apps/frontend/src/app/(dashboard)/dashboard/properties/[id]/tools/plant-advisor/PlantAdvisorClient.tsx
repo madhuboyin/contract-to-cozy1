@@ -49,6 +49,7 @@ import {
 } from '@/components/ui/sheet';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/components/ui/use-toast';
+import { track } from '@/lib/analytics/events';
 import {
   addRoomPlantRecommendationToHome,
   dismissRoomPlantRecommendation,
@@ -455,6 +456,7 @@ export default function PlantAdvisorClient() {
       prefill_room_id: prefillRoomId ?? null,
       prefill_room_type: prefillRoomType ?? null,
     });
+    track('workflow_started', { tool: 'plant-advisor', propertyId, entryPoint: launchSurface });
   }, [launchSurface, prefillRoomId, prefillRoomType, propertyId, trackEvent]);
 
   React.useEffect(() => {

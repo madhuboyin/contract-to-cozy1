@@ -11,6 +11,7 @@ import {
   MobilePageContainer,
 } from '@/components/mobile/dashboard/MobilePrimitives';
 import DetailTemplate from '../../components/route-templates/DetailTemplate';
+import { track } from '@/lib/analytics/events';
 
 const REPORT_TYPES = [
   { value: 'GENERAL', label: 'General Home Inspection' },
@@ -62,6 +63,7 @@ export default function UploadInspectionReportPage() {
         inspectorLicense: inspectorLicense || undefined,
         inspectorCompany: inspectorCompany || undefined,
       });
+      track('action_completed', { tool: 'inspection-hub', actionType: 'upload_report', propertyId });
       router.push(`/dashboard/properties/${propertyId}/inspection-hub/${reportId}`);
     } catch (e: any) {
       setError(e?.message ?? 'Upload failed. Please try again.');

@@ -44,6 +44,7 @@ import {
   type GazetteStoryDto,
 } from './homeGazetteApi';
 import { recordGuidanceToolStatus } from '@/lib/api/guidanceApi';
+import { track } from '@/lib/analytics/events';
 import {
   appendGuidanceContinuityToHref,
   extractGuidanceContinuityContext,
@@ -828,6 +829,16 @@ export default function HomeGazetteClient() {
   const guidanceContext = extractGuidanceContinuityContext(searchParams);
   const hasGuidanceContext = hasGuidanceContinuityContext(guidanceContext);
 
+  useEffect(() => {
+    if (!propertyId) return;
+    track('workflow_started', {
+      tool: 'home-gazette',
+      propertyId,
+      entryPoint: hasGuidanceContext ? 'guidance' : 'direct',
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [propertyId]);
+
   const [tab, setTab] = useState<Tab>('current');
   const [loading, setLoading] = useState(false);
   const [edition, setEdition] = useState<GazetteEditionDto | null | 'none'>('none');
@@ -847,6 +858,9 @@ export default function HomeGazetteClient() {
       const data = await getCurrentEdition(propertyId);
       if (reqId !== reqRef.current) return;
       setEdition(data ?? 'none');
+      if (data) {
+        track('workflow_completed', { tool: 'home-gazette', propertyId });
+      }
     } catch (e: unknown) {
       if (reqId !== reqRef.current) return;
       setError(e instanceof Error ? e.message : 'Failed to load Gazette');

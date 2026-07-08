@@ -1,8 +1,9 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
+import { track } from '@/lib/analytics/events';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   AlertTriangle,
@@ -1002,6 +1003,11 @@ export default function HomeDigitalTwinClient() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
+  useEffect(() => {
+    if (!propertyId) return;
+    track('workflow_started', { tool: 'home-digital-twin', propertyId, entryPoint: 'direct' });
+  }, [propertyId]);
+
   const [selectedComponentId, setSelectedComponentId] = useState<string | null>(null);
   const [componentSheetOpen, setComponentSheetOpen] = useState(false);
 
@@ -1092,6 +1098,7 @@ export default function HomeDigitalTwinClient() {
         title: 'Scenario computed',
         description: `"${scenario.name}" is ready to review.`,
       });
+      track('action_completed', { tool: 'home-digital-twin', actionType: 'run_scenario', propertyId });
     },
     onError: (error) =>
       toast({

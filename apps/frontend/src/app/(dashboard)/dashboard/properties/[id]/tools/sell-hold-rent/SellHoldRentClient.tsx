@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import ToolWorkspaceTemplate from '../../components/route-templates/ToolWorkspaceTemplate';
 import HomeToolHeader from '@/components/tools/HomeToolHeader';
 import PriorityActionHero from '@/components/system/PriorityActionHero';
+import { track } from '@/lib/analytics/events';
 
 import ComparisonBars from './ComparisonBars';
 import {
@@ -138,6 +139,11 @@ export default function SellHoldRentClient() {
     loadOverrides();
     loadSnapshot();
   }, [loadSimulator, loadOverrides, loadSnapshot, years]);
+
+  useEffect(() => {
+    if (!propertyId) return;
+    track('workflow_started', { tool: 'sell-hold-rent', propertyId, entryPoint: 'direct' });
+  }, [propertyId]);
 
   const hasScenarioData =
     !!data?.scenarios?.sell &&
@@ -536,6 +542,7 @@ export default function SellHoldRentClient() {
                     await saveSellHoldRentOverrides(propertyId, patch);
                     await loadOverrides();
                     await loadSimulator(years);
+                    track('action_completed', { tool: 'sell-hold-rent', actionType: 'save_overrides', propertyId });
                   } finally {
                     setOvSaving(false);
                   }

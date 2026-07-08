@@ -153,6 +153,13 @@ export default function PropertyTaxClient() {
   const [taxRate, setTaxRate] = useState<string>(''); // decimal
   const [trendYears, setTrendYears] = useState<5 | 10>(5);
   const reqRef = React.useRef(0);
+  const workflowCompletedTrackedRef = React.useRef(false);
+
+  useEffect(() => {
+    if (!propertyId || !estimate || workflowCompletedTrackedRef.current) return;
+    workflowCompletedTrackedRef.current = true;
+    track('workflow_completed', { tool: 'property-tax', propertyId });
+  }, [propertyId, estimate]);
 
   async function getAndSet(years: 5 | 10) {
     if (!propertyId) return;

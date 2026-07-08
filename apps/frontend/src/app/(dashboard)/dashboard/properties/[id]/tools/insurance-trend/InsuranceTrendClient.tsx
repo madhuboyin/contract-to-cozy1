@@ -48,6 +48,13 @@ export default function InsuranceTrendClient() {
   const [showAllDrivers, setShowAllDrivers] = useState(false);
   const [methodologyOpen, setMethodologyOpen] = useState(false);
   const reqRef = React.useRef(0);
+  const workflowCompletedTrackedRef = React.useRef(false);
+
+  useEffect(() => {
+    if (!propertyId || !data || workflowCompletedTrackedRef.current) return;
+    workflowCompletedTrackedRef.current = true;
+    track('workflow_completed', { tool: 'insurance-trend', propertyId });
+  }, [propertyId, data]);
 
   async function getAndSet(years: 5 | 10) {
     if (!propertyId) return;

@@ -11,6 +11,7 @@ import { ArrowLeft, Hammer } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
 import { api } from '@/lib/api/client';
+import { track } from '@/lib/analytics/events';
 import {
   MobilePageContainer,
   MobileSection,
@@ -168,6 +169,11 @@ export default function HomeRenovationRiskAdvisorPageClient({
     }
   }, [propertyIdOverride, selectedPropertyId, setSelectedPropertyId]);
 
+  React.useEffect(() => {
+    if (!propertyId) return;
+    track('workflow_started', { tool: 'home-renovation-risk-advisor', propertyId, entryPoint: 'direct' });
+  }, [propertyId]);
+
   // Session state
   const [currentSessionId, setCurrentSessionId] = React.useState<string | null>(
     () => searchParams.get('sessionId') ?? null
@@ -265,6 +271,9 @@ export default function HomeRenovationRiskAdvisorPageClient({
     onSuccess: (session) => {
       setCurrentSessionId(session.id);
       queryClient.setQueryData(['renovation-advisor-session', session.id], session);
+      if (propertyId) {
+        track('workflow_completed', { tool: 'home-renovation-risk-advisor', propertyId });
+      }
     },
   });
 

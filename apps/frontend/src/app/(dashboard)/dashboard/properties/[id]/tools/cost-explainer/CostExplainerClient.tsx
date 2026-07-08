@@ -4,6 +4,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import { getCostExplainer, CostExplainerDTO } from './costExplainerApi';
+import { track } from '@/lib/analytics/events';
 import MultiLineChart from '../insurance-trend/MultiLineChart';
 import HomeToolsRail from '../../components/HomeToolsRail';
 import { Button } from '@/components/ui/button';
@@ -34,6 +35,13 @@ export default function CostExplainerClient() {
   const [error, setError] = useState<string | null>(null);
 
   const reqRef = React.useRef(0);
+  const workflowCompletedTrackedRef = React.useRef(false);
+
+  useEffect(() => {
+    if (!propertyId || !data || workflowCompletedTrackedRef.current) return;
+    workflowCompletedTrackedRef.current = true;
+    track('workflow_completed', { tool: 'cost-explainer', propertyId });
+  }, [propertyId, data]);
 
   async function load(nextYears: 5 | 10) {
     if (!propertyId) return;
@@ -56,6 +64,7 @@ export default function CostExplainerClient() {
   useEffect(() => {
     if (!propertyId) return;
     load(years);
+    track('workflow_started', { tool: 'cost-explainer', propertyId, entryPoint: 'direct' });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [propertyId]);
 

@@ -50,6 +50,7 @@ import {
 } from '@/components/ui/sheet';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/components/ui/use-toast';
+import { track } from '@/lib/analytics/events';
 import {
   BottomSafeAreaReserve,
   EmptyStateCard,
@@ -2281,6 +2282,11 @@ export default function HomeDigitalWillClient() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
+  React.useEffect(() => {
+    if (!propertyId) return;
+    track('workflow_started', { tool: 'home-digital-will', propertyId, entryPoint: 'direct' });
+  }, [propertyId]);
+
   // Navigation state
   const [selectedSectionId, setSelectedSectionId] = React.useState<string | null>(null);
   const [showContactsPanel, setShowContactsPanel] = React.useState(false);
@@ -2370,6 +2376,7 @@ export default function HomeDigitalWillClient() {
       queryClient.invalidateQueries({ queryKey: ['home-digital-will', propertyId] });
       setEntryEditorState(null);
       toast({ title: 'Entry added' });
+      track('action_completed', { tool: 'home-digital-will', actionType: 'create_entry', propertyId });
     },
     onError: () => {
       toast({ title: 'Failed to add entry', variant: 'destructive' });

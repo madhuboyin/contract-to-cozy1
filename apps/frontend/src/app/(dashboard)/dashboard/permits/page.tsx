@@ -8,6 +8,7 @@ import type { PermitSummary, PermitFetchJobSummary, PermitHubSummary } from '@/t
 import PermitCard from '@/components/features/permits/PermitCard';
 import FetchStatusBanner from '@/components/features/permits/FetchStatusBanner';
 import DisclosureExportButton from '@/components/features/permits/DisclosureExportButton';
+import { track } from '@/lib/analytics/events';
 
 const ACTIVE_STATUSES = ['ISSUED', 'INSPECTION_PENDING', 'INSPECTION_FAILED', 'APPLIED'];
 
@@ -38,6 +39,11 @@ export default function PermitHubPage() {
     load().finally(() => setLoading(false));
   }, [load]);
 
+  useEffect(() => {
+    if (!propertyId) return;
+    track('workflow_started', { tool: 'permits', propertyId, entryPoint: 'direct' });
+  }, [propertyId]);
+
   // Poll while a fetch is running
   useEffect(() => {
     if (!fetchJob || !['QUEUED', 'RUNNING'].includes(fetchJob.status)) return;
@@ -60,6 +66,7 @@ export default function PermitHubPage() {
     const { fetchJobId } = await api.triggerPermitFetch(propertyId);
     const f = await api.getPermitFetchStatus(propertyId).catch(() => null);
     setFetchJob(f ?? { id: fetchJobId, status: 'QUEUED', startedAt: new Date().toISOString() });
+    track('action_completed', { tool: 'permits', actionType: 'trigger_fetch', propertyId });
   }
 
   if (!propertyId) {

@@ -5,6 +5,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
 import HomeToolsRail from '../../components/HomeToolsRail';
 import { getTrueCostOwnership, TrueCostOwnershipDTO } from './trueCostApi';
+import { track } from '@/lib/analytics/events';
 import { Button } from '@/components/ui/button';
 import ToolWorkspaceTemplate from '../../components/route-templates/ToolWorkspaceTemplate';
 import HomeToolHeader from '@/components/tools/HomeToolHeader';
@@ -26,6 +27,13 @@ export default function TrueCostClient() {
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<TrueCostOwnershipDTO | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const workflowCompletedTrackedRef = React.useRef(false);
+
+  useEffect(() => {
+    if (!propertyId || !data || workflowCompletedTrackedRef.current) return;
+    workflowCompletedTrackedRef.current = true;
+    track('workflow_completed', { tool: 'true-cost', propertyId });
+  }, [propertyId, data]);
   const [chartExpanded, setChartExpanded] = useState(false);
   const reqRef = React.useRef(0);
 
@@ -48,6 +56,9 @@ export default function TrueCostClient() {
 
   useEffect(() => {
     load(years);
+    if (propertyId) {
+      track('workflow_started', { tool: 'true-cost', propertyId, entryPoint: 'direct' });
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [propertyId]);
 

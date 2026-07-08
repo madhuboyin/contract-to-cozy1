@@ -481,6 +481,9 @@ export default function HomeEventRadarPageClient({ propertyId: propertyIdOverrid
     setStateOverrides((prev) => ({ ...prev, [matchId]: state }));
     // Also update the selected item if it's still open
     setSelectedItem((prev) => (prev?.propertyRadarMatchId === matchId ? { ...prev, state } : prev));
+    if (propertyId) {
+      track('action_completed', { tool: 'home-event-radar', actionType: `state_${state}`, propertyId });
+    }
   }
 
   function handleFilterChange(key: FilterKey) {

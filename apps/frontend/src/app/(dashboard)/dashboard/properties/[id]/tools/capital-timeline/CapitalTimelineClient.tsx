@@ -44,6 +44,7 @@ import ToolWorkspaceTemplate from '../../components/route-templates/ToolWorkspac
 import InventoryItemDrawer from '../../../../components/inventory/InventoryItemDrawer';
 import { getInventoryItem, listInventoryRooms } from '../../../../inventory/inventoryApi';
 import { InventoryItem, InventoryRoom } from '@/types';
+import { track } from '@/lib/analytics/events';
 
 // ─── Helpers ────────────────────────────────────────────────────────
 function money(cents: number | null | undefined) {
@@ -773,6 +774,7 @@ function ItemEditPanel({
     setSaving(true);
     try {
       await persistOverrides(propertyId, item.inventoryItemId, form, existingOverrides);
+      track('action_completed', { tool: 'capital-timeline', actionType: 'correct_estimate', propertyId });
       await onSaved();
     } catch {
       setLocalError('Failed to save. Please try again.');
@@ -1071,6 +1073,9 @@ export default function CapitalTimelineClient() {
 
   useEffect(() => {
     load();
+    if (propertyId) {
+      track('workflow_started', { tool: 'capital-timeline', propertyId, entryPoint: 'direct' });
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [propertyId]);
 

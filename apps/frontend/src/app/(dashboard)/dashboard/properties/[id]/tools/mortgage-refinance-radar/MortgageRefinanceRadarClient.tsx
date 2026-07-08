@@ -375,6 +375,7 @@ function ScenarioCalculator({
       });
       setResult(scenario);
       setShowResult(true);
+      track('action_completed', { tool: 'mortgage-refinance-radar', actionType: 'run_scenario', propertyId });
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Scenario calculation failed.');
     } finally {
@@ -893,6 +894,7 @@ export default function MortgageRefinanceRadarClient() {
       const status = await evaluateRadar(propertyId);
       if (reqId !== reqRef.current) return;
       setData(status);
+      track('action_completed', { tool: 'mortgage-refinance-radar', actionType: 'evaluate', propertyId });
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Evaluation failed');
     } finally {

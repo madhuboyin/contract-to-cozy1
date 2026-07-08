@@ -16,6 +16,7 @@ import {
   StatusChip,
 } from '@/components/mobile/dashboard/MobilePrimitives';
 import DetailTemplate from '../components/route-templates/DetailTemplate';
+import { track } from '@/lib/analytics/events';
 
 const REPORT_TYPE_LABELS: Record<string, string> = {
   GENERAL: 'General Home',
@@ -78,6 +79,11 @@ export default function InspectionHubPage() {
   }, [propertyId]);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    if (!propertyId) return;
+    track('workflow_started', { tool: 'inspection-hub', propertyId, entryPoint: 'direct' });
+  }, [propertyId]);
 
   // Poll while any report is PROCESSING
   useEffect(() => {

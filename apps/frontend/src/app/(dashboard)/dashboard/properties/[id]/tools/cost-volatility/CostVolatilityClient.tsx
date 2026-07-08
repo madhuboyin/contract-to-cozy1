@@ -10,6 +10,7 @@ import ToolWorkspaceTemplate from '../../components/route-templates/ToolWorkspac
 import HomeToolHeader from '@/components/tools/HomeToolHeader';
 
 import { getCostVolatility, type CostVolatilityDTO } from './costVolatilityApi';
+import { track } from '@/lib/analytics/events';
 import MiniLineChartPct from './MiniLineChartPct';
 
 function badgeForBand(b?: 'LOW' | 'MEDIUM' | 'HIGH') {
@@ -47,6 +48,13 @@ export default function CostVolatilityClient() {
   const [error, setError] = useState<string | null>(null);
 
   const reqRef = React.useRef(0);
+  const workflowCompletedTrackedRef = React.useRef(false);
+
+  useEffect(() => {
+    if (!propertyId || !data || workflowCompletedTrackedRef.current) return;
+    workflowCompletedTrackedRef.current = true;
+    track('workflow_completed', { tool: 'cost-volatility', propertyId });
+  }, [propertyId, data]);
 
   async function load(nextYears: 5 | 10) {
     if (!propertyId) return;
@@ -69,6 +77,7 @@ export default function CostVolatilityClient() {
   useEffect(() => {
     if (!propertyId) return;
     load(years);
+    track('workflow_started', { tool: 'cost-volatility', propertyId, entryPoint: 'direct' });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [propertyId]);
 

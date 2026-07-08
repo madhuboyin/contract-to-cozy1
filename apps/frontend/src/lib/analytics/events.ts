@@ -88,7 +88,29 @@ export type CtcTool =
   | 'vault'
   | 'magic-scan'
   | 'resolution-hub'
-  | 'financial-efficiency';
+  | 'financial-efficiency'
+  // Added as part of the tool-instrumentation coverage sprint
+  | 'break-even'
+  | 'capital-timeline'
+  | 'cost-explainer'
+  | 'cost-growth'
+  | 'cost-volatility'
+  | 'diy'
+  | 'financing'
+  | 'hoa'
+  | 'home-digital-twin'
+  | 'home-digital-will'
+  | 'home-gazette'
+  | 'home-habit-coach'
+  | 'home-renovation-risk-advisor'
+  | 'home-risk-replay'
+  | 'inspection-hub'
+  | 'neighborhood-change-radar'
+  | 'permits'
+  | 'plant-advisor'
+  | 'reserve-fund'
+  | 'sell-hold-rent'
+  | 'true-cost';
 
 function toEventAttributes(properties: Record<string, unknown>): Record<string, string> {
   const attrs: Record<string, string> = {};

@@ -1,15 +1,22 @@
 'use client';
 
+import { useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import HomeToolsRail from '../../components/HomeToolsRail';
 import DoNothingSimulatorPanel from '@/components/ai/DoNothingSimulatorPanel';
 import ToolExplainerSection from '@/components/tool-explainer/ToolExplainerSection';
 import ToolWorkspaceTemplate from '../../components/route-templates/ToolWorkspaceTemplate';
+import { track } from '@/lib/analytics/events';
 
 export default function DoNothingToolClient() {
   const params = useParams<{ id: string }>();
   const propertyId = params.id;
   const backHref = `/dashboard/properties/${propertyId}`;
+
+  useEffect(() => {
+    if (!propertyId) return;
+    track('workflow_started', { tool: 'do-nothing', propertyId, entryPoint: 'direct' });
+  }, [propertyId]);
 
   return (
     <ToolWorkspaceTemplate

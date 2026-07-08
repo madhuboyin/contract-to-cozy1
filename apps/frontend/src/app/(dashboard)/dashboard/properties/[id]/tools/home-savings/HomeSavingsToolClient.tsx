@@ -1,9 +1,11 @@
 'use client';
 
+import { useEffect } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import HomeToolsRail from '../../components/HomeToolsRail';
 import HomeSavingsCheckPanel from '@/components/ai/HomeSavingsCheckPanel';
 import ToolWorkspaceTemplate from '../../components/route-templates/ToolWorkspaceTemplate';
+import { track } from '@/lib/analytics/events';
 
 function formatMoney(value: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(value);
@@ -18,6 +20,11 @@ export default function HomeSavingsToolClient() {
   const highlightOpportunities = searchParams.get('highlight') === 'opportunities';
 
   const backHref = `/dashboard/properties/${propertyId}`;
+
+  useEffect(() => {
+    if (!propertyId) return;
+    track('workflow_started', { tool: 'home-savings', propertyId, entryPoint: 'direct' });
+  }, [propertyId]);
 
   return (
     <ToolWorkspaceTemplate

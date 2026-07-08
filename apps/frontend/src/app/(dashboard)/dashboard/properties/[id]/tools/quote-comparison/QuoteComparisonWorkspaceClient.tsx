@@ -21,6 +21,7 @@ import HomeToolsRail from '../../components/HomeToolsRail';
 import CompareTemplate from '../../components/route-templates/CompareTemplate';
 import { pricingLoopTrust } from '@/lib/trust/trustPresets';
 import { buildGuidanceOverviewHref } from '@/lib/navigation/guidanceOverviewHref';
+import { track } from '@/lib/analytics/events';
 
 type SearchParamSource = { get(name: string): string | null };
 
@@ -195,6 +196,16 @@ export default function QuoteComparisonWorkspaceClient() {
   const itemId = searchParams.get('itemId');
   const homeAssetId = searchParams.get('homeAssetId');
   const contextQuery = buildContextQuery(searchParams);
+
+  React.useEffect(() => {
+    if (!propertyId) return;
+    track('workflow_started', {
+      tool: 'quote-comparison',
+      propertyId,
+      entryPoint: guidanceJourneyId ? 'guidance' : 'direct',
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [propertyId]);
   const isGuidanceContext = Boolean(guidanceJourneyId);
 
   const [loading, setLoading] = React.useState(true);
@@ -396,6 +407,7 @@ export default function QuoteComparisonWorkspaceClient() {
               primaryAction: (
                 <Link
                   href={`/dashboard/properties/${propertyId}/tools/price-finalization${priceFinalizationQuery}`}
+                  onClick={() => track('action_completed', { tool: 'quote-comparison', actionType: 'continue_to_finalization', propertyId })}
                   className="inline-flex min-h-[44px] w-full items-center justify-center rounded-xl border border-black bg-black px-3 text-sm font-semibold text-white hover:bg-black/90"
                 >
                   Continue to Price Finalization

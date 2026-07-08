@@ -699,8 +699,11 @@ export default function HiddenAssetFinderClient() {
       matchId: string;
       status: 'VIEWED' | 'DISMISSED' | 'CLAIMED';
     }) => updateHiddenAssetMatchStatus(matchId, status),
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['hidden-assets', propertyId] });
+      if (variables.status === 'CLAIMED') {
+        track('outcome_action_taken', { type: 'SAVINGS', sourceEngine: 'hidden-asset-finder', propertyId });
+      }
     },
     onError: () =>
       toast({ title: 'Could not update status. Please try again.', variant: 'destructive' }),

@@ -16,6 +16,7 @@ import HoaAssociationCard from '@/components/features/hoa/HoaAssociationCard';
 import ApprovalRecordList from '@/components/features/hoa/ApprovalRecordList';
 import ReportViolationModal from '@/components/features/hoa/ReportViolationModal';
 import ViolationHistoryList from '@/components/features/hoa/ViolationHistoryList';
+import { track } from '@/lib/analytics/events';
 
 export default function HoaCompliancePage() {
   const searchParams = useSearchParams();
@@ -48,6 +49,11 @@ export default function HoaCompliancePage() {
     load().finally(() => setLoading(false));
   }, [load]);
 
+  useEffect(() => {
+    if (!propertyId) return;
+    track('workflow_started', { tool: 'hoa', propertyId, entryPoint: 'direct' });
+  }, [propertyId]);
+
   async function handleSaveAssociation(payload: UpsertHoaAssociationPayload) {
     const updated = await api.upsertHoaAssociation(propertyId, payload);
     setAssociation(updated);
@@ -56,6 +62,7 @@ export default function HoaCompliancePage() {
   async function handleAddRecord(payload: CreateHoaApprovalRecordPayload) {
     const record = await api.createHoaApprovalRecord(propertyId, payload);
     setRecords((prev) => [record, ...prev]);
+    track('action_completed', { tool: 'hoa', actionType: 'add_approval_record', propertyId });
   }
 
   async function handleUpdateRecord(recordId: string, patch: UpdateHoaApprovalRecordPayload) {
@@ -138,7 +145,10 @@ export default function HoaCompliancePage() {
       <ReportViolationModal
         open={reportingViolation}
         onClose={() => setReportingViolation(false)}
-        onReported={refreshViolations}
+        onReported={() => {
+          refreshViolations();
+          track('action_completed', { tool: 'hoa', actionType: 'report_violation', propertyId });
+        }}
         propertyId={propertyId}
       />
     </div>

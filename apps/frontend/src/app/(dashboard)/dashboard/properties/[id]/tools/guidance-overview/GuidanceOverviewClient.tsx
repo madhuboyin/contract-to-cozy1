@@ -406,6 +406,7 @@ export default function GuidanceOverviewClient() {
       // the scoped filter to match — the journey may not be in filteredActions
       // until the invalidated query resolves.
       pushParams({ journeyId: data.journey.id });
+      track('action_completed', { tool: 'guidance-overview', actionType: 'start_journey', propertyId });
     },
   });
 

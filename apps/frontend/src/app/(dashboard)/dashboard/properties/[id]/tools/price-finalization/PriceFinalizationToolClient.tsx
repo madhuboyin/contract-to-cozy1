@@ -27,6 +27,7 @@ import { pricingLoopTrust } from '@/lib/trust/trustPresets';
 import HomeToolsRail from '../../components/HomeToolsRail';
 import CompareTemplate from '../../components/route-templates/CompareTemplate';
 import { buildGuidanceOverviewHref } from '@/lib/navigation/guidanceOverviewHref';
+import { track } from '@/lib/analytics/events';
 
 type FormState = {
   serviceCategory: ServiceCategory | '';
@@ -125,6 +126,16 @@ export default function PriceFinalizationToolClient() {
   const homeAssetId = searchParams.get('homeAssetId');
   const defaultCategory = searchParams.get('serviceCategory') || searchParams.get('category');
   const defaultVendorName = searchParams.get('vendorName');
+
+  React.useEffect(() => {
+    if (!propertyId) return;
+    track('workflow_started', {
+      tool: 'price-finalization',
+      propertyId,
+      entryPoint: guidanceJourneyId ? 'guidance' : 'direct',
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [propertyId]);
   const defaultQuoteAmount = searchParams.get('quoteAmount');
   const quoteComparisonWorkspaceId = searchParams.get('quoteComparisonWorkspaceId');
   const serviceRadarCheckId = searchParams.get('serviceRadarCheckId');
@@ -324,6 +335,7 @@ export default function PriceFinalizationToolClient() {
       setActiveId(finalized.id);
       setFinalizedId(finalized.id);
       setForm(buildFormFromDetail(finalized));
+      track('action_completed', { tool: 'price-finalization', actionType: 'finalize_price', propertyId });
     } catch (finalizeError: any) {
       setError(finalizeError?.message || 'Unable to finalize price.');
     } finally {

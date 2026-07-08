@@ -6,6 +6,7 @@ import { useParams } from 'next/navigation';
 
 import MultiLineChart from './MultiLineChart';
 import { getHomeCostGrowth, HomeCostGrowthDTO } from './costGrowthApi';
+import { track } from '@/lib/analytics/events';
 import HomeToolsRail from '../../components/HomeToolsRail';
 import { Button } from '@/components/ui/button';
 import ToolWorkspaceTemplate from '../../components/route-templates/ToolWorkspaceTemplate';
@@ -28,6 +29,13 @@ export default function HomeCostGrowthClient() {
   // null = use server estimated rate; number = user override (percentage, e.g. 3.5 = 3.5%)
   const [appreciationOverridePct, setAppreciationOverridePct] = useState<number | null>(null);
   const reqRef = React.useRef(0);
+  const workflowCompletedTrackedRef = React.useRef(false);
+
+  useEffect(() => {
+    if (!propertyId || !data || workflowCompletedTrackedRef.current) return;
+    workflowCompletedTrackedRef.current = true;
+    track('workflow_completed', { tool: 'cost-growth', propertyId });
+  }, [propertyId, data]);
 
   async function getAndSet(years: 5 | 10, overrideRatePct?: number | null) {
     if (!propertyId) return;
@@ -53,6 +61,7 @@ export default function HomeCostGrowthClient() {
   useEffect(() => {
     if (!propertyId) return;
     getAndSet(trendYears);
+    track('workflow_started', { tool: 'cost-growth', propertyId, entryPoint: 'direct' });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [propertyId]);
 

@@ -60,6 +60,7 @@ import {
   updatePreferences,
 } from './homeHabitCoachApi';
 import type { HabitCategory, PropertyHabit, SnoozePreset } from './types';
+import { track } from '@/lib/analytics/events';
 import {
   HABIT_STATUS_TONE,
   HABIT_STATUS_LABEL,
@@ -252,6 +253,7 @@ function HabitDetailSheet({
       toast({ title: 'Habit marked complete' });
       invalidate();
       onClose();
+      track('action_completed', { tool: 'home-habit-coach', actionType: 'complete_habit', propertyId });
     },
     onError: () =>
       toast({ title: getHabitActionErrorMessage('complete'), variant: 'destructive' }),
@@ -589,6 +591,11 @@ export default function HomeHabitCoachClient() {
   const propertyId = params.id;
   const { toast } = useToast();
   const qc = useQueryClient();
+
+  React.useEffect(() => {
+    if (!propertyId) return;
+    track('workflow_started', { tool: 'home-habit-coach', propertyId, entryPoint: 'direct' });
+  }, [propertyId]);
 
   const [tab, setTab] = React.useState<Tab>('active');
   const [selectedHabit, setSelectedHabit] = React.useState<PropertyHabit | null>(null);

@@ -48,6 +48,7 @@ import ToolWorkspaceTemplate from '../../components/route-templates/ToolWorkspac
 import InventoryItemDrawer from '../../../../components/inventory/InventoryItemDrawer';
 import { getInventoryItem, listInventoryRooms } from '../../../../inventory/inventoryApi';
 import { InventoryItem, InventoryRoom } from '@/types';
+import { track } from '@/lib/analytics/events';
 
 // ─── Helpers ────────────────────────────────────────────────────────
 function money(cents: number | null | undefined) {
@@ -330,6 +331,9 @@ export default function ReserveFundClient() {
 
   useEffect(() => {
     load();
+    if (propertyId) {
+      track('workflow_started', { tool: 'reserve-fund', propertyId, entryPoint: 'direct' });
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [propertyId]);
 
@@ -383,6 +387,7 @@ export default function ReserveFundClient() {
       ]);
       setFund(updatedFund);
       setContributions(updatedContributions.items);
+      track('action_completed', { tool: 'reserve-fund', actionType: 'log_contribution', propertyId });
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to log contribution');
     } finally {

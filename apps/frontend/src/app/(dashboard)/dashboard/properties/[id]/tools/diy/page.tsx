@@ -9,6 +9,7 @@ import SkillProfileCard from '@/components/features/diy/SkillProfileCard';
 import TemplateCard from '@/components/features/diy/TemplateCard';
 import AiGuideSheet from '@/components/features/diy/AiGuideSheet';
 import { STATUS_LABELS, STATUS_COLOR } from '@/components/features/diy/DiyUtils';
+import { track } from '@/lib/analytics/events';
 
 export default function PropertyDiyToolPage() {
   const params = useParams<{ id: string }>();
@@ -22,11 +23,13 @@ export default function PropertyDiyToolPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!propertyId) return;
     Promise.all([
       api.getDiySkillProfile().then(setSkillProfile).catch(() => null),
       api.getFeaturedDiyTemplates().then(setFeatured).catch(() => []),
       api.listDiyProjects(propertyId, { status: ['PLANNING', 'IN_PROGRESS'] }).then((r) => setActiveProjects(r.items)).catch(() => []),
     ]).finally(() => setLoading(false));
+    track('workflow_started', { tool: 'diy', propertyId, entryPoint: 'direct' });
   }, [propertyId]);
 
   function handleGuideStarted(guideId: string) {
@@ -37,6 +40,7 @@ export default function PropertyDiyToolPage() {
         if (guide.status === 'COMPLETED') {
           clearInterval(poll);
           const project = await api.createDiyProject(propertyId, { aiGuideId: guide.id });
+          track('action_completed', { tool: 'diy', actionType: 'create_project', propertyId });
           router.push(`/dashboard/diy/projects/${project.id}?propertyId=${propertyId}`);
         } else if (guide.status === 'FAILED') {
           clearInterval(poll);

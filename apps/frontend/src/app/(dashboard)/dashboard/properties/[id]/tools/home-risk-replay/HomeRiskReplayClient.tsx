@@ -17,6 +17,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { api } from '@/lib/api/client';
+import { track } from '@/lib/analytics/events';
 import type { Property } from '@/types';
 import { cn } from '@/lib/utils';
 import {
@@ -539,6 +540,12 @@ export default function HomeRiskReplayClient() {
   const trackedHistoryErrorsRef = React.useRef<Set<string>>(new Set());
   const trackedOpenErrorsRef = React.useRef<Set<string>>(new Set());
 
+  React.useEffect(() => {
+    if (!propertyId) return;
+    track('workflow_started', { tool: 'home-risk-replay', propertyId, entryPoint: launchSurface ?? 'direct' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [propertyId]);
+
   const [windowType, setWindowType] = React.useState<HomeRiskReplayWindowType>(() => {
     return isWindowType(prefilledWindowType) ? prefilledWindowType : 'since_built';
   });
@@ -607,6 +614,9 @@ export default function HomeRiskReplayClient() {
       setSelectedEvent(null);
       queryClient.setQueryData(['home-risk-replay-detail', propertyId, replay.id], replay);
       await queryClient.invalidateQueries({ queryKey: ['home-risk-replay-runs', propertyId] });
+      if (propertyId) {
+        track('action_completed', { tool: 'home-risk-replay', actionType: 'generate_replay', propertyId });
+      }
     },
     onError: (error) => {
       trackReplayEvent('ERROR', 'controls', {

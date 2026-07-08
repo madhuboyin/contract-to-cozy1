@@ -13,6 +13,7 @@ import HomeToolHeader from '@/components/tools/HomeToolHeader';
 
 import MultiLineChart from '../insurance-trend/MultiLineChart';
 import { getBreakEven, BreakEvenDTO } from './breakEvenApi';
+import { track } from '@/lib/analytics/events';
 
 function money(n: number | null | undefined, currency = 'USD') {
   if (n === null || n === undefined) return '—';
@@ -53,6 +54,13 @@ export default function BreakEvenClient() {
   const [error, setError] = useState<string | null>(null);
 
   const reqRef = React.useRef(0);
+  const workflowCompletedTrackedRef = React.useRef(false);
+
+  useEffect(() => {
+    if (!propertyId || !data || workflowCompletedTrackedRef.current) return;
+    workflowCompletedTrackedRef.current = true;
+    track('workflow_completed', { tool: 'break-even', propertyId });
+  }, [propertyId, data]);
 
   async function load(nextYears: 5 | 10 | 20 | 30) {
     if (!propertyId) return;
@@ -78,6 +86,7 @@ export default function BreakEvenClient() {
   useEffect(() => {
     if (!propertyId) return;
     load(years);
+    track('workflow_started', { tool: 'break-even', propertyId, entryPoint: 'direct' });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [propertyId, requestedAssumptionSetId]);
 

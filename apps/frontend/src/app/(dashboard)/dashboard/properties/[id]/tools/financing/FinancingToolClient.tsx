@@ -10,6 +10,7 @@ import ToolWorkspaceTemplate from '../../components/route-templates/ToolWorkspac
 import EquityCard from '@/components/features/financing/EquityCard';
 import ScenarioCard from '@/components/features/financing/ScenarioCard';
 import FinancingCalculatorSheet from '@/components/features/financing/FinancingCalculatorSheet';
+import { track } from '@/lib/analytics/events';
 import type {
   EquityPosition,
   PropertyFinancingProfile,
@@ -30,6 +31,7 @@ export default function FinancingToolClient() {
 
   useEffect(() => {
     if (!propertyId) return;
+    track('workflow_started', { tool: 'financing', propertyId, entryPoint: 'direct' });
     setLoading(true);
     Promise.all([
       api.getFinancingProfile(propertyId).catch(() => null),
@@ -124,6 +126,7 @@ export default function FinancingToolClient() {
                       .listFinancingScenarios(propertyId)
                       .then(setScenarios)
                       .catch(() => null);
+                    track('action_completed', { tool: 'financing', actionType: 'save_scenario', propertyId });
                   }}
                 />
               </div>
