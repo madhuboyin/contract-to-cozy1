@@ -130,41 +130,45 @@ function buildParams(filters: AdminAnalyticsFilters): Record<string, string> {
 export async function fetchAdminAnalyticsOverview(
   filters: AdminAnalyticsFilters,
 ): Promise<AdminOverviewResponse> {
-  const response = await api.get<{ success: boolean; data: AdminOverviewResponse }>(
+  // api.get() already unwraps the backend's { success, data } envelope one
+  // level (see APIClient.get's "robust unwrap"), so `response.data` here IS
+  // the AdminOverviewResponse — do not access `.data.data`, it resolves to
+  // undefined and React Query treats an undefined queryFn result as an error.
+  const response = await api.get<AdminOverviewResponse>(
     '/api/admin/analytics/overview',
     { params: buildParams(filters) },
   );
-  return response.data.data;
+  return response.data;
 }
 
 export async function fetchAdminAnalyticsTrends(
   filters: AdminAnalyticsFilters,
 ): Promise<AdminTrendsResponse> {
-  const response = await api.get<{ success: boolean; data: AdminTrendsResponse }>(
+  const response = await api.get<AdminTrendsResponse>(
     '/api/admin/analytics/trends',
     { params: buildParams(filters) },
   );
-  return response.data.data;
+  return response.data;
 }
 
 export async function fetchAdminAnalyticsFeatureAdoption(
   filters: AdminAnalyticsFilters,
 ): Promise<AdminFeatureAdoptionResponse> {
-  const response = await api.get<{ success: boolean; data: AdminFeatureAdoptionResponse }>(
+  const response = await api.get<AdminFeatureAdoptionResponse>(
     '/api/admin/analytics/feature-adoption',
     { params: buildParams(filters) },
   );
-  return response.data.data;
+  return response.data;
 }
 
 export async function fetchAdminAnalyticsFunnel(
   filters: AdminAnalyticsFilters,
 ): Promise<AdminFunnelResponse> {
-  const response = await api.get<{ success: boolean; data: AdminFunnelResponse }>(
+  const response = await api.get<AdminFunnelResponse>(
     '/api/admin/analytics/funnel',
     { params: buildParams(filters) },
   );
-  return response.data.data;
+  return response.data;
 }
 
 export async function fetchAdminAnalyticsCohorts(opts: {
@@ -174,11 +178,11 @@ export async function fetchAdminAnalyticsCohorts(opts: {
   const params: Record<string, string> = {};
   if (opts.cohortType) params.cohortType = opts.cohortType;
   if (opts.limit) params.limit = String(opts.limit);
-  const response = await api.get<{ success: boolean; data: AdminCohortResponse }>(
+  const response = await api.get<AdminCohortResponse>(
     '/api/admin/analytics/cohorts',
     { params },
   );
-  return response.data.data;
+  return response.data;
 }
 
 export async function fetchAdminAnalyticsTopTools(
@@ -186,9 +190,9 @@ export async function fetchAdminAnalyticsTopTools(
 ): Promise<AdminTopToolsResponse> {
   const params = buildParams(filters);
   if (filters.topN) params.topN = String(filters.topN);
-  const response = await api.get<{ success: boolean; data: AdminTopToolsResponse }>(
+  const response = await api.get<AdminTopToolsResponse>(
     '/api/admin/analytics/top-tools',
     { params },
   );
-  return response.data.data;
+  return response.data;
 }
