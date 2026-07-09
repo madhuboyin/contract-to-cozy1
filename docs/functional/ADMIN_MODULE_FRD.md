@@ -1,8 +1,8 @@
 # Admin Module — Functional Requirements Document
 
-**Version:** 1.1
+**Version:** 1.2
 **Last Updated:** 2026-07-09
-**Status:** Approved — decisions locked for Q2-Q5, ready for implementation
+**Status:** Implemented — verified via manual browser testing on 2026-07-09; see §11 for fixes found during verification beyond the original scope
 **Audience:** Frontend engineers, backend engineers, QA, product
 
 ---
@@ -19,6 +19,7 @@
 8. [Rollout Plan](#8-rollout-plan)
 9. [Open Questions](#9-open-questions)
 10. [Appendix: File Reference Map](#10-appendix-file-reference-map)
+11. [Post-Implementation Fixes Found in Verification](#11-post-implementation-fixes-found-in-verification)
 
 ---
 
@@ -87,11 +88,11 @@ The ADMIN role must get its own layout branch, mirroring the existing PROVIDER p
 
 - FR-2.1: Add middleware prefix rules covering the real admin paths (`/dashboard/admin`, `/dashboard/analytics-admin`, `/dashboard/knowledge-admin`, `/dashboard/worker-jobs`) that redirect non-ADMIN roles before the page loads.
 - FR-2.2: Remove or repoint the dead `/admin` prefix rule in `middleware.ts:212-217` to match actual paths.
-- FR-2.3: Replace the 4 duplicated page-level guards with a single shared guard (e.g. a `<RequireAdmin>` wrapper or a `useRequireAdmin()` hook) used by every admin page. New admin pages must adopt this guard rather than reimplementing the check.
+- FR-2.3: Replace the duplicated page-level guards with a single shared guard (`useAdminGuard`) used by every admin page. New admin pages must adopt this guard rather than reimplementing the check. (Implementation note: a 5th page, `worker-jobs`, was found during implementation to have the same duplicated pattern as the original 4 — not counted in the gap analysis in §3, but migrated along with the rest since it's the identical bug.)
 
 **Acceptance criteria:**
 - A HOMEOWNER session hitting any admin URL directly is redirected server-side (middleware), before any admin page code executes client-side.
-- All 4 existing admin pages use the shared guard; no page contains its own inline `role !== 'ADMIN'` branch.
+- All 5 admin pages use the shared guard; no page contains its own inline `role !== 'ADMIN'` branch.
 - Backend `requireRole(ADMIN)` checks are unchanged (defense in depth retained).
 
 ### FR-3: Session Inactivity Timeout
@@ -154,6 +155,23 @@ Resolved 2026-07-09 (confirmed with product):
 | `apps/backend/src/middleware/auth.middleware.ts` | `requireMfa` — existing precedent for admin-only session behavior (MFA), a useful pattern reference for admin-only timeout gating |
 | `prisma/schema.prisma` | `UserRole` enum — no changes anticipated |
 
+## 11. Post-Implementation Fixes Found in Verification
+
+FR-1 through FR-3 were implemented and pushed on 2026-07-09. Manual browser testing that same day (using a seeded test account temporarily promoted to ADMIN) surfaced several more homeowner-only surfaces leaking into the admin console. These weren't in the original §3 gap analysis — that analysis only covered the sidebar/drawer/bottom-bar/middleware — but they're the same class of bug as G1–G5, just in global chrome rendered by `(dashboard)/layout.tsx` rather than the primary nav itself, so they're recorded here as an extension of FR-1.3 rather than a new FRD.
+
+| # | Surface | Issue | Fix |
+|---|---|---|---|
+| P1 | `useIdleTimeout` logout path | Idle-triggered logout went through `AuthContext.logout()` (React state update + soft `router.replace`). A tab idle since shortly after login hits the access token's own 15-min expiry at nearly the same moment as the idle timer; any other in-flight request could independently trigger the app's existing hard `window.location.href` redirect (`client.ts`), and that hard navigation racing the in-flight React state update surfaced as a visible Next.js error-boundary crash. | Idle-timeout logout no longer goes through `AuthContext.logout()` — it's now a self-contained hard redirect (`api.logout()` then `window.location.href = '/login?reason=idle_timeout'`), so both mechanisms resolve via ordinary browser navigation instead of colliding with React. Login page also now shows a distinct message for `reason=idle_timeout`. |
+| P2 | `PropertySetupBanner` ("Add your first property") | Gated only on `user.segment !== 'EXISTING_OWNER'`, never on role — rendered for ADMIN. | Added explicit `user.role === 'ADMIN'` bail-out in `(dashboard)/layout.tsx`. |
+| P3 | `CtcTopCommandBar` property switcher ("Main Home" dropdown) | Rendered unconditionally, no role check. | Hidden for `isAdminNav` on both desktop and mobile top bars. |
+| P4 | `/dashboard` page (homeowner main dashboard) | Every admin page's "Back to dashboard" link (`AdminConsoleShell`'s default `backHref`) points at `/dashboard`. Since admin has zero properties, that page's own onboarding gate fired, showing "Start My Property Setup Now" — a dead end. | `/dashboard` now redirects ADMIN to `/dashboard/knowledge-admin`, mirroring the existing PROVIDER-redirect pattern. Covers any stray link to bare `/dashboard`, not just the back-link. |
+| P5 | `DashboardBreadcrumbs` | Nested admin routes (e.g. `/dashboard/admin/provider-compliance`) produced a broken `Today / Admin / Details` trail — "Admin" linked to a nonexistent `/dashboard/admin` index page (404), and `provider-compliance` happened to match the component's long-token ID-detection heuristic and got mislabeled "Details". | Breadcrumbs suppressed entirely for admin routes — redundant with `AdminConsoleShell`'s own back-link + header anyway. |
+| P6 | `DashboardCommandPalette` (Cmd+K) | Showed the full homeowner nav list (Protect, Save, Vault, Rooms, Inventory, Book a Pro, etc.) to admin with only one admin item (`Knowledge Admin`) appended — the same homeowner-nav-plus-extras pattern FR-1 was written to fix, just in a second, undiscovered nav surface. | Branches to a dedicated admin-only item list sourced from `ADMIN_NAV`, with no property-scoped "Recent Actions"/"Quick Shortcuts" sections. |
+| P7 | `AIChat` ("Cozy") | A homeowner maintenance/expense concierge widget, floating on every dashboard page including admin. | No longer rendered for ADMIN. |
+| P8 | `CtcCommandSearch` placeholder copy | "Ask your home anything…" shown on the admin console top bar. | Swapped to "Search admin console…" when opened from the admin top bar. |
+
+All 8 fixes are committed on `main` (commits `0473a9b`, `8054e1d`, `b92b4ad`, `fe9e032`) and verified via `tsc --noEmit` (no new errors) plus live browser testing against the running dev stack.
+
 ---
 
-*This FRD reflects a code review conducted 2026-07-09. No implementation has started; requirements above are ready for product/eng sign-off before work begins.*
+*This FRD reflects a code review conducted 2026-07-09, implemented the same day, and verified in the browser the same day — including the fixes in §11 found during that verification pass.*
