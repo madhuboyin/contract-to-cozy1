@@ -531,6 +531,7 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
 
     const fetchPropertyCount = async () => {
       if (!user) { setShowBanner(false); return; }
+      if (user.role === 'ADMIN') { setShowBanner(false); return; }
       if (user.segment !== 'EXISTING_OWNER') { setShowBanner(false); return; }
 
       try {

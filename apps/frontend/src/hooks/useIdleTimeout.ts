@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useAuth } from '@/lib/auth/AuthContext';
+import { api } from '@/lib/api/client';
 
 const ACTIVITY_KEY = 'ctc.admin.idle.lastActivityAt';
 const LOGGED_OUT_KEY = 'ctc.admin.idle.loggedOut';
@@ -29,13 +30,23 @@ export interface UseIdleTimeoutResult {
  *
  * Cross-tab aware via localStorage 'storage' events — activity in one tab
  * resets the clock in all tabs, and a timeout in one tab logs out every
- * other open tab. No leader election: logout() is idempotent per tab.
+ * other open tab. No leader election: logout is idempotent per tab.
+ *
+ * On timeout this deliberately does NOT go through AuthContext.logout()
+ * (setUser(null) + router.replace). For a tab that's been idle since
+ * shortly after login, the access token's own 15-minute expiry can lapse
+ * at nearly the same moment as the idle timeout, and any other in-flight
+ * request hitting that expired token triggers client.ts's own hard
+ * `window.location.href` redirect. Racing that hard navigation against a
+ * React state update + soft router navigation is what surfaced as a visible
+ * crash. Using a plain hard redirect here too means both paths resolve via
+ * ordinary browser navigation semantics instead of colliding with React.
  */
 export function useIdleTimeout(options?: UseIdleTimeoutOptions): UseIdleTimeoutResult {
   const idleMs = options?.idleMs ?? 15 * 60 * 1000;
   const warningMs = options?.warningMs ?? 60 * 1000;
 
-  const { user, loading, logout } = useAuth();
+  const { user, loading } = useAuth();
   const armed = !loading && user?.role === 'ADMIN';
 
   const [showWarning, setShowWarning] = useState(false);
@@ -73,7 +84,9 @@ export function useIdleTimeout(options?: UseIdleTimeoutOptions): UseIdleTimeoutR
       if (hasLoggedOutRef.current) return;
       hasLoggedOutRef.current = true;
       window.localStorage.setItem(LOGGED_OUT_KEY, String(Date.now()));
-      void logout();
+      void api.logout().finally(() => {
+        window.location.href = '/login?reason=idle_timeout';
+      });
     };
 
     const handleStorage = (event: StorageEvent) => {
@@ -112,7 +125,7 @@ export function useIdleTimeout(options?: UseIdleTimeoutOptions): UseIdleTimeoutR
       window.removeEventListener('storage', handleStorage);
       window.clearInterval(tick);
     };
-  }, [armed, idleMs, warningMs, logout]);
+  }, [armed, idleMs, warningMs]);
 
   return {
     showWarning: armed && showWarning,

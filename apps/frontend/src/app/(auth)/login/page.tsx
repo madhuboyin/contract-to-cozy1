@@ -15,9 +15,13 @@ export default function LoginPage() {
   const searchParams = useSearchParams();
   const { login, user, completeMfaChallenge, completeMfaRecoveryChallenge } = useAuth();
   const [loading, setLoading] = useState(false);
-  const sessionExpired = searchParams.get('reason') === 'session_expired';
+  const sessionReason = searchParams.get('reason');
   const [error, setError] = useState<string | null>(
-    sessionExpired ? 'Your session expired. Please sign in again.' : null
+    sessionReason === 'session_expired'
+      ? 'Your session expired. Please sign in again.'
+      : sessionReason === 'idle_timeout'
+        ? 'You were signed out due to inactivity. Please sign in again.'
+        : null
   );
   const [showPassword, setShowPassword] = useState(false);
 
