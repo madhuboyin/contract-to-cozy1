@@ -417,6 +417,20 @@ export async function getUserProperties(userId: string): Promise<ScoredProperty[
 export async function createProperty(userId: string, data: CreatePropertyData): Promise<ScoredProperty> {
   const homeownerProfileId = await getHomeownerProfileId(userId);
 
+  const duplicate = await prisma.property.findFirst({
+    where: {
+      homeownerProfileId,
+      address: { equals: data.address.trim(), mode: 'insensitive' },
+      city: { equals: data.city.trim(), mode: 'insensitive' },
+      state: { equals: data.state.trim(), mode: 'insensitive' },
+      zipCode: data.zipCode.trim(),
+    },
+  });
+
+  if (duplicate) {
+    throw new Error('A property with this address already exists');
+  }
+
   // If this is set as primary, unset other primary properties
   if (data.isPrimary) {
     await prisma.property.updateMany({
@@ -1196,23 +1210,27 @@ export async function deleteProperty(propertyId: string, userId: string) {
     throw new Error('Property not found');
   }
 
-  // Check if property has active bookings
-  const activeBookings = await prisma.booking.count({
-    where: {
-      propertyId,
-      status: {
-        in: ['PENDING', 'CONFIRMED', 'IN_PROGRESS'],
-      },
-    },
+  // Bookings reference the property directly (no cascade), so any booking —
+  // not just an active one — blocks deletion at the database level. Check
+  // upfront so the error message matches what actually happens.
+  const bookingCount = await prisma.booking.count({
+    where: { propertyId },
   });
 
-  if (activeBookings > 0) {
-    throw new Error('Cannot delete property with active bookings');
+  if (bookingCount > 0) {
+    throw new Error('Cannot delete property with existing bookings');
   }
 
-  await prisma.property.delete({
-    where: { id: propertyId },
-  });
+  try {
+    await prisma.property.delete({
+      where: { id: propertyId },
+    });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2003') {
+      throw new Error('Cannot delete property because other records still reference it');
+    }
+    throw error;
+  }
 }
 
 // ============================================================================

@@ -188,8 +188,9 @@ export default function PropertiesPage() {
       } else {
         toast({ title: response.message || 'Failed to delete property', variant: 'destructive' });
       }
-    } catch {
-      toast({ title: 'Failed to delete property. It may have active bookings.', variant: 'destructive' });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to delete property';
+      toast({ title: message, variant: 'destructive' });
     } finally {
       setDeleting(null);
       setDeleteTarget(null);

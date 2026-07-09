@@ -1570,7 +1570,7 @@ model PropertyInsightSnapshot {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
-  property Property @relation(fields: [propertyId], references: [id])
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   user     User     @relation(fields: [userId], references: [id])
 
   // relations
@@ -1610,7 +1610,7 @@ model PropertyNarrativeRun {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  property Property                 @relation(fields: [propertyId], references: [id])
+  property Property                 @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   user     User                     @relation(fields: [userId], references: [id])
   snapshot PropertyInsightSnapshot? @relation(fields: [snapshotId], references: [id])
 
@@ -2199,7 +2199,7 @@ model MaintenancePrediction {
 
   status PredictionStatus @default(PENDING) // PENDING, COMPLETED, DISMISSED
 
-  property      Property       @relation(fields: [propertyId], references: [id])
+  property      Property       @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   inventoryItem InventoryItem? @relation(fields: [inventoryItemId], references: [id])
   booking       Booking?
 
@@ -2662,7 +2662,7 @@ model Document {
 
   // Relations
   booking                    Booking?                    @relation(fields: [bookingId], references: [id], onDelete: Cascade)
-  property                   Property?                   @relation("PropertyDocuments", fields: [propertyId], references: [id])
+  property                   Property?                   @relation("PropertyDocuments", fields: [propertyId], references: [id], onDelete: SetNull)
   coverForProperties         Property[]                  @relation("PropertyCoverPhoto")
   warranty                   Warranty?                   @relation(fields: [warrantyId], references: [id], onDelete: Cascade)
   insurancePolicy            InsurancePolicy?            @relation(fields: [policyId], references: [id], onDelete: Cascade)
@@ -2780,9 +2780,9 @@ model Warranty {
 
   // Relations
   homeownerProfile HomeownerProfile @relation(fields: [homeownerProfileId], references: [id], onDelete: Cascade)
-  property         Property?        @relation(fields: [propertyId], references: [id])
+  property         Property?        @relation(fields: [propertyId], references: [id], onDelete: SetNull)
   documents        Document[]
-  homeAsset        HomeAsset?       @relation(fields: [homeAssetId], references: [id])
+  homeAsset        HomeAsset?       @relation(fields: [homeAssetId], references: [id], onDelete: SetNull)
   inventoryItem    InventoryItem?   @relation("WarrantyToInventoryItem", fields: [inventoryItemId], references: [id], onDelete: SetNull)
 
   // PHASE 1: NEW RELATION
@@ -2830,7 +2830,7 @@ model InsurancePolicy {
 
   // Relations
   homeownerProfile    HomeownerProfile     @relation(fields: [homeownerProfileId], references: [id], onDelete: Cascade)
-  property            Property?            @relation(fields: [propertyId], references: [id])
+  property            Property?            @relation(fields: [propertyId], references: [id], onDelete: SetNull)
   documents           Document[]
   inventoryItems      InventoryItem[]
   claims              Claim[]
@@ -2870,7 +2870,7 @@ model Expense {
 
   // Relations
   homeownerProfile HomeownerProfile @relation(fields: [homeownerProfileId], references: [id], onDelete: Cascade)
-  property         Property?        @relation(fields: [propertyId], references: [id])
+  property         Property?        @relation(fields: [propertyId], references: [id], onDelete: SetNull)
   booking          Booking?         @relation(fields: [bookingId], references: [id])
   homeEvents       HomeEvent[]
 
@@ -2889,7 +2889,7 @@ model Expense {
 model HomeAsset {
   id               String     @id @default(uuid())
   propertyId       String
-  property         Property   @relation(fields: [propertyId], references: [id])
+  property         Property   @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   assetType        String // e.g., "HVAC_FURNACE", "WATER_HEATER" - should map to an Enum
   installationYear Int? // Year the user installed it (more accurate than age)
   modelNumber      String?
@@ -4269,7 +4269,7 @@ model PropertyOnboarding {
   updatedAt DateTime @updatedAt
   createdAt DateTime @default(now())
 
-  property Property @relation(fields: [propertyId], references: [id])
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
 }
 
 enum OnboardingStatus {
@@ -6734,7 +6734,7 @@ model HomeSavingsRun {
   ranAt DateTime @default(now())
 
   homeownerProfile HomeownerProfile @relation(fields: [homeownerProfileId], references: [id], onDelete: Cascade)
-  property         Property?        @relation(fields: [propertyId], references: [id])
+  property         Property?        @relation(fields: [propertyId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -6775,7 +6775,7 @@ model HomeSavingsOpportunity {
   generatedAt DateTime @default(now())
 
   homeownerProfile HomeownerProfile    @relation(fields: [homeownerProfileId], references: [id], onDelete: Cascade)
-  property         Property?           @relation(fields: [propertyId], references: [id])
+  property         Property?           @relation(fields: [propertyId], references: [id], onDelete: SetNull)
   account          HomeSavingsAccount? @relation(fields: [accountId], references: [id], onDelete: SetNull)
 
   documents Document[] @relation("HomeSavingsOpportunityDocuments")
@@ -6820,7 +6820,7 @@ model HomeSavingsAccount {
   warrantyId        String?
 
   homeownerProfile HomeownerProfile @relation(fields: [homeownerProfileId], references: [id], onDelete: Cascade)
-  property         Property?        @relation(fields: [propertyId], references: [id])
+  property         Property?        @relation(fields: [propertyId], references: [id], onDelete: SetNull)
 
   insurancePolicy InsurancePolicy? @relation(fields: [insurancePolicyId], references: [id], onDelete: SetNull)
   warranty        Warranty?        @relation(fields: [warrantyId], references: [id], onDelete: SetNull)
@@ -7543,7 +7543,7 @@ model Incident {
   userPreferences             IncidentUserPreference[]
   autoResolutionNotifications IncidentAutoResolutionNotification[]
 
-  property Property @relation(fields: [propertyId], references: [id])
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
 
   @@index([roomId])
   @@index([propertyId, status, severity])
@@ -9109,7 +9109,7 @@ model PropertyNeighborhoodEvent {
 
   createdAt DateTime @default(now())
 
-  property Property          @relation(fields: [propertyId], references: [id])
+  property Property          @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   event    NeighborhoodEvent @relation(fields: [eventId], references: [id])
 
   @@index([propertyId])
