@@ -103,6 +103,33 @@ function safeTrack(label: string, promise: Promise<unknown>): void {
 }
 
 // ============================================================================
+// ACTIVATION SIDE EFFECT
+//
+// property.service.ts's maybeMarkPropertyActivated() was originally only
+// called from the Digital Twin tool, making "activated" a near-meaningless
+// denominator for admin adoption-rate metrics (adoption rates were coming
+// out over 1000% because far more properties had real usage than had ever
+// been marked "activated"). Any property generating a real analytics event
+// — onboarding completion (PROPERTY_CREATED) or first use of any of the
+// instrumented tools — now counts as activation.
+//
+// Uses a dynamic import rather than a static one: property.service.ts
+// already imports this module via the analytics barrel (./index.ts), so a
+// static import here would create a require cycle. Safe either way since
+// neither side touches the other at module-evaluation time, but the dynamic
+// import avoids the cycle entirely rather than relying on that being true.
+// ============================================================================
+
+function maybeActivateProperty(propertyId: string | null | undefined, userId: string | null | undefined): void {
+  if (!propertyId) return;
+  import('../property.service')
+    .then(({ maybeMarkPropertyActivated }) => maybeMarkPropertyActivated(propertyId, userId ?? null))
+    .catch((err) => {
+      logger.error({ err }, '[Analytics] Failed to mark property activated');
+    });
+}
+
+// ============================================================================
 // EMITTER OBJECT
 // ============================================================================
 
@@ -115,6 +142,7 @@ export const analyticsEmitter = {
   track(input: TrackEventInput): void {
     if (!shouldEmitViewEvent(input.eventType, input.propertyId)) return;
     safeTrack(input.eventType, ProductAnalyticsService.trackEvent(input));
+    maybeActivateProperty(input.propertyId, input.userId);
   },
 
   /**
@@ -134,6 +162,7 @@ export const analyticsEmitter = {
       `${ProductAnalyticsEventType.FEATURE_OPENED}:${input.featureKey}`,
       ProductAnalyticsService.trackFeatureOpened(input)
     );
+    maybeActivateProperty(input.propertyId, input.userId);
   },
 
   /**
@@ -145,6 +174,7 @@ export const analyticsEmitter = {
       `${ProductAnalyticsEventType.DECISION_GUIDED}:${input.featureKey}`,
       ProductAnalyticsService.trackDecisionGuided(input)
     );
+    maybeActivateProperty(input.propertyId, input.userId);
   },
 
   /**
@@ -167,6 +197,7 @@ export const analyticsEmitter = {
       `${ProductAnalyticsEventType.TOOL_USED}:${input.featureKey}`,
       ProductAnalyticsService.trackToolUsed(input)
     );
+    maybeActivateProperty(input.propertyId, input.userId);
   },
 };
 
