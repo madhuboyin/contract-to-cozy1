@@ -1828,7 +1828,7 @@ async function mapChecklistItemToAction(params: {
  * - suppressedActions[] provides transparency + trace
  * - coverage is now action-level for risk items
  */
-export async function getOrchestrationSummary(propertyId: string): Promise<OrchestrationSummary> {
+export async function getOrchestrationSummary(propertyId: string, userId?: string | null): Promise<OrchestrationSummary> {
   // 0) Booking context
   const { categorySet: bookingCategorySet, bookingByCategory } =
     await getActiveBookingCategorySet(propertyId);
@@ -2270,6 +2270,7 @@ export async function getOrchestrationSummary(propertyId: string): Promise<Orche
 
         analyticsEmitter.decisionGuided({
           propertyId,
+          userId,
           featureKey: top.targetTool,
           moduleKey: AnalyticsModule.DASHBOARD,
           decisionType: top.reasonCode,
@@ -2356,7 +2357,7 @@ export async function getOrchestrationSummary(propertyId: string): Promise<Orche
   };
 }
 
-export async function getOrchestrationDecisionDiagnostics(propertyId: string): Promise<{
+export async function getOrchestrationDecisionDiagnostics(propertyId: string, userId?: string | null): Promise<{
   generatedAt: string;
   evaluatedCount: number;
   surfacedCount: number;
@@ -2373,7 +2374,7 @@ export async function getOrchestrationDecisionDiagnostics(propertyId: string): P
     low: number;
   };
 } | null> {
-  const summary = await getOrchestrationSummary(propertyId);
+  const summary = await getOrchestrationSummary(propertyId, userId);
   return summary.decisionEngine?.diagnostics ?? null;
 }
 

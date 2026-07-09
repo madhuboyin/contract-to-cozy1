@@ -692,7 +692,7 @@ export async function computeStatuses(propertyId: string): Promise<void> {
 // listBoard
 // ---------------------------------------------------------------------------
 
-export async function listBoard(propertyId: string, query: ListBoardQuery) {
+export async function listBoard(propertyId: string, query: ListBoardQuery, userId?: string | null) {
   // Keep board registry and category mappings synced on every load.
   await ensureHomeItems(propertyId);
 
@@ -1077,6 +1077,7 @@ export async function listBoard(propertyId: string, query: ListBoardQuery) {
   if (topRecommendation) {
     analyticsEmitter.decisionGuided({
       propertyId,
+      userId,
       featureKey: topRecommendation.targetTool,
       moduleKey: AnalyticsModule.DASHBOARD,
       decisionType: topRecommendation.reasonCode,

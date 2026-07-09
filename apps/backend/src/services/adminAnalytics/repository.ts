@@ -7,6 +7,17 @@
 //   counts (WAH, MAH, totalEvents, eventsPerProperty). This prevents admin users
 //   loading the analytics dashboard from inflating engagement metrics.
 //
+// SYSTEM/CRON EVENT EXCLUSION:
+//   Several event sources are entirely automated with no human actor — severe
+//   weather alerts, freeze-risk detection, coverage-lapse and provider-credential-
+//   lapse scans all sweep every property on a schedule and emit with userId: null.
+//   Those events are real and still recorded (operational visibility), but every
+//   engagement/adoption/retention metric in this file filters them out via
+//   `userId IS NOT NULL` — a property that's never had a real user open the app
+//   must not count as "active"/"adopted"/"activated" just because it sat in a
+//   storm's path. See docs/operations/PILOT_RAISE_READINESS_PLAN.md Section 2
+//   (Feature Adoption briefly showed >1000% before this was added).
+//
 // BACKFILL / REPLAY SAFETY:
 //   All metrics queries are read-only and idempotent — safe to run repeatedly.
 //   If historical events are backfilled, WAH/MAH and interaction counts will
@@ -51,6 +62,7 @@ export async function countDistinctActiveProperties(since: Date): Promise<number
   const result = await prisma.productAnalyticsEvent.findMany({
     where: {
       propertyId: { not: null },
+      userId: { not: null },
       occurredAt: { gte: since },
       // Exclude admin's own analytics dashboard activity from engagement counts
       NOT: { moduleKey: ADMIN_MODULE_KEY },
@@ -69,6 +81,7 @@ export async function countTotalEvents(range: DateRange): Promise<number> {
   return prisma.productAnalyticsEvent.count({
     where: {
       occurredAt: { gte: range.from, lte: range.to },
+      userId: { not: null },
       // Exclude admin analytics dashboard events from interaction totals
       NOT: { moduleKey: ADMIN_MODULE_KEY },
     },
@@ -85,6 +98,7 @@ export async function countEventsPerProperty(
     SELECT "propertyId", COUNT(*)::bigint AS count
     FROM "product_analytics_events"
     WHERE "propertyId" IS NOT NULL
+      AND "userId" IS NOT NULL
       AND "occurredAt" >= ${range.from}
       AND "occurredAt" <= ${range.to}
       AND "moduleKey" != ${ADMIN_MODULE_KEY}
@@ -106,6 +120,7 @@ export async function countDecisionsGuided(
     WHERE "eventType" = 'DECISION_GUIDED'
       AND "occurredAt" >= ${range.from}
       AND "occurredAt" <= ${range.to}
+      AND "userId" IS NOT NULL
     GROUP BY "moduleKey"
     ORDER BY count DESC
   `;
@@ -130,6 +145,7 @@ export async function getDailyEventCounts(range: DateRange): Promise<DailyEventR
     FROM "product_analytics_events"
     WHERE "occurredAt" >= ${range.from}
       AND "occurredAt" <= ${range.to}
+      AND "userId" IS NOT NULL
       AND "moduleKey" != ${ADMIN_MODULE_KEY}
     GROUP BY DATE_TRUNC('day', "occurredAt")
     ORDER BY day ASC
@@ -162,6 +178,7 @@ export async function getFeatureUsage(
       WHERE "occurredAt" >= ${range.from}
         AND "occurredAt" <= ${range.to}
         AND "featureKey" IS NOT NULL
+        AND "userId" IS NOT NULL
         AND "moduleKey" = ${moduleKey}
       GROUP BY "moduleKey", "featureKey"
       ORDER BY "uniqueHomes" DESC
@@ -178,6 +195,7 @@ export async function getFeatureUsage(
     WHERE "occurredAt" >= ${range.from}
       AND "occurredAt" <= ${range.to}
       AND "featureKey" IS NOT NULL
+      AND "userId" IS NOT NULL
     GROUP BY "moduleKey", "featureKey"
     ORDER BY "uniqueHomes" DESC
   `;
@@ -213,12 +231,14 @@ export async function getFunnelCounts(range: DateRange): Promise<FunnelCountRow[
 
       UNION ALL
 
-      -- Stage 2: properties with ANY analytics activity in range (excluding admin module)
+      -- Stage 2: properties with ANY genuine (userId-backed) analytics activity in
+      -- range, excluding admin module and system/cron-generated events
       SELECT DISTINCT e."propertyId", 'has_analytics_activity' AS stage
       FROM "product_analytics_events" e
       WHERE e."occurredAt" >= ${range.from}
         AND e."occurredAt" <= ${range.to}
         AND e."propertyId" IS NOT NULL
+        AND e."userId" IS NOT NULL
         AND e."moduleKey" != ${ADMIN_MODULE_KEY}
 
       UNION ALL
@@ -229,6 +249,7 @@ export async function getFunnelCounts(range: DateRange): Promise<FunnelCountRow[
         AND e."occurredAt" >= ${range.from}
         AND e."occurredAt" <= ${range.to}
         AND e."propertyId" IS NOT NULL
+        AND e."userId" IS NOT NULL
 
       UNION ALL
 
@@ -238,6 +259,7 @@ export async function getFunnelCounts(range: DateRange): Promise<FunnelCountRow[
         AND e."occurredAt" >= ${range.from}
         AND e."occurredAt" <= ${range.to}
         AND e."propertyId" IS NOT NULL
+        AND e."userId" IS NOT NULL
 
       UNION ALL
 
@@ -277,6 +299,7 @@ export async function getMonthlyCohortRetention(limitCohorts: number): Promise<C
         DATE_TRUNC('week', e."occurredAt") AS "activityWeek"
       FROM "product_analytics_events" e
       WHERE e."propertyId" IS NOT NULL
+        AND e."userId" IS NOT NULL
       GROUP BY e."propertyId", DATE_TRUNC('week', e."occurredAt")
     )
     SELECT
@@ -311,6 +334,7 @@ export async function getWeeklyCohortRetention(limitCohorts: number): Promise<Co
         DATE_TRUNC('week', e."occurredAt") AS "activityWeek"
       FROM "product_analytics_events" e
       WHERE e."propertyId" IS NOT NULL
+        AND e."userId" IS NOT NULL
       GROUP BY e."propertyId", DATE_TRUNC('week', e."occurredAt")
     )
     SELECT
@@ -352,6 +376,7 @@ export async function getTopTools(range: DateRange, topN: number): Promise<TopTo
       AND "occurredAt" <= ${range.to}
       AND "featureKey" IS NOT NULL
       AND "propertyId" IS NOT NULL
+      AND "userId" IS NOT NULL
     GROUP BY "moduleKey", "featureKey"
     ORDER BY "uniqueHomes" DESC, "totalEvents" DESC
     LIMIT ${topN}

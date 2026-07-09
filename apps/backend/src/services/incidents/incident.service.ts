@@ -1,6 +1,6 @@
 // apps/backend/src/services/incidents/incident.service.ts
 import { prisma } from '../../lib/prisma';
-import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../analytics';
+import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature, AnalyticsSource } from '../analytics';
 import {
   AcknowledgementType,
   IncidentActionStatus,
@@ -485,10 +485,12 @@ export class IncidentService {
         propertyId: incident.propertyId,
         moduleKey: AnalyticsModule.INCIDENTS,
         featureKey: AnalyticsFeature.INCIDENT,
+        source: incident.sourceType === 'MANUAL' ? AnalyticsSource.HOME_TOOLS : AnalyticsSource.AUTOMATION,
         metadataJson: {
           typeKey: incident.typeKey,
           severity: incident.severity ?? null,
           isSuppressed: incident.isSuppressed,
+          sourceType: incident.sourceType,
         },
       });
     }

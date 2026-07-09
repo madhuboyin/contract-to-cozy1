@@ -115,6 +115,16 @@ function safeTrack(label: string, promise: Promise<unknown>): void {
 // — onboarding completion (PROPERTY_CREATED) or first use of any of the
 // instrumented tools — now counts as activation.
 //
+// REQUIRES a real userId: several event sources are system/cron-generated
+// with no human actor (severe-weather alerts, freeze-risk detection,
+// coverage-lapse and provider-credential-lapse scans all sweep every
+// property on a schedule and emit with userId: null). Those events are
+// still recorded for operational visibility, but must NOT count as
+// "activation" — a property that's never had a real user open the app
+// shouldn't be counted as activated just because it sat in a storm's path.
+// See docs/operations/PILOT_RAISE_READINESS_PLAN.md Section 2 for the
+// investigation that surfaced this (Feature Adoption showing >1000%).
+//
 // Uses a dynamic import rather than a static one: property.service.ts
 // already imports this module via the analytics barrel (./index.ts), so a
 // static import here would create a require cycle. Safe either way since
@@ -123,9 +133,9 @@ function safeTrack(label: string, promise: Promise<unknown>): void {
 // ============================================================================
 
 function maybeActivateProperty(propertyId: string | null | undefined, userId: string | null | undefined): void {
-  if (!propertyId) return;
+  if (!propertyId || !userId) return;
   import('../property.service')
-    .then(({ maybeMarkPropertyActivated }) => maybeMarkPropertyActivated(propertyId, userId ?? null))
+    .then(({ maybeMarkPropertyActivated }) => maybeMarkPropertyActivated(propertyId, userId))
     .catch((err) => {
       logger.error({ err }, '[Analytics] Failed to mark property activated');
     });

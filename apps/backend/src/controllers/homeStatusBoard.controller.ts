@@ -8,7 +8,7 @@ export async function getBoard(req: CustomRequest, res: Response, next: NextFunc
   try {
     const propertyId = req.params.propertyId;
     const query = listBoardQuerySchema.parse(req.query);
-    const data = await listBoard(propertyId, query);
+    const data = await listBoard(propertyId, query, req.user?.userId ?? null);
 
     analyticsEmitter.track({
       eventType: AnalyticsEvent.TOOL_USED,

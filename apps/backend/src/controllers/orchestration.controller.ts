@@ -183,7 +183,7 @@ export async function getOrchestrationSummaryHandler(
     // -----------------------------
     // 2. Delegate to Orchestration
     // -----------------------------
-    const summary = await getOrchestrationSummary(propertyId);
+    const summary = await getOrchestrationSummary(propertyId, (req as any).user?.userId ?? null);
 
     // Defensive check (should never happen, but safe)
     if (!summary) {
@@ -240,7 +240,7 @@ export async function getOrchestrationDecisionDiagnosticsHandler(
       });
     }
 
-    const diagnostics = await getOrchestrationDecisionDiagnostics(propertyId);
+    const diagnostics = await getOrchestrationDecisionDiagnostics(propertyId, (req as any).user?.userId ?? null);
     return res.status(200).json({
       success: true,
       data: diagnostics,
