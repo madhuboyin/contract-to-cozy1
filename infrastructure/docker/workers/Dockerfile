@@ -70,7 +70,7 @@ RUN mkdir -p src/shared/backend/utils \
              src/shared/backend/services/permitAdapters
 
 COPY apps/backend/src/utils/riskCalculator.util.ts apps/backend/src/utils/FinancialCalculator.util.ts src/shared/backend/utils/
-COPY apps/backend/src/config/risk-constants.ts apps/backend/src/config/workerJobRegistry.ts src/shared/backend/config/
+COPY apps/backend/src/config/risk-constants.ts apps/backend/src/config/workerJobRegistry.ts apps/backend/src/config/queueDefaults.ts src/shared/backend/config/
 COPY apps/backend/src/services/homeEventRadarMatcher.service.ts \
      apps/backend/src/services/eventSignalProjection.service.ts \
      apps/backend/src/services/sharedDataObservability.service.ts \
@@ -235,6 +235,8 @@ RUN sed -i 's/\.\.\/\.\.\/backend\/src\/utils\/riskCalculator\.util/\.\/shared\/
     sed -i 's/\.\.\/\.\.\/backend\/src\/services\/hiddenAssets\.service/\.\/shared\/backend\/services\/hiddenAssets\.service/g' src/worker.ts && \
     sed -i 's/\.\.\/\.\.\/backend\/src\/services\/RiskAssessment\.service/\.\/shared\/backend\/services\/RiskAssessment\.service/g' src/worker.ts && \
     sed -i 's/\.\.\/\.\.\/backend\/src\/config\/workerJobRegistry/\.\/shared\/backend\/config\/workerJobRegistry/g' src/worker.ts && \
+    sed -i 's/\.\.\/\.\.\/backend\/src\/config\/queueDefaults/\.\/shared\/backend\/config\/queueDefaults/g' src/worker.ts && \
+    sed -i 's/\.\.\/\.\.\/backend\/src\/config\/queueDefaults/\.\/shared\/backend\/config\/queueDefaults/g' src/runners/highPriorityEmailEnqueue.poller.ts && \
     sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/hiddenAssets\.service/\.\.\/shared\/backend\/services\/hiddenAssets\.service/g' src/jobs/hiddenAssetRefresh.job.ts && \
     sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/neighborhoodIntelligence\/neighborhoodPropertyMatchService/\.\.\/shared\/backend\/neighborhoodIntelligence\/neighborhoodPropertyMatchService/g' src/jobs/refreshNeighborhoodEvents.job.ts && \
     sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/neighborhoodIntelligence\/neighborhoodPropertyMatchService/\.\.\/shared\/backend\/neighborhoodIntelligence\/neighborhoodPropertyMatchService/g' src/jobs/ingestNeighborhoodDummyEvents.job.ts && \
