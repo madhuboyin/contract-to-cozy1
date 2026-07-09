@@ -1,8 +1,8 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api/client';
-import { useAuth } from '@/lib/auth/AuthContext';
+import { useAdminGuard } from '@/hooks/useAdminGuard';
+import { AdminConsoleShell } from '@/components/ops/AdminConsoleShell';
 import type { ProviderCredential, ProviderCredentialType } from '@/types';
 import { formatEnumLabel } from '@/lib/utils/formatters';
 import ProviderCredentialQueueActions from '@/components/features/providerTrust/ProviderCredentialQueueActions';
@@ -17,16 +17,14 @@ const CREDENTIAL_TYPES: ProviderCredentialType[] = [
 ];
 
 export default function AdminProviderCompliancePage() {
-  const { isAdmin } = useAuth();
-  const router = useRouter();
+  const guard = useAdminGuard({
+    title: 'Provider Compliance Review',
+    subtitle: 'Review pending provider credentials and manage category eligibility.',
+  });
 
   const [queue, setQueue] = useState<ProviderCredential[]>([]);
   const [loading, setLoading] = useState(true);
   const [typeFilter, setTypeFilter] = useState<ProviderCredentialType | ''>('');
-
-  useEffect(() => {
-    if (!isAdmin) router.replace('/dashboard');
-  }, [isAdmin, router]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -38,27 +36,20 @@ export default function AdminProviderCompliancePage() {
   }, [typeFilter]);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    if (guard.isAdmin) load();
+  }, [guard.isAdmin, load]);
 
   function handleDecided(id: string) {
     setQueue((prev) => prev.filter((c) => c.id !== id));
   }
 
-  if (!isAdmin) return null;
+  if (guard.status !== 'ready') return guard.node;
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-6">
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-neutral-900">Provider Compliance Review</h1>
-          <p className="mb-0 text-sm text-neutral-500">
-            Credentials pending review, oldest first. Approving a credential recomputes the provider&apos;s
-            category eligibility immediately.
-          </p>
-        </div>
-      </div>
-
+    <AdminConsoleShell
+      title="Provider Compliance Review"
+      subtitle="Credentials pending review, oldest first. Approving a credential recomputes the provider's category eligibility immediately."
+    >
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <select
           value={typeFilter}
@@ -122,6 +113,6 @@ export default function AdminProviderCompliancePage() {
           </table>
         </div>
       )}
-    </div>
+    </AdminConsoleShell>
   );
 }

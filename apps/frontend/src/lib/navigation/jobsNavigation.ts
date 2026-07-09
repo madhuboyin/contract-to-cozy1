@@ -15,6 +15,7 @@ import {
   Users
 } from 'lucide-react';
 import { ElementType } from 'react';
+import { ADMIN_NAV } from './adminNavigation';
 
 export interface NavJob {
   key: string;
@@ -160,3 +161,25 @@ export const PRIMARY_JOBS: NavJob[] = [
     ],
   },
 ];
+
+export interface NavSections {
+  coreJobs: NavJob[];
+  labJob: NavJob | undefined;
+  isAdminNav: boolean;
+}
+
+/**
+ * Derives the nav sections a role should see. ADMIN gets a dedicated,
+ * lightweight nav (see adminNavigation.ts) instead of the homeowner
+ * PRIMARY_JOBS list — the two must never be merged.
+ */
+export function getNavSectionsForRole(role: string | undefined): NavSections {
+  if (role === 'ADMIN') {
+    return { coreJobs: ADMIN_NAV, labJob: undefined, isAdminNav: true };
+  }
+  return {
+    coreJobs: PRIMARY_JOBS.filter((j) => j.key !== 'home-lab'),
+    labJob: PRIMARY_JOBS.find((j) => j.key === 'home-lab'),
+    isAdminNav: false,
+  };
+}

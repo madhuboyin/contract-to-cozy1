@@ -2,7 +2,8 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api/client';
-import { useAuth } from '@/lib/auth/AuthContext';
+import { useAdminGuard } from '@/hooks/useAdminGuard';
+import { AdminConsoleShell } from '@/components/ops/AdminConsoleShell';
 import type { AdminDiyTemplateSummary, DiyTemplateStatus, DiyProjectCategory } from '@/types';
 import AdminTemplateTable from '@/components/features/diy/admin/AdminTemplateTable';
 
@@ -27,7 +28,10 @@ const STATUS_TABS: { value: DiyTemplateStatus | ''; label: string }[] = [
 ];
 
 export default function AdminDiyTemplatesPage() {
-  const { isAdmin } = useAuth();
+  const guard = useAdminGuard({
+    title: 'DIY Templates',
+    subtitle: 'Manage DIY project templates shown to homeowners.',
+  });
   const router = useRouter();
 
   const [templates, setTemplates] = useState<AdminDiyTemplateSummary[]>([]);
@@ -35,10 +39,6 @@ export default function AdminDiyTemplatesPage() {
   const [statusFilter, setStatusFilter] = useState<DiyTemplateStatus | ''>('');
   const [categoryFilter, setCategoryFilter] = useState<DiyProjectCategory | ''>('');
   const [search, setSearch] = useState('');
-
-  useEffect(() => {
-    if (!isAdmin) router.replace('/dashboard');
-  }, [isAdmin, router]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -53,9 +53,10 @@ export default function AdminDiyTemplatesPage() {
   }, [statusFilter, categoryFilter, search]);
 
   useEffect(() => {
+    if (!guard.isAdmin) return;
     const t = setTimeout(load, 200);
     return () => clearTimeout(t);
-  }, [load]);
+  }, [guard.isAdmin, load]);
 
   function handleStatusChange(id: string, status: DiyTemplateStatus) {
     setTemplates((prev) => prev.map((t) => t.id === id ? { ...t, status } : t));
@@ -65,21 +66,21 @@ export default function AdminDiyTemplatesPage() {
     // Navigate happens inside TemplateStatusActions; just refresh list on return
   }
 
-  if (!isAdmin) return null;
+  if (guard.status !== 'ready') return guard.node;
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-6">
-      {/* Header */}
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-neutral-900">DIY Templates</h1>
+    <AdminConsoleShell
+      title="DIY Templates"
+      subtitle="Manage DIY project templates shown to homeowners."
+      actions={
         <button
           onClick={() => router.push('/dashboard/admin/diy/templates/new')}
           className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
         >
           + New Template
         </button>
-      </div>
-
+      }
+    >
       {/* Filter bar */}
       <div className="mb-4 flex flex-wrap items-center gap-3">
         {/* Status tabs */}
@@ -129,6 +130,6 @@ export default function AdminDiyTemplatesPage() {
           onDuplicate={handleDuplicate}
         />
       )}
-    </div>
+    </AdminConsoleShell>
   );
 }

@@ -15,12 +15,12 @@ import {
   RefreshCw,
   XCircle,
 } from 'lucide-react';
-import { useAuth } from '@/lib/auth/AuthContext';
+import { useAdminGuard } from '@/hooks/useAdminGuard';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
 import { useWorkerJobs, useTriggerWorkerJob } from '@/hooks/useAdminWorkerJobs';
 import type { WorkerJobDetail, JobCategory, RecentRun } from '@/lib/api/adminWorkerJobs';
-import { AdminAccessState, AdminConsoleShell, AdminRouteState, useAdminOnlineStatus } from '@/components/ops/AdminConsoleShell';
+import { AdminConsoleShell, AdminRouteState } from '@/components/ops/AdminConsoleShell';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -394,12 +394,13 @@ function PageSkeleton() {
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function WorkerJobsPage() {
-  const { user, loading } = useAuth();
+  const guard = useAdminGuard({
+    title: 'Worker Jobs',
+    subtitle: 'Monitor queue health, failures, and manual reruns.',
+  });
   const { toast } = useToast();
-  const isOnline = useAdminOnlineStatus();
-  const isAdmin = !loading && user?.role === 'ADMIN';
 
-  const jobsQ = useWorkerJobs(isAdmin);
+  const jobsQ = useWorkerJobs(guard.isAdmin);
   const trigger = useTriggerWorkerJob();
 
   const [triggeringKey, setTriggeringKey] = useState<string | null>(null);
@@ -415,44 +416,7 @@ export default function WorkerJobsPage() {
     if (jobsQ.data && !lastRefreshed) setLastRefreshed(Date.now());
   }, [jobsQ.data, lastRefreshed]);
 
-  if (loading) {
-    return (
-      <AdminConsoleShell title="Worker Jobs" subtitle="Loading queue health and operations controls.">
-        <AdminRouteState
-          state="loading"
-          title="Loading worker operations"
-          description="Fetching queue status and recent run telemetry."
-        />
-      </AdminConsoleShell>
-    );
-  }
-
-  if (!user) {
-    return (
-      <AdminAccessState title="Sign in required" description="Please sign in to access this page." />
-    );
-  }
-
-  if (user.role !== 'ADMIN') {
-    return (
-      <AdminAccessState
-        title="Admin access required"
-        description="This page is restricted to platform administrators."
-      />
-    );
-  }
-
-  if (!isOnline) {
-    return (
-      <AdminConsoleShell title="Worker Jobs" subtitle="Monitor queue health, failures, and manual reruns.">
-        <AdminRouteState
-          state="offline"
-          title="You're offline"
-          description="Reconnect to monitor jobs and trigger queue actions."
-        />
-      </AdminConsoleShell>
-    );
-  }
+  if (guard.status !== 'ready') return guard.node;
 
   function handleTrigger(jobKey: string) {
     setTriggeringKey(jobKey);

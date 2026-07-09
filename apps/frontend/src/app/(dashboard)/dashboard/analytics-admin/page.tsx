@@ -20,7 +20,7 @@ import {
   Users,
   Zap,
 } from 'lucide-react';
-import { useAuth } from '@/lib/auth/AuthContext';
+import { useAdminGuard } from '@/hooks/useAdminGuard';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -47,7 +47,7 @@ import {
   TableSkeleton,
 } from '@/components/admin-analytics/AdminAnalyticsSkeleton';
 import type { AdminAnalyticsFilters } from '@/lib/api/adminAnalytics';
-import { AdminAccessState, AdminConsoleShell, AdminRouteState, useAdminOnlineStatus } from '@/components/ops/AdminConsoleShell';
+import { AdminConsoleShell, AdminRouteState } from '@/components/ops/AdminConsoleShell';
 import { ScrollFadeX } from '@/components/ui/ScrollFadeX';
 
 // ============================================================================
@@ -1070,13 +1070,14 @@ const DEFAULT_FILTERS: AdminAnalyticsFilters = {
 };
 
 export default function AnalyticsAdminPage() {
-  const { user, loading } = useAuth();
-  const isOnline = useAdminOnlineStatus();
+  const guard = useAdminGuard({
+    title: 'Admin Analytics',
+    subtitle: 'Monitor activation, engagement, adoption, and value delivery.',
+  });
+  const isAdmin = guard.isAdmin;
   const [filters, setFilters] = useState<AdminAnalyticsFilters>(DEFAULT_FILTERS);
   const [refreshKey, setRefreshKey] = useState(0);
   const [lastFetched, setLastFetched] = useState<Date | null>(null);
-
-  const isAdmin = !loading && user?.role === 'ADMIN';
 
   const overviewQ = useAdminAnalyticsOverview(filters, isAdmin);
 
@@ -1090,48 +1091,7 @@ export default function AnalyticsAdminPage() {
     setFilters((f) => ({ ...f })); // triggers re-render / re-fetch
   }, []);
 
-  // ── Auth guards ──────────────────────────────────────────────────────────
-  if (loading) {
-    return (
-      <AdminConsoleShell title="Admin Analytics" subtitle="Loading admin analytics access and datasets.">
-        <AdminRouteState
-          state="loading"
-          title="Checking admin access"
-          description="Validating authentication and permissions for analytics console."
-        />
-      </AdminConsoleShell>
-    );
-  }
-
-  if (!user) {
-    return (
-      <AdminAccessState
-        title="Sign in required"
-        description="This internal analytics view requires authentication."
-      />
-    );
-  }
-
-  if (user.role !== 'ADMIN') {
-    return (
-      <AdminAccessState
-        title="Admin access required"
-        description="Only platform admins can view the product analytics dashboard."
-      />
-    );
-  }
-
-  if (!isOnline) {
-    return (
-      <AdminConsoleShell title="Admin Analytics" subtitle="Monitor activation, engagement, adoption, and value delivery.">
-        <AdminRouteState
-          state="offline"
-          title="You're offline"
-          description="Analytics queries require a live connection. Reconnect and refresh."
-        />
-      </AdminConsoleShell>
-    );
-  }
+  if (guard.status !== 'ready') return guard.node;
 
   // ── Page ─────────────────────────────────────────────────────────────────
   return (

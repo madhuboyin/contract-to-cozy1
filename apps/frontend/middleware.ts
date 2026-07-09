@@ -28,6 +28,13 @@ const SENSITIVE_PAGE_PREFIXES = [
   '/admin',
   '/vault',
 ] as const;
+const ADMIN_CONSOLE_PREFIXES = [
+  '/dashboard/admin/provider-compliance',
+  '/dashboard/admin/diy/templates',
+  '/dashboard/analytics-admin',
+  '/dashboard/knowledge-admin',
+  '/dashboard/worker-jobs',
+] as const;
 const NO_STORE_PAGE_PREFIXES = [
   ...SENSITIVE_PAGE_PREFIXES,
   '/login',
@@ -209,8 +216,15 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/providers/dashboard', request.url));
   }
 
-  // Admin portal — admins only.
-  if (pathname.startsWith('/admin') && userRole !== 'ADMIN') {
+  // Admin console pages — admins only. Homeowners and providers are both
+  // redirected away; unlike the provider-portal rule above, providers do
+  // not get admin-console access.
+  if (
+    ADMIN_CONSOLE_PREFIXES.some(
+      (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)
+    ) &&
+    userRole !== 'ADMIN'
+  ) {
     const fallback =
       userRole === 'PROVIDER' ? '/providers/dashboard' : '/dashboard';
     return NextResponse.redirect(new URL(fallback, request.url));

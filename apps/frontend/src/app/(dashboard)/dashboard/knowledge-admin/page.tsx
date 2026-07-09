@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowUpRight, BookOpenText, Loader2, Plus } from 'lucide-react';
-import { useAuth } from '@/lib/auth/AuthContext';
+import { useAdminGuard } from '@/hooks/useAdminGuard';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -16,7 +16,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { getKnowledgeAdminArticles } from '@/lib/knowledge/adminApi';
-import { AdminAccessState, AdminConsoleShell, AdminRouteState, useAdminOnlineStatus } from '@/components/ops/AdminConsoleShell';
+import { AdminConsoleShell, AdminRouteState } from '@/components/ops/AdminConsoleShell';
 
 function formatDateTime(value?: string | null) {
   if (!value) return '—';
@@ -26,46 +26,18 @@ function formatDateTime(value?: string | null) {
 }
 
 export default function KnowledgeAdminPage() {
-  const { user, loading } = useAuth();
-  const isOnline = useAdminOnlineStatus();
+  const guard = useAdminGuard({
+    title: 'Knowledge Hub Editor',
+    subtitle: 'Create, publish, and maintain homeowner knowledge articles.',
+  });
   const articlesQuery = useQuery({
     queryKey: ['knowledge-admin-articles'],
     queryFn: getKnowledgeAdminArticles,
-    enabled: !loading && user?.role === 'ADMIN',
+    enabled: guard.isAdmin,
   });
   const articles = articlesQuery.data ?? [];
 
-  if (loading) {
-    return (
-      <AdminConsoleShell title="Knowledge Hub Editor" subtitle="Loading editor access and article records.">
-        <AdminRouteState
-          state="loading"
-          title="Checking admin access"
-          description="Verifying authentication and role permissions for Knowledge Hub operations."
-        />
-      </AdminConsoleShell>
-    );
-  }
-
-  if (!user) {
-    return <AdminAccessState title="Sign in required" description="This internal Knowledge Hub admin view requires authentication." />;
-  }
-
-  if (user.role !== 'ADMIN') {
-    return <AdminAccessState title="Admin access required" description="Only platform admins can manage Knowledge Hub articles." />;
-  }
-
-  if (!isOnline) {
-    return (
-      <AdminConsoleShell title="Knowledge Hub Editor" subtitle="Create, publish, and maintain homeowner knowledge articles.">
-        <AdminRouteState
-          state="offline"
-          title="You're offline"
-          description="Knowledge admin actions require a live connection. Reconnect to manage articles."
-        />
-      </AdminConsoleShell>
-    );
-  }
+  if (guard.status !== 'ready') return guard.node;
 
   return (
     <AdminConsoleShell

@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { PRIMARY_JOBS } from '@/lib/navigation/jobsNavigation';
+import { ADMIN_NAV } from '@/lib/navigation/adminNavigation';
 import {
   Building,
   Camera,
@@ -10,8 +11,6 @@ import {
   Globe,
   Settings,
   LogOut,
-  BarChart2,
-  Cpu,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
@@ -43,16 +42,23 @@ function buildPropertyAwareHref(
 const PRIMARY_BAR_KEYS = ['today', 'vault'] as const;
 const SECONDARY_BAR_KEYS = ['fix'] as const;
 
+// Admin nav's equivalent slot assignment (no camera FAB, no property scoping)
+const ADMIN_PRIMARY_BAR_KEYS = ['admin-provider-compliance', 'admin-analytics'] as const;
+const ADMIN_SECONDARY_BAR_KEYS = ['admin-worker-jobs'] as const;
+const ADMIN_MORE_JOB_KEYS = ['admin-diy-templates', 'admin-knowledge'] as const;
+
 export function BottomNav() {
   const pathname = usePathname();
   const router = useRouter();
-  const { logout } = useAuth();
+  const { logout, user } = useAuth();
   const { selectedPropertyId } = usePropertyContext();
   const [moreOpen, setMoreOpen] = React.useState(false);
   const [query, setQuery] = React.useState('');
   const [propertySwitcherOpen, setPropertySwitcherOpen] = React.useState(false);
   const resolvedPropertyId = selectedPropertyId || getPropertyIdFromPathname(pathname || '');
+  const isAdminNav = user?.role === 'ADMIN';
   const showCameraFab = React.useMemo(() => {
+    if (isAdminNav) return false;
     const currentPath = pathname || '';
 
     return [
@@ -65,7 +71,7 @@ export function BottomNav() {
       /^\/dashboard\/seasonal(?:\/.*)?$/,
       /^\/dashboard\/community-events(?:\/.*)?$/,
     ].some((pattern) => pattern.test(currentPath));
-  }, [pathname]);
+  }, [pathname, isAdminNav]);
 
   const handleLogout = React.useCallback(async () => {
     setMoreOpen(false);
@@ -77,54 +83,77 @@ export function BottomNav() {
     router.push(href);
   }, [resolvedPropertyId, router]);
 
-  // Left two items (Today, Vault)
-  const leftItems = PRIMARY_JOBS.filter((j) => (PRIMARY_BAR_KEYS as readonly string[]).includes(j.key)).map((job) => ({
-    href:
-      job.href === '/dashboard' || job.href === '/dashboard/properties'
-        ? job.href
-        : buildPropertyAwareHref(resolvedPropertyId, job.href.replace('/dashboard/', ''), job.key),
-    icon: job.icon,
-    label: job.name,
-    match: (path: string) => {
-      if (job.href === '/dashboard') return path === '/dashboard';
-      return path.startsWith(job.href) || job.engines.some((e) => path.includes(e));
-    },
-  }));
+  // Left two items (Today, Vault — or, for admins, Provider Compliance, Analytics)
+  const leftItems = isAdminNav
+    ? ADMIN_NAV.filter((j) => (ADMIN_PRIMARY_BAR_KEYS as readonly string[]).includes(j.key)).map((job) => ({
+        href: job.href,
+        icon: job.icon,
+        label: job.name,
+        match: (path: string) => path.startsWith(job.href),
+      }))
+    : PRIMARY_JOBS.filter((j) => (PRIMARY_BAR_KEYS as readonly string[]).includes(j.key)).map((job) => ({
+        href:
+          job.href === '/dashboard' || job.href === '/dashboard/properties'
+            ? job.href
+            : buildPropertyAwareHref(resolvedPropertyId, job.href.replace('/dashboard/', ''), job.key),
+        icon: job.icon,
+        label: job.name,
+        match: (path: string) => {
+          if (job.href === '/dashboard') return path === '/dashboard';
+          return path.startsWith(job.href) || job.engines.some((e) => path.includes(e));
+        },
+      }));
 
-  // Right item before More (Fix)
-  const rightItems = PRIMARY_JOBS.filter((j) => (SECONDARY_BAR_KEYS as readonly string[]).includes(j.key)).map((job) => ({
-    href: buildPropertyAwareDashboardHref(resolvedPropertyId, job.href),
-    icon: job.icon,
-    label: job.name,
-    match: (path: string) => path.startsWith(job.href) || job.engines.some((e) => path.includes(e)),
-  }));
+  // Right item before More (Fix — or, for admins, Worker Jobs)
+  const rightItems = isAdminNav
+    ? ADMIN_NAV.filter((j) => (ADMIN_SECONDARY_BAR_KEYS as readonly string[]).includes(j.key)).map((job) => ({
+        href: job.href,
+        icon: job.icon,
+        label: job.name,
+        match: (path: string) => path.startsWith(job.href),
+      }))
+    : PRIMARY_JOBS.filter((j) => (SECONDARY_BAR_KEYS as readonly string[]).includes(j.key)).map((job) => ({
+        href: buildPropertyAwareDashboardHref(resolvedPropertyId, job.href),
+        icon: job.icon,
+        label: job.name,
+        match: (path: string) => path.startsWith(job.href) || job.engines.some((e) => path.includes(e)),
+      }));
 
-  // More drawer: remaining jobs + secondary links
+  // More drawer: remaining jobs (+ secondary links for homeowner nav only)
   const moreJobKeys = ['my-home', 'protect', 'save', 'home-lab'];
-  const moreJobs = PRIMARY_JOBS.filter((j) => moreJobKeys.includes(j.key)).map((job) => ({
-    label: job.name,
-    href:
-      job.href === '/dashboard/properties'
-        ? job.href
-        : buildPropertyAwareDashboardHref(resolvedPropertyId, job.href),
-    icon: job.icon,
-    isActive: (path: string) => path.startsWith(job.href) || job.engines.some((e) => path.includes(e)),
-  }));
+  const moreJobs = isAdminNav
+    ? ADMIN_NAV.filter((j) => (ADMIN_MORE_JOB_KEYS as readonly string[]).includes(j.key)).map((job) => ({
+        label: job.name,
+        href: job.href,
+        icon: job.icon,
+        isActive: (path: string) => path.startsWith(job.href),
+      }))
+    : PRIMARY_JOBS.filter((j) => moreJobKeys.includes(j.key)).map((job) => ({
+        label: job.name,
+        href:
+          job.href === '/dashboard/properties'
+            ? job.href
+            : buildPropertyAwareDashboardHref(resolvedPropertyId, job.href),
+        icon: job.icon,
+        isActive: (path: string) => path.startsWith(job.href) || job.engines.some((e) => path.includes(e)),
+      }));
 
-  const moreStaticLinks = [
-    {
-      label: 'Knowledge',
-      href: resolvedPropertyId ? `/knowledge?propertyId=${encodeURIComponent(resolvedPropertyId)}` : '/knowledge',
-      icon: BookOpen,
-      isActive: (path: string) => path.startsWith('/knowledge'),
-    },
-    {
-      label: 'Community',
-      href: '/dashboard/community-events',
-      icon: Globe,
-      isActive: (path: string) => path.startsWith('/dashboard/community-events'),
-    },
-  ];
+  const moreStaticLinks = isAdminNav
+    ? []
+    : [
+        {
+          label: 'Knowledge',
+          href: resolvedPropertyId ? `/knowledge?propertyId=${encodeURIComponent(resolvedPropertyId)}` : '/knowledge',
+          icon: BookOpen,
+          isActive: (path: string) => path.startsWith('/knowledge'),
+        },
+        {
+          label: 'Community',
+          href: '/dashboard/community-events',
+          icon: Globe,
+          isActive: (path: string) => path.startsWith('/dashboard/community-events'),
+        },
+      ];
 
   type MoreItem = {
     label: string;
@@ -252,20 +281,22 @@ export function BottomNav() {
                 <SheetTitle>More</SheetTitle>
               </SheetHeader>
 
-              {/* Property switcher */}
-              <button
-                type="button"
-                onClick={() => { setMoreOpen(false); setPropertySwitcherOpen(true); }}
-                className="mt-3 flex w-full items-center justify-between gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-left hover:bg-white active:bg-slate-100 transition-colors"
-              >
-                <div className="flex items-center gap-2 min-w-0">
-                  <Building className="h-4 w-4 shrink-0 text-slate-500" />
-                  <span className="text-xs font-semibold text-slate-700 truncate">
-                    {resolvedPropertyId ? 'Switch property' : 'Select a property'}
-                  </span>
-                </div>
-                <Settings className="h-3.5 w-3.5 shrink-0 text-slate-400" />
-              </button>
+              {/* Property switcher (homeowner nav only — admin isn't property-scoped) */}
+              {!isAdminNav && (
+                <button
+                  type="button"
+                  onClick={() => { setMoreOpen(false); setPropertySwitcherOpen(true); }}
+                  className="mt-3 flex w-full items-center justify-between gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-left hover:bg-white active:bg-slate-100 transition-colors"
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Building className="h-4 w-4 shrink-0 text-slate-500" />
+                    <span className="text-xs font-semibold text-slate-700 truncate">
+                      {resolvedPropertyId ? 'Switch property' : 'Select a property'}
+                    </span>
+                  </div>
+                  <Settings className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                </button>
+              )}
 
               <div className="mt-3">
                 <Input

@@ -5,10 +5,12 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
 import { AnimatePresence } from 'framer-motion';
-import { PRIMARY_JOBS } from '@/lib/navigation/jobsNavigation';
+import { getNavSectionsForRole } from '@/lib/navigation/jobsNavigation';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { cn } from '@/lib/utils';
 import PostLoginTransition from '@/components/system/PostLoginTransition';
+import { IdleTimeoutWarningDialog } from '@/components/system/IdleTimeoutWarningDialog';
+import { useIdleTimeout } from '@/hooks/useIdleTimeout';
 import { APP_CONFIG } from '@/lib/config/appConfig';
 import { Button } from '@/components/ui/button';
 import {
@@ -21,8 +23,6 @@ import {
   LogOut,
   Menu,
   Settings,
-  BarChart2,
-  Cpu,
   BookOpen,
   Globe,
   ChevronDown,
@@ -97,8 +97,7 @@ function PersistentSidebarNav({ user, isCollapsed, onToggleCollapse }: {
     await logout();
   };
 
-  const coreJobs = PRIMARY_JOBS.filter(j => j.key !== 'home-lab');
-  const labJob = PRIMARY_JOBS.find(j => j.key === 'home-lab');
+  const { coreJobs, labJob, isAdminNav } = getNavSectionsForRole(user?.role);
 
   return (
     <div className="relative flex flex-col h-full">
@@ -213,72 +212,31 @@ function PersistentSidebarNav({ user, isCollapsed, onToggleCollapse }: {
           </div>
         )}
 
-        {/* Divider + secondary links */}
-        <div className="pt-4 mt-3 border-t border-slate-200/70">
-          <Link
-            href={resolvedPropertyId ? `/knowledge?propertyId=${encodeURIComponent(resolvedPropertyId)}` : '/knowledge'}
-            title={isCollapsed ? 'Knowledge' : undefined}
-            className={cn(
-              'flex items-center rounded-[14px] text-sm font-semibold text-slate-500 transition-all hover:bg-white/80 hover:text-slate-800',
-              isCollapsed ? 'justify-center px-3 py-2' : 'gap-3 px-3 py-2'
-            )}
-          >
-            <BookOpen className="h-4 w-4 text-slate-400 flex-shrink-0" />
-            {!isCollapsed && 'Knowledge'}
-          </Link>
-          <Link
-            href="/dashboard/community-events"
-            title={isCollapsed ? 'Community' : undefined}
-            className={cn(
-              'flex items-center rounded-[14px] text-sm font-semibold text-slate-500 transition-all hover:bg-white/80 hover:text-slate-800',
-              isCollapsed ? 'justify-center px-3 py-2' : 'gap-3 px-3 py-2'
-            )}
-          >
-            <Globe className="h-4 w-4 text-slate-400 flex-shrink-0" />
-            {!isCollapsed && 'Community'}
-          </Link>
-        </div>
-
-        {/* Admin links (ADMIN role only) */}
-        {user?.role === 'ADMIN' && (
-          <div className="pt-2 border-t border-gray-100 space-y-0.5">
-            {!isCollapsed && (
-              <p className="px-3 pt-1 pb-0.5 text-[11px] tracking-normal text-gray-400 font-semibold">
-                Admin
-              </p>
-            )}
+        {/* Divider + secondary links (homeowner nav only — the admin nav is
+            already dedicated, so it doesn't get these homeowner content links) */}
+        {!isAdminNav && (
+          <div className="pt-4 mt-3 border-t border-slate-200/70">
             <Link
-              href="/dashboard/analytics-admin"
-              title={isCollapsed ? 'Analytics' : undefined}
+              href={resolvedPropertyId ? `/knowledge?propertyId=${encodeURIComponent(resolvedPropertyId)}` : '/knowledge'}
+              title={isCollapsed ? 'Knowledge' : undefined}
               className={cn(
-                'flex items-center rounded-lg text-sm font-medium text-gray-500 hover:text-gray-700 hover:bg-gray-50',
+                'flex items-center rounded-[14px] text-sm font-semibold text-slate-500 transition-all hover:bg-white/80 hover:text-slate-800',
                 isCollapsed ? 'justify-center px-3 py-2' : 'gap-3 px-3 py-2'
               )}
             >
-              <BarChart2 className="h-4 w-4 text-gray-400 flex-shrink-0" />
-              {!isCollapsed && 'Analytics'}
+              <BookOpen className="h-4 w-4 text-slate-400 flex-shrink-0" />
+              {!isCollapsed && 'Knowledge'}
             </Link>
             <Link
-              href="/dashboard/knowledge-admin"
-              title={isCollapsed ? 'Knowledge Admin' : undefined}
+              href="/dashboard/community-events"
+              title={isCollapsed ? 'Community' : undefined}
               className={cn(
-                'flex items-center rounded-lg text-sm font-medium text-gray-500 hover:text-gray-700 hover:bg-gray-50',
+                'flex items-center rounded-[14px] text-sm font-semibold text-slate-500 transition-all hover:bg-white/80 hover:text-slate-800',
                 isCollapsed ? 'justify-center px-3 py-2' : 'gap-3 px-3 py-2'
               )}
             >
-              <Settings className="h-4 w-4 text-gray-400 flex-shrink-0" />
-              {!isCollapsed && 'Knowledge Admin'}
-            </Link>
-            <Link
-              href="/dashboard/worker-jobs"
-              title={isCollapsed ? 'Worker Jobs' : undefined}
-              className={cn(
-                'flex items-center rounded-lg text-sm font-medium text-gray-500 hover:text-gray-700 hover:bg-gray-50',
-                isCollapsed ? 'justify-center px-3 py-2' : 'gap-3 px-3 py-2'
-              )}
-            >
-              <Cpu className="h-4 w-4 text-gray-400 flex-shrink-0" />
-              {!isCollapsed && 'Worker Jobs'}
+              <Globe className="h-4 w-4 text-slate-400 flex-shrink-0" />
+              {!isCollapsed && 'Community'}
             </Link>
           </div>
         )}
@@ -369,8 +327,7 @@ function MobileDrawerNav({ user }: { user: User | null }) {
     await logout();
   };
 
-  const coreJobs = PRIMARY_JOBS.filter(j => j.key !== 'home-lab');
-  const labJob = PRIMARY_JOBS.find(j => j.key === 'home-lab');
+  const { coreJobs, labJob, isAdminNav } = getNavSectionsForRole(user?.role);
 
   return (
     <div className="flex flex-col h-full py-4 px-3">
@@ -460,26 +417,28 @@ function MobileDrawerNav({ user }: { user: User | null }) {
           </div>
         )}
 
-        <div className="pt-3 border-t border-gray-100 space-y-0.5">
-          <SheetClose asChild>
-            <Link
-              href={resolvedPropertyId ? `/knowledge?propertyId=${encodeURIComponent(resolvedPropertyId)}` : '/knowledge'}
-              className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-50"
-            >
-              <BookOpen className="h-4 w-4 text-gray-400 flex-shrink-0" />
-              Knowledge
-            </Link>
-          </SheetClose>
-          <SheetClose asChild>
-            <Link
-              href="/dashboard/community-events"
-              className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-50"
-            >
-              <Globe className="h-4 w-4 text-gray-400 flex-shrink-0" />
-              Community
-            </Link>
-          </SheetClose>
-        </div>
+        {!isAdminNav && (
+          <div className="pt-3 border-t border-gray-100 space-y-0.5">
+            <SheetClose asChild>
+              <Link
+                href={resolvedPropertyId ? `/knowledge?propertyId=${encodeURIComponent(resolvedPropertyId)}` : '/knowledge'}
+                className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-50"
+              >
+                <BookOpen className="h-4 w-4 text-gray-400 flex-shrink-0" />
+                Knowledge
+              </Link>
+            </SheetClose>
+            <SheetClose asChild>
+              <Link
+                href="/dashboard/community-events"
+                className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-50"
+              >
+                <Globe className="h-4 w-4 text-gray-400 flex-shrink-0" />
+                Community
+              </Link>
+            </SheetClose>
+          </div>
+        )}
       </nav>
 
       {/* User section at bottom of drawer */}
@@ -522,6 +481,7 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [showBanner, setShowBanner] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
+  const { showWarning: showIdleWarning, secondsRemaining: idleSecondsRemaining, stayActive: stayIdleActive } = useIdleTimeout();
   
   // Collapsible sidebar state
   const [isCollapsed, setIsCollapsed] = useState(() => {
@@ -760,6 +720,11 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
         <DashboardCommandPalette />
         <AIChat />
         <FeedbackWidget />
+        <IdleTimeoutWarningDialog
+          open={showIdleWarning}
+          secondsRemaining={idleSecondsRemaining}
+          onStayActive={stayIdleActive}
+        />
       </PropertyProvider>
       </NotificationProvider>
       )}
