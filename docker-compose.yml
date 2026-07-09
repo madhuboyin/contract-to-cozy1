@@ -44,6 +44,7 @@ services:
     build:
       context: ./apps/backend
       dockerfile: ../../infrastructure/docker/backend/Dockerfile
+      target: builder
     container_name: contracttocozy-backend
     restart: unless-stopped
     ports:

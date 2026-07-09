@@ -28,6 +28,10 @@ import {
 } from '../utils/refresh-session.util';
 
 import { prisma } from '../lib/prisma';
+
+// Bumped whenever the Terms of Service / Privacy Policy content materially
+// changes, so we can tell which version a given user's tosAcceptedAt covers.
+const TOS_VERSION = '2026-07-09';
 import { logger, auditLog } from '../lib/logger';
 import { securityTokenReuseTotal } from '../lib/metrics';
 
@@ -214,6 +218,10 @@ export class AuthService {
         role: data.role,
         status: 'PENDING_VERIFICATION',
         emailVerified: false,
+        // registerSchema requires acceptedTerms === true, so reaching here
+        // means the user explicitly agreed at signup.
+        tosAcceptedAt: new Date(),
+        tosVersion: TOS_VERSION,
       },
     });
 

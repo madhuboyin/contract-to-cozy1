@@ -1443,6 +1443,7 @@ export interface RegisterInput {
   lastName: string;
   role: UserRole;
   segment?: HomeownerSegment;
+  acceptedTerms: boolean;
 }
 
 export interface CreateBookingInput {

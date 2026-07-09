@@ -1,7 +1,7 @@
 // Comprehensive Seed Script - All Service Categories
 // Run: npx prisma db seed
 
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Prisma } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { seedKnowledgeHub } from './knowledgeHub.seed';
 
@@ -156,7 +156,317 @@ async function seedPlantCatalog() {
   ];
 
   await prisma.plantCatalog.createMany({
-    data: starterCatalog,
+    data: starterCatalog as unknown as Prisma.PlantCatalogCreateManyInput[],
+  });
+}
+
+// Populates a property with the kind of history a pilot/investor demo needs:
+// a real inventory with ages/conditions, a capital timeline forecast, and
+// reserve fund contribution history — so the first screen is never empty.
+async function seedLivedInPropertyData(propertyId: string, homeownerProfileId: string) {
+  const monthsAgo = (n: number) => {
+    const d = new Date();
+    d.setMonth(d.getMonth() - n);
+    return d;
+  };
+  const monthsFromNow = (n: number) => {
+    const d = new Date();
+    d.setMonth(d.getMonth() + n);
+    return d;
+  };
+
+  const kitchen = await prisma.inventoryRoom.create({
+    data: { propertyId, name: 'Kitchen', type: 'KITCHEN', floorLevel: 1, sortOrder: 1 },
+  });
+  const living = await prisma.inventoryRoom.create({
+    data: { propertyId, name: 'Living Room', type: 'LIVING_ROOM', floorLevel: 1, sortOrder: 2 },
+  });
+  const primaryBath = await prisma.inventoryRoom.create({
+    data: { propertyId, name: 'Primary Bathroom', type: 'BATHROOM', floorLevel: 2, sortOrder: 3 },
+  });
+  const laundry = await prisma.inventoryRoom.create({
+    data: { propertyId, name: 'Laundry Room', type: 'LAUNDRY', floorLevel: 1, sortOrder: 4 },
+  });
+  const garage = await prisma.inventoryRoom.create({
+    data: { propertyId, name: 'Garage', type: 'GARAGE', floorLevel: 1, sortOrder: 5 },
+  });
+
+  const [hvac, waterHeater, refrigerator, washer, dryer, dishwasher, roof] = await Promise.all([
+    prisma.inventoryItem.create({
+      data: {
+        propertyId,
+        roomId: garage.id,
+        name: 'Central HVAC System',
+        category: 'HVAC',
+        condition: 'GOOD',
+        brand: 'Carrier',
+        model: 'Infinity 24',
+        installedOn: new Date('2018-06-01'),
+        purchaseCostCents: 850000,
+        replacementCostCents: 900000,
+        isVerified: true,
+        verificationSource: 'MANUAL',
+      },
+    }),
+    prisma.inventoryItem.create({
+      data: {
+        propertyId,
+        roomId: garage.id,
+        name: 'Water Heater',
+        category: 'PLUMBING',
+        condition: 'FAIR',
+        brand: 'Rheem',
+        model: 'Performance Platinum 50gal',
+        installedOn: new Date('2016-03-01'),
+        purchaseCostCents: 140000,
+        replacementCostCents: 180000,
+        isVerified: true,
+        verificationSource: 'MANUAL',
+      },
+    }),
+    prisma.inventoryItem.create({
+      data: {
+        propertyId,
+        roomId: kitchen.id,
+        name: 'Refrigerator',
+        category: 'APPLIANCE',
+        condition: 'GOOD',
+        brand: 'Samsung',
+        model: 'RF28R7351SG',
+        installedOn: new Date('2019-05-01'),
+        purchaseCostCents: 220000,
+        replacementCostCents: 240000,
+        isVerified: true,
+        verificationSource: 'MANUAL',
+      },
+    }),
+    prisma.inventoryItem.create({
+      data: {
+        propertyId,
+        roomId: laundry.id,
+        name: 'Washer',
+        category: 'APPLIANCE',
+        condition: 'FAIR',
+        brand: 'LG',
+        model: 'WM3900H',
+        installedOn: new Date('2018-08-01'),
+        purchaseCostCents: 90000,
+        replacementCostCents: 95000,
+        isVerified: true,
+        verificationSource: 'MANUAL',
+      },
+    }),
+    prisma.inventoryItem.create({
+      data: {
+        propertyId,
+        roomId: laundry.id,
+        name: 'Dryer',
+        category: 'APPLIANCE',
+        condition: 'FAIR',
+        brand: 'LG',
+        model: 'DLEX3900W',
+        installedOn: new Date('2018-08-01'),
+        purchaseCostCents: 80000,
+        replacementCostCents: 85000,
+        isVerified: true,
+        verificationSource: 'MANUAL',
+      },
+    }),
+    prisma.inventoryItem.create({
+      data: {
+        propertyId,
+        roomId: kitchen.id,
+        name: 'Dishwasher',
+        category: 'APPLIANCE',
+        condition: 'GOOD',
+        brand: 'Bosch',
+        model: 'SHPM65Z55N',
+        installedOn: new Date('2020-02-01'),
+        purchaseCostCents: 95000,
+        replacementCostCents: 100000,
+        isVerified: true,
+        verificationSource: 'MANUAL',
+      },
+    }),
+    prisma.inventoryItem.create({
+      data: {
+        propertyId,
+        name: 'Asphalt Shingle Roof',
+        category: 'ROOF_EXTERIOR',
+        condition: 'GOOD',
+        brand: 'GAF',
+        model: 'Timberline HDZ',
+        installedOn: new Date('2018-01-01'),
+        purchaseCostCents: 1400000,
+        replacementCostCents: 1550000,
+        isVerified: true,
+        verificationSource: 'MANUAL',
+      },
+    }),
+  ]);
+
+  await prisma.inventoryItem.create({
+    data: {
+      propertyId,
+      roomId: living.id,
+      name: 'Smoke & CO Detectors (whole home)',
+      category: 'SAFETY',
+      condition: 'NEW',
+      brand: 'First Alert',
+      installedOn: new Date('2022-09-01'),
+      purchaseCostCents: 18000,
+      replacementCostCents: 20000,
+      isVerified: true,
+      verificationSource: 'MANUAL',
+    },
+  });
+
+  await prisma.inventoryItem.create({
+    data: {
+      propertyId,
+      roomId: primaryBath.id,
+      name: 'Vanity Faucet',
+      category: 'PLUMBING',
+      condition: 'GOOD',
+      brand: 'Moen',
+      installedOn: new Date('2018-01-01'),
+      purchaseCostCents: 22000,
+      replacementCostCents: 25000,
+      isVerified: false,
+      verificationSource: 'MANUAL',
+    },
+  });
+
+  // Capital timeline forecast — a realistic 10-year horizon given the ages above.
+  const analysis = await prisma.homeCapitalTimelineAnalysis.create({
+    data: {
+      homeownerProfileId,
+      propertyId,
+      status: 'READY',
+      confidence: 'MEDIUM',
+      horizonYears: 10,
+      summary:
+        'Water heater is approaching end of typical service life; HVAC and washer/dryer are the next-largest upcoming capital items over the 10-year horizon.',
+      computedAt: new Date(),
+    },
+  });
+
+  await prisma.homeCapitalTimelineItem.createMany({
+    data: [
+      {
+        analysisId: analysis.id,
+        propertyId,
+        inventoryItemId: waterHeater.id,
+        category: 'WATER_HEATER',
+        eventType: 'REPLACE',
+        windowStart: monthsFromNow(6),
+        windowEnd: monthsFromNow(18),
+        estimatedCostMinCents: 150000,
+        estimatedCostMaxCents: 210000,
+        confidence: 'HIGH',
+        priority: 'HIGH',
+        why: 'Unit is ~10 years old; typical tank water heater lifespan is 8-12 years.',
+      },
+      {
+        analysisId: analysis.id,
+        propertyId,
+        inventoryItemId: washer.id,
+        category: 'APPLIANCE',
+        eventType: 'REPLACE',
+        windowStart: monthsFromNow(18),
+        windowEnd: monthsFromNow(30),
+        estimatedCostMinCents: 80000,
+        estimatedCostMaxCents: 110000,
+        confidence: 'MEDIUM',
+        priority: 'MEDIUM',
+        why: 'Washer/dryer pair is ~8 years old, approaching typical 10-13 year replacement window.',
+      },
+      {
+        analysisId: analysis.id,
+        propertyId,
+        inventoryItemId: hvac.id,
+        category: 'HVAC',
+        eventType: 'MAJOR_REPAIR',
+        windowStart: monthsFromNow(30),
+        windowEnd: monthsFromNow(48),
+        estimatedCostMinCents: 60000,
+        estimatedCostMaxCents: 120000,
+        confidence: 'MEDIUM',
+        priority: 'MEDIUM',
+        why: 'Mid-life service (compressor/coil work) is typical around year 8-10 for this HVAC unit.',
+      },
+      {
+        analysisId: analysis.id,
+        propertyId,
+        inventoryItemId: roof.id,
+        category: 'ROOF',
+        eventType: 'INSPECTION',
+        windowStart: monthsFromNow(42),
+        windowEnd: monthsFromNow(54),
+        estimatedCostMinCents: 30000,
+        estimatedCostMaxCents: 60000,
+        confidence: 'LOW',
+        priority: 'LOW',
+        why: 'Asphalt shingle roofs typically warrant a professional condition check around year 7-8.',
+      },
+    ],
+  });
+
+  // Reserve fund + contribution history — an active fund with real deposits,
+  // not a freshly-initialized zero balance.
+  const fund = await prisma.homeReserveFund.create({
+    data: {
+      propertyId,
+      homeownerProfileId,
+      posture: 'MODERATE',
+      horizonYears: 10,
+      currentBalanceCents: 0, // set below from the sum of actual contributions
+      recommendedMonthlyContributionCents: 17500,
+      currentShortfallCents: 0,
+      lastRecalculatedAt: new Date(),
+      sourceAnalysisId: analysis.id,
+    },
+  });
+
+  const monthlyDepositCents = 15000;
+  const contributionMonths = 11;
+  const contributions = [
+    { type: 'DEPOSIT' as const, amountCents: 50000, occurredAt: monthsAgo(contributionMonths + 1), note: 'Initial fund deposit' },
+    ...Array.from({ length: contributionMonths }, (_, i) => ({
+      type: 'DEPOSIT' as const,
+      amountCents: monthlyDepositCents,
+      occurredAt: monthsAgo(contributionMonths - i),
+      note: 'Monthly reserve contribution',
+    })),
+  ];
+  await prisma.homeReserveFundContribution.createMany({
+    data: contributions.map((c) => ({ ...c, fundId: fund.id })),
+  });
+
+  const totalBalanceCents = contributions.reduce((sum, c) => sum + c.amountCents, 0);
+  await prisma.homeReserveFund.update({
+    where: { id: fund.id },
+    data: { currentBalanceCents: totalBalanceCents },
+  });
+
+  // Mortgage/valuation data — several financial tools (break-even, true-cost,
+  // cost-explainer, financing) divide by these; without them they render NaN.
+  await prisma.property.update({
+    where: { id: propertyId },
+    data: {
+      purchasePriceCents: 38000000, // $380,000 purchase in 2018
+      lastAppraisedValue: 46500000, // $465,000 current appraised value
+    },
+  });
+  await prisma.propertyFinanceSnapshot.create({
+    data: {
+      propertyId,
+      mortgageBalance: 268000, // dollars, not cents (Float column)
+      interestRate: 0.0435,
+      remainingTermMonths: 264, // 22 years remaining on a 30-year loan taken in 2018
+      monthlyPayment: 1685,
+      lastVerifiedAt: new Date(),
+    },
   });
 }
 
@@ -164,29 +474,14 @@ async function main() {
   console.log('🌱 Seeding comprehensive test data for all service categories...');
   console.log('');
 
-  // Clear existing data
+  // Clear existing data. TRUNCATE ... CASCADE on the two root tables instead of a
+  // manual per-model deleteMany list — the schema has grown to 100+ models that
+  // transitively reference users/properties, and that list goes stale (FK errors)
+  // every time a new child table is added.
   console.log('🧹 Clearing existing data...');
-  await prisma.auditLog.deleteMany();
-  await prisma.notification.deleteMany();
-  await prisma.favorite.deleteMany();
-  await prisma.review.deleteMany();
-  await prisma.message.deleteMany();
-  await prisma.document.deleteMany();
-  await prisma.payment.deleteMany();
-  await prisma.bookingTimeline.deleteMany();
-  await prisma.booking.deleteMany();
-  await prisma.service.deleteMany();
-  await prisma.checklistItem.deleteMany();
-  await prisma.checklist.deleteMany();
-  await prisma.providerAvailability.deleteMany();
-  await prisma.providerPortfolio.deleteMany();
-  await prisma.certification.deleteMany();
-  await prisma.property.deleteMany();
-  await prisma.providerProfile.deleteMany();
-  await prisma.homeownerProfile.deleteMany();
-  await prisma.address.deleteMany();
-  await prisma.user.deleteMany();
-  await prisma.plantCatalog.deleteMany();
+  await prisma.$executeRawUnsafe(
+    'TRUNCATE TABLE "users", "properties", "plant_catalog" RESTART IDENTITY CASCADE'
+  );
   console.log('✅ Cleared existing data');
   console.log('');
 
@@ -230,11 +525,6 @@ async function main() {
       homeownerProfile: {
         create: {
           segment: 'HOME_BUYER',
-          propertyType: 'Single Family',
-          propertySize: 1850,
-          yearBuilt: 2019,
-          bedrooms: 3,
-          bathrooms: 2,
           closingDate: new Date('2025-12-15'),
           purchasePrice: 425000,
           totalBudget: 15000,
@@ -255,6 +545,11 @@ async function main() {
       state: 'TX',
       zipCode: '78704',
       isPrimary: true,
+      propertyType: 'SINGLE_FAMILY',
+      propertySize: 1850,
+      yearBuilt: 2019,
+      bedrooms: 3,
+      bathrooms: 2,
     },
   });
 
@@ -287,11 +582,6 @@ async function main() {
       homeownerProfile: {
         create: {
           segment: 'EXISTING_OWNER',
-          propertyType: 'Single Family',
-          propertySize: 2400,
-          yearBuilt: 2018,
-          bedrooms: 4,
-          bathrooms: 2.5,
           preferredContactMethod: 'email',
         },
       },
@@ -299,7 +589,7 @@ async function main() {
     include: { homeownerProfile: true },
   });
 
-  await prisma.property.create({
+  const existingOwnerProperty = await prisma.property.create({
     data: {
       homeownerProfileId: existingOwner.homeownerProfile!.id,
       name: 'My Home',
@@ -308,10 +598,20 @@ async function main() {
       state: 'TX',
       zipCode: '78701',
       isPrimary: true,
+      propertyType: 'SINGLE_FAMILY',
+      propertySize: 2400,
+      yearBuilt: 2018,
+      bedrooms: 4,
+      bathrooms: 2.5,
     },
   });
 
   console.log('✅ Created EXISTING_OWNER: owner@example.com');
+  console.log('');
+
+  console.log('🏡 Seeding lived-in demo data for "My Home"...');
+  await seedLivedInPropertyData(existingOwnerProperty.id, existingOwner.homeownerProfile!.id);
+  console.log('✅ Seeded inventory, reserve fund history, and capital timeline for "My Home"');
   console.log('');
 
   // =========================================================================

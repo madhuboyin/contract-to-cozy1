@@ -2,7 +2,7 @@
 
 **Context:** Pre-revenue, pilot phase, no customers yet. Targeting a fundraising round in 2-3 months. This plan covers the four areas identified as highest-leverage before that raise: bug triage, analytics instrumentation, security/data hygiene, and general pilot readiness.
 
-This document reflects the actual current state of the codebase (verified, not assumed) as of 2026-07-07.
+This document reflects the actual current state of the codebase (verified, not assumed) as of 2026-07-09.
 
 ---
 
@@ -12,17 +12,21 @@ This document reflects the actual current state of the codebase (verified, not a
 
 ### P0 — fix before any pilot user or investor sees the product
 
-| Issue | Why it's P0 |
-|---|---|
-| Guidance Advisor "Homeowner profile not found" — AI strategic advice fails for at least one journey/property | This is core AI value proposition. A failure here in a live demo or early pilot session is close to worst-case. |
-| Inspection Check Advisor — blocked on DB drift + missing `S3_BUCKET` env var, currently can't even be manually tested | Can't verify this tool works at all right now — must resolve the env/config blocker before it's safe to expose. |
+| Issue | Why it's P0 | Status |
+|---|---|---|
+| Guidance Advisor "Homeowner profile not found" — AI strategic advice fails for at least one journey/property | This is core AI value proposition. A failure here in a live demo or early pilot session is close to worst-case. | Open |
+| Inspection Check Advisor — blocked on DB drift + missing `S3_BUCKET` env var, currently can't even be manually tested | Can't verify this tool works at all right now — must resolve the env/config blocker before it's safe to expose. | ✅ The DB-drift half is fixed as a side effect of the seed-script rewrite below (`prisma db seed` now runs cleanly end-to-end again). `S3_BUCKET` still needs to be provisioned — untouched here. |
+| **NEW — Post-login hang.** After a fresh signup + login, the dashboard can get stuck indefinitely on "Preparing your home command center…" (`PostLoginTransition`), with a console error `API Request Error: No token provided` on `/api/auth/me` immediately after login. Observed for 21+ seconds in one automated run. | If real and reproducible, this is worse than anything else on this list — it would block every single pilot user immediately after signup, not just one tool. | ⚠️ **Unconfirmed.** A clean, isolated repro (login via API, then immediately call `/api/auth/me` with the same cookie jar) succeeded instantly with no race — the access-token cookie was present and valid on the very next request. The environment during the original observation was unstable (backend was crash-looping from an unrelated schema change I was making concurrently, and the dev DB was being reseeded mid-test). **Needs a clean re-test in a live browser against a stable backend before triaging further** — don't treat as confirmed, but don't dismiss it either given the severity if real. |
+| **NEW — Legal-page links 404 everywhere.** The cookie-consent banner (shown on every page), the signup page, and the landing-page footer all link to `/privacy`, `/terms`, `/cookies` — none of those routes existed. Clicking "Privacy Policy" from the consent banner in a demo would 404. | High-visibility, low-effort-to-fix, embarrassing in exactly the kind of moment (investor clicking around) this plan is trying to de-risk. | ✅ Fixed — see Section 4 below. |
 
 ### P1 — fix before pilot, not necessarily before an early demo
 
-| Issue | Why it's P1 |
-|---|---|
-| Coverage Options — 6 known bugs in `CoverageOptionsClient.tsx` | Real bugs in a live financial-decision tool, but not confirmed to crash/mislead — audit and fix. |
-| Appliance Health CTA — "Add appliances to inventory" links to the wrong page | Confusing but not data-unsafe; quick fix. |
+**Status as of 2026-07-08: both items already fixed and on `main`, verified in code — no open work here.**
+
+| Issue | Why it's P1 | Status |
+|---|---|---|
+| Coverage Options — 6 known bugs in `CoverageOptionsClient.tsx` | Real bugs in a live financial-decision tool, but not confirmed to crash/mislead — audit and fix. | ✅ Fixed (`ac41b9b`) — verified all 6 fixes present in current code: double-negative copy, "remaining 0 gaps" clause suppression, "No Coverage exposure" → "Uninsured exposure" label, duplicate Gap Breakdown card hidden at 1 gap, neutral guidance-panel header, redundant hero card hidden at 1 gap. |
+| Appliance Health CTA — "Add appliances to inventory" links to the wrong page | Confusing but not data-unsafe; quick fix. | ✅ Fixed (`ef1d464`) — CTA now links to `/edit?focus=appliances`, which auto-expands the appliances accordion and scrolls to it. |
 
 ### P2 — track, don't block on
 
@@ -33,6 +37,19 @@ This document reflects the actual current state of the codebase (verified, not a
 
 ### Process
 Don't trust this list alone — it's carried over from prior session notes and hasn't been re-verified end-to-end in this pass. Week 1 of the plan (below) should include a **fresh, full click-through of all 36 tools with realistic data**, logging every broken or confusing surface newly. Anything found gets triaged into P0/P1/P2 using the same framework. Any tool that can't be fixed in time should be **feature-flagged or hidden** rather than left exposed to pilot users or a demo — a hidden tool reads as "roadmap"; a broken visible one reads as "unfinished."
+
+### ✅ Click-through of all 36 tools — done, status as of 2026-07-09
+A full automated click-through of all 36 tool pages ran against the seeded "My Home" property. Key findings and what happened to each:
+
+- **Root cause found for most "NaN" renders: empty demo data, not broken math.** 8 of 36 tools (break-even, cost-explainer, cost-growth, do-nothing, financing, mortgage-refinance-radar, reserve-fund, true-cost) rendered `NaN` somewhere in their output. Traced to the seeded homeowner having no mortgage/valuation data at all (`PropertyFinanceSnapshot` didn't exist, `Property.purchasePriceCents`/`lastAppraisedValue` were null) — several financial tools divide by these. **Fixed** by extending the seed script (Section 4 below) to include a realistic mortgage snapshot; re-verified live against the running API afterward — break-even, true-cost, cost-explainer, financing, do-nothing, cost-growth, and reserve-fund now all return zero `NaN` occurrences.
+- **2 tools failed to load at all** (`plant-advisor`: `ERR_EMPTY_RESPONSE`; `price-finalization`: 20s navigation timeout) during the original run. Both loaded fine (200, real content) when spot-checked afterward against a stable backend — most likely caused by the dev server still compiling that route on first hit combined with the rate-limit cascade below, not an application bug. **Needs one more clean pass to confirm**, but not currently believed to be a real bug.
+- **A cascade of 429s and a handful of "invalid csrf token" errors** showed up across most tool pages (`radar/analytics-events`, `csrf-token`, `notifications/unread-count`, tool-specific `/events` tracking endpoints). Root-caused: the app's CSRF middleware and general API rate limiter share the same `/api` prefix, and the frontend fetches a CSRF token lazily on first mutating request. If that first `GET /api/csrf-token` gets rate-limited, the client never gets a token to attach to the next tracking POST, which then fails CSRF with a confusing "invalid csrf token" message instead of a rate-limit message. This reproduced because the click-through script does a full `page.goto()` per tool (full reload, re-fetching csrf-token/notifications/property every time) rather than the client-side navigation a real user does — **most likely a test-methodology artifact, not a real user-facing bug**, but worth one clean re-run using in-app navigation to be sure before ruling it out entirely.
+- **1-2 remaining unexplained NaN flags** (`home-gazette`, `home-habit-coach`, `service-price-radar`) — spot-checked `home-gazette` visually and it rendered a clean, no-NaN "being set up" empty state, so this may be a false-positive substring match in hidden hydration JSON rather than a visible bug. Not chased further this session — low-confidence, low-severity if real.
+- **New finding, not from the original list:** the cookie-consent banner + signup page + landing footer legal links all 404'd (see P0 table above) — fixed.
+- Full raw results (36/36 tools, screenshots, console/network logs) are in this session's scratchpad and were not committed anywhere durable — **re-run and save findings to this repo** (e.g. `docs/operations/`) next time rather than relying on ephemeral scratchpad output.
+
+### ⚠️ Onboarding flow — audited, but scoped to the wrong flow (see Section 4)
+The route this plan pointed at (`apps/frontend/src/app/onboarding`) turned out to be dead code with zero inbound links. The real first-property flow is different. See Section 4 for the actual findings.
 
 ---
 
@@ -92,19 +109,35 @@ Don't trust this list alone — it's carried over from prior session notes and h
 4. ❌ **Secrets rotation policy — not written.** This is a policy/cadence decision (how often, who owns rotation, break-glass revocation procedure) that needs your input, not something to invent unilaterally.
 5. ✅ **Account deletion — already existed on the backend, was missing from the homeowner-facing UI.** `DELETE /api/user/account` and `POST /api/user/account/deactivate` were already implemented and already wired into the **provider** profile page, but the **homeowner** profile page (the primary pilot user) had no Danger Zone section at all. Added the same Deactivate/Delete UI (with the same "type DELETE to confirm" pattern) to `dashboard/profile/page.tsx`, for both its mobile and desktop layouts. The underlying data-retention *policy* (what gets deleted vs. anonymized, GDPR/CCPA specifics) is still a decision for you, not implemented here.
 6. ❌ **Next.js 14 upgrade timing — not decided.** Still allowlisted in `.audit-ci.json`. This is a scheduling decision I didn't make unilaterally given it's a major-version migration across a 216K-line frontend.
-7. ❌ **Legal pages — not created.** I'm not writing placeholder Privacy Policy / Terms of Service text and presenting it as real — that's the kind of thing that needs actual legal review, and shipping fabricated legal copy could be worse than having none. This is a hard blocker for real pilot users and needs your (or counsel's) input on content, not just a route scaffold from me.
+7. ⚠️ **Legal pages — mechanism built, real content still not written.** As of 2026-07-09: `/terms`, `/privacy`, `/cookies` now exist and return real pages instead of 404s (they previously didn't exist at all — see Section 1's new P0 finding), and signup now has an explicit "I agree to the Terms of Service and Privacy Policy" checkbox, enforced both client-side and server-side (`registerSchema` rejects registration without it), with real acceptance recorded on the user (`User.tosAcceptedAt` / `tosVersion`). **What's still not done, deliberately:** the page content itself is an honest placeholder ("this page is being finalized with counsel ahead of pilot launch") — I did not write real Privacy Policy / Terms of Service legal text, for the same reason as before: that needs actual legal review, and shipping fabricated legal copy could be worse than having none. This is still a hard blocker for real pilot users; the gate and pages are ready to receive real content the moment you/counsel have it.
 
 ---
 
 ## 4. Pilot-Readiness Checklist (beyond bugs/analytics/security)
 
-- **Legal pages + consent gate.** Privacy Policy and Terms of Service, with real acceptance at signup — the analytics consent-banner pattern already exists (`lib/consent`); extend that same pattern to a ToS acceptance gate.
-- **Realistic demo/pilot data.** Build or confirm a seed script that produces a non-zero, lived-in property (inventory with real ages/conditions, reserve fund contribution history, populated capital timeline) — a pilot user's or investor's first screen should never be an empty/zero dashboard.
-- **Walk the onboarding flow end-to-end as a brand-new user this week.** (`apps/frontend/src/app/onboarding` exists.) This is the single highest-scrutiny path for both pilot users and investor demos — it must be flawless.
-- **A real feedback channel for pilot users** — in-app widget or at minimum a monitored inbox. Check if one exists; if not, it's cheap to add and materially raises the quality of the pilot feedback you bring into the raise.
-- **Verify backups actually run, and test a restore at least once.** Losing a pilot user's home/financial data would be reputationally fatal at this stage — don't assume backups work, prove it.
-- **Confirm someone is actually watching Sentry/Loki during the pilot window**, not just collecting data into it.
-- **A full, fresh click-through of all 36 tools** with realistic data, cataloguing anything broken or confusing. Feeds directly into Section 1's bug triage.
+**Status as of 2026-07-09** — worked through this list end-to-end this session; four items materially advanced, one re-scoped after a wrong assumption in the original plan, two still need your input/decision (not something to build unilaterally).
+
+1. ✅ **Legal pages + consent gate — built.** `/terms`, `/privacy`, `/cookies` now exist (previously 404'd — see Section 1). Signup now has a real, enforced ToS-acceptance checkbox (`User.tosAcceptedAt`/`tosVersion` recorded server-side on register; `registerSchema` rejects registration without `acceptedTerms: true`). Real legal copy is still a placeholder pending your/counsel's input — see Section 3, item 7.
+
+2. ✅ **Realistic demo/pilot data — built and verified live.** The seed script (`apps/backend/prisma/seed.ts`) had drifted badly out of sync with the schema and was failing outright (`propertyType` had moved off `HomeownerProfile` onto `Property`, and the manual per-model `deleteMany()` cleanup list was missing dozens of newer child tables, causing FK violations). Fixed by:
+   - Rewriting the cleanup step as a single `TRUNCATE ... CASCADE` on the two root tables (`users`, `properties`) instead of an ever-growing manual delete list, so it stops going stale every time the schema grows.
+   - Adding a `seedLivedInPropertyData()` step for the `EXISTING_OWNER` persona's property ("My Home"): 9 inventory items across 5 rooms with realistic install dates/conditions/brands, a 10-year capital timeline forecast (4 forecast items: water heater replace, washer/dryer replace, HVAC major repair, roof inspection), and a reserve fund with 12 months of real contribution history (~$2,150 balance, not $0).
+   - Adding a `PropertyFinanceSnapshot` (mortgage balance/rate/term) plus `purchasePriceCents`/`lastAppraisedValue` on the property — this turned out to be the root cause of most of the "NaN" findings in the click-through audit below (financial tools were dividing by null purchase-price/mortgage data). Re-verified live: break-even, true-cost, cost-explainer, financing, do-nothing, cost-growth, and reserve-fund all render zero NaN now.
+   - Also fixed the local dev `DATABASE_URL` in `apps/backend/.env`, which was pointed at a nonexistent local Postgres install (`contract_to_cozy_dev`, no credentials) rather than the docker-compose Postgres — the seed script couldn't have run at all before this.
+
+3. ⚠️ **Onboarding flow — audited, but the plan pointed at the wrong flow.** `apps/frontend/src/app/onboarding` (the route this plan named) turned out to be **dead code with zero inbound links anywhere in the app** — not the real first-run experience. The actual first-property flow after signup is `/dashboard/properties/new`, reached via `PropertySetupBanner`, and was never audited. Findings from what *was* audited:
+   - Confirmed a genuine dev-environment dead end (not necessarily a prod bug): the register response tells the user "check your email to verify," but in `NODE_ENV=development` the backend intentionally skips queuing the verification email (`auth.service.ts`) and no workers container was running in this environment to send it anyway — needs a real prod/staging-like check that the already-configured Brevo SMTP path actually delivers verification emails, since local dev can't demonstrate this either way.
+   - Flagged (not confirmed — see Section 1's new P0 entry) a possible post-login hang.
+   - The cookie-consent banner visually overlaps the password/confirm-password fields on the signup form on a typical viewport — minor, but a real user would need to dismiss it mid-form.
+   - **Next step:** re-run this audit against `/dashboard/properties/new`, the actual flow, not `/onboarding`.
+
+4. ⚠️ **Pilot feedback channel — partial, cheap path identified, not yet built.** A feedback widget already exists (`FeedbackWidget.tsx`) but is scoped to a single page (seller-prep) and feature-flagged off by default; its backend endpoint just writes to a `sellerPrepFeedback` table with nothing reading or alerting on it. Cheapest path to a real channel (not yet implemented): generalize the existing model/endpoint into a generic `feedback` table + `POST /api/feedback`, reuse the existing widget UI app-wide, and fire an email via the already-working `apps/workers` SMTP (Brevo) integration on each submission — no new infra needed, roughly a 20-line addition on top of what exists.
+
+5. ❌ **Backups — confirmed nothing exists, not yet built.** This was not a "verify it works" task — there is no backup mechanism anywhere in this repo or in prod. No `pg_dump`/WAL archiving/CronJob of any kind; `infrastructure/scripts/backup/` and `database/backups/` are empty placeholders. Two other docs in the repo (`docs/functional/PRODUCTION_READINESS_AUDIT_2026.md`, `EXHAUSTIVE_SYSTEM_AUDIT.md`) already independently flagged this gap. Recommended approach for the Pi k3s prod setup (not yet built): a k8s `CronJob` running `pg_dump -Fc` on a schedule, pushed to off-cluster object storage (not just a second PVC on the same physical hardware), with retention + a Loki/Prometheus alert if the job fails or goes stale — then a periodic real restore test into a throwaway namespace.
+
+6. ❌ **Sentry/Loki monitoring ownership — a process question, not a code task.** This isn't something I can verify or build; it's "who is actually looking at the dashboard during the pilot window." Needs your answer, not engineering work.
+
+7. ✅ **Full click-through of all 36 tools — done.** See Section 1's new "Click-through of all 36 tools" writeup for the detailed findings (most NaNs traced to the missing demo-data problem in item 2 above and fixed; two load failures and a rate-limit/CSRF cascade flagged for one more clean re-verification pass, believed to be test-methodology artifacts rather than real bugs).
 
 ---
 

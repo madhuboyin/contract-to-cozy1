@@ -56,6 +56,9 @@ export const registerSchema = z.object({
   phone: z.string().optional(),
   role: z.enum(['HOMEOWNER', 'PROVIDER']).default('HOMEOWNER'),
   segment: z.enum(['HOME_BUYER', 'EXISTING_OWNER']).optional(),
+  acceptedTerms: z.literal(true, {
+    message: 'You must agree to the Terms of Service and Privacy Policy to create an account',
+  }),
 });
 
 // Login schema

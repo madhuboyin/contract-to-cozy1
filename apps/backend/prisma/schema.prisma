@@ -1374,6 +1374,12 @@ model User {
   // Incremented on every password change so pre-change tokens are rejected.
   tokenVersion  Int     @default(0)
 
+  // Legal — recorded at signup when the user checks "I agree to the Terms
+  // of Service and Privacy Policy". Null means they never explicitly agreed
+  // (accounts created before this gate existed).
+  tosAcceptedAt DateTime?
+  tosVersion    String?
+
   // MFA (TOTP) — admin accounts only for v1.0
   mfaEnabled Boolean @default(false)
   mfaSecret  String? // AES-256-GCM encrypted TOTP secret; null until setup

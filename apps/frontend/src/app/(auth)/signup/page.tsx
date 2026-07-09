@@ -7,13 +7,14 @@ import { KeyRound, Mail, User } from 'lucide-react';
 
 import AuthTemplate from '@/components/auth/AuthTemplate';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { APIError, HomeownerSegment } from '@/types';
 
-type FieldName = 'email' | 'password' | 'confirmPassword' | 'firstName' | 'lastName' | 'segment';
+type FieldName = 'email' | 'password' | 'confirmPassword' | 'firstName' | 'lastName' | 'segment' | 'acceptedTerms';
 
 type FieldErrors = Partial<Record<FieldName, string>>;
 
@@ -24,6 +25,7 @@ interface SignupFormData {
   firstName: string;
   lastName: string;
   segment: HomeownerSegment;
+  acceptedTerms: boolean;
 }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -44,11 +46,18 @@ export default function SignupPage() {
     firstName: '',
     lastName: '',
     segment: 'EXISTING_OWNER',
+    acceptedTerms: false,
   });
 
   const setField = (field: FieldName, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
     setFieldErrors((prev) => ({ ...prev, [field]: undefined }));
+    setFormError('');
+  };
+
+  const setAcceptedTerms = (checked: boolean) => {
+    setFormData((prev) => ({ ...prev, acceptedTerms: checked }));
+    setFieldErrors((prev) => ({ ...prev, acceptedTerms: undefined }));
     setFormError('');
   };
 
@@ -66,6 +75,9 @@ export default function SignupPage() {
       nextErrors.confirmPassword = 'Passwords do not match.';
     }
     if (!formData.segment) nextErrors.segment = 'Select the option that best matches your situation.';
+    if (!formData.acceptedTerms) {
+      nextErrors.acceptedTerms = 'You must agree to the Terms of Service and Privacy Policy to continue.';
+    }
 
     return nextErrors;
   };
@@ -91,6 +103,7 @@ export default function SignupPage() {
         lastName: formData.lastName,
         role: 'HOMEOWNER',
         segment: formData.segment,
+        acceptedTerms: formData.acceptedTerms,
       });
 
       if (result && result.success) {
@@ -115,19 +128,6 @@ export default function SignupPage() {
       activeRoute="signup"
       title="Create your homeowner account"
       subtitle="Get personalized guidance for maintenance, risk, and savings in one place."
-      footer={
-        <p className="text-center text-xs text-slate-500">
-          By creating an account, you agree to our{' '}
-          <Link href="/terms" className="font-medium text-brand-700 hover:text-brand-900">
-            Terms
-          </Link>{' '}
-          and{' '}
-          <Link href="/privacy" className="font-medium text-brand-700 hover:text-brand-900">
-            Privacy Policy
-          </Link>
-          .
-        </p>
-      }
     >
       {formError ? (
         <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
@@ -295,6 +295,32 @@ export default function SignupPage() {
           </RadioGroup>
           {fieldErrors.segment ? <p className="mt-1.5 text-xs text-rose-700">{fieldErrors.segment}</p> : null}
         </fieldset>
+
+        <div>
+          <label htmlFor="acceptedTerms" className="flex cursor-pointer items-start gap-2.5">
+            <Checkbox
+              id="acceptedTerms"
+              checked={formData.acceptedTerms}
+              onCheckedChange={(checked) => setAcceptedTerms(checked === true)}
+              aria-invalid={Boolean(fieldErrors.acceptedTerms)}
+              className="mt-0.5"
+            />
+            <span className="text-sm text-slate-600">
+              I have read and agree to the{' '}
+              <Link href="/terms" target="_blank" className="font-medium text-brand-700 hover:text-brand-900">
+                Terms of Service
+              </Link>{' '}
+              and{' '}
+              <Link href="/privacy" target="_blank" className="font-medium text-brand-700 hover:text-brand-900">
+                Privacy Policy
+              </Link>
+              .
+            </span>
+          </label>
+          {fieldErrors.acceptedTerms ? (
+            <p className="mt-1.5 text-xs text-rose-700">{fieldErrors.acceptedTerms}</p>
+          ) : null}
+        </div>
 
         <Button type="submit" className="mt-2 min-h-[46px] w-full text-sm sm:text-base" disabled={loading}>
           {loading ? 'Creating account...' : 'Create my account'}
