@@ -1,0 +1,111 @@
+# Daily Postgres backup for the production database.
+#
+# This is a first cut: dumps land on an in-cluster PVC (local-path storage class,
+# same as postgres-data). It protects against accidental data corruption/DROP/bad
+# migration, but NOT against node/disk loss, since the backup PVC lives on the same
+# Raspberry Pi node as the primary data. Pushing dumps to off-cluster object storage
+# (e.g. S3/B2/rsync.net) is a deliberate follow-up — not wired up here because it
+# needs real cloud credentials this manifest does not have.
+#
+# The backup logic itself lives in infrastructure/scripts/backup/pg_backup.sh (kept
+# as a standalone script so it can also be run manually/locally — see
+# docs/operations/BACKUP_RESTORE.md). It is loaded into the container via the
+# postgres-backup-script ConfigMap below, which must be (re)created from that file
+# whenever the script changes:
+#
+#   kubectl create configmap postgres-backup-script \
+#     --from-file=pg_backup.sh=infrastructure/scripts/backup/pg_backup.sh \
+#     -n production --dry-run=client -o yaml | kubectl apply -f -
+#
+# Restore is a manual, deliberate operation (infrastructure/scripts/backup/pg_restore.sh)
+# and is intentionally NOT automated here — see docs/operations/BACKUP_RESTORE.md.
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-backups
+  namespace: production
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-path
+  resources:
+    requests:
+      # 14 daily dumps of a small-to-medium pilot DB should comfortably fit; revisit
+      # if the DB grows or RETENTION_COUNT is increased.
+      storage: 20Gi
+
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: postgres-backup
+  namespace: production
+spec:
+  # Daily at 03:00 UTC — low-traffic window for a homeowner-facing pilot app.
+  schedule: "0 3 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 5
+  jobTemplate:
+    spec:
+      # A stuck/hung pg_dump shouldn't be able to block every future run forever.
+      activeDeadlineSeconds: 3600
+      backoffLimit: 2
+      template:
+        metadata:
+          labels:
+            app: postgres-backup
+        spec:
+          nodeSelector:
+            role: database
+          restartPolicy: Never
+          containers:
+            - name: pg-backup
+              image: postgres:15-alpine
+              command: ["/bin/bash", "/scripts/pg_backup.sh"]
+              env:
+                - name: PGHOST
+                  value: postgres
+                - name: PGPORT
+                  value: "5432"
+                - name: POSTGRES_USER
+                  valueFrom:
+                    secretKeyRef:
+                      name: postgres-credentials
+                      key: POSTGRES_USER
+                - name: POSTGRES_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: postgres-credentials
+                      key: POSTGRES_PASSWORD
+                - name: POSTGRES_DB
+                  valueFrom:
+                    secretKeyRef:
+                      name: postgres-credentials
+                      key: POSTGRES_DB
+                - name: BACKUP_DIR
+                  value: /backups
+                - name: RETENTION_COUNT
+                  value: "14"
+              resources:
+                requests:
+                  cpu: "100m"
+                  memory: "256Mi"
+                limits:
+                  cpu: "1000m"
+                  memory: "1Gi"
+              volumeMounts:
+                - name: postgres-backups
+                  mountPath: /backups
+                - name: backup-script
+                  mountPath: /scripts
+                  readOnly: true
+          volumes:
+            - name: postgres-backups
+              persistentVolumeClaim:
+                claimName: postgres-backups
+            - name: backup-script
+              configMap:
+                name: postgres-backup-script
+                defaultMode: 0755
