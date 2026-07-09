@@ -136,7 +136,9 @@ export const JOB_REGISTRY: JobRegistryEntry[] = [
     schedule: 'Daily at 9:00 AM EST',
     cronExpression: '0 9 * * *',
     type: 'cron',
-    triggerSupported: false,
+    queueName: 'cron-trigger-queue',
+    jobName: 'maintenance-reminders',
+    triggerSupported: true,
   },
   {
     key: 'seasonal-checklist-generation',
@@ -147,7 +149,9 @@ export const JOB_REGISTRY: JobRegistryEntry[] = [
     schedule: 'Daily at 2:00 AM EST',
     cronExpression: '0 2 * * *',
     type: 'cron',
-    triggerSupported: false,
+    queueName: 'cron-trigger-queue',
+    jobName: 'seasonal-checklist-generation',
+    triggerSupported: true,
   },
   {
     key: 'seasonal-checklist-expiration',
@@ -157,7 +161,9 @@ export const JOB_REGISTRY: JobRegistryEntry[] = [
     schedule: 'Daily at 1:00 AM EST',
     cronExpression: '0 1 * * *',
     type: 'cron',
-    triggerSupported: false,
+    queueName: 'cron-trigger-queue',
+    jobName: 'seasonal-checklist-expiration',
+    triggerSupported: true,
   },
   {
     key: 'seasonal-notifications',
@@ -168,7 +174,9 @@ export const JOB_REGISTRY: JobRegistryEntry[] = [
     schedule: 'Daily at 9:00 AM EST',
     cronExpression: '0 9 * * *',
     type: 'cron',
-    triggerSupported: false,
+    queueName: 'cron-trigger-queue',
+    jobName: 'seasonal-notifications',
+    triggerSupported: true,
   },
   {
     key: 'inventory-draft-cleanup',
@@ -179,7 +187,9 @@ export const JOB_REGISTRY: JobRegistryEntry[] = [
     schedule: 'Daily at 3:15 AM EST',
     cronExpression: '15 3 * * *',
     type: 'cron',
-    triggerSupported: false,
+    queueName: 'cron-trigger-queue',
+    jobName: 'inventory-draft-cleanup',
+    triggerSupported: true,
   },
 
   // ── Risk & Safety (cron) ──────────────────────────────────────────────────
@@ -461,7 +471,9 @@ export const JOB_REGISTRY: JobRegistryEntry[] = [
     schedule: 'Daily at 8:00 AM EST',
     cronExpression: '0 8 * * *',
     type: 'cron',
-    triggerSupported: false,
+    queueName: 'cron-trigger-queue',
+    jobName: 'permit-inspection-reminders',
+    triggerSupported: true,
   },
   {
     key: 'permit-fetch',
