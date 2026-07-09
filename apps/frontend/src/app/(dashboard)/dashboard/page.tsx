@@ -649,7 +649,17 @@ export default function DashboardPage() {
   const prefersReducedMotion = useReducedMotion();
   const guidanceContext = extractGuidanceContinuityContext(searchParams);
   const hasGuidanceContext = hasGuidanceContinuityContext(guidanceContext);
-  
+
+  // Admin has no properties and isn't property-scoped — this page's
+  // welcome/property-setup flow is homeowner-only. Any admin link that
+  // points at /dashboard (e.g. AdminConsoleShell's "Back to dashboard")
+  // should land on the admin console instead.
+  useEffect(() => {
+    if (!userLoading && user?.role === 'ADMIN') {
+      router.replace('/dashboard/knowledge-admin');
+    }
+  }, [userLoading, user, router]);
+
   const [data, setData] = useState<DashboardData>({
     bookings: [],
     properties: [],
@@ -1197,6 +1207,8 @@ export default function DashboardPage() {
     };
   })();
 
+
+  if (user?.role === 'ADMIN') return null;
 
   if (userLoading || data.isLoading || !redirectChecked) {
     return <DashboardRouteState state="loading" title="Preparing your command center" description="Syncing your latest home intelligence..." />;
