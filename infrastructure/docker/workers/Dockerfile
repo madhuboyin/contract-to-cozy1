@@ -131,6 +131,9 @@ COPY apps/backend/src/services/analytics/index.ts \
      src/shared/backend/services/analytics/
 # Replace zod-dependent schemas.ts with a typed pass-through stub (zod is not a workers dependency)
 COPY apps/workers/stubs/analytics-schemas.ts src/shared/backend/services/analytics/schemas.ts
+# Stub: emitter.ts dynamically imports ../property.service (not copied into workers) to
+# run its activation side effect — see stub file comment for why this is a safe no-op here
+COPY apps/workers/stubs/property-service.ts src/shared/backend/services/property.service.ts
 # Copy neighborhood intelligence files needed by refreshNeighborhoodEvents.job.ts
 # and ingestNeighborhoodDummyEvents.job.ts
 COPY apps/backend/src/neighborhoodIntelligence/neighborhoodPropertyMatchService.ts \
