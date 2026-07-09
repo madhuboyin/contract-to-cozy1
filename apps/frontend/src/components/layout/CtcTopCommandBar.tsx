@@ -144,7 +144,10 @@ export function CtcTopCommandBar({ className }: CtcTopCommandBarProps) {
             </Link>
 
             {/* Center-Left: Command Search (bigger) */}
-            <CtcCommandSearch className="flex-1 max-w-[600px]" />
+            <CtcCommandSearch
+              className="flex-1 max-w-[600px]"
+              placeholder={isAdminNav ? 'Search admin console…' : undefined}
+            />
 
             {/* Center: Property Selector (bigger) — admin isn't property-scoped */}
             {!isAdminNav && (

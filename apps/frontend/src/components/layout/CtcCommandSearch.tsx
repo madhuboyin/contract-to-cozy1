@@ -8,9 +8,10 @@ import { cn } from '@/lib/utils';
 interface CtcCommandSearchProps {
   className?: string;
   onOpen?: () => void;
+  placeholder?: string;
 }
 
-export function CtcCommandSearch({ className, onOpen }: CtcCommandSearchProps) {
+export function CtcCommandSearch({ className, onOpen, placeholder = 'Ask your home anything…' }: CtcCommandSearchProps) {
   const handleClick = () => {
     if (onOpen) {
       onOpen();
@@ -41,7 +42,7 @@ export function CtcCommandSearch({ className, onOpen }: CtcCommandSearchProps) {
     >
       <Search className="h-4 w-4 text-slate-400 shrink-0" />
       <span className="flex-1 text-left text-sm text-slate-400 truncate">
-        Ask your home anything…
+        {placeholder}
       </span>
       <div className="flex items-center gap-1 shrink-0">
         <kbd className="hidden sm:inline-flex h-5 min-w-[20px] items-center justify-center rounded border border-slate-200 bg-white px-1.5 text-[11px] font-medium text-slate-500">

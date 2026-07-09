@@ -8,6 +8,7 @@ import { Search } from 'lucide-react';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
 import { buildPropertyAwareDashboardHref } from '@/lib/routes/dashboardPropertyAwareHref';
+import { ADMIN_NAV } from '@/lib/navigation/adminNavigation';
 import { Command } from 'cmdk';
 
 type CommandItem = {
@@ -126,7 +127,21 @@ export default function DashboardCommandPalette({ propertyId }: DashboardCommand
     ? `/dashboard/properties/${resolvedPropertyId}/risk-assessment`
     : '/dashboard/properties';
 
+  const isAdminNav = user?.role === 'ADMIN';
+
   const items = React.useMemo<CommandItem[]>(() => {
+    // Admin gets its own dedicated command list — not the homeowner nav
+    // plus an extra admin item. No property-scoped "Recent Actions" or
+    // "Quick Shortcuts" either, since those are homeowner-tool concepts.
+    if (isAdminNav) {
+      return ADMIN_NAV.map((job) => ({
+        id: `nav-${job.key}`,
+        label: job.name,
+        href: job.href,
+        group: 'Navigation' as const,
+      }));
+    }
+
     const navItems: CommandItem[] = [
       { id: 'nav-dashboard', label: 'Dashboard', href: '/dashboard', group: 'Navigation' },
       {
@@ -149,16 +164,6 @@ export default function DashboardCommandPalette({ propertyId }: DashboardCommand
         href: resolvedPropertyId ? `/knowledge?propertyId=${encodeURIComponent(resolvedPropertyId)}` : '/knowledge',
         group: 'Navigation',
       },
-      ...(user?.role === 'ADMIN'
-        ? [
-            {
-              id: 'nav-knowledge-admin',
-              label: 'Knowledge Admin',
-              href: '/dashboard/knowledge-admin',
-              group: 'Navigation' as const,
-            },
-          ]
-        : []),
       { id: 'nav-home-admin', label: 'Home Admin', href: '/dashboard/warranties', group: 'Navigation' },
       { id: 'nav-community', label: 'Community Events', href: '/dashboard/community-events', group: 'Navigation' },
     ];
@@ -185,6 +190,7 @@ export default function DashboardCommandPalette({ propertyId }: DashboardCommand
   }, [
     homeLabHref,
     inventoryHref,
+    isAdminNav,
     propertyRoomsHref,
     protectionHref,
     recentActions,
@@ -192,7 +198,6 @@ export default function DashboardCommandPalette({ propertyId }: DashboardCommand
     resolutionCenterHref,
     riskReportHref,
     saveHref,
-    user?.role,
     vaultHref,
   ]);
 

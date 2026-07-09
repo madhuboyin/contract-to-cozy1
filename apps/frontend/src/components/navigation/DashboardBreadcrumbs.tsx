@@ -3,6 +3,7 @@
 import { useMemo } from 'react';
 import { usePathname } from 'next/navigation';
 import { Breadcrumb } from '@/components/navigation/Breadcrumb';
+import { ADMIN_NAV } from '@/lib/navigation/adminNavigation';
 
 type Crumb = {
   label: string;
@@ -88,6 +89,17 @@ export default function DashboardBreadcrumbs() {
     if (!pathname || !pathname.startsWith('/dashboard')) return [];
 
     const pathWithoutQuery = pathname.split('?')[0];
+
+    // Admin console pages already carry their own "Back to dashboard" link
+    // and title/subtitle header via AdminConsoleShell — no separate
+    // breadcrumb trail needed. This also sidesteps segment-labeling logic
+    // below that isn't built for admin route slugs (e.g. it can't tell
+    // 'admin' apart from a page title, and long hyphenated segments like
+    // 'provider-compliance' get misread as opaque ID tokens).
+    if (ADMIN_NAV.some((job) => pathWithoutQuery === job.href || pathWithoutQuery.startsWith(`${job.href}/`))) {
+      return [];
+    }
+
     const segments = pathWithoutQuery.split('/').filter(Boolean);
     if (segments.length <= 2) {
       return [];

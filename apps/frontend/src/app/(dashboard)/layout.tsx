@@ -719,7 +719,8 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
 
         {/* Global overlays */}
         <DashboardCommandPalette />
-        <AIChat />
+        {/* Cozy is a homeowner maintenance/expense concierge — not relevant to admin */}
+        {user?.role !== 'ADMIN' && <AIChat />}
         <FeedbackWidget />
         <IdleTimeoutWarningDialog
           open={showIdleWarning}
