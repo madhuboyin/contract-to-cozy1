@@ -21,7 +21,8 @@ export type JobCategory =
   | 'NEIGHBORHOOD'
   | 'HOME_CARE'
   | 'FINANCIAL_MARKET'
-  | 'HOME_INTELLIGENCE';
+  | 'HOME_INTELLIGENCE'
+  | 'DIY_TEMPLATES';
 
 export interface JobRegistryEntry {
   key: string;
@@ -450,7 +451,7 @@ export const JOB_REGISTRY: JobRegistryEntry[] = [
     triggerSupported: false,
   },
 
-  // ── Permit Tracker (cron) ─────────────────────────────────────────────────
+  // ── Permit Tracker (cron + BullMQ) ────────────────────────────────────────
   {
     key: 'permit-inspection-reminders',
     name: 'Permit Inspection Reminders',
@@ -460,6 +461,60 @@ export const JOB_REGISTRY: JobRegistryEntry[] = [
     schedule: 'Daily at 8:00 AM EST',
     cronExpression: '0 8 * * *',
     type: 'cron',
+    triggerSupported: false,
+  },
+  {
+    key: 'permit-fetch',
+    name: 'Permit History Fetch',
+    description:
+      'Fetches municipal permit history for a property from the configured permit-records provider.',
+    category: 'MAINTENANCE',
+    schedule: 'On-demand (event-driven)',
+    cronExpression: '',
+    type: 'bullmq',
+    queueName: 'permit-fetch-queue',
+    jobName: 'fetch-permit-history',
+    triggerSupported: false,
+  },
+  {
+    key: 'detect-unpermitted-work',
+    name: 'Detect Unpermitted Work',
+    description:
+      'Cross-references a property\'s inventory/renovation records against its fetched permit history to flag work that appears to lack a matching permit.',
+    category: 'MAINTENANCE',
+    schedule: 'On-demand (event-driven)',
+    cronExpression: '',
+    type: 'bullmq',
+    queueName: 'detect-unpermitted-work-queue',
+    jobName: 'detect-unpermitted-work',
+    triggerSupported: false,
+  },
+  {
+    key: 'generate-permit-disclosure',
+    name: 'Generate Permit Disclosure',
+    description:
+      'Generates a seller-facing permit disclosure export/report for a property.',
+    category: 'MAINTENANCE',
+    schedule: 'On-demand (event-driven)',
+    cronExpression: '',
+    type: 'bullmq',
+    queueName: 'generate-permit-disclosure-queue',
+    jobName: 'generate-permit-disclosure',
+    triggerSupported: false,
+  },
+
+  // ── DIY Templates (BullMQ, event-driven) ──────────────────────────────────
+  {
+    key: 'generate-diy-ai-guide',
+    name: 'DIY AI Guide Generation',
+    description:
+      'Generates an AI-authored DIY project guide (materials, steps, safety notes) via Gemini for a homeowner-requested guide.',
+    category: 'DIY_TEMPLATES',
+    schedule: 'On-demand (event-driven)',
+    cronExpression: '',
+    type: 'bullmq',
+    queueName: 'diy-ai-guide-queue',
+    jobName: 'GENERATE_DIY_AI_GUIDE',
     triggerSupported: false,
   },
 ];

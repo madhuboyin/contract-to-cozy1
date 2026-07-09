@@ -1,6 +1,6 @@
 // apps/backend/src/services/JobQueue.service.ts
 
-import { Queue, Worker, Job } from 'bullmq';
+import { Queue } from 'bullmq';
 import * as dotenv from 'dotenv';
 dotenv.config();
 
@@ -9,10 +9,8 @@ import {
   PropertyIntelligenceJobType,
   PropertyIntelligenceJobPayload,
 } from '../config/risk-job-types';
-import RiskAssessmentService from './RiskAssessment.service';
-import { FinancialReportService } from './FinancialReport.service';
-import { HiddenAssetService } from './hiddenAssets.service';
 import { logger } from '../lib/logger';
+import { DEFAULT_JOB_RETENTION } from '../config/queueDefaults';
 
 // -----------------------------------------------------------------------------
 // Shared Redis Connection Configuration
@@ -35,7 +33,7 @@ export const connection = {
 export const propertyIntelligenceQueue =
   new Queue<PropertyIntelligenceJobPayload>(
     'property-intelligence-queue',
-    { connection }
+    { connection, defaultJobOptions: DEFAULT_JOB_RETENTION }
   );
 
 // Email Notification Queue
@@ -57,7 +55,7 @@ export interface EmailNotificationJobPayload {
 export const emailNotificationQueue =
   new Queue<EmailNotificationJobPayload>(
     'email-notification-queue',
-    { connection }
+    { connection, defaultJobOptions: DEFAULT_JOB_RETENTION }
   );
 
 // Push notification queue
@@ -67,7 +65,7 @@ interface PushNotificationJobPayload {
 
 export const pushNotificationQueue = new Queue<PushNotificationJobPayload>(
   'push-notification-queue',
-  { connection }
+  { connection, defaultJobOptions: DEFAULT_JOB_RETENTION }
 );
 
 // SMS notification queue
@@ -77,7 +75,7 @@ interface SmsNotificationJobPayload {
 
 export const smsNotificationQueue = new Queue<SmsNotificationJobPayload>(
   'sms-notification-queue',
-  { connection }
+  { connection, defaultJobOptions: DEFAULT_JOB_RETENTION }
 );
 
 // Permit History & Unpermitted Work Tracker queues
@@ -97,25 +95,18 @@ export interface GeneratePermitDisclosureJobPayload {
 
 export const permitFetchQueue = new Queue<PermitFetchJobPayload>(
   'permit-fetch-queue',
-  { connection }
+  { connection, defaultJobOptions: DEFAULT_JOB_RETENTION }
 );
 
 export const detectUnpermittedWorkQueue = new Queue<DetectUnpermittedWorkJobPayload>(
   'detect-unpermitted-work-queue',
-  { connection }
+  { connection, defaultJobOptions: DEFAULT_JOB_RETENTION }
 );
 
 export const generatePermitDisclosureQueue = new Queue<GeneratePermitDisclosureJobPayload>(
   'generate-permit-disclosure-queue',
-  { connection }
+  { connection, defaultJobOptions: DEFAULT_JOB_RETENTION }
 );
-
-// -----------------------------------------------------------------------------
-// Services
-// -----------------------------------------------------------------------------
-const riskAssessmentService = RiskAssessmentService;
-const financialReportService = new FinancialReportService();
-const hiddenAssetService = new HiddenAssetService();
 
 // -----------------------------------------------------------------------------
 // Job Queue Service
@@ -176,70 +167,6 @@ export class JobQueueService {
     logger.info(
       `[QUEUE-MANAGER] Risk + FES + HiddenAssets jobs enqueued for property ${propertyId}`
     );
-  }
-
-  /**
-   * Worker processor for Property Intelligence jobs
-   */
-  private async processPropertyJob(
-    job: Job<PropertyIntelligenceJobPayload>
-  ): Promise<void> {
-    const { propertyId, jobType } = job.data;
-
-    try {
-      switch (jobType) {
-        case PropertyIntelligenceJobType.CALCULATE_RISK_REPORT:
-          await riskAssessmentService.calculateAndSaveReport(propertyId);
-          break;
-
-        case PropertyIntelligenceJobType.CALCULATE_FES:
-          await financialReportService.calculateAndSaveFES(propertyId);
-          break;
-
-        case PropertyIntelligenceJobType.CALCULATE_HIDDEN_ASSETS:
-          await hiddenAssetService.refreshMatchesInternal(propertyId);
-          break;
-
-        default:
-          logger.warn(`[WORKER] Unknown job type: ${jobType}`);
-      }
-    } catch (err: any) {
-      logger.error(
-        `[WORKER] Job failed [${jobType}] for property ${propertyId}`,
-        err.message
-      );
-      throw err;
-    }
-  }
-
-  /**
-   * Start Property Intelligence Worker
-   */
-  public startWorker() {
-    const worker = new Worker<PropertyIntelligenceJobPayload>(
-      propertyIntelligenceQueue.name,
-      (job) => this.processPropertyJob(job),
-      { connection, concurrency: 5 }
-    );
-
-    worker.on('completed', (job) => {
-      logger.info(
-        `[WORKER] Job completed: ${job.id} (${job.data.jobType})`
-      );
-    });
-
-    worker.on('failed', (job, err) => {
-      logger.error(
-        `[WORKER] Job failed: ${job?.id} (${job?.data.jobType})`,
-        err.message
-      );
-    });
-
-    logger.info(
-      `[WORKER] Property Intelligence Worker started`
-    );
-
-    return worker;
   }
 
   /**

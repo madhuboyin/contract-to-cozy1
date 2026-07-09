@@ -5,6 +5,7 @@ import { logger } from '../lib/logger';
 import { LLM_MODEL_CONFIG } from '../config/ai-constants';
 import { Queue } from 'bullmq';
 import { connection } from './JobQueue.service';
+import { DEFAULT_JOB_RETENTION } from '../config/queueDefaults';
 
 export const DIY_AI_GUIDE_JOB = 'GENERATE_DIY_AI_GUIDE';
 export const DIY_AI_GUIDE_QUEUE = 'diy-ai-guide-queue';
@@ -14,8 +15,7 @@ export const diyAiGuideQueue = new Queue<{ guideId: string }>(DIY_AI_GUIDE_QUEUE
   defaultJobOptions: {
     attempts: 2,
     backoff: { type: 'exponential', delay: 3000 },
-    removeOnComplete: true,
-    removeOnFail: 500,
+    ...DEFAULT_JOB_RETENTION,
   },
 });
 

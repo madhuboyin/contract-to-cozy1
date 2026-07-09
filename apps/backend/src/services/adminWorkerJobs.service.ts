@@ -6,6 +6,7 @@
 import { Queue } from 'bullmq';
 import { connection } from './JobQueue.service';
 import { JOB_REGISTRY } from '../config/workerJobRegistry';
+import { DEFAULT_JOB_RETENTION } from '../config/queueDefaults';
 
 // Re-export types so routes/controllers don't need two import paths
 export type { JobCategory, JobRegistryEntry } from '../config/workerJobRegistry';
@@ -49,7 +50,10 @@ const queueCache = new Map<string, Queue>();
 
 function getQueue(queueName: string): Queue {
   if (!queueCache.has(queueName)) {
-    queueCache.set(queueName, new Queue(queueName, { connection }));
+    queueCache.set(
+      queueName,
+      new Queue(queueName, { connection, defaultJobOptions: DEFAULT_JOB_RETENTION }),
+    );
   }
   return queueCache.get(queueName)!;
 }

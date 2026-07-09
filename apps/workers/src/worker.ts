@@ -25,6 +25,7 @@ import { startDomainEventsPoller } from './runners/domainEvents.poller';
 import { startHighPriorityEmailEnqueuePoller } from './runners/highPriorityEmailEnqueue.poller';
 import { startClaimFollowUpDuePoller } from './runners/claimFollowUpDue.poller';
 import { alertOnJobFailure } from './lib/jobFailureAlert';
+import { DEFAULT_JOB_RETENTION } from '../../backend/src/config/queueDefaults';
 import { recallIngestJob, RECALL_INGEST_JOB } from './jobs/recallIngest.job';
 import { recallMatchJob, RECALL_MATCH_JOB } from './jobs/recallMatch.job';
 import { coverageLapseIncidentsJob } from './jobs/coverageLapseIncidents.job';
@@ -954,13 +955,12 @@ startClaimFollowUpDuePoller({
 // =============================================================================
 const RECALL_QUEUE_NAME = 'recall-jobs-queue';
 
-const recallQueue = new Queue(RECALL_QUEUE_NAME, { 
+const recallQueue = new Queue(RECALL_QUEUE_NAME, {
   connection: redisConnection,
   defaultJobOptions: {
     attempts: 3,
     backoff: { type: 'exponential', delay: 1000 },
-    removeOnComplete: true, // Clean up to save Redis memory
-    removeOnFail: 1000
+    ...DEFAULT_JOB_RETENTION,
   }
 });
 

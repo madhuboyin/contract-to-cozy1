@@ -34,6 +34,7 @@ const CATEGORY_LABELS: Record<JobCategory, string> = {
   HOME_CARE: 'Home Care',
   FINANCIAL_MARKET: 'Financial Market',
   HOME_INTELLIGENCE: 'Home Intelligence',
+  DIY_TEMPLATES: 'DIY Templates',
 };
 
 const CATEGORY_ORDER: JobCategory[] = [
@@ -46,6 +47,7 @@ const CATEGORY_ORDER: JobCategory[] = [
   'HOME_CARE',
   'FINANCIAL_MARKET',
   'HOME_INTELLIGENCE',
+  'DIY_TEMPLATES',
 ];
 
 function fmtDuration(ms: number | null): string {

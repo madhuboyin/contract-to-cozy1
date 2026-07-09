@@ -2,6 +2,7 @@ import { Queue } from 'bullmq';
 import { prisma } from '../lib/prisma';
 import { DeliveryStatus, NotificationChannel } from '@prisma/client';
 import { logger } from '../lib/logger';
+import { DEFAULT_JOB_RETENTION } from '../../../backend/src/config/queueDefaults';
 
 const QUEUE_NAME = 'email-notification-queue';
 const JOB_NAME = 'SEND_EMAIL_NOTIFICATION';
@@ -18,7 +19,10 @@ export function startHighPriorityEmailEnqueuePoller(opts?: {
   const intervalMs = opts?.intervalMs ?? 10_000;
   const batchSize = opts?.batchSize ?? 50;
 
-  const queue = new Queue(QUEUE_NAME, { connection: opts?.redisConnection });
+  const queue = new Queue(QUEUE_NAME, {
+    connection: opts?.redisConnection,
+    defaultJobOptions: DEFAULT_JOB_RETENTION,
+  });
 
   let stopped = false;
 
