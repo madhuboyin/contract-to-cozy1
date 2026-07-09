@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { Check, Eye, EyeOff, KeyRound, Mail, Phone, User } from 'lucide-react';
 import ProviderAuthTemplate from '@/components/providers/ProviderAuthTemplate';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useAuth } from '@/lib/auth/AuthContext';
@@ -19,7 +20,8 @@ type JoinField =
   | 'confirmPassword'
   | 'businessName'
   | 'phone'
-  | 'serviceCategories';
+  | 'serviceCategories'
+  | 'acceptedTerms';
 
 type JoinErrors = Partial<Record<JoinField, string>>;
 
@@ -61,11 +63,18 @@ export default function ProviderJoinPage() {
     businessName: '',
     phone: '',
     serviceCategories: [] as string[],
+    acceptedTerms: false,
   });
 
   const setField = (field: JoinField, value: string | string[]) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
     setErrors((prev) => ({ ...prev, [field]: undefined }));
+    setFormError('');
+  };
+
+  const setAcceptedTerms = (checked: boolean) => {
+    setFormData((prev) => ({ ...prev, acceptedTerms: checked }));
+    setErrors((prev) => ({ ...prev, acceptedTerms: undefined }));
     setFormError('');
   };
 
@@ -93,6 +102,9 @@ export default function ProviderJoinPage() {
     if (!formData.phone.trim()) nextErrors.phone = 'Phone number is required.';
     if (formData.serviceCategories.length === 0) {
       nextErrors.serviceCategories = 'Select at least one service category.';
+    }
+    if (!formData.acceptedTerms) {
+      nextErrors.acceptedTerms = 'You must agree to the Terms of Service and Privacy Policy to continue.';
     }
 
     return nextErrors;
@@ -138,6 +150,7 @@ export default function ProviderJoinPage() {
         firstName: formData.firstName,
         lastName: formData.lastName,
         role: 'PROVIDER',
+        acceptedTerms: formData.acceptedTerms,
       });
 
       if (result && result.success) {
@@ -396,6 +409,30 @@ export default function ProviderJoinPage() {
               })}
             </div>
             {errors.serviceCategories ? <p className="mt-1.5 text-xs text-rose-700">{errors.serviceCategories}</p> : null}
+          </div>
+
+          <div>
+            <label htmlFor="acceptedTerms" className="flex cursor-pointer items-start gap-2.5">
+              <Checkbox
+                id="acceptedTerms"
+                checked={formData.acceptedTerms}
+                onCheckedChange={(checked) => setAcceptedTerms(checked === true)}
+                aria-invalid={Boolean(errors.acceptedTerms)}
+                className="mt-0.5"
+              />
+              <span className="text-sm text-slate-600">
+                I have read and agree to the{' '}
+                <Link href="/terms" target="_blank" className="font-medium text-brand-700 hover:text-brand-900">
+                  Terms of Service
+                </Link>{' '}
+                and{' '}
+                <Link href="/privacy" target="_blank" className="font-medium text-brand-700 hover:text-brand-900">
+                  Privacy Policy
+                </Link>
+                .
+              </span>
+            </label>
+            {errors.acceptedTerms ? <p className="mt-1.5 text-xs text-rose-700">{errors.acceptedTerms}</p> : null}
           </div>
 
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
