@@ -142,6 +142,11 @@ export async function ingestRecallsJob() {
       if (rows.length) {
         await tx.recallProduct.createMany({ data: rows.slice(0, 200) });
       }
+    }, {
+      // Default 5s timeout/2s maxWait is too tight under connection-pool contention
+      // from other cron jobs sharing this pod's Prisma client around the same 2-3 AM window.
+      maxWait: 10000,
+      timeout: 15000,
     });
 
     upserted++;

@@ -54,28 +54,71 @@ function getQueue(queueName: string): Queue {
   return queueCache.get(queueName)!;
 }
 
+// Some registry entries share one physical BullMQ queue (e.g. recall-ingest and
+// recall-match both run on 'recall-jobs-queue'). For those, stats/recent-runs
+// must be filtered by job.name or each card ends up showing the other job's data.
+const SHARED_QUEUE_NAMES = new Set<string>(
+  Object.entries(
+    JOB_REGISTRY.reduce<Record<string, number>>((counts, job) => {
+      if (job.queueName) counts[job.queueName] = (counts[job.queueName] ?? 0) + 1;
+      return counts;
+    }, {}),
+  )
+    .filter(([, count]) => count > 1)
+    .map(([queueName]) => queueName),
+);
+
 // ─── Service functions ────────────────────────────────────────────────────────
 
-async function getQueueStats(queueName: string): Promise<QueueStats> {
+async function getQueueStats(queueName: string, jobName?: string): Promise<QueueStats> {
   const q = getQueue(queueName);
-  const [waiting, active, completed, failed] = await Promise.all([
-    q.getWaitingCount(),
-    q.getActiveCount(),
-    q.getCompletedCount(),
-    q.getFailedCount(),
+
+  if (!jobName || !SHARED_QUEUE_NAMES.has(queueName)) {
+    const [waiting, active, completed, failed] = await Promise.all([
+      q.getWaitingCount(),
+      q.getActiveCount(),
+      q.getCompletedCount(),
+      q.getFailedCount(),
+    ]);
+    return { waiting, active, completed, failed };
+  }
+
+  // Shared queue: the fast Redis counters are queue-wide, not per-job-name, so we
+  // have to pull the (retention-capped) job lists and filter/count by name instead.
+  const [waitingJobs, activeJobs, completedJobs, failedJobs] = await Promise.all([
+    q.getJobs(['waiting'], 0, -1),
+    q.getJobs(['active'], 0, -1),
+    q.getJobs(['completed'], 0, -1),
+    q.getJobs(['failed'], 0, -1),
   ]);
-  return { waiting, active, completed, failed };
+  const countByName = (jobs: { name: string }[]) =>
+    jobs.filter((job) => job.name === jobName).length;
+
+  return {
+    waiting: countByName(waitingJobs),
+    active: countByName(activeJobs),
+    completed: countByName(completedJobs),
+    failed: countByName(failedJobs),
+  };
 }
 
-async function getRecentRuns(queueName: string, limit = 3): Promise<RecentRun[]> {
+async function getRecentRuns(queueName: string, jobName: string | undefined, limit = 3): Promise<RecentRun[]> {
   const q = getQueue(queueName);
+  const isShared = !!jobName && SHARED_QUEUE_NAMES.has(queueName);
+  // On a shared queue, the first (limit - 1) completed/failed entries may all belong
+  // to the other job, so widen the fetch window before filtering down by name.
+  const fetchTo = isShared ? 49 : limit - 1;
+
   const [completed, failed] = await Promise.all([
-    q.getCompleted(0, limit - 1),
-    q.getFailed(0, limit - 1),
+    q.getCompleted(0, fetchTo),
+    q.getFailed(0, fetchTo),
   ]);
 
+  const filterByName = <T extends { name: string }>(jobs: T[]) =>
+    isShared ? jobs.filter((job) => job.name === jobName) : jobs;
+
   const runs: RecentRun[] = [
-    ...completed.map((job) => ({
+    ...filterByName(completed).map((job) => ({
       id: job.id ?? '',
       jobName: job.name,
       status: 'completed' as const,
@@ -83,7 +126,7 @@ async function getRecentRuns(queueName: string, limit = 3): Promise<RecentRun[]>
       durationMs:
         job.finishedOn && job.processedOn ? job.finishedOn - job.processedOn : null,
     })),
-    ...failed.map((job) => ({
+    ...filterByName(failed).map((job) => ({
       id: job.id ?? '',
       jobName: job.name,
       status: 'failed' as const,
@@ -107,8 +150,8 @@ export async function listWorkerJobs(): Promise<WorkerJobDetail[]> {
       }
       try {
         const [queueStats, recentRuns] = await Promise.all([
-          getQueueStats(job.queueName),
-          getRecentRuns(job.queueName),
+          getQueueStats(job.queueName, job.jobName),
+          getRecentRuns(job.queueName, job.jobName),
         ]);
         return { ...job, queueStats, recentRuns };
       } catch {

@@ -24,6 +24,7 @@ import { runMaterialSpecExportPoller } from './runners/materialSpecExport.poller
 import { startDomainEventsPoller } from './runners/domainEvents.poller';
 import { startHighPriorityEmailEnqueuePoller } from './runners/highPriorityEmailEnqueue.poller';
 import { startClaimFollowUpDuePoller } from './runners/claimFollowUpDue.poller';
+import { alertOnJobFailure } from './lib/jobFailureAlert';
 import { recallIngestJob, RECALL_INGEST_JOB } from './jobs/recallIngest.job';
 import { recallMatchJob, RECALL_MATCH_JOB } from './jobs/recallMatch.job';
 import { coverageLapseIncidentsJob } from './jobs/coverageLapseIncidents.job';
@@ -841,6 +842,7 @@ function startWorker() {
     jobsActiveGauge.dec({ queue: QUEUE_NAME });
     jobsProcessedTotal.inc({ queue: QUEUE_NAME, job_name: job?.data?.jobType ?? 'unknown', status: 'failed' });
     logger.error({ err }, `[QUEUE] Job ${job?.id} (${job?.data.jobType}) failed`);
+    void alertOnJobFailure(QUEUE_NAME, job, err);
   });
 
   propertyIntelligenceWorker.on('error', (err) => {
@@ -876,6 +878,7 @@ function startWorker() {
 
   emailNotificationWorker.on('failed', (job, err) => {
     logger.error({ err }, `[QUEUE] Email notification job ${job?.id} failed`);
+    void alertOnJobFailure('email-notification-queue', job, err);
   });
 
   emailNotificationWorker.on('error', (err) => {
@@ -895,6 +898,10 @@ function startWorker() {
     { connection: redisConnection }
   );
   logger.info(`[WORKER] Push Notification Worker started for queue: push-notification-queue`);
+  pushWorker.on('failed', (job, err) => {
+    logger.error({ err }, `[PUSH-WORKER] delivery ${job?.data?.notificationDeliveryId} failed`);
+    void alertOnJobFailure('push-notification-queue', job, err);
+  });
   // ===============================
   // SMS NOTIFICATIONS
   // ===============================
@@ -907,6 +914,10 @@ function startWorker() {
     },
     { connection: redisConnection }
   );
+  smsWorker.on('failed', (job, err) => {
+    logger.error({ err }, `[SMS-WORKER] delivery ${job?.data?.notificationDeliveryId} failed`);
+    void alertOnJobFailure('sms-notification-queue', job, err);
+  });
   logger.info(`[WORKER] Property Intelligence Worker started for queue: ${QUEUE_NAME}`);
 
 }
@@ -984,6 +995,7 @@ recallWorker.on('completed', (job) => {
 
 recallWorker.on('failed', (job, err) => {
   logger.error(`[RECALL-WORKER] Job ${job?.id} (${job?.name}) failed:`, err);
+  void alertOnJobFailure(RECALL_QUEUE_NAME, job, err);
 });
 
 // Enqueue recall jobs on startup (using repeatable logic instead of manual IDs)
@@ -1031,7 +1043,10 @@ const diyAiGuideWorker = new Worker<{ guideId: string }>(
 
 diyAiGuideWorker.on('ready', () => logger.info(`[DIY-GUIDE-WORKER] Ready on queue: ${DIY_AI_GUIDE_QUEUE}`));
 diyAiGuideWorker.on('completed', (job) => logger.info(`[DIY-GUIDE-WORKER] Guide ${job.data.guideId} completed`));
-diyAiGuideWorker.on('failed', (job, err) => logger.error({ err }, `[DIY-GUIDE-WORKER] Guide ${job?.data?.guideId} failed`));
+diyAiGuideWorker.on('failed', (job, err) => {
+  logger.error({ err }, `[DIY-GUIDE-WORKER] Guide ${job?.data?.guideId} failed`);
+  void alertOnJobFailure(DIY_AI_GUIDE_QUEUE, job, err);
+});
 
 // =============================================================================
 // PERMIT HISTORY & UNPERMITTED WORK TRACKER — BullMQ workers
@@ -1048,7 +1063,10 @@ const permitFetchWorker = new Worker<{ fetchJobId: string; propertyId: string }>
 );
 permitFetchWorker.on('ready', () => logger.info('[PERMIT-FETCH-WORKER] Ready on queue: permit-fetch-queue'));
 permitFetchWorker.on('completed', (job) => logger.info(`[PERMIT-FETCH-WORKER] fetchJob ${job.data.fetchJobId} completed`));
-permitFetchWorker.on('failed', (job, err) => logger.error({ err }, `[PERMIT-FETCH-WORKER] fetchJob ${job?.data?.fetchJobId} failed`));
+permitFetchWorker.on('failed', (job, err) => {
+  logger.error({ err }, `[PERMIT-FETCH-WORKER] fetchJob ${job?.data?.fetchJobId} failed`);
+  void alertOnJobFailure('permit-fetch-queue', job, err);
+});
 
 const detectUnpermittedWorker = new Worker<{ propertyId: string }>(
   'detect-unpermitted-work-queue',
@@ -1061,7 +1079,10 @@ const detectUnpermittedWorker = new Worker<{ propertyId: string }>(
 );
 detectUnpermittedWorker.on('ready', () => logger.info('[DETECT-UNPERMITTED-WORKER] Ready on queue: detect-unpermitted-work-queue'));
 detectUnpermittedWorker.on('completed', (job) => logger.info(`[DETECT-UNPERMITTED-WORKER] property ${job.data.propertyId} completed`));
-detectUnpermittedWorker.on('failed', (job, err) => logger.error({ err }, `[DETECT-UNPERMITTED-WORKER] property ${job?.data?.propertyId} failed`));
+detectUnpermittedWorker.on('failed', (job, err) => {
+  logger.error({ err }, `[DETECT-UNPERMITTED-WORKER] property ${job?.data?.propertyId} failed`);
+  void alertOnJobFailure('detect-unpermitted-work-queue', job, err);
+});
 
 const permitDisclosureWorker = new Worker<{ exportId: string; propertyId: string }>(
   'generate-permit-disclosure-queue',
@@ -1074,7 +1095,10 @@ const permitDisclosureWorker = new Worker<{ exportId: string; propertyId: string
 );
 permitDisclosureWorker.on('ready', () => logger.info('[PERMIT-DISCLOSURE-WORKER] Ready on queue: generate-permit-disclosure-queue'));
 permitDisclosureWorker.on('completed', (job) => logger.info(`[PERMIT-DISCLOSURE-WORKER] export ${job.data.exportId} completed`));
-permitDisclosureWorker.on('failed', (job, err) => logger.error({ err }, `[PERMIT-DISCLOSURE-WORKER] export ${job?.data?.exportId} failed`));
+permitDisclosureWorker.on('failed', (job, err) => {
+  logger.error({ err }, `[PERMIT-DISCLOSURE-WORKER] export ${job?.data?.exportId} failed`);
+  void alertOnJobFailure('generate-permit-disclosure-queue', job, err);
+});
 
 // =============================================================================
 // DUMMY RADAR INGEST (QA / E2E)
@@ -1205,6 +1229,7 @@ cronTriggerWorker.on('failed', (job, err) => {
   jobsActiveGauge.dec({ queue: 'cron-trigger-queue' });
   jobsProcessedTotal.inc({ queue: 'cron-trigger-queue', job_name: job?.name ?? 'unknown', status: 'failed' });
   logger.error(`[CRON-TRIGGER] Job ${job?.id} (${job?.name}) failed:`, err);
+  void alertOnJobFailure('cron-trigger-queue', job, err);
 });
 
 // Start cron jobs from registry, then start BullMQ worker
