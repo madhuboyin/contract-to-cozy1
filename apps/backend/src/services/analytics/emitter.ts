@@ -20,6 +20,8 @@ import {
   TrackDecisionGuidedInput,
   TrackPropertyActivatedInput,
   TrackToolUsedInput,
+  TrackOutcomeGeneratedInput,
+  TrackOutcomeActionTakenInput,
 } from './schemas';
 import { logger } from '../../lib/logger';
 
@@ -152,6 +154,9 @@ export const analyticsEmitter = {
   trackBatch(inputs: TrackEventInput[]): void {
     if (inputs.length === 0) return;
     safeTrack('batch', ProductAnalyticsService.trackEvents(inputs));
+    for (const input of inputs) {
+      maybeActivateProperty(input.propertyId, input.userId);
+    }
   },
 
   /**
@@ -196,6 +201,28 @@ export const analyticsEmitter = {
     safeTrack(
       `${ProductAnalyticsEventType.TOOL_USED}:${input.featureKey}`,
       ProductAnalyticsService.trackToolUsed(input)
+    );
+    maybeActivateProperty(input.propertyId, input.userId);
+  },
+
+  /**
+   * Track a generated outcome (savings/risk-prevention/time-saved) surfaced to the user.
+   */
+  outcomeGenerated(input: TrackOutcomeGeneratedInput): void {
+    safeTrack(
+      `${ProductAnalyticsEventType.OUTCOME_GENERATED}:${input.sourceEngine}`,
+      ProductAnalyticsService.trackOutcomeGenerated(input)
+    );
+    maybeActivateProperty(input.propertyId, input.userId);
+  },
+
+  /**
+   * Track a user acting on a previously-generated outcome.
+   */
+  outcomeActionTaken(input: TrackOutcomeActionTakenInput): void {
+    safeTrack(
+      `${ProductAnalyticsEventType.OUTCOME_ACTION_TAKEN}:${input.sourceEngine}`,
+      ProductAnalyticsService.trackOutcomeActionTaken(input)
     );
     maybeActivateProperty(input.propertyId, input.userId);
   },

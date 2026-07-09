@@ -9,7 +9,7 @@ import {
   HomeEventType,
 } from '@prisma/client';
 import { prisma } from '../lib/prisma';
-import { ProductAnalyticsService } from './analytics/service';
+import { analyticsEmitter } from './analytics';
 
 type RiskTolerance = 'LOW' | 'MEDIUM' | 'HIGH';
 type UsageIntensity = 'LOW' | 'MEDIUM' | 'HIGH';
@@ -678,7 +678,7 @@ export class ReplaceRepairService {
     });
 
     // Track outcome generated for the user
-    void ProductAnalyticsService.trackOutcomeGenerated({
+    analyticsEmitter.outcomeGenerated({
       userId,
       propertyId,
       outcomeType: 'RISK_PREVENTION',

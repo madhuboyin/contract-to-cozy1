@@ -1,7 +1,7 @@
 // apps/backend/src/services/valueIntelligence.service.ts
 
 import { prisma } from '../lib/prisma';
-import { ProductAnalyticsService } from './analytics/service';
+import { analyticsEmitter } from './analytics';
 
 const MAINTENANCE_PREMIUM_RATE = 0.08; // 8% conservative uplift from documented care
 const RESALE_ADVANTAGE_HEALTH_BASELINE = 80;
@@ -149,7 +149,7 @@ export async function calculateHomeEquity(propertyId: string): Promise<HomeEquit
   });
 
   if (maintenancePremiumCents > 5000) {
-    void ProductAnalyticsService.trackOutcomeGenerated({
+    analyticsEmitter.outcomeGenerated({
       propertyId,
       outcomeType: 'SAVINGS',
       sourceEngine: 'VALUE_INTELLIGENCE',

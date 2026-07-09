@@ -4,7 +4,7 @@ import { GoogleGenAI } from "@google/genai";
 import { prisma } from '../lib/prisma';
 import { Prisma, WarrantyCategory } from '@prisma/client';
 import { logger } from '../lib/logger';
-import { ProductAnalyticsService } from './analytics/service';
+import { analyticsEmitter } from './analytics';
 import { APIError } from '../middleware/error.middleware';
 import { AICircuitBreaker, AICircuitOpenError, AITimeoutError, withTimeout } from '../lib/aiResilience';
 
@@ -271,7 +271,7 @@ export class DocumentIntelligenceService {
       logger.info({ warrantyId: warranty.id }, '[DOC-INTELLIGENCE] Auto-created warranty');
 
       // Track outcome generated for the user
-      void ProductAnalyticsService.trackOutcomeGenerated({
+      analyticsEmitter.outcomeGenerated({
         propertyId,
         outcomeType: 'RISK_PREVENTION',
         sourceEngine: 'WARRANTY_AUTO_DETECTION',
@@ -362,7 +362,7 @@ export class DocumentIntelligenceService {
       logger.info({ policyId: policy.id }, '[DOC-INTELLIGENCE] Auto-created insurance policy');
 
       // Track outcome generated for the user
-      void ProductAnalyticsService.trackOutcomeGenerated({
+      analyticsEmitter.outcomeGenerated({
         propertyId,
         outcomeType: 'SAVINGS',
         sourceEngine: 'INSURANCE_AUTO_DETECTION',

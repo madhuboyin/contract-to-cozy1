@@ -713,7 +713,7 @@ function FeatureAdoptionTable({
   return (
     <Section
       title="Feature Adoption"
-      description={`${q.data?.totalActivatedHomes ?? '—'} activated homes in period.`}
+      description={`${q.data?.totalActivatedHomes ?? '—'} activated homes to date. Adoption % = homes using the feature in this period ÷ homes activated to date.`}
       icon={Activity}
     >
       {features.length === 0 ? (

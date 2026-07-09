@@ -1,6 +1,6 @@
 import { Response } from 'express';
 import { ProductAnalyticsEventType } from '@prisma/client';
-import { ProductAnalyticsService } from '../services/analytics/service';
+import { analyticsEmitter } from '../services/analytics';
 import { CustomRequest } from '../types';
 import { logger } from '../lib/logger';
 
@@ -21,7 +21,7 @@ export async function trackRouteRedirectEvent(req: CustomRequest, res: Response)
     }
 
     const payload = (req.body ?? {}) as RouteRedirectEventInput;
-    await ProductAnalyticsService.trackEvent({
+    analyticsEmitter.track({
       eventType: ProductAnalyticsEventType.TOOL_USED,
       eventName: 'ROUTE_REDIRECTED',
       userId,
