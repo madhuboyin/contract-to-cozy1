@@ -171,6 +171,9 @@ export function middleware(request: NextRequest) {
     '/forgot-password',
     '/reset-password',
     '/verify-email',
+    '/terms',
+    '/privacy',
+    '/cookies',
   ];
 
   const isPublicRoute = pathname === '/' || publicRoutes.some((r) => pathname.startsWith(r));
