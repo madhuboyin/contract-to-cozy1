@@ -18,6 +18,7 @@ import {
 import { APIError } from '../middleware/error.middleware';
 import { modelShortlistAdvisorService } from '../services/guidanceEngine/modelShortlistAdvisor.service';
 import { vendorSuggestionsAdvisorService } from '../services/guidanceEngine/vendorSuggestionsAdvisor.service';
+import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
 
 const GUIDANCE_TARGET_ACTIONS = new Set([
   'BOOKING',
@@ -37,7 +38,7 @@ function requireUserId(req: CustomRequest): string {
 
 export async function getPropertyGuidance(req: CustomRequest, res: Response, next: NextFunction) {
   try {
-    requireUserId(req);
+    const userId = requireUserId(req);
     const propertyId = req.params.propertyId;
     const userSelectedScopeId = req.query.userSelectedScopeId
       ? String(req.query.userSelectedScopeId)
@@ -45,6 +46,15 @@ export async function getPropertyGuidance(req: CustomRequest, res: Response, nex
 
     const payload = await guidanceJourneyService.getPropertyGuidance(propertyId, {
       userSelectedScopeId,
+    });
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.TOOL_USED,
+      userId,
+      propertyId,
+      moduleKey: AnalyticsModule.GUIDANCE,
+      featureKey: AnalyticsFeature.GUIDANCE_ADVISOR,
+      metadataJson: { journeyCount: payload.journeys.length },
     });
 
     res.json({
@@ -118,6 +128,15 @@ export async function resolveGuidanceSignal(req: CustomRequest, res: Response, n
       actorUserId: userId,
     });
 
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.ACTION_COMPLETED,
+      userId,
+      propertyId,
+      moduleKey: AnalyticsModule.GUIDANCE,
+      featureKey: AnalyticsFeature.GUIDANCE_ADVISOR,
+      metadataJson: { actionType: 'resolve_signal' },
+    });
+
     res.status(201).json({
       success: true,
       data: {
@@ -142,6 +161,15 @@ export async function completeGuidanceStep(req: CustomRequest, res: Response, ne
       nextStatus: 'COMPLETED',
       producedData: req.body?.producedData ?? null,
       actorUserId: userId,
+    });
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.ACTION_COMPLETED,
+      userId,
+      propertyId,
+      moduleKey: AnalyticsModule.GUIDANCE,
+      featureKey: AnalyticsFeature.GUIDANCE_ADVISOR,
+      metadataJson: { actionType: 'complete_step' },
     });
 
     res.json({
@@ -302,6 +330,15 @@ export async function startGuidanceJourney(req: CustomRequest, res: Response, ne
       req.body,
       userId
     );
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.ACTION_COMPLETED,
+      userId,
+      propertyId,
+      moduleKey: AnalyticsModule.GUIDANCE,
+      featureKey: AnalyticsFeature.GUIDANCE_ADVISOR,
+      metadataJson: { actionType: 'start_journey' },
+    });
 
     res.status(201).json({
       success: true,
@@ -469,6 +506,15 @@ export async function generateGuidanceModelShortlist(req: CustomRequest, res: Re
       journeyContext,
     });
 
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.ACTION_COMPLETED,
+      userId: req.user?.userId,
+      propertyId,
+      moduleKey: AnalyticsModule.GUIDANCE,
+      featureKey: AnalyticsFeature.GUIDANCE_ADVISOR,
+      metadataJson: { actionType: 'generate_model_shortlist' },
+    });
+
     res.json({ success: true, data: result });
   } catch (error) {
     next(error);
@@ -490,6 +536,15 @@ export async function generateGuidanceVendorSuggestions(req: CustomRequest, res:
       assetName,
       modelName,
       budgetMax,
+    });
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.ACTION_COMPLETED,
+      userId: req.user?.userId,
+      propertyId,
+      moduleKey: AnalyticsModule.GUIDANCE,
+      featureKey: AnalyticsFeature.GUIDANCE_ADVISOR,
+      metadataJson: { actionType: 'generate_vendor_suggestions' },
     });
 
     res.json({ success: true, data: result });

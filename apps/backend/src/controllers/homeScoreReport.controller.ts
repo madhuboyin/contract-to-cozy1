@@ -6,6 +6,7 @@ import {
   HomeScoreReportService,
 } from '../services/homeScoreReport.service';
 import { logger } from '../lib/logger';
+import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
 
 const service = new HomeScoreReportService();
 
@@ -25,6 +26,16 @@ export async function getHomeScoreReport(req: CustomRequest, res: Response) {
 
     const weeks = parseWeeks(req.query.weeks, 26);
     const report = await service.getReport(propertyId, userId, weeks);
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.TOOL_USED,
+      userId,
+      propertyId,
+      moduleKey: AnalyticsModule.DASHBOARD,
+      featureKey: AnalyticsFeature.HOME_SCORE_REPORT,
+      metadataJson: { weeks },
+    });
+
     return res.json({ success: true, data: { report } });
   } catch (error: any) {
     logger.error({ err: error }, 'Error fetching home score report');
@@ -45,6 +56,16 @@ export async function refreshHomeScoreReport(req: CustomRequest, res: Response) 
 
     const weeks = parseWeeks(req.query.weeks, 26);
     const report = await service.refresh(propertyId, userId, weeks);
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.ACTION_COMPLETED,
+      userId,
+      propertyId,
+      moduleKey: AnalyticsModule.DASHBOARD,
+      featureKey: AnalyticsFeature.HOME_SCORE_REPORT,
+      metadataJson: { actionType: 'refresh' },
+    });
+
     return res.json({ success: true, data: { report } });
   } catch (error: any) {
     logger.error({ err: error }, 'Error refreshing home score report');
@@ -125,6 +146,16 @@ export async function submitHomeScoreCorrection(req: CustomRequest, res: Respons
 
     const payload = (req.body ?? {}) as HomeScoreCorrectionInput;
     const result = await service.submitCorrection(propertyId, userId, payload);
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.ACTION_COMPLETED,
+      userId,
+      propertyId,
+      moduleKey: AnalyticsModule.DASHBOARD,
+      featureKey: AnalyticsFeature.HOME_SCORE_REPORT,
+      metadataJson: { actionType: 'submit_correction' },
+    });
+
     return res.status(201).json({ success: true, data: result });
   } catch (error: any) {
     logger.error({ err: error }, 'Error submitting home score correction');

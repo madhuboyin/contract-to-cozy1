@@ -1,5 +1,6 @@
 // apps/backend/src/controllers/recalls.controller.ts
-import { Request, Response } from 'express';
+import { Response } from 'express';
+import { CustomRequest as Request } from '../types';
 import {
   confirmRecallMatch,
   dismissRecallMatch,
@@ -10,6 +11,7 @@ import {
 import { RecallResolutionType } from '@prisma/client';
 import { guidanceJourneyService } from '../services/guidanceEngine/guidanceJourney.service';
 import { logger } from '../lib/logger';
+import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
 
 function isNotFoundError(err: any) {
   const msg = String(err?.message || '').toLowerCase();
@@ -20,6 +22,15 @@ export async function listRecalls(req: Request, res: Response) {
   const { propertyId } = req.params as any;
 
   const rows = await listPropertyRecallMatches(propertyId);
+
+  analyticsEmitter.track({
+    eventType: AnalyticsEvent.TOOL_USED,
+    userId: req.user?.userId,
+    propertyId,
+    moduleKey: AnalyticsModule.MARKETPLACE,
+    featureKey: AnalyticsFeature.RECALLS,
+    metadataJson: { count: Array.isArray(rows) ? rows.length : undefined },
+  });
 
   return res.json({
     propertyId,
@@ -57,6 +68,15 @@ export async function confirmMatch(req: Request, res: Response) {
     } catch (guidanceError) {
       logger.warn({ guidanceError }, '[GUIDANCE] recall confirm hook failed');
     }
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.ACTION_COMPLETED,
+      userId: req.user?.userId,
+      propertyId,
+      moduleKey: AnalyticsModule.MARKETPLACE,
+      featureKey: AnalyticsFeature.RECALLS,
+      metadataJson: { actionType: 'confirm_match', matchId, recallId: row.recallId },
+    });
 
     return res.json(row);
   } catch (err: any) {
@@ -96,6 +116,15 @@ export async function dismissMatch(req: Request, res: Response) {
     } catch (guidanceError) {
       logger.warn({ guidanceError }, '[GUIDANCE] recall dismiss hook failed');
     }
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.ACTION_COMPLETED,
+      userId: req.user?.userId,
+      propertyId,
+      moduleKey: AnalyticsModule.MARKETPLACE,
+      featureKey: AnalyticsFeature.RECALLS,
+      metadataJson: { actionType: 'dismiss_match', matchId, recallId: row.recallId },
+    });
 
     return res.json(row);
   } catch (err: any) {
@@ -150,6 +179,15 @@ export async function resolveMatch(req: Request, res: Response) {
     } catch (guidanceError) {
       logger.warn({ guidanceError }, '[GUIDANCE] recall resolve hook failed');
     }
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.ACTION_COMPLETED,
+      userId: req.user?.userId,
+      propertyId,
+      moduleKey: AnalyticsModule.MARKETPLACE,
+      featureKey: AnalyticsFeature.RECALLS,
+      metadataJson: { actionType: 'resolve_match', matchId, resolutionType: row.resolutionType },
+    });
 
     return res.json(row);
   } catch (err: any) {

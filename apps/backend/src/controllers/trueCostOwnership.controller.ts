@@ -4,6 +4,7 @@ import { TrueCostOwnershipService } from '../services/trueCostOwnership.service'
 import { CustomRequest } from '../types';
 import { guidanceJourneyService } from '../services/guidanceEngine/guidanceJourney.service';
 import { logger } from '../lib/logger';
+import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
 
 const svc = new TrueCostOwnershipService();
 
@@ -79,6 +80,15 @@ export async function getTrueCostOwnership(req: CustomRequest, res: Response) {
   } catch (guidanceError) {
     logger.warn({ guidanceError }, '[GUIDANCE] true-cost hook failed');
   }
+
+  analyticsEmitter.track({
+    eventType: AnalyticsEvent.TOOL_USED,
+    userId: req.user?.userId,
+    propertyId,
+    moduleKey: AnalyticsModule.FINANCIAL,
+    featureKey: AnalyticsFeature.TRUE_COST_OWNERSHIP,
+    metadataJson: { years, annualTotalNow: dto.current.annualTotalNow, confidence: dto.meta.confidence },
+  });
 
   return res.json({
     success: true,

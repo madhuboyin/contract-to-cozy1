@@ -3,6 +3,7 @@ import { CustomRequest } from '../types';
 import { HomeDigitalWillService } from '../services/homeDigitalWill.service';
 import { HomeDigitalWillSectionType } from '@prisma/client';
 import { APIError } from '../middleware/error.middleware';
+import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
 
 const svc = new HomeDigitalWillService();
 
@@ -12,6 +13,16 @@ export async function getDigitalWillByProperty(req: CustomRequest, res: Response
   try {
     const { propertyId } = req.params;
     const data = await svc.getByProperty(propertyId);
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.TOOL_USED,
+      userId: req.user?.userId,
+      propertyId,
+      moduleKey: AnalyticsModule.DASHBOARD,
+      featureKey: AnalyticsFeature.HOME_DIGITAL_WILL,
+      metadataJson: {},
+    });
+
     res.json({ success: true, data });
   } catch (err) {
     next(err);
@@ -22,6 +33,16 @@ export async function createDigitalWillForProperty(req: CustomRequest, res: Resp
   try {
     const { propertyId } = req.params;
     const data = await svc.getOrCreateByProperty(propertyId, req.body);
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.ACTION_COMPLETED,
+      userId: req.user?.userId,
+      propertyId,
+      moduleKey: AnalyticsModule.DASHBOARD,
+      featureKey: AnalyticsFeature.HOME_DIGITAL_WILL,
+      metadataJson: { actionType: 'create_will' },
+    });
+
     res.status(201).json({ success: true, data });
   } catch (err) {
     next(err);

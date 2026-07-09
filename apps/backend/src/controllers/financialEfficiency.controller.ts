@@ -1,11 +1,13 @@
 // apps/backend/src/controllers/financialEfficiency.controller.ts
 
 import { Request, Response } from 'express';
+import { CustomRequest } from '../types';
 import { FinancialReportService } from '../services/FinancialReport.service';
 import { prisma } from '../lib/prisma';
 import JobQueueService from '../services/JobQueue.service';
 import { PropertyIntelligenceJobType, PropertyIntelligenceJobPayload } from '../config/risk-job-types';
 import { logger } from '../lib/logger';
+import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
 
 const financialReportService = new FinancialReportService();
 
@@ -54,7 +56,7 @@ export const getPrimaryFESSummary = async (req: Request, res: Response) => {
  * GET /api/v1/properties/:propertyId/financial-efficiency
  * Retrieves the full detailed FES report.
  */
-export const getDetailedFESReport = async (req: Request, res: Response) => {
+export const getDetailedFESReport = async (req: CustomRequest, res: Response) => {
   const { propertyId } = req.params;
 
   try {
@@ -68,6 +70,15 @@ export const getDetailedFESReport = async (req: Request, res: Response) => {
     if (report === 'MISSING_DATA') {
         return res.status(200).json({ status: 'MISSING_DATA', message: 'Insufficient data.' });
     }
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.TOOL_USED,
+      userId: req.user?.userId,
+      propertyId,
+      moduleKey: AnalyticsModule.FINANCIAL,
+      featureKey: AnalyticsFeature.FINANCIAL_EFFICIENCY,
+      metadataJson: { financialEfficiencyScore: (report as any)?.financialEfficiencyScore, status: (report as any)?.status },
+    });
 
     // FIX: Wrap in success/data format
     return res.status(200).json({
@@ -84,7 +95,7 @@ export const getDetailedFESReport = async (req: Request, res: Response) => {
  * POST /api/v1/properties/:propertyId/financial-efficiency/recalculate
  * Triggers an on-demand FES calculation job.
  */
-export const recalculateFES = async (req: Request, res: Response) => {
+export const recalculateFES = async (req: CustomRequest, res: Response) => {
   const { propertyId } = req.params;
 
   try {
@@ -96,7 +107,16 @@ export const recalculateFES = async (req: Request, res: Response) => {
     // Explicitly add the job to the queue
     await (JobQueueService as any).addJob(PropertyIntelligenceJobType.CALCULATE_FES, payload);
 
-    return res.status(202).json({ 
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.ACTION_COMPLETED,
+      userId: req.user?.userId,
+      propertyId,
+      moduleKey: AnalyticsModule.FINANCIAL,
+      featureKey: AnalyticsFeature.FINANCIAL_EFFICIENCY,
+      metadataJson: { actionType: 'recalculate' },
+    });
+
+    return res.status(202).json({
         success: true, 
         message: 'Financial Efficiency calculation job successfully queued.',
         status: 'QUEUED'

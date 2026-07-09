@@ -8,6 +8,7 @@ import {
 } from '../services/doNothingSimulator.service';
 import { guidanceJourneyService } from '../services/guidanceEngine/guidanceJourney.service';
 import { logger } from '../lib/logger';
+import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
 
 const service = new DoNothingSimulatorService();
 
@@ -42,6 +43,16 @@ export async function createDoNothingScenario(req: CustomRequest, res: Response)
 
     const payload = req.body as CreateDoNothingScenarioInput;
     const result = await service.createScenario(propertyId, userId, payload);
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.ACTION_COMPLETED,
+      userId,
+      propertyId,
+      moduleKey: AnalyticsModule.FINANCIAL,
+      featureKey: AnalyticsFeature.DO_NOTHING_SIMULATOR,
+      metadataJson: { actionType: 'create_scenario' },
+    });
+
     return res.status(201).json({ success: true, data: result });
   } catch (error: any) {
     logger.error({ err: error }, 'Error creating do-nothing scenario');
@@ -119,6 +130,15 @@ export async function getLatestDoNothingRun(req: CustomRequest, res: Response) {
       horizonMonths: Number.isFinite(horizonMonths) ? horizonMonths : undefined,
     });
 
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.TOOL_USED,
+      userId,
+      propertyId,
+      moduleKey: AnalyticsModule.FINANCIAL,
+      featureKey: AnalyticsFeature.DO_NOTHING_SIMULATOR,
+      metadataJson: { exists: result.exists, riskScoreDelta: result.exists ? result.run.riskScoreDelta : null },
+    });
+
     return res.json({ success: true, data: result });
   } catch (error: any) {
     logger.error({ err: error }, 'Error fetching latest do-nothing run');
@@ -182,6 +202,19 @@ export async function runDoNothingSimulation(req: CustomRequest, res: Response) 
     } catch (guidanceError) {
       logger.warn({ guidanceError }, '[GUIDANCE] do-nothing hook failed');
     }
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.ACTION_COMPLETED,
+      userId,
+      propertyId,
+      moduleKey: AnalyticsModule.FINANCIAL,
+      featureKey: AnalyticsFeature.DO_NOTHING_SIMULATOR,
+      metadataJson: {
+        actionType: 'run_simulation',
+        horizonMonths: result.run.horizonMonths,
+        riskScoreDelta: result.run.riskScoreDelta,
+      },
+    });
 
     return res.json({ success: true, data: result });
   } catch (error: any) {

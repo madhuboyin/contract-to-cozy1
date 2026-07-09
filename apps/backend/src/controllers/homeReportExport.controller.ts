@@ -6,6 +6,7 @@ import { presignGetObject } from '../services/storage/presign';
 import { getS3Client } from '../services/storage/s3Client';
 import { DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { logger } from '../lib/logger';
+import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
 
 
 export async function createHomeReportExport(req: Request, res: Response) {
@@ -32,6 +33,15 @@ export async function createHomeReportExport(req: Request, res: Response) {
 
     await prisma.homeReportExportEvent.create({
       data: { reportId: exp.id, type: 'CREATED' },
+    });
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.ACTION_COMPLETED,
+      userId,
+      propertyId,
+      moduleKey: AnalyticsModule.DASHBOARD,
+      featureKey: AnalyticsFeature.HOME_REPORT_EXPORT,
+      metadataJson: { actionType: 'create_export', type: exp.type },
     });
 
     // ✅ FIX: Return standard format
@@ -65,10 +75,19 @@ export async function listHomeReportExportsForProperty(req: Request, res: Respon
       take: 50,
     });
 
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.TOOL_USED,
+      userId,
+      propertyId,
+      moduleKey: AnalyticsModule.DASHBOARD,
+      featureKey: AnalyticsFeature.HOME_REPORT_EXPORT,
+      metadataJson: { exportCount: exports.length },
+    });
+
     // ✅ FIX: Return standard format
-    return res.json({ 
+    return res.json({
       success: true,
-      data: { exports } 
+      data: { exports }
     });
   } catch (error: any) {
     logger.error({ err: error }, '[listHomeReportExportsForProperty] Error');
@@ -125,10 +144,19 @@ export async function downloadHomeReportExport(req: Request, res: Response) {
       expiresInSeconds: 60,
     });
 
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.ACTION_COMPLETED,
+      userId,
+      propertyId: exp.propertyId,
+      moduleKey: AnalyticsModule.DASHBOARD,
+      featureKey: AnalyticsFeature.HOME_REPORT_EXPORT,
+      metadataJson: { actionType: 'download' },
+    });
+
     // ✅ FIX: Return standard format
-    return res.json({ 
+    return res.json({
       success: true,
-      data: { url } 
+      data: { url }
     });
   } catch (error: any) {
     logger.error({ err: error }, '[downloadHomeReportExport] Error');
@@ -188,6 +216,15 @@ export async function createShareLinkForReport(req: Request, res: Response) {
         type: 'SHARED',
         meta: { expiresInDays },
       },
+    });
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.ACTION_COMPLETED,
+      userId,
+      propertyId: exp.propertyId,
+      moduleKey: AnalyticsModule.DASHBOARD,
+      featureKey: AnalyticsFeature.HOME_REPORT_EXPORT,
+      metadataJson: { actionType: 'share', expiresInDays },
     });
 
     // ✅ FIX: Return standard format
@@ -378,6 +415,15 @@ export async function regenerateHomeReportExport(req: Request, res: Response) {
       sections: exp.sections as any,
       locale: exp.locale ?? undefined,
       timezone: exp.timezone ?? undefined,
+    });
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.ACTION_COMPLETED,
+      userId,
+      propertyId: exp.propertyId,
+      moduleKey: AnalyticsModule.DASHBOARD,
+      featureKey: AnalyticsFeature.HOME_REPORT_EXPORT,
+      metadataJson: { actionType: 'regenerate', regeneratedFromId: existing.id },
     });
 
     return res.status(202).json({

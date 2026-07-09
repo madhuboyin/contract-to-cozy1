@@ -9,6 +9,7 @@ import { AuthRequest } from '../types/auth.types';
 import { markCoverageAnalysisStale, markItemCoverageAnalysesStale } from '../services/coverageAnalysis.service';
 import { markRiskPremiumOptimizerStale } from '../services/riskPremiumOptimizer.service';
 import { markDoNothingRunsStale } from '../services/doNothingSimulator.service';
+import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
 
 // [FIX]: Define the expected structure of the authenticated user.
 interface AuthUserWithId {
@@ -66,7 +67,18 @@ class RiskAssessmentController {
       }
 
       const report = await RiskAssessmentService.getOrCreateRiskReport(propertyId);
-      
+
+      analyticsEmitter.track({
+        eventType: AnalyticsEvent.TOOL_USED,
+        userId: auth.userId,
+        propertyId,
+        moduleKey: AnalyticsModule.RISK,
+        featureKey: AnalyticsFeature.RISK_ASSESSMENT,
+        metadataJson: {
+          riskScore: (report as any)?.riskScore,
+        },
+      });
+
       return res.status(200).json(report);
     } catch (error) {
       next(error);
@@ -155,7 +167,16 @@ class RiskAssessmentController {
       // Phase 3.4: PDF generation logic (using service placeholder)
       try {
         const pdfBuffer = await RiskAssessmentService.generateRiskReportPdf(propertyId);
-        
+
+        analyticsEmitter.track({
+          eventType: AnalyticsEvent.ACTION_COMPLETED,
+          userId: auth.userId,
+          propertyId,
+          moduleKey: AnalyticsModule.RISK,
+          featureKey: AnalyticsFeature.RISK_ASSESSMENT,
+          metadataJson: { actionType: 'generate_pdf' },
+        });
+
         res.setHeader('Content-Type', 'application/pdf');
         res.setHeader('Content-Disposition', `attachment; filename="risk-report-${propertyId}.pdf"`);
         return res.send(pdfBuffer);
@@ -198,7 +219,16 @@ class RiskAssessmentController {
       await markRiskPremiumOptimizerStale(propertyId);
       await markDoNothingRunsStale(propertyId);
 
-      return res.status(200).json({ 
+      analyticsEmitter.track({
+        eventType: AnalyticsEvent.ACTION_COMPLETED,
+        userId: auth.userId,
+        propertyId,
+        moduleKey: AnalyticsModule.RISK,
+        featureKey: AnalyticsFeature.RISK_ASSESSMENT,
+        metadataJson: { actionType: 'recalculate', riskScore: (report as any)?.riskScore },
+      });
+
+      return res.status(200).json({
         message: 'Risk assessment recalculated successfully.',
         report: report,
       });

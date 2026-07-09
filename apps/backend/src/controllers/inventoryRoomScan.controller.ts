@@ -3,6 +3,7 @@ import { CustomRequest } from '../types';
 import { APIError } from '../middleware/error.middleware';
 import { RoomScanService } from '../services/roomScan/roomScan.service';
 import { NextFunction, Response } from 'express';
+import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
 
 const svc = new RoomScanService();
 
@@ -25,6 +26,15 @@ export async function startRoomScan(req: CustomRequest, res: Response, next: Nex
 
     const files = pickUploadedFiles(req);
     const out = await svc.runRoomScan({ propertyId, roomId, userId, files });
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.ACTION_COMPLETED,
+      userId,
+      propertyId,
+      moduleKey: AnalyticsModule.INVENTORY,
+      featureKey: AnalyticsFeature.INVENTORY_SCAN,
+      metadataJson: { actionType: 'room_scan', roomId, draftCount: (out.drafts || []).length },
+    });
 
     // ✅ IMPORTANT: return APISuccess envelope for frontend APIClient.post()
     return res.json({
@@ -78,6 +88,15 @@ export async function listRoomScanSessions(req: CustomRequest, res: Response, ne
       roomId,
       userId,
       limit,
+    });
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.TOOL_USED,
+      userId,
+      propertyId,
+      moduleKey: AnalyticsModule.INVENTORY,
+      featureKey: AnalyticsFeature.INVENTORY_SCAN,
+      metadataJson: { roomId, count: sessions.length },
     });
 
     return res.json({

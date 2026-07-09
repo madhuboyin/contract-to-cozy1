@@ -6,6 +6,7 @@ import { markCoverageAnalysisStale, markItemCoverageAnalysesStale } from '../ser
 import { markReplaceRepairStale } from '../services/replaceRepairAnalysis.service';
 import { markRiskPremiumOptimizerStale } from '../services/riskPremiumOptimizer.service';
 import { markDoNothingRunsStale } from '../services/doNothingSimulator.service';
+import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
 
 const svc = new InventoryImportService();
 
@@ -73,6 +74,15 @@ export async function importInventoryFromXlsx(
       await markRiskPremiumOptimizerStale(propertyId);
       await markDoNothingRunsStale(propertyId);
     }
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.ACTION_COMPLETED,
+      userId: req.user?.userId,
+      propertyId,
+      moduleKey: AnalyticsModule.INVENTORY,
+      featureKey: AnalyticsFeature.INVENTORY_ITEM,
+      metadataJson: { actionType: 'import_xlsx', dryRun, createdCount: Number(result.createdCount || 0) },
+    });
 
     return res.json(result);
   } catch (err) {

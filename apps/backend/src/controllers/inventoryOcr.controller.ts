@@ -6,6 +6,7 @@ import { APIError } from '../middleware/error.middleware';
 import { extractLabelFieldsFromImage } from '../services/inventoryOcr.service';
 import { InventoryDraftService } from '../services/inventoryDraft.service';
 import { logger } from '../lib/logger';
+import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
 
 const draftSvc = new InventoryDraftService();
 
@@ -151,6 +152,16 @@ export async function ocrLabelToDraft(req: CustomRequest, res: Response) {
   });
   
   logger.info({ draft }, 'draft');
+
+  analyticsEmitter.track({
+    eventType: AnalyticsEvent.ACTION_COMPLETED,
+    userId,
+    propertyId,
+    moduleKey: AnalyticsModule.INVENTORY,
+    featureKey: AnalyticsFeature.INVENTORY_SCAN,
+    metadataJson: { actionType: 'ocr_scan', provider: ocr.provider, fieldCount: fields.length },
+  });
+
   return res.json({
     sessionId: session.id,
     draftId: draft.id,
@@ -168,6 +179,16 @@ export async function dismissDraft(req: CustomRequest, res: Response) {
   if (!userId) throw new APIError('Authentication required', 401, 'AUTH_REQUIRED');
 
   const d = await draftSvc.dismissDraft(propertyId, userId, draftId);
+
+  analyticsEmitter.track({
+    eventType: AnalyticsEvent.ACTION_COMPLETED,
+    userId,
+    propertyId,
+    moduleKey: AnalyticsModule.INVENTORY,
+    featureKey: AnalyticsFeature.INVENTORY_SCAN,
+    metadataJson: { actionType: 'dismiss_draft', draftId },
+  });
+
   return res.json({ ok: true, draft: d });
 }
 
@@ -178,6 +199,16 @@ export async function confirmDraft(req: CustomRequest, res: Response) {
   if (!userId) throw new APIError('Authentication required', 401, 'AUTH_REQUIRED');
 
   const item = await draftSvc.confirmDraftToInventoryItem(propertyId, userId, draftId);
+
+  analyticsEmitter.track({
+    eventType: AnalyticsEvent.ACTION_COMPLETED,
+    userId,
+    propertyId,
+    moduleKey: AnalyticsModule.INVENTORY,
+    featureKey: AnalyticsFeature.INVENTORY_SCAN,
+    metadataJson: { actionType: 'confirm_draft', draftId },
+  });
+
   return res.json({ item });
 }
 export async function listDrafts(req: CustomRequest, res: Response, next: NextFunction) {
@@ -202,6 +233,15 @@ export async function listDrafts(req: CustomRequest, res: Response, next: NextFu
         })
       : await draftSvc.listDrafts(propertyId, userId);
 
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.TOOL_USED,
+      userId,
+      propertyId,
+      moduleKey: AnalyticsModule.INVENTORY,
+      featureKey: AnalyticsFeature.INVENTORY_SCAN,
+      metadataJson: { count: Array.isArray(drafts) ? drafts.length : 0 },
+    });
+
     // ✅ ALWAYS an array
     return res.json({ drafts: Array.isArray(drafts) ? drafts : [] });
   } catch (err) {
@@ -216,6 +256,16 @@ export async function bulkDismissDrafts(req: CustomRequest, res: Response) {
 
   const draftIds = Array.isArray((req as any).body?.draftIds) ? (req as any).body.draftIds : [];
   const out = await draftSvc.bulkDismiss(propertyId, userId, draftIds);
+
+  analyticsEmitter.track({
+    eventType: AnalyticsEvent.ACTION_COMPLETED,
+    userId,
+    propertyId,
+    moduleKey: AnalyticsModule.INVENTORY,
+    featureKey: AnalyticsFeature.INVENTORY_SCAN,
+    metadataJson: { actionType: 'bulk_dismiss_drafts', count: draftIds.length },
+  });
+
   return res.json(out);
 }
 
@@ -226,5 +276,15 @@ export async function bulkConfirmDrafts(req: CustomRequest, res: Response) {
 
   const draftIds = Array.isArray((req as any).body?.draftIds) ? (req as any).body.draftIds : [];
   const out = await draftSvc.bulkConfirm(propertyId, userId, draftIds);
+
+  analyticsEmitter.track({
+    eventType: AnalyticsEvent.ACTION_COMPLETED,
+    userId,
+    propertyId,
+    moduleKey: AnalyticsModule.INVENTORY,
+    featureKey: AnalyticsFeature.INVENTORY_SCAN,
+    metadataJson: { actionType: 'bulk_confirm_drafts', count: draftIds.length },
+  });
+
   return res.json(out);
 }

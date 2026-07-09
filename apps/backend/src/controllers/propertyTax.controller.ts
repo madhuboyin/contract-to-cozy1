@@ -2,6 +2,7 @@
 import { Response, NextFunction } from 'express';
 import { CustomRequest } from '../types';
 import { PropertyTaxService } from '../services/propertyTax.service';
+import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
 
 const service = new PropertyTaxService();
 
@@ -24,6 +25,15 @@ export async function getPropertyTaxEstimate(req: CustomRequest, res: Response, 
       assessedValue,
       taxRate,
       historyYears: historyYears ? Math.round(historyYears) : undefined,
+    });
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.TOOL_USED,
+      userId: req.user?.userId,
+      propertyId,
+      moduleKey: AnalyticsModule.TAX,
+      featureKey: AnalyticsFeature.PROPERTY_TAX,
+      metadataJson: { annualTax: estimate.current?.annualTax, confidence: estimate.current?.confidence },
     });
 
     res.json({ success: true, data: { estimate } });

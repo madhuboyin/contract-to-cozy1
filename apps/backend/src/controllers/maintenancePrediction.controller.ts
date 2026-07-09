@@ -7,6 +7,7 @@ import {
   updateForecastStatus,
 } from '../services/maintenancePrediction.service';
 import { APIError } from '../middleware/error.middleware';
+import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
 
 function parseStatuses(value: unknown): PredictionStatus[] | undefined {
   if (!value) return undefined;
@@ -40,6 +41,16 @@ export async function generateMaintenanceForecast(
   try {
     const { propertyId } = req.params;
     const result = await generateForecast(propertyId);
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.ACTION_COMPLETED,
+      userId: req.user?.userId,
+      propertyId,
+      moduleKey: AnalyticsModule.MAINTENANCE,
+      featureKey: AnalyticsFeature.MAINTENANCE_PREDICTION,
+      metadataJson: { actionType: 'generate_forecast' },
+    });
+
     return res.json({ success: true, data: result });
   } catch (error) {
     next(error);
@@ -59,6 +70,15 @@ export async function getMaintenanceForecast(
     const predictions = await listForecast(propertyId, {
       statuses,
       limit,
+    });
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.TOOL_USED,
+      userId: req.user?.userId,
+      propertyId,
+      moduleKey: AnalyticsModule.MAINTENANCE,
+      featureKey: AnalyticsFeature.MAINTENANCE_PREDICTION,
+      metadataJson: { predictionCount: Array.isArray(predictions) ? predictions.length : undefined },
     });
 
     return res.json({ success: true, data: predictions });
@@ -82,6 +102,16 @@ export async function patchMaintenanceForecastStatus(
 
     const status = statusInput as PredictionStatus;
     const result = await updateForecastStatus(propertyId, predictionId, status);
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.ACTION_COMPLETED,
+      userId: req.user?.userId,
+      propertyId,
+      moduleKey: AnalyticsModule.MAINTENANCE,
+      featureKey: AnalyticsFeature.MAINTENANCE_PREDICTION,
+      metadataJson: { actionType: 'update_forecast_status', status },
+    });
+
     return res.json({ success: true, data: result });
   } catch (error) {
     next(error);

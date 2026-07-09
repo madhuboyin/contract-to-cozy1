@@ -2,6 +2,7 @@
 import { Response, NextFunction } from 'express';
 import { CustomRequest } from '../types';
 import { RoomInsightsService } from '../services/roomInsights.service';
+import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
 
 const svc = new RoomInsightsService();
 
@@ -9,6 +10,16 @@ export async function getRoomInsights(req: CustomRequest, res: Response, next: N
   try {
     const { propertyId, roomId } = req.params;
     const data = await svc.getRoomInsights(propertyId, roomId);
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.TOOL_USED,
+      userId: req.user?.userId,
+      propertyId,
+      moduleKey: AnalyticsModule.AI_INSIGHTS,
+      featureKey: AnalyticsFeature.ROOM_INSIGHTS,
+      metadataJson: { roomId },
+    });
+
     res.json({ success: true, data });
   } catch (err) {
     next(err);

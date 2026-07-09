@@ -8,6 +8,7 @@ import {
 import { HomeSavingsService } from '../services/homeSavings.service';
 import { guidanceJourneyService } from '../services/guidanceEngine/guidanceJourney.service';
 import { logger } from '../lib/logger';
+import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
 
 const service = new HomeSavingsService();
 
@@ -38,6 +39,19 @@ export async function getHomeSavingsSummary(req: CustomRequest, res: Response) {
   try {
     const userId = requireUserId(req);
     const result = await service.getSummary(req.params.propertyId, userId);
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.TOOL_USED,
+      userId,
+      propertyId: req.params.propertyId,
+      moduleKey: AnalyticsModule.FINANCIAL,
+      featureKey: AnalyticsFeature.HOME_SAVINGS,
+      metadataJson: {
+        potentialMonthlySavings: result.potentialMonthlySavings,
+        potentialAnnualSavings: result.potentialAnnualSavings,
+      },
+    });
+
     return res.json({ success: true, data: result });
   } catch (error: any) {
     const status = error?.message === 'Authentication required.' ? 401 : 500;
@@ -78,6 +92,16 @@ export async function upsertHomeSavingsAccount(req: CustomRequest, res: Response
       userId,
       payload
     );
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.ACTION_COMPLETED,
+      userId,
+      propertyId: req.params.propertyId,
+      moduleKey: AnalyticsModule.FINANCIAL,
+      featureKey: AnalyticsFeature.HOME_SAVINGS,
+      metadataJson: { actionType: 'upsert_account', categoryKey: req.params.categoryKey },
+    });
+
     return res.json({ success: true, data: result });
   } catch (error: any) {
     const status = error?.message === 'Authentication required.' ? 401 : 500;
@@ -132,6 +156,19 @@ export async function runHomeSavingsComparison(req: CustomRequest, res: Response
     } catch (guidanceError) {
       logger.warn({ guidanceError }, '[GUIDANCE] home savings hook failed');
     }
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.ACTION_COMPLETED,
+      userId,
+      propertyId: req.params.propertyId,
+      moduleKey: AnalyticsModule.FINANCIAL,
+      featureKey: AnalyticsFeature.HOME_SAVINGS,
+      metadataJson: {
+        actionType: 'run_comparison',
+        potentialMonthlySavings: result.summary.potentialMonthlySavings,
+        potentialAnnualSavings: result.summary.potentialAnnualSavings,
+      },
+    });
 
     return res.json({ success: true, data: result });
   } catch (error: any) {

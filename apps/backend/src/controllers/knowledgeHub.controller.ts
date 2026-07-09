@@ -1,5 +1,6 @@
 import { NextFunction, Request, Response } from 'express';
 import { knowledgeHubService } from '../services/knowledgeHub.service';
+import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
 
 export async function listPublishedKnowledgeArticles(_req: Request, res: Response, next: NextFunction) {
   try {
@@ -20,6 +21,13 @@ export async function getPublishedKnowledgeArticle(req: Request, res: Response, 
         message: 'Knowledge article not found.',
       });
     }
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.ARTICLE_VIEWED,
+      moduleKey: AnalyticsModule.KNOWLEDGE_HUB,
+      featureKey: AnalyticsFeature.KNOWLEDGE_ARTICLE,
+      metadataJson: { slug: req.params.slug },
+    });
 
     return res.json({ success: true, data: { article } });
   } catch (error) {

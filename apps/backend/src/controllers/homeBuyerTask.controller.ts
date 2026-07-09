@@ -8,6 +8,7 @@ import {
   UpdateHomeBuyerTaskStatusRequest,
   LinkTaskToBookingRequest,
 } from '../types/task.types';
+import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
 
 /**
  * GET /api/home-buyer-tasks/checklist
@@ -24,6 +25,14 @@ const handleGetChecklist = async (
     }
 
     const checklist = await HomeBuyerTaskService.getOrCreateChecklist(req.user.userId);
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.TOOL_USED,
+      userId: req.user.userId,
+      moduleKey: AnalyticsModule.HOME_BUYER,
+      featureKey: AnalyticsFeature.HOME_BUYER_TASK,
+      metadataJson: {},
+    });
 
     return res.status(200).json({
       success: true,
@@ -122,6 +131,14 @@ const handleCreateTask = async (
 
     const task = await HomeBuyerTaskService.createTask(req.user.userId, data);
 
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.ACTION_COMPLETED,
+      userId: req.user.userId,
+      moduleKey: AnalyticsModule.HOME_BUYER,
+      featureKey: AnalyticsFeature.HOME_BUYER_TASK,
+      metadataJson: { actionType: 'create_task' },
+    });
+
     return res.status(201).json({
       success: true,
       data: task,
@@ -211,6 +228,14 @@ const handleUpdateTaskStatus = async (
       status
     );
 
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.ACTION_COMPLETED,
+      userId: req.user.userId,
+      moduleKey: AnalyticsModule.HOME_BUYER,
+      featureKey: AnalyticsFeature.HOME_BUYER_TASK,
+      metadataJson: { actionType: 'update_task_status', status },
+    });
+
     return res.status(200).json({
       success: true,
       data: task,
@@ -284,6 +309,14 @@ const handleLinkToBooking = async (
       taskId,
       bookingId
     );
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.ACTION_COMPLETED,
+      userId: req.user.userId,
+      moduleKey: AnalyticsModule.HOME_BUYER,
+      featureKey: AnalyticsFeature.HOME_BUYER_TASK,
+      metadataJson: { actionType: 'link_to_booking' },
+    });
 
     return res.status(200).json({
       success: true,

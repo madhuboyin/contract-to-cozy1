@@ -19,6 +19,7 @@ import { AuthRequest } from '../types/auth.types';
 import { guidanceBookingGuardService } from '../services/guidanceEngine/guidanceBookingGuard.service';
 import { guidanceJourneyService } from '../services/guidanceEngine/guidanceJourney.service';
 import { logger } from '../lib/logger';
+import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
 
 export class BookingController {
   /**
@@ -118,6 +119,15 @@ export class BookingController {
         }
       }
 
+      analyticsEmitter.track({
+        eventType: AnalyticsEvent.ACTION_COMPLETED,
+        userId,
+        propertyId: booking.property.id,
+        moduleKey: AnalyticsModule.MARKETPLACE,
+        featureKey: AnalyticsFeature.BOOKING,
+        metadataJson: { actionType: 'create_booking', category: booking.category },
+      });
+
       res.status(201).json({
         success: true,
         message: 'Booking created successfully',
@@ -169,6 +179,15 @@ export class BookingController {
       const query = listBookingsSchema.parse(req.query) as ListBookingsQuery;
 
       const result = await BookingService.listBookings(userId, userRole, query);
+
+      analyticsEmitter.track({
+        eventType: AnalyticsEvent.TOOL_USED,
+        userId,
+        propertyId: query.propertyId,
+        moduleKey: AnalyticsModule.MARKETPLACE,
+        featureKey: AnalyticsFeature.BOOKING,
+        metadataJson: {},
+      });
 
       res.status(200).json({
         success: true,
@@ -331,6 +350,15 @@ export class BookingController {
 
       const booking = await BookingService.confirmBooking(id, userId);
 
+      analyticsEmitter.track({
+        eventType: AnalyticsEvent.ACTION_COMPLETED,
+        userId,
+        propertyId: booking.property.id,
+        moduleKey: AnalyticsModule.MARKETPLACE,
+        featureKey: AnalyticsFeature.BOOKING,
+        metadataJson: { actionType: 'confirm_booking' },
+      });
+
       res.status(200).json({
         success: true,
         message: 'Booking confirmed successfully',
@@ -383,6 +411,15 @@ export class BookingController {
       }
 
       const booking = await BookingService.startBooking(id, userId);
+
+      analyticsEmitter.track({
+        eventType: AnalyticsEvent.ACTION_COMPLETED,
+        userId,
+        propertyId: booking.property.id,
+        moduleKey: AnalyticsModule.MARKETPLACE,
+        featureKey: AnalyticsFeature.BOOKING,
+        metadataJson: { actionType: 'start_booking' },
+      });
 
       res.status(200).json({
         success: true,
@@ -439,6 +476,15 @@ export class BookingController {
       const input = completeBookingSchema.parse(req.body) as CompleteBookingInput;
 
       const booking = await BookingService.completeBooking(id, userId, input);
+
+      analyticsEmitter.track({
+        eventType: AnalyticsEvent.ACTION_COMPLETED,
+        userId,
+        propertyId: booking.property.id,
+        moduleKey: AnalyticsModule.MARKETPLACE,
+        featureKey: AnalyticsFeature.BOOKING,
+        metadataJson: { actionType: 'complete_booking' },
+      });
 
       res.status(200).json({
         success: true,

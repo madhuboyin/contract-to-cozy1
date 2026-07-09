@@ -7,6 +7,7 @@ import { APIError } from '../middleware/error.middleware';
 import { logger } from '../lib/logger';
 import { guidanceJourneyService } from '../services/guidanceEngine/guidanceJourney.service';
 import { prisma } from '../config/database';
+import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
 
 const service = new HomeEventRadarService();
 
@@ -112,6 +113,15 @@ export async function listRadarFeed(req: CustomRequest, res: Response, next: Nex
       cursor: req.query.cursor ? String(req.query.cursor) : undefined,
     });
 
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.TOOL_USED,
+      userId,
+      propertyId,
+      moduleKey: AnalyticsModule.RISK,
+      featureKey: AnalyticsFeature.HOME_EVENT_RADAR,
+      metadataJson: { itemCount: (result as any)?.items?.length },
+    });
+
     res.json({ success: true, data: result });
   } catch (err) {
     next(err);
@@ -159,6 +169,15 @@ export async function updateRadarMatchState(req: CustomRequest, res: Response, n
       nextState,
       req.body.stateMetaJson ?? null,
     );
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.ACTION_COMPLETED,
+      userId,
+      propertyId,
+      moduleKey: AnalyticsModule.RISK,
+      featureKey: AnalyticsFeature.HOME_EVENT_RADAR,
+      metadataJson: { actionType: 'update_match_state', matchId, state: nextState },
+    });
 
     if (
       guidanceJourneyId &&

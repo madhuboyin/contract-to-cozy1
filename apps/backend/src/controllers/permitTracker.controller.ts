@@ -5,12 +5,23 @@ import { permitFetchService } from '../services/permitFetch.service';
 import { permitDetectionService } from '../services/permitDetection.service';
 import { prisma } from '../lib/prisma';
 import { APIError } from '../middleware/error.middleware';
+import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
 
 // ── Open Data Fetch ────────────────────────────────────────────────────────────
 
 export async function triggerPermitFetch(req: Request, res: Response, next: NextFunction) {
   try {
     const result = await permitFetchService.triggerFetch(req.params.propertyId, 'USER_REQUEST');
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.ACTION_COMPLETED,
+      userId: req.user?.userId,
+      propertyId: req.params.propertyId,
+      moduleKey: AnalyticsModule.PROJECT_MGMT,
+      featureKey: AnalyticsFeature.PERMIT_TRACKER,
+      metadataJson: { actionType: 'trigger_fetch' },
+    });
+
     res.json({ success: true, data: result });
   } catch (err) { next(err); }
 }
@@ -27,6 +38,16 @@ export async function getPermitFetchStatus(req: Request, res: Response, next: Ne
 export async function listPermits(req: Request, res: Response, next: NextFunction) {
   try {
     const result = await permitTrackerService.listPermits(req.params.propertyId, req.query as any);
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.TOOL_USED,
+      userId: req.user?.userId,
+      propertyId: req.params.propertyId,
+      moduleKey: AnalyticsModule.PROJECT_MGMT,
+      featureKey: AnalyticsFeature.PERMIT_TRACKER,
+      metadataJson: { count: Array.isArray((result as any)?.permits) ? (result as any).permits.length : undefined },
+    });
+
     res.json({ success: true, data: result });
   } catch (err) { next(err); }
 }
@@ -34,6 +55,16 @@ export async function listPermits(req: Request, res: Response, next: NextFunctio
 export async function createManualPermit(req: Request, res: Response, next: NextFunction) {
   try {
     const permit = await permitTrackerService.createManualPermit(req.params.propertyId, req.body);
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.ACTION_COMPLETED,
+      userId: req.user?.userId,
+      propertyId: req.params.propertyId,
+      moduleKey: AnalyticsModule.PROJECT_MGMT,
+      featureKey: AnalyticsFeature.PERMIT_TRACKER,
+      metadataJson: { actionType: 'create_manual_permit', permitId: (permit as any)?.id },
+    });
+
     res.status(201).json({ success: true, data: { permit } });
   } catch (err) { next(err); }
 }
@@ -55,6 +86,16 @@ export async function updatePermit(req: Request, res: Response, next: NextFuncti
       req.params.propertyId,
       req.body,
     );
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.ACTION_COMPLETED,
+      userId: req.user?.userId,
+      propertyId: req.params.propertyId,
+      moduleKey: AnalyticsModule.PROJECT_MGMT,
+      featureKey: AnalyticsFeature.PERMIT_TRACKER,
+      metadataJson: { actionType: 'update_permit', permitId: req.params.permitId },
+    });
+
     res.json({ success: true, data: { permit } });
   } catch (err) { next(err); }
 }
@@ -62,6 +103,16 @@ export async function updatePermit(req: Request, res: Response, next: NextFuncti
 export async function deletePermit(req: Request, res: Response, next: NextFunction) {
   try {
     await permitTrackerService.softDeletePermit(req.params.permitId, req.params.propertyId);
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.ACTION_COMPLETED,
+      userId: req.user?.userId,
+      propertyId: req.params.propertyId,
+      moduleKey: AnalyticsModule.PROJECT_MGMT,
+      featureKey: AnalyticsFeature.PERMIT_TRACKER,
+      metadataJson: { actionType: 'delete_permit', permitId: req.params.permitId },
+    });
+
     res.status(204).send();
   } catch (err) { next(err); }
 }
@@ -174,6 +225,16 @@ export async function createManualFlag(req: Request, res: Response, next: NextFu
 export async function runDetectionScan(req: Request, res: Response, next: NextFunction) {
   try {
     const flagsCreated = await permitDetectionService.detectUnpermittedWork(req.params.propertyId);
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.ACTION_COMPLETED,
+      userId: req.user?.userId,
+      propertyId: req.params.propertyId,
+      moduleKey: AnalyticsModule.PROJECT_MGMT,
+      featureKey: AnalyticsFeature.PERMIT_TRACKER,
+      metadataJson: { actionType: 'run_detection_scan', flagsCreated },
+    });
+
     res.json({ success: true, data: { flagsCreated } });
   } catch (err) { next(err); }
 }
@@ -186,6 +247,16 @@ export async function requestDisclosureExport(req: Request, res: Response, next:
       req.params.propertyId,
       req.user!.userId,
     );
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.ACTION_COMPLETED,
+      userId: req.user?.userId,
+      propertyId: req.params.propertyId,
+      moduleKey: AnalyticsModule.PROJECT_MGMT,
+      featureKey: AnalyticsFeature.PERMIT_TRACKER,
+      metadataJson: { actionType: 'request_disclosure_export' },
+    });
+
     res.status(202).json({ success: true, data: result });
   } catch (err) { next(err); }
 }

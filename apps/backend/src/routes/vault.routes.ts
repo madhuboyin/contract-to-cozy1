@@ -16,6 +16,7 @@ import {
 } from '../services/vault.service';
 import { AuthRequest } from '../types/auth.types';
 import { auditLog } from '../lib/logger';
+import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
 
 const router = Router();
 
@@ -141,6 +142,16 @@ router.get(
     try {
       const { propertyId } = req.params;
       const status = await getVaultStatus(propertyId);
+
+      analyticsEmitter.track({
+        eventType: AnalyticsEvent.TOOL_USED,
+        userId: req.user?.userId,
+        propertyId,
+        moduleKey: AnalyticsModule.DOCUMENTS,
+        featureKey: AnalyticsFeature.VAULT,
+        metadataJson: { isConfigured: status?.isConfigured ?? null },
+      });
+
       return res.json({ success: true, data: status });
     } catch (error: any) {
       const status = error?.statusCode ?? 500;
@@ -249,6 +260,15 @@ router.post(
         ip: req.ip,
         propertyId,
         expiresAt: expiresAt.toISOString(),
+      });
+
+      analyticsEmitter.track({
+        eventType: AnalyticsEvent.ACTION_COMPLETED,
+        userId,
+        propertyId,
+        moduleKey: AnalyticsModule.DOCUMENTS,
+        featureKey: AnalyticsFeature.VAULT,
+        metadataJson: { actionType: 'create_share_link' },
       });
 
       return res.json({

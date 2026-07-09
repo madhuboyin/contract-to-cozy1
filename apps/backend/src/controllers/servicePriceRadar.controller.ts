@@ -9,6 +9,7 @@ import {
   TrackServicePriceRadarEventBody,
 } from '../validators/servicePriceRadar.validators';
 import { logger } from '../lib/logger';
+import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
 
 const service = new ServicePriceRadarService();
 
@@ -94,6 +95,19 @@ export async function createServicePriceRadarCheck(
       logger.warn({ guidanceError }, '[GUIDANCE] service price radar hook failed');
     }
 
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.ACTION_COMPLETED,
+      userId,
+      propertyId: req.params.propertyId,
+      moduleKey: AnalyticsModule.MARKETPLACE,
+      featureKey: AnalyticsFeature.SERVICE_PRICE_RADAR,
+      metadataJson: {
+        actionType: 'create_check',
+        verdict: result.check.verdict,
+        confidenceScore: result.check.confidenceScore,
+      },
+    });
+
     return res.status(201).json({ success: true, data: result });
   } catch (error) {
     return next(error);
@@ -114,6 +128,16 @@ export async function listServicePriceRadarChecks(
 
     const query = queryResult.data;
     const result = await service.listChecks(req.params.propertyId, userId, query);
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.TOOL_USED,
+      userId,
+      propertyId: req.params.propertyId,
+      moduleKey: AnalyticsModule.MARKETPLACE,
+      featureKey: AnalyticsFeature.SERVICE_PRICE_RADAR,
+      metadataJson: {},
+    });
+
     return res.status(200).json({ success: true, data: result });
   } catch (error) {
     return next(error);

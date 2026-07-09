@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { CustomRequest } from '../types';
 import { HomeScoreReportService } from '../services/homeScoreReport.service';
 import { logger } from '../lib/logger';
+import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
 
 const service = new HomeScoreReportService();
 
@@ -17,6 +18,15 @@ export async function createBuyerShareToken(req: CustomRequest, res: Response) {
     const { token, expiresAt } = await service.createBuyerShareToken(propertyId, userId, expiresInDays);
 
     const shareUrl = `${req.headers.origin || process.env.FRONTEND_URL || ''}/home-score/share/${token}`;
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.ACTION_COMPLETED,
+      userId,
+      propertyId,
+      moduleKey: AnalyticsModule.DASHBOARD,
+      featureKey: AnalyticsFeature.HOME_SCORE_SHARE,
+      metadataJson: { actionType: 'create_share_link', expiresInDays },
+    });
 
     return res.status(201).json({
       success: true,
@@ -71,6 +81,16 @@ export async function getBuyerReportPreview(req: CustomRequest, res: Response) {
     }
 
     const result = await service.getBuyerReportPreview(propertyId, userId);
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.TOOL_USED,
+      userId,
+      propertyId,
+      moduleKey: AnalyticsModule.DASHBOARD,
+      featureKey: AnalyticsFeature.HOME_SCORE_SHARE,
+      metadataJson: {},
+    });
+
     return res.json({ success: true, data: result });
   } catch (error: any) {
     logger.error({ err: error }, '[getBuyerReportPreview] Error');

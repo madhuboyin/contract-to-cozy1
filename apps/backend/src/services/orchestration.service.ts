@@ -40,6 +40,7 @@ import {
 // PHASE 2.3 INTEGRATION
 import { createTaskFromActionCenter } from './orchestrationIntegration.service';
 import { logger } from '../lib/logger';
+import { analyticsEmitter, AnalyticsModule } from './analytics';
 
 
 type DerivedFrom = {
@@ -2265,6 +2266,18 @@ export async function getOrchestrationSummary(propertyId: string): Promise<Orche
         nextBestMove = mapRecommendationToNextBestMove({
           recommendation: top,
           assumptionSetId: activeScenario?.assumptionSetId ?? null,
+        });
+
+        analyticsEmitter.decisionGuided({
+          propertyId,
+          featureKey: top.targetTool,
+          moduleKey: AnalyticsModule.DASHBOARD,
+          decisionType: top.reasonCode,
+          metadataJson: {
+            targetTool: top.targetTool,
+            score: top.score,
+            priorityBucket: top.priorityBucket,
+          },
         });
       }
     }

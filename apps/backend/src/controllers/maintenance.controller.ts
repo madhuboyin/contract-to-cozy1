@@ -4,6 +4,7 @@ import { AuthRequest } from '../types/auth.types';
 import { MaintenanceService } from '../services/maintenance.service';
 import { PropertyMaintenanceTaskService } from '../services/PropertyMaintenanceTask.service';
 import { MaintenanceTaskConfig } from '../types/maintenance.types';
+import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
 
 /**
  * Gets the list of available maintenance task templates.
@@ -19,7 +20,15 @@ const handleGetMaintenanceTemplates = async (
     }
 
     const templates = await MaintenanceService.getMaintenanceTemplates();
-    
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.TOOL_USED,
+      userId: req.user.userId,
+      moduleKey: AnalyticsModule.MAINTENANCE,
+      featureKey: AnalyticsFeature.MAINTENANCE_TASK,
+      metadataJson: { templateCount: templates.length },
+    });
+
     res.status(200).json({
       success: true,
       data: {
@@ -64,6 +73,14 @@ const handleCreateCustomMaintenanceItems = async (
         })
       )
     );
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.ACTION_COMPLETED,
+      userId,
+      moduleKey: AnalyticsModule.MAINTENANCE,
+      featureKey: AnalyticsFeature.MAINTENANCE_TASK,
+      metadataJson: { actionType: 'create_custom_tasks', taskCount: tasks.length },
+    });
 
     res.status(201).json({
       success: true,

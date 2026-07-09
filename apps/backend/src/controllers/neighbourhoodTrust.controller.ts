@@ -2,6 +2,7 @@ import { Response } from 'express';
 import { CustomRequest } from '../types';
 import { NeighbourhoodTrustService } from '../services/neighbourhoodTrust.service';
 import { logger } from '../lib/logger';
+import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
 
 const service = new NeighbourhoodTrustService();
 
@@ -22,6 +23,15 @@ export async function getZipInfo(req: CustomRequest, res: Response) {
     const zipInfo = await service.getHomeownerZipInfo(uid);
     if (!zipInfo) return res.status(404).json({ success: false, message: 'No property found to determine neighbourhood.' });
     const stats = await service.getStats(zipInfo.zipCode);
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.TOOL_USED,
+      userId: uid,
+      moduleKey: AnalyticsModule.COMMUNITY,
+      featureKey: AnalyticsFeature.NEIGHBOURHOOD_TRUST,
+      metadataJson: { zipCode: zipInfo.zipCode },
+    });
+
     return res.json({ success: true, data: { ...zipInfo, stats } });
   } catch (err: any) { return sendErr(res, err); }
 }
@@ -62,6 +72,16 @@ export async function submitEndorsement(req: CustomRequest, res: Response) {
       highlightTags: Array.isArray(highlightTags) ? highlightTags.map(String) : [],
       anonymousToNeighbors: Boolean(anonymousToNeighbors),
     });
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.ACTION_COMPLETED,
+      userId: uid,
+      propertyId: (endorsement as any)?.propertyId,
+      moduleKey: AnalyticsModule.COMMUNITY,
+      featureKey: AnalyticsFeature.NEIGHBOURHOOD_TRUST,
+      metadataJson: { actionType: 'submit_endorsement', wouldHireAgain: Boolean(wouldHireAgain) },
+    });
+
     return res.status(201).json({ success: true, data: { endorsement } });
   } catch (err: any) { return sendErr(res, err); }
 }

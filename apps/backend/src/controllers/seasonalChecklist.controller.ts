@@ -5,10 +5,11 @@ import { ClimateZoneService } from '../services/climateZone.service';
 import { Season } from '@prisma/client';
 import { prisma } from '../config/database';
 // PHASE 2.5 INTEGRATION
-import { 
-  addSeasonalTaskToMaintenance, 
-  removeSeasonalTaskFromMaintenance 
+import {
+  addSeasonalTaskToMaintenance,
+  removeSeasonalTaskFromMaintenance
 } from '../services/seasonalChecklistIntegration.service';
+import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
 
 interface AuthRequest extends Request {
   user?: {
@@ -58,6 +59,15 @@ export class SeasonalChecklistController {
         userId,
         filters
       );
+
+      analyticsEmitter.track({
+        eventType: AnalyticsEvent.TOOL_USED,
+        userId,
+        propertyId,
+        moduleKey: AnalyticsModule.MAINTENANCE,
+        featureKey: AnalyticsFeature.SEASONAL_CHECKLIST,
+        metadataJson: { checklistCount: Array.isArray(checklists) ? checklists.length : undefined },
+      });
 
       res.json({
         success: true,
@@ -136,6 +146,15 @@ export class SeasonalChecklistController {
         req.user.userId
       );
 
+      analyticsEmitter.track({
+        eventType: AnalyticsEvent.ACTION_COMPLETED,
+        userId: req.user.userId,
+        propertyId,
+        moduleKey: AnalyticsModule.MAINTENANCE,
+        featureKey: AnalyticsFeature.SEASONAL_CHECKLIST,
+        metadataJson: { actionType: 'generate_checklist', season, year: parseInt(year) },
+      });
+
       res.status(201).json({
         success: true,
         data: checklist,
@@ -162,6 +181,15 @@ export class SeasonalChecklistController {
       const { checklistId } = req.params;
 
       const result = await SeasonalChecklistService.dismissChecklist(checklistId, req.user.userId);
+
+      analyticsEmitter.track({
+        eventType: AnalyticsEvent.ACTION_COMPLETED,
+        userId: req.user.userId,
+        propertyId: (result as any)?.propertyId,
+        moduleKey: AnalyticsModule.MAINTENANCE,
+        featureKey: AnalyticsFeature.SEASONAL_CHECKLIST,
+        metadataJson: { actionType: 'dismiss_checklist', checklistId },
+      });
 
       res.json({
         success: true,
@@ -239,6 +267,15 @@ export class SeasonalChecklistController {
 
       const result = await addSeasonalTaskToMaintenance(userId, itemId);
 
+      analyticsEmitter.track({
+        eventType: AnalyticsEvent.ACTION_COMPLETED,
+        userId,
+        propertyId: (result.task as any)?.propertyId,
+        moduleKey: AnalyticsModule.MAINTENANCE,
+        featureKey: AnalyticsFeature.SEASONAL_CHECKLIST,
+        metadataJson: { actionType: 'add_task_to_maintenance', itemId },
+      });
+
       res.status(result.success ? 201 : 200).json({
         success: result.success,
         message: result.message,
@@ -295,6 +332,15 @@ export class SeasonalChecklistController {
 
       const result = await removeSeasonalTaskFromMaintenance(userId, itemId);
 
+      analyticsEmitter.track({
+        eventType: AnalyticsEvent.ACTION_COMPLETED,
+        userId,
+        propertyId: (result as any)?.propertyId,
+        moduleKey: AnalyticsModule.MAINTENANCE,
+        featureKey: AnalyticsFeature.SEASONAL_CHECKLIST,
+        metadataJson: { actionType: 'remove_task_from_maintenance', itemId },
+      });
+
       res.status(200).json(result);
     } catch (error) {
       if (error instanceof Error) {
@@ -335,6 +381,15 @@ export class SeasonalChecklistController {
 
       const result = await SeasonalChecklistService.dismissTask(itemId, req.user.userId);
 
+      analyticsEmitter.track({
+        eventType: AnalyticsEvent.ACTION_COMPLETED,
+        userId: req.user.userId,
+        propertyId: (result as any)?.propertyId,
+        moduleKey: AnalyticsModule.MAINTENANCE,
+        featureKey: AnalyticsFeature.SEASONAL_CHECKLIST,
+        metadataJson: { actionType: 'dismiss_task', itemId },
+      });
+
       res.json({
         success: true,
         data: result,
@@ -367,6 +422,15 @@ export class SeasonalChecklistController {
         days ? parseInt(days) : 7
       );
 
+      analyticsEmitter.track({
+        eventType: AnalyticsEvent.ACTION_COMPLETED,
+        userId: req.user.userId,
+        propertyId: (result as any)?.propertyId,
+        moduleKey: AnalyticsModule.MAINTENANCE,
+        featureKey: AnalyticsFeature.SEASONAL_CHECKLIST,
+        metadataJson: { actionType: 'snooze_task', itemId },
+      });
+
       res.json({
         success: true,
         data: result,
@@ -393,6 +457,15 @@ export class SeasonalChecklistController {
       const { checklistId } = req.params;
 
       const result = await SeasonalChecklistService.addAllCriticalTasks(checklistId, req.user.userId);
+
+      analyticsEmitter.track({
+        eventType: AnalyticsEvent.ACTION_COMPLETED,
+        userId: req.user.userId,
+        propertyId: (result as any)?.propertyId,
+        moduleKey: AnalyticsModule.MAINTENANCE,
+        featureKey: AnalyticsFeature.SEASONAL_CHECKLIST,
+        metadataJson: { actionType: 'add_all_critical_tasks', checklistId },
+      });
 
       res.json({
         success: true,

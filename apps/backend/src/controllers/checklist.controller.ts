@@ -17,6 +17,7 @@ import { ChecklistService } from '../services/checklist.service';
 import { AuthRequest } from '../types/auth.types';
 import { ChecklistItemStatus } from '@prisma/client';
 import { logger } from '../lib/logger';
+import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
 
 /**
  * Gets the user's checklist.
@@ -34,12 +35,20 @@ const handleGetChecklist = async (
     const userId = req.user.userId;
 
     const checklist = await ChecklistService.getOrCreateChecklist(userId);
-    
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.TOOL_USED,
+      userId,
+      moduleKey: AnalyticsModule.MAINTENANCE,
+      featureKey: AnalyticsFeature.SEASONAL_CHECKLIST,
+      metadataJson: { itemCount: (checklist as any)?.items?.length },
+    });
+
     // Add deprecation headers
     res.setHeader('X-API-Deprecated', 'true');
     res.setHeader('X-API-Deprecation-Info', 'Use /api/home-buyer-tasks or /api/maintenance-tasks');
     res.setHeader('X-API-Sunset-Date', '2025-12-31');
-    
+
     return res.status(200).json(checklist);
   } catch (error) {
     next(error);
@@ -76,6 +85,14 @@ const handleUpdateChecklistItem = async (
       itemId,
       status
     );
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.ACTION_COMPLETED,
+      userId,
+      moduleKey: AnalyticsModule.MAINTENANCE,
+      featureKey: AnalyticsFeature.SEASONAL_CHECKLIST,
+      metadataJson: { actionType: 'update_checklist_item_status', itemId, status },
+    });
 
     // Add deprecation headers
     res.setHeader('X-API-Deprecated', 'true');
@@ -164,6 +181,14 @@ const handleDeleteChecklistItem = async (
 
     await ChecklistService.deleteChecklistItem(userId, itemId);
 
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.ACTION_COMPLETED,
+      userId,
+      moduleKey: AnalyticsModule.MAINTENANCE,
+      featureKey: AnalyticsFeature.SEASONAL_CHECKLIST,
+      metadataJson: { actionType: 'delete_checklist_item', itemId },
+    });
+
     // Add deprecation headers
     res.setHeader('X-API-Deprecated', 'true');
     res.setHeader('X-API-Deprecation-Info', 'Use /api/home-buyer-tasks or /api/maintenance-tasks');
@@ -211,6 +236,15 @@ const handleCreateMaintenanceItems = async (
       templateIds,
       propertyId
     );
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.ACTION_COMPLETED,
+      userId,
+      propertyId,
+      moduleKey: AnalyticsModule.MAINTENANCE,
+      featureKey: AnalyticsFeature.SEASONAL_CHECKLIST,
+      metadataJson: { actionType: 'create_maintenance_items', count: result.count },
+    });
 
     // Add deprecation headers
     res.setHeader('X-API-Deprecated', 'true');
@@ -294,6 +328,15 @@ const handleCreateChecklistItem = async (
     
     const deduped = (result as any)?.deduped === true;
     const item = (result as any)?.item ?? result;
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.ACTION_COMPLETED,
+      userId,
+      propertyId,
+      moduleKey: AnalyticsModule.MAINTENANCE,
+      featureKey: AnalyticsFeature.SEASONAL_CHECKLIST,
+      metadataJson: { actionType: 'create_checklist_item', actionKey, deduped },
+    });
 
     // Add deprecation headers
     res.setHeader('X-API-Deprecated', 'true');

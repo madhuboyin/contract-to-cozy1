@@ -10,6 +10,7 @@ import { NeighborhoodIntelligenceService } from '../neighborhoodIntelligence/nei
 import { getResolutionCenter } from '../services/resolutionCenter.service';
 import { logger } from '../lib/logger';
 import { prisma } from '../lib/prisma';
+import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
 
 const neighborhoodService = new NeighborhoodIntelligenceService();
 
@@ -80,6 +81,15 @@ export const getProperty = async (req: AuthRequest, res: Response) => {
         message: 'Property not found',
       });
     }
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.TOOL_USED,
+      userId,
+      propertyId: id,
+      moduleKey: AnalyticsModule.PROPERTY,
+      featureKey: AnalyticsFeature.PROPERTY_PROFILE,
+      metadataJson: {},
+    });
 
     // NOTE: The property service returns the full Property object, ensuring new fields are included here.
     res.json({

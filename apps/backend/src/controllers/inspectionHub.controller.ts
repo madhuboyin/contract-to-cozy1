@@ -4,12 +4,23 @@ import * as hubService from '../services/inspectionHub.service';
 import { ingestInspectionReport } from '../services/inspectionExtraction.service';
 import { applyWriteBacks, getWriteBackPreview } from '../services/inspectionWriteBack.service';
 import { APIError } from '../middleware/error.middleware';
+import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
 
 // ── Hub overview ──────────────────────────────────────────────────────────────
 
 export async function getHub(req: Request, res: Response, next: NextFunction) {
   try {
     const data = await hubService.getHub(req.params.propertyId);
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.TOOL_USED,
+      userId: req.user?.userId,
+      propertyId: req.params.propertyId,
+      moduleKey: AnalyticsModule.INSPECTION,
+      featureKey: AnalyticsFeature.INSPECTION_HUB,
+      metadataJson: { openItemCount: (data as any)?.openItemCount ?? (data as any)?.openItemsCount },
+    });
+
     res.json({ success: true, data });
   } catch (err) { next(err); }
 }
@@ -39,6 +50,15 @@ export async function uploadReport(req: Request, res: Response, next: NextFuncti
       inspectorName,
       inspectorLicense,
       inspectorCompany,
+    });
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.ACTION_COMPLETED,
+      userId,
+      propertyId: req.params.propertyId,
+      moduleKey: AnalyticsModule.INSPECTION,
+      featureKey: AnalyticsFeature.INSPECTION_HUB,
+      metadataJson: { actionType: 'upload_report', reportType },
     });
 
     res.status(201).json({ success: true, data: { reportId } });
@@ -93,6 +113,16 @@ export async function dismissFinding(req: Request, res: Response, next: NextFunc
       req.params.propertyId,
       req.body.reason,
     );
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.ACTION_COMPLETED,
+      userId: req.user?.userId,
+      propertyId: req.params.propertyId,
+      moduleKey: AnalyticsModule.INSPECTION,
+      featureKey: AnalyticsFeature.INSPECTION_HUB,
+      metadataJson: { actionType: 'dismiss_finding', findingId: req.params.findingId },
+    });
+
     res.json({ success: true, data: { finding } });
   } catch (err) { next(err); }
 }
@@ -110,6 +140,16 @@ export async function confirmReport(req: Request, res: Response, next: NextFunct
   try {
     const userId = req.user!.userId;
     const result = await applyWriteBacks(req.params.reportId, req.params.propertyId, userId);
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.ACTION_COMPLETED,
+      userId,
+      propertyId: req.params.propertyId,
+      moduleKey: AnalyticsModule.INSPECTION,
+      featureKey: AnalyticsFeature.INSPECTION_HUB,
+      metadataJson: { actionType: 'confirm_report', reportId: req.params.reportId },
+    });
+
     res.json({ success: true, data: result });
   } catch (err) { next(err); }
 }
@@ -136,6 +176,16 @@ export async function resolveFinding(req: Request, res: Response, next: NextFunc
       req.params.propertyId,
       req.body,
     );
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.ACTION_COMPLETED,
+      userId: req.user?.userId,
+      propertyId: req.params.propertyId,
+      moduleKey: AnalyticsModule.INSPECTION,
+      featureKey: AnalyticsFeature.INSPECTION_HUB,
+      metadataJson: { actionType: 'resolve_finding', findingId: req.params.findingId },
+    });
+
     res.json({ success: true, data: { finding } });
   } catch (err) { next(err); }
 }
@@ -163,6 +213,16 @@ export async function generateNegotiationPackage(req: Request, res: Response, ne
       req.body.findingIds,
       req.body.decisions,
     );
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.ACTION_COMPLETED,
+      userId: req.user?.userId,
+      propertyId: req.params.propertyId,
+      moduleKey: AnalyticsModule.INSPECTION,
+      featureKey: AnalyticsFeature.INSPECTION_HUB,
+      metadataJson: { actionType: 'generate_negotiation_package', findingCount: req.body.findingIds?.length },
+    });
+
     res.json({ success: true, data: result });
   } catch (err) { next(err); }
 }
@@ -186,6 +246,16 @@ export async function saveFixDisclosureDecisions(req: Request, res: Response, ne
       req.params.propertyId,
       req.body.decisions,
     );
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.ACTION_COMPLETED,
+      userId: req.user?.userId,
+      propertyId: req.params.propertyId,
+      moduleKey: AnalyticsModule.INSPECTION,
+      featureKey: AnalyticsFeature.INSPECTION_HUB,
+      metadataJson: { actionType: 'save_fix_disclosure_decisions', decisionCount: req.body.decisions?.length },
+    });
+
     res.json({ success: true, data: result });
   } catch (err) { next(err); }
 }

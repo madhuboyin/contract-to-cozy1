@@ -6,6 +6,7 @@ import {
   UpdateRiskMitigationPlanItemInput,
 } from '../services/riskPremiumOptimizer.service';
 import { logger } from '../lib/logger';
+import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
 
 const service = new RiskPremiumOptimizerService();
 
@@ -19,6 +20,16 @@ export async function getRiskPremiumOptimizer(req: CustomRequest, res: Response)
     }
 
     const result = await service.getLatest(propertyId, userId);
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.TOOL_USED,
+      userId,
+      propertyId,
+      moduleKey: AnalyticsModule.FINANCIAL,
+      featureKey: AnalyticsFeature.RISK_PREMIUM_OPTIMIZER,
+      metadataJson: { exists: result.exists, status: result.exists ? result.analysis.status : null },
+    });
+
     return res.json({ success: true, data: result });
   } catch (error: any) {
     logger.error({ err: error }, 'Error fetching risk-premium optimization');
@@ -42,6 +53,16 @@ export async function runRiskPremiumOptimizer(req: CustomRequest, res: Response)
     const assumptionSetId =
       typeof req.body?.assumptionSetId === 'string' ? req.body.assumptionSetId : undefined;
     const analysis = await service.run(propertyId, userId, overrides, { assumptionSetId });
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.ACTION_COMPLETED,
+      userId,
+      propertyId,
+      moduleKey: AnalyticsModule.FINANCIAL,
+      featureKey: AnalyticsFeature.RISK_PREMIUM_OPTIMIZER,
+      metadataJson: { actionType: 'run_optimization', estimatedSavingsMax: analysis.estimatedSavingsMax ?? null },
+    });
+
     return res.json({ success: true, data: { analysis } });
   } catch (error: any) {
     logger.error({ err: error }, 'Error running risk-premium optimization');

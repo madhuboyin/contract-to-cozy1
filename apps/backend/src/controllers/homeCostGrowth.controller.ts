@@ -2,6 +2,7 @@
 import { Response, NextFunction } from 'express';
 import { CustomRequest } from '../types';
 import { HomeCostGrowthService } from '../services/homeCostGrowth.service';
+import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
 
 const service = new HomeCostGrowthService();
 
@@ -41,6 +42,15 @@ export async function getHomeCostGrowth(req: CustomRequest, res: Response, next:
       appreciationRate,
       insuranceAnnualNow,
       maintenanceAnnualNow,
+    });
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.TOOL_USED,
+      userId: req.user?.userId,
+      propertyId,
+      moduleKey: AnalyticsModule.FINANCIAL,
+      featureKey: AnalyticsFeature.HOME_COST_GROWTH,
+      metadataJson: { years, appreciationRate: costGrowth.current.appreciationRate },
     });
 
     res.json({ success: true, data: { costGrowth } });

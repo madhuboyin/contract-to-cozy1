@@ -6,6 +6,7 @@ import { ListBoardQuery, PatchItemStatusBody } from '../validators/homeStatusBoa
 import { SharedSignalKey, signalService } from './signal.service';
 import { DecisionCandidate, runDecisionEngine } from './decisionEngine.service';
 import { logSharedDataEvent } from './sharedDataObservability.service';
+import { analyticsEmitter, AnalyticsModule } from './analytics';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -1072,6 +1073,20 @@ export async function listBoard(propertyId: string, query: ListBoardQuery) {
         },
       }
     : null;
+
+  if (topRecommendation) {
+    analyticsEmitter.decisionGuided({
+      propertyId,
+      featureKey: topRecommendation.targetTool,
+      moduleKey: AnalyticsModule.DASHBOARD,
+      decisionType: topRecommendation.reasonCode,
+      metadataJson: {
+        targetTool: topRecommendation.targetTool,
+        score: topRecommendation.score,
+        source: 'status_board',
+      },
+    });
+  }
 
   return result;
 }

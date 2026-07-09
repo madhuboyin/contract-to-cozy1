@@ -15,6 +15,7 @@ import {
   completionUpdateSchema,
 } from '../validators/orchestrationCompletion.validator';
 import multer from 'multer';
+import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -68,6 +69,16 @@ export async function updateCompletionHandler(
       completionId,
       validation.data
     );
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.ACTION_COMPLETED,
+      userId: req.user?.userId,
+      propertyId,
+      moduleKey: AnalyticsModule.DASHBOARD,
+      featureKey: AnalyticsFeature.DASHBOARD_SUMMARY,
+      metadataJson: { actionType: 'update_completion' },
+    });
+
     return res.json(completion);
   } catch (error: any) {
     return res.status(400).json({ error: error.message });

@@ -17,6 +17,7 @@ import { uploadDocumentBuffer, deleteDocumentObject } from '../services/storage/
 import { presignGetObject } from '../services/storage/presign';
 import { uploadRateLimiter } from '../middleware/rateLimiter.middleware';
 import { APIError } from '../middleware/error.middleware';
+import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
 
 const router = Router();
 
@@ -217,6 +218,15 @@ router.post('/analyze', authenticate, uploadRateLimiter, upload.single('file'), 
           downloadFilename: document.name,
         })
       : null;
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.DOCUMENT_UPLOADED,
+      userId,
+      propertyId: document.propertyId ?? undefined,
+      moduleKey: AnalyticsModule.DOCUMENTS,
+      featureKey: AnalyticsFeature.DOCUMENT_UPLOAD,
+      metadataJson: { documentType: String(document.type), autoCreatedWarranty: Boolean(warranty) },
+    });
 
     res.json({
       success: true,

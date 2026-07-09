@@ -1,6 +1,7 @@
 import { Response, NextFunction } from 'express';
 import { CustomRequest } from '../types';
 import { MaterialSpecService } from '../services/materialSpec.service';
+import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
 
 const service = new MaterialSpecService();
 
@@ -15,6 +16,16 @@ export async function listSpecs(req: CustomRequest, res: Response, next: NextFun
       limit: req.query.limit ? Number(req.query.limit) : undefined,
       cursor: req.query.cursor ? String(req.query.cursor) : undefined,
     });
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.TOOL_USED,
+      userId: req.user?.userId,
+      propertyId,
+      moduleKey: AnalyticsModule.PROJECT_MGMT,
+      featureKey: AnalyticsFeature.MATERIAL_SPEC,
+      metadataJson: { count: Array.isArray((result as any)?.specs) ? (result as any).specs.length : undefined },
+    });
+
     res.json({ success: true, data: result });
   } catch (err) {
     next(err);
@@ -45,6 +56,16 @@ export async function createSpec(req: CustomRequest, res: Response, next: NextFu
   try {
     const { propertyId } = req.params;
     const spec = await service.createSpec(propertyId, req.body);
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.ACTION_COMPLETED,
+      userId: req.user?.userId,
+      propertyId,
+      moduleKey: AnalyticsModule.PROJECT_MGMT,
+      featureKey: AnalyticsFeature.MATERIAL_SPEC,
+      metadataJson: { actionType: 'create_spec', specId: (spec as any)?.id, category: (spec as any)?.category },
+    });
+
     res.status(201).json({ success: true, data: { spec } });
   } catch (err) {
     next(err);
@@ -106,6 +127,16 @@ export async function requestExport(req: CustomRequest, res: Response, next: Nex
     const { propertyId } = req.params;
     const userId = req.user!.userId;
     const specExport = await service.requestExport(propertyId, userId, req.body);
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.ACTION_COMPLETED,
+      userId,
+      propertyId,
+      moduleKey: AnalyticsModule.PROJECT_MGMT,
+      featureKey: AnalyticsFeature.MATERIAL_SPEC,
+      metadataJson: { actionType: 'request_export' },
+    });
+
     res.status(201).json({ success: true, data: { export: specExport } });
   } catch (err) {
     next(err);

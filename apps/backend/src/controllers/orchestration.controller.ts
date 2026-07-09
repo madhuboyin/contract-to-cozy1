@@ -25,6 +25,7 @@ import { createCompletion } from '../services/orchestrationCompletion.service';
 import { PropertyMaintenanceTaskService } from '../services/PropertyMaintenanceTask.service';
 import { completionCreateSchema } from '../validators/orchestrationCompletion.validator';
 import { logger } from '../lib/logger';
+import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
 
 /**
  * GET /api/orchestration/:propertyId/summary
@@ -195,6 +196,15 @@ export async function getOrchestrationSummaryHandler(
     // -----------------------------
     // 3. Success Response
     // -----------------------------
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.TOOL_USED,
+      userId: (req as any).user?.userId,
+      propertyId,
+      moduleKey: AnalyticsModule.DASHBOARD,
+      featureKey: AnalyticsFeature.DASHBOARD_SUMMARY,
+      metadataJson: {},
+    });
+
     return res.status(200).json({
       success: true,
       data: summary,

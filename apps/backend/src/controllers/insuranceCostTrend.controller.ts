@@ -2,6 +2,7 @@
 import { Response, NextFunction } from 'express';
 import { CustomRequest } from '../types';
 import { InsuranceCostTrendService } from '../services/insuranceCostTrend.service';
+import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
 
 const service = new InsuranceCostTrendService();
 
@@ -32,6 +33,15 @@ export async function getInsuranceCostTrend(req: CustomRequest, res: Response, n
       homeValueNow,
       insuranceAnnualNow,
       inflationRate,
+    });
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.TOOL_USED,
+      userId: req.user?.userId,
+      propertyId,
+      moduleKey: AnalyticsModule.INSURANCE,
+      featureKey: AnalyticsFeature.INSURANCE_COST_TREND,
+      metadataJson: { years },
     });
 
     res.json({ success: true, data: { insuranceTrend: trend } });

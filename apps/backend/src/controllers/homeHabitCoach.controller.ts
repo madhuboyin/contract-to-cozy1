@@ -3,6 +3,7 @@
 import { Response, NextFunction } from 'express';
 import { CustomRequest } from '../types';
 import { HomeHabitCoachService } from '../services/homeHabitCoach/homeHabitCoachService';
+import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
 
 const service = new HomeHabitCoachService();
 
@@ -17,6 +18,16 @@ export async function listHabits(req: CustomRequest, res: Response, next: NextFu
       limit: req.query.limit ? Number(req.query.limit) : undefined,
       cursor: req.query.cursor ? String(req.query.cursor) : undefined,
     });
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.TOOL_USED,
+      userId: req.user?.userId,
+      propertyId,
+      moduleKey: AnalyticsModule.MAINTENANCE,
+      featureKey: AnalyticsFeature.HOME_HABIT_COACH,
+      metadataJson: { habitCount: (result as any)?.habits?.length },
+    });
+
     res.json({ success: true, data: result });
   } catch (err) {
     next(err);
@@ -62,6 +73,16 @@ export async function generateHabits(req: CustomRequest, res: Response, next: Ne
   try {
     const { propertyId } = req.params;
     const result = await service.generateHabits(propertyId);
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.ACTION_COMPLETED,
+      userId: req.user?.userId,
+      propertyId,
+      moduleKey: AnalyticsModule.MAINTENANCE,
+      featureKey: AnalyticsFeature.HOME_HABIT_COACH,
+      metadataJson: { actionType: 'generate_habits' },
+    });
+
     res.status(201).json({ success: true, data: result });
   } catch (err) {
     next(err);
@@ -75,6 +96,16 @@ export async function completeHabit(req: CustomRequest, res: Response, next: Nex
     const { propertyId, habitId } = req.params;
     const userId = req.user?.userId ?? null;
     const result = await service.completeHabit(propertyId, habitId, userId, req.body);
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.ACTION_COMPLETED,
+      userId: userId ?? undefined,
+      propertyId,
+      moduleKey: AnalyticsModule.MAINTENANCE,
+      featureKey: AnalyticsFeature.HOME_HABIT_COACH,
+      metadataJson: { actionType: 'complete_habit', habitId },
+    });
+
     res.json({ success: true, data: result });
   } catch (err) {
     next(err);
@@ -86,6 +117,16 @@ export async function snoozeHabit(req: CustomRequest, res: Response, next: NextF
     const { propertyId, habitId } = req.params;
     const userId = req.user?.userId ?? null;
     const result = await service.snoozeHabit(propertyId, habitId, userId, req.body);
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.ACTION_COMPLETED,
+      userId: userId ?? undefined,
+      propertyId,
+      moduleKey: AnalyticsModule.MAINTENANCE,
+      featureKey: AnalyticsFeature.HOME_HABIT_COACH,
+      metadataJson: { actionType: 'snooze_habit', habitId },
+    });
+
     res.json({ success: true, data: result });
   } catch (err) {
     next(err);
@@ -97,6 +138,16 @@ export async function skipHabit(req: CustomRequest, res: Response, next: NextFun
     const { propertyId, habitId } = req.params;
     const userId = req.user?.userId ?? null;
     const result = await service.skipHabit(propertyId, habitId, userId, req.body);
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.ACTION_COMPLETED,
+      userId: userId ?? undefined,
+      propertyId,
+      moduleKey: AnalyticsModule.MAINTENANCE,
+      featureKey: AnalyticsFeature.HOME_HABIT_COACH,
+      metadataJson: { actionType: 'skip_habit', habitId },
+    });
+
     res.json({ success: true, data: result });
   } catch (err) {
     next(err);
@@ -108,6 +159,16 @@ export async function dismissHabit(req: CustomRequest, res: Response, next: Next
     const { propertyId, habitId } = req.params;
     const userId = req.user?.userId ?? null;
     const result = await service.dismissHabit(propertyId, habitId, userId, req.body);
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.ACTION_COMPLETED,
+      userId: userId ?? undefined,
+      propertyId,
+      moduleKey: AnalyticsModule.MAINTENANCE,
+      featureKey: AnalyticsFeature.HOME_HABIT_COACH,
+      metadataJson: { actionType: 'dismiss_habit', habitId },
+    });
+
     res.json({ success: true, data: result });
   } catch (err) {
     next(err);
@@ -119,6 +180,16 @@ export async function reopenHabit(req: CustomRequest, res: Response, next: NextF
     const { propertyId, habitId } = req.params;
     const userId = req.user?.userId ?? null;
     const result = await service.reopenHabit(propertyId, habitId, userId);
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.ACTION_COMPLETED,
+      userId: userId ?? undefined,
+      propertyId,
+      moduleKey: AnalyticsModule.MAINTENANCE,
+      featureKey: AnalyticsFeature.HOME_HABIT_COACH,
+      metadataJson: { actionType: 'reopen_habit', habitId },
+    });
+
     res.json({ success: true, data: result });
   } catch (err) {
     next(err);

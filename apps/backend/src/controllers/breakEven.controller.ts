@@ -2,6 +2,7 @@
 import { Response } from 'express';
 import { CustomRequest } from '../types';
 import { BreakEvenService } from '../services/breakEven.service';
+import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
 
 const svc = new BreakEvenService();
 
@@ -61,6 +62,15 @@ export async function getBreakEven(req: CustomRequest, res: Response) {
     remainingTermMonths,
     monthlyPayment,
   }, userId);
+
+  analyticsEmitter.track({
+    eventType: AnalyticsEvent.TOOL_USED,
+    userId,
+    propertyId,
+    moduleKey: AnalyticsModule.FINANCIAL,
+    featureKey: AnalyticsFeature.BREAK_EVEN,
+    metadataJson: { status: dto.breakEven.status, reached: dto.breakEven.reached, breakEvenYearIndex: dto.breakEven.breakEvenYearIndex },
+  });
 
   return res.json({
     success: true,

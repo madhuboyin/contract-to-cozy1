@@ -1,12 +1,23 @@
 import { Response, NextFunction } from 'express';
 import { CustomRequest as Request } from '../types';
 import * as svc from '../services/projectTracker.service';
+import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
 
 // ── Projects ──────────────────────────────────────────────────────────────────
 
 export async function listProjects(req: Request, res: Response, next: NextFunction) {
   try {
     const data = await svc.listProjects(req.params.propertyId);
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.TOOL_USED,
+      userId: req.user?.userId,
+      propertyId: req.params.propertyId,
+      moduleKey: AnalyticsModule.PROJECT_MGMT,
+      featureKey: AnalyticsFeature.PROJECT_TRACKER,
+      metadataJson: { count: Array.isArray(data) ? data.length : undefined },
+    });
+
     res.json({ success: true, data });
   } catch (err) { next(err); }
 }
@@ -14,6 +25,16 @@ export async function listProjects(req: Request, res: Response, next: NextFuncti
 export async function createProject(req: Request, res: Response, next: NextFunction) {
   try {
     const data = await svc.createProject(req.params.propertyId, req.body);
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.ACTION_COMPLETED,
+      userId: req.user?.userId,
+      propertyId: req.params.propertyId,
+      moduleKey: AnalyticsModule.PROJECT_MGMT,
+      featureKey: AnalyticsFeature.PROJECT_TRACKER,
+      metadataJson: { actionType: 'create_project', projectId: (data as any)?.id },
+    });
+
     res.status(201).json({ success: true, data });
   } catch (err) { next(err); }
 }
@@ -258,6 +279,16 @@ export async function confirmCompletion(req: Request, res: Response, next: NextF
     const data = await svc.confirmCompletion(
       req.params.projectId, req.params.propertyId, req.user!.userId, req.body,
     );
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.ACTION_COMPLETED,
+      userId: req.user?.userId,
+      propertyId: req.params.propertyId,
+      moduleKey: AnalyticsModule.PROJECT_MGMT,
+      featureKey: AnalyticsFeature.PROJECT_TRACKER,
+      metadataJson: { actionType: 'confirm_completion', projectId: req.params.projectId },
+    });
+
     res.json({ success: true, data });
   } catch (err) { next(err); }
 }

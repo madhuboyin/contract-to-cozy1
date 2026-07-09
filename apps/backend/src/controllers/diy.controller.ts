@@ -4,6 +4,7 @@ import { CustomRequest as Request } from '../types';
 import { diyService } from '../services/diy.service';
 import { diyDecisionService } from '../services/diyDecision.service';
 import { diyAiGuideService } from '../services/diyAiGuide.service';
+import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
 
 // ── Skill Profile ─────────────────────────────────────────────────────────────
 
@@ -49,6 +50,16 @@ export async function getTemplateDetail(req: Request, res: Response, next: NextF
 export async function getDiyDecision(req: Request, res: Response, next: NextFunction) {
   try {
     const result = await diyDecisionService.score({ ...req.body, userId: req.user!.userId });
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.TOOL_USED,
+      userId: req.user?.userId,
+      propertyId: req.params.propertyId,
+      moduleKey: AnalyticsModule.FINANCIAL,
+      featureKey: AnalyticsFeature.DIY_DECISION,
+      metadataJson: { verdict: (result as any)?.verdict, score: (result as any)?.score },
+    });
+
     res.json({ success: true, data: result });
   } catch (err) { next(err); }
 }
@@ -58,6 +69,16 @@ export async function getDiyDecision(req: Request, res: Response, next: NextFunc
 export async function createProject(req: Request, res: Response, next: NextFunction) {
   try {
     const project = await diyService.createProject(req.params.propertyId, req.user!.userId, req.body);
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.ACTION_COMPLETED,
+      userId: req.user?.userId,
+      propertyId: req.params.propertyId,
+      moduleKey: AnalyticsModule.FINANCIAL,
+      featureKey: AnalyticsFeature.DIY_DECISION,
+      metadataJson: { actionType: 'create_project', category: (project as any)?.category },
+    });
+
     res.status(201).json({ success: true, data: { project } });
   } catch (err) { next(err); }
 }
@@ -95,13 +116,34 @@ export async function updateStep(req: Request, res: Response, next: NextFunction
 export async function completeProject(req: Request, res: Response, next: NextFunction) {
   try {
     const project = await diyService.completeProject(req.params.projectId, req.params.propertyId, req.body);
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.ACTION_COMPLETED,
+      userId: req.user?.userId,
+      propertyId: req.params.propertyId,
+      moduleKey: AnalyticsModule.FINANCIAL,
+      featureKey: AnalyticsFeature.DIY_DECISION,
+      metadataJson: { actionType: 'complete_project' },
+    });
+
     res.json({ success: true, data: { homeEventId: project.homeEventId } });
   } catch (err) { next(err); }
 }
 
 export async function abandonProject(req: Request, res: Response, next: NextFunction) {
   try {
-    await diyService.abandonProject(req.params.projectId, req.params.propertyId, req.body.hireOut ?? false);
+    const hireOut = req.body.hireOut ?? false;
+    await diyService.abandonProject(req.params.projectId, req.params.propertyId, hireOut);
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.ACTION_COMPLETED,
+      userId: req.user?.userId,
+      propertyId: req.params.propertyId,
+      moduleKey: AnalyticsModule.FINANCIAL,
+      featureKey: AnalyticsFeature.DIY_DECISION,
+      metadataJson: { actionType: 'abandon_project', hireOut },
+    });
+
     res.status(204).send();
   } catch (err) { next(err); }
 }
@@ -113,6 +155,16 @@ export async function generateAiGuide(req: Request, res: Response, next: NextFun
     const guideId = await diyAiGuideService.initiateGeneration(
       req.user!.userId, req.params.propertyId, req.body.userPrompt,
     );
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.ACTION_COMPLETED,
+      userId: req.user?.userId,
+      propertyId: req.params.propertyId,
+      moduleKey: AnalyticsModule.FINANCIAL,
+      featureKey: AnalyticsFeature.DIY_DECISION,
+      metadataJson: { actionType: 'generate_ai_guide', guideId },
+    });
+
     res.status(201).json({ success: true, data: { guideId } });
   } catch (err) { next(err); }
 }

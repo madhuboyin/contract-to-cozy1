@@ -39,6 +39,15 @@ export const AnalyticsModule = {
   ADMIN_ANALYTICS:   'admin_analytics',
   RENOVATION_ADVISOR: 'renovation_advisor',
   GAZETTE:           'gazette',
+  INSURANCE:         'insurance',
+  PROJECT_MGMT:      'project_mgmt',
+  TAX:               'tax',
+  COMMUNITY:         'community',
+  MARKETPLACE:       'marketplace',
+  INSPECTION:        'inspection',
+  HOME_BUYER:        'home_buyer',
+  AI_INSIGHTS:       'ai_insights',
+  GUIDANCE:          'guidance',
 } as const;
 
 export type AnalyticsModuleKey = typeof AnalyticsModule[keyof typeof AnalyticsModule];
@@ -105,6 +114,73 @@ export const AnalyticsFeature = {
   GAZETTE_EDITION:   'gazette_edition',
   GAZETTE_SHARE:     'gazette_share',
   GAZETTE_STORY_CTA: 'gazette_story_cta',
+
+  // Financial (additional tools)
+  BREAK_EVEN:             'break_even',
+  COST_EXPLAINER:         'cost_explainer',
+  COST_VOLATILITY:        'cost_volatility',
+  RISK_PREMIUM_OPTIMIZER: 'risk_premium_optimizer',
+  DIY_DECISION:           'diy_decision',
+  DO_NOTHING_SIMULATOR:   'do_nothing_simulator',
+  FINANCING:              'financing',
+  TRUE_COST_OWNERSHIP:    'true_cost_ownership',
+  HOME_COST_GROWTH:       'home_cost_growth',
+  HOME_SAVINGS:           'home_savings',
+
+  // Community / HOA
+  HOA_COMPLIANCE:      'hoa_compliance',
+  NEIGHBOURHOOD_TRUST: 'neighbourhood_trust',
+
+  // Home Buyer / Seller
+  HOME_BUYER_TASK: 'home_buyer_task',
+  SELL_HOLD_RENT:  'sell_hold_rent',
+
+  // Home Intelligence (additional tools)
+  HOME_DIGITAL_WILL:   'home_digital_will',
+  HOME_EVENT_RADAR:    'home_event_radar',
+  HOME_HABIT_COACH:    'home_habit_coach',
+  HOME_REPORT_EXPORT:  'home_report_export',
+  HOME_RISK_REPLAY:    'home_risk_replay',
+  HOME_SCORE_REPORT:   'home_score_report',
+  HOME_SCORE_SHARE:    'home_score_share',
+
+  // Inspection
+  INSPECTION_HUB:        'inspection_hub',
+  INSPECTION_READINESS:  'inspection_readiness',
+
+  // Insurance
+  INSURANCE_AUDITOR:    'insurance_auditor',
+  INSURANCE_COST_TREND: 'insurance_cost_trend',
+  INSURANCE_OCR:        'insurance_ocr',
+
+  // Inventory (additional)
+  INVENTORY_VERIFICATION: 'inventory_verification',
+
+  // Project management
+  MATERIAL_SPEC:      'material_spec',
+  PERMIT_TRACKER:     'permit_tracker',
+  PRICE_FINALIZATION: 'price_finalization',
+  PROJECT_TRACKER:    'project_tracker',
+
+  // Tax
+  PROPERTY_TAX: 'property_tax',
+
+  // Marketplace
+  RECALLS:             'recalls',
+  SERVICE_PRICE_RADAR: 'service_price_radar',
+  BOOKING:             'booking',
+
+  // AI Insights
+  ROOM_INSIGHTS:       'room_insights',
+  ROOM_PLANT_ADVISOR:  'room_plant_advisor',
+  NARRATIVE:           'narrative',
+
+  // Guidance / Decision engine
+  GUIDANCE_ADVISOR: 'guidance_advisor',
+
+  // Dashboard
+  DASHBOARD_SUMMARY: 'dashboard_summary',
+  STATUS_BOARD:      'status_board',
 } as const;
 
 export type AnalyticsFeatureKey = typeof AnalyticsFeature[keyof typeof AnalyticsFeature];

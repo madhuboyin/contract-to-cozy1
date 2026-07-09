@@ -5,6 +5,7 @@ import { prisma } from '../lib/prisma';
 import { APIError } from '../middleware/error.middleware';
 import { extractInsuranceFieldsFromImage } from '../services/insuranceOcr.service';
 import { incrementStreak } from '../services/gamification.service';
+import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
 
 function pickUploadedFile(req: CustomRequest): Express.Multer.File | undefined {
   const direct = (req as any).file as Express.Multer.File | undefined;
@@ -46,6 +47,15 @@ export async function extractInsuranceOcr(
     if (!file?.buffer?.length) throw new APIError('image file is required', 400, 'OCR_IMAGE_REQUIRED');
 
     const extracted = await extractInsuranceFieldsFromImage(file.buffer);
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.TOOL_USED,
+      userId,
+      propertyId,
+      moduleKey: AnalyticsModule.INSURANCE,
+      featureKey: AnalyticsFeature.INSURANCE_OCR,
+      metadataJson: { policyId, provider: extracted.provider },
+    });
 
     return res.json({
       success: true,
@@ -125,6 +135,15 @@ export async function confirmInsuranceOcr(
     });
 
     const streak = existing.isVerified ? null : await incrementStreak(propertyId);
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.ACTION_COMPLETED,
+      userId,
+      propertyId,
+      moduleKey: AnalyticsModule.INSURANCE,
+      featureKey: AnalyticsFeature.INSURANCE_OCR,
+      metadataJson: { actionType: 'confirm_ocr_extraction', policyId },
+    });
 
     return res.json({ success: true, data: { policy, streak } });
   } catch (err) {

@@ -10,6 +10,7 @@ import {
   UpdatePriceFinalizationBody,
 } from '../validators/priceFinalization.validators';
 import { logger } from '../lib/logger';
+import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
 
 function requireUser(req: CustomRequest) {
   const userId = req.user?.userId;
@@ -60,6 +61,15 @@ export async function listPriceFinalizations(
       }
     );
 
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.TOOL_USED,
+      userId,
+      propertyId: req.params.propertyId,
+      moduleKey: AnalyticsModule.PROJECT_MGMT,
+      featureKey: AnalyticsFeature.PRICE_FINALIZATION,
+      metadataJson: { count: Array.isArray((result as any)?.finalizations) ? (result as any).finalizations.length : undefined },
+    });
+
     res.status(200).json({ success: true, data: result });
   } catch (error) {
     next(error);
@@ -101,6 +111,15 @@ export async function createPriceFinalizationDraft(
         ...payload,
       }
     );
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.ACTION_COMPLETED,
+      userId,
+      propertyId: req.params.propertyId,
+      moduleKey: AnalyticsModule.PROJECT_MGMT,
+      featureKey: AnalyticsFeature.PRICE_FINALIZATION,
+      metadataJson: { actionType: 'create_draft', finalizationId: detail.id, serviceCategory: detail.serviceCategory },
+    });
 
     res.status(201).json({ success: true, data: { finalization: detail } });
   } catch (error) {
@@ -152,6 +171,20 @@ export async function finalizePriceFinalization(
         ...payload,
       }
     );
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.ACTION_COMPLETED,
+      userId,
+      propertyId: req.params.propertyId,
+      moduleKey: AnalyticsModule.PROJECT_MGMT,
+      featureKey: AnalyticsFeature.PRICE_FINALIZATION,
+      metadataJson: {
+        actionType: 'finalize',
+        finalizationId: detail.id,
+        acceptedPrice: detail.acceptedPrice,
+        serviceCategory: detail.serviceCategory,
+      },
+    });
 
     const resolvedStepKey =
       detail.guidanceStepKey ||

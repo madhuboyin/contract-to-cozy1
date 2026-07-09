@@ -8,6 +8,7 @@ import {
 } from '../services/coverageAnalysis.service';
 import { guidanceJourneyService } from '../services/guidanceEngine/guidanceJourney.service';
 import { logger } from '../lib/logger';
+import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
 
 const service = new CoverageIntelligenceService();
 
@@ -21,6 +22,16 @@ export async function getCoverageAnalysis(req: CustomRequest, res: Response) {
     }
 
     const result = await service.getLatest(propertyId, userId);
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.TOOL_USED,
+      userId,
+      propertyId,
+      moduleKey: AnalyticsModule.FINANCIAL,
+      featureKey: AnalyticsFeature.COVERAGE_ANALYSIS,
+      metadataJson: { exists: result.exists, overallVerdict: result.exists ? result.analysis.overallVerdict : null },
+    });
+
     return res.json({ success: true, data: result });
   } catch (error: any) {
     logger.error({ err: error }, 'Error fetching coverage analysis');
@@ -81,6 +92,15 @@ export async function runCoverageAnalysis(req: CustomRequest, res: Response) {
     } catch (guidanceError) {
       logger.warn({ guidanceError }, '[GUIDANCE] coverage analysis hook failed');
     }
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.ACTION_COMPLETED,
+      userId,
+      propertyId,
+      moduleKey: AnalyticsModule.FINANCIAL,
+      featureKey: AnalyticsFeature.COVERAGE_ANALYSIS,
+      metadataJson: { actionType: 'run_analysis', overallVerdict: analysis.overallVerdict, confidence: analysis.confidence },
+    });
 
     return res.json({ success: true, data: { analysis } });
   } catch (error: any) {
@@ -184,6 +204,15 @@ export async function runItemCoverageAnalysis(req: CustomRequest, res: Response)
     } catch (guidanceError) {
       logger.warn({ guidanceError }, '[GUIDANCE] item coverage analysis hook failed');
     }
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.ACTION_COMPLETED,
+      userId,
+      propertyId,
+      moduleKey: AnalyticsModule.FINANCIAL,
+      featureKey: AnalyticsFeature.COVERAGE_ANALYSIS,
+      metadataJson: { actionType: 'run_item_analysis', itemId, overallVerdict: analysis.overallVerdict },
+    });
 
     return res.json({ success: true, data: { analysis } });
   } catch (error: any) {

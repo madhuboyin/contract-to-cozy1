@@ -4,6 +4,7 @@ import { CustomRequest } from '../types';
 import { APIError } from '../middleware/error.middleware';
 import { InventoryDraftService } from '../services/inventoryDraft.service';
 import { prisma } from '../lib/prisma';
+import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
 
 const svc = new InventoryDraftService();
 
@@ -29,6 +30,15 @@ export async function listInventoryDrafts(req: CustomRequest, res: Response, nex
       userId,
       roomId,
       scanSessionId,
+    });
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.TOOL_USED,
+      userId: req.user?.userId,
+      propertyId,
+      moduleKey: AnalyticsModule.INVENTORY,
+      featureKey: AnalyticsFeature.INVENTORY_ITEM,
+      metadataJson: { count: Array.isArray(drafts) ? drafts.length : 0 },
     });
 
     // ✅ IMPORTANT: return APISuccess envelope for frontend APIClient.get()
@@ -72,6 +82,15 @@ export async function updateInventoryDraft(req: CustomRequest, res: Response, ne
         upc: typeof body.upc === 'string' ? body.upc : undefined,
         sku: typeof body.sku === 'string' ? body.sku : undefined,
       },
+    });
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.ACTION_COMPLETED,
+      userId,
+      propertyId,
+      moduleKey: AnalyticsModule.INVENTORY,
+      featureKey: AnalyticsFeature.INVENTORY_ITEM,
+      metadataJson: { actionType: 'update_draft', draftId },
     });
 
     return res.json({ success: true, data: { draft: updated } });
@@ -217,7 +236,16 @@ export async function exportInventoryDraftsCsv(req: CustomRequest, res: Response
     });
 
     const csv = [headers.map(escape).join(','), ...rows].join('\n');
-  
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.ACTION_COMPLETED,
+      userId,
+      propertyId,
+      moduleKey: AnalyticsModule.INVENTORY,
+      featureKey: AnalyticsFeature.INVENTORY_ITEM,
+      metadataJson: { actionType: 'export_csv', itemCount: rows.length },
+    });
+
     res.setHeader('Content-Type', 'text/csv');
     res.setHeader(
       'Content-Disposition',

@@ -3,12 +3,23 @@ import { Response, NextFunction } from 'express';
 import { CustomRequest } from '../types';
 import { RateConfigType } from '@prisma/client';
 import * as svc from '../services/financing.service';
+import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
 
 // ─── Financing Profile ────────────────────────────────────────────────────────
 
 export async function getFinancingProfile(req: CustomRequest, res: Response, next: NextFunction) {
   try {
     const profile = await svc.getProfile(req.params.propertyId);
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.TOOL_USED,
+      userId: req.user?.userId,
+      propertyId: req.params.propertyId,
+      moduleKey: AnalyticsModule.FINANCIAL,
+      featureKey: AnalyticsFeature.FINANCING,
+      metadataJson: { hasProfile: !!profile, mortgageType: profile?.mortgageType ?? null },
+    });
+
     res.json({ success: true, data: { profile } });
   } catch (err) {
     next(err);
@@ -46,6 +57,16 @@ export async function getEquityPosition(req: CustomRequest, res: Response, next:
 export async function refreshEquityPosition(req: CustomRequest, res: Response, next: NextFunction) {
   try {
     const equity = await svc.refreshEquity(req.params.propertyId);
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.ACTION_COMPLETED,
+      userId: req.user?.userId,
+      propertyId: req.params.propertyId,
+      moduleKey: AnalyticsModule.FINANCIAL,
+      featureKey: AnalyticsFeature.FINANCING,
+      metadataJson: { actionType: 'refresh_equity', equityPercent: Number(equity.equityPercent), ltvPercent: Number(equity.ltvPercent) },
+    });
+
     res.status(201).json({ success: true, data: { equity: serializeEquity(equity) } });
   } catch (err) {
     next(err);
@@ -89,6 +110,16 @@ export async function createFinancingScenario(req: CustomRequest, res: Response,
     if (!userId) return res.status(401).json({ success: false, error: 'Authentication required' });
 
     const scenario = await svc.createScenario(req.params.propertyId, userId, req.body);
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.ACTION_COMPLETED,
+      userId,
+      propertyId: req.params.propertyId,
+      moduleKey: AnalyticsModule.FINANCIAL,
+      featureKey: AnalyticsFeature.FINANCING,
+      metadataJson: { actionType: 'create_scenario', entryPoint: (scenario as any)?.entryPoint },
+    });
+
     res.status(201).json({ success: true, data: { scenario } });
   } catch (err) {
     next(err);

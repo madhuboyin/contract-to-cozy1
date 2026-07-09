@@ -2,6 +2,7 @@
 import { Response } from 'express';
 import { CustomRequest } from '../types';
 import { SellHoldRentService } from '../services/sellHoldRent.service';
+import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
 
 const svc = new SellHoldRentService();
 
@@ -34,6 +35,15 @@ export async function getSellHoldRent(req: CustomRequest, res: Response) {
     vacancyRate: num(req.query.vacancyRate),
     managementRate: num(req.query.managementRate),
   }, userId);
+
+  analyticsEmitter.track({
+    eventType: AnalyticsEvent.TOOL_USED,
+    userId,
+    propertyId,
+    moduleKey: AnalyticsModule.HOME_BUYER,
+    featureKey: AnalyticsFeature.SELL_HOLD_RENT,
+    metadataJson: { years },
+  });
 
   // ✅ Option B: match your standard API envelope used by api.get()
   return res.json({
