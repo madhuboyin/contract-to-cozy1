@@ -4,9 +4,11 @@
 // Job registry is defined in ../config/workerJobRegistry.ts (shared with worker).
 
 import { Queue } from 'bullmq';
+import Redis from 'ioredis';
 import { connection } from './JobQueue.service';
 import { JOB_REGISTRY } from '../config/workerJobRegistry';
 import { DEFAULT_JOB_RETENTION } from '../config/queueDefaults';
+import { logger } from '../lib/logger';
 
 // Re-export types so routes/controllers don't need two import paths
 export type { JobCategory, JobRegistryEntry } from '../config/workerJobRegistry';
@@ -42,6 +44,47 @@ export interface WorkerJobDetail {
   triggerSupported: boolean;
   queueStats?: QueueStats;
   recentRuns: RecentRun[];
+}
+
+// ─── Cron run history (for jobs with no BullMQ queue) ─────────────────────────
+//
+// Pure node-cron jobs (no queueName in the registry) don't run through
+// BullMQ, so they had no run history on this dashboard at all — every one
+// showed "Never run" regardless of how many times it actually succeeded.
+// apps/workers/src/lib/cronRunHistory.ts writes a short rolling history per
+// job key to this same Redis instance after each cron run; this reads it back.
+const CRON_HISTORY_KEY_PREFIX = 'cron-run-history:';
+
+const cronHistoryRedis = new Redis({ ...connection });
+cronHistoryRedis.on('error', (err) => {
+  logger.error({ err }, '[ADMIN-WORKER-JOBS] cron run history Redis connection error');
+});
+
+interface StoredCronRun {
+  status: 'completed' | 'failed';
+  finishedAt: number;
+  durationMs: number;
+  failReason?: string;
+}
+
+async function getCronRunHistory(jobKey: string, limit = 3): Promise<RecentRun[]> {
+  try {
+    const raw = await cronHistoryRedis.lrange(`${CRON_HISTORY_KEY_PREFIX}${jobKey}`, 0, limit - 1);
+    return raw.map((entry, i) => {
+      const parsed = JSON.parse(entry) as StoredCronRun;
+      return {
+        id: `${jobKey}-${i}`,
+        jobName: jobKey,
+        status: parsed.status,
+        finishedAt: parsed.finishedAt,
+        durationMs: parsed.durationMs,
+        failReason: parsed.failReason,
+      };
+    });
+  } catch (err) {
+    logger.error({ err }, `[ADMIN-WORKER-JOBS] Failed to read cron run history for "${jobKey}"`);
+    return [];
+  }
 }
 
 // ─── Queue instances (lazy, keyed by name) ────────────────────────────────────
@@ -150,7 +193,8 @@ export async function listWorkerJobs(): Promise<WorkerJobDetail[]> {
   return Promise.all(
     JOB_REGISTRY.map(async (job) => {
       if (!job.queueName) {
-        return { ...job, recentRuns: [] };
+        const recentRuns = await getCronRunHistory(job.key);
+        return { ...job, recentRuns };
       }
       try {
         const [queueStats, recentRuns] = await Promise.all([

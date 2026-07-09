@@ -25,6 +25,7 @@ import { startDomainEventsPoller } from './runners/domainEvents.poller';
 import { startHighPriorityEmailEnqueuePoller } from './runners/highPriorityEmailEnqueue.poller';
 import { startClaimFollowUpDuePoller } from './runners/claimFollowUpDue.poller';
 import { alertOnJobFailure } from './lib/jobFailureAlert';
+import { initCronRunHistory, recordCronRun } from './lib/cronRunHistory';
 import { DEFAULT_JOB_RETENTION } from '../../backend/src/config/queueDefaults';
 import { recallIngestJob, RECALL_INGEST_JOB } from './jobs/recallIngest.job';
 import { recallMatchJob, RECALL_MATCH_JOB } from './jobs/recallMatch.job';
@@ -745,11 +746,20 @@ function scheduleCronJobs(): void {
           logger.info(`[${entry.key}] ✅ Completed`);
           cronJobRunsTotal.inc({ job_key: entry.key, status: 'success' });
           cronJobLastSuccessTimestamp.set({ job_key: entry.key }, Date.now() / 1000);
+          void recordCronRun(entry.key, {
+            status: 'completed',
+            finishedAt: Date.now(),
+            durationMs: stopTimer() * 1000,
+          });
         } catch (err) {
           logger.error({ err }, `[${entry.key}] ❌ Failed`);
           cronJobRunsTotal.inc({ job_key: entry.key, status: 'failure' });
-        } finally {
-          stopTimer();
+          void recordCronRun(entry.key, {
+            status: 'failed',
+            finishedAt: Date.now(),
+            durationMs: stopTimer() * 1000,
+            failReason: err instanceof Error ? err.message : String(err),
+          });
         }
       },
       { timezone: 'America/New_York' },
@@ -1233,6 +1243,7 @@ cronTriggerWorker.on('failed', (job, err) => {
 });
 
 // Start cron jobs from registry, then start BullMQ worker
+initCronRunHistory(redisConnection);
 scheduleCronJobs();
 startWorker();
 startMetricsServer();
