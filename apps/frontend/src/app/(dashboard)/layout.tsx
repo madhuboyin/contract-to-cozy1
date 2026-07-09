@@ -43,6 +43,7 @@ import DashboardCommandPalette from '@/components/navigation/DashboardCommandPal
 import DashboardBreadcrumbs from '@/components/navigation/DashboardBreadcrumbs';
 import { AppShell } from '@/components/layout/AppShell';
 import { CtcTopCommandBar } from '@/components/layout/CtcTopCommandBar';
+import { FeedbackWidget } from '@/components/feedback/FeedbackWidget';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -758,6 +759,7 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
         {/* Global overlays */}
         <DashboardCommandPalette />
         <AIChat />
+        <FeedbackWidget />
       </PropertyProvider>
       </NotificationProvider>
       )}

@@ -2484,6 +2484,26 @@ class APIClient {
   }
 
   /**
+   * Submit app-wide pilot feedback (thumbs up/down + optional comment) from
+   * any dashboard page. See also submitSellerPrepFeedback above, which is
+   * the earlier seller-prep-specific variant of this same mechanism.
+   */
+  async submitFeedback(
+    rating: 'up' | 'down',
+    comment: string | undefined,
+    page: string
+  ): Promise<APIResponse<any>> {
+    return this.request('/api/feedback', {
+      method: 'POST',
+      body: {
+        rating,
+        comment,
+        page,
+      },
+    });
+  }
+
+  /**
    * Delete an agent interview
    */
   async deleteAgentInterview(interviewId: string): Promise<APIResponse<void>> {

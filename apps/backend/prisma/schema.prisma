@@ -3029,18 +3029,23 @@ model SellerPrepLead {
   @@index([propertyId, leadType])
 }
 
-model SellerPrepFeedback {
+// Generic app-wide pilot feedback (thumbs up/down + optional comment).
+// Originally seller-prep-only (SellerPrepFeedback); generalized so any page
+// in the app can submit feedback via POST /api/feedback. propertyId/page
+// are now optional/generic to support non-property-scoped screens.
+model Feedback {
   id         String   @id @default(uuid())
   userId     String
-  propertyId String
-  rating     String // "helpful" or "not-helpful"
+  propertyId String?
+  rating     String // "helpful"/"not-helpful" (seller-prep) or "up"/"down" (generic widget)
   comment    String?
-  page       String   @default("seller-prep")
+  page       String   @default("app")
   createdAt  DateTime @default(now())
 
   @@index([propertyId])
   @@index([rating])
   @@index([createdAt])
+  @@index([userId])
 }
 
 // NEW MODEL: Stores data for the Agent Interview Guide

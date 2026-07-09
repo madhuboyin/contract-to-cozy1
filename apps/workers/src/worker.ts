@@ -12,6 +12,7 @@ import { Worker, Queue } from 'bullmq';
 import { calculateFinancialEfficiency } from '../../backend/src/utils/FinancialCalculator.util';
 import { calculateHealthScore } from './utils/propertyScore.util';
 import { sendEmailNotificationJob, runDailyEmailDigest } from './jobs/sendEmailNotification.job';
+import { sendFeedbackNotificationJob } from './jobs/sendFeedbackNotification.job';
 import { sendPushNotificationJob } from './jobs/sendPushNotification.job';
 import { sendSmsNotificationJob } from './jobs/sendSmsNotification.job';
 import { generateSeasonalChecklists } from './jobs/seasonalChecklistGeneration.job';
@@ -854,6 +855,8 @@ function startWorker() {
     async (job) => {
       if (job.name === 'SEND_EMAIL_NOTIFICATION') {
         await sendEmailNotificationJob(job.data.notificationDeliveryId);
+      } else if (job.name === 'SEND_FEEDBACK_NOTIFICATION') {
+        await sendFeedbackNotificationJob(job.data);
       }
     },
     {

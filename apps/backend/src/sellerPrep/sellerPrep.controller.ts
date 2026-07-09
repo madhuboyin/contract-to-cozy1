@@ -274,7 +274,7 @@ export class SellerPrepController {
         });
       }
   
-      const feedback = await prisma.sellerPrepFeedback.create({
+      const feedback = await prisma.feedback.create({
         data: {
           userId,
           propertyId,

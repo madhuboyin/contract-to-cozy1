@@ -1,8 +1,17 @@
-// apps/frontend/src/components/seller-prep/FeedbackWidget.tsx
+// apps/frontend/src/components/feedback/FeedbackWidget.tsx
+//
+// App-wide pilot feedback widget: floating thumbs-up/down + comment card.
+// Mounted once in the dashboard root layout (app/(dashboard)/layout.tsx) so
+// it's available on every dashboard page, not just seller-prep (its
+// original home — see git history of
+// components/seller-prep/FeedbackWidget.tsx for the pre-generalization
+// version, which required a propertyId prop and posted to
+// /api/seller-prep/feedback).
 "use client";
 
 import { useState, useEffect, useRef } from "react";
 import { useMutation } from "@tanstack/react-query";
+import { usePathname } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -11,27 +20,19 @@ import { api } from "@/lib/api/client";
 import { useToast } from "@/components/ui/use-toast";
 import { FEATURE_FLAGS } from "@/lib/featureFlags";
 
-interface FeedbackWidgetProps {
-  propertyId: string;
-}
-
-export function FeedbackWidget({ propertyId }: FeedbackWidgetProps) {
+export function FeedbackWidget() {
   const { toast } = useToast();
+  const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false); // Default to false to show the trigger button
-  const [selectedRating, setSelectedRating] = useState<"helpful" | "not-helpful" | null>(null);
+  const [selectedRating, setSelectedRating] = useState<"up" | "down" | null>(null);
   const [comment, setComment] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const mountedRef = useRef(true);
   useEffect(() => { return () => { mountedRef.current = false; }; }, []);
 
   const mutation = useMutation({
-    mutationFn: async (data: { rating: string; comment?: string }) => {
-      return api.submitSellerPrepFeedback(
-        propertyId,
-        data.rating as 'helpful' | 'not-helpful',
-        data.comment,
-        'seller-prep'
-      );
+    mutationFn: async (data: { rating: "up" | "down"; comment?: string }) => {
+      return api.submitFeedback(data.rating, data.comment, pathname || "unknown");
     },
     onSuccess: () => {
       setSubmitted(true);
@@ -65,14 +66,14 @@ export function FeedbackWidget({ propertyId }: FeedbackWidgetProps) {
   if (!FEATURE_FLAGS.FEEDBACK_WIDGET) return null;
 
   return (
-    // FIXED: Positioned fixed to bottom-left (left-6) to avoid blocking AI Chat on the right
+    // Positioned fixed to bottom-left (left-6) to avoid blocking AI Chat on the right
     <div className="fixed bottom-[calc(60px+env(safe-area-inset-bottom)+1rem)] left-6 z-40 flex flex-col items-start gap-4 lg:bottom-6">
       {isOpen && !submitted && (
         <Card className="w-72 shadow-xl border-blue-100 animate-in fade-in slide-in-from-left-4 duration-200">
           <CardContent className="p-4 space-y-4">
             <div className="flex items-center justify-between">
               <span className="text-sm font-semibold text-blue-900">
-                Helpful insights?
+                Got feedback?
               </span>
               <Button
                 variant="ghost"
@@ -90,7 +91,7 @@ export function FeedbackWidget({ propertyId }: FeedbackWidgetProps) {
                   variant="outline"
                   size="sm"
                   className="flex-1 hover:bg-green-50 hover:text-green-600 border-gray-200"
-                  onClick={() => setSelectedRating("helpful")}
+                  onClick={() => setSelectedRating("up")}
                 >
                   <ThumbsUp className="h-4 w-4 mr-2" />
                   Yes
@@ -99,7 +100,7 @@ export function FeedbackWidget({ propertyId }: FeedbackWidgetProps) {
                   variant="outline"
                   size="sm"
                   className="flex-1 hover:bg-red-50 hover:text-red-600 border-gray-200"
-                  onClick={() => setSelectedRating("not-helpful")}
+                  onClick={() => setSelectedRating("down")}
                 >
                   <ThumbsDown className="h-4 w-4 mr-2" />
                   No
@@ -108,7 +109,7 @@ export function FeedbackWidget({ propertyId }: FeedbackWidgetProps) {
             ) : (
               <div className="space-y-3">
                 <div className="text-xs text-gray-600 font-medium">
-                  {selectedRating === "helpful"
+                  {selectedRating === "up"
                     ? "Great! Any additional thoughts?"
                     : "Sorry to hear that. How can we improve?"}
                 </div>

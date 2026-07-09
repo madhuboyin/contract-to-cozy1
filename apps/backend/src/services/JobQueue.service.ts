@@ -39,8 +39,19 @@ export const propertyIntelligenceQueue =
   );
 
 // Email Notification Queue
+// Union payload: the existing 'SEND_EMAIL_NOTIFICATION' job carries a
+// notificationDeliveryId (per-user notification pipeline). The
+// 'SEND_FEEDBACK_NOTIFICATION' job (added for the pilot feedback channel)
+// carries a direct recipient/subject payload — it isn't tied to a User
+// row or the Notification/NotificationDelivery models.
 export interface EmailNotificationJobPayload {
-  notificationDeliveryId: string;
+  notificationDeliveryId?: string;
+  to?: string;
+  rating?: string;
+  comment?: string | null;
+  page?: string;
+  userEmail?: string;
+  userId?: string;
 }
 
 export const emailNotificationQueue =

@@ -22,7 +22,9 @@ import SellerPrepOverview from "@/components/seller-prep/SellerPrepOverview";
 import { SellerPrepIntakeForm } from "@/components/seller-prep/SellerPrepIntakeForm";
 import { SellerPrepDisclaimer } from "@/components/seller-prep/SellerPrepDisclaimer";
 import { useMilestones } from "@/hooks/useMilestones";
-import { FeedbackWidget } from "@/components/seller-prep/FeedbackWidget";
+// Note: this page used to mount its own seller-prep-scoped FeedbackWidget
+// here. That's superseded by the app-wide FeedbackWidget now mounted once
+// in app/(dashboard)/layout.tsx — kept here would double-mount it on this page.
 
 interface SellerPrepItem {
   id: string;
@@ -235,12 +237,6 @@ export default function SellerPrepPage() {
         propertyId={propertyId as string}
       />
 
-      {/* Persistent Feedback Mechanism */}
-      {propertyId && (
-        <div className="mt-8 border-t pt-6">
-          <FeedbackWidget propertyId={propertyId} />
-        </div>
-      )}
       </MobilePageContainer>
     </DashboardShell>
   );
