@@ -17,7 +17,8 @@
     "test:watch": "node --test --watch $(find tests -type f -name '*.test.js')",
     "smoke:health-score-ui": "node scripts/healthScoreUiSmokeCheck.js",
     "lint:ssrf": "node scripts/check-ssrf-guards.js",
-    "report:weekly": "ts-node scripts/weekly-retention-report.ts"
+    "report:weekly": "ts-node scripts/weekly-retention-report.ts",
+    "backfill:property-activation": "ts-node scripts/backfill-property-activation.ts"
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"
