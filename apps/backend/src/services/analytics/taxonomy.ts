@@ -126,10 +126,13 @@ export const AnalyticsFeature = {
   TRUE_COST_OWNERSHIP:    'true_cost_ownership',
   HOME_COST_GROWTH:       'home_cost_growth',
   HOME_SAVINGS:           'home_savings',
+  COVERAGE_OPTIONS:       'coverage_options',
+  MORTGAGE_REFINANCE_RADAR: 'mortgage_refinance_radar',
 
   // Community / HOA
   HOA_COMPLIANCE:      'hoa_compliance',
   NEIGHBOURHOOD_TRUST: 'neighbourhood_trust',
+  NEIGHBORHOOD_CHANGE_RADAR: 'neighborhood_change_radar',
 
   // Home Buyer / Seller
   HOME_BUYER_TASK: 'home_buyer_task',

@@ -9,6 +9,7 @@ import { apiRateLimiter, ocrRateLimiter } from '../middleware/rateLimiter.middle
 import { CustomRequest } from '../types';
 import { prisma } from '../lib/prisma';
 import { detectCoverageGaps } from '../services/coverageGap.service';
+import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
 import { InventoryImportService } from '../services/inventoryImport.service';
 import { checkDuplicateAppliance, listImportBatches, rollbackImportBatch } from '../controllers/inventory.controller';
 import { InventoryService } from '../services/inventory.service';
@@ -402,6 +403,15 @@ router.get(
         },
         { total: 0 } as Record<string, number>
       );
+
+      analyticsEmitter.track({
+        eventType: AnalyticsEvent.TOOL_USED,
+        userId: req.user?.userId,
+        propertyId,
+        moduleKey: AnalyticsModule.FINANCIAL,
+        featureKey: AnalyticsFeature.COVERAGE_OPTIONS,
+        metadataJson: { gapCount: counts.total },
+      });
 
       return res.json({ success: true, data: { counts, gaps, waived } });
     } catch (err: any) {

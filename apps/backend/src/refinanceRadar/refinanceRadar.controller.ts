@@ -12,6 +12,7 @@ import {
   RateHistoryQuery,
   RunScenarioBody,
 } from './validators/refinanceRadar.validators';
+import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
 
 const service = new RefinanceRadarService();
 
@@ -22,6 +23,16 @@ export class RefinanceRadarController {
     try {
       const { propertyId } = req.params;
       const result = await service.getCurrentStatus(propertyId);
+
+      analyticsEmitter.track({
+        eventType: AnalyticsEvent.TOOL_USED,
+        userId: req.user?.userId,
+        propertyId,
+        moduleKey: AnalyticsModule.FINANCIAL,
+        featureKey: AnalyticsFeature.MORTGAGE_REFINANCE_RADAR,
+        metadataJson: {},
+      });
+
       res.json({ success: true, data: { radarStatus: result } });
     } catch (err) {
       next(err);
@@ -90,6 +101,16 @@ export class RefinanceRadarController {
         closingCostPercent: body.closingCostPercent,
         saveScenario: body.saveScenario ?? false,
       });
+
+      analyticsEmitter.track({
+        eventType: AnalyticsEvent.ACTION_COMPLETED,
+        userId: req.user?.userId,
+        propertyId,
+        moduleKey: AnalyticsModule.FINANCIAL,
+        featureKey: AnalyticsFeature.MORTGAGE_REFINANCE_RADAR,
+        metadataJson: { actionType: 'run_scenario', saved: body.saveScenario ?? false },
+      });
+
       res.json({ success: true, data: { scenario: result } });
     } catch (err) {
       next(err);

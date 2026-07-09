@@ -8,6 +8,7 @@ import { NeighborhoodRadarQueryService } from './neighborhoodRadarQueryService';
 import { NeighborhoodSignalService } from './neighborhoodSignalService';
 import { NeighborhoodEventType } from '@prisma/client';
 import { EventListQuery } from './neighborhoodIntelligence.validators';
+import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
 
 const intelligenceService = new NeighborhoodIntelligenceService();
 const queryService = new NeighborhoodRadarQueryService();
@@ -25,6 +26,16 @@ export async function getNeighborhoodRadarSummary(
   try {
     const { propertyId } = req.params;
     const summary = await queryService.getSummary(propertyId);
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.TOOL_USED,
+      userId: req.user?.userId,
+      propertyId,
+      moduleKey: AnalyticsModule.COMMUNITY,
+      featureKey: AnalyticsFeature.NEIGHBORHOOD_CHANGE_RADAR,
+      metadataJson: {},
+    });
+
     res.json({ success: true, data: { summary } });
   } catch (err) {
     next(err);
