@@ -8,6 +8,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Bell, Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { api } from '@/lib/api/client';
+import { useAuth } from '@/lib/auth/AuthContext';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
 import { useNotifications } from '@/lib/notifications/NotificationContext';
 import { CtcCommandSearch } from './CtcCommandSearch';
@@ -100,6 +101,8 @@ function NotificationsButton() {
 
 export function CtcTopCommandBar({ className }: CtcTopCommandBarProps) {
   const router = useRouter();
+  const { user } = useAuth();
+  const isAdminNav = user?.role === 'ADMIN';
   const { setSelectedPropertyId } = usePropertyContext();
   const { propertyId, propertyAddress, properties, property, onboardingStatus } = usePropertyData();
 
@@ -143,14 +146,16 @@ export function CtcTopCommandBar({ className }: CtcTopCommandBarProps) {
             {/* Center-Left: Command Search (bigger) */}
             <CtcCommandSearch className="flex-1 max-w-[600px]" />
 
-            {/* Center: Property Selector (bigger) */}
-            <CtcPropertySelector 
-              propertyAddress={propertyAddress}
-              properties={properties}
-              selectedPropertyId={propertyId}
-              onPropertySelect={handlePropertySelect}
-              onAddProperty={handleAddProperty}
-            />
+            {/* Center: Property Selector (bigger) — admin isn't property-scoped */}
+            {!isAdminNav && (
+              <CtcPropertySelector
+                propertyAddress={propertyAddress}
+                properties={properties}
+                selectedPropertyId={propertyId}
+                onPropertySelect={handlePropertySelect}
+                onAddProperty={handleAddProperty}
+              />
+            )}
 
             {/* Right: Setup guide + Notifications */}
             <div className="flex items-center gap-2 shrink-0">
@@ -184,19 +189,25 @@ export function CtcTopCommandBar({ className }: CtcTopCommandBarProps) {
               </div>
             </Link>
 
-            {/* Property selector inline — scrolls horizontally in remaining space */}
-            <ScrollFadeX className="flex-1 min-w-0">
-            <div className="overflow-x-auto scrollbar-hide">
-              <CtcPropertySelector
-                propertyAddress={propertyAddress}
-                properties={properties}
-                selectedPropertyId={propertyId}
-                onPropertySelect={handlePropertySelect}
-                onAddProperty={handleAddProperty}
-                className="shrink-0 text-xs"
-              />
-            </div>
-            </ScrollFadeX>
+            {/* Property selector inline — scrolls horizontally in remaining space
+                (admin isn't property-scoped; keep the flex-1 spacer so the
+                right-side actions stay pinned to the right edge) */}
+            {isAdminNav ? (
+              <div className="flex-1 min-w-0" />
+            ) : (
+              <ScrollFadeX className="flex-1 min-w-0">
+                <div className="overflow-x-auto scrollbar-hide">
+                  <CtcPropertySelector
+                    propertyAddress={propertyAddress}
+                    properties={properties}
+                    selectedPropertyId={propertyId}
+                    onPropertySelect={handlePropertySelect}
+                    onAddProperty={handleAddProperty}
+                    className="shrink-0 text-xs"
+                  />
+                </div>
+              </ScrollFadeX>
+            )}
 
             {/* Right Actions */}
             <div className="flex items-center gap-1.5 shrink-0">
