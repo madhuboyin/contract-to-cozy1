@@ -14,7 +14,7 @@ const HOME_TOOL_GROUPS = [
   {
     key: 'monitoring',
     title: 'Monitoring + Awareness',
-    toolKeys: ['home-event-radar'],
+    toolKeys: ['home-event-radar', 'neighborhood-change-radar'],
   },
   {
     key: 'history',
