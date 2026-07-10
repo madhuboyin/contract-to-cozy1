@@ -687,6 +687,7 @@ export class GuidanceJourneyService {
     signal?: any | null;
     next?: any | null;
     includeAIAdvice?: boolean;
+    userId?: string | null;
   }): Promise<EnrichedGuidanceAction> {
     const journey = params.journey;
     const signal = params.signal ?? journey.primarySignal ?? null;
@@ -800,9 +801,10 @@ export class GuidanceJourneyService {
 
     // FRD-FR-15: AI-powered strategic advice for the guidance overview (Top Class feature)
     let strategicAdvice: string | null = null;
-    if (params.includeAIAdvice && journey.status === 'ACTIVE') {
+    if (params.includeAIAdvice && journey.status === 'ACTIVE' && params.userId) {
       strategicAdvice = await guidanceAdvisorService.generateStrategicAdvice({
         propertyId: journey.propertyId,
+        userId: params.userId,
         journeyId: journey.id,
         issueDomain: journey.issueDomain,
         signalIntentFamily: signal?.signalIntentFamily ?? null,
@@ -813,6 +815,11 @@ export class GuidanceJourneyService {
         costOfDelay: validation.sanitized.costOfDelay,
         coverageImpact: financial.coverageImpact,
       });
+    } else if (params.includeAIAdvice && journey.status === 'ACTIVE' && !params.userId) {
+      logger.warn(
+        { journeyId: journey.id },
+        '[GUIDANCE-ADVISOR] Skipped AI advice generation: no userId supplied to enrichAction'
+      );
     }
 
     const polishedNext = next
@@ -1570,7 +1577,7 @@ export class GuidanceJourneyService {
     return true;
   }
 
-  async getJourneyById(propertyId: string, journeyId: string) {
+  async getJourneyById(propertyId: string, journeyId: string, userId?: string | null) {
     const { guidanceJourney } = getGuidanceModels();
 
     const fetchJourney = (id: string) =>
@@ -1659,6 +1666,7 @@ export class GuidanceJourneyService {
       signal: journey.primarySignal ?? null,
       next,
       includeAIAdvice: true,
+      userId,
     });
 
     return {
@@ -2050,10 +2058,11 @@ export class GuidanceJourneyService {
         },
       });
 
-      const activeJourney = await this.getJourneyById(args.propertyId, sourceJourney.id);
+      const activeJourney = await this.getJourneyById(args.propertyId, sourceJourney.id, args.actorUserId);
       const next = await this.resolveNextStepWithIntelligence({
         propertyId: args.propertyId,
         journeyId: activeJourney.id,
+        userId: args.actorUserId,
       });
 
       return {
@@ -2088,10 +2097,11 @@ export class GuidanceJourneyService {
     });
 
     if (existingChild) {
-      const activeJourney = await this.getJourneyById(args.propertyId, existingChild.id);
+      const activeJourney = await this.getJourneyById(args.propertyId, existingChild.id, args.actorUserId);
       const next = await this.resolveNextStepWithIntelligence({
         propertyId: args.propertyId,
         journeyId: activeJourney.id,
+        userId: args.actorUserId,
       });
       return {
         sourceJourney: completed.journey,
@@ -2202,10 +2212,11 @@ export class GuidanceJourneyService {
       childJourney = confirmResult.journey;
     }
 
-    const activeJourney = await this.getJourneyById(args.propertyId, childJourney.id);
+    const activeJourney = await this.getJourneyById(args.propertyId, childJourney.id, args.actorUserId);
     const next = await this.resolveNextStepWithIntelligence({
       propertyId: args.propertyId,
       journeyId: activeJourney.id,
+      userId: args.actorUserId,
     });
 
     return {
@@ -2339,8 +2350,12 @@ export class GuidanceJourneyService {
     });
   }
 
-  async resolveNextStepWithIntelligence(params: { propertyId: string; journeyId: string }) {
-    const journey = await this.getJourneyById(params.propertyId, params.journeyId);
+  async resolveNextStepWithIntelligence(params: {
+    propertyId: string;
+    journeyId: string;
+    userId?: string | null;
+  }) {
+    const journey = await this.getJourneyById(params.propertyId, params.journeyId, params.userId);
     const next = await guidanceStepResolverService.resolveNextStep({
       propertyId: params.propertyId,
       journeyId: journey.id,
@@ -2351,6 +2366,7 @@ export class GuidanceJourneyService {
       signal: journey.primarySignal ?? null,
       next,
       includeAIAdvice: true,
+      userId: params.userId,
     });
     return enriched.next;
   }

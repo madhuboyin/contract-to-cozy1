@@ -1969,6 +1969,7 @@ export class CoverageIntelligenceService {
 
     const strategicAdvice = await coverageAdvisorService.generateStrategicAdvice({
       propertyId,
+      userId,
       overallVerdict: snapshot.overallVerdict,
       insuranceVerdict: snapshot.insuranceVerdict,
       warrantyVerdict: snapshot.warrantyVerdict,

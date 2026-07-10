@@ -4,6 +4,7 @@ import { GuidanceIssueDomain } from './guidanceTypes';
 
 export type GuidanceAdviceContext = {
   propertyId: string;
+  userId: string;
   journeyId: string;
   issueDomain: GuidanceIssueDomain;
   signalIntentFamily?: string | null;
@@ -48,7 +49,7 @@ export class GuidanceAdvisorService {
       // We use a dedicated session ID for guidance advice to keep it stateless or semi-persistent
       const sessionId = `guidance-advice-${context.journeyId}`;
       const advice = await geminiService.sendMessageToChat(
-        'SYSTEM', // System actor
+        context.userId,
         sessionId,
         prompt,
         context.propertyId

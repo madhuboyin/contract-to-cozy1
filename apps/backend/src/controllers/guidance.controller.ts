@@ -93,14 +93,15 @@ export async function listActiveGuidanceJourneys(req: CustomRequest, res: Respon
 
 export async function getGuidanceJourneyDetail(req: CustomRequest, res: Response, next: NextFunction) {
   try {
-    requireUserId(req);
+    const userId = requireUserId(req);
     const propertyId = req.params.propertyId;
     const journeyId = req.params.journeyId;
 
-    const journey = await guidanceJourneyService.getJourneyById(propertyId, journeyId);
+    const journey = await guidanceJourneyService.getJourneyById(propertyId, journeyId, userId);
     const next = await guidanceJourneyService.resolveNextStepWithIntelligence({
       propertyId,
       journeyId,
+      userId,
     });
 
     res.json({
@@ -242,7 +243,7 @@ export async function blockGuidanceStep(req: CustomRequest, res: Response, next:
 
 export async function getGuidanceNextStep(req: CustomRequest, res: Response, next: NextFunction) {
   try {
-    requireUserId(req);
+    const userId = requireUserId(req);
     const propertyId = req.params.propertyId;
     const journeyId = String(req.query.journeyId || '');
 
@@ -251,6 +252,7 @@ export async function getGuidanceNextStep(req: CustomRequest, res: Response, nex
     const result = await guidanceJourneyService.resolveNextStepWithIntelligence({
       propertyId,
       journeyId,
+      userId,
     });
 
     res.json({

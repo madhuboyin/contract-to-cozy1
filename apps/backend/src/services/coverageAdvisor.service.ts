@@ -3,6 +3,7 @@ import { logger } from '../lib/logger';
 
 export type CoverageAdviceContext = {
   propertyId: string;
+  userId: string;
   overallVerdict: string;
   insuranceVerdict: string;
   warrantyVerdict: string;
@@ -56,7 +57,7 @@ export class CoverageAdvisorService {
     try {
       const sessionId = `coverage-advice-${context.propertyId}`;
       const advice = await geminiService.sendMessageToChat(
-        'SYSTEM',
+        context.userId,
         sessionId,
         prompt,
         context.propertyId
