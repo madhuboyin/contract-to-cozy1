@@ -125,6 +125,16 @@ export const JOB_REGISTRY: JobRegistryEntry[] = [
     type: 'cron',
     triggerSupported: false,
   },
+  {
+    key: 'weekly-retention-report',
+    name: 'Weekly Retention Report',
+    description: 'Emails a weekly activation/retention/engagement summary (ProductAnalyticsEvent) to RETENTION_REPORT_EMAIL.',
+    category: 'NOTIFICATIONS',
+    schedule: 'Mondays at 8:00 AM EST',
+    cronExpression: '0 8 * * 1',
+    type: 'cron',
+    triggerSupported: false,
+  },
 
   // ── Maintenance (cron) ────────────────────────────────────────────────────
   {

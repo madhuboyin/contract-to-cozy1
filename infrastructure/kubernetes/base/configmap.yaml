@@ -73,3 +73,6 @@ data:
   # Severe weather alerts (NOAA/NWS, api.weather.gov) — identifying User-Agent
   # required by NWS API usage policy; not a secret.
   NWS_USER_AGENT: "(contracttocozy.com, ops@contracttocozy.com)"
+
+  # Weekly retention/activation report recipient (see workers weeklyRetentionReport.job.ts)
+  RETENTION_REPORT_EMAIL: "madhuboyina@gmail.com"

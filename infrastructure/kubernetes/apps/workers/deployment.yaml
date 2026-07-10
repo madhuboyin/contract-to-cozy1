@@ -82,6 +82,11 @@ spec:
                 configMapKeyRef:
                   name: app-config
                   key: EMAIL_FROM
+            - name: RETENTION_REPORT_EMAIL
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: RETENTION_REPORT_EMAIL
             - name: CPSC_RECALL_FEED_URL
               valueFrom:
                 configMapKeyRef:

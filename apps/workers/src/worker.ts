@@ -43,6 +43,7 @@ import { ingestNeighborhoodDummyEventsJob } from './jobs/ingestNeighborhoodDummy
 import { runHabitGenerationJob } from './jobs/habitGeneration.job';
 import { ingestMortgageRatesJob } from './jobs/ingestMortgageRates.job';
 import { runGazetteGenerationJob } from './jobs/gazetteGeneration.job';
+import { runWeeklyRetentionReportJob } from './jobs/weeklyRetentionReport.job';
 import { expireGuidanceSignalsJob } from './jobs/expireGuidanceSignals.job';
 import { runSharedDataBackfillJob } from './jobs/sharedDataBackfill.job';
 import { runSharedDataConsistencyAuditJob } from './jobs/sharedDataConsistencyAudit.job';
@@ -711,6 +712,7 @@ const CRON_HANDLERS: Record<string, () => Promise<void>> = {
   'provider-credential-expire':      async () => { await providerCredentialExpireJob(); },
   'provider-credential-lapse':       async () => { await providerCredentialLapseJob(); },
   'provider-missing-credential-sweep': async () => { await providerMissingCredentialSweepJob(); },
+  'weekly-retention-report':         async () => { await runWeeklyRetentionReportJob(); },
 };
 
 // Per-job cron expression overrides (env-var-based schedules)
