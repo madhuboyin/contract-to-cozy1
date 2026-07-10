@@ -16,32 +16,11 @@ export function PropertySetupBanner({ show, onDismiss }: PropertySetupBannerProp
   const [dismissed, setDismissed] = useState(false);
 
   useEffect(() => {
-    console.log('🎌 BANNER COMPONENT - Mounted/Updated');
-    console.log('   ├─ show prop:', show);
-    
     const wasDismissed = localStorage.getItem(BANNER_DISMISSED_KEY) === 'true';
-    console.log('   ├─ localStorage dismissed:', wasDismissed);
-    
     setDismissed(wasDismissed);
-    
-    const shouldRender = show && !wasDismissed;
-    console.log('   └─ Will render?', shouldRender);
-    
-    if (shouldRender) {
-      console.log('✅ BANNER IS RENDERING');
-    } else {
-      console.log('❌ Banner NOT rendering');
-      if (!show) {
-        console.log('   Reason: show=false');
-      }
-      if (wasDismissed) {
-        console.log('   Reason: dismissed=true');
-      }
-    }
   }, [show]);
 
   const handleDismiss = () => {
-    console.log('🎌 BANNER DISMISSED by user');
     if (onDismiss) {
       onDismiss();
     } else {
@@ -54,8 +33,6 @@ export function PropertySetupBanner({ show, onDismiss }: PropertySetupBannerProp
   if (!show || dismissed) {
     return null;
   }
-
-  console.log('🎨 BANNER RENDERING NOW');
 
   return (
     <div className="bg-gradient-to-r from-amber-50 to-orange-50 border-l-4 border-orange-400 px-4 sm:px-6 py-4 shadow-sm">

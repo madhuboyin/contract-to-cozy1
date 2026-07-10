@@ -180,16 +180,31 @@ export async function getOrCreateOnboarding(
     return existing;
   }
 
-  return prisma.propertyOnboarding.create({
-    data: {
-      propertyId,
-      userId,
-      status: OnboardingStatus.IN_PROGRESS,
-      currentStep: 1,
-      completedJson: {},
-      setupScore: 0,
-    },
-  });
+  try {
+    return await prisma.propertyOnboarding.create({
+      data: {
+        propertyId,
+        userId,
+        status: OnboardingStatus.IN_PROGRESS,
+        currentStep: 1,
+        completedJson: {},
+        setupScore: 0,
+      },
+    });
+  } catch (error) {
+    // A freshly created property is commonly fetched by more than one
+    // concurrent request (e.g. duplicate dashboard-bootstrap calls right
+    // after property creation) — both can see "not found" above and race
+    // to create. Prisma's upsert() doesn't compile to an atomic Postgres
+    // ON CONFLICT for this secondary-unique-key case, so on a P2002 here
+    // the other request won the race: fetch what it created instead of
+    // letting the unique-constraint error bubble up as a 500.
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      const winner = await prisma.propertyOnboarding.findUnique({ where: { propertyId } });
+      if (winner) return winner;
+    }
+    throw error;
+  }
 }
 
 export async function computeSetupStatus(

@@ -12,7 +12,10 @@ interface PropertyContextType {
 
 const PropertyContext = createContext<PropertyContextType | undefined>(undefined);
 const STORAGE_KEY = 'selectedPropertyId';
-const PROPERTY_ID_IN_PATH = /\/dashboard\/properties\/([^/]+)/;
+// Property IDs are always UUIDs (see prisma schema.prisma `Property.id`). Matching on
+// UUID shape — rather than "any non-slash segment" — keeps this from misreading static
+// sibling routes like /dashboard/properties/new as a property id.
+const PROPERTY_ID_IN_PATH = /\/dashboard\/properties\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?:\/|$)/i;
 
 function getPropertyIdFromPathname(pathname: string): string | undefined {
   const match = pathname.match(PROPERTY_ID_IN_PATH);
