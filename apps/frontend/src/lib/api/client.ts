@@ -211,6 +211,22 @@ class APIClient {
     }
   }
 
+  /**
+   * Drop the properties cache (in-memory + sessionStorage fallback). Must run on
+   * login/logout so a stale or cross-account property list is never served after
+   * a session change in the same tab.
+   */
+  private resetPropertiesCache(): void {
+    this.propertiesCache = null;
+    this.propertiesRequest = null;
+    if (typeof window === 'undefined') return;
+    try {
+      window.sessionStorage.removeItem(APIClient.PROPERTIES_SESSION_FALLBACK_KEY);
+    } catch {
+      // Ignore storage failures.
+    }
+  }
+
   private shouldAttachCsrf(endpoint: string, method?: string): boolean {
     const normalizedMethod = (method || 'GET').toUpperCase();
     if (['GET', 'HEAD', 'OPTIONS'].includes(normalizedMethod)) return false;
@@ -526,6 +542,7 @@ class APIClient {
    * Login user
    */
   async login(input: LoginInput): Promise<APIResponse<AuthLoginResponse>> {
+    this.resetPropertiesCache();
     return this.request<AuthLoginResponse>('/api/auth/login', {
       method: 'POST',
       body: input,
@@ -618,6 +635,7 @@ class APIClient {
       // Ignore errors on logout request, the tokens are being cleared anyway
     } finally {
       this.removeToken();
+      this.resetPropertiesCache();
     }
   }
 
