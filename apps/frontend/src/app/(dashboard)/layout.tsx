@@ -502,23 +502,31 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
     });
   };
 
-  const [transitionVisible, setTransitionVisible] = useState(false);
+  // Read (but don't yet consume) the flag during the render phase via a lazy
+  // initializer — this is a pure read, so it's safe to run twice under React
+  // Strict Mode's dev-only double-invocation.
+  const [transitionVisible, setTransitionVisible] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.sessionStorage.getItem(POST_LOGIN_TRANSITION_KEY) === '1';
+  });
   const [transitionBootstrapped, setTransitionBootstrapped] = useState(false);
   const enablePullToRefresh = pathname === '/dashboard' || Boolean(pathname?.match(/^\/dashboard\/properties\/[^/]+$/));
 
+  // Consuming the one-time flag has no cleanup, so Strict Mode's dev-only
+  // mount->cleanup->mount replay just calls removeItem twice harmlessly.
   useEffect(() => {
     if (typeof window === 'undefined') return;
-
-    const shouldShowTransition = window.sessionStorage.getItem(POST_LOGIN_TRANSITION_KEY) === '1';
     window.sessionStorage.removeItem(POST_LOGIN_TRANSITION_KEY);
     setTransitionBootstrapped(true);
+  }, []);
 
-    if (!shouldShowTransition) return;
-
-    setTransitionVisible(true);
+  // Timer effect is keyed off derived state rather than a consumed side
+  // effect, so it re-establishes cleanly if Strict Mode replays mount/cleanup.
+  useEffect(() => {
+    if (!transitionVisible) return;
     const t = window.setTimeout(() => setTransitionVisible(false), MIN_TRANSITION_MS);
     return () => window.clearTimeout(t);
-  }, []);
+  }, [transitionVisible]);
 
   useEffect(() => {
     if (
