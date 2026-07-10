@@ -4,6 +4,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
 import { Building2, ChevronRight, Home, MoreHorizontal, Pencil, Plus, Sparkles, Trash2 } from 'lucide-react';
 import { api } from '@/lib/api/client';
 import { Property } from '@/types';
@@ -61,7 +62,8 @@ function getPropertyAddressLines(property: Property): { lineOne: string; lineTwo
 export default function PropertiesPage() {
   const searchParams = useSearchParams();
   const { toast } = useToast();
-  const { setSelectedPropertyId } = usePropertyContext();
+  const { selectedPropertyId, setSelectedPropertyId } = usePropertyContext();
+  const queryClient = useQueryClient();
   const [properties, setProperties] = useState<Property[]>([]);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState<string | null>(null);
@@ -182,7 +184,21 @@ export default function PropertiesPage() {
     try {
       const response = await api.deleteProperty(id);
       if (response.success) {
-        setProperties((current) => current.filter((property) => property.id !== id));
+        const remaining = properties.filter((property) => property.id !== id);
+        setProperties(remaining);
+
+        // The deleted property may still be referenced by shared/cached state
+        // (selected-property context, top-bar setup guide, property detail
+        // caches) — clear it out so nothing keeps pointing at a dead property.
+        if (selectedPropertyId === id) {
+          setSelectedPropertyId(remaining[0]?.id);
+        }
+        queryClient.invalidateQueries({ queryKey: ['properties'] });
+        queryClient.removeQueries({ queryKey: ['property', id] });
+        queryClient.removeQueries({ queryKey: ['onboarding-status', id] });
+        queryClient.removeQueries({ queryKey: ['property-onboarding', id] });
+        queryClient.removeQueries({ queryKey: ['property-bootstrap', id] });
+
         toast({ title: 'Property deleted successfully' });
         setDeleteTarget(null);
       } else {

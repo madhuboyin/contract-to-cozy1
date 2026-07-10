@@ -1288,10 +1288,12 @@ class APIClient {
     purchasePriceCents?: number | null;
     purchaseDate?: Date | string | null;
   }): Promise<APIResponse<Property>> {
-    return this.request('/api/properties', {
+    const response = await this.request<Property>('/api/properties', {
       method: 'POST',
       body: data,
     });
+    if (response.success) this.resetPropertiesCache();
+    return response;
   }
 
 /**
@@ -1348,19 +1350,23 @@ class APIClient {
       applianceAges?: any;
     }
   ): Promise<APIResponse<Property>> {
-    return this.request(`/api/properties/${id}`, {
+    const response = await this.request<Property>(`/api/properties/${id}`, {
       method: 'PUT',
       body: data,
     });
+    if (response.success) this.resetPropertiesCache();
+    return response;
   }
 
   /**
    * Delete a property
    */
   async deleteProperty(id: string): Promise<APIResponse<void>> {
-    return this.request(`/api/properties/${id}`, {
+    const response = await this.request<void>(`/api/properties/${id}`, {
       method: 'DELETE',
     });
+    if (response.success) this.resetPropertiesCache();
+    return response;
   }
 
   async getOrCreatePropertyNarrativeRun(
