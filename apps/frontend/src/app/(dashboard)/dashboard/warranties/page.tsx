@@ -142,9 +142,11 @@ function sanitizeReturnTo(raw: string | null): string | null {
   return raw;
 }
 
+// UUID-shaped segment only — a bare `[^/?]+` also matches sibling routes
+// like /dashboard/properties/new as a property id.
 function propertyIdFromDashboardPath(path: string | null): string | undefined {
   if (!path) return undefined;
-  const match = path.match(/\/dashboard\/properties\/([^/?]+)/);
+  const match = path.match(/\/dashboard\/properties\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?:\/|\?|$)/i);
   return match?.[1];
 }
 

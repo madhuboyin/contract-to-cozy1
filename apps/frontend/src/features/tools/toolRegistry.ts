@@ -82,7 +82,9 @@ function resolvePreferredPropertyId(propertyId?: string | null): string | undefi
   const storedPropertyId = window.localStorage.getItem('selectedPropertyId');
   if (storedPropertyId) return storedPropertyId;
 
-  const pathMatch = window.location.pathname.match(/\/dashboard\/properties\/([^/]+)/);
+  // UUID-shaped segment only — a bare `[^/]+` also matches sibling routes
+  // like /dashboard/properties/new as a property id.
+  const pathMatch = window.location.pathname.match(/\/dashboard\/properties\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?:\/|$)/i);
   return pathMatch?.[1];
 }
 

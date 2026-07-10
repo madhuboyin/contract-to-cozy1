@@ -4,15 +4,18 @@ import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Box, Loader2, ArrowRight, Home, Thermometer, Droplets, Zap, ShieldAlert, CheckCircle2 } from 'lucide-react';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
-import { api } from '@/lib/api/client';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
+import { getHomeDigitalTwin } from '../tools/home-digital-twin/homeDigitalTwinApi';
 
 export function DigitalTwinPreview({ propertyId }: { propertyId: string }) {
+  // getHomeDigitalTwin (unlike the raw api client method) treats a 404 as
+  // "no twin generated yet" and resolves to null instead of throwing, so a
+  // fresh property doesn't burn two pointless retries against a permanent 404.
   const { data: twinData, isLoading } = useQuery({
     queryKey: ['home-digital-twin', propertyId],
-    queryFn: () => api.getHomeDigitalTwin(propertyId),
+    queryFn: () => getHomeDigitalTwin(propertyId),
     enabled: !!propertyId,
   });
 
