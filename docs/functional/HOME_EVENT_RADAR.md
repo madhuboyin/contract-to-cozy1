@@ -2,13 +2,16 @@
 
 ## Overview
 
-Home Event Radar is a recent-signal monitoring and property-matching feature that surfaces weather, insurance market shifts, utility outages, tax changes, air quality alerts, and similar signals that may matter to a homeowner's property. The system stores canonical radar events, runs a deterministic rules-based matching engine against property characteristics, and delivers a personalized feed with actionable recommendations.
+Home Event Radar is the unified live-signal ingestion layer for events that may matter to a homeowner's property — weather, insurance market shifts, utility outages, tax reassessments, air quality alerts, and similar signals. The system stores canonical radar events, runs a deterministic rules-based matching engine against property characteristics, and delivers a personalized feed with actionable recommendations.
+
+**Architecture (updated 2026-07-10):** `RadarEvent` is the raw ingestion layer — every provider, once integrated, writes into it. High-impact matches are **promoted into `Incident`**, which owns the actionable lifecycle (severity scoring, acknowledgment, auto-resolution, archival, guidance-journey creation) rather than duplicating that machinery on `RadarEvent`. See [RadarEvent → Incident Promotion Bridge](#radarevent--incident-promotion-bridge) below. This decision was made because `Incident` already had a mature lifecycle and was the only thing that automatically created `GuidanceJourney` records; `RadarEvent`/`PropertyRadarMatch` had neither.
 
 Important current-state clarification:
-- The user-facing page does not call external providers directly.
+- The user-facing Home Event Radar page does not call external providers directly.
 - The frontend reads property-scoped matches from CtC backend APIs.
 - Canonical `RadarEvent` rows must already exist in the database before the feature can show anything.
-- Today, those canonical events can come from manual/internal ingest APIs or the worker-based dummy ingest flow used for QA and E2E testing.
+- As of this update, canonical events come from: (1) the manual/internal ingest API, (2) the worker-based dummy ingest flow (QA/E2E only, **disabled in production**, see [Incident History](#incident-history-dummy-data-in-production-2026-07-10)), and (3) **the real tax-reassessment provider integration** (first real, non-dummy data source — see [Real Provider Ingestion](#real-provider-ingestion)).
+- Weather is **not yet** ingested through `RadarEvent`. Real weather alerts (NWS-based) flow through a separate, pre-existing pipeline directly into `Incident` (`severeWeatherAlerts.job.ts`, `freezeRiskIncidents.job.ts`). Weather-family guidance journeys route to the **Incidents tab**, not to Home Event Radar. See [Guidance Journey Integration](#guidance-journey-integration).
 
 ---
 
@@ -19,6 +22,7 @@ Important current-state clarification:
 - Surface recommended actions per event with priority levels.
 - Track user engagement state (new → seen → saved → dismissed → acted on).
 - Provide an analytics audit trail for all interactions.
+- **Promote high-impact signals into the actionable `Incident` + `GuidanceJourney` lifecycle** so users are proactively routed to resolution, not just shown a feed.
 
 ---
 
@@ -146,7 +150,7 @@ Events are deduplicated via `dedupeKey` to prevent ingesting the same signal twi
 
 #### `PropertyRadarMatch` — Property-Specific Match Record
 
-Created by the matching engine for each `(property, radar event)` pair that meets the location and relevance criteria. This is the record the UI actually renders in the homeowner feed.
+Created by the matching engine for each `(property, radar event)` pair that meets the location and relevance criteria. This is the record the UI actually renders in the homeowner feed, and the record `promoteRadarEventToIncident` reads impact data from when promoting to `Incident`.
 
 | Column | Type | Notes |
 |---|---|---|
@@ -205,6 +209,30 @@ Append-only log of every UI interaction a user takes on a match. Used for analyt
 
 ---
 
+#### `TaxAssessorDataSource` — Tax Assessor Jurisdiction Config (new)
+
+Admin-managed per-county/municipal open-data config, mirroring `PermitDataSource`'s shape (same reused `PermitDataSourceStatus`/`PermitDataSourceAdapter`/`PermitDataSourceCoverageType` enums) but kept as a separate table so permit and tax-assessor jurisdiction coverage can be configured independently.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | String (uuid) | PK |
+| `name` | String | Display name |
+| `slug` | String (unique) | |
+| `status` | `PermitDataSourceStatus` | ACTIVE / INACTIVE / ERROR / RATE_LIMITED |
+| `adapterType` | `PermitDataSourceAdapter` | SOCRATA / ACCELA / CUSTOM (only SOCRATA implemented so far) |
+| `baseUrl` | String | |
+| `datasetId` | String? | |
+| `apiKeyEnvVar` | String? | Env var name holding the API key, if required |
+| `coverageType` | `PermitDataSourceCoverageType` | CITY / COUNTY / STATE |
+| `normalizedCoverageKey` | String (unique) | e.g. `US-NJ-princeton` — same normalization scheme as the permit pipeline |
+| `fieldMappingJson` | Json | Source field → canonical field mapping |
+| `queryFilterJson` | Json? | Optional extra SoQL filter |
+| `lastFetchAt` / `lastFetchError` / `totalAssessmentsFetched` | | Fetch bookkeeping |
+
+**No rows are seeded by default.** At least one real pilot jurisdiction must be configured before `ingestTaxAssessmentEventsJob` will fetch anything — see [Real Provider Ingestion](#real-provider-ingestion).
+
+---
+
 ### Related Model: `HomeEvent` (Property Timeline — Separate Feature)
 
 The `HomeEvent` model serves the property maintenance timeline and is a distinct concept from Event Radar. Both share the `/api/home-events` route prefix but serve different purposes.
@@ -215,6 +243,21 @@ The `HomeEvent` model serves the property maintenance timeline and is a distinct
 | `importance` | LOW, NORMAL, HIGH, HIGHLIGHT |
 | `visibility` | PRIVATE, HOUSEHOLD, SHARE_LINK, RESALE_PACK |
 | Links | InventoryRoom, InventoryItem, Claim, Expense, Document |
+
+---
+
+### Related Model: `Incident` (Promotion Target — Separate Feature)
+
+`Incident` is documented in full elsewhere (`apps/backend/src/services/incidents/incident.service.ts`), but the fields relevant to the promotion bridge:
+
+| Column | Type | Notes |
+|---|---|---|
+| `sourceType` | `IncidentSourceType` | Now includes `RADAR_EVENT` (added this update) — set when an incident originates from a promoted `RadarEvent` match |
+| `typeKey` | String | For radar-promoted incidents: `` `RADAR_${eventType.toUpperCase()}` ``, e.g. `RADAR_TAX_REASSESSMENT` |
+| `fingerprint` | String | For radar-promoted incidents: `` `property:${propertyId}|${typeKey}|${radarEvent.dedupeKey}` `` — guarantees idempotency across repeated matching runs |
+| `severity` | `IncidentSeverity` | `RadarImpactLevel.moderate` → `WARNING`, `.high` → `CRITICAL` |
+
+`Incident` has the full actionable lifecycle (severity scoring, acknowledgment, auto-resolution, archival, dedup) and is the *only* model that automatically creates a `GuidanceJourney` (via `bridgeIncidentToGuidance`). `RadarEvent`/`PropertyRadarMatch` do not.
 
 ---
 
@@ -233,9 +276,8 @@ Purpose:
 - Preserve source metadata, dedupe identity, and scope.
 
 Examples:
-- One `zip`-scoped hail event for `08536`
-- One `state`-scoped insurance market shift for `NJ`
-- One `property`-scoped manual signal for a specific test home
+- One `zip`-scoped hail event for `08536` (QA fixture)
+- One `property`-scoped real tax reassessment record for a specific home
 
 ### Property-scoped layer
 
@@ -261,6 +303,221 @@ Purpose:
 - Track what a specific user has done with a match.
 - These tables do not determine whether an event exists. They only track engagement after matching.
 
+### Promoted/actionable layer (new)
+
+Table:
+- `incidents` (see [RadarEvent → Incident Promotion Bridge](#radarevent--incident-promotion-bridge))
+
+Purpose:
+- For `moderate`/`high` impact matches only, materialize an `Incident` with full lifecycle tracking and automatically bridge to a `GuidanceJourney`.
+- `none`/`watch` impact matches stay visible only in the raw Home Event Radar feed — they are never promoted.
+
+---
+
+## RadarEvent → Incident Promotion Bridge
+
+Added this update, in `apps/backend/src/services/homeEventRadarMatcher.service.ts`.
+
+### Why
+
+Before this change, `RadarEvent` matching only wrote `PropertyRadarMatch` and published `Signal` rows (`RISK_SPIKE`/`COST_ANOMALY` via `signalService.publishRadarEventSignals`) — it never created a `GuidanceJourney`. Only `Incident` (via `IncidentService.upsertIncident` → `bridgeIncidentToGuidance`) could do that. Rather than rebuild `Incident`'s dedup/severity/lifecycle machinery on top of `RadarEvent`, high-impact matches are now promoted into `Incident`, reusing that machinery as-is.
+
+### How it works
+
+In `runMatchingForEvent()`, immediately after impact is computed and `PropertyRadarMatch` is upserted:
+
+```ts
+if (impact.impactLevel === 'moderate' || impact.impactLevel === 'high') {
+  await promoteRadarEventToIncident(event, property, impact, match.id);
+}
+```
+
+`promoteRadarEventToIncident` calls `IncidentService.upsertIncident(...)` directly with:
+- `sourceType: 'RADAR_EVENT'`
+- `typeKey`: `` `RADAR_${eventType.toUpperCase()}` ``
+- `category`: the uppercased `eventType`
+- `severity`: `moderate` → `WARNING`, `high` → `CRITICAL`
+- `fingerprint`: `` `property:${propertyId}|${typeKey}|${radarEvent.dedupeKey}` `` — idempotent across repeated matching runs
+- `details`: `{ radarEventId, eventType, eventSubType, propertyRadarMatchId, ...impactFactorsJson }`
+
+`mapIncidentTypeToGuidance()` (`incident.service.ts`) was extended with a branch matching `typeKey.includes('TAX_REASSESSMENT')` → `signalIntentFamily: 'tax_reassessment'`, `issueDomain: 'FINANCIAL'`, `sourceToolKey: 'incidents'`. A generic `RADAR_`-prefix convention is used so future domains (utility, insurance) can add their own branches the same way.
+
+Failures in promotion are logged and swallowed (`try/catch`) — a promotion failure never blocks the underlying `PropertyRadarMatch`/`Signal` write, so the raw feed still works even if the Incident bridge has an issue.
+
+---
+
+## Real Provider Ingestion
+
+### Tax Reassessment (first real integration — added this update)
+
+Property tax reassessment data, fetched from county Socrata open-data portals — the first non-dummy data source for Home Event Radar. Mirrors the existing permit-adapter pipeline's jurisdiction-config pattern.
+
+**Data flow:**
+```text
+TaxAssessorDataSource (jurisdiction config, per county)
+        ↓
+socrataTaxAdapter.fetchAssessments()  — HTTP + pagination + 429 backoff
+        ↓
+RawTaxAssessmentRecord[]
+        ↓
+normalizeTaxAssessmentRecord()  — assessed-value change % drives severity tiering
+        ↓
+CanonicalRadarSignal (eventType: 'tax_reassessment', sourceType: 'tax_assessor_feed')
+        ↓
+upsertCanonicalRadarEvent()  — shared helper, also used by the dummy job
+        ↓
+radar_events
+        ↓
+runMatchingForEvent(...)
+        ↓
+property_radar_matches  (+ Incident promotion if moderate/high impact)
+```
+
+**Files:**
+
+| File | Purpose |
+|---|---|
+| `apps/backend/src/services/taxAssessorAdapters/taxAssessmentTypes.ts` | Shared types (`TaxAssessorDataSourceConfig`, `PropertyAddress`, `RawTaxAssessmentRecord`) |
+| `apps/backend/src/services/taxAssessorAdapters/socrataTaxAdapter.ts` | Socrata HTTP client — address-filtered SoQL query, pagination, 429 backoff/retry |
+| `apps/backend/src/services/taxAssessmentFetch.service.ts` | Per-property jurisdiction routing (`normalizedCoverageKey` lookup); skips properties with no configured jurisdiction; logs and skips (does not abort the batch) on a single jurisdiction's fetch failure |
+| `apps/workers/src/radar/normalizeTaxAssessment.ts` | Raw Socrata row → `CanonicalRadarSignal`; severity tiers by assessed-value change % (`≥15%` → high, `≥5%` → medium, else low) |
+| `apps/workers/src/radar/upsertCanonicalRadarEvent.ts` | Shared `RadarEvent` upsert helper (extracted from the dummy job so both paths share one implementation) |
+| `apps/workers/src/jobs/ingestTaxAssessmentEvents.job.ts` | Cron job: paginates all properties (`iterateAllProperties`), fetches + normalizes + upserts + triggers matching per jurisdiction-matched property |
+
+**Cron registration:** `tax-assessment-ingest` in `workerJobRegistry.ts` (category `RISK_SAFETY`), wired into `CRON_HANDLERS` in `worker.ts`. Weekly, Mondays 6:00 AM (county tax rolls update infrequently). Override via `TAX_ASSESSMENT_INGEST_CRON` env var, following the same `CRON_ENV_OVERRIDES` pattern as other adjustable jobs.
+
+**Guidance journey:** new `tax_reassessment_resolution` journey template — see [Guidance Journey Integration](#guidance-journey-integration).
+
+**Setup required before this fetches anything:** at least one real `TaxAssessorDataSource` row must be configured (real Socrata `baseUrl`/`datasetId`/`fieldMappingJson` for a specific county). No rows are seeded by default. This is a rollout prerequisite, not a code gap.
+
+**Tests:** `apps/workers/tests/unit/normalizeTaxAssessment.test.js` (pure-function coverage of severity tiering, dedupe key, summary formatting — run via `node --test`).
+
+---
+
+### Dummy Ingest (QA/E2E only)
+
+Home Event Radar has a worker-based dummy ingest path for QA and end-to-end testing.
+
+**⚠️ Must never be enabled in production** — see [Incident History](#incident-history-dummy-data-in-production-2026-07-10). A startup guardrail now enforces this (see below).
+
+Relevant files:
+
+| File | Purpose |
+|---|---|
+| `apps/workers/src/jobs/ingestRadarSignals.job.ts` | Selects target properties, generates dummy raw signals, upserts canonical events, triggers matching |
+| `apps/workers/src/radar/dummyRadar.client.ts` | Loads JSON fixtures and renders provider-like raw signals |
+| `apps/workers/src/radar/normalize.ts` | Maps raw dummy signals into canonical `RadarEvent` shape |
+| `apps/workers/src/radar/upsertCanonicalRadarEvent.ts` | Shared upsert helper (also used by the real tax job) |
+| `apps/workers/src/radar/radar.types.ts` | Raw/canonical/dummy fixture types |
+| `apps/workers/src/radar/fixtures/propertyScopedSignals.json` | Property-scoped QA fixtures |
+| `apps/workers/src/radar/fixtures/zipScopedSignals.json` | ZIP-scoped QA fixtures |
+| `apps/workers/src/worker.ts` | Cron registration, optional startup run, **production guardrail** |
+| `infrastructure/kubernetes/apps/workers/deployment.yaml` | Worker env defaults for dummy ingest — **all three dummy-ingest flags now `"false"`** |
+
+### Worker data flow (dummy)
+
+```text
+ZIP or property fixture JSON
+        ↓
+dummyRadar.client.ts
+        ↓
+DummyRadarRawSignal
+        ↓
+normalize.ts
+        ↓
+CanonicalRadarSignal
+        ↓
+upsertCanonicalRadarEvent()  (shared helper)
+        ↓
+radar_events
+        ↓
+runMatchingForEvent(...)
+        ↓
+property_radar_matches  (+ Incident promotion if moderate/high impact)
+        ↓
+frontend feed
+```
+
+### Production guardrail (new)
+
+`apps/workers/src/worker.ts` now fails fast at startup if `NODE_ENV=production` and any of `RADAR_DUMMY_INGEST_ENABLED` / `HOME_RISK_REPLAY_DUMMY_INGEST_ENABLED` / `NEIGHBORHOOD_DUMMY_INGEST_ENABLED` is `"true"` — logs a clear error and throws before scheduling any cron jobs, rather than relying solely on manifest review. See [Incident History](#incident-history-dummy-data-in-production-2026-07-10) for why this was added.
+
+### Fixture sets
+
+Two fixture modes exist:
+
+- `property_scoped` — one canonical dummy event per target property; safest for isolated single-home QA.
+- `zip_scoped` — one canonical dummy event per ZIP + fixture type; best for realistic E2E testing across multiple homes in the same ZIP.
+
+### Worker environment variables
+
+| Env var | Purpose | Current behavior |
+|---|---|---|
+| `RADAR_DUMMY_INGEST_ENABLED` | Enables scheduled dummy ingest | **`"false"` in prod manifest** (was accidentally `"true"` — see Incident History) |
+| `RADAR_DUMMY_INGEST_CRON` | Cron schedule | Default `*/30 * * * *` |
+| `RADAR_DUMMY_INGEST_RUN_ON_STARTUP` | Runs one ingest on worker startup | `"false"` in prod manifest |
+| `RADAR_DUMMY_FIXTURE_SET` | `property_scoped` or `zip_scoped` | Default `zip_scoped` |
+| `RADAR_DUMMY_TARGET_ZIPS` | ZIP list for ZIP-mode targeting | Default `08536,10019` |
+| `RADAR_DUMMY_TARGET_PROPERTY_IDS` | Explicit property allowlist | Overrides ZIP discovery when set |
+| `RADAR_DUMMY_MAX_PROPERTIES` | Optional cap for selected properties | Unset = no cap |
+| `TAX_ASSESSMENT_INGEST_CRON` | Override for the real tax job's cron schedule | Default `0 6 * * 1` (weekly, Mon 6am) |
+
+### E2E testing notes
+
+For reliable E2E on a **non-production** environment:
+- prefer `zip_scoped` fixtures
+- point `RADAR_DUMMY_TARGET_ZIPS` at shared QA ZIPs
+- leave `RADAR_DUMMY_MAX_PROPERTIES` unset unless you intentionally want a sample
+- verify both `radar_events` and `property_radar_matches`
+- **verify `zipCode` on any QA/seed property actually matches its displayed address** — a mismatch here was the proximate cause of the production incident (a property displaying a Peoria, IL address had a `zipCode` matching the QA target ZIP list, causing it to receive fixture data). Check with a query like:
+  ```sql
+  SELECT id, address, city, state, "zipCode" FROM properties
+  WHERE "zipCode" IN ('08536', '10019');
+  ```
+
+---
+
+## Incident History: Dummy Data in Production (2026-07-10)
+
+**What happened:** `RADAR_DUMMY_INGEST_ENABLED`, `HOME_RISK_REPLAY_DUMMY_INGEST_ENABLED`, and `NEIGHBORHOOD_DUMMY_INGEST_ENABLED` were all set to `"true"` in the production Kubernetes deployment manifest (`infrastructure/kubernetes/apps/workers/deployment.yaml`), with `RUN_ON_STARTUP` also `"true"`. This meant the QA/E2E dummy ingest job ran every 30 minutes in production, seeding synthetic fixture events (`"Test hail activity near ZIP 08536"`, etc.) into `radar_events`, `home_risk_events`, and `neighborhood_events`, which were then surfaced to real users as if they were live signals — 952 fake radar events, 19,128 property matches, 1,428 fake home-risk events, and 12 fake neighborhood events had accumulated by the time this was caught.
+
+A contributing data-quality factor: at least one real property had a `zipCode` column value matching the QA target ZIP list (`08536`/`10019`) despite displaying a different address, causing it to be incidentally matched into the dummy job's target set.
+
+**Root cause of the underlying UX bug:** the `flood_risk` (and sibling weather-family) guidance journey step was mapped to `toolKey: 'home-event-radar'` in `guidanceTemplateRegistry.ts`, but Home Event Radar had (and still has, aside from tax reassessment) no real data source — the guidance CTA was showing dummy data instead of the real NWS-based flood alert, which was actually tracked via `Incident` (a completely separate, disconnected pipeline).
+
+**Fixes applied:**
+1. All three dummy-ingest flags set to `"false"` in the production manifest; `RUN_ON_STARTUP` flags also `"false"`.
+2. All seeded fixture data deleted from production (`radar_events`, `property_radar_matches`, `signals`, `home_risk_events`, `home_risk_replay_event_matches`, `neighborhood_events` and its child tables).
+3. Weather-family guidance journeys (`freeze_risk`, `flood_risk`, `hurricane_risk`, `wind_risk`, `heat_risk`, `wildfire_risk`) repointed from `home-event-radar` to `incidents`, since `Incident` has the real data. Existing (already-created) journeys were backfilled via a targeted SQL `UPDATE`.
+4. A startup guardrail was added (see [Production guardrail](#production-guardrail-new)) so this class of misconfiguration fails fast instead of silently redeploying.
+5. As a longer-term fix (this update), the architecture was changed so `RadarEvent` promotes into `Incident` for high-impact matches, and a real data source (tax reassessment) was built — see [RadarEvent → Incident Promotion Bridge](#radarevent--incident-promotion-bridge) and [Real Provider Ingestion](#real-provider-ingestion).
+
+`energy_inefficiency_detected`/`high_utility_cost` guidance families still point at `home-event-radar` and were **not** fixed in this pass — no verified real data source exists for them yet (candidate: repoint to `home-savings`, which has genuinely real, live account-tracking data, but the fit for `energy_inefficiency_detected` specifically is weaker than for `high_utility_cost`). This remains open.
+
+---
+
+## Guidance Journey Integration
+
+### `tax_reassessment_resolution` (new)
+
+Signal family `tax_reassessment` (`issueDomain: FINANCIAL`), created automatically when a tax-reassessment `RadarEvent` match is promoted to `Incident` (see above). Three steps, reusing existing tool keys — no new tools were built:
+
+| Step | Tool | Route |
+|---|---|---|
+| 1. `review_assessment` | `incidents` | `/dashboard/properties/:propertyId?tab=incidents` |
+| 2. `prepare_appeal` | `true-cost` | `/dashboard/properties/:propertyId/tools/true-cost` |
+| 3. `update_budget` | `guidance-overview` | `/dashboard/properties/:propertyId/tools/guidance-overview` |
+
+Registered in `guidanceTemplateRegistry.ts` (`journeyTypeKey: 'tax_reassessment_resolution'`) with matching entries added to `guidanceSignalResolver.service.ts`'s five lookup maps and to `TOOL_DEFAULT_STEP_KEY`/`JOURNEY_TOOL_STEP_KEY` (the `'incidents'` and `'true-cost'` tool keys are shared with other journeys under different step keys, so journey-scoped overrides were required to disambiguate).
+
+### `weather_risk_resolution` (routing corrected this update)
+
+Existing journey (`freeze_risk`, `flood_risk`, `hurricane_risk`, `wind_risk`, `heat_risk`, `wildfire_risk`) — step 1 (`weather_safety_check`) now routes to `toolKey: 'incidents'` instead of `'home-event-radar'`, since the real NWS weather data lives in `Incident`, not `RadarEvent`. See [Incident History](#incident-history-dummy-data-in-production-2026-07-10) for why.
+
+### `energy_efficiency_resolution` (unchanged, known gap)
+
+Still routes step 1 to `toolKey: 'home-event-radar'`. This is a known, currently-unfixed gap — Home Event Radar has no real utility/energy data source (see [Pending Phases](#pending-phases)).
+
 ---
 
 ## Backend
@@ -272,7 +529,10 @@ Purpose:
 | `backend/src/routes/homeEventRadar.routes.ts` | Express route definitions, middleware chains |
 | `backend/src/controllers/homeEventRadar.controller.ts` | Request/response handling |
 | `backend/src/services/homeEventRadar.service.ts` | Business logic, Prisma queries |
-| `backend/src/services/homeEventRadarMatcher.service.ts` | Matching engine + impact computation |
+| `backend/src/services/homeEventRadarMatcher.service.ts` | Matching engine + impact computation + **Incident promotion bridge (new)** |
+| `backend/src/services/incidents/incident.service.ts` | `IncidentService.upsertIncident` (promotion target), `mapIncidentTypeToGuidance` (extended for `RADAR_`-prefixed typeKeys) |
+| `backend/src/services/taxAssessorAdapters/` | Real tax-assessor provider adapter (new) |
+| `backend/src/services/taxAssessmentFetch.service.ts` | Jurisdiction routing for tax ingestion (new) |
 | `backend/src/validators/homeEventRadar.validators.ts` | Zod v4 input validation schemas |
 | `backend/src/index.ts` | Route mounting |
 
@@ -325,7 +585,7 @@ Core business logic class:
 
 #### `HomeEventRadarMatcherService` (`homeEventRadarMatcher.service.ts`)
 
-Rules-based matching and impact computation engine:
+Rules-based matching and impact computation engine, **now also the Incident promotion trigger point**:
 
 **Location Matching Strategies:**
 - `property` — Exact property ID match
@@ -350,12 +610,12 @@ Scores are adjusted up/down based on property characteristics. Final score is cl
 
 **Impact Level Thresholds:**
 
-| Score | Impact Level |
-|---|---|
-| < 0.25 | none |
-| < 0.45 | watch |
-| < 0.65 | moderate |
-| ≥ 0.65 | high |
+| Score | Impact Level | Promoted to Incident? |
+|---|---|---|
+| < 0.25 | none | No |
+| < 0.45 | watch | No |
+| < 0.65 | moderate | **Yes** |
+| ≥ 0.65 | high | **Yes** |
 
 **Per-Event-Type Impact Computers:**
 
@@ -371,7 +631,7 @@ Scores are adjusted up/down based on property characteristics. Final score is cl
 | `computeInsuranceMarket()` | insurance_market | Coverage type, premium history |
 | `computeUtilityOutage()` | utility_outage | Heating fuel type, backup generator presence |
 | `computeUtilityRateChange()` | utility_rate_change | Utility providers, usage patterns |
-| `computeTaxEvent()` | tax_reassessment / tax_rate_change | Assessment history |
+| `computeTaxEvent()` | tax_reassessment / tax_rate_change | Assessment history — **its 3 recommended actions (`REVIEW_ASSESSMENT`/`PREPARE_APPEAL`/`UPDATE_BUDGET`) are what the new `tax_reassessment_resolution` guidance journey's 3 steps mirror** |
 | `computeGeneric()` | other / fallback | Severity-only scoring |
 
 **Match Output Fields:**
@@ -381,6 +641,8 @@ Scores are adjusted up/down based on property characteristics. Final score is cl
 - `impactFactorsJson` — Array of `{ code: string, effect: 'increase' | 'decrease' | 'neutral', description: string }`
 - `recommendedActionsJson` — Array of `{ code: string, label: string, priority: 'high' | 'medium' | 'low' }`
 - `matchedSystemsJson` — Array of `{ type: string, relevance: 'high' | 'medium' | 'low' }`
+
+**Promotion function:** `promoteRadarEventToIncident(event, property, impact, propertyRadarMatchId)` — see [RadarEvent → Incident Promotion Bridge](#radarevent--incident-promotion-bridge).
 
 ---
 
@@ -412,6 +674,8 @@ Zod v4 schemas applied as Express middleware via `validateBody()`:
 | `frontend/src/components/features/homeEventRadar/RadarUtils.ts` | Pure UI helper functions and label/color maps |
 | `frontend/src/lib/api/client.ts` | API client methods (`getRadarFeed`, `getRadarMatchDetail`, `updateRadarMatchState`, `trackHomeEventRadarEvent`) |
 | `frontend/src/types/index.ts` | TypeScript interfaces (lines ~2200–2278) |
+
+No frontend changes were needed for the promotion bridge or tax integration — by design, new signal sources flow through the existing canonical `RadarEvent` + `PropertyRadarMatch` contract, so `RadarFeedItem`/`RadarMatchDetail` stayed stable. The only frontend changes this update were in the **guidance** layer (`guidanceDisplay.ts`, `GuidanceStepPageClient.tsx`, `ScopedWorkspaceGuidanceStep.tsx`) to add the `'incidents'` tool key — see [Guidance Journey Integration](#guidance-journey-integration).
 
 ---
 
@@ -659,101 +923,10 @@ Home Event Radar is surfaced in the mobile navigation via the **Home Tools** pan
 
 ---
 
-## Workers and Dummy Ingest
-
-Home Event Radar now has a short-term worker-based dummy ingest path for QA and end-to-end testing.
-
-### Current worker approach
-
-This follows the existing short-term CtC worker pattern:
-- the worker uses Prisma directly against the shared database
-- the worker reuses backend matching logic
-- the worker does **not** call the backend ingest API
-
-Relevant files:
-
-| File | Purpose |
-|---|---|
-| `apps/workers/src/jobs/ingestRadarSignals.job.ts` | Selects target properties, generates dummy raw signals, upserts canonical events, triggers matching |
-| `apps/workers/src/radar/dummyRadar.client.ts` | Loads JSON fixtures and renders provider-like raw signals |
-| `apps/workers/src/radar/normalize.ts` | Maps raw dummy signals into canonical `RadarEvent` shape |
-| `apps/workers/src/radar/radar.types.ts` | Raw/canonical/dummy fixture types |
-| `apps/workers/src/radar/fixtures/propertyScopedSignals.json` | Property-scoped QA fixtures |
-| `apps/workers/src/radar/fixtures/zipScopedSignals.json` | ZIP-scoped QA fixtures |
-| `apps/workers/src/worker.ts` | Cron registration and optional startup run |
-| `infrastructure/kubernetes/apps/workers/deployment.yaml` | Worker env defaults for dummy ingest |
-
-### Worker data flow
-
-```text
-ZIP or property fixture JSON
-        ↓
-dummyRadar.client.ts
-        ↓
-DummyRadarRawSignal
-        ↓
-normalize.ts
-        ↓
-CanonicalRadarSignal
-        ↓
-upsert into radar_events
-        ↓
-runMatchingForEvent(...)
-        ↓
-property_radar_matches
-        ↓
-frontend feed
-```
-
-### Fixture sets
-
-Two fixture modes exist:
-
-- `property_scoped`
-  - one canonical dummy event per target property
-  - safest for isolated single-home QA
-
-- `zip_scoped`
-  - one canonical dummy event per ZIP + fixture type
-  - best for realistic E2E testing across multiple homes in the same ZIP
-
-Current default for QA:
-- `RADAR_DUMMY_FIXTURE_SET=zip_scoped`
-- `RADAR_DUMMY_TARGET_ZIPS=08536,10019`
-
-### Worker environment variables
-
-| Env var | Purpose | Current behavior |
-|---|---|---|
-| `RADAR_DUMMY_INGEST_ENABLED` | Enables scheduled dummy ingest | Disabled by default |
-| `RADAR_DUMMY_INGEST_CRON` | Cron schedule | Default `*/30 * * * *` |
-| `RADAR_DUMMY_INGEST_RUN_ON_STARTUP` | Runs one ingest on worker startup | Disabled by default |
-| `RADAR_DUMMY_FIXTURE_SET` | `property_scoped` or `zip_scoped` | Default `zip_scoped` |
-| `RADAR_DUMMY_TARGET_ZIPS` | ZIP list for ZIP-mode targeting | Default `08536,10019` |
-| `RADAR_DUMMY_TARGET_PROPERTY_IDS` | Explicit property allowlist | Overrides ZIP discovery when set |
-| `RADAR_DUMMY_MAX_PROPERTIES` | Optional cap for selected properties | Unset = no cap |
-
-### E2E testing notes
-
-For reliable E2E:
-- prefer `zip_scoped` fixtures
-- point `RADAR_DUMMY_TARGET_ZIPS` at shared QA ZIPs
-- leave `RADAR_DUMMY_MAX_PROPERTIES` unset unless you intentionally want a sample
-- verify both:
-  - `radar_events`
-  - `property_radar_matches`
-
-Important:
-- A ZIP-level canonical radar event is not enough by itself.
-- The worker must also pass the selected property IDs into matching so only the intended homes receive `PropertyRadarMatch` rows.
-- The current worker implementation does this via `payloadJson.targetPropertyIds` and the property ID filter passed to `runMatchingForEvent(...)`.
-
----
-
 ## Data Flow
 
 ```
-Manual import / backend ingest API / dummy worker ingest
+Manual import / backend ingest API / dummy worker ingest (QA only) / real tax-assessment job
         │
         ▼
 Canonical RadarEvent created or updated
@@ -767,7 +940,8 @@ HomeEventRadarMatcherService.triggerMatching()
   ├─ Runs per-event-type impact computer for each property
   ├─ Computes matchScore, impactLevel, impactSummary, impactFactors,
   │   recommendedActions, matchedSystems
-  └─ Upserts PropertyRadarMatch records
+  ├─ Upserts PropertyRadarMatch records
+  └─ If impactLevel is moderate/high: promotes to Incident (+ GuidanceJourney)
         │
         ▼
 User opens /dashboard/home-event-radar?propertyId=<id>
@@ -802,7 +976,9 @@ PropertyRadarState updated + PropertyRadarAction logged
 | **Route mounting** | Both `homeEventRadar.routes` and `homeEvents.routes` are registered in `backend/src/index.ts` |
 | **Auth** | All endpoints behind JWT middleware + `propertyAuth.middleware` for property-scoped routes |
 | **Rate limiting** | `apiRateLimiter` applied to all endpoints |
-| **Background workers** | Dummy QA/E2E ingest worker exists in `apps/workers`; real provider ingest does not exist yet |
+| **Background workers** | Dummy QA/E2E ingest worker exists in `apps/workers` (disabled in prod); real tax-assessment ingest worker exists (needs pilot jurisdiction config); weather/utility/insurance real ingest does not exist yet |
+| **Incident lifecycle** | `moderate`/`high` impact matches promote into `Incident` via `homeEventRadarMatcher.service.ts`'s `promoteRadarEventToIncident` |
+| **Guidance engine** | `tax_reassessment_resolution` journey auto-created on promotion; weather-family journeys route to `Incidents`, not Home Event Radar |
 | **Audit log** | Analytics events written to platform audit log via `AuditLog` model |
 | **Dashboard widget** | `MobileDashboardHome.tsx` queries radar feed to show new/active event counts on the home screen |
 
@@ -810,144 +986,47 @@ PropertyRadarState updated + PropertyRadarAction logged
 
 ## Current Limitations
 
-- No live external provider integrations exist yet.
-- The Home Event Radar page itself does not fetch provider data directly.
+- Only one real external provider integration exists (tax reassessment), and it requires at least one jurisdiction to be manually configured before it fetches anything.
+- Weather is not ingested through `RadarEvent` — it remains on the separate `Incident`-only pipeline (`severeWeatherAlerts.job.ts`, `freezeRiskIncidents.job.ts`).
+- No utility outage or insurance market real data source exists (insurance: not even a viable candidate provider identified yet — see Pending Phases).
 - `county` and `polygon` matching are not implemented.
-- The worker dummy ingest is intended for QA and E2E, not production signal quality.
-- Real-time guarantees do not exist in the current architecture; freshness depends on when canonical events are ingested.
+- The dummy ingest path is QA/E2E only, now disabled in production and guardrailed against re-enabling.
+- Real-time guarantees do not exist in the current architecture; freshness depends on when canonical events are ingested (tax reassessment: weekly cron).
+- `energy_inefficiency_detected`/`high_utility_cost` guidance families still point at the (mostly dataless) Home Event Radar tool — known gap, not yet fixed.
 
 ---
 
-## What Changes When We Integrate External Providers
+## Pending Phases
 
-This is the main future-state checklist.
+Tracked from the "unified live-signal surface" initiative (2026-07-10). Phase 1 (promotion bridge + tax reassessment) is **done** — everything below is what's left.
 
-### 1. Add provider clients in workers
+### Phase 2 — Weather dual-write/promotion consolidation (not started)
 
-We will need real provider clients analogous to the recall ingest pattern:
-- weather provider client
-- insurance market client
-- utility outage/rate client
-- tax assessor/assessment client
+`severeWeatherAlertsJob`/`freezeRiskIncidentsJob` currently write directly to `Incident`, bypassing `RadarEvent` entirely, so real weather events never appear in the Home Event Radar raw feed. Making them *also* write a `RadarEvent` needs its own design pass to avoid double-triggering guidance journeys (since `Incident` already creates one, and the promotion bridge would try to create a second) — this is safety-relevant code and shouldn't be touched casually. Until this lands, weather guidance stays correctly routed to the Incidents tab (not a bug, just Phase 1's chosen scope).
 
-Likely location:
-- `apps/workers/src/radar/providers/*`
+### Phase 3 — Utility outage integration (blocked on a provider/budget decision)
 
-Each provider client should:
-- fetch raw provider payloads
-- handle auth, rate limits, retries, pagination
-- return provider-specific raw signal objects
+No single national utility outage API exists. Real options: a paid aggregator (e.g. PowerOutage.us) or per-utility-territory scraping scoped to wherever the actual user base lives. Needs a business decision before any code gets written — not just an engineering task.
 
-### 2. Define stable raw signal contracts per provider
+### Insurance market integration (deferred indefinitely)
 
-Today the worker uses dummy raw signals. For real providers we should introduce:
-- one raw payload type per provider
-- one normalized internal radar raw signal shape
+No real data source exists today. "Insurance Trend" (a separate, already-shipped tool) is a heuristic/computed estimate, not live market data — its own DTO is explicitly labeled `EDUCATIONAL_ESTIMATE` and disclaims that it's *"not derived from live DOI rate filings, FEMA/NOAA actuarial data, or your actual policy records."* There's a dead adapter stub (`insuranceRateFiling.adapter.ts`) that explicitly doesn't call any real API yet — building it out would mean per-state DOI bulletin ingestion (inconsistent formats, mostly PDF filings, no uniform API), the least reliable of any candidate integration. Not scheduled.
 
-Recommended split:
-- `ProviderWeatherSignal`
-- `ProviderUtilitySignal`
-- `ProviderInsuranceSignal`
-- `ProviderTaxSignal`
-- `NormalizedRadarRawSignal`
+### `energy_inefficiency_detected` / `high_utility_cost` tool mapping (open, small)
 
-This keeps provider quirks isolated from the canonical ingest model.
+Both still point at `home-event-radar`. `high_utility_cost` has a clear better fit (`home-savings` — genuinely real, live account-tracking data). `energy_inefficiency_detected`'s fit there is weaker (system/appliance inefficiency vs. bill tracking) — needs its own decision, not a forced repoint.
 
-### 3. Replace or extend dummy fixture ingestion with provider normalization
+### Reusable pattern for future providers
 
-The normalization layer should continue to map into the canonical `RadarEvent` shape:
-- `eventType`
-- `sourceType`
-- `severity`
-- `startAt`
-- `endAt`
-- `locationType`
-- `locationKey`
-- `payloadJson`
-- `dedupeKey`
-
-The dummy fixtures already exercise this shape, so the current normalize step is a good scaffold for real integrations.
-
-### 4. Decide whether worker writes directly or calls backend ingest APIs
-
-Current short-term pattern:
-- worker writes with Prisma directly
-- worker calls `runMatchingForEvent(...)`
-
-Future options:
-
-- Keep DB-direct ingest
-  - Pros: minimal moving parts, matches current worker pattern
-  - Cons: business rules can drift between backend and worker
-
-- Move to backend-ingest API
-  - Worker calls `POST /api/radar/events`
-  - Worker calls `POST /api/radar/events/:eventId/match`
-  - Pros: one canonical validation/business-rule path
-  - Cons: requires internal service auth and backend URL wiring
-
-Recommendation:
-- Long-term, backend-ingest API is cleaner.
-- Short-term, the current DB-direct worker approach is acceptable while the feature is still evolving.
-
-### 5. Add worker-to-backend auth if we move to API-based ingest
-
-If we stop writing directly from workers, we need:
-- `BACKEND_INTERNAL_BASE_URL`
-- machine/service authentication
-- internal-only access rules for radar ingest endpoints
-
-This is not implemented today.
-
-### 6. Add source configuration usage
-
-The schema already has `radar_source_configs`, but real provider integration should define how it is used for:
-- API credentials or secret references
-- polling enable/disable
-- last sync checkpoint
-- provider-specific region/ZIP targeting
-- health and failure state
-
-Today this model is preparatory, not fully wired.
-
-### 7. Expand dedupe strategy
-
-Dummy events use deterministic QA-friendly `dedupeKey` values.
-
-Real providers will need a stricter policy such as:
-- `provider + providerEventId`
-- or `provider + eventType + normalized geography + normalized event window`
-
-We should document dedupe rules per provider so recurring updates mutate the same canonical event instead of creating duplicates.
-
-### 8. Improve geography support
-
-For real providers, ZIP/city/state matching will not be enough for all event families.
-
-Likely future work:
-- county support once county is available on properties
-- polygon / GeoJSON matching for weather polygons, outage polygons, smoke plumes, etc.
-- better spatial confidence/provenance messaging in the UI
-
-### 9. Add provider observability and failure handling
-
-Real integrations need:
-- provider fetch logs
-- sync success/failure metrics
-- last successful sync timestamps
-- retry policy
-- dead-letter or replay strategy for malformed payloads
-
-The current dummy ingest path does not need this complexity.
-
-### 10. Keep the frontend contract stable
-
-The goal of real provider integration should be:
-- no major frontend contract changes
-- `RadarFeedItem` and `RadarMatchDetail` remain stable
-- new provider sophistication stays behind canonical event ingest and matching layers
-
-That is why the canonical `RadarEvent` + `PropertyRadarMatch` split matters.
+The tax-reassessment integration establishes the template for anything that follows:
+1. New `<Domain>DataSource`-style Prisma model if jurisdiction/provider config is needed (mirror `TaxAssessorDataSource`/`PermitDataSource`).
+2. Adapter(s) under `apps/backend/src/services/<domain>Adapters/` — reuse the Socrata HTTP/pagination/backoff shape if applicable.
+3. Fetch/routing service under `apps/backend/src/services/`.
+4. Normalizer under `apps/workers/src/radar/normalize<Domain>.ts` → `CanonicalRadarSignal` (check `RadarEventType`/`RadarSourceType` enums first — several domains' values already exist unused).
+5. Job under `apps/workers/src/jobs/ingest<Domain>Events.job.ts`, reusing `upsertCanonicalRadarEvent` + `runMatchingForEvent`.
+6. Register via `workerJobRegistry.ts` + `CRON_HANDLERS` in `worker.ts` (**not** the ad-hoc `cron.schedule()` block style the dummy jobs use).
+7. **Add matching `COPY`/`sed` entries in `infrastructure/docker/workers/Dockerfile`** — the workers image build uses a manually curated backend-file copy list; new backend imports silently fail the Docker build (not local `tsc`) if this step is skipped. Bitten by this twice in this project already.
+8. If the impact should be user-actionable, add a `mapIncidentTypeToGuidance` branch (`RADAR_`-prefixed typeKey convention already established) and a guidance journey template reusing existing tool keys where possible.
 
 ---
 
@@ -960,9 +1039,16 @@ That is why the canonical `RadarEvent` + `PropertyRadarMatch` split matters.
 | `apps/backend/src/routes/homeEventRadar.routes.ts` | Route definitions + middleware |
 | `apps/backend/src/controllers/homeEventRadar.controller.ts` | Request handlers |
 | `apps/backend/src/services/homeEventRadar.service.ts` | Business logic + Prisma queries |
-| `apps/backend/src/services/homeEventRadarMatcher.service.ts` | Matching engine + impact computers |
+| `apps/backend/src/services/homeEventRadarMatcher.service.ts` | Matching engine + impact computers + Incident promotion bridge |
+| `apps/backend/src/services/incidents/incident.service.ts` | `IncidentService.upsertIncident`, `mapIncidentTypeToGuidance` (promotion target) |
+| `apps/backend/src/services/taxAssessorAdapters/taxAssessmentTypes.ts` | Shared tax-ingestion types |
+| `apps/backend/src/services/taxAssessorAdapters/socrataTaxAdapter.ts` | Socrata tax-assessor HTTP client |
+| `apps/backend/src/services/taxAssessmentFetch.service.ts` | Per-property jurisdiction routing |
+| `apps/backend/src/services/guidanceEngine/guidanceSignalResolver.service.ts` | Signal family → tool/step lookup maps (`tax_reassessment` added) |
+| `apps/backend/src/services/guidanceEngine/guidanceTemplateRegistry.ts` | Journey templates (`tax_reassessment_resolution` added; `weather_risk_resolution` step 1 repointed) |
+| `apps/backend/src/config/workerJobRegistry.ts` | `tax-assessment-ingest` cron entry |
 | `apps/backend/src/validators/homeEventRadar.validators.ts` | Zod v4 input schemas |
-| `apps/backend/prisma/schema.prisma` | DB models and enums |
+| `apps/backend/prisma/schema.prisma` | DB models and enums (`TaxAssessorDataSource`, `IncidentSourceType.RADAR_EVENT` added) |
 
 ### Frontend
 
@@ -978,18 +1064,26 @@ That is why the canonical `RadarEvent` + `PropertyRadarMatch` split matters.
 | `apps/frontend/src/app/(dashboard)/dashboard/components/MobileDashboardHome.tsx` | Dashboard widget |
 | `apps/frontend/src/lib/api/client.ts` | Typed API client methods |
 | `apps/frontend/src/types/index.ts` | TypeScript interfaces |
+| `apps/frontend/src/features/guidance/utils/guidanceDisplay.ts` | `'incidents'` tool key route + guided-flow set (added) |
+| `apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/guidance/step/GuidanceStepPageClient.tsx` | `'incidents'` in `LIVE_WORKSPACE_BRIDGE_TOOL_KEYS` (added) |
+| `apps/frontend/src/components/guidance/ScopedWorkspaceGuidanceStep.tsx` | `'incidents'` workspace-bridge copy (added) |
 
 ### Workers
 
 | Path | Role |
 |---|---|
-| `apps/workers/src/jobs/ingestRadarSignals.job.ts` | Dummy radar ingest runner |
+| `apps/workers/src/jobs/ingestRadarSignals.job.ts` | Dummy radar ingest runner (QA/E2E only, disabled in prod) |
+| `apps/workers/src/jobs/ingestTaxAssessmentEvents.job.ts` | Real tax-reassessment ingest runner (new) |
 | `apps/workers/src/radar/dummyRadar.client.ts` | JSON fixture loader and raw signal generator |
 | `apps/workers/src/radar/normalize.ts` | Dummy raw signal → canonical radar event mapper |
+| `apps/workers/src/radar/normalizeTaxAssessment.ts` | Real tax record → canonical radar event mapper (new) |
+| `apps/workers/src/radar/upsertCanonicalRadarEvent.ts` | Shared `RadarEvent` upsert helper (extracted, used by both jobs) |
 | `apps/workers/src/radar/radar.types.ts` | Worker radar types |
 | `apps/workers/src/radar/fixtures/propertyScopedSignals.json` | Property-scoped QA fixtures |
 | `apps/workers/src/radar/fixtures/zipScopedSignals.json` | ZIP-scoped QA fixtures |
-| `apps/workers/src/worker.ts` | Cron/startup registration |
+| `apps/workers/src/lib/paginateProperties.ts` | Cursor-paginated all-properties iterator (extended with `address` field for tax job) |
+| `apps/workers/src/worker.ts` | Cron/startup registration + **production dummy-ingest guardrail** |
+| `apps/workers/tests/unit/normalizeTaxAssessment.test.js` | Unit tests for the tax normalizer (new) |
 | `apps/workers/prisma/schema.prisma` | Synced mirror of backend Prisma schema |
-| `infrastructure/docker/workers/Dockerfile` | Worker image wiring |
-| `infrastructure/kubernetes/apps/workers/deployment.yaml` | Worker runtime env configuration |
+| `infrastructure/docker/workers/Dockerfile` | Worker image wiring — curated backend-file copy list, extended for tax-assessment files |
+| `infrastructure/kubernetes/apps/workers/deployment.yaml` | Worker runtime env configuration — dummy-ingest flags now `"false"` |
