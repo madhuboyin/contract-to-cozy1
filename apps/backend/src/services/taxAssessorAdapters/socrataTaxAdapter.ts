@@ -25,18 +25,25 @@ function mapFields(
 // filters, so this builds its own $where clause (not shared with
 // permitAdapters/socrata.adapter.ts) even though the HTTP/pagination/backoff
 // mechanics below are the same shape.
+//
+// The address column name is NOT standardized across county/city datasets
+// (e.g. Cook County vs. NYC vs. a given county's own assessor export), so it
+// is configurable per data source via queryFilterJson.addressColumn, falling
+// back to 'situs_address' — a common convention, but not universal. The
+// remaining queryFilterJson keys (if any) are appended as additional exact
+// -match filters, same as before.
 function buildAddressFilter(address: PropertyAddress, queryFilter?: Record<string, unknown>): string {
   const parts: string[] = [];
+  const { addressColumn, ...extraFilters } = queryFilter ?? {};
+  const addressField = typeof addressColumn === 'string' && addressColumn.trim() ? addressColumn : 'situs_address';
 
   const streetNum = address.street.split(' ')[0];
   const streetName = address.street.split(' ').slice(1).join(' ').toUpperCase();
-  parts.push(`upper(situs_address) like '%${streetNum}%${streetName}%'`);
+  parts.push(`upper(${addressField}) like '%${streetNum}%${streetName}%'`);
 
-  if (queryFilter) {
-    for (const [field, value] of Object.entries(queryFilter)) {
-      if (typeof value === 'string') {
-        parts.push(`${field}='${value}'`);
-      }
+  for (const [field, value] of Object.entries(extraFilters)) {
+    if (typeof value === 'string') {
+      parts.push(`${field}='${value}'`);
     }
   }
 
