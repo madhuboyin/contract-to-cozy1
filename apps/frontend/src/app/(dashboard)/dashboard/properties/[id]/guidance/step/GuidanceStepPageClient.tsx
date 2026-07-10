@@ -159,6 +159,7 @@ const LIVE_WORKSPACE_BRIDGE_TOOL_KEYS = new Set([
   'coverage-options',
   'documents',
   'home-event-radar',
+  'incidents',
   'inspection-report',
   'maintenance',
   'price-finalization',

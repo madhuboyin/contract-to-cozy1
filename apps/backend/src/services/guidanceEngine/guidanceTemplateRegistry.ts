@@ -564,8 +564,11 @@ const templates: GuidanceJourneyTemplate[] = [
         decisionStage: 'AWARENESS',
         executionReadiness: 'NEEDS_CONTEXT',
         isRequired: true,
-        toolKey: 'home-event-radar',
-        routePath: '/dashboard/properties/:propertyId/tools/home-event-radar',
+        // Home Event Radar has no live data source in production (only a QA
+        // dummy ingest, now disabled) — route to the Incidents tab instead,
+        // which is populated by the real NWS severe-weather ingest.
+        toolKey: 'incidents',
+        routePath: '/dashboard/properties/:propertyId?tab=incidents',
         skipPolicy: 'DISALLOWED',
       },
       // P1-9: Check if weather damage would be covered before spend
@@ -1788,7 +1791,10 @@ export const TOOL_DEFAULT_STEP_KEY: Record<string, string> = {
   'price-finalization': 'finalize_price',
   recalls: 'safety_alert',
   booking: 'book_service',
-  'home-event-radar': 'weather_safety_check',
+  // Only energy_efficiency_resolution still uses this toolKey — weather now
+  // routes through 'incidents' (see below).
+  'home-event-radar': 'review_energy_signal',
+  incidents: 'weather_safety_check',
   'inspection-report': 'assess_urgency',
   'service-price-radar': 'validate_price',
   'negotiation-shield': 'prepare_negotiation',
@@ -1813,7 +1819,7 @@ const JOURNEY_TOOL_STEP_KEY: Record<string, Record<string, string>> = {
   },
   // B2: weather journey uses distinct step keys for all four tools
   weather_risk_resolution: {
-    'home-event-radar': 'weather_safety_check',
+    incidents: 'weather_safety_check',
     'coverage-intelligence': 'check_weather_coverage',
     maintenance: 'protect_exposed_systems',
     booking: 'schedule_weather_followup',

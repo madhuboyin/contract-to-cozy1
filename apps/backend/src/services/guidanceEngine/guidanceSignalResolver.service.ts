@@ -103,12 +103,16 @@ const RECOMMENDED_TOOL_BY_FAMILY: Record<string, string> = {
   inspection_followup_needed: 'inspection-report',
   financial_exposure: 'true-cost',
   cost_of_inaction_risk: 'do-nothing-simulator',
-  freeze_risk: 'home-event-radar',
-  flood_risk: 'home-event-radar',
-  hurricane_risk: 'home-event-radar',
-  wind_risk: 'home-event-radar',
-  heat_risk: 'home-event-radar',
-  wildfire_risk: 'home-event-radar',
+  // Weather-family signals route to the Incidents tab, which is populated by
+  // the real NWS severe-weather ingest (severeWeatherAlerts.job.ts). Home
+  // Event Radar has no live data source in production — see the ENERGY
+  // entries below, which still point there and need a separate decision.
+  freeze_risk: 'incidents',
+  flood_risk: 'incidents',
+  hurricane_risk: 'incidents',
+  wind_risk: 'incidents',
+  heat_risk: 'incidents',
+  wildfire_risk: 'incidents',
   permit_required: 'guidance-overview',
   hoa_violation_detected: 'guidance-overview',
   safety_inspection_due: 'guidance-overview',

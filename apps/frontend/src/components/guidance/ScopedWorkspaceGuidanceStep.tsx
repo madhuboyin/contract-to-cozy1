@@ -74,6 +74,15 @@ const WORKSPACE_BRIDGE_CONFIG: Record<string, WorkspaceBridgeConfig> = {
       'Return here once you have reviewed the event and are ready to continue.',
     ],
   },
+  incidents: {
+    actionLabel: 'Open incidents',
+    summary: 'Review the live incident behind this step and understand why the home needs attention now.',
+    bullets: [
+      'See the active incident driving this recommendation.',
+      'Use the property-scoped incident details before taking action.',
+      'Return here once you have reviewed the incident and are ready to continue.',
+    ],
+  },
   maintenance: {
     actionLabel: 'Open maintenance workspace',
     summary: 'Work through the maintenance actions connected to this guidance step without losing journey continuity.',
