@@ -67,7 +67,8 @@ RUN mkdir -p src/shared/backend/utils \
              src/shared/backend/refinanceRadar/engine \
              src/shared/backend/refinanceRadar/config \
              src/shared/backend/refinanceRadar/types \
-             src/shared/backend/services/permitAdapters
+             src/shared/backend/services/permitAdapters \
+             src/shared/backend/services/taxAssessorAdapters
 
 COPY apps/backend/src/utils/riskCalculator.util.ts apps/backend/src/utils/FinancialCalculator.util.ts src/shared/backend/utils/
 COPY apps/backend/src/config/risk-constants.ts apps/backend/src/config/workerJobRegistry.ts apps/backend/src/config/queueDefaults.ts src/shared/backend/config/
@@ -203,6 +204,11 @@ COPY apps/backend/src/services/permitFetch.service.ts \
      apps/backend/src/services/homeReserveFundCalculation.service.ts \
      apps/backend/src/services/homeReserveFundReconciliation.service.ts \
      src/shared/backend/services/
+# Tax assessor adapters + fetch service (used by ingestTaxAssessmentEvents.job.ts)
+COPY apps/backend/src/services/taxAssessorAdapters/taxAssessmentTypes.ts \
+     apps/backend/src/services/taxAssessorAdapters/socrataTaxAdapter.ts \
+     src/shared/backend/services/taxAssessorAdapters/
+COPY apps/backend/src/services/taxAssessmentFetch.service.ts src/shared/backend/services/
 # Provider Trust & Compliance Verification — only providerCompliance.service.ts
 # and the lapse adapter are needed here; providerCredential.service.ts (CRUD,
 # submission) is only used by backend routes/controllers, not worker jobs.
@@ -270,6 +276,11 @@ RUN sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/homeReserveFundCalculati
 # Rewrite paths introduced by the Provider Trust & Compliance Verification jobs
 RUN sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/providerCompliance\.service/\.\.\/shared\/backend\/services\/providerCompliance\.service/g' src/jobs/providerCredentialExpire.job.ts && \
     sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/incidents\/integrations\/providerCredentialLapse\.adapter/\.\.\/shared\/backend\/services\/incidents\/integrations\/providerCredentialLapse\.adapter/g' src/jobs/providerCredentialLapse.job.ts
+
+# Rewrite paths introduced by the tax assessment ingestion job
+RUN sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/taxAssessmentFetch\.service/\.\.\/shared\/backend\/services\/taxAssessmentFetch\.service/g' src/jobs/ingestTaxAssessmentEvents.job.ts && \
+    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/homeEventRadarMatcher\.service/\.\.\/shared\/backend\/services\/homeEventRadarMatcher\.service/g' src/jobs/ingestTaxAssessmentEvents.job.ts && \
+    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/taxAssessorAdapters\/taxAssessmentTypes/\.\.\/shared\/backend\/services\/taxAssessorAdapters\/taxAssessmentTypes/g' src/radar/normalizeTaxAssessment.ts
 
 # Compile TS -> dist/
 RUN npx tsc --project ./tsconfig.json
