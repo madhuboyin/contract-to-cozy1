@@ -613,6 +613,61 @@ const templates: GuidanceJourneyTemplate[] = [
     ],
   },
 
+  // ── Tax Reassessment ──────────────────────────────────────────────────────────
+  // First real domain promoted through the RadarEvent -> Incident bridge
+  // (homeEventRadarMatcher.service.ts's promoteRadarEventToIncident), fed by
+  // ingestTaxAssessmentEvents.job.ts (Socrata county tax-assessor data).
+  // Step sequence mirrors the 3 actions already anticipated by
+  // computeTaxEvent() in homeEventRadarMatcher.service.ts.
+  {
+    journeyTypeKey: 'tax_reassessment_resolution',
+    journeyKey: 'journey_tax_reassessment_resolution',
+    version: '1.0.0',
+    signalIntentFamilies: ['tax_reassessment'],
+    issueDomain: 'FINANCIAL',
+    defaultDecisionStage: 'AWARENESS',
+    defaultReadiness: 'READY',
+    canonicalFirstStepKey: 'review_assessment',
+    steps: [
+      {
+        stepOrder: 1,
+        stepKey: 'review_assessment',
+        stepType: 'AWARENESS',
+        label: 'Review the new tax assessment',
+        decisionStage: 'AWARENESS',
+        executionReadiness: 'READY',
+        isRequired: true,
+        toolKey: 'incidents',
+        routePath: '/dashboard/properties/:propertyId?tab=incidents',
+        skipPolicy: 'DISALLOWED',
+      },
+      {
+        stepOrder: 2,
+        stepKey: 'prepare_appeal',
+        stepType: 'DECISION',
+        label: 'Estimate the financial impact and prepare an appeal',
+        decisionStage: 'DECISION',
+        executionReadiness: 'NEEDS_CONTEXT',
+        isRequired: false,
+        toolKey: 'true-cost',
+        routePath: '/dashboard/properties/:propertyId/tools/true-cost',
+        skipPolicy: 'ALLOWED',
+      },
+      {
+        stepOrder: 3,
+        stepKey: 'update_budget',
+        stepType: 'TRACKING',
+        label: 'Update your budget for the new assessment',
+        decisionStage: 'TRACKING',
+        executionReadiness: 'TRACKING_ONLY',
+        isRequired: false,
+        toolKey: 'guidance-overview',
+        routePath: '/dashboard/properties/:propertyId/tools/guidance-overview',
+        skipPolicy: 'ALLOWED',
+      },
+    ],
+  },
+
   // ── Inspection Followup ───────────────────────────────────────────────────────
   {
     journeyTypeKey: 'inspection_followup_resolution',
@@ -1823,6 +1878,13 @@ const JOURNEY_TOOL_STEP_KEY: Record<string, Record<string, string>> = {
     'coverage-intelligence': 'check_weather_coverage',
     maintenance: 'protect_exposed_systems',
     booking: 'schedule_weather_followup',
+  },
+  // 'incidents' and 'true-cost' are also used by other journeys with
+  // different step keys — this override disambiguates for this journey.
+  tax_reassessment_resolution: {
+    incidents: 'review_assessment',
+    'true-cost': 'prepare_appeal',
+    'guidance-overview': 'update_budget',
   },
   inspection_followup_resolution: {
     'service-price-radar': 'estimate_repair_cost',

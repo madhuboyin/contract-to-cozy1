@@ -323,6 +323,24 @@ export const JOB_REGISTRY: JobRegistryEntry[] = [
     jobName: 'mortgage-rate-ingest',
     triggerSupported: true,
   },
+  // ── Home Event Radar (cron) ───────────────────────────────────────────────
+  {
+    key: 'tax-assessment-ingest',
+    name: 'Tax Assessment Ingest',
+    description:
+      'Fetches real property tax reassessment data from configured county Socrata open-data ' +
+      'portals (TaxAssessorDataSource) and writes it into RadarEvent — the Home Event Radar ' +
+      'unified ingestion layer. High-impact assessments are promoted into Incident + a guidance ' +
+      'journey via homeEventRadarMatcher.service.ts. Properties in unconfigured jurisdictions ' +
+      'are skipped. Override schedule via TAX_ASSESSMENT_INGEST_CRON env var.',
+    category: 'RISK_SAFETY',
+    schedule: 'Weekly, Mondays at 6:00 AM',
+    cronExpression: '0 6 * * 1',
+    type: 'cron',
+    queueName: 'cron-trigger-queue',
+    jobName: 'tax-assessment-ingest',
+    triggerSupported: true,
+  },
   {
     key: 'reserve-fund-recalculation',
     name: 'Reserve Fund Recalculation',

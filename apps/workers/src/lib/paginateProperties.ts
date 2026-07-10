@@ -3,6 +3,7 @@ import { prisma } from './prisma';
 
 export type PropertyForGeoJobs = {
   id: string;
+  address: string | null;
   zipCode: string | null;
   city: string | null;
   state: string | null;
@@ -28,6 +29,7 @@ export async function* iterateAllProperties(
     const batch = await prisma.property.findMany({
       select: {
         id: true,
+        address: true,
         zipCode: true,
         city: true,
         state: true,

@@ -2,6 +2,7 @@ import { prisma } from '../lib/prisma';
 import { fetchDummyRadarSignals } from '../radar/dummyRadar.client';
 import { normalizeDummyRadarSignal } from '../radar/normalize';
 import type { CanonicalRadarSignal } from '../radar/radar.types';
+import { upsertCanonicalRadarEvent } from '../radar/upsertCanonicalRadarEvent';
 import { runMatchingForEvent } from '../../../backend/src/services/homeEventRadarMatcher.service';
 import { logger } from '../lib/logger';
 
@@ -102,41 +103,6 @@ async function loadTargetProperties(): Promise<TargetProperty[]> {
     },
     orderBy: { createdAt: 'asc' },
     ...(maxProperties ? { take: maxProperties } : {}),
-  });
-}
-
-async function upsertCanonicalRadarEvent(signal: CanonicalRadarSignal) {
-  const canonical = signal;
-  const db = prisma as any;
-
-  return db.radarEvent.upsert({
-    where: { dedupeKey: canonical.dedupeKey },
-    update: {
-      title: canonical.title,
-      summary: canonical.summary ?? null,
-      severity: canonical.severity,
-      sourceRef: canonical.sourceRef ?? null,
-      endAt: canonical.endAt ? new Date(canonical.endAt) : null,
-      payloadJson: canonical.payloadJson ?? null,
-      status: canonical.status,
-    },
-    create: {
-      eventType: canonical.eventType,
-      eventSubType: canonical.eventSubType ?? null,
-      title: canonical.title,
-      summary: canonical.summary ?? null,
-      sourceType: canonical.sourceType,
-      sourceRef: canonical.sourceRef ?? null,
-      severity: canonical.severity,
-      startAt: new Date(canonical.startAt),
-      endAt: canonical.endAt ? new Date(canonical.endAt) : null,
-      locationType: canonical.locationType,
-      locationKey: canonical.locationKey,
-      geoJson: canonical.geoJson ?? null,
-      payloadJson: canonical.payloadJson ?? null,
-      dedupeKey: canonical.dedupeKey,
-      status: canonical.status,
-    },
   });
 }
 

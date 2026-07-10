@@ -34,6 +34,7 @@ import { freezeRiskIncidentsJob } from './jobs/freezeRiskIncidents.job';
 import { severeWeatherAlertsJob } from './jobs/severeWeatherAlerts.job';
 import { cleanupInventoryDraftsJob } from './jobs/cleanupInventoryDrafts.job';
 import { ingestRadarSignalsJob } from './jobs/ingestRadarSignals.job';
+import { ingestTaxAssessmentEventsJob } from './jobs/ingestTaxAssessmentEvents.job';
 import { ingestHomeRiskEventsJob } from './jobs/ingestHomeRiskEvents.job';
 import { runHiddenAssetRefreshJob } from './jobs/hiddenAssetRefresh.job';
 import { refreshNeighborhoodEventsJob } from './jobs/refreshNeighborhoodEvents.job';
@@ -696,6 +697,7 @@ const CRON_HANDLERS: Record<string, () => Promise<void>> = {
       logger.warn({ reason: result.reason }, '[mortgage-rate-ingest] No rates ingested');
     }
   },
+  'tax-assessment-ingest':           async () => { await ingestTaxAssessmentEventsJob(); },
   'home-gazette-generation':         async () => { await runGazetteGenerationJob(); },
   'shared-data-backfill':            async () => { await runSharedDataBackfillJob(); },
   'shared-data-consistency-audit':   async () => { await runSharedDataConsistencyAuditJob(); },
@@ -713,6 +715,7 @@ const CRON_HANDLERS: Record<string, () => Promise<void>> = {
 
 // Per-job cron expression overrides (env-var-based schedules)
 const CRON_ENV_OVERRIDES: Record<string, string | undefined> = {
+  'tax-assessment-ingest':      process.env.TAX_ASSESSMENT_INGEST_CRON,
   'inventory-draft-cleanup':    process.env.INVENTORY_DRAFT_CLEANUP_CRON,
   'home-gazette-generation':    process.env.HOME_GAZETTE_GENERATION_CRON,
   'shared-data-backfill':       process.env.SHARED_DATA_BACKFILL_CRON,
@@ -1109,6 +1112,36 @@ permitDisclosureWorker.on('failed', (job, err) => {
   logger.error({ err }, `[PERMIT-DISCLOSURE-WORKER] export ${job?.data?.exportId} failed`);
   void alertOnJobFailure('generate-permit-disclosure-queue', job, err);
 });
+
+// =============================================================================
+// GUARDRAIL: QA/E2E dummy-ingest jobs must never run in production. These
+// generate synthetic fixture data (RadarEvent, HomeRiskEvent, NeighborhoodEvent)
+// that is indistinguishable from real signals to end users once ingested.
+// A prior incident shipped RADAR_DUMMY_INGEST_ENABLED=true to the prod
+// deployment manifest, seeding fake weather/risk events into production for
+// real users — fail fast here instead of relying on manifest review alone.
+// =============================================================================
+const DUMMY_INGEST_ENV_FLAGS = [
+  'RADAR_DUMMY_INGEST_ENABLED',
+  'HOME_RISK_REPLAY_DUMMY_INGEST_ENABLED',
+  'NEIGHBORHOOD_DUMMY_INGEST_ENABLED',
+] as const;
+
+if (process.env.NODE_ENV === 'production') {
+  const enabledInProd = DUMMY_INGEST_ENV_FLAGS.filter((key) => process.env[key] === 'true');
+  if (enabledInProd.length > 0) {
+    logger.error(
+      { enabledInProd },
+      '[STARTUP-GUARDRAIL] QA/E2E dummy-ingest flags are enabled with NODE_ENV=production. ' +
+        'Refusing to start — these jobs seed synthetic fixture data that is visually ' +
+        'indistinguishable from real signals once ingested. Set these to "false" in the ' +
+        'production deployment manifest.',
+    );
+    throw new Error(
+      `Refusing to start: dummy-ingest flags enabled in production: ${enabledInProd.join(', ')}`,
+    );
+  }
+}
 
 // =============================================================================
 // DUMMY RADAR INGEST (QA / E2E)

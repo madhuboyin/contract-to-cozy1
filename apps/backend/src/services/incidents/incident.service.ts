@@ -121,6 +121,8 @@ const GUIDANCE_SOURCE_TYPE_BY_INCIDENT_SOURCE_TYPE: Record<string, string> = {
   IOT: 'SENSOR',
   MANUAL: 'MANUAL',
   SYSTEM: 'SCHEDULED',
+  // Promoted from a RadarEvent match (Home Event Radar unified ingestion layer).
+  RADAR_EVENT: 'EXTERNAL',
 };
 
 function toGuidanceSourceType(incidentSourceType: string | null | undefined): string {
@@ -245,6 +247,18 @@ function mapIncidentTypeToGuidance(
       issueDomain: 'FINANCIAL',
       readiness: 'NEEDS_CONTEXT',
       sourceToolKey: 'true-cost',
+    };
+  }
+
+  // Promoted from a RadarEvent match (see homeEventRadarMatcher.service.ts's
+  // promoteRadarEventToIncident) — typeKey is prefixed 'RADAR_' for every
+  // domain ingested through the unified Home Event Radar layer.
+  if (normalized.includes('TAX_REASSESSMENT')) {
+    return {
+      signalIntentFamily: 'tax_reassessment',
+      issueDomain: 'FINANCIAL',
+      readiness: 'READY',
+      sourceToolKey: 'incidents',
     };
   }
 

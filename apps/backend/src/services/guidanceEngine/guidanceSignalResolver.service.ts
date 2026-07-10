@@ -22,6 +22,7 @@ const ISSUE_DOMAIN_BY_FAMILY: Record<string, GuidanceIssueDomain> = {
   safety_inspection_due: 'COMPLIANCE',
   energy_inefficiency_detected: 'ENERGY',
   high_utility_cost: 'ENERGY',
+  tax_reassessment: 'FINANCIAL',
   generic_actionable_signal: 'OTHER',
 };
 
@@ -45,6 +46,7 @@ const STAGE_BY_FAMILY: Record<string, GuidanceDecisionStage> = {
   safety_inspection_due: 'AWARENESS',
   energy_inefficiency_detected: 'AWARENESS',
   high_utility_cost: 'AWARENESS',
+  tax_reassessment: 'AWARENESS',
   generic_actionable_signal: 'AWARENESS',
 };
 
@@ -68,6 +70,7 @@ const READINESS_BY_FAMILY: Record<string, GuidanceExecutionReadiness> = {
   safety_inspection_due: 'NEEDS_CONTEXT',
   energy_inefficiency_detected: 'NEEDS_CONTEXT',
   high_utility_cost: 'NEEDS_CONTEXT',
+  tax_reassessment: 'READY',
   generic_actionable_signal: 'UNKNOWN',
 };
 
@@ -91,6 +94,7 @@ const FIRST_STEP_BY_FAMILY: Record<string, string> = {
   safety_inspection_due: 'review_compliance_requirement',
   energy_inefficiency_detected: 'review_energy_signal',
   high_utility_cost: 'review_energy_signal',
+  tax_reassessment: 'review_assessment',
   generic_actionable_signal: 'review_signal',
 };
 
@@ -118,6 +122,9 @@ const RECOMMENDED_TOOL_BY_FAMILY: Record<string, string> = {
   safety_inspection_due: 'guidance-overview',
   energy_inefficiency_detected: 'home-event-radar',
   high_utility_cost: 'home-event-radar',
+  // Promoted RadarEvent -> Incident (see homeEventRadarMatcher.service.ts's
+  // promoteRadarEventToIncident); Incidents is the real, populated surface.
+  tax_reassessment: 'incidents',
   generic_actionable_signal: 'guidance-overview',
 };
 

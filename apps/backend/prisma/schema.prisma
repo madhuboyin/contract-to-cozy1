@@ -7432,6 +7432,8 @@ enum IncidentSourceType {
   IOT
   MANUAL
   SYSTEM
+  // Promoted from a RadarEvent match (Home Event Radar unified ingestion layer).
+  RADAR_EVENT
 }
 
 enum SignalType {
@@ -11391,6 +11393,38 @@ model PermitDataSource {
   fetchJobs     PermitFetchJob[]
 
   @@map("permit_data_sources")
+}
+
+// Admin-managed county/municipal tax-assessor open data config. One row per
+// supported jurisdiction. Mirrors PermitDataSource — reuses the same adapter/
+// coverage/status enums since the shape (per-jurisdiction open-data source
+// config) is identical; kept as a separate table from permit_data_sources so
+// permit and tax-assessor jurisdiction coverage can be configured independently.
+model TaxAssessorDataSource {
+  id   String @id @default(uuid())
+  name String
+  slug String @unique
+
+  status      PermitDataSourceStatus
+  adapterType PermitDataSourceAdapter
+
+  baseUrl      String
+  datasetId    String?
+  apiKeyEnvVar String?
+
+  coverageType          PermitDataSourceCoverageType
+  normalizedCoverageKey String                       @unique
+  fieldMappingJson      Json
+  queryFilterJson       Json?
+
+  lastFetchAt              DateTime?
+  lastFetchError           String?
+  totalAssessmentsFetched  Int       @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("tax_assessor_data_sources")
 }
 
 // One row per permit record — API-sourced or manually entered.
