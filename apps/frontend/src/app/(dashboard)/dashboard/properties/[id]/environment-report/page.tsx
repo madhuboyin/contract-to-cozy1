@@ -236,9 +236,13 @@ function RadonSection({ result }: { result: SectionResult<RadonData> }) {
       </SectionCard>
     );
   }
-  const { zone, zoneDescription } = result.data;
+  const { zone, zoneDescription, countyName, stateName } = result.data;
   return (
-    <SectionCard icon={Radiation} title="Radon" description="EPA 1993 county radon zone map">
+    <SectionCard
+      icon={Radiation}
+      title="Radon"
+      description={countyName && stateName ? `${countyName}, ${stateName} — EPA county radon zone map` : 'EPA county radon zone map'}
+    >
       <div className="flex items-center gap-3">
         <Badge variant={zone === 1 ? 'destructive' : zone === 2 ? 'secondary' : 'outline'}>Zone {zone}</Badge>
         <span className="text-sm text-slate-600">{zoneDescription}</span>

@@ -4704,6 +4704,8 @@ export interface FloodElevationData {
 export interface RadonData {
   zone: 1 | 2 | 3;
   zoneDescription: string;
+  countyName: string | null;
+  stateName: string | null;
 }
 
 export interface HardinessZoneData {

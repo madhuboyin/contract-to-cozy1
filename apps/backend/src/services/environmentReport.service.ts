@@ -129,6 +129,9 @@ export async function getEnvironmentReport(property: GeocodableProperty): Promis
   }
 
   const { lat, lon } = geo;
+  // Only Drought needs a resolved county FIPS (US Drought Monitor's API is
+  // FIPS-keyed, not lat/lon) — Radon queries EPA's own service directly by
+  // point, same as Flood & Elevation.
   const fipsPromise = resolveCountyFips(lat, lon);
 
   const [weatherR, airQualityR, droughtR, floodElevationR, radonR, hazardsR, normalsR, hardinessZoneR, countyFipsR] =
@@ -137,7 +140,7 @@ export async function getEnvironmentReport(property: GeocodableProperty): Promis
       getAirQuality(lat, lon),
       fipsPromise.then(fips => getDrought(fips)),
       getFloodElevation(lat, lon),
-      fipsPromise.then(fips => getRadonZone(fips)),
+      getRadonZone(lat, lon),
       getEnvironmentalHazards(lat, lon),
       getClimateNormals(lat, lon),
       getHardinessZone(zipCode),
