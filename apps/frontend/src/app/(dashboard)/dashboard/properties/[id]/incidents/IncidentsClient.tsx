@@ -70,7 +70,10 @@ export default function IncidentsClient() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [propertyId, status, includeSuppressed]);
 
-  const openCount = useMemo(() => items.filter((item) => item.status === 'ACTIVE').length, [items]);
+  const openCount = useMemo(
+    () => items.filter((item) => !['RESOLVED', 'EXPIRED', 'SUPPRESSED'].includes(item.status)).length,
+    [items]
+  );
 
   return (
     <MobilePageContainer className="space-y-4 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:max-w-7xl lg:px-8 lg:pb-10">

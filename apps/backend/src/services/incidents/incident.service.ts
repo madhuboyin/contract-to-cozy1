@@ -569,8 +569,11 @@ export class IncidentService {
       propertyId: q.propertyId,
     };
     
-    // If a specific status is requested, use it
-    if (q.status) {
+    // "ACTIVE" (the UI's default filter) means "currently live", not the literal
+    // ACTIVE lifecycle stage — incidents sit in DETECTED/EVALUATED/ACTIONED/MITIGATED
+    // before or instead of ever reaching that exact enum value, so matching it
+    // literally hid live incidents that hadn't (yet) been evaluated into ACTIVE.
+    if (q.status && q.status !== 'ACTIVE') {
       where.status = q.status;
     } else {
       // By default, exclude terminal states (RESOLVED, EXPIRED, SUPPRESSED)

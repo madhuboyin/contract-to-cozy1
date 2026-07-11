@@ -6,6 +6,7 @@ import dynamic from 'next/dynamic';
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/api/client';
+import { usePropertyContext } from '@/lib/property/PropertyContext';
 import { Booking, BookingStatus, CreateBookingInput } from '@/types';
 import { CalendarClock, Edit, Eye, House, XCircle } from 'lucide-react';
 import { housePulseAnimation } from '@/components/animations/lottieData';
@@ -141,6 +142,7 @@ function groupBookings(bookings: Booking[]): { upcoming: Booking[]; recent: Book
 }
 
 export default function HomeownerBookingsPage() {
+  const { selectedPropertyId } = usePropertyContext();
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'all' | BookingStatus>('all');
@@ -165,7 +167,7 @@ export default function HomeownerBookingsPage() {
     try {
       setLoading(true);
       setError(null);
-      const response = await api.listBookings({});
+      const response = await api.listBookings(selectedPropertyId ? { propertyId: selectedPropertyId } : {});
 
       if (response.success) {
         setBookings(response.data.bookings);
@@ -175,7 +177,7 @@ export default function HomeownerBookingsPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [selectedPropertyId]);
 
   useEffect(() => {
     fetchBookings();
