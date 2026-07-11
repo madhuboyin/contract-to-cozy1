@@ -881,8 +881,9 @@ export async function getResolutionCenter(propertyId: string, userId: string): P
       where: {
         propertyId,
         status: {
-          notIn: ['RESOLVED', 'SUPPRESSED'],
+          notIn: ['RESOLVED', 'EXPIRED', 'SUPPRESSED'],
         },
+        isSuppressed: false,
       },
       orderBy: [{ openedAt: 'desc' }],
     }),
