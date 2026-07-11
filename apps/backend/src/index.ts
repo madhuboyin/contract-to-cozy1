@@ -449,6 +449,11 @@ app.use('/api/providers', providerRoutes);
 app.use('/api/bookings', bookingRoutes);
 // Keep vault public and mount before any generic '/api' routers that apply auth middleware.
 app.use('/api/vault', vaultRoutes);
+// Mount dedicated environment endpoints before generic '/api' feature routers.
+// Some of those routers install router-wide authorization middleware, so a
+// dedicated route must get the first opportunity to handle this URL.
+app.use('/api/weather', weatherRoutes);
+app.use('/api/environment', environmentReportRoutes);
 // Keep Knowledge Hub public and mount before generic '/api' routers with internal auth middleware.
 app.use('/api', knowledgeHubRoutes);
 app.use('/api', homeReportExportRoutes);
@@ -553,8 +558,6 @@ app.use('/api', inspectionHubRoutes);
 app.use('/api', projectTrackerRoutes);
 app.use('/api', gazetteRoutes);
 app.use('/api', gazetteInternalRoutes);
-app.use('/api/weather', weatherRoutes);
-app.use('/api/environment', environmentReportRoutes);
 app.use('/api/admin/release-gates', authenticate, requireMfa, requireRole(UserRole.ADMIN), releaseGateRoutes);
 
 // 404 handler
