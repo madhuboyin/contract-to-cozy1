@@ -1,0 +1,14 @@
+{
+  "metadata": {
+    "version": "0.1",
+    "lastUpdated": "2026-07-11",
+    "description": "EPA 1993 county radon zone map, keyed by 5-digit county FIPS code (state+county).",
+    "zones": {
+      "1": "Highest potential (predicted average indoor radon screening level > 4 pCi/L)",
+      "2": "Moderate potential (predicted average 2 - 4 pCi/L)",
+      "3": "Low potential (predicted average < 2 pCi/L)"
+    },
+    "sourcingStatus": "NOT YET POPULATED. This file intentionally ships with an empty fipsZoneMapping — EPA's public county radon zone table (https://www.epa.gov/radon/find-information-about-local-radon-zones-and-radon-programs) covers ~3,100 counties and was not transcribed here to avoid shipping fabricated or mis-transcribed safety data. Populate fipsZoneMapping from that official EPA source before relying on this section in production; until then, radonZone.service.ts returns { status: 'unavailable' } for every county, which is the intended safe default."
+  },
+  "fipsZoneMapping": {}
+}

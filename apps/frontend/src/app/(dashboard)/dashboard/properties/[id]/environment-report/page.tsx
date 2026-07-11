@@ -1,0 +1,464 @@
+// apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/environment-report/page.tsx
+
+'use client';
+
+import type { ComponentType, ReactNode } from 'react';
+import { useParams, useRouter } from 'next/navigation';
+import { useQuery } from '@tanstack/react-query';
+import { api } from '@/lib/api/client';
+import { DashboardShell } from '@/components/DashboardShell';
+import { PageHeader, PageHeaderHeading } from '@/components/page-header';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { ArrowLeft, AlertTriangle, Loader2, CloudSun, Wind, Droplets, Waves, Radiation, Factory, Thermometer } from 'lucide-react';
+import { navigateBackWithDashboardFallback } from '@/lib/navigation/backNavigation';
+import type {
+  SectionResult,
+  WeatherReportData,
+  AirQualityData,
+  DroughtData,
+  FloodElevationData,
+  RadonData,
+  EnvironmentalHazardsData,
+  ClimateSectionData,
+} from '@/types';
+
+const WEATHER_CODE_LABELS: Record<number, string> = {
+  0: 'Clear sky', 1: 'Mainly clear', 2: 'Partly cloudy', 3: 'Overcast',
+  45: 'Fog', 48: 'Depositing rime fog',
+  51: 'Light drizzle', 53: 'Drizzle', 55: 'Dense drizzle',
+  61: 'Light rain', 63: 'Rain', 65: 'Heavy rain',
+  71: 'Light snow', 73: 'Snow', 75: 'Heavy snow',
+  80: 'Rain showers', 81: 'Heavy rain showers', 82: 'Violent rain showers',
+  95: 'Thunderstorm', 96: 'Thunderstorm w/ hail', 99: 'Severe thunderstorm w/ hail',
+};
+function weatherLabel(code: number): string {
+  return WEATHER_CODE_LABELS[code] ?? `Weather code ${code}`;
+}
+
+function SectionUnavailable({ reason }: { reason?: string }) {
+  return (
+    <div className="flex items-center gap-2 rounded-lg border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-sm text-slate-500">
+      <AlertTriangle className="h-4 w-4 shrink-0 text-slate-400" />
+      <span>Data temporarily unavailable{reason ? ` (${reason})` : ''}.</span>
+    </div>
+  );
+}
+
+function SectionCard({
+  icon: Icon,
+  title,
+  description,
+  children,
+}: {
+  icon: ComponentType<{ className?: string }>;
+  title: string;
+  description?: string;
+  children: ReactNode;
+}) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Icon className="h-5 w-5 text-primary" />
+          {title}
+        </CardTitle>
+        {description ? <CardDescription>{description}</CardDescription> : null}
+      </CardHeader>
+      <CardContent>{children}</CardContent>
+    </Card>
+  );
+}
+
+function WeatherSection({ result }: { result: SectionResult<WeatherReportData> }) {
+  if (result.status !== 'ok') {
+    return (
+      <SectionCard icon={CloudSun} title="Weather">
+        <SectionUnavailable reason={result.reason} />
+      </SectionCard>
+    );
+  }
+  const { current, hourly, tenDayForecast, thirtyDayHistory } = result.data;
+
+  return (
+    <SectionCard icon={CloudSun} title="Weather" description={weatherLabel(current.weatherCode)}>
+      <Tabs defaultValue="current">
+        <TabsList>
+          <TabsTrigger value="current">Current</TabsTrigger>
+          <TabsTrigger value="hourly">Hourly</TabsTrigger>
+          <TabsTrigger value="forecast">10-Day Forecast</TabsTrigger>
+          <TabsTrigger value="history">30-Day History</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="current" className="mt-4">
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+            <Stat label="Temperature" value={`${Math.round(current.temperatureF)}°F`} />
+            <Stat label="Feels like" value={`${Math.round(current.apparentTemperatureF)}°F`} />
+            <Stat label="Humidity" value={`${current.humidityPercent}%`} />
+            <Stat label="Wind" value={`${Math.round(current.windSpeedMph)} mph`} />
+          </div>
+        </TabsContent>
+
+        <TabsContent value="hourly" className="mt-4">
+          <div className="max-h-64 overflow-y-auto">
+            <SimpleTable
+              rows={hourly.slice(0, 24).map(h => [
+                new Date(h.time).toLocaleTimeString([], { hour: 'numeric' }),
+                `${Math.round(h.temperatureF)}°F`,
+                `${h.precipitationProbabilityPercent}% precip`,
+              ])}
+            />
+          </div>
+        </TabsContent>
+
+        <TabsContent value="forecast" className="mt-4">
+          <SimpleTable
+            rows={tenDayForecast.map(d => [
+              new Date(d.date).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' }),
+              `${Math.round(d.tempMaxF)}° / ${Math.round(d.tempMinF)}°F`,
+              `${d.precipitationSumIn.toFixed(2)}in`,
+            ])}
+          />
+        </TabsContent>
+
+        <TabsContent value="history" className="mt-4">
+          <div className="max-h-64 overflow-y-auto">
+            {thirtyDayHistory.length === 0 ? (
+              <SectionUnavailable reason="history_unavailable" />
+            ) : (
+              <SimpleTable
+                rows={thirtyDayHistory.map(d => [
+                  new Date(d.date).toLocaleDateString([], { month: 'short', day: 'numeric' }),
+                  `${Math.round(d.tempMaxF)}° / ${Math.round(d.tempMinF)}°F`,
+                  `${d.precipitationSumIn.toFixed(2)}in`,
+                ])}
+              />
+            )}
+          </div>
+        </TabsContent>
+      </Tabs>
+    </SectionCard>
+  );
+}
+
+function AirQualitySection({ result }: { result: SectionResult<AirQualityData> }) {
+  if (result.status !== 'ok') {
+    return (
+      <SectionCard icon={Wind} title="Air Quality">
+        <SectionUnavailable reason={result.reason} />
+      </SectionCard>
+    );
+  }
+  const { current, history } = result.data;
+  const tone = current.aqi <= 50 ? 'good' : current.aqi <= 100 ? 'moderate' : 'unhealthy';
+
+  return (
+    <SectionCard icon={Wind} title="Air Quality">
+      <div className="mb-4 grid grid-cols-3 gap-4">
+        <Stat label="AQI" value={String(current.aqi)} tone={tone} />
+        <Stat label="PM2.5" value={`${current.pm2_5} µg/m³`} />
+        <Stat label="PM10" value={`${current.pm10} µg/m³`} />
+      </div>
+      {history.length > 0 && (
+        <div className="max-h-48 overflow-y-auto">
+          <SimpleTable
+            rows={history.slice(-14).map(h => [
+              new Date(h.date).toLocaleDateString([], { month: 'short', day: 'numeric' }),
+              `AQI ${h.avgAqi}`,
+              `PM2.5 ${h.avgPm2_5}`,
+            ])}
+          />
+        </div>
+      )}
+    </SectionCard>
+  );
+}
+
+function DroughtSection({ result }: { result: SectionResult<DroughtData> }) {
+  if (result.status !== 'ok') {
+    return (
+      <SectionCard icon={Droplets} title="Drought">
+        <SectionUnavailable reason={result.reason} />
+      </SectionCard>
+    );
+  }
+  const { current, history } = result.data;
+
+  return (
+    <SectionCard icon={Droplets} title="Drought" description="US Drought Monitor, published weekly">
+      <div className="mb-4">
+        <Badge variant={current?.dominantCategory === 'None' ? 'secondary' : 'destructive'}>
+          {current ? current.dominantCategory : 'No data'}
+        </Badge>
+      </div>
+      {history.length > 0 && (
+        <div className="max-h-48 overflow-y-auto">
+          <SimpleTable
+            rows={history
+              .slice()
+              .reverse()
+              .map(w => [new Date(w.date).toLocaleDateString([], { month: 'short', day: 'numeric' }), w.dominantCategory, ''])}
+          />
+        </div>
+      )}
+    </SectionCard>
+  );
+}
+
+function FloodElevationSection({ result }: { result: SectionResult<FloodElevationData> }) {
+  if (result.status !== 'ok') {
+    return (
+      <SectionCard icon={Waves} title="Flood & Elevation">
+        <SectionUnavailable reason={result.reason} />
+      </SectionCard>
+    );
+  }
+  const { femaFloodZone, femaZoneSubtype, elevationFeet } = result.data;
+
+  return (
+    <SectionCard icon={Waves} title="Flood & Elevation">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <Stat label="FEMA Flood Zone" value={femaFloodZone ?? '—'} />
+        <Stat label="Zone Detail" value={femaZoneSubtype ?? '—'} />
+        <Stat label="Elevation" value={elevationFeet != null ? `${Math.round(elevationFeet)} ft` : '—'} />
+      </div>
+    </SectionCard>
+  );
+}
+
+function RadonSection({ result }: { result: SectionResult<RadonData> }) {
+  if (result.status !== 'ok') {
+    return (
+      <SectionCard icon={Radiation} title="Radon">
+        <SectionUnavailable reason={result.reason} />
+      </SectionCard>
+    );
+  }
+  const { zone, zoneDescription } = result.data;
+  return (
+    <SectionCard icon={Radiation} title="Radon" description="EPA 1993 county radon zone map">
+      <div className="flex items-center gap-3">
+        <Badge variant={zone === 1 ? 'destructive' : zone === 2 ? 'secondary' : 'outline'}>Zone {zone}</Badge>
+        <span className="text-sm text-slate-600">{zoneDescription}</span>
+      </div>
+    </SectionCard>
+  );
+}
+
+function HazardsSection({ result }: { result: SectionResult<EnvironmentalHazardsData> }) {
+  if (result.status !== 'ok') {
+    return (
+      <SectionCard icon={Factory} title="Environmental Hazards">
+        <SectionUnavailable reason={result.reason} />
+      </SectionCard>
+    );
+  }
+  const { facilities, totalFacilitiesInRadius, totalPenaltiesInRadius, searchRadiusMiles } = result.data;
+
+  return (
+    <SectionCard
+      icon={Factory}
+      title="Environmental Hazards"
+      description={`EPA-regulated facilities within ${searchRadiusMiles} mile${searchRadiusMiles === 1 ? '' : 's'}`}
+    >
+      <div className="mb-4 grid grid-cols-2 gap-4 sm:grid-cols-3">
+        <Stat label="Facilities nearby" value={String(totalFacilitiesInRadius)} />
+        <Stat label="Total penalties" value={totalPenaltiesInRadius ?? '$0'} />
+        <Stat label="Flagged facilities" value={String(facilities.length)} />
+      </div>
+      {facilities.length === 0 ? (
+        <p className="text-sm text-slate-500">No facilities with compliance issues found nearby.</p>
+      ) : (
+        <div className="max-h-64 space-y-2 overflow-y-auto">
+          {facilities.map(f => (
+            <div key={f.registryId} className="rounded-lg border border-slate-200 p-3">
+              <div className="flex items-start justify-between gap-2">
+                <p className="text-sm font-semibold text-slate-900">{f.name}</p>
+                {f.significantNoncompliance && <Badge variant="destructive">SNC</Badge>}
+              </div>
+              <p className="text-xs text-slate-500">{f.address}</p>
+              <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                {f.programs.map(p => (
+                  <Badge key={p} variant="outline" className="text-[10px]">
+                    {p}
+                  </Badge>
+                ))}
+                {f.complianceStatus && <span className="text-xs text-slate-500">{f.complianceStatus}</span>}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </SectionCard>
+  );
+}
+
+function ClimateSection({ result }: { result: SectionResult<ClimateSectionData> }) {
+  if (result.status !== 'ok') {
+    return (
+      <SectionCard icon={Thermometer} title="Climate">
+        <SectionUnavailable reason={result.reason} />
+      </SectionCard>
+    );
+  }
+  const { normals, hardinessZone } = result.data;
+
+  return (
+    <SectionCard icon={Thermometer} title="Climate">
+      <div className="space-y-4">
+        <div>
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Plant Hardiness Zone</p>
+          {hardinessZone.status === 'ok' ? (
+            <div className="flex items-center gap-3">
+              <Badge>{hardinessZone.data.zone}</Badge>
+              <span className="text-sm text-slate-600">{hardinessZone.data.temperatureRangeF}°F</span>
+            </div>
+          ) : (
+            <SectionUnavailable reason={hardinessZone.reason} />
+          )}
+        </div>
+
+        <div>
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">1991-2020 Climate Normals</p>
+          {normals.status === 'ok' ? (
+            <div className="space-y-3">
+              <p className="text-xs text-slate-500">Nearest station: {normals.data.stationName}</p>
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                <Stat
+                  label="Heating degree days"
+                  value={normals.data.annualHeatingDegreeDays != null ? String(Math.round(normals.data.annualHeatingDegreeDays)) : '—'}
+                />
+                <Stat
+                  label="Cooling degree days"
+                  value={normals.data.annualCoolingDegreeDays != null ? String(Math.round(normals.data.annualCoolingDegreeDays)) : '—'}
+                />
+              </div>
+              <div className="max-h-48 overflow-y-auto">
+                <SimpleTable
+                  rows={normals.data.monthly.map(m => [
+                    new Date(2000, m.month - 1, 1).toLocaleDateString([], { month: 'short' }),
+                    m.avgHighF != null ? `${Math.round(m.avgHighF)}°` : '—',
+                    m.avgLowF != null ? `${Math.round(m.avgLowF)}°` : '—',
+                  ])}
+                />
+              </div>
+            </div>
+          ) : (
+            <SectionUnavailable reason={normals.reason} />
+          )}
+        </div>
+      </div>
+    </SectionCard>
+  );
+}
+
+function Stat({ label, value, tone }: { label: string; value: string; tone?: 'good' | 'moderate' | 'unhealthy' }) {
+  const toneClass =
+    tone === 'good' ? 'text-emerald-600' : tone === 'moderate' ? 'text-amber-600' : tone === 'unhealthy' ? 'text-red-600' : 'text-slate-900';
+  return (
+    <div>
+      <p className="text-xs text-slate-500">{label}</p>
+      <p className={`text-lg font-bold ${toneClass}`}>{value}</p>
+    </div>
+  );
+}
+
+function SimpleTable({ rows }: { rows: [string, string, string][] }) {
+  return (
+    <table className="w-full text-sm">
+      <tbody>
+        {rows.map((row, i) => (
+          <tr key={i} className="border-b border-slate-100 last:border-0">
+            {row.map((cell, j) => (
+              <td key={j} className="py-1.5 pr-3 text-slate-700">
+                {cell}
+              </td>
+            ))}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+export default function EnvironmentReportPage() {
+  const params = useParams();
+  const router = useRouter();
+  const propertyId = Array.isArray(params.id) ? params.id[0] ?? '' : params.id ?? '';
+
+  const query = useQuery({
+    queryKey: ['environment-report', propertyId],
+    queryFn: async () => {
+      const response = await api.getEnvironmentReport(propertyId);
+      if (response.success) return response.data;
+      throw new Error('message' in response ? response.message : 'Failed to load environment report');
+    },
+    enabled: Boolean(propertyId),
+    staleTime: 5 * 60_000,
+    gcTime: 30 * 60_000,
+  });
+
+  if (query.isLoading || !propertyId) {
+    return (
+      <DashboardShell>
+        <div className="flex h-64 items-center justify-center rounded-lg bg-gray-100 animate-pulse">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      </DashboardShell>
+    );
+  }
+
+  if (query.isError || !query.data) {
+    return (
+      <DashboardShell>
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-destructive">
+              <AlertTriangle className="h-5 w-5" />
+              Failed to Load Environment Report
+            </CardTitle>
+            <CardDescription>There was a problem retrieving this property&apos;s environment data.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button onClick={() => query.refetch()} disabled={query.isFetching}>
+              {query.isFetching && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Try Again
+            </Button>
+          </CardContent>
+        </Card>
+      </DashboardShell>
+    );
+  }
+
+  const report = query.data;
+  const { sections } = report;
+
+  return (
+    <DashboardShell>
+      <PageHeader>
+        <Button
+          variant="link"
+          className="p-0 h-auto mb-2 text-sm text-muted-foreground min-h-[44px] flex items-center"
+          onClick={() => navigateBackWithDashboardFallback(router)}
+        >
+          <ArrowLeft className="h-4 w-4 mr-1" /> Back
+        </Button>
+        <PageHeaderHeading className="flex items-center gap-2">
+          <CloudSun className="h-8 w-8 text-primary" /> Environment Report
+        </PageHeaderHeading>
+      </PageHeader>
+
+      <div className="space-y-6">
+        <WeatherSection result={sections.weather} />
+        <AirQualitySection result={sections.airQuality} />
+        <FloodElevationSection result={sections.floodElevation} />
+        <DroughtSection result={sections.drought} />
+        <RadonSection result={sections.radon} />
+        <HazardsSection result={sections.hazards} />
+        <ClimateSection result={sections.climate} />
+      </div>
+    </DashboardShell>
+  );
+}

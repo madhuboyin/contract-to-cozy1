@@ -4623,3 +4623,148 @@ export interface ProviderVerificationSummary {
   unverifiedCategories: ServiceCategory[];
   credentialTypesPresent: ProviderCredentialType[];
 }
+
+// ─────────────────────────────────────────────────────────────────────────
+// Environment Report
+// ─────────────────────────────────────────────────────────────────────────
+
+export type SectionResult<T> =
+  | { status: 'ok'; data: T; fetchedAt: string }
+  | { status: 'unavailable'; reason?: string };
+
+export interface WeatherCurrentConditions {
+  temperatureF: number;
+  apparentTemperatureF: number;
+  humidityPercent: number;
+  windSpeedMph: number;
+  precipitationIn: number;
+  weatherCode: number;
+  isDay: boolean;
+  observedAt: string;
+}
+export interface WeatherHourlyPoint {
+  time: string;
+  temperatureF: number;
+  precipitationProbabilityPercent: number;
+  weatherCode: number;
+}
+export interface WeatherDailyForecastPoint {
+  date: string;
+  tempMaxF: number;
+  tempMinF: number;
+  precipitationSumIn: number;
+  weatherCode: number;
+}
+export interface WeatherHistoryPoint {
+  date: string;
+  tempMaxF: number;
+  tempMinF: number;
+  precipitationSumIn: number;
+}
+export interface WeatherReportData {
+  current: WeatherCurrentConditions;
+  hourly: WeatherHourlyPoint[];
+  tenDayForecast: WeatherDailyForecastPoint[];
+  thirtyDayHistory: WeatherHistoryPoint[];
+}
+
+export interface AirQualityCurrent {
+  aqi: number;
+  pm2_5: number;
+  pm10: number;
+  observedAt: string;
+}
+export interface AirQualityHistoryPoint {
+  date: string;
+  avgAqi: number;
+  avgPm2_5: number;
+}
+export interface AirQualityData {
+  current: AirQualityCurrent;
+  history: AirQualityHistoryPoint[];
+}
+
+export type DroughtCategory = 'None' | 'D0' | 'D1' | 'D2' | 'D3' | 'D4';
+export interface DroughtWeekPoint {
+  date: string;
+  dominantCategory: DroughtCategory;
+  percentArea: Record<DroughtCategory, number>;
+}
+export interface DroughtData {
+  current: DroughtWeekPoint | null;
+  history: DroughtWeekPoint[];
+}
+
+export interface FloodElevationData {
+  femaFloodZone: string | null;
+  femaZoneSubtype: string | null;
+  elevationFeet: number | null;
+}
+
+export interface RadonData {
+  zone: 1 | 2 | 3;
+  zoneDescription: string;
+}
+
+export interface HardinessZoneData {
+  zone: string;
+  temperatureRangeF: string;
+}
+
+export interface ClimateNormalsMonthlyPoint {
+  month: number;
+  avgTempF: number | null;
+  avgHighF: number | null;
+  avgLowF: number | null;
+}
+export interface ClimateNormalsData {
+  stationId: string;
+  stationName: string;
+  monthly: ClimateNormalsMonthlyPoint[];
+  annualHeatingDegreeDays: number | null;
+  annualCoolingDegreeDays: number | null;
+  firstFrostDate: null;
+  lastFrostDate: null;
+}
+export interface ClimateSectionData {
+  normals: SectionResult<ClimateNormalsData>;
+  hardinessZone: SectionResult<HardinessZoneData>;
+}
+
+export interface HazardFacility {
+  registryId: string;
+  name: string;
+  address: string;
+  programs: string[];
+  complianceStatus: string | null;
+  significantNoncompliance: boolean;
+  inspectionCount: number;
+  lastInspectionDate: string | null;
+  penaltyCount: number;
+}
+export interface EnvironmentalHazardsData {
+  facilities: HazardFacility[];
+  totalFacilitiesInRadius: number;
+  totalPenaltiesInRadius: string | null;
+  searchRadiusMiles: number;
+}
+
+export interface EnvironmentReportDTO {
+  propertyId: string;
+  location: {
+    latitude: number | null;
+    longitude: number | null;
+    countyFips: string | null;
+    zipCode: string | null;
+  };
+  generatedAt: string;
+  sections: {
+    weather: SectionResult<WeatherReportData>;
+    airQuality: SectionResult<AirQualityData>;
+    drought: SectionResult<DroughtData>;
+    floodElevation: SectionResult<FloodElevationData>;
+    radon: SectionResult<RadonData>;
+    hazards: SectionResult<EnvironmentalHazardsData>;
+    climate: SectionResult<ClimateSectionData>;
+  };
+}

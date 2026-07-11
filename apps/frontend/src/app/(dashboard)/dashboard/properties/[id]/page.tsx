@@ -64,6 +64,7 @@ import { buildHomeRiskReplayHref } from '@/lib/routes/homeRiskReplay';
 import { buildServicePriceRadarHref } from '@/lib/routes/servicePriceRadar';
 import { SmartContextToolsSection } from './components/SmartContextToolsSection';
 import PlantAdvisorDashboardCard from './components/PlantAdvisorDashboardCard';
+import EnvironmentReportDashboardCard from './components/EnvironmentReportDashboardCard';
 import { GuidanceResumeBanner } from '@/components/guidance/GuidanceResumeBanner';
 import PropertyHubTemplate from './components/PropertyHubTemplate';
 import { HomeScoreReportCard } from '../../components/HomeScoreReportCard';
@@ -469,6 +470,8 @@ const PropertyOverview = ({ property }: { property: Property }) => {
             </div>
           </MobileCard>
           
+          <EnvironmentReportDashboardCard propertyId={property.id} />
+
           {/* Legacy Plant Advisor */}
           <PlantAdvisorDashboardCard propertyId={property.id} />
         </div>

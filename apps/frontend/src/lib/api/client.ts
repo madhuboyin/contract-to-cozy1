@@ -95,6 +95,7 @@ import {
   RadarMatchDetail,
   RadarUserState,
   ResolutionCenterPayload,
+  EnvironmentReportDTO,
 } from '@/types';
 
 // REMOVED: import { RiskReportSummary } from '@/app/(dashboard)/dashboard/types'; as it was not defined or needed.
@@ -1233,6 +1234,16 @@ class APIClient {
    */
   async getProperty(id: string): Promise<APIResponse<Property>> {
     return this.request(`/api/properties/${id}`);
+  }
+
+  /**
+   * Get the Environment report for a property (weather, air quality,
+   * drought, flood & elevation, radon, hazards, climate). Each section is
+   * independently ok/unavailable — a 200 response doesn't guarantee every
+   * section has data.
+   */
+  async getEnvironmentReport(propertyId: string): Promise<APIResponse<EnvironmentReportDTO>> {
+    return this.request(`/api/environment/report/${propertyId}`);
   }
 
   /**

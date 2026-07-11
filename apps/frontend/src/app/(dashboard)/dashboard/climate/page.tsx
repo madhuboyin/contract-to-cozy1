@@ -2,9 +2,10 @@
 'use client';
 
 import { useState, useEffect, Suspense } from 'react';
+import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import ClimateRiskPredictor from '@/components/ClimateRiskPredictor';
-import { ArrowLeft, Cloud, Loader2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Cloud, Loader2 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { api } from '@/lib/api/client';
@@ -96,7 +97,16 @@ function ClimateContent() {
 
       {/* Climate Risk Component */}
       {selectedPropertyId ? (
-        <ClimateRiskPredictor propertyId={selectedPropertyId} />
+        <>
+          <ClimateRiskPredictor propertyId={selectedPropertyId} />
+          <Link
+            href={`/dashboard/properties/${selectedPropertyId}/environment-report`}
+            className="flex items-center justify-between rounded-xl border border-slate-200 bg-white p-4 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
+          >
+            <span>View full Environment Report — live weather, air quality, flood, drought &amp; more</span>
+            <ArrowRight className="h-4 w-4 shrink-0 text-slate-400" />
+          </Link>
+        </>
       ) : (
         <div className="text-center py-12 bg-gray-50 rounded-lg">
           <Cloud className="w-12 h-12 text-gray-400 mx-auto mb-4" />

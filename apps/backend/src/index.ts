@@ -109,6 +109,7 @@ import homeStatusBoardRoutes from './routes/homeStatusBoard.routes';
 import inventoryVerificationRoutes from './routes/inventoryVerification.routes';
 import maintenancePredictionRoutes from './routes/maintenancePrediction.routes';
 import weatherRoutes from './routes/weather.routes';
+import environmentReportRoutes from './routes/environmentReport.routes';
 import servicePriceRadarRoutes from './routes/servicePriceRadar.routes';
 import negotiationShieldRoutes from './routes/negotiationShield.routes';
 import priceFinalizationRoutes from './routes/priceFinalization.routes';
@@ -553,6 +554,7 @@ app.use('/api', projectTrackerRoutes);
 app.use('/api', gazetteRoutes);
 app.use('/api', gazetteInternalRoutes);
 app.use('/api/weather', weatherRoutes);
+app.use('/api/environment', environmentReportRoutes);
 app.use('/api/admin/release-gates', authenticate, requireMfa, requireRole(UserRole.ADMIN), releaseGateRoutes);
 
 // 404 handler
