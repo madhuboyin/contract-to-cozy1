@@ -9,6 +9,7 @@ import { createPropertySchema, updatePropertySchema } from '../utils/validators'
 import { AuthRequest } from '../types/auth.types'; 
 import { logger } from '../lib/logger';
 import { prisma } from '../lib/prisma';
+import { apiRateLimiter } from '../middleware/rateLimiter.middleware';
 
 const router = Router();
 
@@ -70,6 +71,8 @@ router.get('/', authenticate, propertyController.listProperties);
  *         description: Property not found
  */
 router.get('/lookup', authenticate, propertyController.lookupProperty);
+router.get('/address-suggestions', authenticate, apiRateLimiter, propertyController.autocompleteAddresses);
+router.get('/address-details', authenticate, apiRateLimiter, propertyController.getAddressDetails);
 
 /**
  * @swagger

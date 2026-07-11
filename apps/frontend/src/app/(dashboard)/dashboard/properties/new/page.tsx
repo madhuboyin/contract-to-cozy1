@@ -14,6 +14,7 @@ import {
   ScenarioInputCard,
   StatusChip,
 } from '@/components/mobile/dashboard/MobilePrimitives';
+import { AddressAutocomplete } from '@/components/property/AddressAutocomplete';
 
 const PROPERTY_SETUP_SKIPPED_KEY = 'propertySetupSkipped';
 
@@ -386,22 +387,11 @@ export default function NewPropertyPage() {
         />
       </div>
 
-      <div className="space-y-1.5">
-        <label htmlFor="address" className="block text-sm font-medium text-slate-700">
-          Street Address <span className="text-red-500">*</span>
-        </label>
-        <input
-          type="text"
-          id="address"
-          name="address"
-          value={formData.address}
-          onChange={handleChange}
-          required
-          placeholder="123 Main St"
-          autoComplete="street-address"
-          className={inputBaseClass}
-        />
-      </div>
+      <AddressAutocomplete
+        value={formData}
+        onChange={(address) => setFormData((previous) => ({ ...previous, ...address }))}
+        inputClassName={inputBaseClass}
+      />
 
       <div className="grid grid-cols-[minmax(0,1fr)_106px] gap-3 sm:grid-cols-[minmax(0,1fr)_132px]">
         <div className="space-y-1.5">

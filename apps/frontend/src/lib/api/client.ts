@@ -1228,6 +1228,25 @@ class APIClient {
     return { success: true, data: res.data };
   }
 
+  async suggestAddresses(input: string, sessionToken: string): Promise<APIResponse<Array<{ placeId: string; label: string }>>> {
+    const params = new URLSearchParams({ input, sessionToken });
+    const res = await this.get<Array<{ placeId: string; label: string }>>(`/api/properties/address-suggestions?${params}`);
+    return { success: true, data: res.data };
+  }
+
+  async getAddressDetails(placeId: string, sessionToken: string): Promise<APIResponse<{
+    address: string;
+    city: string;
+    state: string;
+    zipCode: string;
+  }>> {
+    const params = new URLSearchParams({ placeId, sessionToken });
+    const res = await this.get<{ address: string; city: string; state: string; zipCode: string }>(
+      `/api/properties/address-details?${params}`,
+    );
+    return { success: true, data: res.data };
+  }
+
 
   /**
    * Get a single property by ID
