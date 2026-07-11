@@ -300,7 +300,12 @@ export default function FinancialEfficiencyPage() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const focusBreakdown = searchParams.get('focus') === 'breakdown';
-    
+
+    // The dashboard card passes the annual cost figure it promised — surface it
+    // if it no longer matches what this page calculates, instead of ignoring it.
+    const expectedCostParam = searchParams.get('expectedCost');
+    const expectedAnnualCost = expectedCostParam ? Number(expectedCostParam) : null;
+
     // 🔑 NEW: Extract view parameter for trends highlighting
     const viewParam = searchParams.get('view');
     const shouldFocusTrends = viewParam === 'trends';
@@ -409,6 +414,10 @@ export default function FinancialEfficiencyPage() {
     const isZeroState = score === 0 && actualTotalCost === 0 && !isQueued && !isCalculating;
     
     const formattedExposure = formatCurrency(actualTotalCost);
+    const annualCostMismatch =
+        expectedAnnualCost != null && !Number.isNaN(expectedAnnualCost) && !isQueued && !isCalculating
+            ? Math.round(actualTotalCost) !== Math.round(expectedAnnualCost)
+            : false;
     // Score is based on inverse of badness, so a score of 0 (worst efficiency) maps to 100 on the gauge (high risk)
     // Here, 100 score is excellent efficiency. We show 100 for best, 0 for worst.
     const efficiencyProgressValue = score; 
@@ -661,6 +670,11 @@ export default function FinancialEfficiencyPage() {
                         open={focusBreakdown || undefined}
                     >
                         <summary className="cursor-pointer text-sm font-semibold text-slate-800">Detailed breakdown</summary>
+                        {annualCostMismatch && (
+                            <p className="mt-2 text-xs text-amber-600">
+                                Expected {formatCurrency(expectedAnnualCost ?? 0)}/yr — currently {formattedExposure}/yr.
+                            </p>
+                        )}
                         <div className="mt-3">{renderDetailedSections()}</div>
                     </details>
                 </MobileToolWorkspace>
@@ -881,6 +895,11 @@ export default function FinancialEfficiencyPage() {
 
                 {/* --- Detailed Section Content --- */}
                 <div id="cost-breakdown" className="scroll-mt-8">
+                    {annualCostMismatch && (
+                        <p className="mb-2 text-xs text-amber-600">
+                            Expected {formatCurrency(expectedAnnualCost ?? 0)}/yr — currently {formattedExposure}/yr.
+                        </p>
+                    )}
                     {renderDetailedSections()}
                 </div>
             </div>

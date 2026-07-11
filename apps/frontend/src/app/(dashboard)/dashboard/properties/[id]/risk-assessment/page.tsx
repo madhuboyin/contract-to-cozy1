@@ -1295,6 +1295,12 @@ export default function RiskAssessmentPage() {
     const focusParam = searchParams.get('focus');
     const shouldFocusExposure = focusParam === 'exposure';
 
+    // CTAs (sidebar "Review risk exposure") pass the $ amount they promised —
+    // surface it if it no longer matches what this page calculates, instead of
+    // silently ignoring it.
+    const amountParam = searchParams.get('amount');
+    const expectedExposureAmount = amountParam ? Number(amountParam) : null;
+
     // 🔑 NEW: Extract view parameter for trends highlighting
     const viewParam = searchParams.get('view');
     const shouldFocusTrends = viewParam === 'trends';
@@ -1580,6 +1586,10 @@ export default function RiskAssessmentPage() {
         : (typeof exposureString === 'number' ? exposureString : 0);
     
     const formattedExposure = formatCurrency(exposure);
+    const exposureAmountMismatch =
+        expectedExposureAmount != null && !Number.isNaN(expectedExposureAmount) && !isCalculating && !isQueued
+            ? Math.round(exposure) !== Math.round(expectedExposureAmount)
+            : false;
     const riskProgressValue = 100 - score;
     const hasWeeklyHistory = !!riskSeries?.previous;
     const highRiskCount = report?.details?.filter(d => d.riskLevel === 'HIGH').length ?? 0;
@@ -1857,6 +1867,11 @@ export default function RiskAssessmentPage() {
                             ]}
                             columns={2}
                         />
+                        {exposureAmountMismatch && (
+                            <p className="mt-2 text-xs text-amber-600">
+                                Expected {formatCurrency(expectedExposureAmount ?? 0)} at risk — currently {formattedExposure}.
+                            </p>
+                        )}
                     </div>
 
                     <div
@@ -2009,9 +2024,14 @@ export default function RiskAssessmentPage() {
                         <p className="text-sm text-muted-foreground mt-1">
                             Calculated worst-case, out-of-pocket costs based on age and lack of coverage.
                         </p>
+                        {exposureAmountMismatch && (
+                            <p className="mt-2 text-xs text-amber-600">
+                                Expected {formatCurrency(expectedExposureAmount ?? 0)} at risk — currently {formattedExposure}.
+                            </p>
+                        )}
                     </CardContent>
                 </Card>
-                
+
                 <Card className="sm:col-span-2 lg:col-span-1 flex flex-col justify-between">
                     <CardHeader className="pb-2">
                         <CardTitle className="text-sm font-medium">Tools & Export</CardTitle>

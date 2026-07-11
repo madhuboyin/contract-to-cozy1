@@ -1,6 +1,6 @@
 import type { Booking, ResolutionCenterData } from '@/types';
 import type { UrgentActionItem } from '@/lib/dashboard/urgentActions';
-import { mapUrgentActionsToResolutionCases } from '@/lib/dashboard/resolutionCases';
+import { casePriorityForAction, mapUrgentActionsToResolutionCases } from '@/lib/dashboard/resolutionCases';
 import {
   mapBookingsToExecutionItems,
   mapReplaceRepairAnalysesToDecisionInsights,
@@ -17,34 +17,55 @@ export type ResolutionCenterViewModel = ResolutionCenterData & {
 export function filterResolutionActions(
   actions: UrgentActionItem[],
   filterParam?: ResolutionCenterFilter,
+  priorityParam?: ResolutionCenterFilter,
 ): UrgentActionItem[] {
-  if (!filterParam) return actions;
+  let result = actions;
 
-  const filter = filterParam.toLowerCase();
-  if (filter === 'urgent') {
-    return actions.filter(
-      (action) => action.type === 'INCIDENT' || action.type === 'RENEWAL_EXPIRED' || action.severity === 'CRITICAL',
-    );
-  }
-  if (filter === 'maintenance' || filter === 'preventive') {
-    return actions.filter(
-      (action) =>
-        action.type === 'MAINTENANCE_OVERDUE' ||
-        action.type === 'MAINTENANCE_UNSCHEDULED' ||
-        action.type === 'HEALTH_INSIGHT',
-    );
-  }
-  if (filter === 'coverage') {
-    return actions.filter(
-      (action) =>
-        action.type === 'RENEWAL_EXPIRED' ||
-        action.type === 'RENEWAL_UPCOMING' ||
-        action.type === 'COVERAGE_GAP' ||
-        action.type === 'COVERAGE_PARTIAL',
-    );
+  if (filterParam) {
+    const filter = filterParam.toLowerCase();
+    if (filter === 'urgent') {
+      result = result.filter(
+        (action) => action.type === 'INCIDENT' || action.type === 'RENEWAL_EXPIRED' || action.severity === 'CRITICAL',
+      );
+    } else if (filter === 'maintenance' || filter === 'preventive') {
+      result = result.filter(
+        (action) =>
+          action.type === 'MAINTENANCE_OVERDUE' ||
+          action.type === 'MAINTENANCE_UNSCHEDULED' ||
+          action.type === 'HEALTH_INSIGHT',
+      );
+    } else if (filter === 'coverage') {
+      result = result.filter(
+        (action) =>
+          action.type === 'RENEWAL_EXPIRED' ||
+          action.type === 'RENEWAL_UPCOMING' ||
+          action.type === 'COVERAGE_GAP' ||
+          action.type === 'COVERAGE_PARTIAL',
+      );
+    }
   }
 
-  return actions;
+  if (priorityParam?.toLowerCase() === 'high') {
+    result = result.filter((action) => {
+      const priority = casePriorityForAction(action);
+      return priority === 'critical' || priority === 'high';
+    });
+  }
+
+  return result;
+}
+
+const ACTION_PRIORITY_RANK: Record<ReturnType<typeof casePriorityForAction>, number> = {
+  critical: 0,
+  high: 1,
+  medium: 2,
+  low: 3,
+};
+
+export function sortResolutionActionsByPriority(actions: UrgentActionItem[]): UrgentActionItem[] {
+  return [...actions].sort(
+    (a, b) => ACTION_PRIORITY_RANK[casePriorityForAction(a)] - ACTION_PRIORITY_RANK[casePriorityForAction(b)],
+  );
 }
 
 export function buildResolutionCenterViewModel(args: {

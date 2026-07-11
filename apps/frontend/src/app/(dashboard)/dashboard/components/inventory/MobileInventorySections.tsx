@@ -378,6 +378,9 @@ export function InventoryFiltersPanel({
   missingValueCount,
   recallCount,
   notRequiredCount,
+  missingAgeCount,
+  missingDateCount,
+  missingWarrantyCount,
   activeFilterCount,
   onClearAllFilters,
 }: {
@@ -398,6 +401,9 @@ export function InventoryFiltersPanel({
   missingValueCount: number;
   recallCount: number;
   notRequiredCount: number;
+  missingAgeCount: number;
+  missingDateCount: number;
+  missingWarrantyCount: number;
   activeFilterCount: number;
   onClearAllFilters: () => void;
 }) {
@@ -413,6 +419,15 @@ export function InventoryFiltersPanel({
       : null,
     notRequiredCount > 0
       ? { id: 'not-required' as const, label: `${notRequiredCount} not required` }
+      : null,
+    missingAgeCount > 0
+      ? { id: 'missing-age' as const, label: `${missingAgeCount} missing age` }
+      : null,
+    missingDateCount > 0
+      ? { id: 'missing-date' as const, label: `${missingDateCount} missing purchase date` }
+      : null,
+    missingWarrantyCount > 0
+      ? { id: 'missing-warranty' as const, label: `${missingWarrantyCount} missing warranty` }
       : null,
   ].filter(Boolean) as Array<{ id: SmartFilterId; label: string }>;
 

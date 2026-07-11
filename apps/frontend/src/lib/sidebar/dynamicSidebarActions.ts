@@ -201,7 +201,7 @@ function getMyHomeActions(ctx: SidebarContext): SidebarAction[] {
       title: 'Add room',
       description: 'Map your home layout',
       icon: MapPin,
-      href: `${propPath}/rooms`,
+      href: `${propPath}/inventory/rooms`,
       priority: 'high',
       group: 'recommended-next',
     });
@@ -225,7 +225,7 @@ function getMyHomeActions(ctx: SidebarContext): SidebarAction[] {
       title: 'Upload property document',
       description: 'Add inspection or appraisal',
       icon: Upload,
-      href: `${propPath}/vault?action=upload&category=property-docs`,
+      href: `/dashboard/documents?propertyId=${ctx.propertyId}&action=upload`,
       priority: 'medium',
       group: 'missing-info',
     });
@@ -281,7 +281,7 @@ function getProtectActions(ctx: SidebarContext): SidebarAction[] {
       title: 'Upload insurance policy',
       description: 'Track coverage details',
       icon: Upload,
-      href: `${propPath}/vault?action=upload&category=insurance&type=policy`,
+      href: `/dashboard/documents?propertyId=${ctx.propertyId}&action=upload`,
       priority: 'high',
       group: 'missing-info',
     });
@@ -294,7 +294,7 @@ function getProtectActions(ctx: SidebarContext): SidebarAction[] {
       title: 'Check warranty coverage',
       description: 'Review appliance warranties',
       icon: FileCheck,
-      href: `/dashboard/warranties?propertyId=${ctx.propertyId}&action=add-warranty`,
+      href: `/dashboard/warranties?propertyId=${ctx.propertyId}&action=new`,
       priority: 'medium',
       group: 'protection-opportunities',
     });
@@ -428,7 +428,7 @@ function getFixActions(ctx: SidebarContext): SidebarAction[] {
     title: 'Start repair guidance',
     description: 'Get step-by-step help',
     icon: Sparkles,
-    href: `${propPath}/guidance?action=start&type=repair`,
+    href: `${propPath}/tools/guidance-overview?scopeCategory=ITEM`,
     priority: 'medium',
     group: 'contextual-actions',
   });
@@ -439,7 +439,7 @@ function getFixActions(ctx: SidebarContext): SidebarAction[] {
     title: 'Add contractor quote',
     description: 'Compare repair costs',
     icon: FileText,
-    href: `${propPath}/bookings?action=add-quote&type=contractor`,
+    href: `${propPath}/tools/quote-comparison`,
     priority: 'medium',
     group: 'contextual-actions',
   });
@@ -450,7 +450,7 @@ function getFixActions(ctx: SidebarContext): SidebarAction[] {
     title: 'Validate repair cost',
     description: 'Check market rates',
     icon: Calculator,
-    href: `${propPath}/tools/cost-explainer?action=validate&type=repair`,
+    href: `${propPath}/tools/service-price-radar`,
     priority: 'low',
     group: 'contextual-actions',
   });
@@ -479,7 +479,7 @@ function getVaultActions(ctx: SidebarContext): SidebarAction[] {
     title: 'Upload document',
     description: 'Add property records',
     icon: Upload,
-    href: `${propPath}/vault?action=upload&source=vault`,
+    href: `/dashboard/documents?propertyId=${ctx.propertyId}&action=upload`,
     priority: 'high',
     group: 'recommended-next',
   });
@@ -503,7 +503,7 @@ function getVaultActions(ctx: SidebarContext): SidebarAction[] {
     title: 'Add receipt',
     description: 'Document home expenses',
     icon: FileText,
-    href: `${propPath}/vault?action=upload&category=receipts&type=expense`,
+    href: `/dashboard/documents?propertyId=${ctx.propertyId}&action=upload`,
     priority: 'medium',
     group: 'contextual-actions',
   });
@@ -515,7 +515,7 @@ function getVaultActions(ctx: SidebarContext): SidebarAction[] {
       title: 'Review missing documents',
       description: 'Complete property records',
       icon: ClipboardList,
-      href: `${propPath}/vault?view=missing&action=review`,
+      href: `/dashboard/documents?propertyId=${ctx.propertyId}`,
       priority: 'medium',
       group: 'missing-info',
     });
@@ -527,7 +527,7 @@ function getVaultActions(ctx: SidebarContext): SidebarAction[] {
     title: 'Organize property records',
     description: 'Tag and categorize files',
     icon: FileText,
-    href: `${propPath}/vault?action=organize&view=all`,
+    href: `/dashboard/documents?propertyId=${ctx.propertyId}`,
     priority: 'low',
     group: 'contextual-actions',
   });
@@ -607,7 +607,7 @@ function getInventoryActions(ctx: SidebarContext): SidebarAction[] {
     title: 'Scan room',
     description: 'Quick capture with camera',
     icon: Camera,
-    href: `${propPath}/inventory?action=scan-room&mode=camera`,
+    href: `/dashboard/visual-inspector?propertyId=${ctx.propertyId}`,
     priority: 'medium',
     group: 'contextual-actions',
   });
@@ -662,7 +662,7 @@ function getRoomsActions(ctx: SidebarContext): SidebarAction[] {
     title: 'Add room',
     description: 'Map your home layout',
     icon: MapPin,
-    href: `${propPath}/rooms?action=add-room&source=rooms`,
+    href: `${propPath}/inventory/rooms`,
     priority: 'high',
     group: 'recommended-next',
   });
@@ -684,7 +684,7 @@ function getRoomsActions(ctx: SidebarContext): SidebarAction[] {
     title: 'Scan room',
     description: 'Quick capture with camera',
     icon: Camera,
-    href: `${propPath}/inventory?action=scan-room&mode=camera&source=rooms`,
+    href: `/dashboard/visual-inspector?propertyId=${ctx.propertyId}`,
     priority: 'medium',
     group: 'contextual-actions',
   });
@@ -771,7 +771,7 @@ function getToolsActions(ctx: SidebarContext): SidebarAction[] {
       title: 'Upload insurance policy',
       description: 'Improve coverage analysis',
       icon: Upload,
-      href: `${propPath}/vault?action=upload&category=insurance&source=coverage-tool`,
+      href: `/dashboard/documents?propertyId=${ctx.propertyId}&action=upload`,
       priority: 'high',
       group: 'recommended-next',
     });
@@ -783,7 +783,7 @@ function getToolsActions(ctx: SidebarContext): SidebarAction[] {
       title: 'Add mortgage details',
       description: 'Enable debt-aware modeling',
       icon: Building,
-      href: `${propPath}?action=add-mortgage&source=financial-tool`,
+      href: `${propPath}/tools/financing/profile`,
       priority: 'high',
       badge: 'Recommended',
       group: 'recommended-next',
@@ -825,7 +825,7 @@ function getFallbackActions(ctx: SidebarContext): SidebarAction[] {
     title: 'Complete home profile',
     description: 'Add property details',
     icon: Home,
-    href: `${propPath}?action=edit-profile&source=fallback`,
+    href: `${propPath}/edit`,
     priority: 'medium',
     group: 'missing-info',
   });
@@ -847,7 +847,7 @@ function getFallbackActions(ctx: SidebarContext): SidebarAction[] {
     title: 'Upload document',
     description: 'Add property records',
     icon: Upload,
-    href: `${propPath}/vault?action=upload&source=fallback`,
+    href: `/dashboard/documents?propertyId=${ctx.propertyId}&action=upload`,
     priority: 'low',
     group: 'contextual-actions',
   });

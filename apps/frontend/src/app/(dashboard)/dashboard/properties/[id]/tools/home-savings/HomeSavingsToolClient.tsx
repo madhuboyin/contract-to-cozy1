@@ -18,6 +18,7 @@ export default function HomeSavingsToolClient() {
   const expectedMonthly = Number(searchParams.get('expectedMonthly') ?? 0);
   const expectedAnnual = Number(searchParams.get('expectedAnnual') ?? 0);
   const highlightOpportunities = searchParams.get('highlight') === 'opportunities';
+  const autoRunAnalysis = searchParams.get('action') === 'analyze';
 
   const backHref = `/dashboard/properties/${propertyId}`;
 
@@ -55,7 +56,7 @@ export default function HomeSavingsToolClient() {
       )}
 
       <div id="home-savings-opportunities">
-        <HomeSavingsCheckPanel propertyId={propertyId} />
+        <HomeSavingsCheckPanel propertyId={propertyId} autoRun={autoRunAnalysis} />
       </div>
     </ToolWorkspaceTemplate>
   );

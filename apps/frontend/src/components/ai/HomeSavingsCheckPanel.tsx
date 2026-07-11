@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertCircle, CheckCircle2, Loader2, PiggyBank, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { track } from '@/lib/analytics/events';
@@ -28,6 +28,7 @@ import {
 
 type HomeSavingsCheckPanelProps = {
   propertyId: string;
+  autoRun?: boolean;
 };
 
 type FormState = {
@@ -172,7 +173,7 @@ function categoryFormDescription(categoryKey: HomeSavingsCategoryKey): string {
   }
 }
 
-export default function HomeSavingsCheckPanel({ propertyId }: HomeSavingsCheckPanelProps) {
+export default function HomeSavingsCheckPanel({ propertyId, autoRun }: HomeSavingsCheckPanelProps) {
   const [summary, setSummary] = useState<HomeSavingsSummaryDTO | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<HomeSavingsCategoryKey | null>(null);
   const [detail, setDetail] = useState<HomeSavingsCategoryDetailDTO | null>(null);
@@ -287,6 +288,16 @@ export default function HomeSavingsCheckPanel({ propertyId }: HomeSavingsCheckPa
       setRunningAll(false);
     }
   };
+
+  // "Check for savings" CTA (sidebar) promises the analysis runs immediately,
+  // not just that the tool page loads — honor autoRun once summary data is in.
+  const hasAutoRun = useRef(false);
+  useEffect(() => {
+    if (!autoRun || hasAutoRun.current || loadingSummary || !propertyId) return;
+    hasAutoRun.current = true;
+    void runAllComparisons();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoRun, loadingSummary, propertyId]);
 
   const updateOpportunityStatus = async (opportunityId: string, status: HomeSavingsOpportunityStatus) => {
     if (!selectedCategory) return;

@@ -40,7 +40,7 @@ function caseSourceForAction(action: UrgentActionItem): ResolutionCase['source']
   }
 }
 
-function casePriorityForAction(action: UrgentActionItem): ResolutionCase['priority'] {
+export function casePriorityForAction(action: UrgentActionItem): ResolutionCase['priority'] {
   if (action.type === 'INCIDENT' && action.severity === 'CRITICAL') return 'critical';
   if (action.type === 'INCIDENT') return 'high';
   if (action.type === 'RENEWAL_EXPIRED' || action.type === 'COVERAGE_GAP' || action.type === 'MAINTENANCE_OVERDUE') {
@@ -109,28 +109,47 @@ export function mapUrgentActionsToResolutionCases(
 export function filterResolutionCases(
   cases: ResolutionCase[],
   filterParam?: string | null,
+  priorityParam?: string | null,
 ): ResolutionCase[] {
-  if (!filterParam) return cases;
+  let result = cases;
 
-  const filter = filterParam.toLowerCase();
-  if (filter === 'urgent') {
-    return cases.filter(
-      (caseItem) =>
-        caseItem.kind === 'incident' ||
-        caseItem.kind === 'renewal' ||
-        caseItem.priority === 'critical',
-    );
-  }
-  if (filter === 'maintenance' || filter === 'preventive') {
-    return cases.filter((caseItem) =>
-      caseItem.kind === 'maintenance' ||
-      caseItem.kind === 'health_insight' ||
-      caseItem.kind === 'repair_replace',
-    );
-  }
-  if (filter === 'coverage') {
-    return cases.filter((caseItem) => caseItem.kind === 'coverage_gap' || caseItem.kind === 'renewal');
+  if (filterParam) {
+    const filter = filterParam.toLowerCase();
+    if (filter === 'urgent') {
+      result = result.filter(
+        (caseItem) =>
+          caseItem.kind === 'incident' ||
+          caseItem.kind === 'renewal' ||
+          caseItem.priority === 'critical',
+      );
+    } else if (filter === 'maintenance' || filter === 'preventive') {
+      result = result.filter((caseItem) =>
+        caseItem.kind === 'maintenance' ||
+        caseItem.kind === 'health_insight' ||
+        caseItem.kind === 'repair_replace',
+      );
+    } else if (filter === 'coverage') {
+      result = result.filter((caseItem) => caseItem.kind === 'coverage_gap' || caseItem.kind === 'renewal');
+    }
   }
 
-  return cases;
+  // CTAs promising "priority" items (Health Score, Maintenance Nudge cards)
+  // pass priority=high — narrow to the top of the priority scale rather than
+  // silently ignoring the param.
+  if (priorityParam?.toLowerCase() === 'high') {
+    result = result.filter((caseItem) => caseItem.priority === 'critical' || caseItem.priority === 'high');
+  }
+
+  return result;
+}
+
+const PRIORITY_RANK: Record<ResolutionCase['priority'], number> = {
+  critical: 0,
+  high: 1,
+  medium: 2,
+  low: 3,
+};
+
+export function sortResolutionCasesByPriority(cases: ResolutionCase[]): ResolutionCase[] {
+  return [...cases].sort((a, b) => PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority]);
 }

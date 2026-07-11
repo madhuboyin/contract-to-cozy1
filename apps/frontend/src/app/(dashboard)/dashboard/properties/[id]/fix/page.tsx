@@ -32,8 +32,8 @@ import {
   resolveUrgentActionHref,
   UrgentActionItem,
 } from '@/lib/dashboard/urgentActions';
-import { filterResolutionActions } from '@/lib/dashboard/resolutionCenterViewModel';
-import { filterResolutionCases } from '@/lib/dashboard/resolutionCases';
+import { filterResolutionActions, sortResolutionActionsByPriority } from '@/lib/dashboard/resolutionCenterViewModel';
+import { filterResolutionCases, sortResolutionCasesByPriority } from '@/lib/dashboard/resolutionCases';
 import { useGuidance } from '@/features/guidance/hooks/useGuidance';
 import type { GuidanceJourneyDTO } from '@/lib/api/guidanceApi';
 import { startGuidanceJourney } from '@/lib/api/guidanceApi';
@@ -362,6 +362,8 @@ export default function ResolutionHubPage() {
   const [creatingJourneyForItemId, setCreatingJourneyForItemId] = useState<string | null>(null);
 
   const filterParam = searchParams.get('filter');
+  const priorityParam = searchParams.get('priority');
+  const sortParam = searchParams.get('sort');
   const genericIssueGuidanceHref = propertyId
     ? buildIssueGuidanceOverviewHref({
         propertyId,
@@ -451,14 +453,14 @@ export default function ResolutionHubPage() {
     void fetchData();
   }, [fetchData]);
 
-  const filteredActions = useMemo(
-    () => filterResolutionActions(urgentActions, filterParam),
-    [urgentActions, filterParam],
-  );
-  const filteredCases = useMemo(
-    () => filterResolutionCases(resolutionCenterData.cases, filterParam),
-    [resolutionCenterData.cases, filterParam],
-  );
+  const filteredActions = useMemo(() => {
+    const filtered = filterResolutionActions(urgentActions, filterParam, priorityParam);
+    return sortParam === 'priority' ? sortResolutionActionsByPriority(filtered) : filtered;
+  }, [urgentActions, filterParam, priorityParam, sortParam]);
+  const filteredCases = useMemo(() => {
+    const filtered = filterResolutionCases(resolutionCenterData.cases, filterParam, priorityParam);
+    return sortParam === 'priority' ? sortResolutionCasesByPriority(filtered) : filtered;
+  }, [resolutionCenterData.cases, filterParam, priorityParam, sortParam]);
   const displayedOpenCaseCount = resolutionCenterV2Enabled
     ? filteredCases.length
     : filteredActions.length;
@@ -736,8 +738,10 @@ export default function ResolutionHubPage() {
               </div>
               <p className="mt-1 text-sm text-slate-500">
                 {filterParam
-                  ? `Filtered to ${filterParam} ${resolutionCenterV2Enabled ? 'cases' : 'actions'}${expectedCount ? ` (expecting ${expectedCount})` : ''}`
-                  : resolutionCenterV2Enabled
+                  ? `Filtered to ${filterParam}${priorityParam === 'high' ? ' (high priority)' : ''} ${resolutionCenterV2Enabled ? 'cases' : 'actions'}${expectedCount ? ` (expecting ${expectedCount})` : ''}`
+                  : priorityParam === 'high'
+                    ? `Showing high priority ${resolutionCenterV2Enabled ? 'cases' : 'actions'}${expectedCount ? ` (expecting ${expectedCount})` : ''}`
+                    : resolutionCenterV2Enabled
                     ? 'Each case is connected to the next workflow: analyze, decide, or execute.'
                     : 'These are the ranked items behind the dashboard count.'}
               </p>

@@ -66,6 +66,23 @@ function hasReplacementValue(item: InventoryItem): boolean {
   return Number(item.replacementCostCents || 0) > 0;
 }
 
+function smartFilterLabel(filter: SmartFilterId): string {
+  switch (filter) {
+    case 'no-value':
+      return 'missing values';
+    case 'not-required':
+      return 'not required';
+    case 'missing-age':
+      return 'missing age';
+    case 'missing-date':
+      return 'missing purchase date';
+    case 'missing-warranty':
+      return 'missing warranty';
+    default:
+      return filter;
+  }
+}
+
 function containsSearch(item: InventoryItem, query: string): boolean {
   if (!query.trim()) return true;
 
@@ -97,6 +114,22 @@ export default function InventoryClient() {
   const from = searchParams.get('from');
   const tabFromUrl = searchParams.get('tab');
   const smartFromUrl = searchParams.get('smart') as SmartFilterId | null;
+  const actionFromUrl = searchParams.get('action');
+  const filterFromUrl = searchParams.get('filter');
+  const categoryFromUrl = searchParams.get('category') as InventoryItemCategory | null;
+
+  // CTAs across the sidebar promise specific missing-data scopes ("Complete age
+  // assessment", "Add warranty details") via ?filter=/?action= — map those onto
+  // the same smart-filter mechanism the filter chips use, so the promised list
+  // actually shows up instead of the unfiltered inventory.
+  const smartFilterFromUrl: SmartFilterId | null =
+    filterFromUrl === 'missing-age' || actionFromUrl === 'add-ages'
+      ? 'missing-age'
+      : filterFromUrl === 'missing-date' || actionFromUrl === 'add-dates'
+        ? 'missing-date'
+        : filterFromUrl === 'missing-warranty' || actionFromUrl === 'add-warranty'
+          ? 'missing-warranty'
+          : smartFromUrl;
 
   const [rooms, setRooms] = useState<InventoryRoom[]>([]);
   const [items, setItems] = useState<InventoryItem[]>([]);
@@ -109,7 +142,7 @@ export default function InventoryClient() {
   const [categoryFilter, setCategoryFilter] = useState<InventoryItemCategory | null>(null);
   const [docsFilter, setDocsFilter] = useState<'any' | 'with-docs' | 'no-docs'>('any');
   const [recallFilter, setRecallFilter] = useState<'any' | 'with-recalls' | 'no-recalls'>('any');
-  const [activeSmartFilter, setActiveSmartFilter] = useState<SmartFilterId | null>(smartFromUrl);
+  const [activeSmartFilter, setActiveSmartFilter] = useState<SmartFilterId | null>(smartFilterFromUrl);
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
@@ -174,6 +207,18 @@ export default function InventoryClient() {
       setAutoOpenedFromUrl(true);
     }
   }, [autoOpenedFromUrl, openItemId, items]);
+
+  // Sidebar/dashboard CTAs like "Add appliance" promise a ready-to-fill add form,
+  // not just landing on the list — honor ?action=add-item by opening it directly.
+  useEffect(() => {
+    if (autoOpenedFromUrl) return;
+    if (openItemId) return;
+    if (actionFromUrl !== 'add-item') return;
+
+    setEditingItem(null);
+    setDrawerOpen(true);
+    setAutoOpenedFromUrl(true);
+  }, [autoOpenedFromUrl, openItemId, actionFromUrl]);
 
   useEffect(() => {
     if (autoScrolledFromUrl) return;
@@ -258,6 +303,9 @@ export default function InventoryClient() {
       if (activeSmartFilter === 'no-value' && hasReplacementValue(item)) return false;
       if (activeSmartFilter === 'recalls' && !hasRecall) return false;
       if (activeSmartFilter === 'not-required' && !item.coverageNotRequired) return false;
+      if (activeSmartFilter === 'missing-age' && item.installedOn) return false;
+      if (activeSmartFilter === 'missing-date' && item.purchasedOn) return false;
+      if (activeSmartFilter === 'missing-warranty' && item.warrantyId) return false;
 
       return true;
     });
@@ -281,6 +329,10 @@ export default function InventoryClient() {
   const recallCount = useMemo(() => {
     return items.filter((item) => hasOpenRecall(item.id)).length;
   }, [items, recallCountByItem]);
+
+  const missingAgeCount = useMemo(() => items.filter((item) => !item.installedOn).length, [items]);
+  const missingDateCount = useMemo(() => items.filter((item) => !item.purchasedOn).length, [items]);
+  const missingWarrantyCount = useMemo(() => items.filter((item) => !item.warrantyId).length, [items]);
 
   async function handleExportCsv() {
     try {
@@ -429,6 +481,9 @@ export default function InventoryClient() {
               missingValueCount={portfolioStats.missingValueCount}
               recallCount={recallCount}
               notRequiredCount={portfolioStats.notRequiredCount}
+              missingAgeCount={missingAgeCount}
+              missingDateCount={missingDateCount}
+              missingWarrantyCount={missingWarrantyCount}
               activeFilterCount={activeFilterCount}
               onClearAllFilters={clearAllFilters}
             />
@@ -438,7 +493,7 @@ export default function InventoryClient() {
             <MobileSection>
               <div className="flex items-center gap-2">
                 <span className="rounded-full border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 py-1 text-xs font-medium text-[hsl(var(--mobile-text-secondary))]">
-                  Active filter: {activeSmartFilter === 'no-value' ? 'missing values' : activeSmartFilter === 'not-required' ? 'not required' : activeSmartFilter}
+                  Active filter: {activeSmartFilter ? smartFilterLabel(activeSmartFilter) : ''}
                 </span>
                 <button
                   type="button"
@@ -593,6 +648,9 @@ export default function InventoryClient() {
             missingValueCount={portfolioStats.missingValueCount}
             recallCount={recallCount}
             notRequiredCount={portfolioStats.notRequiredCount}
+            missingAgeCount={missingAgeCount}
+            missingDateCount={missingDateCount}
+            missingWarrantyCount={missingWarrantyCount}
             activeFilterCount={activeFilterCount}
             onClearAllFilters={clearAllFilters}
           />
@@ -600,7 +658,7 @@ export default function InventoryClient() {
           {activeSmartFilter ? (
             <div className="mb-2 flex items-center gap-2">
               <span className="rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-xs text-gray-600">
-                Active filter: {activeSmartFilter === 'no-value' ? 'missing values' : activeSmartFilter === 'not-required' ? 'not required' : activeSmartFilter}
+                Active filter: {activeSmartFilter ? smartFilterLabel(activeSmartFilter) : ''}
               </span>
               <button
                 type="button"
@@ -691,6 +749,7 @@ export default function InventoryClient() {
         propertyId={propertyId}
         rooms={rooms}
         initialItem={editingItem}
+        initialCategory={categoryFromUrl}
         highlightRecallMatchId={highlightRecallMatchId}
         onSaved={async () => {
           setDrawerOpen(false);

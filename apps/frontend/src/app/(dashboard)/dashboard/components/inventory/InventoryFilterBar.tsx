@@ -5,7 +5,7 @@ import { Search, X } from 'lucide-react';
 import type { InventoryItemCategory, InventoryRoom } from '@/types';
 import { INVENTORY_CATEGORY_FILTER_OPTIONS } from '@/lib/config/inventoryConfig';
 
-type SmartFilterId = 'gaps' | 'no-value' | 'recalls' | 'not-required';
+type SmartFilterId = 'gaps' | 'no-value' | 'recalls' | 'not-required' | 'missing-age' | 'missing-date' | 'missing-warranty';
 
 type InventoryFilterBarProps = {
   searchQuery: string;
@@ -25,6 +25,9 @@ type InventoryFilterBarProps = {
   missingValueCount: number;
   recallCount: number;
   notRequiredCount: number;
+  missingAgeCount: number;
+  missingDateCount: number;
+  missingWarrantyCount: number;
   activeFilterCount: number;
   onClearAllFilters: () => void;
 };
@@ -69,6 +72,9 @@ export default function InventoryFilterBar({
   missingValueCount,
   recallCount,
   notRequiredCount,
+  missingAgeCount,
+  missingDateCount,
+  missingWarrantyCount,
   activeFilterCount,
   onClearAllFilters,
 }: InventoryFilterBarProps) {
@@ -103,6 +109,30 @@ export default function InventoryFilterBar({
           label: `${notRequiredCount} not required`,
           color: 'bg-slate-100 border-slate-200 text-slate-600',
           activeColor: 'bg-slate-200 border-slate-300 text-slate-700',
+        }
+      : null,
+    missingAgeCount > 0
+      ? {
+          id: 'missing-age' as const,
+          label: `${missingAgeCount} missing age`,
+          color: 'bg-sky-100 border-sky-200 text-sky-700',
+          activeColor: 'bg-sky-200 border-sky-300 text-sky-800',
+        }
+      : null,
+    missingDateCount > 0
+      ? {
+          id: 'missing-date' as const,
+          label: `${missingDateCount} missing purchase date`,
+          color: 'bg-sky-100 border-sky-200 text-sky-700',
+          activeColor: 'bg-sky-200 border-sky-300 text-sky-800',
+        }
+      : null,
+    missingWarrantyCount > 0
+      ? {
+          id: 'missing-warranty' as const,
+          label: `${missingWarrantyCount} missing warranty`,
+          color: 'bg-violet-100 border-violet-200 text-violet-700',
+          activeColor: 'bg-violet-200 border-violet-300 text-violet-800',
         }
       : null,
   ].filter(Boolean) as Array<{

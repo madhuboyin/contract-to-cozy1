@@ -236,6 +236,7 @@ export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCar
   const [error, setError] = useState<string | null>(null);
   const [actualRecallCount, setActualRecallCount] = useState<number | null>(null);
   const [annualMaintenanceCost, setAnnualMaintenanceCost] = useState<number | null>(null);
+  const [annualSavingsPotential, setAnnualSavingsPotential] = useState<number | null>(null);
 
   const loadSnapshot = useCallback(async () => {
     if (!propertyId) {
@@ -251,10 +252,11 @@ export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCar
       setSnapshot(data);
       track('morning_brief_opened', { propertyId, itemCount: data.payload.summary.length });
 
-      // Fetch recall count and maintenance cost in parallel — both non-critical
-      const [recallsResult, statsResult] = await Promise.allSettled([
+      // Fetch recall count, maintenance cost, and financial efficiency report in parallel — all non-critical
+      const [recallsResult, statsResult, fesResult] = await Promise.allSettled([
         listPropertyRecalls(propertyId),
         api.getMaintenanceTaskStats(propertyId),
+        api.getDetailedFESReport(propertyId),
       ]);
 
       if (recallsResult.status === 'fulfilled') {
@@ -269,6 +271,15 @@ export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCar
       if (statsResult.status === 'fulfilled' && statsResult.value.success) {
         const cost = statsResult.value.data.totalEstimatedCost;
         setAnnualMaintenanceCost(cost > 0 ? cost : null);
+      }
+
+      if (fesResult.status === 'fulfilled' && fesResult.value !== 'QUEUED') {
+        const report = fesResult.value;
+        const actualTotal = (report.actualInsuranceCost || 0) + (report.actualUtilityCost || 0) + (report.actualWarrantyCost || 0);
+        const gap = (report.marketAverageTotal || 0) - actualTotal;
+        setAnnualSavingsPotential(gap > 0 ? gap : null);
+      } else {
+        setAnnualSavingsPotential(null);
       }
     } catch (err: any) {
       setError(err?.message ?? 'Failed to load Morning Home Pulse.');
@@ -556,7 +567,13 @@ export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCar
                               className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 hover:underline"
                               onClick={() => track('morning_brief_savings_clicked', { propertyId, scoreValue })}
                             >
-                              $220-$760
+                              {annualSavingsPotential !== null
+                                ? new Intl.NumberFormat(undefined, {
+                                    style: 'currency',
+                                    currency: 'USD',
+                                    maximumFractionDigits: 0,
+                                  }).format(annualSavingsPotential)
+                                : 'Review savings'}
                             </Link>
                           ),
                       valueClassName: '',

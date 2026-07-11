@@ -48,6 +48,12 @@ function money(value?: number | null): string {
   }).format(value);
 }
 
+function computeSavingsRange(analysis: RiskPremiumOptimizationDTO | null, hasAnalysis: boolean): string {
+  return analysis && hasAnalysis
+    ? `${money(analysis.estimatedSavingsMin)} - ${money(analysis.estimatedSavingsMax)}`
+    : '—';
+}
+
 export default function RiskPremiumOptimizerToolCard({
   propertyId,
 }: RiskPremiumOptimizerToolCardProps) {
@@ -109,7 +115,8 @@ export default function RiskPremiumOptimizerToolCard({
         const latest = await runRiskPremiumOptimizer(propertyId);
         setHasAnalysis(true);
         setAnalysis(latest);
-        router.push(`/dashboard/properties/${propertyId}/tools/risk-premium-optimizer?source=dashboard-card&action=run&savingsRange=${encodeURIComponent(savingsRange)}`);
+        const freshSavingsRange = computeSavingsRange(latest, true);
+        router.push(`/dashboard/properties/${propertyId}/tools/risk-premium-optimizer?source=dashboard-card&action=run&savingsRange=${encodeURIComponent(freshSavingsRange)}`);
       } finally {
         setRunning(false);
       }
@@ -121,10 +128,7 @@ export default function RiskPremiumOptimizerToolCard({
 
   const status = statusMeta(loading, analysis, hasAnalysis);
 
-  const savingsRange =
-    analysis && hasAnalysis
-      ? `${money(analysis.estimatedSavingsMin)} - ${money(analysis.estimatedSavingsMax)}`
-      : '—';
+  const savingsRange = computeSavingsRange(analysis, hasAnalysis);
   const topRecommendation = analysis?.recommendations?.[0]?.title ?? 'Pending';
   const confidence = analysis?.confidence ? analysis.confidence.toLowerCase() : '—';
 

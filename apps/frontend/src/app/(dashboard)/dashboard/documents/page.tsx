@@ -554,6 +554,17 @@ export default function DocumentsPage() {
     fetchDependencies();
   }, [fetchDependencies]);
 
+  // Sidebar/vault CTAs ("Upload document", "Upload insurance policy", "Add
+  // receipt") promise a ready-to-use upload flow, not just the document list —
+  // honor ?action=upload by opening the dialog directly.
+  useEffect(() => {
+    if (searchParams.get('action') === 'upload' && !isUploadModalOpen) {
+      setUploadMode('standard');
+      setIsUploadModalOpen(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
   const handleDelete = async (documentId: string) => {
     const confirmed = await requestConfirmation({
       title: 'Delete this document?',

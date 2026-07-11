@@ -180,6 +180,7 @@ export default function InventoryItemDrawer(props: {
   propertyId: string;
   rooms: InventoryRoom[];
   initialItem: InventoryItem | null;
+  initialCategory?: InventoryItemCategory | null;
   highlightRecallMatchId?: string | null;
   onSaved: () => void;
   existingItems?: InventoryItem[];
@@ -360,7 +361,7 @@ useEffect(() => {
     if (!props.open) return;
     const item = props.initialItem;
     setName(item?.name ?? '');
-    setCategory(item?.category ?? 'OTHER');
+    setCategory(item?.category ?? props.initialCategory ?? 'OTHER');
     setCondition(item?.condition ?? 'UNKNOWN');
     setRoomId(item?.roomId ?? '');
 
