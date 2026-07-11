@@ -10,8 +10,12 @@ import { UserRole } from '../../types/auth.types';
 
 const router = Router();
 
-// All internal routes require ADMIN role
-router.use(authenticate, requireRole(UserRole.ADMIN));
+// All internal routes require ADMIN role. Scoped to /internal/gazette —
+// router.use() without a path applies to every request that reaches this
+// router, which (mounted at bare '/api') would otherwise admin-gate any
+// later-registered route that falls through to it (e.g. weatherRoutes,
+// environmentReportRoutes), not just this router's own endpoints.
+router.use('/internal/gazette', authenticate, requireRole(UserRole.ADMIN));
 
 // POST /internal/gazette/generate
 router.post(
