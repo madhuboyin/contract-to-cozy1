@@ -14,7 +14,7 @@ export default function HomeKnowledgeTimeline() {
         <div className="mx-auto max-w-3xl text-center">
           <p className="mb-2 text-xs font-semibold text-brand-700">Knowledge compounds</p>
           <h2 className="text-2xl font-semibold tracking-tight text-slate-950 sm:text-3xl">Every year, your home knows more.</h2>
-          <p className="mx-auto mt-2 max-w-2xl text-sm text-slate-600 sm:text-base">Every document makes the next decision easier. Every improvement makes the history more valuable.</p>
+          <p className="mx-auto mt-2 max-w-2xl text-sm text-slate-600 sm:text-base">Every chapter makes the next decision easier.</p>
         </div>
         <div className="mt-9 grid gap-4 md:grid-cols-3 lg:grid-cols-6">
           {YEARS.map((item, index) => (
@@ -26,7 +26,7 @@ export default function HomeKnowledgeTimeline() {
             </article>
           ))}
         </div>
-        <p className="mx-auto mt-7 max-w-3xl text-center text-base font-semibold text-slate-900">Contract to Cozy becomes more valuable because your home&apos;s knowledge never stops growing.</p>
+        <p className="mx-auto mt-7 max-w-3xl text-center text-base font-semibold text-slate-900">The history grows. The value compounds.</p>
       </div>
     </section>
   );

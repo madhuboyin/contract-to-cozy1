@@ -39,12 +39,12 @@ export default function DashboardShowcase() {
             
             {/* Reduced font size and margin */}
             <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-3">
-              Your home&apos;s digital headquarters
+              The control center for your home&apos;s memory
             </h2>
             
             {/* Reduced font size and margin */}
             <p className="text-base text-gray-600 mb-6 leading-relaxed">
-              This is where your home remembers. Every new document, repair, project, and decision adds context—making the next question easier to answer and the next decision easier to make.
+              Every new record adds context. Every future decision starts with the full story.
             </p>
 
             {/* Features Grid - Reduced margin */}
@@ -100,14 +100,14 @@ export default function DashboardShowcase() {
                   <div className="p-4">
                     <div className="flex items-start justify-between">
                       <div>
-                        <p className="text-[10px] font-medium text-slate-500">GOOD MORNING</p>
-                        <h4 className="mt-0.5 text-sm font-semibold text-slate-900">Your home is in good shape.</h4>
+                        <p className="text-[10px] font-medium text-slate-500">HOME MEMORY</p>
+                        <h4 className="mt-0.5 text-sm font-semibold text-slate-900">Your home remembers.</h4>
                       </div>
-                      <span className="rounded-full bg-emerald-100 px-2 py-1 text-[10px] font-semibold text-emerald-700">Home health 86</span>
+                      <span className="rounded-full bg-emerald-100 px-2 py-1 text-[10px] font-semibold text-emerald-700">Health improving ↑</span>
                     </div>
 
                     <div className="mt-4 grid grid-cols-3 gap-2">
-                      {[['24', 'Records'], ['3', 'Coming up'], ['$1.2k', 'Savings']].map(([value, label]) => (
+                      {[['2042', 'Roof warranty'], ['98%', 'Buyer package'], ['$1.1k', 'Savings found']].map(([value, label]) => (
                         <div key={label} className="rounded-lg border border-slate-200 p-2">
                           <div className="text-sm font-bold text-blue-600">{value}</div>
                           <div className="text-[9px] text-slate-500">{label}</div>
@@ -116,16 +116,19 @@ export default function DashboardShowcase() {
                     </div>
 
                     <div className="mt-4">
-                      <p className="text-[10px] font-semibold text-slate-900">What comes next</p>
-                      <div className="mt-2 space-y-2">
-                        <div className="flex items-center justify-between rounded-lg bg-slate-50 p-2">
-                          <div><p className="text-[10px] font-medium text-slate-900">Spring HVAC service</p><p className="text-[9px] text-slate-500">Due in 12 days · Home Care</p></div>
-                          <span className="text-[9px] font-medium text-blue-600">View</span>
-                        </div>
-                        <div className="flex items-center justify-between rounded-lg bg-slate-50 p-2">
-                          <div><p className="text-[10px] font-medium text-slate-900">Energy rebate available</p><p className="text-[9px] text-slate-500">Potential value $600 · Savings</p></div>
-                          <span className="text-[9px] font-medium text-blue-600">Review</span>
-                        </div>
+                      <p className="text-[10px] font-semibold text-slate-900">Connected home history</p>
+                      <div className="mt-2 grid grid-cols-2 gap-2">
+                        {[
+                          ['Kitchen remodel', '18 photos · 2028'],
+                          ['Insurance claim', 'Resolved · 2030'],
+                          ['HVAC serviced', 'Next due Jun 2027'],
+                          ['Contractor history', '7 trusted relationships'],
+                        ].map(([title, detail]) => (
+                          <div key={title} className="rounded-lg bg-slate-50 p-2">
+                            <p className="text-[9px] font-medium text-slate-900">{title}</p>
+                            <p className="text-[8px] text-slate-500">{detail}</p>
+                          </div>
+                        ))}
                       </div>
                     </div>
                   </div>
