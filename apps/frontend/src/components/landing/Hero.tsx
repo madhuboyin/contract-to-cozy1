@@ -32,9 +32,6 @@ export default function Hero() {
             <button onClick={() => scrollToSection('features')} className="text-sm font-medium text-slate-600 hover:text-brand-700">
               Product
             </button>
-            <button onClick={() => scrollToSection('journey')} className="text-sm font-medium text-slate-600 hover:text-brand-700">
-              Your journey
-            </button>
             <button onClick={() => scrollToSection('calculator')} className="text-sm font-medium text-slate-600 hover:text-brand-700">
               Savings
             </button>
@@ -63,9 +60,6 @@ export default function Hero() {
             <div className="space-y-1 px-4 py-4">
               <button onClick={() => scrollToSection('features')} className="flex min-h-[44px] w-full items-center text-left text-sm font-medium text-slate-700">
                 Product
-              </button>
-              <button onClick={() => scrollToSection('journey')} className="flex min-h-[44px] w-full items-center text-left text-sm font-medium text-slate-700">
-                Your journey
               </button>
               <button onClick={() => scrollToSection('calculator')} className="flex min-h-[44px] w-full items-center text-left text-sm font-medium text-slate-700">
                 Savings

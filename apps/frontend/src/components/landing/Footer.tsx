@@ -9,7 +9,6 @@ export default function Footer() {
     product: [
       { name: 'Features', href: '/#features' },
       { name: 'Home systems', href: '/#features' },
-      { name: 'Your journey', href: '/#journey' },
       { name: 'Savings', href: '/#calculator' },
       { name: 'Homeowner stories', href: '/#testimonials' },
       { name: 'Pricing', href: '/pricing' },

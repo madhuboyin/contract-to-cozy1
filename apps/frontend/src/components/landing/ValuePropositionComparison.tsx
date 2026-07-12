@@ -34,7 +34,7 @@ export default function ValuePropositionComparison() {
   ];
 
   return (
-    <section className="py-10 md:py-12 px-4 sm:px-6 lg:px-8 bg-gray-50">
+    <section id="features" className="py-10 md:py-12 px-4 sm:px-6 lg:px-8 bg-gray-50">
       <div className="max-w-7xl mx-auto">
         <div className="text-center mb-4">
           <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-4">
