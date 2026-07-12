@@ -4753,6 +4753,13 @@ export interface EnvironmentalHazardsData {
 
 export interface EnvironmentReportDTO {
   propertyId: string;
+  property: {
+    name: string | null;
+    address: string;
+    city: string;
+    state: string;
+    zipCode: string;
+  };
   location: {
     latitude: number | null;
     longitude: number | null;
@@ -4760,6 +4767,7 @@ export interface EnvironmentReportDTO {
     zipCode: string | null;
   };
   generatedAt: string;
+  insights: EnvironmentInsight[];
   sections: {
     weather: SectionResult<WeatherReportData>;
     airQuality: SectionResult<AirQualityData>;
@@ -4769,4 +4777,26 @@ export interface EnvironmentReportDTO {
     hazards: SectionResult<EnvironmentalHazardsData>;
     climate: SectionResult<ClimateSectionData>;
   };
+}
+
+export interface EnvironmentInsightAction {
+  label: string;
+  href: string;
+  kind: 'primary' | 'secondary';
+}
+
+export interface EnvironmentInsight {
+  id: string;
+  category: 'rain' | 'snow' | 'freeze' | 'heat' | 'storm' | 'air_quality' | 'drought';
+  severity: 'info' | 'watch' | 'action';
+  title: string;
+  summary: string;
+  homeImplication: string;
+  timeframe: string;
+  effectiveFrom: string;
+  effectiveTo: string;
+  affectedSystems: string[];
+  recommendedActions: string[];
+  actions: EnvironmentInsightAction[];
+  source: string;
 }

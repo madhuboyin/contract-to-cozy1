@@ -29,6 +29,7 @@ export default function EnvironmentReportDashboardCard({ propertyId }: { propert
     ? Object.values(sections).filter((s: SectionResult<unknown>) => s.status === 'ok').length
     : 0;
   const totalSections = sections ? Object.keys(sections).length : 7;
+  const topInsight = report?.insights?.[0];
 
   return (
     <Link href={href} className="no-brand-style block">
@@ -44,9 +45,13 @@ export default function EnvironmentReportDashboardCard({ propertyId }: { propert
             Environment Report
           </p>
           <p className="mb-0 mt-0.5 flex items-center gap-2 text-[12px] text-[hsl(var(--mobile-text-secondary))]">
-            {sections ? (
+            {topInsight ? (
+              <StatusChip tone={topInsight.severity === 'action' ? 'danger' : 'info'}>
+                {topInsight.title}
+              </StatusChip>
+            ) : sections ? (
               <StatusChip tone={availableCount >= totalSections ? 'good' : 'info'}>
-                {availableCount} of {totalSections} sections available
+                No immediate concerns
               </StatusChip>
             ) : (
               'Weather, air quality, flood risk, and more'

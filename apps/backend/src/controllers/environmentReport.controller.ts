@@ -18,7 +18,20 @@ class EnvironmentReportController {
 
       const property = await prisma.property.findUnique({
         where: { id: propertyId },
-        select: { id: true, zipCode: true, latitude: true, longitude: true, geocodedZipCode: true },
+        select: {
+          id: true,
+          name: true,
+          address: true,
+          city: true,
+          state: true,
+          zipCode: true,
+          latitude: true,
+          longitude: true,
+          geocodedZipCode: true,
+          hasDrainageIssues: true,
+          hasSumpPumpBackup: true,
+          coolingType: true,
+        },
       });
 
       if (!property) {

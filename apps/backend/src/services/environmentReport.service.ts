@@ -20,6 +20,7 @@ import { getHardinessZone, HardinessZoneData } from './environment/hardinessZone
 import { getClimateNormals, ClimateNormalsData } from './environment/climateNormals.service';
 import { getEnvironmentalHazards, EnvironmentalHazardsData } from './environment/environmentalHazards.service';
 import { SectionResult } from './environment/types';
+import { deriveEnvironmentInsights, EnvironmentInsight } from './environment/environmentInsights.service';
 
 export interface ClimateSectionData {
   normals: SectionResult<ClimateNormalsData>;
@@ -28,6 +29,13 @@ export interface ClimateSectionData {
 
 export interface EnvironmentReportDTO {
   propertyId: string;
+  property: {
+    name: string | null;
+    address: string;
+    city: string;
+    state: string;
+    zipCode: string;
+  };
   location: {
     latitude: number | null;
     longitude: number | null;
@@ -35,6 +43,7 @@ export interface EnvironmentReportDTO {
     zipCode: string | null;
   };
   generatedAt: string;
+  insights: EnvironmentInsight[];
   sections: {
     weather: SectionResult<WeatherReportData>;
     airQuality: SectionResult<AirQualityData>;
@@ -48,10 +57,17 @@ export interface EnvironmentReportDTO {
 
 interface GeocodableProperty {
   id: string;
-  zipCode: string | null;
+  name: string | null;
+  address: string;
+  city: string;
+  state: string;
+  zipCode: string;
   latitude: number | null;
   longitude: number | null;
   geocodedZipCode: string | null;
+  hasDrainageIssues: boolean | null;
+  hasSumpPumpBackup: boolean | null;
+  coolingType: string | null;
 }
 
 const OPEN_METEO_GEOCODING_URL = 'https://geocoding-api.open-meteo.com/v1/search';
@@ -110,8 +126,10 @@ export async function getEnvironmentReport(property: GeocodableProperty): Promis
     const reason = 'property_not_geocoded';
     return {
       propertyId: property.id,
+      property: { name: property.name, address: property.address, city: property.city, state: property.state, zipCode: property.zipCode },
       location: { latitude: null, longitude: null, countyFips: null, zipCode },
       generatedAt: new Date().toISOString(),
+      insights: [],
       sections: {
         weather: unavailable<WeatherReportData>(reason),
         airQuality: unavailable<AirQualityData>(reason),
@@ -160,22 +178,27 @@ export async function getEnvironmentReport(property: GeocodableProperty): Promis
     hardinessZoneR.status === 'fulfilled' ? hardinessZoneR.value : unavailable<HardinessZoneData>('section_rejected');
   const countyFips = countyFipsR.status === 'fulfilled' ? countyFipsR.value : null;
 
+  const sections = {
+    weather,
+    airQuality,
+    drought,
+    floodElevation,
+    radon,
+    hazards,
+    climate: {
+      status: 'ok' as const,
+      data: { normals, hardinessZone },
+      fetchedAt: new Date().toISOString(),
+    },
+  };
+  const insights = deriveEnvironmentInsights(property, sections);
+
   return {
     propertyId: property.id,
+    property: { name: property.name, address: property.address, city: property.city, state: property.state, zipCode: property.zipCode },
     location: { latitude: lat, longitude: lon, countyFips: countyFips ?? null, zipCode },
     generatedAt: new Date().toISOString(),
-    sections: {
-      weather,
-      airQuality,
-      drought,
-      floodElevation,
-      radon,
-      hazards,
-      climate: {
-        status: 'ok',
-        data: { normals, hardinessZone },
-        fetchedAt: new Date().toISOString(),
-      },
-    },
+    insights,
+    sections,
   };
 }

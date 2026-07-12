@@ -4,6 +4,7 @@
 
 import type { ComponentType, ReactNode } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api/client';
 import { DashboardShell } from '@/components/DashboardShell';
@@ -12,7 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { ArrowLeft, AlertTriangle, Loader2, CloudSun, Wind, Droplets, Waves, Radiation, Factory, Thermometer } from 'lucide-react';
+import { ArrowLeft, ArrowRight, AlertTriangle, CheckCircle2, Clock3, Loader2, CloudRain, CloudSnow, CloudSun, Flame, ShieldAlert, Snowflake, Wind, Droplets, Waves, Radiation, Factory, Thermometer } from 'lucide-react';
 import { navigateBackWithDashboardFallback } from '@/lib/navigation/backNavigation';
 import type {
   SectionResult,
@@ -23,7 +24,105 @@ import type {
   RadonData,
   EnvironmentalHazardsData,
   ClimateSectionData,
+  EnvironmentInsight,
 } from '@/types';
+
+const INSIGHT_ICONS: Record<EnvironmentInsight['category'], ComponentType<{ className?: string }>> = {
+  rain: CloudRain,
+  snow: CloudSnow,
+  freeze: Snowflake,
+  heat: Flame,
+  storm: ShieldAlert,
+  air_quality: Wind,
+  drought: Droplets,
+};
+
+function InsightSummary({ insights }: { insights: EnvironmentInsight[] }) {
+  if (insights.length === 0) {
+    return (
+      <Card className="border-emerald-200 bg-emerald-50/70">
+        <CardContent className="flex items-start gap-3 p-5">
+          <CheckCircle2 className="mt-0.5 h-6 w-6 shrink-0 text-emerald-600" />
+          <div>
+            <p className="font-semibold text-emerald-950">No immediate environment concerns</p>
+            <p className="mt-1 text-sm text-emerald-800">We did not detect weather or environmental conditions that need action right now.</p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <section aria-labelledby="environment-attention-heading" className="space-y-3">
+      <div className="flex flex-wrap items-end justify-between gap-2">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Home protection outlook</p>
+          <h2 id="environment-attention-heading" className="mt-1 text-xl font-bold text-slate-950">What needs your attention</h2>
+        </div>
+        <Badge variant={insights.some(i => i.severity === 'action') ? 'destructive' : 'secondary'}>
+          {insights.length} active insight{insights.length === 1 ? '' : 's'}
+        </Badge>
+      </div>
+
+      {insights.map((insight, index) => {
+        const Icon = INSIGHT_ICONS[insight.category];
+        const needsAction = insight.severity === 'action';
+        return (
+          <Card key={insight.id} className={needsAction ? 'overflow-hidden border-amber-300 shadow-sm' : 'overflow-hidden border-sky-200'}>
+            <div className={needsAction ? 'h-1 bg-amber-500' : 'h-1 bg-sky-500'} />
+            <CardContent className="p-5 sm:p-6">
+              <div className="flex flex-col gap-5 lg:flex-row lg:items-start">
+                <div className="flex min-w-0 flex-1 items-start gap-3">
+                  <div className={needsAction ? 'rounded-xl bg-amber-100 p-2.5 text-amber-700' : 'rounded-xl bg-sky-100 p-2.5 text-sky-700'}>
+                    <Icon className="h-6 w-6" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge variant={needsAction ? 'destructive' : 'secondary'}>{needsAction ? 'Action recommended' : 'Prepare soon'}</Badge>
+                      <span className="flex items-center gap-1 text-xs text-slate-500"><Clock3 className="h-3.5 w-3.5" />{insight.timeframe}</span>
+                    </div>
+                    <h3 className="mt-2 text-lg font-bold text-slate-950">{insight.title}</h3>
+                    <p className="mt-1 text-sm text-slate-700">{insight.summary}</p>
+                    <div className="mt-4 rounded-lg bg-slate-50 p-3">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Why this matters to your home</p>
+                      <p className="mt-1 text-sm text-slate-700">{insight.homeImplication}</p>
+                    </div>
+                    <div className="mt-4">
+                      <p className="text-sm font-semibold text-slate-900">Before conditions begin</p>
+                      <ul className="mt-2 space-y-1.5">
+                        {insight.recommendedActions.map(action => (
+                          <li key={action} className="flex gap-2 text-sm text-slate-700">
+                            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />{action}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      {insight.actions.map(action => (
+                        <Button key={action.href} asChild variant={action.kind === 'primary' ? 'default' : 'outline'} size="sm">
+                          <Link href={action.href}>{action.label}<ArrowRight className="ml-1.5 h-4 w-4" /></Link>
+                        </Button>
+                      ))}
+                    </div>
+                    <p className="mt-4 text-xs text-slate-400">Source: {insight.source}</p>
+                  </div>
+                </div>
+                {index === 0 && insight.affectedSystems.length > 0 ? (
+                  <div className="w-full rounded-xl border border-slate-200 p-4 lg:w-56">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Home areas affected</p>
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {insight.affectedSystems.map(system => <Badge key={system} variant="outline">{system}</Badge>)}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            </CardContent>
+          </Card>
+        );
+      })}
+    </section>
+  );
+}
 
 const WEATHER_CODE_LABELS: Record<number, string> = {
   0: 'Clear sky', 1: 'Mainly clear', 2: 'Partly cloudy', 3: 'Overcast',
@@ -452,9 +551,14 @@ export default function EnvironmentReportPage() {
         <PageHeaderHeading className="flex items-center gap-2">
           <CloudSun className="h-8 w-8 text-primary" /> Environment Report
         </PageHeaderHeading>
+        <p className="mt-2 text-sm text-muted-foreground">
+          {report.property.name ? `${report.property.name} · ` : ''}{report.property.address}, {report.property.city}, {report.property.state} {report.property.zipCode}
+          {' · '}Updated {new Date(report.generatedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+        </p>
       </PageHeader>
 
       <div className="space-y-6">
+        <InsightSummary insights={report.insights ?? []} />
         <WeatherSection result={sections.weather} />
         <AirQualitySection result={sections.airQuality} />
         <FloodElevationSection result={sections.floodElevation} />
