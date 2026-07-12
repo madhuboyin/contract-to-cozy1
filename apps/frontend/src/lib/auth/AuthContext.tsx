@@ -135,7 +135,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     if (response.success && response.data.user) {
       const registerData = extractApiData<RegisterResponse>(response.data);
-      return registerData;
+      return { ...registerData, success: true };
     }
     return null;
   }, []);
