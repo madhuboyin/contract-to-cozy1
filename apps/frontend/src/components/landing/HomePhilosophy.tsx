@@ -11,8 +11,7 @@ export default function HomePhilosophy() {
     <section className="border-b border-slate-200/70 bg-white px-4 py-12 sm:px-6 lg:px-8 lg:py-16">
       <div className="mx-auto max-w-6xl">
         <div className="mx-auto max-w-3xl text-center">
-          <p className="mb-2 text-xs font-semibold text-brand-700">Homeownership gets more complicated every year</p>
-          <h2 className="text-2xl font-semibold tracking-tight text-slate-950 sm:text-3xl">Your home should not depend on your memory.</h2>
+          <h2 className="text-2xl font-semibold tracking-tight text-slate-950 sm:text-3xl">Your home shouldn&apos;t depend on memory.</h2>
         </div>
         <div className="mt-9 grid gap-3 md:grid-cols-[1fr_auto_1fr_auto_1fr] md:items-center">
           {PHILOSOPHY.map((item, index) => (

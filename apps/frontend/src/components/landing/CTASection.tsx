@@ -1,5 +1,4 @@
 import Link from 'next/link';
-import { CheckCircle2 } from 'lucide-react';
 
 export default function CTASection() {
   return (
@@ -7,36 +6,13 @@ export default function CTASection() {
       <div className="mx-auto max-w-4xl text-center">
         <h2 className="text-3xl font-semibold tracking-tight text-white">Your home deserves a permanent memory.</h2>
 
-        <div className="mt-7 flex flex-col justify-center gap-3 sm:flex-row">
+        <div className="mt-7 flex justify-center">
           <Link
             href="/signup"
             className="inline-flex min-h-[46px] items-center justify-center rounded-lg bg-white px-6 py-2.5 text-sm font-semibold text-brand-700 transition hover:bg-slate-100"
           >
             Start my home&apos;s history
           </Link>
-          <Link
-            href="#features"
-            className="inline-flex min-h-[46px] items-center justify-center rounded-lg border border-white/35 px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-white/10"
-          >
-            Explore product
-          </Link>
-        </div>
-
-        <div className="mt-8 border-t border-white/30 pt-5">
-          <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm text-teal-50">
-            <span className="inline-flex items-center gap-2">
-              <CheckCircle2 className="h-4 w-4" />
-              No credit card required
-            </span>
-            <span className="inline-flex items-center gap-2">
-              <CheckCircle2 className="h-4 w-4" />
-              Built for decades
-            </span>
-            <span className="inline-flex items-center gap-2">
-              <CheckCircle2 className="h-4 w-4" />
-              Every year adds value
-            </span>
-          </div>
         </div>
       </div>
     </section>

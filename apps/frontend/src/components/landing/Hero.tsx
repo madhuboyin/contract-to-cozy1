@@ -29,11 +29,8 @@ export default function Hero() {
           </Link>
 
           <div className="hidden items-center gap-6 md:flex">
-            <button onClick={() => scrollToSection('features')} className="text-sm font-medium text-slate-600 hover:text-brand-700">
+            <button onClick={() => scrollToSection('product')} className="text-sm font-medium text-slate-600 hover:text-brand-700">
               Product
-            </button>
-            <button onClick={() => scrollToSection('journey')} className="text-sm font-medium text-slate-600 hover:text-brand-700">
-              Your journey
             </button>
             <button onClick={() => scrollToSection('calculator')} className="text-sm font-medium text-slate-600 hover:text-brand-700">
               Savings
@@ -61,11 +58,8 @@ export default function Hero() {
         {isMenuOpen ? (
           <div className="border-t border-slate-200 bg-white md:hidden">
             <div className="space-y-1 px-4 py-4">
-              <button onClick={() => scrollToSection('features')} className="flex min-h-[44px] w-full items-center text-left text-sm font-medium text-slate-700">
+              <button onClick={() => scrollToSection('product')} className="flex min-h-[44px] w-full items-center text-left text-sm font-medium text-slate-700">
                 Product
-              </button>
-              <button onClick={() => scrollToSection('journey')} className="flex min-h-[44px] w-full items-center text-left text-sm font-medium text-slate-700">
-                Your journey
               </button>
               <button onClick={() => scrollToSection('calculator')} className="flex min-h-[44px] w-full items-center text-left text-sm font-medium text-slate-700">
                 Savings
@@ -101,7 +95,7 @@ export default function Hero() {
         ctaLabel="Create free account"
         ctaHref="/signup"
         secondaryCtaLabel="Explore product"
-        secondaryCtaHref="#features"
+        secondaryCtaHref="#product"
         proofItems={[
           {
             label: 'Nothing gets lost',

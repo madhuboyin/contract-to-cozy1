@@ -2,36 +2,29 @@ import Link from 'next/link';
 
 export default function DashboardShowcase() {
   return (
-    // Reduced vertical padding
-    <section className="py-10 md:py-12 bg-white"> 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="grid lg:grid-cols-2 gap-10 items-center">
-          
-          {/* Left Column - Text (Sleeker fonts, tighter spacing) */}
-          <div>
-            <div className="inline-block px-3 py-1 bg-blue-100 text-blue-700 text-xs font-medium rounded-full mb-3">
-              Your home, connected
-            </div>
-            
-            {/* Reduced font size and margin */}
-            <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-3">
-              The control center for your home&apos;s memory
-            </h2>
-            
-            {/* Reduced font size and margin */}
-            {/* Reduced button size */}
-            <Link
-              href="/signup"
-              className="mt-3 inline-block px-5 py-2.5 bg-blue-600 text-white text-base font-medium rounded-lg hover:bg-blue-700 transition-colors shadow-md"
-            >
-              Explore your home →
-            </Link>
+    <section id="product" className="py-14 md:py-20 bg-white">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-xl text-center">
+          <div className="inline-block px-3 py-1 bg-blue-100 text-blue-700 text-xs font-medium rounded-full mb-3">
+            Your home, connected
           </div>
 
-          {/* Right Column - Dashboard Mockup (desktop only; too dense to read at mobile widths) */}
-          <div className="relative hidden lg:block">
-            {/* Reduced outer padding (p-8 to p-6) */}
-            <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-6 shadow-xl border border-gray-200">
+          <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-4">
+            Your home&apos;s control center
+          </h2>
+
+          <Link
+            href="/signup"
+            className="inline-block px-5 py-2.5 bg-blue-600 text-white text-base font-medium rounded-lg hover:bg-blue-700 transition-colors shadow-md"
+          >
+            Explore your home →
+          </Link>
+        </div>
+
+        {/* Dashboard mockup — the visual centerpiece; horizontal-scrolls on narrow screens instead of shrinking illegibly */}
+        <div className="relative mt-10 md:mt-14">
+          <div className="relative mx-auto max-w-4xl overflow-x-auto">
+            <div className="min-w-[640px] bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-4 md:p-6 shadow-xl border border-gray-200">
               <div className="overflow-hidden rounded-xl bg-white shadow-lg">
                 <div className="flex items-center justify-between bg-blue-600 px-4 py-3 text-white">
                   <div>
@@ -87,12 +80,13 @@ export default function DashboardShowcase() {
                   </div>
                 </div>
               </div>
-
-              {/* Decorative Elements (Unchanged) */}
-              <div className="absolute -top-4 -right-4 w-24 h-24 bg-blue-200 rounded-full opacity-20 blur-2xl"></div>
-              <div className="absolute -bottom-4 -left-4 w-32 h-32 bg-purple-200 rounded-full opacity-20 blur-2xl"></div>
             </div>
+            <div className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-white to-transparent md:hidden" />
           </div>
+          <p className="mt-2 text-center text-xs text-slate-400 md:hidden">Swipe to see more →</p>
+
+          <div className="pointer-events-none absolute -top-4 -right-4 w-24 h-24 bg-blue-200 rounded-full opacity-20 blur-2xl"></div>
+          <div className="pointer-events-none absolute -bottom-4 -left-4 w-32 h-32 bg-purple-200 rounded-full opacity-20 blur-2xl"></div>
         </div>
       </div>
     </section>

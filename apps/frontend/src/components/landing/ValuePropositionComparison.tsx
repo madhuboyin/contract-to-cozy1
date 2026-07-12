@@ -1,7 +1,6 @@
 // apps/frontend/src/components/landing/ValuePropositionComparison.tsx
 // Final Integrated Value Section: All differentiators and capabilities in one crisp table.
 
-import Link from 'next/link';
 import { resolveIconByToken } from '@/lib/icons';
 
 export default function ValuePropositionComparison() {
@@ -136,18 +135,6 @@ export default function ValuePropositionComparison() {
               </div>
             );
           })}
-        </div>
-
-        <div className="mt-12 text-center">
-          <h3 className="text-2xl font-bold text-gray-900 mb-4">
-            Keep your home knowledge for good
-          </h3>
-          <Link
-            href="/signup"
-            className="inline-block px-6 py-3 bg-blue-600 text-white text-base font-semibold rounded-lg hover:bg-blue-700 transition-colors shadow-lg"
-          >
-            Create your free home →
-          </Link>
         </div>
       </div>
     </section>
