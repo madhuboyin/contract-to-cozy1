@@ -97,7 +97,7 @@ export default function Hero() {
             <span className="text-brand-700"> memory.</span>
           </>
         }
-        subtitle="Every document, repair, project, expense, and decision. Connected to your home. Never lost."
+        subtitle="Every document, repair, and decision — connected to your home, permanently."
         ctaLabel="Create free account"
         ctaHref="/signup"
         secondaryCtaLabel="Explore product"

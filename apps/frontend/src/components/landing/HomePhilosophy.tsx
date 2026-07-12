@@ -13,7 +13,6 @@ export default function HomePhilosophy() {
         <div className="mx-auto max-w-3xl text-center">
           <p className="mb-2 text-xs font-semibold text-brand-700">Homeownership gets more complicated every year</p>
           <h2 className="text-2xl font-semibold tracking-tight text-slate-950 sm:text-3xl">Your home should not depend on your memory.</h2>
-          <p className="mx-auto mt-3 max-w-xl text-sm text-slate-600 sm:text-base">Scattered information becomes useful knowledge.</p>
         </div>
         <div className="mt-9 grid gap-3 md:grid-cols-[1fr_auto_1fr_auto_1fr] md:items-center">
           {PHILOSOPHY.map((item, index) => (

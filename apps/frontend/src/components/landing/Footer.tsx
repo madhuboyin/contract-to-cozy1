@@ -56,7 +56,7 @@ export default function Footer() {
               <span>Contract to Cozy</span>
             </Link>
             <p className="text-gray-400 text-sm leading-relaxed max-w-xs">
-              The operating system for homeownership. Everything about your home, together for the entire journey.
+              The operating system for homeownership.
             </p>
             {/* Social Links */}
             <div className="flex space-x-4 mt-6">

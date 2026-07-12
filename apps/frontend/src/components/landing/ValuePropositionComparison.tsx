@@ -56,7 +56,7 @@ export default function ValuePropositionComparison() {
       <div className="max-w-7xl mx-auto">
         <div className="text-center mb-10">
           <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-4">
-            Homeownership feels different when everything is connected
+            Contract to Cozy vs. today
           </h2>
         </div>
 

@@ -9,7 +9,6 @@ import ValuePropositionComparison from '@/components/landing/ValuePropositionCom
 import HomeKnowledge from '@/components/landing/HomeKnowledge';
 import HomeKnowledgeTimeline from '@/components/landing/HomeKnowledgeTimeline';
 import ConnectedEcosystem from '@/components/landing/ConnectedEcosystem';
-import Services from '@/components/landing/Services';
 import Neighborhood from '@/components/landing/Neighborhood';
 import SavingsCalculator from '@/components/landing/SavingsCalculator';
 import Testimonials from '@/components/landing/Testimonials';
@@ -27,7 +26,6 @@ export default function Home() {
       <ValuePropositionComparison /> {/* NEW COMPONENT PLACED HERE */}
       <HomeKnowledge />
       <SavingsCalculator />
-      <Services />
       <Neighborhood />
       <HomeKnowledgeTimeline />
       <Testimonials />
