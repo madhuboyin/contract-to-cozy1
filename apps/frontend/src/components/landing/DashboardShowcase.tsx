@@ -3,7 +3,7 @@ import Link from 'next/link';
 export default function DashboardShowcase() {
   return (
     // Reduced vertical padding
-    <section className="py-10 md:py-12 bg-white"> 
+    <section id="features" className="py-10 md:py-12 bg-white">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid lg:grid-cols-2 gap-10 items-center">
           

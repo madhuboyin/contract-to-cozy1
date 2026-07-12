@@ -2,7 +2,6 @@
 
 import Hero from '@/components/landing/Hero';
 import HomePhilosophy from '@/components/landing/HomePhilosophy';
-import Features from '@/components/landing/Features';
 import HowItWorks from '@/components/landing/HowItWorks';
 import DashboardShowcase from '@/components/landing/DashboardShowcase';
 import ValuePropositionComparison from '@/components/landing/ValuePropositionComparison'; // NEW IMPORT
@@ -20,7 +19,6 @@ export default function Home() {
     <main className="min-h-screen">
       <Hero />
       <HomePhilosophy />
-      <Features />
       <HowItWorks />
       <DashboardShowcase />
       <ValuePropositionComparison /> {/* NEW COMPONENT PLACED HERE */}
