@@ -9,21 +9,21 @@ export default function Testimonials() {
       location: 'Brooklyn, NY',
       initials: 'SB',
       rating: 5,
-      text: 'Contract to Cozy found a utility rebate we had forgotten about. We recovered $900 because the original project records were still there.',
+      text: '$900 rebate recovered because our HVAC records were still attached.',
     },
     {
       name: 'Michael R.',
       location: 'Park Slope, NY',
       initials: 'MR',
       rating: 5,
-      text: 'Our HVAC technician could see the last service, the replaced part, and the warranty before arriving. We did not have to explain the house again.',
+      text: 'Our contractor knew the home history before arriving.',
     },
     {
       name: 'Jessica C.',
       location: 'Williamsburg, NY',
       initials: 'JC',
       rating: 5,
-      text: 'When we sold, the inspection, permits, warranties, and improvements were already complete. We never searched through old paperwork.',
+      text: 'We sold with every inspection record ready.',
     },
   ];
 
@@ -35,9 +35,6 @@ export default function Testimonials() {
           <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2">
             Home knowledge creates real value
           </h2>
-          <p className="text-base text-gray-600">
-            The history matters most when it changes what happens next.
-          </p>
         </div>
 
         {/* Testimonials Grid - Compact */}
@@ -77,25 +74,6 @@ export default function Testimonials() {
           ))}
         </div>
 
-        {/* Trust Badges - Compact */}
-        <div className="mt-10 grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
-          <div>
-            <div className="text-2xl font-bold text-blue-600 mb-1">One place</div>
-            <div className="text-xs text-gray-600">Nothing important lost</div>
-          </div>
-          <div>
-            <div className="text-2xl font-bold text-blue-600 mb-1">One history</div>
-            <div className="text-xs text-gray-600">Every chapter preserved</div>
-          </div>
-          <div>
-            <div className="text-2xl font-bold text-blue-600 mb-1">Always ready</div>
-            <div className="text-xs text-gray-600">Answers when they matter</div>
-          </div>
-          <div>
-            <div className="text-2xl font-bold text-blue-600 mb-1">Built for years</div>
-            <div className="text-xs text-gray-600">Knowledge that compounds</div>
-          </div>
-        </div>
       </div>
     </section>
   );

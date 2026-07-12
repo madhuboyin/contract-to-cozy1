@@ -97,7 +97,7 @@ export default function Hero() {
             <span className="text-brand-700"> memory.</span>
           </>
         }
-        subtitle="Every year, your home creates more history. Contract to Cozy keeps every document, repair, project, expense, and decision connected—so nothing your home knows is ever lost."
+        subtitle="Every document, repair, project, expense, and decision. Connected to your home. Never lost."
         ctaLabel="Create free account"
         ctaHref="/signup"
         secondaryCtaLabel="Explore product"
@@ -105,15 +105,15 @@ export default function Hero() {
         proofItems={[
           {
             label: 'Nothing gets lost',
-            detail: 'Every record stays connected to the home it belongs to.',
+            detail: 'Every record, connected.',
           },
           {
             label: 'Built for decades',
-            detail: 'A permanent history that grows more useful every year.',
+            detail: 'More useful every year.',
           },
           {
             label: 'Complete context',
-            detail: 'Past knowledge makes every future decision easier.',
+            detail: 'Better future decisions.',
           },
         ]}
       />

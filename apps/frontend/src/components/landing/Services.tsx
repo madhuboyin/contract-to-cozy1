@@ -65,9 +65,6 @@ export default function Services() {
           <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-3">
             Everything your home knows, connected.
           </h2>
-          <p className="text-base text-gray-600 max-w-2xl mx-auto">
-            Records, care, money, and relationships all become part of the same permanent memory.
-          </p>
         </div>
 
         {/* Services Grid - Reduced gap */}

@@ -25,7 +25,6 @@ export default function HomeKnowledge() {
         <div className="text-center">
           <p className="mb-2 text-xs font-semibold text-brand-700">One home. Every connection.</p>
           <h2 className="text-2xl font-semibold tracking-tight text-slate-950 sm:text-3xl">What your home knows</h2>
-          <p className="mx-auto mt-2 max-w-xl text-sm text-slate-600 sm:text-base">A permanent memory turns scattered records into answers.</p>
         </div>
 
         <div className="relative mx-auto mt-8 max-w-5xl overflow-hidden rounded-3xl border border-slate-200 bg-slate-50 p-5 shadow-sm sm:p-8">

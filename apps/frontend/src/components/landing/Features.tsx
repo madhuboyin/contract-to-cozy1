@@ -6,47 +6,47 @@ const FEATURES: Array<{ concept: IconConcept; title: string; description: string
   {
     concept: 'property',
     title: 'Home Vault',
-    description: 'The permanent source for every document your home will ever need.',
+    description: 'Documents · warranties · receipts',
   },
   {
     concept: 'notifications',
     title: 'Home Timeline',
-    description: 'The living history of every repair, improvement, inspection, and milestone.',
+    description: 'Every event, in order',
   },
   {
     concept: 'expenses',
     title: 'Home Planner',
-    description: 'Past care becomes the knowledge that tells you what your home needs next.',
+    description: 'What comes next',
   },
   {
     concept: 'providers',
     title: 'Home Care',
-    description: 'Every service adds context to how your home has been cared for.',
+    description: 'Service history',
   },
   {
     concept: 'expenses',
     title: 'Home Finances',
-    description: 'A lasting record of what the home costs, saves, and gains in value.',
+    description: 'Costs · savings · value',
   },
   {
     concept: 'property',
     title: 'Property Health',
-    description: 'Understand where your home is today—and what its history says comes next.',
+    description: 'Condition · risk · priorities',
   },
   {
     concept: 'providers',
     title: 'Projects',
-    description: 'Capture every improvement as part of your home’s permanent story.',
+    description: 'Plans · people · proof',
   },
   {
     concept: 'notifications',
     title: 'Insurance',
-    description: 'Policies, claims, coverage decisions, and proof remain connected for good.',
+    description: 'Policies · claims · coverage',
   },
   {
     concept: 'property',
     title: 'Neighborhood',
-    description: 'Local knowledge and trusted relationships become part of the home’s context.',
+    description: 'People · place · context',
   },
 ];
 
@@ -57,7 +57,6 @@ export default function Features() {
         <div className="mb-6 text-center">
           <p className="mb-2 text-xs font-semibold tracking-normal text-brand-700">One connected home</p>
           <h2 className="text-2xl font-semibold tracking-tight text-slate-950 sm:text-3xl">One memory. Every part of your home.</h2>
-          <p className="mx-auto mt-2 max-w-2xl text-sm text-slate-600">Each system preserves a different part of your home&apos;s knowledge. Together, they form one permanent history.</p>
         </div>
 
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 lg:gap-5">

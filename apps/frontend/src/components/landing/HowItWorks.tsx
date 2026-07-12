@@ -4,37 +4,37 @@ const STEPS = [
   {
     number: '01',
     title: 'Buy',
-    description: 'Inspections, closing records, and early decisions become the first chapter—not another forgotten folder.',
+    description: 'Inspection · closing · warranties',
     iconToken: 'building-2',
   },
   {
     number: '02',
     title: 'Move in',
-    description: 'Appliances, warranties, and move-in details continue the history already in motion.',
+    description: 'Appliances · utilities · setup',
     iconToken: 'search',
   },
   {
     number: '03',
     title: 'Own',
-    description: 'Daily ownership adds knowledge about costs, systems, risks, and the neighborhood.',
+    description: 'Costs · systems · neighborhood',
     iconToken: 'calendar',
   },
   {
     number: '04',
     title: 'Maintain',
-    description: 'Every service and repair teaches the home what was done and what comes next.',
+    description: 'Service · repair · next care',
     iconToken: 'wrench',
   },
   {
     number: '05',
     title: 'Improve',
-    description: 'Every project preserves the choices, people, materials, and value added.',
+    description: 'Projects · proof · value',
     iconToken: 'sparkles',
   },
   {
     number: '06',
     title: 'Sell',
-    description: 'The complete history carries forward. Selling is a handoff, not an ending.',
+    description: 'Complete history transfers',
     iconToken: 'key',
   },
 ];
@@ -46,7 +46,6 @@ export default function HowItWorks() {
         <div className="mb-7 text-center">
           <p className="mb-2 text-xs font-semibold tracking-normal text-brand-700">Built for the entire journey</p>
           <h2 className="text-2xl font-semibold tracking-tight text-slate-950 sm:text-3xl">Your home never starts from scratch again</h2>
-          <p className="mx-auto mt-2 max-w-2xl text-sm text-slate-600">Buying is not the beginning. Selling is not the end. The home&apos;s knowledge continues.</p>
         </div>
 
         <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">

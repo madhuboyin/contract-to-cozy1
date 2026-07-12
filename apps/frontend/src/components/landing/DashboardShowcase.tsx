@@ -1,30 +1,6 @@
 import Link from 'next/link';
-import { resolveIconByToken } from '@/lib/icons';
 
 export default function DashboardShowcase() {
-  const features = [
-    {
-      iconToken: 'layout-grid',
-      title: 'Home records',
-      description: 'Nothing important disappears',
-    },
-    {
-      iconToken: 'building-2',
-      title: 'Plans & projects',
-      description: 'Every choice stays in context',
-    },
-    {
-      iconToken: 'badge-check',
-      title: 'Home history',
-      description: 'Knowledge that grows each year',
-    },
-    {
-      iconToken: 'dollar-sign',
-      title: 'Money & value',
-      description: 'Past decisions guide future value',
-    },
-  ];
-
   return (
     // Reduced vertical padding
     <section className="py-10 md:py-12 bg-white"> 
@@ -43,33 +19,10 @@ export default function DashboardShowcase() {
             </h2>
             
             {/* Reduced font size and margin */}
-            <p className="text-base text-gray-600 mb-6 leading-relaxed">
-              Every new record adds context. Every future decision starts with the full story.
-            </p>
-
-            {/* Features Grid - Reduced margin */}
-            <div className="grid grid-cols-2 gap-4 mb-6">
-              {features.map((feature, index) => {
-                const FeatureIcon = resolveIconByToken(feature.iconToken);
-                return (
-                <div key={index} className="flex items-start">
-                  {/* Icon size and margin are already compact, kept as is */}
-                  <span className="mr-3 mt-0.5 inline-flex h-8 w-8 items-center justify-center rounded-full bg-blue-50 text-blue-600">
-                    <FeatureIcon className="h-4 w-4" />
-                  </span>
-                  <div>
-                    <div className="font-semibold text-gray-900 text-sm">{feature.title}</div>
-                    <div className="text-xs text-gray-600">{feature.description}</div>
-                  </div>
-                </div>
-                );
-              })}
-            </div>
-
             {/* Reduced button size */}
             <Link
               href="/signup"
-              className="inline-block px-5 py-2.5 bg-blue-600 text-white text-base font-medium rounded-lg hover:bg-blue-700 transition-colors shadow-md"
+              className="mt-3 inline-block px-5 py-2.5 bg-blue-600 text-white text-base font-medium rounded-lg hover:bg-blue-700 transition-colors shadow-md"
             >
               Explore your home →
             </Link>

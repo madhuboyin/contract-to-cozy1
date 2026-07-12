@@ -40,11 +40,9 @@ export default function SavingsCalculator() {
           <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2">
             Your home can save more than you think
           </h2>
-          <p className="text-base text-gray-600">
-            A connected home uncovers opportunities. Find tax credits, rebates, insurance improvements, utility savings, and preventive savings in context.
-          </p>
+          <p className="text-base text-gray-600">Preserved knowledge finds missed opportunities.</p>
           <div className="mt-4 flex flex-wrap justify-center gap-2">
-            {['Tax credits', 'Insurance', 'Utility rebates', 'Warranty claims', 'Preventive care', 'Refinancing', 'Government programs', 'Home value'].map((item) => (
+            {['Tax credits', 'Insurance', 'Rebates', 'Warranties', 'Refinancing', 'Home value'].map((item) => (
               <span key={item} className="rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700">{item}</span>
             ))}
           </div>

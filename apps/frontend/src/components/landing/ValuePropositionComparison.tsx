@@ -10,52 +10,44 @@ export default function ValuePropositionComparison() {
     {
       iconToken: 'key',
       title: 'Home records',
-      cozy: 'Every document, receipt, warranty, and record is organized in one trusted place.',
-      competitor: 'Scattered folders, old emails, paper files, and missing attachments.'
+      cozy: 'One permanent record', competitor: 'Folders · emails · paper'
     },
     {
       iconToken: 'layout-grid',
       title: 'Home history',
-      cozy: 'A complete timeline preserves what changed, when it happened, and who did the work.',
-      competitor: 'Trying to remember when something was repaired or searching for an old receipt.'
+      cozy: 'Complete timeline', competitor: 'Memory and guesswork'
     },
     {
       iconToken: 'bell-ring',
       title: 'What comes next',
-      cozy: 'Maintenance, renewals, and seasonal work stay visible before they become urgent.',
-      competitor: 'Sticky notes, forgotten tasks, and catching up after something goes wrong.'
+      cozy: 'Always visible', competitor: 'Forgotten tasks'
     },
     {
       iconToken: 'badge-check',
       title: 'Home knowledge',
-      cozy: 'Information stays connected to the home and remains useful for years.',
-      competitor: 'Knowledge disappears across inboxes, spreadsheets, and changing owners.'
+      cozy: 'Context preserved', competitor: 'Context disappears'
     },
 
     // --- CORE CAPABILITIES (The Necessities - Added from Features.tsx) ---
     {
       iconToken: 'dollar-sign',
       title: 'Money & savings',
-      cozy: 'Spending, budgets, rebates, tax credits, and savings opportunities live together.',
-      competitor: 'Disconnected spreadsheets and opportunities discovered too late.'
+      cozy: 'Opportunities found', competitor: 'Savings missed'
     },
     {
       iconToken: 'zap',
       title: 'Prepared ownership',
-      cozy: 'You can answer questions about your home with confidence, whether maintaining or selling.',
-      competitor: 'Starting the search from scratch every time a question comes up.'
+      cozy: 'Answers ready', competitor: 'Start over every time'
     },
     {
       iconToken: 'shield-check',
       title: 'Future decisions',
-      cozy: 'Every document and improvement adds context for what you decide next.',
-      competitor: 'Every new question begins with another search through incomplete information.'
+      cozy: 'Full context', competitor: 'Incomplete information'
     },
     {
       iconToken: 'shield-check',
       title: 'What your home becomes',
-      cozy: 'A living home record that becomes more valuable every year.',
-      competitor: 'Disconnected home information that loses value over time.'
+      cozy: 'More valuable each year', competitor: 'Value lost over time'
     },
   ];
 
@@ -66,9 +58,6 @@ export default function ValuePropositionComparison() {
           <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-4">
             Homeownership feels different when everything is connected
           </h2>
-          <p className="text-base text-gray-600 max-w-3xl mx-auto">
-            Less searching. Less remembering. More confidence in the home you own.
-          </p>
         </div>
 
         {/* Mobile: stacked feature cards (< md) */}
