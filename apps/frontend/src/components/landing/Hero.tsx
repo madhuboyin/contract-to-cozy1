@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { Menu, X } from 'lucide-react';
 
 import MarketingHeroTemplate from '@/components/landing/MarketingHeroTemplate';
+import HeroMemoryVisual from '@/components/landing/HeroMemoryVisual';
 import { resolveIconByConcept } from '@/lib/icons';
 
 export default function Hero() {
@@ -102,6 +103,7 @@ export default function Hero() {
         ctaHref="/signup"
         secondaryCtaLabel="Explore product"
         secondaryCtaHref="#features"
+        visual={<HeroMemoryVisual />}
         proofItems={[
           {
             label: 'Nothing gets lost',

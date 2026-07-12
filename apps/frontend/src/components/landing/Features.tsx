@@ -1,87 +1,62 @@
 import Link from 'next/link';
-import { resolveIconByConcept } from '@/lib/icons';
-import type { IconConcept } from '@/lib/icons';
+import { ArrowDown, CheckCircle2 } from 'lucide-react';
+import { resolveIconByToken } from '@/lib/icons';
 
-const FEATURES: Array<{ concept: IconConcept; title: string; description: string }> = [
+const STORIES = [
   {
-    concept: 'property',
-    title: 'Home Vault',
-    description: 'The permanent source for every document your home will ever need.',
+    title: 'The roof remembers',
+    iconToken: 'shield-check',
+    items: ['Inspection', 'Warranty', 'Repair', 'Insurance claim', 'Replacement', 'Buyer history'],
   },
   {
-    concept: 'notifications',
-    title: 'Home Timeline',
-    description: 'The living history of every repair, improvement, inspection, and milestone.',
+    title: 'Every project keeps its context',
+    iconToken: 'wrench',
+    items: ['Estimate', 'Contractor', 'Materials', 'Invoice', 'Photos', 'Home value'],
   },
   {
-    concept: 'expenses',
-    title: 'Home Planner',
-    description: 'Past care becomes the knowledge that tells you what your home needs next.',
-  },
-  {
-    concept: 'providers',
-    title: 'Home Care',
-    description: 'Every service adds context to how your home has been cared for.',
-  },
-  {
-    concept: 'expenses',
-    title: 'Home Finances',
-    description: 'A lasting record of what the home costs, saves, and gains in value.',
-  },
-  {
-    concept: 'property',
-    title: 'Property Health',
-    description: 'Understand where your home is today—and what its history says comes next.',
-  },
-  {
-    concept: 'providers',
-    title: 'Projects',
-    description: 'Capture every improvement as part of your home’s permanent story.',
-  },
-  {
-    concept: 'notifications',
-    title: 'Insurance',
-    description: 'Policies, claims, coverage decisions, and proof remain connected for good.',
-  },
-  {
-    concept: 'property',
-    title: 'Neighborhood',
-    description: 'Local knowledge and trusted relationships become part of the home’s context.',
+    title: 'Care becomes guidance',
+    iconToken: 'calendar',
+    items: ['Last service', 'Parts replaced', 'Cost history', 'Next service', 'Risk avoided', 'Savings found'],
   },
 ];
 
 export default function Features() {
   return (
-    <section id="features" className="bg-white px-4 py-10 sm:px-6 lg:px-8 lg:py-12">
+    <section id="features" className="bg-slate-50 px-4 py-10 sm:px-6 lg:px-8 lg:py-12">
       <div className="mx-auto max-w-6xl">
-        <div className="mb-6 text-center">
-          <p className="mb-2 text-xs font-semibold tracking-normal text-brand-700">One connected home</p>
+        <div className="mb-7 text-center">
+          <p className="mb-2 text-xs font-semibold text-brand-700">One connected home</p>
           <h2 className="text-2xl font-semibold tracking-tight text-slate-950 sm:text-3xl">One memory. Every part of your home.</h2>
-          <p className="mx-auto mt-2 max-w-2xl text-sm text-slate-600">Each system preserves a different part of your home&apos;s knowledge. Together, they form one permanent history.</p>
+          <p className="mx-auto mt-2 max-w-xl text-sm text-slate-600">Each record adds meaning to everything that came before it.</p>
         </div>
 
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 lg:gap-5">
-          {FEATURES.map((feature) => {
-            const FeatureIcon = resolveIconByConcept(feature.concept);
+        <div className="grid gap-5 lg:grid-cols-3">
+          {STORIES.map((story) => {
+            const StoryIcon = resolveIconByToken(story.iconToken);
             return (
-              <article key={feature.title} className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm">
-                <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-brand-50 text-brand-700">
-                  <FeatureIcon className="h-5 w-5" />
-                </span>
-                <h3 className="mt-3 text-lg font-semibold text-slate-900">{feature.title}</h3>
-                <p className="mt-1 text-sm leading-relaxed text-slate-600">{feature.description}</p>
+              <article key={story.title} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                <div className="flex items-center gap-3 border-b border-slate-100 pb-4">
+                  <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-50 text-brand-700"><StoryIcon className="h-5 w-5" /></span>
+                  <h3 className="mb-0 text-base font-semibold text-slate-900">{story.title}</h3>
+                </div>
+                <div className="mt-4 grid grid-cols-[1fr_auto_1fr] items-center gap-x-2 gap-y-3">
+                  {story.items.map((item, index) => (
+                    <div key={item} className="contents">
+                      <div className={`rounded-xl border px-3 py-2 text-center text-xs font-medium ${index === story.items.length - 1 ? 'border-brand-200 bg-brand-50 text-brand-800' : 'border-slate-200 bg-slate-50 text-slate-700'}`}>
+                        {index === story.items.length - 1 ? <CheckCircle2 className="mx-auto mb-1 h-3.5 w-3.5" /> : null}{item}
+                      </div>
+                      {index % 2 === 0 && index < story.items.length - 1 ? <span className="text-brand-400" aria-hidden="true">→</span> : null}
+                      {index % 2 === 1 && index < story.items.length - 1 ? <ArrowDown className="col-span-3 mx-auto h-3.5 w-3.5 text-brand-400" aria-hidden="true" /> : null}
+                    </div>
+                  ))}
+                </div>
               </article>
             );
           })}
         </div>
 
         <div className="mt-8 text-center">
-          <Link
-            href="/signup"
-            className="inline-flex min-h-[44px] items-center rounded-lg bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-700"
-          >
-            Start your home&apos;s history
-          </Link>
+          <Link href="/signup" className="inline-flex min-h-[44px] items-center rounded-lg bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-700">Start your home&apos;s history</Link>
         </div>
       </div>
     </section>
