@@ -131,18 +131,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   );
 
   const register = useCallback(async (data: RegisterInput): Promise<RegisterResponse | null> => {
-    try {
-      const response = await api.register(data);
+    const response = await api.register(data);
 
-      if (response.success && response.data.user) {
-        const registerData = extractApiData<RegisterResponse>(response.data);
-        return registerData;
-      }
-      return null;
-    } catch (error) {
-      console.error('Registration failed:', error);
-      return null;
+    if (response.success && response.data.user) {
+      const registerData = extractApiData<RegisterResponse>(response.data);
+      return registerData;
     }
+    return null;
   }, []);
 
 
