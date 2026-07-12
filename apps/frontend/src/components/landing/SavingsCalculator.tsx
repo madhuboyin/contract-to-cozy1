@@ -66,7 +66,7 @@ export default function SavingsCalculator() {
                 value={location}
                 onChange={(e) => setLocation(e.target.value)}
                 required
-                className="w-full px-4 py-2.5 text-sm rounded-lg border border-gray-300 focus:ring-2 focus:ring-gray-900 focus:border-transparent"
+                className="w-full px-4 py-2.5 text-sm rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
                 <option value="">Select your location</option>
                 <option value="Manhattan, NY">Manhattan, NY</option>
@@ -95,7 +95,7 @@ export default function SavingsCalculator() {
                     onChange={(e) => setPrice(e.target.value.replace(/,/g, ''))}
                     placeholder="500,000"
                     required
-                    className="w-full pl-8 pr-4 py-2.5 text-sm rounded-lg border border-gray-300 focus:ring-2 focus:ring-gray-900 focus:border-transparent"
+                    className="w-full pl-8 pr-4 py-2.5 text-sm rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 </div>
               </div>
@@ -110,7 +110,7 @@ export default function SavingsCalculator() {
                   value={closingDate}
                   onChange={(e) => setClosingDate(e.target.value)}
                   required
-                  className="w-full px-4 py-2.5 text-sm rounded-lg border border-gray-300 focus:ring-2 focus:ring-gray-900 focus:border-transparent"
+                  className="w-full px-4 py-2.5 text-sm rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
             </div>
@@ -118,7 +118,7 @@ export default function SavingsCalculator() {
             {/* Submit Button */}
             <button
               type="submit"
-              className="w-full py-3 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-black transition-colors shadow-md hover:shadow-lg"
+              className="w-full py-3 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors shadow-md hover:shadow-lg"
             >
               Find my opportunities
             </button>
@@ -137,22 +137,22 @@ export default function SavingsCalculator() {
               </h3>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="text-center p-3 bg-gray-50 rounded-lg shadow-sm">
-                  <div className="text-2xl font-bold text-gray-900">${results.moneySaved}</div>
+                  <div className="text-2xl font-bold text-blue-600">${results.moneySaved}</div>
                   <div className="text-xs text-gray-600 mt-1">Potential value</div>
                 </div>
                 <div className="text-center p-3 bg-gray-50 rounded-lg shadow-sm">
-                  <div className="text-2xl font-bold text-gray-900">{results.timeSaved}h</div>
+                  <div className="text-2xl font-bold text-blue-600">{results.timeSaved}h</div>
                   <div className="text-xs text-gray-600 mt-1">Research saved</div>
                 </div>
                 <div className="text-center p-3 bg-gray-50 rounded-lg shadow-sm">
-                  <div className="text-2xl font-bold text-gray-900">{results.providerCount}</div>
+                  <div className="text-2xl font-bold text-blue-600">{results.providerCount}</div>
                   <div className="text-xs text-gray-600 mt-1">Opportunities checked</div>
                 </div>
               </div>
               <div className="mt-4 text-center">
                 <Link
                   href="/signup"
-                  className="inline-block px-6 py-2.5 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-black transition-colors shadow-md"
+                  className="inline-block px-6 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors shadow-md"
                 >
                   Save opportunities to my home →
                 </Link>
