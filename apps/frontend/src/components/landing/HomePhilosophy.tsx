@@ -1,29 +1,43 @@
-import { ArrowDown, CheckCircle2 } from 'lucide-react';
+import { DollarSign, FileText, Users, Wrench } from 'lucide-react';
 
-const PHILOSOPHY = [
-  { title: 'History', description: 'Everything connected' },
-  { title: 'Knowledge', description: 'What matters next' },
-  { title: 'Better decisions', description: 'Savings · protection · value' },
+const CATEGORIES = [
+  {
+    icon: FileText,
+    title: 'Records and history',
+    description: 'Documents, closing records, warranties, home timeline',
+  },
+  {
+    icon: Wrench,
+    title: 'Care and planning',
+    description: 'Maintenance, seasonal planning, repairs, projects',
+  },
+  {
+    icon: DollarSign,
+    title: 'Money and value',
+    description: 'Budgets, insurance, home value, savings and rebates',
+  },
+  {
+    icon: Users,
+    title: 'People and place',
+    description: 'Trusted providers, neighborhood, local recommendations',
+  },
 ];
 
 export default function HomePhilosophy() {
   return (
-    <section className="border-b border-slate-200/70 bg-white px-4 py-12 sm:px-6 lg:px-8 lg:py-16">
+    <section className="border-b border-slate-200/70 bg-slate-50 px-4 py-12 sm:px-6 lg:px-8 lg:py-16">
       <div className="mx-auto max-w-6xl">
-        <div className="mx-auto max-w-3xl text-center">
-          <p className="mb-2 text-xs font-semibold text-brand-700">Homeownership gets more complicated every year</p>
-          <h2 className="text-2xl font-semibold tracking-tight text-slate-950 sm:text-3xl">Your home should not depend on your memory.</h2>
+        <div className="mx-auto max-w-2xl text-center">
+          <p className="mb-2 text-sm font-semibold text-blue-600">everything your home knows, connected</p>
+          <h2 className="text-3xl font-bold tracking-tight text-slate-950 sm:text-4xl">One memory. Every part of your home.</h2>
         </div>
-        <div className="mt-9 grid gap-3 md:grid-cols-[1fr_auto_1fr_auto_1fr] md:items-center">
-          {PHILOSOPHY.map((item, index) => (
-            <div key={item.title} className="contents">
-              <article className="rounded-2xl border border-slate-200/80 bg-slate-50 p-5">
-                <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-brand-600 text-white"><CheckCircle2 className="h-4 w-4" /></span>
-                <h3 className="mt-3 text-lg font-semibold text-slate-900">{item.title}</h3>
-                <p className="mt-1 text-sm leading-relaxed text-slate-600">{item.description}</p>
-              </article>
-              {index < PHILOSOPHY.length - 1 ? <ArrowDown className="mx-auto h-5 w-5 text-brand-500 md:-rotate-90" aria-hidden="true" /> : null}
-            </div>
+        <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {CATEGORIES.map((category) => (
+            <article key={category.title} className="rounded-2xl border border-slate-200 bg-white p-5">
+              <category.icon className="h-6 w-6 text-slate-900" strokeWidth={1.75} />
+              <h3 className="mt-4 text-lg font-semibold text-slate-900">{category.title}</h3>
+              <p className="mt-2 text-sm leading-relaxed text-slate-600">{category.description}</p>
+            </article>
           ))}
         </div>
       </div>
