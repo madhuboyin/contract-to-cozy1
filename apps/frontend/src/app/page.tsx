@@ -1,6 +1,7 @@
 // apps/frontend/src/app/page.tsx
 
 import Hero from '@/components/landing/Hero';
+import HomePhilosophy from '@/components/landing/HomePhilosophy';
 import Features from '@/components/landing/Features';
 import HowItWorks from '@/components/landing/HowItWorks';
 import DashboardShowcase from '@/components/landing/DashboardShowcase';
@@ -16,6 +17,7 @@ export default function Home() {
   return (
     <main className="min-h-screen">
       <Hero />
+      <HomePhilosophy />
       <Features />
       <HowItWorks />
       <DashboardShowcase />

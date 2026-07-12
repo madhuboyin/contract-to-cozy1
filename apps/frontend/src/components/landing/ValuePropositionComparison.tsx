@@ -47,9 +47,9 @@ export default function ValuePropositionComparison() {
     },
     {
       iconToken: 'shield-check',
-      title: 'One trusted place',
-      cozy: 'Everything belongs to one connected home system built around you.',
-      competitor: 'A growing collection of apps, notes, logins, and unfinished lists.'
+      title: 'What your home becomes',
+      cozy: 'A living home record that becomes more valuable every year.',
+      competitor: 'Disconnected home information that loses value over time.'
     },
   ];
 
@@ -90,7 +90,7 @@ export default function ValuePropositionComparison() {
                 </div>
                 {/* Old way */}
                 <div className="px-4 py-3">
-                  <p className="text-[11px] font-semibold tracking-wide text-red-500 uppercase mb-1">Traditional homeownership</p>
+                  <p className="text-[11px] font-semibold tracking-wide text-red-500 uppercase mb-1">Current experience</p>
                   <div className="flex items-start gap-2">
                     <CompetitorIcon className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />
                     <p className="text-sm text-gray-700 leading-snug">{point.competitor}</p>
@@ -107,7 +107,7 @@ export default function ValuePropositionComparison() {
           <div className="grid grid-cols-3 font-bold text-sm sm:text-base bg-gray-100 text-gray-700 tracking-normal">
             <div className="p-4 border-r border-gray-200">The experience</div>
             <div className="p-4 border-r border-gray-200 text-center text-blue-600">With Contract to Cozy</div>
-            <div className="p-4 text-center text-red-600">Traditional homeownership</div>
+            <div className="p-4 text-center text-red-600">Current experience</div>
           </div>
 
           {/* Table Rows */}

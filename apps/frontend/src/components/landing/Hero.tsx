@@ -97,7 +97,7 @@ export default function Hero() {
             <span className="text-brand-700"> run your home.</span>
           </>
         }
-        subtitle="Your home comes with documents, decisions, projects, warranties, repairs, expenses, and responsibilities. Contract to Cozy keeps everything connected, so owning a home feels organized instead of overwhelming."
+        subtitle="Homeownership gets more complicated every year. Contract to Cozy gives every document, repair, project, expense, and decision one connected place—so you can run your home with confidence."
         ctaLabel="Create free account"
         ctaHref="/signup"
         secondaryCtaLabel="Explore product"

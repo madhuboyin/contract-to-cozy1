@@ -20,8 +20,33 @@ const FEATURES: Array<{ concept: IconConcept; title: string; description: string
   },
   {
     concept: 'providers',
+    title: 'Home Care',
+    description: 'Keep maintenance, seasonal work, repairs, and trusted help in rhythm.',
+  },
+  {
+    concept: 'expenses',
     title: 'Home Finances',
     description: 'Understand spending, budgets, home value, and opportunities to save.',
+  },
+  {
+    concept: 'property',
+    title: 'Property Health',
+    description: 'See the condition, risks, and priorities that shape what your home needs next.',
+  },
+  {
+    concept: 'providers',
+    title: 'Projects',
+    description: 'Keep plans, estimates, decisions, progress, and completed work together.',
+  },
+  {
+    concept: 'notifications',
+    title: 'Insurance',
+    description: 'Keep policies, renewals, coverage details, and claims connected to the home.',
+  },
+  {
+    concept: 'property',
+    title: 'Neighborhood',
+    description: 'Connect local knowledge, community context, and trusted relationships to your home.',
   },
 ];
 
@@ -32,10 +57,10 @@ export default function Features() {
         <div className="mb-6 text-center">
           <p className="mb-2 text-xs font-semibold tracking-normal text-brand-700">One connected home</p>
           <h2 className="text-2xl font-semibold tracking-tight text-slate-950 sm:text-3xl">Every part of homeownership, working together</h2>
-          <p className="mx-auto mt-2 max-w-2xl text-sm text-slate-600">Contract to Cozy brings the essential systems of your home into one permanent place.</p>
+          <p className="mx-auto mt-2 max-w-2xl text-sm text-slate-600">Not separate features. One operating system, built around your home.</p>
         </div>
 
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4 lg:gap-5">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 lg:gap-5">
           {FEATURES.map((feature) => {
             const FeatureIcon = resolveIconByConcept(feature.concept);
             return (

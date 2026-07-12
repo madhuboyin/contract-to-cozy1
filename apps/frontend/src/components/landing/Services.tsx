@@ -63,10 +63,10 @@ export default function Services() {
         {/* Section Header - Reduced font size and margins */}
         <div className="text-center mb-10">
           <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-3">
-            Everything your home needs
+            One home. An entire ecosystem.
           </h2>
           <p className="text-base text-gray-600 max-w-2xl mx-auto">
-            One connected home for the records, responsibilities, money, and people that shape homeownership.
+            Everything your home needs, connected to the same history and working from the same knowledge.
           </p>
         </div>
 

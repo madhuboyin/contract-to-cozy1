@@ -15,15 +15,27 @@ const STEPS = [
   },
   {
     number: '03',
-    title: 'Own & improve',
-    description: 'Plan maintenance, manage projects, track spending, and preserve every improvement.',
+    title: 'Own',
+    description: 'Keep records, insurance, appliances, finances, and neighborhood knowledge connected.',
     iconToken: 'calendar',
   },
   {
     number: '04',
+    title: 'Maintain',
+    description: 'Know what comes next and preserve every repair as part of the home history.',
+    iconToken: 'wrench',
+  },
+  {
+    number: '05',
+    title: 'Improve',
+    description: 'Plan projects, make informed decisions, and capture the value you add.',
+    iconToken: 'sparkles',
+  },
+  {
+    number: '06',
     title: 'Sell',
     description: 'Prepare with a complete home history and carry what you learned into what comes next.',
-    iconToken: 'sparkles',
+    iconToken: 'key',
   },
 ];
 
@@ -37,7 +49,7 @@ export default function HowItWorks() {
           <p className="mx-auto mt-2 max-w-2xl text-sm text-slate-600">From the first signature to the final handoff, Contract to Cozy keeps your home knowledge intact.</p>
         </div>
 
-        <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
           {STEPS.map((step, index) => {
             const StepIcon = resolveIconByToken(step.iconToken);
             return (

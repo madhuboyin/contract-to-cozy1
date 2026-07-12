@@ -7,7 +7,7 @@ export default function CTASection() {
       <div className="mx-auto max-w-4xl text-center">
         <h2 className="text-3xl font-semibold tracking-tight text-white">Your home deserves better than scattered paperwork.</h2>
         <p className="mx-auto mt-3 max-w-2xl text-base text-teal-50">
-          Create your free home operating system today. Keep everything connected from this home to the next.
+          Everything about your home. Together. Forever.
         </p>
 
         <div className="mt-7 flex flex-col justify-center gap-3 sm:flex-row">

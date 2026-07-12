@@ -79,63 +79,54 @@ export default function DashboardShowcase() {
           <div className="relative hidden lg:block">
             {/* Reduced outer padding (p-8 to p-6) */}
             <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-6 shadow-xl border border-gray-200">
-              {/* Mock Dashboard */}
-              <div className="bg-white rounded-xl shadow-lg overflow-hidden">
-                {/* Header - Reduced padding (px-6 py-4 to px-4 py-3) and font size (text-lg to text-base) */}
-                <div className="bg-blue-600 text-white px-4 py-3">
-                  <div className="flex items-center justify-between">
+              <div className="overflow-hidden rounded-xl bg-white shadow-lg">
+                <div className="flex items-center justify-between bg-blue-600 px-4 py-3 text-white">
+                  <div>
+                    <p className="text-[10px] text-blue-100">MY HOME</p>
                     <h3 className="text-base font-semibold">14 Maple Street</h3>
-                    <div className="flex items-center space-x-2">
-                      {/* Reduced avatar size */}
-                      <div className="w-6 h-6 bg-blue-500 rounded-full"></div>
-                    </div>
                   </div>
+                  <span className="rounded-full bg-white/15 px-2.5 py-1 text-[10px] font-medium">Connected since 2026</span>
                 </div>
 
-                {/* Stats - Reduced padding (p-6 to p-4) and font size (text-2xl to text-xl) */}
-                <div className="grid grid-cols-3 gap-4 p-4 border-b border-gray-200">
-                  <div className="text-center">
-                    <div className="text-xl font-bold text-blue-600">92%</div>
-                    <div className="text-xs text-gray-600">Home profile</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-xl font-bold text-green-600">$1,240</div>
-                    <div className="text-xs text-gray-600">Savings found</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-xl font-bold text-purple-600">18</div>
-                    <div className="text-xs text-gray-600">Home records</div>
-                  </div>
-                </div>
+                <div className="grid grid-cols-[132px_1fr]">
+                  <nav className="border-r border-slate-200 bg-slate-50 p-3" aria-label="Home system preview">
+                    {['Overview', 'Vault', 'Timeline', 'Maintenance', 'Projects', 'Property Health', 'Finances', 'Insurance', 'Neighborhood', 'Savings', 'Seller Prep'].map((item, index) => (
+                      <div key={item} className={`mb-0.5 rounded-md px-2 py-1.5 text-[10px] font-medium ${index === 0 ? 'bg-blue-100 text-blue-700' : 'text-slate-600'}`}>
+                        {item}
+                      </div>
+                    ))}
+                  </nav>
 
-                {/* Recent Bookings - Reduced padding (p-6 to p-4) and internal padding (p-3 to p-2) */}
-                <div className="p-4">
-                  <h4 className="text-sm font-semibold text-gray-900 mb-3">What&apos;s happening at home</h4>
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
-                      <div className="flex items-center">
-                        <div className="w-2 h-2 bg-green-500 rounded-full mr-3"></div>
-                        <div>
-                          <div className="text-sm font-medium text-gray-900">Spring HVAC service</div>
-                          <div className="text-xs text-gray-500">Due in 12 days · Maintenance</div>
-                        </div>
+                  <div className="p-4">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <p className="text-[10px] font-medium text-slate-500">GOOD MORNING</p>
+                        <h4 className="mt-0.5 text-sm font-semibold text-slate-900">Your home is in good shape.</h4>
                       </div>
-                      <span className="text-xs font-medium text-green-600 bg-green-100 px-2 py-1 rounded">
-                        Planned
-                      </span>
+                      <span className="rounded-full bg-emerald-100 px-2 py-1 text-[10px] font-semibold text-emerald-700">Home health 86</span>
                     </div>
-                    
-                    <div className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
-                      <div className="flex items-center">
-                        <div className="w-2 h-2 bg-yellow-500 rounded-full mr-3"></div>
-                        <div>
-                          <div className="text-sm font-medium text-gray-900">Roof warranty added</div>
-                          <div className="text-xs text-gray-500">Today · Home timeline</div>
+
+                    <div className="mt-4 grid grid-cols-3 gap-2">
+                      {[['24', 'Records'], ['3', 'Coming up'], ['$1.2k', 'Savings']].map(([value, label]) => (
+                        <div key={label} className="rounded-lg border border-slate-200 p-2">
+                          <div className="text-sm font-bold text-blue-600">{value}</div>
+                          <div className="text-[9px] text-slate-500">{label}</div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="mt-4">
+                      <p className="text-[10px] font-semibold text-slate-900">What comes next</p>
+                      <div className="mt-2 space-y-2">
+                        <div className="flex items-center justify-between rounded-lg bg-slate-50 p-2">
+                          <div><p className="text-[10px] font-medium text-slate-900">Spring HVAC service</p><p className="text-[9px] text-slate-500">Due in 12 days · Home Care</p></div>
+                          <span className="text-[9px] font-medium text-blue-600">View</span>
+                        </div>
+                        <div className="flex items-center justify-between rounded-lg bg-slate-50 p-2">
+                          <div><p className="text-[10px] font-medium text-slate-900">Energy rebate available</p><p className="text-[9px] text-slate-500">Potential value $600 · Savings</p></div>
+                          <span className="text-[9px] font-medium text-blue-600">Review</span>
                         </div>
                       </div>
-                      <span className="text-xs font-medium text-yellow-600 bg-yellow-100 px-2 py-1 rounded">
-                        Filed
-                      </span>
                     </div>
                   </div>
                 </div>

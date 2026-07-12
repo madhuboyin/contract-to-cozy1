@@ -113,7 +113,7 @@ export default function Neighborhood() {
                 <div>
                   {/* 8. Reduced card title font size (text-2xl to text-xl) */}
                   <h3 className="text-xl font-bold text-gray-900 mb-2">
-                    Brooklyn Home Inspectors
+                    Your home inspection relationship
                   </h3>
                   <div className="flex items-center space-x-2">
                     <div className="flex text-yellow-400">
@@ -122,11 +122,11 @@ export default function Neighborhood() {
                       ))}
                     </div>
                     <span className="text-sm text-gray-600 font-semibold">4.9</span>
-                    <span className="text-sm text-gray-400">(127 reviews)</span>
+                    <span className="text-sm text-gray-400">Known to your neighborhood</span>
                   </div>
                 </div>
                 <div className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-semibold"> {/* Reduced font size */}
-                  Best Value
+                  Home context ready
                 </div>
               </div>
 
@@ -145,7 +145,7 @@ export default function Neighborhood() {
                     />
                   </svg>
                   <span className="text-sm font-semibold"> {/* Reduced font size */}
-                    15 jobs completed in your neighborhood
+                    15 nearby homes · 2 prior visits to your home
                   </span>
                 </div>
               </div>
@@ -153,16 +153,16 @@ export default function Neighborhood() {
               {/* Service Details */}
               <div className="space-y-2"> {/* Reduced spacing */}
                 <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">Service Type</span>
-                  <span className="font-semibold text-gray-900">Home Inspection</span>
+                  <span className="text-gray-600">Last home visit</span>
+                  <span className="font-semibold text-gray-900">May 18, 2025</span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">Price Range</span>
-                  <span className="font-semibold text-green-600">$425 - $550</span>
+                  <span className="text-gray-600">Records preserved</span>
+                  <span className="font-semibold text-green-600">Report, receipt, photos</span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">Availability</span>
-                  <span className="font-semibold text-gray-900">Next 2-3 days</span>
+                  <span className="text-gray-600">Connected project</span>
+                  <span className="font-semibold text-gray-900">Annual inspection</span>
                 </div>
               </div>
 
