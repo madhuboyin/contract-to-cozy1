@@ -47,6 +47,12 @@ export default function ValuePropositionComparison() {
     },
     {
       iconToken: 'shield-check',
+      title: 'Future decisions',
+      cozy: 'Every document and improvement adds context for what you decide next.',
+      competitor: 'Every new question begins with another search through incomplete information.'
+    },
+    {
+      iconToken: 'shield-check',
       title: 'What your home becomes',
       cozy: 'A living home record that becomes more valuable every year.',
       competitor: 'Disconnected home information that loses value over time.'

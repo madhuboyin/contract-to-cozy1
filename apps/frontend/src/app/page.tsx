@@ -6,6 +6,9 @@ import Features from '@/components/landing/Features';
 import HowItWorks from '@/components/landing/HowItWorks';
 import DashboardShowcase from '@/components/landing/DashboardShowcase';
 import ValuePropositionComparison from '@/components/landing/ValuePropositionComparison'; // NEW IMPORT
+import HomeKnowledge from '@/components/landing/HomeKnowledge';
+import HomeKnowledgeTimeline from '@/components/landing/HomeKnowledgeTimeline';
+import ConnectedEcosystem from '@/components/landing/ConnectedEcosystem';
 import Services from '@/components/landing/Services';
 import Neighborhood from '@/components/landing/Neighborhood';
 import SavingsCalculator from '@/components/landing/SavingsCalculator';
@@ -22,10 +25,13 @@ export default function Home() {
       <HowItWorks />
       <DashboardShowcase />
       <ValuePropositionComparison /> {/* NEW COMPONENT PLACED HERE */}
+      <HomeKnowledge />
+      <SavingsCalculator />
       <Services />
       <Neighborhood />
-      <SavingsCalculator />
+      <HomeKnowledgeTimeline />
       <Testimonials />
+      <ConnectedEcosystem />
       <CTASection />
       <Footer />
     </main>

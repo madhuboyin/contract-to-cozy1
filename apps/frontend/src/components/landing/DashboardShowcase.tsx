@@ -6,22 +6,22 @@ export default function DashboardShowcase() {
     {
       iconToken: 'layout-grid',
       title: 'Home records',
-      description: 'Documents, insurance, warranties',
+      description: 'Nothing important disappears',
     },
     {
       iconToken: 'building-2',
       title: 'Plans & projects',
-      description: 'Maintenance and improvements',
+      description: 'Every choice stays in context',
     },
     {
       iconToken: 'badge-check',
       title: 'Home history',
-      description: 'A timeline that stays complete',
+      description: 'Knowledge that grows each year',
     },
     {
       iconToken: 'dollar-sign',
       title: 'Money & value',
-      description: 'Budgets, savings, and equity',
+      description: 'Past decisions guide future value',
     },
   ];
 
@@ -44,7 +44,7 @@ export default function DashboardShowcase() {
             
             {/* Reduced font size and margin */}
             <p className="text-base text-gray-600 mb-6 leading-relaxed">
-              Everything about your home has a place here: documents, projects, maintenance, budgets, insurance, property health, neighborhood knowledge, home value, savings, and trusted help.
+              This is where your home remembers. Every new document, repair, project, and decision adds context—making the next question easier to answer and the next decision easier to make.
             </p>
 
             {/* Features Grid - Reduced margin */}

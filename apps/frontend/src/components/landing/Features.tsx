@@ -6,47 +6,47 @@ const FEATURES: Array<{ concept: IconConcept; title: string; description: string
   {
     concept: 'property',
     title: 'Home Vault',
-    description: 'Keep documents, warranties, receipts, manuals, and inspections where they belong.',
+    description: 'The permanent source for every document your home will ever need.',
   },
   {
     concept: 'notifications',
     title: 'Home Timeline',
-    description: 'Preserve every repair, upgrade, inspection, and milestone in one lasting history.',
+    description: 'The living history of every repair, improvement, inspection, and milestone.',
   },
   {
     concept: 'expenses',
     title: 'Home Planner',
-    description: 'Stay ahead of maintenance, renewals, seasonal work, and future projects.',
+    description: 'Past care becomes the knowledge that tells you what your home needs next.',
   },
   {
     concept: 'providers',
     title: 'Home Care',
-    description: 'Keep maintenance, seasonal work, repairs, and trusted help in rhythm.',
+    description: 'Every service adds context to how your home has been cared for.',
   },
   {
     concept: 'expenses',
     title: 'Home Finances',
-    description: 'Understand spending, budgets, home value, and opportunities to save.',
+    description: 'A lasting record of what the home costs, saves, and gains in value.',
   },
   {
     concept: 'property',
     title: 'Property Health',
-    description: 'See the condition, risks, and priorities that shape what your home needs next.',
+    description: 'Understand where your home is today—and what its history says comes next.',
   },
   {
     concept: 'providers',
     title: 'Projects',
-    description: 'Keep plans, estimates, decisions, progress, and completed work together.',
+    description: 'Capture every improvement as part of your home’s permanent story.',
   },
   {
     concept: 'notifications',
     title: 'Insurance',
-    description: 'Keep policies, renewals, coverage details, and claims connected to the home.',
+    description: 'Policies, claims, coverage decisions, and proof remain connected for good.',
   },
   {
     concept: 'property',
     title: 'Neighborhood',
-    description: 'Connect local knowledge, community context, and trusted relationships to your home.',
+    description: 'Local knowledge and trusted relationships become part of the home’s context.',
   },
 ];
 
@@ -56,8 +56,8 @@ export default function Features() {
       <div className="mx-auto max-w-6xl">
         <div className="mb-6 text-center">
           <p className="mb-2 text-xs font-semibold tracking-normal text-brand-700">One connected home</p>
-          <h2 className="text-2xl font-semibold tracking-tight text-slate-950 sm:text-3xl">Every part of homeownership, working together</h2>
-          <p className="mx-auto mt-2 max-w-2xl text-sm text-slate-600">Not separate features. One operating system, built around your home.</p>
+          <h2 className="text-2xl font-semibold tracking-tight text-slate-950 sm:text-3xl">One memory. Every part of your home.</h2>
+          <p className="mx-auto mt-2 max-w-2xl text-sm text-slate-600">Each system preserves a different part of your home&apos;s knowledge. Together, they form one permanent history.</p>
         </div>
 
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 lg:gap-5">
@@ -80,7 +80,7 @@ export default function Features() {
             href="/signup"
             className="inline-flex min-h-[44px] items-center rounded-lg bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-700"
           >
-            Build your home system
+            Start your home&apos;s history
           </Link>
         </div>
       </div>

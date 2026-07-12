@@ -13,8 +13,9 @@ export default function Neighborhood() {
             
             {/* 3. Reduced header font size (text-5xl to text-3xl) */}
             <h2 className="text-2xl md:text-3xl font-bold text-gray-900">
-              Trusted help when you need it
+              The people who know your home
             </h2>
+            <p className="text-sm leading-relaxed text-gray-600">The relationship becomes more valuable when the context never disappears.</p>
             
             <div className="space-y-5"> {/* Reduced space-y-6 to space-y-5 */}
               
@@ -41,7 +42,7 @@ export default function Neighborhood() {
                   </h3>
                   {/* 6. Reduced feature description font size (implicit base to text-sm) */}
                   <p className="text-sm text-gray-600">
-                    Find the right professional from the maintenance task, project, or home record that led you there.
+                    Your roofer knows the roof. Your HVAC technician sees the last service. No one starts without the history.
                   </p>
                 </div>
               </div>
@@ -69,7 +70,7 @@ export default function Neighborhood() {
                   </h3>
                   {/* 6. Reduced feature description font size (implicit base to text-sm) */}
                   <p className="text-sm text-gray-600">
-                    Learn from nearby homeowners and see relevant work completed in your neighborhood.
+                    Trusted relationships and nearby experience remain connected to the home—not buried in a contact list.
                   </p>
                 </div>
               </div>
@@ -97,7 +98,7 @@ export default function Neighborhood() {
                   </h3>
                   {/* 6. Reduced feature description font size (implicit base to text-sm) */}
                   <p className="text-sm text-gray-600">
-                    Keep estimates, receipts, warranties, and completed work attached to your home timeline.
+                    Reports, estimates, receipts, warranties, and completed work stay attached long after the visit ends.
                   </p>
                 </div>
               </div>

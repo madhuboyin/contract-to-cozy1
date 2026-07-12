@@ -9,21 +9,21 @@ export default function Testimonials() {
       location: 'Brooklyn, NY',
       initials: 'SB',
       rating: 5,
-      text: 'For the first time, I know exactly where every document, warranty, and repair record lives. The mental load is gone.',
+      text: 'Contract to Cozy found a utility rebate we had forgotten about. We recovered $900 because the original project records were still there.',
     },
     {
       name: 'Michael R.',
       location: 'Park Slope, NY',
       initials: 'MR',
       rating: 5,
-      text: 'I no longer wonder what maintenance I forgot. I can see what is coming and plan for it before it becomes urgent.',
+      text: 'Our HVAC technician could see the last service, the replaced part, and the warranty before arriving. We did not have to explain the house again.',
     },
     {
       name: 'Jessica C.',
       location: 'Williamsburg, NY',
       initials: 'JC',
       rating: 5,
-      text: 'When we prepared to sell, our complete home history was already organized. What used to feel daunting felt manageable.',
+      text: 'When we sold, the inspection, permits, warranties, and improvements were already complete. We never searched through old paperwork.',
     },
   ];
 
@@ -33,10 +33,10 @@ export default function Testimonials() {
         {/* Section Header - Compact */}
         <div className="text-center mb-8">
           <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2">
-            A calmer way to own a home
+            Home knowledge creates real value
           </h2>
           <p className="text-base text-gray-600">
-            Confidence comes from knowing everything is in its place.
+            The history matters most when it changes what happens next.
           </p>
         </div>
 
@@ -81,19 +81,19 @@ export default function Testimonials() {
         <div className="mt-10 grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
           <div>
             <div className="text-2xl font-bold text-blue-600 mb-1">One place</div>
-            <div className="text-xs text-gray-600">Home records organized</div>
+            <div className="text-xs text-gray-600">Nothing important lost</div>
           </div>
           <div>
             <div className="text-2xl font-bold text-blue-600 mb-1">One history</div>
-            <div className="text-xs text-gray-600">Homes kept connected</div>
+            <div className="text-xs text-gray-600">Every chapter preserved</div>
           </div>
           <div>
             <div className="text-2xl font-bold text-blue-600 mb-1">Always ready</div>
-            <div className="text-xs text-gray-600">Homeowner confidence</div>
+            <div className="text-xs text-gray-600">Answers when they matter</div>
           </div>
           <div>
             <div className="text-2xl font-bold text-blue-600 mb-1">Built for years</div>
-            <div className="text-xs text-gray-600">Savings opportunities</div>
+            <div className="text-xs text-gray-600">Knowledge that compounds</div>
           </div>
         </div>
       </div>

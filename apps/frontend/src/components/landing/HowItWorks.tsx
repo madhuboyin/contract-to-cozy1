@@ -4,37 +4,37 @@ const STEPS = [
   {
     number: '01',
     title: 'Buy',
-    description: 'Bring inspections, closing records, and important decisions together from day one.',
+    description: 'Inspections, closing records, and early decisions become the first chapter—not another forgotten folder.',
     iconToken: 'building-2',
   },
   {
     number: '02',
     title: 'Move in',
-    description: 'Organize utilities, appliances, warranties, and the details that make the home yours.',
+    description: 'Appliances, warranties, and move-in details continue the history already in motion.',
     iconToken: 'search',
   },
   {
     number: '03',
     title: 'Own',
-    description: 'Keep records, insurance, appliances, finances, and neighborhood knowledge connected.',
+    description: 'Daily ownership adds knowledge about costs, systems, risks, and the neighborhood.',
     iconToken: 'calendar',
   },
   {
     number: '04',
     title: 'Maintain',
-    description: 'Know what comes next and preserve every repair as part of the home history.',
+    description: 'Every service and repair teaches the home what was done and what comes next.',
     iconToken: 'wrench',
   },
   {
     number: '05',
     title: 'Improve',
-    description: 'Plan projects, make informed decisions, and capture the value you add.',
+    description: 'Every project preserves the choices, people, materials, and value added.',
     iconToken: 'sparkles',
   },
   {
     number: '06',
     title: 'Sell',
-    description: 'Prepare with a complete home history and carry what you learned into what comes next.',
+    description: 'The complete history carries forward. Selling is a handoff, not an ending.',
     iconToken: 'key',
   },
 ];
@@ -46,7 +46,7 @@ export default function HowItWorks() {
         <div className="mb-7 text-center">
           <p className="mb-2 text-xs font-semibold tracking-normal text-brand-700">Built for the entire journey</p>
           <h2 className="text-2xl font-semibold tracking-tight text-slate-950 sm:text-3xl">Your home never starts from scratch again</h2>
-          <p className="mx-auto mt-2 max-w-2xl text-sm text-slate-600">From the first signature to the final handoff, Contract to Cozy keeps your home knowledge intact.</p>
+          <p className="mx-auto mt-2 max-w-2xl text-sm text-slate-600">Buying is not the beginning. Selling is not the end. The home&apos;s knowledge continues.</p>
         </div>
 
         <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">

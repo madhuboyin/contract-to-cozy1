@@ -63,10 +63,10 @@ export default function Services() {
         {/* Section Header - Reduced font size and margins */}
         <div className="text-center mb-10">
           <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-3">
-            One home. An entire ecosystem.
+            Everything your home knows, connected.
           </h2>
           <p className="text-base text-gray-600 max-w-2xl mx-auto">
-            Everything your home needs, connected to the same history and working from the same knowledge.
+            Records, care, money, and relationships all become part of the same permanent memory.
           </p>
         </div>
 
@@ -111,7 +111,7 @@ export default function Services() {
             // Reduced padding and font size for a sleeker button
             className="inline-flex items-center px-5 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-all shadow-md hover:shadow-lg"
           >
-            See everything in one place
+            Begin the permanent record
             <svg className="ml-2 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
             </svg>

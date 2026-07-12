@@ -1,9 +1,9 @@
 import { ArrowDown, CheckCircle2 } from 'lucide-react';
 
 const PHILOSOPHY = [
-  { title: 'Organize', description: 'Bring every record, responsibility, project, and decision into one connected home.' },
-  { title: 'Understand', description: 'Know what happened, what matters now, and what your home will need next.' },
-  { title: 'Act', description: 'Maintain, improve, protect, save, and prepare with the full story in front of you.' },
+  { title: 'Organize', description: 'Everything your home knows becomes connected.' },
+  { title: 'Understand', description: 'Your home starts telling you what matters—and what comes next.' },
+  { title: 'Act', description: 'Make better decisions with the complete history in front of you.' },
 ];
 
 export default function HomePhilosophy() {

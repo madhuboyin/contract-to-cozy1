@@ -93,27 +93,27 @@ export default function Hero() {
         eyebrow="The operating system for homeownership"
         title={
           <>
-            Finally, one place to
-            <span className="text-brand-700"> run your home.</span>
+            Your home&apos;s permanent
+            <span className="text-brand-700"> memory.</span>
           </>
         }
-        subtitle="Homeownership gets more complicated every year. Contract to Cozy gives every document, repair, project, expense, and decision one connected place—so you can run your home with confidence."
+        subtitle="Every year, your home creates more history. Contract to Cozy keeps every document, repair, project, expense, and decision connected—so nothing your home knows is ever lost."
         ctaLabel="Create free account"
         ctaHref="/signup"
         secondaryCtaLabel="Explore product"
         secondaryCtaHref="#features"
         proofItems={[
           {
-            label: 'Everything together',
-            detail: 'Records, plans, finances, and trusted help in one home.',
+            label: 'Nothing gets lost',
+            detail: 'Every record stays connected to the home it belongs to.',
           },
           {
-            label: 'Built for years',
-            detail: 'A permanent history that grows with your home.',
+            label: 'Built for decades',
+            detail: 'A permanent history that grows more useful every year.',
           },
           {
-            label: 'Always prepared',
-            detail: 'Know what happened, what matters, and what comes next.',
+            label: 'Complete context',
+            detail: 'Past knowledge makes every future decision easier.',
           },
         ]}
       />

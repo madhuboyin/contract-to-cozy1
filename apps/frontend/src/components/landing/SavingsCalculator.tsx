@@ -44,7 +44,7 @@ export default function SavingsCalculator() {
             A connected home uncovers opportunities. Find tax credits, rebates, insurance improvements, utility savings, and preventive savings in context.
           </p>
           <div className="mt-4 flex flex-wrap justify-center gap-2">
-            {['Tax credits', 'Insurance', 'Utilities', 'Maintenance', 'Rebates', 'Home value'].map((item) => (
+            {['Tax credits', 'Insurance', 'Utility rebates', 'Warranty claims', 'Preventive care', 'Refinancing', 'Government programs', 'Home value'].map((item) => (
               <span key={item} className="rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700">{item}</span>
             ))}
           </div>
