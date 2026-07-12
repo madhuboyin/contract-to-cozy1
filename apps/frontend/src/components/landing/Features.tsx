@@ -1,87 +1,49 @@
-import Link from 'next/link';
-import { resolveIconByConcept } from '@/lib/icons';
-import type { IconConcept } from '@/lib/icons';
+import { resolveIconByToken } from '@/lib/icons';
 import { landingStyles } from './landingStyles';
 
-const FEATURES: Array<{ concept: IconConcept; title: string; description: string }> = [
+const CAPABILITIES = [
   {
-    concept: 'property',
-    title: 'Home Vault',
-    description: 'Documents · warranties · receipts',
+    iconToken: 'file-text',
+    title: 'Records and history',
+    description: 'Documents, closing records, warranties, home timeline',
   },
   {
-    concept: 'notifications',
-    title: 'Home Timeline',
-    description: 'Every event, in order',
+    iconToken: 'wrench',
+    title: 'Care and planning',
+    description: 'Maintenance, seasonal planning, repairs, projects',
   },
   {
-    concept: 'expenses',
-    title: 'Home Planner',
-    description: 'What comes next',
+    iconToken: 'dollar-sign',
+    title: 'Money and value',
+    description: 'Budgets, insurance, home value, savings and rebates',
   },
   {
-    concept: 'providers',
-    title: 'Home Care',
-    description: 'Service history',
-  },
-  {
-    concept: 'expenses',
-    title: 'Home Finances',
-    description: 'Costs · savings · value',
-  },
-  {
-    concept: 'property',
-    title: 'Property Health',
-    description: 'Condition · risk · priorities',
-  },
-  {
-    concept: 'providers',
-    title: 'Projects',
-    description: 'Plans · people · proof',
-  },
-  {
-    concept: 'notifications',
-    title: 'Insurance',
-    description: 'Policies · claims · coverage',
-  },
-  {
-    concept: 'property',
-    title: 'Neighborhood',
-    description: 'People · place · context',
+    iconToken: 'users',
+    title: 'People and place',
+    description: 'Trusted providers, neighborhood, local recommendations',
   },
 ];
 
 export default function Features() {
   return (
-    <section id="features" className={`bg-white ${landingStyles.section}`}>
+    <section id="features" className={`bg-slate-50 ${landingStyles.section}`}>
       <div className={landingStyles.container}>
-        <div className="mb-7 text-left">
-          <p className={landingStyles.eyebrow}>One connected home</p>
+        <div className="mx-auto mb-8 max-w-2xl text-center">
+          <p className={landingStyles.eyebrow}>Everything your home knows, connected</p>
           <h2 className={landingStyles.heading}>One memory. Every part of your home.</h2>
         </div>
 
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {FEATURES.map((feature) => {
-            const FeatureIcon = resolveIconByConcept(feature.concept);
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {CAPABILITIES.map((capability) => {
+            const CapabilityIcon = resolveIconByToken(capability.iconToken);
             return (
-              <article key={feature.title} className={landingStyles.featureCard}>
-                <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-brand-50 text-brand-700">
-                  <FeatureIcon className="h-4.5 w-4.5" />
-                </span>
-                <h3 className="mb-0 mt-3 text-base font-semibold text-slate-900">{feature.title}</h3>
-                <p className="mb-0 mt-1 text-xs leading-5 text-slate-600">{feature.description}</p>
+              <article key={capability.title} className={`${landingStyles.featureCard} min-h-44`}>
+                <CapabilityIcon className="h-5 w-5 text-slate-800" />
+                <h3 className="mb-0 mt-4 text-base font-semibold text-slate-900">{capability.title}</h3>
+                <p className="mb-0 mt-3 text-sm leading-6 text-slate-600">{capability.description}</p>
               </article>
             );
           })}
-        </div>
-
-        <div className="mt-8 text-center">
-          <Link
-            href="/signup"
-            className="inline-flex min-h-[44px] items-center rounded-lg bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-700"
-          >
-            Start your home&apos;s history
-          </Link>
         </div>
       </div>
     </section>
