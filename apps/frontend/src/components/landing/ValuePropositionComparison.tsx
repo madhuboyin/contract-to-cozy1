@@ -3,6 +3,7 @@
 
 import Link from 'next/link';
 import { CheckCircle2, XCircle } from 'lucide-react';
+import { landingStyles } from './landingStyles';
 
 export default function ValuePropositionComparison() {
   const comparisonPoints = [
@@ -34,19 +35,19 @@ export default function ValuePropositionComparison() {
   ];
 
   return (
-    <section id="features" className="py-10 md:py-12 px-4 sm:px-6 lg:px-8 bg-gray-50">
-      <div className="max-w-7xl mx-auto">
-        <div className="text-center mb-4">
-          <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-4">
+    <section className={`bg-slate-50 ${landingStyles.section}`}>
+      <div className={landingStyles.container}>
+        <div className="mb-5 text-center">
+          <h2 className={landingStyles.heading}>
             Homeownership feels different when everything is connected
           </h2>
-          <p className="text-base text-gray-600">Less searching. Less remembering. More confidence in the home you own.</p>
+          <p className={`mx-auto mt-3 max-w-xl ${landingStyles.body}`}>Less searching. Less remembering. More confidence.</p>
         </div>
 
         {/* Mobile: stacked feature cards (< md) */}
         <div className="mt-6 space-y-3 md:hidden">
           {comparisonPoints.map((point, index) => (
-            <div key={index} className="rounded-xl border border-gray-200 bg-white overflow-hidden shadow-sm">
+            <div key={index} className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
               <div className="px-4 py-3 bg-gray-50 border-b border-gray-200">
                 <h3 className="text-sm font-semibold text-gray-900">{point.title}</h3>
               </div>
@@ -69,33 +70,33 @@ export default function ValuePropositionComparison() {
         </div>
 
         {/* Desktop: 3-column table (>= md) */}
-        <div className="mt-6 hidden md:block border border-gray-200 rounded-xl overflow-hidden shadow-xl bg-white">
+        <div className="mt-7 hidden overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_18px_42px_-32px_rgba(15,23,42,0.55)] md:block">
           {/* Table Header */}
-          <div className="grid grid-cols-3 font-bold text-sm sm:text-base bg-gray-100 text-gray-700 tracking-normal">
-            <div className="p-4 border-r border-gray-200">The experience</div>
-            <div className="p-4 border-r border-gray-200 text-blue-600">With Contract to Cozy</div>
-            <div className="p-4 text-gray-900">Without it</div>
+          <div className="grid grid-cols-3 bg-slate-50 text-xs font-semibold text-slate-600">
+            <div className="border-r border-slate-200 px-5 py-3">The experience</div>
+            <div className="border-r border-slate-200 px-5 py-3 text-brand-700">With Contract to Cozy</div>
+            <div className="px-5 py-3">Without it</div>
           </div>
 
           {/* Table Rows */}
           {comparisonPoints.map((point, index) => (
             <div
               key={index}
-              className={`grid grid-cols-3 items-center bg-white ${index > 0 ? 'border-t border-gray-200' : ''}`}
+              className={`grid grid-cols-3 items-center bg-white transition-colors hover:bg-slate-50/60 ${index > 0 ? 'border-t border-slate-200' : ''}`}
             >
-              <div className="p-4 border-r border-gray-200">
-                <h3 className="text-sm font-semibold text-gray-900 leading-snug">{point.title}</h3>
+              <div className="border-r border-slate-200 px-5 py-4">
+                <h3 className="mb-0 text-sm font-semibold leading-snug text-slate-900">{point.title}</h3>
               </div>
-              <div className="p-4 border-r border-gray-200">
+              <div className="border-r border-slate-200 px-5 py-4">
                 <div className="flex items-start space-x-3">
-                  <CheckCircle2 className="h-5 w-5 text-emerald-500 shrink-0 mt-0.5" />
-                  <p className="text-sm text-gray-700 leading-snug">{point.cozy}</p>
+                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+                  <p className="mb-0 text-sm leading-snug text-slate-700">{point.cozy}</p>
                 </div>
               </div>
-              <div className="p-4">
+              <div className="px-5 py-4">
                 <div className="flex items-start space-x-3">
-                  <XCircle className="h-5 w-5 text-gray-400 shrink-0 mt-0.5" />
-                  <p className="text-sm text-gray-700 leading-snug">{point.without}</p>
+                  <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
+                  <p className="mb-0 text-sm leading-snug text-slate-600">{point.without}</p>
                 </div>
               </div>
             </div>

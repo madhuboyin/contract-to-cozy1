@@ -1,6 +1,7 @@
 // apps/frontend/src/components/landing/Testimonials.tsx
 // Compact version with reduced height
 import { Star } from 'lucide-react';
+import { landingStyles } from './landingStyles';
 
 export default function Testimonials() {
   const testimonials = [
@@ -28,21 +29,21 @@ export default function Testimonials() {
   ];
 
   return (
-    <section id="testimonials" className="py-12 md:py-16 px-4 sm:px-6 lg:px-8 bg-gray-50">
-      <div className="max-w-7xl mx-auto">
+    <section id="testimonials" className={`bg-slate-50 ${landingStyles.section}`}>
+      <div className={landingStyles.container}>
         {/* Section Header - Compact */}
-        <div className="text-center mb-8">
-          <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2">
+        <div className="mb-7 text-left">
+          <h2 className={landingStyles.heading}>
             Home knowledge creates real value
           </h2>
         </div>
 
         {/* Testimonials Grid - Compact */}
-        <div className="grid md:grid-cols-3 gap-6">
+        <div className="grid gap-4 md:grid-cols-3">
           {testimonials.map((testimonial, index) => (
             <div
               key={index}
-              className="bg-white rounded-xl p-6 shadow-sm hover:shadow-md transition-all duration-300"
+              className={landingStyles.testimonialCard}
             >
               {/* Stars - Smaller */}
               <div className="flex text-yellow-400 text-lg mb-3">

@@ -1,11 +1,12 @@
 import Link from 'next/link';
+import { landingStyles } from './landingStyles';
 
 export default function DashboardShowcase() {
   return (
     // Reduced vertical padding
-    <section id="features" className="py-10 md:py-12 bg-white">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="grid lg:grid-cols-2 gap-10 items-center">
+    <section className={`bg-white ${landingStyles.section}`}>
+      <div className="mx-auto max-w-7xl">
+        <div className="grid items-center gap-8 lg:grid-cols-[0.82fr_1.18fr] lg:gap-12">
           
           {/* Left Column - Text (Sleeker fonts, tighter spacing) */}
           <div>
@@ -22,7 +23,7 @@ export default function DashboardShowcase() {
             {/* Reduced button size */}
             <Link
               href="/signup"
-              className="mt-3 inline-block px-5 py-2.5 bg-blue-600 text-white text-base font-medium rounded-lg hover:bg-blue-700 transition-colors shadow-md"
+              className="mt-3 inline-flex min-h-[44px] items-center rounded-xl bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-brand-700"
             >
               Explore your home →
             </Link>
@@ -31,8 +32,8 @@ export default function DashboardShowcase() {
           {/* Right Column - Dashboard Mockup (desktop only; too dense to read at mobile widths) */}
           <div className="relative hidden lg:block">
             {/* Reduced outer padding (p-8 to p-6) */}
-            <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-6 shadow-xl border border-gray-200">
-              <div className="overflow-hidden rounded-xl bg-white shadow-lg">
+            <div className="rounded-2xl border border-brand-100 bg-brand-50/60 p-6">
+              <div className={`overflow-hidden ${landingStyles.productCard}`}>
                 <div className="flex items-center justify-between bg-blue-600 px-4 py-3 text-white">
                   <div>
                     <p className="text-[10px] text-blue-100">MY HOME</p>

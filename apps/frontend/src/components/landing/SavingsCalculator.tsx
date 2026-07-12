@@ -5,6 +5,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { Lock, Sparkles } from 'lucide-react';
+import { landingStyles } from './landingStyles';
 
 export default function SavingsCalculator() {
   const [location, setLocation] = useState('');
@@ -33,28 +34,28 @@ export default function SavingsCalculator() {
   };
 
   return (
-    <section id="calculator" className="py-12 md:py-16 px-4 sm:px-6 lg:px-8 bg-gray-50">
-      <div className="max-w-3xl mx-auto">
+    <section id="calculator" className={`bg-slate-50 ${landingStyles.section}`}>
+      <div className={landingStyles.container}>
+        <div className="grid items-start gap-8 lg:grid-cols-[0.82fr_1.18fr] lg:gap-12">
         {/* Section Header */}
-        <div className="text-center mb-8">
+        <div className="pt-2 text-left lg:sticky lg:top-24">
           <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
             <Sparkles className="h-3.5 w-3.5" />
             Free, no account needed
           </span>
-          <h2 className="mt-4 text-2xl md:text-3xl font-bold text-gray-900 mb-2">
+          <h2 className={`mt-4 ${landingStyles.heading}`}>
             See what your home qualifies for
           </h2>
-          <p className="text-base text-gray-600">Tax credits, rebates, and refinancing opportunities tied to your specific property. Takes 30 seconds.</p>
+          <p className={`mt-3 max-w-md ${landingStyles.body}`}>Tax credits, rebates, insurance savings, and refinancing opportunities tied to your property.</p>
+          <div className="mt-5 flex flex-wrap gap-2">
+            {['Tax credits', 'Insurance', 'Utility rebates', 'Refinancing'].map((item) => (
+              <span key={item} className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700">{item}</span>
+            ))}
+          </div>
         </div>
 
         {/* Calculator Card */}
-        <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-6 md:p-8">
-          <div className="flex flex-wrap justify-center gap-2 mb-6">
-            {['Tax credits', 'Insurance', 'Utility rebates', 'Refinancing'].map((item) => (
-              <span key={item} className="rounded-full border border-gray-300 px-3 py-1 text-xs font-medium text-gray-700">{item}</span>
-            ))}
-          </div>
-
+        <div className={`${landingStyles.productCard} p-6 md:p-8`}>
           <form onSubmit={calculateSavings} className="space-y-4">
             {/* Location */}
             <div>
@@ -66,7 +67,7 @@ export default function SavingsCalculator() {
                 value={location}
                 onChange={(e) => setLocation(e.target.value)}
                 required
-                className="w-full px-4 py-2.5 text-sm rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm focus:border-transparent focus:ring-2 focus:ring-brand-500"
               >
                 <option value="">Select your location</option>
                 <option value="Manhattan, NY">Manhattan, NY</option>
@@ -95,7 +96,7 @@ export default function SavingsCalculator() {
                     onChange={(e) => setPrice(e.target.value.replace(/,/g, ''))}
                     placeholder="500,000"
                     required
-                    className="w-full pl-8 pr-4 py-2.5 text-sm rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full rounded-xl border border-slate-300 py-2.5 pl-8 pr-4 text-sm focus:border-transparent focus:ring-2 focus:ring-brand-500"
                   />
                 </div>
               </div>
@@ -110,7 +111,7 @@ export default function SavingsCalculator() {
                   value={closingDate}
                   onChange={(e) => setClosingDate(e.target.value)}
                   required
-                  className="w-full px-4 py-2.5 text-sm rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm focus:border-transparent focus:ring-2 focus:ring-brand-500"
                 />
               </div>
             </div>
@@ -118,7 +119,7 @@ export default function SavingsCalculator() {
             {/* Submit Button */}
             <button
               type="submit"
-              className="w-full py-3 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors shadow-md hover:shadow-lg"
+              className="min-h-[44px] w-full rounded-xl bg-brand-600 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-brand-700"
             >
               Find my opportunities
             </button>
@@ -152,13 +153,14 @@ export default function SavingsCalculator() {
               <div className="mt-4 text-center">
                 <Link
                   href="/signup"
-                  className="inline-block px-6 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors shadow-md"
+                  className="inline-flex min-h-[44px] items-center rounded-xl bg-brand-600 px-6 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-brand-700"
                 >
                   Save opportunities to my home →
                 </Link>
               </div>
             </div>
           )}
+        </div>
         </div>
       </div>
     </section>

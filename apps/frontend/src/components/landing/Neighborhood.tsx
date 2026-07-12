@@ -1,13 +1,14 @@
 import Link from 'next/link';
 import { Star } from 'lucide-react';
+import { landingStyles } from './landingStyles';
 
 export default function Neighborhood() {
   return (
     // 1. Reduced padding (py-24 to py-10/12)
     // 2. Changed background (gradient to bg-white) for consistency
-    <section className="py-10 md:py-12 px-4 sm:px-6 lg:px-8 bg-white">
-      <div className="max-w-7xl mx-auto">
-        <div className="grid lg:grid-cols-2 gap-10 items-center"> {/* Reduced gap-12 to gap-10 */}
+    <section className={`bg-white ${landingStyles.section}`}>
+      <div className={landingStyles.container}>
+        <div className="grid items-center gap-6 lg:grid-cols-[0.9fr_1.1fr] lg:gap-8">
           {/* Left Column - Text Content */}
           <div className="space-y-6"> {/* Reduced space-y-8 to space-y-6 */}
             
@@ -98,7 +99,7 @@ export default function Neighborhood() {
           {/* Right Column - Provider Card */}
           <div className="relative">
             {/* 7. Reduced card padding (p-8 to p-6) and spacing (space-y-6 to space-y-5) */}
-            <div className="bg-white rounded-2xl shadow-2xl p-6 space-y-5">
+            <div className={`${landingStyles.productCard} space-y-5 p-6`}>
               {/* Provider Header */}
               <div className="flex items-start justify-between">
                 <div>
@@ -160,12 +161,12 @@ export default function Neighborhood() {
               {/* Action Buttons */}
               <div className="grid grid-cols-2 gap-4">
                 {/* 10. Reduced button padding/font size */}
-                <button className="px-5 py-2.5 border-2 border-blue-600 text-blue-600 rounded-lg text-sm font-semibold hover:bg-blue-50 transition-colors">
+                <button className="min-h-[44px] rounded-xl border border-brand-300 px-5 py-2.5 text-sm font-semibold text-brand-700 transition-colors hover:bg-brand-50">
                   View details
                 </button>
                 <Link
                   href="/signup"
-                  className="px-5 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition-colors text-center"
+                  className="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-brand-600 px-5 py-2.5 text-center text-sm font-semibold text-white transition-colors hover:bg-brand-700"
                 >
                   Save to home
                 </Link>

@@ -1,7 +1,9 @@
 // apps/frontend/src/app/page.tsx
 
 import Hero from '@/components/landing/Hero';
-import HomePhilosophy from '@/components/landing/HomePhilosophy';
+import Features from '@/components/landing/Features';
+import HowItWorks from '@/components/landing/HowItWorks';
+import DashboardShowcase from '@/components/landing/DashboardShowcase';
 import ValuePropositionComparison from '@/components/landing/ValuePropositionComparison'; // NEW IMPORT
 import Neighborhood from '@/components/landing/Neighborhood';
 import SavingsCalculator from '@/components/landing/SavingsCalculator';
@@ -13,7 +15,9 @@ export default function Home() {
   return (
     <main className="min-h-screen">
       <Hero />
-      <HomePhilosophy />
+      <Features />
+      <HowItWorks />
+      <DashboardShowcase />
       <ValuePropositionComparison /> {/* NEW COMPONENT PLACED HERE */}
       <SavingsCalculator />
       <Neighborhood />
