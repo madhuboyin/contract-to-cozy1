@@ -9,47 +9,47 @@ export default function ValuePropositionComparison() {
     // --- DIFFERENTIATORS (The UVPs) ---
     {
       iconToken: 'key',
-      title: 'Unified Closure Services',
-      cozy: 'One platform for inspection, attorney, and insurance vendor coordination.',
-      competitor: 'Separate vendors, manual communication, and disjointed scheduling required.'
+      title: 'Home records',
+      cozy: 'Every document, receipt, warranty, and record is organized in one trusted place.',
+      competitor: 'Scattered folders, old emails, paper files, and missing attachments.'
     },
     {
       iconToken: 'layout-grid',
-      title: 'Single Pane Dashboard',
-      cozy: 'All bookings, property documents, and budget history in one beautiful interface.',
-      competitor: 'Tracking services using spreadsheets, emails, and phone notes.'
+      title: 'Home history',
+      cozy: 'A complete timeline preserves what changed, when it happened, and who did the work.',
+      competitor: 'Trying to remember when something was repaired or searching for an old receipt.'
     },
     {
       iconToken: 'bell-ring',
-      title: 'Annual Reminders',
-      cozy: 'Automatic reminders for maintenance (e.g., duct cleaning, pest control).',
-      competitor: 'Homeowner must manually track and remember service cycles.'
+      title: 'What comes next',
+      cozy: 'Maintenance, renewals, and seasonal work stay visible before they become urgent.',
+      competitor: 'Sticky notes, forgotten tasks, and catching up after something goes wrong.'
     },
     {
       iconToken: 'badge-check',
-      title: 'Neighborhood Trust',
-      cozy: 'Pros vetted and rated by your actual neighbors with local job history.',
-      competitor: 'Generic city-wide reviews and simple rating systems.'
+      title: 'Home knowledge',
+      cozy: 'Information stays connected to the home and remains useful for years.',
+      competitor: 'Knowledge disappears across inboxes, spreadsheets, and changing owners.'
     },
 
     // --- CORE CAPABILITIES (The Necessities - Added from Features.tsx) ---
     {
       iconToken: 'dollar-sign',
-      title: 'Transparent Pricing',
-      cozy: 'See upfront costs and guaranteed quotes before booking.',
-      competitor: 'Hidden fees, estimated quotes that often change upon arrival.'
+      title: 'Money & savings',
+      cozy: 'Spending, budgets, rebates, tax credits, and savings opportunities live together.',
+      competitor: 'Disconnected spreadsheets and opportunities discovered too late.'
     },
     {
       iconToken: 'zap',
-      title: 'Book Fast',
-      cozy: 'Find, compare, and book qualified pros in minutes.',
-      competitor: 'Calling multiple vendors and waiting days for callbacks or quotes.'
+      title: 'Prepared ownership',
+      cozy: 'You can answer questions about your home with confidence, whether maintaining or selling.',
+      competitor: 'Starting the search from scratch every time a question comes up.'
     },
     {
       iconToken: 'shield-check',
-      title: 'Trusted & Verified',
-      cozy: 'All pros are background-checked, licensed, and insured for your peace of mind.',
-      competitor: 'User must manually verify license and insurance details themselves.'
+      title: 'One trusted place',
+      cozy: 'Everything belongs to one connected home system built around you.',
+      competitor: 'A growing collection of apps, notes, logins, and unfinished lists.'
     },
   ];
 
@@ -58,10 +58,10 @@ export default function ValuePropositionComparison() {
       <div className="max-w-7xl mx-auto">
         <div className="text-center mb-10">
           <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-4">
-            The Cozy Way vs. The Old Way
+            Homeownership feels different when everything is connected
           </h2>
           <p className="text-base text-gray-600 max-w-3xl mx-auto">
-            See how we transform the chaos of home services into a simple, managed experience.
+            Less searching. Less remembering. More confidence in the home you own.
           </p>
         </div>
 
@@ -82,7 +82,7 @@ export default function ValuePropositionComparison() {
                 </div>
                 {/* Cozy way */}
                 <div className="px-4 py-3 border-b border-gray-100">
-                  <p className="text-[11px] font-semibold tracking-wide text-blue-600 uppercase mb-1">The Cozy Way</p>
+                  <p className="text-[11px] font-semibold tracking-wide text-blue-600 uppercase mb-1">With Contract to Cozy</p>
                   <div className="flex items-start gap-2">
                     <CozyIcon className="h-4 w-4 text-green-500 shrink-0 mt-0.5" />
                     <p className="text-sm text-gray-700 leading-snug">{point.cozy}</p>
@@ -90,7 +90,7 @@ export default function ValuePropositionComparison() {
                 </div>
                 {/* Old way */}
                 <div className="px-4 py-3">
-                  <p className="text-[11px] font-semibold tracking-wide text-red-500 uppercase mb-1">The Old Way</p>
+                  <p className="text-[11px] font-semibold tracking-wide text-red-500 uppercase mb-1">Traditional homeownership</p>
                   <div className="flex items-start gap-2">
                     <CompetitorIcon className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />
                     <p className="text-sm text-gray-700 leading-snug">{point.competitor}</p>
@@ -105,9 +105,9 @@ export default function ValuePropositionComparison() {
         <div className="hidden md:block border border-gray-200 rounded-xl overflow-hidden shadow-xl bg-white">
           {/* Table Header */}
           <div className="grid grid-cols-3 font-bold text-sm sm:text-base bg-gray-100 text-gray-700 tracking-normal">
-            <div className="p-4 border-r border-gray-200">Key Feature</div>
-            <div className="p-4 border-r border-gray-200 text-center text-blue-600">The Cozy Way</div>
-            <div className="p-4 text-center text-red-600">The Old Way</div>
+            <div className="p-4 border-r border-gray-200">The experience</div>
+            <div className="p-4 border-r border-gray-200 text-center text-blue-600">With Contract to Cozy</div>
+            <div className="p-4 text-center text-red-600">Traditional homeownership</div>
           </div>
 
           {/* Table Rows */}
@@ -145,13 +145,13 @@ export default function ValuePropositionComparison() {
 
         <div className="mt-12 text-center">
           <h3 className="text-2xl font-bold text-gray-900 mb-4">
-            Ready to simplify your home management?
+            Keep your home knowledge for good
           </h3>
           <Link
             href="/signup"
             className="inline-block px-6 py-3 bg-blue-600 text-white text-base font-semibold rounded-lg hover:bg-blue-700 transition-colors shadow-lg"
           >
-            Create Your Free Account →
+            Create your free home →
           </Link>
         </div>
       </div>

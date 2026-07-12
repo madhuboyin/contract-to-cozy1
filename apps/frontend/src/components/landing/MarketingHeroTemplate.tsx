@@ -13,6 +13,8 @@ interface MarketingHeroTemplateProps {
   subtitle: string;
   ctaLabel: string;
   ctaHref: string;
+  secondaryCtaLabel?: string;
+  secondaryCtaHref?: string;
   proofItems: ProofRowItem[];
   screenshotSrc?: string;
   screenshotAlt?: string;
@@ -24,6 +26,8 @@ export default function MarketingHeroTemplate({
   subtitle,
   ctaLabel,
   ctaHref,
+  secondaryCtaLabel,
+  secondaryCtaHref,
   proofItems,
   screenshotSrc = '/contract-to-cozy-dashboard.png',
   screenshotAlt = 'Contract to Cozy dashboard preview',
@@ -42,7 +46,7 @@ export default function MarketingHeroTemplate({
           </h1>
           <p className="mt-4 max-w-xl text-pretty text-base text-slate-600 sm:text-lg">{subtitle}</p>
 
-          <div className="mt-7">
+          <div className="mt-7 flex flex-col gap-3 sm:flex-row">
             <Link
               href={ctaHref}
               className={`inline-flex min-h-[48px] items-center gap-2 rounded-xl bg-brand-600 px-6 py-3 text-sm font-semibold text-white shadow-[0_12px_30px_-16px_rgba(13,148,136,0.75)] transition hover:bg-brand-700 ${CTC_INTERACTION_RULES_V1.focusRing}`}
@@ -50,6 +54,11 @@ export default function MarketingHeroTemplate({
               {ctaLabel}
               <ArrowRight className="h-4 w-4" />
             </Link>
+            {secondaryCtaLabel && secondaryCtaHref ? (
+              <Link href={secondaryCtaHref} className={`inline-flex min-h-[48px] items-center justify-center rounded-xl border border-slate-300 bg-white px-6 py-3 text-sm font-semibold text-slate-700 transition hover:border-brand-300 hover:text-brand-700 ${CTC_INTERACTION_RULES_V1.focusRing}`}>
+                {secondaryCtaLabel}
+              </Link>
+            ) : null}
           </div>
 
           <ProofRow items={proofItems} className="mt-6" />

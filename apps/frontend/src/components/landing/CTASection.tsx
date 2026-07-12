@@ -5,9 +5,9 @@ export default function CTASection() {
   return (
     <section className="bg-gradient-to-r from-brand-600 to-brand-700 px-4 py-12 sm:px-6 lg:px-8 lg:py-14">
       <div className="mx-auto max-w-4xl text-center">
-        <h2 className="text-3xl font-semibold tracking-tight text-white">Ready to run your home with confidence?</h2>
+        <h2 className="text-3xl font-semibold tracking-tight text-white">Your home deserves better than scattered paperwork.</h2>
         <p className="mx-auto mt-3 max-w-2xl text-base text-teal-50">
-          Start free, get your highest-priority move, and take action with clear trust signals.
+          Create your free home operating system today. Keep everything connected from this home to the next.
         </p>
 
         <div className="mt-7 flex flex-col justify-center gap-3 sm:flex-row">
@@ -18,10 +18,10 @@ export default function CTASection() {
             Create free account
           </Link>
           <Link
-            href="/marketplace"
+            href="#features"
             className="inline-flex min-h-[46px] items-center justify-center rounded-lg border border-white/35 px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-white/10"
           >
-            Explore marketplace
+            Explore product
           </Link>
         </div>
 
@@ -33,11 +33,11 @@ export default function CTASection() {
             </span>
             <span className="inline-flex items-center gap-2">
               <CheckCircle2 className="h-4 w-4" />
-              Homeowner-first guidance
+              Built around your home
             </span>
             <span className="inline-flex items-center gap-2">
               <CheckCircle2 className="h-4 w-4" />
-              Cancel anytime
+              Your history stays together
             </span>
           </div>
         </div>

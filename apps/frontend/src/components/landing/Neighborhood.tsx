@@ -13,7 +13,7 @@ export default function Neighborhood() {
             
             {/* 3. Reduced header font size (text-5xl to text-3xl) */}
             <h2 className="text-2xl md:text-3xl font-bold text-gray-900">
-              Book Providers Your Neighbors Trust
+              Trusted help when you need it
             </h2>
             
             <div className="space-y-5"> {/* Reduced space-y-6 to space-y-5 */}
@@ -37,11 +37,11 @@ export default function Neighborhood() {
                 <div>
                   {/* 5. Reduced feature title font size (text-xl to text-lg) */}
                   <h3 className="text-lg font-semibold text-gray-900 mb-1.5">
-                    Hyperlocal Matching
+                    Help in context
                   </h3>
                   {/* 6. Reduced feature description font size (implicit base to text-sm) */}
                   <p className="text-sm text-gray-600">
-                    See providers who&apos;ve done great work on your street. Real photos, real reviews from real neighbors.
+                    Find the right professional from the maintenance task, project, or home record that led you there.
                   </p>
                 </div>
               </div>
@@ -65,11 +65,11 @@ export default function Neighborhood() {
                 <div>
                   {/* 5. Reduced feature title font size (text-xl to text-lg) */}
                   <h3 className="text-lg font-semibold text-gray-900 mb-1.5">
-                    Ask Your Neighbors
+                    Local knowledge
                   </h3>
                   {/* 6. Reduced feature description font size (implicit base to text-sm) */}
                   <p className="text-sm text-gray-600">
-                    Connect with homeowners nearby who&apos;ve used these providers. Get the inside scoop before you book.
+                    Learn from nearby homeowners and see relevant work completed in your neighborhood.
                   </p>
                 </div>
               </div>
@@ -93,11 +93,11 @@ export default function Neighborhood() {
                 <div>
                   {/* 5. Reduced feature title font size (text-xl to text-lg) */}
                   <h3 className="text-lg font-semibold text-gray-900 mb-1.5">
-                    See Nearby Work
+                    History preserved
                   </h3>
                   {/* 6. Reduced feature description font size (implicit base to text-sm) */}
                   <p className="text-sm text-gray-600">
-                    Browse portfolios of completed jobs in your area. See exactly what to expect.
+                    Keep estimates, receipts, warranties, and completed work attached to your home timeline.
                   </p>
                 </div>
               </div>
@@ -170,13 +170,13 @@ export default function Neighborhood() {
               <div className="grid grid-cols-2 gap-4">
                 {/* 10. Reduced button padding/font size */}
                 <button className="px-5 py-2.5 border-2 border-blue-600 text-blue-600 rounded-lg text-sm font-semibold hover:bg-blue-50 transition-colors">
-                  Ask Neighbors
+                  View details
                 </button>
                 <Link
                   href="/signup"
                   className="px-5 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition-colors text-center"
                 >
-                  Book Now
+                  Save to home
                 </Link>
               </div>
             </div>

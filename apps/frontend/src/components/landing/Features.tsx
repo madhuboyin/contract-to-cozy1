@@ -5,23 +5,23 @@ import type { IconConcept } from '@/lib/icons';
 const FEATURES: Array<{ concept: IconConcept; title: string; description: string }> = [
   {
     concept: 'property',
-    title: 'Know What Matters Now',
-    description: 'See your highest-priority home action first, not a cluttered dashboard.',
+    title: 'Home Vault',
+    description: 'Keep documents, warranties, receipts, manuals, and inspections where they belong.',
   },
   {
     concept: 'notifications',
-    title: 'Stay Ahead of Risk',
-    description: 'Get early signals for maintenance, coverage gaps, and upcoming deadlines.',
+    title: 'Home Timeline',
+    description: 'Preserve every repair, upgrade, inspection, and milestone in one lasting history.',
   },
   {
     concept: 'expenses',
-    title: 'Protect Your Budget',
-    description: 'Understand true cost, avoid preventable spend, and spot savings opportunities.',
+    title: 'Home Planner',
+    description: 'Stay ahead of maintenance, renewals, seasonal work, and future projects.',
   },
   {
     concept: 'providers',
-    title: 'Act With Confidence',
-    description: 'Move from insight to vetted providers and clear next steps in minutes.',
+    title: 'Home Finances',
+    description: 'Understand spending, budgets, home value, and opportunities to save.',
   },
 ];
 
@@ -30,8 +30,9 @@ export default function Features() {
     <section id="features" className="bg-white px-4 py-10 sm:px-6 lg:px-8 lg:py-12">
       <div className="mx-auto max-w-6xl">
         <div className="mb-6 text-center">
-          <p className="mb-2 text-xs font-semibold tracking-normal text-brand-700">Why Homeowners Choose CtC</p>
-          <h2 className="text-2xl font-semibold tracking-tight text-slate-950 sm:text-3xl">A calmer way to run your home</h2>
+          <p className="mb-2 text-xs font-semibold tracking-normal text-brand-700">One connected home</p>
+          <h2 className="text-2xl font-semibold tracking-tight text-slate-950 sm:text-3xl">Every part of homeownership, working together</h2>
+          <p className="mx-auto mt-2 max-w-2xl text-sm text-slate-600">Contract to Cozy brings the essential systems of your home into one permanent place.</p>
         </div>
 
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4 lg:gap-5">
@@ -54,7 +55,7 @@ export default function Features() {
             href="/signup"
             className="inline-flex min-h-[44px] items-center rounded-lg bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-700"
           >
-            Create free account
+            Build your home system
           </Link>
         </div>
       </div>

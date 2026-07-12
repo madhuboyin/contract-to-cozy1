@@ -9,34 +9,34 @@ export default function Testimonials() {
       location: 'Brooklyn, NY',
       initials: 'SB',
       rating: 5,
-      text: 'Saved me $850 and countless headaches! Found my home inspector, locksmith, and cleaning service all in one place.',
+      text: 'For the first time, I know exactly where every document, warranty, and repair record lives. The mental load is gone.',
     },
     {
       name: 'Michael R.',
       location: 'Park Slope, NY',
       initials: 'MR',
       rating: 5,
-      text: 'First-time buyer here. Contract to Cozy made everything so simple. Booked all my services in 20 minutes.',
+      text: 'I no longer wonder what maintenance I forgot. I can see what is coming and plan for it before it becomes urgent.',
     },
     {
       name: 'Jessica C.',
       location: 'Williamsburg, NY',
       initials: 'JC',
       rating: 5,
-      text: 'The neighborhood verification is genius! I saw the inspector had done 12 homes on my block. Felt way more confident.',
+      text: 'When we prepared to sell, our complete home history was already organized. What used to feel daunting felt manageable.',
     },
   ];
 
   return (
-    <section className="py-12 md:py-16 px-4 sm:px-6 lg:px-8 bg-gray-50">
+    <section id="testimonials" className="py-12 md:py-16 px-4 sm:px-6 lg:px-8 bg-gray-50">
       <div className="max-w-7xl mx-auto">
         {/* Section Header - Compact */}
         <div className="text-center mb-8">
           <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2">
-            Loved by Homebuyers
+            A calmer way to own a home
           </h2>
           <p className="text-base text-gray-600">
-            Join thousands of happy homeowners
+            Confidence comes from knowing everything is in its place.
           </p>
         </div>
 
@@ -80,20 +80,20 @@ export default function Testimonials() {
         {/* Trust Badges - Compact */}
         <div className="mt-10 grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
           <div>
-            <div className="text-2xl font-bold text-blue-600 mb-1">10,000+</div>
-            <div className="text-xs text-gray-600">Happy Homeowners</div>
+            <div className="text-2xl font-bold text-blue-600 mb-1">One place</div>
+            <div className="text-xs text-gray-600">Home records organized</div>
           </div>
           <div>
-            <div className="text-2xl font-bold text-blue-600 mb-1">500+</div>
-            <div className="text-xs text-gray-600">Verified Providers</div>
+            <div className="text-2xl font-bold text-blue-600 mb-1">One history</div>
+            <div className="text-xs text-gray-600">Homes kept connected</div>
           </div>
           <div>
-            <div className="text-2xl font-bold text-blue-600 mb-1">4.9/5</div>
-            <div className="text-xs text-gray-600">Average Rating</div>
+            <div className="text-2xl font-bold text-blue-600 mb-1">Always ready</div>
+            <div className="text-xs text-gray-600">Homeowner confidence</div>
           </div>
           <div>
-            <div className="text-2xl font-bold text-blue-600 mb-1">$850+</div>
-            <div className="text-xs text-gray-600">Average Savings</div>
+            <div className="text-2xl font-bold text-blue-600 mb-1">Built for years</div>
+            <div className="text-xs text-gray-600">Savings opportunities</div>
           </div>
         </div>
       </div>

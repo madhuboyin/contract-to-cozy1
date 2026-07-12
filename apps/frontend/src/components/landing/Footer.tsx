@@ -8,9 +8,10 @@ export default function Footer() {
   const footerLinks = {
     product: [
       { name: 'Features', href: '/#features' },
-      { name: 'Services', href: '/#services' },
-      { name: 'Calculator', href: '/#calculator' },
-      { name: 'Reviews', href: '/#testimonials' },
+      { name: 'Home systems', href: '/#features' },
+      { name: 'Your journey', href: '/#journey' },
+      { name: 'Savings', href: '/#calculator' },
+      { name: 'Homeowner stories', href: '/#testimonials' },
       { name: 'Pricing', href: '/pricing' },
     ],
     company: [
@@ -55,7 +56,7 @@ export default function Footer() {
               <span>Contract to Cozy</span>
             </Link>
             <p className="text-gray-400 text-sm leading-relaxed max-w-xs">
-              Your complete homebuying journey platform. From contract signing to cozy home living.
+              The operating system for homeownership. Everything about your home, together for the entire journey.
             </p>
             {/* Social Links */}
             <div className="flex space-x-4 mt-6">

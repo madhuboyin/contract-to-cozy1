@@ -32,8 +32,8 @@ export default function Hero() {
             <button onClick={() => scrollToSection('features')} className="text-sm font-medium text-slate-600 hover:text-brand-700">
               Product
             </button>
-            <button onClick={() => scrollToSection('how-it-works')} className="text-sm font-medium text-slate-600 hover:text-brand-700">
-              How it works
+            <button onClick={() => scrollToSection('journey')} className="text-sm font-medium text-slate-600 hover:text-brand-700">
+              Your journey
             </button>
             <button onClick={() => scrollToSection('calculator')} className="text-sm font-medium text-slate-600 hover:text-brand-700">
               Savings
@@ -64,8 +64,8 @@ export default function Hero() {
               <button onClick={() => scrollToSection('features')} className="flex min-h-[44px] w-full items-center text-left text-sm font-medium text-slate-700">
                 Product
               </button>
-              <button onClick={() => scrollToSection('how-it-works')} className="flex min-h-[44px] w-full items-center text-left text-sm font-medium text-slate-700">
-                How it works
+              <button onClick={() => scrollToSection('journey')} className="flex min-h-[44px] w-full items-center text-left text-sm font-medium text-slate-700">
+                Your journey
               </button>
               <button onClick={() => scrollToSection('calculator')} className="flex min-h-[44px] w-full items-center text-left text-sm font-medium text-slate-700">
                 Savings
@@ -90,28 +90,30 @@ export default function Hero() {
 
       <div className="pt-16">
       <MarketingHeroTemplate
-        eyebrow="Homeowner confidence, minus the guesswork"
+        eyebrow="The operating system for homeownership"
         title={
           <>
-            Know your next home move in under
-            <span className="text-brand-700"> two minutes</span>.
+            Finally, one place to
+            <span className="text-brand-700"> run your home.</span>
           </>
         }
-        subtitle="Contract to Cozy turns scattered home data into clear, prioritized decisions so you can protect value, lower risk, and avoid expensive surprises."
-        ctaLabel="Start free homeowner account"
+        subtitle="Your home comes with documents, decisions, projects, warranties, repairs, expenses, and responsibilities. Contract to Cozy keeps everything connected, so owning a home feels organized instead of overwhelming."
+        ctaLabel="Create free account"
         ctaHref="/signup"
+        secondaryCtaLabel="Explore product"
+        secondaryCtaHref="#features"
         proofItems={[
           {
-            label: 'Decision clarity',
-            detail: 'One ranked next step instead of dashboard overload.',
+            label: 'Everything together',
+            detail: 'Records, plans, finances, and trusted help in one home.',
           },
           {
-            label: 'Trust signals',
-            detail: 'Confidence, source, and recency attached to recommendations.',
+            label: 'Built for years',
+            detail: 'A permanent history that grows with your home.',
           },
           {
-            label: 'Mobile ready',
-            detail: 'Manage your home from your phone with calm, guided workflows.',
+            label: 'Always prepared',
+            detail: 'Know what happened, what matters, and what comes next.',
           },
         ]}
       />

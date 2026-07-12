@@ -2,39 +2,39 @@ import { resolveIconByToken } from '@/lib/icons';
 
 const STEPS = [
   {
-    number: '1',
-    title: 'Create your account',
-    description: 'Add your property and basic home details.',
+    number: '01',
+    title: 'Buy',
+    description: 'Bring inspections, closing records, and important decisions together from day one.',
     iconToken: 'building-2',
   },
   {
-    number: '2',
-    title: 'Review your priority',
-    description: 'See the top action ranked by urgency and confidence.',
+    number: '02',
+    title: 'Move in',
+    description: 'Organize utilities, appliances, warranties, and the details that make the home yours.',
     iconToken: 'search',
   },
   {
-    number: '3',
-    title: 'Choose your move',
-    description: 'Compare your options and understand the tradeoffs.',
+    number: '03',
+    title: 'Own & improve',
+    description: 'Plan maintenance, manage projects, track spending, and preserve every improvement.',
     iconToken: 'calendar',
   },
   {
-    number: '4',
-    title: 'Track progress',
-    description: 'Monitor outcomes across maintenance, risk, and savings.',
+    number: '04',
+    title: 'Sell',
+    description: 'Prepare with a complete home history and carry what you learned into what comes next.',
     iconToken: 'sparkles',
   },
 ];
 
 export default function HowItWorks() {
   return (
-    <section id="how-it-works" className="bg-slate-50 px-4 py-10 sm:px-6 lg:px-8 lg:py-12">
+    <section id="journey" className="bg-slate-50 px-4 py-10 sm:px-6 lg:px-8 lg:py-12">
       <div className="mx-auto max-w-6xl">
         <div className="mb-7 text-center">
-          <p className="mb-2 text-xs font-semibold tracking-normal text-brand-700">How It Works</p>
-          <h2 className="text-2xl font-semibold tracking-tight text-slate-950 sm:text-3xl">From uncertainty to action in four steps</h2>
-          <p className="mt-2 text-sm text-slate-600">Designed for busy homeowners, not internal tools teams.</p>
+          <p className="mb-2 text-xs font-semibold tracking-normal text-brand-700">Built for the entire journey</p>
+          <h2 className="text-2xl font-semibold tracking-tight text-slate-950 sm:text-3xl">Your home never starts from scratch again</h2>
+          <p className="mx-auto mt-2 max-w-2xl text-sm text-slate-600">From the first signature to the final handoff, Contract to Cozy keeps your home knowledge intact.</p>
         </div>
 
         <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-4">

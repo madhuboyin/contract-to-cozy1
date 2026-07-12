@@ -38,10 +38,10 @@ export default function SavingsCalculator() {
         {/* Section Header - Compact */}
         <div className="text-center mb-8">
           <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2">
-            Calculate Your Savings
+            Your home can save more than you think
           </h2>
           <p className="text-base text-gray-600">
-            See how much time and money you&apos;ll save
+            Find tax credits, rebates, insurance improvements, utility savings, and preventive opportunities connected to your home.
           </p>
         </div>
 
@@ -94,7 +94,7 @@ export default function SavingsCalculator() {
             {/* Closing Date */}
             <div>
               <label htmlFor="closingDate" className="block text-sm font-medium text-gray-700 mb-1.5">
-                Expected Closing Date
+                When did you buy your home?
               </label>
               <input
                 type="date"
@@ -111,7 +111,7 @@ export default function SavingsCalculator() {
               type="submit"
               className="w-full py-3 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors shadow-md hover:shadow-lg"
             >
-              Calculate My Savings
+              Find my opportunities
             </button>
           </form>
 
@@ -119,20 +119,20 @@ export default function SavingsCalculator() {
           {results && (
             <div className="mt-6 pt-6 border-t border-blue-200">
               <h3 className="text-lg font-semibold text-gray-900 mb-4 text-center">
-                Your Potential Savings
+                Potential opportunities for your home
               </h3>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="text-center p-3 bg-white rounded-lg shadow-sm">
                   <div className="text-2xl font-bold text-blue-600">${results.moneySaved}</div>
-                  <div className="text-xs text-gray-600 mt-1">Money Saved</div>
+                  <div className="text-xs text-gray-600 mt-1">Potential value</div>
                 </div>
                 <div className="text-center p-3 bg-white rounded-lg shadow-sm">
                   <div className="text-2xl font-bold text-blue-600">{results.timeSaved}h</div>
-                  <div className="text-xs text-gray-600 mt-1">Time Saved</div>
+                  <div className="text-xs text-gray-600 mt-1">Research saved</div>
                 </div>
                 <div className="text-center p-3 bg-white rounded-lg shadow-sm">
                   <div className="text-2xl font-bold text-blue-600">{results.providerCount}</div>
-                  <div className="text-xs text-gray-600 mt-1">Providers</div>
+                  <div className="text-xs text-gray-600 mt-1">Opportunities checked</div>
                 </div>
               </div>
               <div className="mt-4 text-center">
@@ -140,7 +140,7 @@ export default function SavingsCalculator() {
                   href="/signup"
                   className="inline-block px-6 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors shadow-md"
                 >
-                  Get Started →
+                  Save opportunities to my home →
                 </Link>
               </div>
             </div>

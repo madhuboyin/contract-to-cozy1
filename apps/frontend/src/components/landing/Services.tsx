@@ -7,51 +7,51 @@ import { resolveIconByToken } from '@/lib/icons';
 export default function Services() {
   const serviceCategories = [
     {
-      title: 'Closing Phase',
+      title: 'Records & history',
       iconToken: 'clipboard-list',
       // color: 'bg-blue-50 border-blue-200 hover:border-blue-300', // <-- Removed for sleek consistency
       services: [
-        'Home Inspection',
-        'Insurance',
-        'Title Services',
-        'Real Estate Attorney',
-        'Appraisal'
+        'Documents & closing records',
+        'Warranties & manuals',
+        'Receipts & inspections',
+        'Home timeline',
+        'Appliances'
       ]
     },
     {
-      title: 'Move-In',
+      title: 'Care & planning',
       iconToken: 'truck',
       // color: 'bg-green-50 border-green-200 hover:border-green-300', // <-- Removed for sleek consistency
       services: [
-        'Moving Services',
-        'Utility Setup',
-        'Internet & Cable',
-        'Locksmith',
-        'Cleaning Services'
+        'Maintenance',
+        'Seasonal planning',
+        'Repairs',
+        'Projects',
+        'Property health'
       ]
     },
     {
-      title: 'Maintenance',
+      title: 'Money & value',
       iconToken: 'wrench',
       // color: 'bg-purple-50 border-purple-200 hover:border-purple-300', // <-- Removed for sleek consistency
       services: [
-        'HVAC Service',
-        'Dryer Vent Cleaning',
-        'Chimney Inspection',
-        'Gutter Cleaning',
-        'Pest Control'
+        'Budgets & expenses',
+        'Insurance',
+        'Home value',
+        'Savings & rebates',
+        'Seller preparation'
       ]
     },
     {
-      title: 'Upgrades',
+      title: 'People & place',
       iconToken: 'zap',
       // color: 'bg-amber-50 border-amber-200 hover:border-amber-300', // <-- Removed for sleek consistency
       services: [
-        'Solar Installation',
-        'Window Replacement',
-        'Smart Home Setup',
-        'Energy Audit',
-        'Landscaping'
+        'Trusted providers',
+        'Neighborhood information',
+        'Community knowledge',
+        'Local recommendations',
+        'Home guidance'
       ]
     }
   ];
@@ -63,10 +63,10 @@ export default function Services() {
         {/* Section Header - Reduced font size and margins */}
         <div className="text-center mb-10">
           <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-3">
-            Services We Cover
+            Everything your home needs
           </h2>
           <p className="text-base text-gray-600 max-w-2xl mx-auto">
-            From inspection to move-in and beyond, we&apos;ve got you covered
+            One connected home for the records, responsibilities, money, and people that shape homeownership.
           </p>
         </div>
 
@@ -111,7 +111,7 @@ export default function Services() {
             // Reduced padding and font size for a sleeker button
             className="inline-flex items-center px-5 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-all shadow-md hover:shadow-lg"
           >
-            Browse All Services
+            See everything in one place
             <svg className="ml-2 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
             </svg>
