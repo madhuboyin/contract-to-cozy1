@@ -11,7 +11,11 @@ import { getResolutionCenter } from '../services/resolutionCenter.service';
 import { logger } from '../lib/logger';
 import { prisma } from '../lib/prisma';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
-import { resolveAddress, suggestAddresses } from '../services/addressAutocomplete.service';
+import {
+  isAddressAutocompleteConfigured,
+  resolveAddress,
+  suggestAddresses,
+} from '../services/addressAutocomplete.service';
 
 const neighborhoodService = new NeighborhoodIntelligenceService();
 
@@ -22,11 +26,14 @@ export const autocompleteAddresses = async (req: AuthRequest, res: Response) => 
     if (input.length < 3 || input.length > 200 || !/^[A-Za-z0-9_-]{8,64}$/.test(sessionToken)) {
       return res.status(400).json({ success: false, message: 'Invalid autocomplete request' });
     }
+    if (!isAddressAutocompleteConfigured()) {
+      return res.status(503).json({ success: false, message: 'Address suggestions are not configured' });
+    }
     const suggestions = await suggestAddresses(input, sessionToken);
     return res.json({ success: true, data: suggestions });
   } catch (error) {
     logger.warn({ err: error }, 'Address autocomplete unavailable');
-    return res.json({ success: true, data: [] });
+    return res.status(503).json({ success: false, message: 'Address suggestions are temporarily unavailable' });
   }
 };
 
@@ -36,6 +43,9 @@ export const getAddressDetails = async (req: AuthRequest, res: Response) => {
     const sessionToken = String(req.query.sessionToken || '').trim();
     if (!placeId || placeId.length > 300 || !/^[A-Za-z0-9_-]{8,64}$/.test(sessionToken)) {
       return res.status(400).json({ success: false, message: 'Invalid address details request' });
+    }
+    if (!isAddressAutocompleteConfigured()) {
+      return res.status(503).json({ success: false, message: 'Address suggestions are not configured' });
     }
     const address = await resolveAddress(placeId, sessionToken);
     if (!address) return res.status(404).json({ success: false, message: 'Address details unavailable' });

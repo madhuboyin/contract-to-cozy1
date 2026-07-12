@@ -16,6 +16,10 @@ function getApiKey(): string | null {
   return process.env.GOOGLE_MAPS_API_KEY?.trim() || null;
 }
 
+export function isAddressAutocompleteConfigured(): boolean {
+  return Boolean(getApiKey());
+}
+
 async function googlePlacesRequest(url: string, init: RequestInit): Promise<any | null> {
   const apiKey = getApiKey();
   if (!apiKey) return null;

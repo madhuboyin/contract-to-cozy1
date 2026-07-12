@@ -36,6 +36,7 @@ kubectl create secret generic app-secrets \
   --from-literal=JWT_EMAIL_SECRET='random-email-token-string' \
   --from-literal=JWT_PASSWORD_RESET_SECRET='random-password-reset-string' \
   --from-literal=JWT_MFA_SECRET='random-mfa-string' \
+  --from-literal=GOOGLE_MAPS_API_KEY='google-places-api-key' \
   -n production
 
 kubectl create secret generic postgres-credentials \

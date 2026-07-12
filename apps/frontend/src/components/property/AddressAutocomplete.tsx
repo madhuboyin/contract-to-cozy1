@@ -38,12 +38,14 @@ export function AddressAutocomplete({
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
+  const [serviceUnavailable, setServiceUnavailable] = useState(false);
 
   useEffect(() => {
     const query = value.address.trim();
     if (query.length < 3) {
       setSuggestions([]);
       setOpen(false);
+      setServiceUnavailable(false);
       return;
     }
 
@@ -54,6 +56,7 @@ export function AddressAutocomplete({
         const response = await api.suggestAddresses(query, sessionToken.current);
         if (sequence !== requestSequence.current) return;
         const next = response.success ? response.data || [] : [];
+        setServiceUnavailable(!response.success);
         setSuggestions(next);
         setOpen(next.length > 0);
         setActiveIndex(-1);
@@ -61,6 +64,7 @@ export function AddressAutocomplete({
         if (sequence === requestSequence.current) {
           setSuggestions([]);
           setOpen(false);
+          setServiceUnavailable(true);
         }
       } finally {
         if (sequence === requestSequence.current) setLoading(false);
@@ -81,6 +85,7 @@ export function AddressAutocomplete({
       setSuggestions([]);
     } catch {
       // Keep the user's text untouched; manual entry remains available.
+      setServiceUnavailable(true);
     } finally {
       setLoading(false);
     }
@@ -127,6 +132,11 @@ export function AddressAutocomplete({
         />
         {loading && <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-slate-400" aria-hidden="true" />}
       </div>
+      {serviceUnavailable && (
+        <p role="status" className="text-xs text-amber-700">
+          Address suggestions are unavailable. Continue entering the address manually.
+        </p>
+      )}
 
       {open && (
         <div className="absolute z-50 mt-1 w-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl">
