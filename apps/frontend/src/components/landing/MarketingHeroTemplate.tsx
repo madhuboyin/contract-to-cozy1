@@ -18,7 +18,6 @@ interface MarketingHeroTemplateProps {
   proofItems: ProofRowItem[];
   screenshotSrc?: string;
   screenshotAlt?: string;
-  visual?: ReactNode;
 }
 
 export default function MarketingHeroTemplate({
@@ -32,7 +31,6 @@ export default function MarketingHeroTemplate({
   proofItems,
   screenshotSrc = '/contract-to-cozy-dashboard.png',
   screenshotAlt = 'Contract to Cozy dashboard preview',
-  visual,
 }: MarketingHeroTemplateProps) {
   return (
     <section className="relative overflow-hidden border-b border-slate-200/70 bg-[radial-gradient(circle_at_top_right,rgba(20,184,166,0.14),transparent_45%),linear-gradient(175deg,#f8fafc,#ecfeff_52%,#ffffff)] px-4 pb-14 pt-10 sm:px-6 sm:pb-16 sm:pt-12 lg:px-8 lg:pb-20">
@@ -68,7 +66,7 @@ export default function MarketingHeroTemplate({
 
         <div className="relative">
           <div className="absolute -inset-3 hidden rounded-[28px] bg-gradient-to-br from-brand-100/60 to-cyan-100/50 blur-2xl lg:block" />
-          {visual ? <div className="relative">{visual}</div> : <div className="relative overflow-hidden rounded-[22px] border border-slate-200 bg-white shadow-[0_28px_55px_-35px_rgba(15,23,42,0.65)]">
+          <div className="relative overflow-hidden rounded-[22px] border border-slate-200 bg-white shadow-[0_28px_55px_-35px_rgba(15,23,42,0.65)]">
             <div className="flex items-center gap-1 border-b border-slate-200 px-3 py-2">
               <span className="h-2.5 w-2.5 rounded-full bg-rose-300" />
               <span className="h-2.5 w-2.5 rounded-full bg-amber-300" />
@@ -85,7 +83,7 @@ export default function MarketingHeroTemplate({
                 priority
               />
             </div>
-          </div>}
+          </div>
         </div>
       </div>
     </section>

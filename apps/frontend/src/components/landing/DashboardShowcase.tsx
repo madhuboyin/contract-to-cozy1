@@ -116,20 +116,17 @@ export default function DashboardShowcase() {
                     </div>
 
                     <div className="mt-4">
-                      <p className="text-[10px] font-semibold text-slate-900">One connected roof history</p>
-                      <div className="mt-2 flex items-stretch gap-1">
+                      <p className="text-[10px] font-semibold text-slate-900">Connected home history</p>
+                      <div className="mt-2 grid grid-cols-2 gap-2">
                         {[
-                          ['Warranty', '2042'],
-                          ['Claim', '2029'],
-                          ['Replacement', '2030'],
-                          ['Inspection', 'Due 2035'],
-                        ].map(([title, detail], index, items) => (
-                          <div key={title} className="contents">
-                            <div className="min-w-0 flex-1 rounded-lg bg-slate-50 p-1.5 text-center">
-                              <p className="truncate text-[8px] font-medium text-slate-900">{title}</p>
-                              <p className="text-[7px] text-slate-500">{detail}</p>
-                            </div>
-                            {index < items.length - 1 ? <span className="self-center text-[8px] text-blue-400">→</span> : null}
+                          ['Kitchen remodel', '18 photos · 2028'],
+                          ['Insurance claim', 'Resolved · 2030'],
+                          ['HVAC serviced', 'Next due Jun 2027'],
+                          ['Contractor history', '7 trusted relationships'],
+                        ].map(([title, detail]) => (
+                          <div key={title} className="rounded-lg bg-slate-50 p-2">
+                            <p className="text-[9px] font-medium text-slate-900">{title}</p>
+                            <p className="text-[8px] text-slate-500">{detail}</p>
                           </div>
                         ))}
                       </div>

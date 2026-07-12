@@ -26,10 +26,10 @@ export default function Home() {
       <DashboardShowcase />
       <ValuePropositionComparison /> {/* NEW COMPONENT PLACED HERE */}
       <HomeKnowledge />
+      <SavingsCalculator />
       <Services />
       <Neighborhood />
       <HomeKnowledgeTimeline />
-      <SavingsCalculator />
       <Testimonials />
       <ConnectedEcosystem />
       <CTASection />

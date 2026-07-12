@@ -1,10 +1,10 @@
 const YEARS = [
-  { year: 'Purchase', title: 'The first chapter', detail: 'Inspection, warranties, closing records' },
-  { year: 'Move in', title: 'The home becomes yours', detail: 'Appliances, utilities, service plans' },
-  { year: 'Remodel', title: 'The home improves', detail: 'Kitchen choices, contractor, receipts' },
-  { year: 'Claim', title: 'The history protects you', detail: 'Damage, photos, insurance resolution' },
-  { year: 'New roof', title: 'Value is preserved', detail: 'Permit, installer, 20-year warranty' },
-  { year: 'Next owner', title: 'Nothing starts over', detail: 'Complete history transfers with the home' },
+  { year: '2026', title: 'The home begins remembering', detail: 'Inspection, warranties, purchase records' },
+  { year: '2027', title: 'A major system changes', detail: 'HVAC replacement, receipt, service plan' },
+  { year: '2028', title: 'The home improves', detail: 'Kitchen remodel, finishes, contractor history' },
+  { year: '2030', title: 'The history protects you', detail: 'Insurance claim, photos, resolution' },
+  { year: '2032', title: 'More value is preserved', detail: 'Roof replacement, permit, 20-year warranty' },
+  { year: '2035', title: 'The next chapter is ready', detail: 'Complete history available for the next owner' },
 ];
 
 export default function HomeKnowledgeTimeline() {
