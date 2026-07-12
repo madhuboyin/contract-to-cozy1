@@ -3,7 +3,6 @@
 import Hero from '@/components/landing/Hero';
 import HomePhilosophy from '@/components/landing/HomePhilosophy';
 import ValuePropositionComparison from '@/components/landing/ValuePropositionComparison'; // NEW IMPORT
-import HomeKnowledgeTimeline from '@/components/landing/HomeKnowledgeTimeline';
 import Neighborhood from '@/components/landing/Neighborhood';
 import SavingsCalculator from '@/components/landing/SavingsCalculator';
 import Testimonials from '@/components/landing/Testimonials';
@@ -18,7 +17,6 @@ export default function Home() {
       <ValuePropositionComparison /> {/* NEW COMPONENT PLACED HERE */}
       <SavingsCalculator />
       <Neighborhood />
-      <HomeKnowledgeTimeline />
       <Testimonials />
       <CTASection />
       <Footer />
