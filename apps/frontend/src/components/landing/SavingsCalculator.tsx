@@ -38,7 +38,7 @@ export default function SavingsCalculator() {
         {/* Section Header - Compact */}
         <div className="text-center mb-8">
           <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2">
-            Your home can save you money
+            Your home can save more than you think
           </h2>
           <p className="text-base text-gray-600">Preserved knowledge finds missed opportunities.</p>
           <div className="mt-4 flex flex-wrap justify-center gap-2">

@@ -7,8 +7,11 @@ export default function Footer() {
 
   const footerLinks = {
     product: [
-      { name: 'Product', href: '/#product' },
+      { name: 'Features', href: '/#features' },
+      { name: 'Home systems', href: '/#features' },
+      { name: 'Your journey', href: '/#journey' },
       { name: 'Savings', href: '/#calculator' },
+      { name: 'Homeowner stories', href: '/#testimonials' },
       { name: 'Pricing', href: '/pricing' },
     ],
     company: [
