@@ -51,7 +51,7 @@ require.cache[metricsPath] = {
   },
 };
 
-const { propertyAuthMiddleware } = require('../../src/middleware/propertyAuth.middleware.ts');
+const { propertyAuthMiddleware, resolvePropertyAccess } = require('../../src/middleware/propertyAuth.middleware.ts');
 
 function createRes() {
   return {
@@ -142,6 +142,58 @@ test('propertyAuthMiddleware denies a user with household access to a different 
   assert.deepEqual(metricCalls.scope, [
     { source: 'property_auth_middleware', status_code: '404' },
   ]);
+
+  // Reset shared mocks back to the denial-by-default state for any later tests.
+  prismaMock.householdMember.findUnique = async () => null;
+  prismaMock.property.findFirst = async () => null;
+});
+
+test('propertyAuthMiddleware grants access to a household collaborator (CONTRIBUTOR) of the correct property', async () => {
+  metricCalls.auth.length = 0;
+  metricCalls.scope.length = 0;
+
+  // user-4 is a CONTRIBUTOR household member of property-C (not its owner) —
+  // this is the exact scenario the owner-only bug used to block.
+  prismaMock.householdMember.findUnique = async ({ where }) => {
+    if (where.propertyId_userId.propertyId === 'property-C' && where.propertyId_userId.userId === 'user-4') {
+      return { role: 'CONTRIBUTOR' };
+    }
+    return null;
+  };
+
+  const req = {
+    params: { propertyId: 'property-C' },
+    user: { userId: 'user-4' },
+  };
+  const res = createRes();
+  let nextCalled = false;
+
+  await propertyAuthMiddleware(req, res, () => { nextCalled = true; });
+
+  assert.equal(nextCalled, true);
+  assert.equal(req.householdRole, 'CONTRIBUTOR');
+  assert.deepEqual(req.property, { id: 'property-C' });
+  assert.deepEqual(metricCalls.auth, []);
+  assert.deepEqual(metricCalls.scope, []);
+
+  // Reset shared mocks back to the denial-by-default state for any later tests.
+  prismaMock.householdMember.findUnique = async () => null;
+  prismaMock.property.findFirst = async () => null;
+});
+
+test('resolvePropertyAccess returns the same access decision propertyAuthMiddleware uses, for direct service/controller callers', async () => {
+  prismaMock.householdMember.findUnique = async ({ where }) => {
+    if (where.propertyId_userId.propertyId === 'property-D' && where.propertyId_userId.userId === 'user-5') {
+      return { role: 'VIEWER' };
+    }
+    return null;
+  };
+
+  const access = await resolvePropertyAccess('user-5', 'property-D');
+  assert.deepEqual(access, { propertyId: 'property-D', role: 'VIEWER' });
+
+  const denied = await resolvePropertyAccess('user-5', 'property-E');
+  assert.equal(denied, null);
 
   // Reset shared mocks back to the denial-by-default state for any later tests.
   prismaMock.householdMember.findUnique = async () => null;

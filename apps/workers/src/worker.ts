@@ -26,6 +26,7 @@ import { startHighPriorityEmailEnqueuePoller } from './runners/highPriorityEmail
 import { startClaimFollowUpDuePoller } from './runners/claimFollowUpDue.poller';
 import { alertOnJobFailure } from './lib/jobFailureAlert';
 import { initCronRunHistory, recordCronRun } from './lib/cronRunHistory';
+import { acquireCronLease, releaseCronLease } from './lib/cronLease';
 import { DEFAULT_JOB_RETENTION } from '../../backend/src/config/queueDefaults';
 import { recallIngestJob, RECALL_INGEST_JOB } from './jobs/recallIngest.job';
 import { recallMatchJob, RECALL_MATCH_JOB } from './jobs/recallMatch.job';
@@ -728,6 +729,11 @@ const CRON_ENV_OVERRIDES: Record<string, string | undefined> = {
   'reserve-fund-reconciliation': process.env.RESERVE_FUND_RECONCILIATION_CRON,
 };
 
+// Crash-recovery safety net only — the lease is normally released explicitly
+// right after the handler finishes (see scheduleCronJobs). Default is well
+// under the tightest registry interval (severe-weather-alerts, every 15 min).
+const CRON_LEASE_TTL_MS = Number(process.env.CRON_LEASE_TTL_MS) || 10 * 60 * 1000; // 10 minutes
+
 function scheduleCronJobs(): void {
   const cronEntries = JOB_REGISTRY.filter((j) => j.type === 'cron' && j.cronExpression);
 
@@ -744,6 +750,11 @@ function scheduleCronJobs(): void {
     cron.schedule(
       cronExpr,
       async () => {
+        const gotLease = await acquireCronLease(entry.key, CRON_LEASE_TTL_MS);
+        if (!gotLease) {
+          logger.debug(`[${entry.key}] Skipped tick — lease held by another replica`);
+          return;
+        }
         const stopTimer = cronJobDurationSeconds.startTimer({ job_key: entry.key });
         try {
           logger.info(`[${entry.key}] Starting: ${entry.name}`);
@@ -765,6 +776,8 @@ function scheduleCronJobs(): void {
             durationMs: stopTimer() * 1000,
             failReason: err instanceof Error ? err.message : String(err),
           });
+        } finally {
+          await releaseCronLease(entry.key);
         }
       },
       { timezone: 'America/New_York' },

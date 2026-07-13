@@ -2,7 +2,7 @@ import { Response, NextFunction } from 'express';
 import { HouseholdRole } from '@prisma/client';
 import { CustomRequest } from '../types';
 
-const ROLE_RANK: Record<HouseholdRole, number> = {
+export const ROLE_RANK: Record<HouseholdRole, number> = {
   VIEWER: 0,
   CONTRIBUTOR: 1,
   OWNER: 2,

@@ -5428,6 +5428,25 @@ model DomainEvent {
 }
 
 // ============================================================================
+// CRON JOB LEASE (multi-replica safety for scheduleCronJobs() in worker.ts)
+// ============================================================================
+// Every registry-driven cron job in apps/workers/src/worker.ts is scheduled
+// independently by every worker replica (Kubernetes runs 2). Without a lock,
+// every tick runs the job N times. This table gives each jobKey a single row
+// that acts as a lease: a replica must CAS-claim the row before running the
+// handler, and releases it (or lets it expire) when done, so a crashed
+// replica can't wedge future ticks forever.
+model CronJobLock {
+  jobKey    String    @id
+  lockedBy  String?   // "<hostname>:<pid>" of the replica currently/last holding the lease
+  lockedAt  DateTime?
+  expiresAt DateTime? // TTL safety net; NULL or in the past = eligible to be claimed
+  updatedAt DateTime  @updatedAt
+
+  @@map("cron_job_locks")
+}
+
+// ============================================================================
 // RISK TO PREMIUM Optimizer
 // ============================================================================
 

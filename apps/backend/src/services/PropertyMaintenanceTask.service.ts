@@ -8,11 +8,14 @@ import {
     ServiceCategory,
     RecurrenceFrequency,
     Season,
+    HouseholdRole,
   } from '@prisma/client';
   import { prisma } from '../lib/prisma';
   import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from './analytics';
   import { signalService } from './signal.service';
 import { logger } from '../lib/logger';
+import { resolvePropertyAccess } from '../middleware/propertyAuth.middleware';
+import { ROLE_RANK } from '../middleware/householdRole.middleware';
 
   /**
    * Service for managing property maintenance tasks.
@@ -84,7 +87,7 @@ import { logger } from '../lib/logger';
     /**
      * Get a single task by ID (with ownership verification).
      */
-    static async getTask(userId: string, taskId: string) {
+    static async getTask(userId: string, taskId: string, minRole: HouseholdRole = 'VIEWER') {
       const task = await prisma.propertyMaintenanceTask.findUnique({
         where: { id: taskId },
         include: {
@@ -99,16 +102,20 @@ import { logger } from '../lib/logger';
           seasonalChecklistItem: true,
         },
       });
-  
+
       if (!task) {
         throw new Error('Task not found.');
       }
-  
-      // Verify ownership
-      if (task.property.homeownerProfile.userId !== userId) {
+
+      // Verify access: owner OR household collaborator (CONTRIBUTOR/VIEWER), not owner-only.
+      const access = await resolvePropertyAccess(userId, task.propertyId);
+      if (!access) {
         throw new Error('User does not have access to this task.');
       }
-  
+      if (ROLE_RANK[access.role] < ROLE_RANK[minRole]) {
+        throw new Error('User does not have access to perform this action on this task.');
+      }
+
       return task;
     }
   
@@ -129,8 +136,8 @@ import { logger } from '../lib/logger';
         nextDueDate?: string;
       }
     ): Promise<PropertyMaintenanceTask> {
-      // Verify property ownership
-      await this.verifyPropertyOwnership(userId, propertyId);
+      // Verify property access (CONTRIBUTOR+ required to create tasks)
+      await this.verifyPropertyOwnership(userId, propertyId, 'CONTRIBUTOR');
   
       // Validate serviceCategory if provided
       if (data.serviceCategory) {
@@ -193,8 +200,8 @@ import { logger } from '../lib/logger';
         actionKey?: string; // 🔑 ADD: Accept actionKey from caller
       }
     ): Promise<{ task: PropertyMaintenanceTask; deduped: boolean }> {
-      // Verify property ownership
-      await this.verifyPropertyOwnership(userId, propertyId);
+      // Verify property access (CONTRIBUTOR+ required to create tasks)
+      await this.verifyPropertyOwnership(userId, propertyId, 'CONTRIBUTOR');
 
       // 🔑 FIX: Use provided actionKey OR fallback to generated one
       const actionKey = data.actionKey || `${propertyId}:ACTION_CENTER:${data.assetType}`;
@@ -276,8 +283,8 @@ import { logger } from '../lib/logger';
     propertyId: string,
     seasonalItemId: string
   ): Promise<PropertyMaintenanceTask> {
-    // Verify property ownership
-    await this.verifyPropertyOwnership(userId, propertyId);
+    // Verify property access (CONTRIBUTOR+ required to create tasks)
+    await this.verifyPropertyOwnership(userId, propertyId, 'CONTRIBUTOR');
 
     // Get seasonal item with all relations
     const seasonalItem = await prisma.seasonalChecklistItem.findUnique({
@@ -383,8 +390,8 @@ import { logger } from '../lib/logger';
       propertyId: string,
       templateIds: string[]
     ): Promise<{ count: number; tasks: PropertyMaintenanceTask[] }> {
-      // Verify property ownership
-      await this.verifyPropertyOwnership(userId, propertyId);
+      // Verify property access (CONTRIBUTOR+ required to create tasks)
+      await this.verifyPropertyOwnership(userId, propertyId, 'CONTRIBUTOR');
   
       // Get templates
       const templates = await prisma.maintenanceTaskTemplate.findMany({
@@ -442,9 +449,9 @@ import { logger } from '../lib/logger';
       status: MaintenanceTaskStatus,
       actualCost?: number
     ): Promise<PropertyMaintenanceTask> {
-      // Verify ownership
-      await this.getTask(userId, taskId);
-    
+      // Verify access (CONTRIBUTOR+ required to mutate tasks)
+      await this.getTask(userId, taskId, 'CONTRIBUTOR');
+
       // Get current task state before update (need to check previous status)
       const task = await prisma.propertyMaintenanceTask.findUnique({
         where: { id: taskId },
@@ -569,9 +576,9 @@ import { logger } from '../lib/logger';
         serviceCategory?: ServiceCategory | null;
       }
     ): Promise<PropertyMaintenanceTask> {
-      // Verify ownership
-      await this.getTask(userId, taskId);
-  
+      // Verify access (CONTRIBUTOR+ required to mutate tasks)
+      await this.getTask(userId, taskId, 'CONTRIBUTOR');
+
       // Validate serviceCategory if provided
       if (data.serviceCategory) {
         await this.validateServiceCategory(data.serviceCategory);
@@ -607,8 +614,8 @@ import { logger } from '../lib/logger';
      * Delete a task.
      */
     static async deleteTask(userId: string, taskId: string): Promise<void> {
-      // Verify ownership
-      const task = await this.getTask(userId, taskId);
+      // Verify access (CONTRIBUTOR+ required to mutate tasks)
+      const task = await this.getTask(userId, taskId, 'CONTRIBUTOR');
   
       // Prevent deletion of ACTION_CENTER tasks (can only be cancelled)
       if (task.source === 'ACTION_CENTER') {
@@ -630,9 +637,9 @@ import { logger } from '../lib/logger';
       taskId: string,
       bookingId: string
     ): Promise<PropertyMaintenanceTask> {
-      // Verify ownership
-      await this.getTask(userId, taskId);
-  
+      // Verify access (CONTRIBUTOR+ required to mutate tasks)
+      await this.getTask(userId, taskId, 'CONTRIBUTOR');
+
       // Verify booking
       const booking = await prisma.booking.findFirst({
         where: {
@@ -721,23 +728,29 @@ import { logger } from '../lib/logger';
      */
     private static async verifyPropertyOwnership(
       userId: string,
-      propertyId: string
+      propertyId: string,
+      minRole: HouseholdRole = 'VIEWER'
     ): Promise<void> {
+      // Verify access: owner OR household collaborator (CONTRIBUTOR/VIEWER), not owner-only.
+      const access = await resolvePropertyAccess(userId, propertyId);
+      if (!access) {
+        throw new Error('User does not have access to this property.');
+      }
+      if (ROLE_RANK[access.role] < ROLE_RANK[minRole]) {
+        throw new Error('User does not have access to perform this action on this property.');
+      }
+
       const property = await prisma.property.findUnique({
         where: { id: propertyId },
         include: {
           homeownerProfile: true,
         },
       });
-  
+
       if (!property) {
         throw new Error('Property not found.');
       }
-  
-      if (property.homeownerProfile.userId !== userId) {
-        throw new Error('User does not have access to this property.');
-      }
-  
+
       // Verify user is EXISTING_OWNER segment
       if (property.homeownerProfile.segment !== 'EXISTING_OWNER') {
         throw new Error(
