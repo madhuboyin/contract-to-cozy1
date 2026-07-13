@@ -1,6 +1,6 @@
 # Environment Report — Functional Requirements Document
 
-**Version:** 1.0  
+**Version:** 1.1
 **Last Updated:** 2026-07-12  
 **Status:** Implemented baseline with documented future enhancements  
 **Audience:** Product, design, frontend engineering, backend engineering, data engineering, QA, support
@@ -891,9 +891,293 @@ Analytics listed here are future requirements unless already emitted by the unde
 - Push/email digest personalization based on saved homeowner preferences.
 - Explainable AI copy layer constrained by deterministic facts and approved action catalog.
 - Professional verification workflow for roof, drainage, HVAC, radon, and resilience data.
-- Add a distinct Outdoor Resilience mode for shade, runoff, windbreak, erosion, and climate-resilient landscaping recommendations.
 
-### 24.4 Required Future Data Models
+### 24.4 Deferred Feature Specification — Outdoor Resilience Mode
+
+#### 24.4.1 Status and Intent
+
+**Status:** Deferred; not part of the currently implemented Plant Advisor garden-zone experience.
+
+Outdoor Resilience mode will extend Plant Advisor from plant care and seasonal garden planning into longer-term, property-aware landscape resilience. It will recommend planting strategies that may reduce localized exposure to recurring heat, runoff, drought, wind, erosion, snow drifting, or coastal conditions.
+
+The feature must be presented as decision support. Vegetation may reduce or redirect some localized environmental effects, but it cannot prevent structural flooding, hurricane damage, wildfire, landslides, or other severe events.
+
+#### 24.4.2 Objectives
+
+- Convert recurring Environment Report signals into longer-term landscape opportunities.
+- Recommend a resilience function before recommending a specific plant.
+- Use property layout, mature plant characteristics, climate suitability, and safety constraints to determine whether planting is appropriate.
+- Explain expected benefit, time to maturity, confidence, tradeoffs, and required professional review.
+- Create a contextual Plant Advisor journey rather than a generic retail promotion.
+- Support future nursery, arborist, landscape designer, and installation CTAs without compromising recommendation independence.
+
+#### 24.4.3 Non-Goals
+
+Outdoor Resilience mode will not:
+
+- Guarantee flood, wind, fire, erosion, snow, or heat protection.
+- Replace engineered drainage, grading, retaining walls, defensible-space planning, or structural mitigation.
+- Produce a planting plan when minimum site information is unavailable.
+- Recommend excavation before utility, septic, easement, and local-code constraints are checked.
+- Recommend invasive plants or species not suited to the property’s climate.
+- Estimate immediate energy or insurance savings without a validated model.
+- Treat an individual forecast event as sufficient evidence for a permanent landscape change.
+- Automatically purchase plants, hire providers, or modify the property.
+
+#### 24.4.4 Supported Resilience Opportunities
+
+| Environmental pattern | Potential planting strategy | Intended localized benefit |
+|---|---|---|
+| Recurring extreme heat or high cooling demand | Appropriately sized deciduous shade tree, trellis vine, shrub layer, or vegetated surface | Shade windows, walls, roofs, equipment, or paving; reduce localized surface heat |
+| Repeated heavy rain or runoff concentration | Rain garden, bioswale planting, deep-rooted native grasses, or suitable shrubs | Slow, spread, infiltrate, or filter runoff where site conditions allow |
+| Persistent drought | Native and low-water-use planting palette, soil cover, and irrigation zoning | Reduce supplemental water demand and improve landscape survivability |
+| Recurring strong wind | Professionally designed tree-and-shrub windbreak | Reduce wind velocity in a defined leeward area |
+| Soil erosion | Deep-rooted native groundcover, grasses, shrubs, or buffer planting | Stabilize exposed soil and reduce surface erosion |
+| Repeated snow drifting | Professionally designed living snow fence | Redirect snow accumulation away from selected access areas or structures |
+| Coastal salt/wind exposure | Salt-tolerant native vegetation and layered buffers | Improve landscape durability and reduce localized surface erosion |
+| Urban heat and extensive paving | Shade canopy, planting islands, groundcover, or green-infrastructure planting | Reduce localized heat around hard surfaces |
+
+Recommendations must use wording such as “may help,” “can reduce localized exposure,” or “consider professional evaluation.” They must not state that plants will protect the home from a severe event.
+
+#### 24.4.5 Entry Points and User Journey
+
+Outdoor Resilience mode may be entered from:
+
+1. An Environment Report insight showing a recurring rather than isolated pattern.
+2. Plant Advisor’s Outdoor Planning area.
+3. A property dashboard resilience opportunity card.
+4. A post-event follow-up after repeated runoff, erosion, wind, or heat observations.
+
+The intended journey is:
+
+1. **Opportunity detected:** The system identifies a recurring environmental pattern.
+2. **Eligibility check:** Existing property, garden-zone, hazard, and climate data are evaluated.
+3. **Incremental capture:** One or two high-value missing facts are requested inline.
+4. **Strategy recommendation:** The system recommends a resilience role, such as shade or runoff capture.
+5. **Plant and placement screening:** Candidate plant forms/species and possible zones are evaluated.
+6. **Safety review:** Conflicts and required professional review are surfaced.
+7. **Action:** The homeowner may save the concept, continue planning, or contact an appropriate professional.
+8. **Follow-through:** Future versions may record installation, establishment care, maturity, and observed outcomes.
+
+#### 24.4.6 Minimum Required Inputs
+
+The system must not generate a placement-specific recommendation until the relevant minimum inputs are known.
+
+**Property and site inputs:**
+
+- Property type and available outdoor area
+- Candidate garden zone or yard side
+- Orientation or cardinal direction
+- Approximate distance from the home and other structures
+- Sun exposure
+- Soil drainage and known standing-water behavior
+- Existing mature trees and major plantings
+- Foundation, driveway, sidewalk, retaining wall, and fence proximity
+- Overhead and known underground utility constraints
+- Septic tank, drain-field, well, or easement presence where applicable
+- HOA, municipal, historic-district, or visibility restrictions when known
+- Irrigation availability
+- Known wildlife/deer pressure where relevant
+- Wildfire exposure or defensible-space restrictions where applicable
+
+**Environmental inputs:**
+
+- Hardiness zone
+- Climate normals and seasonal extremes
+- Multi-year heat, precipitation, drought, freeze, wind, or snow patterns
+- FEMA and local flood context, with appropriate limitations
+- Current garden-zone sun, drainage, irrigation, and frost-pocket facts
+- Locally authoritative invasive-species and native-plant references
+
+#### 24.4.7 Incremental Data Capture
+
+- The experience must ask no more than two questions at a time.
+- Questions must be selected by expected decision value, not by schema order.
+- Answers must persist and must not be requested again unless the homeowner edits them or marks them uncertain.
+- “Not sure” must be supported and must lower confidence rather than block all progress when safe generalized guidance remains possible.
+- Questions must explain why the information matters.
+
+Example questions:
+
+- “Which side of the home receives the strongest afternoon sun?”
+- “About how far is the planting area from the foundation?”
+- “Where does water collect during heavy rain?”
+- “Are there overhead lines or known underground utilities in this area?”
+- “Is this area part of a septic drain field?”
+- “Does your HOA restrict tree size or front-yard landscaping?”
+
+#### 24.4.8 Recommendation Hierarchy
+
+Recommendations must be generated in this order:
+
+1. **Resilience need:** heat, runoff, drought, wind, erosion, snow, salt, or urban heat.
+2. **Strategy:** shade canopy, rain garden, windbreak, buffer, groundcover, or another approved strategy.
+3. **Eligible property zone:** zones that satisfy minimum site and safety constraints.
+4. **Plant form:** canopy tree, small tree, shrub, grass, perennial, groundcover, or vine.
+5. **Candidate species:** locally appropriate options meeting climate, mature-size, water, soil, safety, and invasive-status requirements.
+6. **Placement concept:** conditional location and clearance guidance.
+7. **Execution pathway:** DIY planning, utility marking, arborist, landscape designer, drainage specialist, or other professional.
+
+The feature must not begin with a species recommendation and attempt to justify it afterward.
+
+#### 24.4.9 Candidate Plant Requirements
+
+The future outdoor catalog must support:
+
+- Common and scientific name
+- Native regions and authoritative source
+- Hardiness-zone range
+- Heat, drought, flood, salt, wind, ice, and pollution tolerance
+- Sun and soil requirements
+- Mature height, canopy spread, and root-behavior guidance
+- Growth rate and estimated time to meaningful resilience benefit
+- Deciduous/evergreen behavior
+- Water needs during establishment and at maturity
+- Invasive or prohibited status by jurisdiction
+- Wildlife, pet, and human toxicity warnings
+- Utility, foundation, septic, pavement, and structure clearance guidance
+- Wildfire/defensible-space suitability
+- Supported resilience roles
+- Evidence source, confidence, and last-reviewed date
+
+Species data must come from authoritative national, state, extension, botanical, municipal, or other approved sources. Generative AI must not invent plant tolerances or clearance requirements.
+
+#### 24.4.10 Placement and Safety Rules
+
+- Recommendations must evaluate mature size rather than nursery-container size.
+- Large-tree placement must consider canopy, root area, foundation, roof, pavement, utilities, and neighboring property.
+- Utility marking must be required before excavation-oriented actions.
+- Septic drain fields and critical easements must be treated as restricted unless an authoritative rule allows the proposed planting.
+- Rain gardens must not be placed solely because heavy rain is forecast; soil infiltration, drainage direction, setbacks, utilities, and overflow routing must be evaluated.
+- Windbreak and living-snow-fence recommendations require prevailing-wind direction, target area, mature height, density, and setback logic.
+- Wildfire-prone properties must use defensible-space rules that may override shade, privacy, or wind recommendations.
+- Coastal recommendations must account for salt spray, wind, erosion, and applicable shoreline restrictions.
+- Invasive or locally prohibited species must be excluded.
+- Conflicting strategies must be surfaced—for example, dense vegetation for wind protection versus vegetation clearance for wildfire safety.
+- High-consequence or low-confidence recommendations must require professional review.
+
+#### 24.4.11 Scoring and Explainability
+
+Each strategy and candidate must expose:
+
+- Opportunity score
+- Site-fit score
+- Climate-fit score
+- Safety/conflict score
+- Data completeness
+- Confidence band
+- Expected time horizon
+- Facts used
+- Assumptions made
+- Exclusion reasons
+- Professional-review requirement
+
+The ranking model must be deterministic and versioned. Property-specific facts may improve or reduce fit, but commercial availability or sponsorship must never increase a candidate’s resilience score.
+
+#### 24.4.12 UX Requirements
+
+The result should include:
+
+- “Why this opportunity was identified”
+- A simple property-zone visualization
+- Recommended resilience strategy
+- Candidate plant forms and, when eligible, species
+- Expected benefit and maturity timeframe
+- Placement constraints and conflicts
+- Establishment-care expectations
+- Confidence and missing information
+- Primary CTA appropriate to risk and complexity
+
+Example:
+
+> **Explore west-side shade planting**
+> This home experiences recurring summer heat, and the west garden zone receives strong afternoon sun. A correctly sized deciduous shade tree may reduce direct solar exposure as it matures. Foundation distance and overhead utility information are still needed before placement options can be evaluated.
+
+Possible CTAs:
+
+- Complete site details
+- Compare suitable plant types
+- Save resilience concept
+- Review with an arborist
+- Find a landscape professional
+- Check utility-marking requirements
+
+#### 24.4.13 Proposed APIs
+
+Potential future endpoints:
+
+```http
+GET  /api/properties/:propertyId/plant-advisor/resilience/opportunities
+POST /api/properties/:propertyId/plant-advisor/resilience/evaluate
+POST /api/properties/:propertyId/plant-advisor/resilience/plans
+PATCH /api/properties/:propertyId/plant-advisor/resilience/plans/:planId
+POST /api/properties/:propertyId/plant-advisor/resilience/plans/:planId/verify
+```
+
+APIs must be property-authorized, return rule/confidence metadata, and degrade safely when environmental or plant-reference providers are unavailable.
+
+#### 24.4.14 Proposed Data Models
+
+Potential schema additions:
+
+- `PropertyOutdoorProfile`: utilities, septic, easements, restrictions, wildfire/coastal context, and confidence.
+- `OutdoorSiteZone`: geometry or relative position, orientation, dimensions, structure clearances, sun, soil, drainage, and constraints.
+- `OutdoorPlantCatalog`: authoritative resilience traits, climate range, mature size, safety clearances, source, and review date.
+- `OutdoorResilienceOpportunity`: detected environmental pattern, strategy, evidence window, confidence, and lifecycle.
+- `OutdoorResiliencePlan`: selected strategy, zone, candidate plants, assumptions, conflicts, professional-review status, and outcome.
+- `OutdoorPlantInstallation`: installed plant, location, installation date, establishment plan, provider, and verification.
+
+Existing `GardenZone` and `HomePlant` data should be reused or migrated where compatible rather than duplicated.
+
+#### 24.4.15 Analytics and Success Measures
+
+Recommended events:
+
+- `outdoor_resilience_opportunity_viewed`
+- `outdoor_resilience_capture_answered`
+- `outdoor_resilience_strategy_saved`
+- `outdoor_resilience_candidate_compared`
+- `outdoor_resilience_professional_cta_clicked`
+- `outdoor_resilience_plan_verified`
+- `outdoor_resilience_installation_recorded`
+
+Success measures should include completion of high-value site facts, qualified plan saves, professional-review conversion, installation follow-through, recommendation correction rate, and absence of repeat questions. Plant purchases alone are not an adequate success measure.
+
+#### 24.4.16 Acceptance Criteria
+
+- [ ] A permanent landscape opportunity is generated only from a recurring pattern or explicit homeowner goal, not a single forecast event.
+- [ ] The system recommends a resilience strategy before presenting plant species.
+- [ ] Placement-specific results are withheld until minimum site and safety data are available.
+- [ ] Mature plant dimensions and required clearances are visible.
+- [ ] Invasive, prohibited, climate-incompatible, and safety-conflicting candidates are excluded with reasons.
+- [ ] Wildfire, utility, septic, easement, foundation, and drainage constraints can block or redirect a recommendation.
+- [ ] Low-confidence results clearly identify missing inputs and do not imply protection.
+- [ ] Commercial sponsorship does not influence resilience ranking.
+- [ ] Professional review is required for high-consequence strategies.
+- [ ] Saved answers and plans persist and are reused.
+- [ ] Provider failure does not break Environment Report or the existing Plant Advisor.
+- [ ] Mobile and desktop experiences expose equivalent facts, warnings, confidence, and CTAs.
+
+#### 24.4.17 Assumptions and Risks
+
+- Vegetation benefits develop over time and depend on survival, maintenance, mature size, and placement.
+- Address-level weather and public hazard data may not represent parcel-level microconditions.
+- Hardiness zone alone is insufficient for species or placement selection.
+- Root behavior and infrastructure conflicts cannot always be determined remotely.
+- Local rules and invasive-species lists change and require source versioning.
+- Homeowner-entered measurements may be approximate.
+- Provider or catalog coverage may vary significantly by region.
+- Recommendations may create liability if benefit language is overstated or site constraints are missed.
+
+#### 24.4.18 Recommended Rollout
+
+1. **Opportunity discovery:** Identify recurring heat, runoff, drought, wind, erosion, snow, or coastal patterns and explain eligible resilience strategies without species selection.
+2. **Site qualification:** Add outdoor-profile and site-zone capture, safety blockers, data completeness, and professional-review routing.
+3. **Plant-form and species screening:** Introduce authoritative regional catalog data, mature-size rules, exclusions, and explainable ranking.
+4. **Placement concepts:** Add relative property mapping, clearances, conflicts, and conditional layouts.
+5. **Execution and follow-through:** Add saved plans, provider handoff, installation records, establishment care, and outcome tracking.
+
+### 24.5 Required Future Data Models
 
 Potential schema additions, only when these capabilities are approved:
 
