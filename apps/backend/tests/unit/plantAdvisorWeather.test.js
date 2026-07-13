@@ -70,6 +70,10 @@ test('offers contextual Plant Advisor setup when heat is relevant and no plant d
   assert.equal(modules[0].contextLevel, 'setup');
   assert.equal(modules[0].action.label, 'Set up Plant Advisor');
   assert.match(modules[0].action.href, /launchSurface=environment-report/);
+  assert.match(modules[0].action.href, /weatherContext=heat/);
+  assert.match(modules[0].action.href, /insightId=heat-2026-07-14/);
+  assert.match(modules[0].action.href, /returnTo=%2Fdashboard%2Fproperties%2Fproperty-1%2Fenvironment-report/);
+  assert.match(modules[0].action.href, /#environment-weather-guidance$/);
 });
 
 test('personalizes heat guidance with plants added to the home and their room', () => {

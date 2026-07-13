@@ -13,7 +13,25 @@ import type { GardenIrrigationType, GardenSoilDrainage, GardenSunExposure } from
 
 const NOW = () => new Date().toISOString();
 
-export default function WeatherAwarePlantCare({ propertyId }: { propertyId: string }) {
+type PlantWeatherContext = 'heat' | 'freeze' | 'low_humidity' | 'storm' | 'air_quality';
+
+const WEATHER_CONTEXT_LABELS: Record<PlantWeatherContext, string> = {
+  heat: 'heat',
+  freeze: 'freeze',
+  low_humidity: 'low-humidity',
+  storm: 'storm',
+  air_quality: 'air-quality',
+};
+
+export default function WeatherAwarePlantCare({
+  propertyId,
+  weatherContext,
+  focusedRoomName,
+}: {
+  propertyId: string;
+  weatherContext?: PlantWeatherContext | null;
+  focusedRoomName?: string | null;
+}) {
   const queryClient = useQueryClient();
   const queryKey = ['plant-care-outlook', propertyId];
   const outlook = useQuery({ queryKey, queryFn: () => getPlantCareOutlook(propertyId), staleTime: 15 * 60_000 });
@@ -48,12 +66,24 @@ export default function WeatherAwarePlantCare({ propertyId }: { propertyId: stri
   if (outlook.isError || !outlook.data) return <Card><CardContent className="p-5"><p className="text-sm font-medium">Plant care outlook is temporarily unavailable.</p><Button className="mt-3" size="sm" variant="outline" onClick={() => outlook.refetch()}>Retry</Button></CardContent></Card>;
 
   const data = outlook.data;
+  const contextTrigger = weatherContext === 'air_quality' ? 'poor_air_quality' : weatherContext;
+  const contextualCareRecommendations = contextTrigger
+    ? data.careRecommendations.filter(item => item.triggers.includes(contextTrigger))
+    : data.careRecommendations;
+  const careRecommendations = focusedRoomName
+    ? [...contextualCareRecommendations].sort((left, right) => {
+        const leftFocused = left.locationName === focusedRoomName ? 1 : 0;
+        const rightFocused = right.locationName === focusedRoomName ? 1 : 0;
+        return rightFocused - leftFocused;
+      })
+    : contextualCareRecommendations;
+  const contextLabel = weatherContext ? WEATHER_CONTEXT_LABELS[weatherContext] : null;
   return (
     <section className="space-y-4" aria-labelledby="plant-care-outlook-title">
       <div>
-        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-700">Weather-aware care</p>
-        <h2 id="plant-care-outlook-title" className="mt-1 text-xl font-bold">Plant care and outdoor planning</h2>
-        <p className="mt-1 text-sm text-muted-foreground">Guidance adapts to current weather, confirmed plants, garden zones, and USDA hardiness context.</p>
+        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-700">{contextLabel ? 'Environment Report follow-up' : 'Weather-aware care'}</p>
+        <h2 id="plant-care-outlook-title" className="mt-1 text-xl font-bold">{contextLabel ? `${contextLabel.charAt(0).toUpperCase()}${contextLabel.slice(1)} plant guidance` : 'Plant care and outdoor planning'}</h2>
+        <p className="mt-1 text-sm text-muted-foreground">{contextLabel ? `Recommendations below are focused on the ${contextLabel} conditions that brought you here.` : 'Guidance adapts to current weather, confirmed plants, garden zones, and USDA hardiness context.'}</p>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
@@ -61,8 +91,8 @@ export default function WeatherAwarePlantCare({ propertyId }: { propertyId: stri
           <CardHeader><CardTitle className="flex items-center gap-2 text-base"><Leaf className="h-5 w-5 text-emerald-600" />My plants</CardTitle></CardHeader>
           <CardContent className="space-y-3">
             {data.plants.length === 0 ? <p className="text-sm text-muted-foreground">Add a recommendation to your home to receive individual care guidance.</p> : null}
-            {data.careRecommendations.length === 0 && data.plants.length > 0 ? <p className="flex gap-2 text-sm text-emerald-800"><CheckCircle2 className="h-4 w-4" />No weather-driven care changes are recommended right now.</p> : null}
-            {data.careRecommendations.map(item => (
+            {careRecommendations.length === 0 && data.plants.length > 0 ? <p className="flex gap-2 text-sm text-emerald-800"><CheckCircle2 className="h-4 w-4" />{contextLabel ? `No additional ${contextLabel} care changes are recommended for confirmed plants right now.` : 'No weather-driven care changes are recommended right now.'}</p> : null}
+            {careRecommendations.map(item => (
               <div key={item.id} className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-3">
                 <div className="flex flex-wrap items-center justify-between gap-2"><p className="font-semibold">{item.title}</p><Badge variant={item.priority === 'NOW' ? 'destructive' : 'secondary'}>{item.priority === 'NOW' ? 'Act now' : 'Prepare soon'}</Badge></div>
                 <p className="mt-1 text-xs text-muted-foreground">{item.locationName} · {item.triggers.join(' · ').replaceAll('_', ' ')}</p>

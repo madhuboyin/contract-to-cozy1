@@ -8,6 +8,7 @@ import {
   AlertTriangle,
   ArrowLeft,
   CheckCircle2,
+  CloudSun,
   Home,
   Leaf,
   Loader2,
@@ -50,6 +51,7 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/components/ui/use-toast';
 import { track } from '@/lib/analytics/events';
+import { api } from '@/lib/api/client';
 import {
   addRoomPlantRecommendationToHome,
   dismissRoomPlantRecommendation,
@@ -88,6 +90,25 @@ type PlantAdvisorDraft = {
 const PROFILE_QUERY_KEY = 'plant-advisor-room-state';
 const ROOMS_QUERY_KEY = 'plant-advisor-rooms';
 const UNSET = '__UNSET__';
+
+type PlantWeatherContext = 'heat' | 'freeze' | 'low_humidity' | 'storm' | 'air_quality';
+
+const WEATHER_CONTEXT_LABELS: Record<PlantWeatherContext, string> = {
+  heat: 'Heat',
+  freeze: 'Freeze',
+  low_humidity: 'Low humidity',
+  storm: 'Storm',
+  air_quality: 'Air quality',
+};
+
+function parseWeatherContext(value: string | null): PlantWeatherContext | null {
+  return value && value in WEATHER_CONTEXT_LABELS ? value as PlantWeatherContext : null;
+}
+
+function environmentReportReturnPath(value: string | null, propertyId: string): string {
+  const fallback = `/dashboard/properties/${propertyId}/environment-report`;
+  return value?.startsWith(fallback) ? value : fallback;
+}
 
 const LIGHT_OPTIONS: Array<{ value: PlantLightLevel; label: string; hint: string }> = [
   { value: 'LOW', label: 'Low', hint: 'Little natural light, works away from windows.' },
@@ -364,6 +385,11 @@ export default function PlantAdvisorClient() {
   const launchSurface = searchParams.get('launchSurface') ?? 'direct';
   const prefillRoomId = searchParams.get('roomId');
   const prefillRoomType = parseRoomType(searchParams.get('roomType'));
+  const weatherContext = parseWeatherContext(searchParams.get('weatherContext'));
+  const weatherContextLabel = weatherContext ? WEATHER_CONTEXT_LABELS[weatherContext] : 'Weather';
+  const sourceInsightId = searchParams.get('insightId');
+  const isEnvironmentReportLaunch = launchSurface === 'environment-report' && weatherContext !== null;
+  const returnTo = environmentReportReturnPath(searchParams.get('returnTo'), propertyId);
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const roomSelectionSourceRef = React.useRef<'auto_default' | 'prefill' | 'picker' | 'auto_fallback'>(
@@ -408,6 +434,35 @@ export default function PlantAdvisorClient() {
   });
 
   const rooms = React.useMemo(() => roomsQuery.data ?? [], [roomsQuery.data]);
+
+  const environmentContextQuery = useQuery({
+    queryKey: ['plant-advisor-environment-context', propertyId, sourceInsightId, weatherContext],
+    queryFn: async () => {
+      const response = await api.getEnvironmentReport(propertyId);
+      if (!response.success) throw new Error('message' in response ? response.message : 'Environment context is unavailable');
+      return response.data;
+    },
+    enabled: Boolean(propertyId && isEnvironmentReportLaunch),
+    staleTime: 5 * 60_000,
+  });
+
+  const sourceInsight = React.useMemo(() => {
+    const insights = environmentContextQuery.data?.insights ?? [];
+    if (sourceInsightId) {
+      const exact = insights.find(insight => insight.id === sourceInsightId);
+      if (exact) return exact;
+    }
+    return weatherContext ? insights.find(insight => insight.category === weatherContext) ?? null : null;
+  }, [environmentContextQuery.data?.insights, sourceInsightId, weatherContext]);
+
+  const sourcePlantModule = React.useMemo(() => {
+    const modules = environmentContextQuery.data?.plantAdvisorModules ?? [];
+    return weatherContext
+      ? modules.find(module => module.trigger === weatherContext && (!sourceInsightId || module.relatedInsightId === sourceInsightId))
+        ?? modules.find(module => module.trigger === weatherContext)
+        ?? null
+      : null;
+  }, [environmentContextQuery.data?.plantAdvisorModules, sourceInsightId, weatherContext]);
 
   React.useEffect(() => {
     if (rooms.length === 0) {
@@ -456,9 +511,11 @@ export default function PlantAdvisorClient() {
       launch_surface: launchSurface,
       prefill_room_id: prefillRoomId ?? null,
       prefill_room_type: prefillRoomType ?? null,
+      weather_context: weatherContext,
+      source_insight_id: sourceInsightId,
     });
     track('workflow_started', { tool: 'plant-advisor', propertyId, entryPoint: launchSurface });
-  }, [launchSurface, prefillRoomId, prefillRoomType, propertyId, trackEvent]);
+  }, [launchSurface, prefillRoomId, prefillRoomType, propertyId, sourceInsightId, trackEvent, weatherContext]);
 
   React.useEffect(() => {
     if (!selectedRoomSummary) return;
@@ -715,11 +772,63 @@ export default function PlantAdvisorClient() {
         </Link>
       </MobileSection>
 
+      {isEnvironmentReportLaunch ? (
+        <section
+          id="environment-weather-guidance"
+          className="scroll-mt-24 rounded-2xl border border-emerald-200 bg-emerald-50/70 p-4 shadow-sm sm:p-5"
+          aria-labelledby="environment-weather-guidance-title"
+        >
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div className="flex min-w-0 items-start gap-3">
+              <div className="shrink-0 rounded-xl bg-emerald-100 p-2.5 text-emerald-700">
+                <CloudSun className="h-5 w-5" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-emerald-700">
+                  From Environment Report · {weatherContextLabel}
+                </p>
+                <h1 id="environment-weather-guidance-title" className="mt-1 text-xl font-bold text-slate-950">
+                  {sourcePlantModule?.title ?? `${weatherContextLabel} plant care plan`}
+                </h1>
+                {environmentContextQuery.isLoading ? (
+                  <p className="mt-2 flex items-center gap-2 text-sm text-emerald-900/75">
+                    <Loader2 className="h-4 w-4 animate-spin" />Loading the related weather insight…
+                  </p>
+                ) : (
+                  <>
+                    {sourceInsight ? <p className="mt-1 text-sm font-medium text-slate-700">{sourceInsight.title} · {sourceInsight.timeframe}</p> : null}
+                    <p className="mt-2 max-w-4xl text-sm leading-relaxed text-emerald-950/80">
+                      {sourcePlantModule?.summary ?? sourceInsight?.summary ?? 'Review weather-aware placement and care guidance for this home.'}
+                    </p>
+                  </>
+                )}
+                {sourcePlantModule?.roomNames.length ? (
+                  <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-emerald-900/75">
+                    <span className="font-semibold">Affected rooms:</span>
+                    {sourcePlantModule.roomNames.map(roomName => (
+                      <span key={roomName} className="rounded-full border border-emerald-200 bg-white/80 px-2 py-1">{roomName}</span>
+                    ))}
+                  </div>
+                ) : null}
+                {selectedRoomSummary ? <p className="mt-2 text-xs text-slate-500">Focused room: {selectedRoomSummary.name}</p> : null}
+              </div>
+            </div>
+            <Button asChild variant="outline" size="sm" className="shrink-0 border-emerald-300 bg-white text-emerald-800 hover:bg-emerald-100">
+              <Link href={returnTo}><ArrowLeft className="mr-1.5 h-4 w-4" />Back to Environment Report</Link>
+            </Button>
+          </div>
+        </section>
+      ) : null}
+
       <div className="space-y-6 lg:grid lg:grid-cols-[minmax(0,1fr)_320px] lg:gap-6 lg:space-y-0 xl:grid-cols-[minmax(0,1fr)_360px]">
         <div className="space-y-6">
           <HomeToolHeader toolId="plant-advisor" propertyId={propertyId} />
 
-          <WeatherAwarePlantCare propertyId={propertyId} />
+          <WeatherAwarePlantCare
+            propertyId={propertyId}
+            weatherContext={weatherContext}
+            focusedRoomName={selectedRoomSummary?.name ?? null}
+          />
 
           <MobileSection>
             <MobileSectionHeader

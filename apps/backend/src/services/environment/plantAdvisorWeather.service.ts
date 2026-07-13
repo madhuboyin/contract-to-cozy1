@@ -158,6 +158,8 @@ export function derivePlantAdvisorWeatherModules(
     const roomId = relevantPlants[0]?.roomId ?? context.profiles[0]?.roomId;
     const query = new URLSearchParams({ launchSurface: 'environment-report', weatherContext: trigger });
     if (roomId) query.set('roomId', roomId);
+    if (relatedInsightId) query.set('insightId', relatedInsightId);
+    query.set('returnTo', `/dashboard/properties/${propertyId}/environment-report`);
     return {
       id: `plant-advisor-${trigger}`,
       trigger,
@@ -168,7 +170,7 @@ export function derivePlantAdvisorWeatherModules(
       roomNames,
       action: {
         label: level === 'setup' ? 'Set up Plant Advisor' : level === 'room_profiles' ? 'Get plant recommendations' : 'Review my plants',
-        href: `/dashboard/properties/${propertyId}/tools/plant-advisor?${query.toString()}`,
+        href: `/dashboard/properties/${propertyId}/tools/plant-advisor?${query.toString()}#environment-weather-guidance`,
       },
     };
   });
