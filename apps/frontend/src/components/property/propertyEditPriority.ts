@@ -58,6 +58,7 @@ export const PROPERTY_PRIORITY_FIELDS: PropertyPriorityField[] = [
   { key: "coolingType", label: "cooling type", tier: "P1", impactWeight: 87, sectionId: "systems", fieldRefId: "field-coolingType", isFilled: (v) => hasText(v.coolingType) },
   { key: "waterHeaterType", label: "water heater type", tier: "P1", impactWeight: 86, sectionId: "systems", fieldRefId: "field-waterHeaterType", isFilled: (v) => hasText(v.waterHeaterType) },
   { key: "roofType", label: "roof type", tier: "P1", impactWeight: 85, sectionId: "systems", fieldRefId: "field-roofType", isFilled: (v) => hasText(v.roofType) },
+  { key: "foundationType", label: "foundation type", tier: "P1", impactWeight: 84, sectionId: "systems", fieldRefId: "field-foundationType", isFilled: (v) => hasText(v.foundationType) },
 
   { key: "hasSmokeDetectors", label: "smoke detectors", tier: "P2", impactWeight: 70, sectionId: "safety", isFilled: (v) => v.hasSmokeDetectors !== null && v.hasSmokeDetectors !== undefined },
   { key: "hasCoDetectors", label: "CO detectors", tier: "P2", impactWeight: 69, sectionId: "safety", isFilled: (v) => v.hasCoDetectors !== null && v.hasCoDetectors !== undefined },

@@ -9,6 +9,7 @@
 // report.
 
 import { prisma } from '../lib/prisma';
+import type { FoundationType } from '@prisma/client';
 import { logger } from '../lib/logger';
 import { resolveCountyFips } from './environment/fipsResolver.service';
 import { getWeatherReport, WeatherReportData } from './environment/weatherReport.service';
@@ -84,7 +85,7 @@ interface GeocodableProperty {
   hvacInstallYear: number | null;
   roofType: string | null;
   roofReplacementYear: number | null;
-  foundationType: string | null;
+  foundationType: FoundationType | null;
   hasIrrigation: boolean | null;
   hasSecondaryHeat: boolean | null;
 }

@@ -123,6 +123,17 @@ enum RoofType {
   UNKNOWN
 }
 
+enum FoundationType {
+  BASEMENT
+  CRAWL_SPACE
+  SLAB
+  PIER_AND_BEAM
+  RAISED
+  MIXED
+  OTHER
+  UNKNOWN
+}
+
 // ============================================================================
 // NEW ENUMS FOR RISK ASSESSMENT (PHASE 1)
 // ============================================================================
@@ -1952,7 +1963,7 @@ model Property {
   hvacInstallYear        Int?
   waterHeaterInstallYear Int?
   roofReplacementYear    Int?
-  foundationType         String?
+  foundationType         FoundationType?
   sidingType             String?
   electricalPanelAge     Int?
 

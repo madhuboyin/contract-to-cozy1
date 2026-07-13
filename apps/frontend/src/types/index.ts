@@ -244,6 +244,18 @@ export const RoofTypes = {
 } as const;
 export type RoofType = keyof typeof RoofTypes;
 
+export const FoundationTypes = {
+  BASEMENT: 'BASEMENT',
+  CRAWL_SPACE: 'CRAWL_SPACE',
+  SLAB: 'SLAB',
+  PIER_AND_BEAM: 'PIER_AND_BEAM',
+  RAISED: 'RAISED',
+  MIXED: 'MIXED',
+  OTHER: 'OTHER',
+  UNKNOWN: 'UNKNOWN',
+} as const;
+export type FoundationType = keyof typeof FoundationTypes;
+
 // ============================================================================
 // NEW RISK ASSESSMENT TYPES (PHASE 3)
 // ============================================================================
@@ -1155,7 +1167,7 @@ export interface Property {
   hvacInstallYear: number | null;
   waterHeaterInstallYear: number | null;
   roofReplacementYear: number | null;
-  foundationType: string | null;
+  foundationType: FoundationType | null;
   sidingType: string | null;
   electricalPanelAge: number | null;
   lotSize: number | null;

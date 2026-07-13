@@ -22,7 +22,7 @@ const property = {
   hvacInstallYear: 2018,
   roofType: 'SHINGLE',
   roofReplacementYear: 2015,
-  foundationType: 'Basement',
+  foundationType: 'BASEMENT',
   hasIrrigation: false,
   hasSecondaryHeat: false,
   hvacFilterLastCompletedDate: '2026-06-15T12:00:00.000Z',
@@ -183,6 +183,30 @@ test('uses captured roof data to personalize and elevate a snow insight', () => 
   assert.equal(insights[0].severity, 'action');
   assert.match(insights[0].homeImplication, /flat roof/);
   assert.match(insights[0].homeImplication, /years since replacement/);
+});
+
+test('uses canonical foundation enum values for inline drought capture and personalization', () => {
+  const droughtInsight = { id: 'drought-2026-07-10', category: 'drought' };
+  const questions = deriveEnvironmentQuestions(
+    { ...property, foundationType: null },
+    [droughtInsight]
+  );
+  const foundationQuestion = questions.find(question => question.field === 'foundationType');
+
+  assert.ok(foundationQuestion);
+  assert.deepEqual(
+    foundationQuestion.options.map(option => option.value),
+    ['BASEMENT', 'CRAWL_SPACE', 'SLAB', 'PIER_AND_BEAM', 'RAISED', 'MIXED', 'OTHER', 'UNKNOWN']
+  );
+  assert.equal(
+    deriveEnvironmentQuestions({ ...property, foundationType: 'UNKNOWN' }, [droughtInsight]).some(question => question.field === 'foundationType'),
+    false
+  );
+
+  const input = sections();
+  input.drought.data.current = { date: '2026-07-10', dominantCategory: 'D3', percentArea: {} };
+  const insights = deriveEnvironmentInsights({ ...property, foundationType: 'PIER_AND_BEAM' }, input);
+  assert.match(insights[0].homeImplication, /pier and beam foundation/i);
 });
 
 test('links a matching official incident and makes it the primary CTA', () => {

@@ -3,6 +3,7 @@ import type { DroughtData } from './drought.service';
 import type { FloodElevationData } from './floodElevation.service';
 import type { WeatherReportData } from './weatherReport.service';
 import type { SectionResult } from './types';
+import type { FoundationType } from '@prisma/client';
 
 export type EnvironmentInsightSeverity = 'info' | 'watch' | 'action';
 
@@ -55,7 +56,7 @@ export interface EnvironmentInsightProperty {
   hvacInstallYear: number | null;
   roofType: string | null;
   roofReplacementYear: number | null;
-  foundationType: string | null;
+  foundationType: FoundationType | null;
   hasIrrigation: boolean | null;
   hasSecondaryHeat: boolean | null;
   hvacFilterLastCompletedDate: string | null;
@@ -105,6 +106,17 @@ const maintenanceHref = (propertyId: string) => `/dashboard/maintenance?property
 const providersHref = (propertyId: string) => `/dashboard/providers?propertyId=${propertyId}`;
 const coverageHref = (propertyId: string) =>
   `/dashboard/properties/${propertyId}/tools/coverage-intelligence`;
+
+const foundationLabel = (value: FoundationType) => ({
+  BASEMENT: 'basement',
+  CRAWL_SPACE: 'crawl space',
+  SLAB: 'slab',
+  PIER_AND_BEAM: 'pier and beam',
+  RAISED: 'raised',
+  MIXED: 'mixed',
+  OTHER: 'other',
+  UNKNOWN: 'unknown',
+}[value]);
 
 function isFloodZone(zone: string | null): boolean {
   if (!zone) return false;
@@ -304,8 +316,8 @@ export function deriveEnvironmentInsights(
       severity: category === 'D4' ? 'action' : 'watch',
       title: `${category} drought conditions`,
       summary: 'Severe or worse drought conditions are reported for the area.',
-      homeImplication: property.foundationType && property.foundationType !== 'Unknown'
-        ? `This home has a ${property.foundationType.toLowerCase()} foundation${property.hasIrrigation ? ' and an irrigation system' : ''}. Dry soil can stress landscaping and contribute to soil movement around the foundation.`
+      homeImplication: property.foundationType && property.foundationType !== 'UNKNOWN'
+        ? `This home has a ${foundationLabel(property.foundationType)} foundation${property.hasIrrigation ? ' and an irrigation system' : ''}. Dry soil can stress landscaping and contribute to soil movement around the foundation.`
         : 'Dry soil can stress landscaping and may contribute to soil movement or gaps around the foundation.',
       timeframe: 'Current weekly outlook',
       effectiveFrom: sections.drought.data.current!.date,
@@ -482,10 +494,14 @@ export function deriveEnvironmentQuestions(
           reason: 'Foundation type helps us tailor soil-movement and moisture guidance.',
           inputType: 'choice',
           options: [
-            { label: 'Basement', value: 'Basement' },
-            { label: 'Crawl space', value: 'Crawl space' },
-            { label: 'Slab', value: 'Slab' },
-            { label: 'Not sure', value: 'Unknown' },
+            { label: 'Basement', value: 'BASEMENT' },
+            { label: 'Crawl space', value: 'CRAWL_SPACE' },
+            { label: 'Slab', value: 'SLAB' },
+            { label: 'Pier and beam', value: 'PIER_AND_BEAM' },
+            { label: 'Raised', value: 'RAISED' },
+            { label: 'Mixed', value: 'MIXED' },
+            { label: 'Other', value: 'OTHER' },
+            { label: 'Not sure', value: 'UNKNOWN' },
           ],
         });
       }

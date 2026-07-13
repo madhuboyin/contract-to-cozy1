@@ -265,6 +265,7 @@ Every insight must support:
 - FR-6.5: The report must refetch and recalculate after a successful answer.
 - FR-6.6: A confirmed known value must not be requested again.
 - FR-6.7: Supported enum “Not sure” values must persist as `UNKNOWN` where the canonical model supports it.
+- FR-6.8: Foundation type must use the canonical `FoundationType` enum across property editing and inline capture: `BASEMENT`, `CRAWL_SPACE`, `SLAB`, `PIER_AND_BEAM`, `RAISED`, `MIXED`, `OTHER`, or `UNKNOWN`.
 
 ### FR-7: HVAC Filter Maintenance Awareness
 
@@ -587,7 +588,7 @@ The Environment Report currently uses the typed frontend `updateProperty` client
 
 | Data | Canonical owner |
 |---|---|
-| Address, structure, systems, resilience markers | `Property` |
+| Address, structure, systems, resilience markers | `Property`, including canonical `FoundationType` |
 | HVAC filter completion and next due date | `PropertyMaintenanceTask` |
 | Severe weather lifecycle | `Incident` and `IncidentSignal` |
 | Weather guidance journey | Guidance Engine models |

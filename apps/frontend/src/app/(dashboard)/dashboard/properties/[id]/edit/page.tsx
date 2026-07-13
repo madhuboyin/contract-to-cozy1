@@ -16,6 +16,7 @@ import {
   CoolingTypes,
   WaterHeaterTypes,
   RoofTypes,
+  FoundationTypes,
 } from "@/types"; 
 import { api } from "@/lib/api/client";
 import { Card, CardContent, CardDescription } from "@/components/ui/card";
@@ -96,6 +97,13 @@ const SYSTEM_ENUM_DISPLAY_MAP: Record<string, string> = {
   TILE: "Tile Roof",
   FLAT: "Flat / TPO Roof",
   METAL: "Metal Roof",
+  BASEMENT: "Basement",
+  CRAWL_SPACE: "Crawl Space",
+  SLAB: "Slab",
+  PIER_AND_BEAM: "Pier and Beam",
+  RAISED: "Raised Foundation",
+  MIXED: "Mixed Foundation",
+  OTHER: "Other",
   OWNER_OCCUPIED: "Owner Occupied",
   RENTED_OUT: "Rented Out",
 };
@@ -180,6 +188,9 @@ const propertySchema = z.object({
   roofType: z.union([z.nativeEnum(RoofTypes), z.literal("")])
     .transform(val => val === "" ? null : val)
     .refine(val => val !== null, { message: "Roof Type is required." }),
+  foundationType: z.union([z.nativeEnum(FoundationTypes), z.literal("")])
+    .transform(val => val === "" ? null : val)
+    .optional().nullable(),
   
   hvacInstallYear: z.coerce.number().int().min(1900).optional().nullable(),
   waterHeaterInstallYear: z.coerce.number().int().min(1900).optional().nullable(),
@@ -261,6 +272,7 @@ const mapDbToForm = (property: any): PropertyFormValues => {
         coolingType: property.coolingType || ("" as any),
         waterHeaterType: property.waterHeaterType || ("" as any),
         roofType: property.roofType || ("" as any),
+        foundationType: property.foundationType || ("" as any),
         
         hvacInstallYear: property.hvacInstallYear,
         waterHeaterInstallYear: property.waterHeaterInstallYear,
@@ -555,7 +567,7 @@ export default function EditPropertyPage() {
       bathrooms: null, ownershipType: "" as any, occupantsCount: null,
       heatingType: "" as any, coolingType: "" as any, waterHeaterType: "" as any, 
       roofType: "" as any, hvacInstallYear: null, waterHeaterInstallYear: null,
-      roofReplacementYear: null, hasDrainageIssues: null, hasSmokeDetectors: null,
+      roofReplacementYear: null, foundationType: "" as any, hasDrainageIssues: null, hasSmokeDetectors: null,
       hasCoDetectors: null, hasSecuritySystem: null, hasFireExtinguisher: null,
       hasIrrigation: null,
       purchasePriceDollars: null,
@@ -636,6 +648,7 @@ export default function EditPropertyPage() {
         hvacInstallYear: data.hvacInstallYear ?? undefined,
         waterHeaterInstallYear: data.waterHeaterInstallYear ?? undefined,
         roofReplacementYear: data.roofReplacementYear ?? undefined,
+        foundationType: data.foundationType ?? undefined,
         
         hasSmokeDetectors: data.hasSmokeDetectors ?? undefined,
         hasCoDetectors: data.hasCoDetectors ?? undefined,
@@ -722,6 +735,7 @@ export default function EditPropertyPage() {
     watchHvacInstallYear,
     watchWaterHeaterInstallYear,
     watchRoofReplacementYear,
+    watchFoundationType,
     watchBedrooms,
     watchBathrooms,
     watchOccupantsCount,
@@ -749,6 +763,7 @@ export default function EditPropertyPage() {
     "hvacInstallYear",
     "waterHeaterInstallYear",
     "roofReplacementYear",
+    "foundationType",
     "bedrooms",
     "bathrooms",
     "occupantsCount",
@@ -818,6 +833,7 @@ export default function EditPropertyPage() {
         hvacInstallYear: watchHvacInstallYear,
         waterHeaterInstallYear: watchWaterHeaterInstallYear,
         roofReplacementYear: watchRoofReplacementYear,
+        foundationType: watchFoundationType,
         bedrooms: watchBedrooms,
         bathrooms: watchBathrooms,
         occupantsCount: watchOccupantsCount,
@@ -843,6 +859,7 @@ export default function EditPropertyPage() {
     watchYearBuilt,
     watchHeatingType,
     watchCoolingType,
+    watchFoundationType,
     watchWaterHeaterType,
     watchRoofType,
     watchHvacInstallYear,
@@ -1530,7 +1547,7 @@ export default function EditPropertyPage() {
                   />
                 </div>
 
-                <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+                <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-4">
                   <div className="flex h-full flex-col rounded-md border border-black/5 bg-gray-50/50 p-3 dark:border-white/10 dark:bg-slate-900/30">
                     <p className="mb-3 text-sm font-semibold text-gray-900 dark:text-slate-100">HVAC</p>
                     <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
@@ -1697,6 +1714,33 @@ export default function EditPropertyPage() {
                             };
                             return <span className={cn("mt-1.5 inline-flex max-w-full items-center overflow-hidden text-ellipsis whitespace-nowrap rounded-full border px-2 py-[3px] text-[11px] font-medium leading-none", colorMap[fb.color!])}>{fb.label}</span>;
                           })()}
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                  <div className="flex h-full flex-col rounded-md border border-black/5 bg-gray-50/50 p-3 dark:border-white/10 dark:bg-slate-900/30">
+                    <p className="mb-3 text-sm font-semibold text-gray-900 dark:text-slate-100">Foundation</p>
+                    <FormField
+                      control={form.control}
+                      name="foundationType"
+                      render={({ field }) => (
+                        <FormItem className="w-full">
+                          <div className="flex items-center gap-2">
+                            <FormLabel>Foundation type</FormLabel>
+                            {isRecommended("foundationType") ? <FieldNudgeChip variant="recommended" /> : null}
+                          </div>
+                          <Select onValueChange={(value) => field.onChange(value === "" ? null : value)} value={field.value || ""}>
+                            <FormControl>
+                              <SelectTrigger id="field-foundationType" className="h-9 text-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40"><SelectValue placeholder="Select type" /></SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {Object.values(FoundationTypes).map((type) => (
+                                <SelectItem key={type} value={type}>{formatEnumLabel(type)}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <p className="text-xs text-gray-500 dark:text-slate-400">Used for drainage, drought, moisture, and foundation-risk insights.</p>
                           <FormMessage />
                         </FormItem>
                       )}

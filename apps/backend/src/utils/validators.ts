@@ -23,6 +23,8 @@ const WaterHeaterTypeEnum = z.enum(['TANK', 'TANKLESS', 'HEAT_PUMP', 'SOLAR', 'U
 
 const RoofTypeEnum = z.enum(['SHINGLE', 'TILE', 'FLAT', 'METAL', 'UNKNOWN']);
 
+const FoundationTypeEnum = z.enum(['BASEMENT', 'CRAWL_SPACE', 'SLAB', 'PIER_AND_BEAM', 'RAISED', 'MIXED', 'OTHER', 'UNKNOWN']);
+
 
 // ============================================================================
 // NEW ASSET SCHEMA (Strategic Fix for HomeAsset Table)
@@ -145,7 +147,7 @@ export const createPropertySchema = z.object({
   hvacInstallYear: z.number().int().min(1700).optional(),
   waterHeaterInstallYear: z.number().int().min(1700).optional(),
   roofReplacementYear: z.number().int().min(1700).optional(),
-  foundationType: z.string().max(100).optional(),
+  foundationType: FoundationTypeEnum.optional(),
   sidingType: z.string().max(100).optional(),
   electricalPanelAge: z.number().int().positive().optional(),
   lotSize: z.number().positive().optional(),

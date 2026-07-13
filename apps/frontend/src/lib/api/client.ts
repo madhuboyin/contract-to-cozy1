@@ -96,6 +96,7 @@ import {
   RadarUserState,
   ResolutionCenterPayload,
   EnvironmentReportDTO,
+  FoundationType,
 } from '@/types';
 
 // REMOVED: import { RiskReportSummary } from '@/app/(dashboard)/dashboard/types'; as it was not defined or needed.
@@ -1356,7 +1357,7 @@ class APIClient {
       hvacInstallYear?: number;
       waterHeaterInstallYear?: number;
       roofReplacementYear?: number;
-      foundationType?: string;
+      foundationType?: FoundationType;
       sidingType?: string;
       electricalPanelAge?: number;
       lotSize?: number;

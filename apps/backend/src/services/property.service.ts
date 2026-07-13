@@ -1,6 +1,6 @@
 // apps/backend/src/services/property.service.ts
 
-import { Property, PropertyType, OwnershipType, HeatingType, CoolingType, WaterHeaterType, RoofType, Prisma, ChecklistItem, Warranty, DocumentType } from '@prisma/client';
+import { Property, PropertyType, OwnershipType, HeatingType, CoolingType, WaterHeaterType, RoofType, FoundationType, Prisma, ChecklistItem, Warranty, DocumentType } from '@prisma/client';
 import { calculateHealthScore, HealthScoreResult } from '../utils/propertyScore.util'; 
 import JobQueueService from './JobQueue.service';
 import type { HomeAssetDTO } from './propertyApplianceInventory.service';
@@ -55,7 +55,7 @@ interface CreatePropertyData {
   hvacInstallYear?: number | null;
   waterHeaterInstallYear?: number | null;
   roofReplacementYear?: number | null;
-  foundationType?: string | null;
+  foundationType?: FoundationType | null;
   sidingType?: string | null;
   electricalPanelAge?: number | null;
   lotSize?: number | null; // FIX
