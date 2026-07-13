@@ -22,7 +22,7 @@ function createPrismaMock(initialSetting = null) {
         return setting;
       },
     },
-    auditLog: {
+    personalizationAuditEvent: {
       create: async ({ data }) => {
         auditLogEntries.push(data);
         return { id: `audit-${auditLogEntries.length}`, createdAt: new Date(), ...data };
@@ -44,8 +44,16 @@ function installPrismaMock(prismaMock) {
 }
 
 function loadService() {
+  // Delete both this service and personalizationAudit.service.ts (which it
+  // calls) so each test's fresh prisma mock actually gets picked up — a
+  // CJS `import { prisma } from '../lib/prisma'` binds to whatever object
+  // was in require.cache the moment the importing module was first loaded,
+  // so a stale, not-reloaded dependent module would keep writing into a
+  // previous test's mock instance instead of the current one.
   const servicePath = require.resolve('../../src/services/personalizationKillSwitch.service.ts');
+  const auditPath = require.resolve('../../src/services/personalizationAudit.service.ts');
   delete require.cache[servicePath];
+  delete require.cache[auditPath];
   return require('../../src/services/personalizationKillSwitch.service.ts');
 }
 
@@ -73,7 +81,7 @@ test('pausePersonalization sets state and writes an audit log entry, is idempote
   assert.equal(await isPersonalizationPaused(), true);
   assert.equal(auditLogEntries.length, 1);
   assert.equal(auditLogEntries[0].action, 'PERSONALIZATION_KILL_SWITCH_PAUSED');
-  assert.equal(auditLogEntries[0].userId, 'admin-1');
+  assert.equal(auditLogEntries[0].actorUserId, 'admin-1');
 
   // Idempotent: pausing again while already paused just updates and still succeeds.
   const state2 = await pausePersonalization('admin-2', 'still bad');

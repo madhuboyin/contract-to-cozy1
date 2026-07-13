@@ -1,0 +1,18 @@
+{
+  "definitionCode": "smoke_co_detector_battery_check",
+  "kind": "unknown",
+  "description": "Property never recorded whether it even has smoke/CO detectors — unknown must not be treated as ineligible-by-default false, and must not be treated as eligible either; three-valued handling per docs/personalization/08-personalization-frd.md PER-FR-005.",
+  "input": {
+    "household": { "syntheticId": "fixture-household-3" },
+    "property": { "syntheticId": "fixture-property-3" },
+    "context": { "season": "FALL" },
+    "history": {}
+  },
+  "expected": {
+    "traits": { "smokeDetectorBatteryOverdue": "UNKNOWN" },
+    "eligible": false,
+    "suppressed": false,
+    "explanationReasonCodes": ["INSUFFICIENT_DATA"],
+    "actions": ["PROMPT_PROFILE_QUESTION"]
+  }
+}

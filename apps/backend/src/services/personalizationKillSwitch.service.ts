@@ -17,6 +17,7 @@
 // once the catalog exists.
 import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
+import { recordPersonalizationAuditEvent } from './personalizationAudit.service';
 
 const SYSTEM_SETTING_KEY = 'personalization.killSwitch';
 
@@ -93,15 +94,13 @@ export async function pausePersonalization(
     },
   });
 
-  await prisma.auditLog.create({
-    data: {
-      userId: adminUserId,
-      action: 'PERSONALIZATION_KILL_SWITCH_PAUSED',
-      entityType: 'SYSTEM_SETTING',
-      entityId: SYSTEM_SETTING_KEY,
-      oldValues: previous as unknown as Prisma.InputJsonValue,
-      newValues: state as unknown as Prisma.InputJsonValue,
-    },
+  await recordPersonalizationAuditEvent({
+    actorUserId: adminUserId,
+    action: 'PERSONALIZATION_KILL_SWITCH_PAUSED',
+    entityType: 'SYSTEM_SETTING',
+    entityId: SYSTEM_SETTING_KEY,
+    reason,
+    metadata: { previous, next: state },
   });
 
   return state;
@@ -128,15 +127,12 @@ export async function resumePersonalization(
     },
   });
 
-  await prisma.auditLog.create({
-    data: {
-      userId: adminUserId,
-      action: 'PERSONALIZATION_KILL_SWITCH_RESUMED',
-      entityType: 'SYSTEM_SETTING',
-      entityId: SYSTEM_SETTING_KEY,
-      oldValues: previous as unknown as Prisma.InputJsonValue,
-      newValues: DEFAULT_STATE as unknown as Prisma.InputJsonValue,
-    },
+  await recordPersonalizationAuditEvent({
+    actorUserId: adminUserId,
+    action: 'PERSONALIZATION_KILL_SWITCH_RESUMED',
+    entityType: 'SYSTEM_SETTING',
+    entityId: SYSTEM_SETTING_KEY,
+    metadata: { previous, next: DEFAULT_STATE },
   });
 
   return DEFAULT_STATE;

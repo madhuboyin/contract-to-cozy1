@@ -1,0 +1,28 @@
+{
+  "definitionCode": "smoke_co_detector_battery_check",
+  "kind": "suppression",
+  "description": "Eligible on the merits, but user already dismissed this exact recommendation this quarter — suppressed, not re-surfaced.",
+  "input": {
+    "household": { "syntheticId": "fixture-household-4" },
+    "property": {
+      "syntheticId": "fixture-property-4",
+      "hasSmokeDetectors": true,
+      "hasCoDetectors": true
+    },
+    "context": { "season": "FALL" },
+    "history": {
+      "lastSmokeDetectorBatteryCheckDaysAgo": 400,
+      "recommendationSuppressions": [
+        { "definitionCode": "smoke_co_detector_battery_check", "reason": "USER_DISMISSED", "until": "2026-10-01" }
+      ]
+    }
+  },
+  "expected": {
+    "traits": { "smokeDetectorBatteryOverdue": true },
+    "eligible": true,
+    "suppressed": true,
+    "suppressionReason": "USER_DISMISSED",
+    "explanationReasonCodes": ["SAFETY_DEVICE_BATTERY_OVERDUE"],
+    "actions": []
+  }
+}

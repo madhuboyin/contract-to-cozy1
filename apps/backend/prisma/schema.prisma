@@ -12647,3 +12647,175 @@ model ProviderServiceZone {
   @@index([providerProfileId])
   @@map("provider_service_zones")
 }
+
+// ============================================================================
+// PERSONALIZATION ENGINE — CATALOG + AUDIT (Phase 0 schema baseline)
+// ============================================================================
+// Additive-only, inactive-by-default tables per docs/personalization/.
+// No evaluator reads these yet — this is Phase 0's "additive schema
+// baseline" + "20-40 definition content plan" deliverable, scoped to just
+// the catalog/definition family from docs/personalization/05-data-model.md's
+// full 24-entity sketch. The household-profile/trait/recommendation-instance
+// tables (Household, PetProfile, DerivedTrait, PersonalizedRecommendation,
+// etc.) are deliberately NOT included here — that's later, separate work
+// once a rule evaluator exists to consume them (see project memory / the
+// roadmap's "first implementation step").
+//
+// Field/status values are kept as strings rather than enums, matching
+// 05-data-model.md's explicit guidance: "Exact Prisma enum names should be
+// finalized during implementation; strings in the sketch reduce premature
+// enum proliferation."
+
+// Catalog of possible derived traits a rule can depend on (e.g.
+// "hasHighSheddingPet"). Purely descriptive metadata at this stage — no
+// DerivedTrait/computation table exists yet, so nothing populates real
+// values against these definitions until that later work lands.
+model TraitDefinition {
+  id                String   @id @default(uuid())
+  key               String
+  version           Int      @default(1)
+  valueType         String // BOOLEAN | NUMBER | TEXT | CODE | DATE | JSON
+  scope             String // HOUSEHOLD | PROPERTY
+  privacyClass      String   @default("STANDARD") // STANDARD | SENSITIVE
+  derivationVersion Int      @default(1)
+  overridePolicy    String   @default("USER_OVERRIDABLE") // USER_OVERRIDABLE | SYSTEM_ONLY
+  dependencyKeys    String[] @default([])
+  status            String   @default("DRAFT") // DRAFT | ACTIVE | RETIRED
+  description       String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([key, version])
+  @@index([status])
+  @@map("personalization_trait_definitions")
+}
+
+// Stable, versioned identity for one piece of catalog content (e.g.
+// "hvac_filter_pet_adjusted"). See docs/personalization/catalog-plan.md for
+// the Phase 0 candidate list — all seeded rows start DRAFT/inactive; going
+// ACTIVE requires the two-person review the docs call for on safety-adjacent
+// advice, which is explicitly out of scope for this Phase 0 pass.
+model RecommendationDefinition {
+  id          String @id @default(uuid())
+  code        String @unique
+  category    String
+  safetyClass String @default("ROUTINE") // ROUTINE | SAFETY_SENSITIVE
+  status      String @default("DRAFT") // DRAFT | ACTIVE | PAUSED | RETIRED
+  ownerTeam   String?
+
+  effectiveFrom DateTime?
+  effectiveTo   DateTime?
+  reviewDueAt   DateTime?
+
+  // Per-definition emergency pause — complements the system-wide switch in
+  // personalizationKillSwitch.service.ts. See
+  // docs/personalization/06-api-design.md's
+  // `POST /api/admin/personalization/definitions/:code/pause`. Not wired to
+  // any endpoint yet (no controller consumes this); the column exists so the
+  // future admin endpoint has somewhere to write without another migration.
+  pausedAt    DateTime?
+  pausedBy    String?
+  pauseReason String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  rules           RecommendationRule[]
+  contentVersions RecommendationContentVersion[]
+
+  @@index([status, effectiveFrom, effectiveTo])
+  @@index([category, status])
+  @@map("personalization_recommendation_definitions")
+}
+
+// One immutable, validated-AST version of a definition's eligibility/scoring
+// logic. `ruleAst` is intentionally opaque JSON at the schema level — the
+// typed validator/evaluator that enforces its shape is separate, not-yet-built
+// work (the roadmap's "first implementation step").
+model RecommendationRule {
+  id             String   @id @default(uuid())
+  definitionId   String
+  version        Int
+  ruleAst        Json
+  dependencyKeys String[] @default([])
+  scoreConfig    Json?
+  status         String   @default("DRAFT") // DRAFT | ACTIVE | RETIRED
+  authoredBy     String?
+  reviewedBy     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  definition RecommendationDefinition @relation(fields: [definitionId], references: [id], onDelete: Cascade)
+
+  @@unique([definitionId, version])
+  @@index([status])
+  @@map("personalization_recommendation_rules")
+}
+
+// User-facing copy for a definition, versioned and locale-scoped separately
+// from the eligibility rule so content and logic can be reviewed/rolled back
+// independently.
+model RecommendationContentVersion {
+  id           String    @id @default(uuid())
+  definitionId String
+  locale       String    @default("en-US")
+  version      Int
+  title        String
+  body         String    @db.Text
+  templates    Json?
+  sources      Json?
+  reviewDate   DateTime?
+  status       String    @default("DRAFT") // DRAFT | ACTIVE | RETIRED
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  definition RecommendationDefinition @relation(fields: [definitionId], references: [id], onDelete: Cascade)
+
+  @@unique([definitionId, locale, version])
+  @@map("personalization_recommendation_content_versions")
+}
+
+// Optional bundle/model-weights publish unit, independent of individual rule
+// versions — for future non-per-definition tuning (e.g. ranking weights).
+// Not referenced by any rule yet; additive placeholder per the data model doc.
+model RuleVersion {
+  id                String    @id @default(uuid())
+  version           String    @unique
+  bundleJson        Json?
+  modelWeights      Json?
+  publishApprovedBy String?
+  publishApprovedAt DateTime?
+  effectiveFrom     DateTime?
+  effectiveTo       DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@map("personalization_rule_versions")
+}
+
+// Append-only, allowlisted-metadata audit trail for personalization admin
+// actions (kill switch pause/resume, future definition pause/publish, etc.).
+// Deliberately separate from the generic AuditLog model: AuditLog accepts
+// arbitrary oldValues/newValues JSON, which is exactly the "profile/rule
+// evaluation payloads must never be logged" risk flagged in
+// docs/personalization/01-codebase-assessment.md's risk table. `metadata`
+// here is written only through personalizationAudit.service.ts's allowlist,
+// never with a raw request body or trait payload.
+model PersonalizationAuditEvent {
+  id         String  @id @default(uuid())
+  actorUserId String?
+  action     String // e.g. PERSONALIZATION_KILL_SWITCH_PAUSED
+  entityType String // e.g. SYSTEM_SETTING, RECOMMENDATION_DEFINITION
+  entityId   String
+  reason     String?
+  metadata   Json?
+
+  createdAt DateTime @default(now())
+
+  @@index([entityType, entityId, createdAt])
+  @@index([actorUserId, createdAt])
+  @@map("personalization_audit_events")
+}

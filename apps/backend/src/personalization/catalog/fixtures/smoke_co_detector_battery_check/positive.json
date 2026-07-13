@@ -1,0 +1,23 @@
+{
+  "definitionCode": "smoke_co_detector_battery_check",
+  "kind": "positive",
+  "description": "Household has smoke/CO detectors and none have had a battery check in over a year — eligible.",
+  "input": {
+    "household": { "syntheticId": "fixture-household-1" },
+    "property": {
+      "syntheticId": "fixture-property-1",
+      "hasSmokeDetectors": true,
+      "hasCoDetectors": true
+    },
+    "context": { "season": "FALL" },
+    "history": { "lastSmokeDetectorBatteryCheckDaysAgo": 400 }
+  },
+  "expected": {
+    "traits": { "smokeDetectorBatteryOverdue": true },
+    "eligible": true,
+    "suppressed": false,
+    "rankBand": "HIGH",
+    "explanationReasonCodes": ["SAFETY_DEVICE_BATTERY_OVERDUE"],
+    "actions": ["CREATE_MAINTENANCE_TASK"]
+  }
+}

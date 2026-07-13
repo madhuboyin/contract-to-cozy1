@@ -1,0 +1,22 @@
+{
+  "definitionCode": "smoke_co_detector_battery_check",
+  "kind": "negative",
+  "description": "Battery check was done last month — not eligible.",
+  "input": {
+    "household": { "syntheticId": "fixture-household-2" },
+    "property": {
+      "syntheticId": "fixture-property-2",
+      "hasSmokeDetectors": true,
+      "hasCoDetectors": true
+    },
+    "context": { "season": "FALL" },
+    "history": { "lastSmokeDetectorBatteryCheckDaysAgo": 30 }
+  },
+  "expected": {
+    "traits": { "smokeDetectorBatteryOverdue": false },
+    "eligible": false,
+    "suppressed": false,
+    "explanationReasonCodes": [],
+    "actions": []
+  }
+}

@@ -75,6 +75,19 @@ const options = {
       '*.passwordHash',
       '*.token',
       '*.refreshToken',
+      // Personalization-shaped fields, reserved ahead of the fields
+      // existing (see docs/personalization/01-codebase-assessment.md's
+      // "never log profile/rule evaluation payloads" risk item and
+      // lib/redaction.ts's DEFAULT_SENSITIVE_KEYS, which this list mirrors).
+      // Pino's redact only matches paths it can traverse to, so these are
+      // no-ops today and start protecting the moment personalization code
+      // begins passing these shapes into logger.error/warn/info.
+      '*.traitValue',
+      '*.valueJson',
+      '*.evidenceJson',
+      '*.profileAnswer',
+      '*.explanationText',
+      '*.rawSnapshot',
     ],
     censor: '[REDACTED]',
   },
