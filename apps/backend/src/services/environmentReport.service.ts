@@ -27,6 +27,10 @@ import {
   EnvironmentInsight,
   EnvironmentQuestion,
 } from './environment/environmentInsights.service';
+import {
+  getPlantAdvisorWeatherModules,
+  PlantAdvisorWeatherModule,
+} from './environment/plantAdvisorWeather.service';
 
 export interface ClimateSectionData {
   normals: SectionResult<ClimateNormalsData>;
@@ -51,6 +55,7 @@ export interface EnvironmentReportDTO {
   generatedAt: string;
   insights: EnvironmentInsight[];
   questions: EnvironmentQuestion[];
+  plantAdvisorModules: PlantAdvisorWeatherModule[];
   sections: {
     weather: SectionResult<WeatherReportData>;
     airQuality: SectionResult<AirQualityData>;
@@ -145,6 +150,7 @@ export async function getEnvironmentReport(property: GeocodableProperty): Promis
       generatedAt: new Date().toISOString(),
       insights: [],
       questions: [],
+      plantAdvisorModules: [],
       sections: {
         weather: unavailable<WeatherReportData>(reason),
         airQuality: unavailable<AirQualityData>(reason),
@@ -253,6 +259,10 @@ export async function getEnvironmentReport(property: GeocodableProperty): Promis
     })
   );
   const questions = deriveEnvironmentQuestions(insightProperty, insights);
+  const plantAdvisorModules = await getPlantAdvisorWeatherModules(property, sections, insights).catch(error => {
+    logger.error({ err: error }, '[ENV_REPORT] Failed to build Plant Advisor weather modules');
+    return [];
+  });
 
   return {
     propertyId: property.id,
@@ -261,6 +271,7 @@ export async function getEnvironmentReport(property: GeocodableProperty): Promis
     generatedAt: new Date().toISOString(),
     insights,
     questions,
+    plantAdvisorModules,
     sections,
   };
 }

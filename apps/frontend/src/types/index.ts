@@ -4772,6 +4772,7 @@ export interface EnvironmentReportDTO {
   generatedAt: string;
   insights: EnvironmentInsight[];
   questions: EnvironmentQuestion[];
+  plantAdvisorModules: PlantAdvisorWeatherModule[];
   sections: {
     weather: SectionResult<WeatherReportData>;
     airQuality: SectionResult<AirQualityData>;
@@ -4787,6 +4788,18 @@ export interface EnvironmentInsightAction {
   label: string;
   href: string;
   kind: 'primary' | 'secondary';
+}
+
+export interface PlantAdvisorWeatherModule {
+  id: string;
+  trigger: 'heat' | 'freeze' | 'low_humidity' | 'storm' | 'air_quality';
+  relatedInsightId: string | null;
+  title: string;
+  summary: string;
+  contextLevel: 'added_plants' | 'saved_recommendations' | 'room_profiles' | 'setup';
+  plantNames: string[];
+  roomNames: string[];
+  action: { label: string; href: string };
 }
 
 export interface EnvironmentInsight {

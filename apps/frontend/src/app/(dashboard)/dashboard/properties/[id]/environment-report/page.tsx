@@ -12,7 +12,7 @@ import { PageHeader, PageHeaderHeading } from '@/components/page-header';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, ArrowRight, AlertTriangle, CheckCircle2, Clock3, Loader2, Cloud, CloudDrizzle, CloudFog, CloudLightning, CloudRain, CloudSnow, CloudSun, Flame, ShieldAlert, Snowflake, Sun, Wind, Droplets, Waves, Radiation, Factory, Thermometer } from 'lucide-react';
+import { ArrowLeft, ArrowRight, AlertTriangle, CheckCircle2, Clock3, Loader2, Cloud, CloudDrizzle, CloudFog, CloudLightning, CloudRain, CloudSnow, CloudSun, Flame, ShieldAlert, Snowflake, Sun, Wind, Droplets, Waves, Radiation, Factory, Thermometer, Sprout } from 'lucide-react';
 import { navigateBackWithDashboardFallback } from '@/lib/navigation/backNavigation';
 import type {
   SectionResult,
@@ -26,6 +26,7 @@ import type {
   ClimateNormalsMonthlyPoint,
   EnvironmentInsight,
   EnvironmentQuestion,
+  PlantAdvisorWeatherModule,
 } from '@/types';
 
 function InlineInsightQuestions({
@@ -142,28 +143,57 @@ const INSIGHT_ICONS: Record<EnvironmentInsight['category'], ComponentType<{ clas
   drought: Droplets,
 };
 
+function PlantAdvisorWeatherCard({ module }: { module: PlantAdvisorWeatherModule }) {
+  const isSetup = module.contextLevel === 'setup';
+  return (
+    <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50/70 p-4" aria-label="Plant Advisor weather guidance">
+      <div className="flex items-start gap-3">
+        <div className="rounded-lg bg-emerald-100 p-2 text-emerald-700"><Sprout className="h-5 w-5" /></div>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-sm font-semibold text-emerald-950">{module.title}</p>
+            <Badge variant="outline" className="border-emerald-300 bg-white text-emerald-800">Plant Advisor</Badge>
+          </div>
+          <p className="mt-1 text-sm leading-relaxed text-emerald-900/80">{module.summary}</p>
+          {module.contextLevel === 'saved_recommendations' ? (
+            <p className="mt-2 text-xs text-emerald-700">Guidance is based on saved recommendations; confirm plants you actually own in Plant Advisor.</p>
+          ) : null}
+          <Button asChild variant={isSetup ? 'default' : 'outline'} size="sm" className="mt-3">
+            <Link href={module.action.href}>{module.action.label}<ArrowRight className="ml-1.5 h-4 w-4" /></Link>
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function InsightSummary({
   propertyId,
   insights,
   questions,
+  plantAdvisorModules,
   onSaved,
 }: {
   propertyId: string;
   insights: EnvironmentInsight[];
   questions: EnvironmentQuestion[];
+  plantAdvisorModules: PlantAdvisorWeatherModule[];
   onSaved: (prompt: string) => Promise<void>;
 }) {
   if (insights.length === 0) {
     return (
-      <Card className="border-emerald-200 bg-emerald-50/70">
-        <CardContent className="flex items-start gap-3 p-5">
-          <CheckCircle2 className="mt-0.5 h-6 w-6 shrink-0 text-emerald-600" />
-          <div>
-            <p className="font-semibold text-emerald-950">No immediate environment concerns</p>
-            <p className="mt-1 text-sm text-emerald-800">We did not detect weather or environmental conditions that need action right now.</p>
-          </div>
-        </CardContent>
-      </Card>
+      <div className="space-y-3">
+        <Card className="border-emerald-200 bg-emerald-50/70">
+          <CardContent className="flex items-start gap-3 p-5">
+            <CheckCircle2 className="mt-0.5 h-6 w-6 shrink-0 text-emerald-600" />
+            <div>
+              <p className="font-semibold text-emerald-950">No immediate environment concerns</p>
+              <p className="mt-1 text-sm text-emerald-800">We did not detect weather or environmental conditions that need action right now.</p>
+            </div>
+          </CardContent>
+        </Card>
+        {plantAdvisorModules.map(module => <PlantAdvisorWeatherCard key={module.id} module={module} />)}
+      </div>
     );
   }
 
@@ -183,6 +213,7 @@ function InsightSummary({
         const Icon = INSIGHT_ICONS[insight.category];
         const needsAction = insight.severity === 'action';
         const insightQuestions = questions.filter(question => question.insightId === insight.id);
+        const plantModules = plantAdvisorModules.filter(module => module.relatedInsightId === insight.id);
         return (
           <Card key={insight.id} className={needsAction ? 'overflow-hidden border-amber-300 shadow-sm' : 'overflow-hidden border-sky-200'}>
             <div className={needsAction ? 'h-1 bg-amber-500' : 'h-1 bg-sky-500'} />
@@ -216,6 +247,7 @@ function InsightSummary({
                       questions={insightQuestions}
                       onSaved={onSaved}
                     />
+                    {plantModules.map(module => <PlantAdvisorWeatherCard key={module.id} module={module} />)}
                     <div className="mt-4">
                       <p className="text-sm font-semibold text-slate-900">Before conditions begin</p>
                       <ul className="mt-2 space-y-1.5">
@@ -249,6 +281,9 @@ function InsightSummary({
           </Card>
         );
       })}
+      {plantAdvisorModules.filter(module => module.relatedInsightId === null).map(module => (
+        <PlantAdvisorWeatherCard key={module.id} module={module} />
+      ))}
     </section>
   );
 }
@@ -845,6 +880,7 @@ export default function EnvironmentReportPage() {
           propertyId={propertyId}
           insights={report.insights ?? []}
           questions={report.questions ?? []}
+          plantAdvisorModules={report.plantAdvisorModules ?? []}
           onSaved={async () => {
             setSavedMessage('Saved to your home profile. Future environment recommendations will use this information.');
             await query.refetch();

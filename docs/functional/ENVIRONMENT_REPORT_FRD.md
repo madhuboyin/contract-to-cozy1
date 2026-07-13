@@ -284,6 +284,18 @@ Every insight must support:
 - FR-8.2: Raw tables must remain available behind expandable detail controls.
 - FR-8.3: Visual summaries must not hide source units or exact values needed for verification.
 
+### FR-9: Contextual Plant Advisor Cross-Sell
+
+- FR-9.1: Heat, freeze, thunderstorm, and poor-air-quality insights must support a secondary Plant Advisor module.
+- FR-9.2: Current outdoor humidity at or below 30% must support a standalone low-humidity plant-care module without increasing the home-risk insight count.
+- FR-9.3: Personalization must prefer plants added to the home, then saved recommendations, then room profiles.
+- FR-9.4: Plant guidance must use available plant humidity, light, maintenance, watering-cadence, room-type, cooling, heating, and backup-heat context.
+- FR-9.5: Saved recommendations must not be presented as confirmed plant ownership.
+- FR-9.6: When no Plant Advisor data exists, the module must provide a contextual setup CTA rather than plant-specific guidance.
+- FR-9.7: The CTA must preserve property, weather trigger, launch surface, and relevant room context.
+- FR-9.8: Poor-air-quality guidance must explicitly avoid presenting houseplants as a substitute for indoor-air filtration.
+- FR-9.9: A Plant Advisor query failure must degrade only the cross-sell module and must not fail the Environment Report.
+
 ---
 
 ## 8. Insight and Personalization Rules
@@ -563,6 +575,7 @@ The Environment Report currently uses the typed frontend `updateProperty` client
 | Weather guidance journey | Guidance Engine models |
 | Environmental provider data | Cached service response; not persisted as property facts |
 | Generated report insights | Computed on read; not currently persisted |
+| Plant Advisor weather context | Existing `RoomPlantProfile`, `RoomPlantRecommendation`, `PlantCatalog`, and Plant Advisor `HomeEvent` records |
 
 No new database schema was required for the implemented baseline. Future insight lifecycle, snooze, and acknowledgement features may require persisted state.
 
@@ -834,6 +847,7 @@ Analytics listed here are future requirements unless already emitted by the unde
 - Add analytics events defined in Section 19.
 - Add automated visual regression coverage for charts and mobile layouts.
 - Add empty-state CTA to complete property geocoding/address data.
+- Add weather-aware care guidance for individual confirmed plants, including temporary watering and placement guidance.
 
 ### 24.2 Medium-Term (P2)
 
@@ -846,6 +860,7 @@ Analytics listed here are future requirements unless already emitted by the unde
 - Insurance-policy and coverage-context integration with explicit non-binding wording.
 - Maintenance-readiness score using overdue/completed tasks and asset service history.
 - Household-specific health guidance using opt-in sensitivity preferences.
+- Add outdoor plant inventory, garden zones, irrigation context, frost preparation, drought planning, and seasonal planting recommendations.
 
 ### 24.3 Long-Term (P3)
 
@@ -858,6 +873,7 @@ Analytics listed here are future requirements unless already emitted by the unde
 - Push/email digest personalization based on saved homeowner preferences.
 - Explainable AI copy layer constrained by deterministic facts and approved action catalog.
 - Professional verification workflow for roof, drainage, HVAC, radon, and resilience data.
+- Add a distinct Outdoor Resilience mode for shade, runoff, windbreak, erosion, and climate-resilient landscaping recommendations.
 
 ### 24.4 Required Future Data Models
 
@@ -923,6 +939,7 @@ Support must be able to explain:
 | `apps/backend/src/services/environment/environmentalHazards.service.ts` | EPA ECHO facilities, coordinates, and distance |
 | `apps/backend/src/services/environment/climateNormals.service.ts` | NOAA climate normals |
 | `apps/backend/src/services/environment/hardinessZone.service.ts` | Plant hardiness zone |
+| `apps/backend/src/services/environment/plantAdvisorWeather.service.ts` | Weather-triggered Plant Advisor context, personalization, and CTA derivation |
 | `apps/backend/src/services/incidents/incident.evaluator.ts` | Weather Incident reevaluation and notification activation logic |
 | `apps/backend/src/services/incidents/incident.scoring.ts` | Incident score and bounded property-vulnerability calculation |
 | `apps/workers/src/jobs/severeWeatherAlerts.job.ts` | NWS severe-weather Incident ingestion |
