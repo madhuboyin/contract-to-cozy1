@@ -1581,19 +1581,21 @@ export default function EditPropertyPage() {
                   />
                 </div>
 
-                <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-                  <div className="flex h-full flex-col rounded-lg border border-black/5 bg-gray-50/50 p-4 dark:border-white/10 dark:bg-slate-900/30 lg:col-span-3">
-                    <div className="mb-4 flex items-center justify-between gap-3">
+                <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
+                  <div className="flex h-full flex-col rounded-lg border border-black/5 bg-gray-50/50 p-3 dark:border-white/10 dark:bg-slate-900/30 lg:col-span-3 sm:p-4">
+                    <div className="mb-3 flex items-center justify-between gap-3">
                       <p className="text-sm font-semibold text-gray-900 dark:text-slate-100">HVAC</p>
                       <SystemAgeBadge year={watchHvacInstallYear} />
                     </div>
-                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                    <div className="grid grid-cols-1 items-start gap-3 sm:grid-cols-3">
                       <FormField
                         control={form.control}
                         name="heatingType"
                         render={({ field }) => (
                           <FormItem className="w-full min-w-0">
-                            <FormLabel>Heating type</FormLabel>
+                            <div className="flex min-h-5 items-center">
+                              <FormLabel>Heating type</FormLabel>
+                            </div>
                             <Select onValueChange={(value) => field.onChange(value === "" ? null : value)} value={field.value || ""}>
                               <FormControl>
                                 <SelectTrigger id="field-heatingType" title={field.value ? formatEnumLabel(field.value) : undefined} className="h-9 min-w-0 text-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40 [&>span]:truncate"><SelectValue placeholder="Select type" /></SelectTrigger>
@@ -1613,7 +1615,9 @@ export default function EditPropertyPage() {
                         name="coolingType"
                         render={({ field }) => (
                           <FormItem className="w-full min-w-0">
-                            <FormLabel>Cooling type</FormLabel>
+                            <div className="flex min-h-5 items-center">
+                              <FormLabel>Cooling type</FormLabel>
+                            </div>
                             <Select onValueChange={(value) => field.onChange(value === "" ? null : value)} value={field.value || ""}>
                               <FormControl>
                                 <SelectTrigger id="field-coolingType" title={field.value ? formatEnumLabel(field.value) : undefined} className="h-9 min-w-0 text-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40 [&>span]:truncate"><SelectValue placeholder="Select type" /></SelectTrigger>
@@ -1633,7 +1637,7 @@ export default function EditPropertyPage() {
                         name="hvacInstallYear"
                         render={({ field }) => (
                           <FormItem className="w-full">
-                            <div className="flex items-center gap-2">
+                            <div className="flex min-h-5 items-center gap-2">
                               <FormLabel>Install year</FormLabel>
                               {isRecommended("hvacInstallYear") ? <FieldNudgeChip variant="recommended" /> : null}
                             </div>
@@ -1647,29 +1651,31 @@ export default function EditPropertyPage() {
                     </div>
                   </div>
 
-                  <div className="flex h-full flex-col rounded-lg border border-black/5 bg-gray-50/50 p-4 dark:border-white/10 dark:bg-slate-900/30">
-                    <div className="mb-4 flex items-center justify-between gap-3">
+                  <div className="flex h-full flex-col rounded-lg border border-black/5 bg-gray-50/50 p-3 dark:border-white/10 dark:bg-slate-900/30 sm:p-4">
+                    <div className="mb-3 flex items-center justify-between gap-3">
                       <p className="text-sm font-semibold text-gray-900 dark:text-slate-100">Water heater</p>
                       <SystemAgeBadge year={watchWaterHeaterInstallYear} />
                     </div>
-                    <div className="grid grid-cols-1 gap-4">
+                    <div className="grid grid-cols-1 items-start gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(120px,0.42fr)]">
                       <FormField
                         control={form.control}
                         name="waterHeaterType"
                         render={({ field }) => (
                           <FormItem className="w-full">
-                          <FormLabel>Type</FormLabel>
-                          <Select onValueChange={(value) => field.onChange(value === "" ? null : value)} value={field.value || ""}>
-                            <FormControl>
-                              <SelectTrigger id="field-waterHeaterType" className="h-9 text-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40"><SelectValue placeholder="Select type" /></SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {Object.values(WaterHeaterTypes).map((type) => (
-                                <SelectItem key={type} value={type}>{formatEnumLabel(type)}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
+                            <div className="flex min-h-5 items-center">
+                              <FormLabel>Type</FormLabel>
+                            </div>
+                            <Select onValueChange={(value) => field.onChange(value === "" ? null : value)} value={field.value || ""}>
+                              <FormControl>
+                                <SelectTrigger id="field-waterHeaterType" className="h-9 text-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40"><SelectValue placeholder="Select type" /></SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                {Object.values(WaterHeaterTypes).map((type) => (
+                                  <SelectItem key={type} value={type}>{formatEnumLabel(type)}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
                           </FormItem>
                         )}
                       />
@@ -1677,44 +1683,46 @@ export default function EditPropertyPage() {
                         control={form.control}
                         name="waterHeaterInstallYear"
                         render={({ field }) => (
-                          <FormItem className="w-full max-w-[180px]">
-                          <div className="flex items-center gap-2">
-                            <FormLabel>Install year</FormLabel>
-                            {isRecommended("waterHeaterInstallYear") ? <FieldNudgeChip variant="recommended" /> : null}
-                          </div>
-                          <FormControl>
-                            <Input id="field-waterHeaterInstallYear" className="h-9 text-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40" placeholder="2020" type="number" {...field} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value === "" ? null : parseInt(e.target.value, 10))} />
-                          </FormControl>
-                          <FormMessage />
+                          <FormItem className="w-full">
+                            <div className="flex min-h-5 items-center gap-2">
+                              <FormLabel>Install year</FormLabel>
+                              {isRecommended("waterHeaterInstallYear") ? <FieldNudgeChip variant="recommended" /> : null}
+                            </div>
+                            <FormControl>
+                              <Input id="field-waterHeaterInstallYear" className="h-9 text-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40" placeholder="2020" type="number" {...field} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value === "" ? null : parseInt(e.target.value, 10))} />
+                            </FormControl>
+                            <FormMessage />
                           </FormItem>
                         )}
                       />
                     </div>
                   </div>
 
-                  <div className="flex h-full flex-col rounded-lg border border-black/5 bg-gray-50/50 p-4 dark:border-white/10 dark:bg-slate-900/30">
-                    <div className="mb-4 flex items-center justify-between gap-3">
+                  <div className="flex h-full flex-col rounded-lg border border-black/5 bg-gray-50/50 p-3 dark:border-white/10 dark:bg-slate-900/30 sm:p-4">
+                    <div className="mb-3 flex items-center justify-between gap-3">
                       <p className="text-sm font-semibold text-gray-900 dark:text-slate-100">Roof</p>
                       <SystemAgeBadge year={watchRoofReplacementYear} />
                     </div>
-                    <div className="grid grid-cols-1 gap-4">
+                    <div className="grid grid-cols-1 items-start gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(120px,0.42fr)]">
                       <FormField
                         control={form.control}
                         name="roofType"
                         render={({ field }) => (
                           <FormItem className="w-full">
-                          <FormLabel>Roof type</FormLabel>
-                          <Select onValueChange={(value) => field.onChange(value === "" ? null : value)} value={field.value || ""}>
-                            <FormControl>
-                              <SelectTrigger id="field-roofType" className="h-9 text-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40"><SelectValue placeholder="Select type" /></SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {Object.values(RoofTypes).map((type) => (
-                                <SelectItem key={type} value={type}>{formatEnumLabel(type)}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
+                            <div className="flex min-h-5 items-center">
+                              <FormLabel>Roof type</FormLabel>
+                            </div>
+                            <Select onValueChange={(value) => field.onChange(value === "" ? null : value)} value={field.value || ""}>
+                              <FormControl>
+                                <SelectTrigger id="field-roofType" className="h-9 text-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40"><SelectValue placeholder="Select type" /></SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                {Object.values(RoofTypes).map((type) => (
+                                  <SelectItem key={type} value={type}>{formatEnumLabel(type)}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
                           </FormItem>
                         )}
                       />
@@ -1722,22 +1730,22 @@ export default function EditPropertyPage() {
                         control={form.control}
                         name="roofReplacementYear"
                         render={({ field }) => (
-                          <FormItem className="w-full max-w-[180px]">
-                          <div className="flex items-center gap-2">
-                            <FormLabel>Replacement year</FormLabel>
-                            {isRecommended("roofReplacementYear") ? <FieldNudgeChip variant="recommended" /> : null}
-                          </div>
-                          <FormControl>
-                            <Input id="field-roofReplacementYear" className="h-9 text-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40" placeholder="2010" type="number" {...field} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value === "" ? null : parseInt(e.target.value, 10))} />
-                          </FormControl>
-                          <FormMessage />
+                          <FormItem className="w-full">
+                            <div className="flex min-h-5 items-center gap-2">
+                              <FormLabel>Replacement year</FormLabel>
+                              {isRecommended("roofReplacementYear") ? <FieldNudgeChip variant="recommended" /> : null}
+                            </div>
+                            <FormControl>
+                              <Input id="field-roofReplacementYear" className="h-9 text-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40" placeholder="2010" type="number" {...field} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value === "" ? null : parseInt(e.target.value, 10))} />
+                            </FormControl>
+                            <FormMessage />
                           </FormItem>
                         )}
                       />
                     </div>
                   </div>
-                  <div className="flex h-full flex-col rounded-lg border border-black/5 bg-gray-50/50 p-4 dark:border-white/10 dark:bg-slate-900/30">
-                    <div className="mb-4 flex items-center justify-between gap-3">
+                  <div className="flex h-full flex-col rounded-lg border border-black/5 bg-gray-50/50 p-3 dark:border-white/10 dark:bg-slate-900/30 sm:p-4">
+                    <div className="mb-3 flex items-center justify-between gap-3">
                       <p className="text-sm font-semibold text-gray-900 dark:text-slate-100">Foundation</p>
                       {!watchFoundationType ? (
                         <span className="inline-flex shrink-0 items-center rounded-full border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium leading-none text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">
