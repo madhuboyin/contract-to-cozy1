@@ -143,26 +143,39 @@ const INSIGHT_ICONS: Record<EnvironmentInsight['category'], ComponentType<{ clas
   drought: Droplets,
 };
 
+function formatRelativeMaintenanceAge(text: string): string {
+  return text.replace(/\b(\d+)\s+days?\s+ago\b/gi, (match, rawDays: string) => {
+    const days = Number(rawDays);
+    if (!Number.isFinite(days) || days < 60) return match;
+    if (days >= 730) return `${Math.round(days / 365)} years ago`;
+    return `${Math.round(days / 30)} months ago`;
+  });
+}
+
+function compactRecommendedAction(action: string): string {
+  const withoutRepeatedFilterAge = action.replace(
+    /^The HVAC filter was last checked \d+ days? ago;\s*/i,
+    '',
+  );
+  const compact = formatRelativeMaintenanceAge(withoutRepeatedFilterAge);
+  return compact ? `${compact.charAt(0).toUpperCase()}${compact.slice(1)}` : action;
+}
+
 function PlantAdvisorWeatherCard({ module }: { module: PlantAdvisorWeatherModule }) {
   const isSetup = module.contextLevel === 'setup';
   return (
-    <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50/70 p-4" aria-label="Plant Advisor weather guidance">
-      <div className="flex items-start gap-3">
-        <div className="rounded-lg bg-emerald-100 p-2 text-emerald-700"><Sprout className="h-5 w-5" /></div>
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <p className="text-sm font-semibold text-emerald-950">{module.title}</p>
-            <Badge variant="outline" className="border-emerald-300 bg-white text-emerald-800">Plant Advisor</Badge>
-          </div>
-          <p className="mt-1 text-sm leading-relaxed text-emerald-900/80">{module.summary}</p>
-          {module.contextLevel === 'saved_recommendations' ? (
-            <p className="mt-2 text-xs text-emerald-700">Guidance is based on saved recommendations; confirm plants you actually own in Plant Advisor.</p>
-          ) : null}
-          <Button asChild variant={isSetup ? 'default' : 'outline'} size="sm" className="mt-3">
-            <Link href={module.action.href}>{module.action.label}<ArrowRight className="ml-1.5 h-4 w-4" /></Link>
-          </Button>
+    <div className="mt-4 flex flex-col gap-3 rounded-lg border border-emerald-200 bg-emerald-50/60 px-3 py-3 sm:flex-row sm:items-center" aria-label="Plant Advisor weather guidance">
+      <div className="flex min-w-0 flex-1 items-center gap-3">
+        <div className="shrink-0 rounded-full bg-emerald-100 p-2 text-emerald-700"><Sprout className="h-4 w-4" /></div>
+        <div className="min-w-0">
+          <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">Plant care</p>
+          <p className="truncate text-sm font-semibold text-emerald-950">{module.title}</p>
+          <p className="line-clamp-1 text-xs text-emerald-800/80">{module.summary}</p>
         </div>
       </div>
+      <Button asChild variant={isSetup ? 'default' : 'ghost'} size="sm" className="shrink-0 justify-start text-emerald-800 hover:bg-emerald-100 hover:text-emerald-950">
+        <Link href={module.action.href}>{isSetup ? 'Set up Plant Advisor' : 'View guidance'}<ArrowRight className="ml-1.5 h-4 w-4" /></Link>
+      </Button>
     </div>
   );
 }
@@ -209,73 +222,84 @@ function InsightSummary({
         </Badge>
       </div>
 
-      {insights.map((insight, index) => {
+      {insights.map((insight) => {
         const Icon = INSIGHT_ICONS[insight.category];
         const needsAction = insight.severity === 'action';
         const insightQuestions = questions.filter(question => question.insightId === insight.id);
         const plantModules = plantAdvisorModules.filter(module => module.relatedInsightId === insight.id);
+        const primaryAction = insight.actions.find(action => action.kind === 'primary') ?? insight.actions[0];
+        const secondaryAction = insight.actions.find(action => action !== primaryAction);
+        const visibleRecommendations = insight.recommendedActions.slice(0, 3).map(compactRecommendedAction);
         return (
-          <Card key={insight.id} className={needsAction ? 'overflow-hidden border-amber-300 shadow-sm' : 'overflow-hidden border-sky-200'}>
-            <div className={needsAction ? 'h-1 bg-amber-500' : 'h-1 bg-sky-500'} />
-            <CardContent className="p-5 sm:p-6">
-              <div className="flex flex-col gap-5 lg:flex-row lg:items-start">
-                <div className="flex min-w-0 flex-1 items-start gap-3">
-                  <div className={needsAction ? 'rounded-xl bg-amber-100 p-2.5 text-amber-700' : 'rounded-xl bg-sky-100 p-2.5 text-sky-700'}>
-                    <Icon className="h-6 w-6" />
+          <Card key={insight.id} className={needsAction ? 'overflow-hidden border-amber-200 border-l-4 border-l-amber-500 shadow-sm' : 'overflow-hidden border-sky-200 border-l-4 border-l-sky-500'}>
+            <CardContent className="p-4 sm:p-5">
+              <div className="flex min-w-0 items-start gap-3">
+                <div className={needsAction ? 'shrink-0 rounded-lg bg-amber-100 p-2 text-amber-700' : 'shrink-0 rounded-lg bg-sky-100 p-2 text-sky-700'}>
+                  <Icon className="h-5 w-5" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
+                    <Badge variant={needsAction ? 'destructive' : 'secondary'}>{needsAction ? 'Action recommended' : 'Prepare soon'}</Badge>
+                    {insight.relatedIncident?.isOfficialAlert ? <Badge variant="outline">Official alert</Badge> : null}
+                    <span className="flex items-center gap-1 text-xs text-slate-500"><Clock3 className="h-3.5 w-3.5" />{insight.timeframe}</span>
                   </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Badge variant={needsAction ? 'destructive' : 'secondary'}>{needsAction ? 'Action recommended' : 'Prepare soon'}</Badge>
-                      <Badge variant="outline">
-                        {insight.relatedIncident?.isOfficialAlert ? 'Official alert in effect' : 'Forecast-based preparation'}
-                      </Badge>
-                      <span className="flex items-center gap-1 text-xs text-slate-500"><Clock3 className="h-3.5 w-3.5" />{insight.timeframe}</span>
+                  <h3 className="mt-2 text-lg font-bold text-slate-950">{insight.title}</h3>
+                  <p className="mt-1 text-sm text-slate-600">{insight.summary}</p>
+                  <p className="mt-2 max-w-4xl text-sm leading-relaxed text-slate-700">
+                    {formatRelativeMaintenanceAge(insight.homeImplication)}
+                  </p>
+
+                  {insight.affectedSystems.length > 0 ? (
+                    <div className="mt-3 flex flex-wrap gap-1.5" aria-label="Home areas affected">
+                      {insight.affectedSystems.map(system => <Badge key={system} variant="outline" className="font-normal text-slate-600">{system}</Badge>)}
                     </div>
-                    {insight.relatedIncident ? (
-                      <p className="mt-2 text-xs font-medium text-slate-600">
-                        Related incident: {insight.relatedIncident.title} · {insight.relatedIncident.severity ?? 'Pending assessment'}
-                      </p>
-                    ) : null}
-                    <h3 className="mt-2 text-lg font-bold text-slate-950">{insight.title}</h3>
-                    <p className="mt-1 text-sm text-slate-700">{insight.summary}</p>
-                    <div className="mt-4 rounded-lg bg-slate-50 p-3">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Why this matters to your home</p>
-                      <p className="mt-1 text-sm text-slate-700">{insight.homeImplication}</p>
-                    </div>
-                    <InlineInsightQuestions
-                      propertyId={propertyId}
-                      questions={insightQuestions}
-                      onSaved={onSaved}
-                    />
-                    {plantModules.map(module => <PlantAdvisorWeatherCard key={module.id} module={module} />)}
-                    <div className="mt-4">
-                      <p className="text-sm font-semibold text-slate-900">Before conditions begin</p>
-                      <ul className="mt-2 space-y-1.5">
-                        {insight.recommendedActions.map(action => (
+                  ) : null}
+
+                  <InlineInsightQuestions
+                    propertyId={propertyId}
+                    questions={insightQuestions}
+                    onSaved={onSaved}
+                  />
+
+                  {visibleRecommendations.length > 0 ? (
+                    <div className="mt-4 border-t border-slate-100 pt-4">
+                      <p className="text-sm font-semibold text-slate-900">Recommended before conditions begin</p>
+                      <ul className="mt-2 grid gap-1.5 lg:grid-cols-2">
+                        {visibleRecommendations.map(action => (
                           <li key={action} className="flex gap-2 text-sm text-slate-700">
-                            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />{action}
+                            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+                            <span>{action}</span>
                           </li>
                         ))}
                       </ul>
                     </div>
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      {insight.actions.map(action => (
-                        <Button key={action.href} asChild variant={action.kind === 'primary' ? 'default' : 'outline'} size="sm">
-                          <Link href={action.href}>{action.label}<ArrowRight className="ml-1.5 h-4 w-4" /></Link>
+                  ) : null}
+
+                  {primaryAction ? (
+                    <div className="mt-4 flex flex-wrap items-center gap-2">
+                      <Button asChild size="sm">
+                        <Link href={primaryAction.href}>{primaryAction.label}<ArrowRight className="ml-1.5 h-4 w-4" /></Link>
+                      </Button>
+                      {secondaryAction ? (
+                        <Button asChild variant="ghost" size="sm" className="text-slate-700">
+                          <Link href={secondaryAction.href}>{secondaryAction.label}<ArrowRight className="ml-1.5 h-4 w-4" /></Link>
                         </Button>
-                      ))}
+                      ) : null}
                     </div>
-                    <p className="mt-4 text-xs text-slate-400">Source: {insight.source}</p>
-                  </div>
+                  ) : null}
+
+                  {plantModules.map(module => <PlantAdvisorWeatherCard key={module.id} module={module} />)}
+
+                  <details className="mt-3 border-t border-slate-100 pt-3 text-xs text-slate-500">
+                    <summary className="cursor-pointer list-none font-medium text-slate-500 hover:text-slate-700">Details &amp; sources</summary>
+                    <div className="mt-2 space-y-1.5">
+                      {insight.relatedIncident ? (
+                        <p>Related incident: {insight.relatedIncident.title} · {insight.relatedIncident.severity ?? 'Pending assessment'}</p>
+                      ) : null}
+                      <p>Source: {insight.source}</p>
+                    </div>
+                  </details>
                 </div>
-                {index === 0 && insight.affectedSystems.length > 0 ? (
-                  <div className="w-full rounded-xl border border-slate-200 p-4 lg:w-56">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Home areas affected</p>
-                    <div className="mt-2 flex flex-wrap gap-1.5">
-                      {insight.affectedSystems.map(system => <Badge key={system} variant="outline">{system}</Badge>)}
-                    </div>
-                  </div>
-                ) : null}
               </div>
             </CardContent>
           </Card>
