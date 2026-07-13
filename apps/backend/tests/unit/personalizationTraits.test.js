@@ -5,6 +5,7 @@ require('ts-node/register');
 
 const {
   deriveHvacFilterReplacementOverdue,
+  deriveHvacFilterDaysSinceServiced,
   HVAC_FILTER_OVERDUE_THRESHOLD_DAYS,
   deriveSmokeDetectorMissing,
   deriveRoofReplacementOverdue,
@@ -66,6 +67,28 @@ test('uses the most recently serviced HVAC asset when multiple exist', () => {
     NOW,
   );
   assert.deepEqual(reading, { known: true, value: false });
+});
+
+test('deriveHvacFilterDaysSinceServiced: UNKNOWN when no HVAC asset at all or never serviced', () => {
+  assert.deepEqual(
+    deriveHvacFilterDaysSinceServiced([{ assetType: 'WATER_HEATER', lastServiced: daysAgo(10) }], NOW),
+    { known: false },
+  );
+  assert.deepEqual(
+    deriveHvacFilterDaysSinceServiced([{ assetType: 'HVAC_FURNACE', lastServiced: null }], NOW),
+    { known: false },
+  );
+});
+
+test('deriveHvacFilterDaysSinceServiced: known, raw day count from the most recently serviced HVAC asset', () => {
+  const reading = deriveHvacFilterDaysSinceServiced(
+    [
+      { assetType: 'HVAC_FURNACE', lastServiced: daysAgo(200) },
+      { assetType: 'HVAC_HEAT_PUMP', lastServiced: daysAgo(5) },
+    ],
+    NOW,
+  );
+  assert.deepEqual(reading, { known: true, value: 5 });
 });
 
 test('deriveSmokeDetectorMissing: UNKNOWN when never confirmed either way', () => {

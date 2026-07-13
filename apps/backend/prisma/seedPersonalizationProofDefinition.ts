@@ -13,6 +13,7 @@ import {
   HVAC_FILTER_PROOF_RULE_AST,
   HVAC_FILTER_PROOF_RULE_VERSION,
 } from '../src/modules/personalization/catalog/proofDefinition';
+import { DEFAULT_HVAC_FILTER_SCORE_CONFIG } from '../src/modules/personalization/domain/scoring';
 
 const prisma = new PrismaClient();
 
@@ -42,10 +43,12 @@ async function main() {
       definitionId: definition.id,
       version: HVAC_FILTER_PROOF_RULE_VERSION,
       ruleAst: HVAC_FILTER_PROOF_RULE_AST,
+      scoreConfig: DEFAULT_HVAC_FILTER_SCORE_CONFIG,
       status: 'DRAFT',
     },
     update: {
       ruleAst: HVAC_FILTER_PROOF_RULE_AST,
+      scoreConfig: DEFAULT_HVAC_FILTER_SCORE_CONFIG,
     },
   });
 

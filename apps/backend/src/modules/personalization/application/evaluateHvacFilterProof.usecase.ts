@@ -19,7 +19,7 @@
 // Not exposed via any route or job yet (see adr-0001) — called directly by
 // tests today, and by the shadow-evaluation use case (migration steps 4-6).
 import { validateRuleAst } from '../domain/ruleAst';
-import { evaluateRule } from '../domain/evaluator';
+import { evaluateRule, TraitReading } from '../domain/evaluator';
 import { computePropertyTraitSnapshot } from './computePropertyTraitSnapshot.usecase';
 import { loadActiveRule, recordEvaluationRun } from '../infrastructure/evaluationRunRepository';
 import { isPersonalizationPaused } from '../../../services/personalizationKillSwitch.service';
@@ -41,6 +41,10 @@ export interface EvaluateHvacFilterProofResult {
   ruleVersion?: number;
   /** Present only when a PersonalizationEvaluationRun row was actually written. */
   evaluationRunId?: string;
+  /** Present only on COMPLETED — the trait set this evaluation ran against, for scoring inputs (e.g. hvacFilterDaysSinceServiced) that aren't part of the rule's eligibility logic. */
+  traitsSnapshot?: Record<string, TraitReading>;
+  /** Present only on COMPLETED — the active rule's opaque scoring-weight config (domain/scoring.ts parses it). */
+  scoreConfig?: unknown;
 }
 
 export async function evaluateHvacFilterProofForProperty(
@@ -132,5 +136,7 @@ export async function evaluateHvacFilterProofForProperty(
     definitionId: loadedRule.definitionId,
     ruleVersion: loadedRule.ruleVersion,
     evaluationRunId: run.id,
+    traitsSnapshot: snapshot.traits,
+    scoreConfig: loadedRule.scoreConfig,
   };
 }

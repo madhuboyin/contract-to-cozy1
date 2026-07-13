@@ -51,6 +51,9 @@ function createPrismaMock({ homeAssets = [], dailyPulseAction = null } = {}) {
     recommendationExplanation: {
       upsert: async ({ create }) => ({ id: 'exp-1', ...create }),
     },
+    recommendationSuppression: {
+      findMany: async () => [],
+    },
     propertyMicroAction: {
       findFirst: async () => dailyPulseAction,
     },
@@ -77,6 +80,7 @@ function loadUseCase(personalizationShadowPct = '100') {
     '../../src/modules/personalization/infrastructure/evaluationRunRepository.ts',
     '../../src/modules/personalization/infrastructure/traitSnapshotRepository.ts',
     '../../src/modules/personalization/infrastructure/recommendationRepository.ts',
+    '../../src/modules/personalization/infrastructure/suppressionRepository.ts',
     '../../src/modules/personalization/infrastructure/dailyPulseComparisonRepository.ts',
     '../../src/modules/personalization/application/computePropertyTraitSnapshot.usecase.ts',
     '../../src/modules/personalization/application/evaluateHvacFilterProof.usecase.ts',

@@ -16,13 +16,21 @@ const REAL_DEFINITION = {
   rules: [{ version: HVAC_FILTER_PROOF_RULE_VERSION, ruleAst: HVAC_FILTER_PROOF_RULE_AST, status: 'ACTIVE' }],
 };
 
-function createPrismaMock({ definition = REAL_DEFINITION, homeAssets = [], property = { id: 'prop-1' }, killSwitchPaused = false } = {}) {
+function createPrismaMock({
+  definition = REAL_DEFINITION,
+  homeAssets = [],
+  property = { id: 'prop-1' },
+  killSwitchPaused = false,
+  suppressions = [],
+} = {}) {
   const runs = [];
   let recommendationRow = null;
   let currentHomeAssets = homeAssets;
+  let currentSuppressions = suppressions;
   const recommendationUpserts = [];
   const explanationUpserts = [];
   const recommendationExpires = [];
+  const recommendationSuppressed = [];
 
   const prismaMock = {
     systemSetting: {
@@ -71,7 +79,8 @@ function createPrismaMock({ definition = REAL_DEFINITION, homeAssets = [], prope
       },
       updateMany: async ({ where, data }) => {
         recommendationExpires.push({ where, data });
-        if (recommendationRow && recommendationRow.status === 'ACTIVE') {
+        if (data.status === 'SUPPRESSED') recommendationSuppressed.push({ where, data });
+        if (recommendationRow && recommendationRow.status === where.status) {
           recommendationRow = { ...recommendationRow, ...data };
           return { count: 1 };
         }
@@ -84,6 +93,14 @@ function createPrismaMock({ definition = REAL_DEFINITION, homeAssets = [], prope
         return { id: 'exp-1', ...create, ...update };
       },
     },
+    recommendationSuppression: {
+      findMany: async ({ where }) => {
+        const scopeKeys = where.OR.map((o) => `${o.scope}:${o.scopeKey}`);
+        return currentSuppressions.filter(
+          (s) => scopeKeys.includes(`${s.scope}:${s.scopeKey}`) && (!s.propertyId || s.propertyId === where.propertyId),
+        );
+      },
+    },
   };
 
   return {
@@ -92,9 +109,13 @@ function createPrismaMock({ definition = REAL_DEFINITION, homeAssets = [], prope
     recommendationUpserts,
     explanationUpserts,
     recommendationExpires,
+    recommendationSuppressed,
     getRecommendationRow: () => recommendationRow,
     setHomeAssets: (next) => {
       currentHomeAssets = next;
+    },
+    setSuppressions: (next) => {
+      currentSuppressions = next;
     },
   };
 }
@@ -117,6 +138,7 @@ function loadUseCase(personalizationShadowPct = '100') {
     '../../src/modules/personalization/infrastructure/evaluationRunRepository.ts',
     '../../src/modules/personalization/infrastructure/traitSnapshotRepository.ts',
     '../../src/modules/personalization/infrastructure/recommendationRepository.ts',
+    '../../src/modules/personalization/infrastructure/suppressionRepository.ts',
     '../../src/modules/personalization/application/computePropertyTraitSnapshot.usecase.ts',
     '../../src/modules/personalization/application/evaluateHvacFilterProof.usecase.ts',
     '../../src/modules/personalization/application/shadowEvaluateHvacFilterProof.usecase.ts',
@@ -164,6 +186,12 @@ test('eligible (TRUE): creates a PersonalizedRecommendation + RecommendationExpl
   assert.equal(recommendationUpserts[0].create.definitionId, 'def-1');
   assert.equal(explanationUpserts.length, 1);
   assert.equal(explanationUpserts[0].create.recommendationId, 'rec-1');
+
+  // Scoring is threaded through end to end (domain/scoring.ts).
+  assert.equal(typeof recommendationUpserts[0].create.score, 'number');
+  assert.ok(['HIGH', 'MEDIUM', 'LOW'].includes(recommendationUpserts[0].create.priorityBand));
+  assert.equal(recommendationUpserts[0].create.confidence, 1);
+  assert.ok(recommendationUpserts[0].create.scoreBreakdown);
 });
 
 test('not eligible (FALSE): no recommendation is created', async () => {
@@ -236,4 +264,69 @@ test('FALSE result expires a previously-ACTIVE recommendation', async () => {
   assert.equal(second.recommendationCreated, false);
   assert.equal(recommendationExpires.length, 1);
   assert.equal(getRecommendationRow().status, 'EXPIRED');
+});
+
+test('re-eligibility after EXPIRED revives the recommendation to ACTIVE, not stuck forever', async () => {
+  const overdueAssets = [{ assetType: 'HVAC_FURNACE', lastServiced: new Date(Date.now() - 200 * 24 * 60 * 60 * 1000) }];
+  const recentAssets = [{ assetType: 'HVAC_FURNACE', lastServiced: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000) }];
+  const { prismaMock, setHomeAssets, getRecommendationRow } = createPrismaMock({ homeAssets: overdueAssets });
+  installPrismaMock(prismaMock);
+  const { shadowEvaluateHvacFilterProofForProperty } = loadUseCase();
+
+  await shadowEvaluateHvacFilterProofForProperty('prop-1'); // eligible -> ACTIVE
+  setHomeAssets(recentAssets);
+  await shadowEvaluateHvacFilterProofForProperty('prop-1'); // FALSE -> EXPIRED
+  assert.equal(getRecommendationRow().status, 'EXPIRED');
+
+  setHomeAssets(overdueAssets);
+  const third = await shadowEvaluateHvacFilterProofForProperty('prop-1'); // eligible again
+
+  assert.equal(third.recommendationCreated, true);
+  assert.equal(getRecommendationRow().status, 'ACTIVE');
+});
+
+test('an active DEFINITION-scope suppression blocks the upsert and flips an existing ACTIVE row to SUPPRESSED', async () => {
+  const homeAssets = [{ assetType: 'HVAC_FURNACE', lastServiced: new Date(Date.now() - 200 * 24 * 60 * 60 * 1000) }];
+  const { prismaMock, recommendationSuppressed, getRecommendationRow, setSuppressions } = createPrismaMock({
+    homeAssets,
+  });
+  installPrismaMock(prismaMock);
+  const { shadowEvaluateHvacFilterProofForProperty } = loadUseCase();
+
+  // First run: no suppression yet -> creates the ACTIVE row normally.
+  const first = await shadowEvaluateHvacFilterProofForProperty('prop-1');
+  assert.equal(first.recommendationCreated, true);
+  assert.equal(getRecommendationRow().status, 'ACTIVE');
+
+  // A suppression becomes active before the next run (e.g. explicit feedback arrived).
+  setSuppressions([
+    { scope: 'DEFINITION', scopeKey: HVAC_FILTER_PROOF_DEFINITION_CODE, propertyId: 'prop-1', until: null },
+  ]);
+  const second = await shadowEvaluateHvacFilterProofForProperty('prop-1');
+
+  assert.equal(second.recommendationCreated, false);
+  assert.equal(second.suppressed, true);
+  assert.equal(recommendationSuppressed.length, 1);
+  assert.equal(getRecommendationRow().status, 'SUPPRESSED');
+});
+
+test('an expired suppression does not block the upsert', async () => {
+  const homeAssets = [{ assetType: 'HVAC_FURNACE', lastServiced: new Date(Date.now() - 200 * 24 * 60 * 60 * 1000) }];
+  const { prismaMock } = createPrismaMock({
+    homeAssets,
+    suppressions: [
+      {
+        scope: 'DEFINITION',
+        scopeKey: HVAC_FILTER_PROOF_DEFINITION_CODE,
+        propertyId: 'prop-1',
+        until: new Date(Date.now() - 1000),
+      },
+    ],
+  });
+  installPrismaMock(prismaMock);
+  const { shadowEvaluateHvacFilterProofForProperty } = loadUseCase();
+
+  const result = await shadowEvaluateHvacFilterProofForProperty('prop-1');
+  assert.equal(result.recommendationCreated, true);
+  assert.equal(result.suppressed, undefined);
 });

@@ -30,20 +30,22 @@ WITH def AS (
   RETURNING id
 )
 INSERT INTO personalization_recommendation_rules
-  (id, "definitionId", version, "ruleAst", "dependencyKeys", status, "createdAt", "updatedAt")
+  (id, "definitionId", version, "ruleAst", "dependencyKeys", "scoreConfig", status, "createdAt", "updatedAt")
 SELECT
   gen_random_uuid(),
   def.id,
   1,
   '{"op":"trait","key":"hvacFilterReplacementOverdue","cmp":"eq","value":true}'::jsonb,
   ARRAY[]::text[],
+  '{"modelVersion":"hvac-filter-proof-score-v1","baseRelevance":60,"weights":{"baseRelevance":0.4,"urgency":0.4,"confidence":0.2}}'::jsonb,
   'DRAFT',
   now(),
   now()
 FROM def
 ON CONFLICT ("definitionId", version) DO UPDATE SET
-  "ruleAst"   = EXCLUDED."ruleAst",
-  "updatedAt" = now();
+  "ruleAst"     = EXCLUDED."ruleAst",
+  "scoreConfig" = EXCLUDED."scoreConfig",
+  "updatedAt"   = now();
 
 -- Sanity check after running: should return exactly 1 row, status DRAFT,
 -- with a nested rule showing the trait-based ruleAst.

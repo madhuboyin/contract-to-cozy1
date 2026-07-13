@@ -462,6 +462,21 @@ export const JOB_REGISTRY: JobRegistryEntry[] = [
     jobName: 'shared-signal-health-audit',
     triggerSupported: true,
   },
+  {
+    key: 'personalization-shadow-sweep',
+    name: 'Personalization Shadow Sweep',
+    description:
+      'Runs the personalization engine\'s shadow HVAC-filter evaluation and Daily Pulse comparison for every ' +
+      'property with an active household link. Shadow-diagnostic only — no UI change, logs a structured ' +
+      'agreement comparison per property. Idempotent and safe to rerun.',
+    category: 'HOME_INTELLIGENCE',
+    schedule: 'Daily at 3:25 AM EST',
+    cronExpression: '25 3 * * *',
+    type: 'cron',
+    queueName: 'cron-trigger-queue',
+    jobName: 'personalization-shadow-sweep',
+    triggerSupported: true,
+  },
 
   // ── Guidance Engine (cron) ────────────────────────────────────────────────
   {

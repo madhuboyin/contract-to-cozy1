@@ -22,6 +22,10 @@ export interface UpsertShadowRecommendationParams {
   headline: string;
   reasonCodes: ReasonCode[];
   evidence: unknown;
+  score?: number;
+  priorityBand?: string;
+  confidence?: number;
+  scoreBreakdown?: unknown;
 }
 
 /**
@@ -50,11 +54,25 @@ export async function upsertShadowRecommendation(
       ruleVersion: params.ruleVersion,
       dedupeKey: params.dedupeKey,
       status: 'ACTIVE',
+      score: params.score,
+      priorityBand: params.priorityBand,
+      confidence: params.confidence,
+      scoreBreakdown: params.scoreBreakdown as Prisma.InputJsonValue | undefined,
     },
     update: {
       evaluationRunId: params.evaluationRunId,
       ruleVersion: params.ruleVersion,
       lastEvaluatedAt: new Date(),
+      // Re-eligibility after a prior EXPIRED/SUPPRESSED run must actually
+      // revive the row, not just refresh its metadata — this was a latent
+      // gap left by the FALSE/UNKNOWN expiry fix (expireRecommendationIfActive
+      // below): without resetting status here, a once-expired recommendation
+      // could never become ACTIVE again even after the property re-qualifies.
+      status: 'ACTIVE',
+      score: params.score,
+      priorityBand: params.priorityBand,
+      confidence: params.confidence,
+      scoreBreakdown: params.scoreBreakdown as Prisma.InputJsonValue | undefined,
     },
   });
 
@@ -98,6 +116,45 @@ export async function expireRecommendationIfActive(propertyId: string, definitio
     data: {
       status: 'EXPIRED',
       expiresAt: new Date(),
+    },
+  });
+}
+
+/**
+ * Flips a previously-ACTIVE recommendation to SUPPRESSED when an active
+ * RecommendationSuppression covers it — called instead of upserting when
+ * shadowEvaluateHvacFilterProofForProperty finds an eligible result that's
+ * suppressed. No-op if nothing is currently ACTIVE for this pair.
+ */
+export async function suppressRecommendationIfActive(propertyId: string, definitionId: string): Promise<void> {
+  await prisma.personalizedRecommendation.updateMany({
+    where: {
+      propertyId,
+      definitionId,
+      occurrenceKey: 'default',
+      status: 'ACTIVE',
+    },
+    data: {
+      status: 'SUPPRESSED',
+    },
+  });
+}
+
+/**
+ * Flips a recommendation to DISMISSED when explicit negative feedback
+ * (application/recordRecommendationFeedback.usecase.ts + domain/feedbackPolicy.ts)
+ * arrives for it — so it stops showing immediately rather than waiting for
+ * the next shadow-eval tick. Guarded to only act on a currently-ACTIVE row,
+ * same as its siblings above — a COMPLETED/EXPIRED/SUPPRESSED row is left as is.
+ */
+export async function markRecommendationDismissed(recommendationId: string): Promise<void> {
+  await prisma.personalizedRecommendation.updateMany({
+    where: {
+      id: recommendationId,
+      status: 'ACTIVE',
+    },
+    data: {
+      status: 'DISMISSED',
     },
   });
 }

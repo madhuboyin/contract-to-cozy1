@@ -11,21 +11,32 @@
 // "shadow only" scope).
 //
 // Ineligible (FALSE/UNKNOWN) results retire a previously-ACTIVE recommendation
-// (see expireRecommendationIfActive) rather than leaving it stale, but this
-// slice still does not suppress/dedupe/rank — that lifecycle handling beyond
-// simple retirement is later work once a real consumer needs it.
+// (see expireRecommendationIfActive) rather than leaving it stale. An eligible
+// result that's covered by an active RecommendationSuppression (user-dismissed
+// or system-set) is suppressed instead of (re)created — see
+// suppressRecommendationIfActive. Cross-definition dedupe/diversity/ranking
+// beyond this single-definition suppression check is later work, once a
+// second real rule-bearing definition exists to make it meaningful.
 import {
   evaluateHvacFilterProofForProperty,
   EvaluateHvacFilterProofResult,
 } from './evaluateHvacFilterProof.usecase';
-import { HVAC_FILTER_PROOF_DEFINITION_CODE } from '../catalog/proofDefinition';
-import { upsertShadowRecommendation, expireRecommendationIfActive } from '../infrastructure/recommendationRepository';
+import { HVAC_FILTER_PROOF_CATEGORY, HVAC_FILTER_PROOF_DEFINITION_CODE } from '../catalog/proofDefinition';
+import { HVAC_FILTER_OVERDUE_THRESHOLD_DAYS } from '../domain/traits';
+import { computeHvacFilterProofScore } from '../domain/scoring';
+import {
+  upsertShadowRecommendation,
+  expireRecommendationIfActive,
+  suppressRecommendationIfActive,
+} from '../infrastructure/recommendationRepository';
+import { findActiveSuppression } from '../infrastructure/suppressionRepository';
 import { isToolEnabled } from '../../../config/featureFlags';
 
 export interface ShadowEvaluateResult {
   evaluation: EvaluateHvacFilterProofResult | { status: 'SHADOW_DISABLED' };
   recommendationCreated: boolean;
   recommendationId?: string;
+  suppressed?: boolean;
 }
 
 export async function shadowEvaluateHvacFilterProofForProperty(
@@ -58,6 +69,31 @@ export async function shadowEvaluateHvacFilterProofForProperty(
     return { evaluation, recommendationCreated: false };
   }
 
+  const activeSuppression = await findActiveSuppression(propertyId, {
+    definitionCode: HVAC_FILTER_PROOF_DEFINITION_CODE,
+    category: HVAC_FILTER_PROOF_CATEGORY,
+    dedupeKey: HVAC_FILTER_PROOF_DEFINITION_CODE,
+  });
+  if (activeSuppression) {
+    await suppressRecommendationIfActive(propertyId, evaluation.definitionId);
+    return { evaluation, recommendationCreated: false, suppressed: true };
+  }
+
+  // Scoring input — a scoring-only trait, not read by the rule's eligibility
+  // logic, so it's normally known whenever the eligibility trait is (both
+  // derive from the same HVAC service history). Falls back to no score
+  // (undefined fields) rather than guessing if it's ever unknown.
+  const daysSinceServicedReading = evaluation.traitsSnapshot?.['hvacFilterDaysSinceServiced'];
+  const scoreResult =
+    daysSinceServicedReading?.known && typeof daysSinceServicedReading.value === 'number'
+      ? computeHvacFilterProofScore({
+          daysSinceServiced: daysSinceServicedReading.value,
+          thresholdDays: HVAC_FILTER_OVERDUE_THRESHOLD_DAYS,
+          confidence: 1,
+          scoreConfigRaw: evaluation.scoreConfig,
+        })
+      : undefined;
+
   const { id: recommendationId } = await upsertShadowRecommendation({
     propertyId,
     definitionId: evaluation.definitionId,
@@ -70,6 +106,10 @@ export async function shadowEvaluateHvacFilterProofForProperty(
     headline: 'HVAC filter may need replacement',
     reasonCodes: [{ code: 'HVAC_FILTER_OVERDUE', templateKey: 'hvac_filter_overdue_reason' }],
     evidence: evaluation,
+    score: scoreResult?.score,
+    priorityBand: scoreResult?.priorityBand,
+    confidence: scoreResult?.confidence,
+    scoreBreakdown: scoreResult?.scoreBreakdown,
   });
 
   return { evaluation, recommendationCreated: true, recommendationId };

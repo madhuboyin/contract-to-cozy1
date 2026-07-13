@@ -97,8 +97,10 @@ test('all traits known: persists a DerivedTrait per trait and one TraitSnapshot 
   assert.equal(result.traits.smokeDetectorMissing.value, true);
   assert.equal(result.traits.roofReplacementOverdue.known, true);
   assert.equal(result.traits.roofReplacementOverdue.value, true);
+  assert.equal(result.traits.hvacFilterDaysSinceServiced.known, true);
+  assert.equal(result.traits.hvacFilterDaysSinceServiced.value, 200);
 
-  assert.equal(derivedTraitUpserts.length, 3);
+  assert.equal(derivedTraitUpserts.length, 4);
   assert.ok(derivedTraitUpserts.every((u) => u.create.householdId === 'hh-1'));
 
   assert.equal(traitSnapshots.length, 1);
@@ -131,10 +133,10 @@ test('unknown traits are excluded from DerivedTrait persistence but included in 
   // Nothing known -> no DerivedTrait rows persisted (absence represents UNKNOWN),
   // but any stale row from a previous known value is actively deleted.
   assert.equal(derivedTraitUpserts.length, 0);
-  assert.equal(derivedTraitDeletes.length, 3);
+  assert.equal(derivedTraitDeletes.length, 4);
   assert.deepEqual(
     derivedTraitDeletes.map((d) => d.where.traitKey).sort(),
-    ['hvacFilterReplacementOverdue', 'roofReplacementOverdue', 'smokeDetectorMissing'],
+    ['hvacFilterDaysSinceServiced', 'hvacFilterReplacementOverdue', 'roofReplacementOverdue', 'smokeDetectorMissing'],
   );
 
   // Snapshot still records the full (all-unknown) trait set.
@@ -156,9 +158,9 @@ test('partial knowledge: only known traits get a DerivedTrait row', async () => 
 
   await computePropertyTraitSnapshot('prop-3');
 
-  assert.equal(derivedTraitUpserts.length, 2);
+  assert.equal(derivedTraitUpserts.length, 3);
   const traitKeys = derivedTraitUpserts.map((u) => u.create.traitKey).sort();
-  assert.deepEqual(traitKeys, ['hvacFilterReplacementOverdue', 'smokeDetectorMissing']);
+  assert.deepEqual(traitKeys, ['hvacFilterDaysSinceServiced', 'hvacFilterReplacementOverdue', 'smokeDetectorMissing']);
 
   // The one unknown trait (roofReplacementOverdue) gets its stale row deleted, not skipped.
   assert.equal(derivedTraitDeletes.length, 1);

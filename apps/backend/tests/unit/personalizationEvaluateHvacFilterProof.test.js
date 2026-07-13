@@ -191,6 +191,27 @@ test('positive fixture: HVAC serviced 200 days ago -> eligible TRUE, run recorde
   assert.equal(runs[0].result, 'TRUE');
   assert.equal(runs[0].definitionId, 'def-1');
   assert.equal(runs[0].ruleVersion, HVAC_FILTER_PROOF_RULE_VERSION);
+
+  // Scoring inputs — present on every COMPLETED result (scoring itself happens
+  // one layer up, in shadowEvaluateHvacFilterProof.usecase.ts).
+  assert.equal(result.traitsSnapshot.hvacFilterDaysSinceServiced.known, true);
+  assert.equal(result.traitsSnapshot.hvacFilterDaysSinceServiced.value, 200);
+  assert.equal(result.scoreConfig, null); // REAL_DEFINITION's mocked rule has no scoreConfig field
+});
+
+test('COMPLETED result passes through the active rule\'s scoreConfig unchanged', async () => {
+  const scoreConfig = { modelVersion: 'test-v1', baseRelevance: 50, weights: { baseRelevance: 0.5, urgency: 0.3, confidence: 0.2 } };
+  const definitionWithScoreConfig = {
+    ...REAL_DEFINITION,
+    rules: [{ ...REAL_DEFINITION.rules[0], scoreConfig }],
+  };
+  const homeAssets = [{ assetType: 'HVAC_FURNACE', lastServiced: new Date(Date.now() - 200 * 24 * 60 * 60 * 1000) }];
+  const { prismaMock } = createPrismaMock({ definition: definitionWithScoreConfig, homeAssets });
+  installPrismaMock(prismaMock);
+  const { evaluateHvacFilterProofForProperty } = loadUseCase();
+
+  const result = await evaluateHvacFilterProofForProperty('prop-1', HVAC_FILTER_PROOF_DEFINITION_CODE);
+  assert.deepEqual(result.scoreConfig, scoreConfig);
 });
 
 test('negative fixture: HVAC serviced 5 days ago -> not eligible FALSE', async () => {

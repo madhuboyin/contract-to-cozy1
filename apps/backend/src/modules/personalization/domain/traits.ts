@@ -21,6 +21,25 @@ export interface HomeAssetFact {
 }
 
 /**
+ * Most recent service date among HVAC-type assets, or `null` when there's no
+ * HVAC-type asset at all or none was ever serviced. Shared by both HVAC
+ * traits below so "what counts as serviced" only has one implementation.
+ */
+function mostRecentHvacServiceDate(homeAssets: HomeAssetFact[]): Date | null {
+  const hvacAssets = homeAssets.filter((a) => a.assetType.toUpperCase().startsWith('HVAC'));
+  const serviced = hvacAssets.filter(
+    (a): a is HomeAssetFact & { lastServiced: Date } => a.lastServiced !== null,
+  );
+  if (serviced.length === 0) {
+    return null;
+  }
+  return serviced.reduce(
+    (latest, a) => (a.lastServiced > latest ? a.lastServiced : latest),
+    serviced[0].lastServiced,
+  );
+}
+
+/**
  * Derives whether an HVAC filter is likely overdue for replacement, purely
  * from HomeAsset service history.
  *
@@ -34,28 +53,37 @@ export function deriveHvacFilterReplacementOverdue(
   homeAssets: HomeAssetFact[],
   now: Date = new Date(),
 ): TraitReading {
-  const hvacAssets = homeAssets.filter((a) => a.assetType.toUpperCase().startsWith('HVAC'));
-  if (hvacAssets.length === 0) {
+  const mostRecentServiceDate = mostRecentHvacServiceDate(homeAssets);
+  if (!mostRecentServiceDate) {
     return { known: false };
   }
-
-  const serviced = hvacAssets.filter(
-    (a): a is HomeAssetFact & { lastServiced: Date } => a.lastServiced !== null,
-  );
-  if (serviced.length === 0) {
-    return { known: false };
-  }
-
-  const mostRecentServiceDate = serviced.reduce(
-    (latest, a) => (a.lastServiced > latest ? a.lastServiced : latest),
-    serviced[0].lastServiced,
-  );
 
   const daysSinceServiced = Math.floor(
     (now.getTime() - mostRecentServiceDate.getTime()) / (1000 * 60 * 60 * 24),
   );
 
   return { known: true, value: daysSinceServiced >= HVAC_FILTER_OVERDUE_THRESHOLD_DAYS };
+}
+
+/**
+ * Raw days-since-last-HVAC-service, as a scoring input (not an eligibility
+ * trait — no rule AST references this key). Same UNKNOWN semantics as
+ * deriveHvacFilterReplacementOverdue: no HVAC asset or never serviced -> unknown.
+ */
+export function deriveHvacFilterDaysSinceServiced(
+  homeAssets: HomeAssetFact[],
+  now: Date = new Date(),
+): TraitReading {
+  const mostRecentServiceDate = mostRecentHvacServiceDate(homeAssets);
+  if (!mostRecentServiceDate) {
+    return { known: false };
+  }
+
+  const daysSinceServiced = Math.floor(
+    (now.getTime() - mostRecentServiceDate.getTime()) / (1000 * 60 * 60 * 24),
+  );
+
+  return { known: true, value: daysSinceServiced };
 }
 
 // ─── Phase 1, migration step 3: two more non-sensitive property traits ────

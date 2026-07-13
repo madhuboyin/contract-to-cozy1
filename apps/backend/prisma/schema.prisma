@@ -13150,9 +13150,11 @@ model TraitSnapshot {
 // required householdId in the unique key would let Postgres's NULL != NULL
 // unique-constraint semantics silently allow duplicates.
 
-// A materialized, user-facing recommendation instance. This slice's shadow
-// job only ever creates ACTIVE rows for definitions that evaluated eligible
-// — an ineligible/unknown result produces no row, not a suppressed one.
+// A materialized, user-facing recommendation instance. The shadow job creates
+// an ACTIVE row when eligible, EXPIREs it on a later FALSE/UNKNOWN result,
+// and SUPPRESSes it instead of (re)creating when an active
+// RecommendationSuppression covers it; explicit negative feedback can also
+// flip a row to DISMISSED (see application/recordRecommendationFeedback.usecase.ts).
 model PersonalizedRecommendation {
   id              String  @id @default(uuid())
   householdId     String?
@@ -13165,8 +13167,10 @@ model PersonalizedRecommendation {
   ruleVersion     Int
   contentVersion  Int? // null until real reviewed content exists for this definition
 
-  // Full scoring formula (04-target-architecture.md's weighted score) is
-  // later work — this slice records eligibility only, not a ranked score.
+  // A deliberately scoped-down 3-of-11-component slice of
+  // 04-target-architecture.md's weighted score formula — see domain/scoring.ts.
+  // household/goal/preference/seasonal/risk/financial/engagement components
+  // have no data source yet (sensitive collection deliberately deferred).
   score          Float?
   priorityBand   String?
   confidence     Float?
@@ -13176,11 +13180,12 @@ model PersonalizedRecommendation {
   lastEvaluatedAt DateTime  @default(now())
   expiresAt       DateTime?
 
-  household     Household?                    @relation(fields: [householdId], references: [id], onDelete: SetNull)
-  property      Property                      @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-  definition    RecommendationDefinition      @relation(fields: [definitionId], references: [id], onDelete: Cascade)
-  evaluationRun PersonalizationEvaluationRun? @relation(fields: [evaluationRunId], references: [id], onDelete: SetNull)
-  explanations  RecommendationExplanation[]
+  household      Household?                    @relation(fields: [householdId], references: [id], onDelete: SetNull)
+  property       Property                      @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  definition     RecommendationDefinition      @relation(fields: [definitionId], references: [id], onDelete: Cascade)
+  evaluationRun  PersonalizationEvaluationRun? @relation(fields: [evaluationRunId], references: [id], onDelete: SetNull)
+  explanations   RecommendationExplanation[]
+  feedbackEvents RecommendationFeedback[]
 
   @@unique([propertyId, definitionId, occurrenceKey])
   @@index([propertyId, status])
@@ -13212,10 +13217,35 @@ model RecommendationExplanation {
   @@map("personalization_recommendation_explanations")
 }
 
+// Explicit/implicit feedback events on a recommendation instance (06-api-design.md's
+// FeedbackDTO shape). Append-only, idempotent on eventId. Explicit negative
+// feedback (see application/recordRecommendationFeedback.usecase.ts +
+// domain/feedbackPolicy.ts) creates/extends a RecommendationSuppression;
+// implicit feedback (explicit: false) never does — PER-FDBK-001's "explicit
+// negative shall affect suppression more than implicit non-engagement".
+model RecommendationFeedback {
+  id               String  @id @default(uuid())
+  recommendationId String
+  eventId          String  @unique
+  type             String // VIEWED | EXPANDED | SAVED | ACCEPTED | COMPLETED | DISMISSED | SNOOZED | NOT_RELEVANT | PROFILE_CORRECTED | VENDOR_CLICKED | NOTIFICATION_OPENED | NOTIFICATION_MUTED
+  explicit         Boolean
+  reasonCode       String? // ALREADY_DONE | TOO_EXPENSIVE | NOT_APPLICABLE | BAD_TIMING | WRONG_PROFILE | OTHER
+  comment          String? @db.Text
+
+  createdAt DateTime @default(now())
+
+  recommendation PersonalizedRecommendation @relation(fields: [recommendationId], references: [id], onDelete: Cascade)
+
+  @@index([recommendationId, type])
+  @@map("personalization_recommendation_feedback")
+}
+
 // User/definition/category-scoped suppression (dismissed/completed/system).
-// Not read or written by this slice's shadow job — added now as additive
-// schema per the approved plan, ahead of the consumer that will need it
-// once recommendations are ever shown to a user.
+// Read by shadowEvaluateHvacFilterProof.usecase.ts before creating a
+// recommendation (infrastructure/suppressionRepository.ts), and written by
+// application/recordRecommendationFeedback.usecase.ts on explicit negative
+// feedback — see domain/feedbackPolicy.ts for exactly which feedback types
+// suppress and for how long.
 model RecommendationSuppression {
   id          String    @id @default(uuid())
   householdId String?
