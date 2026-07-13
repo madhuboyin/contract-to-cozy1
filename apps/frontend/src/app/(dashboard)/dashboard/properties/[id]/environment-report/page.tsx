@@ -28,7 +28,7 @@ import type {
   EnvironmentQuestion,
 } from '@/types';
 
-function IncrementalQuestions({
+function InlineInsightQuestions({
   propertyId,
   questions,
   onSaved,
@@ -61,15 +61,13 @@ function IncrementalQuestions({
   if (questions.length === 0) return null;
 
   return (
-    <Card className="border-violet-200 bg-violet-50/60">
-      <CardHeader className="pb-3">
-        <CardTitle className="text-base">Help us tailor this outlook to your home</CardTitle>
-        <CardDescription>Answering these relevant details improves the active recommendations. Your answers are saved to this home and will not be asked again.</CardDescription>
-      </CardHeader>
-      <CardContent className="grid gap-4 md:grid-cols-2">
+    <div className="mt-4 rounded-xl border border-violet-200 bg-violet-50/70 p-4" aria-label="Personalize this insight">
+      <p className="text-sm font-semibold text-violet-950">Help us tailor this insight to your home</p>
+      <p className="mt-1 text-xs leading-relaxed text-violet-700">These answers are saved to this home and will not be asked again.</p>
+      <div className="mt-3 grid gap-3 md:grid-cols-2">
         {questions.map(question => (
-          <div key={question.id} className="rounded-xl border border-violet-200 bg-white p-4">
-            <p className="font-semibold text-slate-950">{question.prompt}</p>
+          <div key={question.id} className="rounded-lg border border-violet-200 bg-white p-3">
+            <p className="text-sm font-semibold text-slate-950">{question.prompt}</p>
             <p className="mt-1 text-xs leading-relaxed text-slate-500">{question.reason}</p>
             {question.inputType === 'choice' ? (
               <div className="mt-3 flex flex-wrap gap-2">
@@ -116,8 +114,8 @@ function IncrementalQuestions({
           </div>
         ))}
         {error ? <p role="alert" className="text-sm text-red-600 md:col-span-2">{error}</p> : null}
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }
 
@@ -131,7 +129,17 @@ const INSIGHT_ICONS: Record<EnvironmentInsight['category'], ComponentType<{ clas
   drought: Droplets,
 };
 
-function InsightSummary({ insights }: { insights: EnvironmentInsight[] }) {
+function InsightSummary({
+  propertyId,
+  insights,
+  questions,
+  onSaved,
+}: {
+  propertyId: string;
+  insights: EnvironmentInsight[];
+  questions: EnvironmentQuestion[];
+  onSaved: (prompt: string) => Promise<void>;
+}) {
   if (insights.length === 0) {
     return (
       <Card className="border-emerald-200 bg-emerald-50/70">
@@ -161,6 +169,7 @@ function InsightSummary({ insights }: { insights: EnvironmentInsight[] }) {
       {insights.map((insight, index) => {
         const Icon = INSIGHT_ICONS[insight.category];
         const needsAction = insight.severity === 'action';
+        const insightQuestions = questions.filter(question => question.insightId === insight.id);
         return (
           <Card key={insight.id} className={needsAction ? 'overflow-hidden border-amber-300 shadow-sm' : 'overflow-hidden border-sky-200'}>
             <div className={needsAction ? 'h-1 bg-amber-500' : 'h-1 bg-sky-500'} />
@@ -189,6 +198,11 @@ function InsightSummary({ insights }: { insights: EnvironmentInsight[] }) {
                       <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Why this matters to your home</p>
                       <p className="mt-1 text-sm text-slate-700">{insight.homeImplication}</p>
                     </div>
+                    <InlineInsightQuestions
+                      propertyId={propertyId}
+                      questions={insightQuestions}
+                      onSaved={onSaved}
+                    />
                     <div className="mt-4">
                       <p className="text-sm font-semibold text-slate-900">Before conditions begin</p>
                       <ul className="mt-2 space-y-1.5">
@@ -662,14 +676,14 @@ export default function EnvironmentReportPage() {
       </PageHeader>
 
       <div className="space-y-6">
-        <InsightSummary insights={report.insights ?? []} />
         {savedMessage ? (
           <div role="status" className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
             <CheckCircle2 className="h-4 w-4" />{savedMessage}
           </div>
         ) : null}
-        <IncrementalQuestions
+        <InsightSummary
           propertyId={propertyId}
+          insights={report.insights ?? []}
           questions={report.questions ?? []}
           onSaved={async () => {
             setSavedMessage('Saved to your home profile. Future environment recommendations will use this information.');

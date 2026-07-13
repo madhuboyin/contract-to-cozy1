@@ -149,7 +149,9 @@ export function deriveEnvironmentInsights(
           { label: 'Start storm preparation', href: maintenanceHref(property.id), kind: 'primary' },
           { label: 'Check weather coverage', href: coverageHref(property.id), kind: 'secondary' },
         ],
-        source: 'Open-Meteo forecast and property profile',
+        source: elevatedPropertyRisk || property.hasSumpPumpBackup !== null
+          ? 'Open-Meteo forecast and property profile'
+          : 'Open-Meteo forecast',
       });
     }
 
@@ -233,7 +235,9 @@ export function deriveEnvironmentInsights(
           { label: 'Prepare the cooling system', href: maintenanceHref(property.id), kind: 'primary' },
           { label: 'Find an HVAC professional', href: providersHref(property.id), kind: 'secondary' },
         ],
-        source: 'Open-Meteo forecast and property profile',
+        source: olderHvac || (property.coolingType !== null && property.coolingType !== 'UNKNOWN')
+          ? 'Open-Meteo forecast and property profile'
+          : 'Open-Meteo forecast',
       });
     }
 
