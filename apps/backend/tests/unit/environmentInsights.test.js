@@ -3,7 +3,10 @@ const assert = require('node:assert/strict');
 
 require('ts-node/register');
 
-const { deriveEnvironmentInsights } = require('../../src/services/environment/environmentInsights.service.ts');
+const {
+  deriveEnvironmentInsights,
+  deriveEnvironmentQuestions,
+} = require('../../src/services/environment/environmentInsights.service.ts');
 
 const property = {
   id: 'property-1',
@@ -14,6 +17,13 @@ const property = {
   hasDrainageIssues: false,
   hasSumpPumpBackup: true,
   coolingType: 'CENTRAL_AIR',
+  heatingType: 'FURNACE',
+  hvacInstallYear: 2018,
+  roofType: 'SHINGLE',
+  roofReplacementYear: 2015,
+  foundationType: 'Basement',
+  hasIrrigation: false,
+  hasSecondaryHeat: false,
 };
 
 function sections(overrides = {}) {
@@ -104,4 +114,48 @@ test('prioritizes action insights above watch insights', () => {
   assert.equal(insights[0].severity, 'action');
   assert.equal(insights[1].category, 'air_quality');
   assert.equal(insights[1].severity, 'watch');
+});
+
+test('asks at most two rain questions only when the relevant property data is missing', () => {
+  const rainInsight = {
+    id: 'heavy-rain-2026-07-14',
+    category: 'rain',
+  };
+  const missingProperty = { ...property, hasDrainageIssues: null, hasSumpPumpBackup: null };
+  const questions = deriveEnvironmentQuestions(missingProperty, [rainInsight]);
+
+  assert.equal(questions.length, 2);
+  assert.deepEqual(questions.map(question => question.field), ['hasDrainageIssues', 'hasSumpPumpBackup']);
+  assert.equal(deriveEnvironmentQuestions(property, [rainInsight]).length, 0);
+});
+
+test('persists unknown enum choices conceptually by not asking when UNKNOWN is already stored', () => {
+  const heatInsight = { id: 'heat-2026-07-14', category: 'heat' };
+  const questions = deriveEnvironmentQuestions(
+    { ...property, coolingType: 'UNKNOWN', hvacInstallYear: null },
+    [heatInsight]
+  );
+
+  assert.deepEqual(questions.map(question => question.field), ['hvacInstallYear']);
+});
+
+test('uses captured roof data to personalize and elevate a snow insight', () => {
+  const input = sections();
+  input.weather.data.tenDayForecast.push({
+    date: '2026-12-18',
+    tempMaxF: 32,
+    tempMinF: 24,
+    precipitationSumIn: 0.4,
+    weatherCode: 71,
+  });
+
+  const insights = deriveEnvironmentInsights(
+    { ...property, roofType: 'FLAT', roofReplacementYear: 2001 },
+    input
+  );
+
+  assert.equal(insights[0].category, 'snow');
+  assert.equal(insights[0].severity, 'action');
+  assert.match(insights[0].homeImplication, /flat roof/);
+  assert.match(insights[0].homeImplication, /years since replacement/);
 });

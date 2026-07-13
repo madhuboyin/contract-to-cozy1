@@ -2,7 +2,7 @@
 
 'use client';
 
-import type { ComponentType, ReactNode } from 'react';
+import { useState, type ComponentType, type ReactNode } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
@@ -25,7 +25,101 @@ import type {
   EnvironmentalHazardsData,
   ClimateSectionData,
   EnvironmentInsight,
+  EnvironmentQuestion,
 } from '@/types';
+
+function IncrementalQuestions({
+  propertyId,
+  questions,
+  onSaved,
+}: {
+  propertyId: string;
+  questions: EnvironmentQuestion[];
+  onSaved: (prompt: string) => Promise<void>;
+}) {
+  const [savingId, setSavingId] = useState<string | null>(null);
+  const [years, setYears] = useState<Record<string, string>>({});
+  const [error, setError] = useState<string | null>(null);
+
+  const saveAnswer = async (question: EnvironmentQuestion, value: string | number | boolean) => {
+    setError(null);
+    setSavingId(question.id);
+    try {
+      const response = await api.updateProperty(
+        propertyId,
+        { [question.field]: value } as Parameters<typeof api.updateProperty>[1]
+      );
+      if (!response.success) throw new Error('message' in response ? response.message : 'Unable to save answer');
+      await onSaved(question.prompt);
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : 'Unable to save this answer. Please try again.');
+    } finally {
+      setSavingId(null);
+    }
+  };
+
+  if (questions.length === 0) return null;
+
+  return (
+    <Card className="border-violet-200 bg-violet-50/60">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base">Help us tailor this outlook to your home</CardTitle>
+        <CardDescription>Answering these relevant details improves the active recommendations. Your answers are saved to this home and will not be asked again.</CardDescription>
+      </CardHeader>
+      <CardContent className="grid gap-4 md:grid-cols-2">
+        {questions.map(question => (
+          <div key={question.id} className="rounded-xl border border-violet-200 bg-white p-4">
+            <p className="font-semibold text-slate-950">{question.prompt}</p>
+            <p className="mt-1 text-xs leading-relaxed text-slate-500">{question.reason}</p>
+            {question.inputType === 'choice' ? (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {question.options?.map(option => (
+                  <Button
+                    key={String(option.value)}
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={savingId !== null}
+                    onClick={() => void saveAnswer(question, option.value)}
+                  >
+                    {savingId === question.id ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : null}
+                    {option.label}
+                  </Button>
+                ))}
+              </div>
+            ) : (
+              <div className="mt-3 flex gap-2">
+                <input
+                  type="number"
+                  min="1700"
+                  max={new Date().getFullYear()}
+                  placeholder={question.placeholder}
+                  value={years[question.id] ?? ''}
+                  onChange={event => setYears(current => ({ ...current, [question.id]: event.target.value }))}
+                  className="min-h-9 w-36 rounded-md border border-slate-300 bg-white px-3 text-sm"
+                />
+                <Button
+                  type="button"
+                  size="sm"
+                  disabled={savingId !== null || !years[question.id]}
+                  onClick={() => {
+                    const year = Number(years[question.id]);
+                    if (year >= 1700 && year <= new Date().getFullYear()) void saveAnswer(question, year);
+                    else setError('Enter a valid four-digit year.');
+                  }}
+                >
+                  {savingId === question.id ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : null}
+                  Save
+                </Button>
+              </div>
+            )}
+          </div>
+        ))}
+        {error ? <p role="alert" className="text-sm text-red-600 md:col-span-2">{error}</p> : null}
+      </CardContent>
+    </Card>
+  );
+}
 
 const INSIGHT_ICONS: Record<EnvironmentInsight['category'], ComponentType<{ className?: string }>> = {
   rain: CloudRain,
@@ -490,6 +584,7 @@ export default function EnvironmentReportPage() {
   const params = useParams();
   const router = useRouter();
   const propertyId = Array.isArray(params.id) ? params.id[0] ?? '' : params.id ?? '';
+  const [savedMessage, setSavedMessage] = useState<string | null>(null);
 
   const query = useQuery({
     queryKey: ['environment-report', propertyId],
@@ -559,6 +654,19 @@ export default function EnvironmentReportPage() {
 
       <div className="space-y-6">
         <InsightSummary insights={report.insights ?? []} />
+        {savedMessage ? (
+          <div role="status" className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+            <CheckCircle2 className="h-4 w-4" />{savedMessage}
+          </div>
+        ) : null}
+        <IncrementalQuestions
+          propertyId={propertyId}
+          questions={report.questions ?? []}
+          onSaved={async () => {
+            setSavedMessage('Saved to your home profile. Future environment recommendations will use this information.');
+            await query.refetch();
+          }}
+        />
         <WeatherSection result={sections.weather} />
         <AirQualitySection result={sections.airQuality} />
         <FloodElevationSection result={sections.floodElevation} />

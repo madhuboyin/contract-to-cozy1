@@ -4768,6 +4768,7 @@ export interface EnvironmentReportDTO {
   };
   generatedAt: string;
   insights: EnvironmentInsight[];
+  questions: EnvironmentQuestion[];
   sections: {
     weather: SectionResult<WeatherReportData>;
     airQuality: SectionResult<AirQualityData>;
@@ -4799,4 +4800,27 @@ export interface EnvironmentInsight {
   recommendedActions: string[];
   actions: EnvironmentInsightAction[];
   source: string;
+}
+
+export type EnvironmentQuestionField =
+  | 'hasDrainageIssues'
+  | 'hasSumpPumpBackup'
+  | 'coolingType'
+  | 'hvacInstallYear'
+  | 'roofType'
+  | 'roofReplacementYear'
+  | 'heatingType'
+  | 'hasSecondaryHeat'
+  | 'hasIrrigation'
+  | 'foundationType';
+
+export interface EnvironmentQuestion {
+  id: string;
+  insightId: string;
+  field: EnvironmentQuestionField;
+  prompt: string;
+  reason: string;
+  inputType: 'choice' | 'year' | 'text';
+  options?: Array<{ label: string; value: string | number | boolean }>;
+  placeholder?: string;
 }

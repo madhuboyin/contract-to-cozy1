@@ -37,6 +37,41 @@ export interface EnvironmentInsightProperty {
   hasDrainageIssues: boolean | null;
   hasSumpPumpBackup: boolean | null;
   coolingType: string | null;
+  heatingType: string | null;
+  hvacInstallYear: number | null;
+  roofType: string | null;
+  roofReplacementYear: number | null;
+  foundationType: string | null;
+  hasIrrigation: boolean | null;
+  hasSecondaryHeat: boolean | null;
+}
+
+export type EnvironmentQuestionField =
+  | 'hasDrainageIssues'
+  | 'hasSumpPumpBackup'
+  | 'coolingType'
+  | 'hvacInstallYear'
+  | 'roofType'
+  | 'roofReplacementYear'
+  | 'heatingType'
+  | 'hasSecondaryHeat'
+  | 'hasIrrigation'
+  | 'foundationType';
+
+export interface EnvironmentQuestionOption {
+  label: string;
+  value: string | number | boolean;
+}
+
+export interface EnvironmentQuestion {
+  id: string;
+  insightId: string;
+  field: EnvironmentQuestionField;
+  prompt: string;
+  reason: string;
+  inputType: 'choice' | 'year' | 'text';
+  options?: EnvironmentQuestionOption[];
+  placeholder?: string;
 }
 
 export interface EnvironmentInsightSections {
@@ -106,13 +141,21 @@ export function deriveEnvironmentInsights(
 
     const snowDay = weather.tenDayForecast.find(day => [71, 73, 75, 77, 85, 86].includes(day.weatherCode));
     if (snowDay) {
+      const roofAge = property.roofReplacementYear ? new Date().getFullYear() - property.roofReplacementYear : null;
+      const elevatedRoofRisk = property.roofType === 'FLAT' || (roofAge !== null && roofAge >= 20);
+      const roofContext = [
+        property.roofType && property.roofType !== 'UNKNOWN' ? `${property.roofType.toLowerCase()} roof` : null,
+        roofAge !== null ? `approximately ${roofAge} years since replacement` : null,
+      ].filter(Boolean).join(' with ');
       insights.push({
         id: `snow-${snowDay.date}`,
         category: 'snow',
-        severity: snowDay.weatherCode === 75 || snowDay.weatherCode === 86 ? 'action' : 'watch',
+        severity: snowDay.weatherCode === 75 || snowDay.weatherCode === 86 || elevatedRoofRisk ? 'action' : 'watch',
         title: `Snow expected ${dayLabel(snowDay.date)}`,
         summary: `Snow is forecast with temperatures between ${Math.round(snowDay.tempMinF)}° and ${Math.round(snowDay.tempMaxF)}°F.`,
-        homeImplication: 'Snow and refreezing can block exterior vents, create unsafe walkways, and expose plumbing to freezing conditions.',
+        homeImplication: roofContext
+          ? `This home has a ${roofContext}. Snow and refreezing may increase roof, vent, walkway, and plumbing exposure.`
+          : 'Snow and refreezing can block exterior vents, create unsafe walkways, and expose plumbing to freezing conditions.',
         timeframe: dayLabel(snowDay.date),
         effectiveFrom: snowDay.date,
         effectiveTo: snowDay.date,
@@ -128,13 +171,18 @@ export function deriveEnvironmentInsights(
 
     const freezeDay = weather.tenDayForecast.find(day => day.tempMinF <= 28 && ![71, 73, 75, 77, 85, 86].includes(day.weatherCode));
     if (freezeDay) {
+      const heatPumpWithoutBackup = property.heatingType === 'HEAT_PUMP' && property.hasSecondaryHeat === false;
       insights.push({
         id: `freeze-${freezeDay.date}`,
         category: 'freeze',
-        severity: freezeDay.tempMinF <= 20 ? 'action' : 'watch',
+        severity: freezeDay.tempMinF <= 20 || heatPumpWithoutBackup ? 'action' : 'watch',
         title: `Freeze risk ${dayLabel(freezeDay.date)}`,
         summary: `The low is forecast near ${Math.round(freezeDay.tempMinF)}°F.`,
-        homeImplication: 'Exposed pipes and exterior fixtures may freeze, especially in unheated or poorly insulated areas.',
+        homeImplication: heatPumpWithoutBackup
+          ? 'This home uses a heat pump and no backup heat source is recorded. Extreme cold can reduce heating performance while exposed plumbing remains vulnerable.'
+          : property.heatingType && property.heatingType !== 'UNKNOWN'
+            ? `This home uses ${property.heatingType.toLowerCase().replace('_', ' ')} heat. Exposed pipes and fixtures may still freeze in unheated areas.`
+            : 'Exposed pipes and exterior fixtures may freeze, especially in unheated or poorly insulated areas.',
         timeframe: dayLabel(freezeDay.date),
         effectiveFrom: freezeDay.date,
         effectiveTo: freezeDay.date,
@@ -149,14 +197,18 @@ export function deriveEnvironmentInsights(
     if (heatDays.length > 0) {
       const first = heatDays[0];
       const last = heatDays[heatDays.length - 1];
+      const hvacAge = property.hvacInstallYear ? new Date().getFullYear() - property.hvacInstallYear : null;
+      const olderHvac = hvacAge !== null && hvacAge >= 15;
       insights.push({
         id: `heat-${first.date}`,
         category: 'heat',
-        severity: heatDays.length >= 2 || Math.max(...heatDays.map(day => day.tempMaxF)) >= 100 ? 'action' : 'watch',
+        severity: heatDays.length >= 2 || Math.max(...heatDays.map(day => day.tempMaxF)) >= 100 || olderHvac ? 'action' : 'watch',
         title: heatDays.length >= 2 ? 'Multi-day heat risk ahead' : `High heat expected ${dayLabel(first.date)}`,
         summary: `${heatDays.length} day${heatDays.length === 1 ? '' : 's'} may reach 95°F or higher.`,
-        homeImplication: property.coolingType
-          ? 'Sustained heat can strain the cooling system, increase energy use, and worsen indoor humidity.'
+        homeImplication: olderHvac
+          ? `The recorded cooling system is approximately ${hvacAge} years old. Sustained heat may increase strain and the chance of reduced performance.`
+          : property.coolingType && property.coolingType !== 'UNKNOWN'
+            ? `This home uses ${property.coolingType.toLowerCase().replace('_', ' ')} cooling. Sustained heat can increase system demand, energy use, and indoor humidity.`
           : 'No cooling-system type is recorded for this home, so confirm there is a safe plan for keeping indoor temperatures down.',
         timeframe: heatDays.length > 1 ? `${dayLabel(first.date)} – ${dayLabel(last.date)}` : dayLabel(first.date),
         effectiveFrom: first.date,
@@ -218,7 +270,9 @@ export function deriveEnvironmentInsights(
       severity: category === 'D4' ? 'action' : 'watch',
       title: `${category} drought conditions`,
       summary: 'Severe or worse drought conditions are reported for the area.',
-      homeImplication: 'Dry soil can stress landscaping and may contribute to soil movement or gaps around the foundation.',
+      homeImplication: property.foundationType && property.foundationType !== 'Unknown'
+        ? `This home has a ${property.foundationType.toLowerCase()} foundation${property.hasIrrigation ? ' and an irrigation system' : ''}. Dry soil can stress landscaping and contribute to soil movement around the foundation.`
+        : 'Dry soil can stress landscaping and may contribute to soil movement or gaps around the foundation.',
       timeframe: 'Current weekly outlook',
       effectiveFrom: sections.drought.data.current!.date,
       effectiveTo: sections.drought.data.current!.date,
@@ -231,4 +285,168 @@ export function deriveEnvironmentInsights(
 
   const severityOrder: Record<EnvironmentInsightSeverity, number> = { action: 0, watch: 1, info: 2 };
   return insights.sort((a, b) => severityOrder[a.severity] - severityOrder[b.severity]).slice(0, 5);
+}
+
+const knownEnum = (value: string | null) => Boolean(value);
+
+export function deriveEnvironmentQuestions(
+  property: EnvironmentInsightProperty,
+  insights: EnvironmentInsight[]
+): EnvironmentQuestion[] {
+  const questions: EnvironmentQuestion[] = [];
+  const add = (question: EnvironmentQuestion) => {
+    if (questions.length < 2 && !questions.some(existing => existing.field === question.field)) questions.push(question);
+  };
+
+  for (const insight of insights) {
+    if (questions.length >= 2) break;
+
+    if (insight.category === 'rain') {
+      if (property.hasDrainageIssues === null) {
+        add({
+          id: `${insight.id}-drainage`,
+          insightId: insight.id,
+          field: 'hasDrainageIssues',
+          prompt: 'Has this home had drainage or water-pooling problems?',
+          reason: 'This helps us estimate water-intrusion risk from the approaching rain.',
+          inputType: 'choice',
+          options: [{ label: 'Yes', value: true }, { label: 'No', value: false }],
+        });
+      }
+      if (property.hasSumpPumpBackup === null) {
+        add({
+          id: `${insight.id}-sump-backup`,
+          insightId: insight.id,
+          field: 'hasSumpPumpBackup',
+          prompt: 'Does the sump pump have battery or generator backup?',
+          reason: 'Backup power materially changes basement protection during a storm outage.',
+          inputType: 'choice',
+          options: [{ label: 'Yes', value: true }, { label: 'No', value: false }],
+        });
+      }
+    }
+
+    if (insight.category === 'heat') {
+      if (!knownEnum(property.coolingType)) {
+        add({
+          id: `${insight.id}-cooling`,
+          insightId: insight.id,
+          field: 'coolingType',
+          prompt: 'How is this home primarily cooled?',
+          reason: 'Cooling type helps us tailor heat-wave preparation and service guidance.',
+          inputType: 'choice',
+          options: [
+            { label: 'Central air', value: 'CENTRAL_AC' },
+            { label: 'Window units', value: 'WINDOW_AC' },
+            { label: 'Not sure', value: 'UNKNOWN' },
+          ],
+        });
+      }
+      if (property.hvacInstallYear === null) {
+        add({
+          id: `${insight.id}-hvac-year`,
+          insightId: insight.id,
+          field: 'hvacInstallYear',
+          prompt: 'What year was the cooling system installed?',
+          reason: 'System age helps us identify elevated strain during sustained heat.',
+          inputType: 'year',
+          placeholder: 'e.g. 2016',
+        });
+      }
+    }
+
+    if (insight.category === 'snow' || insight.category === 'storm') {
+      if (!knownEnum(property.roofType)) {
+        add({
+          id: `${insight.id}-roof-type`,
+          insightId: insight.id,
+          field: 'roofType',
+          prompt: 'What type of roof does this home have?',
+          reason: 'Roof material affects which weather impacts and inspections matter most.',
+          inputType: 'choice',
+          options: [
+            { label: 'Shingle', value: 'SHINGLE' },
+            { label: 'Tile', value: 'TILE' },
+            { label: 'Flat', value: 'FLAT' },
+            { label: 'Metal', value: 'METAL' },
+            { label: 'Not sure', value: 'UNKNOWN' },
+          ],
+        });
+      }
+      if (property.roofReplacementYear === null) {
+        add({
+          id: `${insight.id}-roof-year`,
+          insightId: insight.id,
+          field: 'roofReplacementYear',
+          prompt: 'When was the roof last replaced?',
+          reason: 'Roof age helps us determine whether post-weather inspection should be prioritized.',
+          inputType: 'year',
+          placeholder: 'e.g. 2012',
+        });
+      }
+    }
+
+    if (insight.category === 'freeze') {
+      if (!knownEnum(property.heatingType)) {
+        add({
+          id: `${insight.id}-heating`,
+          insightId: insight.id,
+          field: 'heatingType',
+          prompt: 'What is the primary heating system?',
+          reason: 'Heating type helps us tailor freeze protection and backup-heat guidance.',
+          inputType: 'choice',
+          options: [
+            { label: 'HVAC', value: 'HVAC' },
+            { label: 'Furnace', value: 'FURNACE' },
+            { label: 'Heat pump', value: 'HEAT_PUMP' },
+            { label: 'Radiators', value: 'RADIATORS' },
+            { label: 'Not sure', value: 'UNKNOWN' },
+          ],
+        });
+      }
+      if (property.hasSecondaryHeat === null) {
+        add({
+          id: `${insight.id}-secondary-heat`,
+          insightId: insight.id,
+          field: 'hasSecondaryHeat',
+          prompt: 'Does this home have a backup heat source?',
+          reason: 'Backup heat improves resilience during extreme cold or a power interruption.',
+          inputType: 'choice',
+          options: [{ label: 'Yes', value: true }, { label: 'No', value: false }],
+        });
+      }
+    }
+
+    if (insight.category === 'drought') {
+      if (property.hasIrrigation === null) {
+        add({
+          id: `${insight.id}-irrigation`,
+          insightId: insight.id,
+          field: 'hasIrrigation',
+          prompt: 'Does this property have an irrigation system?',
+          reason: 'This helps tailor drought and foundation-perimeter recommendations.',
+          inputType: 'choice',
+          options: [{ label: 'Yes', value: true }, { label: 'No', value: false }],
+        });
+      }
+      if (!property.foundationType) {
+        add({
+          id: `${insight.id}-foundation`,
+          insightId: insight.id,
+          field: 'foundationType',
+          prompt: 'What type of foundation does this home have?',
+          reason: 'Foundation type helps us tailor soil-movement and moisture guidance.',
+          inputType: 'choice',
+          options: [
+            { label: 'Basement', value: 'Basement' },
+            { label: 'Crawl space', value: 'Crawl space' },
+            { label: 'Slab', value: 'Slab' },
+            { label: 'Not sure', value: 'Unknown' },
+          ],
+        });
+      }
+    }
+  }
+
+  return questions;
 }

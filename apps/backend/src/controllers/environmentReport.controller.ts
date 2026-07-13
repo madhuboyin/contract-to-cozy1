@@ -31,6 +31,13 @@ class EnvironmentReportController {
           hasDrainageIssues: true,
           hasSumpPumpBackup: true,
           coolingType: true,
+          heatingType: true,
+          hvacInstallYear: true,
+          roofType: true,
+          roofReplacementYear: true,
+          foundationType: true,
+          hasIrrigation: true,
+          hasSecondaryHeat: true,
         },
       });
 

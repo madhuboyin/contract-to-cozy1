@@ -20,7 +20,12 @@ import { getHardinessZone, HardinessZoneData } from './environment/hardinessZone
 import { getClimateNormals, ClimateNormalsData } from './environment/climateNormals.service';
 import { getEnvironmentalHazards, EnvironmentalHazardsData } from './environment/environmentalHazards.service';
 import { SectionResult } from './environment/types';
-import { deriveEnvironmentInsights, EnvironmentInsight } from './environment/environmentInsights.service';
+import {
+  deriveEnvironmentInsights,
+  deriveEnvironmentQuestions,
+  EnvironmentInsight,
+  EnvironmentQuestion,
+} from './environment/environmentInsights.service';
 
 export interface ClimateSectionData {
   normals: SectionResult<ClimateNormalsData>;
@@ -44,6 +49,7 @@ export interface EnvironmentReportDTO {
   };
   generatedAt: string;
   insights: EnvironmentInsight[];
+  questions: EnvironmentQuestion[];
   sections: {
     weather: SectionResult<WeatherReportData>;
     airQuality: SectionResult<AirQualityData>;
@@ -68,6 +74,13 @@ interface GeocodableProperty {
   hasDrainageIssues: boolean | null;
   hasSumpPumpBackup: boolean | null;
   coolingType: string | null;
+  heatingType: string | null;
+  hvacInstallYear: number | null;
+  roofType: string | null;
+  roofReplacementYear: number | null;
+  foundationType: string | null;
+  hasIrrigation: boolean | null;
+  hasSecondaryHeat: boolean | null;
 }
 
 const OPEN_METEO_GEOCODING_URL = 'https://geocoding-api.open-meteo.com/v1/search';
@@ -130,6 +143,7 @@ export async function getEnvironmentReport(property: GeocodableProperty): Promis
       location: { latitude: null, longitude: null, countyFips: null, zipCode },
       generatedAt: new Date().toISOString(),
       insights: [],
+      questions: [],
       sections: {
         weather: unavailable<WeatherReportData>(reason),
         airQuality: unavailable<AirQualityData>(reason),
@@ -192,6 +206,7 @@ export async function getEnvironmentReport(property: GeocodableProperty): Promis
     },
   };
   const insights = deriveEnvironmentInsights(property, sections);
+  const questions = deriveEnvironmentQuestions(property, insights);
 
   return {
     propertyId: property.id,
@@ -199,6 +214,7 @@ export async function getEnvironmentReport(property: GeocodableProperty): Promis
     location: { latitude: lat, longitude: lon, countyFips: countyFips ?? null, zipCode },
     generatedAt: new Date().toISOString(),
     insights,
+    questions,
     sections,
   };
 }
