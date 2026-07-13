@@ -4,6 +4,10 @@ import { z } from 'zod';
 import { AuthRequest } from '../types/auth.types';
 import { prisma } from '../lib/prisma';
 import { logger } from '../lib/logger';
+import {
+  cascadeDeleteOwnedProperties,
+  HouseholdOwnershipBlockedError,
+} from '../services/accountDeletionCascade.service';
 
 const updateProfileSchema = z.object({
   firstName: z.string().min(1).optional(),
@@ -221,6 +225,10 @@ export const deleteAccount = async (req: AuthRequest, res: Response) => {
     const anonymizedEmail = `deleted+${shortId}-${now}@deleted.contracttocozy.local`;
 
     await prisma.$transaction(async (tx) => {
+      // Hard-deletes owned properties + their domain data, unless another
+      // household member is still on one of them (throws instead, below).
+      await cascadeDeleteOwnedProperties(tx, userId);
+
       await deactivateProviderFootprint(tx, userId);
 
       await tx.address.deleteMany({
@@ -255,6 +263,13 @@ export const deleteAccount = async (req: AuthRequest, res: Response) => {
       },
     });
   } catch (error) {
+    if (error instanceof HouseholdOwnershipBlockedError) {
+      return res.status(409).json({
+        error: error.message,
+        code: 'HOUSEHOLD_OWNERSHIP_BLOCKED',
+        properties: error.properties,
+      });
+    }
     logger.error({ err: error }, 'Delete account error');
     res.status(500).json({ error: 'Failed to delete account' });
   }
