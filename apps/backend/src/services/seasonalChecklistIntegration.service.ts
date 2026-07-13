@@ -15,6 +15,7 @@
 
 import { PropertyMaintenanceTaskService } from './PropertyMaintenanceTask.service';
 import { prisma } from '../lib/prisma';
+import { resolvePropertyAccess, ROLE_RANK } from './propertyAccess.service';
 
 /**
  * Creates a PropertyMaintenanceTask from a seasonal checklist item.
@@ -55,8 +56,9 @@ export async function addSeasonalTaskToMaintenance(
     throw new Error('Seasonal item not found');
   }
 
-  // 2. Verify ownership
-  if (seasonalItem.seasonalChecklist.property.homeownerProfile.userId !== userId) {
+  // 2. Verify access: owner OR household collaborator (CONTRIBUTOR+), not owner-only.
+  const access = await resolvePropertyAccess(userId, seasonalItem.propertyId);
+  if (!access || ROLE_RANK[access.role] < ROLE_RANK.CONTRIBUTOR) {
     throw new Error('User does not have access to this seasonal item');
   }
 
@@ -107,15 +109,6 @@ export async function removeSeasonalTaskFromMaintenance(
   const seasonalItem = await prisma.seasonalChecklistItem.findUnique({
     where: { id: seasonalItemId },
     include: {
-      seasonalChecklist: {
-        include: {
-          property: {
-            include: {
-              homeownerProfile: true,
-            },
-          },
-        },
-      },
       maintenanceTask: true,
     },
   });
@@ -124,8 +117,9 @@ export async function removeSeasonalTaskFromMaintenance(
     throw new Error('Seasonal item not found');
   }
 
-  // 2. Verify ownership
-  if (seasonalItem.seasonalChecklist.property.homeownerProfile.userId !== userId) {
+  // 2. Verify access: owner OR household collaborator (CONTRIBUTOR+), not owner-only.
+  const access = await resolvePropertyAccess(userId, seasonalItem.propertyId);
+  if (!access || ROLE_RANK[access.role] < ROLE_RANK.CONTRIBUTOR) {
     throw new Error('User does not have access to this seasonal item');
   }
 
@@ -183,19 +177,9 @@ export async function getSeasonalItemsWithTaskStatus(
   maintenanceTaskId: string | null;
   season: string;
 }>> {
-  // 1. Verify property ownership
-  const property = await prisma.property.findUnique({
-    where: { id: propertyId },
-    include: {
-      homeownerProfile: true,
-    },
-  });
-
-  if (!property) {
-    throw new Error('Property not found');
-  }
-
-  if (property.homeownerProfile.userId !== userId) {
+  // 1. Verify access: owner OR household collaborator (CONTRIBUTOR/VIEWER), not owner-only.
+  const access = await resolvePropertyAccess(userId, propertyId);
+  if (!access) {
     throw new Error('User does not have access to this property');
   }
 

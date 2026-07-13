@@ -5,6 +5,7 @@ import { resolveCompsProvider } from './providers/compsResolver';
 import { buildSellerReadinessReport } from './reports/sellerReadiness.builder';
 import { calculateBudgetAndValue } from './engines/valueCalculator.engine';
 import { personalizeChecklist, generatePersonalizedSummary, ChecklistItem, UserPreferences } from './engines/personalization.engine';
+import { resolvePropertyAccess, ROLE_RANK } from '../services/propertyAccess.service';
 
 export class SellerPrepService {
   static async getOverview(
@@ -21,18 +22,21 @@ export class SellerPrepService {
     interviews: any[]; // NEW: Added for agent comparison
     startDate: string; 
   }> {
-    const property = await prisma.property.findFirst({
-      where: {
-        id: propertyId,
-        homeownerProfile: { userId },
-      },
+    // Verify access: owner OR household collaborator (CONTRIBUTOR/VIEWER), not owner-only.
+    const access = await resolvePropertyAccess(userId, propertyId);
+    if (!access) {
+      throw new Error('Property not found or unauthorized');
+    }
+
+    const property = await prisma.property.findUnique({
+      where: { id: propertyId },
       select: { id: true, state: true, yearBuilt: true, propertyType: true },
     });
-  
+
     if (!property) {
       throw new Error('Property not found or unauthorized');
     }
-  
+
     let plan = await prisma.sellerPrepPlan.findFirst({
       where: { userId, propertyId },
       include: { 
@@ -116,8 +120,23 @@ export class SellerPrepService {
     itemId: string,
     status: 'PLANNED' | 'DONE' | 'SKIPPED'
   ) {
+    const item = await prisma.sellerPrepPlanItem.findUnique({
+      where: { id: itemId },
+      include: { plan: true },
+    });
+
+    if (!item) {
+      throw new Error('Item not found');
+    }
+
+    // Verify access: owner OR household collaborator (CONTRIBUTOR+), not unauthenticated/no check.
+    const access = await resolvePropertyAccess(userId, item.plan.propertyId);
+    if (!access || ROLE_RANK[access.role] < ROLE_RANK.CONTRIBUTOR) {
+      throw new Error('Item not found or unauthorized');
+    }
+
     const updateData: any = { status };
-    
+
     if (status === 'DONE') {
       updateData.completedAt = new Date();
       updateData.skippedAt = null;
@@ -196,11 +215,14 @@ export class SellerPrepService {
   }
 
   static async getComparables(userId: string, propertyId: string) {
-    const property = await prisma.property.findFirst({
-      where: {
-        id: propertyId,
-        homeownerProfile: { userId },
-      },
+    // Verify access: owner OR household collaborator (CONTRIBUTOR/VIEWER), not owner-only.
+    const access = await resolvePropertyAccess(userId, propertyId);
+    if (!access) {
+      throw new Error('Property not found');
+    }
+
+    const property = await prisma.property.findUnique({
+      where: { id: propertyId },
       select: {
         city: true,
         state: true,
@@ -208,11 +230,11 @@ export class SellerPrepService {
         propertyType: true,
       },
     });
-  
+
     if (!property) {
       throw new Error('Property not found');
     }
-  
+
     const provider = resolveCompsProvider({
       city: property.city,
       state: property.state,

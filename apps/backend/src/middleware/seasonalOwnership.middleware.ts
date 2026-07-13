@@ -1,6 +1,7 @@
 import { NextFunction, Response } from 'express';
 import { prisma } from '../lib/prisma';
 import { AuthRequest } from '../types/auth.types';
+import { resolvePropertyAccess } from '../services/propertyAccess.service';
 
 export const requireSeasonalChecklistOwnership = async (
   req: AuthRequest,
@@ -20,19 +21,19 @@ export const requireSeasonalChecklistOwnership = async (
     return;
   }
 
-  const checklist = await prisma.seasonalChecklist.findFirst({
-    where: {
-      id: checklistId,
-      property: {
-        homeownerProfile: {
-          userId,
-        },
-      },
-    },
-    select: { id: true },
+  const checklist = await prisma.seasonalChecklist.findUnique({
+    where: { id: checklistId },
+    select: { propertyId: true },
   });
 
   if (!checklist) {
+    res.status(404).json({ success: false, message: 'Seasonal checklist not found' });
+    return;
+  }
+
+  // Verify access: owner OR household collaborator (CONTRIBUTOR/VIEWER), not owner-only.
+  const access = await resolvePropertyAccess(userId, checklist.propertyId);
+  if (!access) {
     res.status(404).json({ success: false, message: 'Seasonal checklist not found' });
     return;
   }
@@ -58,19 +59,19 @@ export const requireSeasonalItemOwnership = async (
     return;
   }
 
-  const item = await prisma.seasonalChecklistItem.findFirst({
-    where: {
-      id: itemId,
-      property: {
-        homeownerProfile: {
-          userId,
-        },
-      },
-    },
-    select: { id: true },
+  const item = await prisma.seasonalChecklistItem.findUnique({
+    where: { id: itemId },
+    select: { propertyId: true },
   });
 
   if (!item) {
+    res.status(404).json({ success: false, message: 'Seasonal checklist item not found' });
+    return;
+  }
+
+  // Verify access: owner OR household collaborator (CONTRIBUTOR/VIEWER), not owner-only.
+  const access = await resolvePropertyAccess(userId, item.propertyId);
+  if (!access) {
     res.status(404).json({ success: false, message: 'Seasonal checklist item not found' });
     return;
   }

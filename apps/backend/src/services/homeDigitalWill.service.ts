@@ -5,9 +5,11 @@ import {
   HomeDigitalWillTrustedContact,
   HomeDigitalWillAccessLevel,
   HomeDigitalWillSectionType,
+  HouseholdRole,
 } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { APIError } from '../middleware/error.middleware';
+import { resolvePropertyAccess, ROLE_RANK } from './propertyAccess.service';
 import {
   CreateDigitalWillBody,
   UpdateDigitalWillBody,
@@ -209,81 +211,71 @@ function sortEntries(entries: HomeDigitalWillEntry[]): HomeDigitalWillEntry[] {
 export class HomeDigitalWillService {
   // ─── Authorization helpers ───────────────────────────────────────────────
 
-  /** Resolve a digital will and assert the requesting user owns the property. */
-  private async assertWillOwnership(willId: string, userId: string) {
-    const will = await prisma.homeDigitalWill.findFirst({
-      where: { id: willId },
-      include: {
-        property: {
-          select: { homeownerProfile: { select: { userId: true } } },
-        },
-      },
-    });
-    if (!will || will.property.homeownerProfile.userId !== userId) {
+  /**
+   * Resolve a digital will and assert the requesting user has property access
+   * (owner OR household collaborator), at or above minRole. Not owner-only.
+   */
+  private async assertWillOwnership(willId: string, userId: string, minRole: HouseholdRole = 'VIEWER') {
+    const will = await prisma.homeDigitalWill.findUnique({ where: { id: willId } });
+    if (!will) {
+      throw new APIError('Digital will not found', 404, 'NOT_FOUND');
+    }
+    const access = await resolvePropertyAccess(userId, will.propertyId);
+    if (!access || ROLE_RANK[access.role] < ROLE_RANK[minRole]) {
       throw new APIError('Digital will not found', 404, 'NOT_FOUND');
     }
     return will;
   }
 
-  /** Assert a section belongs to a will the user owns, returns the section. */
-  private async assertSectionOwnership(sectionId: string, userId: string) {
-    const section = await prisma.homeDigitalWillSection.findFirst({
+  /** Assert a section belongs to a will the user has property access to (owner OR household collaborator), returns the section. */
+  private async assertSectionOwnership(sectionId: string, userId: string, minRole: HouseholdRole = 'VIEWER') {
+    const section = await prisma.homeDigitalWillSection.findUnique({
       where: { id: sectionId },
-      include: {
-        digitalWill: {
-          include: {
-            property: {
-              select: { homeownerProfile: { select: { userId: true } } },
-            },
-          },
-        },
-      },
+      include: { digitalWill: true },
     });
-    if (!section || section.digitalWill.property.homeownerProfile.userId !== userId) {
+    if (!section) {
+      throw new APIError('Section not found', 404, 'NOT_FOUND');
+    }
+    const access = await resolvePropertyAccess(userId, section.digitalWill.propertyId);
+    if (!access || ROLE_RANK[access.role] < ROLE_RANK[minRole]) {
       throw new APIError('Section not found', 404, 'NOT_FOUND');
     }
     return section;
   }
 
-  /** Assert an entry belongs to a section in a will the user owns. */
-  private async assertEntryOwnership(entryId: string, userId: string) {
-    const entry = await prisma.homeDigitalWillEntry.findFirst({
+  /** Assert an entry belongs to a section in a will the user has property access to (owner OR household collaborator). */
+  private async assertEntryOwnership(entryId: string, userId: string, minRole: HouseholdRole = 'VIEWER') {
+    const entry = await prisma.homeDigitalWillEntry.findUnique({
       where: { id: entryId },
       include: {
-        section: {
-          include: {
-            digitalWill: {
-              include: {
-                property: {
-                  select: { homeownerProfile: { select: { userId: true } } },
-                },
-              },
-            },
-          },
-        },
+        section: { include: { digitalWill: true } },
       },
     });
-    if (!entry || entry.section.digitalWill.property.homeownerProfile.userId !== userId) {
+    if (!entry) {
+      throw new APIError('Entry not found', 404, 'NOT_FOUND');
+    }
+    const access = await resolvePropertyAccess(userId, entry.section.digitalWill.propertyId);
+    if (!access || ROLE_RANK[access.role] < ROLE_RANK[minRole]) {
       throw new APIError('Entry not found', 404, 'NOT_FOUND');
     }
     return entry;
   }
 
-  /** Assert a trusted contact belongs to a will the user owns. */
-  private async assertContactOwnership(contactId: string, userId: string) {
-    const contact = await prisma.homeDigitalWillTrustedContact.findFirst({
+  /**
+   * Assert a trusted contact belongs to a will the user has property access to.
+   * Trusted contacts control who gets emergency/full access to the will, so
+   * mutations require OWNER by default (sensitive access-grant management).
+   */
+  private async assertContactOwnership(contactId: string, userId: string, minRole: HouseholdRole = 'VIEWER') {
+    const contact = await prisma.homeDigitalWillTrustedContact.findUnique({
       where: { id: contactId },
-      include: {
-        digitalWill: {
-          include: {
-            property: {
-              select: { homeownerProfile: { select: { userId: true } } },
-            },
-          },
-        },
-      },
+      include: { digitalWill: true },
     });
-    if (!contact || contact.digitalWill.property.homeownerProfile.userId !== userId) {
+    if (!contact) {
+      throw new APIError('Trusted contact not found', 404, 'NOT_FOUND');
+    }
+    const access = await resolvePropertyAccess(userId, contact.digitalWill.propertyId);
+    if (!access || ROLE_RANK[access.role] < ROLE_RANK[minRole]) {
       throw new APIError('Trusted contact not found', 404, 'NOT_FOUND');
     }
     return contact;
@@ -396,7 +388,7 @@ export class HomeDigitalWillService {
   }
 
   async updateWill(willId: string, userId: string, body: UpdateDigitalWillBody): Promise<DigitalWillDTO> {
-    await this.assertWillOwnership(willId, userId);
+    await this.assertWillOwnership(willId, userId, 'CONTRIBUTOR');
 
     const data: Record<string, unknown> = {};
     if (body.title !== undefined) data.title = body.title;
@@ -426,7 +418,7 @@ export class HomeDigitalWillService {
   }
 
   async createSection(willId: string, userId: string, body: CreateSectionBody): Promise<SectionDTO> {
-    await this.assertWillOwnership(willId, userId);
+    await this.assertWillOwnership(willId, userId, 'CONTRIBUTOR');
 
     // Enforce one section per type per will
     const existing = await prisma.homeDigitalWillSection.findUnique({
@@ -456,7 +448,7 @@ export class HomeDigitalWillService {
   }
 
   async updateSection(sectionId: string, userId: string, body: UpdateSectionBody): Promise<SectionDTO> {
-    await this.assertSectionOwnership(sectionId, userId);
+    await this.assertSectionOwnership(sectionId, userId, 'CONTRIBUTOR');
 
     const data: Record<string, unknown> = {};
     if (body.title !== undefined) data.title = body.title;
@@ -474,12 +466,12 @@ export class HomeDigitalWillService {
   }
 
   async deleteSection(sectionId: string, userId: string): Promise<void> {
-    await this.assertSectionOwnership(sectionId, userId);
+    await this.assertSectionOwnership(sectionId, userId, 'CONTRIBUTOR');
     await prisma.homeDigitalWillSection.delete({ where: { id: sectionId } });
   }
 
   async reorderSections(willId: string, userId: string, body: ReorderBody): Promise<SectionDTO[]> {
-    await this.assertWillOwnership(willId, userId);
+    await this.assertWillOwnership(willId, userId, 'CONTRIBUTOR');
 
     const { orderedIds } = body;
 
@@ -516,7 +508,7 @@ export class HomeDigitalWillService {
   }
 
   async createEntry(sectionId: string, userId: string, body: CreateEntryBody): Promise<EntryDTO> {
-    await this.assertSectionOwnership(sectionId, userId);
+    await this.assertSectionOwnership(sectionId, userId, 'CONTRIBUTOR');
 
     const entry = await prisma.homeDigitalWillEntry.create({
       data: {
@@ -538,7 +530,7 @@ export class HomeDigitalWillService {
   }
 
   async updateEntry(entryId: string, userId: string, body: UpdateEntryBody): Promise<EntryDTO> {
-    await this.assertEntryOwnership(entryId, userId);
+    await this.assertEntryOwnership(entryId, userId, 'CONTRIBUTOR');
 
     const data: Record<string, unknown> = {};
     if (body.entryType !== undefined) data.entryType = body.entryType;
@@ -557,12 +549,12 @@ export class HomeDigitalWillService {
   }
 
   async deleteEntry(entryId: string, userId: string): Promise<void> {
-    await this.assertEntryOwnership(entryId, userId);
+    await this.assertEntryOwnership(entryId, userId, 'CONTRIBUTOR');
     await prisma.homeDigitalWillEntry.delete({ where: { id: entryId } });
   }
 
   async reorderEntries(sectionId: string, userId: string, body: ReorderBody): Promise<EntryDTO[]> {
-    await this.assertSectionOwnership(sectionId, userId);
+    await this.assertSectionOwnership(sectionId, userId, 'CONTRIBUTOR');
 
     const { orderedIds } = body;
 
@@ -604,7 +596,7 @@ export class HomeDigitalWillService {
     userId: string,
     body: CreateTrustedContactBody,
   ): Promise<TrustedContactDTO> {
-    await this.assertWillOwnership(willId, userId);
+    await this.assertWillOwnership(willId, userId, 'OWNER');
 
     const isPrimary = body.isPrimary ?? false;
 
@@ -638,7 +630,7 @@ export class HomeDigitalWillService {
     userId: string,
     body: UpdateTrustedContactBody,
   ): Promise<TrustedContactDTO> {
-    const existing = await this.assertContactOwnership(contactId, userId);
+    const existing = await this.assertContactOwnership(contactId, userId, 'OWNER');
 
     const contact = await prisma.$transaction(async (tx) => {
       if (body.isPrimary === true) {
@@ -665,7 +657,7 @@ export class HomeDigitalWillService {
   }
 
   async deleteTrustedContact(contactId: string, userId: string): Promise<void> {
-    await this.assertContactOwnership(contactId, userId);
+    await this.assertContactOwnership(contactId, userId, 'OWNER');
     await prisma.homeDigitalWillTrustedContact.delete({ where: { id: contactId } });
   }
 }
