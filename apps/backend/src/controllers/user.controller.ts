@@ -8,6 +8,7 @@ import {
   cascadeDeleteOwnedProperties,
   HouseholdOwnershipBlockedError,
 } from '../services/accountDeletionCascade.service';
+import { eraseHouseholdDataForUser } from '../modules/personalization/application/eraseHouseholdDataForUser.usecase';
 
 const updateProfileSchema = z.object({
   firstName: z.string().min(1).optional(),
@@ -228,6 +229,12 @@ export const deleteAccount = async (req: AuthRequest, res: Response) => {
       // Hard-deletes owned properties + their domain data, unless another
       // household member is still on one of them (throws instead, below).
       await cascadeDeleteOwnedProperties(tx, userId);
+
+      // Deletes personalization Household rows this user owns, cascading the
+      // composition tables (HouseholdMemberSummary/PetProfile/HouseholdGoal/
+      // HouseholdPreference/LifestyleAttribute/ProfileAnswer) — anonymizing
+      // the User row below does not do this on its own.
+      await eraseHouseholdDataForUser(tx, userId);
 
       await deactivateProviderFootprint(tx, userId);
 

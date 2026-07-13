@@ -12926,6 +12926,7 @@ model Household {
   traitSnapshots TraitSnapshot[]
   recommendations PersonalizedRecommendation[]
   recommendationSuppressions RecommendationSuppression[]
+  profileAnswers ProfileAnswer[]
 
   @@index([ownerUserId, status])
   @@map("personalization_households")
@@ -13084,6 +13085,83 @@ model LifestyleAttribute {
   @@unique([householdId, propertyId, key])
   @@index([householdId, status])
   @@map("personalization_lifestyle_attributes")
+}
+
+// ============================================================================
+// PERSONALIZATION ENGINE — PROGRESSIVE PROFILING
+// ============================================================================
+// Versioned question catalog + answer/skip/snooze events. Real writes to the
+// five composition tables above (HouseholdMemberSummary/PetProfile/
+// HouseholdGoal/HouseholdPreference/LifestyleAttribute) only ever happen
+// through an ANSWERED ProfileAnswer — see
+// application/recordProfileAnswer.usecase.ts. No sensitive trait
+// materialization (DerivedTrait) reads this data yet — these 9 traits are
+// household-scoped, and DerivedTrait.propertyId is a required column (a
+// deliberate Phase 1 step 3 simplification for property-only traits);
+// revisiting that is separate, later work once a real rule needs it.
+
+// One versioned question definition. targetKey is used for the three
+// key-value composition tables (HouseholdGoal.goalCode/
+// HouseholdPreference.key/LifestyleAttribute.key) and left null for the two
+// structured-answer tables (HouseholdMemberSummary, PetProfile), whose
+// answerJson shape maps to multiple fields instead of one key.
+model ProfileQuestion {
+  id       String @id @default(uuid())
+  code     String
+  version  Int
+  status   String @default("DRAFT") // DRAFT | ACTIVE | RETIRED
+
+  prompt      String
+  whyAsked    String
+  privacyNote String
+
+  targetTable String // HOUSEHOLD_MEMBER_SUMMARY | PET_PROFILE | HOUSEHOLD_GOAL | HOUSEHOLD_PREFERENCE | LIFESTYLE_ATTRIBUTE
+  targetKey   String?
+  answerSchema Json
+
+  placementContexts String[] @default([])
+  valueScore        Float
+  effortScore       Float
+  maxImpressions    Int      @default(3)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  answers ProfileAnswer[]
+
+  @@unique([code, version])
+  @@index([status])
+  @@map("personalization_profile_questions")
+}
+
+// One asked/answered/skipped/snoozed event. Idempotent on idempotencyKey
+// (matches 08-personalization-frd.md UC-10's "idempotency key on repeated
+// event"). answerJson is only set when action = ANSWERED; nextEligibleAt is
+// the precomputed skip(90d)/later(14d) cooldown expiry so eligibility is a
+// plain filter, not per-row date math (see domain/profiling.ts).
+model ProfileAnswer {
+  id             String @id @default(uuid())
+  questionId     String
+  householdId    String
+  idempotencyKey String @unique
+
+  action     String // ANSWERED | SKIPPED | SNOOZED
+  answerJson Json?
+
+  askedAt      DateTime  @default(now())
+  answeredAt   DateTime?
+  skippedAt    DateTime?
+  snoozedAt    DateTime?
+  nextEligibleAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  question  ProfileQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  household Household       @relation(fields: [householdId], references: [id], onDelete: Cascade)
+
+  @@index([householdId, nextEligibleAt])
+  @@index([questionId, householdId])
+  @@map("personalization_profile_answers")
 }
 
 // Current effective trait value. This slice only ever writes property-scoped
