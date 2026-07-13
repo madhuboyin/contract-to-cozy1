@@ -46,11 +46,10 @@ function InlineInsightQuestions({
     setSavingId(question.id);
     try {
       if (question.field === 'hvacFilterLastCompletedDate') {
-        const response = await api.post<{ success: boolean; message?: string }>(
+        await api.post<{ taskId: string; completedDate: string }>(
           `/api/environment/report/${propertyId}/maintenance-context`,
           { field: question.field, completedDate: value }
         );
-        if (!response.data.success) throw new Error(response.data.message || 'Unable to save maintenance date');
       } else {
         const response = await api.updateProperty(
           propertyId,
