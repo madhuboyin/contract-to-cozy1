@@ -57,3 +57,48 @@ export function deriveHvacFilterReplacementOverdue(
 
   return { known: true, value: daysSinceServiced >= HVAC_FILTER_OVERDUE_THRESHOLD_DAYS };
 }
+
+// ─── Phase 1, migration step 3: two more non-sensitive property traits ────
+// (see docs/personalization/adr-0002-phase1-foundation-migration-steps-1-3.md)
+// Both derived from fields already on Property — no household/personal data.
+
+export interface PropertySafetyFact {
+  hasSmokeDetectors: boolean | null;
+}
+
+/**
+ * Derives whether the property is missing smoke detectors, from
+ * Property.hasSmokeDetectors directly. `null` (never confirmed either way)
+ * is UNKNOWN, not FALSE — an unconfirmed property must not be treated as
+ * "definitely has detectors."
+ */
+export function deriveSmokeDetectorMissing(property: PropertySafetyFact): TraitReading {
+  if (property.hasSmokeDetectors === null || property.hasSmokeDetectors === undefined) {
+    return { known: false };
+  }
+  return { known: true, value: property.hasSmokeDetectors === false };
+}
+
+export const ROOF_REPLACEMENT_OVERDUE_THRESHOLD_YEARS = 25;
+
+export interface PropertyRoofFact {
+  roofReplacementYear: number | null;
+}
+
+/**
+ * Derives whether the roof is likely overdue for replacement, from
+ * Property.roofReplacementYear against a fixed threshold. This is a
+ * deliberate simplification — real per-material lifespan modeling (asphalt
+ * shingle vs. metal vs. tile, climate exposure, etc.) is out of scope for
+ * this proof-adjacent slice; `roofReplacementYear` unset is UNKNOWN.
+ */
+export function deriveRoofReplacementOverdue(
+  property: PropertyRoofFact,
+  now: Date = new Date(),
+): TraitReading {
+  if (property.roofReplacementYear === null || property.roofReplacementYear === undefined) {
+    return { known: false };
+  }
+  const age = now.getUTCFullYear() - property.roofReplacementYear;
+  return { known: true, value: age >= ROOF_REPLACEMENT_OVERDUE_THRESHOLD_YEARS };
+}

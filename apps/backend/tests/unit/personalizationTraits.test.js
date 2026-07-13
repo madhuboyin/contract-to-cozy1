@@ -6,6 +6,9 @@ require('ts-node/register');
 const {
   deriveHvacFilterReplacementOverdue,
   HVAC_FILTER_OVERDUE_THRESHOLD_DAYS,
+  deriveSmokeDetectorMissing,
+  deriveRoofReplacementOverdue,
+  ROOF_REPLACEMENT_OVERDUE_THRESHOLD_YEARS,
 } = require('../../src/modules/personalization/domain/traits.ts');
 
 const NOW = new Date('2026-07-13T00:00:00.000Z');
@@ -63,4 +66,33 @@ test('uses the most recently serviced HVAC asset when multiple exist', () => {
     NOW,
   );
   assert.deepEqual(reading, { known: true, value: false });
+});
+
+test('deriveSmokeDetectorMissing: UNKNOWN when never confirmed either way', () => {
+  assert.deepEqual(deriveSmokeDetectorMissing({ hasSmokeDetectors: null }), { known: false });
+});
+
+test('deriveSmokeDetectorMissing: known TRUE (missing) when confirmed absent', () => {
+  assert.deepEqual(deriveSmokeDetectorMissing({ hasSmokeDetectors: false }), { known: true, value: true });
+});
+
+test('deriveSmokeDetectorMissing: known FALSE (not missing) when confirmed present', () => {
+  assert.deepEqual(deriveSmokeDetectorMissing({ hasSmokeDetectors: true }), { known: true, value: false });
+});
+
+test('deriveRoofReplacementOverdue: UNKNOWN when roofReplacementYear is unset', () => {
+  const reading = deriveRoofReplacementOverdue({ roofReplacementYear: null }, NOW);
+  assert.deepEqual(reading, { known: false });
+});
+
+test('deriveRoofReplacementOverdue: known FALSE when younger than the threshold', () => {
+  const roofReplacementYear = NOW.getUTCFullYear() - (ROOF_REPLACEMENT_OVERDUE_THRESHOLD_YEARS - 1);
+  const reading = deriveRoofReplacementOverdue({ roofReplacementYear }, NOW);
+  assert.deepEqual(reading, { known: true, value: false });
+});
+
+test('deriveRoofReplacementOverdue: known TRUE when at or beyond the threshold', () => {
+  const roofReplacementYear = NOW.getUTCFullYear() - ROOF_REPLACEMENT_OVERDUE_THRESHOLD_YEARS;
+  const reading = deriveRoofReplacementOverdue({ roofReplacementYear }, NOW);
+  assert.deepEqual(reading, { known: true, value: true });
 });

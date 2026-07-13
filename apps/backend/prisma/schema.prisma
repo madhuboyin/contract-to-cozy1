@@ -1457,6 +1457,11 @@ model User {
   // Material Spec Registry
   materialSpecExports MaterialSpecExport[]
 
+  // Personalization engine — Household profile aggregate (Phase 1
+  // migration steps 1-3; see docs/personalization/adr-0002). Distinct from
+  // HouseholdMember below, which is the property-collaborator ACL.
+  personalizationHouseholds Household[]
+
   // Household Collaboration
   householdMemberships             HouseholdMember[]
   householdInvitesSent             HouseholdInvite[]             @relation("HouseholdInviteSentBy")
@@ -2188,6 +2193,16 @@ model Property {
   // Personalization engine (Phase 0 thin proof — see
   // docs/personalization/adr-0001-personalization-module-foundation.md)
   personalizationEvaluationRuns PersonalizationEvaluationRun[]
+
+  // Personalization engine — Phase 1 household-profile/trait tables (see
+  // docs/personalization/adr-0002-phase1-foundation-migration-steps-1-3.md)
+  personalizationHouseholdLinks     HouseholdProperty[]
+  personalizationPetProfiles        PetProfile[]
+  personalizationGoals              HouseholdGoal[]
+  personalizationPreferences        HouseholdPreference[]
+  personalizationLifestyleAttributes LifestyleAttribute[]
+  personalizationDerivedTraits      DerivedTrait[]
+  personalizationTraitSnapshots     TraitSnapshot[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -12855,4 +12870,242 @@ model PersonalizationEvaluationRun {
   @@index([definitionId, status])
   @@index([startedAt])
   @@map("personalization_evaluation_runs")
+}
+
+// ============================================================================
+// PERSONALIZATION ENGINE — PHASE 1 HOUSEHOLD PROFILE (migration steps 1-3)
+// ============================================================================
+// Additive-only, per docs/personalization/adr-0002-phase1-foundation-migration-steps-1-3.md.
+// Every table below is created empty by this change — no code in this
+// commit writes composition/preference/lifestyle data to any of them except
+// the backfill script (Household/HouseholdProperty only, source='BACKFILL').
+// Collecting real household data requires a UI/consent flow that does not
+// exist yet — that's a separate, later, explicitly-deferred decision.
+
+// Household is a profile/consent aggregate, distinct from HouseholdMember
+// (the existing property-collaborator ACL). One user can own multiple
+// households; a household can link multiple properties via HouseholdProperty.
+model Household {
+  id             String    @id @default(uuid())
+  ownerUserId    String
+  displayName    String?
+  status         String    @default("ACTIVE") // ACTIVE | ARCHIVED
+  // Records provenance of this row — 'BACKFILL' for the migration-step-2
+  // script, 'USER_CREATED' for a future real onboarding flow.
+  source         String    @default("USER_CREATED")
+  consentVersion String?
+  consentedAt    DateTime?
+  deletedAt      DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  owner      User                @relation(fields: [ownerUserId], references: [id])
+  properties HouseholdProperty[]
+  members    HouseholdMemberSummary[]
+  pets       PetProfile[]
+  goals      HouseholdGoal[]
+  preferences HouseholdPreference[]
+  lifestyleAttributes LifestyleAttribute[]
+  derivedTraits DerivedTrait[]
+  traitSnapshots TraitSnapshot[]
+
+  @@index([ownerUserId, status])
+  @@map("personalization_households")
+}
+
+// Household <-> Property link with occupancy type and effective dates.
+model HouseholdProperty {
+  id            String    @id @default(uuid())
+  householdId   String
+  propertyId    String
+  occupancyType String    @default("PRIMARY") // PRIMARY | SECONDARY | RENTAL | VACANT
+  effectiveFrom DateTime  @default(now())
+  effectiveTo   DateTime?
+
+  household Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  property  Property  @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@unique([householdId, propertyId, effectiveFrom])
+  @@index([propertyId, effectiveTo])
+  @@map("personalization_household_properties")
+}
+
+// Non-account composition bands (e.g. "2 adults, 1 child (toddler)") — no
+// names, no birthdates, no medical data. Sensitive privacy class per
+// 04-target-architecture.md's trait registry; empty until a real UI collects it.
+// Simplification: uniqueness below is a plain (household, type, lifeStage)
+// constraint, not "unique while active" (a true partial-unique-index would
+// need raw SQL this project's schema-only-edit convention avoids); a
+// REMOVED row must be hard-deleted rather than soft-tombstoned to free the
+// slot for re-entry, which also matches this table's "hard-delete on
+// request" retention note in 05-data-model.md.
+model HouseholdMemberSummary {
+  id          String   @id @default(uuid())
+  householdId String
+  type        String // ADULT | CHILD | SENIOR
+  lifeStage   String? // e.g. INFANT | TODDLER | EARLY_SCHOOL | TEEN (CHILD only)
+  count       Int      @default(1)
+  status      String   @default("ACTIVE") // ACTIVE | REMOVED
+  source      String   @default("USER_INPUT")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  household Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+
+  @@unique([householdId, type, lifeStage])
+  @@index([householdId, status])
+  @@map("personalization_household_member_summaries")
+}
+
+// Pet composition — type/count/size/shedding/access/fence dependence only.
+// No feeding, medication, veterinary, training, or social data (see
+// 04-target-architecture.md's "Pet intelligence is limited to..." scope note).
+model PetProfile {
+  id          String  @id @default(uuid())
+  householdId String
+  propertyId  String? // optional property applicability
+
+  petType            String  // DOG | CAT | OTHER
+  count              Int     @default(1)
+  sizeBand           String? // SMALL | MEDIUM | LARGE
+  sheddingLevel      String? // LOW | MEDIUM | HIGH
+  indoorOutdoor      String? // INDOOR | OUTDOOR | BOTH
+  yardFenceDependent Boolean?
+  status             String  @default("ACTIVE") // ACTIVE | REMOVED
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  household Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  property  Property? @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+
+  @@index([householdId, status, petType])
+  @@map("personalization_pet_profiles")
+}
+
+// Typed household/property goals (e.g. SAFETY, COST, AGING_IN_PLACE).
+model HouseholdGoal {
+  id          String  @id @default(uuid())
+  householdId String
+  propertyId  String?
+  goalCode    String
+  priority    Int     @default(0)
+  horizon     String? // NOW | THIS_YEAR | SOMEDAY
+  source      String  @default("USER_INPUT")
+  status      String  @default("ACTIVE") // ACTIVE | RETIRED
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  household Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  property  Property? @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+
+  @@unique([householdId, propertyId, goalCode])
+  @@index([householdId, status])
+  @@map("personalization_household_goals")
+}
+
+// Typed budget/service/repair/channel/category preference values.
+// Sensitive where financial (budget posture) per 05-data-model.md.
+model HouseholdPreference {
+  id          String @id @default(uuid())
+  householdId String
+  propertyId  String?
+  scope       String @default("HOUSEHOLD") // HOUSEHOLD | PROPERTY
+  key         String // e.g. BUDGET_POSTURE | REPAIR_POSTURE | CHANNEL_PREFERENCE
+  valueJson   Json
+  status      String @default("ACTIVE")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  household Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  property  Property? @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+
+  @@unique([householdId, propertyId, key])
+  @@index([householdId, status])
+  @@map("personalization_household_preferences")
+}
+
+// Sparse typed lifestyle facts (e.g. WFH days band, travel frequency).
+// Exactly one of the value* columns should be populated per row — this is
+// an application-level invariant (evaluateHvacFilterProof.usecase.ts-style
+// callers must enforce it); a DB CHECK constraint would need a raw SQL
+// migration, which this project's schema-only-edit convention avoids.
+model LifestyleAttribute {
+  id          String @id @default(uuid())
+  householdId String
+  propertyId  String?
+  key         String // e.g. WORKS_FROM_HOME_DAYS_BAND | TRAVEL_FREQUENCY
+  source      String @default("EXPLICIT") // EXPLICIT | INFERRED
+  confidence  Float  @default(1.0)
+
+  valueBoolean Boolean?
+  valueNumber  Float?
+  valueText    String?
+  valueCode    String?
+  valueDate    DateTime?
+  valueJson    Json?
+
+  status String @default("ACTIVE")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  household Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  property  Property? @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+
+  @@unique([householdId, propertyId, key])
+  @@index([householdId, status])
+  @@map("personalization_lifestyle_attributes")
+}
+
+// Current effective trait value. This slice only ever writes property-scoped
+// rows (propertyId required, householdId optional/supplementary) — no
+// household-level trait derivation exists yet, so uniqueness is keyed on
+// (propertyId, traitKey) alone. A future household-level trait would need
+// its own uniqueness rule; not added here since nothing produces one yet.
+model DerivedTrait {
+  id                String    @id @default(uuid())
+  householdId       String?
+  propertyId        String
+  traitKey          String
+  valueJson         Json
+  source            String // EXPLICIT | INFERRED | DERIVED | EXTERNAL
+  confidence        Float     @default(1.0)
+  definitionVersion Int       @default(1)
+  evidenceJson      Json?
+  computedAt        DateTime  @default(now())
+  validUntil        DateTime?
+  overriddenAt      DateTime?
+
+  household Household? @relation(fields: [householdId], references: [id], onDelete: SetNull)
+  property  Property   @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@unique([propertyId, traitKey])
+  @@index([householdId, traitKey])
+  @@index([validUntil])
+  @@map("personalization_derived_traits")
+}
+
+// Immutable snapshot of the trait set used for one evaluation pass — bounded
+// history, not a full time series.
+model TraitSnapshot {
+  id            String @id @default(uuid())
+  householdId   String?
+  propertyId    String
+  traitsJson    Json // { [traitKey]: value } at snapshot time
+  traitsHash    String // hash of traitsJson, for reuse/dedup detection
+  schemaVersion Int    @default(1)
+
+  computedAt DateTime @default(now())
+
+  household Household? @relation(fields: [householdId], references: [id], onDelete: SetNull)
+  property  Property   @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId, computedAt])
+  @@index([traitsHash])
+  @@map("personalization_trait_snapshots")
 }
