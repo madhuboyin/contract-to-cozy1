@@ -9,7 +9,16 @@
 // (occupancyType='PRIMARY'). Does NOT touch HouseholdMemberSummary,
 // PetProfile, HouseholdGoal, HouseholdPreference, or LifestyleAttribute —
 // composition/preference data stays empty until a real UI collects it.
-// Idempotent: safe to re-run.
+//
+// Idempotent, including on repeat runs against an owner that already has a
+// household: re-linking is scoped to BACKFILL-sourced households only (not
+// USER_CREATED ones) and checked per (household, property) pair, so a
+// property added *after* the first backfill run still gets linked next time
+// this is re-run, matching seedHouseholdBackfill.sql's behavior. A
+// USER_CREATED household is left untouched — once a real onboarding flow
+// exists, whether a new property joins the same household context is a UI
+// decision (05-data-model.md: "UI asks whether secondary/rental properties
+// share the same household context"), not this script's to make.
 // Run: npx ts-node prisma/seedHouseholdBackfill.ts
 import { PrismaClient } from '@prisma/client';
 
@@ -28,30 +37,39 @@ async function main() {
   });
 
   let householdsCreated = 0;
-  let ownersSkipped = 0;
+  let ownersWithExistingHousehold = 0;
   let propertiesLinked = 0;
 
   for (const profile of homeownerProfiles) {
     const existing = await prisma.household.findFirst({
       where: { ownerUserId: profile.userId },
-      select: { id: true },
+      select: { id: true, source: true },
     });
+
+    let household: { id: string };
 
     if (existing) {
-      ownersSkipped++;
-      continue;
+      ownersWithExistingHousehold++;
+      if (existing.source !== 'BACKFILL') continue;
+      household = existing;
+    } else {
+      household = await prisma.household.create({
+        data: {
+          ownerUserId: profile.userId,
+          status: 'ACTIVE',
+          source: 'BACKFILL',
+        },
+      });
+      householdsCreated++;
     }
 
-    const household = await prisma.household.create({
-      data: {
-        ownerUserId: profile.userId,
-        status: 'ACTIVE',
-        source: 'BACKFILL',
-      },
-    });
-    householdsCreated++;
-
     for (const property of profile.properties) {
+      const alreadyLinked = await prisma.householdProperty.findFirst({
+        where: { householdId: household.id, propertyId: property.id },
+        select: { id: true },
+      });
+      if (alreadyLinked) continue;
+
       await prisma.householdProperty.create({
         data: {
           householdId: household.id,
@@ -67,8 +85,8 @@ async function main() {
   console.log('═══════════════════════════════════════════════');
   console.log('✅ Backfill Complete');
   console.log(`   Households created: ${householdsCreated}`);
-  console.log(`   Owners skipped (already had a household): ${ownersSkipped}`);
-  console.log(`   Properties linked: ${propertiesLinked}`);
+  console.log(`   Owners with a pre-existing household: ${ownersWithExistingHousehold}`);
+  console.log(`   Properties linked (new this run): ${propertiesLinked}`);
   console.log('   Composition (members/pets/goals/preferences) was NOT inferred.');
   console.log('═══════════════════════════════════════════════');
 }

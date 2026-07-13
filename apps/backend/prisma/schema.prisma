@@ -12892,6 +12892,14 @@ model PersonalizationEvaluationRun {
 // Household is a profile/consent aggregate, distinct from HouseholdMember
 // (the existing property-collaborator ACL). One user can own multiple
 // households; a household can link multiple properties via HouseholdProperty.
+// 05-data-model.md calls for "unique active owner/default", but a true
+// partial unique index (WHERE status = 'ACTIVE') isn't expressible via
+// Prisma's schema DSL without raw SQL, which this project's schema-only-edit
+// convention avoids (same tradeoff already made for HouseholdMemberSummary
+// below). Enforced at the application layer instead — today that means
+// seedHouseholdBackfill.ts's findFirst-before-create check, the only current
+// write path — until a second writer (e.g. a real onboarding flow) exists,
+// at which point this needs a real constraint.
 model Household {
   id             String    @id @default(uuid())
   ownerUserId    String
@@ -12924,6 +12932,13 @@ model Household {
 }
 
 // Household <-> Property link with occupancy type and effective dates.
+// The @@unique below keys on effectiveFrom, so it stops exact duplicate
+// inserts but does not prevent two concurrently-active (effectiveTo: null)
+// rows for the same (householdId, propertyId) — that would need a partial
+// unique index (WHERE "effectiveTo" IS NULL), which isn't expressible via
+// Prisma's schema DSL without raw SQL (same tradeoff documented on
+// Household above). Enforced at the application layer instead — today
+// that's seedHouseholdBackfill.ts's alreadyLinked check before create.
 model HouseholdProperty {
   id            String    @id @default(uuid())
   householdId   String

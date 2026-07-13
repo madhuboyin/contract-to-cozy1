@@ -9,10 +9,13 @@ const {
   HVAC_FILTER_PROOF_RULE_VERSION,
 } = require('../../src/modules/personalization/catalog/proofDefinition.ts');
 
-function createPrismaMock({ definition = null, homeAssets = [], property = { id: 'prop-1' } } = {}) {
+function createPrismaMock({ definition = null, homeAssets = [], property = { id: 'prop-1' }, killSwitchPaused = false } = {}) {
   const runs = [];
 
   const prismaMock = {
+    systemSetting: {
+      findUnique: async () => (killSwitchPaused ? { value: { paused: true } } : null),
+    },
     recommendationDefinition: {
       findUnique: async ({ where }) => {
         if (definition && where.code === definition.code) return definition;
@@ -69,6 +72,7 @@ function loadUseCase() {
   // the chain would keep writing into a previous test's mock instance
   // (learned the hard way earlier this session with personalizationAudit.service.ts).
   const paths = [
+    '../../src/services/personalizationKillSwitch.service.ts',
     '../../src/modules/personalization/infrastructure/evaluationRunRepository.ts',
     '../../src/modules/personalization/infrastructure/traitSnapshotRepository.ts',
     '../../src/modules/personalization/application/computePropertyTraitSnapshot.usecase.ts',
@@ -83,6 +87,16 @@ const REAL_DEFINITION = {
   id: 'def-1',
   rules: [{ version: HVAC_FILTER_PROOF_RULE_VERSION, ruleAst: HVAC_FILTER_PROOF_RULE_AST }],
 };
+
+test('returns PAUSED and persists nothing when the kill switch is engaged', async () => {
+  const { prismaMock, runs } = createPrismaMock({ definition: REAL_DEFINITION, killSwitchPaused: true });
+  installPrismaMock(prismaMock);
+  const { evaluateHvacFilterProofForProperty } = loadUseCase();
+
+  const result = await evaluateHvacFilterProofForProperty('prop-1', HVAC_FILTER_PROOF_DEFINITION_CODE);
+  assert.deepEqual(result, { status: 'PAUSED' });
+  assert.equal(runs.length, 0);
+});
 
 test('returns FAILED/DEFINITION_NOT_FOUND and persists nothing when the definition does not exist', async () => {
   const { prismaMock, runs } = createPrismaMock({ definition: null });

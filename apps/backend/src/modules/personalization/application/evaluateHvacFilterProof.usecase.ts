@@ -22,8 +22,9 @@ import { validateRuleAst } from '../domain/ruleAst';
 import { evaluateRule } from '../domain/evaluator';
 import { computePropertyTraitSnapshot } from './computePropertyTraitSnapshot.usecase';
 import { loadActiveRule, recordEvaluationRun } from '../infrastructure/evaluationRunRepository';
+import { isPersonalizationPaused } from '../../../services/personalizationKillSwitch.service';
 
-export type EvaluationRunStatus = 'COMPLETED' | 'FAILED';
+export type EvaluationRunStatus = 'COMPLETED' | 'FAILED' | 'PAUSED';
 export type EvaluationRunErrorCode = 'DEFINITION_NOT_FOUND' | 'INVALID_RULE_AST' | 'PROPERTY_NOT_FOUND';
 
 export interface EvaluateHvacFilterProofResult {
@@ -44,6 +45,13 @@ export async function evaluateHvacFilterProofForProperty(
   trigger = 'MANUAL',
 ): Promise<EvaluateHvacFilterProofResult> {
   const startedAt = new Date();
+
+  if (await isPersonalizationPaused()) {
+    // The kill switch's actual enforcement point (personalizationKillSwitch.service.ts) —
+    // no definitionId yet to attach a run row to, so nothing is persisted, same as the
+    // DEFINITION_NOT_FOUND case below.
+    return { status: 'PAUSED' };
+  }
 
   const loadedRule = await loadActiveRule(definitionCode);
   if (!loadedRule) {

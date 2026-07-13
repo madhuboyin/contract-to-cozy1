@@ -15,13 +15,16 @@ const REAL_DEFINITION = {
   rules: [{ version: HVAC_FILTER_PROOF_RULE_VERSION, ruleAst: HVAC_FILTER_PROOF_RULE_AST }],
 };
 
-function createPrismaMock({ definition = REAL_DEFINITION, homeAssets = [], property = { id: 'prop-1' } } = {}) {
+function createPrismaMock({ definition = REAL_DEFINITION, homeAssets = [], property = { id: 'prop-1' }, killSwitchPaused = false } = {}) {
   const runs = [];
   let recommendationRow = null;
   const recommendationUpserts = [];
   const explanationUpserts = [];
 
   const prismaMock = {
+    systemSetting: {
+      findUnique: async () => (killSwitchPaused ? { value: { paused: true } } : null),
+    },
     recommendationDefinition: {
       findUnique: async ({ where }) => {
         if (definition && where.code === definition.code) return definition;
@@ -85,6 +88,7 @@ function installPrismaMock(prismaMock) {
 
 function loadUseCase() {
   const paths = [
+    '../../src/services/personalizationKillSwitch.service.ts',
     '../../src/modules/personalization/infrastructure/evaluationRunRepository.ts',
     '../../src/modules/personalization/infrastructure/traitSnapshotRepository.ts',
     '../../src/modules/personalization/infrastructure/recommendationRepository.ts',
@@ -95,6 +99,18 @@ function loadUseCase() {
   for (const p of paths) delete require.cache[p];
   return require('../../src/modules/personalization/application/shadowEvaluateHvacFilterProof.usecase.ts');
 }
+
+test('kill switch engaged: no recommendation is created', async () => {
+  const homeAssets = [{ assetType: 'HVAC_FURNACE', lastServiced: new Date(Date.now() - 200 * 24 * 60 * 60 * 1000) }];
+  const { prismaMock, recommendationUpserts } = createPrismaMock({ homeAssets, killSwitchPaused: true });
+  installPrismaMock(prismaMock);
+  const { shadowEvaluateHvacFilterProofForProperty } = loadUseCase();
+
+  const result = await shadowEvaluateHvacFilterProofForProperty('prop-1');
+  assert.equal(result.evaluation.status, 'PAUSED');
+  assert.equal(result.recommendationCreated, false);
+  assert.equal(recommendationUpserts.length, 0);
+});
 
 test('eligible (TRUE): creates a PersonalizedRecommendation + RecommendationExplanation', async () => {
   const homeAssets = [{ assetType: 'HVAC_FURNACE', lastServiced: new Date(Date.now() - 200 * 24 * 60 * 60 * 1000) }];

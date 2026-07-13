@@ -17,6 +17,9 @@ const REAL_DEFINITION = {
 
 function createPrismaMock({ homeAssets = [], dailyPulseAction = null } = {}) {
   const prismaMock = {
+    systemSetting: {
+      findUnique: async () => null,
+    },
     recommendationDefinition: {
       findUnique: async ({ where }) => (where.code === REAL_DEFINITION.code ? REAL_DEFINITION : null),
     },
@@ -64,6 +67,7 @@ function installPrismaMock(prismaMock) {
 
 function loadUseCase() {
   const paths = [
+    '../../src/services/personalizationKillSwitch.service.ts',
     '../../src/modules/personalization/infrastructure/evaluationRunRepository.ts',
     '../../src/modules/personalization/infrastructure/traitSnapshotRepository.ts',
     '../../src/modules/personalization/infrastructure/recommendationRepository.ts',
