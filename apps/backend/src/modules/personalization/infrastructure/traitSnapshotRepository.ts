@@ -47,10 +47,12 @@ export interface DerivedTraitInput {
 }
 
 /**
- * Upserts one DerivedTrait row per known trait. Traits with known=false are
- * skipped — a DerivedTrait row's existence represents "this is currently
- * known," so an UNKNOWN trait is represented by the absence of a row, not a
- * row with a null/placeholder value.
+ * Upserts one DerivedTrait row per known trait. Traits with known=false have
+ * any existing row deleted (not just skipped) — a DerivedTrait row's
+ * existence represents "this is currently known," so an UNKNOWN trait is
+ * represented by the absence of a row. A trait can flip from known to
+ * unknown between computations (e.g. HVAC service history removed), and
+ * without the delete, that stale known-value row would persist forever.
  */
 export async function persistDerivedTraits(
   propertyId: string,
@@ -58,7 +60,10 @@ export async function persistDerivedTraits(
   traits: DerivedTraitInput[],
 ): Promise<void> {
   for (const trait of traits) {
-    if (!trait.known) continue;
+    if (!trait.known) {
+      await prisma.derivedTrait.deleteMany({ where: { propertyId, traitKey: trait.traitKey } });
+      continue;
+    }
 
     await prisma.derivedTrait.upsert({
       where: { propertyId_traitKey: { propertyId, traitKey: trait.traitKey } },
@@ -78,12 +83,26 @@ export async function persistDerivedTraits(
   }
 }
 
+/**
+ * Skips creating a new TraitSnapshot when the most recent one for this
+ * property already has the same traitsHash — nothing changed since last
+ * computation, so a fresh row would just be an unbounded duplicate. Compares
+ * against the single most recent snapshot only (not full dedup across all
+ * history), which is all "reuse the last computation" needs.
+ */
 export async function persistTraitSnapshot(
   propertyId: string,
   householdId: string | null,
   traitsJson: Record<string, unknown>,
   traitsHash: string,
 ): Promise<void> {
+  const latest = await prisma.traitSnapshot.findFirst({
+    where: { propertyId },
+    orderBy: { computedAt: 'desc' },
+    select: { traitsHash: true },
+  });
+  if (latest?.traitsHash === traitsHash) return;
+
   await prisma.traitSnapshot.create({
     data: {
       propertyId,

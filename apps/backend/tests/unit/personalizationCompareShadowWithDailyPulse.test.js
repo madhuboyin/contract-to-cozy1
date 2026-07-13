@@ -12,7 +12,8 @@ const {
 const REAL_DEFINITION = {
   code: HVAC_FILTER_PROOF_DEFINITION_CODE,
   id: 'def-1',
-  rules: [{ version: HVAC_FILTER_PROOF_RULE_VERSION, ruleAst: HVAC_FILTER_PROOF_RULE_AST }],
+  status: 'ACTIVE',
+  rules: [{ version: HVAC_FILTER_PROOF_RULE_VERSION, ruleAst: HVAC_FILTER_PROOF_RULE_AST, status: 'ACTIVE' }],
 };
 
 function createPrismaMock({ homeAssets = [], dailyPulseAction = null } = {}) {
@@ -34,15 +35,18 @@ function createPrismaMock({ homeAssets = [], dailyPulseAction = null } = {}) {
     },
     derivedTrait: {
       upsert: async () => ({}),
+      deleteMany: async () => ({ count: 0 }),
     },
     traitSnapshot: {
       create: async () => ({}),
+      findFirst: async () => null,
     },
     personalizationEvaluationRun: {
       create: async ({ data }) => ({ id: 'run-1', ...data }),
     },
     personalizedRecommendation: {
-      upsert: async ({ create }) => ({ id: 'rec-1', ...create }),
+      upsert: async ({ create }) => ({ id: 'rec-1', status: 'ACTIVE', ...create }),
+      updateMany: async () => ({ count: 0 }),
     },
     recommendationExplanation: {
       upsert: async ({ create }) => ({ id: 'exp-1', ...create }),
@@ -65,8 +69,10 @@ function installPrismaMock(prismaMock) {
   };
 }
 
-function loadUseCase() {
+function loadUseCase(personalizationShadowPct = '100') {
+  process.env.TOOL_ROLLOUT_PERSONALIZATION_SHADOW = personalizationShadowPct;
   const paths = [
+    '../../src/config/featureFlags.ts',
     '../../src/services/personalizationKillSwitch.service.ts',
     '../../src/modules/personalization/infrastructure/evaluationRunRepository.ts',
     '../../src/modules/personalization/infrastructure/traitSnapshotRepository.ts',
@@ -138,4 +144,16 @@ test('UNKNOWN personalization result is treated as not-eligible for comparison p
   assert.equal(result.personalizationResult, 'UNKNOWN');
   assert.equal(result.personalizationEligible, false);
   assert.equal(result.agreement, 'AGREE_BOTH_CLEAR');
+});
+
+test('SHADOW_DISABLED (rollout flag off) is treated as not-eligible for comparison purposes', async () => {
+  const { prismaMock } = createPrismaMock({ homeAssets: OVERDUE_HOME_ASSETS, dailyPulseAction: PENDING_DAILY_PULSE_ACTION });
+  installPrismaMock(prismaMock);
+  const { compareShadowWithDailyPulseForProperty } = loadUseCase('0');
+
+  const result = await compareShadowWithDailyPulseForProperty('prop-1');
+  assert.equal(result.personalizationResult, undefined);
+  assert.equal(result.personalizationEligible, false);
+  assert.equal(result.dailyPulseHasActiveAction, true);
+  assert.equal(result.agreement, 'DISAGREE_DAILY_PULSE_ONLY');
 });

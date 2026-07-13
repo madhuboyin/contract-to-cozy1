@@ -39,14 +39,18 @@ export async function compareShadowWithDailyPulseForProperty(propertyId: string)
   const shadow = await shadowEvaluateHvacFilterProofForProperty(propertyId);
   const dailyPulseState = await loadDailyPulseHvacFilterCheckState(propertyId);
 
-  const personalizationEligible = shadow.evaluation.eligible === true;
+  // shadow.evaluation is 'SHADOW_DISABLED' when the rollout flag excludes
+  // this property — treated as not-eligible for comparison, same as an
+  // UNKNOWN result, since neither gives us a real eligibility signal.
+  const personalizationResult = 'result' in shadow.evaluation ? shadow.evaluation.result : undefined;
+  const personalizationEligible = 'eligible' in shadow.evaluation && shadow.evaluation.eligible === true;
   const dailyPulseHasActiveAction = dailyPulseState.hasActiveHvacFilterCheckAction;
   const agreement = classifyAgreement(personalizationEligible, dailyPulseHasActiveAction);
 
   const diagnostic: ShadowDiagnosticResult = {
     propertyId,
     personalizationEligible,
-    personalizationResult: shadow.evaluation.result,
+    personalizationResult,
     dailyPulseHasActiveAction,
     agreement,
   };
@@ -57,7 +61,7 @@ export async function compareShadowWithDailyPulseForProperty(propertyId: string)
       definitionCode: 'hvac_filter_replacement_check_proof',
       propertyId,
       personalizationEligible,
-      personalizationResult: shadow.evaluation.result,
+      personalizationResult,
       dailyPulseHasActiveAction,
       agreement,
     },

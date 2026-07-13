@@ -12,14 +12,17 @@ const {
 const REAL_DEFINITION = {
   code: HVAC_FILTER_PROOF_DEFINITION_CODE,
   id: 'def-1',
-  rules: [{ version: HVAC_FILTER_PROOF_RULE_VERSION, ruleAst: HVAC_FILTER_PROOF_RULE_AST }],
+  status: 'ACTIVE',
+  rules: [{ version: HVAC_FILTER_PROOF_RULE_VERSION, ruleAst: HVAC_FILTER_PROOF_RULE_AST, status: 'ACTIVE' }],
 };
 
 function createPrismaMock({ definition = REAL_DEFINITION, homeAssets = [], property = { id: 'prop-1' }, killSwitchPaused = false } = {}) {
   const runs = [];
   let recommendationRow = null;
+  let currentHomeAssets = homeAssets;
   const recommendationUpserts = [];
   const explanationUpserts = [];
+  const recommendationExpires = [];
 
   const prismaMock = {
     systemSetting: {
@@ -34,7 +37,7 @@ function createPrismaMock({ definition = REAL_DEFINITION, homeAssets = [], prope
     property: {
       findUnique: async ({ where }) => {
         if (property && where.id === property.id) {
-          return { hasSmokeDetectors: null, roofReplacementYear: null, ...property, homeAssets };
+          return { hasSmokeDetectors: null, roofReplacementYear: null, ...property, homeAssets: currentHomeAssets };
         }
         return null;
       },
@@ -44,9 +47,11 @@ function createPrismaMock({ definition = REAL_DEFINITION, homeAssets = [], prope
     },
     derivedTrait: {
       upsert: async () => ({}),
+      deleteMany: async () => ({ count: 0 }),
     },
     traitSnapshot: {
       create: async () => ({}),
+      findFirst: async () => null,
     },
     personalizationEvaluationRun: {
       create: async ({ data }) => {
@@ -58,11 +63,19 @@ function createPrismaMock({ definition = REAL_DEFINITION, homeAssets = [], prope
       upsert: async ({ create, update }) => {
         recommendationUpserts.push({ create, update });
         if (!recommendationRow) {
-          recommendationRow = { id: 'rec-1', ...create };
+          recommendationRow = { id: 'rec-1', status: 'ACTIVE', ...create };
         } else {
           recommendationRow = { ...recommendationRow, ...update };
         }
         return recommendationRow;
+      },
+      updateMany: async ({ where, data }) => {
+        recommendationExpires.push({ where, data });
+        if (recommendationRow && recommendationRow.status === 'ACTIVE') {
+          recommendationRow = { ...recommendationRow, ...data };
+          return { count: 1 };
+        }
+        return { count: 0 };
       },
     },
     recommendationExplanation: {
@@ -73,7 +86,17 @@ function createPrismaMock({ definition = REAL_DEFINITION, homeAssets = [], prope
     },
   };
 
-  return { prismaMock, runs, recommendationUpserts, explanationUpserts, getRecommendationRow: () => recommendationRow };
+  return {
+    prismaMock,
+    runs,
+    recommendationUpserts,
+    explanationUpserts,
+    recommendationExpires,
+    getRecommendationRow: () => recommendationRow,
+    setHomeAssets: (next) => {
+      currentHomeAssets = next;
+    },
+  };
 }
 
 function installPrismaMock(prismaMock) {
@@ -86,8 +109,10 @@ function installPrismaMock(prismaMock) {
   };
 }
 
-function loadUseCase() {
+function loadUseCase(personalizationShadowPct = '100') {
+  process.env.TOOL_ROLLOUT_PERSONALIZATION_SHADOW = personalizationShadowPct;
   const paths = [
+    '../../src/config/featureFlags.ts',
     '../../src/services/personalizationKillSwitch.service.ts',
     '../../src/modules/personalization/infrastructure/evaluationRunRepository.ts',
     '../../src/modules/personalization/infrastructure/traitSnapshotRepository.ts',
@@ -99,6 +124,18 @@ function loadUseCase() {
   for (const p of paths) delete require.cache[p];
   return require('../../src/modules/personalization/application/shadowEvaluateHvacFilterProof.usecase.ts');
 }
+
+test('SHADOW_DISABLED: no recommendation is created when the rollout flag excludes this property', async () => {
+  const homeAssets = [{ assetType: 'HVAC_FURNACE', lastServiced: new Date(Date.now() - 200 * 24 * 60 * 60 * 1000) }];
+  const { prismaMock, recommendationUpserts, runs } = createPrismaMock({ homeAssets });
+  installPrismaMock(prismaMock);
+  const { shadowEvaluateHvacFilterProofForProperty } = loadUseCase('0');
+
+  const result = await shadowEvaluateHvacFilterProofForProperty('prop-1');
+  assert.deepEqual(result, { evaluation: { status: 'SHADOW_DISABLED' }, recommendationCreated: false });
+  assert.equal(recommendationUpserts.length, 0);
+  assert.equal(runs.length, 0);
+});
 
 test('kill switch engaged: no recommendation is created', async () => {
   const homeAssets = [{ assetType: 'HVAC_FURNACE', lastServiced: new Date(Date.now() - 200 * 24 * 60 * 60 * 1000) }];
@@ -177,4 +214,26 @@ test('idempotent: re-running an eligible evaluation upserts the same recommendat
   assert.equal(recommendationUpserts.length, 2);
   // Second call is an update (refresh), not a fresh create.
   assert.ok(recommendationUpserts[1].update.lastEvaluatedAt);
+});
+
+test('FALSE result expires a previously-ACTIVE recommendation', async () => {
+  const overdueAssets = [{ assetType: 'HVAC_FURNACE', lastServiced: new Date(Date.now() - 200 * 24 * 60 * 60 * 1000) }];
+  const recentAssets = [{ assetType: 'HVAC_FURNACE', lastServiced: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000) }];
+  const { prismaMock, recommendationExpires, setHomeAssets, getRecommendationRow } = createPrismaMock({
+    homeAssets: overdueAssets,
+  });
+  installPrismaMock(prismaMock);
+  const { shadowEvaluateHvacFilterProofForProperty } = loadUseCase();
+
+  const first = await shadowEvaluateHvacFilterProofForProperty('prop-1');
+  assert.equal(first.recommendationCreated, true);
+  assert.equal(getRecommendationRow().status, 'ACTIVE');
+
+  setHomeAssets(recentAssets);
+  const second = await shadowEvaluateHvacFilterProofForProperty('prop-1');
+
+  assert.equal(second.evaluation.result, 'FALSE');
+  assert.equal(second.recommendationCreated, false);
+  assert.equal(recommendationExpires.length, 1);
+  assert.equal(getRecommendationRow().status, 'EXPIRED');
 });

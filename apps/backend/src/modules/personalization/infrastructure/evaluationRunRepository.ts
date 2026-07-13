@@ -13,16 +13,47 @@ export interface LoadedRule {
   ruleAst: unknown;
 }
 
-/** Loads a definition's latest rule version by code. Null if the definition or any rule is missing. */
-export async function loadActiveRule(definitionCode: string): Promise<LoadedRule | null> {
+export type LoadActiveRuleOutcome =
+  | { rule: LoadedRule }
+  | { rule: null; reason: 'NOT_FOUND' | 'NOT_ACTIVE' };
+
+/**
+ * Loads a definition's latest ACTIVE rule version by code — the actual
+ * enforcement point for "DRAFT/PAUSED/RETIRED/out-of-window definitions and
+ * rules must never be evaluated" (PER-FR-004). Filtered in application code
+ * rather than via a Prisma relation `where` so this stays testable against
+ * plain object mocks that don't implement Prisma's query semantics.
+ *
+ * `reason: 'NOT_ACTIVE'` covers: definition.status !== 'ACTIVE', a
+ * per-definition pause (pausedAt set), outside the definition's
+ * effectiveFrom/effectiveTo window, or no rule with status: 'ACTIVE' exists
+ * for it (a DRAFT-only or fully-retired rule set).
+ */
+export async function loadActiveRule(definitionCode: string): Promise<LoadActiveRuleOutcome> {
+  const now = new Date();
   const definition = await prisma.recommendationDefinition.findUnique({
     where: { code: definitionCode },
-    include: { rules: { orderBy: { version: 'desc' }, take: 1 } },
+    include: { rules: { orderBy: { version: 'desc' } } },
   });
-  if (!definition || definition.rules.length === 0) return null;
+  if (!definition) return { rule: null, reason: 'NOT_FOUND' };
 
-  const rule = definition.rules[0];
-  return { definitionId: definition.id, ruleVersion: rule.version, ruleAst: rule.ruleAst };
+  const definitionIsActive =
+    definition.status === 'ACTIVE' &&
+    !definition.pausedAt &&
+    (!definition.effectiveFrom || definition.effectiveFrom <= now) &&
+    (!definition.effectiveTo || definition.effectiveTo >= now);
+
+  const activeRule = (definition.rules as Array<{ version: number; ruleAst: unknown; status: string }>).find(
+    (r) => r.status === 'ACTIVE',
+  );
+
+  if (!definitionIsActive || !activeRule) {
+    return { rule: null, reason: 'NOT_ACTIVE' };
+  }
+
+  return {
+    rule: { definitionId: definition.id, ruleVersion: activeRule.version, ruleAst: activeRule.ruleAst },
+  };
 }
 
 export interface RecordEvaluationRunParams {

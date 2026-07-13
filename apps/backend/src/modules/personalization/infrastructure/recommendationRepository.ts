@@ -78,3 +78,26 @@ export async function upsertShadowRecommendation(
 
   return { id: recommendation.id };
 }
+
+/**
+ * Retires a previously-ACTIVE recommendation once re-evaluation comes back
+ * FALSE/UNKNOWN, so it doesn't stay stale indefinitely (e.g. an HVAC filter
+ * gets serviced after an earlier eligible run). No-op (updateMany matches
+ * zero rows) if no ACTIVE recommendation exists for this pair — this slice
+ * only ever has one occurrence per (property, definition), same as
+ * upsertShadowRecommendation above.
+ */
+export async function expireRecommendationIfActive(propertyId: string, definitionId: string): Promise<void> {
+  await prisma.personalizedRecommendation.updateMany({
+    where: {
+      propertyId,
+      definitionId,
+      occurrenceKey: 'default',
+      status: 'ACTIVE',
+    },
+    data: {
+      status: 'EXPIRED',
+      expiresAt: new Date(),
+    },
+  });
+}

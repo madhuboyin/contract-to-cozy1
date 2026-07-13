@@ -40,9 +40,11 @@ function createPrismaMock({ definition = null, homeAssets = [], property = { id:
     },
     derivedTrait: {
       upsert: async () => ({}),
+      deleteMany: async () => ({ count: 0 }),
     },
     traitSnapshot: {
       create: async () => ({}),
+      findFirst: async () => null,
     },
     personalizationEvaluationRun: {
       create: async ({ data }) => {
@@ -85,7 +87,8 @@ function loadUseCase() {
 const REAL_DEFINITION = {
   code: HVAC_FILTER_PROOF_DEFINITION_CODE,
   id: 'def-1',
-  rules: [{ version: HVAC_FILTER_PROOF_RULE_VERSION, ruleAst: HVAC_FILTER_PROOF_RULE_AST }],
+  status: 'ACTIVE',
+  rules: [{ version: HVAC_FILTER_PROOF_RULE_VERSION, ruleAst: HVAC_FILTER_PROOF_RULE_AST, status: 'ACTIVE' }],
 };
 
 test('returns PAUSED and persists nothing when the kill switch is engaged', async () => {
@@ -108,8 +111,60 @@ test('returns FAILED/DEFINITION_NOT_FOUND and persists nothing when the definiti
   assert.equal(runs.length, 0);
 });
 
+test('returns FAILED/DEFINITION_NOT_ACTIVE and persists nothing when the definition is DRAFT', async () => {
+  const draftDefinition = { ...REAL_DEFINITION, status: 'DRAFT' };
+  const { prismaMock, runs } = createPrismaMock({ definition: draftDefinition });
+  installPrismaMock(prismaMock);
+  const { evaluateHvacFilterProofForProperty } = loadUseCase();
+
+  const result = await evaluateHvacFilterProofForProperty('prop-1', HVAC_FILTER_PROOF_DEFINITION_CODE);
+  assert.deepEqual(result, { status: 'FAILED', errorCode: 'DEFINITION_NOT_ACTIVE' });
+  assert.equal(runs.length, 0);
+});
+
+test('returns FAILED/DEFINITION_NOT_ACTIVE when the definition is ACTIVE but its only rule is DRAFT', async () => {
+  const draftRuleDefinition = {
+    ...REAL_DEFINITION,
+    rules: [{ version: HVAC_FILTER_PROOF_RULE_VERSION, ruleAst: HVAC_FILTER_PROOF_RULE_AST, status: 'DRAFT' }],
+  };
+  const { prismaMock, runs } = createPrismaMock({ definition: draftRuleDefinition });
+  installPrismaMock(prismaMock);
+  const { evaluateHvacFilterProofForProperty } = loadUseCase();
+
+  const result = await evaluateHvacFilterProofForProperty('prop-1', HVAC_FILTER_PROOF_DEFINITION_CODE);
+  assert.deepEqual(result, { status: 'FAILED', errorCode: 'DEFINITION_NOT_ACTIVE' });
+  assert.equal(runs.length, 0);
+});
+
+test('returns FAILED/DEFINITION_NOT_ACTIVE when the definition has a per-definition pause set', async () => {
+  const pausedDefinition = { ...REAL_DEFINITION, pausedAt: new Date() };
+  const { prismaMock, runs } = createPrismaMock({ definition: pausedDefinition });
+  installPrismaMock(prismaMock);
+  const { evaluateHvacFilterProofForProperty } = loadUseCase();
+
+  const result = await evaluateHvacFilterProofForProperty('prop-1', HVAC_FILTER_PROOF_DEFINITION_CODE);
+  assert.deepEqual(result, { status: 'FAILED', errorCode: 'DEFINITION_NOT_ACTIVE' });
+  assert.equal(runs.length, 0);
+});
+
+test('returns FAILED/DEFINITION_NOT_ACTIVE when the definition is outside its effective window', async () => {
+  const expiredDefinition = { ...REAL_DEFINITION, effectiveTo: new Date(Date.now() - 24 * 60 * 60 * 1000) };
+  const { prismaMock, runs } = createPrismaMock({ definition: expiredDefinition });
+  installPrismaMock(prismaMock);
+  const { evaluateHvacFilterProofForProperty } = loadUseCase();
+
+  const result = await evaluateHvacFilterProofForProperty('prop-1', HVAC_FILTER_PROOF_DEFINITION_CODE);
+  assert.deepEqual(result, { status: 'FAILED', errorCode: 'DEFINITION_NOT_ACTIVE' });
+  assert.equal(runs.length, 0);
+});
+
 test('returns FAILED/INVALID_RULE_AST and records a failed run when the stored ruleAst is malformed', async () => {
-  const brokenDefinition = { code: 'broken', id: 'def-2', rules: [{ version: 1, ruleAst: { op: 'not_a_real_op' } }] };
+  const brokenDefinition = {
+    code: 'broken',
+    id: 'def-2',
+    status: 'ACTIVE',
+    rules: [{ version: 1, ruleAst: { op: 'not_a_real_op' }, status: 'ACTIVE' }],
+  };
   const { prismaMock, runs } = createPrismaMock({ definition: brokenDefinition });
   installPrismaMock(prismaMock);
   const { evaluateHvacFilterProofForProperty } = loadUseCase();

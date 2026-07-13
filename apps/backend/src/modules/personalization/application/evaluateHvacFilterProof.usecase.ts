@@ -25,7 +25,11 @@ import { loadActiveRule, recordEvaluationRun } from '../infrastructure/evaluatio
 import { isPersonalizationPaused } from '../../../services/personalizationKillSwitch.service';
 
 export type EvaluationRunStatus = 'COMPLETED' | 'FAILED' | 'PAUSED';
-export type EvaluationRunErrorCode = 'DEFINITION_NOT_FOUND' | 'INVALID_RULE_AST' | 'PROPERTY_NOT_FOUND';
+export type EvaluationRunErrorCode =
+  | 'DEFINITION_NOT_FOUND'
+  | 'DEFINITION_NOT_ACTIVE'
+  | 'INVALID_RULE_AST'
+  | 'PROPERTY_NOT_FOUND';
 
 export interface EvaluateHvacFilterProofResult {
   status: EvaluationRunStatus;
@@ -53,11 +57,17 @@ export async function evaluateHvacFilterProofForProperty(
     return { status: 'PAUSED' };
   }
 
-  const loadedRule = await loadActiveRule(definitionCode);
-  if (!loadedRule) {
-    // No definitionId to attach a run row to (required FK) — nothing to persist.
-    return { status: 'FAILED', errorCode: 'DEFINITION_NOT_FOUND' };
+  const loaded = await loadActiveRule(definitionCode);
+  if (!loaded.rule) {
+    // No definitionId to attach a run row to (required FK) — nothing to persist,
+    // for either reason (doesn't exist at all, or exists but isn't an active,
+    // reviewed, in-window rule/definition — PER-FR-004).
+    return {
+      status: 'FAILED',
+      errorCode: loaded.reason === 'NOT_FOUND' ? 'DEFINITION_NOT_FOUND' : 'DEFINITION_NOT_ACTIVE',
+    };
   }
+  const loadedRule = loaded.rule;
 
   const validated = validateRuleAst(loadedRule.ruleAst);
   if (!validated.success || !validated.data) {
