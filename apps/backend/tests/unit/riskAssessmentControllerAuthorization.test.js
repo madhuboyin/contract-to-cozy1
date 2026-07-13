@@ -16,7 +16,7 @@ require('ts-node/register');
 
 let resolvePropertyAccessImpl = async () => null;
 
-const propertyAuthPath = require.resolve('../../src/middleware/propertyAuth.middleware.ts');
+const propertyAuthPath = require.resolve('../../src/services/propertyAccess.service.ts');
 require.cache[propertyAuthPath] = {
   id: propertyAuthPath,
   filename: propertyAuthPath,

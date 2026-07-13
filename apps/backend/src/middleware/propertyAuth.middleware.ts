@@ -1,61 +1,12 @@
 // apps/backend/src/middleware/propertyAuth.middleware.ts
 import { Response, NextFunction } from 'express';
-import { HouseholdRole } from '@prisma/client';
-import { prisma } from '../lib/prisma';
 import { CustomRequest } from '../types';
 import { logger } from '../lib/logger';
-import { HouseholdService } from '../services/household.service';
+import { resolvePropertyAccess } from '../services/propertyAccess.service';
 import {
   securityAuthDenialsTotal,
   securityPropertyScopeDenialsTotal,
 } from '../lib/metrics';
-
-const householdService = new HouseholdService();
-
-export interface PropertyAccess {
-  propertyId: string;
-  role: HouseholdRole;
-}
-
-/**
- * Single source of truth for "who can access this property and at what role."
- * Used by propertyAuthMiddleware (route-level, propertyId from req.params) and
- * directly by services/controllers that already have a resolved propertyId
- * from elsewhere (query param, request body, or a related row like a task).
- * Returns null if the user has no access — callers decide the HTTP
- * status/error to surface; this function never touches req/res.
- */
-export async function resolvePropertyAccess(
-  userId: string,
-  propertyId: string
-): Promise<PropertyAccess | null> {
-  // Check household membership first (covers owners who have a member row + contributors/viewers)
-  const member = await prisma.householdMember.findUnique({
-    where: { propertyId_userId: { propertyId, userId } },
-    select: { role: true },
-  });
-
-  if (member) {
-    return { propertyId, role: member.role };
-  }
-
-  // Fall back: property ownership check for users who pre-date the household feature
-  const property = await prisma.property.findFirst({
-    where: {
-      id: propertyId,
-      homeownerProfile: { userId },
-    },
-    select: { id: true },
-  });
-
-  if (property) {
-    // Auto-create the primary owner HouseholdMember row (migration path for pre-household properties)
-    await householdService.ensurePrimaryOwnerMember(property.id, userId);
-    return { propertyId, role: 'OWNER' };
-  }
-
-  return null;
-}
 
 export const propertyAuthMiddleware = async (
   req: CustomRequest,

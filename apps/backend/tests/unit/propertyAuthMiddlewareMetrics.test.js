@@ -51,7 +51,8 @@ require.cache[metricsPath] = {
   },
 };
 
-const { propertyAuthMiddleware, resolvePropertyAccess } = require('../../src/middleware/propertyAuth.middleware.ts');
+const { resolvePropertyAccess } = require('../../src/services/propertyAccess.service.ts');
+const { propertyAuthMiddleware } = require('../../src/middleware/propertyAuth.middleware.ts');
 
 function createRes() {
   return {

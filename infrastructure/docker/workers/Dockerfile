@@ -112,6 +112,8 @@ COPY apps/backend/src/services/PropertyMaintenanceTask.service.ts \
      apps/backend/src/services/riskAssessmentIntegration.service.ts \
      apps/backend/src/services/RiskAssessment.service.ts \
      src/shared/backend/services/
+# Pure (Express-free) property-access resolution used by PropertyMaintenanceTask.service.ts
+COPY apps/backend/src/services/propertyAccess.service.ts src/shared/backend/services/
 # Stub: breaks the JobQueue.service ↔ RiskAssessment.service circular import
 COPY apps/workers/stubs/job-queue-service.ts src/shared/backend/services/JobQueue.service.ts
 COPY apps/backend/src/services/hiddenAssets/ruleEngine.ts \

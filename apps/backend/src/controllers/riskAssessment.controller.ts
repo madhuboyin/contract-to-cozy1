@@ -6,7 +6,7 @@ import RiskAssessmentService, { RiskSummaryDto } from '../services/RiskAssessmen
 import { Property, Prisma, RiskAssessmentReport } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { CustomRequest } from '../types';
-import { resolvePropertyAccess } from '../middleware/propertyAuth.middleware';
+import { resolvePropertyAccess } from '../services/propertyAccess.service';
 import { markCoverageAnalysisStale, markItemCoverageAnalysesStale } from '../services/coverageAnalysis.service';
 import { markRiskPremiumOptimizerStale } from '../services/riskPremiumOptimizer.service';
 import { markDoNothingRunsStale } from '../services/doNothingSimulator.service';

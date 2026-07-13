@@ -7,22 +7,24 @@ require('ts-node/register');
 // Mocks
 //
 // PropertyMaintenanceTask.service.ts now delegates the "who can access this
-// property" question to resolvePropertyAccess (propertyAuth.middleware.ts),
+// property" question to resolvePropertyAccess (propertyAccess.service.ts),
 // so it's mocked directly here rather than re-mocking prisma's
 // householdMember/property queries — that logic has its own dedicated test
-// file (propertyAuthMiddlewareMetrics.test.js). ROLE_RANK is loaded for real
-// since it's a pure constant with no prisma dependency.
+// file (propertyAuthMiddlewareMetrics.test.js). ROLE_RANK is re-declared here
+// (not the real module) since resolvePropertyAccess is mocked from the same
+// file; it's a plain value copy of the real ranking, not separate logic.
 // ============================================================================
 
 let resolvePropertyAccessImpl = async () => null;
 
-const propertyAuthPath = require.resolve('../../src/middleware/propertyAuth.middleware.ts');
+const propertyAuthPath = require.resolve('../../src/services/propertyAccess.service.ts');
 require.cache[propertyAuthPath] = {
   id: propertyAuthPath,
   filename: propertyAuthPath,
   loaded: true,
   exports: {
     resolvePropertyAccess: (...args) => resolvePropertyAccessImpl(...args),
+    ROLE_RANK: { VIEWER: 0, CONTRIBUTOR: 1, OWNER: 2 },
   },
 };
 

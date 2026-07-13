@@ -1,12 +1,9 @@
 import { Response, NextFunction } from 'express';
 import { HouseholdRole } from '@prisma/client';
 import { CustomRequest } from '../types';
+import { ROLE_RANK } from '../services/propertyAccess.service';
 
-export const ROLE_RANK: Record<HouseholdRole, number> = {
-  VIEWER: 0,
-  CONTRIBUTOR: 1,
-  OWNER: 2,
-};
+export { ROLE_RANK };
 
 export function requireRole(minRole: HouseholdRole) {
   return (req: CustomRequest, res: Response, next: NextFunction) => {

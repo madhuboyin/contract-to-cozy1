@@ -14,8 +14,7 @@ import {
   import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from './analytics';
   import { signalService } from './signal.service';
 import { logger } from '../lib/logger';
-import { resolvePropertyAccess } from '../middleware/propertyAuth.middleware';
-import { ROLE_RANK } from '../middleware/householdRole.middleware';
+import { resolvePropertyAccess, ROLE_RANK } from './propertyAccess.service';
 
   /**
    * Service for managing property maintenance tasks.
