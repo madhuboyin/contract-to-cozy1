@@ -35,6 +35,9 @@ export interface HazardFacility {
   inspectionCount: number;
   lastInspectionDate: string | null;
   penaltyCount: number;
+  latitude: number | null;
+  longitude: number | null;
+  distanceMiles: number | null;
 }
 
 export interface EnvironmentalHazardsData {
@@ -71,6 +74,8 @@ interface EchoFacilityRecord {
   FacInspectionCount?: string;
   FacDateLastInspection?: string | null;
   FacPenaltyCount?: string;
+  FacLat?: string;
+  FacLong?: string;
 }
 
 interface EchoQidResponse {
@@ -129,6 +134,15 @@ function isNotable(rec: EchoFacilityRecord): boolean {
   return statuses.some(s => typeof s === 'string' && /violation/i.test(s) && !/no violation/i.test(s));
 }
 
+function distanceMiles(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const toRadians = (degrees: number) => degrees * Math.PI / 180;
+  const earthRadiusMiles = 3958.8;
+  const dLat = toRadians(lat2 - lat1);
+  const dLon = toRadians(lon2 - lon1);
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRadians(lat1)) * Math.cos(toRadians(lat2)) * Math.sin(dLon / 2) ** 2;
+  return earthRadiusMiles * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
 /**
  * Returns EPA-regulated facilities (RCRA/CAA/CWA/SDWA/TRI) with a
  * compliance flag of interest within 1 mile of a lat/lon point, plus the
@@ -163,7 +177,11 @@ export async function getEnvironmentalHazards(lat: number, lon: number): Promise
     .filter(isNotable)
     .sort((a, b) => (b.FacSNCFlg === 'Y' ? 1 : 0) - (a.FacSNCFlg === 'Y' ? 1 : 0))
     .slice(0, MAX_FACILITIES_RETURNED)
-    .map((rec): HazardFacility => ({
+    .map((rec): HazardFacility => {
+      const facilityLat = Number(rec.FacLat);
+      const facilityLon = Number(rec.FacLong);
+      const hasCoordinates = Number.isFinite(facilityLat) && Number.isFinite(facilityLon);
+      return {
       registryId: rec.RegistryID ?? '',
       name: rec.FacName ?? 'Unknown facility',
       address: [rec.FacStreet, rec.FacCity, rec.FacState, rec.FacZip].filter(Boolean).join(', '),
@@ -173,7 +191,11 @@ export async function getEnvironmentalHazards(lat: number, lon: number): Promise
       inspectionCount: Number(rec.FacInspectionCount ?? '0'),
       lastInspectionDate: rec.FacDateLastInspection ?? null,
       penaltyCount: Number(rec.FacPenaltyCount ?? '0'),
-    }));
+      latitude: hasCoordinates ? facilityLat : null,
+      longitude: hasCoordinates ? facilityLon : null,
+      distanceMiles: hasCoordinates ? Math.round(distanceMiles(lat, lon, facilityLat, facilityLon) * 100) / 100 : null,
+    };
+    });
 
   const data: EnvironmentalHazardsData = {
     facilities: notable,

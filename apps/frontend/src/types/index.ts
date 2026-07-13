@@ -4743,6 +4743,9 @@ export interface HazardFacility {
   inspectionCount: number;
   lastInspectionDate: string | null;
   penaltyCount: number;
+  latitude: number | null;
+  longitude: number | null;
+  distanceMiles: number | null;
 }
 export interface EnvironmentalHazardsData {
   facilities: HazardFacility[];

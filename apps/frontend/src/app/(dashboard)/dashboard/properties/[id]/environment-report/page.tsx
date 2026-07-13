@@ -23,6 +23,7 @@ import type {
   RadonData,
   EnvironmentalHazardsData,
   ClimateSectionData,
+  ClimateNormalsMonthlyPoint,
   EnvironmentInsight,
   EnvironmentQuestion,
 } from '@/types';
@@ -239,6 +240,25 @@ function InsightSummary({
   );
 }
 
+function HomeSystemsOutlook({ insights }: { insights: EnvironmentInsight[] }) {
+  const systems = new Map<string, { severity: EnvironmentInsight['severity']; hazards: string[] }>();
+  insights.forEach(insight => insight.affectedSystems.forEach(system => {
+    const existing = systems.get(system);
+    const severity = existing?.severity === 'action' || insight.severity === 'action' ? 'action' : insight.severity;
+    systems.set(system, { severity, hazards: Array.from(new Set([...(existing?.hazards ?? []), insight.title])) });
+  }));
+  const entries = Array.from(systems.entries()).slice(0, 8);
+  if (entries.length === 0) return null;
+  return (
+    <section aria-labelledby="systems-outlook-heading">
+      <div className="mb-3"><p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Weather-to-home connection</p><h2 id="systems-outlook-heading" className="mt-1 text-xl font-bold text-slate-950">Home systems outlook</h2></div>
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+        {entries.map(([system, context]) => <div key={system} className={context.severity === 'action' ? 'rounded-xl border border-amber-300 bg-amber-50 p-3' : 'rounded-xl border border-sky-200 bg-sky-50/60 p-3'}><div className="flex items-center justify-between gap-2"><p className="text-sm font-semibold text-slate-950">{system}</p><span className={context.severity === 'action' ? 'h-2.5 w-2.5 rounded-full bg-amber-500' : 'h-2.5 w-2.5 rounded-full bg-sky-500'} /></div><p className="mt-2 line-clamp-2 text-xs text-slate-600">{context.hazards.join(' · ')}</p></div>)}
+      </div>
+    </section>
+  );
+}
+
 const WEATHER_CODE_LABELS: Record<number, string> = {
   0: 'Clear sky', 1: 'Mainly clear', 2: 'Partly cloudy', 3: 'Overcast',
   45: 'Fog', 48: 'Depositing rime fog',
@@ -350,6 +370,65 @@ function AqiTrendChart({ history }: { history: AirQualityData['history'] }) {
   );
 }
 
+function WeatherHistoryChart({ history, normalHigh, normalLow }: { history: WeatherReportData['thirtyDayHistory']; normalHigh?: number | null; normalLow?: number | null }) {
+  const data = history.slice(-30);
+  if (data.length < 2) return <SectionUnavailable reason="weather_history_unavailable" />;
+  const width = 760;
+  const height = 250;
+  const pad = { left: 42, right: 18, top: 22, bottom: 38 };
+  const plotWidth = width - pad.left - pad.right;
+  const plotHeight = height - pad.top - pad.bottom;
+  const values = data.flatMap(point => [point.tempMaxF, point.tempMinF]);
+  const min = Math.floor(Math.min(...values, normalLow ?? Infinity) - 3);
+  const max = Math.ceil(Math.max(...values, normalHigh ?? -Infinity) + 3);
+  const range = Math.max(1, max - min);
+  const x = (index: number) => pad.left + (index / (data.length - 1)) * plotWidth;
+  const y = (value: number) => pad.top + ((max - value) / range) * plotHeight;
+  const pathFor = (selector: (point: typeof data[number]) => number) => data.map((point, index) => `${index === 0 ? 'M' : 'L'} ${x(index).toFixed(1)} ${y(selector(point)).toFixed(1)}`).join(' ');
+  const maxRain = Math.max(0.01, ...data.map(point => point.precipitationSumIn));
+  return (
+    <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-3">
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2"><div><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Past 30 days</p><p className="text-sm font-semibold text-slate-900">Temperature range and rainfall</p></div><div className="flex gap-3 text-[11px] text-slate-500"><span>High</span><span>Low</span><span>Rain</span></div></div>
+      <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Thirty-day high and low temperatures with rainfall and climate normal comparison" className="h-auto w-full">
+        {[0, 0.5, 1].map(fraction => { const gridY = pad.top + fraction * plotHeight; const label = Math.round(max - fraction * range); return <g key={fraction}><line x1={pad.left} x2={width - pad.right} y1={gridY} y2={gridY} className="stroke-slate-200" /><text x={pad.left - 7} y={gridY + 4} textAnchor="end" className="fill-slate-400 text-[10px]">{label}°</text></g>; })}
+        {normalHigh != null ? <g><line x1={pad.left} x2={width - pad.right} y1={y(normalHigh)} y2={y(normalHigh)} strokeDasharray="5 5" className="stroke-amber-400" /><text x={width - pad.right} y={y(normalHigh) - 5} textAnchor="end" className="fill-amber-600 text-[10px]">Normal high {Math.round(normalHigh)}°</text></g> : null}
+        {normalLow != null ? <line x1={pad.left} x2={width - pad.right} y1={y(normalLow)} y2={y(normalLow)} strokeDasharray="5 5" className="stroke-sky-300" /> : null}
+        {data.map((point, index) => { const barHeight = (point.precipitationSumIn / maxRain) * plotHeight * 0.35; return <rect key={point.date} x={x(index) - 3} y={pad.top + plotHeight - barHeight} width="6" height={barHeight} rx="2" className="fill-sky-200/80" />; })}
+        <path d={pathFor(point => point.tempMaxF)} fill="none" strokeWidth="3" strokeLinecap="round" className="stroke-amber-500" />
+        <path d={pathFor(point => point.tempMinF)} fill="none" strokeWidth="3" strokeLinecap="round" className="stroke-sky-600" />
+        <text x={pad.left} y={height - 8} className="fill-slate-500 text-[10px]">{new Date(`${data[0].date}T12:00:00`).toLocaleDateString([], { month: 'short', day: 'numeric' })}</text>
+        <text x={width - pad.right} y={height - 8} textAnchor="end" className="fill-slate-500 text-[10px]">{new Date(`${data[data.length - 1].date}T12:00:00`).toLocaleDateString([], { month: 'short', day: 'numeric' })}</text>
+      </svg>
+    </div>
+  );
+}
+
+function ClimateNormalsChart({ monthly }: { monthly: ClimateNormalsMonthlyPoint[] }) {
+  const data = monthly;
+  const usable = data.filter(point => point.avgHighF != null && point.avgLowF != null);
+  if (usable.length < 2) return <SectionUnavailable reason="climate_normals_unavailable" />;
+  const width = 720; const height = 220; const pad = { left: 40, right: 14, top: 18, bottom: 34 };
+  const values = usable.flatMap(point => [point.avgHighF!, point.avgLowF!]); const min = Math.floor(Math.min(...values) - 5); const max = Math.ceil(Math.max(...values) + 5); const range = Math.max(1, max - min);
+  const x = (index: number) => pad.left + (index / (usable.length - 1)) * (width - pad.left - pad.right); const y = (value: number) => pad.top + ((max - value) / range) * (height - pad.top - pad.bottom);
+  const highPath = usable.map((point, index) => `${index ? 'L' : 'M'} ${x(index)} ${y(point.avgHighF!)}`).join(' '); const lowPath = usable.map((point, index) => `${index ? 'L' : 'M'} ${x(index)} ${y(point.avgLowF!)}`).join(' ');
+  return <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Monthly climate-normal high and low temperatures" className="h-auto w-full"><path d={highPath} fill="none" strokeWidth="3" className="stroke-amber-500" /><path d={lowPath} fill="none" strokeWidth="3" className="stroke-sky-600" />{usable.map((point, index) => <g key={point.month}><circle cx={x(index)} cy={y(point.avgHighF!)} r="3" className="fill-white stroke-amber-500" strokeWidth="2" /><text x={x(index)} y={height - 8} textAnchor="middle" className="fill-slate-500 text-[10px]">{new Date(2000, point.month - 1, 1).toLocaleDateString([], { month: 'short' })}</text></g>)}</svg>;
+}
+
+const DROUGHT_LEVEL: Record<string, number> = { None: 0, D0: 1, D1: 2, D2: 3, D3: 4, D4: 5 };
+function DroughtProgression({ history }: { history: DroughtData['history'] }) {
+  const data = history.slice(-12);
+  if (data.length === 0) return null;
+  const tone = (category: string) => category === 'D4' ? 'bg-red-600' : category === 'D3' ? 'bg-orange-600' : category === 'D2' ? 'bg-orange-400' : category === 'D1' ? 'bg-amber-400' : category === 'D0' ? 'bg-yellow-300' : 'bg-emerald-300';
+  return <div><div className="flex h-28 items-end gap-1.5" role="img" aria-label="Twelve-week drought severity progression">{data.map(point => <div key={point.date} className="flex min-w-0 flex-1 flex-col items-center justify-end gap-1"><span className="text-[9px] text-slate-500">{point.dominantCategory}</span><div className={`w-full rounded-t ${tone(point.dominantCategory)}`} style={{ height: `${18 + DROUGHT_LEVEL[point.dominantCategory] * 12}px` }} title={`${point.date}: ${point.dominantCategory}`} /></div>)}</div><div className="mt-2 flex justify-between text-[10px] text-slate-500"><span>{new Date(`${data[0].date}T12:00:00`).toLocaleDateString([], { month: 'short', day: 'numeric' })}</span><span>Latest</span></div></div>;
+}
+
+function FacilityProximityPlot({ facilities, radiusMiles, propertyLat, propertyLon }: { facilities: EnvironmentalHazardsData['facilities']; radiusMiles: number; propertyLat: number | null; propertyLon: number | null }) {
+  const located = facilities.filter(facility => facility.distanceMiles != null && facility.latitude != null && facility.longitude != null);
+  if (located.length === 0 || propertyLat == null || propertyLon == null) return <div className="flex h-56 items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50 text-sm text-slate-500">Facility coordinates unavailable for proximity view.</div>;
+  const center = 150; const radius = 120;
+  return <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-3"><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Proximity view · {radiusMiles} mile radius</p><svg viewBox="0 0 300 300" role="img" aria-label="EPA facility proximity around the property" className="mx-auto mt-2 max-h-72 w-full"><circle cx={center} cy={center} r={radius} className="fill-sky-50 stroke-slate-300" strokeDasharray="5 5" /><circle cx={center} cy={center} r={radius / 2} className="fill-none stroke-slate-200" /><circle cx={center} cy={center} r="10" className="fill-teal-600 stroke-white" strokeWidth="3" /><text x={center} y={center + 25} textAnchor="middle" className="fill-slate-700 text-[10px]">Your home</text>{located.map(facility => { const northMiles = (facility.latitude! - propertyLat) * 69; const eastMiles = (facility.longitude! - propertyLon) * 69 * Math.cos(propertyLat * Math.PI / 180); const dotX = center + Math.max(-radius, Math.min(radius, eastMiles / radiusMiles * radius)); const dotY = center - Math.max(-radius, Math.min(radius, northMiles / radiusMiles * radius)); return <g key={facility.registryId}><circle cx={dotX} cy={dotY} r={facility.significantNoncompliance ? 8 : 6} className={facility.significantNoncompliance ? 'fill-red-500 stroke-white' : 'fill-amber-500 stroke-white'} strokeWidth="2"><title>{facility.name} · {facility.distanceMiles} mi</title></circle></g>; })}<text x={center} y="292" textAnchor="middle" className="fill-slate-500 text-[10px]">Approximate position from EPA coordinates</text></svg></div>;
+}
+
 function SectionUnavailable({ reason }: { reason?: string }) {
   return (
     <div className="flex items-center gap-2 rounded-lg border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-sm text-slate-500">
@@ -384,7 +463,7 @@ function SectionCard({
   );
 }
 
-function WeatherSection({ result }: { result: SectionResult<WeatherReportData> }) {
+function WeatherSection({ result, climate }: { result: SectionResult<WeatherReportData>; climate: SectionResult<ClimateSectionData> }) {
   if (result.status !== 'ok') {
     return (
       <SectionCard icon={CloudSun} title="Weather">
@@ -394,6 +473,10 @@ function WeatherSection({ result }: { result: SectionResult<WeatherReportData> }
   }
   const { current, hourly, tenDayForecast, thirtyDayHistory } = result.data;
   const CurrentIcon = weatherIcon(current.weatherCode);
+  const currentMonth = new Date().getMonth() + 1;
+  const currentNormal = climate.status === 'ok' && climate.data.normals.status === 'ok'
+    ? climate.data.normals.data.monthly.find(month => month.month === currentMonth)
+    : null;
 
   return (
     <SectionCard icon={CloudSun} title="Weather" description={weatherLabel(current.weatherCode)}>
@@ -430,6 +513,7 @@ function WeatherSection({ result }: { result: SectionResult<WeatherReportData> }
         </div>
 
         <div><h3 className="mb-3 text-lg font-bold text-slate-950">Hourly outlook</h3><HourlyWeatherChart points={hourly} /></div>
+        <WeatherHistoryChart history={thirtyDayHistory} normalHigh={currentNormal?.avgHighF} normalLow={currentNormal?.avgLowF} />
 
         <details className="rounded-xl border border-slate-200 bg-white">
           <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-slate-700">View detailed weather data</summary>
@@ -479,21 +563,11 @@ function DroughtSection({ result }: { result: SectionResult<DroughtData> }) {
 
   return (
     <SectionCard icon={Droplets} title="Drought" description="US Drought Monitor, published weekly">
-      <div className="mb-4">
-        <Badge variant={current?.dominantCategory === 'None' ? 'secondary' : 'destructive'}>
-          {current ? current.dominantCategory : 'No data'}
-        </Badge>
+      <div className="grid gap-5 lg:grid-cols-[220px_minmax(0,1fr)]">
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4"><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Current category</p><p className="mt-2 text-4xl font-bold text-slate-950">{current?.dominantCategory ?? '—'}</p><p className="mt-2 text-sm text-slate-600">{current?.dominantCategory === 'None' ? 'No drought classification currently dominates the area.' : 'Dry conditions may affect soil, landscaping, and irrigation planning.'}</p></div>
+        <div className="rounded-xl border border-slate-200 p-4"><p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">12-week progression</p><DroughtProgression history={history} /></div>
       </div>
-      {history.length > 0 && (
-        <div className="max-h-48 overflow-y-auto">
-          <SimpleTable
-            rows={history
-              .slice()
-              .reverse()
-              .map(w => [new Date(w.date).toLocaleDateString([], { month: 'short', day: 'numeric' }), w.dominantCategory, ''])}
-          />
-        </div>
-      )}
+      {history.length > 0 ? <details className="mt-4 rounded-xl border border-slate-200"><summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-slate-700">View weekly drought data</summary><div className="max-h-56 overflow-y-auto border-t border-slate-200 p-4"><SimpleTable rows={history.slice().reverse().map(w => [new Date(`${w.date}T12:00:00`).toLocaleDateString([], { month: 'short', day: 'numeric' }), w.dominantCategory, ''])} /></div></details> : null}
     </SectionCard>
   );
 }
@@ -507,13 +581,13 @@ function FloodElevationSection({ result }: { result: SectionResult<FloodElevatio
     );
   }
   const { femaFloodZone, femaZoneSubtype, elevationFeet } = result.data;
+  const highRisk = Boolean(femaFloodZone && /^(A|AE|AH|AO|AR|A99|V|VE)$/i.test(femaFloodZone));
 
   return (
     <SectionCard icon={Waves} title="Flood & Elevation">
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <Stat label="FEMA Flood Zone" value={femaFloodZone ?? '—'} />
-        <Stat label="Zone Detail" value={femaZoneSubtype ?? '—'} />
-        <Stat label="Elevation" value={elevationFeet != null ? `${Math.round(elevationFeet)} ft` : '—'} />
+      <div className="grid gap-5 lg:grid-cols-[minmax(240px,0.8fr)_minmax(0,1.4fr)]">
+        <div className={highRisk ? 'rounded-xl border border-amber-300 bg-amber-50 p-5' : 'rounded-xl border border-emerald-200 bg-emerald-50/60 p-5'}><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">FEMA flood designation</p><div className="mt-2 flex items-center gap-3"><p className="text-4xl font-bold text-slate-950">{femaFloodZone ?? '—'}</p><Badge variant={highRisk ? 'destructive' : 'secondary'}>{highRisk ? 'Higher exposure' : 'Lower mapped exposure'}</Badge></div><p className="mt-3 text-sm text-slate-600">{femaZoneSubtype || 'Point-based FEMA NFHL classification for this property location.'}</p></div>
+        <div className="rounded-xl border border-slate-200 p-5"><div className="flex items-end justify-between gap-3"><div><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Exposure context</p><p className="mt-1 text-lg font-bold text-slate-950">{elevationFeet != null ? `${Math.round(elevationFeet)} ft elevation` : 'Elevation unavailable'}</p></div><Waves className="h-8 w-8 text-sky-500" /></div><div className="mt-5 grid grid-cols-4 gap-1"><div className="h-3 rounded-l-full bg-emerald-300" /><div className="h-3 bg-yellow-300" /><div className="h-3 bg-orange-400" /><div className="h-3 rounded-r-full bg-red-500" /></div><div className="mt-2 flex justify-between text-[10px] text-slate-500"><span>Lower mapped exposure</span><span>Higher mapped exposure</span></div><p className="mt-4 text-xs text-slate-500">Flood zones describe mapped exposure, not whether a specific storm will cause flooding. Pair this with active rain insights and drainage history.</p></div>
       </div>
     </SectionCard>
   );
@@ -542,7 +616,7 @@ function RadonSection({ result }: { result: SectionResult<RadonData> }) {
   );
 }
 
-function HazardsSection({ result }: { result: SectionResult<EnvironmentalHazardsData> }) {
+function HazardsSection({ result, propertyLat, propertyLon }: { result: SectionResult<EnvironmentalHazardsData>; propertyLat: number | null; propertyLon: number | null }) {
   if (result.status !== 'ok') {
     return (
       <SectionCard icon={Factory} title="Environmental Hazards">
@@ -566,7 +640,9 @@ function HazardsSection({ result }: { result: SectionResult<EnvironmentalHazards
       {facilities.length === 0 ? (
         <p className="text-sm text-slate-500">No facilities with compliance issues found nearby.</p>
       ) : (
-        <div className="max-h-64 space-y-2 overflow-y-auto">
+        <div className="grid gap-4 lg:grid-cols-[minmax(280px,0.85fr)_minmax(0,1.15fr)]">
+          <FacilityProximityPlot facilities={facilities} radiusMiles={searchRadiusMiles} propertyLat={propertyLat} propertyLon={propertyLon} />
+          <div className="max-h-72 space-y-2 overflow-y-auto">
           {facilities.map(f => (
             <div key={f.registryId} className="rounded-lg border border-slate-200 p-3">
               <div className="flex items-start justify-between gap-2">
@@ -574,6 +650,7 @@ function HazardsSection({ result }: { result: SectionResult<EnvironmentalHazards
                 {f.significantNoncompliance && <Badge variant="destructive">SNC</Badge>}
               </div>
               <p className="text-xs text-slate-500">{f.address}</p>
+              {f.distanceMiles != null ? <p className="mt-1 text-xs font-medium text-slate-600">Approximately {f.distanceMiles} miles away</p> : null}
               <div className="mt-1 flex flex-wrap items-center gap-1.5">
                 {f.programs.map(p => (
                   <Badge key={p} variant="outline" className="text-[10px]">
@@ -584,6 +661,7 @@ function HazardsSection({ result }: { result: SectionResult<EnvironmentalHazards
               </div>
             </div>
           ))}
+          </div>
         </div>
       )}
     </SectionCard>
@@ -630,15 +708,8 @@ function ClimateSection({ result }: { result: SectionResult<ClimateSectionData> 
                   value={normals.data.annualCoolingDegreeDays != null ? String(Math.round(normals.data.annualCoolingDegreeDays)) : '—'}
                 />
               </div>
-              <div className="max-h-48 overflow-y-auto">
-                <SimpleTable
-                  rows={normals.data.monthly.map(m => [
-                    new Date(2000, m.month - 1, 1).toLocaleDateString([], { month: 'short' }),
-                    m.avgHighF != null ? `${Math.round(m.avgHighF)}°` : '—',
-                    m.avgLowF != null ? `${Math.round(m.avgLowF)}°` : '—',
-                  ])}
-                />
-              </div>
+              <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-3"><div className="mb-2 flex items-center justify-between"><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Seasonal temperature pattern</p><p className="text-[10px] text-slate-500">High / low</p></div><ClimateNormalsChart monthly={normals.data.monthly} /></div>
+              <details className="rounded-xl border border-slate-200"><summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-slate-700">View monthly climate data</summary><div className="max-h-56 overflow-y-auto border-t border-slate-200 p-4"><SimpleTable rows={normals.data.monthly.map(m => [new Date(2000, m.month - 1, 1).toLocaleDateString([], { month: 'short' }), m.avgHighF != null ? `${Math.round(m.avgHighF)}°` : '—', m.avgLowF != null ? `${Math.round(m.avgLowF)}°` : '—'])} /></div></details>
             </div>
           ) : (
             <SectionUnavailable reason={normals.reason} />
@@ -767,12 +838,13 @@ export default function EnvironmentReportPage() {
             await queryClient.invalidateQueries({ queryKey: ['active-incidents', propertyId] });
           }}
         />
-        <WeatherSection result={sections.weather} />
+        <HomeSystemsOutlook insights={report.insights ?? []} />
+        <WeatherSection result={sections.weather} climate={sections.climate} />
         <AirQualitySection result={sections.airQuality} />
         <FloodElevationSection result={sections.floodElevation} />
         <DroughtSection result={sections.drought} />
         <RadonSection result={sections.radon} />
-        <HazardsSection result={sections.hazards} />
+        <HazardsSection result={sections.hazards} propertyLat={report.location.latitude} propertyLon={report.location.longitude} />
         <ClimateSection result={sections.climate} />
       </div>
     </DashboardShell>
