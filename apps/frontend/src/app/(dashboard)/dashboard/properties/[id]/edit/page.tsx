@@ -123,9 +123,9 @@ function getInstallYearFeedback(year: number | null | undefined): {
   if (!year || year < 1900 || year > CURRENT_YEAR) return null;
   const age = CURRENT_YEAR - year;
   if (age === 0) return null;
-  if (age <= 8) return { label: `${age} yrs · Good condition`, color: "emerald", age };
-  if (age <= 15) return { label: `${age} yrs · Monitor closely`, color: "amber", age };
-  return { label: `${age} yrs · Approaching replacement`, color: "rose", age };
+  if (age <= 8) return { label: `${age} yrs · Good`, color: "emerald", age };
+  if (age <= 15) return { label: `${age} yrs · Monitor`, color: "amber", age };
+  return { label: `${age} yrs · Replace soon`, color: "rose", age };
 }
 
 function getSaveBarCopy(completionPercent: number): string {
@@ -776,6 +776,12 @@ export default function EditPropertyPage() {
     "hasIrrigation",
     "appliances",
   ]);
+  const completedSystemCount = [
+    Boolean(watchHeatingType && watchCoolingType && watchHvacInstallYear),
+    Boolean(watchWaterHeaterType && watchWaterHeaterInstallYear),
+    Boolean(watchRoofType && watchRoofReplacementYear),
+    Boolean(watchFoundationType),
+  ].filter(Boolean).length;
   const [activeSectionId, setActiveSectionId] = React.useState<PropertySectionId | null>("basics");
   const [lockedStartFieldKey, setLockedStartFieldKey] = React.useState<string | null>(null);
 
@@ -1486,7 +1492,18 @@ export default function EditPropertyPage() {
               defaultExpandedDesktop={true}
               defaultExpandedMobile={false}
               forceExpandOnMobile={startSectionId === "systems"}
-              headerChip={startSectionId === "systems" ? <FieldNudgeChip variant="start" /> : undefined}
+              headerChip={(
+                <span
+                  className={cn(
+                    "inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium",
+                    completedSystemCount === 4
+                      ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800/50 dark:bg-emerald-950/40 dark:text-emerald-300"
+                      : "border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300",
+                  )}
+                >
+                  {completedSystemCount} of 4 complete
+                </span>
+              )}
             >
               <div className="space-y-5">
                 <div className="grid grid-cols-1 gap-4 border-b border-black/10 pb-5 dark:border-white/10 md:grid-cols-[1.2fr_1fr_1fr]">
@@ -1547,10 +1564,10 @@ export default function EditPropertyPage() {
                   />
                 </div>
 
-                <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-4">
-                  <div className="flex h-full flex-col rounded-md border border-black/5 bg-gray-50/50 p-3 dark:border-white/10 dark:bg-slate-900/30">
-                    <p className="mb-3 text-sm font-semibold text-gray-900 dark:text-slate-100">HVAC</p>
-                    <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                  <div className="flex h-full flex-col rounded-lg border border-black/5 bg-gray-50/50 p-4 dark:border-white/10 dark:bg-slate-900/30">
+                    <p className="mb-4 text-sm font-semibold text-gray-900 dark:text-slate-100">HVAC</p>
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                       <FormField
                         control={form.control}
                         name="heatingType"
@@ -1620,8 +1637,9 @@ export default function EditPropertyPage() {
                     />
                   </div>
 
-                  <div className="flex h-full flex-col rounded-md border border-black/5 bg-gray-50/50 p-3 dark:border-white/10 dark:bg-slate-900/30">
-                    <p className="mb-3 text-sm font-semibold text-gray-900 dark:text-slate-100">Water heater</p>
+                  <div className="flex h-full flex-col rounded-lg border border-black/5 bg-gray-50/50 p-4 dark:border-white/10 dark:bg-slate-900/30">
+                    <p className="mb-4 text-sm font-semibold text-gray-900 dark:text-slate-100">Water heater</p>
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(150px,0.5fr)]">
                     <FormField
                       control={form.control}
                       name="waterHeaterType"
@@ -1646,7 +1664,7 @@ export default function EditPropertyPage() {
                       control={form.control}
                       name="waterHeaterInstallYear"
                       render={({ field }) => (
-                        <FormItem className="mt-3 w-full max-w-[170px]">
+                        <FormItem className="w-full">
                           <div className="flex items-center gap-2">
                             <FormLabel>Install year</FormLabel>
                             {isRecommended("waterHeaterInstallYear") ? <FieldNudgeChip variant="recommended" /> : null}
@@ -1668,10 +1686,12 @@ export default function EditPropertyPage() {
                         </FormItem>
                       )}
                     />
+                    </div>
                   </div>
 
-                  <div className="flex h-full flex-col rounded-md border border-black/5 bg-gray-50/50 p-3 dark:border-white/10 dark:bg-slate-900/30">
-                    <p className="mb-3 text-sm font-semibold text-gray-900 dark:text-slate-100">Roof</p>
+                  <div className="flex h-full flex-col rounded-lg border border-black/5 bg-gray-50/50 p-4 dark:border-white/10 dark:bg-slate-900/30">
+                    <p className="mb-4 text-sm font-semibold text-gray-900 dark:text-slate-100">Roof</p>
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(150px,0.5fr)]">
                     <FormField
                       control={form.control}
                       name="roofType"
@@ -1696,7 +1716,7 @@ export default function EditPropertyPage() {
                       control={form.control}
                       name="roofReplacementYear"
                       render={({ field }) => (
-                        <FormItem className="mt-3 w-full max-w-[170px]">
+                        <FormItem className="w-full">
                           <div className="flex items-center gap-2">
                             <FormLabel>Replacement year</FormLabel>
                             {isRecommended("roofReplacementYear") ? <FieldNudgeChip variant="recommended" /> : null}
@@ -1718,9 +1738,10 @@ export default function EditPropertyPage() {
                         </FormItem>
                       )}
                     />
+                    </div>
                   </div>
-                  <div className="flex h-full flex-col rounded-md border border-black/5 bg-gray-50/50 p-3 dark:border-white/10 dark:bg-slate-900/30">
-                    <p className="mb-3 text-sm font-semibold text-gray-900 dark:text-slate-100">Foundation</p>
+                  <div className="flex h-full flex-col rounded-lg border border-black/5 bg-gray-50/50 p-4 dark:border-white/10 dark:bg-slate-900/30">
+                    <p className="mb-4 text-sm font-semibold text-gray-900 dark:text-slate-100">Foundation</p>
                     <FormField
                       control={form.control}
                       name="foundationType"
@@ -1740,7 +1761,11 @@ export default function EditPropertyPage() {
                               ))}
                             </SelectContent>
                           </Select>
-                          <p className="text-xs text-gray-500 dark:text-slate-400">Used for drainage, drought, moisture, and foundation-risk insights.</p>
+                          {!field.value ? (
+                            <p className="mt-2 text-xs leading-relaxed text-gray-500 dark:text-slate-400">
+                              Improves drainage, drought, and moisture insights.
+                            </p>
+                          ) : null}
                           <FormMessage />
                         </FormItem>
                       )}
