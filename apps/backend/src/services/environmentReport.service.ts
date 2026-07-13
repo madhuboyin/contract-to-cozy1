@@ -206,7 +206,26 @@ export async function getEnvironmentReport(property: GeocodableProperty): Promis
       fetchedAt: new Date().toISOString(),
     },
   };
-  const derivedInsights = deriveEnvironmentInsights(property, sections);
+  const latestHvacFilterTask = await prisma.propertyMaintenanceTask.findFirst({
+    where: {
+      propertyId: property.id,
+      lastCompletedDate: { not: null },
+      OR: [
+        { actionKey: `${property.id}:ENVIRONMENT_CAPTURE:HVAC_FILTER` },
+        { assetType: { in: ['HVAC_FILTER', 'HVAC_FILTER_CHECK', 'HVAC_FURNACE_FILTER'] } },
+        { AND: [{ title: { contains: 'HVAC', mode: 'insensitive' } }, { title: { contains: 'filter', mode: 'insensitive' } }] },
+        { title: { contains: 'air filter', mode: 'insensitive' } },
+        { title: { contains: 'furnace filter', mode: 'insensitive' } },
+      ],
+    },
+    orderBy: { lastCompletedDate: 'desc' },
+    select: { lastCompletedDate: true },
+  });
+  const insightProperty = {
+    ...property,
+    hvacFilterLastCompletedDate: latestHvacFilterTask?.lastCompletedDate?.toISOString() ?? null,
+  };
+  const derivedInsights = deriveEnvironmentInsights(insightProperty, sections);
   const activeWeatherIncidents = await prisma.incident.findMany({
     where: {
       propertyId: property.id,
@@ -233,7 +252,7 @@ export async function getEnvironmentReport(property: GeocodableProperty): Promis
       };
     })
   );
-  const questions = deriveEnvironmentQuestions(property, insights);
+  const questions = deriveEnvironmentQuestions(insightProperty, insights);
 
   return {
     propertyId: property.id,
@@ -244,4 +263,40 @@ export async function getEnvironmentReport(property: GeocodableProperty): Promis
     questions,
     sections,
   };
+}
+
+export async function recordHvacFilterMaintenance(propertyId: string, completedDate: string) {
+  const parsed = new Date(`${completedDate}T12:00:00Z`);
+  const now = new Date();
+  if (Number.isNaN(parsed.getTime()) || parsed > now || parsed.getUTCFullYear() < 2000) {
+    throw new Error('Enter a valid HVAC filter maintenance date.');
+  }
+  const nextDueDate = new Date(parsed);
+  nextDueDate.setUTCDate(nextDueDate.getUTCDate() + 90);
+  const actionKey = `${propertyId}:ENVIRONMENT_CAPTURE:HVAC_FILTER`;
+  return prisma.propertyMaintenanceTask.upsert({
+    where: { propertyId_actionKey: { propertyId, actionKey } },
+    create: {
+      propertyId,
+      title: 'Inspect or replace HVAC air filter',
+      description: 'HVAC filter maintenance recorded from the Environment Report.',
+      status: 'COMPLETED',
+      source: 'USER_CREATED',
+      actionKey,
+      priority: 'MEDIUM',
+      assetType: 'HVAC_FILTER',
+      category: 'HVAC',
+      isRecurring: true,
+      frequency: 'QUARTERLY',
+      lastCompletedDate: parsed,
+      nextDueDate,
+    },
+    update: {
+      status: 'COMPLETED',
+      lastCompletedDate: parsed,
+      nextDueDate,
+      isRecurring: true,
+      frequency: 'QUARTERLY',
+    },
+  });
 }

@@ -4823,7 +4823,8 @@ export type EnvironmentQuestionField =
   | 'heatingType'
   | 'hasSecondaryHeat'
   | 'hasIrrigation'
-  | 'foundationType';
+  | 'foundationType'
+  | 'hvacFilterLastCompletedDate';
 
 export interface EnvironmentQuestion {
   id: string;
@@ -4831,7 +4832,7 @@ export interface EnvironmentQuestion {
   field: EnvironmentQuestionField;
   prompt: string;
   reason: string;
-  inputType: 'choice' | 'year' | 'text';
+  inputType: 'choice' | 'year' | 'date' | 'text';
   options?: Array<{ label: string; value: string | number | boolean }>;
   placeholder?: string;
 }

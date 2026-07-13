@@ -38,18 +38,26 @@ function InlineInsightQuestions({
   onSaved: (prompt: string) => Promise<void>;
 }) {
   const [savingId, setSavingId] = useState<string | null>(null);
-  const [years, setYears] = useState<Record<string, string>>({});
+  const [values, setValues] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
 
   const saveAnswer = async (question: EnvironmentQuestion, value: string | number | boolean) => {
     setError(null);
     setSavingId(question.id);
     try {
-      const response = await api.updateProperty(
-        propertyId,
-        { [question.field]: value } as Parameters<typeof api.updateProperty>[1]
-      );
-      if (!response.success) throw new Error('message' in response ? response.message : 'Unable to save answer');
+      if (question.field === 'hvacFilterLastCompletedDate') {
+        const response = await api.post<{ success: boolean; message?: string }>(
+          `/api/environment/report/${propertyId}/maintenance-context`,
+          { field: question.field, completedDate: value }
+        );
+        if (!response.data.success) throw new Error(response.data.message || 'Unable to save maintenance date');
+      } else {
+        const response = await api.updateProperty(
+          propertyId,
+          { [question.field]: value } as Parameters<typeof api.updateProperty>[1]
+        );
+        if (!response.success) throw new Error('message' in response ? response.message : 'Unable to save answer');
+      }
       await onSaved(question.prompt);
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : 'Unable to save this answer. Please try again.');
@@ -88,22 +96,28 @@ function InlineInsightQuestions({
             ) : (
               <div className="mt-3 flex gap-2">
                 <input
-                  type="number"
-                  min="1700"
-                  max={new Date().getFullYear()}
+                  type={question.inputType === 'date' ? 'date' : 'number'}
+                  min={question.inputType === 'date' ? '2000-01-01' : '1700'}
+                  max={question.inputType === 'date' ? new Date().toISOString().slice(0, 10) : String(new Date().getFullYear())}
                   placeholder={question.placeholder}
-                  value={years[question.id] ?? ''}
-                  onChange={event => setYears(current => ({ ...current, [question.id]: event.target.value }))}
-                  className="min-h-9 w-36 rounded-md border border-slate-300 bg-white px-3 text-sm"
+                  value={values[question.id] ?? ''}
+                  onChange={event => setValues(current => ({ ...current, [question.id]: event.target.value }))}
+                  className="min-h-9 w-44 rounded-md border border-slate-300 bg-white px-3 text-sm"
                 />
                 <Button
                   type="button"
                   size="sm"
-                  disabled={savingId !== null || !years[question.id]}
+                  disabled={savingId !== null || !values[question.id]}
                   onClick={() => {
-                    const year = Number(years[question.id]);
-                    if (year >= 1700 && year <= new Date().getFullYear()) void saveAnswer(question, year);
-                    else setError('Enter a valid four-digit year.');
+                    const rawValue = values[question.id];
+                    if (question.inputType === 'date') {
+                      if (rawValue) void saveAnswer(question, rawValue);
+                      else setError('Enter a valid maintenance date.');
+                    } else {
+                      const year = Number(rawValue);
+                      if (year >= 1700 && year <= new Date().getFullYear()) void saveAnswer(question, year);
+                      else setError('Enter a valid four-digit year.');
+                    }
                   }}
                 >
                   {savingId === question.id ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : null}

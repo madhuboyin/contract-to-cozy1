@@ -58,6 +58,7 @@ export interface EnvironmentInsightProperty {
   foundationType: string | null;
   hasIrrigation: boolean | null;
   hasSecondaryHeat: boolean | null;
+  hvacFilterLastCompletedDate: string | null;
 }
 
 export type EnvironmentQuestionField =
@@ -70,7 +71,8 @@ export type EnvironmentQuestionField =
   | 'heatingType'
   | 'hasSecondaryHeat'
   | 'hasIrrigation'
-  | 'foundationType';
+  | 'foundationType'
+  | 'hvacFilterLastCompletedDate';
 
 export interface EnvironmentQuestionOption {
   label: string;
@@ -83,7 +85,7 @@ export interface EnvironmentQuestion {
   field: EnvironmentQuestionField;
   prompt: string;
   reason: string;
-  inputType: 'choice' | 'year' | 'text';
+  inputType: 'choice' | 'year' | 'date' | 'text';
   options?: EnvironmentQuestionOption[];
   placeholder?: string;
 }
@@ -215,29 +217,43 @@ export function deriveEnvironmentInsights(
       const last = heatDays[heatDays.length - 1];
       const hvacAge = property.hvacInstallYear ? new Date().getFullYear() - property.hvacInstallYear : null;
       const olderHvac = hvacAge !== null && hvacAge >= 15;
+      const filterCompletedAt = property.hvacFilterLastCompletedDate ? new Date(property.hvacFilterLastCompletedDate) : null;
+      const filterDaysAgo = filterCompletedAt && !Number.isNaN(filterCompletedAt.getTime())
+        ? Math.max(0, Math.floor((Date.now() - filterCompletedAt.getTime()) / 86_400_000))
+        : null;
+      const filterAction = filterDaysAgo === null
+        ? 'Confirm when the HVAC filter was last replaced or inspected.'
+        : filterDaysAgo <= 30
+          ? `The HVAC filter was checked ${filterDaysAgo} day${filterDaysAgo === 1 ? '' : 's'} ago; no routine replacement is needed unless it looks dirty or airflow is reduced.`
+          : filterDaysAgo <= 90
+            ? `The HVAC filter was checked ${filterDaysAgo} days ago; confirm its replacement interval and inspect it before the heat if it is a 1-inch filter or airflow is reduced.`
+            : `The HVAC filter was last checked ${filterDaysAgo} days ago; inspect it before the heat arrives and replace it if dirty.`;
+      const baseImplication = olderHvac
+        ? `The recorded cooling system is approximately ${hvacAge} years old. Sustained heat may increase strain and the chance of reduced performance.`
+        : property.coolingType && property.coolingType !== 'UNKNOWN'
+          ? `This home uses ${property.coolingType.toLowerCase().replace('_', ' ')} cooling. Sustained heat can increase system demand, energy use, and indoor humidity.`
+          : 'No cooling-system type is recorded for this home, so confirm there is a safe plan for keeping indoor temperatures down.';
       insights.push({
         id: `heat-${first.date}`,
         category: 'heat',
         severity: heatDays.length >= 2 || Math.max(...heatDays.map(day => day.tempMaxF)) >= 100 || olderHvac ? 'action' : 'watch',
         title: heatDays.length >= 2 ? 'Multi-day heat risk ahead' : `High heat expected ${dayLabel(first.date)}`,
         summary: `${heatDays.length} day${heatDays.length === 1 ? '' : 's'} may reach 95°F or higher.`,
-        homeImplication: olderHvac
-          ? `The recorded cooling system is approximately ${hvacAge} years old. Sustained heat may increase strain and the chance of reduced performance.`
-          : property.coolingType && property.coolingType !== 'UNKNOWN'
-            ? `This home uses ${property.coolingType.toLowerCase().replace('_', ' ')} cooling. Sustained heat can increase system demand, energy use, and indoor humidity.`
-          : 'No cooling-system type is recorded for this home, so confirm there is a safe plan for keeping indoor temperatures down.',
+        homeImplication: filterDaysAgo !== null ? `${baseImplication} Filter maintenance was recorded ${filterDaysAgo} days ago.` : baseImplication,
         timeframe: heatDays.length > 1 ? `${dayLabel(first.date)} – ${dayLabel(last.date)}` : dayLabel(first.date),
         effectiveFrom: first.date,
         effectiveTo: last.date,
         affectedSystems: ['Cooling system', 'Electrical', 'Indoor air'],
-        recommendedActions: ['Replace or inspect the HVAC filter.', 'Keep outdoor condenser areas clear.', 'Use shades and avoid peak-hour heat-generating activities.'],
+        recommendedActions: [filterAction, 'Keep outdoor condenser areas clear.', 'Use shades and avoid peak-hour heat-generating activities.'],
         actions: [
           { label: 'Prepare the cooling system', href: maintenanceHref(property.id), kind: 'primary' },
           { label: 'Find an HVAC professional', href: providersHref(property.id), kind: 'secondary' },
         ],
-        source: olderHvac || (property.coolingType !== null && property.coolingType !== 'UNKNOWN')
-          ? 'Open-Meteo forecast and property profile'
-          : 'Open-Meteo forecast',
+        source: filterDaysAgo !== null
+          ? 'Open-Meteo forecast, property profile, and maintenance history'
+          : olderHvac || (property.coolingType !== null && property.coolingType !== 'UNKNOWN')
+            ? 'Open-Meteo forecast and property profile'
+            : 'Open-Meteo forecast',
       });
     }
 
@@ -358,6 +374,16 @@ export function deriveEnvironmentQuestions(
             { label: 'Window units', value: 'WINDOW_AC' },
             { label: 'Not sure', value: 'UNKNOWN' },
           ],
+        });
+      }
+      if (property.hvacFilterLastCompletedDate === null) {
+        add({
+          id: `${insight.id}-hvac-filter-date`,
+          insightId: insight.id,
+          field: 'hvacFilterLastCompletedDate',
+          prompt: 'When was the HVAC filter last replaced or inspected?',
+          reason: 'Recent filter maintenance can reduce unnecessary recommendations before a heat event.',
+          inputType: 'date',
         });
       }
       if (property.hvacInstallYear === null) {

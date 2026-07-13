@@ -37,4 +37,11 @@ router.get(
   EnvironmentReportController.getReport.bind(EnvironmentReportController)
 );
 
+router.post(
+  '/report/:propertyId/maintenance-context',
+  authenticate,
+  propertyAuthMiddleware,
+  EnvironmentReportController.recordMaintenanceContext.bind(EnvironmentReportController)
+);
+
 export default router;

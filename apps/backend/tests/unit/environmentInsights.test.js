@@ -25,6 +25,7 @@ const property = {
   foundationType: 'Basement',
   hasIrrigation: false,
   hasSecondaryHeat: false,
+  hvacFilterLastCompletedDate: '2026-06-15T12:00:00.000Z',
 };
 
 function sections(overrides = {}) {
@@ -138,6 +139,29 @@ test('persists unknown enum choices conceptually by not asking when UNKNOWN is a
   );
 
   assert.deepEqual(questions.map(question => question.field), ['hvacInstallYear']);
+});
+
+test('asks for HVAC filter history when heat is forecast and no completed maintenance exists', () => {
+  const heatInsight = { id: 'heat-2026-07-14', category: 'heat' };
+  const questions = deriveEnvironmentQuestions(
+    { ...property, hvacFilterLastCompletedDate: null },
+    [heatInsight]
+  );
+
+  assert.deepEqual(questions.map(question => question.field), ['hvacFilterLastCompletedDate']);
+  assert.equal(questions[0].inputType, 'date');
+});
+
+test('does not recommend routine filter replacement when maintenance was recent', () => {
+  const input = sections();
+  input.weather.data.tenDayForecast.push({ date: '2026-07-14', tempMaxF: 96, tempMinF: 75, precipitationSumIn: 0, weatherCode: 0 });
+  const insights = deriveEnvironmentInsights(
+    { ...property, hvacFilterLastCompletedDate: new Date(Date.now() - 15 * 86_400_000).toISOString() },
+    input
+  );
+
+  assert.match(insights[0].recommendedActions[0], /no routine replacement is needed/i);
+  assert.match(insights[0].source, /maintenance history/i);
 });
 
 test('uses captured roof data to personalize and elevate a snow insight', () => {
