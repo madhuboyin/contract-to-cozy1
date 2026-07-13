@@ -128,6 +128,23 @@ function getInstallYearFeedback(year: number | null | undefined): {
   return { label: `${age} yrs · Replace soon`, color: "rose", age };
 }
 
+function SystemAgeBadge({ year }: { year: number | null | undefined }) {
+  const feedback = getInstallYearFeedback(year);
+  if (!feedback) return null;
+
+  const colorMap = {
+    emerald: "border-emerald-200 bg-emerald-100/70 text-emerald-700 dark:border-emerald-800/40 dark:bg-emerald-900/30 dark:text-emerald-300",
+    amber: "border-amber-200 bg-amber-100/70 text-amber-700 dark:border-amber-800/40 dark:bg-amber-900/30 dark:text-amber-300",
+    rose: "border-rose-200 bg-rose-100/70 text-rose-700 dark:border-rose-800/40 dark:bg-rose-900/30 dark:text-rose-300",
+  };
+
+  return (
+    <span className={cn("inline-flex shrink-0 items-center whitespace-nowrap rounded-full border px-2 py-1 text-[11px] font-medium leading-none", colorMap[feedback.color!])}>
+      {feedback.label}
+    </span>
+  );
+}
+
 function getSaveBarCopy(completionPercent: number): string {
   if (completionPercent === 100) {
     return "Profile complete · Your maintenance plan is fully personalized.";
@@ -1564,10 +1581,13 @@ export default function EditPropertyPage() {
                   />
                 </div>
 
-                <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-                  <div className="flex h-full flex-col rounded-lg border border-black/5 bg-gray-50/50 p-4 dark:border-white/10 dark:bg-slate-900/30">
-                    <p className="mb-4 text-sm font-semibold text-gray-900 dark:text-slate-100">HVAC</p>
-                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+                  <div className="flex h-full flex-col rounded-lg border border-black/5 bg-gray-50/50 p-4 dark:border-white/10 dark:bg-slate-900/30 lg:col-span-3">
+                    <div className="mb-4 flex items-center justify-between gap-3">
+                      <p className="text-sm font-semibold text-gray-900 dark:text-slate-100">HVAC</p>
+                      <SystemAgeBadge year={watchHvacInstallYear} />
+                    </div>
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                       <FormField
                         control={form.control}
                         name="heatingType"
@@ -1608,43 +1628,36 @@ export default function EditPropertyPage() {
                           </FormItem>
                         )}
                       />
+                      <FormField
+                        control={form.control}
+                        name="hvacInstallYear"
+                        render={({ field }) => (
+                          <FormItem className="w-full">
+                            <div className="flex items-center gap-2">
+                              <FormLabel>Install year</FormLabel>
+                              {isRecommended("hvacInstallYear") ? <FieldNudgeChip variant="recommended" /> : null}
+                            </div>
+                            <FormControl>
+                              <Input id="field-hvacInstallYear" className="h-9 text-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40" placeholder="2018" type="number" {...field} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value === "" ? null : parseInt(e.target.value, 10))} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
                     </div>
-                    <FormField
-                      control={form.control}
-                      name="hvacInstallYear"
-                      render={({ field }) => (
-                        <FormItem className="mt-3 w-full max-w-[170px]">
-                          <div className="flex items-center gap-2">
-                            <FormLabel>Install year</FormLabel>
-                            {isRecommended("hvacInstallYear") ? <FieldNudgeChip variant="recommended" /> : null}
-                          </div>
-                          <FormControl>
-                            <Input id="field-hvacInstallYear" className="h-9 text-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40" placeholder="2018" type="number" {...field} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value === "" ? null : parseInt(e.target.value, 10))} />
-                          </FormControl>
-                          {(() => {
-                            const fb = getInstallYearFeedback(field.value);
-                            if (!fb) return null;
-                            const colorMap = {
-                              emerald: "border-emerald-200 bg-emerald-100/70 text-emerald-700 dark:border-emerald-800/40 dark:bg-emerald-900/30 dark:text-emerald-300",
-                              amber: "border-amber-200 bg-amber-100/70 text-amber-700 dark:border-amber-800/40 dark:bg-amber-900/30 dark:text-amber-300",
-                              rose: "border-rose-200 bg-rose-100/70 text-rose-700 dark:border-rose-800/40 dark:bg-rose-900/30 dark:text-rose-300",
-                            };
-                            return <span className={cn("mt-1.5 inline-flex max-w-full items-center overflow-hidden text-ellipsis whitespace-nowrap rounded-full border px-2 py-[3px] text-[11px] font-medium leading-none", colorMap[fb.color!])}>{fb.label}</span>;
-                          })()}
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
                   </div>
 
                   <div className="flex h-full flex-col rounded-lg border border-black/5 bg-gray-50/50 p-4 dark:border-white/10 dark:bg-slate-900/30">
-                    <p className="mb-4 text-sm font-semibold text-gray-900 dark:text-slate-100">Water heater</p>
-                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(150px,0.5fr)]">
-                    <FormField
-                      control={form.control}
-                      name="waterHeaterType"
-                      render={({ field }) => (
-                        <FormItem className="w-full">
+                    <div className="mb-4 flex items-center justify-between gap-3">
+                      <p className="text-sm font-semibold text-gray-900 dark:text-slate-100">Water heater</p>
+                      <SystemAgeBadge year={watchWaterHeaterInstallYear} />
+                    </div>
+                    <div className="grid grid-cols-1 gap-4">
+                      <FormField
+                        control={form.control}
+                        name="waterHeaterType"
+                        render={({ field }) => (
+                          <FormItem className="w-full">
                           <FormLabel>Type</FormLabel>
                           <Select onValueChange={(value) => field.onChange(value === "" ? null : value)} value={field.value || ""}>
                             <FormControl>
@@ -1657,14 +1670,14 @@ export default function EditPropertyPage() {
                             </SelectContent>
                           </Select>
                           <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="waterHeaterInstallYear"
-                      render={({ field }) => (
-                        <FormItem className="w-full">
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="waterHeaterInstallYear"
+                        render={({ field }) => (
+                          <FormItem className="w-full max-w-[180px]">
                           <div className="flex items-center gap-2">
                             <FormLabel>Install year</FormLabel>
                             {isRecommended("waterHeaterInstallYear") ? <FieldNudgeChip variant="recommended" /> : null}
@@ -1672,31 +1685,24 @@ export default function EditPropertyPage() {
                           <FormControl>
                             <Input id="field-waterHeaterInstallYear" className="h-9 text-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40" placeholder="2020" type="number" {...field} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value === "" ? null : parseInt(e.target.value, 10))} />
                           </FormControl>
-                          {(() => {
-                            const fb = getInstallYearFeedback(field.value);
-                            if (!fb) return null;
-                            const colorMap = {
-                              emerald: "border-emerald-200 bg-emerald-100/70 text-emerald-700 dark:border-emerald-800/40 dark:bg-emerald-900/30 dark:text-emerald-300",
-                              amber: "border-amber-200 bg-amber-100/70 text-amber-700 dark:border-amber-800/40 dark:bg-amber-900/30 dark:text-amber-300",
-                              rose: "border-rose-200 bg-rose-100/70 text-rose-700 dark:border-rose-800/40 dark:bg-rose-900/30 dark:text-rose-300",
-                            };
-                            return <span className={cn("mt-1.5 inline-flex max-w-full items-center overflow-hidden text-ellipsis whitespace-nowrap rounded-full border px-2 py-[3px] text-[11px] font-medium leading-none", colorMap[fb.color!])}>{fb.label}</span>;
-                          })()}
                           <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                          </FormItem>
+                        )}
+                      />
                     </div>
                   </div>
 
                   <div className="flex h-full flex-col rounded-lg border border-black/5 bg-gray-50/50 p-4 dark:border-white/10 dark:bg-slate-900/30">
-                    <p className="mb-4 text-sm font-semibold text-gray-900 dark:text-slate-100">Roof</p>
-                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(150px,0.5fr)]">
-                    <FormField
-                      control={form.control}
-                      name="roofType"
-                      render={({ field }) => (
-                        <FormItem className="w-full">
+                    <div className="mb-4 flex items-center justify-between gap-3">
+                      <p className="text-sm font-semibold text-gray-900 dark:text-slate-100">Roof</p>
+                      <SystemAgeBadge year={watchRoofReplacementYear} />
+                    </div>
+                    <div className="grid grid-cols-1 gap-4">
+                      <FormField
+                        control={form.control}
+                        name="roofType"
+                        render={({ field }) => (
+                          <FormItem className="w-full">
                           <FormLabel>Roof type</FormLabel>
                           <Select onValueChange={(value) => field.onChange(value === "" ? null : value)} value={field.value || ""}>
                             <FormControl>
@@ -1709,14 +1715,14 @@ export default function EditPropertyPage() {
                             </SelectContent>
                           </Select>
                           <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="roofReplacementYear"
-                      render={({ field }) => (
-                        <FormItem className="w-full">
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="roofReplacementYear"
+                        render={({ field }) => (
+                          <FormItem className="w-full max-w-[180px]">
                           <div className="flex items-center gap-2">
                             <FormLabel>Replacement year</FormLabel>
                             {isRecommended("roofReplacementYear") ? <FieldNudgeChip variant="recommended" /> : null}
@@ -1724,24 +1730,21 @@ export default function EditPropertyPage() {
                           <FormControl>
                             <Input id="field-roofReplacementYear" className="h-9 text-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40" placeholder="2010" type="number" {...field} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value === "" ? null : parseInt(e.target.value, 10))} />
                           </FormControl>
-                          {(() => {
-                            const fb = getInstallYearFeedback(field.value);
-                            if (!fb) return null;
-                            const colorMap = {
-                              emerald: "border-emerald-200 bg-emerald-100/70 text-emerald-700 dark:border-emerald-800/40 dark:bg-emerald-900/30 dark:text-emerald-300",
-                              amber: "border-amber-200 bg-amber-100/70 text-amber-700 dark:border-amber-800/40 dark:bg-amber-900/30 dark:text-amber-300",
-                              rose: "border-rose-200 bg-rose-100/70 text-rose-700 dark:border-rose-800/40 dark:bg-rose-900/30 dark:text-rose-300",
-                            };
-                            return <span className={cn("mt-1.5 inline-flex max-w-full items-center overflow-hidden text-ellipsis whitespace-nowrap rounded-full border px-2 py-[3px] text-[11px] font-medium leading-none", colorMap[fb.color!])}>{fb.label}</span>;
-                          })()}
                           <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                          </FormItem>
+                        )}
+                      />
                     </div>
                   </div>
                   <div className="flex h-full flex-col rounded-lg border border-black/5 bg-gray-50/50 p-4 dark:border-white/10 dark:bg-slate-900/30">
-                    <p className="mb-4 text-sm font-semibold text-gray-900 dark:text-slate-100">Foundation</p>
+                    <div className="mb-4 flex items-center justify-between gap-3">
+                      <p className="text-sm font-semibold text-gray-900 dark:text-slate-100">Foundation</p>
+                      {!watchFoundationType ? (
+                        <span className="inline-flex shrink-0 items-center rounded-full border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium leading-none text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">
+                          Missing
+                        </span>
+                      ) : null}
+                    </div>
                     <FormField
                       control={form.control}
                       name="foundationType"
