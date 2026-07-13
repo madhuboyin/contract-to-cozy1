@@ -12,8 +12,7 @@ import { PageHeader, PageHeaderHeading } from '@/components/page-header';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { ArrowLeft, ArrowRight, AlertTriangle, CheckCircle2, Clock3, Loader2, CloudRain, CloudSnow, CloudSun, Flame, ShieldAlert, Snowflake, Wind, Droplets, Waves, Radiation, Factory, Thermometer } from 'lucide-react';
+import { ArrowLeft, ArrowRight, AlertTriangle, CheckCircle2, Clock3, Loader2, Cloud, CloudDrizzle, CloudFog, CloudLightning, CloudRain, CloudSnow, CloudSun, Flame, ShieldAlert, Snowflake, Sun, Wind, Droplets, Waves, Radiation, Factory, Thermometer } from 'lucide-react';
 import { navigateBackWithDashboardFallback } from '@/lib/navigation/backNavigation';
 import type {
   SectionResult,
@@ -253,6 +252,104 @@ function weatherLabel(code: number): string {
   return WEATHER_CODE_LABELS[code] ?? `Weather code ${code}`;
 }
 
+function weatherIcon(code: number): ComponentType<{ className?: string }> {
+  if (code === 0 || code === 1) return Sun;
+  if (code === 2 || code === 3) return Cloud;
+  if (code === 45 || code === 48) return CloudFog;
+  if ([51, 53, 55].includes(code)) return CloudDrizzle;
+  if ([61, 63, 65, 80, 81, 82].includes(code)) return CloudRain;
+  if ([71, 73, 75, 77, 85, 86].includes(code)) return CloudSnow;
+  if ([95, 96, 99].includes(code)) return CloudLightning;
+  return CloudSun;
+}
+
+function HourlyWeatherChart({ points }: { points: WeatherReportData['hourly'] }) {
+  const data = points.slice(0, 24);
+  if (data.length < 2) return <SectionUnavailable reason="hourly_chart_unavailable" />;
+  const width = 760;
+  const height = 230;
+  const left = 42;
+  const right = 18;
+  const top = 22;
+  const bottom = 42;
+  const plotWidth = width - left - right;
+  const plotHeight = height - top - bottom;
+  const temps = data.map(point => point.temperatureF);
+  const minTemp = Math.floor(Math.min(...temps) - 2);
+  const maxTemp = Math.ceil(Math.max(...temps) + 2);
+  const tempRange = Math.max(1, maxTemp - minTemp);
+  const x = (index: number) => left + (index / (data.length - 1)) * plotWidth;
+  const y = (temperature: number) => top + ((maxTemp - temperature) / tempRange) * plotHeight;
+  const path = data.map((point, index) => `${index === 0 ? 'M' : 'L'} ${x(index).toFixed(1)} ${y(point.temperatureF).toFixed(1)}`).join(' ');
+  const labelIndexes = data.map((_, index) => index).filter(index => index % 4 === 0 || index === data.length - 1);
+
+  return (
+    <div className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50/60 p-3">
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
+        <span>Temperature and precipitation chance · next 24 hours</span>
+        <span className="flex items-center gap-3"><span className="flex items-center gap-1"><span className="h-0.5 w-4 bg-teal-600" />Temperature</span><span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm bg-sky-300" />Precipitation</span></span>
+      </div>
+      <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Hourly temperature line and precipitation probability bars" className="h-auto w-full">
+        {[0, 0.5, 1].map(fraction => {
+          const gridY = top + fraction * plotHeight;
+          const label = Math.round(maxTemp - fraction * tempRange);
+          return <g key={fraction}><line x1={left} x2={width - right} y1={gridY} y2={gridY} stroke="currentColor" className="text-slate-200" /><text x={left - 8} y={gridY + 4} textAnchor="end" className="fill-slate-400 text-[11px]">{label}°</text></g>;
+        })}
+        {data.map((point, index) => {
+          const barHeight = (point.precipitationProbabilityPercent / 100) * plotHeight;
+          const barWidth = Math.max(4, plotWidth / data.length - 5);
+          return <rect key={point.time} x={x(index) - barWidth / 2} y={top + plotHeight - barHeight} width={barWidth} height={barHeight} rx="2" className="fill-sky-200/80" />;
+        })}
+        <path d={path} fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="text-teal-600" />
+        {data.map((point, index) => index % 4 === 0 ? <circle key={point.time} cx={x(index)} cy={y(point.temperatureF)} r="3.5" className="fill-white stroke-teal-600" strokeWidth="2" /> : null)}
+        {labelIndexes.map(index => <text key={data[index].time} x={x(index)} y={height - 12} textAnchor="middle" className="fill-slate-500 text-[11px]">{new Date(data[index].time).toLocaleTimeString([], { hour: 'numeric' })}</text>)}
+      </svg>
+    </div>
+  );
+}
+
+function AqiGauge({ aqi }: { aqi: number }) {
+  const normalized = Math.min(200, Math.max(0, aqi));
+  const position = Math.min(99, Math.max(1, (normalized / 200) * 100));
+  const label = aqi <= 50 ? 'Good' : aqi <= 100 ? 'Moderate' : aqi <= 150 ? 'Unhealthy for sensitive groups' : 'Unhealthy';
+  return (
+    <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-4">
+      <div className="flex items-end justify-between gap-3"><div><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Air quality index</p><p className="mt-1 text-3xl font-bold text-slate-950">{aqi}</p></div><Badge variant={aqi > 100 ? 'destructive' : 'secondary'}>{label}</Badge></div>
+      <div className="relative mt-5 h-3 rounded-full bg-gradient-to-r from-emerald-400 via-amber-400 to-red-500" aria-label={`AQI ${aqi}, ${label}`}>
+        <span className="absolute top-1/2 h-5 w-1 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white bg-slate-950 shadow" style={{ left: `${position}%` }} />
+      </div>
+      <div className="mt-2 flex justify-between text-[10px] text-slate-500"><span>0 Good</span><span>100</span><span>200 Unhealthy</span></div>
+    </div>
+  );
+}
+
+function AqiTrendChart({ history }: { history: AirQualityData['history'] }) {
+  const data = history.slice(-14);
+  if (data.length < 2) return <SectionUnavailable reason="air_quality_history_unavailable" />;
+  const width = 640;
+  const height = 190;
+  const pad = { left: 34, right: 14, top: 18, bottom: 34 };
+  const plotWidth = width - pad.left - pad.right;
+  const plotHeight = height - pad.top - pad.bottom;
+  const max = Math.max(100, ...data.map(point => point.avgAqi));
+  const x = (index: number) => pad.left + (index / (data.length - 1)) * plotWidth;
+  const y = (value: number) => pad.top + ((max - value) / max) * plotHeight;
+  const path = data.map((point, index) => `${index === 0 ? 'M' : 'L'} ${x(index).toFixed(1)} ${y(point.avgAqi).toFixed(1)}`).join(' ');
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-3">
+      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">14-day AQI trend</p>
+      <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Fourteen-day air quality index trend" className="mt-2 h-auto w-full">
+        <rect x={pad.left} y={y(100)} width={plotWidth} height={Math.max(0, y(50) - y(100))} className="fill-amber-50" />
+        {[50, 100].map(value => <g key={value}><line x1={pad.left} x2={width - pad.right} y1={y(value)} y2={y(value)} stroke="currentColor" className="text-slate-200" /><text x={pad.left - 7} y={y(value) + 4} textAnchor="end" className="fill-slate-400 text-[10px]">{value}</text></g>)}
+        <path d={path} fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="text-amber-600" />
+        {data.map((point, index) => <circle key={point.date} cx={x(index)} cy={y(point.avgAqi)} r={index === data.length - 1 ? 4 : 2.5} className="fill-white stroke-amber-600" strokeWidth="2" />)}
+        <text x={pad.left} y={height - 8} className="fill-slate-500 text-[10px]">{new Date(data[0].date).toLocaleDateString([], { month: 'short', day: 'numeric' })}</text>
+        <text x={width - pad.right} y={height - 8} textAnchor="end" className="fill-slate-500 text-[10px]">{new Date(data[data.length - 1].date).toLocaleDateString([], { month: 'short', day: 'numeric' })}</text>
+      </svg>
+    </div>
+  );
+}
+
 function SectionUnavailable({ reason }: { reason?: string }) {
   return (
     <div className="flex items-center gap-2 rounded-lg border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-sm text-slate-500">
@@ -296,64 +393,53 @@ function WeatherSection({ result }: { result: SectionResult<WeatherReportData> }
     );
   }
   const { current, hourly, tenDayForecast, thirtyDayHistory } = result.data;
+  const CurrentIcon = weatherIcon(current.weatherCode);
 
   return (
     <SectionCard icon={CloudSun} title="Weather" description={weatherLabel(current.weatherCode)}>
-      <Tabs defaultValue="current">
-        <TabsList>
-          <TabsTrigger value="current">Current</TabsTrigger>
-          <TabsTrigger value="hourly">Hourly</TabsTrigger>
-          <TabsTrigger value="forecast">10-Day Forecast</TabsTrigger>
-          <TabsTrigger value="history">30-Day History</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="current" className="mt-4">
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-            <Stat label="Temperature" value={`${Math.round(current.temperatureF)}°F`} />
-            <Stat label="Feels like" value={`${Math.round(current.apparentTemperatureF)}°F`} />
-            <Stat label="Humidity" value={`${current.humidityPercent}%`} />
-            <Stat label="Wind" value={`${Math.round(current.windSpeedMph)} mph`} />
+      <div className="space-y-6">
+        <div className="grid gap-4 rounded-2xl border border-sky-100 bg-gradient-to-br from-sky-50 via-white to-amber-50 p-5 sm:grid-cols-[minmax(0,1.25fr)_minmax(280px,1fr)] sm:p-6">
+          <div className="flex items-center gap-4">
+            <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl bg-white/80 text-amber-500 shadow-sm"><CurrentIcon className="h-11 w-11" /></div>
+            <div><p className="text-sm font-medium text-slate-600">Right now</p><p className="mt-1 text-5xl font-bold tracking-tight text-slate-950">{Math.round(current.temperatureF)}°</p><p className="mt-1 text-sm text-slate-600">{weatherLabel(current.weatherCode)} · Feels like {Math.round(current.apparentTemperatureF)}°F</p></div>
           </div>
-        </TabsContent>
-
-        <TabsContent value="hourly" className="mt-4">
-          <div className="max-h-64 overflow-y-auto">
-            <SimpleTable
-              rows={hourly.slice(0, 24).map(h => [
-                new Date(h.time).toLocaleTimeString([], { hour: 'numeric' }),
-                `${Math.round(h.temperatureF)}°F`,
-                `${h.precipitationProbabilityPercent}% precip`,
-              ])}
-            />
+          <div className="grid grid-cols-3 gap-2 self-center">
+            <div className="rounded-xl bg-white/75 p-3"><Droplets className="h-4 w-4 text-sky-600" /><p className="mt-2 text-xs text-slate-500">Humidity</p><p className="font-bold text-slate-900">{current.humidityPercent}%</p></div>
+            <div className="rounded-xl bg-white/75 p-3"><Wind className="h-4 w-4 text-teal-600" /><p className="mt-2 text-xs text-slate-500">Wind</p><p className="font-bold text-slate-900">{Math.round(current.windSpeedMph)} mph</p></div>
+            <div className="rounded-xl bg-white/75 p-3"><CloudRain className="h-4 w-4 text-indigo-600" /><p className="mt-2 text-xs text-slate-500">Rain now</p><p className="font-bold text-slate-900">{current.precipitationIn.toFixed(2)} in</p></div>
           </div>
-        </TabsContent>
+        </div>
 
-        <TabsContent value="forecast" className="mt-4">
-          <SimpleTable
-            rows={tenDayForecast.map(d => [
-              new Date(d.date).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' }),
-              `${Math.round(d.tempMaxF)}° / ${Math.round(d.tempMinF)}°F`,
-              `${d.precipitationSumIn.toFixed(2)}in`,
-            ])}
-          />
-        </TabsContent>
-
-        <TabsContent value="history" className="mt-4">
-          <div className="max-h-64 overflow-y-auto">
-            {thirtyDayHistory.length === 0 ? (
-              <SectionUnavailable reason="history_unavailable" />
-            ) : (
-              <SimpleTable
-                rows={thirtyDayHistory.map(d => [
-                  new Date(d.date).toLocaleDateString([], { month: 'short', day: 'numeric' }),
-                  `${Math.round(d.tempMaxF)}° / ${Math.round(d.tempMinF)}°F`,
-                  `${d.precipitationSumIn.toFixed(2)}in`,
-                ])}
-              />
-            )}
+        <div>
+          <div className="mb-3 flex items-end justify-between gap-3"><div><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Coming up</p><h3 className="mt-1 text-lg font-bold text-slate-950">7-day forecast</h3></div><p className="text-xs text-slate-500">High / low · precipitation</p></div>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
+            {tenDayForecast.slice(0, 7).map((day, index) => {
+              const DayIcon = weatherIcon(day.weatherCode);
+              const weatherRisk = [65, 75, 82, 95, 96, 99].includes(day.weatherCode);
+              return (
+                <div key={day.date} className={weatherRisk ? 'rounded-xl border border-amber-200 bg-amber-50/70 p-3' : 'rounded-xl border border-slate-200 bg-white p-3'}>
+                  <p className="text-xs font-semibold text-slate-700">{index === 0 ? 'Today' : new Date(`${day.date}T12:00:00`).toLocaleDateString([], { weekday: 'short' })}</p>
+                  <DayIcon className={weatherRisk ? 'my-3 h-7 w-7 text-amber-600' : 'my-3 h-7 w-7 text-sky-600'} />
+                  <p className="text-sm font-bold text-slate-950">{Math.round(day.tempMaxF)}° <span className="font-medium text-slate-400">{Math.round(day.tempMinF)}°</span></p>
+                  <p className="mt-1 text-[11px] text-slate-500">{day.precipitationSumIn.toFixed(2)} in</p>
+                  {weatherRisk ? <p className="mt-2 text-[10px] font-semibold uppercase tracking-wide text-amber-700">Watch</p> : null}
+                </div>
+              );
+            })}
           </div>
-        </TabsContent>
-      </Tabs>
+        </div>
+
+        <div><h3 className="mb-3 text-lg font-bold text-slate-950">Hourly outlook</h3><HourlyWeatherChart points={hourly} /></div>
+
+        <details className="rounded-xl border border-slate-200 bg-white">
+          <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-slate-700">View detailed weather data</summary>
+          <div className="grid gap-5 border-t border-slate-200 p-4 lg:grid-cols-3">
+            <div><p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Hourly</p><div className="max-h-64 overflow-y-auto"><SimpleTable rows={hourly.slice(0, 24).map(h => [new Date(h.time).toLocaleTimeString([], { hour: 'numeric' }), `${Math.round(h.temperatureF)}°F`, `${h.precipitationProbabilityPercent}% precip`])} /></div></div>
+            <div><p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">10-day forecast</p><div className="max-h-64 overflow-y-auto"><SimpleTable rows={tenDayForecast.map(d => [new Date(`${d.date}T12:00:00`).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' }), `${Math.round(d.tempMaxF)}° / ${Math.round(d.tempMinF)}°F`, `${d.precipitationSumIn.toFixed(2)}in`])} /></div></div>
+            <div><p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">30-day history</p><div className="max-h-64 overflow-y-auto">{thirtyDayHistory.length === 0 ? <SectionUnavailable reason="history_unavailable" /> : <SimpleTable rows={thirtyDayHistory.map(d => [new Date(`${d.date}T12:00:00`).toLocaleDateString([], { month: 'short', day: 'numeric' }), `${Math.round(d.tempMaxF)}° / ${Math.round(d.tempMinF)}°F`, `${d.precipitationSumIn.toFixed(2)}in`])} />}</div></div>
+          </div>
+        </details>
+      </div>
     </SectionCard>
   );
 }
@@ -367,26 +453,16 @@ function AirQualitySection({ result }: { result: SectionResult<AirQualityData> }
     );
   }
   const { current, history } = result.data;
-  const tone = current.aqi <= 50 ? 'good' : current.aqi <= 100 ? 'moderate' : 'unhealthy';
 
   return (
     <SectionCard icon={Wind} title="Air Quality">
-      <div className="mb-4 grid grid-cols-3 gap-4">
-        <Stat label="AQI" value={String(current.aqi)} tone={tone} />
-        <Stat label="PM2.5" value={`${current.pm2_5} µg/m³`} />
-        <Stat label="PM10" value={`${current.pm10} µg/m³`} />
-      </div>
-      {history.length > 0 && (
-        <div className="max-h-48 overflow-y-auto">
-          <SimpleTable
-            rows={history.slice(-14).map(h => [
-              new Date(h.date).toLocaleDateString([], { month: 'short', day: 'numeric' }),
-              `AQI ${h.avgAqi}`,
-              `PM2.5 ${h.avgPm2_5}`,
-            ])}
-          />
+      <div className="space-y-4">
+        <div className="grid gap-4 lg:grid-cols-[minmax(260px,0.8fr)_minmax(0,1.4fr)]">
+          <div className="space-y-3"><AqiGauge aqi={current.aqi} /><div className="grid grid-cols-2 gap-3"><div className="rounded-xl border border-slate-200 p-3"><p className="text-xs text-slate-500">PM2.5</p><p className="mt-1 text-lg font-bold text-slate-950">{current.pm2_5} <span className="text-xs font-medium text-slate-500">µg/m³</span></p></div><div className="rounded-xl border border-slate-200 p-3"><p className="text-xs text-slate-500">PM10</p><p className="mt-1 text-lg font-bold text-slate-950">{current.pm10} <span className="text-xs font-medium text-slate-500">µg/m³</span></p></div></div></div>
+          <AqiTrendChart history={history} />
         </div>
-      )}
+        {history.length > 0 ? <details className="rounded-xl border border-slate-200"><summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-slate-700">View detailed air-quality data</summary><div className="max-h-64 overflow-y-auto border-t border-slate-200 p-4"><SimpleTable rows={history.slice(-14).map(h => [new Date(`${h.date}T12:00:00`).toLocaleDateString([], { month: 'short', day: 'numeric' }), `AQI ${h.avgAqi}`, `PM2.5 ${h.avgPm2_5}`])} /></div></details> : null}
+      </div>
     </SectionCard>
   );
 }
