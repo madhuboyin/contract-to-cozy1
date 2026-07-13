@@ -2185,6 +2185,10 @@ model Property {
   // Neighbourhood Trust Network
   neighbourhoodEndorsements NeighbourhoodEndorsement[]
 
+  // Personalization engine (Phase 0 thin proof — see
+  // docs/personalization/adr-0001-personalization-module-foundation.md)
+  personalizationEvaluationRuns PersonalizationEvaluationRun[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -12723,6 +12727,7 @@ model RecommendationDefinition {
 
   rules           RecommendationRule[]
   contentVersions RecommendationContentVersion[]
+  evaluationRuns  PersonalizationEvaluationRun[]
 
   @@index([status, effectiveFrom, effectiveTo])
   @@index([category, status])
@@ -12731,8 +12736,9 @@ model RecommendationDefinition {
 
 // One immutable, validated-AST version of a definition's eligibility/scoring
 // logic. `ruleAst` is intentionally opaque JSON at the schema level — the
-// typed validator/evaluator that enforces its shape is separate, not-yet-built
-// work (the roadmap's "first implementation step").
+// typed validator/evaluator that enforces its shape lives in
+// apps/backend/src/modules/personalization/domain/{ruleAst,evaluator}.ts
+// (the roadmap's "first implementation step", built 2026-07-13).
 model RecommendationRule {
   id             String   @id @default(uuid())
   definitionId   String
@@ -12818,4 +12824,35 @@ model PersonalizationAuditEvent {
   @@index([entityType, entityId, createdAt])
   @@index([actorUserId, createdAt])
   @@map("personalization_audit_events")
+}
+
+// Minimal evaluation-run record for the roadmap's "first implementation
+// step" thin proof — NOT the full TraitSnapshot/PersonalizationSnapshot/
+// Household apparatus from docs/personalization/05-data-model.md's 24-entity
+// sketch (that's Phase 1 MVP build-out, deliberately not built yet; see
+// adr-0001). Records that an evaluation happened, against which rule
+// version, with what result — a compact snapshot, not a queryable trait
+// history table.
+model PersonalizationEvaluationRun {
+  id           String  @id @default(uuid())
+  propertyId   String
+  definitionId String
+  ruleVersion  Int
+  trigger      String  @default("MANUAL") // MANUAL | PROOF (no scheduled/event trigger wired yet)
+  status       String  @default("PENDING") // PENDING | COMPLETED | FAILED
+  result       String? // TRUE | FALSE | UNKNOWN
+  resultJson   Json? // compact { traits, evidence } snapshot — never raw sensitive payloads
+  errorCode    String?
+
+  startedAt   DateTime  @default(now())
+  completedAt DateTime?
+  durationMs  Int?
+
+  property   Property                 @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  definition RecommendationDefinition @relation(fields: [definitionId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId, status])
+  @@index([definitionId, status])
+  @@index([startedAt])
+  @@map("personalization_evaluation_runs")
 }

@@ -1,13 +1,13 @@
 // apps/backend/prisma/seedPersonalizationCatalog.ts
 // Seeds the Phase 0 personalization catalog content plan
-// (src/personalization/catalog/catalogPlan.ts, mirrored in
+// (src/modules/personalization/catalog/catalogPlan.ts, mirrored in
 // docs/personalization/catalog-plan.md) as inert DRAFT
 // RecommendationDefinition rows. No rules, no content versions — nothing
 // here is ACTIVE or evaluatable. Idempotent: safe to re-run, upserts by the
 // unique `code`.
 // Run: npx ts-node prisma/seedPersonalizationCatalog.ts
 import { PrismaClient } from '@prisma/client';
-import { CATALOG_PLAN } from '../src/personalization/catalog/catalogPlan';
+import { CATALOG_PLAN } from '../src/modules/personalization/catalog/catalogPlan';
 
 const prisma = new PrismaClient();
 

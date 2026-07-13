@@ -1,4 +1,4 @@
-// apps/backend/src/personalization/catalog/fixtureTypes.ts
+// apps/backend/src/modules/personalization/catalog/fixtureTypes.ts
 //
 // Golden-fixture format for the personalization catalog, per
 // docs/personalization/10-testing-strategy.md: "Store versioned, synthetic

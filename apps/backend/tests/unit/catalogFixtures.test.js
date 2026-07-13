@@ -6,10 +6,10 @@ const path = require('node:path');
 
 require('ts-node/register');
 
-const { validateCatalogFixtures } = require('../../src/personalization/catalog/validateFixtures.ts');
-const { CATALOG_PLAN } = require('../../src/personalization/catalog/catalogPlan.ts');
+const { validateCatalogFixtures } = require('../../src/modules/personalization/catalog/validateFixtures.ts');
+const { CATALOG_PLAN } = require('../../src/modules/personalization/catalog/catalogPlan.ts');
 
-const REAL_FIXTURES_DIR = path.join(__dirname, '../../src/personalization/catalog/fixtures');
+const REAL_FIXTURES_DIR = path.join(__dirname, '../../src/modules/personalization/catalog/fixtures');
 
 test('CATALOG_PLAN has 20-40 entries with unique codes, per the roadmap target range', () => {
   assert.ok(CATALOG_PLAN.length >= 20 && CATALOG_PLAN.length <= 40, `expected 20-40 entries, got ${CATALOG_PLAN.length}`);

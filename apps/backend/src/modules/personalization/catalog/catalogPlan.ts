@@ -1,4 +1,4 @@
-// apps/backend/src/personalization/catalog/catalogPlan.ts
+// apps/backend/src/modules/personalization/catalog/catalogPlan.ts
 //
 // Typed mirror of docs/personalization/catalog-plan.md's Phase 0 content
 // plan. This is a PLAN, not authored content — no rule logic, no advice

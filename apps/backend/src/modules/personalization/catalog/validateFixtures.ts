@@ -1,4 +1,4 @@
-// apps/backend/src/personalization/catalog/validateFixtures.ts
+// apps/backend/src/modules/personalization/catalog/validateFixtures.ts
 //
 // Golden-fixture "catalog lint" per docs/personalization/10-testing-strategy.md:
 // "every active definition has positive, negative, unknown and suppression
