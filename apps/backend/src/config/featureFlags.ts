@@ -99,6 +99,22 @@ const TOOL_DEFAULTS: Record<string, { label: string; defaultPct: number }> = {
   RENOVATION_RISK_ADVISOR:   { label: 'Renovation Risk Advisor',     defaultPct: 100 },
   PLANT_ADVISOR:             { label: 'Plant Advisor',               defaultPct: 100 },
   NEIGHBORHOOD_CHANGE_RADAR: { label: 'Neighborhood Change Radar',   defaultPct: 25  },
+
+  // Personalization engine — one flag per consumer, per docs/personalization
+  // 09-implementation-roadmap.md's "Migration order by consumer" and its
+  // "Each consumer has a separate flag" rollout policy. All start at 0
+  // (DISABLED) since no personalization evaluation code exists yet; a
+  // consumer flips on only once that module's integration is actually built.
+  // Separate from the emergency kill switch (personalizationKillSwitch.service.ts),
+  // which is a DB-backed, instantly-flippable system-wide pause rather than a
+  // staged env-var rollout.
+  PERSONALIZATION_SHADOW:        { label: 'Personalization — Shadow Evaluation',   defaultPct: 0 },
+  PERSONALIZATION_MAINTENANCE:   { label: 'Personalization — Maintenance',         defaultPct: 0 },
+  PERSONALIZATION_HEALTH:        { label: 'Personalization — Health',              defaultPct: 0 },
+  PERSONALIZATION_DASHBOARD:     { label: 'Personalization — Dashboard',           defaultPct: 0 },
+  PERSONALIZATION_SELLER_PREP:   { label: 'Personalization — Seller Prep',         defaultPct: 0 },
+  PERSONALIZATION_RISK_CLIMATE:  { label: 'Personalization — Risk & Climate',      defaultPct: 0 },
+  PERSONALIZATION_NOTIFICATIONS: { label: 'Personalization — Notification Gating', defaultPct: 0 },
 };
 
 // ============================================================================
