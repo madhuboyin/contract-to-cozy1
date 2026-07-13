@@ -1,4 +1,8 @@
 import {
+  GardenIrrigationType,
+  GardenSoilDrainage,
+  GardenSunExposure,
+  PlantLocationType,
   PlantGoalType,
   PlantLightLevel,
   PlantMaintenanceLevel,
@@ -51,3 +55,35 @@ export const addRoomPlantRecommendationToHomeBodySchema = z.object({
   note: z.string().max(500).optional().nullable(),
   occurredAt: z.string().datetime().optional(),
 });
+
+export const createHomePlantBodySchema = z.object({
+  name: z.string().trim().min(1).max(120),
+  nickname: z.string().trim().max(120).optional().nullable(),
+  locationType: z.nativeEnum(PlantLocationType),
+  roomId: z.string().uuid().optional().nullable(),
+  gardenZoneId: z.string().uuid().optional().nullable(),
+  acquiredAt: z.coerce.date().optional().nullable(),
+  notes: z.string().max(1000).optional().nullable(),
+}).superRefine((value, ctx) => {
+  if (value.locationType === 'INDOOR' && !value.roomId) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['roomId'], message: 'Indoor plants require a room.' });
+  if (value.locationType === 'OUTDOOR' && !value.gardenZoneId) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['gardenZoneId'], message: 'Outdoor plants require a garden zone.' });
+});
+
+export const updateHomePlantCareBodySchema = z.object({
+  lastWateredAt: z.coerce.date().optional().nullable(),
+  lastInspectedAt: z.coerce.date().optional().nullable(),
+  nickname: z.string().trim().max(120).optional().nullable(),
+  notes: z.string().max(1000).optional().nullable(),
+  isActive: z.boolean().optional(),
+});
+
+export const gardenZoneBodySchema = z.object({
+  name: z.string().trim().min(1).max(120),
+  sunExposure: z.nativeEnum(GardenSunExposure).optional(),
+  soilDrainage: z.nativeEnum(GardenSoilDrainage).optional(),
+  irrigationType: z.nativeEnum(GardenIrrigationType).optional(),
+  frostPocket: z.boolean().optional(),
+  notes: z.string().max(1000).optional().nullable(),
+});
+
+export const updateGardenZoneBodySchema = gardenZoneBodySchema.partial();

@@ -506,6 +506,7 @@ model InventoryRoom {
   homeItems            HomeItem[]
   plantProfiles        RoomPlantProfile[]
   plantRecommendations RoomPlantRecommendation[]
+  homePlants           HomePlant[]
   materialSpecs        MaterialSpec[]
   projectProgressLogs  ProjectProgressLog[]
 
@@ -2046,6 +2047,8 @@ model Property {
   roomChecklistItems       RoomChecklistItem[]
   roomPlantProfiles        RoomPlantProfile[]
   roomPlantRecommendations RoomPlantRecommendation[]
+  homePlants               HomePlant[]
+  gardenZones              GardenZone[]
   homeEvents               HomeEvent[]
   financeSnapshots         PropertyFinanceSnapshot[]
   toolOverrides            ToolOverride[]
@@ -7820,6 +7823,33 @@ enum PlantRecommendationStatus {
   DISMISSED
 }
 
+enum PlantLocationType {
+  INDOOR
+  OUTDOOR
+}
+
+enum GardenSunExposure {
+  FULL_SUN
+  PART_SUN
+  SHADE
+  UNKNOWN
+}
+
+enum GardenSoilDrainage {
+  FAST
+  MODERATE
+  SLOW
+  UNKNOWN
+}
+
+enum GardenIrrigationType {
+  NONE
+  MANUAL
+  DRIP
+  SPRINKLER
+  UNKNOWN
+}
+
 model PlantCatalog {
   id String @id @default(uuid())
 
@@ -7851,6 +7881,7 @@ model PlantCatalog {
   updatedAt DateTime @updatedAt
 
   recommendations RoomPlantRecommendation[]
+  homePlants       HomePlant[]
 
   @@index([commonName])
   @@index([scientificName])
@@ -7909,6 +7940,7 @@ model RoomPlantRecommendation {
   room             InventoryRoom    @relation(fields: [roomId], references: [id], onDelete: Cascade)
   roomPlantProfile RoomPlantProfile @relation(fields: [roomPlantProfileId], references: [id], onDelete: Cascade)
   plantCatalog     PlantCatalog     @relation(fields: [plantCatalogId], references: [id], onDelete: Cascade)
+  sourceHomePlant  HomePlant?
 
   @@unique([roomPlantProfileId, plantCatalogId])
   @@index([propertyId])
@@ -7920,6 +7952,56 @@ model RoomPlantRecommendation {
   @@index([propertyId, roomId, status, rank])
   @@index([roomPlantProfileId, status, rank])
   @@map("room_plant_recommendations")
+}
+
+model GardenZone {
+  id         String @id @default(uuid())
+  propertyId String
+  name       String
+  sunExposure GardenSunExposure @default(UNKNOWN)
+  soilDrainage GardenSoilDrainage @default(UNKNOWN)
+  irrigationType GardenIrrigationType @default(UNKNOWN)
+  frostPocket Boolean @default(false)
+  notes String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  plants HomePlant[]
+
+  @@unique([propertyId, name])
+  @@index([propertyId])
+  @@map("garden_zones")
+}
+
+model HomePlant {
+  id         String @id @default(uuid())
+  propertyId String
+  roomId String?
+  gardenZoneId String?
+  plantCatalogId String?
+  sourceRecommendationId String? @unique
+  name String
+  nickname String?
+  locationType PlantLocationType @default(INDOOR)
+  acquiredAt DateTime?
+  lastWateredAt DateTime?
+  lastInspectedAt DateTime?
+  notes String?
+  isActive Boolean @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  room InventoryRoom? @relation(fields: [roomId], references: [id], onDelete: SetNull)
+  gardenZone GardenZone? @relation(fields: [gardenZoneId], references: [id], onDelete: SetNull)
+  plantCatalog PlantCatalog? @relation(fields: [plantCatalogId], references: [id], onDelete: SetNull)
+  sourceRecommendation RoomPlantRecommendation? @relation(fields: [sourceRecommendationId], references: [id], onDelete: SetNull)
+
+  @@index([propertyId, locationType, isActive])
+  @@index([roomId])
+  @@index([gardenZoneId])
+  @@map("home_plants")
 }
 
 model RoomChecklistItem {

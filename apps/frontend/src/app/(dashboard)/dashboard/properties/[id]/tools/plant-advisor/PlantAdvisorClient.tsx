@@ -60,6 +60,7 @@ import {
   trackPlantAdvisorEvent,
   upsertRoomPlantProfile,
 } from './plantAdvisorApi';
+import WeatherAwarePlantCare from './WeatherAwarePlantCare';
 import type {
   PlantAdvisorRoomStateDTO,
   PlantAdvisorRoomSummaryDTO,
@@ -488,6 +489,7 @@ export default function PlantAdvisorClient() {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: [ROOMS_QUERY_KEY, propertyId] }),
       queryClient.invalidateQueries({ queryKey: [PROFILE_QUERY_KEY, propertyId, selectedRoomId] }),
+      queryClient.invalidateQueries({ queryKey: ['plant-care-outlook', propertyId] }),
     ]);
   }, [propertyId, queryClient, selectedRoomId]);
 
@@ -614,7 +616,7 @@ export default function PlantAdvisorClient() {
         plant_catalog_id: result.recommendation.plantCatalogId,
         home_event_id: result.homeEventId ?? null,
       });
-      toast({ title: 'Added to home timeline' });
+      toast({ title: 'Added to My Plants and home timeline' });
       await invalidateRoomData();
     },
     onError: (error) => {
@@ -716,6 +718,8 @@ export default function PlantAdvisorClient() {
       <div className="space-y-6 lg:grid lg:grid-cols-[minmax(0,1fr)_320px] lg:gap-6 lg:space-y-0 xl:grid-cols-[minmax(0,1fr)_360px]">
         <div className="space-y-6">
           <HomeToolHeader toolId="plant-advisor" propertyId={propertyId} />
+
+          <WeatherAwarePlantCare propertyId={propertyId} />
 
           <MobileSection>
             <MobileSectionHeader

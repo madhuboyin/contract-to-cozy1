@@ -347,6 +347,7 @@ test('add-to-home flow is idempotent when event already exists', async () => {
   const originalUpdate = prisma.roomPlantRecommendation.update;
   const originalFindFirst = prisma.homeEvent.findFirst;
   const originalCreate = prisma.homeEvent.create;
+  const originalHomePlantUpsert = prisma.homePlant.upsert;
 
   service.getScopedRecommendation = async () => ({
     id: 'rec-1',
@@ -385,14 +386,17 @@ test('add-to-home flow is idempotent when event already exists', async () => {
     createCalled = true;
     return { id: 'new-event' };
   };
+  prisma.homePlant.upsert = async () => ({ id: 'home-plant-1' });
 
   const result = await service.addRecommendationToHome('prop', 'room', 'rec-1', 'user-1', {});
   assert.equal(createCalled, false);
   assert.equal(result.homeEventId, 'existing-event');
   assert.equal(result.recommendation.status, 'SAVED');
+  assert.equal(result.homePlantId, 'home-plant-1');
 
   service.getScopedRecommendation = originalScoped;
   prisma.roomPlantRecommendation.update = originalUpdate;
   prisma.homeEvent.findFirst = originalFindFirst;
   prisma.homeEvent.create = originalCreate;
+  prisma.homePlant.upsert = originalHomePlantUpsert;
 });

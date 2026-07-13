@@ -1,9 +1,31 @@
 import { NextFunction, Response } from 'express';
 import { CustomRequest } from '../types';
 import { RoomPlantAdvisorService } from '../services/roomPlantAdvisor.service';
+import { PlantCarePlannerService } from '../services/plantCarePlanner.service';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
 
 const service = new RoomPlantAdvisorService();
+const carePlanner = new PlantCarePlannerService();
+
+export async function getPlantCareOutlook(req: CustomRequest, res: Response, next: NextFunction) {
+  try { res.json({ success: true, data: await carePlanner.getOutlook(req.params.propertyId) }); } catch (err) { next(err); }
+}
+
+export async function createHomePlant(req: CustomRequest, res: Response, next: NextFunction) {
+  try { res.status(201).json({ success: true, data: await carePlanner.createPlant(req.params.propertyId, req.body) }); } catch (err) { next(err); }
+}
+
+export async function updateHomePlantCare(req: CustomRequest, res: Response, next: NextFunction) {
+  try { res.json({ success: true, data: await carePlanner.updatePlantCare(req.params.propertyId, req.params.plantId, req.body) }); } catch (err) { next(err); }
+}
+
+export async function createGardenZone(req: CustomRequest, res: Response, next: NextFunction) {
+  try { res.status(201).json({ success: true, data: await carePlanner.createGardenZone(req.params.propertyId, req.body) }); } catch (err) { next(err); }
+}
+
+export async function updateGardenZone(req: CustomRequest, res: Response, next: NextFunction) {
+  try { res.json({ success: true, data: await carePlanner.updateGardenZone(req.params.propertyId, req.params.zoneId, req.body) }); } catch (err) { next(err); }
+}
 
 export async function listEligiblePlantAdvisorRooms(req: CustomRequest, res: Response, next: NextFunction) {
   try {
@@ -147,4 +169,3 @@ export async function addRoomPlantRecommendationToHome(req: CustomRequest, res: 
     next(err);
   }
 }
-

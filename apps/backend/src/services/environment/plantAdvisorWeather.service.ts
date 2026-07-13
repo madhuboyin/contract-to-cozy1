@@ -180,7 +180,7 @@ export async function getPlantAdvisorWeatherModules(
   insights: EnvironmentInsight[]
 ): Promise<PlantAdvisorWeatherModule[]> {
   const propertyId = property.id;
-  const [profileRows, recommendationRows, addedEvents] = await Promise.all([
+  const [profileRows, recommendationRows, addedEvents, homePlants] = await Promise.all([
     prisma.roomPlantProfile.findMany({
       where: { propertyId },
       orderBy: { updatedAt: 'desc' },
@@ -206,6 +206,15 @@ export async function getPlantAdvisorWeatherModules(
       where: { propertyId, subtype: 'SMART_PLANT_ADVISOR' },
       select: { meta: true },
     }),
+    prisma.homePlant.findMany({
+      where: { propertyId, locationType: 'INDOOR', isActive: true, roomId: { not: null } },
+      include: {
+        room: { select: { id: true, name: true } },
+        plantCatalog: {
+          select: { humidityPreference: true, lightLevel: true, maintenanceLevel: true, wateringCadenceDays: true },
+        },
+      },
+    }),
   ]);
 
   const latestProfiles = new Map<string, (typeof profileRows)[number]>();
@@ -225,7 +234,20 @@ export async function getPlantAdvisorWeatherModules(
       roomName: profile.room.name,
       roomType: profile.detectedRoomType ?? profile.room.type ?? null,
     })),
-    plants: recommendationRows.map(recommendation => ({
+    plants: [
+      ...homePlants.filter(plant => plant.room).map(plant => ({
+        recommendationId: plant.sourceRecommendationId ?? plant.id,
+        name: plant.nickname || plant.name,
+        roomId: plant.roomId!,
+        roomName: plant.room!.name,
+        status: 'SAVED',
+        isAddedToHome: true,
+        humidityPreference: plant.plantCatalog?.humidityPreference ?? 'MODERATE',
+        lightLevel: plant.plantCatalog?.lightLevel ?? 'MEDIUM',
+        maintenanceLevel: plant.plantCatalog?.maintenanceLevel ?? 'MEDIUM',
+        wateringCadenceDays: plant.plantCatalog?.wateringCadenceDays ?? null,
+      })),
+      ...recommendationRows.filter(recommendation => !homePlants.some(plant => plant.sourceRecommendationId === recommendation.id)).map(recommendation => ({
       recommendationId: recommendation.id,
       name: recommendation.plantCatalog.commonName,
       roomId: recommendation.roomId,
@@ -236,7 +258,8 @@ export async function getPlantAdvisorWeatherModules(
       lightLevel: recommendation.plantCatalog.lightLevel,
       maintenanceLevel: recommendation.plantCatalog.maintenanceLevel,
       wateringCadenceDays: recommendation.plantCatalog.wateringCadenceDays,
-    })),
+      })),
+    ],
   };
 
   return derivePlantAdvisorWeatherModules(propertyId, sections, insights, context, property);

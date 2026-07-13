@@ -1151,9 +1151,32 @@ export class RoomPlantAdvisorService {
       eventId = created.id;
     }
 
+    const homePlant = await prisma.homePlant.upsert({
+      where: { sourceRecommendationId: recommendationId },
+      create: {
+        propertyId,
+        roomId,
+        plantCatalogId: recommendation.plantCatalogId,
+        sourceRecommendationId: recommendationId,
+        name: recommendation.plantCatalog.commonName,
+        locationType: 'INDOOR',
+        acquiredAt: input.occurredAt ? new Date(input.occurredAt) : new Date(),
+        notes: input.note ?? null,
+      },
+      update: {
+        roomId,
+        plantCatalogId: recommendation.plantCatalogId,
+        name: recommendation.plantCatalog.commonName,
+        isActive: true,
+        ...(input.note !== undefined ? { notes: input.note } : {}),
+      },
+      select: { id: true },
+    });
+
     return {
       recommendation: this.mapRecommendationDTO(updated),
       homeEventId: eventId,
+      homePlantId: homePlant.id,
     };
   }
 }

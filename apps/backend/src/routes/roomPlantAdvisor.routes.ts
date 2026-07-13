@@ -12,17 +12,32 @@ import {
   listPlantCatalog,
   saveRoomPlantRecommendation,
   upsertRoomPlantProfile,
+  getPlantCareOutlook,
+  createHomePlant,
+  updateHomePlantCare,
+  createGardenZone,
+  updateGardenZone,
 } from '../controllers/roomPlantAdvisor.controller';
 import {
   addRoomPlantRecommendationToHomeBodySchema,
   generateRoomPlantRecommendationsBodySchema,
   upsertRoomPlantProfileBodySchema,
+  createHomePlantBodySchema,
+  updateHomePlantCareBodySchema,
+  gardenZoneBodySchema,
+  updateGardenZoneBodySchema,
 } from '../validators/roomPlantAdvisor.validators';
 
 const router = Router();
 
 router.use(apiRateLimiter);
 router.use(authenticate);
+
+router.get('/properties/:propertyId/plant-advisor/care-outlook', propertyAuthMiddleware, getPlantCareOutlook);
+router.post('/properties/:propertyId/plant-advisor/plants', propertyAuthMiddleware, validateBody(createHomePlantBodySchema), createHomePlant);
+router.patch('/properties/:propertyId/plant-advisor/plants/:plantId/care', propertyAuthMiddleware, validateBody(updateHomePlantCareBodySchema), updateHomePlantCare);
+router.post('/properties/:propertyId/plant-advisor/garden-zones', propertyAuthMiddleware, validateBody(gardenZoneBodySchema), createGardenZone);
+router.patch('/properties/:propertyId/plant-advisor/garden-zones/:zoneId', propertyAuthMiddleware, validateBody(updateGardenZoneBodySchema), updateGardenZone);
 
 // Note: propertyAuthMiddleware already validates that :propertyId is a valid UUID
 // that belongs to the authenticated user, so no separate params validate() is needed.

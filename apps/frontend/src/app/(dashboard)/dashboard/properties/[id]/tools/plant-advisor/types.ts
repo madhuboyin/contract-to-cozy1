@@ -94,3 +94,66 @@ export interface RoomPlantProfileInput {
   goals?: PlantGoalType[];
   notes?: string | null;
 }
+
+export type PlantLocationType = 'INDOOR' | 'OUTDOOR';
+export type GardenSunExposure = 'FULL_SUN' | 'PART_SUN' | 'SHADE' | 'UNKNOWN';
+export type GardenSoilDrainage = 'FAST' | 'MODERATE' | 'SLOW' | 'UNKNOWN';
+export type GardenIrrigationType = 'NONE' | 'MANUAL' | 'DRIP' | 'SPRINKLER' | 'UNKNOWN';
+
+export interface HomePlantDTO {
+  id: string;
+  name: string;
+  nickname: string | null;
+  locationType: PlantLocationType;
+  roomId: string | null;
+  gardenZoneId: string | null;
+  lastWateredAt: string | null;
+  lastInspectedAt: string | null;
+  room?: { name: string } | null;
+  gardenZone?: { name: string } | null;
+}
+
+export interface GardenZoneDTO {
+  id: string;
+  name: string;
+  sunExposure: GardenSunExposure;
+  soilDrainage: GardenSoilDrainage;
+  irrigationType: GardenIrrigationType;
+  frostPocket: boolean;
+  notes: string | null;
+}
+
+export interface PlantCareRecommendationDTO {
+  id: string;
+  homePlantId: string;
+  plantName: string;
+  locationName: string;
+  priority: 'NOW' | 'SOON' | 'ROUTINE';
+  title: string;
+  guidance: string;
+  wateringCadenceDays: number | null;
+  adjustedCheckCadenceDays: number | null;
+  placementWarning: string | null;
+  triggers: string[];
+}
+
+export interface GardenZoneRecommendationDTO {
+  id: string;
+  gardenZoneId: string;
+  zoneName: string;
+  title: string;
+  guidance: string;
+  priority: 'NOW' | 'SOON' | 'SEASONAL';
+  season: 'SPRING' | 'SUMMER' | 'FALL' | 'WINTER';
+  hardinessZone: string | null;
+  actions: string[];
+}
+
+export interface PlantCareOutlookDTO {
+  signals: Record<string, boolean | string | null>;
+  hardinessZone: string | null;
+  plants: HomePlantDTO[];
+  zones: GardenZoneDTO[];
+  careRecommendations: PlantCareRecommendationDTO[];
+  gardenRecommendations: GardenZoneRecommendationDTO[];
+}

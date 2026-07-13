@@ -5,6 +5,12 @@ import type {
   RoomPlantProfileDTO,
   RoomPlantProfileInput,
   RoomPlantRecommendationDTO,
+  PlantCareOutlookDTO,
+  GardenZoneDTO,
+  HomePlantDTO,
+  GardenSunExposure,
+  GardenSoilDrainage,
+  GardenIrrigationType,
 } from './types';
 
 export async function listEligiblePlantAdvisorRooms(
@@ -88,8 +94,8 @@ export async function addRoomPlantRecommendationToHome(
   roomId: string,
   recommendationId: string,
   payload: { note?: string; occurredAt?: string } = {},
-): Promise<{ recommendation: RoomPlantRecommendationDTO; homeEventId: string | null }> {
-  const res = await api.post<{ recommendation: RoomPlantRecommendationDTO; homeEventId: string | null }>(
+): Promise<{ recommendation: RoomPlantRecommendationDTO; homeEventId: string | null; homePlantId: string }> {
+  const res = await api.post<{ recommendation: RoomPlantRecommendationDTO; homeEventId: string | null; homePlantId: string }>(
     `/api/properties/${propertyId}/plant-advisor/rooms/${roomId}/recommendations/${recommendationId}/add-to-home`,
     payload,
   );
@@ -110,4 +116,38 @@ export async function trackPlantAdvisorEvent(
     section: payload.section ?? 'plant_advisor',
     metadata: payload.metadata,
   });
+}
+
+export async function getPlantCareOutlook(propertyId: string): Promise<PlantCareOutlookDTO> {
+  const res = await api.get<PlantCareOutlookDTO>(`/api/properties/${propertyId}/plant-advisor/care-outlook`);
+  return res.data;
+}
+
+export async function createGardenZone(propertyId: string, payload: {
+  name: string;
+  sunExposure?: GardenSunExposure;
+  soilDrainage?: GardenSoilDrainage;
+  irrigationType?: GardenIrrigationType;
+  frostPocket?: boolean;
+}): Promise<GardenZoneDTO> {
+  const res = await api.post<GardenZoneDTO>(`/api/properties/${propertyId}/plant-advisor/garden-zones`, payload);
+  return res.data;
+}
+
+export async function createHomePlant(propertyId: string, payload: {
+  name: string;
+  locationType: 'INDOOR' | 'OUTDOOR';
+  roomId?: string;
+  gardenZoneId?: string;
+}): Promise<HomePlantDTO> {
+  const res = await api.post<HomePlantDTO>(`/api/properties/${propertyId}/plant-advisor/plants`, payload);
+  return res.data;
+}
+
+export async function updateHomePlantCare(propertyId: string, plantId: string, payload: {
+  lastWateredAt?: string;
+  lastInspectedAt?: string;
+}): Promise<HomePlantDTO> {
+  const res = await api.patch<HomePlantDTO>(`/api/properties/${propertyId}/plant-advisor/plants/${plantId}/care`, payload);
+  return res.data;
 }

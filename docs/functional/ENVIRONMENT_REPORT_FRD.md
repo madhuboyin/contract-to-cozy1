@@ -296,6 +296,24 @@ Every insight must support:
 - FR-9.8: Poor-air-quality guidance must explicitly avoid presenting houseplants as a substitute for indoor-air filtration.
 - FR-9.9: A Plant Advisor query failure must degrade only the cross-sell module and must not fail the Environment Report.
 
+### FR-10: Individual Weather-Aware Plant Care
+
+- FR-10.1: Plants added to the home must persist as canonical `HomePlant` records.
+- FR-10.2: Heat may shorten the recommended soil-check cadence, but must not prescribe automatic watering.
+- FR-10.3: Freeze, storm, low-humidity, drought, and poor-air conditions must produce species-metadata-aware guidance when relevant.
+- FR-10.4: Placement warnings must distinguish indoor rooms from outdoor garden zones.
+- FR-10.5: Homeowners must be able to record inspection and watering timestamps inline.
+- FR-10.6: Existing Plant Advisor “added to home” events must be migrated into `HomePlant` records.
+
+### FR-11: Outdoor Garden Planning
+
+- FR-11.1: Homeowners must be able to define garden zones with sun, drainage, irrigation, and frost-pocket context.
+- FR-11.2: Homeowners must be able to add outdoor plants to a garden zone.
+- FR-11.3: Garden guidance must combine current forecast, drought status, property irrigation, hardiness zone, and garden-zone facts.
+- FR-11.4: Frost protection, drought planning, heavy-rain drainage warnings, and seasonal planting actions must be deterministic.
+- FR-11.5: Seasonal guidance must remain conditional and direct homeowners to verify species suitability locally.
+- FR-11.6: Outdoor Resilience landscaping design remains future scope.
+
 ---
 
 ## 8. Insight and Personalization Rules
@@ -576,8 +594,10 @@ The Environment Report currently uses the typed frontend `updateProperty` client
 | Environmental provider data | Cached service response; not persisted as property facts |
 | Generated report insights | Computed on read; not currently persisted |
 | Plant Advisor weather context | Existing `RoomPlantProfile`, `RoomPlantRecommendation`, `PlantCatalog`, and Plant Advisor `HomeEvent` records |
+| Confirmed indoor/outdoor plants and care history | `HomePlant` |
+| Outdoor sun, drainage, irrigation, and frost context | `GardenZone` |
 
-No new database schema was required for the implemented baseline. Future insight lifecycle, snooze, and acknowledgement features may require persisted state.
+The original Environment Report baseline required no new schema. Plant-care Phases 2 and 3 add `HomePlant` and `GardenZone`; future insight lifecycle, snooze, and acknowledgement features may require additional persisted state.
 
 ---
 
@@ -847,7 +867,6 @@ Analytics listed here are future requirements unless already emitted by the unde
 - Add analytics events defined in Section 19.
 - Add automated visual regression coverage for charts and mobile layouts.
 - Add empty-state CTA to complete property geocoding/address data.
-- Add weather-aware care guidance for individual confirmed plants, including temporary watering and placement guidance.
 
 ### 24.2 Medium-Term (P2)
 
@@ -860,7 +879,6 @@ Analytics listed here are future requirements unless already emitted by the unde
 - Insurance-policy and coverage-context integration with explicit non-binding wording.
 - Maintenance-readiness score using overdue/completed tasks and asset service history.
 - Household-specific health guidance using opt-in sensitivity preferences.
-- Add outdoor plant inventory, garden zones, irrigation context, frost preparation, drought planning, and seasonal planting recommendations.
 
 ### 24.3 Long-Term (P3)
 
@@ -940,6 +958,7 @@ Support must be able to explain:
 | `apps/backend/src/services/environment/climateNormals.service.ts` | NOAA climate normals |
 | `apps/backend/src/services/environment/hardinessZone.service.ts` | Plant hardiness zone |
 | `apps/backend/src/services/environment/plantAdvisorWeather.service.ts` | Weather-triggered Plant Advisor context, personalization, and CTA derivation |
+| `apps/backend/src/services/plantCarePlanner.service.ts` | Individual weather-aware care plans and outdoor seasonal garden guidance |
 | `apps/backend/src/services/incidents/incident.evaluator.ts` | Weather Incident reevaluation and notification activation logic |
 | `apps/backend/src/services/incidents/incident.scoring.ts` | Incident score and bounded property-vulnerability calculation |
 | `apps/workers/src/jobs/severeWeatherAlerts.job.ts` | NWS severe-weather Incident ingestion |
