@@ -6,6 +6,7 @@ require('ts-node/register');
 const {
   deriveEnvironmentInsights,
   deriveEnvironmentQuestions,
+  attachRelatedWeatherIncidents,
 } = require('../../src/services/environment/environmentInsights.service.ts');
 
 const property = {
@@ -158,4 +159,31 @@ test('uses captured roof data to personalize and elevate a snow insight', () => 
   assert.equal(insights[0].severity, 'action');
   assert.match(insights[0].homeImplication, /flat roof/);
   assert.match(insights[0].homeImplication, /years since replacement/);
+});
+
+test('links a matching official incident and makes it the primary CTA', () => {
+  const input = sections();
+  input.weather.data.tenDayForecast.push({
+    date: '2026-07-14',
+    tempMaxF: 78,
+    tempMinF: 66,
+    precipitationSumIn: 1.4,
+    weatherCode: 65,
+  });
+  const insights = deriveEnvironmentInsights(property, input);
+  const correlated = attachRelatedWeatherIncidents('property-1', insights, [{
+    id: 'incident-1',
+    title: 'Flood Watch',
+    severity: 'WARNING',
+    status: 'ACTIVE',
+    typeKey: 'SEVERE_WEATHER_ALERT',
+    hazardFamily: 'FLOOD',
+    isOfficialAlert: true,
+  }]);
+
+  assert.equal(correlated[0].relatedIncident.id, 'incident-1');
+  assert.equal(correlated[0].relatedIncident.isOfficialAlert, true);
+  assert.equal(correlated[0].actions[0].label, 'Review active incident');
+  assert.match(correlated[0].actions[0].href, /incidents\/incident-1$/);
+  assert.equal(correlated[0].actions[1].kind, 'secondary');
 });

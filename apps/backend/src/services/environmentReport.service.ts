@@ -23,6 +23,7 @@ import { SectionResult } from './environment/types';
 import {
   deriveEnvironmentInsights,
   deriveEnvironmentQuestions,
+  attachRelatedWeatherIncidents,
   EnvironmentInsight,
   EnvironmentQuestion,
 } from './environment/environmentInsights.service';
@@ -205,7 +206,33 @@ export async function getEnvironmentReport(property: GeocodableProperty): Promis
       fetchedAt: new Date().toISOString(),
     },
   };
-  const insights = deriveEnvironmentInsights(property, sections);
+  const derivedInsights = deriveEnvironmentInsights(property, sections);
+  const activeWeatherIncidents = await prisma.incident.findMany({
+    where: {
+      propertyId: property.id,
+      sourceType: 'WEATHER',
+      isSuppressed: false,
+      status: { in: ['DETECTED', 'EVALUATED', 'ACTIVE', 'ACTIONED', 'MITIGATED'] },
+    },
+    orderBy: [{ severityScore: 'desc' }, { updatedAt: 'desc' }],
+    select: { id: true, title: true, severity: true, status: true, typeKey: true, details: true },
+  });
+  const insights = attachRelatedWeatherIncidents(
+    property.id,
+    derivedInsights,
+    activeWeatherIncidents.map(incident => {
+      const details = (incident.details as Record<string, unknown> | null) ?? {};
+      return {
+        id: incident.id,
+        title: incident.title,
+        severity: incident.severity,
+        status: incident.status,
+        typeKey: incident.typeKey,
+        hazardFamily: typeof details.hazardFamily === 'string' ? details.hazardFamily : null,
+        isOfficialAlert: incident.typeKey === 'SEVERE_WEATHER_ALERT',
+      };
+    })
+  );
   const questions = deriveEnvironmentQuestions(property, insights);
 
   return {

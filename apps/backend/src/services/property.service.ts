@@ -17,6 +17,7 @@ import { incrementStreak } from './gamification.service';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from './analytics';
 import { generateHabitsForProperty } from './homeHabitCoach/habitGenerationEngine';
 import { HouseholdService } from './household.service';
+import { reevaluateActiveWeatherIncidentsForProperty } from './incidents/incident.evaluator';
 
 import { prisma } from '../lib/prisma';
 import { logger } from '../lib/logger';
@@ -1173,6 +1174,25 @@ export async function updateProperty(
   // PHASE 2 ADDITION: FIX: Use the comprehensive job enqueuer
   if (Object.keys(updatePayload).length > 0) {
       await JobQueueService.enqueuePropertyIntelligenceJobs(propertyId);
+  }
+
+  const weatherContextFields = new Set([
+    'hasDrainageIssues',
+    'hasSumpPumpBackup',
+    'coolingType',
+    'hvacInstallYear',
+    'roofType',
+    'roofReplacementYear',
+    'heatingType',
+    'hasSecondaryHeat',
+  ]);
+  const shouldReevaluateWeather = Object.keys(updatePayload).some(field => weatherContextFields.has(field));
+  if (shouldReevaluateWeather) {
+    try {
+      await reevaluateActiveWeatherIncidentsForProperty(propertyId);
+    } catch (error) {
+      logger.warn({ err: error, propertyId }, '[PROPERTY] Weather incident reevaluation failed after profile update');
+    }
   }
 
   // FETCH FULL PROPERTY: Must include homeAssets and warranties for return/scoring

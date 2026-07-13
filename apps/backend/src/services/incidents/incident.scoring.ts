@@ -7,6 +7,7 @@ export type SeverityBreakdown = {
   timeSensitivity: number;   // 0-20
   coveragePenalty: number;   // 0-15
   mitigation: number;        // -20..0
+  propertyVulnerability: number; // 0..10
   total: number;             // 0..100
 };
 
@@ -30,10 +31,79 @@ export type IncidentScoringContext = {
 
   // mitigation signals
   mitigationLevel?: 'ACTIVE_PROTECTION' | 'SCHEDULED' | 'CONFIRMED' | 'PARTIAL' | 'NONE' | null;
+  propertyVulnerabilityScore?: number | null;
+};
+
+export type WeatherVulnerabilityProperty = {
+  hasDrainageIssues?: boolean | null;
+  hasSumpPumpBackup?: boolean | null;
+  coolingType?: string | null;
+  hvacInstallYear?: number | null;
+  roofType?: string | null;
+  roofReplacementYear?: number | null;
+  heatingType?: string | null;
+  hasSecondaryHeat?: boolean | null;
 };
 
 function clamp(n: number, min: number, max: number) {
   return Math.max(min, Math.min(max, n));
+}
+
+export function computeWeatherPropertyVulnerability(args: {
+  typeKey: string;
+  hazardFamily?: string | null;
+  property: WeatherVulnerabilityProperty;
+  currentYear?: number;
+}): { score: number; reasons: string[] } {
+  const normalizedType = String(args.typeKey || '').toUpperCase();
+  const hazard = String(args.hazardFamily || '').toUpperCase();
+  const currentYear = args.currentYear ?? new Date().getFullYear();
+  const reasons: string[] = [];
+  let score = 0;
+
+  if (hazard === 'FLOOD' || hazard === 'HURRICANE') {
+    if (args.property.hasDrainageIssues === true) {
+      score += 5;
+      reasons.push('recorded drainage issues');
+    }
+    if (args.property.hasSumpPumpBackup === false) {
+      score += 3;
+      reasons.push('no sump-pump backup recorded');
+    }
+  }
+
+  if (hazard === 'SNOW' || hazard === 'STORM' || hazard === 'HURRICANE') {
+    if (args.property.roofType === 'FLAT') {
+      score += 3;
+      reasons.push('flat roof');
+    }
+    const roofAge = args.property.roofReplacementYear ? currentYear - args.property.roofReplacementYear : null;
+    if (roofAge !== null && roofAge >= 20) {
+      score += 5;
+      reasons.push(`roof approximately ${roofAge} years since replacement`);
+    }
+  }
+
+  if (hazard === 'HEATWAVE') {
+    const hvacAge = args.property.hvacInstallYear ? currentYear - args.property.hvacInstallYear : null;
+    if (hvacAge !== null && hvacAge >= 15) {
+      score += 5;
+      reasons.push(`cooling system approximately ${hvacAge} years old`);
+    }
+    if (!args.property.coolingType || args.property.coolingType === 'UNKNOWN') {
+      score += 2;
+      reasons.push('cooling readiness is unknown');
+    }
+  }
+
+  if (normalizedType === 'FREEZE_RISK' || hazard === 'SNOW') {
+    if (args.property.heatingType === 'HEAT_PUMP' && args.property.hasSecondaryHeat === false) {
+      score += 5;
+      reasons.push('heat pump with no backup heat recorded');
+    }
+  }
+
+  return { score: clamp(score, 0, 10), reasons };
 }
 
 function bucketImpact(exposureUsd?: number | null, safetyCritical?: boolean | null): number {
@@ -92,8 +162,9 @@ export function computeSeverity(ctx: IncidentScoringContext): { severity: Incide
   const timeSensitivity = bucketTimeSensitivity(ctx.timeWindowHours);
   const coveragePenalty = bucketCoveragePenalty(ctx.isCovered, ctx.coverageClarity ?? 'UNKNOWN');
   const mitigation = bucketMitigation(ctx.mitigationLevel);
+  const propertyVulnerability = clamp(ctx.propertyVulnerabilityScore ?? 0, 0, 10);
 
-  const total = clamp(impact + likelihood + timeSensitivity + coveragePenalty + mitigation, 0, 100);
+  const total = clamp(impact + likelihood + timeSensitivity + coveragePenalty + mitigation + propertyVulnerability, 0, 100);
 
   const severity =
     total >= 60 ? IncidentSeverity.CRITICAL :
@@ -102,7 +173,7 @@ export function computeSeverity(ctx: IncidentScoringContext): { severity: Incide
 
   return {
     severity,
-    breakdown: { impact, likelihood, timeSensitivity, coveragePenalty, mitigation, total },
+    breakdown: { impact, likelihood, timeSensitivity, coveragePenalty, mitigation, propertyVulnerability, total },
   };
 }
 

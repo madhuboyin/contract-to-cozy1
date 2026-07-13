@@ -26,6 +26,20 @@ export interface EnvironmentInsight {
   recommendedActions: string[];
   actions: EnvironmentInsightAction[];
   source: string;
+  relatedIncident?: EnvironmentRelatedIncident;
+}
+
+export interface EnvironmentRelatedIncident {
+  id: string;
+  title: string;
+  severity: 'INFO' | 'WARNING' | 'CRITICAL' | null;
+  status: string;
+  typeKey: string;
+  isOfficialAlert: boolean;
+}
+
+export interface CorrelatableWeatherIncident extends EnvironmentRelatedIncident {
+  hazardFamily?: string | null;
 }
 
 export interface EnvironmentInsightProperty {
@@ -449,4 +463,56 @@ export function deriveEnvironmentQuestions(
   }
 
   return questions;
+}
+
+function incidentMatchesInsight(insight: EnvironmentInsight, incident: CorrelatableWeatherIncident): boolean {
+  const hazard = String(incident.hazardFamily || '').toUpperCase();
+  const typeKey = String(incident.typeKey || '').toUpperCase();
+  switch (insight.category) {
+    case 'rain': return hazard === 'FLOOD' || hazard === 'HURRICANE';
+    case 'storm': return hazard === 'STORM' || hazard === 'HURRICANE';
+    case 'snow': return hazard === 'SNOW';
+    case 'heat': return hazard === 'HEATWAVE';
+    case 'freeze': return typeKey === 'FREEZE_RISK' || hazard === 'SNOW';
+    default: return false;
+  }
+}
+
+export function attachRelatedWeatherIncidents(
+  propertyId: string,
+  insights: EnvironmentInsight[],
+  incidents: CorrelatableWeatherIncident[]
+): EnvironmentInsight[] {
+  return insights.map(insight => {
+    const incident = incidents
+      .filter(candidate => incidentMatchesInsight(insight, candidate))
+      .sort((a, b) => {
+        const rank = { CRITICAL: 0, WARNING: 1, INFO: 2 } as const;
+        return rank[a.severity ?? 'INFO'] - rank[b.severity ?? 'INFO'];
+      })[0];
+    if (!incident) return insight;
+
+    const existingPreparation = insight.actions.find(action => action.kind === 'primary') ?? insight.actions[0];
+    return {
+      ...insight,
+      relatedIncident: {
+        id: incident.id,
+        title: incident.title,
+        severity: incident.severity,
+        status: incident.status,
+        typeKey: incident.typeKey,
+        isOfficialAlert: incident.isOfficialAlert,
+      },
+      actions: [
+        {
+          label: 'Review active incident',
+          href: `/dashboard/properties/${propertyId}/incidents/${incident.id}`,
+          kind: 'primary' as const,
+        },
+        ...(existingPreparation
+          ? [{ ...existingPreparation, kind: 'secondary' as const }]
+          : []),
+      ],
+    };
+  });
 }

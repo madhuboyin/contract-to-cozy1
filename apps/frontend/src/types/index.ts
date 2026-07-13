@@ -4800,6 +4800,14 @@ export interface EnvironmentInsight {
   recommendedActions: string[];
   actions: EnvironmentInsightAction[];
   source: string;
+  relatedIncident?: {
+    id: string;
+    title: string;
+    severity: 'INFO' | 'WARNING' | 'CRITICAL' | null;
+    status: string;
+    typeKey: string;
+    isOfficialAlert: boolean;
+  };
 }
 
 export type EnvironmentQuestionField =

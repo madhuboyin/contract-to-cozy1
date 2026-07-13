@@ -5,7 +5,7 @@
 import { useState, type ComponentType, type ReactNode } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api/client';
 import { DashboardShell } from '@/components/DashboardShell';
 import { PageHeader, PageHeaderHeading } from '@/components/page-header';
@@ -173,8 +173,16 @@ function InsightSummary({ insights }: { insights: EnvironmentInsight[] }) {
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <Badge variant={needsAction ? 'destructive' : 'secondary'}>{needsAction ? 'Action recommended' : 'Prepare soon'}</Badge>
+                      <Badge variant="outline">
+                        {insight.relatedIncident?.isOfficialAlert ? 'Official alert in effect' : 'Forecast-based preparation'}
+                      </Badge>
                       <span className="flex items-center gap-1 text-xs text-slate-500"><Clock3 className="h-3.5 w-3.5" />{insight.timeframe}</span>
                     </div>
+                    {insight.relatedIncident ? (
+                      <p className="mt-2 text-xs font-medium text-slate-600">
+                        Related incident: {insight.relatedIncident.title} · {insight.relatedIncident.severity ?? 'Pending assessment'}
+                      </p>
+                    ) : null}
                     <h3 className="mt-2 text-lg font-bold text-slate-950">{insight.title}</h3>
                     <p className="mt-1 text-sm text-slate-700">{insight.summary}</p>
                     <div className="mt-4 rounded-lg bg-slate-50 p-3">
@@ -583,6 +591,7 @@ function SimpleTable({ rows }: { rows: [string, string, string][] }) {
 export default function EnvironmentReportPage() {
   const params = useParams();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const propertyId = Array.isArray(params.id) ? params.id[0] ?? '' : params.id ?? '';
   const [savedMessage, setSavedMessage] = useState<string | null>(null);
 
@@ -665,6 +674,7 @@ export default function EnvironmentReportPage() {
           onSaved={async () => {
             setSavedMessage('Saved to your home profile. Future environment recommendations will use this information.');
             await query.refetch();
+            await queryClient.invalidateQueries({ queryKey: ['active-incidents', propertyId] });
           }}
         />
         <WeatherSection result={sections.weather} />

@@ -1,7 +1,7 @@
 // apps/backend/src/services/incidents/incident.evaluator.ts
 import { prisma } from '../../lib/prisma';
 import { IncidentSeverity, IncidentStatus, IncidentEventType } from '@prisma/client';
-import { computeConfidence, computeSeverity, IncidentScoringContext } from './incident.scoring';
+import { computeConfidence, computeSeverity, computeWeatherPropertyVulnerability, IncidentScoringContext } from './incident.scoring';
 import { logIncidentEvent } from './incident.events';
 import { IncidentNotificationService } from './integrations/incidentNotification.service';
 
@@ -16,6 +16,18 @@ export async function evaluateIncident(incidentId: string) {
     include: {
       signals: { orderBy: { observedAt: 'desc' }, take: 10 },
       actions: { orderBy: { createdAt: 'desc' }, take: 10 },
+      property: {
+        select: {
+          hasDrainageIssues: true,
+          hasSumpPumpBackup: true,
+          coolingType: true,
+          hvacInstallYear: true,
+          roofType: true,
+          roofReplacementYear: true,
+          heatingType: true,
+          hasSecondaryHeat: true,
+        },
+      },
     },
   });
 
@@ -44,6 +56,15 @@ export async function evaluateIncident(incidentId: string) {
     mitigationLevel: details.mitigationLevel ?? signalPayload.mitigationLevel ?? 'NONE',
   };
 
+  const propertyVulnerability = incident.sourceType === 'WEATHER'
+    ? computeWeatherPropertyVulnerability({
+        typeKey: incident.typeKey,
+        hazardFamily: typeof details.hazardFamily === 'string' ? details.hazardFamily : null,
+        property: incident.property,
+      })
+    : { score: 0, reasons: [] as string[] };
+  ctx.propertyVulnerabilityScore = propertyVulnerability.score;
+
   // Action-driven mitigation (if any actions exist)
   const hasAction = incident.actions.length > 0;
   if (hasAction && ctx.mitigationLevel === 'NONE') {
@@ -55,7 +76,13 @@ export async function evaluateIncident(incidentId: string) {
   const confidence = computeConfidence({
     probabilityPct: ctx.probabilityPct,
     hasMultipleSignals: incident.signals.length >= 2,
-    hasExternalAuthoritativeSignal: latestSignal?.signalType === 'WEATHER_FORECAST' || latestSignal?.signalType === 'COVERAGE_CHECK',
+    hasExternalAuthoritativeSignal: [
+      'WEATHER_FORECAST',
+      'WEATHER_FORECAST_MIN_TEMP',
+      'WEATHER_FORECAST_HEAVY_RAIN',
+      'WEATHER_ALERT_NWS',
+      'COVERAGE_CHECK',
+    ].includes(String(latestSignal?.signalType ?? '')),
     signalAgeMinutes: ageMinutes,
   });
 
@@ -66,7 +93,7 @@ export async function evaluateIncident(incidentId: string) {
       severity,
       severityScore: breakdown.total,
       confidence,
-      breakdown,
+      breakdown: { ...breakdown, propertyVulnerabilityReasons: propertyVulnerability.reasons },
       modelVersion: SEVERITY_MODEL_VERSION,
     },
   });
@@ -77,7 +104,7 @@ export async function evaluateIncident(incidentId: string) {
       severity,
       severityScore: breakdown.total,
       confidence,
-      scoreBreakdown: breakdown,
+      scoreBreakdown: { ...breakdown, propertyVulnerabilityReasons: propertyVulnerability.reasons },
       status: incident.status === IncidentStatus.DETECTED ? IncidentStatus.EVALUATED : incident.status,
     },
   });
@@ -88,7 +115,7 @@ export async function evaluateIncident(incidentId: string) {
     userId: incident.userId,
     type: IncidentEventType.SEVERITY_COMPUTED,
     message: `Severity computed: ${severity} (${breakdown.total})`,
-    payload: { breakdown, confidence, modelVersion: SEVERITY_MODEL_VERSION },
+    payload: { breakdown, propertyVulnerabilityReasons: propertyVulnerability.reasons, confidence, modelVersion: SEVERITY_MODEL_VERSION },
   });
 
   // Auto activation rules
@@ -132,4 +159,19 @@ export async function evaluateIncident(incidentId: string) {
   }
 
   return await prisma.incident.findUnique({ where: { id: incident.id } });
+}
+
+export async function reevaluateActiveWeatherIncidentsForProperty(propertyId: string): Promise<number> {
+  const incidents = await prisma.incident.findMany({
+    where: {
+      propertyId,
+      sourceType: 'WEATHER',
+      isSuppressed: false,
+      status: { in: [IncidentStatus.DETECTED, IncidentStatus.EVALUATED, IncidentStatus.ACTIVE, IncidentStatus.ACTIONED] },
+    },
+    select: { id: true },
+  });
+
+  for (const incident of incidents) await evaluateIncident(incident.id);
+  return incidents.length;
 }
