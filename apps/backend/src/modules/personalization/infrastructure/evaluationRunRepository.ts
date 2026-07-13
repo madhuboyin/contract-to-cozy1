@@ -6,7 +6,6 @@
 // directly; this is the boundary that owns those queries.
 import { Prisma } from '@prisma/client';
 import { prisma } from '../../../lib/prisma';
-import { HomeAssetFact } from '../domain/traits';
 
 export interface LoadedRule {
   definitionId: string;
@@ -26,14 +25,6 @@ export async function loadActiveRule(definitionCode: string): Promise<LoadedRule
   return { definitionId: definition.id, ruleVersion: rule.version, ruleAst: rule.ruleAst };
 }
 
-/** Reads only assetType/lastServiced — the two fields the HVAC-filter trait needs. */
-export async function loadHomeAssetFacts(propertyId: string): Promise<HomeAssetFact[]> {
-  return prisma.homeAsset.findMany({
-    where: { propertyId },
-    select: { assetType: true, lastServiced: true },
-  });
-}
-
 export interface RecordEvaluationRunParams {
   propertyId: string;
   definitionId: string;
@@ -47,8 +38,8 @@ export interface RecordEvaluationRunParams {
   completedAt: Date;
 }
 
-export async function recordEvaluationRun(params: RecordEvaluationRunParams): Promise<void> {
-  await prisma.personalizationEvaluationRun.create({
+export async function recordEvaluationRun(params: RecordEvaluationRunParams): Promise<{ id: string }> {
+  const run = await prisma.personalizationEvaluationRun.create({
     data: {
       propertyId: params.propertyId,
       definitionId: params.definitionId,
@@ -65,4 +56,6 @@ export async function recordEvaluationRun(params: RecordEvaluationRunParams): Pr
       durationMs: params.completedAt.getTime() - params.startedAt.getTime(),
     },
   });
+
+  return { id: run.id };
 }

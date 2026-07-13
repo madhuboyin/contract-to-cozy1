@@ -2204,6 +2204,11 @@ model Property {
   personalizationDerivedTraits      DerivedTrait[]
   personalizationTraitSnapshots     TraitSnapshot[]
 
+  // Personalization engine — migration steps 4-6 recommendation-instance
+  // tables (see docs/personalization/ plan for these steps)
+  personalizationRecommendations           PersonalizedRecommendation[]
+  personalizationRecommendationSuppressions RecommendationSuppression[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -12743,6 +12748,7 @@ model RecommendationDefinition {
   rules           RecommendationRule[]
   contentVersions RecommendationContentVersion[]
   evaluationRuns  PersonalizationEvaluationRun[]
+  recommendations PersonalizedRecommendation[]
 
   @@index([status, effectiveFrom, effectiveTo])
   @@index([category, status])
@@ -12865,6 +12871,7 @@ model PersonalizationEvaluationRun {
 
   property   Property                 @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   definition RecommendationDefinition @relation(fields: [definitionId], references: [id], onDelete: Cascade)
+  recommendations PersonalizedRecommendation[]
 
   @@index([propertyId, status])
   @@index([definitionId, status])
@@ -12909,6 +12916,8 @@ model Household {
   lifestyleAttributes LifestyleAttribute[]
   derivedTraits DerivedTrait[]
   traitSnapshots TraitSnapshot[]
+  recommendations PersonalizedRecommendation[]
+  recommendationSuppressions RecommendationSuppression[]
 
   @@index([ownerUserId, status])
   @@map("personalization_households")
@@ -13108,4 +13117,105 @@ model TraitSnapshot {
   @@index([propertyId, computedAt])
   @@index([traitsHash])
   @@map("personalization_trait_snapshots")
+}
+
+// ============================================================================
+// PERSONALIZATION ENGINE — RECOMMENDATION INSTANCES (migration steps 4-6)
+// ============================================================================
+// Additive-only, minimal slice per the approved plan for these steps: only
+// the tables needed to hold one real, shadow-evaluatable recommendation
+// instance end to end. Deliberately NOT added yet: RecommendationCandidate
+// (explicitly "log only in MVP" per 05-data-model.md), RecommendationFeedback,
+// RecommendationAction, ProfileQuestion/ProfileAnswer (profiling UI, needs
+// design) — added only once a real consumer needs them.
+//
+// Like propertyId/householdId elsewhere in this schema, householdId is
+// optional (not required, diverging from 05-data-model.md's literal sketch)
+// because this slice only ever produces property-scoped instances; a
+// required householdId in the unique key would let Postgres's NULL != NULL
+// unique-constraint semantics silently allow duplicates.
+
+// A materialized, user-facing recommendation instance. This slice's shadow
+// job only ever creates ACTIVE rows for definitions that evaluated eligible
+// — an ineligible/unknown result produces no row, not a suppressed one.
+model PersonalizedRecommendation {
+  id              String  @id @default(uuid())
+  householdId     String?
+  propertyId      String
+  definitionId    String
+  evaluationRunId String?
+  occurrenceKey   String  @default("default")
+  dedupeKey       String
+  status          String  @default("ACTIVE") // ACTIVE | COMPLETED | DISMISSED | EXPIRED | SUPPRESSED
+  ruleVersion     Int
+  contentVersion  Int? // null until real reviewed content exists for this definition
+
+  // Full scoring formula (04-target-architecture.md's weighted score) is
+  // later work — this slice records eligibility only, not a ranked score.
+  score          Float?
+  priorityBand   String?
+  confidence     Float?
+  scoreBreakdown Json?
+
+  firstEligibleAt DateTime  @default(now())
+  lastEvaluatedAt DateTime  @default(now())
+  expiresAt       DateTime?
+
+  household     Household?                    @relation(fields: [householdId], references: [id], onDelete: SetNull)
+  property      Property                      @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  definition    RecommendationDefinition      @relation(fields: [definitionId], references: [id], onDelete: Cascade)
+  evaluationRun PersonalizationEvaluationRun? @relation(fields: [evaluationRunId], references: [id], onDelete: SetNull)
+  explanations  RecommendationExplanation[]
+
+  @@unique([propertyId, definitionId, occurrenceKey])
+  @@index([propertyId, status])
+  @@index([dedupeKey, status])
+  @@map("personalization_recommendations")
+}
+
+// Structured reasons/evidence/benefit/confidence for one recommendation
+// instance. No raw secret values — evidenceJson/benefitsJson must only ever
+// hold already-redacted, template-safe data (see lib/redaction.ts).
+model RecommendationExplanation {
+  id               String @id @default(uuid())
+  recommendationId String
+  version          Int    @default(1)
+
+  headline       String
+  reasonCodes    Json // [{ code, templateKey, params }]
+  evidenceJson   Json?
+  benefitsJson   Json?
+  urgencyLevel   String?
+  urgencyReason  String?
+  confidenceBand String?
+
+  createdAt DateTime @default(now())
+
+  recommendation PersonalizedRecommendation @relation(fields: [recommendationId], references: [id], onDelete: Cascade)
+
+  @@unique([recommendationId, version])
+  @@map("personalization_recommendation_explanations")
+}
+
+// User/definition/category-scoped suppression (dismissed/completed/system).
+// Not read or written by this slice's shadow job — added now as additive
+// schema per the approved plan, ahead of the consumer that will need it
+// once recommendations are ever shown to a user.
+model RecommendationSuppression {
+  id          String    @id @default(uuid())
+  householdId String?
+  propertyId  String
+  scope       String // DEFINITION | CATEGORY | DEDUPE_KEY
+  scopeKey    String // definitionCode | category | dedupeKey value
+  reason      String // USER_DISMISSED | COMPLETED | SYSTEM
+  until       DateTime?
+
+  createdAt DateTime @default(now())
+
+  household Household? @relation(fields: [householdId], references: [id], onDelete: SetNull)
+  property  Property   @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@unique([propertyId, scope, scopeKey])
+  @@index([propertyId, scope])
+  @@map("personalization_recommendation_suppressions")
 }

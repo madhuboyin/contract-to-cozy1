@@ -3,19 +3,16 @@
 // Typed rule evaluator — the other half of the "typed rule validator/
 // evaluator" item in docs/personalization/09-implementation-roadmap.md's
 // "first implementation step". Evaluates a validated RuleNode (ruleAst.ts)
-// against a trait-value map using three-valued (Kleene strong) logic, per
-// 04-target-architecture.md: "Unknown data is three-valued (TRUE, FALSE,
-// UNKNOWN); safety rules fail closed, while profiling rules can emit a
-// question opportunity."
+// against trait/fact-value maps using three-valued (Kleene strong) logic,
+// per 04-target-architecture.md: "Unknown data is three-valued (TRUE,
+// FALSE, UNKNOWN); safety rules fail closed, while profiling rules can
+// emit a question opportunity."
 //
-// Scope limit (see docs/personalization/adr-0001-personalization-module-foundation.md):
-// only `trait`/`all`/`any`/`not` are actually evaluated — that's everything
-// this proof's one HVAC-filter definition needs. `fact`/`history`/`date`
-// nodes are structurally valid (ruleAst.ts already checked their shape) but
-// always evaluate to UNKNOWN here, tagged `notImplemented: true` so a
-// caller can tell "we don't have this data" apart from "we haven't wired
-// this evaluation path yet" — implementing them for real needs the
-// context-assembler/normalized-fact infrastructure, which is Phase 1 scope.
+// `trait`/`all`/`any`/`not`/`fact` are evaluated. `history`/`date` remain
+// structurally valid (ruleAst.ts already checked their shape) but always
+// evaluate to UNKNOWN here, tagged `notImplemented: true` — no current
+// definition needs them, and implementing them now would be speculative
+// (see the migration-steps-4-6 plan for what's in/out of this slice).
 import { RuleNode } from './ruleAst';
 
 export type ThreeValued = 'TRUE' | 'FALSE' | 'UNKNOWN';
@@ -26,6 +23,8 @@ export type TraitReading =
   | { known: false };
 
 export type TraitMap = Record<string, TraitReading>;
+/** Same shape as TraitMap — a distinct type alias since facts and traits are conceptually different data sources (context assembler vs. trait derivation), keyed by the `fact` op's `path`. */
+export type FactMap = Record<string, TraitReading>;
 
 export interface EvaluationEvidence {
   path: string;
@@ -62,7 +61,8 @@ function anyNode(results: ThreeValued[]): ThreeValued {
   return 'FALSE';
 }
 
-function evaluateTraitComparison(
+/** Shared by `trait` and `fact` ops — both compare a known reading against an expected value the same way. */
+function evaluateComparison(
   cmp: 'eq' | 'in' | 'gte' | 'lte' | 'exists',
   actual: TraitPrimitive | TraitPrimitive[],
   expected: unknown,
@@ -83,18 +83,24 @@ function evaluateTraitComparison(
   }
 }
 
-function evaluateNode(node: RuleNode, traits: TraitMap, path: string, evidence: EvaluationEvidence[]): ThreeValued {
+function evaluateNode(
+  node: RuleNode,
+  traits: TraitMap,
+  facts: FactMap,
+  path: string,
+  evidence: EvaluationEvidence[],
+): ThreeValued {
   switch (node.op) {
     case 'all': {
-      const childResults = node.children.map((child, i) => evaluateNode(child, traits, `${path}.all[${i}]`, evidence));
+      const childResults = node.children.map((child, i) => evaluateNode(child, traits, facts, `${path}.all[${i}]`, evidence));
       return allNode(childResults);
     }
     case 'any': {
-      const childResults = node.children.map((child, i) => evaluateNode(child, traits, `${path}.any[${i}]`, evidence));
+      const childResults = node.children.map((child, i) => evaluateNode(child, traits, facts, `${path}.any[${i}]`, evidence));
       return anyNode(childResults);
     }
     case 'not': {
-      const childResult = evaluateNode(node.child, traits, `${path}.not`, evidence);
+      const childResult = evaluateNode(node.child, traits, facts, `${path}.not`, evidence);
       return notNode(childResult);
     }
     case 'trait': {
@@ -103,27 +109,38 @@ function evaluateNode(node: RuleNode, traits: TraitMap, path: string, evidence: 
       if (!reading || !reading.known) {
         result = 'UNKNOWN';
       } else {
-        result = evaluateTraitComparison(node.cmp, reading.value, node.value) ? 'TRUE' : 'FALSE';
+        result = evaluateComparison(node.cmp, reading.value, node.value) ? 'TRUE' : 'FALSE';
       }
       evidence.push({ path, op: node.op, result, detail: `trait:${node.key} ${node.cmp}` });
       return result;
     }
-    case 'fact':
+    case 'fact': {
+      const reading = facts[node.path];
+      let result: ThreeValued;
+      if (!reading || !reading.known) {
+        result = 'UNKNOWN';
+      } else {
+        result = evaluateComparison(node.cmp, reading.value, node.value) ? 'TRUE' : 'FALSE';
+      }
+      evidence.push({ path, op: node.op, result, detail: `fact:${node.path} ${node.cmp}` });
+      return result;
+    }
     case 'history':
     case 'date': {
-      evidence.push({ path, op: node.op, result: 'UNKNOWN', notImplemented: true, detail: `${node.op} evaluation not implemented in this proof` });
+      evidence.push({ path, op: node.op, result: 'UNKNOWN', notImplemented: true, detail: `${node.op} evaluation not implemented in this slice` });
       return 'UNKNOWN';
     }
   }
 }
 
 /**
- * Evaluates a validated RuleNode against a trait-value map. Callers must
- * pass the result of ruleAst.ts's validateRuleAst() — this function does
- * not re-validate structure.
+ * Evaluates a validated RuleNode against trait and fact value maps.
+ * Callers must pass the result of ruleAst.ts's validateRuleAst() — this
+ * function does not re-validate structure. `facts` defaults to `{}` for
+ * callers (and existing tests) that only use `trait` nodes.
  */
-export function evaluateRule(node: RuleNode, traits: TraitMap): EvaluationResult {
+export function evaluateRule(node: RuleNode, traits: TraitMap, facts: FactMap = {}): EvaluationResult {
   const evidence: EvaluationEvidence[] = [];
-  const result = evaluateNode(node, traits, '$', evidence);
+  const result = evaluateNode(node, traits, facts, '$', evidence);
   return { result, eligible: result === 'TRUE', evidence };
 }

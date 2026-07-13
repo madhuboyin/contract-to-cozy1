@@ -9,7 +9,7 @@ const {
   HVAC_FILTER_PROOF_RULE_VERSION,
 } = require('../../src/modules/personalization/catalog/proofDefinition.ts');
 
-function createPrismaMock({ definition = null, homeAssets = [] } = {}) {
+function createPrismaMock({ definition = null, homeAssets = [], property = { id: 'prop-1' } } = {}) {
   const runs = [];
 
   const prismaMock = {
@@ -19,8 +19,27 @@ function createPrismaMock({ definition = null, homeAssets = [] } = {}) {
         return null;
       },
     },
-    homeAsset: {
-      findMany: async () => homeAssets,
+    property: {
+      findUnique: async ({ where }) => {
+        if (property && where.id === property.id) {
+          return {
+            hasSmokeDetectors: null,
+            roofReplacementYear: null,
+            ...property,
+            homeAssets,
+          };
+        }
+        return null;
+      },
+    },
+    householdProperty: {
+      findFirst: async () => null,
+    },
+    derivedTrait: {
+      upsert: async () => ({}),
+    },
+    traitSnapshot: {
+      create: async () => ({}),
     },
     personalizationEvaluationRun: {
       create: async ({ data }) => {
@@ -44,10 +63,18 @@ function installPrismaMock(prismaMock) {
 }
 
 function loadUseCase() {
-  const repoPath = require.resolve('../../src/modules/personalization/infrastructure/evaluationRunRepository.ts');
-  const useCasePath = require.resolve('../../src/modules/personalization/application/evaluateHvacFilterProof.usecase.ts');
-  delete require.cache[repoPath];
-  delete require.cache[useCasePath];
+  // Cache-bust every module in the call chain, not just the top-level one —
+  // this use case now calls computePropertyTraitSnapshot.usecase.ts, which
+  // itself calls traitSnapshotRepository.ts; a stale, not-reloaded module in
+  // the chain would keep writing into a previous test's mock instance
+  // (learned the hard way earlier this session with personalizationAudit.service.ts).
+  const paths = [
+    '../../src/modules/personalization/infrastructure/evaluationRunRepository.ts',
+    '../../src/modules/personalization/infrastructure/traitSnapshotRepository.ts',
+    '../../src/modules/personalization/application/computePropertyTraitSnapshot.usecase.ts',
+    '../../src/modules/personalization/application/evaluateHvacFilterProof.usecase.ts',
+  ].map((p) => require.resolve(p));
+  for (const p of paths) delete require.cache[p];
   return require('../../src/modules/personalization/application/evaluateHvacFilterProof.usecase.ts');
 }
 
@@ -120,4 +147,16 @@ test('unknown fixture: no HVAC asset at all -> UNKNOWN, never treated as eligibl
   assert.equal(result.result, 'UNKNOWN');
   assert.equal(result.eligible, false);
   assert.equal(runs[0].result, 'UNKNOWN');
+});
+
+test('returns FAILED/PROPERTY_NOT_FOUND and records a failed run when the property does not exist', async () => {
+  const { prismaMock, runs } = createPrismaMock({ definition: REAL_DEFINITION, property: null });
+  installPrismaMock(prismaMock);
+  const { evaluateHvacFilterProofForProperty } = loadUseCase();
+
+  const result = await evaluateHvacFilterProofForProperty('missing-prop', HVAC_FILTER_PROOF_DEFINITION_CODE);
+  assert.equal(result.status, 'FAILED');
+  assert.equal(result.errorCode, 'PROPERTY_NOT_FOUND');
+  assert.equal(runs.length, 1);
+  assert.equal(runs[0].status, 'FAILED');
 });

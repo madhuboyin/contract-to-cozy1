@@ -81,11 +81,7 @@ test('any (OR): TRUE dominates, then UNKNOWN, else FALSE — Kleene strong logic
   assert.equal(evaluateRule({ op: 'any', children: [t, u] }, traits).result, 'TRUE');
 });
 
-test('fact/history/date nodes evaluate to UNKNOWN and are tagged notImplemented', () => {
-  const factResult = evaluateRule({ op: 'fact', path: 'property.yearBuilt', cmp: 'lte', value: 1980 }, {});
-  assert.equal(factResult.result, 'UNKNOWN');
-  assert.equal(factResult.evidence[0].notImplemented, true);
-
+test('history/date nodes evaluate to UNKNOWN and are tagged notImplemented', () => {
   const historyResult = evaluateRule({ op: 'history', event: 'MAINTENANCE_TASK_COMPLETED', withinDays: 30 }, {});
   assert.equal(historyResult.result, 'UNKNOWN');
   assert.equal(historyResult.evidence[0].notImplemented, true);
@@ -93,6 +89,44 @@ test('fact/history/date nodes evaluate to UNKNOWN and are tagged notImplemented'
   const dateResult = evaluateRule({ op: 'date', field: 'property.purchaseDate', cmp: 'before', value: '2020-01-01' }, {});
   assert.equal(dateResult.result, 'UNKNOWN');
   assert.equal(dateResult.evidence[0].notImplemented, true);
+});
+
+test('fact op: TRUE/FALSE when the comparison matches/does not match a known fact', () => {
+  const node = { op: 'fact', path: 'property.yearBuilt', cmp: 'lte', value: 1980 };
+  const facts = { 'property.yearBuilt': { known: true, value: 1975 } };
+  assert.equal(evaluateRule(node, {}, facts).result, 'TRUE');
+
+  const facts2 = { 'property.yearBuilt': { known: true, value: 2015 } };
+  assert.equal(evaluateRule(node, {}, facts2).result, 'FALSE');
+});
+
+test('fact op: UNKNOWN when the fact is missing/not known, never treated as eligible', () => {
+  const node = { op: 'fact', path: 'property.yearBuilt', cmp: 'lte', value: 1980 };
+  assert.equal(evaluateRule(node, {}, {}).result, 'UNKNOWN');
+  assert.equal(evaluateRule(node, {}, { 'property.yearBuilt': { known: false } }).result, 'UNKNOWN');
+});
+
+test('fact op is not tagged notImplemented (only history/date are)', () => {
+  const node = { op: 'fact', path: 'property.zipCode', cmp: 'exists' };
+  const result = evaluateRule(node, {}, { 'property.zipCode': { known: true, value: '02139' } });
+  assert.equal(result.evidence[0].notImplemented, undefined);
+});
+
+test('trait and fact ops combine correctly through all/any', () => {
+  const node = {
+    op: 'all',
+    children: [
+      { op: 'trait', key: 'hvacFilterReplacementOverdue', cmp: 'eq', value: true },
+      { op: 'fact', path: 'property.zipCode', cmp: 'in', value: ['02139', '02138'] },
+    ],
+  };
+  const result = evaluateRule(
+    node,
+    { hvacFilterReplacementOverdue: { known: true, value: true } },
+    { 'property.zipCode': { known: true, value: '02139' } },
+  );
+  assert.equal(result.result, 'TRUE');
+  assert.equal(result.evidence.length, 2);
 });
 
 test('evidence collects one entry per leaf node in a nested tree', () => {
