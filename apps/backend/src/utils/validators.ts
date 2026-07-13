@@ -23,7 +23,47 @@ const WaterHeaterTypeEnum = z.enum(['TANK', 'TANKLESS', 'HEAT_PUMP', 'SOLAR', 'U
 
 const RoofTypeEnum = z.enum(['SHINGLE', 'TILE', 'FLAT', 'METAL', 'UNKNOWN']);
 
-const FoundationTypeEnum = z.enum(['BASEMENT', 'CRAWL_SPACE', 'SLAB', 'PIER_AND_BEAM', 'RAISED', 'MIXED', 'OTHER', 'UNKNOWN']);
+const FOUNDATION_TYPE_VALUES = [
+  'BASEMENT',
+  'CRAWL_SPACE',
+  'SLAB',
+  'PIER_AND_BEAM',
+  'RAISED',
+  'MIXED',
+  'OTHER',
+  'UNKNOWN',
+] as const;
+
+/**
+ * Keep property updates compatible with clients deployed before foundation type
+ * became a canonical Prisma enum. Older Environment Report bundles submit
+ * display labels such as "Slab" and "Crawl space"; normalize those labels at
+ * the API boundary so Prisma only ever receives enum-safe values.
+ */
+const normalizeFoundationType = (value: unknown): unknown => {
+  if (typeof value !== 'string') return value;
+
+  const normalized = value
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+
+  const legacyAliases: Record<string, typeof FOUNDATION_TYPE_VALUES[number]> = {
+    CRAWLSPACE: 'CRAWL_SPACE',
+    PIER_BEAM: 'PIER_AND_BEAM',
+    RAISED_FOUNDATION: 'RAISED',
+    NOT_SURE: 'UNKNOWN',
+  };
+
+  if (legacyAliases[normalized]) return legacyAliases[normalized];
+  return normalized;
+};
+
+export const FoundationTypeEnum = z.preprocess(
+  normalizeFoundationType,
+  z.enum(FOUNDATION_TYPE_VALUES),
+);
 
 
 // ============================================================================

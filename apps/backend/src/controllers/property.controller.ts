@@ -219,7 +219,9 @@ export const updateProperty = async (req: AuthRequest, res: Response) => {
 
     res.status(400).json({
       success: false,
-      message: error.message || 'Failed to update property',
+      // The full database error is already captured by structured logging.
+      // Do not expose Prisma/Postgres internals in an inline form error.
+      message: 'Unable to save property details. Please try again.',
     });
   }
 };
