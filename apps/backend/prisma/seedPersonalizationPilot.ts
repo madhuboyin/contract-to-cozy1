@@ -49,7 +49,18 @@ async function main() {
     await prisma.profileQuestion.upsert({
       where: { code_version: { code: question.code, version: 1 } },
       create: { ...question, version: 1, status: 'DRAFT', placementContexts: ['PILOT'], maxImpressions: 3 },
-      update: { prompt: question.prompt, whyAsked: question.whyAsked, privacyNote: question.privacyNote, answerSchema: question.answerSchema, valueScore: question.valueScore, effortScore: question.effortScore },
+      update: {
+        prompt: question.prompt,
+        whyAsked: question.whyAsked,
+        privacyNote: question.privacyNote,
+        targetTable: question.targetTable,
+        targetKey: question.targetKey,
+        answerSchema: question.answerSchema,
+        placementContexts: ['PILOT'],
+        valueScore: question.valueScore,
+        effortScore: question.effortScore,
+        maxImpressions: 3,
+      },
     });
   }
 

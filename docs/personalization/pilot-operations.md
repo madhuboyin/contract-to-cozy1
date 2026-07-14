@@ -13,6 +13,10 @@ npx ts-node prisma/seedPersonalizationPilot.ts
 
 This idempotently seeds three definitions, three rules and five profile questions as `DRAFT`. It does not create households, backfill properties, activate content or alter existing definition/rule status.
 
+For pgAdmin, run `apps/backend/prisma/seedPersonalizationPilot.sql` instead.
+It is the SQL equivalent of the TypeScript seed; run one or the other, not both
+(although both are idempotent).
+
 ## Review and activation
 
 - Review the HVAC rule/copy before setting its definition and rule to `ACTIVE`.
