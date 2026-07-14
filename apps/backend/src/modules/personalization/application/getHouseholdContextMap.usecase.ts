@@ -64,13 +64,25 @@ function safeScalar(value: unknown): string | undefined {
   return undefined;
 }
 
-function typedLifestyleValue(row: HouseholdContextMapData['lifestyleAttributes'][number]): string | undefined {
-  if (row.valueBoolean !== null) return safeScalar(row.valueBoolean);
-  if (row.valueNumber !== null) return safeScalar(row.valueNumber);
-  if (row.valueCode !== null) return humanize(row.valueCode);
-  if (row.valueText !== null) return safeScalar(row.valueText);
-  if (row.valueDate !== null) return toIso(row.valueDate) ?? undefined;
-  return safeScalar(row.valueJson);
+function profileAnswerDetail(value: unknown): string {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return safeScalar(value) ?? 'Explicit answer recorded';
+  }
+  const answer = value as Record<string, unknown>;
+  if (typeof answer.hasPet === 'boolean') {
+    return answer.hasPet
+      ? `Yes · ${typeof answer.petType === 'string' ? humanize(answer.petType) : 'Pet'}`
+      : 'No';
+  }
+  if (typeof answer.hasChildren === 'boolean' && typeof answer.hasSeniors === 'boolean') {
+    const selected = [
+      answer.hasChildren ? 'Children' : null,
+      answer.hasSeniors ? 'Seniors' : null,
+    ].filter(Boolean);
+    return selected.length > 0 ? selected.join(' · ') : 'Neither';
+  }
+  if (typeof answer.value === 'boolean') return answer.value ? 'Yes' : 'No';
+  return 'Explicit answer recorded';
 }
 
 function addRelatedNode(
@@ -93,10 +105,11 @@ function addRelatedNode(
 
 export async function getHouseholdContextMap(
   propertyId: string,
+  ownerUserId: string,
   now = new Date(),
 ): Promise<HouseholdContextMap> {
   const materialization = await materializePilotRecommendationsForProperty(propertyId, 'CONTEXT_MAP_READ');
-  const data = await loadHouseholdContextMapData(propertyId);
+  const data = await loadHouseholdContextMapData(propertyId, ownerUserId);
   const paused = materialization.paused === true;
   const emptySummary: HouseholdContextMap['summary'] = {
     PROPERTY: 0,
@@ -139,53 +152,12 @@ export async function getHouseholdContextMap(
     });
   }
 
-  data.members.forEach((row, index) => addRelatedNode(nodes, edges, {
-    id: `profile:member:${row.type.toLowerCase()}:${index}`,
+  data.profileAnswers.forEach((row, index) => addRelatedNode(nodes, edges, {
+    id: `profile:${row.question.code.toLowerCase()}:${index}`,
     type: 'PROFILE_FACT',
-    label: humanize(row.type),
-    detail: [String(row.count), row.lifeStage ? humanize(row.lifeStage) : null].filter(Boolean).join(' · '),
-    source: row.source,
-    validFrom: toIso(row.createdAt),
-    validTo: null,
-  }, 'HAS_EXPLICIT_FACT', 'PROFILE_ANSWER'));
-
-  data.pets.forEach((row, index) => addRelatedNode(nodes, edges, {
-    id: `profile:pet:${row.petType.toLowerCase()}:${index}`,
-    type: 'PROFILE_FACT',
-    label: humanize(row.petType),
-    detail: [String(row.count), row.sizeBand && humanize(row.sizeBand), row.indoorOutdoor && humanize(row.indoorOutdoor)].filter(Boolean).join(' · '),
+    label: row.question.prompt,
+    detail: profileAnswerDetail(row.answerJson),
     source: 'USER_INPUT',
-    validFrom: toIso(row.createdAt),
-    validTo: null,
-  }, 'HAS_EXPLICIT_FACT', 'PROFILE_ANSWER'));
-
-  data.goals.forEach((row, index) => addRelatedNode(nodes, edges, {
-    id: `profile:goal:${row.goalCode.toLowerCase()}:${index}`,
-    type: 'PROFILE_FACT',
-    label: humanize(row.goalCode),
-    detail: row.horizon ? humanize(row.horizon) : 'Household goal',
-    source: row.source,
-    validFrom: toIso(row.createdAt),
-    validTo: null,
-  }, 'HAS_EXPLICIT_FACT', 'PROFILE_ANSWER'));
-
-  data.preferences.forEach((row, index) => addRelatedNode(nodes, edges, {
-    id: `profile:preference:${row.key.toLowerCase()}:${index}`,
-    type: 'PROFILE_FACT',
-    label: humanize(row.key),
-    detail: safeScalar(row.valueJson) ?? 'Explicit preference recorded',
-    source: 'USER_INPUT',
-    validFrom: toIso(row.createdAt),
-    validTo: null,
-  }, 'HAS_EXPLICIT_FACT', 'PROFILE_ANSWER'));
-
-  data.lifestyleAttributes.forEach((row, index) => addRelatedNode(nodes, edges, {
-    id: `profile:lifestyle:${row.key.toLowerCase()}:${index}`,
-    type: 'PROFILE_FACT',
-    label: humanize(row.key),
-    detail: typedLifestyleValue(row) ?? 'Explicit attribute recorded',
-    source: row.source,
-    confidence: row.confidence,
     validFrom: toIso(row.createdAt),
     validTo: null,
   }, 'HAS_EXPLICIT_FACT', 'PROFILE_ANSWER'));
@@ -196,9 +168,8 @@ export async function getHouseholdContextMap(
     label: humanize(row.traitKey),
     detail: safeScalar(row.valueJson) ?? 'Current property signal',
     source: row.source,
-    confidence: row.confidence,
     validFrom: toIso(row.computedAt),
-    validTo: toIso(row.validUntil),
+    validTo: null,
   }, 'HAS_DERIVED_TRAIT', 'TRAIT_COMPUTATION'));
 
   if (!paused) data.recommendations.forEach((row) => addRelatedNode(nodes, edges, {

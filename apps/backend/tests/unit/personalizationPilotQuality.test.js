@@ -35,9 +35,9 @@ test('returns aggregate pilot quality without exposing household or recommendati
   const { getPersonalizationPilotQuality } = loadService({
     optionalProfilesEnabled: 3,
     recommendationRows: [
-      counted({ propertyId: 'property-1', householdId: null, definitionId: 'def-1', status: 'ACTIVE' }, 4),
-      counted({ propertyId: 'property-1', householdId: null, definitionId: 'def-1', status: 'DISMISSED' }, 1),
-      counted({ propertyId: 'property-2', householdId: null, definitionId: 'def-2', status: 'ACTIVE' }, 2),
+      counted({ propertyId: 'property-1', definitionId: 'def-1', status: 'ACTIVE' }, 4),
+      counted({ propertyId: 'property-1', definitionId: 'def-1', status: 'DISMISSED' }, 1),
+      counted({ propertyId: 'property-2', definitionId: 'def-2', status: 'ACTIVE' }, 2),
     ],
     feedbackRows: [
       counted({ type: 'ACCEPTED', explicit: true, reasonCode: null }, 3),
@@ -86,15 +86,15 @@ test('reports no data without dividing by zero or enabling tuning', async () => 
   assert.equal(result.sample.onlineTuningAllowed, false);
 });
 
-test('does not count optional-profile recommendations as default-guidance reach', async () => {
+test('counts all property-owned recommendations as default-guidance reach', async () => {
   const { getPersonalizationPilotQuality } = loadService({
     recommendationRows: [
-      counted({ propertyId: 'property-1', householdId: null, definitionId: 'def-1', status: 'ACTIVE' }, 1),
-      counted({ propertyId: 'property-2', householdId: 'household-2', definitionId: 'def-2', status: 'ACTIVE' }, 1),
+      counted({ propertyId: 'property-1', definitionId: 'def-1', status: 'ACTIVE' }, 1),
+      counted({ propertyId: 'property-2', definitionId: 'def-2', status: 'ACTIVE' }, 1),
     ],
   });
 
   const result = await getPersonalizationPilotQuality(30, new Date('2026-07-13T12:00:00.000Z'));
   assert.equal(result.recommendations.total, 2);
-  assert.equal(result.propertiesWithDefaultGuidance, 1);
+  assert.equal(result.propertiesWithDefaultGuidance, 2);
 });

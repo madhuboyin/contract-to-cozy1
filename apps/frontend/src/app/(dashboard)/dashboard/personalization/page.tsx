@@ -51,8 +51,7 @@ function PilotQuestionCard({
   });
 
   const submitBoolean = (value: boolean) => {
-    const answerJson = question.targetTable === 'HOUSEHOLD_GOAL' ? { present: value } : { value };
-    answer.mutate({ action: 'ANSWERED', answerJson });
+    answer.mutate({ action: 'ANSWERED', answerJson: { value } });
   };
 
   return (
@@ -60,13 +59,13 @@ function PilotQuestionCard({
       <div className="space-y-3">
         <p className="text-xs text-[hsl(var(--mobile-text-secondary))]">{question.privacyNote}</p>
         <div className="flex flex-wrap gap-2">
-          {question.targetTable === 'PET_PROFILE' ? (
+          {question.answerSchema.type === 'select_with_detail' ? (
             <>
               <button type="button" onClick={() => answer.mutate({ action: 'ANSWERED', answerJson: { hasPet: true, petType: 'DOG' } })} className="min-h-[44px] rounded-xl border px-4 py-2 text-sm font-semibold">Dog</button>
               <button type="button" onClick={() => answer.mutate({ action: 'ANSWERED', answerJson: { hasPet: true, petType: 'CAT' } })} className="min-h-[44px] rounded-xl border px-4 py-2 text-sm font-semibold">Cat</button>
               <button type="button" onClick={() => answer.mutate({ action: 'ANSWERED', answerJson: { hasPet: false } })} className="min-h-[44px] rounded-xl border px-4 py-2 text-sm font-semibold">No pet</button>
             </>
-          ) : question.targetTable === 'HOUSEHOLD_MEMBER_SUMMARY' ? (
+          ) : question.answerSchema.type === 'multi_select' ? (
             <>
               <button type="button" onClick={() => answer.mutate({ action: 'ANSWERED', answerJson: { hasChildren: true, hasSeniors: false } })} className="min-h-[44px] rounded-xl border px-4 py-2 text-sm font-semibold">Children</button>
               <button type="button" onClick={() => answer.mutate({ action: 'ANSWERED', answerJson: { hasChildren: false, hasSeniors: true } })} className="min-h-[44px] rounded-xl border px-4 py-2 text-sm font-semibold">Seniors</button>

@@ -31,23 +31,19 @@ const at = new Date('2026-07-13T12:00:00.000Z');
 
 test('builds a sanitized current-state map from consented relational records', async () => {
   const data = {
-    status: 'ACTIVE',
-    source: 'USER_CREATED',
+    source: 'USER_INPUT',
     consentVersion: 'personalization-household-profile-v1',
     consentedAt: at,
     properties: [{ occupancyType: 'PRIMARY', effectiveFrom: at, effectiveTo: null }],
-    members: [{ type: 'CHILD', lifeStage: 'EARLY_SCHOOL', count: 1, source: 'USER_INPUT', createdAt: at }],
-    pets: [],
-    goals: [],
-    preferences: [{ key: 'BUDGET_POSTURE', valueJson: { value: true, privateNote: 'must-not-leak' }, createdAt: at }],
-    lifestyleAttributes: [],
+    profileAnswers: [
+      { question: { code: 'HOUSEHOLD_COMPOSITION_SAFETY', prompt: 'Household safety needs?' }, answerJson: { hasChildren: true, hasSeniors: false }, createdAt: at },
+      { question: { code: 'PREFERENCE_BUDGET_POSTURE', prompt: 'Favor lower-cost options?' }, answerJson: { value: true, privateNote: 'must-not-leak' }, createdAt: at },
+    ],
     derivedTraits: [{
       traitKey: 'HVAC_FILTER_REPLACEMENT_OVERDUE',
       valueJson: { value: true, rawAssetId: 'asset-secret' },
       source: 'DERIVED',
-      confidence: 1,
       computedAt: at,
-      validUntil: null,
     }],
     recommendations: [{
       status: 'ACTIVE',
@@ -57,7 +53,7 @@ test('builds a sanitized current-state map from consented relational records', a
     }],
   };
   const { getHouseholdContextMap } = loadUseCase(data);
-  const result = await getHouseholdContextMap('property-secret', at);
+  const result = await getHouseholdContextMap('property-secret', 'owner-1', at);
 
   assert.equal(result.configured, true);
   assert.deepEqual(result.summary, {
@@ -78,36 +74,29 @@ test('builds a sanitized current-state map from consented relational records', a
 
 test('does not expose stored recommendation nodes while personalization is paused', async () => {
   const data = {
-    status: 'ACTIVE', source: 'USER_CREATED', consentVersion: 'personalization-household-profile-v1', consentedAt: at,
+    source: 'USER_INPUT', consentVersion: 'personalization-household-profile-v1', consentedAt: at,
     properties: [{ occupancyType: 'PRIMARY', effectiveFrom: at, effectiveTo: null }],
-    members: [], pets: [], goals: [], preferences: [], lifestyleAttributes: [], derivedTraits: [],
+    profileAnswers: [], derivedTraits: [],
     recommendations: [{ status: 'ACTIVE', firstEligibleAt: at, expiresAt: null, definition: { code: 'STALE' } }],
   };
   const { getHouseholdContextMap } = loadUseCase(data, { paused: true });
-  const result = await getHouseholdContextMap('property-secret', at);
+  const result = await getHouseholdContextMap('property-secret', 'owner-1', at);
   assert.equal(result.summary.RECOMMENDATION, 0);
   assert.ok(result.nodes.every((node) => node.type !== 'RECOMMENDATION'));
 });
 
 test('returns property transparency before optional-profile consent', async () => {
   const data = {
-    status: null,
     source: null,
     consentVersion: null,
     consentedAt: null,
     properties: [],
-    members: [],
-    pets: [],
-    goals: [],
-    preferences: [],
-    lifestyleAttributes: [],
+    profileAnswers: [],
     derivedTraits: [{
       traitKey: 'HVAC_FILTER_REPLACEMENT_OVERDUE',
       valueJson: true,
       source: 'DERIVED',
-      confidence: 1,
       computedAt: at,
-      validUntil: null,
     }],
     recommendations: [{
       status: 'ACTIVE',
@@ -117,7 +106,7 @@ test('returns property transparency before optional-profile consent', async () =
     }],
   };
   const { getHouseholdContextMap } = loadUseCase(data);
-  const result = await getHouseholdContextMap('property-secret', at);
+  const result = await getHouseholdContextMap('property-secret', 'owner-1', at);
   assert.equal(result.configured, true);
   assert.equal(result.consent, null);
   assert.deepEqual(result.summary, {

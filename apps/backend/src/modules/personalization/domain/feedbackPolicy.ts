@@ -8,20 +8,13 @@
 // Two independently-assertable "more than" relationships:
 //  1. explicit negative (nonzero suppression effect) vs. implicit (always
 //     null, zero effect) — the literal PER-FDBK-001 contrast.
-//  2. NOT_RELEVANT (indefinite, DEFINITION-wide) vs. DISMISSED (30-day,
-//     narrower DEDUPE_KEY-scoped) — a graduated-severity case within
-//     "explicit negative."
-//
-// SuppressionScope/SuppressionReason are defined here (domain) rather than in
-// infrastructure/suppressionRepository.ts, which imports them from here —
-// domain must not depend on infrastructure.
-export type SuppressionScope = 'DEFINITION' | 'CATEGORY' | 'DEDUPE_KEY';
+//  2. NOT_RELEVANT (indefinite) vs. DISMISSED (30-day) — graduated severity
+//     for the same property/definition scope.
 export type SuppressionReason = 'USER_DISMISSED' | 'COMPLETED' | 'SYSTEM';
 
 export const DISMISSED_SUPPRESSION_DAYS = 30;
 
 export interface SuppressionDirective {
-  scope: SuppressionScope;
   /** null = indefinite. */
   until: Date | null;
   reason: SuppressionReason;
@@ -42,12 +35,11 @@ export function decideSuppressionForFeedback(
   }
 
   if (type === 'NOT_RELEVANT') {
-    return { scope: 'DEFINITION', until: null, reason: 'USER_DISMISSED' };
+    return { until: null, reason: 'USER_DISMISSED' };
   }
 
   if (type === 'DISMISSED') {
     return {
-      scope: 'DEDUPE_KEY',
       until: new Date(now.getTime() + DISMISSED_SUPPRESSION_DAYS * 24 * 60 * 60 * 1000),
       reason: 'USER_DISMISSED',
     };

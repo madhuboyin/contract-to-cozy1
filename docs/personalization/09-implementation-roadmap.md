@@ -75,14 +75,16 @@ The original Phase 4 assumed mature, longitudinal real-user data. The product is
 
 Write an Architecture Decision Record and a thin vertical proof with inactive catalog content: a property capability policy, module skeleton, typed rule validator/evaluator, one non-sensitive property trait, one inactive HVAC-filter definition, an evaluation run/snapshot, and golden tests. It proves boundaries and operations without collecting household data or changing UI behavior.
 
-## Migration order by consumer
+## Validation order by consumer
 
-1. Shadow only (compare with existing Action Center/Daily Pulse).
-2. Maintenance task conversion and Health next action.
-3. Dashboard top recommendations.
-4. Seller Prep catalog.
-5. Risk/climate and notification gating.
-6. Remaining modules; retire duplicated local ranks only after parity/quality proof.
+1. Activate and validate the three reviewed definitions against internal
+   properties.
+2. Validate the default personalization surface, feedback and optional-profile
+   enable/question/reset flow.
+3. Validate Maintenance task conversion and the Health navigation action.
+4. Validate Dashboard rendering of the same shared recommendation instances.
+5. Add another module only with reviewed, domain-relevant definitions and
+   observed demand; do not copy eligibility logic into consumers.
 
 ## Rollback strategy
 

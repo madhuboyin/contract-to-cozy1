@@ -16,8 +16,7 @@
 // evaluating to UNKNOWN (the old inline loader never checked the property
 // existed at all).
 //
-// Not exposed via any route or job yet (see adr-0001) — called directly by
-// tests today, and by the shadow-evaluation use case (migration steps 4-6).
+// Used by the direct property-guidance materialization path and unit tests.
 import { validateRuleAst } from '../domain/ruleAst';
 import { evaluateRule, TraitReading } from '../domain/evaluator';
 import { computePropertyTraitSnapshot } from './computePropertyTraitSnapshot.usecase';
@@ -36,15 +35,13 @@ export interface EvaluateDefinitionResult {
   result?: 'TRUE' | 'FALSE' | 'UNKNOWN';
   eligible?: boolean;
   errorCode?: EvaluationRunErrorCode;
-  /** Present whenever the definition was found, even on a FAILED result — lets callers (e.g. the shadow use case) attach a PersonalizedRecommendation without a second lookup. */
+  /** Present whenever the definition was found, even on a FAILED result, so callers can materialize without a second lookup. */
   definitionId?: string;
   ruleVersion?: number;
   /** Present only when a PersonalizationEvaluationRun row was actually written. */
   evaluationRunId?: string;
-  /** Present only on COMPLETED — the trait set this evaluation ran against, for scoring inputs (e.g. hvacFilterDaysSinceServiced) that aren't part of the rule's eligibility logic. */
+  /** Present only on COMPLETED — the property trait set this evaluation ran against. */
   traitsSnapshot?: Record<string, TraitReading>;
-  /** Present only on COMPLETED — the active rule's opaque scoring-weight config (domain/scoring.ts parses it). */
-  scoreConfig?: unknown;
 }
 
 export async function evaluateDefinitionForProperty(
@@ -138,7 +135,6 @@ export async function evaluateDefinitionForProperty(
     ruleVersion: loadedRule.ruleVersion,
     evaluationRunId: run.id,
     traitsSnapshot: snapshot.traits,
-    scoreConfig: loadedRule.scoreConfig,
   };
 }
 

@@ -58,18 +58,9 @@ export async function recordRecommendationFeedback(
     return { status: 'RECORDED', suppressed: false };
   }
 
-  const scopeKey =
-    directive.scope === 'DEFINITION'
-      ? context.definitionCode
-      : directive.scope === 'CATEGORY'
-        ? context.category
-        : context.dedupeKey;
-
   await createOrExtendSuppression({
     propertyId: context.propertyId,
-    householdId: context.householdId,
-    scope: directive.scope,
-    scopeKey,
+    definitionId: context.definitionId,
     reason: directive.reason,
     until: directive.until,
   });

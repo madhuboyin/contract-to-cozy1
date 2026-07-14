@@ -3,178 +3,66 @@ const assert = require('node:assert/strict');
 
 require('ts-node/register');
 
-function createPrismaMock({ suppressions = [] } = {}) {
-  const upserts = [];
+function loadRepository(initial = []) {
+  const suppressions = [...initial];
+  const find = (propertyId, definitionId) => suppressions.find((row) => row.propertyId === propertyId && row.definitionId === definitionId) || null;
   const prismaMock = {
     recommendationSuppression: {
-      findMany: async ({ where }) => {
-        const scopeKeys = where.OR.map((o) => `${o.scope}:${o.scopeKey}`);
-        return suppressions.filter((s) => scopeKeys.includes(`${s.scope}:${s.scopeKey}`) && s.propertyId === where.propertyId);
-      },
       findUnique: async ({ where }) => {
-        const key = where.propertyId_scope_scopeKey;
-        return (
-          suppressions.find(
-            (s) => s.propertyId === key.propertyId && s.scope === key.scope && s.scopeKey === key.scopeKey,
-          ) || null
-        );
+        const key = where.propertyId_definitionId;
+        return find(key.propertyId, key.definitionId);
       },
       upsert: async ({ where, create, update }) => {
-        const key = where.propertyId_scope_scopeKey;
-        const existingIndex = suppressions.findIndex(
-          (s) => s.propertyId === key.propertyId && s.scope === key.scope && s.scopeKey === key.scopeKey,
-        );
-        const record =
-          existingIndex >= 0 ? { ...suppressions[existingIndex], ...update } : { ...create };
-        if (existingIndex >= 0) {
-          suppressions[existingIndex] = record;
-        } else {
-          suppressions.push(record);
-        }
-        upserts.push({ create, update });
-        return record;
+        const key = where.propertyId_definitionId;
+        const existing = find(key.propertyId, key.definitionId);
+        if (existing) Object.assign(existing, update);
+        else suppressions.push({ id: `sup-${suppressions.length + 1}`, ...create });
       },
     },
   };
-  return { prismaMock, upserts, suppressions };
-}
-
-function installPrismaMock(prismaMock) {
   const prismaPath = require.resolve('../../src/lib/prisma.ts');
-  require.cache[prismaPath] = {
-    id: prismaPath,
-    filename: prismaPath,
-    loaded: true,
-    exports: { prisma: prismaMock },
-  };
+  require.cache[prismaPath] = { id: prismaPath, filename: prismaPath, loaded: true, exports: { prisma: prismaMock } };
+  const repositoryPath = require.resolve('../../src/modules/personalization/infrastructure/suppressionRepository.ts');
+  delete require.cache[repositoryPath];
+  return { ...require(repositoryPath), suppressions };
 }
 
-function loadRepository() {
-  const repoPath = require.resolve('../../src/modules/personalization/infrastructure/suppressionRepository.ts');
-  delete require.cache[repoPath];
-  return require('../../src/modules/personalization/infrastructure/suppressionRepository.ts');
-}
-
-const KEYS = { definitionCode: 'hvac_filter_replacement_check_proof', category: 'proof_of_concept', dedupeKey: 'hvac_filter_replacement_check_proof' };
-
-test('findActiveSuppression: returns null when no suppression rows exist', async () => {
-  const { prismaMock } = createPrismaMock({ suppressions: [] });
-  installPrismaMock(prismaMock);
+test('findActiveSuppression returns false when no row exists', async () => {
   const { findActiveSuppression } = loadRepository();
-
-  const result = await findActiveSuppression('prop-1', KEYS);
-  assert.equal(result, null);
+  assert.equal(await findActiveSuppression('property-1', 'definition-1'), false);
 });
 
-test('findActiveSuppression: an indefinite (until: null) suppression is always active', async () => {
-  const { prismaMock } = createPrismaMock({
-    suppressions: [{ propertyId: 'prop-1', scope: 'DEFINITION', scopeKey: KEYS.definitionCode, until: null }],
-  });
-  installPrismaMock(prismaMock);
-  const { findActiveSuppression } = loadRepository();
-
-  const result = await findActiveSuppression('prop-1', KEYS);
-  assert.deepEqual(result, { scope: 'DEFINITION', scopeKey: KEYS.definitionCode });
+test('indefinite and future suppressions are active; expired suppression is ignored', async () => {
+  const now = Date.now();
+  const { findActiveSuppression } = loadRepository([
+    { propertyId: 'property-1', definitionId: 'indefinite', until: null },
+    { propertyId: 'property-1', definitionId: 'future', until: new Date(now + 60_000) },
+    { propertyId: 'property-1', definitionId: 'expired', until: new Date(now - 60_000) },
+  ]);
+  assert.equal(await findActiveSuppression('property-1', 'indefinite'), true);
+  assert.equal(await findActiveSuppression('property-1', 'future'), true);
+  assert.equal(await findActiveSuppression('property-1', 'expired'), false);
 });
 
-test('findActiveSuppression: an expired (until in the past) suppression is ignored', async () => {
-  const { prismaMock } = createPrismaMock({
-    suppressions: [
-      { propertyId: 'prop-1', scope: 'DEDUPE_KEY', scopeKey: KEYS.dedupeKey, until: new Date(Date.now() - 1000) },
-    ],
-  });
-  installPrismaMock(prismaMock);
-  const { findActiveSuppression } = loadRepository();
-
-  const result = await findActiveSuppression('prop-1', KEYS);
-  assert.equal(result, null);
-});
-
-test('findActiveSuppression: a not-yet-expired (until in the future) suppression is active', async () => {
-  const { prismaMock } = createPrismaMock({
-    suppressions: [
-      { propertyId: 'prop-1', scope: 'DEDUPE_KEY', scopeKey: KEYS.dedupeKey, until: new Date(Date.now() + 1000 * 60 * 60) },
-    ],
-  });
-  installPrismaMock(prismaMock);
-  const { findActiveSuppression } = loadRepository();
-
-  const result = await findActiveSuppression('prop-1', KEYS);
-  assert.deepEqual(result, { scope: 'DEDUPE_KEY', scopeKey: KEYS.dedupeKey });
-});
-
-test('createOrExtendSuppression: creates a new row when none exists', async () => {
-  const { prismaMock, upserts } = createPrismaMock({ suppressions: [] });
-  installPrismaMock(prismaMock);
-  const { createOrExtendSuppression } = loadRepository();
-
-  const until = new Date(Date.now() + 1000 * 60 * 60);
-  await createOrExtendSuppression({
-    propertyId: 'prop-1',
-    scope: 'DEFINITION',
-    scopeKey: KEYS.definitionCode,
-    reason: 'USER_DISMISSED',
-    until,
-  });
-
-  assert.equal(upserts.length, 1);
-  assert.equal(upserts[0].create.until.getTime(), until.getTime());
-});
-
-test('createOrExtendSuppression: extends to the later date when re-suppressed with a further-out until', async () => {
-  const earlier = new Date(Date.now() + 1000 * 60 * 60);
-  const later = new Date(Date.now() + 1000 * 60 * 60 * 24);
-  const { prismaMock, suppressions } = createPrismaMock({
-    suppressions: [{ propertyId: 'prop-1', scope: 'DEDUPE_KEY', scopeKey: KEYS.dedupeKey, until: earlier }],
-  });
-  installPrismaMock(prismaMock);
-  const { createOrExtendSuppression } = loadRepository();
-
-  await createOrExtendSuppression({
-    propertyId: 'prop-1',
-    scope: 'DEDUPE_KEY',
-    scopeKey: KEYS.dedupeKey,
-    reason: 'USER_DISMISSED',
-    until: later,
-  });
-
+test('createOrExtendSuppression creates and extends one property-definition row', async () => {
+  const earlier = new Date(Date.now() + 60_000);
+  const later = new Date(Date.now() + 120_000);
+  const { createOrExtendSuppression, suppressions } = loadRepository();
+  const base = { propertyId: 'property-1', definitionId: 'definition-1', reason: 'USER_DISMISSED' };
+  await createOrExtendSuppression({ ...base, until: earlier });
+  await createOrExtendSuppression({ ...base, until: later });
+  assert.equal(suppressions.length, 1);
   assert.equal(suppressions[0].until.getTime(), later.getTime());
 });
 
-test('createOrExtendSuppression: existing indefinite (null) suppression is never shortened', async () => {
-  const { prismaMock, suppressions } = createPrismaMock({
-    suppressions: [{ propertyId: 'prop-1', scope: 'DEFINITION', scopeKey: KEYS.definitionCode, until: null }],
-  });
-  installPrismaMock(prismaMock);
-  const { createOrExtendSuppression } = loadRepository();
+test('indefinite suppression is never shortened and wins over a concrete date', async () => {
+  const future = new Date(Date.now() + 60_000);
+  const base = { propertyId: 'property-1', definitionId: 'definition-1', reason: 'USER_DISMISSED' };
+  const first = loadRepository([{ ...base, until: null }]);
+  await first.createOrExtendSuppression({ ...base, until: future });
+  assert.equal(first.suppressions[0].until, null);
 
-  await createOrExtendSuppression({
-    propertyId: 'prop-1',
-    scope: 'DEFINITION',
-    scopeKey: KEYS.definitionCode,
-    reason: 'USER_DISMISSED',
-    until: new Date(Date.now() + 1000),
-  });
-
-  assert.equal(suppressions[0].until, null);
-});
-
-test('createOrExtendSuppression: a new indefinite (null) until wins over an existing concrete date', async () => {
-  const { prismaMock, suppressions } = createPrismaMock({
-    suppressions: [
-      { propertyId: 'prop-1', scope: 'DEFINITION', scopeKey: KEYS.definitionCode, until: new Date(Date.now() + 1000) },
-    ],
-  });
-  installPrismaMock(prismaMock);
-  const { createOrExtendSuppression } = loadRepository();
-
-  await createOrExtendSuppression({
-    propertyId: 'prop-1',
-    scope: 'DEFINITION',
-    scopeKey: KEYS.definitionCode,
-    reason: 'USER_DISMISSED',
-    until: null,
-  });
-
-  assert.equal(suppressions[0].until, null);
+  const second = loadRepository([{ ...base, until: future }]);
+  await second.createOrExtendSuppression({ ...base, until: null });
+  assert.equal(second.suppressions[0].until, null);
 });

@@ -9,7 +9,7 @@ This audit applies the revised no-real-user scope in `09-implementation-roadmap.
 | Default property guidance | Complete | Reviewed property-only recommendations do not require a Household or consent gate |
 | Optional profile and lazy Household | Complete | Owner choice creates and consents a Household only when enhanced profile questions are enabled |
 | Profile-scoped API | Complete | Enable uses `POST /personalization/profile/enable`; removal uses `DELETE /personalization/profile` |
-| Five-question progressive profile | Complete | Active PILOT questions are ranked, capped, validated and written transactionally |
+| Five-question progressive profile | Complete | Active questions are ranked, capped, validated and retained once in `ProfileAnswer.answerJson` |
 | Three deterministic definitions | Complete in code | HVAC, smoke/CO and dryer-vent rules have TRUE/FALSE/UNKNOWN coverage |
 | Reviewed/versioned content gate | Complete in code | Materialization requires an ACTIVE `RecommendationContentVersion`; seeds remain DRAFT |
 | Generic evaluation/materialization | Complete | One pipeline evaluates all three definitions and persists rule/content versions |
@@ -23,9 +23,13 @@ This audit applies the revised no-real-user scope in `09-implementation-roadmap.
 | Focused tests | Complete | Capability, rules, content gate, materialization, profile validation, feedback, reset and UI accessibility smoke coverage |
 | PostgreSQL rollback test | Harness complete | Runs only with explicit `PERSONALIZATION_TEST_DATABASE_URL`; never targets the default/production database |
 
-Schema pruning removed the unused `TraitDefinition`, `RuleVersion`, and
-`TraitSnapshot` models. `DerivedTrait` is property-only; evaluation input and
-evidence are retained once in `PersonalizationEvaluationRun.resultJson`.
+Schema pruning removed the unused `TraitDefinition`, `RuleVersion`,
+`TraitSnapshot`, `HouseholdMemberSummary`, `PetProfile`, `HouseholdGoal`,
+`HouseholdPreference`, and `LifestyleAttribute` models. Optional facts are
+retained once in `ProfileAnswer.answerJson`. Recommendations and suppressions
+are property/definition-owned. `DerivedTrait` is property-only; evaluation
+input and evidence are retained once in
+`PersonalizationEvaluationRun.resultJson`.
 
 ## Operational activation gates
 

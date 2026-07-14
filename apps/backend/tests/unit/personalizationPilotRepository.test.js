@@ -6,11 +6,7 @@ require('ts-node/register');
 function loadRepository({ household = { id: 'hh-1', consentVersion: 'personalization-household-profile-v1', consentedAt: new Date() } } = {}) {
   const calls = [];
   const db = {
-    personalizedRecommendation: {
-      deleteMany: async (query) => calls.push(['recommendations', query]),
-      findMany: async (query) => { calls.push(['recommendation-list', query]); return []; },
-    },
-    recommendationSuppression: { deleteMany: async (query) => calls.push(['suppressions', query]) },
+    personalizedRecommendation: { findMany: async (query) => { calls.push(['recommendation-list', query]); return []; } },
     household: {
       findFirst: async () => household,
       delete: async (query) => calls.push(['household', query]),
@@ -24,11 +20,10 @@ function loadRepository({ household = { id: 'hh-1', consentVersion: 'personaliza
   return { ...require('../../src/modules/personalization/infrastructure/pilotRepository.ts'), calls };
 }
 
-test('reset removes only household-owned outputs before deleting the optional profile', async () => {
+test('reset deletes only the optional profile aggregate', async () => {
   const { resetPilotHousehold, calls } = loadRepository();
   assert.equal(await resetPilotHousehold('prop-1', 'owner-1'), true);
-  assert.deepEqual(calls.map(([name]) => name), ['recommendations', 'suppressions', 'household']);
-  assert.deepEqual(calls[0][1].where, { propertyId: 'prop-1', householdId: 'hh-1' });
+  assert.deepEqual(calls.map(([name]) => name), ['household']);
 });
 test('reset is a safe no-op when the opted-in household does not exist', async () => {
   const { resetPilotHousehold, calls } = loadRepository({ household: null });
@@ -36,18 +31,17 @@ test('reset is a safe no-op when the opted-in household does not exist', async (
   assert.equal(calls.length, 0);
 });
 
-test('default reads include property-only recommendations without exposing another household', async () => {
+test('default reads are property-scoped and independent of an optional profile', async () => {
   const withoutProfile = loadRepository({ household: null });
   await withoutProfile.listActivePilotRecommendations('prop-1');
   assert.deepEqual(withoutProfile.calls[0][1].where, {
-    propertyId: 'prop-1', status: 'ACTIVE', householdId: null,
+    propertyId: 'prop-1', status: 'ACTIVE',
   });
 
   const withProfile = loadRepository();
-  await withProfile.listActivePilotRecommendations('prop-1', 'hh-1');
+  await withProfile.listActivePilotRecommendations('prop-1');
   assert.deepEqual(withProfile.calls[0][1].where, {
     propertyId: 'prop-1',
     status: 'ACTIVE',
-    OR: [{ householdId: null }, { householdId: 'hh-1' }],
   });
 });

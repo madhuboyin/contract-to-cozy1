@@ -2,89 +2,108 @@
 
 ## Quality model
 
-Test deterministic logic as pure functions, database behavior against PostgreSQL, route/service authorization independently, and user journeys end to end. A reviewed golden household/property dataset is the regression contract for every rule/catalog version.
+Test the current three-definition, property-owned runtime. Optional household
+answers are a separate consented boundary. Tests must not assume percentage
+enrollment, a shadow path, migrations, inferred household traits, background
+workers or a configurable learning model.
 
-## Test layers
+## Required layers
 
-| Layer | Coverage | Release gate |
-|---|---|---|
-| Unit | trait precedence/confidence/expiry; AST validation/evaluation; unknown semantics; scoring/breakdown; dedupe/conflicts/diversity; explanations; profiling value/caps; suppression; safety floors | 100% branch coverage for safety/rule operators; mutation testing considered |
-| Catalog lint/golden | codes/taxonomy/source/review dates, prohibited pet/medical/legal claims, dependency keys, sample eligibility/rank/explanation | every active definition has positive, negative, unknown and suppression fixture |
-| Prisma integration | constraints/indexed query shapes, transactions/outbox, idempotent upserts, cascades, soft-delete/current-row uniqueness, concurrent jobs | real PostgreSQL, not SQLite mocks |
-| API contract | DTO/OpenAPI, validation/errors, ETag/cursors, idempotency/version conflicts, stale response | consumer/provider contract suite |
-| Authorization/security | OWNER/contributor/viewer/admin/MFA; item-ID scope; CSRF/rate limit; AST injection/SSRF; tenant enumeration | deny-by-default matrix passes |
-| Schema deployment | During the data-free pilot, validate Prisma schema and recreate a disposable database. After deployed data must survive changes, add conventional migration and rehearsal checks owned by the user | schema validates; disposable pilot setup succeeds |
-| Frontend component | question/explanation/cards/controls, loading/stale/error, optimistic rollback, reduced motion | Jest/Testing Library + axe |
-| E2E | onboarding → result → detail → correction → recompute → task; privacy controls; notifications | desktop/mobile, keyboard critical path |
-| Performance | snapshot GET, recompute, queue bursts, DB query plans, cache invalidation | PER-NFR targets under Pi limits |
-| Reliability | duplicate delivery, retries, worker restart, provider outage, stale cache, definition pause, DB/Redis interruption | no duplicate actions/false-current hazard |
-| Privacy | telemetry canaries, export/reset/delete, consent withdrawal, viewer redaction, retention jobs | no canary values in log/metric/URL/analytics |
-| AI | AI disabled, schema validation, prompt injection, unsupported claims, deterministic payload unchanged | AI never changes eligibility/score/action |
-
-## Golden dataset
-
-Store versioned, synthetic fixtures: household, property/assets, context, history, expected traits, eligible/suppressed definitions, rank bands, explanation reason codes and actions. Never copy production household data. A catalog PR prints impact diff: newly eligible/ineligible, rank changes, suppression changes and notification volume estimate.
-
-## Required scenario matrix
-
-| Scenario | Expected assertions |
+| Layer | Current release gate |
 |---|---|
-| No profile data | property-only safe results; no sensitive inference; top question optional |
-| Partial profile | unknown rules behave per policy; confidence reduced; no false exclusion |
-| Conflicting answers | latest valid explicit version wins; conflict surfaced for correction; audit retained |
-| Multiple properties | occupancy/property facts produce distinct results; no cross-property task/evidence leak |
-| Multiple pets | aggregated trait threshold deterministic; explanation minimizes detail |
-| Pet removed | pet traits expire; future pet items withdrawn; historical action remains audited |
-| Goal changed | affected rank/eligibility recomputed only; model version recorded |
-| Dismissed | correct definition/instance/category scope suppresses until policy permits |
-| Snoozed | hidden from ordinary channel until time; critical safety override policy tested |
-| Duplicate recommendation | strongest instance remains; evidence merged; one action/notification |
-| Stale context | hazard urgency suppressed/marked stale; refresh enqueued; no all-clear claim |
-| Weather event | valid source+vulnerability yields time-bound item and channel policy decision |
-| Sensitive trait disabled | override/disable blocks inference and dependent explanation promptly |
-| Unauthorized property | 404/403 policy response with no existence/detail leakage |
-| Rule version updated | old instance reproducible; new evaluation references new immutable version |
-| Definition disabled | no new instances; active affected instances withdrawn within SLA; history retained |
-| Existing task | recommendation acted/suppressed; conversion returns existing idempotent action |
-| Notification fatigue | cross-module budget suppresses lower-ranked item with reason |
-| Worker duplicate/retry | one current snapshot/action; run diagnostics record retry |
-| Profile deletion | profile/traits/snapshots/explanations erased; domain property retained per policy |
+| Rule/trait unit | AST bounds, `TRUE`/`FALSE`/`UNKNOWN`, the three property definitions and stable priority bands |
+| Catalog lifecycle | DRAFT is inactive; active reviewed rule/content versions match; safety author/reviewer differ |
+| Application | materialize/expire/suppress; max-three read; content gate; idempotent feedback/action/profile events |
+| Authorization | wrong property denied; VIEWER read-only; CONTRIBUTOR feedback/action; OWNER optional profile/context; ADMIN+MFA lifecycle/quality |
+| Optional profile | consent before answer; schema validation; skip/snooze cooldown; reset/account erasure cascades only profile data |
+| Cross-module | Dashboard, Maintenance and Health receive the same property recommendation DTO; task conversion is idempotent |
+| Privacy | non-owner evidence redaction; context map excludes IDs/raw nested data; aggregate quality excludes answers/comments/identifiers |
+| Operational controls | global and definition pause stop new evaluation and hide stored output; reset remains available |
+| Frontend | loading/error/empty/disabled states, 44px actions, keyboard and accessible labels |
+| Schema | Prisma validates and the current client compiles; seed SQL/TS reference only current fields |
 
-## Representative unit cases
+## Golden scenarios
 
-```ts
-it('explicit override beats inferred trait until revoked');
-it('UNKNOWN fence state emits a question opportunity, not a fence assertion');
-it('critical safety floor is not reduced by dismissal affinity');
-it('top five contain at most two per category when no critical exception exists');
-it('explanation reason codes are a subset of matched rule trace');
-it('same context hash and versions reproduce score and occurrence key');
-```
+Every active definition needs synthetic fixtures for:
 
-## API and authorization matrix
+- a known eligible property;
+- a known ineligible property;
+- missing/unknown source data;
+- inactive or missing reviewed content;
+- active and expired suppression;
+- reevaluation that expires and later revives the same property/definition
+  recommendation.
 
-For every endpoint test: unauthenticated, wrong property, owner, contributor, viewer, suspended/unverified account where relevant, malformed UUID/body, stale version, repeated idempotency key and cross-household ID. Service tests bypass routes to prove checks are not middleware-only.
+No fixture copies production profile data. Optional-profile tests use broad
+synthetic shapes matching the five question schemas.
 
-## Notification testing
+## Authorization matrix
 
-Test candidate threshold, consent/channel, quiet hours/cadence, cross-feature budget, sensitive lock-screen copy, dedupe, digest grouping, provider failure/retry, delivered status, definition pause and expired context. Use fake delivery adapters; no real email/SMS.
+For every property endpoint cover unauthenticated, wrong property, OWNER,
+CONTRIBUTOR and VIEWER. For profile/context endpoints verify OWNER-only access.
+For catalog/quality endpoints verify ADMIN plus MFA. Item-ID operations must
+resolve the item back to the authorized property rather than trust a request
+body household or property ID.
 
-## Performance plan
+## Database tests
 
-Datasets: 10k properties planning envelope, 50/100/250 definitions, 25/100 traits, 100k/1m feedback rows. Measure explain-analyze query plans, API p50/p95/p99, worker CPU/memory/duration, queue age, DB connections and cache hit rate. Run with manifest-equivalent CPU/memory. Reject unbounded JSON scans and N+1 queries.
+Use real disposable PostgreSQL where constraint/cascade/transaction behavior is
+under test. Verify:
 
-## Migration and rollback tests
+- one recommendation and one suppression per property/definition;
+- unique feedback/profile idempotency keys;
+- deleting an optional `Household` cascades its property links and profile
+  answers but not property guidance;
+- active catalog version selection and transactional activation;
+- concurrent retries resolve as idempotent outcomes.
 
-Migration rehearsal is intentionally deferred while there are no real users and no deployed data that must survive. When that condition changes, snapshot a production-shaped anonymized schema, apply the user-authored migration, compare counts/uniques/orphans, run old read paths, and verify rollback flags. Never backfill sensitive traits by inference.
+Mock-backed unit tests remain appropriate for deterministic repository query
+shapes and orchestration.
+
+## Schema deployment and migration rehearsal
+
+While the pilot database contains no data that must survive schema evolution,
+validate the desired Prisma schema and recreate a disposable database. Do not
+maintain migration-rehearsal machinery or speculative backfills.
+
+When a deployed database first contains data that must survive a change, add a
+conventional migration test for that actual change: apply it to an anonymized
+production-shaped snapshot, compare counts/uniques/orphans, exercise old and
+new required reads, and verify the operational rollback. Never infer optional
+household facts during a data transform.
+
+## Performance and reliability
+
+For the pilot, measure the selected-property read/materialization path, shared
+module read and aggregate admin-quality query using a realistic internal data
+set. Reject unbounded JSON scans and N+1 queries. Queue bursts, cache
+invalidation, notification delivery and large-scale definition matrices are
+future gates only if those systems are introduced.
 
 ## Accessibility and visual QA
 
-Automated axe plus manual keyboard/screen-reader checks for profile/question/detail/control flows at 320, 375, 768 and desktop widths; zoom 200%; reduced motion; high contrast; long localization strings; status/error announcements; no color-only confidence/urgency.
+Exercise profile, recommendation, explanation, feedback, reset and admin
+controls at 320, 375, 768 and desktop widths; keyboard-only; 200% zoom;
+reduced-motion and high-contrast settings; long text; and status/error
+announcements. Confidence/priority must not rely on color alone.
 
 ## Quality measurement before learning
 
-Review a stratified sample by definition/property completeness. Compare expert relevance labels to eligibility/rank bands; track not-relevant/correction and completion; require minimum sample size; inspect notification opt-out and safety reports. Do not tune on click-through alone.
+Review aggregate accepted, acted, dismissed and not-relevant outcomes by
+definition only after the declared minimum decision sample. The threshold
+permits human review, never automatic tuning. Do not implement or test learning
+behavior until a separate evidence-backed design defines its outcome, safety
+floor, privacy approval and rollback.
 
-## CI evolution
+## Current verification commands
 
-Add backend personalization unit/catalog/contract suites to the existing backend gate, a disposable PostgreSQL Prisma integration job, and focused frontend accessibility tests. Add migration rehearsal only once a deployed database contains data that must survive schema evolution. Preserve current security/secret scans.
+```bash
+cd apps/backend
+npx prisma validate --schema=prisma/schema.prisma
+npx prisma generate --schema=prisma/schema.prisma
+npx tsc --noEmit
+node --test tests/unit/personalization*.test.js
+
+cd ../frontend
+npm run build
+```

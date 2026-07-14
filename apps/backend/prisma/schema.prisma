@@ -979,7 +979,7 @@ model CoverageAnalysis {
   decisionTrace        Json? // factors: label/detail/impact
   inputsSnapshot       Json? // premium, deductible, warranty cost, overrides used
 
-  strategicAdvice      String?
+  strategicAdvice String?
 
   computedAt DateTime @default(now())
 
@@ -1457,20 +1457,19 @@ model User {
   // Material Spec Registry
   materialSpecExports MaterialSpecExport[]
 
-  // Personalization engine — Household profile aggregate (Phase 1
-  // migration steps 1-3; see docs/personalization/adr-0002). Distinct from
+  // Optional personalization profile aggregate. Distinct from
   // HouseholdMember below, which is the property-collaborator ACL.
   personalizationHouseholds Household[]
 
   // Household Collaboration
-  householdMemberships             HouseholdMember[]
-  householdInvitesSent             HouseholdInvite[]             @relation("HouseholdInviteSentBy")
-  householdInvitesReceived         HouseholdInvite[]             @relation("HouseholdInviteReceiver")
-  householdActivityActed           HouseholdActivityLog[]        @relation("HouseholdActivityActor")
-  householdActivityTargeted        HouseholdActivityLog[]        @relation("HouseholdActivityTarget")
-  maintenanceTasksAssigned         PropertyMaintenanceTask[]     @relation("MaintenanceTaskAssignee")
-  seasonalChecklistItemsAssigned   SeasonalChecklistItem[]       @relation("SeasonalTaskAssignee")
-  homeBuyerTasksAssigned           HomeBuyerTask[]               @relation("HomeBuyerTaskAssignee")
+  householdMemberships           HouseholdMember[]
+  householdInvitesSent           HouseholdInvite[]         @relation("HouseholdInviteSentBy")
+  householdInvitesReceived       HouseholdInvite[]         @relation("HouseholdInviteReceiver")
+  householdActivityActed         HouseholdActivityLog[]    @relation("HouseholdActivityActor")
+  householdActivityTargeted      HouseholdActivityLog[]    @relation("HouseholdActivityTarget")
+  maintenanceTasksAssigned       PropertyMaintenanceTask[] @relation("MaintenanceTaskAssignee")
+  seasonalChecklistItemsAssigned SeasonalChecklistItem[]   @relation("SeasonalTaskAssignee")
+  homeBuyerTasksAssigned         HomeBuyerTask[]           @relation("HomeBuyerTaskAssignee")
 
   // Home Improvement Financing Center
   financingScenarios FinancingScenario[]
@@ -1814,7 +1813,7 @@ model HomeBuyerTask {
   serviceCategory ServiceCategory?
 
   // Scheduling & cost
-  frequency         RecurrenceFrequency?
+  frequency          RecurrenceFrequency?
   estimatedCostCents Int?
 
   // Booking integration
@@ -2033,10 +2032,10 @@ model Property {
   riskReport RiskAssessmentReport? @relation(name: "PropertyRiskReport")
 
   // 1.3 NEW RELATION FOR FINANCIAL EFFICIENCY (Phase 2):
-  financialReport          FinancialEfficiencyReport? @relation(name: "PropertyFinancialReport")
-  legacyInspectionReports  LegacyInspectionReport[]
-  inspectionReports        InspectionReport[]
-  inspectionFindings       InspectionFinding[]
+  financialReport         FinancialEfficiencyReport? @relation(name: "PropertyFinancialReport")
+  legacyInspectionReports LegacyInspectionReport[]
+  inspectionReports       InspectionReport[]
+  inspectionFindings      InspectionFinding[]
 
   seasonalChecklists     SeasonalChecklist[]
   seasonalChecklistItems SeasonalChecklistItem[]
@@ -2155,8 +2154,8 @@ model Property {
   incidentAutoResolutionNotifications IncidentAutoResolutionNotification[]
 
   // Material Spec Registry
-  materialSpecs        MaterialSpec[]
-  materialSpecExports  MaterialSpecExport[]
+  materialSpecs       MaterialSpec[]
+  materialSpecExports MaterialSpecExport[]
 
   // Household Collaboration
   householdMembers     HouseholdMember[]
@@ -2194,18 +2193,10 @@ model Property {
   // docs/personalization/adr-0001-personalization-module-foundation.md)
   personalizationEvaluationRuns PersonalizationEvaluationRun[]
 
-  // Personalization engine — Phase 1 household-profile/trait tables (see
-  // docs/personalization/adr-0002-phase1-foundation-migration-steps-1-3.md)
-  personalizationHouseholdLinks     HouseholdProperty[]
-  personalizationPetProfiles        PetProfile[]
-  personalizationGoals              HouseholdGoal[]
-  personalizationPreferences        HouseholdPreference[]
-  personalizationLifestyleAttributes LifestyleAttribute[]
-  personalizationDerivedTraits      DerivedTrait[]
-
-  // Personalization engine — migration steps 4-6 recommendation-instance
-  // tables (see docs/personalization/ plan for these steps)
-  personalizationRecommendations           PersonalizedRecommendation[]
+  // Personalization engine — property-owned current state.
+  personalizationHouseholdLinks             HouseholdProperty[]
+  personalizationDerivedTraits              DerivedTrait[]
+  personalizationRecommendations            PersonalizedRecommendation[]
   personalizationRecommendationSuppressions RecommendationSuppression[]
 
   createdAt DateTime @default(now())
@@ -2403,7 +2394,7 @@ model ProviderComplianceAlert {
 
   alertType ProviderComplianceAlertType
   severity  ProviderComplianceAlertSeverity
-  status    ProviderComplianceAlertStatus @default(NEW)
+  status    ProviderComplianceAlertStatus   @default(NEW)
 
   title   String
   summary String?
@@ -2570,11 +2561,11 @@ model Booking {
   maintenancePredictionId String?                @unique
   maintenancePrediction   MaintenancePrediction? @relation(fields: [maintenancePredictionId], references: [id])
 
-  inventoryItemId   String?
-  inventoryItem     InventoryItem?     @relation(fields: [inventoryItemId], references: [id])
-  priceFinalization         PriceFinalization?
-  projectRecords            ProjectRecord[]            @relation("ProjectFromBooking")
-  neighbourhoodEndorsement  NeighbourhoodEndorsement?
+  inventoryItemId          String?
+  inventoryItem            InventoryItem?            @relation(fields: [inventoryItemId], references: [id])
+  priceFinalization        PriceFinalization?
+  projectRecords           ProjectRecord[]           @relation("ProjectFromBooking")
+  neighbourhoodEndorsement NeighbourhoodEndorsement?
 
   // Normalized execution scope for preventing duplicate active bookings across
   // item-linked and generic service workflows.
@@ -2590,6 +2581,7 @@ model Booking {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@unique([propertyId, activeExecutionScopeKey])
   @@index([homeownerId])
   @@index([providerId])
   @@index([providerProfileId])
@@ -2602,7 +2594,6 @@ model Booking {
   @@index([guidanceJourneyId]) // Phase 5: journey → bookings lookup
   @@index([propertyId, executionScopeType, executionScopeKey])
   @@index([propertyId, activeExecutionScopeKey])
-  @@unique([propertyId, activeExecutionScopeKey])
   @@map("bookings")
 }
 
@@ -3930,12 +3921,12 @@ model GuidanceJourney {
   // Service key for SERVICE-scoped journeys not tied to an inventory item or home asset.
   // Examples: "warranty_purchase", "insurance_purchase", "general_inspection", "cleaning".
   // Null for all ITEM-scoped journeys.
-  serviceKey String?
+  serviceKey        String?
   branchFromStepKey String?
-  branchType         String?
-  branchChoice       String?
-  sourceVerdict      String?
-  branchedAt         DateTime?
+  branchType        String?
+  branchChoice      String?
+  sourceVerdict     String?
+  branchedAt        DateTime?
 
   // Populated when status is set to DISMISSED.
   dismissedReason String?
@@ -3957,11 +3948,11 @@ model GuidanceJourney {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  property      Property        @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-  homeAsset     HomeAsset?      @relation(fields: [homeAssetId], references: [id], onDelete: SetNull)
-  inventoryItem InventoryItem?  @relation(fields: [inventoryItemId], references: [id], onDelete: SetNull)
-  primarySignal GuidanceSignal? @relation(fields: [primarySignalId], references: [id], onDelete: SetNull)
-  parentJourney GuidanceJourney? @relation("GuidanceJourneyBranch", fields: [parentJourneyId], references: [id], onDelete: SetNull)
+  property      Property          @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  homeAsset     HomeAsset?        @relation(fields: [homeAssetId], references: [id], onDelete: SetNull)
+  inventoryItem InventoryItem?    @relation(fields: [inventoryItemId], references: [id], onDelete: SetNull)
+  primarySignal GuidanceSignal?   @relation(fields: [primarySignalId], references: [id], onDelete: SetNull)
+  parentJourney GuidanceJourney?  @relation("GuidanceJourneyBranch", fields: [parentJourneyId], references: [id], onDelete: SetNull)
   childJourneys GuidanceJourney[] @relation("GuidanceJourneyBranch")
 
   steps      GuidanceJourneyStep[]
@@ -4139,7 +4130,7 @@ model GuidanceStepEvidence {
   expectedScopeId       String?
   actualScopeCategory   GuidanceEvidenceScopeCategory?
   actualScopeId         String?
-  compatibility         GuidanceEvidenceCompatibility   @default(UNKNOWN)
+  compatibility         GuidanceEvidenceCompatibility  @default(UNKNOWN)
 
   observedAt    DateTime  @default(now())
   verifiedAt    DateTime?
@@ -4316,7 +4307,7 @@ enum OnboardingStatus {
 }
 
 model ReplaceRepairAnalysis {
-  id                 String @id @default(uuid())
+  id                 String  @id @default(uuid())
   homeownerProfileId String
   propertyId         String
   inventoryItemId    String
@@ -4351,16 +4342,16 @@ model ReplaceRepairAnalysis {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
-  homeownerProfile    HomeownerProfile   @relation(fields: [homeownerProfileId], references: [id], onDelete: Cascade)
-  property            Property           @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-  inventoryItem       InventoryItem      @relation(fields: [inventoryItemId], references: [id], onDelete: Cascade)
+  homeownerProfile        HomeownerProfile   @relation(fields: [homeownerProfileId], references: [id], onDelete: Cascade)
+  property                Property           @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  inventoryItem           InventoryItem      @relation(fields: [inventoryItemId], references: [id], onDelete: Cascade)
   linkedFinancingScenario FinancingScenario? @relation("ReplaceRepairLinkedScenario", fields: [linkedFinancingScenarioId], references: [id], onDelete: SetNull)
 
+  @@unique([propertyId, inventoryItemId, currentMarker])
   @@index([inventoryItemId, computedAt(sort: Desc)])
   @@index([propertyId, inventoryItemId, currentMarker])
   @@index([propertyId, verdict])
   @@index([propertyId, impactLevel])
-  @@unique([propertyId, inventoryItemId, currentMarker])
   @@map("replace_repair_analyses")
 }
 
@@ -5461,7 +5452,7 @@ model DomainEvent {
 // replica can't wedge future ticks forever.
 model CronJobLock {
   jobKey    String    @id
-  lockedBy  String?   // "<hostname>:<pid>" of the replica currently/last holding the lease
+  lockedBy  String? // "<hostname>:<pid>" of the replica currently/last holding the lease
   lockedAt  DateTime?
   expiresAt DateTime? // TTL safety net; NULL or in the past = eligible to be claimed
   updatedAt DateTime  @updatedAt
@@ -6003,7 +5994,7 @@ model HomeReserveFund {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  property         Property                    @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  property         Property                     @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   homeownerProfile HomeownerProfile             @relation(fields: [homeownerProfileId], references: [id], onDelete: Cascade)
   sourceAnalysis   HomeCapitalTimelineAnalysis? @relation(fields: [sourceAnalysisId], references: [id], onDelete: SetNull)
 
@@ -6052,7 +6043,7 @@ model HomeReserveFundContribution {
 
   type        HomeReserveFundContributionType
   amountCents Int
-  occurredAt  DateTime @default(now())
+  occurredAt  DateTime                        @default(now())
   note        String?
 
   linkedExpenseId  String?
@@ -7934,7 +7925,7 @@ model PlantCatalog {
   updatedAt DateTime @updatedAt
 
   recommendations RoomPlantRecommendation[]
-  homePlants       HomePlant[]
+  homePlants      HomePlant[]
 
   @@index([commonName])
   @@index([scientificName])
@@ -8008,19 +7999,19 @@ model RoomPlantRecommendation {
 }
 
 model GardenZone {
-  id         String @id @default(uuid())
-  propertyId String
-  name       String
-  sunExposure GardenSunExposure @default(UNKNOWN)
-  soilDrainage GardenSoilDrainage @default(UNKNOWN)
+  id             String               @id @default(uuid())
+  propertyId     String
+  name           String
+  sunExposure    GardenSunExposure    @default(UNKNOWN)
+  soilDrainage   GardenSoilDrainage   @default(UNKNOWN)
   irrigationType GardenIrrigationType @default(UNKNOWN)
-  frostPocket Boolean @default(false)
-  notes String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  frostPocket    Boolean              @default(false)
+  notes          String?
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
 
-  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-  plants HomePlant[]
+  property Property    @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  plants   HomePlant[]
 
   @@unique([propertyId, name])
   @@index([propertyId])
@@ -8028,27 +8019,27 @@ model GardenZone {
 }
 
 model HomePlant {
-  id         String @id @default(uuid())
-  propertyId String
-  roomId String?
-  gardenZoneId String?
-  plantCatalogId String?
-  sourceRecommendationId String? @unique
-  name String
-  nickname String?
-  locationType PlantLocationType @default(INDOOR)
-  acquiredAt DateTime?
-  lastWateredAt DateTime?
-  lastInspectedAt DateTime?
-  notes String?
-  isActive Boolean @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                     String            @id @default(uuid())
+  propertyId             String
+  roomId                 String?
+  gardenZoneId           String?
+  plantCatalogId         String?
+  sourceRecommendationId String?           @unique
+  name                   String
+  nickname               String?
+  locationType           PlantLocationType @default(INDOOR)
+  acquiredAt             DateTime?
+  lastWateredAt          DateTime?
+  lastInspectedAt        DateTime?
+  notes                  String?
+  isActive               Boolean           @default(true)
+  createdAt              DateTime          @default(now())
+  updatedAt              DateTime          @updatedAt
 
-  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-  room InventoryRoom? @relation(fields: [roomId], references: [id], onDelete: SetNull)
-  gardenZone GardenZone? @relation(fields: [gardenZoneId], references: [id], onDelete: SetNull)
-  plantCatalog PlantCatalog? @relation(fields: [plantCatalogId], references: [id], onDelete: SetNull)
+  property             Property                 @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  room                 InventoryRoom?           @relation(fields: [roomId], references: [id], onDelete: SetNull)
+  gardenZone           GardenZone?              @relation(fields: [gardenZoneId], references: [id], onDelete: SetNull)
+  plantCatalog         PlantCatalog?            @relation(fields: [plantCatalogId], references: [id], onDelete: SetNull)
   sourceRecommendation RoomPlantRecommendation? @relation(fields: [sourceRecommendationId], references: [id], onDelete: SetNull)
 
   @@index([propertyId, locationType, isActive])
@@ -10699,22 +10690,22 @@ model MaterialSpec {
   surface    MaterialSurface?
   label      String
 
-  manufacturer  String?
-  productLine   String?
-  productName   String?
-  sku           String?
-  colorCode     String?
-  colorHex      String?
-  finish        String?
-  dimensions    String?
-  material      String?
-  supplier      String?
-  supplierUrl   String?
-  purchaseDate  DateTime?
+  manufacturer      String?
+  productLine       String?
+  productName       String?
+  sku               String?
+  colorCode         String?
+  colorHex          String?
+  finish            String?
+  dimensions        String?
+  material          String?
+  supplier          String?
+  supplierUrl       String?
+  purchaseDate      DateTime?
   quantityPurchased String?
-  lotBatch      String?
-  notes         String?
-  isActive      Boolean @default(true)
+  lotBatch          String?
+  notes             String?
+  isActive          Boolean   @default(true)
 
   linkedInventoryItemId String?
   linkedHomeAssetId     String?
@@ -10722,10 +10713,10 @@ model MaterialSpec {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  property      Property       @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-  room          InventoryRoom? @relation(fields: [roomId], references: [id], onDelete: SetNull)
-  inventoryItem InventoryItem? @relation(fields: [linkedInventoryItemId], references: [id], onDelete: SetNull)
-  homeAsset     HomeAsset?     @relation(fields: [linkedHomeAssetId], references: [id], onDelete: SetNull)
+  property      Property            @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  room          InventoryRoom?      @relation(fields: [roomId], references: [id], onDelete: SetNull)
+  inventoryItem InventoryItem?      @relation(fields: [linkedInventoryItemId], references: [id], onDelete: SetNull)
+  homeAsset     HomeAsset?          @relation(fields: [linkedHomeAssetId], references: [id], onDelete: SetNull)
   photos        MaterialSpecPhoto[]
 
   @@index([propertyId])
@@ -10737,13 +10728,13 @@ model MaterialSpec {
 }
 
 model MaterialSpecPhoto {
-  id             String @id @default(uuid())
+  id             String   @id @default(uuid())
   materialSpecId String
   propertyId     String
   photoUrl       String
   fileKey        String
   caption        String?
-  sortOrder      Int    @default(0)
+  sortOrder      Int      @default(0)
   createdAt      DateTime @default(now())
 
   materialSpec MaterialSpec @relation(fields: [materialSpecId], references: [id], onDelete: Cascade)
@@ -10764,8 +10755,8 @@ model MaterialSpecExport {
   fileKey           String?
   expiresAt         DateTime?
   errorMessage      String?
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  createdAt         DateTime                 @default(now())
+  updatedAt         DateTime                 @updatedAt
 
   property    Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   requestedBy User     @relation(fields: [requestedByUserId], references: [id])
@@ -10870,22 +10861,22 @@ model HouseholdInvite {
 }
 
 model HouseholdActivityLog {
-  id         String                @id @default(cuid())
-  propertyId String
+  id          String @id @default(cuid())
+  propertyId  String
   actorUserId String
 
-  activityType  HouseholdActivityType
-  targetUserId  String?
-  entityType    String?
-  entityId      String?
-  summaryText   String
-  metaJson      Json?
+  activityType HouseholdActivityType
+  targetUserId String?
+  entityType   String?
+  entityId     String?
+  summaryText  String
+  metaJson     Json?
 
   createdAt DateTime @default(now())
 
-  property    Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-  actorUser   User     @relation("HouseholdActivityActor", fields: [actorUserId], references: [id])
-  targetUser  User?    @relation("HouseholdActivityTarget", fields: [targetUserId], references: [id])
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  actorUser  User     @relation("HouseholdActivityActor", fields: [actorUserId], references: [id])
+  targetUser User?    @relation("HouseholdActivityTarget", fields: [targetUserId], references: [id])
 
   @@index([propertyId, createdAt])
   @@index([actorUserId])
@@ -10944,17 +10935,17 @@ model PropertyFinancingProfile {
   id         String @id @default(cuid())
   propertyId String @unique
 
-  purchasePriceCents              Int?
-  purchaseDate                    DateTime?
-  mortgageType                    MortgageType?
-  originalMortgageBalanceCents    Int?
-  currentMortgageBalanceCents     Int?
-  mortgageBalanceAsOfDate         DateTime?
-  interestRateBps                 Int?
-  monthlyPaymentCents             Int?
-  hasSecondMortgage               Boolean       @default(false)
-  secondMortgageBalanceCents      Int?
-  hasPMI                          Boolean       @default(false)
+  purchasePriceCents           Int?
+  purchaseDate                 DateTime?
+  mortgageType                 MortgageType?
+  originalMortgageBalanceCents Int?
+  currentMortgageBalanceCents  Int?
+  mortgageBalanceAsOfDate      DateTime?
+  interestRateBps              Int?
+  monthlyPaymentCents          Int?
+  hasSecondMortgage            Boolean       @default(false)
+  secondMortgageBalanceCents   Int?
+  hasPMI                       Boolean       @default(false)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -10979,22 +10970,22 @@ model FinancingRateConfig {
 
 // A saved financing analysis for a homeowner project.
 model FinancingScenario {
-  id          String                 @id @default(cuid())
-  propertyId  String
-  userId      String
-  status      FinancingScenarioStatus @default(DRAFT)
-  title       String
-  projectDescription          String?
-  projectCostCents            Int
-  entryPoint                  FinancingEntryPoint
-  sourceEntityType            String?
-  sourceEntityId              String?
-  equitySnapshotCents         Int?
-  helocCapacitySnapshotCents  Int?
-  rateSnapshotJson            Json
-  resultsJson                 Json
-  selectedOption              FinancingOptionType?
-  notes                       String?
+  id                         String                  @id @default(cuid())
+  propertyId                 String
+  userId                     String
+  status                     FinancingScenarioStatus @default(DRAFT)
+  title                      String
+  projectDescription         String?
+  projectCostCents           Int
+  entryPoint                 FinancingEntryPoint
+  sourceEntityType           String?
+  sourceEntityId             String?
+  equitySnapshotCents        Int?
+  helocCapacitySnapshotCents Int?
+  rateSnapshotJson           Json
+  resultsJson                Json
+  selectedOption             FinancingOptionType?
+  notes                      String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -11014,18 +11005,18 @@ model FinancingScenario {
 
 // Computed equity snapshot (append-only). A new row is written on each equity refresh.
 model EquityPosition {
-  id                    String  @id @default(cuid())
-  propertyId            String
-  estimatedValueCents   Int
-  estimatedValueSource  String  // APPRECIATION_TRACKER | PURCHASE_PRICE | USER_ENTERED
-  mortgageBalanceCents  Int
+  id                         String   @id @default(cuid())
+  propertyId                 String
+  estimatedValueCents        Int
+  estimatedValueSource       String // APPRECIATION_TRACKER | PURCHASE_PRICE | USER_ENTERED
+  mortgageBalanceCents       Int
   secondMortgageBalanceCents Int
-  equityCents           Int
-  equityPercent         Decimal @db.Decimal(5, 2)
-  ltvPercent            Decimal @db.Decimal(5, 2)
-  helocCapacityCents    Int
-  helocEligible         Boolean
-  computedAt            DateTime @default(now())
+  equityCents                Int
+  equityPercent              Decimal  @db.Decimal(5, 2)
+  ltvPercent                 Decimal  @db.Decimal(5, 2)
+  helocCapacityCents         Int
+  helocEligible              Boolean
+  computedAt                 DateTime @default(now())
 
   property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
 
@@ -11137,17 +11128,17 @@ model DiySkillProfile {
 }
 
 model DiyProjectTemplate {
-  id               String             @id @default(cuid())
-  slug             String             @unique
-  title            String
-  shortDescription String
-  longDescription  String?
-  category         DiyProjectCategory
-  difficultyLevel  DiyDifficultyLevel
+  id                 String                  @id @default(cuid())
+  slug               String                  @unique
+  title              String
+  shortDescription   String
+  longDescription    String?
+  category           DiyProjectCategory
+  difficultyLevel    DiyDifficultyLevel
   requiredSkillLevel DiySkillLevel
-  safetyLevel      DiySafetyLevel
-  permitRequirement PermitRequirementStatus
-  estimatedMinutes Int
+  safetyLevel        DiySafetyLevel
+  permitRequirement  PermitRequirementStatus
+  estimatedMinutes   Int
 
   estimatedMaterialCostMinCents Int?
   estimatedMaterialCostMaxCents Int?
@@ -11172,10 +11163,10 @@ model DiyProjectTemplate {
 }
 
 model DiyTemplateStep {
-  id         String @id @default(cuid())
-  templateId String
-  stepNumber Int
-  title      String
+  id          String @id @default(cuid())
+  templateId  String
+  stepNumber  Int
+  title       String
   description String
 
   estimatedMinutes Int?
@@ -11191,11 +11182,11 @@ model DiyTemplateStep {
 }
 
 model DiyTemplateMaterial {
-  id         String @id @default(cuid())
-  templateId String
-  name       String
-  description String?
-  unit       String
+  id              String  @id @default(cuid())
+  templateId      String
+  name            String
+  description     String?
+  unit            String
   quantityFormula String
   unitPriceCents  Int
   isOptional      Boolean @default(false)
@@ -11208,16 +11199,16 @@ model DiyTemplateMaterial {
 }
 
 model DiyTemplateTool {
-  id         String @id @default(cuid())
-  templateId String
-  name       String
-  canonicalId String?
-  description String?
-  isRequired  Boolean       @default(true)
-  defaultToolAction DiyToolAction @default(ALREADY_OWNED)
+  id                    String        @id @default(cuid())
+  templateId            String
+  name                  String
+  canonicalId           String?
+  description           String?
+  isRequired            Boolean       @default(true)
+  defaultToolAction     DiyToolAction @default(ALREADY_OWNED)
   rentDailyPriceCents   Int?
   buyEstimatePriceCents Int?
-  sortOrder   Int
+  sortOrder             Int
 
   template DiyProjectTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
 
@@ -11225,7 +11216,7 @@ model DiyTemplateTool {
 }
 
 model DiyProject {
-  id         String @id @default(cuid())
+  id         String  @id @default(cuid())
   propertyId String
   userId     String
   templateId String?
@@ -11244,11 +11235,11 @@ model DiyProject {
   inventoryItemId   String?
   homeEventId       String?
 
-  notesJson  Json?
-  photoUrls  String[]
+  notesJson Json?
+  photoUrls String[]
 
-  actualMinutes              Int?
-  actualMaterialCostCents    Int?
+  actualMinutes           Int?
+  actualMaterialCostCents Int?
 
   startedAt   DateTime?
   completedAt DateTime?
@@ -11257,10 +11248,10 @@ model DiyProject {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  property  Property           @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-  user      User               @relation(fields: [userId], references: [id], onDelete: Cascade)
-  template  DiyProjectTemplate? @relation(fields: [templateId], references: [id])
-  aiGuide   DiyAiGuide?        @relation(fields: [aiGuideId], references: [id])
+  property Property            @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  user     User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  template DiyProjectTemplate? @relation(fields: [templateId], references: [id])
+  aiGuide  DiyAiGuide?         @relation(fields: [aiGuideId], references: [id])
 
   steps     DiyProjectStep[]
   materials DiyProjectMaterial[]
@@ -11275,7 +11266,7 @@ model DiyProject {
 }
 
 model DiyProjectStep {
-  id             String @id @default(cuid())
+  id             String  @id @default(cuid())
   projectId      String
   templateStepId String?
   stepNumber     Int
@@ -11285,7 +11276,7 @@ model DiyProjectStep {
   estimatedMinutes Int?
   safetyNote       String?
   tipNote          String?
-  isOptional       Boolean      @default(false)
+  isOptional       Boolean       @default(false)
   status           DiyStepStatus @default(PENDING)
   notes            String?
   completedAt      DateTime?
@@ -11297,11 +11288,11 @@ model DiyProjectStep {
 }
 
 model DiyProjectMaterial {
-  id        String @id @default(cuid())
-  projectId String
-  name      String
-  unit      String
-  quantity  Decimal @db.Decimal(10, 2)
+  id                 String  @id @default(cuid())
+  projectId          String
+  name               String
+  unit               String
+  quantity           Decimal @db.Decimal(10, 2)
   unitPriceCents     Int
   totalEstimateCents Int
   isOptional         Boolean @default(false)
@@ -11315,13 +11306,13 @@ model DiyProjectMaterial {
 }
 
 model DiyProjectTool {
-  id        String @id @default(cuid())
-  projectId String
-  name      String
-  canonicalId String?
-  isRequired  Boolean       @default(true)
-  defaultToolAction DiyToolAction
-  userToolAction    DiyToolAction?
+  id                    String         @id @default(cuid())
+  projectId             String
+  name                  String
+  canonicalId           String?
+  isRequired            Boolean        @default(true)
+  defaultToolAction     DiyToolAction
+  userToolAction        DiyToolAction?
   rentDailyPriceCents   Int?
   buyEstimatePriceCents Int?
 
@@ -11332,23 +11323,23 @@ model DiyProjectTool {
 }
 
 model DiyAiGuide {
-  id         String @id @default(cuid())
+  id         String              @id @default(cuid())
   userId     String
   propertyId String
   userPrompt String
   category   DiyProjectCategory?
   status     DiyAiGuideStatus    @default(PENDING)
 
-  generatedTitle   String?
-  generatedSummary String?
-  stepsJson        Json?
-  materialsJson    Json?
-  toolsJson        Json?
-  decisionVerdict  DiyDecisionVerdict?
+  generatedTitle     String?
+  generatedSummary   String?
+  stepsJson          Json?
+  materialsJson      Json?
+  toolsJson          Json?
+  decisionVerdict    DiyDecisionVerdict?
   safetyWarningsJson Json?
-  errorMessage     String?
-  promptTokens     Int?
-  completionTokens Int?
+  errorMessage       String?
+  promptTokens       Int?
+  completionTokens   Int?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -11552,9 +11543,9 @@ model TaxAssessorDataSource {
   fieldMappingJson      Json
   queryFilterJson       Json?
 
-  lastFetchAt              DateTime?
-  lastFetchError           String?
-  totalAssessmentsFetched  Int       @default(0)
+  lastFetchAt             DateTime?
+  lastFetchError          String?
+  totalAssessmentsFetched Int       @default(0)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -11592,19 +11583,19 @@ model PropertyPermitRecord {
   dedupeKey    String?            @unique
 
   rawDataJson Json?
-  documentIds String[]  @default([])
+  documentIds String[] @default([])
   notes       String?
-  isVerified  Boolean   @default(false)
-  isActive    Boolean   @default(true)
+  isVerified  Boolean  @default(false)
+  isActive    Boolean  @default(true)
 
   renovationAdvisorSessionId String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  property                 Property                       @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-  dataSource               PermitDataSource?              @relation(fields: [dataSourceId], references: [id], onDelete: SetNull)
-  renovationAdvisorSession HomeRenovationAdvisorSession?  @relation(fields: [renovationAdvisorSessionId], references: [id], onDelete: SetNull)
+  property                 Property                      @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  dataSource               PermitDataSource?             @relation(fields: [dataSourceId], references: [id], onDelete: SetNull)
+  renovationAdvisorSession HomeRenovationAdvisorSession? @relation(fields: [renovationAdvisorSessionId], references: [id], onDelete: SetNull)
 
   inspectionMilestones      PermitInspectionMilestone[]
   unpermittedFlags          PermitUnpermittedFlag[]     @relation("ResolvedByPermit")
@@ -11637,8 +11628,8 @@ model PermitInspectionMilestone {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  permitRecord      PropertyPermitRecord @relation(fields: [permitRecordId], references: [id], onDelete: Cascade)
-  property          Property             @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  permitRecord      PropertyPermitRecord       @relation(fields: [permitRecordId], references: [id], onDelete: Cascade)
+  property          Property                   @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   projectMilestones ProjectMilestone[]
   readinessChecks   InspectionReadinessCheck[]
 
@@ -11698,7 +11689,7 @@ model PermitUnpermittedFlag {
   workType       PermitWorkType
   triggerType    PermitUnpermittedFlagTrigger
   flagReason     String
-  status         PermitUnpermittedFlagStatus @default(FLAGGED)
+  status         PermitUnpermittedFlagStatus  @default(FLAGGED)
   disclosureRisk PermitDisclosureRisk
 
   homeAssetId        String?
@@ -11811,8 +11802,8 @@ enum HoaApprovalStatus {
 
 // One HOA/community association per property.
 model HoaAssociation {
-  id                String @id @default(uuid())
-  propertyId        String @unique
+  id                String            @id @default(uuid())
+  propertyId        String            @unique
   name              String
   managementCompany String?
   contactName       String?
@@ -11821,11 +11812,11 @@ model HoaAssociation {
   duesAmountCents   Int?
   duesFrequency     HoaDuesFrequency?
   nextDueDate       DateTime?
-  documentIds       String[] @default([]) // CC&Rs / bylaws uploads -> Document.id[]
+  documentIds       String[]          @default([]) // CC&Rs / bylaws uploads -> Document.id[]
   notes             String?
-  isActive          Boolean  @default(true)
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  isActive          Boolean           @default(true)
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
 
   property        Property            @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   approvalRecords HoaApprovalRecord[]
@@ -11846,11 +11837,11 @@ model HoaApprovalRecord {
   description String?
   status      HoaApprovalStatus @default(NOT_SUBMITTED)
 
-  submittedDate       DateTime?
-  decisionDate        DateTime?
-  approvalConditions  String?
-  denialReason        String?
-  expirationDate      DateTime?
+  submittedDate      DateTime?
+  decisionDate       DateTime?
+  approvalConditions String?
+  denialReason       String?
+  expirationDate     DateTime?
 
   documentIds String[] @default([])
   notes       String?
@@ -11986,11 +11977,11 @@ model InspectionReport {
   inspectorCompany String?
   sourceFileKey    String // S3 key for original PDF
 
-  status         InspectionReportStatus @default(PROCESSING)
-  totalFindings  Int                    @default(0)
-  openFindings   Int                    @default(0)
-  safetyFindings Int                    @default(0)
-  majorFindings  Int                    @default(0)
+  status          InspectionReportStatus @default(PROCESSING)
+  totalFindings   Int                    @default(0)
+  openFindings    Int                    @default(0)
+  safetyFindings  Int                    @default(0)
+  majorFindings   Int                    @default(0)
   extractionModel String?
 
   createdAt   DateTime  @default(now())
@@ -12252,7 +12243,7 @@ model ProjectRecord {
 
   projectType ProjectType
   name        String
-  description String?     @db.Text
+  description String?             @db.Text
   status      ProjectRecordStatus @default(DRAFT)
   sourceType  ProjectSourceType   @default(MANUAL)
 
@@ -12309,7 +12300,7 @@ model ProjectRecord {
   progressLogs       ProjectProgressLog[]
   issues             ProjectIssue[]
   writeBacks         ProjectWriteBack[]
-  inspectionFindings InspectionFinding[] @relation("InspectionFindingResolvedByProject")
+  inspectionFindings InspectionFinding[]  @relation("InspectionFindingResolvedByProject")
 
   @@index([propertyId, status])
   @@index([propertyId, createdAt(sort: Desc)])
@@ -12358,7 +12349,7 @@ model ProjectMilestone {
   linkedPermitMilestone PermitInspectionMilestone? @relation(fields: [linkedPermitMilestoneId], references: [id], onDelete: SetNull)
 
   // Payments whose release is gated on this milestone completing (back-relation)
-  triggeredPayments ProjectPayment[] @relation("PaymentTriggerMilestone")
+  triggeredPayments ProjectPayment[]     @relation("PaymentTriggerMilestone")
   progressLogs      ProjectProgressLog[]
 
   @@index([projectId, position])
@@ -12458,10 +12449,10 @@ model ProjectProgressLog {
   createdAt DateTime @default(now())
 
   // Relations
-  project    ProjectRecord     @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  milestone  ProjectMilestone? @relation(fields: [milestoneId], references: [id], onDelete: SetNull)
-  room       InventoryRoom?    @relation(fields: [roomId], references: [id], onDelete: SetNull)
-  loggedBy   User              @relation("ProjectProgressLoggedBy", fields: [loggedByUserId], references: [id], onDelete: Cascade)
+  project   ProjectRecord     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  milestone ProjectMilestone? @relation(fields: [milestoneId], references: [id], onDelete: SetNull)
+  room      InventoryRoom?    @relation(fields: [roomId], references: [id], onDelete: SetNull)
+  loggedBy  User              @relation("ProjectProgressLoggedBy", fields: [loggedByUserId], references: [id], onDelete: Cascade)
 
   @@index([projectId, entryDate(sort: Desc)])
   @@index([milestoneId])
@@ -12540,30 +12531,30 @@ enum NeighbourhoodFeedEntryType {
 // Updated by a background worker whenever a booking is completed + reviewed
 // in that zip. Powers the "X neighbors used this contractor" display.
 model NeighbourhoodTrustProfile {
-  id                      String   @id @default(uuid())
-  providerProfileId       String
-  zipCode                 String
-  city                    String
-  state                   String
+  id                String @id @default(uuid())
+  providerProfileId String
+  zipCode           String
+  city              String
+  state             String
 
   // Aggregate metrics (recomputed on each new review in this zip)
-  totalJobs               Int      @default(0)
-  verifiedJobs            Int      @default(0)   // completed bookings with an approved review
-  avgRating               Float    @default(0)   @db.Real
-  avgQualityRating        Float?                 @db.Real
-  avgCommunicationRating  Float?                 @db.Real
-  avgValueRating          Float?                 @db.Real
-  avgProfessionalismRating Float?                @db.Real
+  totalJobs                Int    @default(0)
+  verifiedJobs             Int    @default(0) // completed bookings with an approved review
+  avgRating                Float  @default(0) @db.Real
+  avgQualityRating         Float? @db.Real
+  avgCommunicationRating   Float? @db.Real
+  avgValueRating           Float? @db.Real
+  avgProfessionalismRating Float? @db.Real
 
   // Freshness signals
-  firstJobAt              DateTime?
-  lastJobAt               DateTime?
-  lastComputedAt          DateTime @default(now())
+  firstJobAt     DateTime?
+  lastJobAt      DateTime?
+  lastComputedAt DateTime  @default(now())
 
-  createdAt               DateTime @default(now())
-  updatedAt               DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  providerProfile         ProviderProfile @relation(fields: [providerProfileId], references: [id], onDelete: Cascade)
+  providerProfile ProviderProfile @relation(fields: [providerProfileId], references: [id], onDelete: Cascade)
 
   @@unique([providerProfileId, zipCode])
   @@index([zipCode, avgRating(sort: Desc)])
@@ -12576,32 +12567,32 @@ model NeighbourhoodTrustProfile {
 // completed booking. Anonymous to neighbours by default — only the zip
 // code is shared, not the homeowner's name or exact address.
 model NeighbourhoodEndorsement {
-  id                    String   @id @default(uuid())
-  bookingId             String   @unique          // enforces one endorsement per booking
-  homeownerId           String
-  propertyId            String
-  providerProfileId     String
+  id                String @id @default(uuid())
+  bookingId         String @unique // enforces one endorsement per booking
+  homeownerId       String
+  propertyId        String
+  providerProfileId String
 
   // Denormalised from Property at creation time for fast neighbourhood queries
-  zipCode               String
-  city                  String
-  state                 String
+  zipCode String
+  city    String
+  state   String
 
-  wouldHireAgain        Boolean  @default(true)
+  wouldHireAgain Boolean  @default(true)
   // Free-form tags, e.g. ["QUALITY_WORK", "FAIR_PRICE", "ON_TIME", "CLEAN_SITE", "CLEAR_COMMUNICATION", "HONEST_ESTIMATE"]
-  highlightTags         String[]
+  highlightTags  String[]
 
   // Privacy control — hides homeowner identity from neighbours
-  anonymousToNeighbors  Boolean  @default(true)
-  visibleToNeighbors    Boolean  @default(true)
+  anonymousToNeighbors Boolean @default(true)
+  visibleToNeighbors   Boolean @default(true)
 
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  booking               Booking        @relation(fields: [bookingId], references: [id], onDelete: Cascade)
-  homeowner             User           @relation("NeighbourhoodEndorsementAuthor", fields: [homeownerId], references: [id], onDelete: Cascade)
-  property              Property       @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-  providerProfile       ProviderProfile @relation(fields: [providerProfileId], references: [id], onDelete: Cascade)
+  booking         Booking         @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  homeowner       User            @relation("NeighbourhoodEndorsementAuthor", fields: [homeownerId], references: [id], onDelete: Cascade)
+  property        Property        @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  providerProfile ProviderProfile @relation(fields: [providerProfileId], references: [id], onDelete: Cascade)
 
   @@index([zipCode, providerProfileId])
   @@index([zipCode, createdAt(sort: Desc)])
@@ -12615,30 +12606,30 @@ model NeighbourhoodEndorsement {
 // Created by a background worker when a booking is completed or an
 // endorsement is submitted. Drives the neighbourhood feed UI.
 model NeighbourhoodFeedEntry {
-  id                  String                     @id @default(uuid())
-  zipCode             String
-  city                String
-  state               String
+  id      String @id @default(uuid())
+  zipCode String
+  city    String
+  state   String
 
-  entryType           NeighbourhoodFeedEntryType
-  providerProfileId   String
+  entryType         NeighbourhoodFeedEntryType
+  providerProfileId String
 
   // Optional back-references (nullable — not all entry types have both)
-  bookingId           String?
-  endorsementId       String?  @unique
+  bookingId     String?
+  endorsementId String? @unique
 
   // Cached display snapshot (denormalised at creation, immutable after)
-  providerBusinessName  String
-  serviceCategory       String                   // e.g. "HVAC", "Plumbing"
-  starRating            Int?                     // 1–5, null if not yet reviewed
-  highlightTags         String[]                 // copied from endorsement if present
-  jobCompletedAt        DateTime?
+  providerBusinessName String
+  serviceCategory      String // e.g. "HVAC", "Plumbing"
+  starRating           Int? // 1–5, null if not yet reviewed
+  highlightTags        String[] // copied from endorsement if present
+  jobCompletedAt       DateTime?
 
-  createdAt           DateTime @default(now())
+  createdAt DateTime @default(now())
   // Feed entries auto-expire after 12 months to keep the feed fresh
-  expiresAt           DateTime
+  expiresAt DateTime
 
-  providerProfile     ProviderProfile @relation(fields: [providerProfileId], references: [id], onDelete: Cascade)
+  providerProfile ProviderProfile @relation(fields: [providerProfileId], references: [id], onDelete: Cascade)
 
   @@index([zipCode, createdAt(sort: Desc)])
   @@index([zipCode, entryType, createdAt(sort: Desc)])
@@ -12650,20 +12641,20 @@ model NeighbourhoodFeedEntry {
 // Tracks the specific zip codes where a provider has actually completed work,
 // derived from booking history. More precise than the global serviceRadius.
 model ProviderServiceZone {
-  id                String   @id @default(uuid())
+  id                String @id @default(uuid())
   providerProfileId String
   zipCode           String
   city              String
   state             String
 
-  totalJobs         Int      @default(1)
-  firstJobAt        DateTime?
-  lastJobAt         DateTime?
+  totalJobs  Int       @default(1)
+  firstJobAt DateTime?
+  lastJobAt  DateTime?
 
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  providerProfile   ProviderProfile @relation(fields: [providerProfileId], references: [id], onDelete: Cascade)
+  providerProfile ProviderProfile @relation(fields: [providerProfileId], references: [id], onDelete: Cascade)
 
   @@unique([providerProfileId, zipCode])
   @@index([zipCode])
@@ -12681,16 +12672,13 @@ model ProviderServiceZone {
 // Stable identity for one reviewed catalog recommendation. Seeded rows start
 // DRAFT/inactive; safety-sensitive activation requires two-person review.
 model RecommendationDefinition {
-  id          String @id @default(uuid())
-  code        String @unique
-  category    String
-  safetyClass String @default("ROUTINE") // ROUTINE | SAFETY_SENSITIVE
-  status      String @default("DRAFT") // DRAFT | ACTIVE | PAUSED | RETIRED
-  ownerTeam   String?
-
+  id            String    @id @default(uuid())
+  code          String    @unique
+  category      String
+  safetyClass   String    @default("ROUTINE") // ROUTINE | SAFETY_SENSITIVE
+  status        String    @default("DRAFT") // DRAFT | ACTIVE | PAUSED | RETIRED
   effectiveFrom DateTime?
   effectiveTo   DateTime?
-  reviewDueAt   DateTime?
 
   // Per-definition emergency pause — complements the system-wide switch in
   // personalizationKillSwitch.service.ts. See
@@ -12707,27 +12695,26 @@ model RecommendationDefinition {
   contentVersions RecommendationContentVersion[]
   evaluationRuns  PersonalizationEvaluationRun[]
   recommendations PersonalizedRecommendation[]
+  suppressions    RecommendationSuppression[]
 
   @@index([status, effectiveFrom, effectiveTo])
   @@index([category, status])
   @@map("personalization_recommendation_definitions")
 }
 
-// One immutable, validated-AST version of a definition's eligibility/scoring
-// logic. `ruleAst` is intentionally opaque JSON at the schema level — the
+// One immutable, validated-AST version of a definition's eligibility logic.
+// `ruleAst` is intentionally opaque JSON at the schema level — the
 // typed validator/evaluator that enforces its shape lives in
 // apps/backend/src/modules/personalization/domain/{ruleAst,evaluator}.ts
 // (the roadmap's "first implementation step", built 2026-07-13).
 model RecommendationRule {
-  id             String   @id @default(uuid())
-  definitionId   String
-  version        Int
-  ruleAst        Json
-  dependencyKeys String[] @default([])
-  scoreConfig    Json?
-  status         String   @default("DRAFT") // DRAFT | ACTIVE | RETIRED
-  authoredBy     String?
-  reviewedBy     String?
+  id           String  @id @default(uuid())
+  definitionId String
+  version      Int
+  ruleAst      Json
+  status       String  @default("DRAFT") // DRAFT | ACTIVE | RETIRED
+  authoredBy   String?
+  reviewedBy   String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -12749,8 +12736,6 @@ model RecommendationContentVersion {
   version      Int
   title        String
   body         String    @db.Text
-  templates    Json?
-  sources      Json?
   reviewDate   DateTime?
   status       String    @default("DRAFT") // DRAFT | ACTIVE | RETIRED
 
@@ -12772,13 +12757,13 @@ model RecommendationContentVersion {
 // here is written only through personalizationAudit.service.ts's allowlist,
 // never with a raw request body or trait payload.
 model PersonalizationAuditEvent {
-  id         String  @id @default(uuid())
+  id          String  @id @default(uuid())
   actorUserId String?
-  action     String // e.g. PERSONALIZATION_KILL_SWITCH_PAUSED
-  entityType String // e.g. SYSTEM_SETTING, RECOMMENDATION_DEFINITION
-  entityId   String
-  reason     String?
-  metadata   Json?
+  action      String // e.g. PERSONALIZATION_KILL_SWITCH_PAUSED
+  entityType  String // e.g. SYSTEM_SETTING, RECOMMENDATION_DEFINITION
+  entityId    String
+  reason      String?
+  metadata    Json?
 
   createdAt DateTime @default(now())
 
@@ -12806,8 +12791,8 @@ model PersonalizationEvaluationRun {
   completedAt DateTime?
   durationMs  Int?
 
-  property   Property                 @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-  definition RecommendationDefinition @relation(fields: [definitionId], references: [id], onDelete: Cascade)
+  property        Property                     @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  definition      RecommendationDefinition     @relation(fields: [definitionId], references: [id], onDelete: Cascade)
   recommendations PersonalizedRecommendation[]
 
   @@index([propertyId, status])
@@ -12817,48 +12802,29 @@ model PersonalizationEvaluationRun {
 }
 
 // ============================================================================
-// PERSONALIZATION ENGINE — PILOT HOUSEHOLD PROFILE
+// PERSONALIZATION ENGINE — OPTIONAL HOUSEHOLD PROFILE
 // ============================================================================
 // The schema describes the desired pilot database. The user applies database
 // changes; this repository does not generate migration scripts. Households are
 // created lazily after explicit pilot opt-in, with no existing-property backfill.
 
-// Household is a profile/consent aggregate, distinct from HouseholdMember
-// (the existing property-collaborator ACL). One user can own multiple
-// households; a household can link multiple properties via HouseholdProperty.
-// 05-data-model.md calls for "unique active owner/default", but a true
-// partial unique index (WHERE status = 'ACTIVE') isn't expressible via
-// Prisma's schema DSL without raw SQL, which this project's schema-only-edit
-// convention avoids (same tradeoff already made for HouseholdMemberSummary
-// below). Enforced at the application layer instead — today that means
-// the opt-in use case's findFirst-before-create check. Revisit with a database
-// constraint when concurrent household creation is a measured pilot concern.
+// Household is the explicit profile/consent aggregate, distinct from
+// HouseholdMember (the existing property-collaborator ACL). It is created
+// lazily only when an owner enables optional household-profile collection.
 model Household {
   id             String    @id @default(uuid())
   ownerUserId    String
-  displayName    String?
-  status         String    @default("ACTIVE") // ACTIVE | ARCHIVED
-  // Records provenance of this row. Pilot households are USER_CREATED.
-  source         String    @default("USER_CREATED")
   consentVersion String?
   consentedAt    DateTime?
-  deletedAt      DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  owner      User                @relation(fields: [ownerUserId], references: [id])
-  properties HouseholdProperty[]
-  members    HouseholdMemberSummary[]
-  pets       PetProfile[]
-  goals      HouseholdGoal[]
-  preferences HouseholdPreference[]
-  lifestyleAttributes LifestyleAttribute[]
-  recommendations PersonalizedRecommendation[]
-  recommendationSuppressions RecommendationSuppression[]
+  owner          User                @relation(fields: [ownerUserId], references: [id])
+  properties     HouseholdProperty[]
   profileAnswers ProfileAnswer[]
 
-  @@index([ownerUserId, status])
+  @@index([ownerUserId])
   @@map("personalization_households")
 }
 
@@ -12885,168 +12851,28 @@ model HouseholdProperty {
   @@map("personalization_household_properties")
 }
 
-// Non-account composition bands (e.g. "2 adults, 1 child (toddler)") — no
-// names, no birthdates, no medical data. Sensitive privacy class per
-// 04-target-architecture.md's trait registry; empty until a real UI collects it.
-// Simplification: uniqueness below is a plain (household, type, lifeStage)
-// constraint, not "unique while active" (a true partial-unique-index would
-// need raw SQL this project's schema-only-edit convention avoids); a
-// REMOVED row must be hard-deleted rather than soft-tombstoned to free the
-// slot for re-entry, which also matches this table's "hard-delete on
-// request" retention note in 05-data-model.md.
-model HouseholdMemberSummary {
-  id          String   @id @default(uuid())
-  householdId String
-  type        String // ADULT | CHILD | SENIOR
-  lifeStage   String? // e.g. INFANT | TODDLER | EARLY_SCHOOL | TEEN (CHILD only)
-  count       Int      @default(1)
-  status      String   @default("ACTIVE") // ACTIVE | REMOVED
-  source      String   @default("USER_INPUT")
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  household Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
-
-  @@unique([householdId, type, lifeStage])
-  @@index([householdId, status])
-  @@map("personalization_household_member_summaries")
-}
-
-// Pet composition — type/count/size/shedding/access/fence dependence only.
-// No feeding, medication, veterinary, training, or social data (see
-// 04-target-architecture.md's "Pet intelligence is limited to..." scope note).
-model PetProfile {
-  id          String  @id @default(uuid())
-  householdId String
-  propertyId  String? // optional property applicability
-
-  petType            String  // DOG | CAT | OTHER
-  count              Int     @default(1)
-  sizeBand           String? // SMALL | MEDIUM | LARGE
-  sheddingLevel      String? // LOW | MEDIUM | HIGH
-  indoorOutdoor      String? // INDOOR | OUTDOOR | BOTH
-  yardFenceDependent Boolean?
-  status             String  @default("ACTIVE") // ACTIVE | REMOVED
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  household Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
-  property  Property? @relation(fields: [propertyId], references: [id], onDelete: SetNull)
-
-  @@index([householdId, status, petType])
-  @@map("personalization_pet_profiles")
-}
-
-// Typed household/property goals (e.g. SAFETY, COST, AGING_IN_PLACE).
-model HouseholdGoal {
-  id          String  @id @default(uuid())
-  householdId String
-  propertyId  String?
-  goalCode    String
-  priority    Int     @default(0)
-  horizon     String? // NOW | THIS_YEAR | SOMEDAY
-  source      String  @default("USER_INPUT")
-  status      String  @default("ACTIVE") // ACTIVE | RETIRED
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  household Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
-  property  Property? @relation(fields: [propertyId], references: [id], onDelete: SetNull)
-
-  @@unique([householdId, propertyId, goalCode])
-  @@index([householdId, status])
-  @@map("personalization_household_goals")
-}
-
-// Typed budget/service/repair/channel/category preference values.
-// Sensitive where financial (budget posture) per 05-data-model.md.
-model HouseholdPreference {
-  id          String @id @default(uuid())
-  householdId String
-  propertyId  String?
-  scope       String @default("HOUSEHOLD") // HOUSEHOLD | PROPERTY
-  key         String // e.g. BUDGET_POSTURE | REPAIR_POSTURE | CHANNEL_PREFERENCE
-  valueJson   Json
-  status      String @default("ACTIVE")
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  household Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
-  property  Property? @relation(fields: [propertyId], references: [id], onDelete: SetNull)
-
-  @@unique([householdId, propertyId, key])
-  @@index([householdId, status])
-  @@map("personalization_household_preferences")
-}
-
-// Sparse typed lifestyle facts (e.g. WFH days band, travel frequency).
-// Exactly one of the value* columns should be populated per row — this is
-// an application-level invariant (evaluateHvacFilterProof.usecase.ts-style
-// callers must enforce it); a DB CHECK constraint would need a raw SQL
-// migration, which this project's schema-only-edit convention avoids.
-model LifestyleAttribute {
-  id          String @id @default(uuid())
-  householdId String
-  propertyId  String?
-  key         String // e.g. WORKS_FROM_HOME_DAYS_BAND | TRAVEL_FREQUENCY
-  source      String @default("EXPLICIT") // EXPLICIT | INFERRED
-  confidence  Float  @default(1.0)
-
-  valueBoolean Boolean?
-  valueNumber  Float?
-  valueText    String?
-  valueCode    String?
-  valueDate    DateTime?
-  valueJson    Json?
-
-  status String @default("ACTIVE")
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  household Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
-  property  Property? @relation(fields: [propertyId], references: [id], onDelete: SetNull)
-
-  @@unique([householdId, propertyId, key])
-  @@index([householdId, status])
-  @@map("personalization_lifestyle_attributes")
-}
-
 // ============================================================================
 // PERSONALIZATION ENGINE — PROGRESSIVE PROFILING
 // ============================================================================
-// Versioned question catalog + answer/skip/snooze events. Real writes to the
-// five composition tables above only happen through a consented ANSWERED
-// ProfileAnswer. Property DerivedTrait rows never read or own this optional
-// household-profile data.
+// Versioned question catalog + consented answer/skip/snooze events.
+// ProfileAnswer.answerJson is the single source of truth for optional profile
+// facts; property DerivedTrait rows never read or own this data.
 
-// One versioned question definition. targetKey is used for the three
-// key-value composition tables (HouseholdGoal.goalCode/
-// HouseholdPreference.key/LifestyleAttribute.key) and left null for the two
-// structured-answer tables (HouseholdMemberSummary, PetProfile), whose
-// answerJson shape maps to multiple fields instead of one key.
 model ProfileQuestion {
-  id       String @id @default(uuid())
-  code     String
-  version  Int
-  status   String @default("DRAFT") // DRAFT | ACTIVE | RETIRED
+  id      String @id @default(uuid())
+  code    String
+  version Int
+  status  String @default("DRAFT") // DRAFT | ACTIVE | RETIRED
 
   prompt      String
   whyAsked    String
   privacyNote String
 
-  targetTable String // HOUSEHOLD_MEMBER_SUMMARY | PET_PROFILE | HOUSEHOLD_GOAL | HOUSEHOLD_PREFERENCE | LIFESTYLE_ATTRIBUTE
-  targetKey   String?
   answerSchema Json
 
-  placementContexts String[] @default([])
-  valueScore        Float
-  effortScore       Float
-  maxImpressions    Int      @default(3)
+  valueScore     Float
+  effortScore    Float
+  maxImpressions Int   @default(3)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -13072,10 +12898,6 @@ model ProfileAnswer {
   action     String // ANSWERED | SKIPPED | SNOOZED
   answerJson Json?
 
-  askedAt      DateTime  @default(now())
-  answeredAt   DateTime?
-  skippedAt    DateTime?
-  snoozedAt    DateTime?
   nextEligibleAt DateTime?
 
   createdAt DateTime @default(now())
@@ -13092,32 +12914,24 @@ model ProfileAnswer {
 // property-owned and available without an optional household profile, so
 // these rows never carry a household/consent relationship.
 model DerivedTrait {
-  id                String    @id @default(uuid())
-  propertyId        String
-  traitKey          String
-  valueJson         Json
-  source            String // EXPLICIT | INFERRED | DERIVED | EXTERNAL
-  confidence        Float     @default(1.0)
-  definitionVersion Int       @default(1)
-  evidenceJson      Json?
-  computedAt        DateTime  @default(now())
-  validUntil        DateTime?
-  overriddenAt      DateTime?
+  id         String   @id @default(uuid())
+  propertyId String
+  traitKey   String
+  valueJson  Json
+  source     String // DERIVED for the current property-only catalog
+  computedAt DateTime @default(now())
 
   property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
 
   @@unique([propertyId, traitKey])
-  @@index([validUntil])
   @@map("personalization_derived_traits")
 }
 
 // ============================================================================
 // PERSONALIZATION ENGINE — RECOMMENDATION INSTANCES
 // ============================================================================
-// Current reviewed definitions produce property-owned instances with
-// householdId = null. The nullable household link is retained only for future
-// explicitly consented profile-enhanced definitions; it never gates basic
-// property personalization.
+// Current reviewed definitions produce property-owned instances. Optional
+// household-profile consent never gates or owns these rows.
 
 // A materialized, user-facing recommendation instance. Evaluation creates an
 // ACTIVE row when eligible, expires it on a later FALSE/UNKNOWN result, and
@@ -13126,39 +12940,31 @@ model DerivedTrait {
 // flip a row to DISMISSED (see application/recordRecommendationFeedback.usecase.ts).
 model PersonalizedRecommendation {
   id              String  @id @default(uuid())
-  householdId     String?
   propertyId      String
   definitionId    String
   evaluationRunId String?
-  occurrenceKey   String  @default("default")
-  dedupeKey       String
   status          String  @default("ACTIVE") // ACTIVE | COMPLETED | DISMISSED | EXPIRED | SUPPRESSED
   ruleVersion     Int
-  contentVersion  Int? // null until real reviewed content exists for this definition
+  contentVersion  Int
 
-  // A deliberately scoped-down 3-of-11-component slice of
-  // 04-target-architecture.md's weighted score formula — see domain/scoring.ts.
-  // household/goal/preference/seasonal/risk/financial/engagement components
-  // have no data source yet (sensitive collection deliberately deferred).
-  score          Float?
-  priorityBand   String?
-  confidence     Float?
-  scoreBreakdown Json?
+  // Optional display ranking fields. The current pilot derives priorityBand
+  // from score with a simple fixed policy; it has no configurable score model.
+  score        Float?
+  priorityBand String?
+  confidence   Float?
 
   firstEligibleAt DateTime  @default(now())
   lastEvaluatedAt DateTime  @default(now())
   expiresAt       DateTime?
 
-  household      Household?                    @relation(fields: [householdId], references: [id], onDelete: SetNull)
   property       Property                      @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   definition     RecommendationDefinition      @relation(fields: [definitionId], references: [id], onDelete: Cascade)
   evaluationRun  PersonalizationEvaluationRun? @relation(fields: [evaluationRunId], references: [id], onDelete: SetNull)
   explanations   RecommendationExplanation[]
   feedbackEvents RecommendationFeedback[]
 
-  @@unique([propertyId, definitionId, occurrenceKey])
+  @@unique([propertyId, definitionId])
   @@index([propertyId, status])
-  @@index([dedupeKey, status])
   @@map("personalization_recommendations")
 }
 
@@ -13170,13 +12976,9 @@ model RecommendationExplanation {
   recommendationId String
   version          Int    @default(1)
 
-  headline       String
-  reasonCodes    Json // [{ code, templateKey, params }]
-  evidenceJson   Json?
-  benefitsJson   Json?
-  urgencyLevel   String?
-  urgencyReason  String?
-  confidenceBand String?
+  headline     String
+  reasonCodes  Json // [{ code, templateKey, params }]
+  evidenceJson Json?
 
   createdAt DateTime @default(now())
 
@@ -13209,27 +13011,22 @@ model RecommendationFeedback {
   @@map("personalization_recommendation_feedback")
 }
 
-// User/definition/category-scoped suppression (dismissed/completed/system).
-// Read by shadowEvaluateHvacFilterProof.usecase.ts before creating a
-// recommendation (infrastructure/suppressionRepository.ts), and written by
-// application/recordRecommendationFeedback.usecase.ts on explicit negative
-// feedback — see domain/feedbackPolicy.ts for exactly which feedback types
-// suppress and for how long.
+// Property/definition-scoped suppression written by explicit negative
+// feedback. A nullable until implements temporary dismissal; null is
+// indefinite irrelevance.
 model RecommendationSuppression {
-  id          String    @id @default(uuid())
-  householdId String?
-  propertyId  String
-  scope       String // DEFINITION | CATEGORY | DEDUPE_KEY
-  scopeKey    String // definitionCode | category | dedupeKey value
-  reason      String // USER_DISMISSED | COMPLETED | SYSTEM
-  until       DateTime?
+  id           String    @id @default(uuid())
+  propertyId   String
+  definitionId String
+  reason       String // USER_DISMISSED | COMPLETED | SYSTEM
+  until        DateTime?
 
   createdAt DateTime @default(now())
 
-  household Household? @relation(fields: [householdId], references: [id], onDelete: SetNull)
-  property  Property   @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  property   Property                 @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  definition RecommendationDefinition @relation(fields: [definitionId], references: [id], onDelete: Cascade)
 
-  @@unique([propertyId, scope, scopeKey])
-  @@index([propertyId, scope])
+  @@unique([propertyId, definitionId])
+  @@index([propertyId])
   @@map("personalization_recommendation_suppressions")
 }

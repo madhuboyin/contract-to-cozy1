@@ -36,11 +36,7 @@ export async function createFeedback(params: CreateFeedbackParams): Promise<{ id
 
 export interface RecommendationSuppressionContext {
   propertyId: string;
-  householdId: string | null;
   definitionId: string;
-  definitionCode: string;
-  category: string;
-  dedupeKey: string;
 }
 
 /** One join covering everything recordRecommendationFeedback.usecase.ts needs to apply a suppression directive. Null if the recommendation doesn't exist. */
@@ -51,20 +47,13 @@ export async function loadRecommendationSuppressionContext(
     where: { id: recommendationId },
     select: {
       propertyId: true,
-      householdId: true,
       definitionId: true,
-      dedupeKey: true,
-      definition: { select: { code: true, category: true } },
     },
   });
   if (!recommendation) return null;
 
   return {
     propertyId: recommendation.propertyId,
-    householdId: recommendation.householdId,
     definitionId: recommendation.definitionId,
-    definitionCode: recommendation.definition.code,
-    category: recommendation.definition.category,
-    dedupeKey: recommendation.dedupeKey,
   };
 }

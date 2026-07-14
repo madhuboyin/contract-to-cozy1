@@ -54,7 +54,7 @@ export async function getPersonalizationPilotQuality(
   ] = await Promise.all([
     prisma.household.count({ where: { consentedAt: { gte: since }, consentVersion: { not: null } } }),
     prisma.personalizedRecommendation.groupBy({
-      by: ['propertyId', 'householdId', 'definitionId', 'status'],
+      by: ['propertyId', 'definitionId', 'status'],
       where: { firstEligibleAt: { gte: since } },
       _count: { _all: true },
     }),
@@ -104,9 +104,7 @@ export async function getPersonalizationPilotQuality(
 
   const decisionEvents = accepted + negative;
   const propertiesWithDefaultGuidance = new Set(
-    recommendationRows
-      .filter((row) => row.householdId === null)
-      .map((row) => row.propertyId),
+    recommendationRows.map((row) => row.propertyId),
   ).size;
   const sampleStatus = decisionEvents === 0
     ? 'NO_DATA' as const

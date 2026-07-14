@@ -56,11 +56,7 @@ export async function materializePilotRecommendationsForProperty(
       continue;
     }
 
-    const suppression = await findActiveSuppression(propertyId, {
-      definitionCode: definition.code,
-      category: definition.category,
-      dedupeKey: definition.code,
-    });
+    const suppression = await findActiveSuppression(propertyId, evaluation.definitionId);
     if (suppression) {
       await suppressRecommendationIfActive(propertyId, evaluation.definitionId);
       continue;
@@ -68,14 +64,10 @@ export async function materializePilotRecommendationsForProperty(
 
     await upsertRecommendation({
       propertyId,
-      // The current reviewed catalog uses property signals only. Optional
-      // household-profile consent must never gate or own these instances.
-      householdId: null,
       definitionId: evaluation.definitionId,
       evaluationRunId: evaluation.evaluationRunId ?? null,
       ruleVersion: evaluation.ruleVersion,
       contentVersion: content.version,
-      dedupeKey: definition.code,
       headline: content.title,
       reasonCodes: [{
         code: definition.reasonCode,
@@ -86,7 +78,6 @@ export async function materializePilotRecommendationsForProperty(
       score: definition.defaultScore,
       priorityBand: priorityBandFromScore(definition.defaultScore),
       confidence: 1,
-      scoreBreakdown: { modelVersion: 'pilot-static-v1' },
     });
     active += 1;
   }

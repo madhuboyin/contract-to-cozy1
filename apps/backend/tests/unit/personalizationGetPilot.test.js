@@ -50,7 +50,7 @@ function loadUseCase({
 
 test('OWNER receives the next question and authorized evidence', async () => {
   const { getPilotPersonalization, getQuestionLoads } = loadUseCase();
-  const result = await getPilotPersonalization('prop-1', {
+  const result = await getPilotPersonalization('prop-1', 'owner-1', {
     canManageSensitiveProfile: true,
     canViewSensitiveEvidence: true,
     canViewOrdinaryRecommendations: true,
@@ -67,7 +67,7 @@ test('OWNER receives the next question and authorized evidence', async () => {
 
 test('global pause hides previously stored recommendations and profile questions', async () => {
   const { getPilotPersonalization, getQuestionLoads, getRecommendationLoads } = loadUseCase({ paused: true });
-  const result = await getPilotPersonalization('prop-1', {
+  const result = await getPilotPersonalization('prop-1', 'owner-1', {
     canManageSensitiveProfile: true,
     canViewSensitiveEvidence: true,
     canViewOrdinaryRecommendations: true,
@@ -83,7 +83,7 @@ test('global pause hides previously stored recommendations and profile questions
 
 test('non-owner receives ordinary recommendations with evidence redacted and no profile question', async () => {
   const { getPilotPersonalization, getQuestionLoads } = loadUseCase();
-  const result = await getPilotPersonalization('prop-1', {
+  const result = await getPilotPersonalization('prop-1', 'viewer-1', {
     canManageSensitiveProfile: false,
     canViewSensitiveEvidence: false,
     canViewOrdinaryRecommendations: true,
@@ -98,7 +98,7 @@ test('non-owner receives ordinary recommendations with evidence redacted and no 
 
 test('property guidance is available before the optional household profile is enabled', async () => {
   const { getPilotPersonalization, getQuestionLoads } = loadUseCase({ household: null });
-  const result = await getPilotPersonalization('prop-1', {
+  const result = await getPilotPersonalization('prop-1', 'owner-1', {
     canManageSensitiveProfile: true,
     canViewSensitiveEvidence: true,
     canViewOrdinaryRecommendations: true,

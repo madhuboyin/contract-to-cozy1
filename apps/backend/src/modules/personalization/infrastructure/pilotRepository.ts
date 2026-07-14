@@ -6,19 +6,16 @@ export async function findPilotHousehold(propertyId: string, ownerUserId: string
   return prisma.household.findFirst({
     where: {
       ownerUserId,
-      status: 'ACTIVE',
-      deletedAt: null,
       properties: { some: { propertyId, effectiveTo: null } },
     },
     select: { id: true, consentVersion: true, consentedAt: true },
   });
 }
 
-export async function findPilotHouseholdForProperty(propertyId: string) {
+export async function findPilotHouseholdForProperty(propertyId: string, ownerUserId: string) {
   return prisma.household.findFirst({
     where: {
-      status: 'ACTIVE',
-      deletedAt: null,
+      ownerUserId,
       consentVersion: { not: null },
       properties: { some: { propertyId, effectiveTo: null } },
     },
@@ -31,8 +28,6 @@ export async function optInPilotHousehold(propertyId: string, ownerUserId: strin
     let household = await db.household.findFirst({
       where: {
         ownerUserId,
-        status: 'ACTIVE',
-        deletedAt: null,
         properties: { some: { propertyId, effectiveTo: null } },
       },
       select: { id: true },
@@ -42,7 +37,6 @@ export async function optInPilotHousehold(propertyId: string, ownerUserId: strin
       household = await db.household.create({
         data: {
           ownerUserId,
-          source: 'USER_CREATED',
           properties: { create: { propertyId, occupancyType: 'PRIMARY' } },
         },
         select: { id: true },
@@ -57,15 +51,9 @@ export async function optInPilotHousehold(propertyId: string, ownerUserId: strin
   });
 }
 
-function householdRecommendationScope(householdId?: string | null) {
-  return householdId
-    ? { OR: [{ householdId: null }, { householdId }] }
-    : { householdId: null };
-}
-
-export async function listActivePilotRecommendations(propertyId: string, householdId?: string | null) {
+export async function listActivePilotRecommendations(propertyId: string) {
   return prisma.personalizedRecommendation.findMany({
-    where: { propertyId, status: 'ACTIVE', ...householdRecommendationScope(householdId) },
+    where: { propertyId, status: 'ACTIVE' },
     orderBy: [{ score: 'desc' }, { firstEligibleAt: 'desc' }],
     take: 3,
     select: {
@@ -87,11 +75,10 @@ export async function listActivePilotRecommendations(propertyId: string, househo
 
 export async function listActiveRecommendationsForModule(
   propertyId: string,
-  householdId?: string | null,
   take = 25,
 ) {
   return prisma.personalizedRecommendation.findMany({
-    where: { propertyId, status: 'ACTIVE', ...householdRecommendationScope(householdId) },
+    where: { propertyId, status: 'ACTIVE' },
     orderBy: [{ score: 'desc' }, { firstEligibleAt: 'desc' }],
     take: Math.min(Math.max(take, 1), 25),
     select: {
@@ -114,10 +101,9 @@ export async function listActiveRecommendationsForModule(
 export async function loadActiveRecommendationForAction(
   recommendationId: string,
   propertyId: string,
-  householdId?: string | null,
 ) {
   return prisma.personalizedRecommendation.findFirst({
-    where: { id: recommendationId, propertyId, status: 'ACTIVE', ...householdRecommendationScope(householdId) },
+    where: { id: recommendationId, propertyId, status: 'ACTIVE' },
     select: {
       id: true,
       definition: { select: { code: true } },
@@ -133,10 +119,9 @@ export async function loadActiveRecommendationForAction(
 export async function recommendationBelongsToProperty(
   recommendationId: string,
   propertyId: string,
-  householdId?: string | null,
 ): Promise<boolean> {
   const row = await prisma.personalizedRecommendation.findFirst({
-    where: { id: recommendationId, propertyId, ...householdRecommendationScope(householdId) },
+    where: { id: recommendationId, propertyId },
     select: { id: true },
   });
   return Boolean(row);
@@ -146,17 +131,8 @@ export async function resetPilotHousehold(propertyId: string, ownerUserId: strin
   const household = await findPilotHousehold(propertyId, ownerUserId);
   if (!household) return false;
 
-  // Reset removes only optional household-profile data and any future outputs
-  // explicitly owned by that profile. Default property-only recommendations
-  // have householdId = null and intentionally survive this operation.
-  await prisma.$transaction(async (db) => {
-    await db.personalizedRecommendation.deleteMany({
-      where: { propertyId, householdId: household.id },
-    });
-    await db.recommendationSuppression.deleteMany({
-      where: { propertyId, householdId: household.id },
-    });
-    await db.household.delete({ where: { id: household.id } });
-  });
+  // Profile answers and the property link cascade with the Household.
+  // Property-owned traits, recommendations and suppressions survive reset.
+  await prisma.household.delete({ where: { id: household.id } });
   return true;
 }

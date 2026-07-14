@@ -329,13 +329,21 @@ Normative experience is in [frontend experience](07-frontend-experience.md).
 
 ## 32. Analytics requirements
 
-Measure profile/question value and recommendation outcomes, not sensitive values. Required metrics: profile completion-by-value, question response/skip, time to first value, impressions/views/expands, accept/task conversion/completion, dismiss/snooze/not-relevant, explanation views, corrections, repeat engagement, notification open/opt-out, modules personalized, diversity, freshness, surfaced savings (confidence-qualified), and completed risk-reduction actions.
+Measure optional question value and recommendation outcomes, not sensitive
+values. The current aggregate includes default-guidance property reach,
+optional-profile enablement, answers/skips/snoozes, recommendation status,
+accepted/negative decisions and bounded reason counts. Add further metrics only
+when the corresponding behavior exists.
 
 Quality before learning uses cohort-level relevance rate (`accepted + acted + saved`), not-relevant/correction rates, completion, freshness, diversity, safety review incidents, and sampled content review. No automated tuning until sample-size, guardrail and rollback criteria are approved.
 
 ## 33. Observability requirements
 
-Metrics: evaluation count/duration/candidates/surfaced/suppression by reason; queue age/depth/retries; snapshot age; context staleness/provider failures; catalog/version distribution; API latency/errors; notification budget decisions; privacy job completion. Traces/request IDs span mutation → job → snapshot. Labels use codes, never IDs with high cardinality or trait values.
+Track evaluation count/duration/result, materialized status, suppression reason,
+catalog versions, API latency/errors and privacy reset completion. Labels use
+stable codes, never profile values or high-cardinality identifiers. Queue,
+cache, notification and snapshot metrics become requirements only if those
+systems are introduced.
 
 ## 34. Accessibility requirements
 
@@ -343,39 +351,65 @@ WCAG 2.2 AA; semantic order, visible focus, 44px targets, reduced motion, contra
 
 ## 35. Performance requirements
 
-See PER-NFR-001/002. External calls are outside evaluation transaction; catalog prefilter and snapshots prevent N+1 joins. Load tests use Pi-representative resource limits.
+See PER-NFR-001/002. The three-definition property evaluation performs no
+external call. Repository queries must remain bounded and avoid N+1 reads.
 
 ## 36. Scalability requirements
 
-Partition work by property, coalesce jobs, bound history and rule complexity, index active status/scope/time, and archive feedback if measured. Trigger infrastructure review at thresholds in feasibility; no premature service extraction.
+Keep evaluation property-scoped, rule complexity bounded and active reads
+indexed. Introduce queues, caches, partitions or archival only after measured
+volume justifies them.
 
 ## 37. Reliability requirements
 
-At-least-once jobs with idempotent upserts; last-known-safe snapshot; retry/backoff/dead-letter visibility; no duplicate cron execution; definition kill switch; nightly reconciliation; transactional outbox/invalidations where atomicity matters.
+Use idempotent recommendation, feedback, profile and action writes. Definition
+pause and the global kill switch are authoritative. No personalization cron,
+queue, nightly reconciliation or outbox is required in the current pilot.
 
 ## 38. Audit requirements
 
-Immutable definition/content/rule publish and pause, consent/profile key changes, trait overrides, explicit feedback, recommendation actions, sensitive reads, admin operations, export/reset/delete. Audit metadata is allowlisted and value-minimized.
+Audit definition/content/rule activation and pause, consent/profile lifecycle,
+explicit feedback/actions where required, sensitive reads and admin/reset/delete
+operations. Audit metadata is allowlisted and value-minimized.
 
 ## 39. Data-retention requirements
 
-Current traits/snapshot retained while active; evaluation/candidate diagnostics 30–90 days; context per provider/legal need; recommendation/action history sufficient for suppression/audit; implicit analytics aggregated and raw events bounded; free-text feedback shortest practical period. Exact periods require policy approval before launch.
+Current property traits remain while the property exists. Evaluation runs,
+recommendation/action history and feedback require approved retention windows
+before real-user launch. Optional profile answers are erased on profile/account
+reset. Free-text feedback receives the shortest practical approved period.
 
-## 40. Migration requirements
+## 40. Schema-application requirements
 
-Additive schema; idempotent backfill; no inferred sensitive values; shadow evaluation; dual read; feature flags; count/hash verification; rollback by flag/job disable; no destructive down migration after collection.
+During the data-free greenfield pilot, the repository defines the desired
+schema and the user applies it; the application does not ship migrations or
+backfill properties. The idempotent catalog seed creates only DRAFT rows. Once
+a deployed database contains data that must survive a schema change, adopt a
+conventional reviewed migration for that specific change, including its data
+preservation verification and rollback plan. Optional-profile values must
+never be inferred during schema work.
 
 ## 41. Testing requirements
 
-Normative plan: [testing strategy](10-testing-strategy.md). Golden catalog/trait datasets, authorization, privacy erasure, migration, performance, notification and AI-disabled tests are release gates.
+Normative plan: [testing strategy](10-testing-strategy.md). Golden catalog/trait
+datasets, authorization, privacy erasure, schema validation, performance and
+AI-disabled tests are release gates. Migration rehearsal is deferred until a
+deployed database contains data that must survive schema evolution.
 
 ## 42. Acceptance criteria
 
-MVP is accepted when all Must-have Phase 0–1 requirements pass; 20–40 reviewed definitions produce deterministic results; UC-01, UC-02, UC-03, UC-05, UC-09 and UC-10 pass end to end; no cross-role sensitive leak; dashboard limits/diversity hold; task action is idempotent; privacy reset completes; performance targets pass under stated load; kill switch and stale-context behavior are demonstrated.
+The greenfield pilot is accepted when the three reviewed definitions produce
+deterministic results; default guidance works without a household profile; the
+optional owner profile can be enabled, answered and reset; shared module reads
+and task conversion are consistent/idempotent; no cross-role sensitive leak
+exists; and catalog plus kill-switch controls are demonstrated.
 
 ## 43. Dependencies
 
-Authorization policy refactor; worker coordination; Prisma additive schema; BullMQ recompute; notification policy adapter; content taxonomy/safety review; privacy retention decision; frontend navigation/content; analytics event governance.
+Current dependencies are schema application by the user, reviewed catalog
+content/safety approval, privacy retention decisions before real-user launch,
+and working existing property/asset and maintenance-task services. Workers,
+notifications and learning infrastructure are not pilot dependencies.
 
 ## 44. Risks
 
@@ -391,7 +425,12 @@ Defaults are documented in [risks/open questions](11-risks-and-open-questions.md
 
 ## 47. Release strategy
 
-Internal shadow mode → staff/beta cohort with evaluation comparison → opt-in homeowner cohort → Maintenance/Health general rollout → cross-module rollout. Every stage has flags, kill switches and rollback.
+Activate reviewed definitions for internal validation, verify the default
+property-guidance path, then validate the shared Dashboard, Maintenance and
+Health placements. Basic property personalization is not percentage-enrolled
+or profile-consent-gated. Optional household-profile collection remains a
+separate owner choice. Use definition lifecycle controls and the global kill
+switch for rollback.
 
 ## 48. Rollout plan
 

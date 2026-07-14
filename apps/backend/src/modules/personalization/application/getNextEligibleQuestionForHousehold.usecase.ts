@@ -3,7 +3,7 @@
 // PER-FR-010 ("offer one ranked progressive question with skip/later/caps").
 // The pilot read API returns at most one eligible question to an OWNER.
 import {
-  loadActiveQuestionsForPlacement,
+  loadActiveQuestions,
   loadAnswerHistoryForHousehold,
   LoadedProfileQuestion,
 } from '../infrastructure/profileQuestionRepository';
@@ -15,16 +15,15 @@ export interface NextEligibleQuestionResult {
 
 export async function getNextEligibleQuestionForHousehold(
   householdId: string,
-  placement: string,
 ): Promise<NextEligibleQuestionResult> {
   const [questions, answerHistory] = await Promise.all([
-    loadActiveQuestionsForPlacement(placement),
+    loadActiveQuestions(),
     loadAnswerHistoryForHousehold(householdId),
   ]);
 
   const now = new Date();
 
-  const askedTimestampsThisWeek = answerHistory.map((a) => a.askedAt);
+  const askedTimestampsThisWeek = answerHistory.map((a) => a.createdAt);
   if (!isWithinWeeklyCap(askedTimestampsThisWeek, now)) {
     return { question: null };
   }

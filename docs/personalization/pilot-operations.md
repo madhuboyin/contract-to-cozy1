@@ -21,7 +21,9 @@ It is the SQL equivalent of the TypeScript seed; run one or the other, not both
 
 - Review the HVAC rule/copy before setting its definition, rule and content version to `ACTIVE`.
 - The smoke/CO and dryer-vent rules are `SAFETY_SENSITIVE`. Each active rule must have different non-empty `authoredBy` and `reviewedBy` values or the evaluator treats it as inactive.
-- Activate only the profile questions approved for the pilot. The UI requests only `ACTIVE` questions in the `PILOT` placement.
+- Activate only the profile questions approved for optional collection. The UI
+  requests the ranked `ACTIVE` question catalog; placement metadata was removed
+  because there is only one profile surface.
 - Materialization requires matching ACTIVE rule and ACTIVE `en-US` content. Missing/DRAFT content is a safe no-op even when the definition and rule are ACTIVE.
 
 ## Exposure and rollback
@@ -82,6 +84,12 @@ An owner can inspect current property personalization context without enabling t
 - `GET /api/properties/:propertyId/personalization/context-map`
 - `/dashboard/personalization` under **What personalization knows**
 
-The endpoint requires the owner-only `canViewSensitiveEvidence` capability. It always returns semantic property, current-signal and active-recommendation nodes. When an optional profile is enabled, it additionally returns the active household/property link and explicit profile facts. It does not return database IDs, owner IDs, raw trait evidence, arbitrary nested JSON or profile data to contributors/viewers.
+The endpoint requires the owner-only `canViewSensitiveEvidence` capability. It
+always returns semantic property, current-signal and active-recommendation
+nodes. When an optional profile is enabled, it additionally returns the active
+household/property link and bounded facts decoded from answered
+`ProfileAnswer.answerJson` events. It does not return database IDs, owner IDs,
+raw trait evidence, arbitrary nested JSON or profile data to
+contributors/viewers.
 
 This is a current-state transparency view, not the existing Home Digital Twin, a household timeline or a simulation engine. It reuses existing tables and requires no SQL, schema application, seed rerun, migration or backfill.

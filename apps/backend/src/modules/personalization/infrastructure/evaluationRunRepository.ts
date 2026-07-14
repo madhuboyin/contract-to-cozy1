@@ -11,8 +11,6 @@ export interface LoadedRule {
   definitionId: string;
   ruleVersion: number;
   ruleAst: unknown;
-  /** Opaque scoring-weight config for this rule version — see domain/scoring.ts. */
-  scoreConfig: unknown;
 }
 
 export type LoadActiveRuleOutcome =
@@ -51,7 +49,6 @@ export async function loadActiveRule(definitionCode: string): Promise<LoadActive
       version: number;
       ruleAst: unknown;
       status: string;
-      scoreConfig?: unknown;
       authoredBy?: string | null;
       reviewedBy?: string | null;
     }>
@@ -74,7 +71,6 @@ export async function loadActiveRule(definitionCode: string): Promise<LoadActive
       definitionId: definition.id,
       ruleVersion: activeRule.version,
       ruleAst: activeRule.ruleAst,
-      scoreConfig: activeRule.scoreConfig ?? null,
     },
   };
 }

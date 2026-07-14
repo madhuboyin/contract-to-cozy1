@@ -4,321 +4,103 @@ const assert = require('node:assert/strict');
 require('ts-node/register');
 
 const QUESTIONS_BY_ID = {
-  'q-member': {
-    id: 'q-member',
-    code: 'household_composition_safety',
-    targetTable: 'HOUSEHOLD_MEMBER_SUMMARY',
-    targetKey: null,
-    valueScore: 8,
-    effortScore: 2,
-    maxImpressions: 3,
-    answerSchema: { type: 'multi_select' },
-  },
-  'q-pet': {
-    id: 'q-pet',
-    code: 'household_pets',
-    targetTable: 'PET_PROFILE',
-    targetKey: null,
-    valueScore: 6,
-    effortScore: 1,
-    maxImpressions: 3,
-    answerSchema: { type: 'select_with_detail' },
-  },
-  'q-goal': {
-    id: 'q-goal',
-    code: 'goal_aging_in_place',
-    targetTable: 'HOUSEHOLD_GOAL',
-    targetKey: 'AGING_IN_PLACE',
-    valueScore: 7,
-    effortScore: 1,
-    maxImpressions: 3,
-    answerSchema: { type: 'boolean' },
-  },
-  'q-pref': {
-    id: 'q-pref',
-    code: 'preference_budget_posture',
-    targetTable: 'HOUSEHOLD_PREFERENCE',
-    targetKey: 'BUDGET_POSTURE',
-    valueScore: 6,
-    effortScore: 1,
-    maxImpressions: 3,
-    answerSchema: { type: 'boolean' },
-  },
-  'q-lifestyle': {
-    id: 'q-lifestyle',
-    code: 'lifestyle_travel_frequency',
-    targetTable: 'LIFESTYLE_ATTRIBUTE',
-    targetKey: 'TRAVEL_FREQUENCY',
-    valueScore: 5,
-    effortScore: 1,
-    maxImpressions: 3,
-    answerSchema: { type: 'boolean' },
-  },
+  'q-member': { id: 'q-member', code: 'household_composition_safety', status: 'ACTIVE', valueScore: 8, effortScore: 2, maxImpressions: 3, answerSchema: { type: 'multi_select' }, prompt: 'Members?', whyAsked: 'Safety', privacyNote: 'Optional' },
+  'q-pet': { id: 'q-pet', code: 'household_pets', status: 'ACTIVE', valueScore: 6, effortScore: 1, maxImpressions: 3, answerSchema: { type: 'select_with_detail' }, prompt: 'Pets?', whyAsked: 'Maintenance', privacyNote: 'Optional' },
+  'q-boolean': { id: 'q-boolean', code: 'preference_budget_posture', status: 'ACTIVE', valueScore: 6, effortScore: 1, maxImpressions: 3, answerSchema: { type: 'boolean' }, prompt: 'Budget?', whyAsked: 'Ranking', privacyNote: 'Optional' },
 };
-
-for (const question of Object.values(QUESTIONS_BY_ID)) {
-  question.status = 'ACTIVE';
-  question.placementContexts = ['PILOT'];
-}
 
 function createPrismaMock({ consentVersion = null } = {}) {
   const answers = [];
-  const memberSummaries = [];
-  const pets = [];
-  const goals = [];
-  const preferences = [];
-  const lifestyleAttributes = [];
-
-  function tableMock(rows) {
-    return {
-      findFirst: async ({ where }) =>
-        rows.find((r) => Object.entries(where).every(([k, v]) => r[k] === v)) || null,
-      create: async ({ data }) => {
-        const row = { id: `id-${rows.length + 1}`, ...data };
-        rows.push(row);
-        return row;
-      },
-      update: async ({ where, data }) => {
-        const row = rows.find((r) => r.id === where.id);
-        Object.assign(row, data);
-        return row;
-      },
-    };
-  }
-
   const prismaMock = {
     $transaction: async (callback) => callback(prismaMock),
     profileQuestion: {
       findUnique: async ({ where }) => QUESTIONS_BY_ID[where.id] || null,
     },
     profileAnswer: {
-      findUnique: async ({ where }) => answers.find((a) => a.idempotencyKey === where.idempotencyKey) || null,
+      findUnique: async ({ where }) => answers.find((answer) => answer.idempotencyKey === where.idempotencyKey) || null,
       create: async ({ data }) => {
-        const row = { id: `ans-${answers.length + 1}`, ...data };
+        const row = { id: `answer-${answers.length + 1}`, createdAt: new Date(), ...data };
         answers.push(row);
         return row;
       },
     },
     household: {
-      findUnique: async () => (consentVersion ? { consentVersion, consentedAt: new Date() } : { consentVersion: null, consentedAt: null }),
+      findUnique: async () => ({ consentVersion, consentedAt: consentVersion ? new Date() : null }),
     },
-    householdMemberSummary: tableMock(memberSummaries),
-    petProfile: tableMock(pets),
-    householdGoal: tableMock(goals),
-    householdPreference: tableMock(preferences),
-    lifestyleAttribute: tableMock(lifestyleAttributes),
   };
-
-  return { prismaMock, answers, memberSummaries, pets, goals, preferences, lifestyleAttributes };
+  return { prismaMock, answers };
 }
 
-function installPrismaMock(prismaMock) {
+function loadUseCase(prismaMock) {
   const prismaPath = require.resolve('../../src/lib/prisma.ts');
-  require.cache[prismaPath] = {
-    id: prismaPath,
-    filename: prismaPath,
-    loaded: true,
-    exports: { prisma: prismaMock },
-  };
-}
-
-function loadUseCase() {
-  const paths = [
+  require.cache[prismaPath] = { id: prismaPath, filename: prismaPath, loaded: true, exports: { prisma: prismaMock } };
+  for (const relativePath of [
     '../../src/modules/personalization/infrastructure/profileQuestionRepository.ts',
     '../../src/modules/personalization/infrastructure/consentRepository.ts',
-    '../../src/modules/personalization/infrastructure/compositionDataRepository.ts',
     '../../src/modules/personalization/application/recordProfileAnswer.usecase.ts',
-  ].map((p) => require.resolve(p));
-  for (const p of paths) delete require.cache[p];
+  ]) {
+    delete require.cache[require.resolve(relativePath)];
+  }
   return require('../../src/modules/personalization/application/recordProfileAnswer.usecase.ts');
 }
 
 test('duplicate idempotencyKey is a true no-op', async () => {
   const { prismaMock, answers } = createPrismaMock({ consentVersion: 'v1' });
-  installPrismaMock(prismaMock);
-  const { recordProfileAnswer } = loadUseCase();
-
-  const params = { questionId: 'q-goal', householdId: 'hh-1', idempotencyKey: 'evt-1', action: 'ANSWERED', answerJson: { present: true } };
-  const first = await recordProfileAnswer(params);
-  const second = await recordProfileAnswer(params);
-
-  assert.equal(first.status, 'RECORDED');
-  assert.equal(second.status, 'DUPLICATE');
+  const { recordProfileAnswer } = loadUseCase(prismaMock);
+  const params = { questionId: 'q-boolean', householdId: 'hh-1', idempotencyKey: 'evt-1', action: 'ANSWERED', answerJson: { value: true } };
+  assert.equal((await recordProfileAnswer(params)).status, 'RECORDED');
+  assert.equal((await recordProfileAnswer(params)).status, 'DUPLICATE');
   assert.equal(answers.length, 1);
 });
 
 test('returns QUESTION_NOT_FOUND for an unknown questionId', async () => {
   const { prismaMock } = createPrismaMock({ consentVersion: 'v1' });
-  installPrismaMock(prismaMock);
-  const { recordProfileAnswer } = loadUseCase();
-
-  const result = await recordProfileAnswer({
-    questionId: 'missing',
-    householdId: 'hh-1',
-    idempotencyKey: 'evt-1',
-    action: 'ANSWERED',
-  });
+  const { recordProfileAnswer } = loadUseCase(prismaMock);
+  const result = await recordProfileAnswer({ questionId: 'missing', householdId: 'hh-1', idempotencyKey: 'evt-1', action: 'ANSWERED' });
   assert.equal(result.status, 'QUESTION_NOT_FOUND');
 });
 
-test('SKIPPED sets a 90-day cooldown and never touches consent or composition data', async () => {
-  const { prismaMock, answers, goals } = createPrismaMock({ consentVersion: null });
-  installPrismaMock(prismaMock);
-  const { recordProfileAnswer } = loadUseCase();
-
-  const result = await recordProfileAnswer({
-    questionId: 'q-goal',
-    householdId: 'hh-1',
-    idempotencyKey: 'evt-skip',
-    action: 'SKIPPED',
-  });
-
-  assert.equal(result.status, 'RECORDED');
-  assert.equal(goals.length, 0);
-  assert.ok(answers[0].nextEligibleAt);
-  const daysAhead = (answers[0].nextEligibleAt.getTime() - answers[0].askedAt.getTime()) / (24 * 60 * 60 * 1000);
-  assert.ok(Math.abs(daysAhead - 90) < 1);
+test('SKIPPED and SNOOZED store cooldown events without profile facts', async () => {
+  const { prismaMock, answers } = createPrismaMock();
+  const { recordProfileAnswer } = loadUseCase(prismaMock);
+  await recordProfileAnswer({ questionId: 'q-boolean', householdId: 'hh-1', idempotencyKey: 'evt-skip', action: 'SKIPPED' });
+  await recordProfileAnswer({ questionId: 'q-boolean', householdId: 'hh-1', idempotencyKey: 'evt-later', action: 'SNOOZED' });
+  assert.equal(answers.length, 2);
+  assert.equal(answers[0].answerJson, null);
+  assert.equal(answers[1].answerJson, null);
+  const skipDays = (answers[0].nextEligibleAt - answers[0].createdAt) / 86_400_000;
+  const laterDays = (answers[1].nextEligibleAt - answers[1].createdAt) / 86_400_000;
+  assert.ok(Math.abs(skipDays - 90) < 1);
+  assert.ok(Math.abs(laterDays - 14) < 1);
 });
 
-test('SNOOZED sets a 14-day cooldown', async () => {
-  const { prismaMock, answers } = createPrismaMock({ consentVersion: null });
-  installPrismaMock(prismaMock);
-  const { recordProfileAnswer } = loadUseCase();
-
-  await recordProfileAnswer({
-    questionId: 'q-goal',
-    householdId: 'hh-1',
-    idempotencyKey: 'evt-snooze',
-    action: 'SNOOZED',
-  });
-
-  const daysAhead = (answers[0].nextEligibleAt.getTime() - answers[0].askedAt.getTime()) / (24 * 60 * 60 * 1000);
-  assert.ok(Math.abs(daysAhead - 14) < 1);
-});
-
-test('ANSWERED without consent returns CONSENT_REQUIRED and writes nothing', async () => {
-  const { prismaMock, answers, goals } = createPrismaMock({ consentVersion: null });
-  installPrismaMock(prismaMock);
-  const { recordProfileAnswer } = loadUseCase();
-
-  const result = await recordProfileAnswer({
-    questionId: 'q-goal',
-    householdId: 'hh-1',
-    idempotencyKey: 'evt-answer',
-    action: 'ANSWERED',
-    answerJson: { present: true },
-  });
-
+test('ANSWERED without consent writes nothing', async () => {
+  const { prismaMock, answers } = createPrismaMock();
+  const { recordProfileAnswer } = loadUseCase(prismaMock);
+  const result = await recordProfileAnswer({ questionId: 'q-boolean', householdId: 'hh-1', idempotencyKey: 'evt-answer', action: 'ANSWERED', answerJson: { value: true } });
   assert.equal(result.status, 'CONSENT_REQUIRED');
-  assert.equal(goals.length, 0);
   assert.equal(answers.length, 0);
 });
 
 test('invalid ANSWERED payload is rejected before any write', async () => {
-  const { prismaMock, answers, pets } = createPrismaMock({ consentVersion: 'v1' });
-  installPrismaMock(prismaMock);
-  const { recordProfileAnswer } = loadUseCase();
-
-  const result = await recordProfileAnswer({
-    questionId: 'q-pet',
-    householdId: 'hh-1',
-    idempotencyKey: 'evt-invalid',
-    action: 'ANSWERED',
-    answerJson: { hasPet: true },
-  });
-
+  const { prismaMock, answers } = createPrismaMock({ consentVersion: 'v1' });
+  const { recordProfileAnswer } = loadUseCase(prismaMock);
+  const result = await recordProfileAnswer({ questionId: 'q-pet', householdId: 'hh-1', idempotencyKey: 'evt-invalid', action: 'ANSWERED', answerJson: { hasPet: true } });
   assert.equal(result.status, 'INVALID_ANSWER');
-  assert.equal(pets.length, 0);
   assert.equal(answers.length, 0);
 });
 
-test('ANSWERED with consent writes to HOUSEHOLD_MEMBER_SUMMARY (multi-select)', async () => {
-  const { prismaMock, memberSummaries } = createPrismaMock({ consentVersion: 'v1' });
-  installPrismaMock(prismaMock);
-  const { recordProfileAnswer } = loadUseCase();
-
-  await recordProfileAnswer({
-    questionId: 'q-member',
-    householdId: 'hh-1',
-    idempotencyKey: 'evt-member',
-    action: 'ANSWERED',
-    answerJson: { hasChildren: true, hasSeniors: true },
-  });
-
-  assert.equal(memberSummaries.length, 2);
-  assert.deepEqual(memberSummaries.map((m) => m.type).sort(), ['CHILD', 'SENIOR']);
-});
-
-test('ANSWERED with consent writes to PET_PROFILE only when hasPet is true', async () => {
-  const { prismaMock, pets } = createPrismaMock({ consentVersion: 'v1' });
-  installPrismaMock(prismaMock);
-  const { recordProfileAnswer } = loadUseCase();
-
-  await recordProfileAnswer({
-    questionId: 'q-pet',
-    householdId: 'hh-1',
-    idempotencyKey: 'evt-pet-no',
-    action: 'ANSWERED',
-    answerJson: { hasPet: false },
-  });
-  assert.equal(pets.length, 0);
-
-  await recordProfileAnswer({
-    questionId: 'q-pet',
-    householdId: 'hh-1',
-    idempotencyKey: 'evt-pet-yes',
-    action: 'ANSWERED',
-    answerJson: { hasPet: true, petType: 'DOG' },
-  });
-  assert.equal(pets.length, 1);
-  assert.equal(pets[0].petType, 'DOG');
-});
-
-test('ANSWERED with consent writes to HOUSEHOLD_GOAL only when present is true', async () => {
-  const { prismaMock, goals } = createPrismaMock({ consentVersion: 'v1' });
-  installPrismaMock(prismaMock);
-  const { recordProfileAnswer } = loadUseCase();
-
-  await recordProfileAnswer({
-    questionId: 'q-goal',
-    householdId: 'hh-1',
-    idempotencyKey: 'evt-goal-false',
-    action: 'ANSWERED',
-    answerJson: { present: false },
-  });
-  assert.equal(goals.length, 0);
-});
-
-test('ANSWERED with consent always writes to HOUSEHOLD_PREFERENCE (true or false is meaningful)', async () => {
-  const { prismaMock, preferences } = createPrismaMock({ consentVersion: 'v1' });
-  installPrismaMock(prismaMock);
-  const { recordProfileAnswer } = loadUseCase();
-
-  await recordProfileAnswer({
-    questionId: 'q-pref',
-    householdId: 'hh-1',
-    idempotencyKey: 'evt-pref',
-    action: 'ANSWERED',
-    answerJson: { value: false },
-  });
-
-  assert.equal(preferences.length, 1);
-  assert.deepEqual(preferences[0].valueJson, { value: false });
-});
-
-test('ANSWERED with consent always writes to LIFESTYLE_ATTRIBUTE (true or false is meaningful)', async () => {
-  const { prismaMock, lifestyleAttributes } = createPrismaMock({ consentVersion: 'v1' });
-  installPrismaMock(prismaMock);
-  const { recordProfileAnswer } = loadUseCase();
-
-  await recordProfileAnswer({
-    questionId: 'q-lifestyle',
-    householdId: 'hh-1',
-    idempotencyKey: 'evt-lifestyle',
-    action: 'ANSWERED',
-    answerJson: { value: true },
-  });
-
-  assert.equal(lifestyleAttributes.length, 1);
-  assert.equal(lifestyleAttributes[0].valueBoolean, true);
+test('consented answers are retained once in ProfileAnswer.answerJson', async () => {
+  const { prismaMock, answers } = createPrismaMock({ consentVersion: 'v1' });
+  const { recordProfileAnswer } = loadUseCase(prismaMock);
+  const cases = [
+    ['q-member', 'evt-member', { hasChildren: true, hasSeniors: false }],
+    ['q-pet', 'evt-pet', { hasPet: true, petType: 'DOG' }],
+    ['q-boolean', 'evt-boolean', { value: false }],
+  ];
+  for (const [questionId, idempotencyKey, answerJson] of cases) {
+    const result = await recordProfileAnswer({ questionId, householdId: 'hh-1', idempotencyKey, action: 'ANSWERED', answerJson });
+    assert.equal(result.status, 'RECORDED');
+  }
+  assert.deepEqual(answers.map((answer) => answer.answerJson), cases.map((entry) => entry[2]));
 });

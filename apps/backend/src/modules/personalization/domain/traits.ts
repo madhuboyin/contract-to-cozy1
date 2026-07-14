@@ -73,8 +73,8 @@ export function deriveHvacFilterReplacementOverdue(
 }
 
 /**
- * Raw days-since-last-HVAC-service, as a scoring input (not an eligibility
- * trait — no rule AST references this key). Same UNKNOWN semantics as
+ * Raw days-since-last-HVAC-service, retained as a transparent property signal
+ * (not an eligibility trait — no rule AST references this key). Same UNKNOWN semantics as
  * deriveHvacFilterReplacementOverdue: no HVAC asset or never serviced -> unknown.
  */
 export function deriveHvacFilterDaysSinceServiced(
@@ -93,9 +93,8 @@ export function deriveHvacFilterDaysSinceServiced(
   return { known: true, value: daysSinceServiced };
 }
 
-// ─── Phase 1, migration step 3: two more non-sensitive property traits ────
-// (see docs/personalization/adr-0002-phase1-foundation-migration-steps-1-3.md)
-// Both derived from fields already on Property — no household/personal data.
+// Additional non-sensitive property traits. Both derive from fields already
+// on Property and never read household/profile data.
 
 export interface PropertySafetyFact {
   hasSmokeDetectors: boolean | null;

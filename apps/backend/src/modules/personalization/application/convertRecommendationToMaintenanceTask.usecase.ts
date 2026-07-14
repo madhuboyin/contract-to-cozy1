@@ -9,7 +9,6 @@ export type ConvertRecommendationStatus = 'CREATED' | 'EXISTING' | 'RECOMMENDATI
 export async function convertRecommendationToMaintenanceTask(params: {
   recommendationId: string;
   propertyId: string;
-  householdId?: string | null;
   userId: string;
   idempotencyKey: string;
 }) {
@@ -19,7 +18,6 @@ export async function convertRecommendationToMaintenanceTask(params: {
   const recommendation = await loadActiveRecommendationForAction(
     params.recommendationId,
     params.propertyId,
-    params.householdId,
   );
   if (!recommendation) return { status: 'RECOMMENDATION_NOT_FOUND' as const };
 

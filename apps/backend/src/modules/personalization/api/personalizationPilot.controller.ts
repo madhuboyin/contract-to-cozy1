@@ -8,7 +8,7 @@ import {
 } from '../application/getPilotPersonalization.usecase';
 import { recordRecommendationFeedback } from '../application/recordRecommendationFeedback.usecase';
 import { recommendationBelongsToProperty } from '../infrastructure/pilotRepository';
-import { findPilotHousehold, findPilotHouseholdForProperty } from '../infrastructure/pilotRepository';
+import { findPilotHousehold } from '../infrastructure/pilotRepository';
 import { recordProfileAnswer } from '../application/recordProfileAnswer.usecase';
 import { getPersonalizationCapabilities } from '../domain/capabilityPolicy';
 import { getModuleRecommendations } from '../application/getModuleRecommendations.usecase';
@@ -41,14 +41,14 @@ export async function getPilot(req: CustomRequest, res: Response) {
   const context = personalizationContext(req, res);
   if (!context) return;
   const capabilities = getPersonalizationCapabilities(req.householdRole!);
-  const data = await getPilotPersonalization(context.propertyId, capabilities);
+  const data = await getPilotPersonalization(context.propertyId, context.userId, capabilities);
   return res.json({ success: true, data });
 }
 
 export async function getPilotContextMap(req: CustomRequest, res: Response) {
   const context = personalizationContext(req, res);
   if (!context) return;
-  const data = await getHouseholdContextMap(context.propertyId);
+  const data = await getHouseholdContextMap(context.propertyId, context.userId);
   return res.json({ success: true, data });
 }
 
@@ -65,8 +65,7 @@ export async function submitPilotFeedback(req: CustomRequest, res: Response) {
   if (!context) return;
   if (await rejectPausedWrite(res)) return;
   const recommendationId = req.params.recommendationId;
-  const household = await findPilotHouseholdForProperty(context.propertyId);
-  if (!(await recommendationBelongsToProperty(recommendationId, context.propertyId, household?.id))) {
+  if (!(await recommendationBelongsToProperty(recommendationId, context.propertyId))) {
     return res.status(404).json({ success: false, error: { code: 'RECOMMENDATION_NOT_FOUND', message: 'Recommendation not found.' } });
   }
   const result = await recordRecommendationFeedback({ recommendationId, ...req.body });
@@ -92,7 +91,6 @@ export async function submitPilotProfileAnswer(req: CustomRequest, res: Response
   const result = await recordProfileAnswer({
     householdId: household.id,
     questionId: req.params.questionId,
-    placement: 'PILOT',
     ...req.body,
   });
   const unavailable = result.status === 'QUESTION_NOT_FOUND' || result.status === 'QUESTION_NOT_ACTIVE';
@@ -131,11 +129,9 @@ export async function getPilotModuleRecommendations(req: CustomRequest, res: Res
 export async function convertPilotRecommendationToTask(req: CustomRequest, res: Response) {
   const context = personalizationContext(req, res);
   if (!context) return;
-  const household = await findPilotHouseholdForProperty(context.propertyId);
   const result = await convertRecommendationToMaintenanceTask({
     recommendationId: req.params.recommendationId,
     propertyId: context.propertyId,
-    householdId: household?.id,
     userId: context.userId,
     idempotencyKey: req.body.idempotencyKey,
   });

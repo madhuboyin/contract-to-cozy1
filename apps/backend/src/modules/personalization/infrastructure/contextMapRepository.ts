@@ -3,22 +3,18 @@ import { prisma } from '../../../lib/prisma';
 /**
  * Loads only the current, property-relevant records needed by the Phase 4
  * transparency facade. Property-derived traits and property recommendations
- * are loaded regardless of optional-profile consent. A household identifier is
- * used only to include consented profile data and any future household-owned
- * outputs, then removed from the returned shape.
+ * are loaded regardless of optional-profile consent. Optional answers are
+ * loaded only from the authenticated owner's consented Household.
  */
-export async function loadHouseholdContextMapData(propertyId: string) {
+export async function loadHouseholdContextMapData(propertyId: string, ownerUserId: string) {
   const household = await prisma.household.findFirst({
     where: {
-      status: 'ACTIVE',
-      deletedAt: null,
+      ownerUserId,
       consentVersion: { not: null },
       properties: { some: { propertyId, effectiveTo: null } },
     },
     select: {
       id: true,
-      status: true,
-      source: true,
       consentVersion: true,
       consentedAt: true,
       properties: {
@@ -27,61 +23,13 @@ export async function loadHouseholdContextMapData(propertyId: string) {
         take: 1,
         select: { occupancyType: true, effectiveFrom: true, effectiveTo: true },
       },
-      members: {
-        where: { status: 'ACTIVE' },
-        orderBy: [{ type: 'asc' }, { lifeStage: 'asc' }],
-        select: { type: true, lifeStage: true, count: true, source: true, createdAt: true },
-      },
-      pets: {
-        where: {
-          status: 'ACTIVE',
-          OR: [{ propertyId: null }, { propertyId }],
-        },
-        orderBy: [{ petType: 'asc' }, { createdAt: 'asc' }],
+      profileAnswers: {
+        where: { action: 'ANSWERED' },
+        orderBy: { createdAt: 'asc' },
         select: {
-          petType: true,
-          count: true,
-          sizeBand: true,
-          sheddingLevel: true,
-          indoorOutdoor: true,
-          yardFenceDependent: true,
+          answerJson: true,
           createdAt: true,
-        },
-      },
-      goals: {
-        where: {
-          status: 'ACTIVE',
-          OR: [{ propertyId: null }, { propertyId }],
-        },
-        orderBy: [{ priority: 'desc' }, { goalCode: 'asc' }],
-        select: { goalCode: true, priority: true, horizon: true, source: true, createdAt: true },
-      },
-      preferences: {
-        where: {
-          status: 'ACTIVE',
-          OR: [{ propertyId: null }, { propertyId }],
-        },
-        orderBy: { key: 'asc' },
-        select: { key: true, valueJson: true, createdAt: true },
-      },
-      lifestyleAttributes: {
-        where: {
-          status: 'ACTIVE',
-          source: 'EXPLICIT',
-          OR: [{ propertyId: null }, { propertyId }],
-        },
-        orderBy: { key: 'asc' },
-        select: {
-          key: true,
-          source: true,
-          confidence: true,
-          valueBoolean: true,
-          valueNumber: true,
-          valueText: true,
-          valueCode: true,
-          valueDate: true,
-          valueJson: true,
-          createdAt: true,
+          question: { select: { code: true, prompt: true } },
         },
       },
     },
@@ -90,26 +38,19 @@ export async function loadHouseholdContextMapData(propertyId: string) {
     prisma.derivedTrait.findMany({
       where: {
         propertyId,
-        overriddenAt: null,
-        OR: [{ validUntil: null }, { validUntil: { gte: new Date() } }],
       },
       orderBy: { traitKey: 'asc' },
       select: {
         traitKey: true,
         valueJson: true,
         source: true,
-        confidence: true,
         computedAt: true,
-        validUntil: true,
       },
     }),
     prisma.personalizedRecommendation.findMany({
       where: {
         propertyId,
         status: 'ACTIVE',
-        ...(household
-          ? { OR: [{ householdId: null }, { householdId: household.id }] }
-          : { householdId: null }),
       },
       orderBy: [{ score: 'desc' }, { firstEligibleAt: 'desc' }],
       select: {
@@ -124,16 +65,11 @@ export async function loadHouseholdContextMapData(propertyId: string) {
     ? (({ id: _householdId, ...profile }) => profile)(household)
     : null;
   return {
-    status: publicHousehold?.status ?? null,
-    source: publicHousehold?.source ?? null,
+    source: publicHousehold ? 'USER_INPUT' : null,
     consentVersion: publicHousehold?.consentVersion ?? null,
     consentedAt: publicHousehold?.consentedAt ?? null,
     properties: publicHousehold?.properties ?? [],
-    members: publicHousehold?.members ?? [],
-    pets: publicHousehold?.pets ?? [],
-    goals: publicHousehold?.goals ?? [],
-    preferences: publicHousehold?.preferences ?? [],
-    lifestyleAttributes: publicHousehold?.lifestyleAttributes ?? [],
+    profileAnswers: publicHousehold?.profileAnswers ?? [],
     derivedTraits,
     recommendations,
   };

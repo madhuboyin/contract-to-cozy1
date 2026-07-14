@@ -11,8 +11,7 @@
 // `trait`/`all`/`any`/`not`/`fact` are evaluated. `history`/`date` remain
 // structurally valid (ruleAst.ts already checked their shape) but always
 // evaluate to UNKNOWN here, tagged `notImplemented: true` — no current
-// definition needs them, and implementing them now would be speculative
-// (see the migration-steps-4-6 plan for what's in/out of this slice).
+// definition needs them, and implementing them now would be speculative.
 import { RuleNode } from './ruleAst';
 
 export type ThreeValued = 'TRUE' | 'FALSE' | 'UNKNOWN';

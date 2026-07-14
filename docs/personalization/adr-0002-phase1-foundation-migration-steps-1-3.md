@@ -8,11 +8,14 @@ seed strategy must not be executed: there are no real users to backfill, the
 user owns database deployment, and pilot Households are now created lazily on
 explicit opt-in. The obsolete scripts referenced below have been removed.
 
-The current pilot also prunes the unused `TraitDefinition`, `RuleVersion`, and
-`TraitSnapshot` tables. Property-derived traits no longer carry a Household
-foreign key; the evaluation run's compact `resultJson` is the only retained
-input/evidence snapshot. The implementation details below describe the
-superseded historical slice, not the current schema.
+The current pilot also prunes the unused `TraitDefinition`, `RuleVersion`,
+`TraitSnapshot`, `HouseholdMemberSummary`, `PetProfile`, `HouseholdGoal`,
+`HouseholdPreference`, and `LifestyleAttribute` tables. Optional facts are
+stored once in `ProfileAnswer.answerJson`. Property-derived traits,
+recommendations and suppressions no longer carry a Household foreign key; the
+evaluation run's compact `resultJson` is the only retained input/evidence
+snapshot. The implementation details below describe the superseded historical
+slice, not the current schema.
 
 ## Context
 

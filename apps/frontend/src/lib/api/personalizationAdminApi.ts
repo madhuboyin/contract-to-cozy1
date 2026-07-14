@@ -30,7 +30,6 @@ export interface PersonalizationCatalogQuestion {
   version: number;
   prompt: string;
   status: string;
-  placementContexts: string[];
   updatedAt: string;
 }
 

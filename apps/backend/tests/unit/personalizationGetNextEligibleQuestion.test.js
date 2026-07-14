@@ -41,20 +41,17 @@ const BASE_QUESTION = {
   id: 'q1',
   code: 'household_composition_safety',
   status: 'ACTIVE',
-  targetTable: 'HOUSEHOLD_MEMBER_SUMMARY',
-  targetKey: null,
-  placementContexts: ['ONBOARDING'],
   valueScore: 8,
   effortScore: 2,
   maxImpressions: 3,
 };
 
-test('returns null when no ACTIVE questions match the placement', async () => {
-  const { prismaMock } = createPrismaMock({ questions: [{ ...BASE_QUESTION, placementContexts: ['SETTINGS'] }] });
+test('returns null when no ACTIVE questions exist', async () => {
+  const { prismaMock } = createPrismaMock({ questions: [] });
   installPrismaMock(prismaMock);
   const { getNextEligibleQuestionForHousehold } = loadUseCase();
 
-  const result = await getNextEligibleQuestionForHousehold('hh-1', 'ONBOARDING');
+  const result = await getNextEligibleQuestionForHousehold('hh-1');
   assert.equal(result.question, null);
 });
 
@@ -63,19 +60,19 @@ test('returns the question when it has never been asked before', async () => {
   installPrismaMock(prismaMock);
   const { getNextEligibleQuestionForHousehold } = loadUseCase();
 
-  const result = await getNextEligibleQuestionForHousehold('hh-1', 'ONBOARDING');
+  const result = await getNextEligibleQuestionForHousehold('hh-1');
   assert.equal(result.question.id, 'q1');
 });
 
 test('returns null once the household already ANSWERED it', async () => {
   const { prismaMock } = createPrismaMock({
     questions: [BASE_QUESTION],
-    answers: [{ householdId: 'hh-1', questionId: 'q1', action: 'ANSWERED', nextEligibleAt: null, askedAt: new Date() }],
+    answers: [{ householdId: 'hh-1', questionId: 'q1', action: 'ANSWERED', nextEligibleAt: null, createdAt: new Date() }],
   });
   installPrismaMock(prismaMock);
   const { getNextEligibleQuestionForHousehold } = loadUseCase();
 
-  const result = await getNextEligibleQuestionForHousehold('hh-1', 'ONBOARDING');
+  const result = await getNextEligibleQuestionForHousehold('hh-1');
   assert.equal(result.question, null);
 });
 
@@ -84,14 +81,14 @@ test('returns null while the weekly cap (2) is already reached, even for an unre
   const { prismaMock } = createPrismaMock({
     questions: [BASE_QUESTION, { ...BASE_QUESTION, id: 'q2', code: 'other' }],
     answers: [
-      { householdId: 'hh-1', questionId: 'q2', action: 'SKIPPED', nextEligibleAt: new Date(now.getTime() + 1000), askedAt: now },
-      { householdId: 'hh-1', questionId: 'q2', action: 'SKIPPED', nextEligibleAt: new Date(now.getTime() + 1000), askedAt: now },
+      { householdId: 'hh-1', questionId: 'q2', action: 'SKIPPED', nextEligibleAt: new Date(now.getTime() + 1000), createdAt: now },
+      { householdId: 'hh-1', questionId: 'q2', action: 'SKIPPED', nextEligibleAt: new Date(now.getTime() + 1000), createdAt: now },
     ],
   });
   installPrismaMock(prismaMock);
   const { getNextEligibleQuestionForHousehold } = loadUseCase();
 
-  const result = await getNextEligibleQuestionForHousehold('hh-1', 'ONBOARDING');
+  const result = await getNextEligibleQuestionForHousehold('hh-1');
   assert.equal(result.question, null);
 });
 
@@ -102,6 +99,6 @@ test('ranks by value/effort and returns the top-ranked eligible question', async
   installPrismaMock(prismaMock);
   const { getNextEligibleQuestionForHousehold } = loadUseCase();
 
-  const result = await getNextEligibleQuestionForHousehold('hh-1', 'ONBOARDING');
+  const result = await getNextEligibleQuestionForHousehold('hh-1');
   assert.equal(result.question.id, 'high');
 });

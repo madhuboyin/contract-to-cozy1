@@ -11,15 +11,14 @@ test('implicit feedback never suppresses, regardless of type', () => {
   assert.equal(decideSuppressionForFeedback('DISMISSED', false), null);
 });
 
-test('explicit NOT_RELEVANT suppresses indefinitely at DEFINITION scope', () => {
+test('explicit NOT_RELEVANT suppresses the property/definition indefinitely', () => {
   const directive = decideSuppressionForFeedback('NOT_RELEVANT', true);
-  assert.deepEqual(directive, { scope: 'DEFINITION', until: null, reason: 'USER_DISMISSED' });
+  assert.deepEqual(directive, { until: null, reason: 'USER_DISMISSED' });
 });
 
-test('explicit DISMISSED suppresses for a bounded window at DEDUPE_KEY scope', () => {
+test('explicit DISMISSED suppresses the property/definition for a bounded window', () => {
   const now = new Date('2026-01-01T00:00:00.000Z');
   const directive = decideSuppressionForFeedback('DISMISSED', true, now);
-  assert.equal(directive.scope, 'DEDUPE_KEY');
   assert.equal(directive.reason, 'USER_DISMISSED');
   assert.equal(directive.until.getTime(), now.getTime() + DISMISSED_SUPPRESSION_DAYS * 24 * 60 * 60 * 1000);
 });
@@ -37,10 +36,9 @@ test('PER-FDBK-001: explicit negative has a nonzero effect, implicit always has 
   assert.equal(implicitNotRelevant, null);
 });
 
-test('graduated severity: NOT_RELEVANT is broader/indefinite, DISMISSED is narrower/bounded', () => {
+test('graduated severity: NOT_RELEVANT is indefinite, DISMISSED is bounded', () => {
   const notRelevant = decideSuppressionForFeedback('NOT_RELEVANT', true);
   const dismissed = decideSuppressionForFeedback('DISMISSED', true);
   assert.equal(notRelevant.until, null);
   assert.notEqual(dismissed.until, null);
-  assert.notEqual(notRelevant.scope, dismissed.scope);
 });

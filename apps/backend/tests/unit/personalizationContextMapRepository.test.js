@@ -18,9 +18,7 @@ function loadRepository(household) {
             traitKey: 'hvacFilterReplacementOverdue',
             valueJson: true,
             source: 'DERIVED',
-            confidence: 1,
             computedAt: new Date('2026-07-13T12:00:00.000Z'),
-            validUntil: null,
           }],
         },
         personalizedRecommendation: {
@@ -39,39 +37,31 @@ function loadRepository(household) {
 
 test('loads property context without an optional household profile', async () => {
   const { loadHouseholdContextMapData, recommendationQueries } = loadRepository(null);
-  const result = await loadHouseholdContextMapData('property-1');
+  const result = await loadHouseholdContextMapData('property-1', 'owner-1');
 
   assert.equal(result.consentVersion, null);
   assert.equal(result.derivedTraits.length, 1);
   assert.deepEqual(recommendationQueries[0].where, {
     propertyId: 'property-1',
     status: 'ACTIVE',
-    householdId: null,
   });
 });
 
 test('adds consented profile scope without hiding property-owned outputs', async () => {
   const household = {
     id: 'household-1',
-    status: 'ACTIVE',
-    source: 'USER_CREATED',
     consentVersion: 'personalization-household-profile-v1',
     consentedAt: new Date('2026-07-13T12:00:00.000Z'),
     properties: [],
-    members: [],
-    pets: [],
-    goals: [],
-    preferences: [],
-    lifestyleAttributes: [],
+    profileAnswers: [],
   };
   const { loadHouseholdContextMapData, recommendationQueries } = loadRepository(household);
-  const result = await loadHouseholdContextMapData('property-1');
+  const result = await loadHouseholdContextMapData('property-1', 'owner-1');
 
   assert.equal(result.consentVersion, 'personalization-household-profile-v1');
   assert.equal('id' in result, false);
   assert.deepEqual(recommendationQueries[0].where, {
     propertyId: 'property-1',
     status: 'ACTIVE',
-    OR: [{ householdId: null }, { householdId: 'household-1' }],
   });
 });

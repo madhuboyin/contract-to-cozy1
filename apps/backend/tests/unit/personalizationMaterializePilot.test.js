@@ -50,7 +50,7 @@ test('materializes all three eligible pilot definitions using active versioned c
   assert.ok(upserts.every((item) => item.headline === 'Reviewed title'));
   assert.ok(upserts.every((item) => item.reasonCodes[0].params.message === 'Reviewed explanation'));
   assert.ok(upserts.every((item) => item.evaluationRunId === 'run-MANUAL'));
-  assert.ok(upserts.every((item) => item.householdId === null));
+  assert.ok(upserts.every((item) => !Object.hasOwn(item, 'householdId')));
 });
 test('does not surface eligible recommendations without ACTIVE reviewed content', async () => {
   const { materializePilotRecommendationsForProperty, upserts, expired } = loadUseCase({ contentAvailable: false });

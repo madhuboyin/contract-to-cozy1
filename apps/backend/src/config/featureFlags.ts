@@ -100,8 +100,6 @@ const TOOL_DEFAULTS: Record<string, { label: string; defaultPct: number }> = {
   PLANT_ADVISOR:             { label: 'Plant Advisor',               defaultPct: 100 },
   NEIGHBORHOOD_CHANGE_RADAR: { label: 'Neighborhood Change Radar',   defaultPct: 25  },
 
-  // Compatibility gate for the retained shadow comparison tests/manual tool.
-  PERSONALIZATION_SHADOW:        { label: 'Personalization — Shadow Evaluation',   defaultPct: 0 },
 };
 
 // ============================================================================

@@ -230,10 +230,9 @@ export const deleteAccount = async (req: AuthRequest, res: Response) => {
       // household member is still on one of them (throws instead, below).
       await cascadeDeleteOwnedProperties(tx, userId);
 
-      // Deletes personalization Household rows this user owns, cascading the
-      // composition tables (HouseholdMemberSummary/PetProfile/HouseholdGoal/
-      // HouseholdPreference/LifestyleAttribute/ProfileAnswer) — anonymizing
-      // the User row below does not do this on its own.
+      // Deletes personalization Household rows this user owns, cascading
+      // optional profile answers and property links — anonymizing the User
+      // row below does not do this on its own.
       await eraseHouseholdDataForUser(tx, userId);
 
       await deactivateProviderFootprint(tx, userId);

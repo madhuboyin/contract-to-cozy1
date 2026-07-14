@@ -7,7 +7,7 @@ Phase 4 has started with context transparency. It has not started a household in
 | Deliverable | Status | Evidence |
 |---|---|---|
 | Current-state relational facade | Complete | `getHouseholdContextMap.usecase.ts` always maps property signals/outputs and conditionally adds consented household rows |
-| Property-scoped repository query | Complete | Selects the active household/property relationship, loads property-derived traits directly by property, and includes only active applicable profile/output rows |
+| Property-scoped repository query | Complete | Loads property-derived traits/recommendations by property and conditionally loads owner-scoped consent plus answered `ProfileAnswer` events |
 | Owner-only API | Complete | `GET /api/properties/:propertyId/personalization/context-map` requires `canViewSensitiveEvidence` after property authorization |
 | Provenance and validity metadata | Complete | Nodes/edges expose source plus available `validFrom`/`validTo`; consent version/time is explicit |
 | Stable public identities | Complete | Semantic keys replace database, property, household and user IDs in the response |
@@ -17,8 +17,10 @@ Phase 4 has started with context transparency. It has not started a household in
 
 ## Privacy and data posture
 
-- No schema change, SQL file, migration, seed change or backfill was created.
-- Profile facts remain explicit and opt-in. Lifestyle rows marked inferred are excluded.
+- No Phase 4 schema entity, migration or backfill was created. The existing
+  seed was later aligned to the pruned pilot schema.
+- Profile facts remain explicit and opt-in in `ProfileAnswer.answerJson`; there
+  is no inference source or separate lifestyle table.
 - Property signals and property-owned recommendations remain visible in the transparency view without optional-profile consent.
 - The context endpoint is restricted to the property owner because household composition and financial preference facts may be sensitive.
 - Raw recommendation/trait evidence, arbitrary nested JSON, database IDs and owner identifiers are excluded.

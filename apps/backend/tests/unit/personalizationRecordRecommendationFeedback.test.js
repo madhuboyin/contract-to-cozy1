@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 
 require('ts-node/register');
 
-function createPrismaMock({ recommendation = { id: 'rec-1', propertyId: 'prop-1', householdId: null, definitionId: 'def-1', dedupeKey: 'hvac_filter_replacement_check_proof', definition: { code: 'hvac_filter_replacement_check_proof', category: 'proof_of_concept' } } } = {}) {
+function createPrismaMock({ recommendation = { id: 'rec-1', propertyId: 'prop-1', definitionId: 'def-1' } } = {}) {
   const feedbackRows = [];
   const suppressions = [];
   const recommendationUpdates = [];
@@ -30,12 +30,12 @@ function createPrismaMock({ recommendation = { id: 'rec-1', propertyId: 'prop-1'
     },
     recommendationSuppression: {
       findUnique: async ({ where }) => {
-        const key = where.propertyId_scope_scopeKey;
-        return suppressions.find((s) => s.propertyId === key.propertyId && s.scope === key.scope && s.scopeKey === key.scopeKey) || null;
+        const key = where.propertyId_definitionId;
+        return suppressions.find((s) => s.propertyId === key.propertyId && s.definitionId === key.definitionId) || null;
       },
       upsert: async ({ where, create, update }) => {
-        const key = where.propertyId_scope_scopeKey;
-        const idx = suppressions.findIndex((s) => s.propertyId === key.propertyId && s.scope === key.scope && s.scopeKey === key.scopeKey);
+        const key = where.propertyId_definitionId;
+        const idx = suppressions.findIndex((s) => s.propertyId === key.propertyId && s.definitionId === key.definitionId);
         const record = idx >= 0 ? { ...suppressions[idx], ...update } : { ...create };
         if (idx >= 0) suppressions[idx] = record;
         else suppressions.push(record);
@@ -72,10 +72,7 @@ test('duplicate eventId is a true no-op: no new feedback row, no suppression cal
   const recommendation = {
     id: 'rec-1',
     propertyId: 'prop-1',
-    householdId: null,
     definitionId: 'def-1',
-    dedupeKey: 'hvac_filter_replacement_check_proof',
-    definition: { code: 'hvac_filter_replacement_check_proof', category: 'proof_of_concept' },
   };
   const { prismaMock, feedbackRows, suppressions } = createPrismaMock({ recommendation });
   installPrismaMock(prismaMock);
@@ -91,7 +88,7 @@ test('duplicate eventId is a true no-op: no new feedback row, no suppression cal
   assert.equal(suppressions.length, 1); // only from the first call
 });
 
-test('explicit NOT_RELEVANT creates a DEFINITION-scope suppression and dismisses the recommendation', async () => {
+test('explicit NOT_RELEVANT creates an indefinite definition suppression and dismisses the recommendation', async () => {
   const { prismaMock, suppressions, getRecommendationRow } = createPrismaMock();
   installPrismaMock(prismaMock);
   const { recordRecommendationFeedback } = loadUseCase();
@@ -106,13 +103,12 @@ test('explicit NOT_RELEVANT creates a DEFINITION-scope suppression and dismisses
   assert.equal(result.status, 'RECORDED');
   assert.equal(result.suppressed, true);
   assert.equal(suppressions.length, 1);
-  assert.equal(suppressions[0].scope, 'DEFINITION');
-  assert.equal(suppressions[0].scopeKey, 'hvac_filter_replacement_check_proof');
+  assert.equal(suppressions[0].definitionId, 'def-1');
   assert.equal(suppressions[0].until, null);
   assert.equal(getRecommendationRow().status, 'DISMISSED');
 });
 
-test('explicit DISMISSED creates a DEDUPE_KEY-scope, time-bounded suppression', async () => {
+test('explicit DISMISSED creates a time-bounded definition suppression', async () => {
   const { prismaMock, suppressions } = createPrismaMock();
   installPrismaMock(prismaMock);
   const { recordRecommendationFeedback } = loadUseCase();
@@ -125,7 +121,7 @@ test('explicit DISMISSED creates a DEDUPE_KEY-scope, time-bounded suppression', 
   });
 
   assert.equal(result.suppressed, true);
-  assert.equal(suppressions[0].scope, 'DEDUPE_KEY');
+  assert.equal(suppressions[0].definitionId, 'def-1');
   assert.ok(suppressions[0].until instanceof Date);
 });
 

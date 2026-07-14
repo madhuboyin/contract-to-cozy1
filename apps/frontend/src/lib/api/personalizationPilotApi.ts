@@ -32,7 +32,6 @@ export interface PilotPersonalization {
     prompt: string;
     whyAsked: string;
     privacyNote: string;
-    targetTable: string;
     answerSchema: { type?: string };
   } | null;
 }

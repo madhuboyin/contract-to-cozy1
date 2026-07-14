@@ -9,7 +9,7 @@ function loadUseCase() {
   return require('../../src/modules/personalization/application/eraseHouseholdDataForUser.usecase.ts');
 }
 
-test('deletes Household rows scoped to ownerUserId, cascading composition data', async () => {
+test('deletes Household rows scoped to ownerUserId, cascading optional profile data', async () => {
   const deleteManyCalls = [];
   const tx = {
     household: {

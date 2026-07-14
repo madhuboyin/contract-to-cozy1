@@ -18,7 +18,9 @@ Phase 3 has started with measurement and explicit user feedback. It has not star
 
 ## Privacy and data posture
 
-- No schema change, SQL file, migration or backfill was created.
+- No Phase 3 schema entity, migration or backfill was created. Later schema
+  pruning removed unused pre-learning fields; the aggregate service continues
+  to query only current property recommendations, feedback and profile events.
 - The quality endpoint returns aggregate counts and rates only.
 - It does not return household answers, feedback comments, user/property identifiers, recommendation evidence or raw events.
 - Profile data remains explicit and opt-in; no inferred trait is produced.

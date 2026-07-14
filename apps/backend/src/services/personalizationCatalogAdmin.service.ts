@@ -31,7 +31,7 @@ export async function listPersonalizationCatalog() {
     }),
     prisma.profileQuestion.findMany({
       orderBy: [{ code: 'asc' }, { version: 'desc' }],
-      select: { code: true, version: true, prompt: true, status: true, placementContexts: true, updatedAt: true },
+      select: { code: true, version: true, prompt: true, status: true, updatedAt: true },
     }),
   ]);
   return { definitions, questions };

@@ -3,9 +3,8 @@
 // Closes the gap docs/personalization/05-data-model.md calls out directly:
 // "current user anonymization alone is insufficient." user.controller.ts's
 // deleteAccount anonymizes the User row in place and never deletes Household,
-// so the onDelete: Cascade wired on HouseholdProperty/HouseholdMemberSummary/
-// PetProfile/HouseholdGoal/HouseholdPreference/LifestyleAttribute/ProfileAnswer
-// never fired. Must run inside the same transaction as the rest of account
+// so the onDelete: Cascade wired on HouseholdProperty/ProfileAnswer never
+// fired. Must run inside the same transaction as the rest of account
 // deletion (mirrors accountDeletionCascade.service.ts's cascadeDeleteOwnedProperties).
 //
 // Deliberately does not touch property-owned DerivedTrait rows or property-only

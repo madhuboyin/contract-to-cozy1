@@ -1,7 +1,14 @@
 # ADR-0001: Personalization module foundation (Phase 0 "first implementation step")
 
-Status: **Accepted** (thin vertical proof only — see Scope)
+Status: **Superseded as an implementation plan; retained as Phase 0 history**
 Date: 2026-07-13
+
+The module-boundary and typed-evaluator decisions remain in force. References
+below to a disabled percentage flag, shadow evaluation, absent Phase 1 models
+and a migration order describe the original thin proof, not the current
+default property-guidance runtime. The current decision is documented in
+`04-target-architecture.md`, `05-data-model.md` and
+`09-implementation-roadmap.md`.
 
 ## Context
 

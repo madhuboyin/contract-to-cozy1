@@ -11,9 +11,12 @@ import type { PersonalizationCapabilities } from '../domain/capabilityPolicy';
 
 export async function getPilotPersonalization(
   propertyId: string,
+  userId: string,
   capabilities: PersonalizationCapabilities,
 ) {
-  const household = await findPilotHouseholdForProperty(propertyId);
+  const household = capabilities.canManageSensitiveProfile
+    ? await findPilotHouseholdForProperty(propertyId, userId)
+    : null;
   const materialization = await materializePilotRecommendationsForProperty(propertyId);
   if (materialization.paused) {
     return {
@@ -26,9 +29,9 @@ export async function getPilotPersonalization(
     };
   }
   const [storedRecommendations, nextQuestion] = await Promise.all([
-    listActivePilotRecommendations(propertyId, household?.id),
+    listActivePilotRecommendations(propertyId),
     household?.consentVersion && capabilities.canManageSensitiveProfile
-      ? getNextEligibleQuestionForHousehold(household.id, 'PILOT')
+      ? getNextEligibleQuestionForHousehold(household.id)
       : Promise.resolve({ question: null }),
   ]);
   const recommendations = storedRecommendations.map((recommendation) => ({
