@@ -18,25 +18,28 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '../../../lib/prisma';
 
+type PersonalizationDb = typeof prisma | Prisma.TransactionClient;
+
 export async function upsertHouseholdMemberSummary(
   householdId: string,
   params: { type: 'CHILD' | 'SENIOR' | 'ADULT'; lifeStage?: string | null; count?: number },
+  db: PersonalizationDb = prisma,
 ): Promise<void> {
   const lifeStage = params.lifeStage ?? null;
-  const existing = await prisma.householdMemberSummary.findFirst({
+  const existing = await db.householdMemberSummary.findFirst({
     where: { householdId, type: params.type, lifeStage },
     select: { id: true },
   });
 
   if (existing) {
-    await prisma.householdMemberSummary.update({
+    await db.householdMemberSummary.update({
       where: { id: existing.id },
       data: { count: params.count ?? 1, status: 'ACTIVE' },
     });
     return;
   }
 
-  await prisma.householdMemberSummary.create({
+  await db.householdMemberSummary.create({
     data: {
       householdId,
       type: params.type,
@@ -63,8 +66,9 @@ export async function createPetProfile(
     indoorOutdoor?: string;
     yardFenceDependent?: boolean;
   },
+  db: PersonalizationDb = prisma,
 ): Promise<void> {
-  await prisma.petProfile.create({
+  await db.petProfile.create({
     data: {
       householdId,
       petType: params.petType,
@@ -81,22 +85,23 @@ export async function createPetProfile(
 export async function upsertHouseholdGoal(
   householdId: string,
   params: { goalCode: string; propertyId?: string | null; priority?: number; horizon?: string },
+  db: PersonalizationDb = prisma,
 ): Promise<void> {
   const propertyId = params.propertyId ?? null;
-  const existing = await prisma.householdGoal.findFirst({
+  const existing = await db.householdGoal.findFirst({
     where: { householdId, propertyId, goalCode: params.goalCode },
     select: { id: true },
   });
 
   if (existing) {
-    await prisma.householdGoal.update({
+    await db.householdGoal.update({
       where: { id: existing.id },
       data: { priority: params.priority ?? 0, horizon: params.horizon, status: 'ACTIVE' },
     });
     return;
   }
 
-  await prisma.householdGoal.create({
+  await db.householdGoal.create({
     data: {
       householdId,
       propertyId,
@@ -111,22 +116,23 @@ export async function upsertHouseholdGoal(
 export async function upsertHouseholdPreference(
   householdId: string,
   params: { key: string; propertyId?: string | null; valueJson: unknown },
+  db: PersonalizationDb = prisma,
 ): Promise<void> {
   const propertyId = params.propertyId ?? null;
-  const existing = await prisma.householdPreference.findFirst({
+  const existing = await db.householdPreference.findFirst({
     where: { householdId, propertyId, key: params.key },
     select: { id: true },
   });
 
   if (existing) {
-    await prisma.householdPreference.update({
+    await db.householdPreference.update({
       where: { id: existing.id },
       data: { valueJson: params.valueJson as Prisma.InputJsonValue, status: 'ACTIVE' },
     });
     return;
   }
 
-  await prisma.householdPreference.create({
+  await db.householdPreference.create({
     data: {
       householdId,
       propertyId,
@@ -139,22 +145,23 @@ export async function upsertHouseholdPreference(
 export async function upsertLifestyleAttribute(
   householdId: string,
   params: { key: string; propertyId?: string | null; valueBoolean?: boolean; source?: string; confidence?: number },
+  db: PersonalizationDb = prisma,
 ): Promise<void> {
   const propertyId = params.propertyId ?? null;
-  const existing = await prisma.lifestyleAttribute.findFirst({
+  const existing = await db.lifestyleAttribute.findFirst({
     where: { householdId, propertyId, key: params.key },
     select: { id: true },
   });
 
   if (existing) {
-    await prisma.lifestyleAttribute.update({
+    await db.lifestyleAttribute.update({
       where: { id: existing.id },
       data: { valueBoolean: params.valueBoolean, status: 'ACTIVE' },
     });
     return;
   }
 
-  await prisma.lifestyleAttribute.create({
+  await db.lifestyleAttribute.create({
     data: {
       householdId,
       propertyId,

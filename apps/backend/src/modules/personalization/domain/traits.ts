@@ -118,9 +118,8 @@ export const SMOKE_DETECTOR_BATTERY_CHECK_THRESHOLD_DAYS = 365;
 
 /**
  * Derives whether a smoke/CO detector battery check is overdue, for the
- * `smoke_co_detector_battery_check` catalog-plan definition (seeded DRAFT in
- * seedPersonalizationCatalog.ts; see seedSmokeDetectorBatteryCheckRule.ts for
- * the rule this trait backs). Same HomeAsset.lastServiced pattern as the HVAC
+ * `smoke_co_detector_battery_check` pilot definition (seeded DRAFT by
+ * seedPersonalizationPilot.ts). Same HomeAsset.lastServiced pattern as the HVAC
  * filter traits above — a battery check is modeled as a HomeAsset row with
  * assetType 'SMOKE_DETECTOR', `lastServiced` being the last check date.
  *
@@ -152,9 +151,8 @@ export const DRYER_VENT_CLEANING_THRESHOLD_DAYS = 365;
 
 /**
  * Derives whether dryer vent cleaning is overdue, for the
- * `dryer_vent_cleaning_reminder` catalog-plan definition (seeded DRAFT in
- * seedPersonalizationCatalog.ts; see seedDryerVentCleaningRule.ts for the
- * rule this trait backs). Same HomeAsset.lastServiced pattern as the traits
+ * `dryer_vent_cleaning_reminder` pilot definition (seeded DRAFT by
+ * seedPersonalizationPilot.ts). Same HomeAsset.lastServiced pattern as the traits
  * above — a DRYER-type asset's `lastServiced` is the last vent cleaning
  * date. Unlike the smoke detector trait, there's no separate "is a dryer
  * present" property field to gate on first — no DRYER-type asset at all is

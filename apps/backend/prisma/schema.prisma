@@ -12880,14 +12880,11 @@ model PersonalizationEvaluationRun {
 }
 
 // ============================================================================
-// PERSONALIZATION ENGINE — PHASE 1 HOUSEHOLD PROFILE (migration steps 1-3)
+// PERSONALIZATION ENGINE — PILOT HOUSEHOLD PROFILE
 // ============================================================================
-// Additive-only, per docs/personalization/adr-0002-phase1-foundation-migration-steps-1-3.md.
-// Every table below is created empty by this change — no code in this
-// commit writes composition/preference/lifestyle data to any of them except
-// the backfill script (Household/HouseholdProperty only, source='BACKFILL').
-// Collecting real household data requires a UI/consent flow that does not
-// exist yet — that's a separate, later, explicitly-deferred decision.
+// The schema describes the desired pilot database. The user applies database
+// changes; this repository does not generate migration scripts. Households are
+// created lazily after explicit pilot opt-in, with no existing-property backfill.
 
 // Household is a profile/consent aggregate, distinct from HouseholdMember
 // (the existing property-collaborator ACL). One user can own multiple
@@ -12897,16 +12894,14 @@ model PersonalizationEvaluationRun {
 // Prisma's schema DSL without raw SQL, which this project's schema-only-edit
 // convention avoids (same tradeoff already made for HouseholdMemberSummary
 // below). Enforced at the application layer instead — today that means
-// seedHouseholdBackfill.ts's findFirst-before-create check, the only current
-// write path — until a second writer (e.g. a real onboarding flow) exists,
-// at which point this needs a real constraint.
+// the opt-in use case's findFirst-before-create check. Revisit with a database
+// constraint when concurrent household creation is a measured pilot concern.
 model Household {
   id             String    @id @default(uuid())
   ownerUserId    String
   displayName    String?
   status         String    @default("ACTIVE") // ACTIVE | ARCHIVED
-  // Records provenance of this row — 'BACKFILL' for the migration-step-2
-  // script, 'USER_CREATED' for a future real onboarding flow.
+  // Records provenance of this row. Pilot households are USER_CREATED.
   source         String    @default("USER_CREATED")
   consentVersion String?
   consentedAt    DateTime?
@@ -12938,8 +12933,7 @@ model Household {
 // rows for the same (householdId, propertyId) — that would need a partial
 // unique index (WHERE "effectiveTo" IS NULL), which isn't expressible via
 // Prisma's schema DSL without raw SQL (same tradeoff documented on
-// Household above). Enforced at the application layer instead — today
-// that's seedHouseholdBackfill.ts's alreadyLinked check before create.
+// Household above). The lazy opt-in use case enforces this at the application layer.
 model HouseholdProperty {
   id            String    @id @default(uuid())
   householdId   String

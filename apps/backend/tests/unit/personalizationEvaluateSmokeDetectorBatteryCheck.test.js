@@ -86,8 +86,18 @@ const ACTIVE_DEFINITION = {
   code: DEFINITION_CODE,
   id: 'smoke-def-1',
   status: 'ACTIVE',
-  rules: [{ version: 1, ruleAst: RULE_AST, status: 'ACTIVE' }],
+  safetyClass: 'SAFETY_SENSITIVE',
+  rules: [{ version: 1, ruleAst: RULE_AST, status: 'ACTIVE', authoredBy: 'author-1', reviewedBy: 'reviewer-1' }],
 };
+
+test('safety-sensitive rule is inactive until a distinct reviewer approves it', async () => {
+  const definition = { ...ACTIVE_DEFINITION, rules: [{ version: 1, ruleAst: RULE_AST, status: 'ACTIVE', authoredBy: 'author-1', reviewedBy: null }] };
+  const { prismaMock } = createPrismaMock({ definition });
+  installPrismaMock(prismaMock);
+  const { evaluateHvacFilterProofForProperty } = loadUseCase();
+  const result = await evaluateHvacFilterProofForProperty('prop-1', DEFINITION_CODE);
+  assert.equal(result.errorCode, 'DEFINITION_NOT_ACTIVE');
+});
 
 test('real seeded state is DRAFT, so it is never evaluated (DEFINITION_NOT_ACTIVE)', async () => {
   const draftDefinition = { ...ACTIVE_DEFINITION, status: 'DRAFT' };

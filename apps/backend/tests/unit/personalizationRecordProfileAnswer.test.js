@@ -12,6 +12,7 @@ const QUESTIONS_BY_ID = {
     valueScore: 8,
     effortScore: 2,
     maxImpressions: 3,
+    answerSchema: { type: 'multi_select' },
   },
   'q-pet': {
     id: 'q-pet',
@@ -21,6 +22,7 @@ const QUESTIONS_BY_ID = {
     valueScore: 6,
     effortScore: 1,
     maxImpressions: 3,
+    answerSchema: { type: 'select_with_detail' },
   },
   'q-goal': {
     id: 'q-goal',
@@ -30,6 +32,7 @@ const QUESTIONS_BY_ID = {
     valueScore: 7,
     effortScore: 1,
     maxImpressions: 3,
+    answerSchema: { type: 'boolean' },
   },
   'q-pref': {
     id: 'q-pref',
@@ -39,6 +42,7 @@ const QUESTIONS_BY_ID = {
     valueScore: 6,
     effortScore: 1,
     maxImpressions: 3,
+    answerSchema: { type: 'boolean' },
   },
   'q-lifestyle': {
     id: 'q-lifestyle',
@@ -48,8 +52,14 @@ const QUESTIONS_BY_ID = {
     valueScore: 5,
     effortScore: 1,
     maxImpressions: 3,
+    answerSchema: { type: 'boolean' },
   },
 };
+
+for (const question of Object.values(QUESTIONS_BY_ID)) {
+  question.status = 'ACTIVE';
+  question.placementContexts = ['PILOT'];
+}
 
 function createPrismaMock({ consentVersion = null } = {}) {
   const answers = [];
@@ -77,6 +87,7 @@ function createPrismaMock({ consentVersion = null } = {}) {
   }
 
   const prismaMock = {
+    $transaction: async (callback) => callback(prismaMock),
     profileQuestion: {
       findUnique: async ({ where }) => QUESTIONS_BY_ID[where.id] || null,
     },
@@ -200,6 +211,24 @@ test('ANSWERED without consent returns CONSENT_REQUIRED and writes nothing', asy
 
   assert.equal(result.status, 'CONSENT_REQUIRED');
   assert.equal(goals.length, 0);
+  assert.equal(answers.length, 0);
+});
+
+test('invalid ANSWERED payload is rejected before any write', async () => {
+  const { prismaMock, answers, pets } = createPrismaMock({ consentVersion: 'v1' });
+  installPrismaMock(prismaMock);
+  const { recordProfileAnswer } = loadUseCase();
+
+  const result = await recordProfileAnswer({
+    questionId: 'q-pet',
+    householdId: 'hh-1',
+    idempotencyKey: 'evt-invalid',
+    action: 'ANSWERED',
+    answerJson: { hasPet: true },
+  });
+
+  assert.equal(result.status, 'INVALID_ANSWER');
+  assert.equal(pets.length, 0);
   assert.equal(answers.length, 0);
 });
 

@@ -5,15 +5,21 @@
 // writes to the sensitive composition tables (PER-PRIV-002: "record purpose/
 // versioned consent and allow correction, override, export, reset,
 // deletion").
+import { Prisma } from '@prisma/client';
 import { prisma } from '../../../lib/prisma';
+
+type PersonalizationDb = typeof prisma | Prisma.TransactionClient;
 
 export interface HouseholdConsent {
   consentVersion: string | null;
   consentedAt: Date | null;
 }
 
-export async function getHouseholdConsent(householdId: string): Promise<HouseholdConsent | null> {
-  return prisma.household.findUnique({
+export async function getHouseholdConsent(
+  householdId: string,
+  db: PersonalizationDb = prisma,
+): Promise<HouseholdConsent | null> {
+  return db.household.findUnique({
     where: { id: householdId },
     select: { consentVersion: true, consentedAt: true },
   });

@@ -2,32 +2,29 @@
 
 No calendar estimates are given because team size, live load, node count and content-review capacity were not verified. Effort is relative and includes engineering, product, privacy/content and QA.
 
-## Phase 0 — Foundation and refactoring
+## Phase 0 — Pilot-safe foundation (complete)
 
-**Effort: Large.**
+**Effort: Medium.** This phase is deliberately smaller while the product has no real users or production data that must survive schema changes.
 
-- **Scope/deliverables:** personalization taxonomy/module skeleton; property capability policy; distinct Household ownership decision; additive schema baseline; domain-event/invalidation contract; BullMQ/DB-lease scheduling; analytics/audit/redaction; flags/kill switch; 20–40 definition content plan and golden fixtures.
-- **Data:** create Household/HouseholdProperty, consent/audit/evaluation foundations; idempotent non-sensitive backfill. Do not collect composition yet.
-- **Backend:** extract/reuse pure Decision Engine concepts; build adapters; correct item-by-ID authorization; make worker scheduling single-execution; define action interface.
-- **Frontend:** navigation naming prototype, dashboard density baseline, event/privacy contract; no production personalization UI.
-- **Dependencies:** Product taxonomy, Privacy classification/retention, Security role matrix, Ops resource baseline.
-- **Risks:** scope creep into global auth rewrite; accidental semantic reuse of `HouseholdMember`; cron changes affecting jobs.
-- **Testing:** authorization regression, backfill/migration rehearsal, rule schema fuzzing, worker concurrency, telemetry canary leakage.
-- **Exit criteria:** property capabilities pass; one queued recompute is single-executed across replicas; flags/kill switch/audit work; schema/backfill checks pass; content owners approve taxonomy.
+- **Keep:** bounded personalization module; property capability policy; distinct Household aggregate; typed rule validator/evaluator; audit/redaction; kill switch; definition lifecycle; focused unit and authorization tests.
+- **Data:** maintain the Prisma schema as the desired pilot schema. The user applies database changes. Do not create migration scripts or backfill existing properties; create a Household lazily when a pilot homeowner opts in.
+- **Catalog:** retain the larger catalog as a future planning artifact, but implement and test only the three-definition pilot set. Definitions remain inactive until their rule and content review is complete.
+- **Scheduling:** no database-wide nightly personalization sweep. Recompute for an opted-in property on opt-in, relevant profile/property changes, explicit refresh, or a stale read.
+- **Testing:** authorization regression, rule schema/golden fixtures, consent and deletion, idempotency, transaction rollback, kill switch, and telemetry redaction. Migration rehearsal becomes relevant only after a deployed database contains data that must survive a schema change.
+- **Exit criteria:** access policy, evaluator, flags/kill switch, audit/redaction and pilot definition fixtures pass. Database migration/backfill gates are not Phase 0 exit criteria during the data-free pilot.
 
-## Phase 1 — Deterministic personalization MVP
+## Phase 1 — Thin deterministic pilot
 
-**Effort: Very large.**
+**Effort: Medium.** The purpose is to learn whether homeowners find the feature useful, not to pre-build the long-term intelligence platform.
 
-- **Scope/deliverables:** household summary, pets, goals/preferences, core traits, catalog/rules/content versions, evaluator/scoring/diversity, structured explanations, instances/snapshot, progressive questions, feedback, controls, Maintenance + Health integration.
-- **Data:** all MVP entities in `05-data-model.md`; current plus bounded snapshots; seed inactive definitions; explicit profile only.
-- **Backend:** module APIs/repos, context/trait adapters, coalesced BullMQ jobs, cache/ETag, task conversion, erasure/reset job, admin pause API, metrics.
-- **Frontend:** household personalization screens, question card, top-3 dashboard list, detail/explanation, traits/controls, task conversion, mobile/accessibility.
-- **Initial catalog:** pet-adjusted filters, pet/fence question/inspection, aging-in-place home safety, travel preparation, WFH comfort, budget posture, seasonal/weather preparations, low-cost prevention.
-- **Dependencies:** Phase 0, reviewed sources/content, design usability testing.
-- **Risks:** collecting too much, profile confusion, duplicate Action Center content, slow recompute, weak explanations.
-- **Testing:** golden traits/rules/scores, API/Prisma/auth/privacy, UC-01/02/03/04/05/08/09/10 E2E, load/failure injection, accessibility.
-- **Exit criteria:** all Phase 1 Must requirements/FRD acceptance pass; 20–40 active definitions; snapshot/API p95 targets pass; beta relevance/not-relevant guardrails agreed; AI can be off.
+- **Scope/deliverables:** explicit opt-in; lazily-created Household; at most five high-value profile questions; three reviewed deterministic definitions; generic evaluation/materialization; structured “why”; top-three read surface; explicit feedback; reset/delete control.
+- **Data:** use only existing pilot schema entities and explicit answers. Do not infer sensitive traits. Do not add speculative entities, migrations, backfills, caches, queues, or graph structures.
+- **Backend:** authenticated property-scoped APIs; generic definition evaluator; validated and transactional answer writes; read-triggered/manual recompute; recommendation suppression; admin pause/kill switch.
+- **Frontend:** one small mobile-accessible pilot surface with opt-in, top-three recommendations, explanations, feedback and reset. Defer a full household settings area and cross-module placements.
+- **Pilot catalog:** HVAC filter replacement check, smoke/CO detector battery check and dryer-vent cleaning. Safety-sensitive definitions stay DRAFT until two-person content/rule review; activation is an explicit operational decision.
+- **Feature flags:** one pilot exposure flag plus the global kill switch. Remove placement-by-placement flags until multiple consumers exist.
+- **Testing:** three golden rule paths (positive/negative/unknown), API authorization, consent, invalid-answer rejection, atomic profile writes, feedback/suppression, reset, empty state and accessibility smoke tests.
+- **Exit criteria:** a pilot user can opt in, receive no more than three explainable recommendations, give feedback and reset data; no recommendation is generated from unconsented household data. Catalog expansion and automated sweeping require measured pilot demand.
 
 ## Phase 2 — Cross-module personalization
 

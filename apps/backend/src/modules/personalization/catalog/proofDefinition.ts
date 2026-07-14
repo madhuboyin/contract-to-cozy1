@@ -16,7 +16,7 @@
 import { RuleNode } from '../domain/ruleAst';
 
 export const HVAC_FILTER_PROOF_DEFINITION_CODE = 'hvac_filter_replacement_check_proof';
-export const HVAC_FILTER_PROOF_CATEGORY = 'proof_of_concept';
+export const HVAC_FILTER_PROOF_CATEGORY = 'low_cost_prevention';
 export const HVAC_FILTER_PROOF_RULE_VERSION = 1;
 
 export const HVAC_FILTER_PROOF_RULE_AST: RuleNode = {

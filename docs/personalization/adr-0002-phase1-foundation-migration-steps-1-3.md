@@ -1,7 +1,12 @@
 # ADR-0002: Phase 1 foundation — migration steps 1–3
 
-Status: **Accepted** (this slice only — see Scope)
+Status: **Superseded by the data-free pilot strategy in `09-implementation-roadmap.md`**
 Date: 2026-07-13
+
+This ADR is retained as implementation history. Its backfill and dual TS/SQL
+seed strategy must not be executed: there are no real users to backfill, the
+user owns database deployment, and pilot Households are now created lazily on
+explicit opt-in. The obsolete scripts referenced below have been removed.
 
 ## Context
 

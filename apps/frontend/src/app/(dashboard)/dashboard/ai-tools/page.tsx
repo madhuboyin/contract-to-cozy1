@@ -63,6 +63,7 @@ export default function AIToolsPage() {
 
   const dailySnapshotHref = `/dashboard/daily-snapshot${resolvedPropertyId ? `?propertyId=${encodeURIComponent(resolvedPropertyId)}` : ''}`;
   const riskRadarHref = buildPropertyAwareDashboardHref(resolvedPropertyId, '/dashboard/risk-radar');
+  const personalizationHref = `/dashboard/personalization${resolvedPropertyId ? `?propertyId=${encodeURIComponent(resolvedPropertyId)}` : ''}`;
 
   return (
     <MobilePageContainer className="space-y-7 pt-2 pb-24 lg:max-w-7xl lg:space-y-8 lg:px-8 lg:pt-4 lg:pb-10">
@@ -110,7 +111,7 @@ export default function AIToolsPage() {
 
       <MobileSection>
         <SummaryCard title="Intelligence Details" subtitle="Deep-dive pages from mobile home intelligence">
-          <div className="grid grid-cols-1 gap-2.5 lg:grid-cols-2">
+          <div className="grid grid-cols-1 gap-2.5 lg:grid-cols-3">
             <Link
               href={dailySnapshotHref}
               className="no-brand-style inline-flex min-h-[44px] items-center justify-center rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] px-4 py-2 text-sm font-semibold text-[hsl(var(--mobile-text-primary))]"
@@ -122,6 +123,12 @@ export default function AIToolsPage() {
               className="no-brand-style inline-flex min-h-[44px] items-center justify-center rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] px-4 py-2 text-sm font-semibold text-[hsl(var(--mobile-text-primary))]"
             >
               Risk Radar
+            </Link>
+            <Link
+              href={personalizationHref}
+              className="no-brand-style inline-flex min-h-[44px] items-center justify-center rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] px-4 py-2 text-sm font-semibold text-[hsl(var(--mobile-text-primary))]"
+            >
+              Home Guidance Pilot
             </Link>
           </div>
         </SummaryCard>

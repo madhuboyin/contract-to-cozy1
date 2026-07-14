@@ -1,12 +1,12 @@
 # ContractToCozy Personalization Engine
 
-**Status:** Discovery and requirements baseline
+**Status:** Discovery baseline with pilot implementation strategy
 
 **Review date:** 2026-07-13
 
 **Decision:** Feasible with moderate refactoring; implement first as a module inside the existing Express backend.
 
-This directory is the evidence-backed discovery package and Functional Requirements Document (FRD) for a centralized Personalization Engine. It proposes no production-code changes. Statements labeled **Verified** describe traced repository behavior; **Proposed** statements are future design.
+This directory began as the evidence-backed discovery package and Functional Requirements Document (FRD). The active delivery strategy is now the data-free pilot in `09-implementation-roadmap.md`; larger target-architecture sections remain long-term reference material, not current commitments.
 
 ## Decision summary
 
@@ -15,11 +15,11 @@ This directory is the evidence-backed discovery package and Functional Requireme
 | Runtime boundary | Modular monolith under `apps/backend/src/modules/personalization/` |
 | Primary store | Existing PostgreSQL through Prisma; relational core plus validated JSON rule AST and snapshot payloads |
 | Rules | Custom, deliberately small typed evaluator; no executable database code |
-| Evaluation | Synchronous cached reads, asynchronous recomputation, safe on-demand fallback |
-| Queue | Reuse Redis/BullMQ for coalesced recomputes; do not add an event platform |
+| Evaluation | Pilot: opt-in/read-triggered recomputation; add event-driven work only after measured need |
+| Queue | No personalization queue or nightly sweep during the pilot |
 | Graph/vector database | Neither is justified for Phases 0–3 |
 | AI | Assist extraction, summaries, and authoring; never eligibility, safety gates, authorization, or financial math |
-| UI | Add a household intelligence area and at most 3–5 diverse dashboard recommendations |
+| UI | One opt-in pilot surface with at most three explainable recommendations |
 | Feasibility | **Feasible with moderate refactoring** |
 
 ## Document map
@@ -36,6 +36,7 @@ This directory is the evidence-backed discovery package and Functional Requireme
 10. [Testing strategy](10-testing-strategy.md)
 11. [Risks and open questions](11-risks-and-open-questions.md)
 12. [Codebase evidence index](codebase-evidence.md)
+13. [Pilot operations](pilot-operations.md)
 
 ## Reading conventions
 

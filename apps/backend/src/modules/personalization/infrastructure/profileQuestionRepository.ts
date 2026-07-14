@@ -4,6 +4,8 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '../../../lib/prisma';
 
+type PersonalizationDb = typeof prisma | Prisma.TransactionClient;
+
 export interface LoadedProfileQuestion {
   id: string;
   code: string;
@@ -12,6 +14,12 @@ export interface LoadedProfileQuestion {
   valueScore: number;
   effortScore: number;
   maxImpressions: number;
+  answerSchema: unknown;
+  prompt: string;
+  whyAsked: string;
+  privacyNote: string;
+  status: string;
+  placementContexts: string[];
 }
 
 /**
@@ -34,6 +42,11 @@ export async function loadActiveQuestionsForPlacement(placement: string): Promis
       valueScore: number;
       effortScore: number;
       maxImpressions: number;
+      answerSchema: unknown;
+      prompt: string;
+      whyAsked: string;
+      privacyNote: string;
+      status: string;
       placementContexts: string[];
     }>
   )
@@ -46,6 +59,12 @@ export async function loadActiveQuestionsForPlacement(placement: string): Promis
       valueScore: q.valueScore,
       effortScore: q.effortScore,
       maxImpressions: q.maxImpressions,
+      answerSchema: q.answerSchema,
+      prompt: q.prompt,
+      whyAsked: q.whyAsked,
+      privacyNote: q.privacyNote,
+      status: q.status,
+      placementContexts: q.placementContexts,
     }));
 }
 
@@ -56,8 +75,11 @@ export interface LoadedProfileAnswer {
   askedAt: Date;
 }
 
-export async function loadQuestionById(questionId: string): Promise<LoadedProfileQuestion | null> {
-  const question = await prisma.profileQuestion.findUnique({ where: { id: questionId } });
+export async function loadQuestionById(
+  questionId: string,
+  db: PersonalizationDb = prisma,
+): Promise<LoadedProfileQuestion | null> {
+  const question = await db.profileQuestion.findUnique({ where: { id: questionId } });
   if (!question) return null;
   return {
     id: question.id,
@@ -67,6 +89,12 @@ export async function loadQuestionById(questionId: string): Promise<LoadedProfil
     valueScore: question.valueScore,
     effortScore: question.effortScore,
     maxImpressions: question.maxImpressions,
+    answerSchema: question.answerSchema,
+    prompt: question.prompt,
+    whyAsked: question.whyAsked,
+    privacyNote: question.privacyNote,
+    status: question.status,
+    placementContexts: question.placementContexts,
   };
 }
 
@@ -77,8 +105,11 @@ export async function loadAnswerHistoryForHousehold(householdId: string): Promis
   });
 }
 
-export async function findAnswerByIdempotencyKey(idempotencyKey: string): Promise<{ id: string } | null> {
-  return prisma.profileAnswer.findUnique({
+export async function findAnswerByIdempotencyKey(
+  idempotencyKey: string,
+  db: PersonalizationDb = prisma,
+): Promise<{ id: string } | null> {
+  return db.profileAnswer.findUnique({
     where: { idempotencyKey },
     select: { id: true },
   });
@@ -93,9 +124,12 @@ export interface RecordAnswerEventParams {
   nextEligibleAt: Date | null;
 }
 
-export async function recordAnswerEvent(params: RecordAnswerEventParams): Promise<{ id: string }> {
+export async function recordAnswerEvent(
+  params: RecordAnswerEventParams,
+  db: PersonalizationDb = prisma,
+): Promise<{ id: string }> {
   const now = new Date();
-  return prisma.profileAnswer.create({
+  return db.profileAnswer.create({
     data: {
       questionId: params.questionId,
       householdId: params.householdId,

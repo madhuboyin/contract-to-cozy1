@@ -1,9 +1,8 @@
 // apps/backend/src/modules/personalization/infrastructure/recommendationRepository.ts
 //
-// Prisma-backed repository for persisting shadow-evaluated recommendation
-// instances (migration steps 4-6). Not read by any consumer yet — writes
-// only, for the shadow-diagnostic pipeline to prove the schema/lifecycle
-// works before anything is ever shown to a user.
+// Prisma-backed recommendation lifecycle repository. The pilot read API now
+// consumes these instances; the older shadow evaluator remains a compatibility
+// caller for its diagnostic tests.
 import { Prisma } from '@prisma/client';
 import { prisma } from '../../../lib/prisma';
 
@@ -13,8 +12,9 @@ export interface ReasonCode {
   params?: Record<string, unknown>;
 }
 
-export interface UpsertShadowRecommendationParams {
+export interface UpsertRecommendationParams {
   propertyId: string;
+  householdId?: string | null;
   definitionId: string;
   evaluationRunId: string | null;
   ruleVersion: number;
@@ -36,8 +36,8 @@ export interface UpsertShadowRecommendationParams {
  * The explanation is upserted at version 1 for the same reason — this slice
  * doesn't keep an explanation version history, just a current one.
  */
-export async function upsertShadowRecommendation(
-  params: UpsertShadowRecommendationParams,
+export async function upsertRecommendation(
+  params: UpsertRecommendationParams,
 ): Promise<{ id: string }> {
   const recommendation = await prisma.personalizedRecommendation.upsert({
     where: {
@@ -49,6 +49,7 @@ export async function upsertShadowRecommendation(
     },
     create: {
       propertyId: params.propertyId,
+      householdId: params.householdId ?? null,
       definitionId: params.definitionId,
       evaluationRunId: params.evaluationRunId,
       ruleVersion: params.ruleVersion,
@@ -60,6 +61,7 @@ export async function upsertShadowRecommendation(
       scoreBreakdown: params.scoreBreakdown as Prisma.InputJsonValue | undefined,
     },
     update: {
+      householdId: params.householdId ?? null,
       evaluationRunId: params.evaluationRunId,
       ruleVersion: params.ruleVersion,
       lastEvaluatedAt: new Date(),
@@ -96,6 +98,9 @@ export async function upsertShadowRecommendation(
 
   return { id: recommendation.id };
 }
+
+export type UpsertShadowRecommendationParams = UpsertRecommendationParams;
+export const upsertShadowRecommendation = upsertRecommendation;
 
 /**
  * Retires a previously-ACTIVE recommendation once re-evaluation comes back

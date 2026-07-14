@@ -1,8 +1,8 @@
 // apps/backend/src/modules/personalization/infrastructure/householdPropertyRepository.ts
 //
-// Used by the nightly shadow-sweep job (apps/workers/src/jobs/personalizationShadowSweep.job.ts)
-// to enumerate which properties currently have an active household context,
-// rather than sweeping every Property row in the database.
+// Property/household lookup helpers. The pilot intentionally has no nightly
+// database-wide personalization sweep; recomputation is scoped to opted-in
+// properties at interaction boundaries.
 import { prisma } from '../../../lib/prisma';
 
 /** Distinct propertyIds with a currently-active (effectiveTo: null) HouseholdProperty link. */

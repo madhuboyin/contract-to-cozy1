@@ -50,7 +50,6 @@ import { runSharedDataBackfillJob } from './jobs/sharedDataBackfill.job';
 import { runSharedDataConsistencyAuditJob } from './jobs/sharedDataConsistencyAudit.job';
 import { runSharedSignalRefreshJob } from './jobs/sharedSignalRefresh.job';
 import { runSharedSignalHealthAuditJob } from './jobs/sharedSignalHealthAudit.job';
-import { runPersonalizationShadowSweepJob } from './jobs/personalizationShadowSweep.job';
 import { generateDiyAiGuideJob, GENERATE_DIY_AI_GUIDE_JOB } from './jobs/generateDiyAiGuide.job';
 import { DIY_AI_GUIDE_QUEUE } from '../../backend/src/services/diyAiGuide.service';
 import { fetchPermitHistoryJob, FETCH_PERMIT_HISTORY_JOB } from './jobs/fetchPermitHistory.job';
@@ -706,7 +705,6 @@ const CRON_HANDLERS: Record<string, () => Promise<void>> = {
   'shared-data-consistency-audit':   async () => { await runSharedDataConsistencyAuditJob(); },
   'shared-signal-refresh':           async () => { await runSharedSignalRefreshJob(); },
   'shared-signal-health-audit':      async () => { await runSharedSignalHealthAuditJob(); },
-  'personalization-shadow-sweep':    async () => { await runPersonalizationShadowSweepJob(); },
   'expire-guidance-signals':         async () => { await expireGuidanceSignalsJob(); },
   'permit-inspection-reminders':     async () => { await permitInspectionReminderJob(); },
   'reserve-fund-recalculation':      async () => { await recalculateReserveFundsJob(); },

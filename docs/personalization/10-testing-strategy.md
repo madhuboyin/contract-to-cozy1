@@ -13,7 +13,7 @@ Test deterministic logic as pure functions, database behavior against PostgreSQL
 | Prisma integration | constraints/indexed query shapes, transactions/outbox, idempotent upserts, cascades, soft-delete/current-row uniqueness, concurrent jobs | real PostgreSQL, not SQLite mocks |
 | API contract | DTO/OpenAPI, validation/errors, ETag/cursors, idempotency/version conflicts, stale response | consumer/provider contract suite |
 | Authorization/security | OWNER/contributor/viewer/admin/MFA; item-ID scope; CSRF/rate limit; AST injection/SSRF; tenant enumeration | deny-by-default matrix passes |
-| Migration | empty/partial/production-like data, repeat backfill, counts/hashes, old app compatibility, rollback flags | rehearsal report approved |
+| Schema deployment | During the data-free pilot, validate Prisma schema and recreate a disposable database. After deployed data must survive changes, add conventional migration and rehearsal checks owned by the user | schema validates; disposable pilot setup succeeds |
 | Frontend component | question/explanation/cards/controls, loading/stale/error, optimistic rollback, reduced motion | Jest/Testing Library + axe |
 | E2E | onboarding → result → detail → correction → recompute → task; privacy controls; notifications | desktop/mobile, keyboard critical path |
 | Performance | snapshot GET, recompute, queue bursts, DB query plans, cache invalidation | PER-NFR targets under Pi limits |
@@ -75,7 +75,7 @@ Datasets: 10k properties planning envelope, 50/100/250 definitions, 25/100 trait
 
 ## Migration and rollback tests
 
-Snapshot a production-shaped anonymized schema, run additive change/backfill twice, compare counts/uniques/orphans, run old backend binary/read paths, enable shadow evaluation, disable flags/jobs and confirm old behavior. Verify no sensitive traits were inferred/backfilled.
+Migration rehearsal is intentionally deferred while there are no real users and no deployed data that must survive. When that condition changes, snapshot a production-shaped anonymized schema, apply the user-authored migration, compare counts/uniques/orphans, run old read paths, and verify rollback flags. Never backfill sensitive traits by inference.
 
 ## Accessibility and visual QA
 
@@ -87,4 +87,4 @@ Review a stratified sample by definition/property completeness. Compare expert r
 
 ## CI evolution
 
-Add backend personalization unit/catalog/contract suites to existing backend gate, Prisma integration job with PostgreSQL, full frontend Jest/accessibility suite, migration rehearsal on schema PRs, and artifacted catalog impact report. Preserve current security/secret scans.
+Add backend personalization unit/catalog/contract suites to the existing backend gate, a disposable PostgreSQL Prisma integration job, and focused frontend accessibility tests. Add migration rehearsal only once a deployed database contains data that must survive schema evolution. Preserve current security/secret scans.

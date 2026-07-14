@@ -46,10 +46,25 @@ export async function loadActiveRule(definitionCode: string): Promise<LoadActive
     (!definition.effectiveTo || definition.effectiveTo >= now);
 
   const activeRule = (
-    definition.rules as Array<{ version: number; ruleAst: unknown; status: string; scoreConfig?: unknown }>
+    definition.rules as Array<{
+      version: number;
+      ruleAst: unknown;
+      status: string;
+      scoreConfig?: unknown;
+      authoredBy?: string | null;
+      reviewedBy?: string | null;
+    }>
   ).find((r) => r.status === 'ACTIVE');
 
-  if (!definitionIsActive || !activeRule) {
+  const safetyReviewComplete =
+    definition.safetyClass !== 'SAFETY_SENSITIVE' ||
+    Boolean(
+      activeRule?.authoredBy &&
+      activeRule.reviewedBy &&
+      activeRule.authoredBy !== activeRule.reviewedBy,
+    );
+
+  if (!definitionIsActive || !activeRule || !safetyReviewComplete) {
     return { rule: null, reason: 'NOT_ACTIVE' };
   }
 

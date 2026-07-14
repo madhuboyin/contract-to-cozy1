@@ -31,7 +31,7 @@ export type EvaluationRunErrorCode =
   | 'INVALID_RULE_AST'
   | 'PROPERTY_NOT_FOUND';
 
-export interface EvaluateHvacFilterProofResult {
+export interface EvaluateDefinitionResult {
   status: EvaluationRunStatus;
   result?: 'TRUE' | 'FALSE' | 'UNKNOWN';
   eligible?: boolean;
@@ -47,11 +47,11 @@ export interface EvaluateHvacFilterProofResult {
   scoreConfig?: unknown;
 }
 
-export async function evaluateHvacFilterProofForProperty(
+export async function evaluateDefinitionForProperty(
   propertyId: string,
   definitionCode: string,
   trigger = 'MANUAL',
-): Promise<EvaluateHvacFilterProofResult> {
+): Promise<EvaluateDefinitionResult> {
   const startedAt = new Date();
 
   if (await isPersonalizationPaused()) {
@@ -140,3 +140,8 @@ export async function evaluateHvacFilterProofForProperty(
     scoreConfig: loadedRule.scoreConfig,
   };
 }
+
+// Compatibility aliases for existing callers while the pilot moves from the
+// original one-definition proof to the generic evaluator.
+export type EvaluateHvacFilterProofResult = EvaluateDefinitionResult;
+export const evaluateHvacFilterProofForProperty = evaluateDefinitionForProperty;
