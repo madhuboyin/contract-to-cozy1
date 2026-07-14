@@ -21,13 +21,16 @@ export interface HomeAssetFact {
 }
 
 /**
- * Most recent service date among HVAC-type assets, or `null` when there's no
- * HVAC-type asset at all or none was ever serviced. Shared by both HVAC
- * traits below so "what counts as serviced" only has one implementation.
+ * Most recent service date among assets whose type starts with
+ * `assetTypePrefix` (case-insensitive), or `null` when there's no such asset
+ * at all or none was ever serviced. Shared by every asset-threshold trait in
+ * this file (HVAC filter, smoke detector battery, dryer vent) so "what
+ * counts as serviced" has one implementation — extracted once a third
+ * near-identical trait made the duplication worth naming.
  */
-function mostRecentHvacServiceDate(homeAssets: HomeAssetFact[]): Date | null {
-  const hvacAssets = homeAssets.filter((a) => a.assetType.toUpperCase().startsWith('HVAC'));
-  const serviced = hvacAssets.filter(
+function mostRecentAssetServiceDate(homeAssets: HomeAssetFact[], assetTypePrefix: string): Date | null {
+  const matchingAssets = homeAssets.filter((a) => a.assetType.toUpperCase().startsWith(assetTypePrefix));
+  const serviced = matchingAssets.filter(
     (a): a is HomeAssetFact & { lastServiced: Date } => a.lastServiced !== null,
   );
   if (serviced.length === 0) {
@@ -37,6 +40,10 @@ function mostRecentHvacServiceDate(homeAssets: HomeAssetFact[]): Date | null {
     (latest, a) => (a.lastServiced > latest ? a.lastServiced : latest),
     serviced[0].lastServiced,
   );
+}
+
+function mostRecentHvacServiceDate(homeAssets: HomeAssetFact[]): Date | null {
+  return mostRecentAssetServiceDate(homeAssets, 'HVAC');
 }
 
 /**
@@ -131,21 +138,41 @@ export function deriveSmokeDetectorBatteryOverdue(
     return { known: false };
   }
 
-  const smokeDetectorAssets = homeAssets.filter((a) => a.assetType.toUpperCase().startsWith('SMOKE_DETECTOR'));
-  const serviced = smokeDetectorAssets.filter(
-    (a): a is HomeAssetFact & { lastServiced: Date } => a.lastServiced !== null,
-  );
-  if (serviced.length === 0) {
+  const mostRecentCheck = mostRecentAssetServiceDate(homeAssets, 'SMOKE_DETECTOR');
+  if (!mostRecentCheck) {
     return { known: false };
   }
 
-  const mostRecentCheck = serviced.reduce(
-    (latest, a) => (a.lastServiced > latest ? a.lastServiced : latest),
-    serviced[0].lastServiced,
-  );
   const daysSinceChecked = Math.floor((now.getTime() - mostRecentCheck.getTime()) / (1000 * 60 * 60 * 24));
 
   return { known: true, value: daysSinceChecked >= SMOKE_DETECTOR_BATTERY_CHECK_THRESHOLD_DAYS };
+}
+
+export const DRYER_VENT_CLEANING_THRESHOLD_DAYS = 365;
+
+/**
+ * Derives whether dryer vent cleaning is overdue, for the
+ * `dryer_vent_cleaning_reminder` catalog-plan definition (seeded DRAFT in
+ * seedPersonalizationCatalog.ts; see seedDryerVentCleaningRule.ts for the
+ * rule this trait backs). Same HomeAsset.lastServiced pattern as the traits
+ * above — a DRYER-type asset's `lastServiced` is the last vent cleaning
+ * date. Unlike the smoke detector trait, there's no separate "is a dryer
+ * present" property field to gate on first — no DRYER-type asset at all is
+ * simply UNKNOWN, same as the original HVAC filter trait's approach.
+ * 365-day threshold matches common fire-safety guidance (annual cleaning).
+ */
+export function deriveDryerVentCleaningOverdue(
+  homeAssets: HomeAssetFact[],
+  now: Date = new Date(),
+): TraitReading {
+  const mostRecentCleaning = mostRecentAssetServiceDate(homeAssets, 'DRYER');
+  if (!mostRecentCleaning) {
+    return { known: false };
+  }
+
+  const daysSinceCleaned = Math.floor((now.getTime() - mostRecentCleaning.getTime()) / (1000 * 60 * 60 * 24));
+
+  return { known: true, value: daysSinceCleaned >= DRYER_VENT_CLEANING_THRESHOLD_DAYS };
 }
 
 export const ROOF_REPLACEMENT_OVERDUE_THRESHOLD_YEARS = 25;

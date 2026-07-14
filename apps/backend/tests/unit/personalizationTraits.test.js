@@ -10,6 +10,8 @@ const {
   deriveSmokeDetectorMissing,
   deriveSmokeDetectorBatteryOverdue,
   SMOKE_DETECTOR_BATTERY_CHECK_THRESHOLD_DAYS,
+  deriveDryerVentCleaningOverdue,
+  DRYER_VENT_CLEANING_THRESHOLD_DAYS,
   deriveRoofReplacementOverdue,
   ROOF_REPLACEMENT_OVERDUE_THRESHOLD_YEARS,
 } = require('../../src/modules/personalization/domain/traits.ts');
@@ -158,6 +160,35 @@ test('deriveSmokeDetectorBatteryOverdue: threshold boundary at 365 days', () => 
     ).value,
     true,
   );
+});
+
+test('deriveDryerVentCleaningOverdue: UNKNOWN when no DRYER-type asset at all', () => {
+  const reading = deriveDryerVentCleaningOverdue(
+    [{ assetType: 'WATER_HEATER', lastServiced: daysAgo(10) }],
+    NOW,
+  );
+  assert.deepEqual(reading, { known: false });
+});
+
+test('deriveDryerVentCleaningOverdue: UNKNOWN when a DRYER asset exists but was never serviced', () => {
+  const reading = deriveDryerVentCleaningOverdue([{ assetType: 'DRYER', lastServiced: null }], NOW);
+  assert.deepEqual(reading, { known: false });
+});
+
+test('deriveDryerVentCleaningOverdue: known FALSE when cleaned within the threshold', () => {
+  const reading = deriveDryerVentCleaningOverdue(
+    [{ assetType: 'DRYER', lastServiced: daysAgo(DRYER_VENT_CLEANING_THRESHOLD_DAYS - 1) }],
+    NOW,
+  );
+  assert.deepEqual(reading, { known: true, value: false });
+});
+
+test('deriveDryerVentCleaningOverdue: known TRUE when cleaned at or beyond the threshold', () => {
+  const reading = deriveDryerVentCleaningOverdue(
+    [{ assetType: 'DRYER', lastServiced: daysAgo(DRYER_VENT_CLEANING_THRESHOLD_DAYS) }],
+    NOW,
+  );
+  assert.deepEqual(reading, { known: true, value: true });
 });
 
 test('deriveRoofReplacementOverdue: UNKNOWN when roofReplacementYear is unset', () => {

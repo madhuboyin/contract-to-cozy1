@@ -11,6 +11,7 @@
 import { createHash } from 'crypto';
 import { TraitReading } from '../domain/evaluator';
 import {
+  deriveDryerVentCleaningOverdue,
   deriveHvacFilterDaysSinceServiced,
   deriveHvacFilterReplacementOverdue,
   deriveRoofReplacementOverdue,
@@ -55,6 +56,7 @@ export async function computePropertyTraitSnapshot(
     // Scoring input, not an eligibility trait — no rule AST references this key.
     hvacFilterDaysSinceServiced: deriveHvacFilterDaysSinceServiced(facts.homeAssets),
     smokeDetectorBatteryOverdue: deriveSmokeDetectorBatteryOverdue(facts, facts.homeAssets),
+    dryerVentCleaningOverdue: deriveDryerVentCleaningOverdue(facts.homeAssets),
   };
 
   await persistDerivedTraits(
