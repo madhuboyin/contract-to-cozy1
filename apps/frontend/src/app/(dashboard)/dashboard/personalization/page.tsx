@@ -152,6 +152,17 @@ export default function PersonalizationPilotPage() {
         <SummaryCard title="Loading guidance" subtitle="Checking this home's current signals"><div /></SummaryCard>
       ) : pilotQuery.isError ? (
         <EmptyStateCard title="Guidance unavailable" description="Personalized guidance could not be loaded for this home." />
+      ) : pilot && !pilot.available ? (
+        <>
+          <EmptyStateCard title="Guidance temporarily paused" description="Property guidance and optional profile collection are currently unavailable." />
+          {pilot.profileEnabled && pilot.capabilities.canManageSensitiveProfile ? (
+            <SummaryCard title="Your profile control" subtitle="You can still remove optional household details while guidance is paused.">
+              <button type="button" disabled={reset.isPending} onClick={resetWithConfirmation} className="inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-red-300 px-4 py-2 text-sm font-semibold text-red-700 disabled:opacity-60">
+                <RotateCcw className="h-4 w-4" /> {reset.isPending ? 'Removing…' : 'Remove optional profile'}
+              </button>
+            </SummaryCard>
+          ) : null}
+        </>
       ) : pilot ? (
         <>
           {!pilot.profileEnabled && pilot.capabilities.canManageSensitiveProfile ? (

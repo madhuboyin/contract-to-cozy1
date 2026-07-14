@@ -2,13 +2,13 @@
 
 No calendar estimates are given because team size, live load, node count and content-review capacity were not verified. Effort is relative and includes engineering, product, privacy/content and QA.
 
-## Phase 0 — Pilot-safe foundation (complete)
+## Phase 0 — Default-safe foundation (complete)
 
 **Effort: Medium.** This phase is deliberately smaller while the product has no real users or production data that must survive schema changes.
 
 - **Keep:** bounded personalization module; property capability policy; distinct Household aggregate; typed rule validator/evaluator; audit/redaction; kill switch; definition lifecycle; focused unit and authorization tests.
 - **Data:** maintain the Prisma schema as the desired internal-validation schema. The user applies database changes. Do not create migration scripts or backfill existing properties; create a Household lazily only when an owner enables the optional profile.
-- **Catalog:** retain the larger catalog as a future planning artifact, but implement and test only the three-definition pilot set. Definitions remain inactive until their rule and content review is complete.
+- **Catalog:** retain the larger catalog as a future planning artifact, but implement and test only the initial three-definition set. Definitions remain inactive until their rule and content review is complete.
 - **Scheduling:** no database-wide nightly personalization sweep. Recompute property guidance on read/manual refresh; recompute enhanced guidance after relevant profile changes when such rules exist.
 - **Testing:** authorization regression, rule schema/golden fixtures, consent and deletion, idempotency, transaction rollback, kill switch, and telemetry redaction. Migration rehearsal becomes relevant only after a deployed database contains data that must survive a schema change.
 - **Exit criteria:** access policy, evaluator, kill switch, audit/redaction and definition fixtures pass. Database migration/backfill gates are not Phase 0 exit criteria while no deployed data must survive changes.
@@ -18,12 +18,12 @@ No calendar estimates are given because team size, live load, node count and con
 **Effort: Medium.** The purpose is to learn whether homeowners find the feature useful, not to pre-build the long-term intelligence platform.
 
 - **Scope/deliverables:** default property guidance; optional explicitly consented Household profile; at most five optional profile questions; three reviewed deterministic definitions; generic evaluation/materialization; structured “why”; top-three read surface; explicit feedback; profile reset/delete control.
-- **Data:** use only existing pilot schema entities and explicit answers. Do not infer sensitive traits. Do not add speculative entities, migrations, backfills, caches, queues, or graph structures.
+- **Data:** use only existing schema entities, property records and explicit optional-profile answers. Do not infer sensitive traits. Do not add speculative entities, migrations, backfills, caches, queues, or graph structures.
 - **Backend:** authenticated property-scoped APIs; generic definition evaluator; validated and transactional answer writes; read-triggered/manual recompute; recommendation suppression; admin pause/kill switch.
 - **Frontend:** one small mobile-accessible guidance surface with default recommendations, an optional “Improve recommendations” profile, explanations, feedback and profile reset. Defer a full household settings area.
-- **Pilot catalog:** HVAC filter replacement check, smoke/CO detector battery check and dryer-vent cleaning. Safety-sensitive definitions stay DRAFT until two-person content/rule review; activation is an explicit operational decision.
+- **Initial catalog:** HVAC filter replacement check, smoke/CO detector battery check and dryer-vent cleaning. Safety-sensitive definitions stay DRAFT until two-person content/rule review; activation is an explicit operational decision.
 - **Exposure:** no percentage enrollment. Authenticated property users receive reviewed property guidance by default; the global kill switch and per-definition lifecycle remain the operational stops.
-- **Testing:** three golden rule paths (positive/negative/unknown), API authorization, consent, invalid-answer rejection, atomic profile writes, feedback/suppression, reset, empty state and accessibility smoke tests.
+- **Testing:** three golden rule paths (positive/negative/unknown), API authorization, default-on reads, kill-switch/stored-output hiding, optional-profile consent, invalid-answer rejection, atomic profile writes, feedback/suppression, reset, empty state and accessibility smoke tests.
 - **Exit criteria:** a property user can receive no more than three explainable property recommendations, give feedback and act without a household profile; an owner can optionally enable/reset that profile; no household-based recommendation is generated from unconsented profile data.
 
 ## Phase 2 — Cross-module personalization (greenfield engineering complete; internal validation pending)

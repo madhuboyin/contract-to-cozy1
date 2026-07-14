@@ -3,13 +3,24 @@ const assert = require('node:assert/strict');
 
 require('ts-node/register');
 
-function loadUseCase(data) {
+function loadUseCase(data, { paused = false } = {}) {
   const repositoryPath = require.resolve('../../src/modules/personalization/infrastructure/contextMapRepository.ts');
   require.cache[repositoryPath] = {
     id: repositoryPath,
     filename: repositoryPath,
     loaded: true,
     exports: { loadHouseholdContextMapData: async () => data },
+  };
+  const materializerPath = require.resolve('../../src/modules/personalization/application/materializePilotRecommendations.usecase.ts');
+  require.cache[materializerPath] = {
+    id: materializerPath,
+    filename: materializerPath,
+    loaded: true,
+    exports: {
+      materializePilotRecommendationsForProperty: async () => paused
+        ? { evaluated: 0, active: 0, paused: true }
+        : { evaluated: 3, active: 1 },
+    },
   };
   const useCasePath = require.resolve('../../src/modules/personalization/application/getHouseholdContextMap.usecase.ts');
   delete require.cache[useCasePath];
@@ -22,7 +33,7 @@ test('builds a sanitized current-state map from consented relational records', a
   const data = {
     status: 'ACTIVE',
     source: 'USER_CREATED',
-    consentVersion: 'personalization-pilot-v1',
+    consentVersion: 'personalization-household-profile-v1',
     consentedAt: at,
     properties: [{ occupancyType: 'PRIMARY', effectiveFrom: at, effectiveTo: null }],
     members: [{ type: 'CHILD', lifeStage: 'EARLY_SCHOOL', count: 1, source: 'USER_INPUT', createdAt: at }],
@@ -63,6 +74,19 @@ test('builds a sanitized current-state map from consented relational records', a
   const serialized = JSON.stringify(result);
   assert.doesNotMatch(serialized, /property-secret|must-not-leak|asset-secret|rawAssetId|privateNote/);
   assert.match(serialized, /Current-state view only/);
+});
+
+test('does not expose stored recommendation nodes while personalization is paused', async () => {
+  const data = {
+    status: 'ACTIVE', source: 'USER_CREATED', consentVersion: 'personalization-household-profile-v1', consentedAt: at,
+    properties: [{ occupancyType: 'PRIMARY', effectiveFrom: at, effectiveTo: null }],
+    members: [], pets: [], goals: [], preferences: [], lifestyleAttributes: [], derivedTraits: [],
+    recommendations: [{ status: 'ACTIVE', firstEligibleAt: at, expiresAt: null, definition: { code: 'STALE' } }],
+  };
+  const { getHouseholdContextMap } = loadUseCase(data, { paused: true });
+  const result = await getHouseholdContextMap('property-secret', at);
+  assert.equal(result.summary.RECOMMENDATION, 0);
+  assert.ok(result.nodes.every((node) => node.type !== 'RECOMMENDATION'));
 });
 
 test('returns an empty non-configured map before consent', async () => {

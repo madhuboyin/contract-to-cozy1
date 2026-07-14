@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 
 require('ts-node/register');
 
-function loadRepository({ household = { id: 'hh-1', consentVersion: 'personalization-pilot-v1', consentedAt: new Date() } } = {}) {
+function loadRepository({ household = { id: 'hh-1', consentVersion: 'personalization-household-profile-v1', consentedAt: new Date() } } = {}) {
   const calls = [];
   const db = {
     personalizedRecommendation: {

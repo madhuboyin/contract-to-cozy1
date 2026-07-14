@@ -2,6 +2,7 @@ import {
   loadHouseholdContextMapData,
   type HouseholdContextMapData,
 } from '../infrastructure/contextMapRepository';
+import { materializePilotRecommendationsForProperty } from './materializePilotRecommendations.usecase';
 
 export type ContextMapNodeType = 'PROPERTY' | 'HOUSEHOLD' | 'PROFILE_FACT' | 'DERIVED_TRAIT' | 'RECOMMENDATION';
 export type ContextMapEdgeType = 'OCCUPIES' | 'HAS_EXPLICIT_FACT' | 'HAS_DERIVED_TRAIT' | 'HAS_RECOMMENDATION';
@@ -94,7 +95,9 @@ export async function getHouseholdContextMap(
   propertyId: string,
   now = new Date(),
 ): Promise<HouseholdContextMap> {
+  const materialization = await materializePilotRecommendationsForProperty(propertyId, 'CONTEXT_MAP_READ');
   const data = await loadHouseholdContextMapData(propertyId);
+  const paused = materialization.paused === true;
   const emptySummary: HouseholdContextMap['summary'] = {
     PROPERTY: 0,
     HOUSEHOLD: 0,
@@ -207,7 +210,7 @@ export async function getHouseholdContextMap(
     validTo: toIso(row.validUntil),
   }, 'HAS_DERIVED_TRAIT', 'TRAIT_COMPUTATION'));
 
-  data.recommendations.forEach((row) => addRelatedNode(nodes, edges, {
+  if (!paused) data.recommendations.forEach((row) => addRelatedNode(nodes, edges, {
     id: `recommendation:${row.definition.code.toLowerCase()}`,
     type: 'RECOMMENDATION',
     label: humanize(row.definition.code),

@@ -21,3 +21,23 @@ test('guidance is presented by default while household profiling is optional', (
   assert.match(page, /Improve my recommendations/);
   assert.doesNotMatch(page, /Join the pilot|Pilot unavailable|Home guidance pilot/);
 });
+
+test('optional household consent and reset use profile-scoped endpoints', () => {
+  const routes = source('../../src/routes/personalizationPilot.routes.ts');
+  const api = source('../../../frontend/src/lib/api/personalizationPilotApi.ts');
+  assert.match(routes, /personalization\/profile\/enable/);
+  assert.match(routes, /personalization\/profile'/);
+  assert.match(api, /personalization\/profile\/enable/);
+  assert.match(api, /personalization\/profile`/);
+  assert.doesNotMatch(routes, /personalization\/opt-in/);
+});
+
+test('paused guidance hides output, blocks new profile writes, and preserves reset control', () => {
+  const controller = source('../../src/modules/personalization/api/personalizationPilot.controller.ts');
+  const page = source('../../../frontend/src/app/(dashboard)/dashboard/personalization/page.tsx');
+  assert.match(controller, /rejectPausedWrite/);
+  assert.match(controller, /PERSONALIZATION_PAUSED/);
+  assert.match(controller, /res\.status\(503\)/);
+  assert.match(page, /Guidance temporarily paused/);
+  assert.match(page, /still remove optional household details while guidance is paused/);
+});

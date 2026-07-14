@@ -11,7 +11,10 @@ export async function getModuleRecommendations(
   limit = 10,
 ) {
   const household = await findPilotHouseholdForProperty(propertyId);
-  await materializePilotRecommendationsForProperty(propertyId, `MODULE_${module}_READ`);
+  const materialization = await materializePilotRecommendationsForProperty(propertyId, `MODULE_${module}_READ`);
+  if (materialization.paused) {
+    return { configured: true, available: false, module, generatedAt: new Date().toISOString(), items: [] };
+  }
   const stored = await listActiveRecommendationsForModule(propertyId, household?.id, 25);
   const items = stored
     .map((recommendation) => mapRecommendationToModule(recommendation, module, capabilities.canAct))
@@ -20,6 +23,7 @@ export async function getModuleRecommendations(
 
   return {
     configured: true,
+    available: true,
     module,
     generatedAt: new Date().toISOString(),
     items,

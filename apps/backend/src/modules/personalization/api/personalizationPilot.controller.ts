@@ -16,6 +16,7 @@ import { convertRecommendationToMaintenanceTask } from '../application/convertRe
 import type { PersonalizationModule } from '../catalog/pilotDefinitions';
 import { ModuleRecommendationQuerySchema } from './personalizationPilot.validators';
 import { getHouseholdContextMap } from '../application/getHouseholdContextMap.usecase';
+import { isPersonalizationPaused } from '../../../services/personalizationKillSwitch.service';
 
 function personalizationContext(req: CustomRequest, res: Response): { propertyId: string; userId: string } | null {
   const propertyId = req.params.propertyId;
@@ -25,6 +26,15 @@ function personalizationContext(req: CustomRequest, res: Response): { propertyId
     return null;
   }
   return { propertyId, userId };
+}
+
+async function rejectPausedWrite(res: Response): Promise<boolean> {
+  if (!(await isPersonalizationPaused())) return false;
+  res.status(503).json({
+    success: false,
+    error: { code: 'PERSONALIZATION_PAUSED', message: 'Personalization is temporarily paused.' },
+  });
+  return true;
 }
 
 export async function getPilot(req: CustomRequest, res: Response) {
@@ -45,6 +55,7 @@ export async function getPilotContextMap(req: CustomRequest, res: Response) {
 export async function optInPilot(req: CustomRequest, res: Response) {
   const context = personalizationContext(req, res);
   if (!context) return;
+  if (await rejectPausedWrite(res)) return;
   const data = await optInToPilotPersonalization(context.propertyId, context.userId);
   return res.status(201).json({ success: true, data });
 }
@@ -52,6 +63,7 @@ export async function optInPilot(req: CustomRequest, res: Response) {
 export async function submitPilotFeedback(req: CustomRequest, res: Response) {
   const context = personalizationContext(req, res);
   if (!context) return;
+  if (await rejectPausedWrite(res)) return;
   const recommendationId = req.params.recommendationId;
   const household = await findPilotHouseholdForProperty(context.propertyId);
   if (!(await recommendationBelongsToProperty(recommendationId, context.propertyId, household?.id))) {
@@ -71,6 +83,7 @@ export async function refreshPilot(req: CustomRequest, res: Response) {
 export async function submitPilotProfileAnswer(req: CustomRequest, res: Response) {
   const context = personalizationContext(req, res);
   if (!context) return;
+  if (await rejectPausedWrite(res)) return;
   const household = await findPilotHousehold(context.propertyId, context.userId);
   if (!household?.consentVersion) {
     return res.status(409).json({ success: false, error: { code: 'CONSENT_REQUIRED', message: 'Enable the optional household profile before answering questions.' } });
@@ -131,6 +144,9 @@ export async function convertPilotRecommendationToTask(req: CustomRequest, res: 
   }
   if (result.status === 'ACTION_NOT_SUPPORTED') {
     return res.status(409).json({ success: false, error: { code: result.status, message: 'This recommendation cannot become a maintenance task.' } });
+  }
+  if (result.status === 'PERSONALIZATION_PAUSED') {
+    return res.status(503).json({ success: false, error: { code: result.status, message: 'Personalization is temporarily paused.' } });
   }
   return res.status(result.status === 'CREATED' ? 201 : 200).json({ success: true, data: result });
 }

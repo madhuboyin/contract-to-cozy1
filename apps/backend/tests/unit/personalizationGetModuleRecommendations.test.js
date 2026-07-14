@@ -8,7 +8,7 @@ function installModule(relativePath, exports) {
   require.cache[resolved] = { id: resolved, filename: resolved, loaded: true, exports };
 }
 
-function loadUseCase() {
+function loadUseCase({ paused = false } = {}) {
   let materialized = 0;
   installModule('../../src/modules/personalization/infrastructure/pilotRepository.ts', {
     findPilotHouseholdForProperty: async () => null,
@@ -24,7 +24,10 @@ function loadUseCase() {
     }],
   });
   installModule('../../src/modules/personalization/application/materializePilotRecommendations.usecase.ts', {
-    materializePilotRecommendationsForProperty: async () => { materialized += 1; },
+    materializePilotRecommendationsForProperty: async () => {
+      materialized += 1;
+      return paused ? { evaluated: 0, active: 0, paused: true } : { evaluated: 3, active: 1 };
+    },
   });
   const path = require.resolve('../../src/modules/personalization/application/getModuleRecommendations.usecase.ts');
   delete require.cache[path];
@@ -43,9 +46,18 @@ test('returns capability-aware Maintenance items through the shared contract', a
   const { getModuleRecommendations, materialized } = loadUseCase();
   const result = await getModuleRecommendations('prop-1', 'MAINTENANCE', capabilities, 3);
   assert.equal(result.configured, true);
+  assert.equal(result.available, true);
   assert.equal(result.items.length, 1);
   assert.equal(result.items[0].actions[0].enabled, false);
   assert.equal(materialized(), 1);
+});
+
+test('global pause hides stored module recommendations', async () => {
+  const { getModuleRecommendations } = loadUseCase({ paused: true });
+  const result = await getModuleRecommendations('prop-1', 'MAINTENANCE', capabilities, 3);
+  assert.equal(result.configured, true);
+  assert.equal(result.available, false);
+  assert.deepEqual(result.items, []);
 });
 
 test('evaluates property recommendations without optional household opt-in', async () => {

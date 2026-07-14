@@ -14,7 +14,17 @@ export async function getPilotPersonalization(
   capabilities: PersonalizationCapabilities,
 ) {
   const household = await findPilotHouseholdForProperty(propertyId);
-  await materializePilotRecommendationsForProperty(propertyId);
+  const materialization = await materializePilotRecommendationsForProperty(propertyId);
+  if (materialization.paused) {
+    return {
+      available: false,
+      profileEnabled: Boolean(household?.consentVersion),
+      consentedAt: household?.consentedAt ?? null,
+      recommendations: [],
+      nextQuestion: null,
+      capabilities,
+    };
+  }
   const [storedRecommendations, nextQuestion] = await Promise.all([
     listActivePilotRecommendations(propertyId, household?.id),
     household?.consentVersion && capabilities.canManageSensitiveProfile
@@ -30,6 +40,7 @@ export async function getPilotPersonalization(
     definition: { ...recommendation.definition, targetModule: 'Maintenance' },
   }));
   return {
+    available: true,
     profileEnabled: Boolean(household?.consentVersion),
     consentedAt: household?.consentedAt ?? null,
     recommendations,
@@ -48,6 +59,5 @@ export async function resetPilotPersonalization(propertyId: string, userId: stri
 }
 
 export async function refreshPilotPersonalization(propertyId: string) {
-  const result = await materializePilotRecommendationsForProperty(propertyId, 'MANUAL');
-  return result;
+  return materializePilotRecommendationsForProperty(propertyId, 'MANUAL');
 }

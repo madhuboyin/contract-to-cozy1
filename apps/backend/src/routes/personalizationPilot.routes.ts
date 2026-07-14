@@ -33,7 +33,7 @@ router.get(
   requirePersonalizationCapability('canViewSensitiveEvidence'),
   getPilotContextMap,
 );
-router.post('/properties/:propertyId/personalization/opt-in', requirePersonalizationCapability('canManageSensitiveProfile'), validateBody(PilotOptInSchema), optInPilot);
+router.post('/properties/:propertyId/personalization/profile/enable', requirePersonalizationCapability('canManageSensitiveProfile'), validateBody(PilotOptInSchema), optInPilot);
 router.post('/properties/:propertyId/personalization/refresh', requirePersonalizationCapability('canAct'), refreshPilot);
 router.get(
   '/properties/:propertyId/personalization/modules/:module/recommendations',
@@ -58,6 +58,6 @@ router.post(
   validateBody(PilotFeedbackSchema),
   submitPilotFeedback,
 );
-router.delete('/properties/:propertyId/personalization', requirePersonalizationCapability('canManageSensitiveProfile'), resetPilot);
+router.delete('/properties/:propertyId/personalization/profile', requirePersonalizationCapability('canManageSensitiveProfile'), resetPilot);
 
 export default router;

@@ -69,6 +69,7 @@ export async function evaluateDefinitionForProperty(
     return {
       status: 'FAILED',
       errorCode: loaded.reason === 'NOT_FOUND' ? 'DEFINITION_NOT_FOUND' : 'DEFINITION_NOT_ACTIVE',
+      ...(loaded.definitionId ? { definitionId: loaded.definitionId } : {}),
     };
   }
   const loadedRule = loaded.rule;

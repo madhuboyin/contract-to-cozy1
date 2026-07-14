@@ -12,6 +12,7 @@ import { loadActivePilotContent } from '../infrastructure/pilotContentRepository
 export interface MaterializePilotResult {
   evaluated: number;
   active: number;
+  paused?: boolean;
 }
 
 export async function materializePilotRecommendationsForProperty(
@@ -23,7 +24,20 @@ export async function materializePilotRecommendationsForProperty(
   for (const definition of PILOT_DEFINITIONS) {
     const evaluation = await evaluateDefinitionForProperty(propertyId, definition.code, trigger);
 
+    // The evaluator owns the kill-switch check. Stop after its first PAUSED
+    // result so a read performs one setting lookup, not one per definition.
+    if (evaluation.status === 'PAUSED') {
+      return { evaluated: 0, active: 0, paused: true };
+    }
+
     if (evaluation.status === 'COMPLETED' && !evaluation.eligible && evaluation.definitionId) {
+      await expireRecommendationIfActive(propertyId, evaluation.definitionId);
+    }
+
+    // A stored recommendation must disappear when its definition/rule becomes
+    // inactive or invalid. Re-activation safely revives it through the normal
+    // upsert path on a later read.
+    if (evaluation.status === 'FAILED' && evaluation.definitionId) {
       await expireRecommendationIfActive(propertyId, evaluation.definitionId);
     }
 

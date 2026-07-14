@@ -106,7 +106,7 @@ test('real seeded state is DRAFT, so it is never evaluated (DEFINITION_NOT_ACTIV
   const { evaluateHvacFilterProofForProperty } = loadUseCase();
 
   const result = await evaluateHvacFilterProofForProperty('prop-1', DEFINITION_CODE);
-  assert.deepEqual(result, { status: 'FAILED', errorCode: 'DEFINITION_NOT_ACTIVE' });
+  assert.deepEqual(result, { status: 'FAILED', errorCode: 'DEFINITION_NOT_ACTIVE', definitionId: 'smoke-def-1' });
   assert.equal(runs.length, 0);
 });
 

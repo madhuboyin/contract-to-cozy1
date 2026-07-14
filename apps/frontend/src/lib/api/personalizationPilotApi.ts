@@ -16,6 +16,7 @@ export interface PilotRecommendation {
 }
 
 export interface PilotPersonalization {
+  available: boolean;
   profileEnabled: boolean;
   consentedAt?: string | null;
   recommendations: PilotRecommendation[];
@@ -77,7 +78,7 @@ export async function getPersonalizationContextMap(propertyId: string) {
 
 export async function enableOptionalPersonalizationProfile(propertyId: string) {
   return (await api.post<{ profileEnabled: true; consentedAt: string }>(
-    `/api/properties/${propertyId}/personalization/opt-in`,
+    `/api/properties/${propertyId}/personalization/profile/enable`,
     { consentAccepted: true },
   )).data;
 }
@@ -107,11 +108,11 @@ export async function answerPilotQuestion(
 }
 
 export async function resetOptionalPersonalizationProfile(propertyId: string) {
-  return (await api.delete<{ reset: boolean }>(`/api/properties/${propertyId}/personalization`)).data;
+  return (await api.delete<{ reset: boolean }>(`/api/properties/${propertyId}/personalization/profile`)).data;
 }
 
 export async function refreshPersonalization(propertyId: string) {
-  return (await api.post<{ evaluated: number; active: number }>(
+  return (await api.post<{ evaluated: number; active: number; paused?: boolean }>(
     `/api/properties/${propertyId}/personalization/refresh`,
   )).data;
 }
@@ -134,6 +135,7 @@ export interface ModuleRecommendation {
 
 export interface ModuleRecommendationsResponse {
   configured: boolean;
+  available: boolean;
   module: PersonalizationModule;
   generatedAt: string;
   items: ModuleRecommendation[];

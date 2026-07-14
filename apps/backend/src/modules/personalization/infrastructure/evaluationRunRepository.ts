@@ -17,7 +17,8 @@ export interface LoadedRule {
 
 export type LoadActiveRuleOutcome =
   | { rule: LoadedRule }
-  | { rule: null; reason: 'NOT_FOUND' | 'NOT_ACTIVE' };
+  | { rule: null; reason: 'NOT_FOUND'; definitionId?: undefined }
+  | { rule: null; reason: 'NOT_ACTIVE'; definitionId: string };
 
 /**
  * Loads a definition's latest ACTIVE rule version by code — the actual
@@ -65,7 +66,7 @@ export async function loadActiveRule(definitionCode: string): Promise<LoadActive
     );
 
   if (!definitionIsActive || !activeRule || !safetyReviewComplete) {
-    return { rule: null, reason: 'NOT_ACTIVE' };
+    return { rule: null, reason: 'NOT_ACTIVE', definitionId: definition.id };
   }
 
   return {

@@ -8,14 +8,18 @@ function installModule(relativePath, exports) {
   require.cache[resolved] = { id: resolved, filename: resolved, loaded: true, exports };
 }
 
-function loadUseCase({ contentAvailable = true } = {}) {
+function loadUseCase({ contentAvailable = true, paused = false, evaluationStatus = 'COMPLETED' } = {}) {
   const upserts = [];
   const expired = [];
   installModule('../../src/modules/personalization/application/evaluateHvacFilterProof.usecase.ts', {
-    evaluateDefinitionForProperty: async (_propertyId, code, trigger) => ({
-      status: 'COMPLETED', result: 'TRUE', eligible: true,
-      definitionId: `def-${code}`, ruleVersion: 1, evaluationRunId: `run-${trigger}`,
-    }),
+    evaluateDefinitionForProperty: async (_propertyId, code, trigger) => paused
+      ? { status: 'PAUSED' }
+      : evaluationStatus === 'COMPLETED'
+      ? {
+        status: 'COMPLETED', result: 'TRUE', eligible: true,
+        definitionId: `def-${code}`, ruleVersion: 1, evaluationRunId: `run-${trigger}`,
+      }
+      : { status: 'FAILED', errorCode: 'DEFINITION_NOT_ACTIVE', definitionId: `def-${code}` },
   });
   installModule('../../src/modules/personalization/infrastructure/suppressionRepository.ts', {
     findActiveSuppression: async () => null,
@@ -50,6 +54,22 @@ test('materializes all three eligible pilot definitions using active versioned c
 });
 test('does not surface eligible recommendations without ACTIVE reviewed content', async () => {
   const { materializePilotRecommendationsForProperty, upserts, expired } = loadUseCase({ contentAvailable: false });
+  const result = await materializePilotRecommendationsForProperty('prop-1');
+  assert.deepEqual(result, { evaluated: 3, active: 0 });
+  assert.equal(upserts.length, 0);
+  assert.equal(expired.length, 3);
+});
+
+test('global pause performs no evaluation or materialization', async () => {
+  const { materializePilotRecommendationsForProperty, upserts, expired } = loadUseCase({ paused: true });
+  const result = await materializePilotRecommendationsForProperty('prop-1');
+  assert.deepEqual(result, { evaluated: 0, active: 0, paused: true });
+  assert.equal(upserts.length, 0);
+  assert.equal(expired.length, 0);
+});
+
+test('inactive definitions expire previously stored recommendations', async () => {
+  const { materializePilotRecommendationsForProperty, upserts, expired } = loadUseCase({ evaluationStatus: 'FAILED' });
   const result = await materializePilotRecommendationsForProperty('prop-1');
   assert.deepEqual(result, { evaluated: 3, active: 0 });
   assert.equal(upserts.length, 0);

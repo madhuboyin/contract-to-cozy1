@@ -1,6 +1,6 @@
 import { prisma } from '../../../lib/prisma';
 
-export const PILOT_CONSENT_VERSION = 'personalization-pilot-v1';
+export const HOUSEHOLD_PROFILE_CONSENT_VERSION = 'personalization-household-profile-v1';
 
 export async function findPilotHousehold(propertyId: string, ownerUserId: string) {
   return prisma.household.findFirst({
@@ -51,7 +51,7 @@ export async function optInPilotHousehold(propertyId: string, ownerUserId: strin
 
     return db.household.update({
       where: { id: household.id },
-      data: { consentVersion: PILOT_CONSENT_VERSION, consentedAt: new Date() },
+      data: { consentVersion: HOUSEHOLD_PROFILE_CONSENT_VERSION, consentedAt: new Date() },
       select: { id: true, consentVersion: true, consentedAt: true },
     });
   });

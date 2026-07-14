@@ -32,6 +32,18 @@ There is no nightly personalization sweep. Recommendations recompute for the sel
 
 Admins can also emergency-pause one definition through `POST /api/admin/personalization/definitions/:code/pause` and resume it through the matching `/resume` endpoint. These operations require authenticated ADMIN role plus MFA and write personalization audit events.
 
+The read path treats controls as authoritative even when an `ACTIVE` recommendation row was materialized earlier. A global pause returns no guidance. A definition/rule that becomes inactive or invalid expires its stored recommendation before results are returned. Reset remains available during a pause.
+
+## Optional household profile
+
+Property guidance does not require consent. An owner may separately enable additional household-profile collection through:
+
+- `POST /api/properties/:propertyId/personalization/profile/enable`
+- consent version `personalization-household-profile-v1`
+- `DELETE /api/properties/:propertyId/personalization/profile` to remove the optional profile
+
+Profile questions and the context map remain consent-gated. Removing this profile does not disable or delete property-only guidance.
+
 ## Phase 2 Maintenance placement
 
 The first cross-module placement uses the same ACTIVE definition/rule/content gates:

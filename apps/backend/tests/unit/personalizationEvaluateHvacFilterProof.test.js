@@ -118,7 +118,7 @@ test('returns FAILED/DEFINITION_NOT_ACTIVE and persists nothing when the definit
   const { evaluateHvacFilterProofForProperty } = loadUseCase();
 
   const result = await evaluateHvacFilterProofForProperty('prop-1', HVAC_FILTER_PROOF_DEFINITION_CODE);
-  assert.deepEqual(result, { status: 'FAILED', errorCode: 'DEFINITION_NOT_ACTIVE' });
+  assert.deepEqual(result, { status: 'FAILED', errorCode: 'DEFINITION_NOT_ACTIVE', definitionId: 'def-1' });
   assert.equal(runs.length, 0);
 });
 
@@ -132,7 +132,7 @@ test('returns FAILED/DEFINITION_NOT_ACTIVE when the definition is ACTIVE but its
   const { evaluateHvacFilterProofForProperty } = loadUseCase();
 
   const result = await evaluateHvacFilterProofForProperty('prop-1', HVAC_FILTER_PROOF_DEFINITION_CODE);
-  assert.deepEqual(result, { status: 'FAILED', errorCode: 'DEFINITION_NOT_ACTIVE' });
+  assert.deepEqual(result, { status: 'FAILED', errorCode: 'DEFINITION_NOT_ACTIVE', definitionId: 'def-1' });
   assert.equal(runs.length, 0);
 });
 
@@ -143,7 +143,7 @@ test('returns FAILED/DEFINITION_NOT_ACTIVE when the definition has a per-definit
   const { evaluateHvacFilterProofForProperty } = loadUseCase();
 
   const result = await evaluateHvacFilterProofForProperty('prop-1', HVAC_FILTER_PROOF_DEFINITION_CODE);
-  assert.deepEqual(result, { status: 'FAILED', errorCode: 'DEFINITION_NOT_ACTIVE' });
+  assert.deepEqual(result, { status: 'FAILED', errorCode: 'DEFINITION_NOT_ACTIVE', definitionId: 'def-1' });
   assert.equal(runs.length, 0);
 });
 
@@ -154,7 +154,7 @@ test('returns FAILED/DEFINITION_NOT_ACTIVE when the definition is outside its ef
   const { evaluateHvacFilterProofForProperty } = loadUseCase();
 
   const result = await evaluateHvacFilterProofForProperty('prop-1', HVAC_FILTER_PROOF_DEFINITION_CODE);
-  assert.deepEqual(result, { status: 'FAILED', errorCode: 'DEFINITION_NOT_ACTIVE' });
+  assert.deepEqual(result, { status: 'FAILED', errorCode: 'DEFINITION_NOT_ACTIVE', definitionId: 'def-1' });
   assert.equal(runs.length, 0);
 });
 

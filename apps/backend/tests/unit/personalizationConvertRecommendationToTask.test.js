@@ -34,6 +34,9 @@ function loadUseCase({ recommendation = undefined, deduped = false } = {}) {
       return { status: 'RECORDED', suppressed: false };
     },
   });
+  installModule('../../src/modules/personalization/application/materializePilotRecommendations.usecase.ts', {
+    materializePilotRecommendationsForProperty: async () => ({ evaluated: 3, active: 1 }),
+  });
   const path = require.resolve('../../src/modules/personalization/application/convertRecommendationToMaintenanceTask.usecase.ts');
   delete require.cache[path];
   return { ...require(path), taskCalls, feedbackCalls };
