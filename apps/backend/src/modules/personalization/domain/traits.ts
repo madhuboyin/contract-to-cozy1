@@ -107,6 +107,47 @@ export function deriveSmokeDetectorMissing(property: PropertySafetyFact): TraitR
   return { known: true, value: property.hasSmokeDetectors === false };
 }
 
+export const SMOKE_DETECTOR_BATTERY_CHECK_THRESHOLD_DAYS = 365;
+
+/**
+ * Derives whether a smoke/CO detector battery check is overdue, for the
+ * `smoke_co_detector_battery_check` catalog-plan definition (seeded DRAFT in
+ * seedPersonalizationCatalog.ts; see seedSmokeDetectorBatteryCheckRule.ts for
+ * the rule this trait backs). Same HomeAsset.lastServiced pattern as the HVAC
+ * filter traits above — a battery check is modeled as a HomeAsset row with
+ * assetType 'SMOKE_DETECTOR', `lastServiced` being the last check date.
+ *
+ * UNKNOWN (not FALSE) whenever detector presence isn't confirmed true, or
+ * it is but no service history exists yet — "no detector confirmed present"
+ * is a distinct concept already covered by deriveSmokeDetectorMissing above;
+ * this trait only answers "given detectors exist, is a check overdue."
+ */
+export function deriveSmokeDetectorBatteryOverdue(
+  property: PropertySafetyFact,
+  homeAssets: HomeAssetFact[],
+  now: Date = new Date(),
+): TraitReading {
+  if (property.hasSmokeDetectors !== true) {
+    return { known: false };
+  }
+
+  const smokeDetectorAssets = homeAssets.filter((a) => a.assetType.toUpperCase().startsWith('SMOKE_DETECTOR'));
+  const serviced = smokeDetectorAssets.filter(
+    (a): a is HomeAssetFact & { lastServiced: Date } => a.lastServiced !== null,
+  );
+  if (serviced.length === 0) {
+    return { known: false };
+  }
+
+  const mostRecentCheck = serviced.reduce(
+    (latest, a) => (a.lastServiced > latest ? a.lastServiced : latest),
+    serviced[0].lastServiced,
+  );
+  const daysSinceChecked = Math.floor((now.getTime() - mostRecentCheck.getTime()) / (1000 * 60 * 60 * 24));
+
+  return { known: true, value: daysSinceChecked >= SMOKE_DETECTOR_BATTERY_CHECK_THRESHOLD_DAYS };
+}
+
 export const ROOF_REPLACEMENT_OVERDUE_THRESHOLD_YEARS = 25;
 
 export interface PropertyRoofFact {

@@ -129,20 +129,47 @@ test('unknown traits are excluded from DerivedTrait persistence but included in 
   assert.equal(result.traits.hvacFilterReplacementOverdue.known, false);
   assert.equal(result.traits.smokeDetectorMissing.known, false);
   assert.equal(result.traits.roofReplacementOverdue.known, false);
+  assert.equal(result.traits.smokeDetectorBatteryOverdue.known, false);
 
   // Nothing known -> no DerivedTrait rows persisted (absence represents UNKNOWN),
   // but any stale row from a previous known value is actively deleted.
   assert.equal(derivedTraitUpserts.length, 0);
-  assert.equal(derivedTraitDeletes.length, 4);
+  assert.equal(derivedTraitDeletes.length, 5);
   assert.deepEqual(
     derivedTraitDeletes.map((d) => d.where.traitKey).sort(),
-    ['hvacFilterDaysSinceServiced', 'hvacFilterReplacementOverdue', 'roofReplacementOverdue', 'smokeDetectorMissing'],
+    [
+      'hvacFilterDaysSinceServiced',
+      'hvacFilterReplacementOverdue',
+      'roofReplacementOverdue',
+      'smokeDetectorBatteryOverdue',
+      'smokeDetectorMissing',
+    ],
   );
 
   // Snapshot still records the full (all-unknown) trait set.
   assert.equal(traitSnapshots.length, 1);
   assert.equal(traitSnapshots[0].householdId, null);
   assert.equal(traitSnapshots[0].traitsJson.hvacFilterReplacementOverdue.known, false);
+});
+
+test('all traits known including smokeDetectorBatteryOverdue: persists a DerivedTrait per trait', async () => {
+  const property = {
+    id: 'prop-6',
+    hasSmokeDetectors: true,
+    roofReplacementYear: 1990,
+    homeAssets: [
+      { assetType: 'HVAC_FURNACE', lastServiced: new Date(Date.now() - 200 * 24 * 60 * 60 * 1000) },
+      { assetType: 'SMOKE_DETECTOR', lastServiced: new Date(Date.now() - 400 * 24 * 60 * 60 * 1000) },
+    ],
+  };
+  const { prismaMock, derivedTraitUpserts } = createPrismaMock({ property, householdLink: null });
+  installPrismaMock(prismaMock);
+  const { computePropertyTraitSnapshot } = loadUseCase();
+
+  const result = await computePropertyTraitSnapshot('prop-6');
+  assert.equal(result.traits.smokeDetectorBatteryOverdue.known, true);
+  assert.equal(result.traits.smokeDetectorBatteryOverdue.value, true);
+  assert.equal(derivedTraitUpserts.length, 5);
 });
 
 test('partial knowledge: only known traits get a DerivedTrait row', async () => {
@@ -162,9 +189,14 @@ test('partial knowledge: only known traits get a DerivedTrait row', async () => 
   const traitKeys = derivedTraitUpserts.map((u) => u.create.traitKey).sort();
   assert.deepEqual(traitKeys, ['hvacFilterDaysSinceServiced', 'hvacFilterReplacementOverdue', 'smokeDetectorMissing']);
 
-  // The one unknown trait (roofReplacementOverdue) gets its stale row deleted, not skipped.
-  assert.equal(derivedTraitDeletes.length, 1);
-  assert.equal(derivedTraitDeletes[0].where.traitKey, 'roofReplacementOverdue');
+  // roofReplacementOverdue (unset year) and smokeDetectorBatteryOverdue (no
+  // SMOKE_DETECTOR-type asset, despite hasSmokeDetectors: true) are both
+  // unknown here -> their stale rows get deleted, not skipped.
+  assert.equal(derivedTraitDeletes.length, 2);
+  assert.deepEqual(
+    derivedTraitDeletes.map((d) => d.where.traitKey).sort(),
+    ['roofReplacementOverdue', 'smokeDetectorBatteryOverdue'],
+  );
 });
 
 test('recomputing with unchanged inputs does not create a duplicate TraitSnapshot', async () => {

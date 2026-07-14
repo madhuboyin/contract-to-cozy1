@@ -8,6 +8,8 @@ const {
   deriveHvacFilterDaysSinceServiced,
   HVAC_FILTER_OVERDUE_THRESHOLD_DAYS,
   deriveSmokeDetectorMissing,
+  deriveSmokeDetectorBatteryOverdue,
+  SMOKE_DETECTOR_BATTERY_CHECK_THRESHOLD_DAYS,
   deriveRoofReplacementOverdue,
   ROOF_REPLACEMENT_OVERDUE_THRESHOLD_YEARS,
 } = require('../../src/modules/personalization/domain/traits.ts');
@@ -101,6 +103,61 @@ test('deriveSmokeDetectorMissing: known TRUE (missing) when confirmed absent', (
 
 test('deriveSmokeDetectorMissing: known FALSE (not missing) when confirmed present', () => {
   assert.deepEqual(deriveSmokeDetectorMissing({ hasSmokeDetectors: true }), { known: true, value: false });
+});
+
+// Mirrors the Phase 0 golden fixtures at
+// catalog/fixtures/smoke_co_detector_battery_check/{positive,negative,unknown}.json
+test('deriveSmokeDetectorBatteryOverdue: UNKNOWN when detector presence is not confirmed true', () => {
+  assert.deepEqual(
+    deriveSmokeDetectorBatteryOverdue({ hasSmokeDetectors: null }, [], NOW),
+    { known: false },
+  );
+  assert.deepEqual(
+    deriveSmokeDetectorBatteryOverdue({ hasSmokeDetectors: false }, [], NOW),
+    { known: false },
+  );
+});
+
+test('deriveSmokeDetectorBatteryOverdue: UNKNOWN when detectors are present but no check history exists', () => {
+  const reading = deriveSmokeDetectorBatteryOverdue({ hasSmokeDetectors: true }, [], NOW);
+  assert.deepEqual(reading, { known: false });
+});
+
+test('deriveSmokeDetectorBatteryOverdue: known TRUE when last checked 400 days ago (fixture: positive)', () => {
+  const reading = deriveSmokeDetectorBatteryOverdue(
+    { hasSmokeDetectors: true },
+    [{ assetType: 'SMOKE_DETECTOR', lastServiced: daysAgo(400) }],
+    NOW,
+  );
+  assert.deepEqual(reading, { known: true, value: true });
+});
+
+test('deriveSmokeDetectorBatteryOverdue: known FALSE when last checked 30 days ago (fixture: negative)', () => {
+  const reading = deriveSmokeDetectorBatteryOverdue(
+    { hasSmokeDetectors: true },
+    [{ assetType: 'SMOKE_DETECTOR', lastServiced: daysAgo(30) }],
+    NOW,
+  );
+  assert.deepEqual(reading, { known: true, value: false });
+});
+
+test('deriveSmokeDetectorBatteryOverdue: threshold boundary at 365 days', () => {
+  assert.equal(
+    deriveSmokeDetectorBatteryOverdue(
+      { hasSmokeDetectors: true },
+      [{ assetType: 'SMOKE_DETECTOR', lastServiced: daysAgo(SMOKE_DETECTOR_BATTERY_CHECK_THRESHOLD_DAYS - 1) }],
+      NOW,
+    ).value,
+    false,
+  );
+  assert.equal(
+    deriveSmokeDetectorBatteryOverdue(
+      { hasSmokeDetectors: true },
+      [{ assetType: 'SMOKE_DETECTOR', lastServiced: daysAgo(SMOKE_DETECTOR_BATTERY_CHECK_THRESHOLD_DAYS) }],
+      NOW,
+    ).value,
+    true,
+  );
 });
 
 test('deriveRoofReplacementOverdue: UNKNOWN when roofReplacementYear is unset', () => {
