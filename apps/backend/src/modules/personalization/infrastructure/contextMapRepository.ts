@@ -2,9 +2,10 @@ import { prisma } from '../../../lib/prisma';
 
 /**
  * Loads only the current, property-relevant records needed by the Phase 4
- * transparency facade. One household identifier is used internally to scope
- * outputs, then removed; database identifiers and raw evidence are never part
- * of the public context-map contract.
+ * transparency facade. Property-derived traits and property recommendations
+ * are loaded regardless of optional-profile consent. A household identifier is
+ * used only to include consented profile data and any future household-owned
+ * outputs, then removed from the returned shape.
  */
 export async function loadHouseholdContextMapData(propertyId: string) {
   const household = await prisma.household.findFirst({
@@ -85,8 +86,6 @@ export async function loadHouseholdContextMapData(propertyId: string) {
       },
     },
   });
-  if (!household) return null;
-
   const [derivedTraits, recommendations] = await Promise.all([
     prisma.derivedTrait.findMany({
       where: {
@@ -108,7 +107,9 @@ export async function loadHouseholdContextMapData(propertyId: string) {
       where: {
         propertyId,
         status: 'ACTIVE',
-        OR: [{ householdId: null }, { householdId: household.id }],
+        ...(household
+          ? { OR: [{ householdId: null }, { householdId: household.id }] }
+          : { householdId: null }),
       },
       orderBy: [{ score: 'desc' }, { firstEligibleAt: 'desc' }],
       select: {
@@ -119,8 +120,23 @@ export async function loadHouseholdContextMapData(propertyId: string) {
       },
     }),
   ]);
-  const { id: _householdId, ...publicHousehold } = household;
-  return { ...publicHousehold, derivedTraits, recommendations };
+  const publicHousehold = household
+    ? (({ id: _householdId, ...profile }) => profile)(household)
+    : null;
+  return {
+    status: publicHousehold?.status ?? null,
+    source: publicHousehold?.source ?? null,
+    consentVersion: publicHousehold?.consentVersion ?? null,
+    consentedAt: publicHousehold?.consentedAt ?? null,
+    properties: publicHousehold?.properties ?? [],
+    members: publicHousehold?.members ?? [],
+    pets: publicHousehold?.pets ?? [],
+    goals: publicHousehold?.goals ?? [],
+    preferences: publicHousehold?.preferences ?? [],
+    lifestyleAttributes: publicHousehold?.lifestyleAttributes ?? [],
+    derivedTraits,
+    recommendations,
+  };
 }
 
 export type HouseholdContextMapData = NonNullable<Awaited<ReturnType<typeof loadHouseholdContextMapData>>>;

@@ -42,7 +42,7 @@ Property guidance does not require consent. An owner may separately enable addit
 - consent version `personalization-household-profile-v1`
 - `DELETE /api/properties/:propertyId/personalization/profile` to remove the optional profile
 
-Profile questions and the context map remain consent-gated. Removing this profile does not disable or delete property-only guidance.
+Profile questions and household fact nodes remain consent-gated. The context map shows property signals and property-only guidance without consent, then adds optional household facts after profile enablement. Removing the profile does not disable or delete property-only guidance or transparency.
 
 ## Phase 2 Maintenance placement
 
@@ -77,11 +77,11 @@ Pilot users can explain why a suggestion was not useful. `BAD_TIMING` is treated
 
 ## Phase 4 context transparency
 
-An owner who enabled the optional household profile can inspect its current personalization context through:
+An owner can inspect current property personalization context without enabling the optional household profile through:
 
 - `GET /api/properties/:propertyId/personalization/context-map`
 - `/dashboard/personalization` under **What personalization knows**
 
-The endpoint requires the owner-only `canViewSensitiveEvidence` capability. It returns semantic nodes and relationships for the active household/property link, explicit profile facts, current property signals and active recommendations. It does not return database IDs, owner IDs, raw trait evidence, arbitrary nested JSON or profile data to contributors/viewers.
+The endpoint requires the owner-only `canViewSensitiveEvidence` capability. It always returns semantic property, current-signal and active-recommendation nodes. When an optional profile is enabled, it additionally returns the active household/property link and explicit profile facts. It does not return database IDs, owner IDs, raw trait evidence, arbitrary nested JSON or profile data to contributors/viewers.
 
 This is a current-state transparency view, not the existing Home Digital Twin, a household timeline or a simulation engine. It reuses existing tables and requires no SQL, schema application, seed rerun, migration or backfill.

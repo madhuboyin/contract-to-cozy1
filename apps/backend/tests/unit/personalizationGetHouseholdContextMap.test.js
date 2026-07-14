@@ -89,11 +89,47 @@ test('does not expose stored recommendation nodes while personalization is pause
   assert.ok(result.nodes.every((node) => node.type !== 'RECOMMENDATION'));
 });
 
-test('returns an empty non-configured map before consent', async () => {
-  const { getHouseholdContextMap } = loadUseCase(null);
+test('returns property transparency before optional-profile consent', async () => {
+  const data = {
+    status: null,
+    source: null,
+    consentVersion: null,
+    consentedAt: null,
+    properties: [],
+    members: [],
+    pets: [],
+    goals: [],
+    preferences: [],
+    lifestyleAttributes: [],
+    derivedTraits: [{
+      traitKey: 'HVAC_FILTER_REPLACEMENT_OVERDUE',
+      valueJson: true,
+      source: 'DERIVED',
+      confidence: 1,
+      computedAt: at,
+      validUntil: null,
+    }],
+    recommendations: [{
+      status: 'ACTIVE',
+      firstEligibleAt: at,
+      expiresAt: null,
+      definition: { code: 'HVAC_FILTER_REPLACEMENT_CHECK_PROOF' },
+    }],
+  };
+  const { getHouseholdContextMap } = loadUseCase(data);
   const result = await getHouseholdContextMap('property-secret', at);
-  assert.equal(result.configured, false);
-  assert.deepEqual(result.nodes, []);
-  assert.deepEqual(result.edges, []);
+  assert.equal(result.configured, true);
   assert.equal(result.consent, null);
+  assert.deepEqual(result.summary, {
+    PROPERTY: 1,
+    HOUSEHOLD: 0,
+    PROFILE_FACT: 0,
+    DERIVED_TRAIT: 1,
+    RECOMMENDATION: 1,
+  });
+  assert.ok(result.nodes.some((node) => node.type === 'PROPERTY'));
+  assert.ok(result.nodes.some((node) => node.type === 'DERIVED_TRAIT'));
+  assert.ok(result.nodes.some((node) => node.type === 'RECOMMENDATION'));
+  assert.ok(result.nodes.every((node) => node.type !== 'HOUSEHOLD' && node.type !== 'PROFILE_FACT'));
+  assert.ok(result.edges.every((edge) => edge.type !== 'OCCUPIES' && edge.type !== 'HAS_EXPLICIT_FACT'));
 });

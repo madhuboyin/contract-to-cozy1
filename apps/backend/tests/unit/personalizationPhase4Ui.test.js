@@ -11,8 +11,11 @@ test('owner transparency UI consumes the property-scoped context map', () => {
   const page = source('../../../frontend/src/app/(dashboard)/dashboard/personalization/page.tsx');
   const api = source('../../../frontend/src/lib/api/personalizationPilotApi.ts');
   assert.match(api, /\/personalization\/context-map/);
-  assert.match(page, /pilot\.profileEnabled && pilot\.capabilities\.canViewSensitiveEvidence/);
+  assert.match(page, /propertyId && pilot\?\.capabilities\.canViewSensitiveEvidence/);
+  assert.doesNotMatch(page, /pilot\?\.profileEnabled && pilot\.capabilities\.canViewSensitiveEvidence/);
   assert.match(page, /What personalization knows/);
+  assert.match(page, /Current property signals/);
+  assert.match(page, /Property guidance does not require them/);
   assert.match(page, /No inferred household relationships, retained timeline, or future simulation/);
 });
 

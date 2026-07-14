@@ -103,7 +103,7 @@ export default function PersonalizationPilotPage() {
   const contextMapQuery = useQuery({
     queryKey: ['personalization-context-map', propertyId],
     queryFn: () => getPersonalizationContextMap(propertyId!),
-    enabled: Boolean(propertyId && pilot?.profileEnabled && pilot.capabilities.canViewSensitiveEvidence),
+    enabled: Boolean(propertyId && pilot?.capabilities.canViewSensitiveEvidence),
     staleTime: 30_000,
   });
 
@@ -246,14 +246,14 @@ export default function PersonalizationPilotPage() {
               })}
             </div>
           </MobileSection>
-          {pilot.profileEnabled && pilot.capabilities.canViewSensitiveEvidence ? (
+          {pilot.capabilities.canViewSensitiveEvidence ? (
             <MobileSection>
               <MobileSectionHeader
                 title="What personalization knows"
-                subtitle="A read-only map of optional facts and outputs connected to this home"
+                subtitle="A read-only view of property signals, optional facts, and current outputs"
               />
               {contextMapQuery.isLoading ? (
-                <SummaryCard title="Loading your context map" subtitle="Collecting the current consented records"><div /></SummaryCard>
+                <SummaryCard title="Loading your context map" subtitle="Collecting the current property records"><div /></SummaryCard>
               ) : contextMapQuery.isError ? (
                 <EmptyStateCard title="Context map unavailable" description="Your suggestions still work. Try this transparency view again later." />
               ) : contextMapQuery.data ? (
@@ -265,9 +265,27 @@ export default function PersonalizationPilotPage() {
                     <div className="flex items-start gap-3">
                       <Network className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
                       <p className="text-sm text-[hsl(var(--mobile-text-secondary))]">
-                        The household profile is connected to this property. Explicit answers stay separate from property-derived maintenance signals and reviewed recommendations.
+                        {contextMapQuery.data.consent
+                          ? 'Your optional household profile is connected to this property. Explicit answers stay separate from property-derived maintenance signals and reviewed recommendations.'
+                          : 'Property-based guidance and its current signals are available without a household profile. Optional household details are collected only if you enable them.'}
                       </p>
                     </div>
+                    {contextMapQuery.data.nodes.filter((node) => node.type === 'DERIVED_TRAIT').length > 0 ? (
+                      <div className="space-y-2">
+                        <p className="text-sm font-semibold">Current property signals</p>
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          {contextMapQuery.data.nodes.filter((node) => node.type === 'DERIVED_TRAIT').map((node) => (
+                            <div key={node.id} className="rounded-xl border p-3">
+                              <p className="text-sm font-semibold">{node.label}</p>
+                              {node.detail ? <p className="mt-1 text-xs text-[hsl(var(--mobile-text-secondary))]">{node.detail}</p> : null}
+                              <p className="mt-1 text-xs text-[hsl(var(--mobile-text-secondary))]">Property record</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-[hsl(var(--mobile-text-secondary))]">No current property signals are available.</p>
+                    )}
                     {contextMapQuery.data.nodes.filter((node) => node.type === 'PROFILE_FACT').length > 0 ? (
                       <div className="grid gap-2 sm:grid-cols-2">
                         {contextMapQuery.data.nodes.filter((node) => node.type === 'PROFILE_FACT').map((node) => (
@@ -279,7 +297,7 @@ export default function PersonalizationPilotPage() {
                         ))}
                       </div>
                     ) : (
-                      <p className="text-sm text-[hsl(var(--mobile-text-secondary))]">No optional household facts have been saved yet.</p>
+                      <p className="text-sm text-[hsl(var(--mobile-text-secondary))]">No optional household facts have been saved. Property guidance does not require them.</p>
                     )}
                     <p className="text-xs text-[hsl(var(--mobile-text-secondary))]">
                       Current-state only. No inferred household relationships, retained timeline, or future simulation.

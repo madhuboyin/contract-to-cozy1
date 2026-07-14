@@ -105,30 +105,8 @@ export async function getHouseholdContextMap(
     DERIVED_TRAIT: 0,
     RECOMMENDATION: 0,
   };
-  if (!data?.consentVersion) {
-    return {
-      version: 'context-map-v0',
-      generatedAt: now.toISOString(),
-      configured: false,
-      consent: null,
-      summary: emptySummary,
-      nodes: [],
-      edges: [],
-      limitations: LIMITATIONS,
-    };
-  }
-
   const occupancy = data.properties[0];
   const nodes: ContextMapNode[] = [
-    {
-      id: 'household',
-      type: 'HOUSEHOLD',
-      label: 'Your household profile',
-      detail: 'Explicitly opted in',
-      source: data.source,
-      validFrom: toIso(data.consentedAt),
-      validTo: null,
-    },
     {
       id: 'property',
       type: 'PROPERTY',
@@ -139,14 +117,27 @@ export async function getHouseholdContextMap(
       validTo: toIso(occupancy?.effectiveTo),
     },
   ];
-  const edges: ContextMapEdge[] = [{
-    from: 'household',
-    to: 'property',
-    type: 'OCCUPIES',
-    source: 'HOUSEHOLD_PROPERTY',
-    validFrom: toIso(occupancy?.effectiveFrom),
-    validTo: toIso(occupancy?.effectiveTo),
-  }];
+  const edges: ContextMapEdge[] = [];
+
+  if (data.consentVersion) {
+    nodes.unshift({
+      id: 'household',
+      type: 'HOUSEHOLD',
+      label: 'Your optional household profile',
+      detail: 'Explicitly enabled',
+      source: data.source ?? 'USER_CREATED',
+      validFrom: toIso(data.consentedAt),
+      validTo: null,
+    });
+    edges.push({
+      from: 'household',
+      to: 'property',
+      type: 'OCCUPIES',
+      source: 'HOUSEHOLD_PROPERTY',
+      validFrom: toIso(occupancy?.effectiveFrom),
+      validTo: toIso(occupancy?.effectiveTo),
+    });
+  }
 
   data.members.forEach((row, index) => addRelatedNode(nodes, edges, {
     id: `profile:member:${row.type.toLowerCase()}:${index}`,
@@ -228,7 +219,9 @@ export async function getHouseholdContextMap(
     version: 'context-map-v0',
     generatedAt: now.toISOString(),
     configured: true,
-    consent: { version: data.consentVersion, consentedAt: toIso(data.consentedAt) },
+    consent: data.consentVersion
+      ? { version: data.consentVersion, consentedAt: toIso(data.consentedAt) }
+      : null,
     summary,
     nodes,
     edges,

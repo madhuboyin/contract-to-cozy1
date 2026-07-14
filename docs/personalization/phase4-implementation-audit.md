@@ -6,19 +6,20 @@ Phase 4 has started with context transparency. It has not started a household in
 
 | Deliverable | Status | Evidence |
 |---|---|---|
-| Current-state relational facade | Complete | `getHouseholdContextMap.usecase.ts` maps existing consented rows into typed nodes and edges |
+| Current-state relational facade | Complete | `getHouseholdContextMap.usecase.ts` always maps property signals/outputs and conditionally adds consented household rows |
 | Property-scoped repository query | Complete | Selects the active household/property relationship, loads property-derived traits directly by property, and includes only active applicable profile/output rows |
 | Owner-only API | Complete | `GET /api/properties/:propertyId/personalization/context-map` requires `canViewSensitiveEvidence` after property authorization |
 | Provenance and validity metadata | Complete | Nodes/edges expose source plus available `validFrom`/`validTo`; consent version/time is explicit |
 | Stable public identities | Complete | Semantic keys replace database, property, household and user IDs in the response |
 | Bounded value disclosure | Complete | Scalar values are formatted; nested arbitrary JSON and trait evidence are not returned |
-| Owner transparency UI | Complete | Personalization page shows explicit fact cards, output counts and the current-state limitation after optional-profile consent |
-| Focused tests | Complete | Mapping, pre-consent empty behavior, private-value omission, capability route and UI boundary coverage |
+| Owner transparency UI | Complete | Personalization page shows property signals before profile consent and adds explicit household fact cards after consent |
+| Focused tests | Complete | Default property mapping, consented profile mapping, private-value omission, pause behavior, repository scope, capability route and UI boundary coverage |
 
 ## Privacy and data posture
 
 - No schema change, SQL file, migration, seed change or backfill was created.
 - Profile facts remain explicit and opt-in. Lifestyle rows marked inferred are excluded.
+- Property signals and property-owned recommendations remain visible in the transparency view without optional-profile consent.
 - The context endpoint is restricted to the property owner because household composition and financial preference facts may be sensitive.
 - Raw recommendation/trait evidence, arbitrary nested JSON, database IDs and owner identifiers are excluded.
 - The existing reset/erasure path remains authoritative; this facade stores nothing.
