@@ -56,18 +56,20 @@ The original Phase 3 assumed sufficient real-user outcome data. The product is s
 - **Dependencies for deferred work:** sufficient unbiased pilot decisions, a predeclared success metric and safety floors, stable analytics definitions, and privacy/ethics approval.
 - **Exit criteria:** Phase 3 is not complete during a data-free pilot. Completion requires measured improvement on a predeclared metric without guardrail regression; every future inferred trait must be inspectable, confirmable and disableable; content and rules remain human-governed.
 
-## Phase 4 — Household Intelligence Graph / Digital Twin evolution
+## Phase 4 — Context transparency before graph evolution (initial slice implemented)
 
 **Effort: Very large.**
 
-- **Scope/deliverables:** temporal household/property relationships, household events, future-plan transitions, longitudinal outcome links, proactive planning and constrained simulations.
-- **Data:** typed relational edges with `validFrom/validTo`, event history and scenario provenance. PostgreSQL remains default.
-- **Backend:** graph-oriented query facade over relational schema; optional extraction boundary only after measurements.
-- **Frontend:** timeline/relationship views only when they clarify decisions; explicit scenario assumptions.
-- **Dependencies:** mature governance, high data quality, demonstrated multi-hop use cases.
-- **Risks:** surveillance feel, indefinite retention, speculative simulations, graph complexity.
-- **Testing:** temporal correctness, provenance, deletion propagation, scenario reproducibility and trust research.
-- **Exit criteria:** at least three validated high-value multi-hop journeys; PostgreSQL benchmark evidence before considering graph DB; privacy review approves temporal retention.
+The original Phase 4 assumed mature, longitudinal real-user data. The product is still a data-free pilot, so storing household event history, modeling future transitions or simulating scenarios would create privacy and complexity before a validated need. Phase 4 therefore starts with a transparent current-state relational view.
+
+- **Implemented initial slice:** owner-only `GET /api/properties/:propertyId/personalization/context-map`; graph-shaped current-state DTO over existing PostgreSQL/Prisma rows; consent, source, confidence and effective-date metadata; an owner UI showing explicit facts and aggregate counts.
+- **Data:** reuse the active household/property link, explicit profile rows, current property-derived traits and active reviewed recommendations. No table, migration, backfill, retained event history or graph database.
+- **Backend:** a read-only facade selects only property-relevant active rows. Its public contract uses stable semantic node keys and excludes database IDs, owner IDs, raw evidence and arbitrary nested JSON.
+- **Frontend:** a compact transparency card is preferred to a graph canvas or timeline because the pilot currently has few facts and no longitudinal history. Contributors and viewers cannot access household-profile context.
+- **Current guardrail:** the map describes what is currently connected; it never claims a causal trait-to-recommendation relationship, infers household facts, or changes product behavior.
+- **Deferred until evidence exists:** temporal household events, future-plan transitions, longitudinal outcome links, proactive planning, scenario provenance, simulations, graph extraction and graph-specific infrastructure.
+- **Dependencies for deferred work:** mature governance, high data quality, privacy-approved retention, and at least three validated high-value multi-hop journeys.
+- **Exit criteria:** Phase 4 is not complete during a data-free pilot. Completion requires validated journeys, temporal/deletion correctness, scenario trust research where applicable, and PostgreSQL benchmark evidence before considering a graph database.
 
 ## First implementation step
 

@@ -16,6 +16,7 @@ import { getModuleRecommendations } from '../application/getModuleRecommendation
 import { convertRecommendationToMaintenanceTask } from '../application/convertRecommendationToMaintenanceTask.usecase';
 import type { PersonalizationModule } from '../catalog/pilotDefinitions';
 import { ModuleRecommendationQuerySchema } from './personalizationPilot.validators';
+import { getHouseholdContextMap } from '../application/getHouseholdContextMap.usecase';
 
 function pilotContext(req: CustomRequest, res: Response): { propertyId: string; userId: string } | null {
   const propertyId = req.params.propertyId;
@@ -36,6 +37,13 @@ export async function getPilot(req: CustomRequest, res: Response) {
   if (!context) return;
   const capabilities = getPersonalizationCapabilities(req.householdRole!);
   const data = await getPilotPersonalization(context.propertyId, capabilities);
+  return res.json({ success: true, data });
+}
+
+export async function getPilotContextMap(req: CustomRequest, res: Response) {
+  const context = pilotContext(req, res);
+  if (!context) return;
+  const data = await getHouseholdContextMap(context.propertyId);
   return res.json({ success: true, data });
 }
 

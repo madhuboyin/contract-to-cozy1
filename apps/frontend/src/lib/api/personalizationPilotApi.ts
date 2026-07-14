@@ -40,6 +40,41 @@ export async function getPilotPersonalization(propertyId: string) {
   return (await api.get<PilotPersonalization>(`/api/properties/${propertyId}/personalization`)).data;
 }
 
+export type ContextMapNodeType = 'PROPERTY' | 'HOUSEHOLD' | 'PROFILE_FACT' | 'DERIVED_TRAIT' | 'RECOMMENDATION';
+
+export interface PersonalizationContextMap {
+  version: 'context-map-v0';
+  generatedAt: string;
+  configured: boolean;
+  consent: { version: string; consentedAt: string | null } | null;
+  summary: Record<ContextMapNodeType, number>;
+  nodes: Array<{
+    id: string;
+    type: ContextMapNodeType;
+    label: string;
+    detail?: string;
+    source: string;
+    confidence?: number;
+    validFrom: string | null;
+    validTo: string | null;
+  }>;
+  edges: Array<{
+    from: string;
+    to: string;
+    type: 'OCCUPIES' | 'HAS_EXPLICIT_FACT' | 'HAS_DERIVED_TRAIT' | 'HAS_RECOMMENDATION';
+    source: string;
+    validFrom: string | null;
+    validTo: string | null;
+  }>;
+  limitations: string[];
+}
+
+export async function getPersonalizationContextMap(propertyId: string) {
+  return (await api.get<PersonalizationContextMap>(
+    `/api/properties/${propertyId}/personalization/context-map`,
+  )).data;
+}
+
 export async function optInPilotPersonalization(propertyId: string) {
   return (await api.post<{ optedIn: true; consentedAt: string }>(
     `/api/properties/${propertyId}/personalization/opt-in`,

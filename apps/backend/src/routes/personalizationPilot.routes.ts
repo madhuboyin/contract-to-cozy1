@@ -12,6 +12,7 @@ import {
   submitPilotProfileAnswer,
   getPilotModuleRecommendations,
   convertPilotRecommendationToTask,
+  getPilotContextMap,
 } from '../modules/personalization/api/personalizationPilot.controller';
 import {
   PilotFeedbackSchema,
@@ -27,6 +28,11 @@ router.use(authenticate);
 router.use('/properties/:propertyId/personalization', propertyAuthMiddleware);
 
 router.get('/properties/:propertyId/personalization', requirePersonalizationCapability('canViewOrdinaryRecommendations'), getPilot);
+router.get(
+  '/properties/:propertyId/personalization/context-map',
+  requirePersonalizationCapability('canViewSensitiveEvidence'),
+  getPilotContextMap,
+);
 router.post('/properties/:propertyId/personalization/opt-in', requirePersonalizationCapability('canManageSensitiveProfile'), validateBody(PilotOptInSchema), optInPilot);
 router.post('/properties/:propertyId/personalization/refresh', requirePersonalizationCapability('canAct'), refreshPilot);
 router.get(

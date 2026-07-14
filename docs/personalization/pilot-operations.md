@@ -61,3 +61,14 @@ The same admin page includes a 30-day aggregate quality snapshot backed by:
 The endpoint requires ADMIN plus MFA and never returns household answers, comments, property/user identifiers or recommendation evidence. Fewer than 20 accepted/negative decision events is explicitly insufficient for review. Reaching 20 permits manual quality review only; online tuning remains disabled.
 
 Pilot users can explain why a suggestion was not useful. `BAD_TIMING` is treated as the existing time-bounded dismissal; other irrelevance reasons use definition suppression. This distinction collects better evidence without introducing behavioral inference.
+
+## Phase 4 context transparency
+
+An opted-in property owner can inspect the current personalization context through:
+
+- `GET /api/properties/:propertyId/personalization/context-map`
+- `/dashboard/personalization` under **What this pilot knows**
+
+The endpoint requires the owner-only `canViewSensitiveEvidence` capability. It returns semantic nodes and relationships for the active household/property link, explicit profile facts, current property signals and active recommendations. It does not return database IDs, owner IDs, raw trait evidence, arbitrary nested JSON or profile data to contributors/viewers.
+
+This is a current-state transparency view, not the existing Home Digital Twin, a household timeline or a simulation engine. It reuses existing tables and requires no SQL, schema application, seed rerun, migration or backfill.

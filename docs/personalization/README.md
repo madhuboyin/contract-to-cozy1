@@ -17,7 +17,7 @@ This directory began as the evidence-backed discovery package and Functional Req
 | Rules | Custom, deliberately small typed evaluator; no executable database code |
 | Evaluation | Pilot: opt-in/read-triggered recomputation; add event-driven work only after measured need |
 | Queue | No personalization queue or nightly sweep during the pilot |
-| Graph/vector database | Neither is justified for Phases 0–3 |
+| Graph/vector database | Neither is justified for the current Phase 4 transparency slice |
 | AI | Assist extraction, summaries, and authoring; never eligibility, safety gates, authorization, or financial math |
 | UI | Opt-in control plus shared Dashboard, Maintenance and Health placements; internal catalog approval |
 | Feasibility | **Feasible with moderate refactoring** |
@@ -40,6 +40,7 @@ This directory began as the evidence-backed discovery package and Functional Req
 14. [Phase 1 completion audit](phase1-completion-audit.md)
 15. [Phase 2 implementation audit](phase2-implementation-audit.md)
 16. [Phase 3 initial implementation audit](phase3-implementation-audit.md)
+17. [Phase 4 initial implementation audit](phase4-implementation-audit.md)
 
 ## Reading conventions
 

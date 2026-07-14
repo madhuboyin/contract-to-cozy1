@@ -4,10 +4,11 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Lightbulb, RefreshCw, RotateCcw, ThumbsDown } from 'lucide-react';
+import { ArrowLeft, Lightbulb, Network, RefreshCw, RotateCcw, ThumbsDown } from 'lucide-react';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
 import {
   answerPilotQuestion,
+  getPersonalizationContextMap,
   getPilotPersonalization,
   optInPilotPersonalization,
   resetPilotPersonalization,
@@ -98,8 +99,18 @@ export default function PersonalizationPilotPage() {
     enabled: Boolean(propertyId),
     staleTime: 30_000,
   });
+  const pilot = pilotQuery.data;
+  const contextMapQuery = useQuery({
+    queryKey: ['personalization-context-map', propertyId],
+    queryFn: () => getPersonalizationContextMap(propertyId!),
+    enabled: Boolean(propertyId && pilot?.optedIn && pilot.capabilities.canViewSensitiveEvidence),
+    staleTime: 30_000,
+  });
 
-  const refresh = async () => queryClient.invalidateQueries({ queryKey });
+  const refresh = async () => Promise.all([
+    queryClient.invalidateQueries({ queryKey }),
+    queryClient.invalidateQueries({ queryKey: ['personalization-context-map', propertyId] }),
+  ]);
   const optIn = useMutation({ mutationFn: () => optInPilotPersonalization(propertyId!), onSuccess: refresh });
   const reset = useMutation({ mutationFn: () => resetPilotPersonalization(propertyId!), onSuccess: refresh });
   const feedback = useMutation({
@@ -128,7 +139,6 @@ export default function PersonalizationPilotPage() {
     );
   }
 
-  const pilot = pilotQuery.data;
   return (
     <MobilePageContainer className="space-y-7 py-3 lg:max-w-5xl lg:px-8 lg:pb-10">
       <MobileSection>
@@ -228,6 +238,49 @@ export default function PersonalizationPilotPage() {
               })}
             </div>
           </MobileSection>
+          {pilot.capabilities.canViewSensitiveEvidence ? (
+            <MobileSection>
+              <MobileSectionHeader
+                title="What this pilot knows"
+                subtitle="A read-only map of current facts and outputs connected to this home"
+              />
+              {contextMapQuery.isLoading ? (
+                <SummaryCard title="Loading your context map" subtitle="Collecting the current consented records"><div /></SummaryCard>
+              ) : contextMapQuery.isError ? (
+                <EmptyStateCard title="Context map unavailable" description="Your suggestions still work. Try this transparency view again later." />
+              ) : contextMapQuery.data ? (
+                <SummaryCard
+                  title="Your context map"
+                  subtitle={`${contextMapQuery.data.summary.PROFILE_FACT} explicit profile facts · ${contextMapQuery.data.summary.DERIVED_TRAIT} property signals · ${contextMapQuery.data.summary.RECOMMENDATION} active suggestions`}
+                >
+                  <div className="space-y-4">
+                    <div className="flex items-start gap-3">
+                      <Network className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
+                      <p className="text-sm text-[hsl(var(--mobile-text-secondary))]">
+                        The household profile is connected to this property. Explicit answers stay separate from property-derived maintenance signals and reviewed recommendations.
+                      </p>
+                    </div>
+                    {contextMapQuery.data.nodes.filter((node) => node.type === 'PROFILE_FACT').length > 0 ? (
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        {contextMapQuery.data.nodes.filter((node) => node.type === 'PROFILE_FACT').map((node) => (
+                          <div key={node.id} className="rounded-xl border p-3">
+                            <p className="text-sm font-semibold">{node.label}</p>
+                            {node.detail ? <p className="mt-1 text-xs text-[hsl(var(--mobile-text-secondary))]">{node.detail}</p> : null}
+                            <p className="mt-1 text-xs text-[hsl(var(--mobile-text-secondary))]">Explicit answer</p>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-[hsl(var(--mobile-text-secondary))]">No optional household facts have been saved yet.</p>
+                    )}
+                    <p className="text-xs text-[hsl(var(--mobile-text-secondary))]">
+                      Current-state only. No inferred household relationships, retained timeline, or future simulation.
+                    </p>
+                  </div>
+                </SummaryCard>
+              ) : null}
+            </MobileSection>
+          ) : null}
           {pilot.capabilities.canManageSensitiveProfile ? (
             <MobileSection>
               <SummaryCard title="Your control" subtitle="Reset removes the pilot household profile and its recommendations.">
