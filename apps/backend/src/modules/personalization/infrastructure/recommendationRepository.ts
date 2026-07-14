@@ -64,6 +64,11 @@ export async function upsertRecommendation(
       // below): without resetting status here, a once-expired recommendation
       // could never become ACTIVE again even after the property re-qualifies.
       status: 'ACTIVE',
+      // An EXPIRED row carries the timestamp from the prior ineligible run.
+      // Clear it when the same property/definition becomes eligible again so
+      // downstream module and context-map DTOs do not expose an ACTIVE item
+      // whose validity window has already ended.
+      expiresAt: null,
       score: params.score,
       priorityBand: params.priorityBand,
       confidence: params.confidence,

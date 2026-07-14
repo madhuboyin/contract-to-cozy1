@@ -3,7 +3,13 @@ const assert = require('node:assert/strict');
 
 require('ts-node/register');
 
-function loadService({ recommendationRows = [], feedbackRows = [], answerRows = [], optionalProfilesEnabled = 0 } = {}) {
+function loadService({
+  recommendationRows = [],
+  feedbackRows = [],
+  answerRows = [],
+  optionalProfilesEnabled = 0,
+  onRecommendationQuery,
+} = {}) {
   const prismaPath = require.resolve('../../src/lib/prisma.ts');
   require.cache[prismaPath] = {
     id: prismaPath,
@@ -12,7 +18,12 @@ function loadService({ recommendationRows = [], feedbackRows = [], answerRows = 
     exports: {
       prisma: {
         household: { count: async () => optionalProfilesEnabled },
-        personalizedRecommendation: { groupBy: async () => recommendationRows },
+        personalizedRecommendation: {
+          groupBy: async (query) => {
+            onRecommendationQuery?.(query);
+            return recommendationRows;
+          },
+        },
         recommendationFeedback: { groupBy: async () => feedbackRows },
         profileAnswer: { groupBy: async () => answerRows },
         recommendationDefinition: {
@@ -87,14 +98,20 @@ test('reports no data without dividing by zero or enabling tuning', async () => 
 });
 
 test('counts all property-owned recommendations as default-guidance reach', async () => {
+  let recommendationQuery;
   const { getPersonalizationPilotQuality } = loadService({
     recommendationRows: [
       counted({ propertyId: 'property-1', definitionId: 'def-1', status: 'ACTIVE' }, 1),
       counted({ propertyId: 'property-2', definitionId: 'def-2', status: 'ACTIVE' }, 1),
     ],
+    onRecommendationQuery: (query) => { recommendationQuery = query; },
   });
 
-  const result = await getPersonalizationPilotQuality(30, new Date('2026-07-13T12:00:00.000Z'));
+  const now = new Date('2026-07-13T12:00:00.000Z');
+  const result = await getPersonalizationPilotQuality(30, now);
   assert.equal(result.recommendations.total, 2);
   assert.equal(result.propertiesWithDefaultGuidance, 2);
+  assert.deepEqual(recommendationQuery.where, {
+    lastEvaluatedAt: { gte: new Date('2026-06-13T12:00:00.000Z') },
+  });
 });

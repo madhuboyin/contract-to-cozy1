@@ -9,7 +9,11 @@ const QUESTIONS_BY_ID = {
   'q-boolean': { id: 'q-boolean', code: 'preference_budget_posture', status: 'ACTIVE', valueScore: 6, effortScore: 1, maxImpressions: 3, answerSchema: { type: 'boolean' }, prompt: 'Budget?', whyAsked: 'Ranking', privacyNote: 'Optional' },
 };
 
-function createPrismaMock({ consentVersion = null } = {}) {
+function createPrismaMock({
+  consentVersion = null,
+  ownerUserId = 'owner-1',
+  propertyId = 'property-1',
+} = {}) {
   const answers = [];
   const prismaMock = {
     $transaction: async (callback) => callback(prismaMock),
@@ -18,6 +22,10 @@ function createPrismaMock({ consentVersion = null } = {}) {
     },
     profileAnswer: {
       findUnique: async ({ where }) => answers.find((answer) => answer.idempotencyKey === where.idempotencyKey) || null,
+      findFirst: async ({ where }) => answers.find((answer) =>
+        answer.householdId === where.householdId &&
+        answer.questionId === where.questionId &&
+        answer.action === where.action) || null,
       create: async ({ data }) => {
         const row = { id: `answer-${answers.length + 1}`, createdAt: new Date(), ...data };
         answers.push(row);
@@ -25,11 +33,23 @@ function createPrismaMock({ consentVersion = null } = {}) {
       },
     },
     household: {
-      findUnique: async () => ({ consentVersion, consentedAt: consentVersion ? new Date() : null }),
+      findFirst: async ({ where }) =>
+        where.id === 'hh-1' &&
+        where.ownerUserId === ownerUserId &&
+        where.properties.some.propertyId === propertyId
+          ? { consentVersion, consentedAt: consentVersion ? new Date() : null }
+          : null,
     },
   };
   return { prismaMock, answers };
 }
+
+const scopedParams = (params) => ({
+  householdId: 'hh-1',
+  propertyId: 'property-1',
+  ownerUserId: 'owner-1',
+  ...params,
+});
 
 function loadUseCase(prismaMock) {
   const prismaPath = require.resolve('../../src/lib/prisma.ts');
@@ -47,7 +67,7 @@ function loadUseCase(prismaMock) {
 test('duplicate idempotencyKey is a true no-op', async () => {
   const { prismaMock, answers } = createPrismaMock({ consentVersion: 'v1' });
   const { recordProfileAnswer } = loadUseCase(prismaMock);
-  const params = { questionId: 'q-boolean', householdId: 'hh-1', idempotencyKey: 'evt-1', action: 'ANSWERED', answerJson: { value: true } };
+  const params = scopedParams({ questionId: 'q-boolean', idempotencyKey: 'evt-1', action: 'ANSWERED', answerJson: { value: true } });
   assert.equal((await recordProfileAnswer(params)).status, 'RECORDED');
   assert.equal((await recordProfileAnswer(params)).status, 'DUPLICATE');
   assert.equal(answers.length, 1);
@@ -56,15 +76,15 @@ test('duplicate idempotencyKey is a true no-op', async () => {
 test('returns QUESTION_NOT_FOUND for an unknown questionId', async () => {
   const { prismaMock } = createPrismaMock({ consentVersion: 'v1' });
   const { recordProfileAnswer } = loadUseCase(prismaMock);
-  const result = await recordProfileAnswer({ questionId: 'missing', householdId: 'hh-1', idempotencyKey: 'evt-1', action: 'ANSWERED' });
+  const result = await recordProfileAnswer(scopedParams({ questionId: 'missing', idempotencyKey: 'evt-1', action: 'ANSWERED' }));
   assert.equal(result.status, 'QUESTION_NOT_FOUND');
 });
 
 test('SKIPPED and SNOOZED store cooldown events without profile facts', async () => {
-  const { prismaMock, answers } = createPrismaMock();
+  const { prismaMock, answers } = createPrismaMock({ consentVersion: 'v1' });
   const { recordProfileAnswer } = loadUseCase(prismaMock);
-  await recordProfileAnswer({ questionId: 'q-boolean', householdId: 'hh-1', idempotencyKey: 'evt-skip', action: 'SKIPPED' });
-  await recordProfileAnswer({ questionId: 'q-boolean', householdId: 'hh-1', idempotencyKey: 'evt-later', action: 'SNOOZED' });
+  await recordProfileAnswer(scopedParams({ questionId: 'q-boolean', idempotencyKey: 'evt-skip', action: 'SKIPPED' }));
+  await recordProfileAnswer(scopedParams({ questionId: 'q-boolean', idempotencyKey: 'evt-later', action: 'SNOOZED' }));
   assert.equal(answers.length, 2);
   assert.equal(answers[0].answerJson, null);
   assert.equal(answers[1].answerJson, null);
@@ -77,7 +97,7 @@ test('SKIPPED and SNOOZED store cooldown events without profile facts', async ()
 test('ANSWERED without consent writes nothing', async () => {
   const { prismaMock, answers } = createPrismaMock();
   const { recordProfileAnswer } = loadUseCase(prismaMock);
-  const result = await recordProfileAnswer({ questionId: 'q-boolean', householdId: 'hh-1', idempotencyKey: 'evt-answer', action: 'ANSWERED', answerJson: { value: true } });
+  const result = await recordProfileAnswer(scopedParams({ questionId: 'q-boolean', idempotencyKey: 'evt-answer', action: 'ANSWERED', answerJson: { value: true } }));
   assert.equal(result.status, 'CONSENT_REQUIRED');
   assert.equal(answers.length, 0);
 });
@@ -85,7 +105,7 @@ test('ANSWERED without consent writes nothing', async () => {
 test('invalid ANSWERED payload is rejected before any write', async () => {
   const { prismaMock, answers } = createPrismaMock({ consentVersion: 'v1' });
   const { recordProfileAnswer } = loadUseCase(prismaMock);
-  const result = await recordProfileAnswer({ questionId: 'q-pet', householdId: 'hh-1', idempotencyKey: 'evt-invalid', action: 'ANSWERED', answerJson: { hasPet: true } });
+  const result = await recordProfileAnswer(scopedParams({ questionId: 'q-pet', idempotencyKey: 'evt-invalid', action: 'ANSWERED', answerJson: { hasPet: true } }));
   assert.equal(result.status, 'INVALID_ANSWER');
   assert.equal(answers.length, 0);
 });
@@ -99,8 +119,36 @@ test('consented answers are retained once in ProfileAnswer.answerJson', async ()
     ['q-boolean', 'evt-boolean', { value: false }],
   ];
   for (const [questionId, idempotencyKey, answerJson] of cases) {
-    const result = await recordProfileAnswer({ questionId, householdId: 'hh-1', idempotencyKey, action: 'ANSWERED', answerJson });
+    const result = await recordProfileAnswer(scopedParams({ questionId, idempotencyKey, action: 'ANSWERED', answerJson }));
     assert.equal(result.status, 'RECORDED');
   }
   assert.deepEqual(answers.map((answer) => answer.answerJson), cases.map((entry) => entry[2]));
+});
+
+test('rejects a household that is outside the authenticated owner/property scope', async () => {
+  const { prismaMock, answers } = createPrismaMock({ consentVersion: 'v1' });
+  const { recordProfileAnswer } = loadUseCase(prismaMock);
+  const result = await recordProfileAnswer(scopedParams({
+    ownerUserId: 'different-owner',
+    questionId: 'q-boolean',
+    idempotencyKey: 'evt-wrong-scope',
+    action: 'ANSWERED',
+    answerJson: { value: true },
+  }));
+  assert.equal(result.status, 'CONSENT_REQUIRED');
+  assert.equal(answers.length, 0);
+});
+
+test('a second ANSWERED event with a new idempotency key does not create a duplicate fact', async () => {
+  const { prismaMock, answers } = createPrismaMock({ consentVersion: 'v1' });
+  const { recordProfileAnswer } = loadUseCase(prismaMock);
+  const first = await recordProfileAnswer(scopedParams({
+    questionId: 'q-boolean', idempotencyKey: 'evt-first', action: 'ANSWERED', answerJson: { value: true },
+  }));
+  const second = await recordProfileAnswer(scopedParams({
+    questionId: 'q-boolean', idempotencyKey: 'evt-second', action: 'ANSWERED', answerJson: { value: false },
+  }));
+  assert.equal(first.status, 'RECORDED');
+  assert.equal(second.status, 'DUPLICATE');
+  assert.equal(answers.length, 1);
 });

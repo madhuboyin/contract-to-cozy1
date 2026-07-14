@@ -13,9 +13,10 @@ import { prisma } from '../../../lib/prisma';
 import {
   loadQuestionById,
   findAnswerByIdempotencyKey,
+  findAnsweredQuestionForHousehold,
   recordAnswerEvent,
 } from '../infrastructure/profileQuestionRepository';
-import { getHouseholdConsent } from '../infrastructure/consentRepository';
+import { getHouseholdConsentForPropertyOwner } from '../infrastructure/consentRepository';
 import { computeNextEligibleAt, ProfileAnswerAction } from '../domain/profiling';
 
 export type RecordProfileAnswerStatus =
@@ -29,6 +30,8 @@ export type RecordProfileAnswerStatus =
 export interface RecordProfileAnswerParams {
   questionId: string;
   householdId: string;
+  propertyId: string;
+  ownerUserId: string;
   idempotencyKey: string;
   action: ProfileAnswerAction;
   answerJson?: unknown;
@@ -88,10 +91,22 @@ export async function recordProfileAnswer(params: RecordProfileAnswerParams): Pr
       const existing = await findAnswerByIdempotencyKey(params.idempotencyKey, db);
       if (existing) return { status: 'DUPLICATE' as const };
 
-      if (params.action === 'ANSWERED') {
-        const consent = await getHouseholdConsent(params.householdId, db);
-        if (!consent?.consentVersion) return { status: 'CONSENT_REQUIRED' as const };
-      }
+      // Re-check owner/property scope and consent inside the same transaction
+      // as the write. This keeps internal callers subject to the same boundary
+      // as the HTTP controller and prevents a stale household id from being
+      // used after its active property link changes.
+      const consent = await getHouseholdConsentForPropertyOwner(
+        params.householdId,
+        params.propertyId,
+        params.ownerUserId,
+        db,
+      );
+      if (!consent?.consentVersion) return { status: 'CONSENT_REQUIRED' as const };
+
+      // ANSWERED is the effective fact for a question. A retry carrying a new
+      // idempotency key must not create a second current fact in Phase 4.
+      const answered = await findAnsweredQuestionForHousehold(params.householdId, params.questionId, db);
+      if (answered) return { status: 'DUPLICATE' as const };
 
       await recordAnswerEvent({
         questionId: params.questionId,

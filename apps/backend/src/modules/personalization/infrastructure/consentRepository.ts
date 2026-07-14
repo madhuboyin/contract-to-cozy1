@@ -9,12 +9,18 @@ export interface HouseholdConsent {
 }
 
 /** Consent is checked in the same transaction that records an answer. */
-export async function getHouseholdConsent(
+export async function getHouseholdConsentForPropertyOwner(
   householdId: string,
+  propertyId: string,
+  ownerUserId: string,
   db: PersonalizationDb = prisma,
 ): Promise<HouseholdConsent | null> {
-  return db.household.findUnique({
-    where: { id: householdId },
+  return db.household.findFirst({
+    where: {
+      id: householdId,
+      ownerUserId,
+      properties: { some: { propertyId, effectiveTo: null } },
+    },
     select: { consentVersion: true, consentedAt: true },
   });
 }

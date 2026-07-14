@@ -80,6 +80,17 @@ export async function findAnswerByIdempotencyKey(
   });
 }
 
+export async function findAnsweredQuestionForHousehold(
+  householdId: string,
+  questionId: string,
+  db: PersonalizationDb = prisma,
+): Promise<{ id: string } | null> {
+  return db.profileAnswer.findFirst({
+    where: { householdId, questionId, action: 'ANSWERED' },
+    select: { id: true },
+  });
+}
+
 export interface RecordAnswerEventParams {
   questionId: string;
   householdId: string;

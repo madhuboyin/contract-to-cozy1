@@ -29,3 +29,10 @@ test('pilot UI contains loading, error, empty, disabled, and reset-confirmation 
 test('pilot UI renders reviewed structured explanation content', () => {
   assert.match(source, /reasonCodes\[0\]\?\.params\?\.message/);
 });
+
+test('pilot UI lets an owner skip or defer an optional profile question', () => {
+  assert.match(source, /action: 'SKIPPED'/);
+  assert.match(source, />Skip<\/button>/);
+  assert.match(source, /action: 'SNOOZED'/);
+  assert.match(source, />Ask later<\/button>/);
+});

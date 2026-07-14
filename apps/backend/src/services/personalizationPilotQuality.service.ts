@@ -55,7 +55,9 @@ export async function getPersonalizationPilotQuality(
     prisma.household.count({ where: { consentedAt: { gte: since }, consentVersion: { not: null } } }),
     prisma.personalizedRecommendation.groupBy({
       by: ['propertyId', 'definitionId', 'status'],
-      where: { firstEligibleAt: { gte: since } },
+      // Measure guidance evaluated during the window, including a current row
+      // first created before the window and refreshed since then.
+      where: { lastEvaluatedAt: { gte: since } },
       _count: { _all: true },
     }),
     prisma.recommendationFeedback.groupBy({

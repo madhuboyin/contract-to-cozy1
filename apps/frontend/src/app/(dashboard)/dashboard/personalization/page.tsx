@@ -77,6 +77,7 @@ function PilotQuestionCard({
               <button type="button" onClick={() => submitBoolean(false)} className="min-h-[44px] rounded-xl border px-4 py-2 text-sm font-semibold">No</button>
             </>
           )}
+          <button type="button" onClick={() => answer.mutate({ action: 'SKIPPED' })} className="min-h-[44px] px-3 py-2 text-sm font-semibold text-[hsl(var(--mobile-text-secondary))]">Skip</button>
           <button type="button" onClick={() => answer.mutate({ action: 'SNOOZED' })} className="min-h-[44px] px-3 py-2 text-sm font-semibold text-[hsl(var(--mobile-text-secondary))]">Ask later</button>
         </div>
       </div>

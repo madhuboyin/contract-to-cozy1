@@ -90,12 +90,23 @@ export async function submitPilotProfileAnswer(req: CustomRequest, res: Response
 
   const result = await recordProfileAnswer({
     householdId: household.id,
+    propertyId: context.propertyId,
+    ownerUserId: context.userId,
     questionId: req.params.questionId,
     ...req.body,
   });
   const unavailable = result.status === 'QUESTION_NOT_FOUND' || result.status === 'QUESTION_NOT_ACTIVE';
-  const statusCode = result.status === 'INVALID_ANSWER' ? 400 : unavailable ? 404 : result.status === 'DUPLICATE' ? 200 : 201;
-  return res.status(statusCode).json({ success: result.status !== 'INVALID_ANSWER' && !unavailable, data: result });
+  const rejected = result.status === 'INVALID_ANSWER' || result.status === 'CONSENT_REQUIRED';
+  const statusCode = result.status === 'INVALID_ANSWER'
+    ? 400
+    : result.status === 'CONSENT_REQUIRED'
+      ? 409
+      : unavailable
+        ? 404
+        : result.status === 'DUPLICATE'
+          ? 200
+          : 201;
+  return res.status(statusCode).json({ success: !rejected && !unavailable, data: result });
 }
 
 export async function resetPilot(req: CustomRequest, res: Response) {
