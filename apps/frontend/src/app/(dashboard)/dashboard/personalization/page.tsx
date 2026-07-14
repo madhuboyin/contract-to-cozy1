@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -21,6 +22,17 @@ import {
   StatusChip,
   SummaryCard,
 } from '@/components/mobile/dashboard/MobilePrimitives';
+
+type PilotFeedbackReason = 'ALREADY_DONE' | 'TOO_EXPENSIVE' | 'NOT_APPLICABLE' | 'BAD_TIMING' | 'WRONG_PROFILE' | 'OTHER';
+
+const PILOT_FEEDBACK_REASONS: Array<{ code: PilotFeedbackReason; label: string; type: 'DISMISSED' | 'NOT_RELEVANT' }> = [
+  { code: 'ALREADY_DONE', label: 'Already handled', type: 'NOT_RELEVANT' },
+  { code: 'NOT_APPLICABLE', label: "Doesn't apply", type: 'NOT_RELEVANT' },
+  { code: 'WRONG_PROFILE', label: 'Wrong home details', type: 'NOT_RELEVANT' },
+  { code: 'TOO_EXPENSIVE', label: 'Too expensive', type: 'NOT_RELEVANT' },
+  { code: 'BAD_TIMING', label: 'Not now', type: 'DISMISSED' },
+  { code: 'OTHER', label: 'Another reason', type: 'NOT_RELEVANT' },
+];
 
 function PilotQuestionCard({
   propertyId,
@@ -76,6 +88,7 @@ export default function PersonalizationPilotPage() {
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const { selectedPropertyId } = usePropertyContext();
+  const [feedbackFor, setFeedbackFor] = useState<string | null>(null);
   const propertyId = selectedPropertyId || searchParams.get('propertyId') || undefined;
   const queryKey = ['personalization-pilot', propertyId];
 
@@ -90,8 +103,12 @@ export default function PersonalizationPilotPage() {
   const optIn = useMutation({ mutationFn: () => optInPilotPersonalization(propertyId!), onSuccess: refresh });
   const reset = useMutation({ mutationFn: () => resetPilotPersonalization(propertyId!), onSuccess: refresh });
   const feedback = useMutation({
-    mutationFn: (recommendationId: string) => sendPilotFeedback(propertyId!, recommendationId, 'NOT_RELEVANT'),
-    onSuccess: refresh,
+    mutationFn: ({ recommendationId, type, reasonCode }: { recommendationId: string; type: 'DISMISSED' | 'NOT_RELEVANT'; reasonCode: PilotFeedbackReason }) =>
+      sendPilotFeedback(propertyId!, recommendationId, type, reasonCode),
+    onSuccess: async () => {
+      setFeedbackFor(null);
+      await refresh();
+    },
   });
   const recompute = useMutation({
     mutationFn: () => refreshPilotPersonalization(propertyId!),
@@ -181,9 +198,29 @@ export default function PersonalizationPilotPage() {
                         {why || 'Suggested because a reviewed maintenance rule matched the property history available to ContractToCozy.'}
                       </p>
                       {pilot.capabilities.canGiveFeedback ? (
-                        <button type="button" disabled={feedback.isPending} onClick={() => feedback.mutate(recommendation.id)} className="inline-flex min-h-[44px] items-center gap-2 rounded-xl border px-4 py-2 text-sm font-semibold disabled:opacity-60">
-                          <ThumbsDown className="h-4 w-4" /> Not relevant
-                        </button>
+                        feedbackFor === recommendation.id ? (
+                          <div className="space-y-2" aria-label="Why is this suggestion not useful?">
+                            <p className="text-sm font-medium">What made this suggestion less useful?</p>
+                            <div className="flex flex-wrap gap-2">
+                              {PILOT_FEEDBACK_REASONS.map((reason) => (
+                                <button
+                                  key={reason.code}
+                                  type="button"
+                                  disabled={feedback.isPending}
+                                  onClick={() => feedback.mutate({ recommendationId: recommendation.id, type: reason.type, reasonCode: reason.code })}
+                                  className="min-h-[44px] rounded-xl border px-3 py-2 text-sm font-semibold disabled:opacity-60"
+                                >
+                                  {reason.label}
+                                </button>
+                              ))}
+                              <button type="button" disabled={feedback.isPending} onClick={() => setFeedbackFor(null)} className="min-h-[44px] px-3 py-2 text-sm font-semibold text-[hsl(var(--mobile-text-secondary))] disabled:opacity-60">Cancel</button>
+                            </div>
+                          </div>
+                        ) : (
+                          <button type="button" disabled={feedback.isPending} onClick={() => setFeedbackFor(recommendation.id)} className="inline-flex min-h-[44px] items-center gap-2 rounded-xl border px-4 py-2 text-sm font-semibold disabled:opacity-60">
+                            <ThumbsDown className="h-4 w-4" /> Not relevant
+                          </button>
+                        )
                       ) : null}
                     </div>
                   </SummaryCard>

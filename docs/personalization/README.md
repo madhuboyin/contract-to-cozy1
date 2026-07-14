@@ -39,6 +39,7 @@ This directory began as the evidence-backed discovery package and Functional Req
 13. [Pilot operations](pilot-operations.md)
 14. [Phase 1 completion audit](phase1-completion-audit.md)
 15. [Phase 2 implementation audit](phase2-implementation-audit.md)
+16. [Phase 3 initial implementation audit](phase3-implementation-audit.md)
 
 ## Reading conventions
 

@@ -39,8 +39,42 @@ export interface PersonalizationCatalogResponse {
   questions: PersonalizationCatalogQuestion[];
 }
 
+export interface PersonalizationPilotQualityResponse {
+  windowDays: number;
+  since: string;
+  generatedAt: string;
+  optedInHouseholds: number;
+  recommendations: {
+    total: number;
+    byStatus: Array<{ status: string; count: number }>;
+    byDefinition: Array<{ code: string; count: number }>;
+  };
+  feedback: {
+    total: number;
+    explicit: number;
+    accepted: number;
+    negative: number;
+    acceptanceRate: number | null;
+    negativeRate: number | null;
+    reasons: Array<{ reasonCode: string; count: number }>;
+  };
+  profileAnswers: Array<{ action: string; count: number }>;
+  sample: {
+    decisionEvents: number;
+    minimumRequired: number;
+    status: 'NO_DATA' | 'INSUFFICIENT_SAMPLE' | 'REVIEWABLE';
+    onlineTuningAllowed: false;
+  };
+}
+
 export async function getPersonalizationAdminCatalog() {
   return (await api.get<PersonalizationCatalogResponse>('/api/admin/personalization/catalog')).data;
+}
+
+export async function getPersonalizationPilotQuality(windowDays = 30) {
+  return (await api.get<PersonalizationPilotQualityResponse>('/api/admin/personalization/quality', {
+    params: { windowDays },
+  })).data;
 }
 
 export async function activatePersonalizationDefinition(

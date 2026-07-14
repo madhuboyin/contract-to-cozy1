@@ -53,7 +53,7 @@ test('converts through the existing task service and records explicit acceptance
   assert.equal(result.status, 'CREATED');
   assert.equal(taskCalls[0][2].actionKey, 'personalization:rec-1:maintenance-task');
   assert.deepEqual(feedbackCalls[0], {
-    recommendationId: 'rec-1', eventId: 'event-1', type: 'ACCEPTED', explicit: true,
+    recommendationId: 'rec-1', eventId: 'personalization-task-accepted:rec-1', type: 'ACCEPTED', explicit: true,
   });
 });
 

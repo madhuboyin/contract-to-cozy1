@@ -41,18 +41,20 @@ The revised greenfield scope proves cross-module reuse with the existing three-d
 
 Seller Prep, Risk/protection, Buyer, Community, Climate, Wellness, Energy, providers, assistant and notifications become post-pilot catalog expansion. They require relevant reviewed definitions and observed demand; wiring maintenance-only recommendations into them would not constitute valid personalization.
 
-## Phase 3 — Learning and optimization
+## Phase 3 — Pilot measurement before learning (initial slice implemented)
 
 **Effort: Large.**
 
-- **Scope/deliverables:** governed behavioral affinity, deterministic weight tuning, experiments, quality analytics, confirmed low-sensitivity inference, timing optimization, advanced diversity.
-- **Data:** experiment assignments, aggregate outcome features, inference consent/confirmation, model/weight version registry.
-- **Backend:** offline analysis, bounded parameter selection, guardrails/rollback, sample-size checks; still deterministic online evaluator.
-- **Frontend:** inference confirmations, experiment-safe copy, richer feedback reason capture without friction.
-- **Dependencies:** sufficient unbiased outcome data, analytics quality, ethics/privacy review.
-- **Risks:** optimizing clicks over home value/safety, feedback loops, sparse data, implicit signals misread.
-- **Testing:** offline backtests, holdouts, fairness/segment checks, safety floors, rollback and drift alerts.
-- **Exit criteria:** predeclared metric improvement without guardrail regression; every inferred trait is inspectable/disableable; no autonomous content/rules.
+The original Phase 3 assumed sufficient real-user outcome data. The product is still a data-free pilot, so experiments, behavioral affinity, inference and weight tuning would create machinery without evidence. Phase 3 therefore starts with measurement only.
+
+- **Implemented initial slice:** richer explicit negative-feedback reasons; temporary `BAD_TIMING` dismissal rather than permanent irrelevance; aggregate 30-day admin quality snapshot; recommendation/status, answer and feedback counts; a 20-decision-event review threshold; automatic tuning hard-disabled.
+- **Data:** reuse existing recommendation, feedback, profile-answer and household-consent rows. No experiment-assignment, inference, model-registry or aggregate-feature tables; no migration or backfill.
+- **Backend:** ADMIN+MFA aggregate-only quality endpoint. It returns counts and rates, never household answers, comments, property identifiers or recommendation evidence.
+- **Frontend:** low-friction reason capture on the pilot recommendation card and a quality snapshot on the existing personalization admin page.
+- **Current guardrail:** reaching the sample threshold permits human review only. It never changes rules, weights, content, thresholds or online ranking.
+- **Deferred until evidence exists:** experiments, affinity, timing optimization, inference, deterministic weight selection, diversity tuning, offline backtests, holdouts, fairness/segment analysis, drift alerts and a version registry.
+- **Dependencies for deferred work:** sufficient unbiased pilot decisions, a predeclared success metric and safety floors, stable analytics definitions, and privacy/ethics approval.
+- **Exit criteria:** Phase 3 is not complete during a data-free pilot. Completion requires measured improvement on a predeclared metric without guardrail regression; every future inferred trait must be inspectable, confirmable and disableable; content and rules remain human-governed.
 
 ## Phase 4 — Household Intelligence Graph / Digital Twin evolution
 
@@ -82,4 +84,4 @@ Write an Architecture Decision Record and a thin vertical proof behind a disable
 
 ## Rollback strategy
 
-Each consumer has a separate flag. Disabling stops reads and new evaluation; existing modules continue current behavior. Pause definitions first for content incidents. Stop queue producers/workers for systemic issues. Additive tables remain for audit; never delete collected profile data as a technical rollback—use approved erasure flows.
+The pilot uses one exposure flag plus the independent database-backed global kill switch. Setting `TOOL_ROLLOUT_PERSONALIZATION_PILOT=0` and restarting the backend stops pilot reads and evaluation. Pause one definition first for a content-specific incident; use the global kill switch for a systemic issue. No personalization queue or worker exists in the pilot. Never delete collected profile data as a technical rollback—use the approved reset/erasure flow.

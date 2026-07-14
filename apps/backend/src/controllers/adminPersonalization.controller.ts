@@ -18,6 +18,7 @@ import {
   listPersonalizationCatalog,
   PersonalizationCatalogActivationError,
 } from '../services/personalizationCatalogAdmin.service';
+import { getPersonalizationPilotQuality } from '../services/personalizationPilotQuality.service';
 
 const pauseSchema = z.object({
   reason: z.string().min(1, 'reason is required'),
@@ -30,6 +31,9 @@ const activateBundleSchema = z.object({
   authoredBy: z.string().trim().min(1).max(100),
 }).strict();
 const activateQuestionSchema = z.object({ version: z.number().int().positive() }).strict();
+const qualityQuerySchema = z.object({
+  windowDays: z.coerce.number().int().min(1).max(365).default(30),
+});
 
 export async function getKillSwitchHandler(req: AuthRequest, res: Response): Promise<void> {
   try {
@@ -123,6 +127,20 @@ export async function getCatalogHandler(_req: AuthRequest, res: Response): Promi
   } catch (err) {
     logger.error({ err }, '[ADMIN-PERSONALIZATION] Failed to read catalog');
     res.status(500).json({ success: false, error: { message: 'Failed to read personalization catalog' } });
+  }
+}
+
+export async function getPilotQualityHandler(req: AuthRequest, res: Response): Promise<void> {
+  const query = qualityQuerySchema.safeParse(req.query);
+  if (!query.success) {
+    res.status(400).json({ success: false, error: { message: 'windowDays must be between 1 and 365' } });
+    return;
+  }
+  try {
+    res.json({ success: true, data: await getPersonalizationPilotQuality(query.data.windowDays) });
+  } catch (err) {
+    logger.error({ err }, '[ADMIN-PERSONALIZATION] Failed to read pilot quality summary');
+    res.status(500).json({ success: false, error: { message: 'Failed to read personalization pilot quality' } });
   }
 }
 

@@ -46,3 +46,18 @@ Dashboard and Property Health use the same module endpoint with `dashboard` and 
 ## Catalog approval UI
 
 Admins with MFA can open `/dashboard/admin/personalization`. The page lists existing seeded definition, rule, content and profile-question versions. Activation requires an active ADMIN author user ID; safety-sensitive rules reject activation when that author is the current reviewer. The workflow activates the selected bundle, retires older active versions and writes personalization audit events. It does not author new rules or create database migrations.
+
+## Phase 3 pilot quality
+
+The same admin page includes a 30-day aggregate quality snapshot backed by:
+
+- `GET /api/admin/personalization/quality?windowDays=30`
+- opted-in household count
+- recommendation counts by status and definition
+- accepted and explicit-negative feedback totals
+- bounded feedback-reason counts
+- profile answer/skip/snooze totals
+
+The endpoint requires ADMIN plus MFA and never returns household answers, comments, property/user identifiers or recommendation evidence. Fewer than 20 accepted/negative decision events is explicitly insufficient for review. Reaching 20 permits manual quality review only; online tuning remains disabled.
+
+Pilot users can explain why a suggestion was not useful. `BAD_TIMING` is treated as the existing time-bounded dismissal; other irrelevance reasons use definition suppression. This distinction collects better evidence without introducing behavioral inference.

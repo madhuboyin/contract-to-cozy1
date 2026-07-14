@@ -29,7 +29,10 @@ export async function convertRecommendationToMaintenanceTask(params: {
   );
   await recordRecommendationFeedback({
     recommendationId: params.recommendationId,
-    eventId: params.idempotencyKey,
+    // Acceptance is a recommendation outcome, not an HTTP-attempt outcome.
+    // A stable event ID prevents retries with a fresh request key from
+    // inflating Phase 3 quality metrics after task-action deduplication.
+    eventId: `personalization-task-accepted:${params.recommendationId}`,
     type: 'ACCEPTED',
     explicit: true,
   });

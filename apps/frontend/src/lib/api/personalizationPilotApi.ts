@@ -51,10 +51,11 @@ export async function sendPilotFeedback(
   propertyId: string,
   recommendationId: string,
   type: 'DISMISSED' | 'NOT_RELEVANT',
+  reasonCode?: 'ALREADY_DONE' | 'TOO_EXPENSIVE' | 'NOT_APPLICABLE' | 'BAD_TIMING' | 'WRONG_PROFILE' | 'OTHER',
 ) {
   return (await api.post(
     `/api/properties/${propertyId}/personalization/recommendations/${recommendationId}/feedback`,
-    { eventId: crypto.randomUUID(), type, explicit: true },
+    { eventId: crypto.randomUUID(), type, explicit: true, reasonCode },
   )).data;
 }
 
