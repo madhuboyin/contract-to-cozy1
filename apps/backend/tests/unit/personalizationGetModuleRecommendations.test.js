@@ -8,12 +8,10 @@ function installModule(relativePath, exports) {
   require.cache[resolved] = { id: resolved, filename: resolved, loaded: true, exports };
 }
 
-function loadUseCase({ consented = true } = {}) {
+function loadUseCase() {
   let materialized = 0;
   installModule('../../src/modules/personalization/infrastructure/pilotRepository.ts', {
-    findPilotHouseholdForProperty: async () => consented
-      ? { id: 'hh-1', consentVersion: 'v1', consentedAt: new Date() }
-      : null,
+    findPilotHouseholdForProperty: async () => null,
     listActiveRecommendationsForModule: async () => [{
       id: 'rec-1',
       status: 'ACTIVE',
@@ -50,10 +48,10 @@ test('returns capability-aware Maintenance items through the shared contract', a
   assert.equal(materialized(), 1);
 });
 
-test('does not evaluate or expose recommendations before opt-in', async () => {
-  const { getModuleRecommendations, materialized } = loadUseCase({ consented: false });
+test('evaluates property recommendations without optional household opt-in', async () => {
+  const { getModuleRecommendations, materialized } = loadUseCase();
   const result = await getModuleRecommendations('prop-1', 'MAINTENANCE', capabilities, 3);
-  assert.equal(result.configured, false);
-  assert.deepEqual(result.items, []);
-  assert.equal(materialized(), 0);
+  assert.equal(result.configured, true);
+  assert.equal(result.items.length, 1);
+  assert.equal(materialized(), 1);
 });

@@ -8,11 +8,11 @@ import { ArrowLeft, Lightbulb, Network, RefreshCw, RotateCcw, ThumbsDown } from 
 import { usePropertyContext } from '@/lib/property/PropertyContext';
 import {
   answerPilotQuestion,
+  enableOptionalPersonalizationProfile,
   getPersonalizationContextMap,
   getPilotPersonalization,
-  optInPilotPersonalization,
-  resetPilotPersonalization,
-  refreshPilotPersonalization,
+  resetOptionalPersonalizationProfile,
+  refreshPersonalization,
   sendPilotFeedback,
 } from '@/lib/api/personalizationPilotApi';
 import {
@@ -103,7 +103,7 @@ export default function PersonalizationPilotPage() {
   const contextMapQuery = useQuery({
     queryKey: ['personalization-context-map', propertyId],
     queryFn: () => getPersonalizationContextMap(propertyId!),
-    enabled: Boolean(propertyId && pilot?.optedIn && pilot.capabilities.canViewSensitiveEvidence),
+    enabled: Boolean(propertyId && pilot?.profileEnabled && pilot.capabilities.canViewSensitiveEvidence),
     staleTime: 30_000,
   });
 
@@ -111,8 +111,8 @@ export default function PersonalizationPilotPage() {
     queryClient.invalidateQueries({ queryKey }),
     queryClient.invalidateQueries({ queryKey: ['personalization-context-map', propertyId] }),
   ]);
-  const optIn = useMutation({ mutationFn: () => optInPilotPersonalization(propertyId!), onSuccess: refresh });
-  const reset = useMutation({ mutationFn: () => resetPilotPersonalization(propertyId!), onSuccess: refresh });
+  const optIn = useMutation({ mutationFn: () => enableOptionalPersonalizationProfile(propertyId!), onSuccess: refresh });
+  const reset = useMutation({ mutationFn: () => resetOptionalPersonalizationProfile(propertyId!), onSuccess: refresh });
   const feedback = useMutation({
     mutationFn: ({ recommendationId, type, reasonCode }: { recommendationId: string; type: 'DISMISSED' | 'NOT_RELEVANT'; reasonCode: PilotFeedbackReason }) =>
       sendPilotFeedback(propertyId!, recommendationId, type, reasonCode),
@@ -122,11 +122,11 @@ export default function PersonalizationPilotPage() {
     },
   });
   const recompute = useMutation({
-    mutationFn: () => refreshPilotPersonalization(propertyId!),
+    mutationFn: () => refreshPersonalization(propertyId!),
     onSuccess: refresh,
   });
   const resetWithConfirmation = () => {
-    if (window.confirm('Reset your personalization profile and remove its recommendations?')) {
+    if (window.confirm('Remove your optional household profile? Property-based home guidance will remain available.')) {
       reset.mutate();
     }
   };
@@ -145,28 +145,25 @@ export default function PersonalizationPilotPage() {
         <Link href={`/dashboard?propertyId=${encodeURIComponent(propertyId)}`} className="no-brand-style inline-flex items-center gap-2 text-sm font-semibold text-[hsl(var(--mobile-brand-strong))]">
           <ArrowLeft className="h-4 w-4" /> Back to Dashboard
         </Link>
-        <MobileSectionHeader title="Home guidance pilot" subtitle="A small, explainable set of suggestions based on your home" />
+        <MobileSectionHeader title="Personalized home guidance" subtitle="Explainable suggestions based on your home" />
       </MobileSection>
 
       {pilotQuery.isLoading ? (
         <SummaryCard title="Loading guidance" subtitle="Checking this home's current signals"><div /></SummaryCard>
       ) : pilotQuery.isError ? (
-        <EmptyStateCard title="Pilot unavailable" description="This pilot is not enabled for this account yet." />
-      ) : !pilot?.optedIn ? (
-        <SummaryCard title="Help us prioritize what matters" subtitle="The pilot creates a home guidance profile only after you opt in.">
-          <div className="space-y-4 text-sm text-[hsl(var(--mobile-text-secondary))]">
-            <p>We use property maintenance history and answers you choose to provide. We do not infer family, health, income, or pet details.</p>
-            {pilot?.capabilities.canManageSensitiveProfile ? (
-              <button type="button" disabled={optIn.isPending} onClick={() => optIn.mutate()} className="min-h-[44px] rounded-xl bg-[hsl(var(--mobile-brand-strong))] px-4 py-2 font-semibold text-white disabled:opacity-60">
-                {optIn.isPending ? 'Turning on…' : 'Join the pilot'}
-              </button>
-            ) : (
-              <p>The property owner can choose whether to join this pilot.</p>
-            )}
-          </div>
-        </SummaryCard>
-      ) : (
+        <EmptyStateCard title="Guidance unavailable" description="Personalized guidance could not be loaded for this home." />
+      ) : pilot ? (
         <>
+          {!pilot.profileEnabled && pilot.capabilities.canManageSensitiveProfile ? (
+            <SummaryCard title="Improve your recommendations" subtitle="Optional household details can make future guidance more relevant.">
+              <div className="space-y-4 text-sm text-[hsl(var(--mobile-text-secondary))]">
+                <p>Property-based guidance is already available. If you choose, you can add a small household profile. We do not infer family, health, income, or pet details.</p>
+                <button type="button" disabled={optIn.isPending} onClick={() => optIn.mutate()} className="min-h-[44px] rounded-xl bg-[hsl(var(--mobile-brand-strong))] px-4 py-2 font-semibold text-white disabled:opacity-60">
+                  {optIn.isPending ? 'Enabling…' : 'Improve my recommendations'}
+                </button>
+              </div>
+            </SummaryCard>
+          ) : null}
           {pilot.nextQuestion ? (
             <MobileSection>
               <MobileSectionHeader title="One optional question" subtitle="Answer only what you are comfortable sharing" />
@@ -191,7 +188,7 @@ export default function PersonalizationPilotPage() {
             />
             <div className="space-y-3">
               {pilot.recommendations.length === 0 ? (
-                <EmptyStateCard title="Nothing needs attention" description="No reviewed pilot rule currently matches this home." />
+                <EmptyStateCard title="Nothing needs attention" description="No reviewed personalization rule currently matches this home." />
               ) : pilot.recommendations.map((recommendation) => {
                 const explanation = recommendation.explanations[0];
                 const why = explanation?.reasonCodes[0]?.params?.message;
@@ -238,11 +235,11 @@ export default function PersonalizationPilotPage() {
               })}
             </div>
           </MobileSection>
-          {pilot.capabilities.canViewSensitiveEvidence ? (
+          {pilot.profileEnabled && pilot.capabilities.canViewSensitiveEvidence ? (
             <MobileSection>
               <MobileSectionHeader
-                title="What this pilot knows"
-                subtitle="A read-only map of current facts and outputs connected to this home"
+                title="What personalization knows"
+                subtitle="A read-only map of optional facts and outputs connected to this home"
               />
               {contextMapQuery.isLoading ? (
                 <SummaryCard title="Loading your context map" subtitle="Collecting the current consented records"><div /></SummaryCard>
@@ -281,17 +278,17 @@ export default function PersonalizationPilotPage() {
               ) : null}
             </MobileSection>
           ) : null}
-          {pilot.capabilities.canManageSensitiveProfile ? (
+          {pilot.profileEnabled && pilot.capabilities.canManageSensitiveProfile ? (
             <MobileSection>
-              <SummaryCard title="Your control" subtitle="Reset removes the pilot household profile and its recommendations.">
+              <SummaryCard title="Your control" subtitle="Reset removes optional household details. Property-based guidance remains available.">
                 <button type="button" disabled={reset.isPending} onClick={resetWithConfirmation} className="inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-red-300 px-4 py-2 text-sm font-semibold text-red-700 disabled:opacity-60">
-                  <RotateCcw className="h-4 w-4" /> {reset.isPending ? 'Resetting…' : 'Reset personalization'}
+                  <RotateCcw className="h-4 w-4" /> {reset.isPending ? 'Removing…' : 'Remove optional profile'}
                 </button>
               </SummaryCard>
             </MobileSection>
           ) : null}
         </>
-      )}
+      ) : null}
     </MobilePageContainer>
   );
 }

@@ -16,8 +16,7 @@ export interface MaterializePilotResult {
 
 export async function materializePilotRecommendationsForProperty(
   propertyId: string,
-  householdId: string,
-  trigger = 'PILOT_READ',
+  trigger = 'PROPERTY_READ',
 ): Promise<MaterializePilotResult> {
   let active = 0;
 
@@ -55,7 +54,9 @@ export async function materializePilotRecommendationsForProperty(
 
     await upsertRecommendation({
       propertyId,
-      householdId,
+      // The current reviewed catalog uses property signals only. Optional
+      // household-profile consent must never gate or own these instances.
+      householdId: null,
       definitionId: evaluation.definitionId,
       evaluationRunId: evaluation.evaluationRunId ?? null,
       ruleVersion: evaluation.ruleVersion,

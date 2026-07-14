@@ -1,6 +1,6 @@
-# Personalization pilot operations
+# Personalization internal-validation operations
 
-The pilot is disabled by default and does not create or run database migration scripts.
+Reviewed property personalization is available by default and does not create or run database migration scripts. Optional household-profile collection remains disabled until an owner explicitly enables it.
 
 ## Database ownership
 
@@ -26,15 +26,15 @@ It is the SQL equivalent of the TypeScript seed; run one or the other, not both
 
 ## Exposure and rollback
 
-Set `TOOL_ROLLOUT_PERSONALIZATION_PILOT` to the desired pilot percentage. The default is `0`. The database-backed personalization kill switch remains the immediate system-wide stop.
+There is no personalization percentage enrollment or per-user rollout flag. Authenticated property users can read reviewed property guidance when matching definition, rule and content versions are `ACTIVE`. The database-backed personalization kill switch remains the immediate system-wide stop.
 
-There is no nightly personalization sweep. Recommendations recompute for the selected opted-in property on opt-in and read. Disabling the rollout flag or engaging the kill switch stops exposure without changing property data.
+There is no nightly personalization sweep. Recommendations recompute for the selected property on read or explicit refresh. Engaging the kill switch stops evaluation without changing property or optional profile data.
 
 Admins can also emergency-pause one definition through `POST /api/admin/personalization/definitions/:code/pause` and resume it through the matching `/resume` endpoint. These operations require authenticated ADMIN role plus MFA and write personalization audit events.
 
 ## Phase 2 Maintenance placement
 
-The first cross-module placement reuses the same pilot exposure flag and ACTIVE definition/rule/content gates:
+The first cross-module placement uses the same ACTIVE definition/rule/content gates:
 
 - `GET /api/properties/:propertyId/personalization/modules/maintenance/recommendations?limit=3`
 - `POST /api/properties/:propertyId/personalization/recommendations/:recommendationId/actions/convert-to-task`
@@ -64,10 +64,10 @@ Pilot users can explain why a suggestion was not useful. `BAD_TIMING` is treated
 
 ## Phase 4 context transparency
 
-An opted-in property owner can inspect the current personalization context through:
+An owner who enabled the optional household profile can inspect its current personalization context through:
 
 - `GET /api/properties/:propertyId/personalization/context-map`
-- `/dashboard/personalization` under **What this pilot knows**
+- `/dashboard/personalization` under **What personalization knows**
 
 The endpoint requires the owner-only `canViewSensitiveEvidence` capability. It returns semantic nodes and relationships for the active household/property link, explicit profile facts, current property signals and active recommendations. It does not return database IDs, owner IDs, raw trait evidence, arbitrary nested JSON or profile data to contributors/viewers.
 

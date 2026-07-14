@@ -100,13 +100,6 @@ const TOOL_DEFAULTS: Record<string, { label: string; defaultPct: number }> = {
   PLANT_ADVISOR:             { label: 'Plant Advisor',               defaultPct: 100 },
   NEIGHBORHOOD_CHANGE_RADAR: { label: 'Neighborhood Change Radar',   defaultPct: 25  },
 
-  // Personalization pilot — one exposure flag plus the independent, DB-backed
-  // emergency kill switch. Consumer-specific flags can be introduced after
-  // the pilot has multiple real placements.
-  // Separate from the emergency kill switch (personalizationKillSwitch.service.ts),
-  // which is a DB-backed, instantly-flippable system-wide pause rather than a
-  // staged env-var rollout.
-  PERSONALIZATION_PILOT:         { label: 'Personalization — Pilot',                defaultPct: 0 },
   // Compatibility gate for the retained shadow comparison tests/manual tool.
   PERSONALIZATION_SHADOW:        { label: 'Personalization — Shadow Evaluation',   defaultPct: 0 },
 };

@@ -42,7 +42,6 @@ function loadUseCase({ recommendation = undefined, deduped = false } = {}) {
 const params = {
   recommendationId: 'rec-1',
   propertyId: 'prop-1',
-  householdId: 'hh-1',
   userId: 'user-1',
   idempotencyKey: 'event-1',
 };

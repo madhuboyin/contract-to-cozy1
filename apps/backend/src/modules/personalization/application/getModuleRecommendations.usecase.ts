@@ -11,12 +11,8 @@ export async function getModuleRecommendations(
   limit = 10,
 ) {
   const household = await findPilotHouseholdForProperty(propertyId);
-  if (!household?.consentVersion) {
-    return { configured: false, module, generatedAt: new Date().toISOString(), items: [] };
-  }
-
-  await materializePilotRecommendationsForProperty(propertyId, household.id, `MODULE_${module}_READ`);
-  const stored = await listActiveRecommendationsForModule(propertyId, household.id, 25);
+  await materializePilotRecommendationsForProperty(propertyId, `MODULE_${module}_READ`);
+  const stored = await listActiveRecommendationsForModule(propertyId, household?.id, 25);
   const items = stored
     .map((recommendation) => mapRecommendationToModule(recommendation, module, capabilities.canAct))
     .filter((item): item is NonNullable<typeof item> => Boolean(item))

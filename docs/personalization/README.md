@@ -1,12 +1,12 @@
 # ContractToCozy Personalization Engine
 
-**Status:** Discovery baseline with pilot implementation strategy
+**Status:** Internal validation with default property personalization
 
-**Review date:** 2026-07-13
+**Review date:** 2026-07-14
 
 **Decision:** Feasible with moderate refactoring; implement first as a module inside the existing Express backend.
 
-This directory began as the evidence-backed discovery package and Functional Requirements Document (FRD). The active delivery strategy is now the data-free pilot in `09-implementation-roadmap.md`; larger target-architecture sections remain long-term reference material, not current commitments.
+This directory began as the evidence-backed discovery package and Functional Requirements Document (FRD). The active delivery strategy is internal validation with no real-user cohort: reviewed property-based guidance is available by default, while additional household-profile collection remains optional and explicitly consented. Larger target-architecture sections remain long-term reference material, not current commitments.
 
 ## Decision summary
 
@@ -15,11 +15,11 @@ This directory began as the evidence-backed discovery package and Functional Req
 | Runtime boundary | Modular monolith under `apps/backend/src/modules/personalization/` |
 | Primary store | Existing PostgreSQL through Prisma; relational core plus validated JSON rule AST and snapshot payloads |
 | Rules | Custom, deliberately small typed evaluator; no executable database code |
-| Evaluation | Pilot: opt-in/read-triggered recomputation; add event-driven work only after measured need |
-| Queue | No personalization queue or nightly sweep during the pilot |
+| Evaluation | Read/manual recomputation for reviewed property rules; add event-driven work only after measured need |
+| Queue | No personalization queue or nightly sweep during internal validation |
 | Graph/vector database | Neither is justified for the current Phase 4 transparency slice |
 | AI | Assist extraction, summaries, and authoring; never eligibility, safety gates, authorization, or financial math |
-| UI | Opt-in control plus shared Dashboard, Maintenance and Health placements; internal catalog approval |
+| UI | Default property guidance plus optional “Improve recommendations” profile; shared placements; internal catalog approval |
 | Feasibility | **Feasible with moderate refactoring** |
 
 ## Document map
@@ -36,7 +36,7 @@ This directory began as the evidence-backed discovery package and Functional Req
 10. [Testing strategy](10-testing-strategy.md)
 11. [Risks and open questions](11-risks-and-open-questions.md)
 12. [Codebase evidence index](codebase-evidence.md)
-13. [Pilot operations](pilot-operations.md)
+13. [Internal-validation operations](pilot-operations.md)
 14. [Phase 1 completion audit](phase1-completion-audit.md)
 15. [Phase 2 implementation audit](phase2-implementation-audit.md)
 16. [Phase 3 initial implementation audit](phase3-implementation-audit.md)

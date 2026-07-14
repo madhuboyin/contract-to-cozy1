@@ -39,7 +39,7 @@ export interface HouseholdContextMap {
 
 const LIMITATIONS = [
   'Current-state view only; it is not a retained household timeline.',
-  'Household profile facts come only from explicit pilot answers.',
+  'Household profile facts come only from explicit optional answers.',
   'No future-event simulation or inferred household relationship is included.',
   'The existing Home Digital Twin remains a separate property-maintenance tool.',
 ];

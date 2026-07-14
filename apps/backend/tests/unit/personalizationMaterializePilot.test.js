@@ -39,17 +39,18 @@ function loadUseCase({ contentAvailable = true } = {}) {
 
 test('materializes all three eligible pilot definitions using active versioned content', async () => {
   const { materializePilotRecommendationsForProperty, upserts } = loadUseCase();
-  const result = await materializePilotRecommendationsForProperty('prop-1', 'hh-1', 'PILOT_MANUAL');
+  const result = await materializePilotRecommendationsForProperty('prop-1', 'MANUAL');
   assert.deepEqual(result, { evaluated: 3, active: 3 });
   assert.equal(upserts.length, 3);
   assert.ok(upserts.every((item) => item.contentVersion === 2));
   assert.ok(upserts.every((item) => item.headline === 'Reviewed title'));
   assert.ok(upserts.every((item) => item.reasonCodes[0].params.message === 'Reviewed explanation'));
-  assert.ok(upserts.every((item) => item.evaluationRunId === 'run-PILOT_MANUAL'));
+  assert.ok(upserts.every((item) => item.evaluationRunId === 'run-MANUAL'));
+  assert.ok(upserts.every((item) => item.householdId === null));
 });
 test('does not surface eligible recommendations without ACTIVE reviewed content', async () => {
   const { materializePilotRecommendationsForProperty, upserts, expired } = loadUseCase({ contentAvailable: false });
-  const result = await materializePilotRecommendationsForProperty('prop-1', 'hh-1');
+  const result = await materializePilotRecommendationsForProperty('prop-1');
   assert.deepEqual(result, { evaluated: 3, active: 0 });
   assert.equal(upserts.length, 0);
   assert.equal(expired.length, 3);

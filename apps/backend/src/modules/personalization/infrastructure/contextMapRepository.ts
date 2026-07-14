@@ -2,18 +2,20 @@ import { prisma } from '../../../lib/prisma';
 
 /**
  * Loads only the current, property-relevant records needed by the Phase 4
- * transparency facade. Database identifiers and raw evidence are deliberately
- * not selected because they are not part of the public context-map contract.
+ * transparency facade. One household identifier is used internally to scope
+ * outputs, then removed; database identifiers and raw evidence are never part
+ * of the public context-map contract.
  */
 export async function loadHouseholdContextMapData(propertyId: string) {
-  return prisma.household.findFirst({
-    where: {
-      status: 'ACTIVE',
-      deletedAt: null,
-      consentVersion: { not: null },
-      properties: { some: { propertyId, effectiveTo: null } },
-    },
-    select: {
+  const household = await prisma.household.findFirst({
+      where: {
+        status: 'ACTIVE',
+        deletedAt: null,
+        consentVersion: { not: null },
+        properties: { some: { propertyId, effectiveTo: null } },
+      },
+      select: {
+      id: true,
       status: true,
       source: true,
       consentVersion: true,
@@ -97,18 +99,26 @@ export async function loadHouseholdContextMapData(propertyId: string) {
           validUntil: true,
         },
       },
-      recommendations: {
-        where: { propertyId, status: 'ACTIVE' },
-        orderBy: [{ score: 'desc' }, { firstEligibleAt: 'desc' }],
-        select: {
-          status: true,
-          firstEligibleAt: true,
-          expiresAt: true,
-          definition: { select: { code: true } },
-        },
       },
-    },
   });
+  if (!household) return null;
+
+  const recommendations = await prisma.personalizedRecommendation.findMany({
+      where: {
+        propertyId,
+        status: 'ACTIVE',
+        OR: [{ householdId: null }, { householdId: household.id }],
+      },
+      orderBy: [{ score: 'desc' }, { firstEligibleAt: 'desc' }],
+      select: {
+        status: true,
+        firstEligibleAt: true,
+        expiresAt: true,
+        definition: { select: { code: true } },
+      },
+  });
+  const { id: _householdId, ...publicHousehold } = household;
+  return { ...publicHousehold, recommendations };
 }
 
 export type HouseholdContextMapData = NonNullable<Awaited<ReturnType<typeof loadHouseholdContextMapData>>>;

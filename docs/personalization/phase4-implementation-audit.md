@@ -12,7 +12,7 @@ Phase 4 has started with context transparency. It has not started a household in
 | Provenance and validity metadata | Complete | Nodes/edges expose source plus available `validFrom`/`validTo`; consent version/time is explicit |
 | Stable public identities | Complete | Semantic keys replace database, property, household and user IDs in the response |
 | Bounded value disclosure | Complete | Scalar values are formatted; nested arbitrary JSON and trait evidence are not returned |
-| Owner transparency UI | Complete | Pilot page shows explicit fact cards, output counts and the current-state limitation |
+| Owner transparency UI | Complete | Personalization page shows explicit fact cards, output counts and the current-state limitation after optional-profile consent |
 | Focused tests | Complete | Mapping, pre-consent empty behavior, private-value omission, capability route and UI boundary coverage |
 
 ## Privacy and data posture
@@ -25,7 +25,7 @@ Phase 4 has started with context transparency. It has not started a household in
 
 ## Why the UI is not a graph canvas
 
-The pilot currently contains a small number of current facts. A visual node canvas or timeline would add interaction cost without improving the owner's understanding. The compact list still uses a typed graph-shaped API, leaving the backend contract useful if real journeys later justify a richer view.
+Internal validation currently contains a small number of current facts. A visual node canvas or timeline would add interaction cost without improving the owner's understanding. The compact list still uses a typed graph-shaped API, leaving the backend contract useful if real journeys later justify a richer view.
 
 ## Intentionally deferred
 

@@ -14,14 +14,10 @@ export async function getPilotPersonalization(
   capabilities: PersonalizationCapabilities,
 ) {
   const household = await findPilotHouseholdForProperty(propertyId);
-  if (!household?.consentVersion) {
-    return { optedIn: false, recommendations: [], capabilities };
-  }
-
-  await materializePilotRecommendationsForProperty(propertyId, household.id);
+  await materializePilotRecommendationsForProperty(propertyId);
   const [storedRecommendations, nextQuestion] = await Promise.all([
-    listActivePilotRecommendations(propertyId, household.id),
-    capabilities.canManageSensitiveProfile
+    listActivePilotRecommendations(propertyId, household?.id),
+    household?.consentVersion && capabilities.canManageSensitiveProfile
       ? getNextEligibleQuestionForHousehold(household.id, 'PILOT')
       : Promise.resolve({ question: null }),
   ]);
@@ -34,8 +30,8 @@ export async function getPilotPersonalization(
     definition: { ...recommendation.definition, targetModule: 'Maintenance' },
   }));
   return {
-    optedIn: true,
-    consentedAt: household.consentedAt,
+    profileEnabled: Boolean(household?.consentVersion),
+    consentedAt: household?.consentedAt ?? null,
     recommendations,
     nextQuestion: nextQuestion.question,
     capabilities,
@@ -44,8 +40,7 @@ export async function getPilotPersonalization(
 
 export async function optInToPilotPersonalization(propertyId: string, userId: string) {
   const household = await optInPilotHousehold(propertyId, userId);
-  await materializePilotRecommendationsForProperty(propertyId, household.id);
-  return { optedIn: true, consentedAt: household.consentedAt };
+  return { profileEnabled: true, consentedAt: household.consentedAt };
 }
 
 export async function resetPilotPersonalization(propertyId: string, userId: string) {
@@ -53,8 +48,6 @@ export async function resetPilotPersonalization(propertyId: string, userId: stri
 }
 
 export async function refreshPilotPersonalization(propertyId: string) {
-  const household = await findPilotHouseholdForProperty(propertyId);
-  if (!household?.consentVersion) return { optedIn: false, evaluated: 0, active: 0 };
-  const result = await materializePilotRecommendationsForProperty(propertyId, household.id, 'PILOT_MANUAL');
-  return { optedIn: true, ...result };
+  const result = await materializePilotRecommendationsForProperty(propertyId, 'MANUAL');
+  return result;
 }

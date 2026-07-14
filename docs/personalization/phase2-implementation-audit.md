@@ -15,7 +15,7 @@ This audit records the completed engineering boundary under the revised data-fre
 | Task action adapter | Complete | Supported recommendations invoke the existing `PropertyMaintenanceTaskService` |
 | Action idempotency | Complete | Recommendation-scoped `actionKey` reuses an existing task instead of creating duplicates |
 | Feedback linkage | Complete | Successful conversion records explicit `ACCEPTED` feedback |
-| Consent/content gates | Complete | No module recommendation is returned before opt-in or without ACTIVE reviewed rule/content |
+| Default/content gates | Complete | Property recommendations require no household opt-in but still require ACTIVE reviewed rule/content |
 | Focused tests | Complete | Contract mapping, consent, capabilities, conversion, deduplication, unsupported action and UI integration |
 | Catalog approval UI | Complete | MFA-protected admin page lists versions and activates existing definition/rule/content/question bundles |
 | Safety review enforcement | Complete | Safety-sensitive activation requires distinct active ADMIN author and reviewer identities |
@@ -35,4 +35,4 @@ This slice changes no Prisma model and creates no migration or backfill. Module 
 
 ## Operational validation
 
-Activate selected seeded versions through the admin workflow, enable the pilot flag for disposable pilot accounts, and verify the same recommendation on Dashboard, Maintenance and Health. Expansion to another module should begin only with a relevant reviewed definition and a measured pilot need.
+Activate selected seeded versions through the admin workflow and verify the same recommendation on Dashboard, Maintenance and Health using a disposable internal account. No percentage flag or household profile is required. Expansion to another module should begin only with a relevant reviewed definition and an observed product need.

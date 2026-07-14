@@ -7,36 +7,36 @@ No calendar estimates are given because team size, live load, node count and con
 **Effort: Medium.** This phase is deliberately smaller while the product has no real users or production data that must survive schema changes.
 
 - **Keep:** bounded personalization module; property capability policy; distinct Household aggregate; typed rule validator/evaluator; audit/redaction; kill switch; definition lifecycle; focused unit and authorization tests.
-- **Data:** maintain the Prisma schema as the desired pilot schema. The user applies database changes. Do not create migration scripts or backfill existing properties; create a Household lazily when a pilot homeowner opts in.
+- **Data:** maintain the Prisma schema as the desired internal-validation schema. The user applies database changes. Do not create migration scripts or backfill existing properties; create a Household lazily only when an owner enables the optional profile.
 - **Catalog:** retain the larger catalog as a future planning artifact, but implement and test only the three-definition pilot set. Definitions remain inactive until their rule and content review is complete.
-- **Scheduling:** no database-wide nightly personalization sweep. Recompute for an opted-in property on opt-in, relevant profile/property changes, explicit refresh, or a stale read.
+- **Scheduling:** no database-wide nightly personalization sweep. Recompute property guidance on read/manual refresh; recompute enhanced guidance after relevant profile changes when such rules exist.
 - **Testing:** authorization regression, rule schema/golden fixtures, consent and deletion, idempotency, transaction rollback, kill switch, and telemetry redaction. Migration rehearsal becomes relevant only after a deployed database contains data that must survive a schema change.
-- **Exit criteria:** access policy, evaluator, flags/kill switch, audit/redaction and pilot definition fixtures pass. Database migration/backfill gates are not Phase 0 exit criteria during the data-free pilot.
+- **Exit criteria:** access policy, evaluator, kill switch, audit/redaction and definition fixtures pass. Database migration/backfill gates are not Phase 0 exit criteria while no deployed data must survive changes.
 
-## Phase 1 — Thin deterministic pilot (engineering complete; activation pending)
+## Phase 1 — Thin deterministic personalization (engineering complete; catalog activation pending)
 
 **Effort: Medium.** The purpose is to learn whether homeowners find the feature useful, not to pre-build the long-term intelligence platform.
 
-- **Scope/deliverables:** explicit opt-in; lazily-created Household; at most five high-value profile questions; three reviewed deterministic definitions; generic evaluation/materialization; structured “why”; top-three read surface; explicit feedback; reset/delete control.
+- **Scope/deliverables:** default property guidance; optional explicitly consented Household profile; at most five optional profile questions; three reviewed deterministic definitions; generic evaluation/materialization; structured “why”; top-three read surface; explicit feedback; profile reset/delete control.
 - **Data:** use only existing pilot schema entities and explicit answers. Do not infer sensitive traits. Do not add speculative entities, migrations, backfills, caches, queues, or graph structures.
 - **Backend:** authenticated property-scoped APIs; generic definition evaluator; validated and transactional answer writes; read-triggered/manual recompute; recommendation suppression; admin pause/kill switch.
-- **Frontend:** one small mobile-accessible pilot surface with opt-in, top-three recommendations, explanations, feedback and reset. Defer a full household settings area and cross-module placements.
+- **Frontend:** one small mobile-accessible guidance surface with default recommendations, an optional “Improve recommendations” profile, explanations, feedback and profile reset. Defer a full household settings area.
 - **Pilot catalog:** HVAC filter replacement check, smoke/CO detector battery check and dryer-vent cleaning. Safety-sensitive definitions stay DRAFT until two-person content/rule review; activation is an explicit operational decision.
-- **Feature flags:** one pilot exposure flag plus the global kill switch. Remove placement-by-placement flags until multiple consumers exist.
+- **Exposure:** no percentage enrollment. Authenticated property users receive reviewed property guidance by default; the global kill switch and per-definition lifecycle remain the operational stops.
 - **Testing:** three golden rule paths (positive/negative/unknown), API authorization, consent, invalid-answer rejection, atomic profile writes, feedback/suppression, reset, empty state and accessibility smoke tests.
-- **Exit criteria:** a pilot user can opt in, receive no more than three explainable recommendations, give feedback and reset data; no recommendation is generated from unconsented household data. Catalog expansion and automated sweeping require measured pilot demand.
+- **Exit criteria:** a property user can receive no more than three explainable property recommendations, give feedback and act without a household profile; an owner can optionally enable/reset that profile; no household-based recommendation is generated from unconsented profile data.
 
-## Phase 2 — Cross-module personalization (greenfield engineering complete; pilot validation pending)
+## Phase 2 — Cross-module personalization (greenfield engineering complete; internal validation pending)
 
 **Effort: Very large.**
 
-The revised greenfield scope proves cross-module reuse with the existing three-definition catalog. No broad catalog, queue, cache or data-model expansion is justified before pilot use.
+The revised greenfield scope proves cross-module reuse with the existing three-definition catalog. No broad catalog, queue, cache or data-model expansion is justified before observed use.
 
 - **Scope/deliverables:** one shared property/module recommendation contract; Dashboard, Maintenance and Property Health placements; idempotent Maintenance task conversion; controlled catalog review/activation UI; per-definition pause/resume.
 - **Data:** reuse existing recommendation, rule, content, question and maintenance-task entities. Module routing and supported actions are code-owned catalog metadata; no migrations or backfills.
 - **Backend:** modules request ranked DTOs and never read profile tables or duplicate eligibility rules. Admin activation retires older active versions, records review identity and audit events, and enforces different active ADMIN author/reviewer identities for safety-sensitive rules.
 - **Frontend:** three placements consume the same instances; Maintenance can act, Dashboard/Health navigate to the authoritative action surface; admin can review status and activate existing versions/questions.
-- **Testing:** shared contract, consent/content gates, capabilities, action deduplication, safety review, admin lifecycle and placement smoke coverage.
+- **Testing:** shared contract, default property access, optional-profile consent, content gates, capabilities, action deduplication, safety review, admin lifecycle and placement smoke coverage.
 - **Exit criteria:** the same reviewed recommendation can appear consistently across Dashboard, Maintenance and Health; supported conversion creates at most one task; admin activation/pause is audited; no module copies household eligibility rules.
 
 Seller Prep, Risk/protection, Buyer, Community, Climate, Wellness, Energy, providers, assistant and notifications become post-pilot catalog expansion. They require relevant reviewed definitions and observed demand; wiring maintenance-only recommendations into them would not constitute valid personalization.
@@ -73,7 +73,7 @@ The original Phase 4 assumed mature, longitudinal real-user data. The product is
 
 ## First implementation step
 
-Write an Architecture Decision Record and a thin vertical proof behind a disabled flag: a property capability policy, module skeleton, typed rule validator/evaluator, one non-sensitive property trait, one inactive HVAC-filter definition, an evaluation run/snapshot, and golden tests. It proves boundaries and operations without collecting household data or changing UI behavior.
+Write an Architecture Decision Record and a thin vertical proof with inactive catalog content: a property capability policy, module skeleton, typed rule validator/evaluator, one non-sensitive property trait, one inactive HVAC-filter definition, an evaluation run/snapshot, and golden tests. It proves boundaries and operations without collecting household data or changing UI behavior.
 
 ## Migration order by consumer
 
@@ -86,4 +86,4 @@ Write an Architecture Decision Record and a thin vertical proof behind a disable
 
 ## Rollback strategy
 
-The pilot uses one exposure flag plus the independent database-backed global kill switch. Setting `TOOL_ROLLOUT_PERSONALIZATION_PILOT=0` and restarting the backend stops pilot reads and evaluation. Pause one definition first for a content-specific incident; use the global kill switch for a systemic issue. No personalization queue or worker exists in the pilot. Never delete collected profile data as a technical rollback—use the approved reset/erasure flow.
+Pause one definition first for a content-specific incident; use the independent database-backed global kill switch for a systemic issue. Definitions and content that are not `ACTIVE` never materialize. No personalization queue or worker exists. Never delete optional profile data as a technical rollback—use the approved reset/erasure flow.

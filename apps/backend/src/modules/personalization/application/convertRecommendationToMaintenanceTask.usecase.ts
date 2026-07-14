@@ -8,7 +8,7 @@ export type ConvertRecommendationStatus = 'CREATED' | 'EXISTING' | 'RECOMMENDATI
 export async function convertRecommendationToMaintenanceTask(params: {
   recommendationId: string;
   propertyId: string;
-  householdId: string;
+  householdId?: string | null;
   userId: string;
   idempotencyKey: string;
 }) {
