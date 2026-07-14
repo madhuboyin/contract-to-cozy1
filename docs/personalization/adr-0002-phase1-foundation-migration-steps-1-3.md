@@ -8,6 +8,12 @@ seed strategy must not be executed: there are no real users to backfill, the
 user owns database deployment, and pilot Households are now created lazily on
 explicit opt-in. The obsolete scripts referenced below have been removed.
 
+The current pilot also prunes the unused `TraitDefinition`, `RuleVersion`, and
+`TraitSnapshot` tables. Property-derived traits no longer carry a Household
+foreign key; the evaluation run's compact `resultJson` is the only retained
+input/evidence snapshot. The implementation details below describe the
+superseded historical slice, not the current schema.
+
 ## Context
 
 `09-implementation-roadmap.md` names Phase 1 ("Deterministic personalization

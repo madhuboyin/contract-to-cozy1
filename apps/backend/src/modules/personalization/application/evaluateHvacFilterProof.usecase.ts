@@ -11,7 +11,7 @@
 // computePropertyTraitSnapshot.usecase.ts existed in Phase 1 step 3) —
 // refactored to call that use case instead, so there's one trait-derivation
 // path, not two that could drift. This also means a run now persists
-// DerivedTrait/TraitSnapshot rows as a side effect, and correctly fails
+// current property-owned DerivedTrait rows as a side effect, and correctly fails
 // with PROPERTY_NOT_FOUND for a nonexistent property instead of silently
 // evaluating to UNKNOWN (the old inline loader never checked the property
 // existed at all).

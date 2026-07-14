@@ -8,13 +8,13 @@ import { prisma } from '../../../lib/prisma';
  */
 export async function loadHouseholdContextMapData(propertyId: string) {
   const household = await prisma.household.findFirst({
-      where: {
-        status: 'ACTIVE',
-        deletedAt: null,
-        consentVersion: { not: null },
-        properties: { some: { propertyId, effectiveTo: null } },
-      },
-      select: {
+    where: {
+      status: 'ACTIVE',
+      deletedAt: null,
+      consentVersion: { not: null },
+      properties: { some: { propertyId, effectiveTo: null } },
+    },
+    select: {
       id: true,
       status: true,
       source: true,
@@ -83,27 +83,28 @@ export async function loadHouseholdContextMapData(propertyId: string) {
           createdAt: true,
         },
       },
-      derivedTraits: {
-        where: {
-          propertyId,
-          overriddenAt: null,
-          OR: [{ validUntil: null }, { validUntil: { gte: new Date() } }],
-        },
-        orderBy: { traitKey: 'asc' },
-        select: {
-          traitKey: true,
-          valueJson: true,
-          source: true,
-          confidence: true,
-          computedAt: true,
-          validUntil: true,
-        },
-      },
-      },
+    },
   });
   if (!household) return null;
 
-  const recommendations = await prisma.personalizedRecommendation.findMany({
+  const [derivedTraits, recommendations] = await Promise.all([
+    prisma.derivedTrait.findMany({
+      where: {
+        propertyId,
+        overriddenAt: null,
+        OR: [{ validUntil: null }, { validUntil: { gte: new Date() } }],
+      },
+      orderBy: { traitKey: 'asc' },
+      select: {
+        traitKey: true,
+        valueJson: true,
+        source: true,
+        confidence: true,
+        computedAt: true,
+        validUntil: true,
+      },
+    }),
+    prisma.personalizedRecommendation.findMany({
       where: {
         propertyId,
         status: 'ACTIVE',
@@ -116,9 +117,10 @@ export async function loadHouseholdContextMapData(propertyId: string) {
         expiresAt: true,
         definition: { select: { code: true } },
       },
-  });
+    }),
+  ]);
   const { id: _householdId, ...publicHousehold } = household;
-  return { ...publicHousehold, recommendations };
+  return { ...publicHousehold, derivedTraits, recommendations };
 }
 
 export type HouseholdContextMapData = NonNullable<Awaited<ReturnType<typeof loadHouseholdContextMapData>>>;

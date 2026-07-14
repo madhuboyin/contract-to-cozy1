@@ -2202,7 +2202,6 @@ model Property {
   personalizationPreferences        HouseholdPreference[]
   personalizationLifestyleAttributes LifestyleAttribute[]
   personalizationDerivedTraits      DerivedTrait[]
-  personalizationTraitSnapshots     TraitSnapshot[]
 
   // Personalization engine — migration steps 4-6 recommendation-instance
   // tables (see docs/personalization/ plan for these steps)
@@ -12673,53 +12672,14 @@ model ProviderServiceZone {
 }
 
 // ============================================================================
-// PERSONALIZATION ENGINE — CATALOG + AUDIT (Phase 0 schema baseline)
+// PERSONALIZATION ENGINE — CATALOG + AUDIT
 // ============================================================================
-// Additive-only, inactive-by-default tables per docs/personalization/.
-// No evaluator reads these yet — this is Phase 0's "additive schema
-// baseline" + "20-40 definition content plan" deliverable, scoped to just
-// the catalog/definition family from docs/personalization/05-data-model.md's
-// full 24-entity sketch. The household-profile/trait/recommendation-instance
-// tables (Household, PetProfile, DerivedTrait, PersonalizedRecommendation,
-// etc.) are deliberately NOT included here — that's later, separate work
-// once a rule evaluator exists to consume them (see project memory / the
-// roadmap's "first implementation step").
-//
-// Field/status values are kept as strings rather than enums, matching
-// 05-data-model.md's explicit guidance: "Exact Prisma enum names should be
-// finalized during implementation; strings in the sketch reduce premature
-// enum proliferation."
+// The data-free pilot uses three seeded definition/rule/content bundles.
+// Runtime evaluation and admin lifecycle controls read these tables directly;
+// all seeded content remains DRAFT until reviewed activation.
 
-// Catalog of possible derived traits a rule can depend on (e.g.
-// "hasHighSheddingPet"). Purely descriptive metadata at this stage — no
-// DerivedTrait/computation table exists yet, so nothing populates real
-// values against these definitions until that later work lands.
-model TraitDefinition {
-  id                String   @id @default(uuid())
-  key               String
-  version           Int      @default(1)
-  valueType         String // BOOLEAN | NUMBER | TEXT | CODE | DATE | JSON
-  scope             String // HOUSEHOLD | PROPERTY
-  privacyClass      String   @default("STANDARD") // STANDARD | SENSITIVE
-  derivationVersion Int      @default(1)
-  overridePolicy    String   @default("USER_OVERRIDABLE") // USER_OVERRIDABLE | SYSTEM_ONLY
-  dependencyKeys    String[] @default([])
-  status            String   @default("DRAFT") // DRAFT | ACTIVE | RETIRED
-  description       String?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@unique([key, version])
-  @@index([status])
-  @@map("personalization_trait_definitions")
-}
-
-// Stable, versioned identity for one piece of catalog content (e.g.
-// "hvac_filter_pet_adjusted"). See docs/personalization/catalog-plan.md for
-// the Phase 0 candidate list — all seeded rows start DRAFT/inactive; going
-// ACTIVE requires the two-person review the docs call for on safety-adjacent
-// advice, which is explicitly out of scope for this Phase 0 pass.
+// Stable identity for one reviewed catalog recommendation. Seeded rows start
+// DRAFT/inactive; safety-sensitive activation requires two-person review.
 model RecommendationDefinition {
   id          String @id @default(uuid())
   code        String @unique
@@ -12803,24 +12763,6 @@ model RecommendationContentVersion {
   @@map("personalization_recommendation_content_versions")
 }
 
-// Optional bundle/model-weights publish unit, independent of individual rule
-// versions — for future non-per-definition tuning (e.g. ranking weights).
-// Not referenced by any rule yet; additive placeholder per the data model doc.
-model RuleVersion {
-  id                String    @id @default(uuid())
-  version           String    @unique
-  bundleJson        Json?
-  modelWeights      Json?
-  publishApprovedBy String?
-  publishApprovedAt DateTime?
-  effectiveFrom     DateTime?
-  effectiveTo       DateTime?
-
-  createdAt DateTime @default(now())
-
-  @@map("personalization_rule_versions")
-}
-
 // Append-only, allowlisted-metadata audit trail for personalization admin
 // actions (kill switch pause/resume, future definition pause/publish, etc.).
 // Deliberately separate from the generic AuditLog model: AuditLog accepts
@@ -12845,13 +12787,10 @@ model PersonalizationAuditEvent {
   @@map("personalization_audit_events")
 }
 
-// Minimal evaluation-run record for the roadmap's "first implementation
-// step" thin proof — NOT the full TraitSnapshot/PersonalizationSnapshot/
-// Household apparatus from docs/personalization/05-data-model.md's 24-entity
-// sketch (that's Phase 1 MVP build-out, deliberately not built yet; see
-// adr-0001). Records that an evaluation happened, against which rule
-// version, with what result — a compact snapshot, not a queryable trait
-// history table.
+// Records that an evaluation happened, against which rule version, and with
+// what result. resultJson is the single retained input/evidence snapshot for
+// the evaluation; a separate trait-snapshot history table is intentionally
+// omitted for the data-free pilot.
 model PersonalizationEvaluationRun {
   id           String  @id @default(uuid())
   propertyId   String
@@ -12915,8 +12854,6 @@ model Household {
   goals      HouseholdGoal[]
   preferences HouseholdPreference[]
   lifestyleAttributes LifestyleAttribute[]
-  derivedTraits DerivedTrait[]
-  traitSnapshots TraitSnapshot[]
   recommendations PersonalizedRecommendation[]
   recommendationSuppressions RecommendationSuppression[]
   profileAnswers ProfileAnswer[]
@@ -13083,14 +13020,9 @@ model LifestyleAttribute {
 // PERSONALIZATION ENGINE — PROGRESSIVE PROFILING
 // ============================================================================
 // Versioned question catalog + answer/skip/snooze events. Real writes to the
-// five composition tables above (HouseholdMemberSummary/PetProfile/
-// HouseholdGoal/HouseholdPreference/LifestyleAttribute) only ever happen
-// through an ANSWERED ProfileAnswer — see
-// application/recordProfileAnswer.usecase.ts. No sensitive trait
-// materialization (DerivedTrait) reads this data yet — these 9 traits are
-// household-scoped, and DerivedTrait.propertyId is a required column (a
-// deliberate Phase 1 step 3 simplification for property-only traits);
-// revisiting that is separate, later work once a real rule needs it.
+// five composition tables above only happen through a consented ANSWERED
+// ProfileAnswer. Property DerivedTrait rows never read or own this optional
+// household-profile data.
 
 // One versioned question definition. targetKey is used for the three
 // key-value composition tables (HouseholdGoal.goalCode/
@@ -13156,14 +13088,11 @@ model ProfileAnswer {
   @@map("personalization_profile_answers")
 }
 
-// Current effective trait value. This slice only ever writes property-scoped
-// rows (propertyId required, householdId optional/supplementary) — no
-// household-level trait derivation exists yet, so uniqueness is keyed on
-// (propertyId, traitKey) alone. A future household-level trait would need
-// its own uniqueness rule; not added here since nothing produces one yet.
+// Current effective property-derived trait value. Basic personalization is
+// property-owned and available without an optional household profile, so
+// these rows never carry a household/consent relationship.
 model DerivedTrait {
   id                String    @id @default(uuid())
-  householdId       String?
   propertyId        String
   traitKey          String
   valueJson         Json
@@ -13175,54 +13104,24 @@ model DerivedTrait {
   validUntil        DateTime?
   overriddenAt      DateTime?
 
-  household Household? @relation(fields: [householdId], references: [id], onDelete: SetNull)
-  property  Property   @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
 
   @@unique([propertyId, traitKey])
-  @@index([householdId, traitKey])
   @@index([validUntil])
   @@map("personalization_derived_traits")
 }
 
-// Immutable snapshot of the trait set used for one evaluation pass — bounded
-// history, not a full time series.
-model TraitSnapshot {
-  id            String @id @default(uuid())
-  householdId   String?
-  propertyId    String
-  traitsJson    Json // { [traitKey]: value } at snapshot time
-  traitsHash    String // hash of traitsJson, for reuse/dedup detection
-  schemaVersion Int    @default(1)
-
-  computedAt DateTime @default(now())
-
-  household Household? @relation(fields: [householdId], references: [id], onDelete: SetNull)
-  property  Property   @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-
-  @@index([propertyId, computedAt])
-  @@index([traitsHash])
-  @@map("personalization_trait_snapshots")
-}
-
 // ============================================================================
-// PERSONALIZATION ENGINE — RECOMMENDATION INSTANCES (migration steps 4-6)
+// PERSONALIZATION ENGINE — RECOMMENDATION INSTANCES
 // ============================================================================
-// Additive-only, minimal slice per the approved plan for these steps: only
-// the tables needed to hold one real, shadow-evaluatable recommendation
-// instance end to end. Deliberately NOT added yet: RecommendationCandidate
-// (explicitly "log only in MVP" per 05-data-model.md), RecommendationFeedback,
-// RecommendationAction, ProfileQuestion/ProfileAnswer (profiling UI, needs
-// design) — added only once a real consumer needs them.
-//
-// Like propertyId/householdId elsewhere in this schema, householdId is
-// optional (not required, diverging from 05-data-model.md's literal sketch)
-// because this slice only ever produces property-scoped instances; a
-// required householdId in the unique key would let Postgres's NULL != NULL
-// unique-constraint semantics silently allow duplicates.
+// Current reviewed definitions produce property-owned instances with
+// householdId = null. The nullable household link is retained only for future
+// explicitly consented profile-enhanced definitions; it never gates basic
+// property personalization.
 
-// A materialized, user-facing recommendation instance. The shadow job creates
-// an ACTIVE row when eligible, EXPIREs it on a later FALSE/UNKNOWN result,
-// and SUPPRESSes it instead of (re)creating when an active
+// A materialized, user-facing recommendation instance. Evaluation creates an
+// ACTIVE row when eligible, expires it on a later FALSE/UNKNOWN result, and
+// suppresses it instead of (re)creating when an active
 // RecommendationSuppression covers it; explicit negative feedback can also
 // flip a row to DISMISSED (see application/recordRecommendationFeedback.usecase.ts).
 model PersonalizedRecommendation {

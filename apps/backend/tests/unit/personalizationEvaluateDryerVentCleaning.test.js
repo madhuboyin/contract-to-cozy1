@@ -71,7 +71,7 @@ function loadUseCase() {
   const paths = [
     '../../src/services/personalizationKillSwitch.service.ts',
     '../../src/modules/personalization/infrastructure/evaluationRunRepository.ts',
-    '../../src/modules/personalization/infrastructure/traitSnapshotRepository.ts',
+    '../../src/modules/personalization/infrastructure/propertyTraitRepository.ts',
     '../../src/modules/personalization/application/computePropertyTraitSnapshot.usecase.ts',
     '../../src/modules/personalization/application/evaluateHvacFilterProof.usecase.ts',
   ].map((p) => require.resolve(p));

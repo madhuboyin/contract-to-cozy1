@@ -11,8 +11,6 @@ function loadRepository({ household = { id: 'hh-1', consentVersion: 'personaliza
       findMany: async (query) => { calls.push(['recommendation-list', query]); return []; },
     },
     recommendationSuppression: { deleteMany: async (query) => calls.push(['suppressions', query]) },
-    traitSnapshot: { deleteMany: async (query) => calls.push(['snapshots', query]) },
-    derivedTrait: { deleteMany: async (query) => calls.push(['traits', query]) },
     household: {
       findFirst: async () => household,
       delete: async (query) => calls.push(['household', query]),
@@ -29,7 +27,7 @@ function loadRepository({ household = { id: 'hh-1', consentVersion: 'personaliza
 test('reset removes only household-owned outputs before deleting the optional profile', async () => {
   const { resetPilotHousehold, calls } = loadRepository();
   assert.equal(await resetPilotHousehold('prop-1', 'owner-1'), true);
-  assert.deepEqual(calls.map(([name]) => name), ['recommendations', 'suppressions', 'snapshots', 'traits', 'household']);
+  assert.deepEqual(calls.map(([name]) => name), ['recommendations', 'suppressions', 'household']);
   assert.deepEqual(calls[0][1].where, { propertyId: 'prop-1', householdId: 'hh-1' });
 });
 test('reset is a safe no-op when the opted-in household does not exist', async () => {

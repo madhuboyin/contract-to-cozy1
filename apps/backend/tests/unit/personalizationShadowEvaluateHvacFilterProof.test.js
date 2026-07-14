@@ -136,7 +136,7 @@ function loadUseCase(personalizationShadowPct = '100') {
     '../../src/config/featureFlags.ts',
     '../../src/services/personalizationKillSwitch.service.ts',
     '../../src/modules/personalization/infrastructure/evaluationRunRepository.ts',
-    '../../src/modules/personalization/infrastructure/traitSnapshotRepository.ts',
+    '../../src/modules/personalization/infrastructure/propertyTraitRepository.ts',
     '../../src/modules/personalization/infrastructure/recommendationRepository.ts',
     '../../src/modules/personalization/infrastructure/suppressionRepository.ts',
     '../../src/modules/personalization/application/computePropertyTraitSnapshot.usecase.ts',

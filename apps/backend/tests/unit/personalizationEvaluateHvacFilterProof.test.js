@@ -70,13 +70,13 @@ function installPrismaMock(prismaMock) {
 function loadUseCase() {
   // Cache-bust every module in the call chain, not just the top-level one —
   // this use case now calls computePropertyTraitSnapshot.usecase.ts, which
-  // itself calls traitSnapshotRepository.ts; a stale, not-reloaded module in
+  // itself calls propertyTraitRepository.ts; a stale, not-reloaded module in
   // the chain would keep writing into a previous test's mock instance
   // (learned the hard way earlier this session with personalizationAudit.service.ts).
   const paths = [
     '../../src/services/personalizationKillSwitch.service.ts',
     '../../src/modules/personalization/infrastructure/evaluationRunRepository.ts',
-    '../../src/modules/personalization/infrastructure/traitSnapshotRepository.ts',
+    '../../src/modules/personalization/infrastructure/propertyTraitRepository.ts',
     '../../src/modules/personalization/application/computePropertyTraitSnapshot.usecase.ts',
     '../../src/modules/personalization/application/evaluateHvacFilterProof.usecase.ts',
   ].map((p) => require.resolve(p));

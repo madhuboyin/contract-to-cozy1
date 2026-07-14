@@ -156,8 +156,6 @@ export async function resetPilotHousehold(propertyId: string, ownerUserId: strin
     await db.recommendationSuppression.deleteMany({
       where: { propertyId, householdId: household.id },
     });
-    await db.traitSnapshot.deleteMany({ where: { propertyId, householdId: household.id } });
-    await db.derivedTrait.deleteMany({ where: { propertyId, householdId: household.id } });
     await db.household.delete({ where: { id: household.id } });
   });
   return true;

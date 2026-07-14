@@ -7,7 +7,7 @@ Phase 4 has started with context transparency. It has not started a household in
 | Deliverable | Status | Evidence |
 |---|---|---|
 | Current-state relational facade | Complete | `getHouseholdContextMap.usecase.ts` maps existing consented rows into typed nodes and edges |
-| Property-scoped repository query | Complete | Selects the active household/property relationship and only active, applicable profile/output rows |
+| Property-scoped repository query | Complete | Selects the active household/property relationship, loads property-derived traits directly by property, and includes only active applicable profile/output rows |
 | Owner-only API | Complete | `GET /api/properties/:propertyId/personalization/context-map` requires `canViewSensitiveEvidence` after property authorization |
 | Provenance and validity metadata | Complete | Nodes/edges expose source plus available `validFrom`/`validTo`; consent version/time is explicit |
 | Stable public identities | Complete | Semantic keys replace database, property, household and user IDs in the response |
@@ -22,6 +22,7 @@ Phase 4 has started with context transparency. It has not started a household in
 - The context endpoint is restricted to the property owner because household composition and financial preference facts may be sensitive.
 - Raw recommendation/trait evidence, arbitrary nested JSON, database IDs and owner identifiers are excluded.
 - The existing reset/erasure path remains authoritative; this facade stores nothing.
+- Property-derived traits are not household-owned and therefore survive optional-profile reset.
 
 ## Why the UI is not a graph canvas
 

@@ -4,6 +4,12 @@
 
 Use relational ownership/lifecycle tables, a small typed sparse-attribute mechanism, and JSON only for validated rule ASTs/immutable snapshots. Do not add every trait as a column or store all profile data in one opaque JSON document. Current `HouseholdMember` remains an ACL record.
 
+For the current data-free pilot, property traits are code-owned and strictly
+property-scoped. `TraitDefinition` and `RuleVersion` remain deferred design
+concepts rather than database tables. Evaluation inputs are retained once in
+`PersonalizationEvaluationRun.resultJson`; a separate `TraitSnapshot` table is
+intentionally omitted.
+
 ## Proposed entities
 
 | Entity | Purpose/key fields | Relations, constraints, indexes | Growth/audit/delete | Phase |
@@ -15,15 +21,15 @@ Use relational ownership/lifecycle tables, a small typed sparse-attribute mechan
 | `HouseholdGoal` | typed goal, priority, horizon, source | unique active household/property?/goalCode; index goal/status | low; history/audit | MVP |
 | `HouseholdPreference` | typed budget/service/repair/channel/category value | unique active scope/key; index scope/key | low; sensitive where financial | MVP |
 | `LifestyleAttribute` | sparse typed explicit values, source/confidence | unique current scope/key; check exactly one typed value | low; allowlist keys; cascade | MVP |
-| `TraitDefinition` | key/type/scope/derivation version/privacy/override policy/dependencies | unique key+version; index status | catalog-small; immutable versions | MVP |
-| `DerivedTrait` | current effective trait value/source/confidence/evidence/validity/override | unique scope+key current; indexes property/household/key/validUntil | moderate churn; redact evidence | MVP |
-| `TraitSnapshot` | immutable evaluation input trait set/hash/version | household/property/evaluation run; unique hash reuse | bounded history/TTL | MVP |
+| `TraitDefinition` | possible future registry for externally authored traits | not present in the pilot schema; pilot traits remain code-owned | avoid a second unused source of truth | Deferred |
+| `DerivedTrait` | current effective property trait value/source/confidence/evidence/validity/override | unique property+key; indexes property/validUntil | moderate churn; redact evidence | MVP |
+| `TraitSnapshot` | possible separate trait-history record | not present; `PersonalizationEvaluationRun.resultJson` owns the evaluation snapshot | avoids duplicate/unbounded history | Omitted |
 | `ProfileQuestion` | versioned question/value/effort/target/privacy/caps | code+version unique; status/context indexes | catalog-small | MVP |
 | `ProfileAnswer` | answer, source, asked/answered/skipped/snoozed | question+household/property; indexes nextEligibleAt | moderate; sensitive; purge | MVP |
 | `RecommendationDefinition` | stable code/taxonomy/safety/status/ownership | code unique; active/effective/category indexes | catalog-small; never hard-delete used definitions | MVP |
 | `RecommendationRule` | definition version + validated AST/dependency keys | unique definition+version; status/effective indexes | catalog-small; immutable/audited | MVP |
 | `RecommendationContentVersion` | locale/title/body/templates/sources/review date | unique definition+locale+version | catalog-small; immutable | MVP |
-| `RuleVersion` | optional bundle/model weights and publish approval | version unique, effective dates | catalog-small | MVP |
+| `RuleVersion` | possible future bundle/model-weight publish unit | not present until evidence justifies learning/weight optimization | avoids dormant learning infrastructure | Deferred |
 | `RecommendationCandidate` | optional short-lived evaluation trace before instance | run/definition/scope/eligible/score JSON | index run/eligible; TTL 30–90d | Later (log only in MVP) |
 | `PersonalizedRecommendation` | materialized user-facing instance/status/score/versions/dedupe/expiry | unique scope+definition+occurrence key; channel/status/score indexes | main growth; soft lifecycle, retain audit | MVP |
 | `RecommendationExplanation` | structured reasons/evidence/benefit/confidence/corrections | one/version per instance; no raw secret values | proportional; cascade/purge with profile deletion | MVP |
@@ -49,8 +55,6 @@ erDiagram
   HOUSEHOLD ||--o{ HOUSEHOLD_GOAL : sets
   HOUSEHOLD ||--o{ HOUSEHOLD_PREFERENCE : sets
   HOUSEHOLD ||--o{ LIFESTYLE_ATTRIBUTE : describes
-  TRAIT_DEFINITION ||--o{ DERIVED_TRAIT : defines
-  HOUSEHOLD ||--o{ DERIVED_TRAIT : has
   PROPERTY ||--o{ DERIVED_TRAIT : has
   HOUSEHOLD ||--o{ PROFILE_ANSWER : answers
   PROFILE_QUESTION ||--o{ PROFILE_ANSWER : receives

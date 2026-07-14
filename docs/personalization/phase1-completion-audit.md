@@ -17,11 +17,15 @@ This audit applies the revised no-real-user scope in `09-implementation-roadmap.
 | Top-three read surface | Complete | Authenticated property-scoped API and mobile UI limit results to three |
 | Authorization | Complete | VIEWER reads summaries; CONTRIBUTOR refreshes/feedback; OWNER manages consent/profile/reset; non-owner evidence is redacted |
 | Feedback and suppression | Complete | Explicit negative feedback is idempotent and suppresses/dismisses according to policy |
-| Reset/delete | Complete | Owner reset removes the optional household profile and household-bound outputs; property guidance remains available |
+| Reset/delete | Complete | Owner reset removes the optional household profile and household-bound outputs; property traits and guidance remain property-owned and available |
 | Recompute | Complete | Opt-in/read recompute plus explicit contributor refresh; no broad sweep |
 | Operational controls | Complete | ACTIVE catalog gates, global kill switch and per-definition lifecycle hide stored outputs at read time; no percentage enrollment |
 | Focused tests | Complete | Capability, rules, content gate, materialization, profile validation, feedback, reset and UI accessibility smoke coverage |
 | PostgreSQL rollback test | Harness complete | Runs only with explicit `PERSONALIZATION_TEST_DATABASE_URL`; never targets the default/production database |
+
+Schema pruning removed the unused `TraitDefinition`, `RuleVersion`, and
+`TraitSnapshot` models. `DerivedTrait` is property-only; evaluation input and
+evidence are retained once in `PersonalizationEvaluationRun.resultJson`.
 
 ## Operational activation gates
 

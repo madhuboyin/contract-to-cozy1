@@ -3,10 +3,9 @@ const assert = require('node:assert/strict');
 
 require('ts-node/register');
 
-function createPrismaMock({ property = null, householdLink = null } = {}) {
+function createPrismaMock({ property = null } = {}) {
   const derivedTraitUpserts = [];
   const derivedTraitDeletes = [];
-  const traitSnapshots = [];
 
   const prismaMock = {
     property: {
@@ -14,9 +13,6 @@ function createPrismaMock({ property = null, householdLink = null } = {}) {
         if (property && where.id === property.id) return property;
         return null;
       },
-    },
-    householdProperty: {
-      findFirst: async () => householdLink,
     },
     derivedTrait: {
       upsert: async ({ where, create, update }) => {
@@ -28,22 +24,9 @@ function createPrismaMock({ property = null, householdLink = null } = {}) {
         return { count: 1 };
       },
     },
-    traitSnapshot: {
-      create: async ({ data }) => {
-        traitSnapshots.push(data);
-        return { id: `ts-${traitSnapshots.length}`, ...data };
-      },
-      // Reflects the most recently created snapshot's hash, same as a real
-      // "most recent for this property" query would — lets the dedup test
-      // below prove persistTraitSnapshot actually skips a duplicate insert.
-      findFirst: async () => {
-        if (traitSnapshots.length === 0) return null;
-        return { traitsHash: traitSnapshots[traitSnapshots.length - 1].traitsHash };
-      },
-    },
   };
 
-  return { prismaMock, derivedTraitUpserts, derivedTraitDeletes, traitSnapshots };
+  return { prismaMock, derivedTraitUpserts, derivedTraitDeletes };
 }
 
 function installPrismaMock(prismaMock) {
@@ -57,7 +40,7 @@ function installPrismaMock(prismaMock) {
 }
 
 function loadUseCase() {
-  const repoPath = require.resolve('../../src/modules/personalization/infrastructure/traitSnapshotRepository.ts');
+  const repoPath = require.resolve('../../src/modules/personalization/infrastructure/propertyTraitRepository.ts');
   const useCasePath = require.resolve('../../src/modules/personalization/application/computePropertyTraitSnapshot.usecase.ts');
   delete require.cache[repoPath];
   delete require.cache[useCasePath];
@@ -65,27 +48,23 @@ function loadUseCase() {
 }
 
 test('returns FAILED/PROPERTY_NOT_FOUND and persists nothing when the property does not exist', async () => {
-  const { prismaMock, derivedTraitUpserts, traitSnapshots } = createPrismaMock({ property: null });
+  const { prismaMock, derivedTraitUpserts } = createPrismaMock({ property: null });
   installPrismaMock(prismaMock);
   const { computePropertyTraitSnapshot } = loadUseCase();
 
   const result = await computePropertyTraitSnapshot('missing-prop');
   assert.deepEqual(result, { status: 'FAILED', errorCode: 'PROPERTY_NOT_FOUND' });
   assert.equal(derivedTraitUpserts.length, 0);
-  assert.equal(traitSnapshots.length, 0);
 });
 
-test('all traits known: persists a DerivedTrait per trait and one TraitSnapshot with all three', async () => {
+test('all traits known: persists property-owned DerivedTrait rows without household linkage', async () => {
   const property = {
     id: 'prop-1',
     hasSmokeDetectors: false,
     roofReplacementYear: 1990,
     homeAssets: [{ assetType: 'HVAC_FURNACE', lastServiced: new Date(Date.now() - 200 * 24 * 60 * 60 * 1000) }],
   };
-  const { prismaMock, derivedTraitUpserts, traitSnapshots } = createPrismaMock({
-    property,
-    householdLink: { householdId: 'hh-1' },
-  });
+  const { prismaMock, derivedTraitUpserts } = createPrismaMock({ property });
   installPrismaMock(prismaMock);
   const { computePropertyTraitSnapshot } = loadUseCase();
 
@@ -101,26 +80,18 @@ test('all traits known: persists a DerivedTrait per trait and one TraitSnapshot 
   assert.equal(result.traits.hvacFilterDaysSinceServiced.value, 200);
 
   assert.equal(derivedTraitUpserts.length, 4);
-  assert.ok(derivedTraitUpserts.every((u) => u.create.householdId === 'hh-1'));
-
-  assert.equal(traitSnapshots.length, 1);
-  assert.equal(traitSnapshots[0].propertyId, 'prop-1');
-  assert.equal(traitSnapshots[0].householdId, 'hh-1');
-  assert.ok(traitSnapshots[0].traitsHash);
-  assert.equal(traitSnapshots[0].traitsJson.hvacFilterReplacementOverdue.value, true);
+  assert.ok(derivedTraitUpserts.every((u) => u.create.propertyId === 'prop-1'));
+  assert.ok(derivedTraitUpserts.every((u) => !Object.hasOwn(u.create, 'householdId')));
 });
 
-test('unknown traits are excluded from DerivedTrait persistence but included in the snapshot', async () => {
+test('unknown traits delete stale DerivedTrait rows instead of persisting unknown values', async () => {
   const property = {
     id: 'prop-2',
     hasSmokeDetectors: null, // unknown
     roofReplacementYear: null, // unknown
     homeAssets: [], // unknown (no HVAC asset)
   };
-  const { prismaMock, derivedTraitUpserts, derivedTraitDeletes, traitSnapshots } = createPrismaMock({
-    property,
-    householdLink: null,
-  });
+  const { prismaMock, derivedTraitUpserts, derivedTraitDeletes } = createPrismaMock({ property });
   installPrismaMock(prismaMock);
   const { computePropertyTraitSnapshot } = loadUseCase();
 
@@ -148,10 +119,6 @@ test('unknown traits are excluded from DerivedTrait persistence but included in 
     ],
   );
 
-  // Snapshot still records the full (all-unknown) trait set.
-  assert.equal(traitSnapshots.length, 1);
-  assert.equal(traitSnapshots[0].householdId, null);
-  assert.equal(traitSnapshots[0].traitsJson.hvacFilterReplacementOverdue.known, false);
 });
 
 test('all traits known: persists a DerivedTrait per trait', async () => {
@@ -165,7 +132,7 @@ test('all traits known: persists a DerivedTrait per trait', async () => {
       { assetType: 'DRYER', lastServiced: new Date(Date.now() - 400 * 24 * 60 * 60 * 1000) },
     ],
   };
-  const { prismaMock, derivedTraitUpserts } = createPrismaMock({ property, householdLink: null });
+  const { prismaMock, derivedTraitUpserts } = createPrismaMock({ property });
   installPrismaMock(prismaMock);
   const { computePropertyTraitSnapshot } = loadUseCase();
 
@@ -184,7 +151,7 @@ test('partial knowledge: only known traits get a DerivedTrait row', async () => 
     roofReplacementYear: null, // unknown
     homeAssets: [{ assetType: 'HVAC_FURNACE', lastServiced: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000) }], // known, not overdue
   };
-  const { prismaMock, derivedTraitUpserts, derivedTraitDeletes } = createPrismaMock({ property, householdLink: null });
+  const { prismaMock, derivedTraitUpserts, derivedTraitDeletes } = createPrismaMock({ property });
   installPrismaMock(prismaMock);
   const { computePropertyTraitSnapshot } = loadUseCase();
 
@@ -203,41 +170,4 @@ test('partial knowledge: only known traits get a DerivedTrait row', async () => 
     derivedTraitDeletes.map((d) => d.where.traitKey).sort(),
     ['dryerVentCleaningOverdue', 'roofReplacementOverdue', 'smokeDetectorBatteryOverdue'],
   );
-});
-
-test('recomputing with unchanged inputs does not create a duplicate TraitSnapshot', async () => {
-  const property = {
-    id: 'prop-4',
-    hasSmokeDetectors: false,
-    roofReplacementYear: 1990,
-    homeAssets: [{ assetType: 'HVAC_FURNACE', lastServiced: new Date(Date.now() - 200 * 24 * 60 * 60 * 1000) }],
-  };
-  const { prismaMock, traitSnapshots } = createPrismaMock({ property, householdLink: null });
-  installPrismaMock(prismaMock);
-  const { computePropertyTraitSnapshot } = loadUseCase();
-
-  await computePropertyTraitSnapshot('prop-4');
-  await computePropertyTraitSnapshot('prop-4');
-
-  assert.equal(traitSnapshots.length, 1);
-});
-
-test('recomputing with changed inputs still creates a new TraitSnapshot', async () => {
-  const propertyBefore = {
-    id: 'prop-5',
-    hasSmokeDetectors: false,
-    roofReplacementYear: 1990,
-    homeAssets: [{ assetType: 'HVAC_FURNACE', lastServiced: new Date(Date.now() - 200 * 24 * 60 * 60 * 1000) }],
-  };
-  const { prismaMock, traitSnapshots } = createPrismaMock({ property: propertyBefore, householdLink: null });
-  installPrismaMock(prismaMock);
-  const { computePropertyTraitSnapshot } = loadUseCase();
-  await computePropertyTraitSnapshot('prop-5');
-
-  // Same property row, but smoke detectors now confirmed present -> different trait set/hash.
-  prismaMock.property.findUnique = async ({ where }) =>
-    where.id === 'prop-5' ? { ...propertyBefore, hasSmokeDetectors: true } : null;
-  await computePropertyTraitSnapshot('prop-5');
-
-  assert.equal(traitSnapshots.length, 2);
 });

@@ -8,13 +8,9 @@
 // never fired. Must run inside the same transaction as the rest of account
 // deletion (mirrors accountDeletionCascade.service.ts's cascadeDeleteOwnedProperties).
 //
-// Deliberately does NOT touch DerivedTrait/TraitSnapshot/PersonalizedRecommendation/
-// RecommendationSuppression — those are onDelete: SetNull from Household (by
-// design, they're property-scoped) and already get hard-deleted via
-// cascadeDeleteOwnedProperties' own Property cascade when that runs in the
-// same transaction. This is a household-deletion step, not a full
-// personalization-reset job (revoking consent + erasure on demand, separate
-// from account deletion, remains deferred Phase 1 work).
+// Deliberately does not touch property-owned DerivedTrait rows or property-only
+// recommendations/suppressions. Property deletion handles those through its
+// own cascades; optional-profile reset removes only household-owned outputs.
 import { Prisma } from '@prisma/client';
 
 export async function eraseHouseholdDataForUser(tx: Prisma.TransactionClient, userId: string): Promise<void> {
