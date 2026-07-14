@@ -10,11 +10,14 @@ import {
   refreshPilot,
   submitPilotFeedback,
   submitPilotProfileAnswer,
+  getPilotModuleRecommendations,
+  convertPilotRecommendationToTask,
 } from '../modules/personalization/api/personalizationPilot.controller';
 import {
   PilotFeedbackSchema,
   PilotOptInSchema,
   PilotProfileAnswerSchema,
+  ConvertRecommendationToTaskSchema,
 } from '../modules/personalization/api/personalizationPilot.validators';
 import { requirePersonalizationCapability } from '../modules/personalization/api/personalizationCapability.middleware';
 
@@ -26,11 +29,22 @@ router.use('/properties/:propertyId/personalization', propertyAuthMiddleware);
 router.get('/properties/:propertyId/personalization', requirePersonalizationCapability('canViewOrdinaryRecommendations'), getPilot);
 router.post('/properties/:propertyId/personalization/opt-in', requirePersonalizationCapability('canManageSensitiveProfile'), validateBody(PilotOptInSchema), optInPilot);
 router.post('/properties/:propertyId/personalization/refresh', requirePersonalizationCapability('canAct'), refreshPilot);
+router.get(
+  '/properties/:propertyId/personalization/modules/:module/recommendations',
+  requirePersonalizationCapability('canViewOrdinaryRecommendations'),
+  getPilotModuleRecommendations,
+);
 router.post(
   '/properties/:propertyId/personalization/questions/:questionId/answers',
   requirePersonalizationCapability('canManageSensitiveProfile'),
   validateBody(PilotProfileAnswerSchema),
   submitPilotProfileAnswer,
+);
+router.post(
+  '/properties/:propertyId/personalization/recommendations/:recommendationId/actions/convert-to-task',
+  requirePersonalizationCapability('canAct'),
+  validateBody(ConvertRecommendationToTaskSchema),
+  convertPilotRecommendationToTask,
 );
 router.post(
   '/properties/:propertyId/personalization/recommendations/:recommendationId/feedback',

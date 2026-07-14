@@ -79,6 +79,51 @@ export async function listActivePilotRecommendations(propertyId: string, househo
   });
 }
 
+export async function listActiveRecommendationsForModule(
+  propertyId: string,
+  householdId: string,
+  take = 25,
+) {
+  return prisma.personalizedRecommendation.findMany({
+    where: { propertyId, householdId, status: 'ACTIVE' },
+    orderBy: [{ score: 'desc' }, { firstEligibleAt: 'desc' }],
+    take: Math.min(Math.max(take, 1), 25),
+    select: {
+      id: true,
+      status: true,
+      score: true,
+      priorityBand: true,
+      confidence: true,
+      expiresAt: true,
+      definition: { select: { code: true, category: true } },
+      explanations: {
+        orderBy: { version: 'desc' },
+        take: 1,
+        select: { headline: true, reasonCodes: true },
+      },
+    },
+  });
+}
+
+export async function loadActiveRecommendationForAction(
+  recommendationId: string,
+  propertyId: string,
+  householdId: string,
+) {
+  return prisma.personalizedRecommendation.findFirst({
+    where: { id: recommendationId, propertyId, householdId, status: 'ACTIVE' },
+    select: {
+      id: true,
+      definition: { select: { code: true } },
+      explanations: {
+        orderBy: { version: 'desc' },
+        take: 1,
+        select: { headline: true, reasonCodes: true },
+      },
+    },
+  });
+}
+
 export async function recommendationBelongsToProperty(
   recommendationId: string,
   propertyId: string,

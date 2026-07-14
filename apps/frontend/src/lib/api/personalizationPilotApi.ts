@@ -79,3 +79,51 @@ export async function refreshPilotPersonalization(propertyId: string) {
     `/api/properties/${propertyId}/personalization/refresh`,
   )).data;
 }
+
+export type PersonalizationModule = 'DASHBOARD' | 'MAINTENANCE';
+
+export interface ModuleRecommendation {
+  id: string;
+  code: string;
+  category: string;
+  modules: PersonalizationModule[];
+  title: string;
+  summary: string;
+  score: number;
+  priority: 'HIGH' | 'MEDIUM' | 'LOW';
+  confidence: number | null;
+  actions: Array<{ type: 'CONVERT_TO_TASK'; label: string; enabled: boolean }>;
+  expiresAt: string | null;
+}
+
+export interface ModuleRecommendationsResponse {
+  configured: boolean;
+  module: PersonalizationModule;
+  generatedAt: string;
+  items: ModuleRecommendation[];
+}
+
+export async function getModulePersonalizationRecommendations(
+  propertyId: string,
+  module: PersonalizationModule,
+  limit = 10,
+) {
+  return (await api.get<ModuleRecommendationsResponse>(
+    `/api/properties/${propertyId}/personalization/modules/${module.toLowerCase()}/recommendations`,
+    { params: { limit } },
+  )).data;
+}
+
+export async function convertPersonalizationRecommendationToTask(
+  propertyId: string,
+  recommendationId: string,
+) {
+  return (await api.post<{
+    status: 'CREATED' | 'EXISTING';
+    deduped: boolean;
+    task: { id: string; title: string };
+  }>(
+    `/api/properties/${propertyId}/personalization/recommendations/${recommendationId}/actions/convert-to-task`,
+    { idempotencyKey: crypto.randomUUID() },
+  )).data;
+}

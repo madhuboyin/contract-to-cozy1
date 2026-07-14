@@ -1,0 +1,89 @@
+'use client';
+
+import { useState } from 'react';
+import Link from 'next/link';
+import { CheckCircle2, Sparkles } from 'lucide-react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Button } from '@/components/ui/button';
+import { useToast } from '@/components/ui/use-toast';
+import { MobileSection, MobileSectionHeader, StatusChip, SummaryCard } from '@/components/mobile/dashboard/MobilePrimitives';
+import {
+  convertPersonalizationRecommendationToTask,
+  getModulePersonalizationRecommendations,
+} from '@/lib/api/personalizationPilotApi';
+
+export function PersonalizedMaintenanceSuggestions({ propertyId }: { propertyId?: string }) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [addedIds, setAddedIds] = useState<Set<string>>(() => new Set());
+  const queryKey = ['personalization-module', propertyId, 'MAINTENANCE'];
+  const recommendations = useQuery({
+    queryKey,
+    queryFn: () => getModulePersonalizationRecommendations(propertyId!, 'MAINTENANCE', 3),
+    enabled: Boolean(propertyId),
+    retry: false,
+    staleTime: 30_000,
+  });
+  const convert = useMutation({
+    mutationFn: (recommendationId: string) => convertPersonalizationRecommendationToTask(propertyId!, recommendationId),
+    onSuccess: (result, recommendationId) => {
+      setAddedIds((current) => new Set(current).add(recommendationId));
+      queryClient.invalidateQueries({ queryKey: ['maintenance-tasks', propertyId] });
+      toast({
+        title: result.deduped ? 'Already in maintenance' : 'Added to maintenance',
+        description: result.task.title,
+      });
+    },
+    onError: () => {
+      toast({ title: 'Could not add task', description: 'Please try again.', variant: 'destructive' });
+    },
+  });
+
+  const items = recommendations.data?.items ?? [];
+  if (recommendations.isLoading || recommendations.isError || items.length === 0) return null;
+
+  return (
+    <MobileSection>
+      <MobileSectionHeader
+        title="Suggested for this home"
+        subtitle="Reviewed guidance from your property signals"
+        action={(
+          <Link
+            href={`/dashboard/personalization?propertyId=${encodeURIComponent(propertyId!)}`}
+            className="text-sm font-semibold text-[hsl(var(--mobile-brand-strong))]"
+          >
+            Personalization settings
+          </Link>
+        )}
+      />
+      <div className="grid gap-3 lg:grid-cols-3">
+        {items.map((item) => {
+          const action = item.actions.find((candidate) => candidate.type === 'CONVERT_TO_TASK');
+          const added = addedIds.has(item.id);
+          return (
+            <SummaryCard key={item.id} title={item.title} subtitle={item.summary}>
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="h-4 w-4" aria-hidden="true" />
+                  <StatusChip tone={item.priority === 'HIGH' ? 'elevated' : 'info'}>{item.priority}</StatusChip>
+                </div>
+                {action ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={!action.enabled || added || convert.isPending}
+                    onClick={() => convert.mutate(item.id)}
+                    className="min-h-[44px]"
+                  >
+                    {added ? <CheckCircle2 className="mr-2 h-4 w-4" aria-hidden="true" /> : null}
+                    {added ? 'Added' : action.enabled ? action.label : 'Read only'}
+                  </Button>
+                ) : null}
+              </div>
+            </SummaryCard>
+          );
+        })}
+      </div>
+    </MobileSection>
+  );
+}

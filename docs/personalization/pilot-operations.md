@@ -31,3 +31,12 @@ Set `TOOL_ROLLOUT_PERSONALIZATION_PILOT` to the desired pilot percentage. The de
 There is no nightly personalization sweep. Recommendations recompute for the selected opted-in property on opt-in and read. Disabling the rollout flag or engaging the kill switch stops exposure without changing property data.
 
 Admins can also emergency-pause one definition through `POST /api/admin/personalization/definitions/:code/pause` and resume it through the matching `/resume` endpoint. These operations require authenticated ADMIN role plus MFA and write personalization audit events.
+
+## Phase 2 Maintenance placement
+
+The first cross-module placement reuses the same pilot exposure flag and ACTIVE definition/rule/content gates:
+
+- `GET /api/properties/:propertyId/personalization/modules/maintenance/recommendations?limit=3`
+- `POST /api/properties/:propertyId/personalization/recommendations/:recommendationId/actions/convert-to-task`
+
+The conversion body is `{ "idempotencyKey": "<uuid>" }`. It calls the existing maintenance task service with a recommendation-scoped action key, so retries return the existing task. No Phase 2 SQL or schema change is required for this slice.

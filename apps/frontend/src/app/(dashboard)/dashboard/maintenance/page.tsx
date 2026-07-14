@@ -67,6 +67,7 @@ import { GuidanceInlinePanel } from '@/components/guidance/GuidanceInlinePanel';
 import { recordGuidanceToolStatus } from '@/lib/api/guidanceApi';
 import { buildGuidanceOverviewHref } from '@/lib/navigation/guidanceOverviewHref';
 import { extractGuidanceContinuityContext, hasGuidanceContinuityContext } from '@/features/guidance/utils/guidanceContinuity';
+import { PersonalizedMaintenanceSuggestions } from './PersonalizedMaintenanceSuggestions';
 
 // Signal families that map to specific maintenance service categories.
 // When a guidance journey routes here via one of these families, the completion
@@ -622,6 +623,8 @@ export default function MaintenancePage() {
         issueDomains={['MAINTENANCE', 'ASSET_LIFECYCLE'] as const}
         limit={2}
       />
+
+      <PersonalizedMaintenanceSuggestions propertyId={selectedPropertyId} />
 
       <MobileFilterSurface className="border border-slate-200/80 bg-white">
         <div className="flex flex-wrap items-center gap-2">

@@ -26,9 +26,11 @@ No calendar estimates are given because team size, live load, node count and con
 - **Testing:** three golden rule paths (positive/negative/unknown), API authorization, consent, invalid-answer rejection, atomic profile writes, feedback/suppression, reset, empty state and accessibility smoke tests.
 - **Exit criteria:** a pilot user can opt in, receive no more than three explainable recommendations, give feedback and reset data; no recommendation is generated from unconsented household data. Catalog expansion and automated sweeping require measured pilot demand.
 
-## Phase 2 — Cross-module personalization
+## Phase 2 — Cross-module personalization (in progress: Maintenance vertical slice)
 
 **Effort: Very large.**
+
+The greenfield implementation starts with a migration-free shared module-placement contract and Maintenance as the first consumer. Additional modules are added only after the same small catalog proves useful; no broad catalog, queue, cache or data-model expansion is justified before pilot use.
 
 - **Scope/deliverables:** Risk, protection/insurance review, Seller Prep, Buyer, Community, Climate, Wellness, Energy, providers, search/assistant and notification policy; life stages; catalog admin UI.
 - **Data:** module action adapters, additional reviewed trait definitions/context types, content workflow/approval, notification budget state.

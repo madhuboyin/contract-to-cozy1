@@ -1,3 +1,5 @@
+export type PersonalizationModule = 'DASHBOARD' | 'MAINTENANCE';
+
 export interface PilotDefinition {
   code: string;
   category: string;
@@ -6,6 +8,11 @@ export interface PilotDefinition {
   reasonCode: string;
   reasonTemplateKey: string;
   defaultScore: number;
+  modules: readonly PersonalizationModule[];
+  maintenanceTask: {
+    assetType: string;
+    priority: 'HIGH' | 'MEDIUM' | 'LOW';
+  };
 }
 
 export const PILOT_DEFINITIONS: readonly PilotDefinition[] = [
@@ -17,6 +24,8 @@ export const PILOT_DEFINITIONS: readonly PilotDefinition[] = [
     reasonCode: 'HVAC_FILTER_OVERDUE',
     reasonTemplateKey: 'hvac_filter_overdue_reason',
     defaultScore: 60,
+    modules: ['DASHBOARD', 'MAINTENANCE'],
+    maintenanceTask: { assetType: 'HVAC', priority: 'MEDIUM' },
   },
   {
     code: 'smoke_co_detector_battery_check',
@@ -26,6 +35,8 @@ export const PILOT_DEFINITIONS: readonly PilotDefinition[] = [
     reasonCode: 'SMOKE_CO_BATTERY_CHECK_DUE',
     reasonTemplateKey: 'smoke_co_battery_check_due_reason',
     defaultScore: 75,
+    modules: ['DASHBOARD', 'MAINTENANCE'],
+    maintenanceTask: { assetType: 'SMOKE_CO_DETECTOR', priority: 'HIGH' },
   },
   {
     code: 'dryer_vent_cleaning_reminder',
@@ -35,5 +46,11 @@ export const PILOT_DEFINITIONS: readonly PilotDefinition[] = [
     reasonCode: 'DRYER_VENT_CLEANING_DUE',
     reasonTemplateKey: 'dryer_vent_cleaning_due_reason',
     defaultScore: 70,
+    modules: ['DASHBOARD', 'MAINTENANCE'],
+    maintenanceTask: { assetType: 'DRYER', priority: 'HIGH' },
   },
 ] as const;
+
+export function findPilotDefinition(code: string): PilotDefinition | undefined {
+  return PILOT_DEFINITIONS.find((definition) => definition.code === code);
+}

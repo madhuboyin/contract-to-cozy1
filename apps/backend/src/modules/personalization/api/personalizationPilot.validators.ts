@@ -17,3 +17,11 @@ export const PilotProfileAnswerSchema = z.object({
   action: z.enum(['ANSWERED', 'SKIPPED', 'SNOOZED']),
   answerJson: z.unknown().optional(),
 }).strict();
+
+export const ModuleRecommendationQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(25).default(10),
+});
+
+export const ConvertRecommendationToTaskSchema = z.object({
+  idempotencyKey: z.string().uuid(),
+}).strict();

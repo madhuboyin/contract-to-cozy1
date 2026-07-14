@@ -12,6 +12,10 @@ import { recommendationBelongsToProperty } from '../infrastructure/pilotReposito
 import { findPilotHousehold, findPilotHouseholdForProperty } from '../infrastructure/pilotRepository';
 import { recordProfileAnswer } from '../application/recordProfileAnswer.usecase';
 import { getPersonalizationCapabilities } from '../domain/capabilityPolicy';
+import { getModuleRecommendations } from '../application/getModuleRecommendations.usecase';
+import { convertRecommendationToMaintenanceTask } from '../application/convertRecommendationToMaintenanceTask.usecase';
+import type { PersonalizationModule } from '../catalog/pilotDefinitions';
+import { ModuleRecommendationQuerySchema } from './personalizationPilot.validators';
 
 function pilotContext(req: CustomRequest, res: Response): { propertyId: string; userId: string } | null {
   const propertyId = req.params.propertyId;
@@ -85,4 +89,49 @@ export async function resetPilot(req: CustomRequest, res: Response) {
   if (!context) return;
   const data = await resetPilotPersonalization(context.propertyId, context.userId);
   return res.json({ success: true, data });
+}
+
+export async function getPilotModuleRecommendations(req: CustomRequest, res: Response) {
+  const context = pilotContext(req, res);
+  if (!context) return;
+  const module = req.params.module?.toUpperCase();
+  if (module !== 'DASHBOARD' && module !== 'MAINTENANCE') {
+    return res.status(400).json({ success: false, error: { code: 'INVALID_MODULE', message: 'Unsupported personalization module.' } });
+  }
+  const query = ModuleRecommendationQuerySchema.safeParse(req.query);
+  if (!query.success) {
+    return res.status(400).json({ success: false, error: { code: 'INVALID_QUERY', message: 'Limit must be between 1 and 25.' } });
+  }
+  const capabilities = getPersonalizationCapabilities(req.householdRole!);
+  const data = await getModuleRecommendations(
+    context.propertyId,
+    module as PersonalizationModule,
+    capabilities,
+    query.data.limit,
+  );
+  return res.json({ success: true, data });
+}
+
+export async function convertPilotRecommendationToTask(req: CustomRequest, res: Response) {
+  const context = pilotContext(req, res);
+  if (!context) return;
+  const household = await findPilotHouseholdForProperty(context.propertyId);
+  if (!household?.consentVersion) {
+    return res.status(409).json({ success: false, error: { code: 'CONSENT_REQUIRED', message: 'Personalization is not configured for this property.' } });
+  }
+
+  const result = await convertRecommendationToMaintenanceTask({
+    recommendationId: req.params.recommendationId,
+    propertyId: context.propertyId,
+    householdId: household.id,
+    userId: context.userId,
+    idempotencyKey: req.body.idempotencyKey,
+  });
+  if (result.status === 'RECOMMENDATION_NOT_FOUND') {
+    return res.status(404).json({ success: false, error: { code: result.status, message: 'Recommendation not found.' } });
+  }
+  if (result.status === 'ACTION_NOT_SUPPORTED') {
+    return res.status(409).json({ success: false, error: { code: result.status, message: 'This recommendation cannot become a maintenance task.' } });
+  }
+  return res.status(result.status === 'CREATED' ? 201 : 200).json({ success: true, data: result });
 }
