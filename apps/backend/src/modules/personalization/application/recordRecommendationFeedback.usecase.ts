@@ -2,10 +2,8 @@
 //
 // PER-FR-011 ("capture explicit and implicit feedback separately, duplicate
 // eventId ignored") + PER-FDBK-001 ("explicit negative feedback shall affect
-// suppression more than implicit non-engagement"). Not exposed via any route
-// yet — internal only, same posture as every other use case in this module;
-// there's no live UI sending real feedback events, this proves the schema/
-// policy mechanism works end to end.
+// suppression more than implicit non-engagement"). The pilot API exposes this
+// use case after property and household authorization.
 import {
   findFeedbackByEventId,
   createFeedback,

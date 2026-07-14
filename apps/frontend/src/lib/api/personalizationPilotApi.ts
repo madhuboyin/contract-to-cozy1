@@ -10,7 +10,7 @@ export interface PilotRecommendation {
   definition: { code: string; category: string; targetModule: string };
   explanations: Array<{
     headline: string;
-    reasonCodes: Array<{ code: string; templateKey: string }>;
+    reasonCodes: Array<{ code: string; templateKey: string; params?: { message?: string } }>;
     evidenceJson: unknown;
   }>;
 }
@@ -19,6 +19,13 @@ export interface PilotPersonalization {
   optedIn: boolean;
   consentedAt?: string | null;
   recommendations: PilotRecommendation[];
+  capabilities: {
+    canManageSensitiveProfile: boolean;
+    canViewSensitiveEvidence: boolean;
+    canViewOrdinaryRecommendations: boolean;
+    canAct: boolean;
+    canGiveFeedback: boolean;
+  };
   nextQuestion?: {
     id: string;
     prompt: string;
@@ -65,4 +72,10 @@ export async function answerPilotQuestion(
 
 export async function resetPilotPersonalization(propertyId: string) {
   return (await api.delete<{ reset: boolean }>(`/api/properties/${propertyId}/personalization`)).data;
+}
+
+export async function refreshPilotPersonalization(propertyId: string) {
+  return (await api.post<{ optedIn: boolean; evaluated: number; active: number }>(
+    `/api/properties/${propertyId}/personalization/refresh`,
+  )).data;
 }

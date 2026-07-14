@@ -14,6 +14,18 @@ export async function findPilotHousehold(propertyId: string, ownerUserId: string
   });
 }
 
+export async function findPilotHouseholdForProperty(propertyId: string) {
+  return prisma.household.findFirst({
+    where: {
+      status: 'ACTIVE',
+      deletedAt: null,
+      consentVersion: { not: null },
+      properties: { some: { propertyId, effectiveTo: null } },
+    },
+    select: { id: true, consentVersion: true, consentedAt: true },
+  });
+}
+
 export async function optInPilotHousehold(propertyId: string, ownerUserId: string) {
   return prisma.$transaction(async (db) => {
     let household = await db.household.findFirst({

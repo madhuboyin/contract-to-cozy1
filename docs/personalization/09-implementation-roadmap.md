@@ -13,7 +13,7 @@ No calendar estimates are given because team size, live load, node count and con
 - **Testing:** authorization regression, rule schema/golden fixtures, consent and deletion, idempotency, transaction rollback, kill switch, and telemetry redaction. Migration rehearsal becomes relevant only after a deployed database contains data that must survive a schema change.
 - **Exit criteria:** access policy, evaluator, flags/kill switch, audit/redaction and pilot definition fixtures pass. Database migration/backfill gates are not Phase 0 exit criteria during the data-free pilot.
 
-## Phase 1 — Thin deterministic pilot
+## Phase 1 — Thin deterministic pilot (engineering complete; activation pending)
 
 **Effort: Medium.** The purpose is to learn whether homeowners find the feature useful, not to pre-build the long-term intelligence platform.
 

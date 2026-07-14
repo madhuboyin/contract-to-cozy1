@@ -55,6 +55,39 @@ ON CONFLICT ("definitionId", version) DO UPDATE SET
   "scoreConfig" = EXCLUDED."scoreConfig",
   "updatedAt"   = now();
 
+WITH pilot_content(code, title, body, templates) AS (
+  VALUES
+    (
+      'hvac_filter_replacement_check_proof',
+      'Your HVAC filter may be due for a replacement check',
+      'Your recorded HVAC maintenance history indicates that the filter replacement interval may have passed.',
+      '{"reasonCode":"HVAC_FILTER_OVERDUE","reasonTemplateKey":"hvac_filter_overdue_reason"}'::jsonb
+    ),
+    (
+      'smoke_co_detector_battery_check',
+      'Check your smoke and carbon monoxide detector batteries',
+      'Your recorded maintenance history indicates that a detector battery check may be due. Test each detector and follow its manufacturer instructions.',
+      '{"reasonCode":"SMOKE_CO_BATTERY_CHECK_DUE","reasonTemplateKey":"smoke_co_battery_check_due_reason"}'::jsonb
+    ),
+    (
+      'dryer_vent_cleaning_reminder',
+      'Your dryer vent may be due for cleaning',
+      'Your recorded maintenance history indicates that dryer-vent cleaning may be due. Inspect the vent and use a qualified professional when appropriate.',
+      '{"reasonCode":"DRYER_VENT_CLEANING_DUE","reasonTemplateKey":"dryer_vent_cleaning_due_reason"}'::jsonb
+    )
+)
+INSERT INTO personalization_recommendation_content_versions
+  (id, "definitionId", locale, version, title, body, templates, status, "createdAt", "updatedAt")
+SELECT
+  gen_random_uuid(), d.id, 'en-US', 1, c.title, c.body, c.templates, 'DRAFT', now(), now()
+FROM pilot_content c
+JOIN personalization_recommendation_definitions d ON d.code = c.code
+ON CONFLICT ("definitionId", locale, version) DO UPDATE SET
+  title       = EXCLUDED.title,
+  body        = EXCLUDED.body,
+  templates   = EXCLUDED.templates,
+  "updatedAt" = now();
+
 INSERT INTO personalization_profile_questions
   (id, code, version, status, prompt, "whyAsked", "privacyNote", "targetTable", "targetKey",
    "answerSchema", "placementContexts", "valueScore", "effortScore", "maxImpressions", "createdAt", "updatedAt")
@@ -141,3 +174,13 @@ WHERE code IN (
   'lifestyle_travel_frequency'
 )
 ORDER BY code;
+
+SELECT d.code, c.locale, c.version, c.status AS content_status, c.title
+FROM personalization_recommendation_definitions d
+JOIN personalization_recommendation_content_versions c ON c."definitionId" = d.id
+WHERE d.code IN (
+  'hvac_filter_replacement_check_proof',
+  'smoke_co_detector_battery_check',
+  'dryer_vent_cleaning_reminder'
+)
+ORDER BY d.code, c.locale, c.version;

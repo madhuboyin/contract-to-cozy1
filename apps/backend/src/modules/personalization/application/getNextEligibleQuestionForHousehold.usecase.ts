@@ -1,8 +1,7 @@
 // apps/backend/src/modules/personalization/application/getNextEligibleQuestionForHousehold.usecase.ts
 //
 // PER-FR-010 ("offer one ranked progressive question with skip/later/caps").
-// Not exposed via any route yet — internal only, same posture as every
-// other use case in this module; there's no live UI calling this yet.
+// The pilot read API returns at most one eligible question to an OWNER.
 import {
   loadActiveQuestionsForPlacement,
   loadAnswerHistoryForHousehold,

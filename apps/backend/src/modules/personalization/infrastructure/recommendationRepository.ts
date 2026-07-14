@@ -18,6 +18,7 @@ export interface UpsertRecommendationParams {
   definitionId: string;
   evaluationRunId: string | null;
   ruleVersion: number;
+  contentVersion?: number;
   dedupeKey: string;
   headline: string;
   reasonCodes: ReasonCode[];
@@ -53,6 +54,7 @@ export async function upsertRecommendation(
       definitionId: params.definitionId,
       evaluationRunId: params.evaluationRunId,
       ruleVersion: params.ruleVersion,
+      contentVersion: params.contentVersion,
       dedupeKey: params.dedupeKey,
       status: 'ACTIVE',
       score: params.score,
@@ -64,6 +66,7 @@ export async function upsertRecommendation(
       householdId: params.householdId ?? null,
       evaluationRunId: params.evaluationRunId,
       ruleVersion: params.ruleVersion,
+      contentVersion: params.contentVersion,
       lastEvaluatedAt: new Date(),
       // Re-eligibility after a prior EXPIRED/SUPPRESSED run must actually
       // revive the row, not just refresh its metadata — this was a latent
@@ -78,13 +81,14 @@ export async function upsertRecommendation(
     },
   });
 
+  const explanationVersion = params.contentVersion ?? 1;
   await prisma.recommendationExplanation.upsert({
     where: {
-      recommendationId_version: { recommendationId: recommendation.id, version: 1 },
+      recommendationId_version: { recommendationId: recommendation.id, version: explanationVersion },
     },
     create: {
       recommendationId: recommendation.id,
-      version: 1,
+      version: explanationVersion,
       headline: params.headline,
       reasonCodes: params.reasonCodes as unknown as Prisma.InputJsonValue,
       evidenceJson: params.evidence as Prisma.InputJsonValue,

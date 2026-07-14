@@ -10,6 +10,8 @@ import {
   getKillSwitchHandler,
   pauseKillSwitchHandler,
   resumeKillSwitchHandler,
+  pauseDefinitionHandler,
+  resumeDefinitionHandler,
 } from '../controllers/adminPersonalization.controller';
 
 const router = Router();
@@ -69,5 +71,8 @@ router.post('/admin/personalization/kill-switch/pause', pauseKillSwitchHandler);
  *         description: Kill switch resumed
  */
 router.post('/admin/personalization/kill-switch/resume', resumeKillSwitchHandler);
+
+router.post('/admin/personalization/definitions/:code/pause', pauseDefinitionHandler);
+router.post('/admin/personalization/definitions/:code/resume', resumeDefinitionHandler);
 
 export default router;

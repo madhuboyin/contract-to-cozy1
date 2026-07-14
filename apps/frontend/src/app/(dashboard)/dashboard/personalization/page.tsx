@@ -3,13 +3,14 @@
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Lightbulb, RotateCcw, ThumbsDown } from 'lucide-react';
+import { ArrowLeft, Lightbulb, RefreshCw, RotateCcw, ThumbsDown } from 'lucide-react';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
 import {
   answerPilotQuestion,
   getPilotPersonalization,
   optInPilotPersonalization,
   resetPilotPersonalization,
+  refreshPilotPersonalization,
   sendPilotFeedback,
 } from '@/lib/api/personalizationPilotApi';
 import {
@@ -92,6 +93,15 @@ export default function PersonalizationPilotPage() {
     mutationFn: (recommendationId: string) => sendPilotFeedback(propertyId!, recommendationId, 'NOT_RELEVANT'),
     onSuccess: refresh,
   });
+  const recompute = useMutation({
+    mutationFn: () => refreshPilotPersonalization(propertyId!),
+    onSuccess: refresh,
+  });
+  const resetWithConfirmation = () => {
+    if (window.confirm('Reset your personalization profile and remove its recommendations?')) {
+      reset.mutate();
+    }
+  };
 
   if (!propertyId) {
     return (
@@ -119,9 +129,13 @@ export default function PersonalizationPilotPage() {
         <SummaryCard title="Help us prioritize what matters" subtitle="The pilot creates a home guidance profile only after you opt in.">
           <div className="space-y-4 text-sm text-[hsl(var(--mobile-text-secondary))]">
             <p>We use property maintenance history and answers you choose to provide. We do not infer family, health, income, or pet details.</p>
-            <button type="button" disabled={optIn.isPending} onClick={() => optIn.mutate()} className="min-h-[44px] rounded-xl bg-[hsl(var(--mobile-brand-strong))] px-4 py-2 font-semibold text-white disabled:opacity-60">
-              {optIn.isPending ? 'Turning on…' : 'Join the pilot'}
-            </button>
+            {pilot?.capabilities.canManageSensitiveProfile ? (
+              <button type="button" disabled={optIn.isPending} onClick={() => optIn.mutate()} className="min-h-[44px] rounded-xl bg-[hsl(var(--mobile-brand-strong))] px-4 py-2 font-semibold text-white disabled:opacity-60">
+                {optIn.isPending ? 'Turning on…' : 'Join the pilot'}
+              </button>
+            ) : (
+              <p>The property owner can choose whether to join this pilot.</p>
+            )}
           </div>
         </SummaryCard>
       ) : (
@@ -133,12 +147,27 @@ export default function PersonalizationPilotPage() {
             </MobileSection>
           ) : null}
           <MobileSection>
-            <MobileSectionHeader title="Top suggestions" subtitle="At most three, ranked by current relevance" />
+            <MobileSectionHeader
+              title="Top suggestions"
+              subtitle="At most three, ranked by current relevance"
+              action={pilot.capabilities.canAct ? (
+                <button
+                  type="button"
+                  disabled={recompute.isPending}
+                  onClick={() => recompute.mutate()}
+                  className="inline-flex min-h-[44px] items-center gap-2 rounded-xl border px-3 py-2 text-sm font-semibold disabled:opacity-60"
+                >
+                  <RefreshCw className="h-4 w-4" aria-hidden="true" />
+                  {recompute.isPending ? 'Refreshing…' : 'Refresh'}
+                </button>
+              ) : undefined}
+            />
             <div className="space-y-3">
               {pilot.recommendations.length === 0 ? (
                 <EmptyStateCard title="Nothing needs attention" description="No reviewed pilot rule currently matches this home." />
               ) : pilot.recommendations.map((recommendation) => {
                 const explanation = recommendation.explanations[0];
+                const why = explanation?.reasonCodes[0]?.params?.message;
                 return (
                   <SummaryCard key={recommendation.id} title={explanation?.headline || 'Home suggestion'} subtitle={recommendation.definition.targetModule}>
                     <div className="space-y-3">
@@ -148,23 +177,29 @@ export default function PersonalizationPilotPage() {
                           {recommendation.priorityBand || 'RELEVANT'}
                         </StatusChip>
                       </div>
-                      <p className="text-sm text-[hsl(var(--mobile-text-secondary))]">Suggested because a reviewed maintenance rule matched the property history available to ContractToCozy.</p>
-                      <button type="button" disabled={feedback.isPending} onClick={() => feedback.mutate(recommendation.id)} className="inline-flex min-h-[44px] items-center gap-2 rounded-xl border px-4 py-2 text-sm font-semibold disabled:opacity-60">
-                        <ThumbsDown className="h-4 w-4" /> Not relevant
-                      </button>
+                      <p className="text-sm text-[hsl(var(--mobile-text-secondary))]">
+                        {why || 'Suggested because a reviewed maintenance rule matched the property history available to ContractToCozy.'}
+                      </p>
+                      {pilot.capabilities.canGiveFeedback ? (
+                        <button type="button" disabled={feedback.isPending} onClick={() => feedback.mutate(recommendation.id)} className="inline-flex min-h-[44px] items-center gap-2 rounded-xl border px-4 py-2 text-sm font-semibold disabled:opacity-60">
+                          <ThumbsDown className="h-4 w-4" /> Not relevant
+                        </button>
+                      ) : null}
                     </div>
                   </SummaryCard>
                 );
               })}
             </div>
           </MobileSection>
-          <MobileSection>
-            <SummaryCard title="Your control" subtitle="Reset removes the pilot household profile and its recommendations.">
-              <button type="button" disabled={reset.isPending} onClick={() => reset.mutate()} className="inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-red-300 px-4 py-2 text-sm font-semibold text-red-700 disabled:opacity-60">
-                <RotateCcw className="h-4 w-4" /> {reset.isPending ? 'Resetting…' : 'Reset personalization'}
-              </button>
-            </SummaryCard>
-          </MobileSection>
+          {pilot.capabilities.canManageSensitiveProfile ? (
+            <MobileSection>
+              <SummaryCard title="Your control" subtitle="Reset removes the pilot household profile and its recommendations.">
+                <button type="button" disabled={reset.isPending} onClick={resetWithConfirmation} className="inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-red-300 px-4 py-2 text-sm font-semibold text-red-700 disabled:opacity-60">
+                  <RotateCcw className="h-4 w-4" /> {reset.isPending ? 'Resetting…' : 'Reset personalization'}
+                </button>
+              </SummaryCard>
+            </MobileSection>
+          ) : null}
         </>
       )}
     </MobilePageContainer>

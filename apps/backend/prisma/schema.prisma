@@ -12735,9 +12735,7 @@ model RecommendationDefinition {
   // Per-definition emergency pause — complements the system-wide switch in
   // personalizationKillSwitch.service.ts. See
   // docs/personalization/06-api-design.md's
-  // `POST /api/admin/personalization/definitions/:code/pause`. Not wired to
-  // any endpoint yet (no controller consumes this); the column exists so the
-  // future admin endpoint has somewhere to write without another migration.
+  // `POST /api/admin/personalization/definitions/:code/pause`.
   pausedAt    DateTime?
   pausedBy    String?
   pauseReason String?

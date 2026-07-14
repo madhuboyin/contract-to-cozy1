@@ -8,10 +8,15 @@ import {
   pausePersonalization,
   resumePersonalization,
 } from '../services/personalizationKillSwitch.service';
+import {
+  pausePersonalizationDefinition,
+  resumePersonalizationDefinition,
+} from '../services/personalizationDefinitionAdmin.service';
 
 const pauseSchema = z.object({
   reason: z.string().min(1, 'reason is required'),
 });
+const definitionCodeSchema = z.string().regex(/^[a-z0-9_]+$/, 'invalid definition code');
 
 export async function getKillSwitchHandler(req: AuthRequest, res: Response): Promise<void> {
   try {
@@ -57,5 +62,44 @@ export async function resumeKillSwitchHandler(req: AuthRequest, res: Response): 
   } catch (err) {
     logger.error({ err }, '[ADMIN-PERSONALIZATION] Failed to resume personalization');
     res.status(500).json({ success: false, error: { message: 'Failed to resume personalization' } });
+  }
+}
+
+export async function pauseDefinitionHandler(req: AuthRequest, res: Response): Promise<void> {
+  const code = definitionCodeSchema.safeParse(req.params.code);
+  const body = pauseSchema.safeParse(req.body);
+  if (!code.success || !body.success) {
+    res.status(400).json({ success: false, error: { message: 'Valid definition code and reason are required' } });
+    return;
+  }
+  try {
+    const state = await pausePersonalizationDefinition(code.data, req.user!.userId, body.data.reason);
+    if (!state) {
+      res.status(404).json({ success: false, error: { message: 'Definition not found' } });
+      return;
+    }
+    res.json({ success: true, data: state });
+  } catch (err) {
+    logger.error({ err, definitionCode: code.data }, '[ADMIN-PERSONALIZATION] Failed to pause definition');
+    res.status(500).json({ success: false, error: { message: 'Failed to pause definition' } });
+  }
+}
+
+export async function resumeDefinitionHandler(req: AuthRequest, res: Response): Promise<void> {
+  const code = definitionCodeSchema.safeParse(req.params.code);
+  if (!code.success) {
+    res.status(400).json({ success: false, error: { message: 'Valid definition code is required' } });
+    return;
+  }
+  try {
+    const state = await resumePersonalizationDefinition(code.data, req.user!.userId);
+    if (!state) {
+      res.status(404).json({ success: false, error: { message: 'Definition not found' } });
+      return;
+    }
+    res.json({ success: true, data: state });
+  } catch (err) {
+    logger.error({ err, definitionCode: code.data }, '[ADMIN-PERSONALIZATION] Failed to resume definition');
+    res.status(500).json({ success: false, error: { message: 'Failed to resume definition' } });
   }
 }

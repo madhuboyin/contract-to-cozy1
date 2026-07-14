@@ -5,23 +5,21 @@
 import { PrismaClient } from '@prisma/client';
 import { HVAC_FILTER_PROOF_RULE_AST } from '../src/modules/personalization/catalog/proofDefinition';
 import { DEFAULT_HVAC_FILTER_SCORE_CONFIG } from '../src/modules/personalization/domain/scoring';
+import { PILOT_DEFINITIONS } from '../src/modules/personalization/catalog/pilotDefinitions';
 
 const prisma = new PrismaClient();
 
-const definitions = [
-  {
-    code: 'hvac_filter_replacement_check_proof', category: 'low_cost_prevention', safetyClass: 'ROUTINE',
-    ruleAst: HVAC_FILTER_PROOF_RULE_AST, scoreConfig: DEFAULT_HVAC_FILTER_SCORE_CONFIG,
-  },
-  {
-    code: 'smoke_co_detector_battery_check', category: 'low_cost_prevention', safetyClass: 'SAFETY_SENSITIVE',
-    ruleAst: { op: 'trait', key: 'smokeDetectorBatteryOverdue', cmp: 'eq', value: true }, scoreConfig: null,
-  },
-  {
-    code: 'dryer_vent_cleaning_reminder', category: 'low_cost_prevention', safetyClass: 'SAFETY_SENSITIVE',
-    ruleAst: { op: 'trait', key: 'dryerVentCleaningOverdue', cmp: 'eq', value: true }, scoreConfig: null,
-  },
-] as const;
+const definitions = PILOT_DEFINITIONS.map((definition) => ({
+  ...definition,
+  safetyClass: definition.code === 'hvac_filter_replacement_check_proof' ? 'ROUTINE' : 'SAFETY_SENSITIVE',
+  ruleAst:
+    definition.code === 'hvac_filter_replacement_check_proof'
+      ? HVAC_FILTER_PROOF_RULE_AST
+      : definition.code === 'smoke_co_detector_battery_check'
+        ? { op: 'trait', key: 'smokeDetectorBatteryOverdue', cmp: 'eq', value: true }
+        : { op: 'trait', key: 'dryerVentCleaningOverdue', cmp: 'eq', value: true },
+  scoreConfig: definition.code === 'hvac_filter_replacement_check_proof' ? DEFAULT_HVAC_FILTER_SCORE_CONFIG : null,
+}));
 
 const questions = [
   { code: 'household_composition_safety', targetTable: 'HOUSEHOLD_MEMBER_SUMMARY', targetKey: null, prompt: 'Does your household include children or seniors who need extra home-safety consideration?', whyAsked: 'Helps prioritize home-safety guidance.', privacyNote: 'We store broad household bands, never names, ages, or birthdates.', answerSchema: { type: 'multi_select', options: ['hasChildren', 'hasSeniors'] }, valueScore: 8, effortScore: 2 },
@@ -42,6 +40,23 @@ async function main() {
       where: { definitionId_version: { definitionId: definition.id, version: 1 } },
       create: { definitionId: definition.id, version: 1, ruleAst: entry.ruleAst, scoreConfig: entry.scoreConfig, status: 'DRAFT' },
       update: { ruleAst: entry.ruleAst, scoreConfig: entry.scoreConfig },
+    });
+    await prisma.recommendationContentVersion.upsert({
+      where: { definitionId_locale_version: { definitionId: definition.id, locale: 'en-US', version: 1 } },
+      create: {
+        definitionId: definition.id,
+        locale: 'en-US',
+        version: 1,
+        title: entry.headline,
+        body: entry.body,
+        templates: { reasonCode: entry.reasonCode, reasonTemplateKey: entry.reasonTemplateKey },
+        status: 'DRAFT',
+      },
+      update: {
+        title: entry.headline,
+        body: entry.body,
+        templates: { reasonCode: entry.reasonCode, reasonTemplateKey: entry.reasonTemplateKey },
+      },
     });
   }
 

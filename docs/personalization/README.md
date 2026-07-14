@@ -37,6 +37,7 @@ This directory began as the evidence-backed discovery package and Functional Req
 11. [Risks and open questions](11-risks-and-open-questions.md)
 12. [Codebase evidence index](codebase-evidence.md)
 13. [Pilot operations](pilot-operations.md)
+14. [Phase 1 completion audit](phase1-completion-audit.md)
 
 ## Reading conventions
 

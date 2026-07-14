@@ -5,11 +5,13 @@ import {
   getPilotPersonalization,
   optInToPilotPersonalization,
   resetPilotPersonalization,
+  refreshPilotPersonalization,
 } from '../application/getPilotPersonalization.usecase';
 import { recordRecommendationFeedback } from '../application/recordRecommendationFeedback.usecase';
 import { recommendationBelongsToProperty } from '../infrastructure/pilotRepository';
-import { findPilotHousehold } from '../infrastructure/pilotRepository';
+import { findPilotHousehold, findPilotHouseholdForProperty } from '../infrastructure/pilotRepository';
 import { recordProfileAnswer } from '../application/recordProfileAnswer.usecase';
+import { getPersonalizationCapabilities } from '../domain/capabilityPolicy';
 
 function pilotContext(req: CustomRequest, res: Response): { propertyId: string; userId: string } | null {
   const propertyId = req.params.propertyId;
@@ -28,7 +30,8 @@ function pilotContext(req: CustomRequest, res: Response): { propertyId: string; 
 export async function getPilot(req: CustomRequest, res: Response) {
   const context = pilotContext(req, res);
   if (!context) return;
-  const data = await getPilotPersonalization(context.propertyId, context.userId);
+  const capabilities = getPersonalizationCapabilities(req.householdRole!);
+  const data = await getPilotPersonalization(context.propertyId, capabilities);
   return res.json({ success: true, data });
 }
 
@@ -43,12 +46,19 @@ export async function submitPilotFeedback(req: CustomRequest, res: Response) {
   const context = pilotContext(req, res);
   if (!context) return;
   const recommendationId = req.params.recommendationId;
-  const household = await findPilotHousehold(context.propertyId, context.userId);
+  const household = await findPilotHouseholdForProperty(context.propertyId);
   if (!household || !(await recommendationBelongsToProperty(recommendationId, context.propertyId, household.id))) {
     return res.status(404).json({ success: false, error: { code: 'RECOMMENDATION_NOT_FOUND', message: 'Recommendation not found.' } });
   }
   const result = await recordRecommendationFeedback({ recommendationId, ...req.body });
   return res.status(result.status === 'RECORDED' ? 201 : 200).json({ success: true, data: result });
+}
+
+export async function refreshPilot(req: CustomRequest, res: Response) {
+  const context = pilotContext(req, res);
+  if (!context) return;
+  const data = await refreshPilotPersonalization(context.propertyId);
+  return res.json({ success: true, data });
 }
 
 export async function submitPilotProfileAnswer(req: CustomRequest, res: Response) {
