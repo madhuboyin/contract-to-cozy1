@@ -12,6 +12,9 @@ import {
   resumeKillSwitchHandler,
   pauseDefinitionHandler,
   resumeDefinitionHandler,
+  getCatalogHandler,
+  activateDefinitionBundleHandler,
+  activateQuestionHandler,
 } from '../controllers/adminPersonalization.controller';
 
 const router = Router();
@@ -74,5 +77,8 @@ router.post('/admin/personalization/kill-switch/resume', resumeKillSwitchHandler
 
 router.post('/admin/personalization/definitions/:code/pause', pauseDefinitionHandler);
 router.post('/admin/personalization/definitions/:code/resume', resumeDefinitionHandler);
+router.get('/admin/personalization/catalog', getCatalogHandler);
+router.post('/admin/personalization/definitions/:code/activate', activateDefinitionBundleHandler);
+router.post('/admin/personalization/questions/:code/activate', activateQuestionHandler);
 
 export default router;

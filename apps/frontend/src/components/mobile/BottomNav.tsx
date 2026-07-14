@@ -45,7 +45,7 @@ const SECONDARY_BAR_KEYS = ['fix'] as const;
 // Admin nav's equivalent slot assignment (no camera FAB, no property scoping)
 const ADMIN_PRIMARY_BAR_KEYS = ['admin-provider-compliance', 'admin-analytics'] as const;
 const ADMIN_SECONDARY_BAR_KEYS = ['admin-worker-jobs'] as const;
-const ADMIN_MORE_JOB_KEYS = ['admin-diy-templates', 'admin-knowledge'] as const;
+const ADMIN_MORE_JOB_KEYS = ['admin-diy-templates', 'admin-knowledge', 'admin-personalization'] as const;
 
 export function BottomNav() {
   const pathname = usePathname();

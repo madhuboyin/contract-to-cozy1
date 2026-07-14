@@ -75,6 +75,7 @@ import {
 } from '@/features/guidance/utils/guidanceContinuity';
 import { buildPropertyAwareDashboardHref } from '@/lib/routes/dashboardPropertyAwareHref';
 import { track } from '@/lib/analytics/events';
+import { PersonalizedReadOnlySuggestions } from '@/components/personalization/PersonalizedReadOnlySuggestions';
 
 import { listIncidents } from './properties/[id]/incidents/incidentsApi';
 import { listInventoryItems } from './inventory/inventoryApi';
@@ -1362,6 +1363,14 @@ export default function DashboardPage() {
           secondaryModules={
             <RoomsSnapshotSection propertyId={effectiveSelectedPropertyId} />
           }
+        />
+      </div>
+
+      <div className="mx-auto w-full max-w-7xl px-4 md:px-6">
+        <PersonalizedReadOnlySuggestions
+          propertyId={effectiveSelectedPropertyId}
+          module="DASHBOARD"
+          title="Suggested for your home"
         />
       </div>
 

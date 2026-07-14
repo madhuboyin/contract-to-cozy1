@@ -1,4 +1,4 @@
-import { ShieldCheck, Hammer, BarChart2, BookOpen, Cpu } from 'lucide-react';
+import { ShieldCheck, Hammer, BarChart2, BookOpen, Cpu, Sparkles } from 'lucide-react';
 import type { NavJob } from './jobsNavigation';
 
 /**
@@ -51,6 +51,15 @@ export const ADMIN_NAV: NavJob[] = [
     href: '/dashboard/worker-jobs',
     icon: Cpu,
     description: 'Background job registry',
+    engines: [],
+    globalHref: true,
+  },
+  {
+    key: 'admin-personalization',
+    name: 'Personalization',
+    href: '/dashboard/admin/personalization',
+    icon: Sparkles,
+    description: 'Review and activate personalization catalog versions',
     engines: [],
     globalHref: true,
   },

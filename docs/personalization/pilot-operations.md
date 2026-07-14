@@ -40,3 +40,9 @@ The first cross-module placement reuses the same pilot exposure flag and ACTIVE 
 - `POST /api/properties/:propertyId/personalization/recommendations/:recommendationId/actions/convert-to-task`
 
 The conversion body is `{ "idempotencyKey": "<uuid>" }`. It calls the existing maintenance task service with a recommendation-scoped action key, so retries return the existing task. No Phase 2 SQL or schema change is required for this slice.
+
+Dashboard and Property Health use the same module endpoint with `dashboard` and `health` in place of `maintenance`. They render reviewed summaries and route action to Maintenance rather than copying rules.
+
+## Catalog approval UI
+
+Admins with MFA can open `/dashboard/admin/personalization`. The page lists existing seeded definition, rule, content and profile-question versions. Activation requires an active ADMIN author user ID; safety-sensitive rules reject activation when that author is the current reviewer. The workflow activates the selected bundle, retires older active versions and writes personalization audit events. It does not author new rules or create database migrations.

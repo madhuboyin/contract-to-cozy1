@@ -95,7 +95,7 @@ export async function getPilotModuleRecommendations(req: CustomRequest, res: Res
   const context = pilotContext(req, res);
   if (!context) return;
   const module = req.params.module?.toUpperCase();
-  if (module !== 'DASHBOARD' && module !== 'MAINTENANCE') {
+  if (module !== 'DASHBOARD' && module !== 'MAINTENANCE' && module !== 'HEALTH') {
     return res.status(400).json({ success: false, error: { code: 'INVALID_MODULE', message: 'Unsupported personalization module.' } });
   }
   const query = ModuleRecommendationQuerySchema.safeParse(req.query);

@@ -36,6 +36,13 @@ test('builds a deterministic maintenance action with a recommendation-scoped key
   assert.equal(task.actionKey, 'personalization:rec-1:maintenance-task');
 });
 
+test('Dashboard and Health receive navigation actions without duplicating eligibility logic', () => {
+  for (const module of ['DASHBOARD', 'HEALTH']) {
+    const item = mapRecommendationToModule(stored, module, false);
+    assert.deepEqual(item.actions, [{ type: 'OPEN_MAINTENANCE', label: 'Review in Maintenance', enabled: true }]);
+  }
+});
+
 test('unknown definitions never leak into a module placement or action', () => {
   const unknown = { ...stored, definition: { code: 'unknown', category: 'unknown' } };
   assert.equal(mapRecommendationToModule(unknown, 'MAINTENANCE', true), null);

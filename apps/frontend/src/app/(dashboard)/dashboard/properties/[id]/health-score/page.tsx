@@ -27,6 +27,7 @@ import {
 
 import { navigateBackWithDashboardFallback } from '@/lib/navigation/backNavigation';
 import { buildHealthInsightResolutionHref } from '@/lib/navigation/healthInsightRouting';
+import { PersonalizedReadOnlySuggestions } from '@/components/personalization/PersonalizedReadOnlySuggestions';
 const REQUIRED_ACTION_STATUSES = ["Needs attention", "Needs Review", "Needs Inspection", "Missing Data", "Needs Warranty"];
 const IN_PROGRESS_STATUSES = ["Action Pending"];
 const WATCH_STATUSES = ["Aging", "Incomplete", "Partial", "Average", "Standard", "High Density"];
@@ -1670,6 +1671,11 @@ export default function PropertyHealthDetailPage() {
           </div>
         </div>
       </div>
+      <PersonalizedReadOnlySuggestions
+        propertyId={propertyId}
+        module="HEALTH"
+        title="Personalized health actions"
+      />
       <Dialog open={showScoreModal} onOpenChange={setShowScoreModal}>
         <DialogContent className="max-h-[90dvh] overflow-y-auto">
           <DialogHeader>

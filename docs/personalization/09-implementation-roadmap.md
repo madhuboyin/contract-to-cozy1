@@ -26,20 +26,20 @@ No calendar estimates are given because team size, live load, node count and con
 - **Testing:** three golden rule paths (positive/negative/unknown), API authorization, consent, invalid-answer rejection, atomic profile writes, feedback/suppression, reset, empty state and accessibility smoke tests.
 - **Exit criteria:** a pilot user can opt in, receive no more than three explainable recommendations, give feedback and reset data; no recommendation is generated from unconsented household data. Catalog expansion and automated sweeping require measured pilot demand.
 
-## Phase 2 — Cross-module personalization (in progress: Maintenance vertical slice)
+## Phase 2 — Cross-module personalization (greenfield engineering complete; pilot validation pending)
 
 **Effort: Very large.**
 
-The greenfield implementation starts with a migration-free shared module-placement contract and Maintenance as the first consumer. Additional modules are added only after the same small catalog proves useful; no broad catalog, queue, cache or data-model expansion is justified before pilot use.
+The revised greenfield scope proves cross-module reuse with the existing three-definition catalog. No broad catalog, queue, cache or data-model expansion is justified before pilot use.
 
-- **Scope/deliverables:** Risk, protection/insurance review, Seller Prep, Buyer, Community, Climate, Wellness, Energy, providers, search/assistant and notification policy; life stages; catalog admin UI.
-- **Data:** module action adapters, additional reviewed trait definitions/context types, content workflow/approval, notification budget state.
-- **Backend:** migrate feature-local eligibility/ranking incrementally; notification candidate gate; admin preview/impact/audit; context adapters and stronger outbox invalidation.
-- **Frontend:** module placements consuming same instances, admin authoring/review, notification explanations, broader preference controls.
-- **Dependencies:** stable MVP quality metrics, content operations staffing, provider source SLAs.
-- **Risks:** migration duplicates, module owners bypassing engine, source staleness, unsafe insurance/legal wording.
-- **Testing:** per-module contract/regression, rule impact simulation, notification volume/consent, UC-06/07 plus full weather flows.
-- **Exit criteria:** no duplicate business rule for migrated definitions; notification budget holds; admin can pause bad content promptly; quality stable across modules.
+- **Scope/deliverables:** one shared property/module recommendation contract; Dashboard, Maintenance and Property Health placements; idempotent Maintenance task conversion; controlled catalog review/activation UI; per-definition pause/resume.
+- **Data:** reuse existing recommendation, rule, content, question and maintenance-task entities. Module routing and supported actions are code-owned catalog metadata; no migrations or backfills.
+- **Backend:** modules request ranked DTOs and never read profile tables or duplicate eligibility rules. Admin activation retires older active versions, records review identity and audit events, and enforces different active ADMIN author/reviewer identities for safety-sensitive rules.
+- **Frontend:** three placements consume the same instances; Maintenance can act, Dashboard/Health navigate to the authoritative action surface; admin can review status and activate existing versions/questions.
+- **Testing:** shared contract, consent/content gates, capabilities, action deduplication, safety review, admin lifecycle and placement smoke coverage.
+- **Exit criteria:** the same reviewed recommendation can appear consistently across Dashboard, Maintenance and Health; supported conversion creates at most one task; admin activation/pause is audited; no module copies household eligibility rules.
+
+Seller Prep, Risk/protection, Buyer, Community, Climate, Wellness, Energy, providers, assistant and notifications become post-pilot catalog expansion. They require relevant reviewed definitions and observed demand; wiring maintenance-only recommendations into them would not constitute valid personalization.
 
 ## Phase 3 — Learning and optimization
 

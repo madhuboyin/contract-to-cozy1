@@ -80,7 +80,7 @@ export async function refreshPilotPersonalization(propertyId: string) {
   )).data;
 }
 
-export type PersonalizationModule = 'DASHBOARD' | 'MAINTENANCE';
+export type PersonalizationModule = 'DASHBOARD' | 'MAINTENANCE' | 'HEALTH';
 
 export interface ModuleRecommendation {
   id: string;
@@ -92,7 +92,7 @@ export interface ModuleRecommendation {
   score: number;
   priority: 'HIGH' | 'MEDIUM' | 'LOW';
   confidence: number | null;
-  actions: Array<{ type: 'CONVERT_TO_TASK'; label: string; enabled: boolean }>;
+  actions: Array<{ type: 'CONVERT_TO_TASK' | 'OPEN_MAINTENANCE'; label: string; enabled: boolean }>;
   expiresAt: string | null;
 }
 

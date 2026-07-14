@@ -19,7 +19,7 @@ This directory began as the evidence-backed discovery package and Functional Req
 | Queue | No personalization queue or nightly sweep during the pilot |
 | Graph/vector database | Neither is justified for Phases 0–3 |
 | AI | Assist extraction, summaries, and authoring; never eligibility, safety gates, authorization, or financial math |
-| UI | One opt-in pilot surface with at most three explainable recommendations |
+| UI | Opt-in control plus shared Dashboard, Maintenance and Health placements; internal catalog approval |
 | Feasibility | **Feasible with moderate refactoring** |
 
 ## Document map

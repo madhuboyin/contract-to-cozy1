@@ -35,7 +35,7 @@ export interface ModuleRecommendationDTO {
   priority: 'HIGH' | 'MEDIUM' | 'LOW';
   confidence: number | null;
   actions: Array<{
-    type: 'CONVERT_TO_TASK';
+    type: 'CONVERT_TO_TASK' | 'OPEN_MAINTENANCE';
     label: string;
     enabled: boolean;
   }>;
@@ -67,7 +67,7 @@ export function mapRecommendationToModule(
     confidence: recommendation.confidence,
     actions: module === 'MAINTENANCE'
       ? [{ type: 'CONVERT_TO_TASK', label: 'Add to maintenance', enabled: canAct }]
-      : [],
+      : [{ type: 'OPEN_MAINTENANCE', label: 'Review in Maintenance', enabled: true }],
     expiresAt: recommendation.expiresAt?.toISOString() ?? null,
   };
 }
