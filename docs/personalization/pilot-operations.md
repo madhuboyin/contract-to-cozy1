@@ -64,7 +64,8 @@ Admins with MFA can open `/dashboard/admin/personalization`. The page lists exis
 The same admin page includes a 30-day aggregate quality snapshot backed by:
 
 - `GET /api/admin/personalization/quality?windowDays=30`
-- opted-in household count
+- distinct property count receiving default property guidance
+- optional household profiles enabled, labeled separately from default feature availability
 - recommendation counts by status and definition
 - accepted and explicit-negative feedback totals
 - bounded feedback-reason counts

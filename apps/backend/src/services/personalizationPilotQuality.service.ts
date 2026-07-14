@@ -8,7 +8,8 @@ export interface PersonalizationPilotQualitySummary {
   windowDays: number;
   since: string;
   generatedAt: string;
-  optedInHouseholds: number;
+  optionalProfilesEnabled: number;
+  propertiesWithDefaultGuidance: number;
   recommendations: {
     total: number;
     byStatus: Array<{ status: string; count: number }>;
@@ -46,14 +47,14 @@ export async function getPersonalizationPilotQuality(
 ): Promise<PersonalizationPilotQualitySummary> {
   const since = new Date(now.getTime() - windowDays * 24 * 60 * 60 * 1000);
   const [
-    optedInHouseholds,
+    optionalProfilesEnabled,
     recommendationRows,
     feedbackRows,
     profileAnswerRows,
   ] = await Promise.all([
     prisma.household.count({ where: { consentedAt: { gte: since }, consentVersion: { not: null } } }),
     prisma.personalizedRecommendation.groupBy({
-      by: ['definitionId', 'status'],
+      by: ['propertyId', 'householdId', 'definitionId', 'status'],
       where: { firstEligibleAt: { gte: since } },
       _count: { _all: true },
     }),
@@ -102,6 +103,11 @@ export async function getPersonalizationPilotQuality(
   }
 
   const decisionEvents = accepted + negative;
+  const propertiesWithDefaultGuidance = new Set(
+    recommendationRows
+      .filter((row) => row.householdId === null)
+      .map((row) => row.propertyId),
+  ).size;
   const sampleStatus = decisionEvents === 0
     ? 'NO_DATA' as const
     : decisionEvents < MIN_PERSONALIZATION_FEEDBACK_SAMPLE
@@ -112,7 +118,8 @@ export async function getPersonalizationPilotQuality(
     windowDays,
     since: since.toISOString(),
     generatedAt: now.toISOString(),
-    optedInHouseholds,
+    optionalProfilesEnabled,
+    propertiesWithDefaultGuidance,
     recommendations: {
       total: recommendationRows.reduce((sum, row) => sum + countOf(row), 0),
       byStatus: [...byStatus.entries()]

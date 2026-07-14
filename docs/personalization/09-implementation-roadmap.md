@@ -47,7 +47,7 @@ Seller Prep, Risk/protection, Buyer, Community, Climate, Wellness, Energy, provi
 
 The original Phase 3 assumed sufficient real-user outcome data. The product is still a data-free pilot, so experiments, behavioral affinity, inference and weight tuning would create machinery without evidence. Phase 3 therefore starts with measurement only.
 
-- **Implemented initial slice:** richer explicit negative-feedback reasons; temporary `BAD_TIMING` dismissal rather than permanent irrelevance; aggregate 30-day admin quality snapshot; recommendation/status, answer and feedback counts; a 20-decision-event review threshold; automatic tuning hard-disabled.
+- **Implemented initial slice:** richer explicit negative-feedback reasons; temporary `BAD_TIMING` dismissal rather than permanent irrelevance; aggregate 30-day admin quality snapshot; distinct properties receiving default guidance; separately labeled optional-profile enablement; recommendation/status, answer and feedback counts; a 20-decision-event review threshold; automatic tuning hard-disabled.
 - **Data:** reuse existing recommendation, feedback, profile-answer and household-consent rows. No experiment-assignment, inference, model-registry or aggregate-feature tables; no migration or backfill.
 - **Backend:** ADMIN+MFA aggregate-only quality endpoint. It returns counts and rates, never household answers, comments, property identifiers or recommendation evidence.
 - **Frontend:** low-friction reason capture on the pilot recommendation card and a quality snapshot on the existing personalization admin page.

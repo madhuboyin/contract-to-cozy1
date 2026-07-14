@@ -43,7 +43,8 @@ export interface PersonalizationPilotQualityResponse {
   windowDays: number;
   since: string;
   generatedAt: string;
-  optedInHouseholds: number;
+  optionalProfilesEnabled: number;
+  propertiesWithDefaultGuidance: number;
   recommendations: {
     total: number;
     byStatus: Array<{ status: string; count: number }>;

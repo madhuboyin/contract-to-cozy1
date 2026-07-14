@@ -20,6 +20,9 @@ test('admin catalog shows aggregate quality and keeps automatic tuning disabled'
   const admin = frontend('app/(dashboard)/dashboard/admin/personalization/page.tsx');
   const api = frontend('lib/api/personalizationAdminApi.ts');
   assert.match(admin, /Pilot quality snapshot/);
+  assert.match(admin, /Homes with default guidance/);
+  assert.match(admin, /Optional profiles enabled/);
+  assert.doesNotMatch(admin, /Opted-in homes/);
   assert.match(admin, /minimumRequired/);
   assert.match(admin, /never automatic weight changes/);
   assert.match(api, /\/api\/admin\/personalization\/quality/);
