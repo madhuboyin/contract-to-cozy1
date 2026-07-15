@@ -7,10 +7,11 @@ export interface PersonalizationRecommendation {
   priorityBand: string | null;
   confidence: number | null;
   firstEligibleAt: string;
+  rankingReasons: string[];
   definition: { code: string; category: string; targetModule: string };
   explanations: Array<{
     headline: string;
-    reasonCodes: Array<{ code: string; templateKey: string; params?: { message?: string } }>;
+    reasonCodes: Array<{ code: string; templateKey: string; params?: { message?: string; factSummary?: string } }>;
     evidenceJson: unknown;
   }>;
 }
@@ -20,6 +21,10 @@ export interface PersonalizationResponse {
   profileEnabled: boolean;
   consentedAt?: string | null;
   recommendations: PersonalizationRecommendation[];
+  rankingContext: {
+    profileApplied: boolean;
+    reasons: string[];
+  };
   capabilities: {
     canManageSensitiveProfile: boolean;
     canViewSensitiveEvidence: boolean;

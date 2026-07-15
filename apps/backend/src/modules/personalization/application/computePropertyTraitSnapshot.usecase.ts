@@ -6,10 +6,13 @@
 import { TraitReading } from '../domain/evaluator';
 import {
   deriveDryerVentCleaningOverdue,
+  deriveDryerVentDaysSinceServiced,
   deriveHvacFilterDaysSinceServiced,
   deriveHvacFilterReplacementOverdue,
   deriveRoofReplacementOverdue,
+  deriveRoofAgeYears,
   deriveSmokeDetectorBatteryOverdue,
+  deriveSmokeDetectorBatteryDaysSinceServiced,
   deriveSmokeDetectorMissing,
 } from '../domain/traits';
 import { loadPropertyTraitFacts, persistDerivedTraits } from '../infrastructure/propertyTraitRepository';
@@ -37,7 +40,10 @@ export async function computePropertyTraitSnapshot(
     // Scoring input, not an eligibility trait — no rule AST references this key.
     hvacFilterDaysSinceServiced: deriveHvacFilterDaysSinceServiced(facts.homeAssets),
     smokeDetectorBatteryOverdue: deriveSmokeDetectorBatteryOverdue(facts, facts.homeAssets),
+    smokeDetectorBatteryDaysSinceServiced: deriveSmokeDetectorBatteryDaysSinceServiced(facts, facts.homeAssets),
     dryerVentCleaningOverdue: deriveDryerVentCleaningOverdue(facts.homeAssets),
+    dryerVentDaysSinceServiced: deriveDryerVentDaysSinceServiced(facts.homeAssets),
+    roofAgeYears: deriveRoofAgeYears(facts),
   };
 
   await persistDerivedTraits(

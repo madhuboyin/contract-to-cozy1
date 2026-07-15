@@ -2,11 +2,10 @@
 //
 // Typed mirror of docs/personalization/catalog-plan.md's Phase 0 content
 // plan. This is a PLAN, not authored content — no rule logic, no advice
-// copy. It exists as:
-//   1. the seed source for the (empty, DRAFT-only) RecommendationDefinition
-//      rows described in catalog-plan.md, and
-//   2. the target-code list validateFixtures.ts checks fixture coverage
-//      against.
+// copy. It exists as the target-code list validateFixtures.ts checks fixture
+// coverage against. It is not a database seed source. The canonical pgAdmin
+// bootstrap contains only implemented focused-tranche definitions and leaves
+// all of them DRAFT until review.
 // Keep this file and catalog-plan.md in sync — this is the source of truth
 // for tooling, the doc is the source of truth for humans reviewing the plan.
 
@@ -66,4 +65,8 @@ export const CATALOG_PLAN: readonly CatalogPlanEntry[] = [
   { code: 'caulking_weatherstripping_check', category: 'low_cost_prevention', targetModule: 'Maintenance', safetyClass: 'ROUTINE', intent: 'Low-cost caulking/weatherstripping check to reduce energy loss.', status: 'DRAFT' },
   { code: 'water_heater_flush_reminder', category: 'low_cost_prevention', targetModule: 'Maintenance', safetyClass: 'ROUTINE', intent: 'Annual water heater flush reminder.', status: 'DRAFT' },
   { code: 'dryer_vent_cleaning_reminder', category: 'low_cost_prevention', targetModule: 'Maintenance', safetyClass: 'SAFETY_SENSITIVE', intent: 'Dryer vent cleaning reminder (fire-prevention, low cost).', status: 'DRAFT' },
+
+  // Phase 2.5 focused showcase
+  { code: 'smoke_detector_installation_review', category: 'safety_risk_reduction', targetModule: 'Maintenance', safetyClass: 'SAFETY_SENSITIVE', intent: 'Confirm a property record that indicates smoke detectors are not installed and prompt a coverage review.', status: 'DRAFT' },
+  { code: 'aging_roof_condition_review', category: 'aging_system_planning', targetModule: 'Health', safetyClass: 'ROUTINE', intent: 'Prompt a condition and service-history review when the recorded roof replacement year is at least 25 years ago.', status: 'DRAFT' },
 ];

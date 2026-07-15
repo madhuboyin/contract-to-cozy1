@@ -142,6 +142,9 @@ for each archetype. Demo fixtures must not create fake production engagement,
 feedback, learning or outcome history. They should be safe to recreate and
 must never be presented as real-user evidence.
 
+The focused tranche's UI-only setup procedure is documented in
+[Phase 2.5 demo data setup through the UI](phase2-5-demo-data-setup.md).
+
 ## Cross-module proof
 
 A recommendation has one definition, rule/content version, explanation,
@@ -290,4 +293,3 @@ Extend beyond the current context facade only when:
 Graph intelligence does not imply a graph database. PostgreSQL remains the
 preferred store when it satisfies the validated journeys and operational
 requirements.
-

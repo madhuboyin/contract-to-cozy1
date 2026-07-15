@@ -14,7 +14,9 @@ WITH personalization_definitions(code, category, safety_class) AS (
   VALUES
     ('hvac_filter_replacement_check_proof', 'low_cost_prevention', 'ROUTINE'),
     ('smoke_co_detector_battery_check',      'low_cost_prevention', 'SAFETY_SENSITIVE'),
-    ('dryer_vent_cleaning_reminder',         'low_cost_prevention', 'SAFETY_SENSITIVE')
+    ('dryer_vent_cleaning_reminder',         'low_cost_prevention', 'SAFETY_SENSITIVE'),
+    ('smoke_detector_installation_review',   'safety_risk_reduction', 'SAFETY_SENSITIVE'),
+    ('aging_roof_condition_review',          'aging_system_planning', 'ROUTINE')
 )
 INSERT INTO personalization_recommendation_definitions
   (id, code, category, "safetyClass", status, "createdAt", "updatedAt")
@@ -36,6 +38,14 @@ WITH personalization_rules(code, rule_ast) AS (
     (
       'dryer_vent_cleaning_reminder',
       '{"op":"trait","key":"dryerVentCleaningOverdue","cmp":"eq","value":true}'::jsonb
+    ),
+    (
+      'smoke_detector_installation_review',
+      '{"op":"trait","key":"smokeDetectorMissing","cmp":"eq","value":true}'::jsonb
+    ),
+    (
+      'aging_roof_condition_review',
+      '{"op":"trait","key":"roofReplacementOverdue","cmp":"eq","value":true}'::jsonb
     )
 )
 INSERT INTO personalization_recommendation_rules
@@ -62,6 +72,16 @@ WITH personalization_content(code, title, body) AS (
       'dryer_vent_cleaning_reminder',
       'Your dryer vent may be due for cleaning',
       'Your recorded maintenance history indicates that dryer-vent cleaning may be due. Inspect the vent and use a qualified professional when appropriate.'
+    ),
+    (
+      'smoke_detector_installation_review',
+      'Confirm smoke-detector coverage for this home',
+      'Your property details currently indicate that smoke detectors are not installed. Confirm the record, then install and test detectors in the locations required for your home.'
+    ),
+    (
+      'aging_roof_condition_review',
+      'Review your roof''s age and condition',
+      'The recorded roof replacement year is at least 25 years ago. Review the roof condition and service history, and schedule a qualified inspection when appropriate before planning repair or replacement.'
     )
 )
 INSERT INTO personalization_recommendation_content_versions
@@ -120,7 +140,7 @@ ON CONFLICT (code, version) DO NOTHING;
 
 COMMIT;
 
--- Verification: expect 3 definitions/rules and 5 questions. Existing rows
+-- Verification: expect 5 definitions/rules and 5 questions. Existing rows
 -- may already be ACTIVE; this bootstrap does not change existing rows.
 SELECT d.code, d.status AS definition_status, r.version, r.status AS rule_status
 FROM personalization_recommendation_definitions d
@@ -128,7 +148,9 @@ JOIN personalization_recommendation_rules r ON r."definitionId" = d.id
 WHERE d.code IN (
   'hvac_filter_replacement_check_proof',
   'smoke_co_detector_battery_check',
-  'dryer_vent_cleaning_reminder'
+  'dryer_vent_cleaning_reminder',
+  'smoke_detector_installation_review',
+  'aging_roof_condition_review'
 )
 ORDER BY d.code;
 
@@ -149,6 +171,8 @@ JOIN personalization_recommendation_content_versions c ON c."definitionId" = d.i
 WHERE d.code IN (
   'hvac_filter_replacement_check_proof',
   'smoke_co_detector_battery_check',
-  'dryer_vent_cleaning_reminder'
+  'dryer_vent_cleaning_reminder',
+  'smoke_detector_installation_review',
+  'aging_roof_condition_review'
 )
 ORDER BY d.code, c.locale, c.version;

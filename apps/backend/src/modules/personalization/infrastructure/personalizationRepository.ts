@@ -51,11 +51,11 @@ export async function enableHouseholdProfile(propertyId: string, ownerUserId: st
   });
 }
 
-export async function listActivePersonalizationRecommendations(propertyId: string) {
+export async function listActivePersonalizationRecommendations(propertyId: string, take = 3) {
   return prisma.personalizedRecommendation.findMany({
     where: { propertyId, status: 'ACTIVE' },
     orderBy: [{ score: 'desc' }, { firstEligibleAt: 'desc' }],
-    take: 3,
+    take: Math.min(Math.max(take, 1), 25),
     select: {
       id: true,
       status: true,

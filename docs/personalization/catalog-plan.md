@@ -2,22 +2,22 @@
 
 Status: **DRAFT / PLANNING ONLY**. This is the "20–40 definition content plan"
 deliverable named in `09-implementation-roadmap.md`'s Phase 0 scope — a list
-of *candidate* definitions, not authored rule logic or advice copy. Every
-entry below is a name, category, and one-line intent only.
+of candidate definitions. Except for the focused Phase 2.5 additions called
+out below, entries are names, categories and one-line intents only.
 
-None of these are reviewed, none have real eligibility logic, and none have
-real user-facing content. Authoring the actual `RecommendationRule` (validated
-AST) and `RecommendationContentVersion` (real copy) for any entry here is
-**Phase 1** work per `09-implementation-roadmap.md`, and per
-`03-feasibility-study.md` requires "immutable version, author/reviewer,
+No entry is approved merely because it appears in this plan. The focused
+Phase 2.5 entries identified below have authored DRAFT eligibility and content;
+the remaining candidates do not. Per `03-feasibility-study.md`, an authored
+`RecommendationRule` and `RecommendationContentVersion` require "immutable
+version, author/reviewer,
 rationale, effective/review dates, source references, safety class, test
 fixtures and audit record. Publish is two-person for safety-sensitive advice."
 Nothing here should be treated as pre-approved content — it exists so
 Phase 1 has a starting list to review against, and so the schema/fixture
 scaffolding built in Phase 0 has real-shaped codes to validate against.
 
-Grouped by the 8 categories `09-implementation-roadmap.md` names for the
-initial catalog. `safetyClass` follows the `RecommendationDefinition.safetyClass`
+The original eight planning categories are followed by two focused Phase 2.5
+categories. `safetyClass` follows the `RecommendationDefinition.safetyClass`
 column added in Phase 0's schema baseline (`ROUTINE` vs `SAFETY_SENSITIVE` —
 the latter needs the two-person review the docs call for before it could ever
 go `ACTIVE`).
@@ -89,21 +89,34 @@ go `ACTIVE`).
 | `water_heater_flush_reminder` | Maintenance | ROUTINE | Annual water heater flush reminder. |
 | `dryer_vent_cleaning_reminder` | Maintenance | SAFETY_SENSITIVE | Dryer vent cleaning reminder (fire-prevention, low cost). |
 
+## Phase 2.5 focused showcase additions
+
+These two entries have now advanced beyond plan-only status: version 1 rule
+and content rows are included in the canonical bootstrap as `DRAFT` for human
+review and activation.
+
+| Code | Target module | Safety class | Intent |
+|---|---|---|---|
+| `smoke_detector_installation_review` | Maintenance | SAFETY_SENSITIVE | Confirm a property record that indicates smoke detectors are not installed and prompt a coverage review. |
+| `aging_roof_condition_review` | Health | ROUTINE | Prompt a condition and service-history review when the recorded roof replacement year is at least 25 years ago. |
+
 ## Totals
 
-27 candidate codes across 8 categories — within the roadmap's 20–40 target
-range. 9 are marked `SAFETY_SENSITIVE` and would need the docs' two-person
-review before ever reaching `ACTIVE`; the remaining 18 are `ROUTINE`.
+29 candidate codes across 10 categories — within the roadmap's 20–40 target
+range. 10 are marked `SAFETY_SENSITIVE` and would need the docs' two-person
+review before ever reaching `ACTIVE`; the remaining 19 are `ROUTINE`.
 
 ## What Phase 0 does and doesn't do with this list
 
-- Does: seed these as `RecommendationDefinition` rows with `status: DRAFT`
-  (inert — no evaluator reads them, no rules or content attached).
+- Does: keep candidate codes in the typed plan for fixture coverage. It does
+  not seed every speculative candidate into the database.
+- Does: add only implemented focused-tranche definition, rule and content
+  versions to `seedPersonalization.sql`, all with `status: DRAFT`.
 - Does: use these exact codes as the target set for the golden-fixture
   framework (`apps/backend/src/personalization/catalog/`), so the fixture
   lint has something concrete to check coverage against.
-- Does not: write any `RecommendationRule` (eligibility logic) or
-  `RecommendationContentVersion` (advice copy) for any of these.
+- Does not: write rule or content versions for the remaining plan-only
+  candidates.
 - Does not: get anything on this list reviewed/approved by Product, Content,
   Legal, or Security — that review is a Phase 1 prerequisite for moving any
   single definition past `DRAFT`.

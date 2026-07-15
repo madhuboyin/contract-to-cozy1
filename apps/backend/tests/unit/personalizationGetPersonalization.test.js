@@ -11,6 +11,7 @@ function installModule(relativePath, exports) {
 function loadUseCase({
   household = { id: 'hh-1', consentVersion: 'v1', consentedAt: new Date('2026-01-01') },
   paused = false,
+  preferences = { agingInPlace: false, budgetSensitive: false },
 } = {}) {
   let questionLoads = 0;
   let recommendationLoads = 0;
@@ -21,6 +22,9 @@ function loadUseCase({
       recommendationLoads += 1;
       return [{
         id: 'rec-1',
+        score: 60,
+        priorityBand: 'MEDIUM',
+        firstEligibleAt: new Date('2026-01-01'),
         definition: { code: 'hvac_filter_replacement_check_proof', category: 'maintenance' },
         explanations: [{ headline: 'Reviewed', reasonCodes: [], evidenceJson: { sensitive: true } }],
       }];
@@ -38,6 +42,9 @@ function loadUseCase({
       questionLoads += 1;
       return { question: { id: 'question-1' } };
     },
+  });
+  installModule('../../src/modules/personalization/infrastructure/profileRankingRepository.ts', {
+    loadExplicitRankingPreferences: async () => preferences,
   });
   const path = require.resolve('../../src/modules/personalization/application/getPersonalization.usecase.ts');
   delete require.cache[path];
@@ -109,4 +116,20 @@ test('property guidance is available before the optional household profile is en
   assert.equal(result.recommendations.length, 1);
   assert.equal(result.nextQuestion, null);
   assert.equal(getQuestionLoads(), 0);
+});
+
+test('consented explicit budget preference is visible as owner-only read-time ranking', async () => {
+  const { getPersonalization } = loadUseCase({
+    preferences: { agingInPlace: false, budgetSensitive: true },
+  });
+  const result = await getPersonalization('prop-1', 'owner-1', {
+    canManageSensitiveProfile: true,
+    canViewSensitiveEvidence: true,
+    canViewOrdinaryRecommendations: true,
+    canAct: true,
+    canGiveFeedback: true,
+  });
+  assert.equal(result.recommendations[0].score, 66);
+  assert.equal(result.rankingContext.profileApplied, true);
+  assert.match(result.recommendations[0].rankingReasons[0], /lower-cost options/);
 });

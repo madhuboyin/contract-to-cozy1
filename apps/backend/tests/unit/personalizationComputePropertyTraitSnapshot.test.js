@@ -79,7 +79,7 @@ test('all traits known: persists property-owned DerivedTrait rows without househ
   assert.equal(result.traits.hvacFilterDaysSinceServiced.known, true);
   assert.equal(result.traits.hvacFilterDaysSinceServiced.value, 200);
 
-  assert.equal(derivedTraitUpserts.length, 4);
+  assert.equal(derivedTraitUpserts.length, 5);
   assert.ok(derivedTraitUpserts.every((u) => u.create.propertyId === 'prop-1'));
   assert.ok(derivedTraitUpserts.every((u) => !Object.hasOwn(u.create, 'householdId')));
 });
@@ -106,14 +106,17 @@ test('unknown traits delete stale DerivedTrait rows instead of persisting unknow
   // Nothing known -> no DerivedTrait rows persisted (absence represents UNKNOWN),
   // but any stale row from a previous known value is actively deleted.
   assert.equal(derivedTraitUpserts.length, 0);
-  assert.equal(derivedTraitDeletes.length, 6);
+  assert.equal(derivedTraitDeletes.length, 9);
   assert.deepEqual(
     derivedTraitDeletes.map((d) => d.where.traitKey).sort(),
     [
       'dryerVentCleaningOverdue',
+      'dryerVentDaysSinceServiced',
       'hvacFilterDaysSinceServiced',
       'hvacFilterReplacementOverdue',
+      'roofAgeYears',
       'roofReplacementOverdue',
+      'smokeDetectorBatteryDaysSinceServiced',
       'smokeDetectorBatteryOverdue',
       'smokeDetectorMissing',
     ],
@@ -141,7 +144,7 @@ test('all traits known: persists a DerivedTrait per trait', async () => {
   assert.equal(result.traits.smokeDetectorBatteryOverdue.value, true);
   assert.equal(result.traits.dryerVentCleaningOverdue.known, true);
   assert.equal(result.traits.dryerVentCleaningOverdue.value, true);
-  assert.equal(derivedTraitUpserts.length, 6);
+  assert.equal(derivedTraitUpserts.length, 9);
 });
 
 test('partial knowledge: only known traits get a DerivedTrait row', async () => {
@@ -165,9 +168,16 @@ test('partial knowledge: only known traits get a DerivedTrait row', async () => 
   // SMOKE_DETECTOR-type asset, despite hasSmokeDetectors: true), and
   // dryerVentCleaningOverdue (no DRYER-type asset) are all unknown here ->
   // their stale rows get deleted, not skipped.
-  assert.equal(derivedTraitDeletes.length, 3);
+  assert.equal(derivedTraitDeletes.length, 6);
   assert.deepEqual(
     derivedTraitDeletes.map((d) => d.where.traitKey).sort(),
-    ['dryerVentCleaningOverdue', 'roofReplacementOverdue', 'smokeDetectorBatteryOverdue'],
+    [
+      'dryerVentCleaningOverdue',
+      'dryerVentDaysSinceServiced',
+      'roofAgeYears',
+      'roofReplacementOverdue',
+      'smokeDetectorBatteryDaysSinceServiced',
+      'smokeDetectorBatteryOverdue',
+    ],
   );
 });

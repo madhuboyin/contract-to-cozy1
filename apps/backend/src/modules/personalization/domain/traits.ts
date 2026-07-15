@@ -28,7 +28,7 @@ export interface HomeAssetFact {
  * counts as serviced" has one implementation — extracted once a third
  * near-identical trait made the duplication worth naming.
  */
-function mostRecentAssetServiceDate(homeAssets: HomeAssetFact[], assetTypePrefix: string): Date | null {
+export function mostRecentAssetServiceDate(homeAssets: HomeAssetFact[], assetTypePrefix: string): Date | null {
   const matchingAssets = homeAssets.filter((a) => a.assetType.toUpperCase().startsWith(assetTypePrefix));
   const serviced = matchingAssets.filter(
     (a): a is HomeAssetFact & { lastServiced: Date } => a.lastServiced !== null,
@@ -147,6 +147,24 @@ export function deriveSmokeDetectorBatteryOverdue(
   return { known: true, value: daysSinceChecked >= SMOKE_DETECTOR_BATTERY_CHECK_THRESHOLD_DAYS };
 }
 
+export function deriveSmokeDetectorBatteryDaysSinceServiced(
+  property: PropertySafetyFact,
+  homeAssets: HomeAssetFact[],
+  now: Date = new Date(),
+): TraitReading {
+  if (property.hasSmokeDetectors !== true) {
+    return { known: false };
+  }
+  const mostRecentCheck = mostRecentAssetServiceDate(homeAssets, 'SMOKE_DETECTOR');
+  if (!mostRecentCheck) {
+    return { known: false };
+  }
+  return {
+    known: true,
+    value: Math.floor((now.getTime() - mostRecentCheck.getTime()) / (1000 * 60 * 60 * 24)),
+  };
+}
+
 export const DRYER_VENT_CLEANING_THRESHOLD_DAYS = 365;
 
 /**
@@ -173,6 +191,20 @@ export function deriveDryerVentCleaningOverdue(
   return { known: true, value: daysSinceCleaned >= DRYER_VENT_CLEANING_THRESHOLD_DAYS };
 }
 
+export function deriveDryerVentDaysSinceServiced(
+  homeAssets: HomeAssetFact[],
+  now: Date = new Date(),
+): TraitReading {
+  const mostRecentCleaning = mostRecentAssetServiceDate(homeAssets, 'DRYER');
+  if (!mostRecentCleaning) {
+    return { known: false };
+  }
+  return {
+    known: true,
+    value: Math.floor((now.getTime() - mostRecentCleaning.getTime()) / (1000 * 60 * 60 * 24)),
+  };
+}
+
 export const ROOF_REPLACEMENT_OVERDUE_THRESHOLD_YEARS = 25;
 
 export interface PropertyRoofFact {
@@ -195,4 +227,14 @@ export function deriveRoofReplacementOverdue(
   }
   const age = now.getUTCFullYear() - property.roofReplacementYear;
   return { known: true, value: age >= ROOF_REPLACEMENT_OVERDUE_THRESHOLD_YEARS };
+}
+
+export function deriveRoofAgeYears(
+  property: PropertyRoofFact,
+  now: Date = new Date(),
+): TraitReading {
+  if (property.roofReplacementYear === null || property.roofReplacementYear === undefined) {
+    return { known: false };
+  }
+  return { known: true, value: now.getUTCFullYear() - property.roofReplacementYear };
 }

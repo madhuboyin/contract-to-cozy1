@@ -13,6 +13,36 @@ export interface PropertyTraitFacts {
   homeAssets: HomeAssetFact[];
 }
 
+interface InventoryServiceFact {
+  name: string;
+  category: string;
+  tags: string[];
+  lastServicedOn: Date | null;
+}
+
+/**
+ * Inventory is the homeowner-facing asset record. Normalize the small set of
+ * asset families used by the reviewed personalization catalog so demo and
+ * production properties can be configured entirely through the UI. Legacy
+ * HomeAsset rows remain supported and are combined with these facts.
+ */
+export function inventoryItemToPersonalizationAssetFact(
+  item: InventoryServiceFact,
+): HomeAssetFact | null {
+  const text = `${item.category} ${item.name} ${(item.tags || []).join(' ')}`.toUpperCase();
+  let assetType: string | null = null;
+
+  if (item.category === 'HVAC' || /\b(HVAC|FURNACE|HEAT PUMP|AIR CONDITION)/.test(text)) {
+    assetType = 'HVAC';
+  } else if (/\bSMOKE\b/.test(text) && /\b(DETECTOR|ALARM)\b/.test(text)) {
+    assetType = 'SMOKE_DETECTOR';
+  } else if (/\b(DRYER|WASHER_DRYER|LAUNDRY)\b/.test(text)) {
+    assetType = 'DRYER';
+  }
+
+  return assetType ? { assetType, lastServiced: item.lastServicedOn } : null;
+}
+
 export async function loadPropertyTraitFacts(propertyId: string): Promise<PropertyTraitFacts | null> {
   const property = await prisma.property.findUnique({
     where: { id: propertyId },
@@ -20,6 +50,9 @@ export async function loadPropertyTraitFacts(propertyId: string): Promise<Proper
       hasSmokeDetectors: true,
       roofReplacementYear: true,
       homeAssets: { select: { assetType: true, lastServiced: true } },
+      inventoryItems: {
+        select: { name: true, category: true, tags: true, lastServicedOn: true },
+      },
     },
   });
   if (!property) return null;
@@ -27,7 +60,12 @@ export async function loadPropertyTraitFacts(propertyId: string): Promise<Proper
   return {
     hasSmokeDetectors: property.hasSmokeDetectors,
     roofReplacementYear: property.roofReplacementYear,
-    homeAssets: property.homeAssets,
+    homeAssets: [
+      ...property.homeAssets,
+      ...(property.inventoryItems ?? [])
+        .map(inventoryItemToPersonalizationAssetFact)
+        .filter((asset): asset is HomeAssetFact => asset !== null),
+    ],
   };
 }
 

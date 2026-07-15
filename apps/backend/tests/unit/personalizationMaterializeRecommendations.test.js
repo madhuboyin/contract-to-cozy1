@@ -18,6 +18,9 @@ function loadUseCase({ contentAvailable = true, paused = false, evaluationStatus
       ? {
         status: 'COMPLETED', result: 'TRUE', eligible: true,
         definitionId: `def-${code}`, ruleVersion: 1, evaluationRunId: `run-${trigger}`,
+        traitsSnapshot: code === 'hvac_filter_replacement_check_proof'
+          ? { hvacFilterDaysSinceServiced: { known: true, value: 200 } }
+          : {},
       }
       : { status: 'FAILED', errorCode: 'DEFINITION_NOT_ACTIVE', definitionId: `def-${code}` },
   });
@@ -41,23 +44,28 @@ function loadUseCase({ contentAvailable = true, paused = false, evaluationStatus
   return { ...useCase, upserts, expired };
 }
 
-test('materializes all three eligible personalization definitions using active versioned content', async () => {
+test('materializes all five eligible personalization definitions using active versioned content', async () => {
   const { materializeRecommendationsForProperty, upserts } = loadUseCase();
   const result = await materializeRecommendationsForProperty('prop-1', 'MANUAL');
-  assert.deepEqual(result, { evaluated: 3, active: 3 });
-  assert.equal(upserts.length, 3);
+  assert.deepEqual(result, { evaluated: 5, active: 5 });
+  assert.equal(upserts.length, 5);
   assert.ok(upserts.every((item) => item.contentVersion === 2));
   assert.ok(upserts.every((item) => item.headline === 'Reviewed title'));
   assert.ok(upserts.every((item) => item.reasonCodes[0].params.message === 'Reviewed explanation'));
   assert.ok(upserts.every((item) => item.evaluationRunId === 'run-MANUAL'));
   assert.ok(upserts.every((item) => !Object.hasOwn(item, 'householdId')));
+  const hvac = upserts.find((item) => item.definitionId === 'def-hvac_filter_replacement_check_proof');
+  assert.equal(hvac.score, 62);
+  assert.equal(hvac.reasonCodes[0].params.factSummary, 'The recorded HVAC service date was 200 days ago.');
+  const smokeInstall = upserts.find((item) => item.definitionId === 'def-smoke_detector_installation_review');
+  assert.match(smokeInstall.reasonCodes[0].params.factSummary, /not installed/);
 });
 test('does not surface eligible recommendations without ACTIVE reviewed content', async () => {
   const { materializeRecommendationsForProperty, upserts, expired } = loadUseCase({ contentAvailable: false });
   const result = await materializeRecommendationsForProperty('prop-1');
-  assert.deepEqual(result, { evaluated: 3, active: 0 });
+  assert.deepEqual(result, { evaluated: 5, active: 0 });
   assert.equal(upserts.length, 0);
-  assert.equal(expired.length, 3);
+  assert.equal(expired.length, 5);
 });
 
 test('global pause performs no evaluation or materialization', async () => {
@@ -71,7 +79,7 @@ test('global pause performs no evaluation or materialization', async () => {
 test('inactive definitions expire previously stored recommendations', async () => {
   const { materializeRecommendationsForProperty, upserts, expired } = loadUseCase({ evaluationStatus: 'FAILED' });
   const result = await materializeRecommendationsForProperty('prop-1');
-  assert.deepEqual(result, { evaluated: 3, active: 0 });
+  assert.deepEqual(result, { evaluated: 5, active: 0 });
   assert.equal(upserts.length, 0);
-  assert.equal(expired.length, 3);
+  assert.equal(expired.length, 5);
 });

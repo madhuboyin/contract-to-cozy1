@@ -6,7 +6,7 @@ import {
   suppressRecommendationIfActive,
   upsertRecommendation,
 } from '../infrastructure/recommendationRepository';
-import { priorityBandFromScore } from '../domain/scoring';
+import { buildPropertyFactSummary, priorityBandFromScore, scoreDefinitionForProperty } from '../domain/scoring';
 import { loadActiveRecommendationContent } from '../infrastructure/recommendationContentRepository';
 
 export interface MaterializeRecommendationsResult {
@@ -62,6 +62,13 @@ export async function materializeRecommendationsForProperty(
       continue;
     }
 
+    const score = scoreDefinitionForProperty(
+      definition.code,
+      definition.defaultScore,
+      evaluation.traitsSnapshot,
+    );
+    const factSummary = buildPropertyFactSummary(definition.code, evaluation.traitsSnapshot);
+
     await upsertRecommendation({
       propertyId,
       definitionId: evaluation.definitionId,
@@ -72,11 +79,11 @@ export async function materializeRecommendationsForProperty(
       reasonCodes: [{
         code: definition.reasonCode,
         templateKey: definition.reasonTemplateKey,
-        params: { message: content.body },
+        params: { message: content.body, ...(factSummary ? { factSummary } : {}) },
       }],
       evidence: { result: evaluation.result },
-      score: definition.defaultScore,
-      priorityBand: priorityBandFromScore(definition.defaultScore),
+      score,
+      priorityBand: priorityBandFromScore(score),
       confidence: 1,
     });
     active += 1;

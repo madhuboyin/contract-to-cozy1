@@ -181,6 +181,13 @@ export default function PersonalizationPage() {
               <ProfileQuestionCard propertyId={propertyId} question={personalization.nextQuestion} onSaved={refresh} />
             </MobileSection>
           ) : null}
+          {personalization.rankingContext.profileApplied ? (
+            <SummaryCard title="Recommendations adjusted" subtitle="Your optional answers changed the order, not the safety or eligibility rules.">
+              <ul className="space-y-1 text-sm text-[hsl(var(--mobile-text-secondary))]">
+                {personalization.rankingContext.reasons.map((reason) => <li key={reason}>{reason}</li>)}
+              </ul>
+            </SummaryCard>
+          ) : null}
           <MobileSection>
             <MobileSectionHeader
               title="Top suggestions"
@@ -203,6 +210,7 @@ export default function PersonalizationPage() {
               ) : personalization.recommendations.map((recommendation) => {
                 const explanation = recommendation.explanations[0];
                 const why = explanation?.reasonCodes[0]?.params?.message;
+                const factSummary = explanation?.reasonCodes[0]?.params?.factSummary;
                 return (
                   <SummaryCard key={recommendation.id} title={explanation?.headline || 'Home suggestion'} subtitle={recommendation.definition.targetModule}>
                     <div className="space-y-3">
@@ -215,6 +223,10 @@ export default function PersonalizationPage() {
                       <p className="text-sm text-[hsl(var(--mobile-text-secondary))]">
                         {why || 'Suggested because a reviewed maintenance rule matched the property history available to ContractToCozy.'}
                       </p>
+                      {factSummary ? <p className="text-sm font-medium">Why this home: {factSummary}</p> : null}
+                      {recommendation.rankingReasons.map((reason) => (
+                        <p key={reason} className="text-xs text-[hsl(var(--mobile-text-secondary))]">Owner preference: {reason}</p>
+                      ))}
                       {personalization.capabilities.canGiveFeedback ? (
                         feedbackFor === recommendation.id ? (
                           <div className="space-y-2" aria-label="Why is this suggestion not useful?">

@@ -269,6 +269,7 @@ export default function InventoryItemDrawer(props: {
   const [suggestions, setSuggestions] = useState<any | null>(null);
   const [installYear, setInstallYear] = useState<string>('');
   const [purchaseDate, setPurchaseDate] = useState<string>('');
+  const [lastServicedDate, setLastServicedDate] = useState<string>('');
   
   const [duplicateError, setDuplicateError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -350,10 +351,12 @@ useEffect(() => {
       } else {
         setPurchaseDate('');
       }
+      setLastServicedDate(formatDateForInput(props.initialItem.lastServicedOn));
     } else {
       // Reset for new item
       setInstallYear('');
       setPurchaseDate('');
+      setLastServicedDate('');
     }
   }, [props.initialItem, props.open]);
   
@@ -847,6 +850,7 @@ useEffect(() => {
         // Category-specific date fields
         installedOn: installedOnValue,
         purchasedOn: purchasedOnValue,
+        lastServicedOn: lastServicedDate ? new Date(`${lastServicedDate}T00:00:00.000Z`).toISOString() : null,
   
         // Cost fields
         purchaseCostCents: purchaseCost ? dollarsToCents(purchaseCost) : null,
@@ -1427,6 +1431,18 @@ useEffect(() => {
                     />
                   </div>
                 ) : null}
+
+                <div className="min-w-0">
+                  <div className="mb-1 text-xs text-gray-500">Last serviced or checked</div>
+                  <input
+                    type="date"
+                    value={lastServicedDate}
+                    onChange={(e) => setLastServicedDate(e.target.value)}
+                    max={new Date().toISOString().split('T')[0]}
+                    className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm"
+                  />
+                  <p className="mt-1 text-xs text-gray-500">Used for maintenance timing and explainable recommendations.</p>
+                </div>
 
                 <div className="min-w-0">
                   <div className="mb-1 text-xs text-gray-500">Purchase Cost ($)</div>
