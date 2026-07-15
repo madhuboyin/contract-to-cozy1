@@ -29,7 +29,6 @@ import {
   MobilePageIntro,
   MobileSection,
   MobileSectionHeader,
-  ResultHeroCard,
   StatusChip,
 } from '@/components/mobile/dashboard/MobilePrimitives';
 import HomeToolHeader from '@/components/tools/HomeToolHeader';
@@ -48,6 +47,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from '@/components/ui/sheet';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/components/ui/use-toast';
 import { track } from '@/lib/analytics/events';
@@ -62,7 +62,7 @@ import {
   trackPlantAdvisorEvent,
   upsertRoomPlantProfile,
 } from './plantAdvisorApi';
-import WeatherAwarePlantCare from './WeatherAwarePlantCare';
+import { GardenZonesSection, PlantCareSection, usePlantCareOutlook } from './WeatherAwarePlantCare';
 import type {
   PlantAdvisorRoomStateDTO,
   PlantAdvisorRoomSummaryDTO,
@@ -220,6 +220,19 @@ function toProfileInput(draft: PlantAdvisorDraft): RoomPlantProfileInput {
 function confidencePercent(confidence: number): number {
   const normalized = Math.max(0, Math.min(1, confidence));
   return Math.round(normalized * 100);
+}
+
+type AdvisorTab = 'recommendations' | 'care' | 'zones';
+
+function StatTile({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-[hsl(var(--mobile-border-subtle))] bg-white p-3.5 shadow-[0_6px_14px_rgba(15,23,42,0.05)]">
+      <p className="mb-0 text-xs font-medium text-[hsl(var(--mobile-text-muted))]">{label}</p>
+      <p className="mb-0 mt-1 truncate text-lg font-semibold text-[hsl(var(--mobile-text-primary))]">
+        {value}
+      </p>
+    </div>
+  );
 }
 
 function RecommendationCard({
@@ -399,6 +412,9 @@ export default function PlantAdvisorClient() {
   const toolOpenTrackedRef = React.useRef(false);
 
   const [selectedRoomId, setSelectedRoomId] = React.useState<string | null>(null);
+  const [activeTab, setActiveTab] = React.useState<AdvisorTab>(
+    isEnvironmentReportLaunch || weatherContext ? 'care' : 'recommendations',
+  );
   const [roomPickerOpen, setRoomPickerOpen] = React.useState(false);
   const [recommendationFilter, setRecommendationFilter] = React.useState<RecommendationFilter>('ALL');
   const [draft, setDraft] = React.useState<PlantAdvisorDraft>({
@@ -434,6 +450,8 @@ export default function PlantAdvisorClient() {
   });
 
   const rooms = React.useMemo(() => roomsQuery.data ?? [], [roomsQuery.data]);
+
+  const outlookQuery = usePlantCareOutlook(propertyId);
 
   const environmentContextQuery = useQuery({
     queryKey: ['plant-advisor-environment-context', propertyId, sourceInsightId, weatherContext],
@@ -820,16 +838,41 @@ export default function PlantAdvisorClient() {
         </section>
       ) : null}
 
-      <div className="space-y-6 lg:grid lg:grid-cols-[minmax(0,1fr)_320px] lg:gap-6 lg:space-y-0 xl:grid-cols-[minmax(0,1fr)_360px]">
-        <div className="space-y-6">
-          <HomeToolHeader toolId="plant-advisor" propertyId={propertyId} />
+      <HomeToolHeader toolId="plant-advisor" propertyId={propertyId} />
 
-          <WeatherAwarePlantCare
-            propertyId={propertyId}
-            weatherContext={weatherContext}
-            focusedRoomName={selectedRoomSummary?.name ?? null}
-          />
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <StatTile label="Selected room" value={selectedRoomSummary?.name ?? '—'} />
+        <StatTile
+          label="Cards generated"
+          value={hasRecommendations ? String(statusCounts.total) : '—'}
+        />
+        <StatTile
+          label="Plants tracked"
+          value={outlookQuery.data ? String(outlookQuery.data.plants.length) : '—'}
+        />
+        <StatTile label="Hardiness zone" value={outlookQuery.data?.hardinessZone ?? '—'} />
+      </div>
 
+      <Tabs
+        value={activeTab}
+        onValueChange={(value) => {
+          setActiveTab(value as AdvisorTab);
+          trackEvent('PLANT_ADVISOR_TAB_CHANGED', 'tabs', { tab: value });
+        }}
+      >
+        <TabsList className="grid h-auto w-full grid-cols-3 sm:inline-flex sm:h-10 sm:w-auto">
+          <TabsTrigger value="recommendations" className="px-2 text-xs sm:px-3 sm:text-sm">
+            Recommendations
+          </TabsTrigger>
+          <TabsTrigger value="care" className="px-2 text-xs sm:px-3 sm:text-sm">
+            My plants &amp; care
+          </TabsTrigger>
+          <TabsTrigger value="zones" className="px-2 text-xs sm:px-3 sm:text-sm">
+            Garden zones
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="recommendations" className="mt-5 space-y-6">
           <MobileSection>
             <MobileSectionHeader
               title="1. Choose a room"
@@ -1212,27 +1255,29 @@ export default function PlantAdvisorClient() {
                             description="Try a different filter to see recommended, saved, or dismissed cards."
                           />
                         ) : (
-                          filteredRecommendations.map((recommendation) => {
-                            const busyAction =
-                              activeRecommendationAction?.recommendationId === recommendation.id
-                                ? activeRecommendationAction.action
-                                : null;
+                          <div className="grid gap-3 lg:grid-cols-2">
+                            {filteredRecommendations.map((recommendation) => {
+                              const busyAction =
+                                activeRecommendationAction?.recommendationId === recommendation.id
+                                  ? activeRecommendationAction.action
+                                  : null;
 
-                            return (
-                              <RecommendationCard
-                                key={recommendation.id}
-                                recommendation={recommendation}
-                                busyAction={busyAction}
-                                onSave={() => handleRecommendationAction(recommendation, 'save')}
-                                onDismiss={() =>
-                                  handleRecommendationAction(recommendation, 'dismiss')
-                                }
-                                onAddToHome={() =>
-                                  handleRecommendationAction(recommendation, 'addToHome')
-                                }
-                              />
-                            );
-                          })
+                              return (
+                                <RecommendationCard
+                                  key={recommendation.id}
+                                  recommendation={recommendation}
+                                  busyAction={busyAction}
+                                  onSave={() => handleRecommendationAction(recommendation, 'save')}
+                                  onDismiss={() =>
+                                    handleRecommendationAction(recommendation, 'dismiss')
+                                  }
+                                  onAddToHome={() =>
+                                    handleRecommendationAction(recommendation, 'addToHome')
+                                  }
+                                />
+                              );
+                            })}
+                          </div>
                         )}
                       </>
                     ) : hasProfile && hasGeneratedRecommendations ? (
@@ -1251,26 +1296,6 @@ export default function PlantAdvisorClient() {
               </MobileSection>
             </>
           ) : null}
-        </div>
-
-        <div className="space-y-4">
-          <ResultHeroCard
-            eyebrow="Room-aware mode"
-            title={selectedRoomSummary?.name ?? 'Plant Advisor'}
-            value={hasRecommendations ? `${statusCounts.total} cards` : 'Ready'}
-            status={
-              hasRecommendations ? (
-                <StatusChip tone="good">Generated</StatusChip>
-              ) : (
-                <StatusChip tone="info">Waiting</StatusChip>
-              )
-            }
-            summary={
-              selectedRoomSummary
-                ? `${getRoomTypeLabel(selectedRoomSummary.roomType)} · Deterministic profile-based scoring.`
-                : 'Select a room to start generating recommendations.'
-            }
-          />
 
           <MobileCard variant="compact" className="space-y-2.5">
             <div className="flex items-center gap-2">
@@ -1284,8 +1309,20 @@ export default function PlantAdvisorClient() {
               are scored deterministically. Cards include explicit fit signals and warning flags.
             </p>
           </MobileCard>
-        </div>
-      </div>
+        </TabsContent>
+
+        <TabsContent value="care" className="mt-5">
+          <PlantCareSection
+            propertyId={propertyId}
+            weatherContext={weatherContext}
+            focusedRoomName={selectedRoomSummary?.name ?? null}
+          />
+        </TabsContent>
+
+        <TabsContent value="zones" className="mt-5">
+          <GardenZonesSection propertyId={propertyId} />
+        </TabsContent>
+      </Tabs>
 
       <BottomSafeAreaReserve />
     </MobilePageContainer>
