@@ -11,6 +11,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { useToast } from '@/components/ui/use-toast';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api/client';
+import { seasonalAPI } from '@/lib/api/seasonal.api';
 import {
   getPriorityIcon,
   getPriorityBadgeClass,
@@ -95,23 +96,27 @@ export function SeasonalTaskCard({
     },
   });
 
-  // Legacy dismiss mutation (keep for backward compatibility)
   const dismissMutation = useMutation({
     mutationFn: async () => {
-      // Use legacy endpoint if exists
-      return await fetch(`/api/seasonal-checklist-items/${item.id}/dismiss`, {
-        method: 'POST',
-      });
+      return await seasonalAPI.dismissTask(item.id);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['seasonal-checklist'] });
-      
+      queryClient.invalidateQueries({ queryKey: ['seasonal-checklists'] });
+
       toast({
         title: 'Task Dismissed',
         description: 'This task has been hidden',
       });
-      
+
       onTaskDismissed?.();
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Failed to Dismiss Task',
+        description: error.message || 'Please try again',
+        variant: 'destructive',
+      });
     },
   });
 
@@ -138,7 +143,10 @@ export function SeasonalTaskCard({
   const isCompleted = item.status === 'COMPLETED' || item.maintenanceTask?.status === 'COMPLETED';
   const isAdded = (item.status === 'ADDED' || !!item.maintenanceTask) && !isCompleted;
   const isNotAdded = !isAdded && !isCompleted;
-  const isLoading = addToMaintenanceMutation.isPending || removeFromMaintenanceMutation.isPending;
+  const isLoading =
+    addToMaintenanceMutation.isPending ||
+    removeFromMaintenanceMutation.isPending ||
+    dismissMutation.isPending;
 
   return (
     <Card className="hover:shadow-md transition-shadow">

@@ -1,6 +1,7 @@
 // apps/backend/src/services/seasonalChecklist.service.ts
 import { ClimateRegion, Season, Property } from '@prisma/client';
 import { ClimateZoneService } from './climateZone.service';
+import { addSeasonalTaskToMaintenance } from './seasonalChecklistIntegration.service';
 import { prisma } from '../lib/prisma';
 import { logger } from '../lib/logger';
 
@@ -502,12 +503,25 @@ export class SeasonalChecklistService {
   static async addAllCriticalTasks(checklistId: string, userId: string) {
     const checklist = await this.assertChecklistOwnership(checklistId, userId);
 
+    // EXISTING_OWNER adds go through the maintenance path so bulk-added tasks
+    // get a linked PropertyMaintenanceTask, matching the individual add button.
+    const property = await prisma.property.findUnique({
+      where: { id: checklist.propertyId },
+      select: { homeownerProfile: { select: { segment: true } } },
+    });
+    const usesMaintenance = property?.homeownerProfile?.segment === 'EXISTING_OWNER';
+
     const addedTasks = [];
 
     for (const item of checklist.items) {
       try {
-        const checklistItem = await this.addTaskToChecklist(item.id, userId);
-        addedTasks.push(checklistItem);
+        if (usesMaintenance) {
+          const result = await addSeasonalTaskToMaintenance(userId, item.id);
+          addedTasks.push(result.task);
+        } else {
+          const checklistItem = await this.addTaskToChecklist(item.id, userId);
+          addedTasks.push(checklistItem);
+        }
       } catch (error) {
         logger.error({ err: error }, `Failed to add task ${item.id}`);
       }

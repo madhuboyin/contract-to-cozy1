@@ -42,9 +42,18 @@ export function SeasonalChecklistModal({ checklistId, onClose }: SeasonalCheckli
   const SeasonIcon = getSeasonIcon(checklist.season);
   const climateName = getClimateRegionName(checklist.climateRegion);
 
-  const criticalCount = tasks.critical.length;
-  const recommendedCount = tasks.recommended.length;
-  const optionalCount = tasks.optional.length;
+  const visibleTasks = {
+    critical: tasks.critical.filter((item: any) => item.status !== 'DISMISSED'),
+    recommended: tasks.recommended.filter((item: any) => item.status !== 'DISMISSED'),
+    optional: tasks.optional.filter((item: any) => item.status !== 'DISMISSED'),
+  };
+
+  const criticalCount = visibleTasks.critical.length;
+  const recommendedCount = visibleTasks.recommended.length;
+  const optionalCount = visibleTasks.optional.length;
+  const pendingCriticalCount = visibleTasks.critical.filter(
+    (item: any) => item.status === 'RECOMMENDED'
+  ).length;
 
   const handleDismissChecklist = async () => {
     const confirmed = await requestConfirmation({
@@ -156,7 +165,7 @@ export function SeasonalChecklistModal({ checklistId, onClose }: SeasonalCheckli
         {/* Content - Scrollable */}
         <div className="flex-1 overflow-y-auto px-6 py-4">
           {/* Critical Tasks Info Banner */}
-          {activeTab === 'critical' && criticalCount > 0 && (
+          {activeTab === 'critical' && pendingCriticalCount > 0 && (
             <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start space-x-3">
               <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
               <div className="flex-1">
@@ -175,11 +184,20 @@ export function SeasonalChecklistModal({ checklistId, onClose }: SeasonalCheckli
             </div>
           )}
 
+          {activeTab === 'critical' && criticalCount > 0 && pendingCriticalCount === 0 && (
+            <div className="mb-4 p-4 bg-green-50 border border-green-200 rounded-lg flex items-start space-x-3">
+              <CheckCircle2 className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
+              <p className="text-sm text-green-800 font-medium">
+                All critical tasks are in your maintenance plan.
+              </p>
+            </div>
+          )}
+
           {/* Task List */}
           <div className="space-y-4">
             {activeTab === 'critical' &&
               (criticalCount > 0 ? (
-                tasks.critical.map((item: any) => (
+                visibleTasks.critical.map((item: any) => (
                   <SeasonalTaskCard key={item.id} item={item} />
                 ))
               ) : (
@@ -190,7 +208,7 @@ export function SeasonalChecklistModal({ checklistId, onClose }: SeasonalCheckli
 
             {activeTab === 'recommended' &&
               (recommendedCount > 0 ? (
-                tasks.recommended.map((item: any) => (
+                visibleTasks.recommended.map((item: any) => (
                   <SeasonalTaskCard key={item.id} item={item} />
                 ))
               ) : (
@@ -201,7 +219,7 @@ export function SeasonalChecklistModal({ checklistId, onClose }: SeasonalCheckli
 
             {activeTab === 'optional' &&
               (optionalCount > 0 ? (
-                tasks.optional.map((item: any) => (
+                visibleTasks.optional.map((item: any) => (
                   <SeasonalTaskCard key={item.id} item={item} />
                 ))
               ) : (
