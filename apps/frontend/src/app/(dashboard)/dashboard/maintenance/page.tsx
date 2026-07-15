@@ -382,6 +382,14 @@ export default function MaintenancePage() {
   const handleCloseView = () => {
     setIsViewOpen(false);
     setViewTask(null);
+    // Bring the deep-linked task row into view once the dialog is out of the way.
+    if (taskIdFromUrl) {
+      requestAnimationFrame(() => {
+        document
+          .getElementById(`task-row-${taskIdFromUrl}`)
+          ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+    }
   };
 
   useEffect(() => {
@@ -717,7 +725,14 @@ export default function MaintenancePage() {
                   const frequencyDisplay = task.isRecurring && task.frequency ? formatEnumString(task.frequency) : 'One-time';
                   const isCompleted = task.status === 'COMPLETED';
                   return (
-                    <TableRow key={task.id} className={cn(isCompleted && 'opacity-80')}>
+                    <TableRow
+                      key={task.id}
+                      id={`task-row-${task.id}`}
+                      className={cn(
+                        isCompleted && 'opacity-80',
+                        task.id === taskIdFromUrl && 'bg-teal-50/70'
+                      )}
+                    >
                       <TableCell className="font-medium">{humanizeActionType(task.title)}</TableCell>
                       <TableCell className="text-sm text-gray-600">{task.description || 'No description'}</TableCell>
                       <TableCell>
@@ -790,7 +805,15 @@ export default function MaintenancePage() {
             const isCompleted = task.status === 'COMPLETED';
             
             return (
-              <Card key={task.id} className={cn("p-4 border", isCompleted && "opacity-80")}>
+              <Card
+                key={task.id}
+                id={`task-row-${task.id}`}
+                className={cn(
+                  'p-4 border',
+                  isCompleted && 'opacity-80',
+                  task.id === taskIdFromUrl && 'border-teal-400 ring-1 ring-teal-300'
+                )}
+              >
                 <div className="flex justify-between items-start mb-2">
                   <div>
                     <h3 className="font-bold text-base leading-tight">{humanizeActionType(task.title)}</h3>
@@ -1157,7 +1180,9 @@ export default function MaintenancePage() {
 
                 <div className="mt-1 flex items-center gap-2">
                   <DialogDescription className="m-0">
-                    Completed tasks are read-only.
+                    {viewTask?.status === 'COMPLETED'
+                      ? 'Completed tasks are read-only.'
+                      : 'This task is on your maintenance schedule below.'}
                   </DialogDescription>
 
                   {viewTask && (() => {
@@ -1233,6 +1258,18 @@ export default function MaintenancePage() {
           )}
 
           <DialogFooter>
+            {viewTask && viewTask.status !== 'COMPLETED' && viewTask.status !== 'CANCELLED' ? (
+              <Button
+                onClick={() => {
+                  const task = viewTask;
+                  handleCloseView();
+                  handleOpenModal(task);
+                }}
+              >
+                <Edit className="w-4 h-4 mr-1.5" />
+                Edit task
+              </Button>
+            ) : null}
             <Button variant="outline" onClick={handleCloseView}>
               Close
             </Button>

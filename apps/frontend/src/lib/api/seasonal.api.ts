@@ -113,6 +113,11 @@ export const seasonalAPI = {
     return assertMutationData(response, 'dismiss task');
   },
 
+  restoreTask: async (itemId: string) => {
+    const response = await apiClient.post(`/api/seasonal-checklist-items/${itemId}/restore`);
+    return assertMutationData(response, 'restore task');
+  },
+
   snoozeTask: async (itemId: string, days: number = 7) => {
     const response = await apiClient.post(`/api/seasonal-checklist-items/${itemId}/snooze`, { days });
     return assertMutationData(response, 'snooze task');

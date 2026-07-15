@@ -400,6 +400,42 @@ export class SeasonalChecklistController {
   }
 
   /**
+   * POST /api/seasonal-checklist-items/:itemId/restore
+   */
+  static async restoreTask(
+    req: AuthRequest,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
+    try {
+      if (!req.user) {
+        res.status(401).json({ success: false, message: 'Authentication required' });
+        return;
+      }
+
+      const { itemId } = req.params;
+
+      const result = await SeasonalChecklistService.restoreTask(itemId, req.user.userId);
+
+      analyticsEmitter.track({
+        eventType: AnalyticsEvent.ACTION_COMPLETED,
+        userId: req.user.userId,
+        propertyId: (result as any)?.propertyId,
+        moduleKey: AnalyticsModule.MAINTENANCE,
+        featureKey: AnalyticsFeature.SEASONAL_CHECKLIST,
+        metadataJson: { actionType: 'restore_task', itemId },
+      });
+
+      res.json({
+        success: true,
+        data: result,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
    * POST /api/seasonal-checklist-items/:itemId/snooze
    */
   static async snoozeTask(

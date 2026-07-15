@@ -196,41 +196,67 @@ export class SeasonalChecklistService {
    * Get seasonal checklist with items
    */
   static async getSeasonalChecklist(checklistId: string, userId: string) {
-    const checklist = await prisma.seasonalChecklist.findFirst({
-      where: {
-        id: checklistId,
-        property: {
-          homeownerProfile: {
-            userId,
+    const fetchChecklist = () =>
+      prisma.seasonalChecklist.findFirst({
+        where: {
+          id: checklistId,
+          property: {
+            homeownerProfile: {
+              userId,
+            },
           },
         },
-      },
-      include: {
-        property: {
-          select: {
-            id: true,
-            name: true,
-            address: true,
-            city: true,
-            state: true,
+        include: {
+          property: {
+            select: {
+              id: true,
+              name: true,
+              address: true,
+              city: true,
+              state: true,
+            },
+          },
+          items: {
+            include: {
+              seasonalTaskTemplate: true,
+              maintenanceTask: true,
+              checklistItem: true,
+            },
+            orderBy: [
+              { priority: 'asc' },
+              { title: 'asc' },
+            ],
           },
         },
-        items: {
-          include: {
-            seasonalTaskTemplate: true,
-            maintenanceTask: true,
-            checklistItem: true,
-          },
-          orderBy: [
-            { priority: 'asc' },
-            { title: 'asc' },
-          ],
-        },
-      },
-    });
+      });
+
+    let checklist = await fetchChecklist();
 
     if (!checklist) {
       throw new Error('Seasonal checklist not found');
+    }
+
+    // Backfill: items added before bulk-add used the maintenance path are
+    // ADDED without a linked PropertyMaintenanceTask, so "View in Maintenance"
+    // never renders for them. Materialize the missing task on read.
+    const legacyAddedItems = checklist.items.filter(
+      (item) => item.status === 'ADDED' && !item.maintenanceTask
+    );
+    if (legacyAddedItems.length > 0) {
+      let healedAny = false;
+      for (const item of legacyAddedItems) {
+        try {
+          await addSeasonalTaskToMaintenance(userId, item.id);
+          healedAny = true;
+        } catch (error) {
+          logger.warn({ err: error, itemId: item.id }, 'Seasonal maintenance-task backfill skipped');
+          // Segment restriction applies to every item on this checklist; stop early.
+          if (error instanceof Error && error.message.includes('only available')) break;
+        }
+      }
+      if (healedAny) {
+        checklist = (await fetchChecklist())!;
+      }
     }
 
     // Group items by priority
@@ -427,6 +453,41 @@ export class SeasonalChecklistService {
       data: {
         status: 'DISMISSED',
         dismissedAt: new Date(),
+      },
+    });
+
+    return updated;
+  }
+
+  /**
+   * Restore (un-dismiss) an individual seasonal task
+   */
+  static async restoreTask(seasonalItemId: string, userId: string) {
+    const item = await prisma.seasonalChecklistItem.findFirst({
+      where: {
+        id: seasonalItemId,
+        property: {
+          homeownerProfile: {
+            userId,
+          },
+        },
+      },
+      select: { id: true, status: true },
+    });
+
+    if (!item) {
+      throw new Error('Seasonal task not found');
+    }
+
+    if (item.status !== 'DISMISSED') {
+      return prisma.seasonalChecklistItem.findUnique({ where: { id: seasonalItemId } });
+    }
+
+    const updated = await prisma.seasonalChecklistItem.update({
+      where: { id: seasonalItemId },
+      data: {
+        status: 'RECOMMENDED',
+        dismissedAt: null,
       },
     });
 

@@ -3,7 +3,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Check, X, Clock, Info, DollarSign, Timer, CheckCircle2, Loader2, Eye } from 'lucide-react';
+import { Check, X, Clock, Info, DollarSign, Timer, CheckCircle2, Loader2, Eye, RotateCcw } from 'lucide-react';
 import { SeasonalChecklistItem } from '@/types/seasonal.types';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -12,6 +12,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api/client';
 import { seasonalAPI } from '@/lib/api/seasonal.api';
+import { cn } from '@/lib/utils';
 import {
   getPriorityIcon,
   getPriorityBadgeClass,
@@ -120,6 +121,28 @@ export function SeasonalTaskCard({
     },
   });
 
+  const restoreMutation = useMutation({
+    mutationFn: async () => {
+      return await seasonalAPI.restoreTask(item.id);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['seasonal-checklist'] });
+      queryClient.invalidateQueries({ queryKey: ['seasonal-checklists'] });
+
+      toast({
+        title: 'Task Reactivated',
+        description: `"${item.title}" is active again`,
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Failed to Reactivate Task',
+        description: error.message || 'Please try again',
+        variant: 'destructive',
+      });
+    },
+  });
+
   const handleAddToMaintenance = () => {
     addToMaintenanceMutation.mutate();
   };
@@ -140,16 +163,19 @@ export function SeasonalTaskCard({
 
   const PriorityIcon = getPriorityIcon(item.priority);
   // Determine task state
-  const isCompleted = item.status === 'COMPLETED' || item.maintenanceTask?.status === 'COMPLETED';
-  const isAdded = (item.status === 'ADDED' || !!item.maintenanceTask) && !isCompleted;
-  const isNotAdded = !isAdded && !isCompleted;
+  const isDismissed = item.status === 'DISMISSED';
+  const isCompleted =
+    !isDismissed && (item.status === 'COMPLETED' || item.maintenanceTask?.status === 'COMPLETED');
+  const isAdded = !isDismissed && (item.status === 'ADDED' || !!item.maintenanceTask) && !isCompleted;
+  const isNotAdded = !isAdded && !isCompleted && !isDismissed;
   const isLoading =
     addToMaintenanceMutation.isPending ||
     removeFromMaintenanceMutation.isPending ||
-    dismissMutation.isPending;
+    dismissMutation.isPending ||
+    restoreMutation.isPending;
 
   return (
-    <Card className="hover:shadow-md transition-shadow">
+    <Card className={cn('hover:shadow-md transition-shadow', isDismissed && 'opacity-60 bg-gray-50')}>
       <CardContent className="p-4 sm:p-6">
         <div className="space-y-4">
           {/* Header */}
@@ -168,6 +194,11 @@ export function SeasonalTaskCard({
                 <Badge className="bg-green-100 text-green-800 border-green-300">
                   <CheckCircle2 className="h-3 w-3 mr-1" />
                   Added
+                </Badge>
+              ) : isDismissed ? (
+                <Badge className="bg-gray-100 text-gray-600 border-gray-300">
+                  <X className="h-3 w-3 mr-1" />
+                  Dismissed
                 </Badge>
               ) : null}
             </div>
@@ -295,6 +326,28 @@ export function SeasonalTaskCard({
                   <X className="h-4 w-4 mr-1 shrink-0" />
                   <span className="hidden sm:inline">Dismiss</span>
                   <span className="sm:hidden">Skip</span>
+                </Button>
+              </>
+            ) : isDismissed ? (
+              // DISMISSED STATE - Grayed out with reactivate option
+              <>
+                <div className="flex-1 flex items-center gap-1 text-xs sm:text-sm text-gray-500">
+                  <X className="h-4 w-4 shrink-0" />
+                  <span>Task dismissed</span>
+                </div>
+                <Button
+                  variant="outline"
+                  onClick={() => restoreMutation.mutate()}
+                  disabled={isLoading}
+                  size="sm"
+                >
+                  {restoreMutation.isPending ? (
+                    <Loader2 className="h-4 w-4 mr-1 animate-spin shrink-0" />
+                  ) : (
+                    <RotateCcw className="h-4 w-4 mr-1 shrink-0" />
+                  )}
+                  <span className="hidden sm:inline">Reactivate</span>
+                  <span className="sm:hidden">Restore</span>
                 </Button>
               </>
             ) : isCompleted ? (

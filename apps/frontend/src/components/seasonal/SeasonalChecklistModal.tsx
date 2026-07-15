@@ -42,16 +42,26 @@ export function SeasonalChecklistModal({ checklistId, onClose }: SeasonalCheckli
   const SeasonIcon = getSeasonIcon(checklist.season);
   const climateName = getClimateRegionName(checklist.climateRegion);
 
+  // Dismissed tasks stay visible (grayed, restorable) but sort below active ones
+  // and are excluded from the tab counts.
+  const sortDismissedLast = (list: any[]) => [
+    ...list.filter((item: any) => item.status !== 'DISMISSED'),
+    ...list.filter((item: any) => item.status === 'DISMISSED'),
+  ];
+
   const visibleTasks = {
-    critical: tasks.critical.filter((item: any) => item.status !== 'DISMISSED'),
-    recommended: tasks.recommended.filter((item: any) => item.status !== 'DISMISSED'),
-    optional: tasks.optional.filter((item: any) => item.status !== 'DISMISSED'),
+    critical: sortDismissedLast(tasks.critical),
+    recommended: sortDismissedLast(tasks.recommended),
+    optional: sortDismissedLast(tasks.optional),
   };
 
-  const criticalCount = visibleTasks.critical.length;
-  const recommendedCount = visibleTasks.recommended.length;
-  const optionalCount = visibleTasks.optional.length;
-  const pendingCriticalCount = visibleTasks.critical.filter(
+  const countActive = (list: any[]) =>
+    list.filter((item: any) => item.status !== 'DISMISSED').length;
+
+  const criticalCount = countActive(tasks.critical);
+  const recommendedCount = countActive(tasks.recommended);
+  const optionalCount = countActive(tasks.optional);
+  const pendingCriticalCount = tasks.critical.filter(
     (item: any) => item.status === 'RECOMMENDED'
   ).length;
 
@@ -196,7 +206,7 @@ export function SeasonalChecklistModal({ checklistId, onClose }: SeasonalCheckli
           {/* Task List */}
           <div className="space-y-4">
             {activeTab === 'critical' &&
-              (criticalCount > 0 ? (
+              (visibleTasks.critical.length > 0 ? (
                 visibleTasks.critical.map((item: any) => (
                   <SeasonalTaskCard key={item.id} item={item} />
                 ))
@@ -207,7 +217,7 @@ export function SeasonalChecklistModal({ checklistId, onClose }: SeasonalCheckli
               ))}
 
             {activeTab === 'recommended' &&
-              (recommendedCount > 0 ? (
+              (visibleTasks.recommended.length > 0 ? (
                 visibleTasks.recommended.map((item: any) => (
                   <SeasonalTaskCard key={item.id} item={item} />
                 ))
@@ -218,7 +228,7 @@ export function SeasonalChecklistModal({ checklistId, onClose }: SeasonalCheckli
               ))}
 
             {activeTab === 'optional' &&
-              (optionalCount > 0 ? (
+              (visibleTasks.optional.length > 0 ? (
                 visibleTasks.optional.map((item: any) => (
                   <SeasonalTaskCard key={item.id} item={item} />
                 ))

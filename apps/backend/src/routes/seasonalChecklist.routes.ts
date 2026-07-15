@@ -120,6 +120,13 @@ router.post(
 );
 
 router.post(
+  '/seasonal-checklist-items/:itemId/restore',
+  authenticate,
+  requireSeasonalItemOwnership,
+  SeasonalChecklistController.restoreTask
+);
+
+router.post(
   '/seasonal-checklist-items/:itemId/snooze',
   authenticate,
   requireSeasonalItemOwnership,
