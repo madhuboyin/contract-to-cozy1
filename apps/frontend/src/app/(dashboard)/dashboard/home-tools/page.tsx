@@ -15,7 +15,7 @@ import {
   QuickActionTile,
   SummaryCard,
 } from '@/components/mobile/dashboard/MobilePrimitives';
-import { MOBILE_HOME_TOOL_LINKS } from '@/components/mobile/dashboard/mobileToolCatalog';
+import { MOBILE_HOME_TOOL_GROUPS, MOBILE_HOME_TOOL_LINKS } from '@/components/mobile/dashboard/mobileToolCatalog';
 
 function buildPropertyAwareHref(
   propertyId: string | undefined,
@@ -39,68 +39,17 @@ function buildPropertyAwareHref(
 
   if (propertyId) {
     const base = `/dashboard/properties/${propertyId}/${hrefSuffix}`;
-    return suffix ? `${base}?${suffix}` : base;
+    return suffix ? `${base}${base.includes('?') ? '&' : '?'}${suffix}` : base;
   }
 
   const base = `/dashboard/properties?navTarget=${encodeURIComponent(navTarget)}`;
   return suffix ? `${base}&${suffix}` : base;
 }
 
-const HOME_TOOL_GROUPS = [
-  {
-    key: 'monitoring',
-    title: 'Monitoring + Awareness',
-    summary: 'Live events and signals matched to your specific home',
-    toolKeys: ['home-event-radar', 'guidance-overview'],
-  },
-  {
-    key: 'history',
-    title: 'History + Replay',
-    summary: 'See what your home has already been through',
-    toolKeys: ['home-risk-replay'],
-  },
-  {
-    key: 'negotiation',
-    title: 'Negotiation + Review',
-    summary: 'Quote and premium review with response-ready guidance',
-    toolKeys: ['service-price-radar', 'negotiation-shield', 'price-finalization'],
-  },
-  {
-    key: 'ownership',
-    title: 'Ownership Strategy',
-    summary: 'Tax, cost, and hold/sell/rent planning',
-    toolKeys: [
-      'property-tax',
-      'cost-growth',
-      'insurance-trend',
-      'cost-explainer',
-      'true-cost',
-      'sell-hold-rent',
-      'cost-volatility',
-      'break-even',
-      'mortgage-refinance-radar',
-      'financing',
-    ],
-  },
-  {
-    key: 'renovation',
-    title: 'Renovation Planning',
-    summary: 'Understand permit, tax, and contractor requirements before starting a project.',
-    toolKeys: ['home-renovation-risk-advisor', 'diy', 'permits', 'inspection-hub', 'project-tracker', 'hoa-compliance'],
-  },
-  {
-    key: 'timeline',
-    title: 'Readiness + Timeline',
-    summary: 'Capital planning, prep, and timeline execution',
-    toolKeys: ['capital-timeline', 'reserve-fund', 'seller-prep', 'home-timeline', 'status-board'],
-  },
-  {
-    key: 'habits',
-    title: 'Home Habits',
-    summary: 'Seasonal care routines, safety checks, and maintenance habits',
-    toolKeys: ['home-habit-coach', 'plant-advisor'],
-  },
-] as const;
+const GROUPED_TOOLS = MOBILE_HOME_TOOL_GROUPS.map((group) => ({
+  ...group,
+  items: MOBILE_HOME_TOOL_LINKS.filter((tool) => tool.group === group.key && !tool.workflowOnly),
+})).filter((group) => group.items.length > 0);
 
 export default function HomeToolsPage() {
   const searchParams = useSearchParams();
@@ -117,14 +66,6 @@ export default function HomeToolsPage() {
     : '/dashboard';
   const backHref = resolveDashboardBackHref(searchParams.get('backTo'), propertyFallbackBackHref);
   const backLabel = resolvedPropertyId ? 'Back to property' : 'Back to dashboard';
-  const toolByKey = new Map(MOBILE_HOME_TOOL_LINKS.map((tool) => [tool.key, tool]));
-
-  const groupedTools = HOME_TOOL_GROUPS.map((group) => ({
-    ...group,
-    items: group.toolKeys
-      .map((toolKey) => toolByKey.get(toolKey))
-      .filter((tool): tool is (typeof MOBILE_HOME_TOOL_LINKS)[number] => Boolean(tool)),
-  })).filter((group) => group.items.length > 0);
 
   return (
     <MobilePageContainer className="space-y-7 pt-2 pb-24 lg:max-w-7xl lg:px-8 lg:pb-10">
@@ -138,7 +79,7 @@ export default function HomeToolsPage() {
         <MobilePageIntro title="Home tools" subtitle="Ownership planning tools for your property" />
       </MobileSection>
 
-      {groupedTools.map((group) => (
+      {GROUPED_TOOLS.map((group) => (
         <MobileSection key={group.key}>
           <ExpandableSummaryCard
             title={group.title}
@@ -155,7 +96,6 @@ export default function HomeToolsPage() {
                     title={tool.name}
                     subtitle={tool.description || 'Open tool'}
                     icon={<ToolIcon className="h-5 w-5" />}
-                    trailingIcon={<ToolIcon className="h-5 w-5" />}
                     href={buildPropertyAwareHref(resolvedPropertyId, tool.hrefSuffix, tool.navTarget, {
                       guidanceJourneyId,
                       guidanceStepKey,

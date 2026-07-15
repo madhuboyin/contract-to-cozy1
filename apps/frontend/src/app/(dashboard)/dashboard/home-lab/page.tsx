@@ -6,78 +6,20 @@ import { useSearchParams } from 'next/navigation';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
-import { MOBILE_HOME_TOOL_LINKS } from '@/components/mobile/dashboard/mobileToolCatalog';
+import { MOBILE_HOME_TOOL_GROUPS, MOBILE_HOME_TOOL_LINKS } from '@/components/mobile/dashboard/mobileToolCatalog';
 import { ToolCard } from './components/ToolCard';
 import { ScrollFadeX } from '@/components/ui/ScrollFadeX';
 
-const HOME_TOOL_GROUPS = [
-  {
-    key: 'monitoring',
-    title: 'Monitoring + Awareness',
-    toolKeys: ['home-event-radar', 'neighborhood-change-radar'],
-  },
-  {
-    key: 'history',
-    title: 'History + Replay',
-    toolKeys: ['home-risk-replay'],
-  },
-  {
-    key: 'negotiation',
-    title: 'Negotiation + Review',
-    toolKeys: ['service-price-radar', 'negotiation-shield', 'price-finalization'],
-  },
-  {
-    key: 'ownership',
-    title: 'Ownership Strategy',
-    toolKeys: [
-      'property-tax',
-      'cost-growth',
-      'insurance-trend',
-      'cost-explainer',
-      'true-cost',
-      'sell-hold-rent',
-      'cost-volatility',
-      'break-even',
-      'mortgage-refinance-radar',
-      'financing',
-    ],
-  },
-  {
-    key: 'renovation',
-    title: 'Renovation Planning',
-    toolKeys: ['home-renovation-risk-advisor', 'diy', 'permits', 'hoa-compliance', 'inspection-hub', 'project-tracker'],
-  },
-  {
-    key: 'timeline',
-    title: 'Readiness + Timeline',
-    toolKeys: ['capital-timeline', 'reserve-fund', 'seller-prep', 'home-timeline', 'status-board'],
-  },
-  {
-    key: 'habits',
-    title: 'Home Habits',
-    toolKeys: ['home-habit-coach', 'plant-advisor'],
-  },
-  {
-    key: 'records',
-    title: 'Property Records',
-    toolKeys: ['material-specs'],
-  },
-] as const;
-
-const TOOL_BY_KEY = new Map(MOBILE_HOME_TOOL_LINKS.map((t) => [t.key, t]));
-
-const GROUPED_TOOLS = HOME_TOOL_GROUPS.map((group) => ({
+const GROUPED_TOOLS = MOBILE_HOME_TOOL_GROUPS.map((group) => ({
   ...group,
-  items: group.toolKeys
-    .map((key) => TOOL_BY_KEY.get(key))
-    .filter((t): t is (typeof MOBILE_HOME_TOOL_LINKS)[number] => Boolean(t)),
+  items: MOBILE_HOME_TOOL_LINKS.filter((tool) => tool.group === group.key && !tool.workflowOnly),
 })).filter((g) => g.items.length > 0);
 
 const ALL_TOOLS = GROUPED_TOOLS.flatMap((group) =>
   group.items.map((tool) => ({ ...tool, groupTitle: group.title }))
 );
 
-const CATEGORIES = ['All', ...HOME_TOOL_GROUPS.map((g) => g.title)];
+const CATEGORIES = ['All', ...GROUPED_TOOLS.map((g) => g.title)];
 
 function buildPropertyAwareHref(
   propertyId: string | undefined,

@@ -546,8 +546,19 @@ export const MOBILE_HOME_AI_TILE_KEYS: MobileAiToolKey[] = [
   'view-all',
 ];
 
+export type MobileHomeToolGroupKey =
+  | 'monitoring'
+  | 'history'
+  | 'negotiation'
+  | 'ownership'
+  | 'renovation'
+  | 'timeline'
+  | 'habits'
+  | 'records';
+
 export type MobilePropertyToolLink = {
   key: string;
+  group: MobileHomeToolGroupKey;
   name: string;
   description: string;
   desktopDescription?: string;
@@ -558,9 +569,57 @@ export type MobilePropertyToolLink = {
   isActive: (pathname: string) => boolean;
 };
 
+export const MOBILE_HOME_TOOL_GROUPS: Array<{
+  key: MobileHomeToolGroupKey;
+  title: string;
+  summary: string;
+}> = [
+  {
+    key: 'monitoring',
+    title: 'Monitoring + Awareness',
+    summary: 'Live events, signals, and a living model of your home',
+  },
+  {
+    key: 'history',
+    title: 'History + Replay',
+    summary: 'See what your home has already been through',
+  },
+  {
+    key: 'negotiation',
+    title: 'Negotiation + Review',
+    summary: 'Quote and premium review with response-ready guidance',
+  },
+  {
+    key: 'ownership',
+    title: 'Ownership Strategy',
+    summary: 'Tax, cost, coverage, and hold/sell/rent planning',
+  },
+  {
+    key: 'renovation',
+    title: 'Renovation Planning',
+    summary: 'Understand permit, tax, and contractor requirements before starting a project.',
+  },
+  {
+    key: 'timeline',
+    title: 'Readiness + Timeline',
+    summary: 'Capital planning, prep, and timeline execution',
+  },
+  {
+    key: 'habits',
+    title: 'Home Habits',
+    summary: 'Seasonal care routines, safety checks, and maintenance habits',
+  },
+  {
+    key: 'records',
+    title: 'Property Records',
+    summary: 'Materials, specs, and critical home knowledge',
+  },
+];
+
 export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
   {
     key: 'home-event-radar',
+    group: 'monitoring',
     name: 'Home Event Radar',
     description: "Track current signals affecting your home",
     desktopDescription: "Events that may affect your property, matched to your specific home.",
@@ -571,6 +630,7 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
   },
   {
     key: 'home-risk-replay',
+    group: 'history',
     name: 'Home Risk Replay',
     description: "See what your home has already been through",
     desktopDescription: "Replay major events your home has already been through and understand impact over time.",
@@ -581,6 +641,7 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
   },
   {
     key: 'service-price-radar',
+    group: 'negotiation',
     name: 'Service Price Radar',
     description: "Know if a quote is fair for your home",
     desktopDescription: "Compare local service pricing so you can judge whether a quote is fair for your home.",
@@ -591,6 +652,7 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
   },
   {
     key: 'property-tax',
+    group: 'ownership',
     name: 'Property Tax',
     description: "Forecast annual tax drag",
     desktopDescription: "Forecast annual property tax burden and monitor drivers of future tax increases.",
@@ -601,6 +663,7 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
   },
   {
     key: 'cost-growth',
+    group: 'ownership',
     name: 'Cost Growth',
     description: "Model ownership cost trend",
     desktopDescription: "Model how ownership costs may grow across taxes, insurance, utilities, and upkeep.",
@@ -611,6 +674,7 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
   },
   {
     key: 'insurance-trend',
+    group: 'ownership',
     name: 'Insurance Trend',
     description: "Track premium pressure",
     desktopDescription: "Track premium pressure and renewal risk based on your property profile and trends.",
@@ -621,6 +685,7 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
   },
   {
     key: 'negotiation-shield',
+    group: 'negotiation',
     name: 'Negotiation Shield',
     description: "Review quotes, claims, and inspection asks",
     desktopDescription: "Build stronger responses for quotes, claims, and inspection requests with clear leverage points.",
@@ -631,6 +696,7 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
   },
   {
     key: 'quote-comparison',
+    group: 'negotiation',
     name: 'Quote Comparison',
     description: "Compare vendor quotes side by side",
     desktopDescription: "Review multiple vendor quotes together so you can shortlist the best option with context.",
@@ -642,6 +708,7 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
   },
   {
     key: 'price-finalization',
+    group: 'negotiation',
     name: 'Price Finalization',
     description: "Capture accepted terms before booking",
     desktopDescription: "Lock accepted pricing and key terms so your booking flow starts with clear scope and cost.",
@@ -652,6 +719,7 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
   },
   {
     key: 'cost-explainer',
+    group: 'ownership',
     name: 'Cost Explainer',
     description: "Understand what drives costs",
     desktopDescription: "Break down what is driving your home costs and where increases are coming from.",
@@ -662,6 +730,7 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
   },
   {
     key: 'true-cost',
+    group: 'ownership',
     name: 'True Cost',
     description: "View full ownership cost",
     desktopDescription: "See your all-in ownership cost, including recurring spend, risk, and long-term obligations.",
@@ -672,6 +741,7 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
   },
   {
     key: 'sell-hold-rent',
+    group: 'ownership',
     name: 'Sell / Hold / Rent',
     description: "Compare next-step scenarios",
     desktopDescription: "Compare sell, hold, and rent paths with projected returns, costs, and tradeoffs.",
@@ -682,6 +752,7 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
   },
   {
     key: 'cost-volatility',
+    group: 'ownership',
     name: 'Volatility',
     description: "Measure cost variability",
     desktopDescription: "Measure cost variability and identify where future expense swings are most likely.",
@@ -692,6 +763,7 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
   },
   {
     key: 'break-even',
+    group: 'ownership',
     name: 'Break-Even',
     description: "Estimate decision break-even",
     desktopDescription: "Estimate when appreciation is projected to outweigh cumulative ownership costs.",
@@ -702,6 +774,7 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
   },
   {
     key: 'capital-timeline',
+    group: 'timeline',
     name: 'Home Capital Timeline',
     description: "Plan major capital events",
     desktopDescription: "Plan major capital events, from replacements to upgrades, on a long-range timeline.",
@@ -712,6 +785,7 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
   },
   {
     key: 'reserve-fund',
+    group: 'timeline',
     name: 'Reserve Fund Planner',
     description: "Save for upcoming capital costs",
     desktopDescription: "Turn your Capital Timeline into a monthly savings target, so you're never caught short.",
@@ -722,6 +796,7 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
   },
   {
     key: 'seller-prep',
+    group: 'timeline',
     name: 'Seller Prep',
     description: "Prep high-ROI improvements",
     desktopDescription: "Prioritize pre-sale improvements based on expected ROI, effort, and buyer impact.",
@@ -732,6 +807,7 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
   },
   {
     key: 'home-timeline',
+    group: 'timeline',
     name: 'Home Timeline',
     description: "Track milestones over time",
     desktopDescription: "Track key milestones, major work, and ownership events over your home timeline.",
@@ -742,6 +818,7 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
   },
   {
     key: 'status-board',
+    group: 'timeline',
     name: 'Status Board',
     description: "Monitor home status signals",
     desktopDescription: "See your home's current health, risk posture, and readiness status at a glance.",
@@ -752,6 +829,7 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
   },
   {
     key: 'home-digital-will',
+    group: 'records',
     name: 'Home Digital Will',
     description: "Store critical home knowledge for trusted parties",
     desktopDescription: "Store trusted contacts, access details, and critical home instructions for handoff or emergencies.",
@@ -762,6 +840,7 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
   },
   {
     key: 'hidden-asset-finder',
+    group: 'ownership',
     name: 'Hidden Asset Finder',
     description: "Find potential rebates, credits, and benefits for your home",
     desktopDescription: "Identify likely rebates, credits, grants, and benefits tied to your property and systems.",
@@ -773,6 +852,7 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
   },
   {
     key: 'home-digital-twin',
+    group: 'monitoring',
     name: 'Home Digital Twin',
     description: "A living model of your home — systems, age, risk, and what-if scenarios",
     desktopDescription: "Use a living digital model of your home to evaluate systems, risk, and what-if scenarios.",
@@ -784,6 +864,7 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
   },
   {
     key: 'neighborhood-change-radar',
+    group: 'monitoring',
     name: 'Neighborhood Change Radar',
     description: "Track major external changes near your home and understand how they may affect value, demand, and livability.",
     desktopDescription: "Track major nearby changes and understand potential effects on value, demand, and livability.",
@@ -795,6 +876,7 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
   },
   {
     key: 'home-habit-coach',
+    group: 'habits',
     name: 'Home Habit Coach',
     description: "Seasonal care routines and safety checks for your home",
     desktopDescription: "Get seasonal care routines and safety habits tailored to your home's needs.",
@@ -806,6 +888,7 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
   },
   {
     key: 'plant-advisor',
+    group: 'habits',
     name: 'Plant Advisor',
     description: "Room-aware plant recommendations tailored to your home's spaces",
     desktopDescription: "Get deterministic, room-aware plant recommendations with fit signals and care guidance.",
@@ -817,6 +900,7 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
   },
   {
     key: 'home-renovation-risk-advisor',
+    group: 'renovation',
     name: 'Renovation Risk Advisor',
     description: "Check permit rules, tax impact, and contractor requirements before a major renovation.",
     desktopDescription: "Check permits, tax impact, and contractor requirements before committing to major renovations.",
@@ -827,6 +911,7 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
   },
   {
     key: 'mortgage-refinance-radar',
+    group: 'ownership',
     name: 'Mortgage Refinance Radar',
     description: "Monitor the market and know when refinancing makes financial sense.",
     desktopDescription: "Monitor refinance signals and know when refinancing is more likely to make financial sense.",
@@ -838,6 +923,7 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
   },
   {
     key: 'financing',
+    group: 'ownership',
     name: 'Financing Center',
     description: 'Equity position and payment options for home projects',
     desktopDescription: 'See your live equity position and compare HELOC, loan, and cash options for any home project.',
@@ -849,6 +935,7 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
   },
   {
     key: 'home-gazette',
+    group: 'monitoring',
     name: 'Home Gazette',
     description: "Your weekly home intelligence briefing — risks, maintenance, finances, and more.",
     desktopDescription: "Your weekly home intelligence briefing covering risk, maintenance priorities, and financial signals.",
@@ -860,6 +947,7 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
   },
   {
     key: 'coverage-options',
+    group: 'ownership',
     name: 'Coverage Options',
     description: "Compare policy and warranty options for your coverage gaps",
     desktopDescription: "Compare available home warranty and insurance policy options to close identified coverage gaps.",
@@ -871,6 +959,7 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
   },
   {
     key: 'guidance-overview',
+    group: 'monitoring',
     name: 'Guidance Overview',
     description: "Review active guidance signals and your next recommended steps",
     desktopDescription: "See all active guidance signals across your property and track recommended resolution steps.",
@@ -882,6 +971,7 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
   },
   {
     key: 'material-specs',
+    group: 'records',
     name: 'Material Specs',
     description: "Track finishes, colors & products used across your home",
     desktopDescription: "A searchable registry of every paint color, tile, flooring, and material used in your home — with supplier details and export to PDF.",
@@ -893,6 +983,7 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
   },
   {
     key: 'diy',
+    group: 'renovation',
     name: 'DIY Project Center',
     description: 'Step-by-step guides for projects you can do yourself',
     desktopDescription: 'Skill-matched DIY guides with step-by-step instructions, materials lists, and cost estimates — with a clear hire-or-DIY verdict before you start.',
@@ -904,6 +995,7 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
   },
   {
     key: 'permits',
+    group: 'renovation',
     name: 'Permit Tracker',
     description: 'Permit history, inspection readiness checks, and disclosure export',
     desktopDescription: 'Pull permit records from municipal open data, track active inspection milestones, run an AI photo-based readiness check before you call for an inspection, detect potential unpermitted work, and generate a disclosure PDF for resale.',
@@ -915,6 +1007,7 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
   },
   {
     key: 'hoa-compliance',
+    group: 'renovation',
     name: 'HOA Compliance',
     description: 'Track HOA approvals and violations before they turn into fines',
     desktopDescription: 'Track your HOA/association details and dues, submit and track architectural-review approvals for renovations, and log violation notices so they surface as guided next steps.',
@@ -926,6 +1019,7 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
   },
   {
     key: 'inspection-hub',
+    group: 'renovation',
     name: 'Inspection Hub',
     description: 'Upload inspection reports and track open findings',
     desktopDescription: 'Upload inspection PDFs and let AI extract every finding into structured, trackable records — with write-back to your Digital Twin, Permit Tracker, and Coverage Intelligence.',
@@ -937,6 +1031,7 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
   },
   {
     key: 'project-tracker',
+    group: 'renovation',
     name: 'Project Tracker',
     description: 'Track contractor projects from contract to completion',
     desktopDescription: 'Manage every active renovation or repair project — milestone timeline, payment gating, change order log, progress photos, and issue tracking — with completion write-back to your home record.',
