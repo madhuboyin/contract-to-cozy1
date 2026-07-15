@@ -41,6 +41,20 @@ The revised greenfield scope proves cross-module reuse with the existing three-d
 
 Seller Prep, Risk/protection, Buyer, Community, Climate, Wellness, Energy, providers, assistant and notifications are evidence-dependent catalog expansion. They require relevant reviewed definitions and observed demand; wiring maintenance-only recommendations into them would not constitute valid personalization.
 
+## Phase 2.5 — USP showcase and limited-user validation (recommended next slice)
+
+**Effort: Medium to large, driven primarily by reviewed journey and content scope.**
+
+ContractToCozy may need substantial time to acquire enough real users for learning. The recommended bridge is to demonstrate contextual and explicit personalization with a small, valuable deterministic catalog rather than prebuilding automated learning or graph infrastructure.
+
+- **Scope/deliverables:** select approximately six to ten reviewed, source-backed homeowner journeys; visible “why this is for your home” explanations; optional-profile before/after value; production-isolated demonstration property archetypes; cross-module consistency; limited design-partner validation.
+- **Data:** reuse current property, asset, recommendation, feedback, action, audit and optional-profile entities. Demo fixtures remain isolated from production evidence. No learning, experiment, inference, retained-history or graph schema; no migration or backfill.
+- **Product evidence:** top-three relevance, time to first useful recommendation, acceptance/action, correction, explanation clarity, trust, perceived time saved and meaningful differences between property archetypes.
+- **Guardrails:** deterministic reviewed rules and copy; distinct safety author/reviewer; property guidance available without profile consent; optional facts owner-controlled; no claims of automatic learning, predictive graph intelligence or statistically proven lift.
+- **Exit criteria:** at least three demonstration archetypes produce materially different explainable guidance; several high-value journeys reach an authoritative action; shared placements remain consistent and idempotent; limited users understand relevance and correction; evidence identifies the next catalog, UX or data-quality improvement.
+
+The detailed scope, validation protocol, credible claims and Phase 3/4 transition triggers are defined in [Personalization USP showcase and limited-user validation strategy](personalization-usp-showcase-strategy.md).
+
 ## Phase 3 — Measurement before learning (initial slice implemented)
 
 **Effort: Large.**
