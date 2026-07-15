@@ -29,6 +29,7 @@ import {
   ChevronLeft,
   ChevronRight,
   CalendarRange,
+  Wrench,
 } from 'lucide-react';
 import { User } from '@/types';
 import { PropertySetupBanner } from '@/components/PropertySetupBanner';
@@ -139,6 +140,12 @@ function PersistentSidebarNav({ user, isCollapsed, onToggleCollapse }: {
             ? `/dashboard/seasonal?propertyId=${resolvedPropertyId}`
             : '/dashboard/seasonal';
           const isSeasonalActive = pathname?.startsWith('/dashboard/seasonal') ?? false;
+          const maintenanceHref = resolvedPropertyId
+            ? `/dashboard/maintenance?propertyId=${resolvedPropertyId}`
+            : '/dashboard/maintenance';
+          const isMaintenanceActive =
+            (pathname?.startsWith('/dashboard/maintenance') ?? false) &&
+            !(pathname?.startsWith('/dashboard/maintenance-setup') ?? false);
 
           return (
             <React.Fragment key={job.key}>
@@ -162,26 +169,48 @@ function PersistentSidebarNav({ user, isCollapsed, onToggleCollapse }: {
                 {!isCollapsed && <span>{job.name}</span>}
               </Link>
               {job.key === 'fix' && (
-                <Link
-                  href={seasonalHref}
-                  title={isCollapsed ? 'Seasonal' : undefined}
-                  className={cn(
-                    'group flex items-center rounded-[14px] text-sm font-medium transition-all duration-[180ms] ease-out',
-                    isCollapsed ? 'justify-center px-3 py-2' : 'gap-3 py-2',
-                    !isCollapsed && 'pl-9',
-                    isSeasonalActive
-                      ? 'text-teal-700'
-                      : 'text-slate-500 hover:text-slate-800'
-                  )}
-                >
-                  <CalendarRange
+                <>
+                  <Link
+                    href={maintenanceHref}
+                    title={isCollapsed ? 'Maintenance' : undefined}
                     className={cn(
-                      'h-4 w-4 flex-shrink-0 transition-colors',
-                      isSeasonalActive ? 'text-teal-600' : 'text-slate-400 group-hover:text-slate-500'
+                      'group flex items-center rounded-[14px] text-sm font-medium transition-all duration-[180ms] ease-out',
+                      isCollapsed ? 'justify-center px-3 py-2' : 'gap-3 py-2',
+                      !isCollapsed && 'pl-9',
+                      isMaintenanceActive
+                        ? 'text-teal-700'
+                        : 'text-slate-500 hover:text-slate-800'
                     )}
-                  />
-                  {!isCollapsed && <span>Seasonal</span>}
-                </Link>
+                  >
+                    <Wrench
+                      className={cn(
+                        'h-4 w-4 flex-shrink-0 transition-colors',
+                        isMaintenanceActive ? 'text-teal-600' : 'text-slate-400 group-hover:text-slate-500'
+                      )}
+                    />
+                    {!isCollapsed && <span>Maintenance</span>}
+                  </Link>
+                  <Link
+                    href={seasonalHref}
+                    title={isCollapsed ? 'Seasonal' : undefined}
+                    className={cn(
+                      'group flex items-center rounded-[14px] text-sm font-medium transition-all duration-[180ms] ease-out',
+                      isCollapsed ? 'justify-center px-3 py-2' : 'gap-3 py-2',
+                      !isCollapsed && 'pl-9',
+                      isSeasonalActive
+                        ? 'text-teal-700'
+                        : 'text-slate-500 hover:text-slate-800'
+                    )}
+                  >
+                    <CalendarRange
+                      className={cn(
+                        'h-4 w-4 flex-shrink-0 transition-colors',
+                        isSeasonalActive ? 'text-teal-600' : 'text-slate-400 group-hover:text-slate-500'
+                      )}
+                    />
+                    {!isCollapsed && <span>Seasonal</span>}
+                  </Link>
+                </>
               )}
             </React.Fragment>
           );
@@ -355,6 +384,12 @@ function MobileDrawerNav({ user }: { user: User | null }) {
             ? `/dashboard/seasonal?propertyId=${resolvedPropertyId}`
             : '/dashboard/seasonal';
           const isSeasonalActive = pathname?.startsWith('/dashboard/seasonal') ?? false;
+          const maintenanceHref = resolvedPropertyId
+            ? `/dashboard/maintenance?propertyId=${resolvedPropertyId}`
+            : '/dashboard/maintenance';
+          const isMaintenanceActive =
+            (pathname?.startsWith('/dashboard/maintenance') ?? false) &&
+            !(pathname?.startsWith('/dashboard/maintenance-setup') ?? false);
 
           return (
             <React.Fragment key={job.key}>
@@ -376,20 +411,36 @@ function MobileDrawerNav({ user }: { user: User | null }) {
                 </Link>
               </SheetClose>
               {job.key === 'fix' && (
-                <SheetClose asChild>
-                  <Link
-                    href={seasonalHref}
-                    className={cn(
-                      'flex items-center gap-3 pl-11 pr-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
-                      isSeasonalActive
-                        ? 'text-teal-700 bg-teal-50/60'
-                        : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'
-                    )}
-                  >
-                    <CalendarRange className={cn('h-4 w-4 flex-shrink-0', isSeasonalActive ? 'text-teal-600' : 'text-gray-400')} />
-                    Seasonal
-                  </Link>
-                </SheetClose>
+                <>
+                  <SheetClose asChild>
+                    <Link
+                      href={maintenanceHref}
+                      className={cn(
+                        'flex items-center gap-3 pl-11 pr-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
+                        isMaintenanceActive
+                          ? 'text-teal-700 bg-teal-50/60'
+                          : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'
+                      )}
+                    >
+                      <Wrench className={cn('h-4 w-4 flex-shrink-0', isMaintenanceActive ? 'text-teal-600' : 'text-gray-400')} />
+                      Maintenance
+                    </Link>
+                  </SheetClose>
+                  <SheetClose asChild>
+                    <Link
+                      href={seasonalHref}
+                      className={cn(
+                        'flex items-center gap-3 pl-11 pr-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
+                        isSeasonalActive
+                          ? 'text-teal-700 bg-teal-50/60'
+                          : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'
+                      )}
+                    >
+                      <CalendarRange className={cn('h-4 w-4 flex-shrink-0', isSeasonalActive ? 'text-teal-600' : 'text-gray-400')} />
+                      Seasonal
+                    </Link>
+                  </SheetClose>
+                </>
               )}
             </React.Fragment>
           );

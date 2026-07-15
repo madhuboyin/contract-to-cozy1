@@ -69,7 +69,9 @@ import {
     status?: MaintenanceTaskStatus;
     estimatedCost?: number;
     actualCost?: number;
-    nextDueDate?: string;
+    isRecurring?: boolean;
+    frequency?: RecurrenceFrequency | null;
+    nextDueDate?: string | null;
     serviceCategory?: ServiceCategory | null;
   }
   

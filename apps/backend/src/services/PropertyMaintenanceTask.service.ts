@@ -14,6 +14,7 @@ import {
   import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from './analytics';
   import { signalService } from './signal.service';
 import { logger } from '../lib/logger';
+import { resolveSeasonalTaskDueDate } from '../utils/maintenanceDueDate';
 import { resolvePropertyAccess, ROLE_RANK } from './propertyAccess.service';
 
   /**
@@ -352,7 +353,7 @@ import { resolvePropertyAccess, ROLE_RANK } from './propertyAccess.service';
           isSeasonal: true,
           season: seasonalItem.seasonalChecklist.season,
           seasonalChecklistItemId: seasonalItem.id,
-          nextDueDate: seasonalItem.recommendedDate ?? null, // 🔧 FIX: Handle null
+          nextDueDate: resolveSeasonalTaskDueDate(seasonalItem.recommendedDate),
           serviceCategory: validServiceCategory,
         },
       });
@@ -571,7 +572,9 @@ import { resolvePropertyAccess, ROLE_RANK } from './propertyAccess.service';
         status?: MaintenanceTaskStatus;
         estimatedCost?: number;
         actualCost?: number;
-        nextDueDate?: string;
+        isRecurring?: boolean;
+        frequency?: RecurrenceFrequency | null;
+        nextDueDate?: string | null;
         serviceCategory?: ServiceCategory | null;
       }
     ): Promise<PropertyMaintenanceTask> {
@@ -597,8 +600,14 @@ import { resolvePropertyAccess, ROLE_RANK } from './propertyAccess.service';
           }),
           ...(data.estimatedCost !== undefined && { estimatedCost: data.estimatedCost }),
           ...(data.actualCost !== undefined && { actualCost: data.actualCost }),
+          ...(data.isRecurring !== undefined && {
+            isRecurring: data.isRecurring,
+            ...(data.isRecurring === false && { frequency: null }),
+          }),
+          ...(data.frequency !== undefined &&
+            data.isRecurring !== false && { frequency: data.frequency }),
           ...(data.nextDueDate !== undefined && {
-            nextDueDate: new Date(data.nextDueDate),
+            nextDueDate: data.nextDueDate ? new Date(data.nextDueDate) : null,
           }),
           ...(data.serviceCategory !== undefined && {
             serviceCategory: data.serviceCategory,

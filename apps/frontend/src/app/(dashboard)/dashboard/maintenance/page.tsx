@@ -1,63 +1,16 @@
-// apps/frontend/src/app/(dashboard)/dashboard/maintenance/page.tsx
-// Drop-in patch for Option A: Completed tasks show "View" (read-only) instead of "Edit"
-
 'use client';
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import Link from 'next/link';
-import {
-  Loader2,
-  Plus,
-  Edit,
-  CheckCircle,
-  Eye,
-} from 'lucide-react';
-import { format, differenceInDays } from 'date-fns';
-import { api } from '@/lib/api/client';
-import { Card, CardDescription, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { useToast } from '@/components/ui/use-toast';
-import { cn } from '@/lib/utils';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { ArrowLeft, Plus } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { MaintenanceConfigModal } from '../maintenance-setup/MaintenanceConfigModal';
-import {
-  MaintenanceTaskConfig,
-  RecurrenceFrequency,
-  Property,
-  PropertyMaintenanceTask,
-  MaintenanceTaskServiceCategory,
-  UpdateMaintenanceTaskInput,
-} from '@/types';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import { Switch } from '@/components/ui/switch';
-import { Label } from '@/components/ui/label';
-import { ArrowLeft } from 'lucide-react';
-import humanizeActionType from '@/lib/utils/humanize';
-import { PRIORITY_CHIP, PriorityLevel } from '@/lib/utils/chipTokens';
-import { formatEnumLabel } from '@/lib/utils/formatters';
-import { usePropertyContext } from '@/lib/property/PropertyContext';
-import { track } from '@/lib/analytics/events';
-
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from '@/components/ui/dialog';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { api } from '@/lib/api/client';
+import { Button } from '@/components/ui/button';
+import { ToastAction } from '@/components/ui/toast';
+import { useToast } from '@/components/ui/use-toast';
 import {
   EmptyStateCard,
-  MobileFilterSurface,
   MobilePageContainer,
   MobilePageIntro,
   MobileSection,
@@ -66,8 +19,31 @@ import {
 import { GuidanceInlinePanel } from '@/components/guidance/GuidanceInlinePanel';
 import { recordGuidanceToolStatus } from '@/lib/api/guidanceApi';
 import { buildGuidanceOverviewHref } from '@/lib/navigation/guidanceOverviewHref';
-import { extractGuidanceContinuityContext, hasGuidanceContinuityContext } from '@/features/guidance/utils/guidanceContinuity';
+import {
+  extractGuidanceContinuityContext,
+  hasGuidanceContinuityContext,
+} from '@/features/guidance/utils/guidanceContinuity';
+import { usePropertyContext } from '@/lib/property/PropertyContext';
+import { track } from '@/lib/analytics/events';
+import type {
+  MaintenanceTaskServiceCategory,
+  Property,
+  PropertyMaintenanceTask,
+  UpdateMaintenanceTaskInput,
+} from '@/types';
 import { PersonalizedMaintenanceSuggestions } from './PersonalizedMaintenanceSuggestions';
+import {
+  normalizeRange,
+  normalizeTaskPriority,
+  normalizeView,
+  splitAndSortTasks,
+  type CompletedRange,
+  type ViewMode,
+} from './taskDisplay';
+import { MaintenanceFilterBar } from './components/MaintenanceFilterBar';
+import { MaintenanceStats } from './components/MaintenanceStats';
+import { TaskDrawer } from './components/TaskDrawer';
+import { TaskList } from './components/TaskList';
 
 // Signal families that map to specific maintenance service categories.
 // When a guidance journey routes here via one of these families, the completion
@@ -81,79 +57,22 @@ const SIGNAL_FAMILY_MAINTENANCE_CATEGORIES: Record<string, MaintenanceTaskServic
   high_utility_cost: ['HVAC', 'ELECTRICAL'],
 };
 
-// --- Helper Functions ---
-
-function formatEnumString(val: string | null | undefined): string {
-  return humanizeActionType(val);
-}
-
-function formatCategory(category: MaintenanceTaskServiceCategory | null) {
-  if (!category) return 'General';
-  return formatEnumString(category);
-}
-
-function formatDueDate(nextDueDate: string | null): { text: string; color: string } {
-  if (!nextDueDate) {
-    return { text: 'Not Scheduled', color: 'text-gray-400' };
-  }
-
-  const dueDate = new Date(nextDueDate);
-  const today = new Date();
-  const daysUntil = differenceInDays(dueDate, today);
-
-  if (daysUntil < 0) return { text: `${Math.abs(daysUntil)} days overdue`, color: 'text-red-600' };
-  if (daysUntil === 0) return { text: 'Due Today', color: 'text-orange-600' };
-  if (daysUntil <= 7) return { text: `Due in ${daysUntil} days`, color: 'text-orange-500' };
-  if (daysUntil <= 30) return { text: `Due in ${daysUntil} days`, color: 'text-yellow-600' };
-  return { text: format(dueDate, 'MMM dd, yyyy'), color: 'text-green-600' };
-}
-
-type ViewMode = 'open' | 'completed' | 'all';
-type CompletedRange = '30d' | '90d' | '1y' | 'all';
-
-function cutoffForCompletedRange(range: CompletedRange): Date | null {
-  const now = new Date();
-  if (range === 'all') return null;
-  const msPerDay = 24 * 60 * 60 * 1000;
-
-  if (range === '30d') return new Date(now.getTime() - 30 * msPerDay);
-  if (range === '90d') return new Date(now.getTime() - 90 * msPerDay);
-  return new Date(now.getTime() - 365 * msPerDay);
-}
-
-function normalizeView(val: string | null): ViewMode {
-  if (val === 'completed' || val === 'all') return val;
-  return 'open';
-}
-
-function normalizeRange(val: string | null): CompletedRange {
-  if (val === '30d' || val === '90d' || val === '1y' || val === 'all') return val;
-  return '30d';
-}
-function getTaskSourceBadge(task: PropertyMaintenanceTask): {
-  label: string;
-  variant: 'secondary' | 'outline';
-} | null {
-  if (task.seasonalChecklistItemId || task.source === 'SEASONAL') {
-    return { label: 'Seasonal', variant: 'secondary' };
-  }
-
-  if (task.source) {
-    return {
-      label: humanizeActionType(task.source),
-      variant: 'outline',
-    };
-  }
-
-  return null;
-}
-
-function normalizeTaskPriority(priority?: string | null): string {
-  const normalized = String(priority || '').toUpperCase();
-  if (normalized === 'URGENT' || normalized === 'HIGH' || normalized === 'MEDIUM' || normalized === 'LOW') {
-    return normalized;
-  }
-  return 'MEDIUM';
+function LoadingSkeleton() {
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} className="h-20 animate-pulse rounded-2xl bg-slate-100" />
+        ))}
+      </div>
+      <div className="h-14 animate-pulse rounded-2xl bg-slate-100" />
+      <div className="space-y-2">
+        {[0, 1, 2].map((i) => (
+          <div key={i} className="h-16 animate-pulse rounded-xl bg-slate-100" />
+        ))}
+      </div>
+    </div>
+  );
 }
 
 export default function MaintenancePage() {
@@ -170,59 +89,51 @@ export default function MaintenancePage() {
   const guidanceJourneyId = guidanceContext.guidanceJourneyId ?? null;
   const guidanceSignalIntentFamily = searchParams.get('guidanceSignalIntentFamily');
   const returnTo = searchParams.get('returnTo');
-  const priority = searchParams.get('priority') === 'true';
+  const priorityOnly = searchParams.get('priority') === 'true';
   const filterOverdue = searchParams.get('filter') === 'overdue';
   const from = searchParams.get('from');
 
   const view: ViewMode = normalizeView(searchParams.get('view'));
   const completedRange: CompletedRange = normalizeRange(searchParams.get('completedRange'));
 
-  const togglePriorityView = useCallback(
-    (enabled: boolean) => {
+  const replaceParams = useCallback(
+    (mutate: (params: URLSearchParams) => void) => {
       const params = new URLSearchParams(searchParams.toString());
       if (selectedPropertyId) params.set('propertyId', selectedPropertyId);
-      if (enabled) params.set('priority', 'true');
-      else params.delete('priority');
-
+      mutate(params);
       router.replace(`/dashboard/maintenance?${params.toString()}`, { scroll: false });
     },
-    [router, selectedPropertyId, searchParams]
+    [router, searchParams, selectedPropertyId]
   );
 
   const setViewMode = useCallback(
     (mode: ViewMode) => {
-      const params = new URLSearchParams(searchParams.toString());
-      params.set('view', mode);
-
-      if ((mode === 'completed' || mode === 'all') && !params.get('completedRange')) {
-        params.set('completedRange', '30d');
-      }
-      if (selectedPropertyId) params.set('propertyId', selectedPropertyId);
-
-      router.replace(`/dashboard/maintenance?${params.toString()}`, { scroll: false });
+      replaceParams((params) => {
+        params.set('view', mode);
+        if ((mode === 'completed' || mode === 'all') && !params.get('completedRange')) {
+          params.set('completedRange', '30d');
+        }
+      });
     },
-    [router, searchParams, selectedPropertyId]
+    [replaceParams]
   );
 
   const setCompletedRange = useCallback(
     (range: CompletedRange) => {
-      const params = new URLSearchParams(searchParams.toString());
-      params.set('completedRange', range);
-      if (selectedPropertyId) params.set('propertyId', selectedPropertyId);
-      router.replace(`/dashboard/maintenance?${params.toString()}`, { scroll: false });
+      replaceParams((params) => params.set('completedRange', range));
     },
-    [router, searchParams, selectedPropertyId]
+    [replaceParams]
   );
 
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingTask, setEditingTask] = useState<PropertyMaintenanceTask | null>(null);
-  const [modalMode, setModalMode] = useState<'edit' | 'view'>('edit'); // ✅ NEW
-
-  useEffect(() => {
-    if (selectedPropertyId) {
-      queryClient.invalidateQueries({ queryKey: ['maintenance-tasks', selectedPropertyId] });
-    }
-  }, [selectedPropertyId, queryClient]);
+  const togglePriorityView = useCallback(
+    (enabled: boolean) => {
+      replaceParams((params) => {
+        if (enabled) params.set('priority', 'true');
+        else params.delete('priority');
+      });
+    },
+    [replaceParams]
+  );
 
   const getBackLink = () => {
     if (returnTo) {
@@ -266,86 +177,57 @@ export default function MaintenancePage() {
 
   const backLink = getBackLink();
 
-  const { data: mainData, isLoading: isInitialLoading } = useQuery({
-    queryKey: ['maintenance-tasks', selectedPropertyId, view, taskIdFromUrl],
+  const propertiesQuery = useQuery({
+    queryKey: ['properties'],
     queryFn: async () => {
-      const [propertiesRes] = await Promise.all([api.getProperties()]);
-      if (!propertiesRes.success) throw new Error('Failed to fetch properties.');
-
-      const propertiesMap = new Map<string, Property>();
-      propertiesRes.data.properties.forEach((p) => propertiesMap.set(p.id, p));
-
-      let propertyId = selectedPropertyId;
-      if (!propertyId && propertiesRes.data.properties.length > 0) {
-        const primaryProperty = propertiesRes.data.properties.find((p) => p.isPrimary);
-        propertyId = primaryProperty?.id || propertiesRes.data.properties[0].id;
-      }
-
-      if (!propertyId) return { maintenanceTasks: [], propertiesMap };
-
-      const includeCompleted = view !== 'open' || Boolean(taskIdFromUrl);
-      const tasksRes = await api.getMaintenanceTasks(propertyId, { includeCompleted });
-      const tasks = tasksRes.success ? tasksRes.data : [];
-
-      return { maintenanceTasks: tasks, propertiesMap };
+      const res = await api.getProperties();
+      if (!res.success) throw new Error('Failed to fetch properties.');
+      return res.data.properties as Property[];
     },
+  });
+
+  const effectivePropertyId = useMemo(() => {
+    if (selectedPropertyId) return selectedPropertyId;
+    const properties = propertiesQuery.data ?? [];
+    const primary = properties.find((p) => p.isPrimary);
+    return primary?.id || properties[0]?.id;
+  }, [selectedPropertyId, propertiesQuery.data]);
+
+  const tasksQuery = useQuery({
+    queryKey: ['maintenance-tasks', effectivePropertyId],
+    queryFn: async () => {
+      const res = await api.getMaintenanceTasks(effectivePropertyId as string, {
+        includeCompleted: true,
+      });
+      return res.success ? res.data : [];
+    },
+    enabled: Boolean(effectivePropertyId),
     staleTime: 0,
-    refetchOnMount: 'always',
     refetchOnWindowFocus: false,
   });
 
-  const allMaintenanceTasks = Array.isArray(mainData?.maintenanceTasks) ? mainData.maintenanceTasks : [];
+  const allMaintenanceTasks = useMemo(
+    () => (Array.isArray(tasksQuery.data) ? tasksQuery.data : []),
+    [tasksQuery.data]
+  );
+  const isInitialLoading =
+    propertiesQuery.isLoading || (Boolean(effectivePropertyId) && tasksQuery.isLoading);
+  const tasksLoaded = Boolean(effectivePropertyId) && tasksQuery.isSuccess;
 
-  const { openTasks, completedTasks } = useMemo(() => {
-    const cutoff = cutoffForCompletedRange(completedRange);
+  const { openTasks, completedTasks } = useMemo(
+    () =>
+      splitAndSortTasks(allMaintenanceTasks, {
+        completedRange,
+        priorityOnly,
+        overdueOnly: filterOverdue,
+      }),
+    [allMaintenanceTasks, completedRange, priorityOnly, filterOverdue]
+  );
 
-    const open = allMaintenanceTasks.filter((t) => t.status !== 'COMPLETED' && t.status !== 'CANCELLED');
-
-    let completed = allMaintenanceTasks.filter((t) => t.status === 'COMPLETED');
-    if (cutoff) {
-      completed = completed.filter((t) => {
-        const d = t.lastCompletedDate ? new Date(t.lastCompletedDate) : null;
-        return d ? d >= cutoff : false;
-      });
-    }
-
-    const openSorted = (() => {
-      let items = filterOverdue
-        ? open.filter((t) => t.nextDueDate && new Date(t.nextDueDate) < new Date())
-        : open;
-
-      if (priority) {
-        const priorityItems = items
-          .filter((task) => task.priority === 'URGENT' || task.priority === 'HIGH')
-          .sort((a, b) => {
-            const priorityOrder: Record<string, number> = { URGENT: 4, HIGH: 3, MEDIUM: 2, LOW: 1 };
-            return (priorityOrder[b.priority] || 0) - (priorityOrder[a.priority] || 0);
-          });
-
-        if (priorityItems.length > 0) return priorityItems;
-      }
-
-      return items.sort((a, b) => {
-        if (!a.nextDueDate) return 1;
-        if (!b.nextDueDate) return -1;
-        return new Date(a.nextDueDate).getTime() - new Date(b.nextDueDate).getTime();
-      });
-    })();
-
-    const completedSorted = completed.sort((a, b) => {
-      const ad = a.lastCompletedDate ? new Date(a.lastCompletedDate).getTime() : 0;
-      const bd = b.lastCompletedDate ? new Date(b.lastCompletedDate).getTime() : 0;
-      return bd - ad;
-    });
-
-    return { openTasks: openSorted, completedTasks: completedSorted };
-  }, [allMaintenanceTasks, completedRange, priority]);
-
-  const maintenanceItems = useMemo(() => {
-    if (view === 'open') return openTasks;
-    if (view === 'completed') return completedTasks;
-    return openTasks; // all view handled separately
-  }, [view, openTasks, completedTasks]);
+  const hasEverCompleted = useMemo(
+    () => allMaintenanceTasks.some((t) => t.status === 'COMPLETED'),
+    [allMaintenanceTasks]
+  );
 
   // Tasks that block guidance step completion. Scoped to signal-relevant service
   // categories when a known mapping exists; otherwise falls back to all open tasks.
@@ -360,37 +242,30 @@ export default function MaintenancePage() {
     return openTasks;
   }, [guidanceStepKey, guidanceSignalIntentFamily, openTasks]);
 
-  // ✅ UPDATED: Open modal in edit mode (open tasks)
-  const handleOpenModal = (task: PropertyMaintenanceTask) => {
-    setEditingTask(task);
-    setModalMode('edit');
-    setIsModalOpen(true);
-  };
-
-  // ✅ NEW: Open modal in view-only mode (completed tasks)
-
-  const [viewTask, setViewTask] = useState<PropertyMaintenanceTask | null>(null);
-  const [isViewOpen, setIsViewOpen] = useState(false);
+  // ── Drawer + deep link ────────────────────────────────────────────────────
+  const [drawerTask, setDrawerTask] = useState<PropertyMaintenanceTask | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const [hasConsumedTaskParam, setHasConsumedTaskParam] = useState(false);
   const [guidanceProofCompleted, setGuidanceProofCompleted] = useState(false);
 
-  const handleViewModal = (task: PropertyMaintenanceTask) => {
-    setViewTask(task);
-    setIsViewOpen(true);
-  };
-  
-  const handleCloseView = () => {
-    setIsViewOpen(false);
-    setViewTask(null);
-    // Bring the deep-linked task row into view once the dialog is out of the way.
-    if (taskIdFromUrl) {
-      requestAnimationFrame(() => {
-        document
-          .getElementById(`task-row-${taskIdFromUrl}`)
-          ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      });
-    }
-  };
+  const scrollToTaskRow = useCallback((taskId: string | null | undefined) => {
+    if (!taskId) return;
+    window.setTimeout(() => {
+      document
+        .getElementById(`task-row-${taskId}`)
+        ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 150);
+  }, []);
+
+  const openDrawer = useCallback((task: PropertyMaintenanceTask) => {
+    setDrawerTask(task);
+    setDrawerOpen(true);
+  }, []);
+
+  const closeDrawer = useCallback(() => {
+    setDrawerOpen(false);
+    scrollToTaskRow(drawerTask?.id);
+  }, [drawerTask?.id, scrollToTaskRow]);
 
   useEffect(() => {
     setHasConsumedTaskParam(false);
@@ -398,30 +273,38 @@ export default function MaintenancePage() {
 
   useEffect(() => {
     setGuidanceProofCompleted(false);
-  }, [guidanceJourneyId, guidanceStepKey, selectedPropertyId]);
+  }, [guidanceJourneyId, guidanceStepKey, effectivePropertyId]);
 
   useEffect(() => {
-    if (!taskIdFromUrl || hasConsumedTaskParam || isInitialLoading) return;
+    if (!taskIdFromUrl || hasConsumedTaskParam || !tasksLoaded) return;
 
     const targetTask = allMaintenanceTasks.find((task) => task.id === taskIdFromUrl);
+    setHasConsumedTaskParam(true);
+
     if (!targetTask) {
-      setHasConsumedTaskParam(true);
+      toast({
+        title: 'Task not found',
+        description: 'It may have been completed or removed.',
+        variant: 'destructive',
+      });
       return;
     }
 
-    setViewTask(targetTask);
-    setIsViewOpen(true);
-    setHasConsumedTaskParam(true);
-  }, [taskIdFromUrl, hasConsumedTaskParam, isInitialLoading, allMaintenanceTasks]);
+    openDrawer(targetTask);
+  }, [taskIdFromUrl, hasConsumedTaskParam, tasksLoaded, allMaintenanceTasks, openDrawer, toast]);
 
+  // Auto-complete proof-backed guidance steps once all scoped tasks are cleared.
+  // Gated on tasksLoaded: an in-flight query yields an empty task list, which
+  // must not be mistaken for "everything is done".
   useEffect(() => {
-    if (!selectedPropertyId || !guidanceJourneyId || !guidanceStepKey || guidanceProofCompleted) return;
+    if (!tasksLoaded) return;
+    if (!effectivePropertyId || !guidanceJourneyId || !guidanceStepKey || guidanceProofCompleted) return;
     if (guidanceScopedOpenTasks.length > 0) return;
 
     let cancelled = false;
     (async () => {
       try {
-        await recordGuidanceToolStatus(selectedPropertyId, {
+        await recordGuidanceToolStatus(effectivePropertyId, {
           stepKey: guidanceStepKey,
           journeyId: guidanceJourneyId,
           signalIntentFamily: guidanceSignalIntentFamily || undefined,
@@ -448,19 +331,20 @@ export default function MaintenancePage() {
       cancelled = true;
     };
   }, [
+    tasksLoaded,
+    effectivePropertyId,
     guidanceJourneyId,
     guidanceProofCompleted,
     guidanceScopedOpenTasks.length,
     guidanceSignalIntentFamily,
     guidanceStepKey,
-    selectedPropertyId,
   ]);
 
-  const handleCloseModal = () => {
-    setIsModalOpen(false);
-    setEditingTask(null);
-    setModalMode('edit');
-  };
+  // ── Mutations ─────────────────────────────────────────────────────────────
+  const invalidateTasks = useCallback(
+    () => queryClient.invalidateQueries({ queryKey: ['maintenance-tasks'] }),
+    [queryClient]
+  );
 
   const updateMutation = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: UpdateMaintenanceTaskInput }) => {
@@ -468,14 +352,15 @@ export default function MaintenancePage() {
       if (!response.success) throw new Error(response.error?.message || 'Failed to update task.');
       return response.data;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['maintenance-tasks'] });
-      toast({ title: 'Task Updated', description: 'Maintenance task updated successfully.' });
-      handleCloseModal();
+    onSuccess: (updatedTask: any, variables) => {
+      invalidateTasks();
+      toast({ title: 'Task updated' });
+      setDrawerOpen(false);
+      scrollToTaskRow(updatedTask?.id ?? variables.id);
     },
     onError: (error: any) => {
       toast({
-        title: 'Update Failed',
+        title: 'Update failed',
         description: error.message || 'Could not update task.',
         variant: 'destructive',
       });
@@ -489,827 +374,276 @@ export default function MaintenancePage() {
       return id;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['maintenance-tasks'] });
-      toast({ title: 'Task Removed', description: 'Task deleted successfully.' });
-      handleCloseModal();
+      invalidateTasks();
+      toast({ title: 'Task removed' });
+      setDrawerOpen(false);
     },
     onError: (error: any) => {
       toast({
-        title: 'Removal Failed',
+        title: 'Removal failed',
         description: error.message || 'Could not remove task.',
         variant: 'destructive',
       });
     },
   });
 
-  const handleMarkComplete = useMutation({
+  const undoComplete = useCallback(
+    async (prior: { id: string; title: string; isRecurring: boolean; nextDueDate: string | null }) => {
+      try {
+        const response = await api.updateMaintenanceTaskStatus(prior.id, { status: 'PENDING' });
+        if (!response.success) throw new Error('Failed to reopen task.');
+        if (prior.isRecurring && prior.nextDueDate) {
+          // Completing a recurring task advances its due date; restore the
+          // pre-completion value so undo is a true undo.
+          await api.updateMaintenanceTask(prior.id, {
+            nextDueDate: prior.nextDueDate.slice(0, 10),
+          });
+        }
+        invalidateTasks();
+        toast({ title: 'Task reopened', description: `"${prior.title}" is back on your list.` });
+      } catch (error: any) {
+        invalidateTasks();
+        toast({
+          title: 'Undo failed',
+          description: error?.message || 'Could not reopen the task.',
+          variant: 'destructive',
+        });
+      }
+    },
+    [invalidateTasks, toast]
+  );
+
+  const completeMutation = useMutation({
     mutationFn: async (task: PropertyMaintenanceTask) => {
       const response = await api.updateMaintenanceTaskStatus(task.id, {
         status: 'COMPLETED',
         actualCost: task.estimatedCost || undefined,
       });
       if (!response.success) throw new Error('Failed to mark as complete.');
-      return {
-        task,
-        updated: response.data,
-      };
+      return response.data;
     },
-    onSuccess: (data: any) => {
-      const completedTask = data?.updated || data?.task || {};
-      const trackedPropertyId = String(completedTask.propertyId || selectedPropertyId || 'unknown');
-      const trackedCategory = String(
-        completedTask.serviceCategory || completedTask.category || 'MAINTENANCE'
-      );
-
+    onSuccess: (updated: any, task) => {
       track('task_completed', {
-        priority: normalizeTaskPriority(completedTask.priority),
-        category: trackedCategory,
-        propertyId: trackedPropertyId,
+        priority: normalizeTaskPriority(task.priority),
+        category: String(task.serviceCategory || 'MAINTENANCE'),
+        propertyId: String(task.propertyId || effectivePropertyId || 'unknown'),
       });
 
-      queryClient.invalidateQueries({ queryKey: ['maintenance-tasks'] });
+      invalidateTasks();
+      setDrawerOpen(false);
+
+      const prior = {
+        id: task.id,
+        title: task.title,
+        isRecurring: Boolean(task.isRecurring),
+        nextDueDate: task.nextDueDate,
+      };
       toast({
-        title: 'Task Completed',
-        description: `"${completedTask.title || 'Task'}" marked as complete.`,
+        title: 'Task completed',
+        description: `"${task.title}" marked as complete.`,
+        action: (
+          <ToastAction altText="Undo" onClick={() => undoComplete(prior)}>
+            Undo
+          </ToastAction>
+        ),
       });
     },
     onError: (error: any) => {
       toast({
-        title: 'Completion Failed',
+        title: 'Completion failed',
         description: error.message || 'Could not mark task as complete.',
         variant: 'destructive',
       });
     },
   });
 
-  const handleSaveTaskUpdate = (config: MaintenanceTaskConfig) => {
-    if (!editingTask) return;
-    if (modalMode === 'view') {
-      // View-only: ignore saves
-      toast({ title: 'View Only', description: 'Completed tasks are read-only.' });
-      return;
-    }
+  const reopenMutation = useMutation({
+    mutationFn: async (task: PropertyMaintenanceTask) => {
+      const response = await api.updateMaintenanceTaskStatus(task.id, { status: 'PENDING' });
+      if (!response.success) throw new Error('Failed to reopen task.');
+      return response.data;
+    },
+    onSuccess: (_updated, task) => {
+      invalidateTasks();
+      setDrawerOpen(false);
+      toast({ title: 'Task reopened', description: `"${task.title}" is back on your list.` });
+      scrollToTaskRow(task.id);
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Reopen failed',
+        description: error.message || 'Could not reopen the task.',
+        variant: 'destructive',
+      });
+    },
+  });
 
-    const updateData: UpdateMaintenanceTaskInput = {
-      title: config.title,
-      description: config.description,
-      isRecurring: config.isRecurring,
-      frequency: config.isRecurring ? (config.frequency as any) : null,
-      nextDueDate: config.nextDueDate ? format(config.nextDueDate, 'yyyy-MM-dd') : null,
-      serviceCategory: config.serviceCategory as MaintenanceTaskServiceCategory,
-    };
+  const pendingTaskId = completeMutation.isPending ? completeMutation.variables?.id ?? null : null;
 
-    updateMutation.mutate({ id: editingTask.id, data: updateData });
-  };
-
-  const handleRemoveTask = (taskId: string) => {
-    if (modalMode === 'view') {
-      toast({ title: 'View Only', description: 'Completed tasks cannot be removed here.' });
-      return;
-    }
-    deleteMutation.mutate(taskId);
-  };
-
-  const isBusy = isInitialLoading || updateMutation.isPending || deleteMutation.isPending || handleMarkComplete.isPending;
-
-  if (isBusy) {
-    return (
-      <MobilePageContainer className="space-y-4 py-6 lg:max-w-7xl lg:px-8 lg:pb-10">
-        <Loader2 className="w-8 h-8 animate-spin text-blue-600 mx-auto mt-10" />
-        <p className="text-center text-gray-500">Loading maintenance tasks...</p>
-      </MobilePageContainer>
-    );
-  }
-
-  const SegButton = ({
-    active,
-    children,
-    onClick,
-  }: {
-    active: boolean;
-    children: React.ReactNode;
-    onClick: () => void;
-  }) => (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        'px-3 py-1.5 text-sm font-medium rounded-md border transition-colors',
-        active ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
-      )}
-    >
-      {children}
-    </button>
-  );
-
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
     <MobilePageContainer className="space-y-4 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:max-w-7xl lg:px-8 lg:pb-10">
       {backLink && (
-        <Link href={backLink.href} className="inline-flex items-center gap-1.5 text-sm text-gray-600 hover:text-gray-900 group">
+        <Link
+          href={backLink.href}
+          className="inline-flex items-center gap-1.5 text-sm text-gray-600 hover:text-gray-900 group"
+        >
           <ArrowLeft className="h-4 w-4 group-hover:-translate-x-0.5 transition-transform" />
           {backLink.label}
         </Link>
       )}
 
       <MobilePageIntro
-        eyebrow="Maintenance"
-        title="Home Tasks & Reminders"
-        subtitle="Manage your recurring maintenance schedule."
+        title="Maintenance"
+        subtitle="Track and complete your home's upkeep tasks."
         action={
           <Button asChild size="sm">
-            <Link href={`/dashboard/maintenance-setup${selectedPropertyId ? `?propertyId=${selectedPropertyId}` : ''}`}>
+            <Link
+              href={`/dashboard/maintenance-setup${effectivePropertyId ? `?propertyId=${effectivePropertyId}` : ''}`}
+            >
               <Plus className="w-4 h-4 mr-1.5" /> Add Task
             </Link>
           </Button>
         }
       />
 
-      <GuidanceInlinePanel
-        propertyId={selectedPropertyId}
-        title="Maintenance Resolution Steps"
-        subtitle="Follow ordered actions before jumping to provider execution."
-        issueDomains={['MAINTENANCE', 'ASSET_LIFECYCLE'] as const}
-        limit={2}
-      />
+      {isInitialLoading ? (
+        <LoadingSkeleton />
+      ) : (
+        <>
+          <MaintenanceStats tasks={allMaintenanceTasks} />
 
-      <PersonalizedMaintenanceSuggestions propertyId={selectedPropertyId} />
-
-      <MobileFilterSurface className="border border-slate-200/80 bg-white">
-        <div className="flex flex-wrap items-center gap-2">
-          <SegButton active={view === 'open'} onClick={() => setViewMode('open')}>
-            Open
-          </SegButton>
-          <SegButton active={view === 'completed'} onClick={() => setViewMode('completed')}>
-            Completed
-          </SegButton>
-          <SegButton active={view === 'all'} onClick={() => setViewMode('all')}>
-            All
-          </SegButton>
-        </div>
-
-        {(view === 'completed' || view === 'all') && (
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-gray-600">Completed:</span>
-            <select
-              value={completedRange}
-              onChange={(e) => setCompletedRange(e.target.value as CompletedRange)}
-              className="h-9 rounded-md border border-gray-200 bg-white px-2 text-sm text-gray-800"
-            >
-              <option value="30d">Last 30 days</option>
-              <option value="90d">Last 90 days</option>
-              <option value="1y">Last 1 year</option>
-              <option value="all">All time</option>
-            </select>
-          </div>
-        )}
-
-        <div className="flex items-center gap-2">
-          <Switch id="priority-mode" checked={priority} onCheckedChange={togglePriorityView} />
-          <Label htmlFor="priority-mode" className="cursor-pointer">
-            Show high priority tasks only
-          </Label>
-        </div>
-      </MobileFilterSurface>
-
-      {filterOverdue && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm font-medium text-amber-800">
-          Showing overdue tasks only — <button className="underline" onClick={() => router.replace(`/dashboard/maintenance${selectedPropertyId ? `?propertyId=${selectedPropertyId}` : ''}`)}>Clear filter</button>
-        </div>
-      )}
-
-      {view === 'open' && openTasks.length === 0 && (
-        <EmptyStateCard
-          title="No Active Tasks Found"
-          description="Visit task setup to add maintenance tasks."
-          action={
-            <Link
-              href={`/dashboard/maintenance-setup${selectedPropertyId ? `?propertyId=${selectedPropertyId}` : ''}`}
-              className="text-sm text-blue-600 hover:underline"
-            >
-              Go to Task Setup
-            </Link>
-          }
-        />
-      )}
-
-      {view === 'completed' && completedTasks.length === 0 && (
-        <EmptyStateCard
-          title="No Completed Tasks"
-          description="Try expanding the completed time range."
-        />
-      )}
-
-      {view !== 'all' && maintenanceItems.length > 0 && (
-        <MobileSection>
-          <MobileSectionHeader
-            title={view === 'completed' ? 'Completed Tasks' : 'Open Tasks'}
-            subtitle={`${maintenanceItems.length} task${maintenanceItems.length === 1 ? '' : 's'}`}
+          <MaintenanceFilterBar
+            view={view}
+            onViewChange={setViewMode}
+            completedRange={completedRange}
+            onRangeChange={setCompletedRange}
+            priorityOnly={priorityOnly}
+            onPriorityChange={togglePriorityView}
           />
-          <div className="hidden md:block rounded-md border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Task</TableHead>
-                  <TableHead>Description</TableHead>
-                  <TableHead>Priority</TableHead>
-                  <TableHead>Category</TableHead>
-                  <TableHead>Frequency</TableHead>
-                  <TableHead>Last Completed</TableHead>
-                  <TableHead className="text-center">Next Due</TableHead>
-                  <TableHead className="text-center">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {maintenanceItems.map((task) => {
-                  const dueDateInfo = formatDueDate(task.nextDueDate);
-                  const frequencyDisplay = task.isRecurring && task.frequency ? formatEnumString(task.frequency) : 'One-time';
-                  const isCompleted = task.status === 'COMPLETED';
-                  return (
-                    <TableRow
-                      key={task.id}
-                      id={`task-row-${task.id}`}
-                      className={cn(
-                        isCompleted && 'opacity-80',
-                        task.id === taskIdFromUrl && 'bg-teal-50/70'
-                      )}
-                    >
-                      <TableCell className="font-medium">{humanizeActionType(task.title)}</TableCell>
-                      <TableCell className="text-sm text-gray-600">{task.description || 'No description'}</TableCell>
-                      <TableCell>
-                        <span
-                          className={cn(
-                            'px-2 py-1 rounded-full text-xs font-medium border',
-                            PRIORITY_CHIP[task.priority.toLowerCase() as PriorityLevel]
-                          )}
-                        >
-                          {formatEnumLabel(task.priority)}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-sm">{formatCategory(task.serviceCategory)}</TableCell>
-                      <TableCell className="text-sm hidden sm:table-cell">{frequencyDisplay}</TableCell>
-                      <TableCell className="text-sm text-gray-500">
-                        {task.lastCompletedDate ? format(new Date(task.lastCompletedDate), 'MMM dd, yyyy') : 'Never'}
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <span className={cn('font-medium text-sm', dueDateInfo.color)}>{dueDateInfo.text}</span>
-                      </TableCell>
 
-                      <TableCell className="text-center">
-                        <div className="flex justify-center space-x-1">
-                          {!isCompleted && (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              aria-label="Mark complete"
-                              className="h-8 w-8 text-gray-500 hover:text-green-600"
-                              onClick={() => handleMarkComplete.mutate(task)}
-                            >
-                              <CheckCircle className="w-4 h-4" />
-                            </Button>
-                          )}
-
-                          {/* ✅ Option A: Completed rows show "View" instead of "Edit" */}
-                          {isCompleted ? (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              aria-label="View task"
-                              className="h-8 w-8 text-gray-500 hover:text-gray-900"
-                              onClick={() => handleViewModal(task)}
-                            >
-                              <Eye className="w-4 h-4" />
-                            </Button>
-                          ) : (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              aria-label="Edit task"
-                              className="h-8 w-8 text-gray-500 hover:text-blue-600"
-                              onClick={() => handleOpenModal(task)}
-                            >
-                              <Edit className="w-4 h-4" />
-                            </Button>
-                          )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </div>
-          {/* 2. Mobile View: Visible on mobile, hidden on desktop (md:hidden) */}
-          <div className="md:hidden space-y-4">
-          {maintenanceItems.map((task) => {
-            const dueDateInfo = formatDueDate(task.nextDueDate);
-            const isCompleted = task.status === 'COMPLETED';
-            
-            return (
-              <Card
-                key={task.id}
-                id={`task-row-${task.id}`}
-                className={cn(
-                  'p-4 border',
-                  isCompleted && 'opacity-80',
-                  task.id === taskIdFromUrl && 'border-teal-400 ring-1 ring-teal-300'
-                )}
+          {filterOverdue && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm font-medium text-amber-800">
+              Showing overdue tasks only —{' '}
+              <button
+                className="underline"
+                onClick={() =>
+                  router.replace(
+                    `/dashboard/maintenance${effectivePropertyId ? `?propertyId=${effectivePropertyId}` : ''}`
+                  )
+                }
               >
-                <div className="flex justify-between items-start mb-2">
-                  <div>
-                    <h3 className="font-bold text-base leading-tight">{humanizeActionType(task.title)}</h3>
-                    <p className="text-xs text-muted-foreground">{formatCategory(task.serviceCategory)}</p>
-                  </div>
-                  <Badge
-                    className={cn(
-                      PRIORITY_CHIP[task.priority.toLowerCase() as PriorityLevel],
-                      'rounded-full text-[11px] px-1.5 py-0 border'
-                    )}
-                  >
-                    {formatEnumLabel(task.priority)}
-                  </Badge>
-                </div>
-
-                <p className="text-sm text-gray-600 line-clamp-2 mb-3">
-                  {task.description || 'No description'}
-                </p>
-
-                <div className="flex justify-between items-center text-sm border-t pt-3">
-                  <div className="flex flex-col">
-                    <span className="text-[11px] text-muted-foreground">Next Due</span>
-                    <span className={cn("font-semibold", dueDateInfo.color)}>{dueDateInfo.text}</span>
-                  </div>
-                  
-                  <div className="flex gap-1">
-                    {!isCompleted && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-11 w-11 text-green-600"
-                        onClick={() => handleMarkComplete.mutate(task)}
-                      >
-                        <CheckCircle className="w-5 h-5" />
-                      </Button>
-                    )}
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-11 w-11"
-                      onClick={() => isCompleted ? handleViewModal(task) : handleOpenModal(task)}
-                    >
-                      {isCompleted ? <Eye className="w-5 h-5" /> : <Edit className="w-5 h-5" />}
-                    </Button>
-                  </div>
-                </div>
-              </Card>
-            );
-          })}
-          </div>
-        </MobileSection>
-      )}
-
-      {/* ALL view: show two sections (Open first, then Completed) */}
-      {view === 'all' && (
-        <div className="space-y-6">
-          {/* Open section */}
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="text-sm font-semibold text-gray-900">Open tasks</h3>
-              <span className="text-xs text-gray-500">{openTasks.length} items</span>
-            </div>
-
-            {openTasks.length === 0 ? (
-              <Card className="text-center py-8">
-                <CardTitle>You’re all caught up 🎉</CardTitle>
-                <CardDescription>No open tasks right now.</CardDescription>
-              </Card>
-            ) : (
-              <>
-              <div className="hidden md:block rounded-md border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Task</TableHead>
-                      <TableHead>Description</TableHead>
-                      <TableHead>Priority</TableHead>
-                      <TableHead>Category</TableHead>
-                      <TableHead className="hidden sm:table-cell">Frequency</TableHead>
-                      <TableHead>Last completed</TableHead>
-                      <TableHead className="text-center">Next due</TableHead>
-                      <TableHead className="text-center">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-
-                  <TableBody>
-                    {openTasks.map((task) => {
-                      const dueDateInfo = formatDueDate(task.nextDueDate);
-                      const frequencyDisplay =
-                        task.isRecurring && task.frequency
-                          ? formatEnumString(task.frequency)
-                          : 'One-time';
-
-                      return (
-                        <TableRow key={task.id}>
-                          <TableCell className="font-medium">{humanizeActionType(task.title)}</TableCell>
-                          <TableCell className="text-sm text-gray-600">
-                            {task.description || 'No description'}
-                          </TableCell>
-                          <TableCell>
-                            <span
-                              className={cn(
-                                'px-2 py-1 rounded-full text-xs font-medium border',
-                                PRIORITY_CHIP[task.priority.toLowerCase() as PriorityLevel]
-                              )}
-                            >
-                              {formatEnumLabel(task.priority)}
-                            </span>
-                          </TableCell>
-                          <TableCell className="text-sm">
-                            {formatCategory(task.serviceCategory)}
-                          </TableCell>
-                          <TableCell className="text-sm hidden sm:table-cell">
-                            {frequencyDisplay}
-                          </TableCell>
-                          <TableCell className="text-sm text-gray-500">
-                            {task.lastCompletedDate
-                              ? format(new Date(task.lastCompletedDate), 'MMM dd, yyyy')
-                              : 'Never'}
-                          </TableCell>
-                          <TableCell className="text-center">
-                            <span className={cn('font-medium text-sm', dueDateInfo.color)}>
-                              {dueDateInfo.text}
-                            </span>
-                          </TableCell>
-                          <TableCell className="text-center">
-                            <div className="flex justify-center space-x-1">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                aria-label="Mark complete"
-                                className="h-8 w-8 text-gray-500 hover:text-green-600"
-                                onClick={() => handleMarkComplete.mutate(task)}
-                              >
-                                <CheckCircle className="w-4 h-4" />
-                              </Button>
-
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                aria-label="Edit task"
-                                className="h-8 w-8 text-gray-500 hover:text-blue-600"
-                                onClick={() => handleOpenModal(task)}
-                              >
-                                <Edit className="w-4 h-4" />
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </div>
-              <div className="md:hidden space-y-4">
-                {openTasks.map((task) => {
-                  const dueDateInfo = formatDueDate(task.nextDueDate);
-
-                  return (
-                    <Card key={task.id} className="p-4 border">
-                      <div className="flex justify-between items-start mb-2 gap-2">
-                        <div className="min-w-0">
-                          <h3 className="font-bold text-base leading-tight">{humanizeActionType(task.title)}</h3>
-                          <p className="text-xs text-muted-foreground">{formatCategory(task.serviceCategory)}</p>
-                        </div>
-                        <Badge
-                          className={cn(
-                            task.priority === 'URGENT' && 'bg-red-100 text-red-700',
-                            task.priority === 'HIGH' && 'bg-orange-100 text-orange-700',
-                            'text-[11px] px-1.5 py-0 shrink-0'
-                          )}
-                        >
-                          {task.priority}
-                        </Badge>
-                      </div>
-
-                      <p className="text-sm text-gray-600 line-clamp-2 mb-3">
-                        {task.description || 'No description'}
-                      </p>
-
-                      <div className="flex justify-between items-center text-sm border-t pt-3">
-                        <div className="flex flex-col">
-                          <span className="text-[11px] text-muted-foreground">Next due</span>
-                          <span className={cn('font-semibold', dueDateInfo.color)}>{dueDateInfo.text}</span>
-                        </div>
-
-                        <div className="flex gap-1">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-11 w-11 text-green-600"
-                            onClick={() => handleMarkComplete.mutate(task)}
-                            title="Mark complete"
-                          >
-                            <CheckCircle className="w-5 h-5" />
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-11 w-11"
-                            onClick={() => handleOpenModal(task)}
-                            title="Edit task"
-                          >
-                            <Edit className="w-5 h-5" />
-                          </Button>
-                        </div>
-                      </div>
-                    </Card>
-                  );
-                })}
-              </div>
-              </>
-            )}
-          </div>
-
-          {/* Completed section */}
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="text-sm font-semibold text-gray-900">Completed tasks</h3>
-              <span className="text-xs text-gray-500">{completedTasks.length} items</span>
-            </div>
-
-            {completedTasks.length === 0 ? (
-              <Card className="text-center py-8">
-                <CardTitle>No completed tasks in this period</CardTitle>
-                <CardDescription>Try expanding the completed time range.</CardDescription>
-              </Card>
-            ) : (
-              <>
-              <div className="hidden md:block rounded-md border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Task</TableHead>
-                      <TableHead>Description</TableHead>
-                      <TableHead>Priority</TableHead>
-                      <TableHead>Category</TableHead>
-                      <TableHead className="hidden sm:table-cell">Frequency</TableHead>
-                      <TableHead>Last Completed</TableHead>
-                      <TableHead className="text-center">Next Due</TableHead>
-                      <TableHead className="text-center">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-
-                  <TableBody>
-                    {completedTasks.map((task) => {
-                      const dueDateInfo = formatDueDate(task.nextDueDate);
-                      const frequencyDisplay =
-                        task.isRecurring && task.frequency
-                          ? formatEnumString(task.frequency)
-                          : 'One-time';
-
-                      return (
-                        <TableRow key={task.id} className="opacity-80">
-                          <TableCell className="font-medium">{humanizeActionType(task.title)}</TableCell>
-                          <TableCell className="text-sm text-gray-600">
-                            {task.description || 'No description'}
-                          </TableCell>
-                          <TableCell>
-                            <span
-                              className={cn(
-                                'px-2 py-1 rounded-full text-xs font-medium border',
-                                PRIORITY_CHIP[task.priority.toLowerCase() as PriorityLevel]
-                              )}
-                            >
-                              {formatEnumLabel(task.priority)}
-                            </span>
-                          </TableCell>
-                          <TableCell className="text-sm">
-                            {formatCategory(task.serviceCategory)}
-                          </TableCell>
-                          <TableCell className="text-sm hidden sm:table-cell">
-                            {frequencyDisplay}
-                          </TableCell>
-                          <TableCell className="text-sm text-gray-500">
-                            {task.lastCompletedDate
-                              ? format(new Date(task.lastCompletedDate), 'MMM dd, yyyy')
-                              : 'Never'}
-                          </TableCell>
-                          <TableCell className="text-center">
-                            <span className={cn('font-medium text-sm', dueDateInfo.color)}>
-                              {dueDateInfo.text}
-                            </span>
-                          </TableCell>
-
-                          {/* ✅ Completed: View only */}
-                          <TableCell className="text-center">
-                            <div className="flex justify-center space-x-1">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                aria-label="View task"
-                                className="h-8 w-8 text-gray-500 hover:text-gray-900"
-                                onClick={() => handleViewModal(task)}
-                              >
-                                <Eye className="w-4 h-4" />
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </div>
-              <div className="md:hidden space-y-4">
-                {completedTasks.map((task) => {
-                  const dueDateInfo = formatDueDate(task.nextDueDate);
-                  return (
-                    <Card key={task.id} className="p-4 border opacity-80">
-                      <div className="flex justify-between items-start mb-2 gap-2">
-                        <div className="min-w-0">
-                          <h3 className="font-bold text-base leading-tight">{humanizeActionType(task.title)}</h3>
-                          <p className="text-xs text-muted-foreground">{formatCategory(task.serviceCategory)}</p>
-                        </div>
-                        <Badge
-                          className={cn(
-                            task.priority === 'URGENT' && 'bg-red-100 text-red-700',
-                            task.priority === 'HIGH' && 'bg-orange-100 text-orange-700',
-                            'text-[11px] px-1.5 py-0 shrink-0'
-                          )}
-                        >
-                          {task.priority}
-                        </Badge>
-                      </div>
-
-                      <p className="text-sm text-gray-600 line-clamp-2 mb-3">
-                        {task.description || 'No description'}
-                      </p>
-
-                      <div className="flex justify-between items-center text-sm border-t pt-3">
-                        <div className="flex flex-col">
-                          <span className="text-[11px] text-muted-foreground">Next Due</span>
-                          <span className={cn('font-semibold', dueDateInfo.color)}>{dueDateInfo.text}</span>
-                        </div>
-
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-11 w-11"
-                          onClick={() => handleViewModal(task)}
-                          title="View Task"
-                        >
-                          <Eye className="w-5 h-5" />
-                        </Button>
-                      </div>
-                    </Card>
-                  );
-                })}
-              </div>
-              </>
-            )}
-          </div>
-        </div>
-      )}
-      <Dialog open={isViewOpen} onOpenChange={(open) => (open ? setIsViewOpen(true) : handleCloseView())}>
-        <DialogContent className="sm:max-w-[560px] max-h-[90dvh] overflow-y-auto">
-          <DialogHeader>
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <DialogTitle className="truncate">
-                  Task Details{viewTask?.title ? `: ${humanizeActionType(viewTask.title)}` : ''}
-                </DialogTitle>
-
-                <div className="mt-1 flex items-center gap-2">
-                  <DialogDescription className="m-0">
-                    {viewTask?.status === 'COMPLETED'
-                      ? 'Completed tasks are read-only.'
-                      : 'This task is on your maintenance schedule below.'}
-                  </DialogDescription>
-
-                  {viewTask && (() => {
-                    const badge = getTaskSourceBadge(viewTask);
-                    if (!badge) return null;
-
-                    return (
-                      <Badge
-                        variant={badge.variant}
-                        className="whitespace-nowrap"
-                      >
-                        {badge.label}
-                      </Badge>
-                    );
-                  })()}
-                </div>
-              </div>
-            </div>
-          </DialogHeader>
-
-
-          {viewTask && (
-            <div className="space-y-4">
-              <div className="space-y-1">
-                <div className="text-xs text-gray-500">Task</div>
-                <div className="text-sm font-medium text-gray-900">{humanizeActionType(viewTask.title)}</div>
-              </div>
-
-              <div className="space-y-1">
-                <div className="text-xs text-gray-500">Notes</div>
-                <div className="text-sm text-gray-700 whitespace-pre-wrap">
-                  {viewTask.description || '—'}
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <div className="text-xs text-gray-500">Category</div>
-                  <div className="text-sm text-gray-900">{formatCategory(viewTask.serviceCategory)}</div>
-                </div>
-
-                <div className="space-y-1">
-                  <div className="text-xs text-gray-500">Priority</div>
-                  <div className="text-sm text-gray-900">{viewTask.priority}</div>
-                </div>
-
-                <div className="space-y-1">
-                  <div className="text-xs text-gray-500">Frequency</div>
-                  <div className="text-sm text-gray-900">
-                    {viewTask.isRecurring && viewTask.frequency
-                      ? formatEnumString(viewTask.frequency)
-                      : 'One-time'}
-                  </div>
-                </div>
-
-                <div className="space-y-1">
-                  <div className="text-xs text-gray-500">Last Completed</div>
-                  <div className="text-sm text-gray-900">
-                    {viewTask.lastCompletedDate
-                      ? format(new Date(viewTask.lastCompletedDate), 'MMM dd, yyyy')
-                      : '—'}
-                  </div>
-                </div>
-
-                <div className="space-y-1 sm:col-span-2">
-                  <div className="text-xs text-gray-500">Next Due</div>
-                  <div className="text-sm text-gray-900">
-                    {viewTask.nextDueDate ? format(new Date(viewTask.nextDueDate), 'MMM dd, yyyy') : '—'}
-                  </div>
-                </div>
-              </div>
+                Clear filter
+              </button>
             </div>
           )}
 
-          <DialogFooter>
-            {viewTask && viewTask.status !== 'COMPLETED' && viewTask.status !== 'CANCELLED' ? (
-              <Button
-                onClick={() => {
-                  const task = viewTask;
-                  handleCloseView();
-                  handleOpenModal(task);
-                }}
-              >
-                <Edit className="w-4 h-4 mr-1.5" />
-                Edit task
-              </Button>
-            ) : null}
-            <Button variant="outline" onClick={handleCloseView}>
-              Close
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          {(view === 'open' || view === 'all') && (
+            <MobileSection>
+              <MobileSectionHeader
+                title="Open tasks"
+                subtitle={`${openTasks.length} task${openTasks.length === 1 ? '' : 's'}`}
+              />
+              {openTasks.length === 0 ? (
+                priorityOnly ? (
+                  <EmptyStateCard
+                    title="No high-priority open tasks"
+                    description="Nothing urgent or high priority right now."
+                    action={
+                      <Button variant="outline" size="sm" onClick={() => togglePriorityView(false)}>
+                        Show all tasks
+                      </Button>
+                    }
+                  />
+                ) : (
+                  <EmptyStateCard
+                    title="No open tasks"
+                    description="Add maintenance tasks to stay ahead of upkeep."
+                    action={
+                      <Link
+                        href={`/dashboard/maintenance-setup${effectivePropertyId ? `?propertyId=${effectivePropertyId}` : ''}`}
+                        className="text-sm text-blue-600 hover:underline"
+                      >
+                        Go to Task Setup
+                      </Link>
+                    }
+                  />
+                )
+              ) : (
+                <TaskList
+                  tasks={openTasks}
+                  variant="open"
+                  highlightTaskId={taskIdFromUrl}
+                  pendingTaskId={pendingTaskId}
+                  onOpenTask={openDrawer}
+                  onCompleteTask={(task) => completeMutation.mutate(task)}
+                />
+              )}
+            </MobileSection>
+          )}
 
-      <MaintenanceConfigModal
-        isOpen={isModalOpen}
-        onClose={handleCloseModal}
-        template={null}
-        properties={mainData?.propertiesMap ? Array.from(mainData.propertiesMap.values()) : []}
-        existingConfig={
-          editingTask
-            ? {
-                templateId: editingTask.id,
-                title: editingTask.title,
-                description: editingTask.description,
-                isRecurring: editingTask.isRecurring,
-                frequency: editingTask.frequency as RecurrenceFrequency | null,
-                nextDueDate: editingTask.nextDueDate ? new Date(editingTask.nextDueDate) : null,
-                serviceCategory: editingTask.serviceCategory as any,
-                propertyId: editingTask.propertyId,
-                source: editingTask.source,
-                seasonalChecklistItemId: editingTask.seasonalChecklistItemId,
-              }
-            : null
-        }
-        // ✅ When in view mode, disable destructive/save actions by making handlers no-op
-        onSave={modalMode === 'view' ? () => toast({ title: 'View Only', description: 'Completed tasks are read-only.' }) : handleSaveTaskUpdate}
-        onRemove={modalMode === 'view' ? () => toast({ title: 'View Only', description: 'Completed tasks cannot be removed here.' }) : handleRemoveTask}
-      />
+          {(view === 'completed' || view === 'all') && (
+            <MobileSection>
+              <MobileSectionHeader
+                title="Completed tasks"
+                subtitle={`${completedTasks.length} task${completedTasks.length === 1 ? '' : 's'}`}
+              />
+              {completedTasks.length === 0 ? (
+                hasEverCompleted ? (
+                  <EmptyStateCard
+                    title="No completed tasks in this range"
+                    description="Try expanding the completed time range."
+                  />
+                ) : (
+                  <EmptyStateCard
+                    title="Nothing completed yet"
+                    description="Tasks you finish will show up here."
+                  />
+                )
+              ) : (
+                <TaskList
+                  tasks={completedTasks}
+                  variant="completed"
+                  highlightTaskId={taskIdFromUrl}
+                  onOpenTask={openDrawer}
+                />
+              )}
+            </MobileSection>
+          )}
 
-      {mainData && guidanceJourneyId && guidanceScopedOpenTasks.length === 0 && (
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-          {guidanceProofCompleted
-            ? 'This guidance step completed automatically after the relevant maintenance tasks were cleared.'
-            : 'All relevant maintenance tasks are cleared. Guidance completion is being recorded automatically.'}
-        </div>
+          <GuidanceInlinePanel
+            propertyId={effectivePropertyId}
+            title="Maintenance Resolution Steps"
+            subtitle="Follow ordered actions before jumping to provider execution."
+            issueDomains={['MAINTENANCE', 'ASSET_LIFECYCLE'] as const}
+            limit={2}
+            hideWhenEmpty
+          />
+
+          <PersonalizedMaintenanceSuggestions propertyId={effectivePropertyId} />
+
+          {tasksLoaded && guidanceJourneyId && guidanceScopedOpenTasks.length === 0 && (
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+              {guidanceProofCompleted
+                ? 'This guidance step completed automatically after the relevant maintenance tasks were cleared.'
+                : 'All relevant maintenance tasks are cleared. Guidance completion is being recorded automatically.'}
+            </div>
+          )}
+        </>
       )}
+
+      <TaskDrawer
+        task={drawerTask}
+        open={drawerOpen}
+        onOpenChange={(open) => (open ? setDrawerOpen(true) : closeDrawer())}
+        onSave={(id, data) => updateMutation.mutate({ id, data })}
+        onComplete={(task) => completeMutation.mutate(task)}
+        onReopen={(task) => reopenMutation.mutate(task)}
+        onDelete={(id) => deleteMutation.mutate(id)}
+        isSaving={updateMutation.isPending}
+        isDeleting={deleteMutation.isPending}
+        isCompleting={completeMutation.isPending}
+      />
     </MobilePageContainer>
   );
 }

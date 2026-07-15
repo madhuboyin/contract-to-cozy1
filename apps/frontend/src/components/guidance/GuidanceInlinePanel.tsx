@@ -24,6 +24,11 @@ type GuidanceInlinePanelProps = {
   hidePrimaryCta?: boolean;
   userSelectedScopeId?: string | null;
   expectedInventoryItemId?: string | null;
+  /** Render nothing at all (header included) when there are no active journeys.
+   *  For host pages whose own content already communicates status. */
+  hideWhenEmpty?: boolean;
+  emptyTitle?: string;
+  emptyDescription?: string;
 };
 
 export function GuidanceInlinePanel({
@@ -38,6 +43,9 @@ export function GuidanceInlinePanel({
   hidePrimaryCta = false,
   userSelectedScopeId = null,
   expectedInventoryItemId = null,
+  hideWhenEmpty = false,
+  emptyTitle,
+  emptyDescription,
 }: GuidanceInlinePanelProps) {
   const [drawerAction, setDrawerAction] = useState<GuidanceActionModel | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -81,6 +89,7 @@ export function GuidanceInlinePanel({
   const isError = journeyId ? pinnedJourney.isError : guidance.isError;
 
   if (!propertyId) return null;
+  if (hideWhenEmpty && !isLoading && !isError && actions.length === 0) return null;
 
   return (
     <section className="space-y-3">
@@ -99,7 +108,7 @@ export function GuidanceInlinePanel({
           Guidance is temporarily unavailable. Existing page actions are still available.
         </div>
       ) : actions.length === 0 ? (
-        <GuidanceEmptyState />
+        <GuidanceEmptyState title={emptyTitle} description={emptyDescription} />
       ) : (
         <div className="space-y-3">
           {actions.map((action) => (
