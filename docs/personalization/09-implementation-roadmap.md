@@ -39,37 +39,37 @@ The revised greenfield scope proves cross-module reuse with the existing three-d
 - **Testing:** shared contract, default property access, optional-profile consent, content gates, capabilities, action deduplication, safety review, admin lifecycle and placement smoke coverage.
 - **Exit criteria:** the same reviewed recommendation can appear consistently across Dashboard, Maintenance and Health; supported conversion creates at most one task; admin activation/pause is audited; no module copies household eligibility rules.
 
-Seller Prep, Risk/protection, Buyer, Community, Climate, Wellness, Energy, providers, assistant and notifications become post-pilot catalog expansion. They require relevant reviewed definitions and observed demand; wiring maintenance-only recommendations into them would not constitute valid personalization.
+Seller Prep, Risk/protection, Buyer, Community, Climate, Wellness, Energy, providers, assistant and notifications are evidence-dependent catalog expansion. They require relevant reviewed definitions and observed demand; wiring maintenance-only recommendations into them would not constitute valid personalization.
 
-## Phase 3 — Pilot measurement before learning (initial slice implemented)
+## Phase 3 — Measurement before learning (initial slice implemented)
 
 **Effort: Large.**
 
-The original Phase 3 assumed sufficient real-user outcome data. The product is still a data-free pilot, so experiments, behavioral affinity, inference and weight tuning would create machinery without evidence. Phase 3 therefore starts with measurement only.
+The original Phase 3 assumed sufficient real-user outcome data. The product has no real users yet, so experiments, behavioral affinity, inference and weight tuning would create machinery without evidence. Phase 3 therefore starts with measurement only.
 
 - **Implemented initial slice:** richer explicit negative-feedback reasons; temporary `BAD_TIMING` dismissal rather than permanent irrelevance; aggregate 30-day admin quality snapshot; distinct properties receiving default guidance; separately labeled optional-profile enablement; recommendation/status, answer and feedback counts; a 20-decision-event review threshold; automatic tuning hard-disabled.
 - **Data:** reuse existing recommendation, feedback, profile-answer and household-consent rows. No experiment-assignment, inference, model-registry or aggregate-feature tables; no migration or backfill.
 - **Backend:** ADMIN+MFA aggregate-only quality endpoint. It returns counts and rates, never household answers, comments, property identifiers or recommendation evidence.
-- **Frontend:** low-friction reason capture on the pilot recommendation card and a quality snapshot on the existing personalization admin page.
+- **Frontend:** low-friction reason capture on the personalization recommendation card and a quality snapshot on the existing personalization admin page.
 - **Current guardrail:** reaching the sample threshold permits human review only. It never changes rules, weights, content, thresholds or online ranking.
 - **Deferred until evidence exists:** experiments, affinity, timing optimization, inference, deterministic weight selection, diversity tuning, offline backtests, holdouts, fairness/segment analysis, drift alerts and a version registry.
-- **Dependencies for deferred work:** sufficient unbiased pilot decisions, a predeclared success metric and safety floors, stable analytics definitions, and privacy/ethics approval.
-- **Exit criteria:** Phase 3 is not complete during a data-free pilot. Completion requires measured improvement on a predeclared metric without guardrail regression; every future inferred trait must be inspectable, confirmable and disableable; content and rules remain human-governed.
+- **Dependencies for deferred work:** sufficient unbiased real-user decisions, a predeclared success metric and safety floors, stable analytics definitions, and privacy/ethics approval.
+- **Exit criteria:** Phase 3 is not complete before real-user evidence exists. Completion requires measured improvement on a predeclared metric without guardrail regression; every future inferred trait must be inspectable, confirmable and disableable; content and rules remain human-governed.
 
 ## Phase 4 — Context transparency before graph evolution (initial slice implemented)
 
 **Effort: Very large.**
 
-The original Phase 4 assumed mature, longitudinal real-user data. The product is still a data-free pilot, so storing household event history, modeling future transitions or simulating scenarios would create privacy and complexity before a validated need. Phase 4 therefore starts with a transparent current-state relational view.
+The original Phase 4 assumed mature, longitudinal real-user data. The product has no real users yet, so storing household event history, modeling future transitions or simulating scenarios would create privacy and complexity before a validated need. Phase 4 therefore starts with a transparent current-state relational view.
 
 - **Implemented initial slice:** owner-only `GET /api/properties/:propertyId/personalization/context-map`; default property-signal and recommendation transparency without profile consent; optional consented household/profile nodes; graph-shaped current-state DTO with source, confidence and effective-date metadata; an owner UI showing property signals, explicit facts and aggregate counts.
 - **Data:** always reuse current property-derived traits and active reviewed recommendations; add the active household/property link and explicit profile rows only after optional-profile consent. No table, migration, backfill, retained event history or graph database.
 - **Backend:** a read-only facade selects only property-relevant active rows. Its public contract uses stable semantic node keys and excludes database IDs, owner IDs, raw evidence and arbitrary nested JSON.
-- **Frontend:** a compact transparency card is preferred to a graph canvas or timeline because the pilot currently has few facts and no longitudinal history. Property transparency does not require profile consent; contributors and viewers still cannot access the owner-only mixed context surface.
+- **Frontend:** a compact transparency card is preferred to a graph canvas or timeline because the current implementation has few facts and no longitudinal history. Property transparency does not require profile consent; contributors and viewers still cannot access the owner-only mixed context surface.
 - **Current guardrail:** the map describes what is currently connected; it never claims a causal trait-to-recommendation relationship, infers household facts, or changes product behavior.
 - **Deferred until evidence exists:** temporal household events, future-plan transitions, longitudinal outcome links, proactive planning, scenario provenance, simulations, graph extraction and graph-specific infrastructure.
 - **Dependencies for deferred work:** mature governance, high data quality, privacy-approved retention, and at least three validated high-value multi-hop journeys.
-- **Exit criteria:** Phase 4 is not complete during a data-free pilot. Completion requires validated journeys, temporal/deletion correctness, scenario trust research where applicable, and PostgreSQL benchmark evidence before considering a graph database.
+- **Exit criteria:** Phase 4 is not complete before real-user evidence exists. Completion requires validated journeys, temporal/deletion correctness, scenario trust research where applicable, and PostgreSQL benchmark evidence before considering a graph database.
 
 ## First implementation step
 

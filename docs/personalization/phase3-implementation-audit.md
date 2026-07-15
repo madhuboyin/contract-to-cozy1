@@ -6,7 +6,7 @@ Phase 3 has started with measurement and explicit user feedback. It has not star
 
 | Deliverable | Status | Evidence |
 |---|---|---|
-| Explicit feedback reasons | Complete | Pilot UI captures already handled, not applicable, wrong details, cost, timing and other reasons |
+| Explicit feedback reasons | Complete | Personalization UI captures already handled, not applicable, wrong details, cost, timing and other reasons |
 | Timing-safe suppression | Complete | `BAD_TIMING` sends `DISMISSED`, preserving the existing 30-day suppression instead of permanent definition suppression |
 | Aggregate quality service | Complete | Existing consent, recommendation, feedback and answer tables are aggregated over a bounded window; default-guidance reach is separate from optional-profile enablement |
 | Acceptance deduplication | Complete | Task conversion records one stable acceptance outcome per recommendation even when the action request is retried |
@@ -23,7 +23,7 @@ Phase 3 has started with measurement and explicit user feedback. It has not star
   to query only current property recommendations, feedback and profile events.
 - The quality endpoint returns aggregate counts and rates only.
 - It does not return household answers, feedback comments, user/property identifiers, recommendation evidence or raw events.
-- Profile data remains explicit and opt-in; no inferred trait is produced.
+- Profile data remains explicit, optional and consented; no inferred trait is produced.
 - Optional-profile enablement is never labeled or interpreted as enrollment in basic personalization, which is available by default.
 
 ## Intentionally deferred
@@ -35,7 +35,7 @@ Phase 3 has started with measurement and explicit user feedback. It has not star
 - Segment/fairness analysis, drift detection and model/weight registries.
 - Advanced diversity and timing optimization.
 
-These are not implementation gaps yet. They require a sufficiently large, unbiased pilot sample, stable metric definitions, predeclared safety floors and privacy/ethics review.
+These are not implementation gaps yet. They require a sufficiently large, unbiased real-user sample, stable metric definitions, predeclared safety floors and privacy/ethics review.
 
 ## Operational interpretation
 

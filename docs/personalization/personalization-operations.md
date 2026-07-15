@@ -4,18 +4,9 @@ Reviewed property personalization is available by default and does not create or
 
 ## Database ownership
 
-The user applies `apps/backend/prisma/schema.prisma` to the pilot database. After the schema is available, the single optional catalog command is:
+The user applies `apps/backend/prisma/schema.prisma` to the greenfield database. After the schema is available, the only personalization catalog bootstrap is `apps/backend/prisma/seedPersonalization.sql`, run manually in pgAdmin.
 
-```bash
-cd apps/backend
-npx ts-node prisma/seedPersonalization.ts
-```
-
-This idempotently seeds three definitions, three rules, three versioned content records and five profile questions as `DRAFT`. It does not create households, backfill properties, activate content or alter existing definition/rule/content/question status.
-
-For pgAdmin, run `apps/backend/prisma/seedPersonalization.sql` instead.
-It is the SQL equivalent of the TypeScript seed; run one or the other, not both
-(although both are idempotent).
+The SQL inserts missing rows for three definitions, three rules, three versioned content records and five profile questions as `DRAFT`. Existing rows are left unchanged, so rerunning it cannot overwrite reviewed rules or copy. It does not create households, backfill properties, activate content or change lifecycle status.
 
 ## Review and activation
 
@@ -61,7 +52,7 @@ Dashboard and Property Health use the same module endpoint with `dashboard` and 
 
 Admins with MFA can open `/dashboard/admin/personalization`. The page lists existing seeded definition, rule, content and profile-question versions. Activation requires an active ADMIN author user ID; safety-sensitive rules reject activation when that author is the current reviewer. The workflow activates the selected bundle, retires older active versions and writes personalization audit events. It does not author new rules or create database migrations.
 
-## Phase 3 pilot quality
+## Phase 3 quality measurement
 
 The same admin page includes a 30-day aggregate quality snapshot backed by:
 
@@ -75,7 +66,7 @@ The same admin page includes a 30-day aggregate quality snapshot backed by:
 
 The endpoint requires ADMIN plus MFA and never returns household answers, comments, property/user identifiers or recommendation evidence. Fewer than 20 accepted/negative decision events is explicitly insufficient for review. Reaching 20 permits manual quality review only; online tuning remains disabled.
 
-Pilot users can explain why a suggestion was not useful. `BAD_TIMING` is treated as the existing time-bounded dismissal; other irrelevance reasons use definition suppression. This distinction collects better evidence without introducing behavioral inference.
+Future users can explain why a suggestion was not useful. `BAD_TIMING` is treated as the existing time-bounded dismissal; other irrelevance reasons use definition suppression. This distinction collects better evidence without introducing behavioral inference.
 
 ## Phase 4 context transparency
 

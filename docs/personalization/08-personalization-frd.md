@@ -364,7 +364,7 @@ volume justifies them.
 
 Use idempotent recommendation, feedback, profile and action writes. Definition
 pause and the global kill switch are authoritative. No personalization cron,
-queue, nightly reconciliation or outbox is required in the current pilot.
+queue, nightly reconciliation or outbox is required in the current greenfield scope.
 
 ## 38. Audit requirements
 
@@ -381,7 +381,7 @@ reset. Free-text feedback receives the shortest practical approved period.
 
 ## 40. Schema-application requirements
 
-During the data-free greenfield pilot, the repository defines the desired
+During greenfield internal validation, the repository defines the desired
 schema and the user applies it; the application does not ship migrations or
 backfill properties. The idempotent catalog seed creates only DRAFT rows. Once
 a deployed database contains data that must survive a schema change, adopt a
@@ -398,7 +398,7 @@ deployed database contains data that must survive schema evolution.
 
 ## 42. Acceptance criteria
 
-The greenfield pilot is accepted when the three reviewed definitions produce
+The greenfield implementation is accepted when the three reviewed definitions produce
 deterministic results; default guidance works without a household profile; the
 optional owner profile can be enabled, answered and reset; shared module reads
 and task conversion are consistent/idempotent; no cross-role sensitive leak
@@ -409,7 +409,7 @@ exists; and catalog plus kill-switch controls are demonstrated.
 Current dependencies are schema application by the user, reviewed catalog
 content/safety approval, privacy retention decisions before real-user launch,
 and working existing property/asset and maintenance-task services. Workers,
-notifications and learning infrastructure are not pilot dependencies.
+notifications and learning infrastructure are not current dependencies.
 
 ## 44. Risks
 

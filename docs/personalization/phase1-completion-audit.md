@@ -18,7 +18,7 @@ This audit applies the revised no-real-user scope in `09-implementation-roadmap.
 | Authorization | Complete | VIEWER reads summaries; CONTRIBUTOR refreshes/feedback; OWNER manages consent/profile/reset; non-owner evidence is redacted |
 | Feedback and suppression | Complete | Explicit negative feedback is idempotent and suppresses/dismisses according to policy |
 | Reset/delete | Complete | Owner reset removes the optional household profile and household-bound outputs; property traits and guidance remain property-owned and available |
-| Recompute | Complete | Opt-in/read recompute plus explicit contributor refresh; no broad sweep |
+| Recompute | Complete | Read-triggered recompute plus explicit contributor refresh; no broad sweep |
 | Operational controls | Complete | ACTIVE catalog gates, global kill switch and per-definition lifecycle hide stored outputs at read time; no percentage enrollment |
 | Focused tests | Complete | Capability, rules, content gate, materialization, profile validation, feedback, reset and UI accessibility smoke coverage |
 | PostgreSQL rollback test | Harness complete | Runs only with explicit `PERSONALIZATION_TEST_DATABASE_URL`; never targets the default/production database |
@@ -35,7 +35,7 @@ input and evidence are retained once in
 
 Default availability does not bypass catalog review. Before internal validation:
 
-1. Confirm the existing schema is applied, then rerun the consolidated seed so the DRAFT content versions exist. This Phase 1 pass adds no schema migration.
+1. Confirm the existing schema is applied, then run the consolidated SQL bootstrap if catalog rows are missing. This Phase 1 pass adds no schema migration.
 2. Review and activate selected profile questions.
 3. Review and activate the matching definition, rule and content version.
 4. For safety-sensitive rules, record distinct `authoredBy` and `reviewedBy` identities.

@@ -20,7 +20,7 @@ flowchart LR
   FB --> SUP[("Property and definition suppression")]
   SUP --> EV
 
-  OWNER["Owner opt-in"] --> HH[("Optional Household + consent")]
+  OWNER["Owner profile consent"] --> HH[("Optional Household + consent")]
   HH --> PA[("ProfileAnswer events")]
   PA --> MAP["Owner context transparency"]
   TD --> MAP
@@ -57,7 +57,7 @@ calculations.
 
 ## Property trait and rule system
 
-The pilot derives a small code-owned set of non-sensitive property traits from
+The current implementation derives a small code-owned set of non-sensitive property traits from
 existing property/asset records. A current known trait is stored as
 `DerivedTrait`; the exact compact evaluation input/evidence is retained once in
 `PersonalizationEvaluationRun.resultJson`.
@@ -86,7 +86,7 @@ create or refresh it; `FALSE`/`UNKNOWN` expires it. Explicit negative feedback
 creates one property/definition suppression: `NOT_RELEVANT` is indefinite and
 `DISMISSED` is time-bounded. Implicit non-engagement never suppresses.
 
-The current pilot may store an optional score/confidence and derives a display
+The current implementation may store an optional score/confidence and derives a display
 priority band with a fixed policy. It has no configurable weight model, score
 breakdown, occurrence/dedupe dimension, behavioral affinity, automated tuning
 or experimentation infrastructure.
@@ -99,14 +99,14 @@ surface.
 
 ## Optional progressive profile
 
-The optional profile has one question surface and at most five active pilot
+The optional profile has one question surface and at most five active
 questions. `ProfileQuestion.answerSchema` defines the allowed answer shape.
 `ProfileAnswer` records an idempotent `ANSWERED`, `SKIPPED` or `SNOOZED` event;
 `answerJson` is present only for an answer. Skip and snooze cooldowns plus an
 impression cap control eligibility.
 
 The answer event is the single profile-fact store. Separate composition, pet,
-goal, preference and lifestyle tables are not justified in a data-free pilot.
+goal, preference and lifestyle tables are not justified without observed requirements.
 The owner context map decodes only bounded known question shapes and excludes
 database IDs, raw evidence and arbitrary nested JSON.
 
@@ -132,5 +132,5 @@ current-state transparency facade, not a retained household graph.
 Experiments, inferred traits, timing/weight optimization, temporal household
 history, graph infrastructure and simulations remain deferred. Introduce one
 only after real-user evidence, a predeclared outcome and safety floor, privacy
-approval, and a demonstrated query or product journey that the relational
-pilot cannot support.
+approval, and a demonstrated query or product journey that the current
+relational model cannot support.

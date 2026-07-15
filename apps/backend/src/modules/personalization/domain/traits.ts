@@ -117,10 +117,11 @@ export const SMOKE_DETECTOR_BATTERY_CHECK_THRESHOLD_DAYS = 365;
 
 /**
  * Derives whether a smoke/CO detector battery check is overdue, for the
- * `smoke_co_detector_battery_check` definition (seeded DRAFT by
- * seedPersonalization.ts). Same HomeAsset.lastServiced pattern as the HVAC
- * filter traits above — a battery check is modeled as a HomeAsset row with
- * assetType 'SMOKE_DETECTOR', `lastServiced` being the last check date.
+ * `smoke_co_detector_battery_check` definition (bootstrapped DRAFT by
+ * apps/backend/prisma/seedPersonalization.sql). Same HomeAsset.lastServiced
+ * pattern as the HVAC filter traits above — a battery check is modeled as a
+ * HomeAsset row with assetType 'SMOKE_DETECTOR', `lastServiced` being the last
+ * check date.
  *
  * UNKNOWN (not FALSE) whenever detector presence isn't confirmed true, or
  * it is but no service history exists yet — "no detector confirmed present"
@@ -150,10 +151,10 @@ export const DRYER_VENT_CLEANING_THRESHOLD_DAYS = 365;
 
 /**
  * Derives whether dryer vent cleaning is overdue, for the
- * `dryer_vent_cleaning_reminder` definition (seeded DRAFT by
- * seedPersonalization.ts). Same HomeAsset.lastServiced pattern as the traits
- * above — a DRYER-type asset's `lastServiced` is the last vent cleaning
- * date. Unlike the smoke detector trait, there's no separate "is a dryer
+ * `dryer_vent_cleaning_reminder` definition (bootstrapped DRAFT by
+ * apps/backend/prisma/seedPersonalization.sql). Same HomeAsset.lastServiced
+ * pattern as the traits above — a DRYER-type asset's `lastServiced` is the
+ * last vent cleaning date. Unlike the smoke detector trait, there's no separate "is a dryer
  * present" property field to gate on first — no DRYER-type asset at all is
  * simply UNKNOWN, same as the original HVAC filter trait's approach.
  * 365-day threshold matches common fire-safety guidance (annual cleaning).

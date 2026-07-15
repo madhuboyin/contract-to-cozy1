@@ -7,11 +7,11 @@ function source(relativePath) {
   return fs.readFileSync(path.resolve(__dirname, relativePath), 'utf8');
 }
 
-test('personalization API is not gated by percentage pilot enrollment', () => {
+test('personalization API is not gated by percentage enrollment', () => {
   const controller = source('../../src/modules/personalization/api/personalization.controller.ts');
   const flags = source('../../src/config/featureFlags.ts');
-  assert.doesNotMatch(controller, /isToolEnabled|PILOT_DISABLED|PERSONALIZATION_PILOT/);
-  assert.doesNotMatch(flags, /PERSONALIZATION_PILOT:/);
+  assert.doesNotMatch(controller, /isToolEnabled|ROLLOUT_DISABLED|rolloutPercentage|featureFlag/);
+  assert.doesNotMatch(flags, /PERSONALIZATION_ROLLOUT:/);
 });
 
 test('guidance is presented by default while household profiling is optional', () => {
@@ -19,7 +19,7 @@ test('guidance is presented by default while household profiling is optional', (
   assert.match(page, /Personalized home guidance/);
   assert.match(page, /Property-based guidance is already available/);
   assert.match(page, /Improve my recommendations/);
-  assert.doesNotMatch(page, /Join the pilot|Pilot unavailable|Home guidance pilot/);
+  assert.doesNotMatch(page, /Join the rollout|Rollout unavailable|Home guidance rollout/);
 });
 
 test('optional household consent and reset use profile-scoped endpoints', () => {

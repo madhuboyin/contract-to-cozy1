@@ -1,14 +1,14 @@
 # ADR-0002: Phase 1 foundation — migration steps 1–3
 
-Status: **Superseded by the data-free pilot strategy in `09-implementation-roadmap.md`**
+Status: **Superseded by the greenfield strategy in `09-implementation-roadmap.md`**
 Date: 2026-07-13
 
 This ADR is retained as implementation history. Its backfill and dual TS/SQL
 seed strategy must not be executed: there are no real users to backfill, the
-user owns database deployment, and pilot Households are now created lazily on
-explicit opt-in. The obsolete scripts referenced below have been removed.
+user owns database deployment, and optional-profile Households are now created
+lazily when an owner enables the profile. The obsolete scripts referenced below have been removed.
 
-The current pilot also prunes the unused `TraitDefinition`, `RuleVersion`,
+The current implementation also prunes the unused `TraitDefinition`, `RuleVersion`,
 `TraitSnapshot`, `HouseholdMemberSummary`, `PetProfile`, `HouseholdGoal`,
 `HouseholdPreference`, and `LifestyleAttribute` tables. Optional facts are
 stored once in `ProfileAnswer.answerJson`. Property-derived traits,

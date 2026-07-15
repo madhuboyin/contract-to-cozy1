@@ -103,13 +103,11 @@ real, working code because the proof requires exercising them end to end.
   already built for the catalog (`positive`/`negative`/`unknown` cases).
 
 **Out of scope, deliberately**:
-- No API route or controller. The roadmap says this proof must happen
+- No API route or controller in the original proof. The roadmap said the proof must happen
   "without... changing UI behavior" — the safest way to guarantee that is
-  to not expose any new HTTP surface at all yet. Everything here is called
-  directly by tests and, if a caller is added later, by a job/use-case, not
-  by a route. (If a route is added later it must be gated behind the
-  already-existing `PERSONALIZATION_SHADOW` rollout flag, which defaults to
-  0% — see `config/featureFlags.ts`.)
+  to not expose any new HTTP surface in that slice. The current implementation
+  now exposes property-scoped APIs by default and uses catalog lifecycle,
+  definition pause and the global kill switch instead of a percentage flag.
 - No `Household`, `PetProfile`, `DerivedTrait`, `ProfileQuestion`, or any
   other household-profile table. Those are Phase 1.
 - No BullMQ job, no recompute-on-event wiring, no dashboard/Maintenance/

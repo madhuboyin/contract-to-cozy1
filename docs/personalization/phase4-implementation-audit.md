@@ -18,8 +18,8 @@ Phase 4 has started with context transparency. It has not started a household in
 ## Privacy and data posture
 
 - No Phase 4 schema entity, migration or backfill was created. The existing
-  seed was later aligned to the pruned pilot schema.
-- Profile facts remain explicit and opt-in in `ProfileAnswer.answerJson`; there
+  bootstrap seed was later aligned to the pruned personalization schema.
+- Profile facts remain explicit, optional and consented in `ProfileAnswer.answerJson`; there
   is no inference source or separate lifestyle table.
 - Property signals and property-owned recommendations remain visible in the transparency view without optional-profile consent.
 - The context endpoint is restricted to the property owner because household composition and financial preference facts may be sensitive.
@@ -41,7 +41,7 @@ Internal validation currently contains a small number of current facts. A visual
 - Graph extraction, a graph database or graph query language.
 - Cross-household analytics and inferred household relationships.
 
-These are not current implementation gaps. They require observed pilot journeys, explicit retention/privacy approval, trustworthy source data and a concrete decision that cannot be explained well by the relational facade.
+These are not current implementation gaps. They require observed real-user journeys, explicit retention/privacy approval, trustworthy source data and a concrete decision that cannot be explained well by the relational facade.
 
 ## Completion assessment
 

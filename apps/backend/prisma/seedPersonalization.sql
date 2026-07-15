@@ -1,12 +1,12 @@
 -- Initial personalization catalog seed for PostgreSQL / pgAdmin.
 --
 -- DATA SEED ONLY: this is not a schema migration. The personalization tables
--- must already exist. This file is idempotent and safe to run after the older
--- personalization seed files: it upserts by stable definition code, rule
--- version, and question code/version.
+-- must already exist. This bootstrap is idempotent: it inserts only missing
+-- rows identified by stable definition code, rule/content version, and
+-- question code/version.
 --
--- Existing definition/rule/question status is deliberately preserved. New
--- rows start DRAFT, so running this file never activates personalization.
+-- Existing rows are deliberately left unchanged. New rows start DRAFT, so
+-- rerunning this file cannot overwrite reviewed content or activate anything.
 
 BEGIN;
 
@@ -21,10 +21,7 @@ INSERT INTO personalization_recommendation_definitions
 SELECT
   gen_random_uuid(), code, category, safety_class, 'DRAFT', now(), now()
 FROM personalization_definitions
-ON CONFLICT (code) DO UPDATE SET
-  category      = EXCLUDED.category,
-  "safetyClass" = EXCLUDED."safetyClass",
-  "updatedAt"   = now();
+ON CONFLICT (code) DO NOTHING;
 
 WITH personalization_rules(code, rule_ast) AS (
   VALUES
@@ -47,9 +44,7 @@ SELECT
   gen_random_uuid(), d.id, 1, r.rule_ast, 'DRAFT', now(), now()
 FROM personalization_rules r
 JOIN personalization_recommendation_definitions d ON d.code = r.code
-ON CONFLICT ("definitionId", version) DO UPDATE SET
-  "ruleAst"   = EXCLUDED."ruleAst",
-  "updatedAt" = now();
+ON CONFLICT ("definitionId", version) DO NOTHING;
 
 WITH personalization_content(code, title, body) AS (
   VALUES
@@ -75,10 +70,7 @@ SELECT
   gen_random_uuid(), d.id, 'en-US', 1, c.title, c.body, 'DRAFT', now(), now()
 FROM personalization_content c
 JOIN personalization_recommendation_definitions d ON d.code = c.code
-ON CONFLICT ("definitionId", locale, version) DO UPDATE SET
-  title       = EXCLUDED.title,
-  body        = EXCLUDED.body,
-  "updatedAt" = now();
+ON CONFLICT ("definitionId", locale, version) DO NOTHING;
 
 INSERT INTO personalization_profile_questions
   (id, code, version, status, prompt, "whyAsked", "privacyNote",
@@ -124,20 +116,12 @@ VALUES
     '{"type":"boolean"}'::jsonb,
     5, 1, 3, now(), now()
   )
-ON CONFLICT (code, version) DO UPDATE SET
-  prompt         = EXCLUDED.prompt,
-  "whyAsked"     = EXCLUDED."whyAsked",
-  "privacyNote"  = EXCLUDED."privacyNote",
-  "answerSchema" = EXCLUDED."answerSchema",
-  "valueScore"   = EXCLUDED."valueScore",
-  "effortScore"  = EXCLUDED."effortScore",
-  "maxImpressions" = EXCLUDED."maxImpressions",
-  "updatedAt"    = now();
+ON CONFLICT (code, version) DO NOTHING;
 
 COMMIT;
 
 -- Verification: expect 3 definitions/rules and 5 questions. Existing rows
--- may already be ACTIVE; this seed does not change their status.
+-- may already be ACTIVE; this bootstrap does not change existing rows.
 SELECT d.code, d.status AS definition_status, r.version, r.status AS rule_status
 FROM personalization_recommendation_definitions d
 JOIN personalization_recommendation_rules r ON r."definitionId" = d.id

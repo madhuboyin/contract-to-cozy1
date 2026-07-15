@@ -62,7 +62,7 @@ shapes and orchestration.
 
 ## Schema deployment and migration rehearsal
 
-While the pilot database contains no data that must survive schema evolution,
+While the greenfield database contains no data that must survive schema evolution,
 validate the desired Prisma schema and recreate a disposable database. Do not
 maintain migration-rehearsal machinery or speculative backfills.
 
@@ -74,7 +74,7 @@ household facts during a data transform.
 
 ## Performance and reliability
 
-For the pilot, measure the selected-property read/materialization path, shared
+During internal validation, measure the selected-property read/materialization path, shared
 module read and aggregate admin-quality query using a realistic internal data
 set. Reject unbounded JSON scans and N+1 queries. Queue bursts, cache
 invalidation, notification delivery and large-scale definition matrices are

@@ -1,6 +1,6 @@
 # Phase 2 implementation audit — revised greenfield scope
 
-This audit records the completed engineering boundary under the revised data-free pilot strategy. It intentionally uses the existing schema and three-definition catalog. Pilot validation remains operational work.
+This audit records the completed engineering boundary under the revised greenfield strategy. It intentionally uses the existing schema and three-definition catalog. Internal validation remains operational work.
 
 ## Completed engineering scope
 
@@ -15,13 +15,13 @@ This audit records the completed engineering boundary under the revised data-fre
 | Task action adapter | Complete | Supported recommendations invoke the existing `PropertyMaintenanceTaskService` |
 | Action idempotency | Complete | Recommendation-scoped `actionKey` reuses an existing task instead of creating duplicates |
 | Feedback linkage | Complete | Successful conversion records explicit `ACCEPTED` feedback |
-| Default/content gates | Complete | Property recommendations require no household opt-in but still require ACTIVE reviewed rule/content |
+| Default/content gates | Complete | Property recommendations require no household-profile consent but still require ACTIVE reviewed rule/content |
 | Focused tests | Complete | Contract mapping, consent, capabilities, conversion, deduplication, unsupported action and UI integration |
 | Catalog approval UI | Complete | MFA-protected admin page lists versions and activates existing definition/rule/content/question bundles |
 | Safety review enforcement | Complete | Safety-sensitive activation requires distinct active ADMIN author and reviewer identities |
 | Lifecycle audit | Complete | Activation, pause/resume and question activation produce personalization audit events |
 
-## Post-pilot expansion, not current implementation gaps
+## Evidence-dependent expansion, not current implementation gaps
 
 - Seller Prep, Risk, protection, community, climate, energy, provider, assistant and notification consumers.
 - Full catalog authoring/rule-AST editing and impact simulation. The current UI intentionally approves existing seeded versions only.
@@ -31,7 +31,7 @@ This audit records the completed engineering boundary under the revised data-fre
 
 ## Database posture
 
-This slice changes no Prisma model and creates no migration or backfill. Module routing and supported task actions are code-owned catalog metadata. The existing pilot seed and activation gates remain unchanged.
+This slice changes no Prisma model and creates no migration or backfill. Module routing and supported task actions are code-owned catalog metadata. The existing catalog bootstrap and activation gates remain unchanged.
 
 ## Operational validation
 

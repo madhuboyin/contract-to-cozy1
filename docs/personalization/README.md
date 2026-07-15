@@ -36,7 +36,7 @@ This directory began as the evidence-backed discovery package and Functional Req
 10. [Testing strategy](10-testing-strategy.md)
 11. [Risks and open questions](11-risks-and-open-questions.md)
 12. [Codebase evidence index](codebase-evidence.md)
-13. [Internal-validation operations](pilot-operations.md)
+13. [Personalization operations](personalization-operations.md)
 14. [Phase 1 completion audit](phase1-completion-audit.md)
 15. [Phase 2 implementation audit](phase2-implementation-audit.md)
 16. [Phase 3 initial implementation audit](phase3-implementation-audit.md)

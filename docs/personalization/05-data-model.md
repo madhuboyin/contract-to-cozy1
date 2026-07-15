@@ -3,7 +3,7 @@
 ## Decision
 
 Basic personalization is property-owned and available by default. Consent is
-required only for the optional household profile. The greenfield pilot keeps a
+required only for the optional household profile. The greenfield implementation keeps a
 small relational model and does not create migration scripts or backfill
 properties. The user applies `apps/backend/prisma/schema.prisma` directly.
 
@@ -67,7 +67,7 @@ erDiagram
   RECOMMENDATION_DEFINITION ||--o{ RECOMMENDATION_SUPPRESSION : controls
 ```
 
-## Deliberately omitted pilot schema
+## Deliberately omitted schema
 
 The following earlier design concepts are not part of the current schema:
 
@@ -80,26 +80,25 @@ The following earlier design concepts are not part of the current schema:
 - profile-question target-table and placement metadata;
 - graph, experiment, inference and aggregate-feature tables.
 
-These are not reserved future requirements. Add one only after pilot evidence
+These are not reserved future requirements. Add one only after real-user evidence
 shows a concrete query, integrity, history or optimization need that the current
 model cannot meet.
 
 ## Schema application
 
-There is no application-owned migration sequence while the pilot database has
+There is no application-owned migration sequence while the greenfield database has
 no data that must survive schema changes. Apply the desired Prisma schema using
 the user's database process, then optionally run one idempotent catalog seed:
 
-- `apps/backend/prisma/seedPersonalization.ts`, or
 - `apps/backend/prisma/seedPersonalization.sql` in pgAdmin.
 
-Run one seed form, not both. Seeds preserve existing lifecycle status and never
-activate catalog content.
+This bootstrap inserts only missing catalog rows as `DRAFT`; it never changes
+existing reviewed rows or activates catalog content.
 
 Conventional migrations become necessary only after a deployed database holds
 data that must survive an incremental schema change. At that point, design the
 specific migration from the then-current deployed schema; do not preserve the
-discarded pre-pilot design as migration baggage.
+discarded earlier design as migration baggage.
 
 ## Privacy and retention
 

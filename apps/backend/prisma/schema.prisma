@@ -3057,7 +3057,7 @@ model SellerPrepLead {
   @@index([propertyId, leadType])
 }
 
-// Generic app-wide pilot feedback (thumbs up/down + optional comment).
+// Generic app-wide product feedback (thumbs up/down + optional comment).
 // Originally seller-prep-only (SellerPrepFeedback); generalized so any page
 // in the app can submit feedback via POST /api/feedback. propertyId/page
 // are now optional/generic to support non-property-scoped screens.
@@ -12665,7 +12665,7 @@ model ProviderServiceZone {
 // ============================================================================
 // PERSONALIZATION ENGINE — CATALOG + AUDIT
 // ============================================================================
-// The data-free pilot uses three seeded definition/rule/content bundles.
+// The greenfield implementation uses three seeded definition/rule/content bundles.
 // Runtime evaluation and admin lifecycle controls read these tables directly;
 // all seeded content remains DRAFT until reviewed activation.
 
@@ -12775,7 +12775,7 @@ model PersonalizationAuditEvent {
 // Records that an evaluation happened, against which rule version, and with
 // what result. resultJson is the single retained input/evidence snapshot for
 // the evaluation; a separate trait-snapshot history table is intentionally
-// omitted for the data-free pilot.
+// omitted until a demonstrated history or query requirement justifies it.
 model PersonalizationEvaluationRun {
   id           String  @id @default(uuid())
   propertyId   String
@@ -12804,9 +12804,9 @@ model PersonalizationEvaluationRun {
 // ============================================================================
 // PERSONALIZATION ENGINE — OPTIONAL HOUSEHOLD PROFILE
 // ============================================================================
-// The schema describes the desired pilot database. The user applies database
+// The schema describes the desired greenfield database. The user applies database
 // changes; this repository does not generate migration scripts. Households are
-// created lazily after explicit pilot opt-in, with no existing-property backfill.
+// created lazily after an owner enables the optional profile, with no property backfill.
 
 // Household is the explicit profile/consent aggregate, distinct from
 // HouseholdMember (the existing property-collaborator ACL). It is created
@@ -12834,7 +12834,7 @@ model Household {
 // rows for the same (householdId, propertyId) — that would need a partial
 // unique index (WHERE "effectiveTo" IS NULL), which isn't expressible via
 // Prisma's schema DSL without raw SQL (same tradeoff documented on
-// Household above). The lazy opt-in use case enforces this at the application layer.
+// Household above). Optional-profile enablement enforces this at the application layer.
 model HouseholdProperty {
   id            String    @id @default(uuid())
   householdId   String
@@ -12947,7 +12947,7 @@ model PersonalizedRecommendation {
   ruleVersion     Int
   contentVersion  Int
 
-  // Optional display ranking fields. The current pilot derives priorityBand
+  // Optional display ranking fields. The current implementation derives priorityBand
   // from score with a simple fixed policy; it has no configurable score model.
   score        Float?
   priorityBand String?
@@ -12969,8 +12969,8 @@ model PersonalizedRecommendation {
 }
 
 // Structured reasons/evidence/benefit/confidence for one recommendation
-// instance. No raw secret values — evidenceJson/benefitsJson must only ever
-// hold already-redacted, template-safe data (see lib/redaction.ts).
+// instance. No raw secret values — evidenceJson must only ever hold
+// already-redacted, template-safe data (see lib/redaction.ts).
 model RecommendationExplanation {
   id               String @id @default(uuid())
   recommendationId String
