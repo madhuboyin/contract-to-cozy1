@@ -29,6 +29,22 @@ Admins can also emergency-pause one definition through `POST /api/admin/personal
 
 The read path treats controls as authoritative even when an `ACTIVE` recommendation row was materialized earlier. A global pause returns no guidance. A definition/rule that becomes inactive or invalid expires its stored recommendation before results are returned. Reset remains available during a pause.
 
+## Homeowner validation path
+
+Test the default experience through normal application navigation. Select the
+test property and open Dashboard first; **Suggested for your home** calls the
+module read endpoint, which recomputes recommendations from current property
+records. Dashboard, Maintenance, Property Health and the detailed
+Personalization page all recompute on a fresh read, so an owner does not need
+to construct a `/dashboard/personalization?propertyId=...` URL or enable the
+optional profile.
+
+Use **AI Tools → Personalized Home Guidance** (or **Personalization settings**
+from a Maintenance suggestion) when validating the explanation and **What
+personalization knows**. Treat the direct URL as a QA/troubleshooting shortcut.
+Use the page's **Refresh** action only when facts changed while the page stayed
+open or when an explicit recomputation is required for test evidence.
+
 ## Optional household profile
 
 Property guidance does not require consent. An owner may separately enable additional household-profile collection through:

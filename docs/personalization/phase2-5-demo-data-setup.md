@@ -51,9 +51,26 @@ Create **DEMO — Safety gap home**.
 - Use a recent roof replacement year, or leave it unknown.
 - Do not add overdue maintenance items.
 
-Expected result after refresh: **Confirm smoke-detector coverage for this
-home** is the top suggestion. Its explanation should identify the property
-record as the reason.
+### Fastest homeowner verification
+
+1. Make **DEMO — Safety gap home** the selected property and open the normal
+   homeowner **Dashboard**. Do not construct or launch a personalization URL.
+2. Wait for **Suggested for your home** to load. The read automatically
+   recomputes recommendations from the current property records.
+3. Confirm **Confirm smoke-detector coverage for this home** appears before
+   selecting **Improve my recommendations**. Its explanation must identify the
+   property's smoke-detector record as the reason.
+4. Open **AI Tools → Personalized Home Guidance**. Alternatively, open
+   **Maintenance**, then use **Personalization settings** on the suggestion.
+5. Under **What personalization knows**, confirm the corresponding property
+   signal is present and optional household facts show zero/not enabled.
+
+The direct
+`/dashboard/personalization?propertyId=<property-id>` URL is a QA and
+troubleshooting shortcut, not a homeowner requirement. The **Refresh** button
+is useful when property data changed while the page remained open or when a
+tester wants an explicit recomputation; a normal fresh Dashboard,
+Maintenance, Property Health or Personalization read recomputes automatically.
 
 ## Archetype B — maintenance catch-up
 
@@ -69,9 +86,11 @@ on. Then open the property's **Inventory** and add:
 Enter an install year when the Appliance form requires it. The important
 personalization signal is **Last serviced or checked**, not the install year.
 
-Expected result after refresh: three maintenance/safety suggestions ordered by
-their bounded property scores. Each should display the recorded elapsed time
-used for this home.
+Expected result after opening Dashboard, Maintenance, Property Health or
+Personalization: three maintenance/safety suggestions ordered by their bounded
+property scores. Each should display the recorded elapsed time used for this
+home. Use **Refresh** only when facts changed while the current page remained
+open or to force an explicit QA recomputation.
 
 ## Archetype C — long-term planning
 
