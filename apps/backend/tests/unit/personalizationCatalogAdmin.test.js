@@ -3,7 +3,13 @@ const assert = require('node:assert/strict');
 
 require('ts-node/register');
 
-function loadService({ safetyClass = 'ROUTINE', authorId = 'author-1', authorExists = true } = {}) {
+function loadService({
+  safetyClass = 'ROUTINE',
+  authorId = 'author-1',
+  authorExists = true,
+  catalogDefinitions = [],
+  activeAdmins = [],
+} = {}) {
   const writes = [];
   const audits = [];
   const db = {
@@ -31,10 +37,17 @@ function loadService({ safetyClass = 'ROUTINE', authorId = 'author-1', authorExi
     exports: {
       prisma: {
         recommendationDefinition: {
+          findMany: async () => catalogDefinitions,
           findUnique: async () => ({ id: 'def-1', safetyClass, rules: [{ id: 'rule-1' }], contentVersions: [{ id: 'content-1' }] }),
         },
-        user: { findFirst: async () => authorExists ? { id: authorId } : null },
-        profileQuestion: { findUnique: async () => ({ id: 'question-1' }) },
+        user: {
+          findFirst: async () => authorExists ? { id: authorId } : null,
+          findMany: async () => activeAdmins,
+        },
+        profileQuestion: {
+          findUnique: async () => ({ id: 'question-1' }),
+          findMany: async () => [],
+        },
         $transaction: async (callback) => callback(db),
       },
     },
@@ -93,4 +106,29 @@ test('activates a selected profile question version and retires an older active 
   assert.equal(result.status, 'ACTIVE');
   assert.deepEqual(writes.map(([operation]) => operation), ['question.updateMany', 'question.update']);
   assert.equal(audits[0].action, 'PERSONALIZATION_PROFILE_QUESTION_ACTIVATED');
+});
+
+test('catalog classifies implemented definitions and returns only the active-admin identity projection', async () => {
+  const implemented = {
+    id: 'def-implemented',
+    code: 'hvac_filter_replacement_check_proof',
+    rules: [],
+    contentVersions: [],
+  };
+  const planOnly = {
+    id: 'def-plan',
+    code: 'air_purifier_pet_suggestion',
+    rules: [],
+    contentVersions: [],
+  };
+  const admins = [{ id: 'admin-1', firstName: 'Ada', lastName: 'Admin', email: 'ada@example.com' }];
+  const { listPersonalizationCatalog } = loadService({
+    catalogDefinitions: [implemented, planOnly],
+    activeAdmins: admins,
+  });
+
+  const result = await listPersonalizationCatalog();
+  assert.equal(result.definitions[0].implementationStatus, 'IMPLEMENTED');
+  assert.equal(result.definitions[1].implementationStatus, 'PLAN_ONLY');
+  assert.deepEqual(result.activeAdmins, admins);
 });

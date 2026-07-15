@@ -1,5 +1,6 @@
 import { prisma } from '../lib/prisma';
 import { recordPersonalizationAuditEvent } from './personalizationAudit.service';
+import { PERSONALIZATION_DEFINITIONS } from '../modules/personalization/catalog/personalizationDefinitions';
 
 export class PersonalizationCatalogActivationError extends Error {
   constructor(public code: 'NOT_FOUND' | 'AUTHOR_NOT_FOUND' | 'TWO_PERSON_REVIEW_REQUIRED') {
@@ -8,7 +9,8 @@ export class PersonalizationCatalogActivationError extends Error {
 }
 
 export async function listPersonalizationCatalog() {
-  const [definitions, questions] = await Promise.all([
+  const implementedCodes = new Set(PERSONALIZATION_DEFINITIONS.map((definition) => definition.code));
+  const [definitions, questions, activeAdmins] = await Promise.all([
     prisma.recommendationDefinition.findMany({
       orderBy: { code: 'asc' },
       select: {
@@ -33,8 +35,20 @@ export async function listPersonalizationCatalog() {
       orderBy: [{ code: 'asc' }, { version: 'desc' }],
       select: { code: true, version: true, prompt: true, status: true, updatedAt: true },
     }),
+    prisma.user.findMany({
+      where: { role: 'ADMIN', status: 'ACTIVE' },
+      orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }, { email: 'asc' }],
+      select: { id: true, firstName: true, lastName: true, email: true },
+    }),
   ]);
-  return { definitions, questions };
+  return {
+    definitions: definitions.map((definition) => ({
+      ...definition,
+      implementationStatus: implementedCodes.has(definition.code) ? 'IMPLEMENTED' as const : 'PLAN_ONLY' as const,
+    })),
+    questions,
+    activeAdmins,
+  };
 }
 
 export async function activatePersonalizationDefinitionBundle(params: {

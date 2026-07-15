@@ -8,6 +8,7 @@ export interface PersonalizationCatalogDefinition {
   status: string;
   pausedAt: string | null;
   pauseReason: string | null;
+  implementationStatus: 'IMPLEMENTED' | 'PLAN_ONLY';
   rules: Array<{
     version: number;
     status: string;
@@ -36,6 +37,12 @@ export interface PersonalizationCatalogQuestion {
 export interface PersonalizationCatalogResponse {
   definitions: PersonalizationCatalogDefinition[];
   questions: PersonalizationCatalogQuestion[];
+  activeAdmins: Array<{
+    id: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+  }>;
 }
 
 export interface PersonalizationQualityResponse {

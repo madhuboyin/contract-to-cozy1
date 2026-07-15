@@ -6,7 +6,7 @@ Reviewed property personalization is available by default and does not create or
 
 The user applies `apps/backend/prisma/schema.prisma` to the greenfield database. After the schema is available, the only personalization catalog bootstrap is `apps/backend/prisma/seedPersonalization.sql`, run manually in pgAdmin.
 
-The SQL inserts missing rows for three definitions, three rules, three versioned content records and five profile questions as `DRAFT`. Existing rows are left unchanged, so rerunning it cannot overwrite reviewed rules or copy. It does not create households, backfill properties, activate content or change lifecycle status.
+The SQL inserts missing rows for five definitions, five rules, five versioned content records and five profile questions as `DRAFT`. Existing rows are left unchanged, so rerunning it cannot overwrite reviewed rules or copy. It does not create households, backfill properties, activate content or change lifecycle status.
 
 ## Review and activation
 
@@ -50,7 +50,11 @@ Dashboard and Property Health use the same module endpoint with `dashboard` and 
 
 ## Catalog approval UI
 
-Admins with MFA can open `/dashboard/admin/personalization`. The page lists existing seeded definition, rule, content and profile-question versions. Activation requires an active ADMIN author user ID; safety-sensitive rules reject activation when that author is the current reviewer. The workflow activates the selected bundle, retires older active versions and writes personalization audit events. It does not author new rules or create database migrations.
+Admins with MFA can open `/dashboard/admin/personalization`. The operational catalog lists only definitions backed by code-owned behavior. Database rows that exist only as future planning records appear in a collapsed, read-only **Plan-only records** section and cannot be activated, paused or resumed.
+
+Implemented definitions missing a rule or `en-US` content version are marked **Incomplete** and direct the admin to the canonical catalog bootstrap. Complete DRAFT bundles are marked **Ready for review**. The author is selected from active ADMIN users instead of entering a raw user ID; safety-sensitive definitions exclude the signed-in reviewer from the author choices. Pause and resume controls are available only for active or paused definitions, never for DRAFT or plan-only records.
+
+The workflow activates the selected bundle, retires older active versions and writes personalization audit events. It does not author new rules, delete legacy planning rows, alter the database schema or create database migrations.
 
 ## Phase 3 quality measurement
 
