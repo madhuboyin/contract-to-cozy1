@@ -1,13 +1,11 @@
 'use client';
 
-import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { AdminConsoleShell, AdminRouteState } from '@/components/ops/AdminConsoleShell';
 import { useAdminGuard } from '@/hooks/useAdminGuard';
-import { useAuth } from '@/lib/auth/AuthContext';
 import { useToast } from '@/components/ui/use-toast';
 import {
   activatePersonalizationDefinition,
@@ -19,14 +17,12 @@ import {
 } from '@/lib/api/personalizationAdminApi';
 
 export default function PersonalizationAdminPage() {
-  const { user } = useAuth();
   const guard = useAdminGuard({
     title: 'Personalization Catalog',
     subtitle: 'Review and activate the small deterministic catalog.',
   });
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [authorIds, setAuthorIds] = useState<Record<string, string>>({});
   const catalog = useQuery({
     queryKey: ['personalization-admin-catalog'],
     queryFn: getPersonalizationAdminCatalog,
@@ -43,18 +39,15 @@ export default function PersonalizationAdminPage() {
       code,
       ruleVersion,
       contentVersion,
-      authoredBy,
     }: {
       code: string;
       ruleVersion: number;
       contentVersion: number;
-      authoredBy: string;
     }) =>
       activatePersonalizationDefinition(code, {
         ruleVersion,
         contentVersion,
         locale: 'en-US',
-        authoredBy,
       }),
     onSuccess: async () => {
       await refresh();
@@ -86,7 +79,7 @@ export default function PersonalizationAdminPage() {
   return (
     <AdminConsoleShell
       title="Personalization Catalog"
-      subtitle="Activate only reviewed deterministic rules and content. Safety-sensitive definitions require a different active admin author."
+      subtitle="Activate only reviewed deterministic rules and content. Every activation is MFA-protected and audited."
       chips={<Badge variant="outline">Internal · MFA protected</Badge>}
     >
       <div className="space-y-6">
@@ -144,14 +137,7 @@ export default function PersonalizationAdminPage() {
               const content = definition.contentVersions.find((item) => item.locale === 'en-US');
               const hasBundle = Boolean(rule && content);
               const bundleActive = Boolean(rule?.status === 'ACTIVE' && content?.status === 'ACTIVE');
-              const authorOptions = catalog.data.activeAdmins.filter(
-                (admin) => definition.safetyClass !== 'SAFETY_SENSITIVE' || admin.id !== user?.id,
-              );
-              const requestedAuthorId = authorIds[definition.code] ?? rule?.authoredBy ?? '';
-              const selectedAuthorId = authorOptions.some((admin) => admin.id === requestedAuthorId)
-                ? requestedAuthorId
-                : '';
-              const ready = Boolean(hasBundle && selectedAuthorId && !bundleActive);
+              const ready = Boolean(hasBundle && !bundleActive);
               const canPause = definition.status === 'ACTIVE' || Boolean(definition.pausedAt);
 
               return (
@@ -177,41 +163,20 @@ export default function PersonalizationAdminPage() {
                       </p>
                     ) : null}
 
-                    {hasBundle && !bundleActive ? (
-                      <label className="block space-y-1 text-sm font-medium">
-                        Author admin
-                        <select
-                          value={selectedAuthorId}
-                          onChange={(event) => setAuthorIds((current) => ({ ...current, [definition.code]: event.target.value }))}
-                          className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                        >
-                          <option value="">Select an active admin author</option>
-                          {authorOptions.map((admin) => (
-                            <option key={admin.id} value={admin.id}>
-                              {admin.firstName} {admin.lastName} ({admin.email})
-                            </option>
-                          ))}
-                        </select>
-                        <span className="block text-xs font-normal text-slate-500">
-                          {definition.safetyClass === 'SAFETY_SENSITIVE'
-                            ? 'Safety-sensitive definitions require an author other than the signed-in reviewer.'
-                            : 'The selected active admin is recorded as author; the signed-in admin is recorded as reviewer.'}
-                        </span>
-                      </label>
-                    ) : null}
-
                     <div className="flex flex-wrap gap-2">
                       {hasBundle && !bundleActive ? (
                         <Button
                           type="button"
                           disabled={!ready || activateDefinition.isPending}
                           onClick={() => {
-                            if (window.confirm(`Activate reviewed rule and content for ${definition.code}?`)) {
+                            const warning = definition.safetyClass === 'SAFETY_SENSITIVE'
+                              ? `Activate safety-sensitive rule and content for ${definition.code}? Confirm that you reviewed both versions.`
+                              : `Activate reviewed rule and content for ${definition.code}?`;
+                            if (window.confirm(warning)) {
                               activateDefinition.mutate({
                                 code: definition.code,
                                 ruleVersion: rule!.version,
                                 contentVersion: content!.version,
-                                authoredBy: selectedAuthorId,
                               });
                             }
                           }}

@@ -87,11 +87,22 @@ const ACTIVE_DEFINITION = {
   id: 'smoke-def-1',
   status: 'ACTIVE',
   safetyClass: 'SAFETY_SENSITIVE',
-  rules: [{ version: 1, ruleAst: RULE_AST, status: 'ACTIVE', authoredBy: 'author-1', reviewedBy: 'reviewer-1' }],
+  rules: [{ version: 1, ruleAst: RULE_AST, status: 'ACTIVE', authoredBy: null, reviewedBy: 'reviewer-1' }],
 };
 
-test('safety-sensitive rule is inactive until a distinct reviewer approves it', async () => {
-  const definition = { ...ACTIVE_DEFINITION, rules: [{ version: 1, ruleAst: RULE_AST, status: 'ACTIVE', authoredBy: 'author-1', reviewedBy: null }] };
+test('active safety-sensitive rule does not require a second admin identity', async () => {
+  const { prismaMock } = createPrismaMock({ definition: ACTIVE_DEFINITION });
+  installPrismaMock(prismaMock);
+  const { evaluateDefinitionForProperty } = loadUseCase();
+  const result = await evaluateDefinitionForProperty('prop-1', DEFINITION_CODE);
+  assert.equal(result.status, 'COMPLETED');
+});
+
+test('active rule without an authenticated reviewer remains inactive', async () => {
+  const definition = {
+    ...ACTIVE_DEFINITION,
+    rules: [{ version: 1, ruleAst: RULE_AST, status: 'ACTIVE', authoredBy: null, reviewedBy: null }],
+  };
   const { prismaMock } = createPrismaMock({ definition });
   installPrismaMock(prismaMock);
   const { evaluateDefinitionForProperty } = loadUseCase();

@@ -246,7 +246,7 @@ The product must not yet claim:
 - Avoid new learning, experiment, inference, history or graph schema until an
   approved evidence-backed requirement exists.
 - Keep demo fixtures separate from production bootstrap data.
-- Preserve author/reviewer separation for safety-sensitive rules.
+- Require MFA-protected audited activation and explicit confirmation for safety-sensitive rules. Defer a true two-session author/reviewer workflow until UI authoring or real-user risk justifies it.
 - Preserve owner-only access to optional-profile facts and mixed context.
 
 ## Phase 2.5 exit criteria

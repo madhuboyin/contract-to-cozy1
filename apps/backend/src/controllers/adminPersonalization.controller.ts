@@ -28,7 +28,6 @@ const activateBundleSchema = z.object({
   ruleVersion: z.number().int().positive(),
   contentVersion: z.number().int().positive(),
   locale: z.string().regex(/^[a-z]{2}-[A-Z]{2}$/).default('en-US'),
-  authoredBy: z.string().trim().min(1).max(100),
 }).strict();
 const activateQuestionSchema = z.object({ version: z.number().int().positive() }).strict();
 const qualityQuerySchema = z.object({
@@ -160,13 +159,10 @@ export async function activateDefinitionBundleHandler(req: AuthRequest, res: Res
     res.json({ success: true, data });
   } catch (err) {
     if (err instanceof PersonalizationCatalogActivationError) {
-      const status = err.code === 'TWO_PERSON_REVIEW_REQUIRED' ? 409 : 404;
-      const message = err.code === 'NOT_FOUND'
-        ? 'Definition, rule, or content version not found'
-        : err.code === 'AUTHOR_NOT_FOUND'
-          ? 'Author must be an active admin user'
-          : 'Safety-sensitive activation requires a different author and reviewer';
-      res.status(status).json({ success: false, error: { code: err.code, message } });
+      res.status(404).json({
+        success: false,
+        error: { code: err.code, message: 'Definition, rule, or content version not found' },
+      });
       return;
     }
     logger.error({ err, definitionCode: code.data }, '[ADMIN-PERSONALIZATION] Failed to activate bundle');

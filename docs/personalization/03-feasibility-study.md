@@ -63,7 +63,7 @@ Credible initial recommendations have strong observable home links: filter caden
 
 MVP catalog management should be code-reviewed seed/config content validated in CI, with database activation/version state and an admin emergency disable endpoint. A full editor is Phase 2 after operator workflows are understood.
 
-Every rule/content change needs immutable version, author/reviewer, rationale, effective/review dates, source references, safety class, test fixtures and audit record. Publish is two-person for safety-sensitive advice. Kill switch disables a definition without deleting historical instances. Quality dashboards track eligibility volume, suppression reasons, stale context, acceptance/completion/not-relevant, corrections and adverse reports.
+Every rule/content change needs an immutable version, rationale, effective/review dates, source references, safety class, test fixtures and an audit record. During internal validation, code-owned seeded content is activated by one MFA-authenticated admin whose identity is recorded as reviewer. A true two-session author/reviewer workflow is deferred until operators can author content in the UI or real-user risk justifies it. The kill switch disables a definition without deleting historical instances. Quality dashboards track eligibility volume, suppression reasons, stale context, acceptance/completion/not-relevant, corrections and adverse reports.
 
 Operational burden is manageable for an initial 20–40 reviewed definitions; it becomes high past roughly 100 active definitions without taxonomy ownership, regression fixtures and authoring tools.
 

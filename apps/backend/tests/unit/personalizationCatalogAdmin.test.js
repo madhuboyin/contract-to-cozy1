@@ -4,11 +4,7 @@ const assert = require('node:assert/strict');
 require('ts-node/register');
 
 function loadService({
-  safetyClass = 'ROUTINE',
-  authorId = 'author-1',
-  authorExists = true,
   catalogDefinitions = [],
-  activeAdmins = [],
 } = {}) {
   const writes = [];
   const audits = [];
@@ -45,11 +41,7 @@ function loadService({
               ? catalogDefinitions.filter((definition) => includedCodes.includes(definition.code))
               : catalogDefinitions;
           },
-          findUnique: async () => ({ id: 'def-1', safetyClass, rules: [{ id: 'rule-1' }], contentVersions: [{ id: 'content-1' }] }),
-        },
-        user: {
-          findFirst: async () => authorExists ? { id: authorId } : null,
-          findMany: async () => activeAdmins,
+          findUnique: async () => ({ id: 'def-1', rules: [{ id: 'rule-1' }], contentVersions: [{ id: 'content-1' }] }),
         },
         profileQuestion: {
           findUnique: async () => ({ id: 'question-1' }),
@@ -76,36 +68,22 @@ const activation = {
   ruleVersion: 1,
   contentVersion: 1,
   locale: 'en-US',
-  authoredBy: 'author-1',
   reviewerUserId: 'reviewer-1',
 };
 
-test('activates one reviewed rule/content bundle transactionally and audits versions', async () => {
-  const { activatePersonalizationDefinitionBundle, writes, audits } = loadService({ safetyClass: 'SAFETY_SENSITIVE' });
+test('one MFA reviewer activates a reviewed rule/content bundle transactionally', async () => {
+  const { activatePersonalizationDefinitionBundle, writes, audits } = loadService();
   const result = await activatePersonalizationDefinitionBundle(activation);
   assert.equal(result.status, 'ACTIVE');
   assert.deepEqual(writes.map(([operation]) => operation), [
     'rule.updateMany', 'rule.update', 'content.updateMany', 'content.update', 'definition.update',
   ]);
-  assert.equal(writes[1][1].data.authoredBy, 'author-1');
+  assert.equal(writes[1][1].data.authoredBy, null);
   assert.equal(writes[1][1].data.reviewedBy, 'reviewer-1');
   assert.deepEqual(audits[0].metadata, { ruleVersion: 1, contentVersion: 1, locale: 'en-US' });
 });
 
-test('blocks safety-sensitive self-review and unknown author identities', async () => {
-  const selfReview = loadService({ safetyClass: 'SAFETY_SENSITIVE', authorId: 'reviewer-1' });
-  await assert.rejects(
-    () => selfReview.activatePersonalizationDefinitionBundle({ ...activation, authoredBy: 'reviewer-1' }),
-    (error) => error.code === 'TWO_PERSON_REVIEW_REQUIRED',
-  );
-  assert.equal(selfReview.writes.length, 0);
-
-  const missingAuthor = loadService({ authorExists: false });
-  await assert.rejects(
-    () => missingAuthor.activatePersonalizationDefinitionBundle(activation),
-    (error) => error.code === 'AUTHOR_NOT_FOUND',
-  );
-
+test('blocks activation of definitions without implemented application behavior', async () => {
   const planOnly = loadService();
   await assert.rejects(
     () => planOnly.activatePersonalizationDefinitionBundle({ ...activation, code: 'air_purifier_pet_suggestion' }),
@@ -122,7 +100,7 @@ test('activates a selected profile question version and retires an older active 
   assert.equal(audits[0].action, 'PERSONALIZATION_PROFILE_QUESTION_ACTIVATED');
 });
 
-test('catalog returns only implemented definitions and the active-admin identity projection', async () => {
+test('catalog returns only implemented definitions without unrelated admin identities', async () => {
   const implemented = {
     id: 'def-implemented',
     code: 'hvac_filter_replacement_check_proof',
@@ -135,15 +113,13 @@ test('catalog returns only implemented definitions and the active-admin identity
     rules: [],
     contentVersions: [],
   };
-  const admins = [{ id: 'admin-1', firstName: 'Ada', lastName: 'Admin', email: 'ada@example.com' }];
   const { listPersonalizationCatalog, reads } = loadService({
     catalogDefinitions: [implemented, planOnly],
-    activeAdmins: admins,
   });
 
   const result = await listPersonalizationCatalog();
   assert.deepEqual(result.definitions.map((definition) => definition.code), [implemented.code]);
   assert.ok(reads[0][1].where.code.in.includes(implemented.code));
   assert.ok(!reads[0][1].where.code.in.includes(planOnly.code));
-  assert.deepEqual(result.activeAdmins, admins);
+  assert.deepEqual(Object.keys(result).sort(), ['definitions', 'questions']);
 });

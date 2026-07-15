@@ -18,9 +18,9 @@ claim about user adoption or measured benefit.
    rerun because it inserts only missing stable codes and versions.
 2. In **Admin → Personalization**, review version 1 of each definition, rule
    and content row needed for the demo.
-3. Activate the definitions only after review. Safety-sensitive definitions
-   require different active ADMIN author and reviewer identities. Routine
-   definitions still require normal review metadata.
+3. Activate the definitions only after review. One MFA-authenticated admin can
+   activate both routine and safety-sensitive bundles; safety-sensitive cards
+   require an explicit confirmation and all activations are audited.
 4. Keep the global personalization switch enabled for the demo environment.
 
 The focused tranche contains:

@@ -5,13 +5,13 @@ import { PERSONALIZATION_DEFINITIONS } from '../modules/personalization/catalog/
 const IMPLEMENTED_DEFINITION_CODES: string[] = PERSONALIZATION_DEFINITIONS.map((definition) => definition.code);
 
 export class PersonalizationCatalogActivationError extends Error {
-  constructor(public code: 'NOT_FOUND' | 'AUTHOR_NOT_FOUND' | 'TWO_PERSON_REVIEW_REQUIRED') {
+  constructor(public code: 'NOT_FOUND') {
     super(code);
   }
 }
 
 export async function listPersonalizationCatalog() {
-  const [definitions, questions, activeAdmins] = await Promise.all([
+  const [definitions, questions] = await Promise.all([
     prisma.recommendationDefinition.findMany({
       where: { code: { in: IMPLEMENTED_DEFINITION_CODES } },
       orderBy: { code: 'asc' },
@@ -25,7 +25,7 @@ export async function listPersonalizationCatalog() {
         pauseReason: true,
         rules: {
           orderBy: { version: 'desc' },
-          select: { version: true, status: true, authoredBy: true, reviewedBy: true, updatedAt: true },
+          select: { version: true, status: true, updatedAt: true },
         },
         contentVersions: {
           orderBy: [{ locale: 'asc' }, { version: 'desc' }],
@@ -37,16 +37,10 @@ export async function listPersonalizationCatalog() {
       orderBy: [{ code: 'asc' }, { version: 'desc' }],
       select: { code: true, version: true, prompt: true, status: true, updatedAt: true },
     }),
-    prisma.user.findMany({
-      where: { role: 'ADMIN', status: 'ACTIVE' },
-      orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }, { email: 'asc' }],
-      select: { id: true, firstName: true, lastName: true, email: true },
-    }),
   ]);
   return {
     definitions,
     questions,
-    activeAdmins,
   };
 }
 
@@ -55,39 +49,24 @@ export async function activatePersonalizationDefinitionBundle(params: {
   ruleVersion: number;
   contentVersion: number;
   locale: string;
-  authoredBy: string;
   reviewerUserId: string;
 }) {
   if (!IMPLEMENTED_DEFINITION_CODES.includes(params.code)) {
     throw new PersonalizationCatalogActivationError('NOT_FOUND');
   }
-  const [definition, author] = await Promise.all([
-    prisma.recommendationDefinition.findUnique({
-      where: { code: params.code },
-      select: {
-        id: true,
-        safetyClass: true,
-        rules: { where: { version: params.ruleVersion }, select: { id: true } },
-        contentVersions: {
-          where: { version: params.contentVersion, locale: params.locale },
-          select: { id: true },
-        },
+  const definition = await prisma.recommendationDefinition.findUnique({
+    where: { code: params.code },
+    select: {
+      id: true,
+      rules: { where: { version: params.ruleVersion }, select: { id: true } },
+      contentVersions: {
+        where: { version: params.contentVersion, locale: params.locale },
+        select: { id: true },
       },
-    }),
-    prisma.user.findFirst({
-      where: { id: params.authoredBy.trim(), role: 'ADMIN', status: 'ACTIVE' },
-      select: { id: true },
-    }),
-  ]);
+    },
+  });
   if (!definition || !definition.rules[0] || !definition.contentVersions[0]) {
     throw new PersonalizationCatalogActivationError('NOT_FOUND');
-  }
-  if (!author) throw new PersonalizationCatalogActivationError('AUTHOR_NOT_FOUND');
-  if (
-    definition.safetyClass === 'SAFETY_SENSITIVE'
-    && params.authoredBy.trim() === params.reviewerUserId
-  ) {
-    throw new PersonalizationCatalogActivationError('TWO_PERSON_REVIEW_REQUIRED');
   }
 
   const activatedAt = new Date();
@@ -100,7 +79,7 @@ export async function activatePersonalizationDefinitionBundle(params: {
       where: { definitionId_version: { definitionId: definition.id, version: params.ruleVersion } },
       data: {
         status: 'ACTIVE',
-        authoredBy: author.id,
+        authoredBy: null,
         reviewedBy: params.reviewerUserId,
       },
     });

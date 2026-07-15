@@ -12,7 +12,7 @@ workers or a configurable learning model.
 | Layer | Current release gate |
 |---|---|
 | Rule/trait unit | AST bounds, `TRUE`/`FALSE`/`UNKNOWN`, the three property definitions and stable priority bands |
-| Catalog lifecycle | DRAFT is inactive; active reviewed rule/content versions match; safety author/reviewer differ |
+| Catalog lifecycle | DRAFT is inactive; active reviewed rule/content versions match; one MFA admin can activate routine and safety-sensitive bundles; safety confirmation and audit identity are present |
 | Application | materialize/expire/suppress; max-three read; content gate; idempotent feedback/action/profile events |
 | Authorization | wrong property denied; VIEWER read-only; CONTRIBUTOR feedback/action; OWNER optional profile/context; ADMIN+MFA lifecycle/quality |
 | Optional profile | consent before answer; schema validation; skip/snooze cooldown; reset/account erasure cascades only profile data |

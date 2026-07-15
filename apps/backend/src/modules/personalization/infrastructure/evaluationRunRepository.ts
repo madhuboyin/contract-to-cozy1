@@ -28,7 +28,8 @@ export type LoadActiveRuleOutcome =
  * `reason: 'NOT_ACTIVE'` covers: definition.status !== 'ACTIVE', a
  * per-definition pause (pausedAt set), outside the definition's
  * effectiveFrom/effectiveTo window, or no rule with status: 'ACTIVE' exists
- * for it (a DRAFT-only or fully-retired rule set).
+ * for it (a DRAFT-only or fully-retired rule set), or an active rule without
+ * the reviewer identity written by the MFA-protected activation workflow.
  */
 export async function loadActiveRule(definitionCode: string): Promise<LoadActiveRuleOutcome> {
   const now = new Date();
@@ -49,20 +50,11 @@ export async function loadActiveRule(definitionCode: string): Promise<LoadActive
       version: number;
       ruleAst: unknown;
       status: string;
-      authoredBy?: string | null;
       reviewedBy?: string | null;
     }>
   ).find((r) => r.status === 'ACTIVE');
 
-  const safetyReviewComplete =
-    definition.safetyClass !== 'SAFETY_SENSITIVE' ||
-    Boolean(
-      activeRule?.authoredBy &&
-      activeRule.reviewedBy &&
-      activeRule.authoredBy !== activeRule.reviewedBy,
-    );
-
-  if (!definitionIsActive || !activeRule || !safetyReviewComplete) {
+  if (!definitionIsActive || !activeRule?.reviewedBy) {
     return { rule: null, reason: 'NOT_ACTIVE', definitionId: definition.id };
   }
 

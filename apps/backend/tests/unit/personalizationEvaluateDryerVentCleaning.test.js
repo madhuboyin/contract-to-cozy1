@@ -84,7 +84,7 @@ const ACTIVE_DEFINITION = {
   id: 'dryer-def-1',
   status: 'ACTIVE',
   safetyClass: 'SAFETY_SENSITIVE',
-  rules: [{ version: 1, ruleAst: RULE_AST, status: 'ACTIVE', authoredBy: 'author-1', reviewedBy: 'reviewer-1' }],
+  rules: [{ version: 1, ruleAst: RULE_AST, status: 'ACTIVE', authoredBy: null, reviewedBy: 'reviewer-1' }],
 };
 
 test('real seeded state is DRAFT, so it is never evaluated (DEFINITION_NOT_ACTIVE)', async () => {

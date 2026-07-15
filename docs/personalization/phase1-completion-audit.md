@@ -38,7 +38,7 @@ Default availability does not bypass catalog review. Before internal validation:
 1. Confirm the existing schema is applied, then run the consolidated SQL bootstrap if catalog rows are missing. This Phase 1 pass adds no schema migration.
 2. Review and activate selected profile questions.
 3. Review and activate the matching definition, rule and content version.
-4. For safety-sensitive rules, record distinct `authoredBy` and `reviewedBy` identities.
+4. For safety-sensitive rules, confirm the warning in the MFA-protected admin UI; activation records the signed-in admin as `reviewedBy` and leaves the system-seeded `authoredBy` empty.
 5. Confirm the kill switch is not paused; no rollout percentage is required.
 6. Exercise default recommendation/feedback/action plus optional-profile enable/question/reset once against a disposable internal account.
 

@@ -75,9 +75,11 @@ The initial catalog contains only:
 - dryer-vent cleaning reminder.
 
 Definitions, rules and locale content are independently versioned. Only a
-fully `ACTIVE`, in-window reviewed bundle materializes. Safety-sensitive rules
-require distinct active-admin author and reviewer identities. A global kill
-switch and per-definition pause are authoritative at both evaluation and read.
+fully `ACTIVE`, in-window reviewed bundle materializes. Activation requires one
+MFA-authenticated admin, records that admin as reviewer and writes an audit
+event. Safety-sensitive activation adds an explicit confirmation, while a
+global kill switch and per-definition pause remain authoritative at evaluation
+and read.
 
 ## Recommendation lifecycle
 

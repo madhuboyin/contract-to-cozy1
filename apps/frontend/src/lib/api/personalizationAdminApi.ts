@@ -11,8 +11,6 @@ export interface PersonalizationCatalogDefinition {
   rules: Array<{
     version: number;
     status: string;
-    authoredBy: string | null;
-    reviewedBy: string | null;
     updatedAt: string;
   }>;
   contentVersions: Array<{
@@ -36,12 +34,6 @@ export interface PersonalizationCatalogQuestion {
 export interface PersonalizationCatalogResponse {
   definitions: PersonalizationCatalogDefinition[];
   questions: PersonalizationCatalogQuestion[];
-  activeAdmins: Array<{
-    id: string;
-    firstName: string;
-    lastName: string;
-    email: string;
-  }>;
 }
 
 export interface PersonalizationQualityResponse {
@@ -85,7 +77,7 @@ export async function getPersonalizationQuality(windowDays = 30) {
 
 export async function activatePersonalizationDefinition(
   code: string,
-  payload: { ruleVersion: number; contentVersion: number; locale: string; authoredBy: string },
+  payload: { ruleVersion: number; contentVersion: number; locale: string },
 ) {
   return (await api.post(`/api/admin/personalization/definitions/${code}/activate`, payload)).data;
 }

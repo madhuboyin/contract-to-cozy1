@@ -34,12 +34,14 @@ test('admin catalog contains only supported definitions and valid lifecycle cont
   const api = frontend('lib/api/personalizationAdminApi.ts');
 
   assert.match(admin, /Recommendation catalog/);
-  assert.match(admin, /Select an active admin author/);
+  assert.match(admin, /Every activation is MFA-protected and audited/);
+  assert.match(admin, /Activate safety-sensitive rule and content/);
   assert.match(admin, /definition\.status === 'ACTIVE' \|\| Boolean\(definition\.pausedAt\)/);
   assert.doesNotMatch(admin, /Plan-only records/);
   assert.doesNotMatch(admin, /NOT IMPLEMENTED/);
   assert.doesNotMatch(admin, /Author admin user ID/);
   assert.doesNotMatch(admin, /Required active ADMIN user ID/);
-  assert.match(api, /activeAdmins/);
+  assert.doesNotMatch(admin, /Select an active admin author/);
+  assert.doesNotMatch(api, /activeAdmins/);
   assert.doesNotMatch(api, /implementationStatus/);
 });

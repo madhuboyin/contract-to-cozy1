@@ -12665,12 +12665,12 @@ model ProviderServiceZone {
 // ============================================================================
 // PERSONALIZATION ENGINE — CATALOG + AUDIT
 // ============================================================================
-// The greenfield implementation uses three seeded definition/rule/content bundles.
+// The greenfield implementation uses five seeded definition/rule/content bundles.
 // Runtime evaluation and admin lifecycle controls read these tables directly;
 // all seeded content remains DRAFT until reviewed activation.
 
 // Stable identity for one reviewed catalog recommendation. Seeded rows start
-// DRAFT/inactive; safety-sensitive activation requires two-person review.
+// DRAFT/inactive; activation requires an MFA-authenticated admin review.
 model RecommendationDefinition {
   id            String    @id @default(uuid())
   code          String    @unique
@@ -12713,8 +12713,8 @@ model RecommendationRule {
   version      Int
   ruleAst      Json
   status       String  @default("DRAFT") // DRAFT | ACTIVE | RETIRED
-  authoredBy   String?
-  reviewedBy   String?
+  authoredBy   String? // reserved for a future authenticated authoring workflow; null for system-seeded content
+  reviewedBy   String? // MFA admin who activated this immutable rule version
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

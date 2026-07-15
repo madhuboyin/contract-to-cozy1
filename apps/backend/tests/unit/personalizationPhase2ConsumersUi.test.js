@@ -22,8 +22,9 @@ test('Dashboard and Health consume the same centralized recommendation component
 
 test('admin catalog exposes reviewed activation and profile-question controls', () => {
   assert.match(admin, /useAdminGuard/);
-  assert.match(admin, /Author admin user ID/);
   assert.match(admin, /Review and activate/);
+  assert.match(admin, /Activate safety-sensitive rule and content/);
+  assert.doesNotMatch(admin, /Author admin/);
   assert.match(admin, /activatePersonalizationQuestion/);
   assert.match(admin, /Internal · MFA protected/);
   assert.match(admin, /window\.confirm/);

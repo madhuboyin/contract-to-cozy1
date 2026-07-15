@@ -18,7 +18,7 @@ This audit records the completed engineering boundary under the revised greenfie
 | Default/content gates | Complete | Property recommendations require no household-profile consent but still require ACTIVE reviewed rule/content |
 | Focused tests | Complete | Contract mapping, consent, capabilities, conversion, deduplication, unsupported action and UI integration |
 | Catalog approval UI | Complete | MFA-protected admin page lists versions and activates existing definition/rule/content/question bundles |
-| Safety review enforcement | Complete | Safety-sensitive activation requires distinct active ADMIN author and reviewer identities |
+| Safety review enforcement | Complete | Safety-sensitive activation requires an explicit confirmation from the signed-in MFA admin and records that reviewer in the rule plus audit event |
 | Lifecycle audit | Complete | Activation, pause/resume and question activation produce personalization audit events |
 
 ## Evidence-dependent expansion, not current implementation gaps

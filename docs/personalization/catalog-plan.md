@@ -8,10 +8,10 @@ out below, entries are names, categories and one-line intents only.
 No entry is approved merely because it appears in this plan. The focused
 Phase 2.5 entries identified below have authored DRAFT eligibility and content;
 the remaining candidates do not. Per `03-feasibility-study.md`, an authored
-`RecommendationRule` and `RecommendationContentVersion` require "immutable
-version, author/reviewer,
-rationale, effective/review dates, source references, safety class, test
-fixtures and audit record. Publish is two-person for safety-sensitive advice."
+`RecommendationRule` and `RecommendationContentVersion` require an immutable
+version, rationale, effective/review dates, source references, safety class,
+test fixtures and an audit record. During internal validation, one
+MFA-authenticated admin reviews and activates the code-owned seeded version.
 Nothing here should be treated as pre-approved content — it exists so
 Phase 1 has a starting list to review against, and so the schema/fixture
 scaffolding built in Phase 0 has real-shaped codes to validate against.
@@ -19,8 +19,8 @@ scaffolding built in Phase 0 has real-shaped codes to validate against.
 The original eight planning categories are followed by two focused Phase 2.5
 categories. `safetyClass` follows the `RecommendationDefinition.safetyClass`
 column added in Phase 0's schema baseline (`ROUTINE` vs `SAFETY_SENSITIVE` —
-the latter needs the two-person review the docs call for before it could ever
-go `ACTIVE`).
+the latter receives an explicit safety confirmation during audited admin
+activation).
 
 ## Pet-adjusted filters
 
@@ -103,8 +103,8 @@ review and activation.
 ## Totals
 
 29 candidate codes across 10 categories — within the roadmap's 20–40 target
-range. 10 are marked `SAFETY_SENSITIVE` and would need the docs' two-person
-review before ever reaching `ACTIVE`; the remaining 19 are `ROUTINE`.
+range. 10 are marked `SAFETY_SENSITIVE` and would require explicit safety
+confirmation if implemented and activated; the remaining 19 are `ROUTINE`.
 
 ## What Phase 0 does and doesn't do with this list
 

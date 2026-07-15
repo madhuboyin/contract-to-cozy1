@@ -13,7 +13,7 @@ If an earlier Phase 0 bootstrap inserted unimplemented planning definitions, run
 ## Review and activation
 
 - Review the HVAC rule/copy before setting its definition, rule and content version to `ACTIVE`.
-- The smoke/CO and dryer-vent rules are `SAFETY_SENSITIVE`. Each active rule must have different non-empty `authoredBy` and `reviewedBy` values or the evaluator treats it as inactive.
+- Safety-sensitive definitions use the same one-admin activation path as routine definitions, with a stronger confirmation prompt. The signed-in MFA admin is recorded as `reviewedBy`; code-owned seeded content keeps `authoredBy` empty during internal validation. An active rule without `reviewedBy` remains ineligible, which prevents a status-only database edit from bypassing review identity.
 - Activate only the profile questions approved for optional collection. The UI
   requests the ranked `ACTIVE` question catalog; placement metadata was removed
   because there is only one profile surface.
@@ -54,9 +54,9 @@ Dashboard and Property Health use the same module endpoint with `dashboard` and 
 
 Admins with MFA can open `/dashboard/admin/personalization`. The API and operational catalog return only definitions backed by code-owned behavior. Unimplemented planning records are not returned to the UI and future ideas remain in roadmap documentation until implemented.
 
-Implemented definitions missing a rule or `en-US` content version are marked **Incomplete** and direct the admin to the canonical catalog bootstrap. Complete DRAFT bundles are marked **Ready for review**. The author is selected from active ADMIN users instead of entering a raw user ID; safety-sensitive definitions exclude the signed-in reviewer from the author choices. Pause and resume controls are available only for active or paused definitions, never for DRAFT or plan-only records.
+Implemented definitions missing a rule or `en-US` content version are marked **Incomplete** and direct the admin to the canonical catalog bootstrap. Complete DRAFT bundles are marked **Ready for review**. One MFA-authenticated admin can review and activate either routine or safety-sensitive bundles; safety-sensitive activation uses an explicit confirmation. Pause and resume controls are available only for active or paused definitions, never for DRAFT records.
 
-The workflow activates the selected bundle, retires older active versions and writes personalization audit events. It does not author new rules, alter the database schema or create database migrations.
+The workflow records the signed-in admin as reviewer, activates the selected bundle, retires older active versions and writes personalization audit events. It does not author new rules, alter the database schema or create database migrations. A true two-admin workflow should be introduced only with an actual author-submit/reviewer-approve lifecycle, not by letting one admin select another person's identity.
 
 ## Phase 3 quality measurement
 
