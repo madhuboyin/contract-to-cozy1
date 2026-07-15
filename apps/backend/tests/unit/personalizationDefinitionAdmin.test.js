@@ -56,3 +56,11 @@ test('unknown definition is a no-op', async () => {
   assert.equal(updates.length, 0);
   assert.equal(audits.length, 0);
 });
+
+test('plan-only definition codes cannot be paused or resumed', async () => {
+  const { pausePersonalizationDefinition, resumePersonalizationDefinition, updates, audits } = loadService();
+  assert.equal(await pausePersonalizationDefinition('air_purifier_pet_suggestion', 'admin-1', 'reason'), null);
+  assert.equal(await resumePersonalizationDefinition('air_purifier_pet_suggestion', 'admin-1'), null);
+  assert.equal(updates.length, 0);
+  assert.equal(audits.length, 0);
+});

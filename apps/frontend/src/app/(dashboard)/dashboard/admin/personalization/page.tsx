@@ -83,13 +83,6 @@ export default function PersonalizationAdminPage() {
     return <AdminConsoleShell title="Personalization Catalog" subtitle="Review and activation."><AdminRouteState state="error" title="Unable to load catalog" description={catalog.error instanceof Error ? catalog.error.message : 'Catalog request failed.'} /></AdminConsoleShell>;
   }
 
-  const implementedDefinitions = catalog.data.definitions.filter(
-    (definition) => definition.implementationStatus === 'IMPLEMENTED',
-  );
-  const planOnlyDefinitions = catalog.data.definitions.filter(
-    (definition) => definition.implementationStatus === 'PLAN_ONLY',
-  );
-
   return (
     <AdminConsoleShell
       title="Personalization Catalog"
@@ -132,21 +125,21 @@ export default function PersonalizationAdminPage() {
             )}
           </CardContent>
         </Card>
-        <section className="space-y-3" aria-labelledby="implemented-catalog-heading">
+        <section className="space-y-3" aria-labelledby="recommendation-catalog-heading">
           <div className="flex flex-wrap items-end justify-between gap-2">
             <div>
-              <h2 id="implemented-catalog-heading" className="text-lg font-semibold">Implemented catalog</h2>
-              <p className="text-sm text-slate-600">Only definitions with code-owned behavior can be reviewed or operated.</p>
+              <h2 id="recommendation-catalog-heading" className="text-lg font-semibold">Recommendation catalog</h2>
+              <p className="text-sm text-slate-600">Review and operate the focused definitions supported by the application.</p>
             </div>
-            <Badge variant="outline">{implementedDefinitions.length} implemented</Badge>
+            <Badge variant="outline">{catalog.data.definitions.length} definitions</Badge>
           </div>
           <div className="grid gap-4 xl:grid-cols-3">
-            {implementedDefinitions.length === 0 ? (
+            {catalog.data.definitions.length === 0 ? (
               <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 xl:col-span-3">
-                No implemented catalog rows were found. Run the canonical catalog bootstrap before review.
+                No catalog rows were found. Run the canonical catalog bootstrap before review.
               </div>
             ) : null}
-            {implementedDefinitions.map((definition) => {
+            {catalog.data.definitions.map((definition) => {
               const rule = definition.rules[0];
               const content = definition.contentVersions.find((item) => item.locale === 'en-US');
               const hasBundle = Boolean(rule && content);
@@ -244,29 +237,6 @@ export default function PersonalizationAdminPage() {
             })}
           </div>
         </section>
-
-        {planOnlyDefinitions.length > 0 ? (
-          <details className="rounded-2xl border bg-white p-4">
-            <summary className="cursor-pointer font-semibold">
-              Plan-only records ({planOnlyDefinitions.length})
-            </summary>
-            <p className="mt-2 text-sm text-slate-600">
-              These legacy planning rows have no implemented behavior. They are read-only here and cannot be activated or paused.
-            </p>
-            <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-              {planOnlyDefinitions.map((definition) => (
-                <div key={definition.id} className="rounded-xl border border-dashed bg-slate-50 p-4">
-                  <div className="flex flex-wrap gap-2">
-                    <Badge variant="secondary">NOT IMPLEMENTED</Badge>
-                    <Badge variant="outline">{definition.safetyClass}</Badge>
-                  </div>
-                  <p className="mt-3 font-mono text-sm font-semibold">{definition.code}</p>
-                  <p className="mt-1 text-xs text-slate-500">Planning record only · no lifecycle actions</p>
-                </div>
-              ))}
-            </div>
-          </details>
-        ) : null}
 
         <Card className="rounded-2xl">
           <CardHeader>

@@ -2,6 +2,8 @@ import { prisma } from '../lib/prisma';
 import { recordPersonalizationAuditEvent } from './personalizationAudit.service';
 import { PERSONALIZATION_DEFINITIONS } from '../modules/personalization/catalog/personalizationDefinitions';
 
+const IMPLEMENTED_DEFINITION_CODES: string[] = PERSONALIZATION_DEFINITIONS.map((definition) => definition.code);
+
 export class PersonalizationCatalogActivationError extends Error {
   constructor(public code: 'NOT_FOUND' | 'AUTHOR_NOT_FOUND' | 'TWO_PERSON_REVIEW_REQUIRED') {
     super(code);
@@ -9,9 +11,9 @@ export class PersonalizationCatalogActivationError extends Error {
 }
 
 export async function listPersonalizationCatalog() {
-  const implementedCodes = new Set(PERSONALIZATION_DEFINITIONS.map((definition) => definition.code));
   const [definitions, questions, activeAdmins] = await Promise.all([
     prisma.recommendationDefinition.findMany({
+      where: { code: { in: IMPLEMENTED_DEFINITION_CODES } },
       orderBy: { code: 'asc' },
       select: {
         id: true,
@@ -42,10 +44,7 @@ export async function listPersonalizationCatalog() {
     }),
   ]);
   return {
-    definitions: definitions.map((definition) => ({
-      ...definition,
-      implementationStatus: implementedCodes.has(definition.code) ? 'IMPLEMENTED' as const : 'PLAN_ONLY' as const,
-    })),
+    definitions,
     questions,
     activeAdmins,
   };
@@ -59,6 +58,9 @@ export async function activatePersonalizationDefinitionBundle(params: {
   authoredBy: string;
   reviewerUserId: string;
 }) {
+  if (!IMPLEMENTED_DEFINITION_CODES.includes(params.code)) {
+    throw new PersonalizationCatalogActivationError('NOT_FOUND');
+  }
   const [definition, author] = await Promise.all([
     prisma.recommendationDefinition.findUnique({
       where: { code: params.code },

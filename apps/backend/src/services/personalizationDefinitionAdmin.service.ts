@@ -1,4 +1,5 @@
 import { prisma } from '../lib/prisma';
+import { findPersonalizationDefinition } from '../modules/personalization/catalog/personalizationDefinitions';
 import { recordPersonalizationAuditEvent } from './personalizationAudit.service';
 
 export interface PersonalizationDefinitionState {
@@ -14,6 +15,7 @@ export async function pausePersonalizationDefinition(
   adminUserId: string,
   reason: string,
 ): Promise<PersonalizationDefinitionState | null> {
+  if (!findPersonalizationDefinition(code)) return null;
   const existing = await prisma.recommendationDefinition.findUnique({ where: { code }, select: { id: true } });
   if (!existing) return null;
 
@@ -36,6 +38,7 @@ export async function resumePersonalizationDefinition(
   code: string,
   adminUserId: string,
 ): Promise<PersonalizationDefinitionState | null> {
+  if (!findPersonalizationDefinition(code)) return null;
   const existing = await prisma.recommendationDefinition.findUnique({ where: { code }, select: { id: true } });
   if (!existing) return null;
 

@@ -8,6 +8,8 @@ The user applies `apps/backend/prisma/schema.prisma` to the greenfield database.
 
 The SQL inserts missing rows for five definitions, five rules, five versioned content records and five profile questions as `DRAFT`. Existing rows are left unchanged, so rerunning it cannot overwrite reviewed rules or copy. It does not create households, backfill properties, activate content or change lifecycle status.
 
+If an earlier Phase 0 bootstrap inserted unimplemented planning definitions, run `apps/backend/prisma/cleanupPersonalizationPlanningRows.sql` once in pgAdmin. It removes only the 25 known planning codes and their dependent catalog data; it preserves the five implemented definitions and all profile questions. This is a manual data cleanup, not a schema migration.
+
 ## Review and activation
 
 - Review the HVAC rule/copy before setting its definition, rule and content version to `ACTIVE`.
@@ -50,11 +52,11 @@ Dashboard and Property Health use the same module endpoint with `dashboard` and 
 
 ## Catalog approval UI
 
-Admins with MFA can open `/dashboard/admin/personalization`. The operational catalog lists only definitions backed by code-owned behavior. Database rows that exist only as future planning records appear in a collapsed, read-only **Plan-only records** section and cannot be activated, paused or resumed.
+Admins with MFA can open `/dashboard/admin/personalization`. The API and operational catalog return only definitions backed by code-owned behavior. Unimplemented planning records are not returned to the UI and future ideas remain in roadmap documentation until implemented.
 
 Implemented definitions missing a rule or `en-US` content version are marked **Incomplete** and direct the admin to the canonical catalog bootstrap. Complete DRAFT bundles are marked **Ready for review**. The author is selected from active ADMIN users instead of entering a raw user ID; safety-sensitive definitions exclude the signed-in reviewer from the author choices. Pause and resume controls are available only for active or paused definitions, never for DRAFT or plan-only records.
 
-The workflow activates the selected bundle, retires older active versions and writes personalization audit events. It does not author new rules, delete legacy planning rows, alter the database schema or create database migrations.
+The workflow activates the selected bundle, retires older active versions and writes personalization audit events. It does not author new rules, alter the database schema or create database migrations.
 
 ## Phase 3 quality measurement
 

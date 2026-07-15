@@ -29,17 +29,17 @@ test('admin catalog shows aggregate quality and keeps automatic tuning disabled'
   assert.match(api, /onlineTuningAllowed: false/);
 });
 
-test('admin catalog separates implemented operations from plan-only records', () => {
+test('admin catalog contains only supported definitions and valid lifecycle controls', () => {
   const admin = frontend('app/(dashboard)/dashboard/admin/personalization/page.tsx');
   const api = frontend('lib/api/personalizationAdminApi.ts');
 
-  assert.match(admin, /Implemented catalog/);
-  assert.match(admin, /Plan-only records/);
-  assert.match(admin, /NOT IMPLEMENTED/);
+  assert.match(admin, /Recommendation catalog/);
   assert.match(admin, /Select an active admin author/);
   assert.match(admin, /definition\.status === 'ACTIVE' \|\| Boolean\(definition\.pausedAt\)/);
+  assert.doesNotMatch(admin, /Plan-only records/);
+  assert.doesNotMatch(admin, /NOT IMPLEMENTED/);
   assert.doesNotMatch(admin, /Author admin user ID/);
   assert.doesNotMatch(admin, /Required active ADMIN user ID/);
   assert.match(api, /activeAdmins/);
-  assert.match(api, /implementationStatus: 'IMPLEMENTED' \| 'PLAN_ONLY'/);
+  assert.doesNotMatch(api, /implementationStatus/);
 });

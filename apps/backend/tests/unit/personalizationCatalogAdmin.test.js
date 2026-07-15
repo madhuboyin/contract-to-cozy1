@@ -12,6 +12,7 @@ function loadService({
 } = {}) {
   const writes = [];
   const audits = [];
+  const reads = [];
   const db = {
     recommendationRule: {
       updateMany: async (args) => writes.push(['rule.updateMany', args]),
@@ -37,7 +38,13 @@ function loadService({
     exports: {
       prisma: {
         recommendationDefinition: {
-          findMany: async () => catalogDefinitions,
+          findMany: async (args) => {
+            reads.push(['definition.findMany', args]);
+            const includedCodes = args?.where?.code?.in;
+            return includedCodes
+              ? catalogDefinitions.filter((definition) => includedCodes.includes(definition.code))
+              : catalogDefinitions;
+          },
           findUnique: async () => ({ id: 'def-1', safetyClass, rules: [{ id: 'rule-1' }], contentVersions: [{ id: 'content-1' }] }),
         },
         user: {
@@ -61,7 +68,7 @@ function loadService({
   };
   const servicePath = require.resolve('../../src/services/personalizationCatalogAdmin.service.ts');
   delete require.cache[servicePath];
-  return { ...require(servicePath), writes, audits };
+  return { ...require(servicePath), writes, audits, reads };
 }
 
 const activation = {
@@ -98,6 +105,13 @@ test('blocks safety-sensitive self-review and unknown author identities', async 
     () => missingAuthor.activatePersonalizationDefinitionBundle(activation),
     (error) => error.code === 'AUTHOR_NOT_FOUND',
   );
+
+  const planOnly = loadService();
+  await assert.rejects(
+    () => planOnly.activatePersonalizationDefinitionBundle({ ...activation, code: 'air_purifier_pet_suggestion' }),
+    (error) => error.code === 'NOT_FOUND',
+  );
+  assert.equal(planOnly.writes.length, 0);
 });
 
 test('activates a selected profile question version and retires an older active version', async () => {
@@ -108,7 +122,7 @@ test('activates a selected profile question version and retires an older active 
   assert.equal(audits[0].action, 'PERSONALIZATION_PROFILE_QUESTION_ACTIVATED');
 });
 
-test('catalog classifies implemented definitions and returns only the active-admin identity projection', async () => {
+test('catalog returns only implemented definitions and the active-admin identity projection', async () => {
   const implemented = {
     id: 'def-implemented',
     code: 'hvac_filter_replacement_check_proof',
@@ -122,13 +136,14 @@ test('catalog classifies implemented definitions and returns only the active-adm
     contentVersions: [],
   };
   const admins = [{ id: 'admin-1', firstName: 'Ada', lastName: 'Admin', email: 'ada@example.com' }];
-  const { listPersonalizationCatalog } = loadService({
+  const { listPersonalizationCatalog, reads } = loadService({
     catalogDefinitions: [implemented, planOnly],
     activeAdmins: admins,
   });
 
   const result = await listPersonalizationCatalog();
-  assert.equal(result.definitions[0].implementationStatus, 'IMPLEMENTED');
-  assert.equal(result.definitions[1].implementationStatus, 'PLAN_ONLY');
+  assert.deepEqual(result.definitions.map((definition) => definition.code), [implemented.code]);
+  assert.ok(reads[0][1].where.code.in.includes(implemented.code));
+  assert.ok(!reads[0][1].where.code.in.includes(planOnly.code));
   assert.deepEqual(result.activeAdmins, admins);
 });

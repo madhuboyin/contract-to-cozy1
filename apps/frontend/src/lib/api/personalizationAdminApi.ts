@@ -8,7 +8,6 @@ export interface PersonalizationCatalogDefinition {
   status: string;
   pausedAt: string | null;
   pauseReason: string | null;
-  implementationStatus: 'IMPLEMENTED' | 'PLAN_ONLY';
   rules: Array<{
     version: number;
     status: string;
