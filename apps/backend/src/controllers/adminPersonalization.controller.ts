@@ -18,7 +18,7 @@ import {
   listPersonalizationCatalog,
   PersonalizationCatalogActivationError,
 } from '../services/personalizationCatalogAdmin.service';
-import { getPersonalizationPilotQuality } from '../services/personalizationPilotQuality.service';
+import { getPersonalizationQuality } from '../services/personalizationQuality.service';
 
 const pauseSchema = z.object({
   reason: z.string().min(1, 'reason is required'),
@@ -130,17 +130,17 @@ export async function getCatalogHandler(_req: AuthRequest, res: Response): Promi
   }
 }
 
-export async function getPilotQualityHandler(req: AuthRequest, res: Response): Promise<void> {
+export async function getPersonalizationQualityHandler(req: AuthRequest, res: Response): Promise<void> {
   const query = qualityQuerySchema.safeParse(req.query);
   if (!query.success) {
     res.status(400).json({ success: false, error: { message: 'windowDays must be between 1 and 365' } });
     return;
   }
   try {
-    res.json({ success: true, data: await getPersonalizationPilotQuality(query.data.windowDays) });
+    res.json({ success: true, data: await getPersonalizationQuality(query.data.windowDays) });
   } catch (err) {
-    logger.error({ err }, '[ADMIN-PERSONALIZATION] Failed to read pilot quality summary');
-    res.status(500).json({ success: false, error: { message: 'Failed to read personalization pilot quality' } });
+    logger.error({ err }, '[ADMIN-PERSONALIZATION] Failed to read quality summary');
+    res.status(500).json({ success: false, error: { message: 'Failed to read personalization quality' } });
   }
 }
 

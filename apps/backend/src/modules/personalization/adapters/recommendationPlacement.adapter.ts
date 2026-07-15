@@ -1,7 +1,7 @@
 import {
-  findPilotDefinition,
+  findPersonalizationDefinition,
   PersonalizationModule,
-} from '../catalog/pilotDefinitions';
+} from '../catalog/personalizationDefinitions';
 
 interface StoredRecommendation {
   id: string;
@@ -47,7 +47,7 @@ export function mapRecommendationToModule(
   module: PersonalizationModule,
   canAct: boolean,
 ): ModuleRecommendationDTO | null {
-  const definition = findPilotDefinition(recommendation.definition.code);
+  const definition = findPersonalizationDefinition(recommendation.definition.code);
   if (!definition || !definition.modules.includes(module)) return null;
 
   const explanation = recommendation.explanations[0];
@@ -77,7 +77,7 @@ export function buildMaintenanceTaskFromRecommendation(recommendation: {
   definition: { code: string };
   explanations: Array<{ headline: string; reasonCodes: unknown }>;
 }) {
-  const definition = findPilotDefinition(recommendation.definition.code);
+  const definition = findPersonalizationDefinition(recommendation.definition.code);
   if (!definition || !definition.modules.includes('MAINTENANCE')) return null;
   const explanation = recommendation.explanations[0];
 

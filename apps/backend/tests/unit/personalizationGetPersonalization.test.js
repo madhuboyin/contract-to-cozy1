@@ -14,22 +14,22 @@ function loadUseCase({
 } = {}) {
   let questionLoads = 0;
   let recommendationLoads = 0;
-  installModule('../../src/modules/personalization/infrastructure/pilotRepository.ts', {
-    findPilotHouseholdForProperty: async () => household,
-    findPilotHousehold: async () => null,
-    listActivePilotRecommendations: async () => {
+  installModule('../../src/modules/personalization/infrastructure/personalizationRepository.ts', {
+    findConsentedHouseholdForProperty: async () => household,
+    findHouseholdForPropertyOwner: async () => null,
+    listActivePersonalizationRecommendations: async () => {
       recommendationLoads += 1;
       return [{
         id: 'rec-1',
-        definition: { code: 'pilot', category: 'maintenance' },
+        definition: { code: 'hvac_filter_replacement_check_proof', category: 'maintenance' },
         explanations: [{ headline: 'Reviewed', reasonCodes: [], evidenceJson: { sensitive: true } }],
       }];
     },
-    optInPilotHousehold: async () => ({}),
-    resetPilotHousehold: async () => true,
+    enableHouseholdProfile: async () => ({}),
+    resetHouseholdProfile: async () => true,
   });
-  installModule('../../src/modules/personalization/application/materializePilotRecommendations.usecase.ts', {
-    materializePilotRecommendationsForProperty: async () => paused
+  installModule('../../src/modules/personalization/application/materializeRecommendations.usecase.ts', {
+    materializeRecommendationsForProperty: async () => paused
       ? ({ evaluated: 0, active: 0, paused: true })
       : ({ evaluated: 3, active: 1 }),
   });
@@ -39,18 +39,18 @@ function loadUseCase({
       return { question: { id: 'question-1' } };
     },
   });
-  const path = require.resolve('../../src/modules/personalization/application/getPilotPersonalization.usecase.ts');
+  const path = require.resolve('../../src/modules/personalization/application/getPersonalization.usecase.ts');
   delete require.cache[path];
   return {
-    ...require('../../src/modules/personalization/application/getPilotPersonalization.usecase.ts'),
+    ...require('../../src/modules/personalization/application/getPersonalization.usecase.ts'),
     getQuestionLoads: () => questionLoads,
     getRecommendationLoads: () => recommendationLoads,
   };
 }
 
 test('OWNER receives the next question and authorized evidence', async () => {
-  const { getPilotPersonalization, getQuestionLoads } = loadUseCase();
-  const result = await getPilotPersonalization('prop-1', 'owner-1', {
+  const { getPersonalization, getQuestionLoads } = loadUseCase();
+  const result = await getPersonalization('prop-1', 'owner-1', {
     canManageSensitiveProfile: true,
     canViewSensitiveEvidence: true,
     canViewOrdinaryRecommendations: true,
@@ -66,8 +66,8 @@ test('OWNER receives the next question and authorized evidence', async () => {
 });
 
 test('global pause hides previously stored recommendations and profile questions', async () => {
-  const { getPilotPersonalization, getQuestionLoads, getRecommendationLoads } = loadUseCase({ paused: true });
-  const result = await getPilotPersonalization('prop-1', 'owner-1', {
+  const { getPersonalization, getQuestionLoads, getRecommendationLoads } = loadUseCase({ paused: true });
+  const result = await getPersonalization('prop-1', 'owner-1', {
     canManageSensitiveProfile: true,
     canViewSensitiveEvidence: true,
     canViewOrdinaryRecommendations: true,
@@ -82,8 +82,8 @@ test('global pause hides previously stored recommendations and profile questions
 });
 
 test('non-owner receives ordinary recommendations with evidence redacted and no profile question', async () => {
-  const { getPilotPersonalization, getQuestionLoads } = loadUseCase();
-  const result = await getPilotPersonalization('prop-1', 'viewer-1', {
+  const { getPersonalization, getQuestionLoads } = loadUseCase();
+  const result = await getPersonalization('prop-1', 'viewer-1', {
     canManageSensitiveProfile: false,
     canViewSensitiveEvidence: false,
     canViewOrdinaryRecommendations: true,
@@ -97,8 +97,8 @@ test('non-owner receives ordinary recommendations with evidence redacted and no 
 });
 
 test('property guidance is available before the optional household profile is enabled', async () => {
-  const { getPilotPersonalization, getQuestionLoads } = loadUseCase({ household: null });
-  const result = await getPilotPersonalization('prop-1', 'owner-1', {
+  const { getPersonalization, getQuestionLoads } = loadUseCase({ household: null });
+  const result = await getPersonalization('prop-1', 'owner-1', {
     canManageSensitiveProfile: true,
     canViewSensitiveEvidence: true,
     canViewOrdinaryRecommendations: true,

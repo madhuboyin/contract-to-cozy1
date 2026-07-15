@@ -9,7 +9,7 @@ const pagePath = path.resolve(
 );
 const source = fs.readFileSync(pagePath, 'utf8');
 
-test('pilot UI uses explicit button types and touch-sized controls', () => {
+test('personalization UI uses explicit button types and touch-sized controls', () => {
   const buttonCount = (source.match(/<button\b/g) || []).length;
   const explicitTypeCount = (source.match(/type="button"/g) || []).length;
   const touchTargetCount = (source.match(/min-h-\[44px\]/g) || []).length;
@@ -18,19 +18,19 @@ test('pilot UI uses explicit button types and touch-sized controls', () => {
   assert.ok(touchTargetCount >= buttonCount);
 });
 
-test('pilot UI contains loading, error, empty, disabled, and reset-confirmation states', () => {
-  assert.match(source, /pilotQuery\.isLoading/);
-  assert.match(source, /pilotQuery\.isError/);
+test('personalization UI contains loading, error, empty, disabled, and reset-confirmation states', () => {
+  assert.match(source, /personalizationQuery\.isLoading/);
+  assert.match(source, /personalizationQuery\.isError/);
   assert.match(source, /Nothing needs attention/);
   assert.match(source, /window\.confirm/);
   assert.match(source, /disabled=/);
 });
 
-test('pilot UI renders reviewed structured explanation content', () => {
+test('personalization UI renders reviewed structured explanation content', () => {
   assert.match(source, /reasonCodes\[0\]\?\.params\?\.message/);
 });
 
-test('pilot UI lets an owner skip or defer an optional profile question', () => {
+test('personalization UI lets an owner skip or defer an optional profile question', () => {
   assert.match(source, /action: 'SKIPPED'/);
   assert.match(source, />Skip<\/button>/);
   assert.match(source, /action: 'SNOOZED'/);

@@ -15,31 +15,31 @@ function loadRepository({ household = { id: 'hh-1', consentVersion: 'personaliza
   const prismaMock = { ...db, $transaction: async (callback) => callback(db) };
   const prismaPath = require.resolve('../../src/lib/prisma.ts');
   require.cache[prismaPath] = { id: prismaPath, filename: prismaPath, loaded: true, exports: { prisma: prismaMock } };
-  const repoPath = require.resolve('../../src/modules/personalization/infrastructure/pilotRepository.ts');
+  const repoPath = require.resolve('../../src/modules/personalization/infrastructure/personalizationRepository.ts');
   delete require.cache[repoPath];
-  return { ...require('../../src/modules/personalization/infrastructure/pilotRepository.ts'), calls };
+  return { ...require('../../src/modules/personalization/infrastructure/personalizationRepository.ts'), calls };
 }
 
 test('reset deletes only the optional profile aggregate', async () => {
-  const { resetPilotHousehold, calls } = loadRepository();
-  assert.equal(await resetPilotHousehold('prop-1', 'owner-1'), true);
+  const { resetHouseholdProfile, calls } = loadRepository();
+  assert.equal(await resetHouseholdProfile('prop-1', 'owner-1'), true);
   assert.deepEqual(calls.map(([name]) => name), ['household']);
 });
 test('reset is a safe no-op when the opted-in household does not exist', async () => {
-  const { resetPilotHousehold, calls } = loadRepository({ household: null });
-  assert.equal(await resetPilotHousehold('prop-1', 'owner-1'), false);
+  const { resetHouseholdProfile, calls } = loadRepository({ household: null });
+  assert.equal(await resetHouseholdProfile('prop-1', 'owner-1'), false);
   assert.equal(calls.length, 0);
 });
 
 test('default reads are property-scoped and independent of an optional profile', async () => {
   const withoutProfile = loadRepository({ household: null });
-  await withoutProfile.listActivePilotRecommendations('prop-1');
+  await withoutProfile.listActivePersonalizationRecommendations('prop-1');
   assert.deepEqual(withoutProfile.calls[0][1].where, {
     propertyId: 'prop-1', status: 'ACTIVE',
   });
 
   const withProfile = loadRepository();
-  await withProfile.listActivePilotRecommendations('prop-1');
+  await withProfile.listActivePersonalizationRecommendations('prop-1');
   assert.deepEqual(withProfile.calls[0][1].where, {
     propertyId: 'prop-1',
     status: 'ACTIVE',

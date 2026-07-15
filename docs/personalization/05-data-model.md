@@ -90,8 +90,8 @@ There is no application-owned migration sequence while the pilot database has
 no data that must survive schema changes. Apply the desired Prisma schema using
 the user's database process, then optionally run one idempotent catalog seed:
 
-- `apps/backend/prisma/seedPersonalizationPilot.ts`, or
-- `apps/backend/prisma/seedPersonalizationPilot.sql` in pgAdmin.
+- `apps/backend/prisma/seedPersonalization.ts`, or
+- `apps/backend/prisma/seedPersonalization.sql` in pgAdmin.
 
 Run one seed form, not both. Seeds preserve existing lifecycle status and never
 activate catalog content.

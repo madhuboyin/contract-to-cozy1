@@ -8,7 +8,7 @@ function source(relativePath) {
 }
 
 test('personalization API is not gated by percentage pilot enrollment', () => {
-  const controller = source('../../src/modules/personalization/api/personalizationPilot.controller.ts');
+  const controller = source('../../src/modules/personalization/api/personalization.controller.ts');
   const flags = source('../../src/config/featureFlags.ts');
   assert.doesNotMatch(controller, /isToolEnabled|PILOT_DISABLED|PERSONALIZATION_PILOT/);
   assert.doesNotMatch(flags, /PERSONALIZATION_PILOT:/);
@@ -23,8 +23,8 @@ test('guidance is presented by default while household profiling is optional', (
 });
 
 test('optional household consent and reset use profile-scoped endpoints', () => {
-  const routes = source('../../src/routes/personalizationPilot.routes.ts');
-  const api = source('../../../frontend/src/lib/api/personalizationPilotApi.ts');
+  const routes = source('../../src/routes/personalization.routes.ts');
+  const api = source('../../../frontend/src/lib/api/personalizationApi.ts');
   assert.match(routes, /personalization\/profile\/enable/);
   assert.match(routes, /personalization\/profile'/);
   assert.match(api, /personalization\/profile\/enable/);
@@ -33,7 +33,7 @@ test('optional household consent and reset use profile-scoped endpoints', () => 
 });
 
 test('paused guidance hides output, blocks new profile writes, and preserves reset control', () => {
-  const controller = source('../../src/modules/personalization/api/personalizationPilot.controller.ts');
+  const controller = source('../../src/modules/personalization/api/personalization.controller.ts');
   const page = source('../../../frontend/src/app/(dashboard)/dashboard/personalization/page.tsx');
   assert.match(controller, /rejectPausedWrite/);
   assert.match(controller, /PERSONALIZATION_PAUSED/);

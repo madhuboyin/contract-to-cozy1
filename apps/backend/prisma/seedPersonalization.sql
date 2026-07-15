@@ -1,4 +1,4 @@
--- Personalization pilot seed for PostgreSQL / pgAdmin.
+-- Initial personalization catalog seed for PostgreSQL / pgAdmin.
 --
 -- DATA SEED ONLY: this is not a schema migration. The personalization tables
 -- must already exist. This file is idempotent and safe to run after the older
@@ -6,11 +6,11 @@
 -- version, and question code/version.
 --
 -- Existing definition/rule/question status is deliberately preserved. New
--- rows start DRAFT, so running this file never activates the pilot.
+-- rows start DRAFT, so running this file never activates personalization.
 
 BEGIN;
 
-WITH pilot_definitions(code, category, safety_class) AS (
+WITH personalization_definitions(code, category, safety_class) AS (
   VALUES
     ('hvac_filter_replacement_check_proof', 'low_cost_prevention', 'ROUTINE'),
     ('smoke_co_detector_battery_check',      'low_cost_prevention', 'SAFETY_SENSITIVE'),
@@ -20,13 +20,13 @@ INSERT INTO personalization_recommendation_definitions
   (id, code, category, "safetyClass", status, "createdAt", "updatedAt")
 SELECT
   gen_random_uuid(), code, category, safety_class, 'DRAFT', now(), now()
-FROM pilot_definitions
+FROM personalization_definitions
 ON CONFLICT (code) DO UPDATE SET
   category      = EXCLUDED.category,
   "safetyClass" = EXCLUDED."safetyClass",
   "updatedAt"   = now();
 
-WITH pilot_rules(code, rule_ast) AS (
+WITH personalization_rules(code, rule_ast) AS (
   VALUES
     (
       'hvac_filter_replacement_check_proof',
@@ -45,13 +45,13 @@ INSERT INTO personalization_recommendation_rules
   (id, "definitionId", version, "ruleAst", status, "createdAt", "updatedAt")
 SELECT
   gen_random_uuid(), d.id, 1, r.rule_ast, 'DRAFT', now(), now()
-FROM pilot_rules r
+FROM personalization_rules r
 JOIN personalization_recommendation_definitions d ON d.code = r.code
 ON CONFLICT ("definitionId", version) DO UPDATE SET
   "ruleAst"   = EXCLUDED."ruleAst",
   "updatedAt" = now();
 
-WITH pilot_content(code, title, body) AS (
+WITH personalization_content(code, title, body) AS (
   VALUES
     (
       'hvac_filter_replacement_check_proof',
@@ -73,7 +73,7 @@ INSERT INTO personalization_recommendation_content_versions
   (id, "definitionId", locale, version, title, body, status, "createdAt", "updatedAt")
 SELECT
   gen_random_uuid(), d.id, 'en-US', 1, c.title, c.body, 'DRAFT', now(), now()
-FROM pilot_content c
+FROM personalization_content c
 JOIN personalization_recommendation_definitions d ON d.code = c.code
 ON CONFLICT ("definitionId", locale, version) DO UPDATE SET
   title       = EXCLUDED.title,

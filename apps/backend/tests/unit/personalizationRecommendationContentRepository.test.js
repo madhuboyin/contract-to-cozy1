@@ -21,17 +21,17 @@ function loadRepository(result) {
       },
     },
   };
-  const repoPath = require.resolve('../../src/modules/personalization/infrastructure/pilotContentRepository.ts');
+  const repoPath = require.resolve('../../src/modules/personalization/infrastructure/recommendationContentRepository.ts');
   delete require.cache[repoPath];
-  return require('../../src/modules/personalization/infrastructure/pilotContentRepository.ts');
+  return require('../../src/modules/personalization/infrastructure/recommendationContentRepository.ts');
 }
 
 test('loads only the latest ACTIVE en-US content version', async () => {
   const expected = { version: 2, title: 'Title', body: 'Why this matters' };
-  const { loadActivePilotContent } = loadRepository(expected);
-  assert.deepEqual(await loadActivePilotContent('def-1'), expected);
+  const { loadActiveRecommendationContent } = loadRepository(expected);
+  assert.deepEqual(await loadActiveRecommendationContent('def-1'), expected);
 });
 test('returns null when reviewed active content does not exist', async () => {
-  const { loadActivePilotContent } = loadRepository(null);
-  assert.equal(await loadActivePilotContent('def-1'), null);
+  const { loadActiveRecommendationContent } = loadRepository(null);
+  assert.equal(await loadActiveRecommendationContent('def-1'), null);
 });

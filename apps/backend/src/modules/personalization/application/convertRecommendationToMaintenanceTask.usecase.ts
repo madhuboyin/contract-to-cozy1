@@ -1,8 +1,8 @@
 import { PropertyMaintenanceTaskService } from '../../../services/PropertyMaintenanceTask.service';
 import { buildMaintenanceTaskFromRecommendation } from '../adapters/recommendationPlacement.adapter';
-import { loadActiveRecommendationForAction } from '../infrastructure/pilotRepository';
+import { loadActiveRecommendationForAction } from '../infrastructure/personalizationRepository';
 import { recordRecommendationFeedback } from './recordRecommendationFeedback.usecase';
-import { materializePilotRecommendationsForProperty } from './materializePilotRecommendations.usecase';
+import { materializeRecommendationsForProperty } from './materializeRecommendations.usecase';
 
 export type ConvertRecommendationStatus = 'CREATED' | 'EXISTING' | 'RECOMMENDATION_NOT_FOUND' | 'ACTION_NOT_SUPPORTED' | 'PERSONALIZATION_PAUSED';
 
@@ -12,7 +12,7 @@ export async function convertRecommendationToMaintenanceTask(params: {
   userId: string;
   idempotencyKey: string;
 }) {
-  const materialization = await materializePilotRecommendationsForProperty(params.propertyId, 'RECOMMENDATION_ACTION');
+  const materialization = await materializeRecommendationsForProperty(params.propertyId, 'RECOMMENDATION_ACTION');
   if (materialization.paused) return { status: 'PERSONALIZATION_PAUSED' as const };
 
   const recommendation = await loadActiveRecommendationForAction(

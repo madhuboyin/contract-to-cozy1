@@ -9,10 +9,10 @@ function source(relativePath) {
 
 test('owner transparency UI consumes the property-scoped context map', () => {
   const page = source('../../../frontend/src/app/(dashboard)/dashboard/personalization/page.tsx');
-  const api = source('../../../frontend/src/lib/api/personalizationPilotApi.ts');
+  const api = source('../../../frontend/src/lib/api/personalizationApi.ts');
   assert.match(api, /\/personalization\/context-map/);
-  assert.match(page, /propertyId && pilot\?\.capabilities\.canViewSensitiveEvidence/);
-  assert.doesNotMatch(page, /pilot\?\.profileEnabled && pilot\.capabilities\.canViewSensitiveEvidence/);
+  assert.match(page, /propertyId && personalization\?\.capabilities\.canViewSensitiveEvidence/);
+  assert.doesNotMatch(page, /personalization\?\.profileEnabled && personalization\.capabilities\.canViewSensitiveEvidence/);
   assert.match(page, /What personalization knows/);
   assert.match(page, /Current property signals/);
   assert.match(page, /Property guidance does not require them/);
@@ -20,7 +20,7 @@ test('owner transparency UI consumes the property-scoped context map', () => {
 });
 
 test('context-map route requires the sensitive-evidence capability', () => {
-  const routes = source('../../src/routes/personalizationPilot.routes.ts');
+  const routes = source('../../src/routes/personalization.routes.ts');
   assert.match(
     routes,
     /personalization\/context-map'[\s\S]*requirePersonalizationCapability\('canViewSensitiveEvidence'\)/,

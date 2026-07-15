@@ -10,7 +10,7 @@ import { MobileSection, MobileSectionHeader, StatusChip, SummaryCard } from '@/c
 import {
   convertPersonalizationRecommendationToTask,
   getModulePersonalizationRecommendations,
-} from '@/lib/api/personalizationPilotApi';
+} from '@/lib/api/personalizationApi';
 
 export function PersonalizedMaintenanceSuggestions({ propertyId }: { propertyId?: string }) {
   const { toast } = useToast();

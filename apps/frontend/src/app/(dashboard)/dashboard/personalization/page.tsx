@@ -7,14 +7,14 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Lightbulb, Network, RefreshCw, RotateCcw, ThumbsDown } from 'lucide-react';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
 import {
-  answerPilotQuestion,
+  answerProfileQuestion,
   enableOptionalPersonalizationProfile,
   getPersonalizationContextMap,
-  getPilotPersonalization,
+  getPersonalization,
   resetOptionalPersonalizationProfile,
   refreshPersonalization,
-  sendPilotFeedback,
-} from '@/lib/api/personalizationPilotApi';
+  sendRecommendationFeedback,
+} from '@/lib/api/personalizationApi';
 import {
   EmptyStateCard,
   MobilePageContainer,
@@ -24,9 +24,9 @@ import {
   SummaryCard,
 } from '@/components/mobile/dashboard/MobilePrimitives';
 
-type PilotFeedbackReason = 'ALREADY_DONE' | 'TOO_EXPENSIVE' | 'NOT_APPLICABLE' | 'BAD_TIMING' | 'WRONG_PROFILE' | 'OTHER';
+type PersonalizationFeedbackReason = 'ALREADY_DONE' | 'TOO_EXPENSIVE' | 'NOT_APPLICABLE' | 'BAD_TIMING' | 'WRONG_PROFILE' | 'OTHER';
 
-const PILOT_FEEDBACK_REASONS: Array<{ code: PilotFeedbackReason; label: string; type: 'DISMISSED' | 'NOT_RELEVANT' }> = [
+const PERSONALIZATION_FEEDBACK_REASONS: Array<{ code: PersonalizationFeedbackReason; label: string; type: 'DISMISSED' | 'NOT_RELEVANT' }> = [
   { code: 'ALREADY_DONE', label: 'Already handled', type: 'NOT_RELEVANT' },
   { code: 'NOT_APPLICABLE', label: "Doesn't apply", type: 'NOT_RELEVANT' },
   { code: 'WRONG_PROFILE', label: 'Wrong home details', type: 'NOT_RELEVANT' },
@@ -35,18 +35,18 @@ const PILOT_FEEDBACK_REASONS: Array<{ code: PilotFeedbackReason; label: string; 
   { code: 'OTHER', label: 'Another reason', type: 'NOT_RELEVANT' },
 ];
 
-function PilotQuestionCard({
+function ProfileQuestionCard({
   propertyId,
   question,
   onSaved,
 }: {
   propertyId: string;
-  question: NonNullable<Awaited<ReturnType<typeof getPilotPersonalization>>['nextQuestion']>;
+  question: NonNullable<Awaited<ReturnType<typeof getPersonalization>>['nextQuestion']>;
   onSaved: () => Promise<unknown>;
 }) {
   const answer = useMutation({
     mutationFn: ({ action, answerJson }: { action: 'ANSWERED' | 'SKIPPED' | 'SNOOZED'; answerJson?: unknown }) =>
-      answerPilotQuestion(propertyId, question.id, action, answerJson),
+      answerProfileQuestion(propertyId, question.id, action, answerJson),
     onSuccess: onSaved,
   });
 
@@ -85,25 +85,25 @@ function PilotQuestionCard({
   );
 }
 
-export default function PersonalizationPilotPage() {
+export default function PersonalizationPage() {
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const { selectedPropertyId } = usePropertyContext();
   const [feedbackFor, setFeedbackFor] = useState<string | null>(null);
   const propertyId = selectedPropertyId || searchParams.get('propertyId') || undefined;
-  const queryKey = ['personalization-pilot', propertyId];
+  const queryKey = ['personalization', propertyId];
 
-  const pilotQuery = useQuery({
+  const personalizationQuery = useQuery({
     queryKey,
-    queryFn: () => getPilotPersonalization(propertyId!),
+    queryFn: () => getPersonalization(propertyId!),
     enabled: Boolean(propertyId),
     staleTime: 30_000,
   });
-  const pilot = pilotQuery.data;
+  const personalization = personalizationQuery.data;
   const contextMapQuery = useQuery({
     queryKey: ['personalization-context-map', propertyId],
     queryFn: () => getPersonalizationContextMap(propertyId!),
-    enabled: Boolean(propertyId && pilot?.capabilities.canViewSensitiveEvidence),
+    enabled: Boolean(propertyId && personalization?.capabilities.canViewSensitiveEvidence),
     staleTime: 30_000,
   });
 
@@ -114,8 +114,8 @@ export default function PersonalizationPilotPage() {
   const optIn = useMutation({ mutationFn: () => enableOptionalPersonalizationProfile(propertyId!), onSuccess: refresh });
   const reset = useMutation({ mutationFn: () => resetOptionalPersonalizationProfile(propertyId!), onSuccess: refresh });
   const feedback = useMutation({
-    mutationFn: ({ recommendationId, type, reasonCode }: { recommendationId: string; type: 'DISMISSED' | 'NOT_RELEVANT'; reasonCode: PilotFeedbackReason }) =>
-      sendPilotFeedback(propertyId!, recommendationId, type, reasonCode),
+    mutationFn: ({ recommendationId, type, reasonCode }: { recommendationId: string; type: 'DISMISSED' | 'NOT_RELEVANT'; reasonCode: PersonalizationFeedbackReason }) =>
+      sendRecommendationFeedback(propertyId!, recommendationId, type, reasonCode),
     onSuccess: async () => {
       setFeedbackFor(null);
       await refresh();
@@ -148,14 +148,14 @@ export default function PersonalizationPilotPage() {
         <MobileSectionHeader title="Personalized home guidance" subtitle="Explainable suggestions based on your home" />
       </MobileSection>
 
-      {pilotQuery.isLoading ? (
+      {personalizationQuery.isLoading ? (
         <SummaryCard title="Loading guidance" subtitle="Checking this home's current signals"><div /></SummaryCard>
-      ) : pilotQuery.isError ? (
+      ) : personalizationQuery.isError ? (
         <EmptyStateCard title="Guidance unavailable" description="Personalized guidance could not be loaded for this home." />
-      ) : pilot && !pilot.available ? (
+      ) : personalization && !personalization.available ? (
         <>
           <EmptyStateCard title="Guidance temporarily paused" description="Property guidance and optional profile collection are currently unavailable." />
-          {pilot.profileEnabled && pilot.capabilities.canManageSensitiveProfile ? (
+          {personalization.profileEnabled && personalization.capabilities.canManageSensitiveProfile ? (
             <SummaryCard title="Your profile control" subtitle="You can still remove optional household details while guidance is paused.">
               <button type="button" disabled={reset.isPending} onClick={resetWithConfirmation} className="inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-red-300 px-4 py-2 text-sm font-semibold text-red-700 disabled:opacity-60">
                 <RotateCcw className="h-4 w-4" /> {reset.isPending ? 'Removing…' : 'Remove optional profile'}
@@ -163,9 +163,9 @@ export default function PersonalizationPilotPage() {
             </SummaryCard>
           ) : null}
         </>
-      ) : pilot ? (
+      ) : personalization ? (
         <>
-          {!pilot.profileEnabled && pilot.capabilities.canManageSensitiveProfile ? (
+          {!personalization.profileEnabled && personalization.capabilities.canManageSensitiveProfile ? (
             <SummaryCard title="Improve your recommendations" subtitle="Optional household details can make future guidance more relevant.">
               <div className="space-y-4 text-sm text-[hsl(var(--mobile-text-secondary))]">
                 <p>Property-based guidance is already available. If you choose, you can add a small household profile. We do not infer family, health, income, or pet details.</p>
@@ -175,17 +175,17 @@ export default function PersonalizationPilotPage() {
               </div>
             </SummaryCard>
           ) : null}
-          {pilot.nextQuestion ? (
+          {personalization.nextQuestion ? (
             <MobileSection>
               <MobileSectionHeader title="One optional question" subtitle="Answer only what you are comfortable sharing" />
-              <PilotQuestionCard propertyId={propertyId} question={pilot.nextQuestion} onSaved={refresh} />
+              <ProfileQuestionCard propertyId={propertyId} question={personalization.nextQuestion} onSaved={refresh} />
             </MobileSection>
           ) : null}
           <MobileSection>
             <MobileSectionHeader
               title="Top suggestions"
               subtitle="At most three, ranked by current relevance"
-              action={pilot.capabilities.canAct ? (
+              action={personalization.capabilities.canAct ? (
                 <button
                   type="button"
                   disabled={recompute.isPending}
@@ -198,9 +198,9 @@ export default function PersonalizationPilotPage() {
               ) : undefined}
             />
             <div className="space-y-3">
-              {pilot.recommendations.length === 0 ? (
+              {personalization.recommendations.length === 0 ? (
                 <EmptyStateCard title="Nothing needs attention" description="No reviewed personalization rule currently matches this home." />
-              ) : pilot.recommendations.map((recommendation) => {
+              ) : personalization.recommendations.map((recommendation) => {
                 const explanation = recommendation.explanations[0];
                 const why = explanation?.reasonCodes[0]?.params?.message;
                 return (
@@ -215,12 +215,12 @@ export default function PersonalizationPilotPage() {
                       <p className="text-sm text-[hsl(var(--mobile-text-secondary))]">
                         {why || 'Suggested because a reviewed maintenance rule matched the property history available to ContractToCozy.'}
                       </p>
-                      {pilot.capabilities.canGiveFeedback ? (
+                      {personalization.capabilities.canGiveFeedback ? (
                         feedbackFor === recommendation.id ? (
                           <div className="space-y-2" aria-label="Why is this suggestion not useful?">
                             <p className="text-sm font-medium">What made this suggestion less useful?</p>
                             <div className="flex flex-wrap gap-2">
-                              {PILOT_FEEDBACK_REASONS.map((reason) => (
+                              {PERSONALIZATION_FEEDBACK_REASONS.map((reason) => (
                                 <button
                                   key={reason.code}
                                   type="button"
@@ -246,7 +246,7 @@ export default function PersonalizationPilotPage() {
               })}
             </div>
           </MobileSection>
-          {pilot.capabilities.canViewSensitiveEvidence ? (
+          {personalization.capabilities.canViewSensitiveEvidence ? (
             <MobileSection>
               <MobileSectionHeader
                 title="What personalization knows"
@@ -307,7 +307,7 @@ export default function PersonalizationPilotPage() {
               ) : null}
             </MobileSection>
           ) : null}
-          {pilot.profileEnabled && pilot.capabilities.canManageSensitiveProfile ? (
+          {personalization.profileEnabled && personalization.capabilities.canManageSensitiveProfile ? (
             <MobileSection>
               <SummaryCard title="Your control" subtitle="Reset removes optional household details. Property-based guidance remains available.">
                 <button type="button" disabled={reset.isPending} onClick={resetWithConfirmation} className="inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-red-300 px-4 py-2 text-sm font-semibold text-red-700 disabled:opacity-60">

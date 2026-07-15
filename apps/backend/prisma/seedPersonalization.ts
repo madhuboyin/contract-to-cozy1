@@ -1,14 +1,14 @@
-// One idempotent seed entry point for the data-free personalization pilot.
-// It creates only the three pilot definitions/rules and five optional profile
+// One idempotent seed entry point for the initial personalization catalog.
+// It creates only the three definitions/rules and five optional profile
 // questions. Everything remains DRAFT until explicit review and activation.
-// Run after the user applies the Prisma schema: npx ts-node prisma/seedPersonalizationPilot.ts
+// Run after the user applies the Prisma schema: npx ts-node prisma/seedPersonalization.ts
 import { PrismaClient } from '@prisma/client';
 import { HVAC_FILTER_PROOF_RULE_AST } from '../src/modules/personalization/catalog/proofDefinition';
-import { PILOT_DEFINITIONS } from '../src/modules/personalization/catalog/pilotDefinitions';
+import { PERSONALIZATION_DEFINITIONS } from '../src/modules/personalization/catalog/personalizationDefinitions';
 
 const prisma = new PrismaClient();
 
-const definitions = PILOT_DEFINITIONS.map((definition) => ({
+const definitions = PERSONALIZATION_DEFINITIONS.map((definition) => ({
   ...definition,
   safetyClass: definition.code === 'hvac_filter_replacement_check_proof' ? 'ROUTINE' : 'SAFETY_SENSITIVE',
   ruleAst:
@@ -72,12 +72,12 @@ async function main() {
     });
   }
 
-  console.log(`Seeded ${definitions.length} pilot definitions and ${questions.length} profile questions as DRAFT.`);
+  console.log(`Seeded ${definitions.length} personalization definitions and ${questions.length} profile questions as DRAFT.`);
 }
 
 main()
   .finally(() => prisma.$disconnect())
   .catch((error) => {
-    console.error('Failed to seed the personalization pilot:', error);
+    console.error('Failed to seed personalization:', error);
     process.exitCode = 1;
   });

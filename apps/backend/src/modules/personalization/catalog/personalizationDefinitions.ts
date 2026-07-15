@@ -1,6 +1,6 @@
 export type PersonalizationModule = 'DASHBOARD' | 'MAINTENANCE' | 'HEALTH';
 
-export interface PilotDefinition {
+export interface PersonalizationDefinition {
   code: string;
   category: string;
   headline: string;
@@ -15,7 +15,7 @@ export interface PilotDefinition {
   };
 }
 
-export const PILOT_DEFINITIONS: readonly PilotDefinition[] = [
+export const PERSONALIZATION_DEFINITIONS: readonly PersonalizationDefinition[] = [
   {
     code: 'hvac_filter_replacement_check_proof',
     category: 'low_cost_prevention',
@@ -51,6 +51,6 @@ export const PILOT_DEFINITIONS: readonly PilotDefinition[] = [
   },
 ] as const;
 
-export function findPilotDefinition(code: string): PilotDefinition | undefined {
-  return PILOT_DEFINITIONS.find((definition) => definition.code === code);
+export function findPersonalizationDefinition(code: string): PersonalizationDefinition | undefined {
+  return PERSONALIZATION_DEFINITIONS.find((definition) => definition.code === code);
 }

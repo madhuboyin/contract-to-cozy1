@@ -1,6 +1,6 @@
 import { api } from './client';
 
-export interface PilotRecommendation {
+export interface PersonalizationRecommendation {
   id: string;
   status: string;
   score: number | null;
@@ -15,11 +15,11 @@ export interface PilotRecommendation {
   }>;
 }
 
-export interface PilotPersonalization {
+export interface PersonalizationResponse {
   available: boolean;
   profileEnabled: boolean;
   consentedAt?: string | null;
-  recommendations: PilotRecommendation[];
+  recommendations: PersonalizationRecommendation[];
   capabilities: {
     canManageSensitiveProfile: boolean;
     canViewSensitiveEvidence: boolean;
@@ -36,8 +36,8 @@ export interface PilotPersonalization {
   } | null;
 }
 
-export async function getPilotPersonalization(propertyId: string) {
-  return (await api.get<PilotPersonalization>(`/api/properties/${propertyId}/personalization`)).data;
+export async function getPersonalization(propertyId: string) {
+  return (await api.get<PersonalizationResponse>(`/api/properties/${propertyId}/personalization`)).data;
 }
 
 export type ContextMapNodeType = 'PROPERTY' | 'HOUSEHOLD' | 'PROFILE_FACT' | 'DERIVED_TRAIT' | 'RECOMMENDATION';
@@ -82,7 +82,7 @@ export async function enableOptionalPersonalizationProfile(propertyId: string) {
   )).data;
 }
 
-export async function sendPilotFeedback(
+export async function sendRecommendationFeedback(
   propertyId: string,
   recommendationId: string,
   type: 'DISMISSED' | 'NOT_RELEVANT',
@@ -94,7 +94,7 @@ export async function sendPilotFeedback(
   )).data;
 }
 
-export async function answerPilotQuestion(
+export async function answerProfileQuestion(
   propertyId: string,
   questionId: string,
   action: 'ANSWERED' | 'SKIPPED' | 'SNOOZED',

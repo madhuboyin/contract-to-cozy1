@@ -5,7 +5,7 @@
 // ANSWERED is retained only after confirming consent (PER-PRIV-002).
 // SKIPPED/SNOOZED never create a profile fact.
 //
-// The catalog's answerSchema selects a small, explicitly supported pilot
+// The catalog's answerSchema selects a small, explicitly supported
 // shape. ProfileAnswer.answerJson is the single source of truth.
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';

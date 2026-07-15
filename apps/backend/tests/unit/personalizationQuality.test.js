@@ -35,15 +35,15 @@ function loadService({
       },
     },
   };
-  const servicePath = require.resolve('../../src/services/personalizationPilotQuality.service.ts');
+  const servicePath = require.resolve('../../src/services/personalizationQuality.service.ts');
   delete require.cache[servicePath];
   return require(servicePath);
 }
 
 const counted = (row, count) => ({ ...row, _count: { _all: count } });
 
-test('returns aggregate pilot quality without exposing household or recommendation rows', async () => {
-  const { getPersonalizationPilotQuality } = loadService({
+test('returns aggregate personalization quality without exposing household or recommendation rows', async () => {
+  const { getPersonalizationQuality } = loadService({
     optionalProfilesEnabled: 3,
     recommendationRows: [
       counted({ propertyId: 'property-1', definitionId: 'def-1', status: 'ACTIVE' }, 4),
@@ -60,7 +60,7 @@ test('returns aggregate pilot quality without exposing household or recommendati
   });
 
   const now = new Date('2026-07-13T12:00:00.000Z');
-  const result = await getPersonalizationPilotQuality(30, now);
+  const result = await getPersonalizationQuality(30, now);
   assert.equal(result.optionalProfilesEnabled, 3);
   assert.equal(result.propertiesWithDefaultGuidance, 2);
   assert.equal(result.recommendations.total, 7);
@@ -87,8 +87,8 @@ test('returns aggregate pilot quality without exposing household or recommendati
 });
 
 test('reports no data without dividing by zero or enabling tuning', async () => {
-  const { getPersonalizationPilotQuality } = loadService();
-  const result = await getPersonalizationPilotQuality(30, new Date('2026-07-13T12:00:00.000Z'));
+  const { getPersonalizationQuality } = loadService();
+  const result = await getPersonalizationQuality(30, new Date('2026-07-13T12:00:00.000Z'));
   assert.equal(result.feedback.acceptanceRate, null);
   assert.equal(result.feedback.negativeRate, null);
   assert.equal(result.optionalProfilesEnabled, 0);
@@ -99,7 +99,7 @@ test('reports no data without dividing by zero or enabling tuning', async () => 
 
 test('counts all property-owned recommendations as default-guidance reach', async () => {
   let recommendationQuery;
-  const { getPersonalizationPilotQuality } = loadService({
+  const { getPersonalizationQuality } = loadService({
     recommendationRows: [
       counted({ propertyId: 'property-1', definitionId: 'def-1', status: 'ACTIVE' }, 1),
       counted({ propertyId: 'property-2', definitionId: 'def-2', status: 'ACTIVE' }, 1),
@@ -108,7 +108,7 @@ test('counts all property-owned recommendations as default-guidance reach', asyn
   });
 
   const now = new Date('2026-07-13T12:00:00.000Z');
-  const result = await getPersonalizationPilotQuality(30, now);
+  const result = await getPersonalizationQuality(30, now);
   assert.equal(result.recommendations.total, 2);
   assert.equal(result.propertiesWithDefaultGuidance, 2);
   assert.deepEqual(recommendationQuery.where, {

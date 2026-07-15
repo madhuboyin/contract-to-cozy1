@@ -1,7 +1,7 @@
 // apps/backend/src/modules/personalization/application/getNextEligibleQuestionForHousehold.usecase.ts
 //
 // PER-FR-010 ("offer one ranked progressive question with skip/later/caps").
-// The pilot read API returns at most one eligible question to an OWNER.
+// The personalization read API returns at most one eligible question to an OWNER.
 import {
   loadActiveQuestions,
   loadAnswerHistoryForHousehold,

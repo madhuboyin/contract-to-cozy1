@@ -4,7 +4,7 @@ export const MIN_PERSONALIZATION_FEEDBACK_SAMPLE = 20;
 
 type CountRow = { _count: { _all: number } };
 
-export interface PersonalizationPilotQualitySummary {
+export interface PersonalizationQualitySummary {
   windowDays: number;
   since: string;
   generatedAt: string;
@@ -41,10 +41,10 @@ function rate(numerator: number, denominator: number): number | null {
   return denominator === 0 ? null : Number((numerator / denominator).toFixed(4));
 }
 
-export async function getPersonalizationPilotQuality(
+export async function getPersonalizationQuality(
   windowDays = 30,
   now = new Date(),
-): Promise<PersonalizationPilotQualitySummary> {
+): Promise<PersonalizationQualitySummary> {
   const since = new Date(now.getTime() - windowDays * 24 * 60 * 60 * 1000);
   const [
     optionalProfilesEnabled,

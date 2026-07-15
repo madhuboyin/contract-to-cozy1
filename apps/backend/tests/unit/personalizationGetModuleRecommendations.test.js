@@ -10,8 +10,8 @@ function installModule(relativePath, exports) {
 
 function loadUseCase({ paused = false } = {}) {
   let materialized = 0;
-  installModule('../../src/modules/personalization/infrastructure/pilotRepository.ts', {
-    findPilotHouseholdForProperty: async () => null,
+  installModule('../../src/modules/personalization/infrastructure/personalizationRepository.ts', {
+    findConsentedHouseholdForProperty: async () => null,
     listActiveRecommendationsForModule: async () => [{
       id: 'rec-1',
       status: 'ACTIVE',
@@ -23,8 +23,8 @@ function loadUseCase({ paused = false } = {}) {
       explanations: [{ headline: 'Check HVAC filter', reasonCodes: [] }],
     }],
   });
-  installModule('../../src/modules/personalization/application/materializePilotRecommendations.usecase.ts', {
-    materializePilotRecommendationsForProperty: async () => {
+  installModule('../../src/modules/personalization/application/materializeRecommendations.usecase.ts', {
+    materializeRecommendationsForProperty: async () => {
       materialized += 1;
       return paused ? { evaluated: 0, active: 0, paused: true } : { evaluated: 3, active: 1 };
     },

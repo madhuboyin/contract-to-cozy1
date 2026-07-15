@@ -1,7 +1,7 @@
 import type { PersonalizationCapabilities } from '../domain/capabilityPolicy';
-import type { PersonalizationModule } from '../catalog/pilotDefinitions';
-import { listActiveRecommendationsForModule } from '../infrastructure/pilotRepository';
-import { materializePilotRecommendationsForProperty } from './materializePilotRecommendations.usecase';
+import type { PersonalizationModule } from '../catalog/personalizationDefinitions';
+import { listActiveRecommendationsForModule } from '../infrastructure/personalizationRepository';
+import { materializeRecommendationsForProperty } from './materializeRecommendations.usecase';
 import { mapRecommendationToModule } from '../adapters/recommendationPlacement.adapter';
 
 export async function getModuleRecommendations(
@@ -10,7 +10,7 @@ export async function getModuleRecommendations(
   capabilities: PersonalizationCapabilities,
   limit = 10,
 ) {
-  const materialization = await materializePilotRecommendationsForProperty(propertyId, `MODULE_${module}_READ`);
+  const materialization = await materializeRecommendationsForProperty(propertyId, `MODULE_${module}_READ`);
   if (materialization.paused) {
     return { configured: true, available: false, module, generatedAt: new Date().toISOString(), items: [] };
   }

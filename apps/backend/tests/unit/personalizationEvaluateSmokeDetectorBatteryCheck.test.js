@@ -1,6 +1,6 @@
 // Proves the second real catalog rule (smoke_co_detector_battery_check)
 // evaluates correctly end to end through the same generic pipeline
-// (evaluateHvacFilterProofForProperty takes definitionCode as a parameter —
+// (evaluateDefinitionForProperty takes definitionCode as a parameter —
 // despite its HVAC-specific name, it's not hardcoded to one definition).
 // Scenarios mirror the Phase 0 golden fixtures at
 // catalog/fixtures/smoke_co_detector_battery_check/{positive,negative,unknown}.json.
@@ -76,10 +76,10 @@ function loadUseCase() {
     '../../src/modules/personalization/infrastructure/evaluationRunRepository.ts',
     '../../src/modules/personalization/infrastructure/propertyTraitRepository.ts',
     '../../src/modules/personalization/application/computePropertyTraitSnapshot.usecase.ts',
-    '../../src/modules/personalization/application/evaluateHvacFilterProof.usecase.ts',
+    '../../src/modules/personalization/application/evaluateDefinition.usecase.ts',
   ].map((p) => require.resolve(p));
   for (const p of paths) delete require.cache[p];
-  return require('../../src/modules/personalization/application/evaluateHvacFilterProof.usecase.ts');
+  return require('../../src/modules/personalization/application/evaluateDefinition.usecase.ts');
 }
 
 const ACTIVE_DEFINITION = {
@@ -94,8 +94,8 @@ test('safety-sensitive rule is inactive until a distinct reviewer approves it', 
   const definition = { ...ACTIVE_DEFINITION, rules: [{ version: 1, ruleAst: RULE_AST, status: 'ACTIVE', authoredBy: 'author-1', reviewedBy: null }] };
   const { prismaMock } = createPrismaMock({ definition });
   installPrismaMock(prismaMock);
-  const { evaluateHvacFilterProofForProperty } = loadUseCase();
-  const result = await evaluateHvacFilterProofForProperty('prop-1', DEFINITION_CODE);
+  const { evaluateDefinitionForProperty } = loadUseCase();
+  const result = await evaluateDefinitionForProperty('prop-1', DEFINITION_CODE);
   assert.equal(result.errorCode, 'DEFINITION_NOT_ACTIVE');
 });
 
@@ -103,9 +103,9 @@ test('real seeded state is DRAFT, so it is never evaluated (DEFINITION_NOT_ACTIV
   const draftDefinition = { ...ACTIVE_DEFINITION, status: 'DRAFT' };
   const { prismaMock, runs } = createPrismaMock({ definition: draftDefinition });
   installPrismaMock(prismaMock);
-  const { evaluateHvacFilterProofForProperty } = loadUseCase();
+  const { evaluateDefinitionForProperty } = loadUseCase();
 
-  const result = await evaluateHvacFilterProofForProperty('prop-1', DEFINITION_CODE);
+  const result = await evaluateDefinitionForProperty('prop-1', DEFINITION_CODE);
   assert.deepEqual(result, { status: 'FAILED', errorCode: 'DEFINITION_NOT_ACTIVE', definitionId: 'smoke-def-1' });
   assert.equal(runs.length, 0);
 });
@@ -118,9 +118,9 @@ test('positive fixture: battery checked 400 days ago -> eligible TRUE', async ()
     property: { id: 'prop-1', hasSmokeDetectors: true },
   });
   installPrismaMock(prismaMock);
-  const { evaluateHvacFilterProofForProperty } = loadUseCase();
+  const { evaluateDefinitionForProperty } = loadUseCase();
 
-  const result = await evaluateHvacFilterProofForProperty('prop-1', DEFINITION_CODE);
+  const result = await evaluateDefinitionForProperty('prop-1', DEFINITION_CODE);
   assert.equal(result.status, 'COMPLETED');
   assert.equal(result.result, 'TRUE');
   assert.equal(result.eligible, true);
@@ -134,9 +134,9 @@ test('negative fixture: battery checked 30 days ago -> not eligible FALSE', asyn
     property: { id: 'prop-1', hasSmokeDetectors: true },
   });
   installPrismaMock(prismaMock);
-  const { evaluateHvacFilterProofForProperty } = loadUseCase();
+  const { evaluateDefinitionForProperty } = loadUseCase();
 
-  const result = await evaluateHvacFilterProofForProperty('prop-1', DEFINITION_CODE);
+  const result = await evaluateDefinitionForProperty('prop-1', DEFINITION_CODE);
   assert.equal(result.status, 'COMPLETED');
   assert.equal(result.result, 'FALSE');
   assert.equal(result.eligible, false);
@@ -149,9 +149,9 @@ test('unknown fixture: detector presence never recorded -> UNKNOWN, never treate
     property: { id: 'prop-1', hasSmokeDetectors: null },
   });
   installPrismaMock(prismaMock);
-  const { evaluateHvacFilterProofForProperty } = loadUseCase();
+  const { evaluateDefinitionForProperty } = loadUseCase();
 
-  const result = await evaluateHvacFilterProofForProperty('prop-1', DEFINITION_CODE);
+  const result = await evaluateDefinitionForProperty('prop-1', DEFINITION_CODE);
   assert.equal(result.status, 'COMPLETED');
   assert.equal(result.result, 'UNKNOWN');
   assert.equal(result.eligible, false);

@@ -13,7 +13,7 @@ import {
   pauseDefinitionHandler,
   resumeDefinitionHandler,
   getCatalogHandler,
-  getPilotQualityHandler,
+  getPersonalizationQualityHandler,
   activateDefinitionBundleHandler,
   activateQuestionHandler,
 } from '../controllers/adminPersonalization.controller';
@@ -79,7 +79,7 @@ router.post('/admin/personalization/kill-switch/resume', resumeKillSwitchHandler
 router.post('/admin/personalization/definitions/:code/pause', pauseDefinitionHandler);
 router.post('/admin/personalization/definitions/:code/resume', resumeDefinitionHandler);
 router.get('/admin/personalization/catalog', getCatalogHandler);
-router.get('/admin/personalization/quality', getPilotQualityHandler);
+router.get('/admin/personalization/quality', getPersonalizationQualityHandler);
 router.post('/admin/personalization/definitions/:code/activate', activateDefinitionBundleHandler);
 router.post('/admin/personalization/questions/:code/activate', activateQuestionHandler);
 

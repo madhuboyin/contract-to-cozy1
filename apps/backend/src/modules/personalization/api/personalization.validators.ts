@@ -1,10 +1,10 @@
 import { z } from 'zod';
 
-export const PilotOptInSchema = z.object({
+export const OptionalProfileEnableSchema = z.object({
   consentAccepted: z.literal(true),
 }).strict();
 
-export const PilotFeedbackSchema = z.object({
+export const RecommendationFeedbackSchema = z.object({
   eventId: z.string().uuid(),
   type: z.enum(['VIEWED', 'EXPANDED', 'SAVED', 'DISMISSED', 'SNOOZED', 'NOT_RELEVANT']),
   explicit: z.boolean(),
@@ -12,7 +12,7 @@ export const PilotFeedbackSchema = z.object({
   comment: z.string().trim().max(500).nullable().optional(),
 }).strict();
 
-export const PilotProfileAnswerSchema = z.object({
+export const ProfileAnswerSchema = z.object({
   idempotencyKey: z.string().uuid(),
   action: z.enum(['ANSWERED', 'SKIPPED', 'SNOOZED']),
   answerJson: z.unknown().optional(),

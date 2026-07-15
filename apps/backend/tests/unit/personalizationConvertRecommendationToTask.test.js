@@ -25,7 +25,7 @@ function loadUseCase({ recommendation = undefined, deduped = false } = {}) {
       },
     },
   });
-  installModule('../../src/modules/personalization/infrastructure/pilotRepository.ts', {
+  installModule('../../src/modules/personalization/infrastructure/personalizationRepository.ts', {
     loadActiveRecommendationForAction: async () => stored,
   });
   installModule('../../src/modules/personalization/application/recordRecommendationFeedback.usecase.ts', {
@@ -34,8 +34,8 @@ function loadUseCase({ recommendation = undefined, deduped = false } = {}) {
       return { status: 'RECORDED', suppressed: false };
     },
   });
-  installModule('../../src/modules/personalization/application/materializePilotRecommendations.usecase.ts', {
-    materializePilotRecommendationsForProperty: async () => ({ evaluated: 3, active: 1 }),
+  installModule('../../src/modules/personalization/application/materializeRecommendations.usecase.ts', {
+    materializeRecommendationsForProperty: async () => ({ evaluated: 3, active: 1 }),
   });
   const path = require.resolve('../../src/modules/personalization/application/convertRecommendationToMaintenanceTask.usecase.ts');
   delete require.cache[path];

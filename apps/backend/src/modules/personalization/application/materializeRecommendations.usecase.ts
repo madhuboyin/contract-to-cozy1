@@ -1,5 +1,5 @@
-import { evaluateDefinitionForProperty } from './evaluateHvacFilterProof.usecase';
-import { PILOT_DEFINITIONS } from '../catalog/pilotDefinitions';
+import { evaluateDefinitionForProperty } from './evaluateDefinition.usecase';
+import { PERSONALIZATION_DEFINITIONS } from '../catalog/personalizationDefinitions';
 import { findActiveSuppression } from '../infrastructure/suppressionRepository';
 import {
   expireRecommendationIfActive,
@@ -7,21 +7,21 @@ import {
   upsertRecommendation,
 } from '../infrastructure/recommendationRepository';
 import { priorityBandFromScore } from '../domain/scoring';
-import { loadActivePilotContent } from '../infrastructure/pilotContentRepository';
+import { loadActiveRecommendationContent } from '../infrastructure/recommendationContentRepository';
 
-export interface MaterializePilotResult {
+export interface MaterializeRecommendationsResult {
   evaluated: number;
   active: number;
   paused?: boolean;
 }
 
-export async function materializePilotRecommendationsForProperty(
+export async function materializeRecommendationsForProperty(
   propertyId: string,
   trigger = 'PROPERTY_READ',
-): Promise<MaterializePilotResult> {
+): Promise<MaterializeRecommendationsResult> {
   let active = 0;
 
-  for (const definition of PILOT_DEFINITIONS) {
+  for (const definition of PERSONALIZATION_DEFINITIONS) {
     const evaluation = await evaluateDefinitionForProperty(propertyId, definition.code, trigger);
 
     // The evaluator owns the kill-switch check. Stop after its first PAUSED
@@ -50,7 +50,7 @@ export async function materializePilotRecommendationsForProperty(
       continue;
     }
 
-    const content = await loadActivePilotContent(evaluation.definitionId);
+    const content = await loadActiveRecommendationContent(evaluation.definitionId);
     if (!content) {
       await expireRecommendationIfActive(propertyId, evaluation.definitionId);
       continue;
@@ -82,5 +82,5 @@ export async function materializePilotRecommendationsForProperty(
     active += 1;
   }
 
-  return { evaluated: PILOT_DEFINITIONS.length, active };
+  return { evaluated: PERSONALIZATION_DEFINITIONS.length, active };
 }

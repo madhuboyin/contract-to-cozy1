@@ -78,10 +78,10 @@ function loadUseCase() {
     '../../src/modules/personalization/infrastructure/evaluationRunRepository.ts',
     '../../src/modules/personalization/infrastructure/propertyTraitRepository.ts',
     '../../src/modules/personalization/application/computePropertyTraitSnapshot.usecase.ts',
-    '../../src/modules/personalization/application/evaluateHvacFilterProof.usecase.ts',
+    '../../src/modules/personalization/application/evaluateDefinition.usecase.ts',
   ].map((p) => require.resolve(p));
   for (const p of paths) delete require.cache[p];
-  return require('../../src/modules/personalization/application/evaluateHvacFilterProof.usecase.ts');
+  return require('../../src/modules/personalization/application/evaluateDefinition.usecase.ts');
 }
 
 const REAL_DEFINITION = {
@@ -94,9 +94,9 @@ const REAL_DEFINITION = {
 test('returns PAUSED and persists nothing when the kill switch is engaged', async () => {
   const { prismaMock, runs } = createPrismaMock({ definition: REAL_DEFINITION, killSwitchPaused: true });
   installPrismaMock(prismaMock);
-  const { evaluateHvacFilterProofForProperty } = loadUseCase();
+  const { evaluateDefinitionForProperty } = loadUseCase();
 
-  const result = await evaluateHvacFilterProofForProperty('prop-1', HVAC_FILTER_PROOF_DEFINITION_CODE);
+  const result = await evaluateDefinitionForProperty('prop-1', HVAC_FILTER_PROOF_DEFINITION_CODE);
   assert.deepEqual(result, { status: 'PAUSED' });
   assert.equal(runs.length, 0);
 });
@@ -104,9 +104,9 @@ test('returns PAUSED and persists nothing when the kill switch is engaged', asyn
 test('returns FAILED/DEFINITION_NOT_FOUND and persists nothing when the definition does not exist', async () => {
   const { prismaMock, runs } = createPrismaMock({ definition: null });
   installPrismaMock(prismaMock);
-  const { evaluateHvacFilterProofForProperty } = loadUseCase();
+  const { evaluateDefinitionForProperty } = loadUseCase();
 
-  const result = await evaluateHvacFilterProofForProperty('prop-1', 'no_such_code');
+  const result = await evaluateDefinitionForProperty('prop-1', 'no_such_code');
   assert.deepEqual(result, { status: 'FAILED', errorCode: 'DEFINITION_NOT_FOUND' });
   assert.equal(runs.length, 0);
 });
@@ -115,9 +115,9 @@ test('returns FAILED/DEFINITION_NOT_ACTIVE and persists nothing when the definit
   const draftDefinition = { ...REAL_DEFINITION, status: 'DRAFT' };
   const { prismaMock, runs } = createPrismaMock({ definition: draftDefinition });
   installPrismaMock(prismaMock);
-  const { evaluateHvacFilterProofForProperty } = loadUseCase();
+  const { evaluateDefinitionForProperty } = loadUseCase();
 
-  const result = await evaluateHvacFilterProofForProperty('prop-1', HVAC_FILTER_PROOF_DEFINITION_CODE);
+  const result = await evaluateDefinitionForProperty('prop-1', HVAC_FILTER_PROOF_DEFINITION_CODE);
   assert.deepEqual(result, { status: 'FAILED', errorCode: 'DEFINITION_NOT_ACTIVE', definitionId: 'def-1' });
   assert.equal(runs.length, 0);
 });
@@ -129,9 +129,9 @@ test('returns FAILED/DEFINITION_NOT_ACTIVE when the definition is ACTIVE but its
   };
   const { prismaMock, runs } = createPrismaMock({ definition: draftRuleDefinition });
   installPrismaMock(prismaMock);
-  const { evaluateHvacFilterProofForProperty } = loadUseCase();
+  const { evaluateDefinitionForProperty } = loadUseCase();
 
-  const result = await evaluateHvacFilterProofForProperty('prop-1', HVAC_FILTER_PROOF_DEFINITION_CODE);
+  const result = await evaluateDefinitionForProperty('prop-1', HVAC_FILTER_PROOF_DEFINITION_CODE);
   assert.deepEqual(result, { status: 'FAILED', errorCode: 'DEFINITION_NOT_ACTIVE', definitionId: 'def-1' });
   assert.equal(runs.length, 0);
 });
@@ -140,9 +140,9 @@ test('returns FAILED/DEFINITION_NOT_ACTIVE when the definition has a per-definit
   const pausedDefinition = { ...REAL_DEFINITION, pausedAt: new Date() };
   const { prismaMock, runs } = createPrismaMock({ definition: pausedDefinition });
   installPrismaMock(prismaMock);
-  const { evaluateHvacFilterProofForProperty } = loadUseCase();
+  const { evaluateDefinitionForProperty } = loadUseCase();
 
-  const result = await evaluateHvacFilterProofForProperty('prop-1', HVAC_FILTER_PROOF_DEFINITION_CODE);
+  const result = await evaluateDefinitionForProperty('prop-1', HVAC_FILTER_PROOF_DEFINITION_CODE);
   assert.deepEqual(result, { status: 'FAILED', errorCode: 'DEFINITION_NOT_ACTIVE', definitionId: 'def-1' });
   assert.equal(runs.length, 0);
 });
@@ -151,9 +151,9 @@ test('returns FAILED/DEFINITION_NOT_ACTIVE when the definition is outside its ef
   const expiredDefinition = { ...REAL_DEFINITION, effectiveTo: new Date(Date.now() - 24 * 60 * 60 * 1000) };
   const { prismaMock, runs } = createPrismaMock({ definition: expiredDefinition });
   installPrismaMock(prismaMock);
-  const { evaluateHvacFilterProofForProperty } = loadUseCase();
+  const { evaluateDefinitionForProperty } = loadUseCase();
 
-  const result = await evaluateHvacFilterProofForProperty('prop-1', HVAC_FILTER_PROOF_DEFINITION_CODE);
+  const result = await evaluateDefinitionForProperty('prop-1', HVAC_FILTER_PROOF_DEFINITION_CODE);
   assert.deepEqual(result, { status: 'FAILED', errorCode: 'DEFINITION_NOT_ACTIVE', definitionId: 'def-1' });
   assert.equal(runs.length, 0);
 });
@@ -167,9 +167,9 @@ test('returns FAILED/INVALID_RULE_AST and records a failed run when the stored r
   };
   const { prismaMock, runs } = createPrismaMock({ definition: brokenDefinition });
   installPrismaMock(prismaMock);
-  const { evaluateHvacFilterProofForProperty } = loadUseCase();
+  const { evaluateDefinitionForProperty } = loadUseCase();
 
-  const result = await evaluateHvacFilterProofForProperty('prop-1', 'broken');
+  const result = await evaluateDefinitionForProperty('prop-1', 'broken');
   assert.equal(result.status, 'FAILED');
   assert.equal(result.errorCode, 'INVALID_RULE_AST');
   assert.equal(runs.length, 1);
@@ -181,9 +181,9 @@ test('positive fixture: HVAC serviced 200 days ago -> eligible TRUE, run recorde
   const homeAssets = [{ assetType: 'HVAC_FURNACE', lastServiced: new Date(Date.now() - 200 * 24 * 60 * 60 * 1000) }];
   const { prismaMock, runs } = createPrismaMock({ definition: REAL_DEFINITION, homeAssets });
   installPrismaMock(prismaMock);
-  const { evaluateHvacFilterProofForProperty } = loadUseCase();
+  const { evaluateDefinitionForProperty } = loadUseCase();
 
-  const result = await evaluateHvacFilterProofForProperty('prop-1', HVAC_FILTER_PROOF_DEFINITION_CODE);
+  const result = await evaluateDefinitionForProperty('prop-1', HVAC_FILTER_PROOF_DEFINITION_CODE);
   assert.equal(result.status, 'COMPLETED');
   assert.equal(result.result, 'TRUE');
   assert.equal(result.eligible, true);
@@ -202,9 +202,9 @@ test('negative fixture: HVAC serviced 5 days ago -> not eligible FALSE', async (
   const homeAssets = [{ assetType: 'HVAC_FURNACE', lastServiced: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000) }];
   const { prismaMock, runs } = createPrismaMock({ definition: REAL_DEFINITION, homeAssets });
   installPrismaMock(prismaMock);
-  const { evaluateHvacFilterProofForProperty } = loadUseCase();
+  const { evaluateDefinitionForProperty } = loadUseCase();
 
-  const result = await evaluateHvacFilterProofForProperty('prop-1', HVAC_FILTER_PROOF_DEFINITION_CODE);
+  const result = await evaluateDefinitionForProperty('prop-1', HVAC_FILTER_PROOF_DEFINITION_CODE);
   assert.equal(result.status, 'COMPLETED');
   assert.equal(result.result, 'FALSE');
   assert.equal(result.eligible, false);
@@ -214,9 +214,9 @@ test('negative fixture: HVAC serviced 5 days ago -> not eligible FALSE', async (
 test('unknown fixture: no HVAC asset at all -> UNKNOWN, never treated as eligible', async () => {
   const { prismaMock, runs } = createPrismaMock({ definition: REAL_DEFINITION, homeAssets: [] });
   installPrismaMock(prismaMock);
-  const { evaluateHvacFilterProofForProperty } = loadUseCase();
+  const { evaluateDefinitionForProperty } = loadUseCase();
 
-  const result = await evaluateHvacFilterProofForProperty('prop-1', HVAC_FILTER_PROOF_DEFINITION_CODE);
+  const result = await evaluateDefinitionForProperty('prop-1', HVAC_FILTER_PROOF_DEFINITION_CODE);
   assert.equal(result.status, 'COMPLETED');
   assert.equal(result.result, 'UNKNOWN');
   assert.equal(result.eligible, false);
@@ -226,9 +226,9 @@ test('unknown fixture: no HVAC asset at all -> UNKNOWN, never treated as eligibl
 test('returns FAILED/PROPERTY_NOT_FOUND and records a failed run when the property does not exist', async () => {
   const { prismaMock, runs } = createPrismaMock({ definition: REAL_DEFINITION, property: null });
   installPrismaMock(prismaMock);
-  const { evaluateHvacFilterProofForProperty } = loadUseCase();
+  const { evaluateDefinitionForProperty } = loadUseCase();
 
-  const result = await evaluateHvacFilterProofForProperty('missing-prop', HVAC_FILTER_PROOF_DEFINITION_CODE);
+  const result = await evaluateDefinitionForProperty('missing-prop', HVAC_FILTER_PROOF_DEFINITION_CODE);
   assert.equal(result.status, 'FAILED');
   assert.equal(result.errorCode, 'PROPERTY_NOT_FOUND');
   assert.equal(runs.length, 1);

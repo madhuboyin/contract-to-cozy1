@@ -2,7 +2,7 @@ import { prisma } from '../../../lib/prisma';
 
 export const HOUSEHOLD_PROFILE_CONSENT_VERSION = 'personalization-household-profile-v1';
 
-export async function findPilotHousehold(propertyId: string, ownerUserId: string) {
+export async function findHouseholdForPropertyOwner(propertyId: string, ownerUserId: string) {
   return prisma.household.findFirst({
     where: {
       ownerUserId,
@@ -12,7 +12,7 @@ export async function findPilotHousehold(propertyId: string, ownerUserId: string
   });
 }
 
-export async function findPilotHouseholdForProperty(propertyId: string, ownerUserId: string) {
+export async function findConsentedHouseholdForProperty(propertyId: string, ownerUserId: string) {
   return prisma.household.findFirst({
     where: {
       ownerUserId,
@@ -23,7 +23,7 @@ export async function findPilotHouseholdForProperty(propertyId: string, ownerUse
   });
 }
 
-export async function optInPilotHousehold(propertyId: string, ownerUserId: string) {
+export async function enableHouseholdProfile(propertyId: string, ownerUserId: string) {
   return prisma.$transaction(async (db) => {
     let household = await db.household.findFirst({
       where: {
@@ -51,7 +51,7 @@ export async function optInPilotHousehold(propertyId: string, ownerUserId: strin
   });
 }
 
-export async function listActivePilotRecommendations(propertyId: string) {
+export async function listActivePersonalizationRecommendations(propertyId: string) {
   return prisma.personalizedRecommendation.findMany({
     where: { propertyId, status: 'ACTIVE' },
     orderBy: [{ score: 'desc' }, { firstEligibleAt: 'desc' }],
@@ -127,8 +127,8 @@ export async function recommendationBelongsToProperty(
   return Boolean(row);
 }
 
-export async function resetPilotHousehold(propertyId: string, ownerUserId: string): Promise<boolean> {
-  const household = await findPilotHousehold(propertyId, ownerUserId);
+export async function resetHouseholdProfile(propertyId: string, ownerUserId: string): Promise<boolean> {
+  const household = await findHouseholdForPropertyOwner(propertyId, ownerUserId);
   if (!household) return false;
 
   // Profile answers and the property link cascade with the Household.

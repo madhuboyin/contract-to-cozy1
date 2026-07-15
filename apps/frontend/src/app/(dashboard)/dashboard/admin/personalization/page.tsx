@@ -13,7 +13,7 @@ import {
   activatePersonalizationDefinition,
   activatePersonalizationQuestion,
   getPersonalizationAdminCatalog,
-  getPersonalizationPilotQuality,
+  getPersonalizationQuality,
   pausePersonalizationDefinition,
   resumePersonalizationDefinition,
 } from '@/lib/api/personalizationAdminApi';
@@ -32,8 +32,8 @@ export default function PersonalizationAdminPage() {
     enabled: guard.isAdmin,
   });
   const quality = useQuery({
-    queryKey: ['personalization-pilot-quality', 30],
-    queryFn: () => getPersonalizationPilotQuality(30),
+    queryKey: ['personalization-quality', 30],
+    queryFn: () => getPersonalizationQuality(30),
     enabled: guard.isAdmin,
   });
   const refresh = () => queryClient.invalidateQueries({ queryKey: ['personalization-admin-catalog'] });
@@ -82,7 +82,7 @@ export default function PersonalizationAdminPage() {
         <Card className="rounded-2xl">
           <CardHeader>
             <div className="flex flex-wrap items-center gap-2">
-              <CardTitle>Pilot quality snapshot</CardTitle>
+              <CardTitle>Personalization quality snapshot</CardTitle>
               <Badge variant="outline">Last 30 days</Badge>
               {quality.data ? <Badge variant={quality.data.sample.status === 'REVIEWABLE' ? 'default' : 'secondary'}>{quality.data.sample.status.replaceAll('_', ' ')}</Badge> : null}
             </div>
@@ -90,9 +90,9 @@ export default function PersonalizationAdminPage() {
           </CardHeader>
           <CardContent>
             {quality.isLoading ? (
-              <p className="text-sm text-slate-600">Loading pilot quality…</p>
+              <p className="text-sm text-slate-600">Loading personalization quality…</p>
             ) : quality.isError || !quality.data ? (
-              <p className="text-sm text-rose-700">Pilot quality is unavailable. Catalog operations are unaffected.</p>
+              <p className="text-sm text-rose-700">Personalization quality is unavailable. Catalog operations are unaffected.</p>
             ) : (
               <div className="space-y-4">
                 <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
@@ -170,7 +170,7 @@ export default function PersonalizationAdminPage() {
         <Card className="rounded-2xl">
           <CardHeader>
             <CardTitle>Progressive profile questions</CardTitle>
-            <CardDescription>Activate only questions approved for the pilot placement.</CardDescription>
+            <CardDescription>Activate only reviewed questions approved for optional profile collection.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             {catalog.data.questions.map((question) => (

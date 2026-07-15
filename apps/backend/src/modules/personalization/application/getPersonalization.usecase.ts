@@ -1,23 +1,23 @@
 import {
-  findPilotHousehold,
-  findPilotHouseholdForProperty,
-  listActivePilotRecommendations,
-  optInPilotHousehold,
-  resetPilotHousehold,
-} from '../infrastructure/pilotRepository';
-import { materializePilotRecommendationsForProperty } from './materializePilotRecommendations.usecase';
+  findHouseholdForPropertyOwner,
+  findConsentedHouseholdForProperty,
+  listActivePersonalizationRecommendations,
+  enableHouseholdProfile,
+  resetHouseholdProfile,
+} from '../infrastructure/personalizationRepository';
+import { materializeRecommendationsForProperty } from './materializeRecommendations.usecase';
 import { getNextEligibleQuestionForHousehold } from './getNextEligibleQuestionForHousehold.usecase';
 import type { PersonalizationCapabilities } from '../domain/capabilityPolicy';
 
-export async function getPilotPersonalization(
+export async function getPersonalization(
   propertyId: string,
   userId: string,
   capabilities: PersonalizationCapabilities,
 ) {
   const household = capabilities.canManageSensitiveProfile
-    ? await findPilotHouseholdForProperty(propertyId, userId)
+    ? await findConsentedHouseholdForProperty(propertyId, userId)
     : null;
-  const materialization = await materializePilotRecommendationsForProperty(propertyId);
+  const materialization = await materializeRecommendationsForProperty(propertyId);
   if (materialization.paused) {
     return {
       available: false,
@@ -29,7 +29,7 @@ export async function getPilotPersonalization(
     };
   }
   const [storedRecommendations, nextQuestion] = await Promise.all([
-    listActivePilotRecommendations(propertyId),
+    listActivePersonalizationRecommendations(propertyId),
     household?.consentVersion && capabilities.canManageSensitiveProfile
       ? getNextEligibleQuestionForHousehold(household.id)
       : Promise.resolve({ question: null }),
@@ -52,15 +52,15 @@ export async function getPilotPersonalization(
   };
 }
 
-export async function optInToPilotPersonalization(propertyId: string, userId: string) {
-  const household = await optInPilotHousehold(propertyId, userId);
+export async function enableOptionalProfile(propertyId: string, userId: string) {
+  const household = await enableHouseholdProfile(propertyId, userId);
   return { profileEnabled: true, consentedAt: household.consentedAt };
 }
 
-export async function resetPilotPersonalization(propertyId: string, userId: string) {
-  return { reset: await resetPilotHousehold(propertyId, userId) };
+export async function resetOptionalProfile(propertyId: string, userId: string) {
+  return { reset: await resetHouseholdProfile(propertyId, userId) };
 }
 
-export async function refreshPilotPersonalization(propertyId: string) {
-  return materializePilotRecommendationsForProperty(propertyId, 'MANUAL');
+export async function refreshPersonalization(propertyId: string) {
+  return materializeRecommendationsForProperty(propertyId, 'MANUAL');
 }

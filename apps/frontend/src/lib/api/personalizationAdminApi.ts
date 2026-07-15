@@ -38,7 +38,7 @@ export interface PersonalizationCatalogResponse {
   questions: PersonalizationCatalogQuestion[];
 }
 
-export interface PersonalizationPilotQualityResponse {
+export interface PersonalizationQualityResponse {
   windowDays: number;
   since: string;
   generatedAt: string;
@@ -71,8 +71,8 @@ export async function getPersonalizationAdminCatalog() {
   return (await api.get<PersonalizationCatalogResponse>('/api/admin/personalization/catalog')).data;
 }
 
-export async function getPersonalizationPilotQuality(windowDays = 30) {
-  return (await api.get<PersonalizationPilotQualityResponse>('/api/admin/personalization/quality', {
+export async function getPersonalizationQuality(windowDays = 30) {
+  return (await api.get<PersonalizationQualityResponse>('/api/admin/personalization/quality', {
     params: { windowDays },
   })).data;
 }

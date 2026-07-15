@@ -11,13 +11,13 @@ function loadUseCase(data, { paused = false } = {}) {
     loaded: true,
     exports: { loadHouseholdContextMapData: async () => data },
   };
-  const materializerPath = require.resolve('../../src/modules/personalization/application/materializePilotRecommendations.usecase.ts');
+  const materializerPath = require.resolve('../../src/modules/personalization/application/materializeRecommendations.usecase.ts');
   require.cache[materializerPath] = {
     id: materializerPath,
     filename: materializerPath,
     loaded: true,
     exports: {
-      materializePilotRecommendationsForProperty: async () => paused
+      materializeRecommendationsForProperty: async () => paused
         ? { evaluated: 0, active: 0, paused: true }
         : { evaluated: 3, active: 1 },
     },

@@ -2,7 +2,7 @@
 //
 // PER-FR-011 ("capture explicit and implicit feedback separately, duplicate
 // eventId ignored") + PER-FDBK-001 ("explicit negative feedback shall affect
-// suppression more than implicit non-engagement"). The pilot API exposes this
+// suppression more than implicit non-engagement"). The personalization API exposes this
 // use case after property and household authorization.
 import {
   findFeedbackByEventId,

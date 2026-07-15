@@ -2,7 +2,7 @@ import {
   loadHouseholdContextMapData,
   type HouseholdContextMapData,
 } from '../infrastructure/contextMapRepository';
-import { materializePilotRecommendationsForProperty } from './materializePilotRecommendations.usecase';
+import { materializeRecommendationsForProperty } from './materializeRecommendations.usecase';
 
 export type ContextMapNodeType = 'PROPERTY' | 'HOUSEHOLD' | 'PROFILE_FACT' | 'DERIVED_TRAIT' | 'RECOMMENDATION';
 export type ContextMapEdgeType = 'OCCUPIES' | 'HAS_EXPLICIT_FACT' | 'HAS_DERIVED_TRAIT' | 'HAS_RECOMMENDATION';
@@ -108,7 +108,7 @@ export async function getHouseholdContextMap(
   ownerUserId: string,
   now = new Date(),
 ): Promise<HouseholdContextMap> {
-  const materialization = await materializePilotRecommendationsForProperty(propertyId, 'CONTEXT_MAP_READ');
+  const materialization = await materializeRecommendationsForProperty(propertyId, 'CONTEXT_MAP_READ');
   const data = await loadHouseholdContextMapData(propertyId, ownerUserId);
   const paused = materialization.paused === true;
   const emptySummary: HouseholdContextMap['summary'] = {

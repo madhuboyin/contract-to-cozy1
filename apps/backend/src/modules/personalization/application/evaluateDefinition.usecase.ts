@@ -1,4 +1,4 @@
-// apps/backend/src/modules/personalization/application/evaluateHvacFilterProof.usecase.ts
+// apps/backend/src/modules/personalization/application/evaluateDefinition.usecase.ts
 //
 // The "evaluation run/snapshot" item in
 // docs/personalization/09-implementation-roadmap.md's first implementation
@@ -137,8 +137,3 @@ export async function evaluateDefinitionForProperty(
     traitsSnapshot: snapshot.traits,
   };
 }
-
-// Compatibility aliases for existing callers while the pilot moves from the
-// original one-definition proof to the generic evaluator.
-export type EvaluateHvacFilterProofResult = EvaluateDefinitionResult;
-export const evaluateHvacFilterProofForProperty = evaluateDefinitionForProperty;

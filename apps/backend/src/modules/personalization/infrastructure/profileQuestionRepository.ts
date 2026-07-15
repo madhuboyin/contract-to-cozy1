@@ -16,7 +16,7 @@ export interface LoadedProfileQuestion {
   status: string;
 }
 
-/** Active optional-profile questions. The pilot has one placement surface. */
+/** Active optional-profile questions for the current guidance surface. */
 export async function loadActiveQuestions(): Promise<LoadedProfileQuestion[]> {
   return prisma.profileQuestion.findMany({
     where: { status: 'ACTIVE' },

@@ -1,7 +1,7 @@
 // apps/backend/src/modules/personalization/infrastructure/recommendationRepository.ts
 //
 // Prisma-backed recommendation lifecycle repository. The default property
-// guidance runtime and pilot read API consume these instances directly.
+// guidance runtime and personalization read API consume these instances directly.
 import { Prisma } from '@prisma/client';
 import { prisma } from '../../../lib/prisma';
 

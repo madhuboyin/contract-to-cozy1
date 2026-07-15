@@ -4,22 +4,22 @@ import { propertyAuthMiddleware } from '../middleware/propertyAuth.middleware';
 import { validateBody } from '../middleware/validate.middleware';
 import { apiRateLimiter } from '../middleware/rateLimiter.middleware';
 import {
-  getPilot,
-  optInPilot,
-  resetPilot,
-  refreshPilot,
-  submitPilotFeedback,
-  submitPilotProfileAnswer,
-  getPilotModuleRecommendations,
-  convertPilotRecommendationToTask,
-  getPilotContextMap,
-} from '../modules/personalization/api/personalizationPilot.controller';
+  getPersonalization,
+  enableOptionalHouseholdProfile,
+  resetOptionalHouseholdProfile,
+  refreshPersonalization,
+  submitRecommendationFeedback,
+  submitProfileAnswer,
+  getPersonalizationModuleRecommendations,
+  convertPersonalizationRecommendationToTask,
+  getPersonalizationContextMap,
+} from '../modules/personalization/api/personalization.controller';
 import {
-  PilotFeedbackSchema,
-  PilotOptInSchema,
-  PilotProfileAnswerSchema,
+  RecommendationFeedbackSchema,
+  OptionalProfileEnableSchema,
+  ProfileAnswerSchema,
   ConvertRecommendationToTaskSchema,
-} from '../modules/personalization/api/personalizationPilot.validators';
+} from '../modules/personalization/api/personalization.validators';
 import { requirePersonalizationCapability } from '../modules/personalization/api/personalizationCapability.middleware';
 
 const router = Router();
@@ -27,37 +27,37 @@ router.use(apiRateLimiter);
 router.use(authenticate);
 router.use('/properties/:propertyId/personalization', propertyAuthMiddleware);
 
-router.get('/properties/:propertyId/personalization', requirePersonalizationCapability('canViewOrdinaryRecommendations'), getPilot);
+router.get('/properties/:propertyId/personalization', requirePersonalizationCapability('canViewOrdinaryRecommendations'), getPersonalization);
 router.get(
   '/properties/:propertyId/personalization/context-map',
   requirePersonalizationCapability('canViewSensitiveEvidence'),
-  getPilotContextMap,
+  getPersonalizationContextMap,
 );
-router.post('/properties/:propertyId/personalization/profile/enable', requirePersonalizationCapability('canManageSensitiveProfile'), validateBody(PilotOptInSchema), optInPilot);
-router.post('/properties/:propertyId/personalization/refresh', requirePersonalizationCapability('canAct'), refreshPilot);
+router.post('/properties/:propertyId/personalization/profile/enable', requirePersonalizationCapability('canManageSensitiveProfile'), validateBody(OptionalProfileEnableSchema), enableOptionalHouseholdProfile);
+router.post('/properties/:propertyId/personalization/refresh', requirePersonalizationCapability('canAct'), refreshPersonalization);
 router.get(
   '/properties/:propertyId/personalization/modules/:module/recommendations',
   requirePersonalizationCapability('canViewOrdinaryRecommendations'),
-  getPilotModuleRecommendations,
+  getPersonalizationModuleRecommendations,
 );
 router.post(
   '/properties/:propertyId/personalization/questions/:questionId/answers',
   requirePersonalizationCapability('canManageSensitiveProfile'),
-  validateBody(PilotProfileAnswerSchema),
-  submitPilotProfileAnswer,
+  validateBody(ProfileAnswerSchema),
+  submitProfileAnswer,
 );
 router.post(
   '/properties/:propertyId/personalization/recommendations/:recommendationId/actions/convert-to-task',
   requirePersonalizationCapability('canAct'),
   validateBody(ConvertRecommendationToTaskSchema),
-  convertPilotRecommendationToTask,
+  convertPersonalizationRecommendationToTask,
 );
 router.post(
   '/properties/:propertyId/personalization/recommendations/:recommendationId/feedback',
   requirePersonalizationCapability('canGiveFeedback'),
-  validateBody(PilotFeedbackSchema),
-  submitPilotFeedback,
+  validateBody(RecommendationFeedbackSchema),
+  submitRecommendationFeedback,
 );
-router.delete('/properties/:propertyId/personalization/profile', requirePersonalizationCapability('canManageSensitiveProfile'), resetPilot);
+router.delete('/properties/:propertyId/personalization/profile', requirePersonalizationCapability('canManageSensitiveProfile'), resetOptionalHouseholdProfile);
 
 export default router;

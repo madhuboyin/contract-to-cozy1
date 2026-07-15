@@ -1,6 +1,6 @@
 // Proves the third real catalog rule (dryer_vent_cleaning_reminder)
 // evaluates correctly end to end through the same generic pipeline
-// (evaluateHvacFilterProofForProperty takes definitionCode as a parameter).
+// (evaluateDefinitionForProperty takes definitionCode as a parameter).
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
@@ -73,10 +73,10 @@ function loadUseCase() {
     '../../src/modules/personalization/infrastructure/evaluationRunRepository.ts',
     '../../src/modules/personalization/infrastructure/propertyTraitRepository.ts',
     '../../src/modules/personalization/application/computePropertyTraitSnapshot.usecase.ts',
-    '../../src/modules/personalization/application/evaluateHvacFilterProof.usecase.ts',
+    '../../src/modules/personalization/application/evaluateDefinition.usecase.ts',
   ].map((p) => require.resolve(p));
   for (const p of paths) delete require.cache[p];
-  return require('../../src/modules/personalization/application/evaluateHvacFilterProof.usecase.ts');
+  return require('../../src/modules/personalization/application/evaluateDefinition.usecase.ts');
 }
 
 const ACTIVE_DEFINITION = {
@@ -91,9 +91,9 @@ test('real seeded state is DRAFT, so it is never evaluated (DEFINITION_NOT_ACTIV
   const draftDefinition = { ...ACTIVE_DEFINITION, status: 'DRAFT' };
   const { prismaMock, runs } = createPrismaMock({ definition: draftDefinition });
   installPrismaMock(prismaMock);
-  const { evaluateHvacFilterProofForProperty } = loadUseCase();
+  const { evaluateDefinitionForProperty } = loadUseCase();
 
-  const result = await evaluateHvacFilterProofForProperty('prop-1', DEFINITION_CODE);
+  const result = await evaluateDefinitionForProperty('prop-1', DEFINITION_CODE);
   assert.deepEqual(result, { status: 'FAILED', errorCode: 'DEFINITION_NOT_ACTIVE', definitionId: 'dryer-def-1' });
   assert.equal(runs.length, 0);
 });
@@ -102,9 +102,9 @@ test('positive: vent cleaned 400 days ago -> eligible TRUE', async () => {
   const homeAssets = [{ assetType: 'DRYER', lastServiced: new Date(Date.now() - 400 * 24 * 60 * 60 * 1000) }];
   const { prismaMock } = createPrismaMock({ definition: ACTIVE_DEFINITION, homeAssets });
   installPrismaMock(prismaMock);
-  const { evaluateHvacFilterProofForProperty } = loadUseCase();
+  const { evaluateDefinitionForProperty } = loadUseCase();
 
-  const result = await evaluateHvacFilterProofForProperty('prop-1', DEFINITION_CODE);
+  const result = await evaluateDefinitionForProperty('prop-1', DEFINITION_CODE);
   assert.equal(result.status, 'COMPLETED');
   assert.equal(result.result, 'TRUE');
   assert.equal(result.eligible, true);
@@ -114,9 +114,9 @@ test('negative: vent cleaned 30 days ago -> not eligible FALSE', async () => {
   const homeAssets = [{ assetType: 'DRYER', lastServiced: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) }];
   const { prismaMock } = createPrismaMock({ definition: ACTIVE_DEFINITION, homeAssets });
   installPrismaMock(prismaMock);
-  const { evaluateHvacFilterProofForProperty } = loadUseCase();
+  const { evaluateDefinitionForProperty } = loadUseCase();
 
-  const result = await evaluateHvacFilterProofForProperty('prop-1', DEFINITION_CODE);
+  const result = await evaluateDefinitionForProperty('prop-1', DEFINITION_CODE);
   assert.equal(result.status, 'COMPLETED');
   assert.equal(result.result, 'FALSE');
   assert.equal(result.eligible, false);
@@ -125,9 +125,9 @@ test('negative: vent cleaned 30 days ago -> not eligible FALSE', async () => {
 test('unknown: no DRYER-type asset at all -> UNKNOWN, never treated as eligible', async () => {
   const { prismaMock } = createPrismaMock({ definition: ACTIVE_DEFINITION, homeAssets: [] });
   installPrismaMock(prismaMock);
-  const { evaluateHvacFilterProofForProperty } = loadUseCase();
+  const { evaluateDefinitionForProperty } = loadUseCase();
 
-  const result = await evaluateHvacFilterProofForProperty('prop-1', DEFINITION_CODE);
+  const result = await evaluateDefinitionForProperty('prop-1', DEFINITION_CODE);
   assert.equal(result.status, 'COMPLETED');
   assert.equal(result.result, 'UNKNOWN');
   assert.equal(result.eligible, false);

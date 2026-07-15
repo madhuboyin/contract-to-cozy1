@@ -7,7 +7,7 @@ import { MobileSection, MobileSectionHeader, StatusChip, SummaryCard } from '@/c
 import {
   getModulePersonalizationRecommendations,
   PersonalizationModule,
-} from '@/lib/api/personalizationPilotApi';
+} from '@/lib/api/personalizationApi';
 
 export function PersonalizedReadOnlySuggestions({
   propertyId,

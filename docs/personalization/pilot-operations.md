@@ -8,12 +8,12 @@ The user applies `apps/backend/prisma/schema.prisma` to the pilot database. Afte
 
 ```bash
 cd apps/backend
-npx ts-node prisma/seedPersonalizationPilot.ts
+npx ts-node prisma/seedPersonalization.ts
 ```
 
 This idempotently seeds three definitions, three rules, three versioned content records and five profile questions as `DRAFT`. It does not create households, backfill properties, activate content or alter existing definition/rule/content/question status.
 
-For pgAdmin, run `apps/backend/prisma/seedPersonalizationPilot.sql` instead.
+For pgAdmin, run `apps/backend/prisma/seedPersonalization.sql` instead.
 It is the SQL equivalent of the TypeScript seed; run one or the other, not both
 (although both are idempotent).
 
