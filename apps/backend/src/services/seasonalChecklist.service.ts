@@ -2,6 +2,8 @@
 import { ClimateRegion, Season, Property } from '@prisma/client';
 import { ClimateZoneService } from './climateZone.service';
 import { addSeasonalTaskToMaintenance } from './seasonalChecklistIntegration.service';
+import { syncSeasonalChecklistStatus } from './seasonalChecklistStatus.service';
+import { deriveChecklistProgress, isDismissibleSeasonalPriority } from '../utils/seasonalProgress';
 import { prisma } from '../lib/prisma';
 import { logger } from '../lib/logger';
 
@@ -264,10 +266,18 @@ export class SeasonalChecklistService {
     const recommended = checklist.items.filter((item) => item.priority === 'RECOMMENDED');
     const optional = checklist.items.filter((item) => item.priority === 'OPTIONAL');
 
+    // Progress is derived from item statuses: dismissed items leave the
+    // denominator, and the stored running counter (which drifts) is not used
+    // for display.
+    const progress = deriveChecklistProgress(checklist.items);
+
     return {
       checklist: {
         ...checklist,
         items: undefined, // Remove items from checklist object
+        tasksCompleted: progress.completedTasks,
+        totalTasks: progress.activeTotalTasks,
+        dismissedTasks: progress.dismissedTasks,
       },
       tasks: {
         critical,
@@ -320,10 +330,14 @@ export class SeasonalChecklistService {
       const daysRemaining = Math.ceil(
         (new Date(checklist.seasonEndDate).getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
       );
+      const progress = deriveChecklistProgress(checklist.items);
 
       return {
         ...checklist,
         daysRemaining: Math.max(0, daysRemaining),
+        tasksCompleted: progress.completedTasks,
+        totalTasks: progress.activeTotalTasks,
+        dismissedTasks: progress.dismissedTasks,
       };
     });
 
@@ -441,11 +455,15 @@ export class SeasonalChecklistService {
           },
         },
       },
-      select: { id: true },
+      select: { id: true, priority: true, seasonalChecklistId: true },
     });
 
     if (!item) {
       throw new Error('Seasonal task not found');
+    }
+
+    if (!isDismissibleSeasonalPriority(item.priority)) {
+      throw new Error('Critical tasks cannot be dismissed');
     }
 
     const updated = await prisma.seasonalChecklistItem.update({
@@ -455,6 +473,10 @@ export class SeasonalChecklistService {
         dismissedAt: new Date(),
       },
     });
+
+    // Dismissal shrinks the checklist's scope: if everything remaining is
+    // already complete, the season is done.
+    await syncSeasonalChecklistStatus(item.seasonalChecklistId);
 
     return updated;
   }
@@ -472,7 +494,7 @@ export class SeasonalChecklistService {
           },
         },
       },
-      select: { id: true, status: true },
+      select: { id: true, status: true, seasonalChecklistId: true },
     });
 
     if (!item) {
@@ -490,6 +512,10 @@ export class SeasonalChecklistService {
         dismissedAt: null,
       },
     });
+
+    // Reactivating re-enters the item into the checklist's scope; a season
+    // that was fully completed reopens.
+    await syncSeasonalChecklistStatus(item.seasonalChecklistId);
 
     return updated;
   }
@@ -610,7 +636,7 @@ export class SeasonalChecklistService {
       },
     });
 
-    // Update checklist completed count
+    // Update checklist completed count (legacy counter; display uses derived progress)
     await prisma.seasonalChecklist.update({
       where: { id: updated.seasonalChecklistId },
       data: {
@@ -618,17 +644,9 @@ export class SeasonalChecklistService {
       },
     });
 
-    // Check if all tasks completed
-    const checklist = await prisma.seasonalChecklist.findUnique({
-      where: { id: updated.seasonalChecklistId },
-    });
-
-    if (checklist && checklist.tasksCompleted >= checklist.totalTasks) {
-      await prisma.seasonalChecklist.update({
-        where: { id: updated.seasonalChecklistId },
-        data: { status: 'COMPLETED' },
-      });
-    }
+    // Completion status is derived from item statuses so dismissed items
+    // (out of scope) don't block a season from completing.
+    await syncSeasonalChecklistStatus(updated.seasonalChecklistId);
 
     return updated;
   }
@@ -682,8 +700,10 @@ export class SeasonalChecklistService {
       });
     }
 
+    await syncSeasonalChecklistStatus(updated.seasonalChecklistId);
+
     logger.info(`🔄 Uncompleted seasonal task: ${seasonalItem.title}`);
-    
+
     return updated;
   }
 }

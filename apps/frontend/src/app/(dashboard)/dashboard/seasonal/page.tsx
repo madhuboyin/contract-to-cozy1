@@ -245,6 +245,9 @@ export default function SeasonalMaintenancePage() {
                   </p>
                   <p className="mb-0 mt-0.5 text-xs text-slate-600">
                     {firstChecklist.tasksCompleted}/{firstChecklist.totalTasks} tasks completed
+                    {(firstChecklist.dismissedTasks ?? 0) > 0
+                      ? ` · ${firstChecklist.dismissedTasks} dismissed`
+                      : ''}
                   </p>
                 </div>
                 <div className="shrink-0 text-right">

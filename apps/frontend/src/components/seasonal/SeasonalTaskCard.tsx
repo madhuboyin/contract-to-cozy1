@@ -317,16 +317,19 @@ export function SeasonalTaskCard({
                   )}
                 </Button>
 
-                <Button
-                  variant="outline"
-                  onClick={handleDismiss}
-                  disabled={isLoading}
-                  size="sm"
-                >
-                  <X className="h-4 w-4 mr-1 shrink-0" />
-                  <span className="hidden sm:inline">Dismiss</span>
-                  <span className="sm:hidden">Skip</span>
-                </Button>
+                {/* Critical tasks protect against damage/safety issues and cannot be dismissed */}
+                {item.priority !== 'CRITICAL' && (
+                  <Button
+                    variant="outline"
+                    onClick={handleDismiss}
+                    disabled={isLoading}
+                    size="sm"
+                  >
+                    <X className="h-4 w-4 mr-1 shrink-0" />
+                    <span className="hidden sm:inline">Dismiss</span>
+                    <span className="sm:hidden">Skip</span>
+                  </Button>
+                )}
               </>
             ) : isDismissed ? (
               // DISMISSED STATE - Grayed out with reactivate option

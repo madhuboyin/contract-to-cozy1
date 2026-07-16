@@ -395,6 +395,13 @@ export class SeasonalChecklistController {
         data: result,
       });
     } catch (error) {
+      if (error instanceof Error && error.message.includes('cannot be dismissed')) {
+        res.status(400).json({
+          success: false,
+          message: error.message,
+        });
+        return;
+      }
       next(error);
     }
   }

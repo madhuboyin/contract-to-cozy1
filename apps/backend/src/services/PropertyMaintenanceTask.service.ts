@@ -15,6 +15,7 @@ import {
   import { signalService } from './signal.service';
 import { logger } from '../lib/logger';
 import { resolveSeasonalTaskDueDate } from '../utils/maintenanceDueDate';
+import { syncSeasonalChecklistStatus } from './seasonalChecklistStatus.service';
 import { resolvePropertyAccess, ROLE_RANK } from './propertyAccess.service';
 
   /**
@@ -521,6 +522,7 @@ import { resolvePropertyAccess, ROLE_RANK } from './propertyAccess.service';
             where: { id: seasonalItem.seasonalChecklistId },
             data: { tasksCompleted: { increment: 1 } },
           });
+          await syncSeasonalChecklistStatus(seasonalItem.seasonalChecklistId);
           logger.info(`✅ Synced seasonal completion: checklist ${seasonalItem.seasonalChecklistId} tasks_completed++`);
 
         } else if (wasCompleted && !isNowCompleted) {
@@ -542,6 +544,7 @@ import { resolvePropertyAccess, ROLE_RANK } from './propertyAccess.service';
             });
             logger.info(`🔄 Synced seasonal uncomplete: checklist ${seasonalItem.seasonalChecklistId} tasks_completed--`);
           }
+          await syncSeasonalChecklistStatus(seasonalItem.seasonalChecklistId);
         }
       }
 

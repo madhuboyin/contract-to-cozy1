@@ -120,10 +120,15 @@ export function SeasonalChecklistModal({ checklistId, onClose }: SeasonalCheckli
         <div className="px-6 py-3 bg-gray-50 border-b border-gray-200">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm font-medium text-gray-700">
-              {checklist.tasksCompleted} of {checklist.totalTasks} tasks completed
+              {checklist.totalTasks > 0
+                ? `${checklist.tasksCompleted} of ${checklist.totalTasks} tasks completed`
+                : 'No active tasks'}
+              {checklist.dismissedTasks > 0 ? (
+                <span className="font-normal text-gray-500"> · {checklist.dismissedTasks} dismissed</span>
+              ) : null}
             </span>
             <span className="text-sm text-gray-600">
-              {checklist.totalTasks > 0 ? Math.round((checklist.tasksCompleted / checklist.totalTasks) * 100) : 0}%
+              {checklist.totalTasks > 0 ? `${Math.round((checklist.tasksCompleted / checklist.totalTasks) * 100)}%` : '—'}
             </span>
           </div>
           <div className="w-full bg-gray-200 rounded-full h-2">

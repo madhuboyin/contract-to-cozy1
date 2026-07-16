@@ -40,6 +40,8 @@ export interface SeasonalChecklist {
   totalTasks: number;
   tasksAdded: number;
   tasksCompleted: number;
+  /** Items dismissed as not applicable; excluded from totalTasks/progress. */
+  dismissedTasks?: number;
   daysRemaining?: number;
   generatedAt: string;
   firstViewedAt?: string;
