@@ -42,6 +42,7 @@ This directory began as the evidence-backed discovery package and Functional Req
 16. [Phase 2 implementation audit](phase2-implementation-audit.md)
 17. [Phase 3 initial implementation audit](phase3-implementation-audit.md)
 18. [Phase 4 initial implementation audit](phase4-implementation-audit.md)
+19. [Property Context Platform FRD](../property-context/PROPERTY_CONTEXT_FRD.md) — shared property-fact foundation and feature-review roadmap
 
 ## Reading conventions
 
