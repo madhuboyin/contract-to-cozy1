@@ -72,7 +72,7 @@ export async function getHabitDetail(req: CustomRequest, res: Response, next: Ne
 export async function generateHabits(req: CustomRequest, res: Response, next: NextFunction) {
   try {
     const { propertyId } = req.params;
-    const result = await service.generateHabits(propertyId);
+    const result = await service.generateHabits(propertyId, req.user!.userId);
 
     analyticsEmitter.track({
       eventType: AnalyticsEvent.ACTION_COMPLETED,

@@ -104,7 +104,15 @@ export const locationAssembler: PropertyContextAssembler = {
     const [property, evidence] = await Promise.all([
       prisma.property.findUnique({
         where: { id: propertyId },
-        select: { city: true, state: true, zipCode: true, timezone: true, latitude: true, longitude: true },
+        select: {
+          city: true,
+          state: true,
+          zipCode: true,
+          timezone: true,
+          latitude: true,
+          longitude: true,
+          climateSetting: { select: { climateRegion: true } },
+        },
       }),
       loadEvidence(propertyId, 'LOCATION'),
     ]);
@@ -115,6 +123,7 @@ export const locationAssembler: PropertyContextAssembler = {
       'location.zipCode': property.zipCode,
       'location.timezone': property.timezone,
       'location.geocoded': property.latitude !== null && property.longitude !== null,
+      'location.climateRegion': property.climateSetting?.climateRegion,
       // No canonical coastal-exposure source exists yet. Do not infer it from
       // state or ZIP; consumers must see UNKNOWN until a verified source lands.
       'location.isCoastal': null,
@@ -233,6 +242,9 @@ function normalizeInstalledItemType(item: { category: string; name: string; tags
     [/\b(WATER HEATER|BOILER)\b/, 'WATER_HEATER'],
     [/\b(FIREPLACE|CHIMNEY)\b/, 'CHIMNEY'],
     [/\bIRRIGATION|SPRINKLER\b/, 'IRRIGATION'],
+    [/\bDISHWASHER\b/, 'DISHWASHER'],
+    [/\b(DRYER|CLOTHES DRYER)\b/, 'DRYER'],
+    [/\b(REFRIGERATOR|FRIDGE)\b/, 'REFRIGERATOR'],
   ];
   for (const [pattern, type] of patterns) {
     if (pattern.test(text)) types.add(type);
@@ -246,7 +258,9 @@ export const systemsAssembler: PropertyContextAssembler = {
     const property = await prisma.property.findUnique({
       where: { id: propertyId },
       select: {
+        heatingType: true,
         coolingType: true,
+        waterHeaterType: true,
         inventoryItems: { select: { category: true, name: true, tags: true } },
       },
     });
@@ -256,6 +270,9 @@ export const systemsAssembler: PropertyContextAssembler = {
     const hasCooling = hasCoolingFromProfile ?? (installedItemTypes.includes('AIR_CONDITIONER') ? true : null);
     const values: Record<string, unknown> = {
       'systems.hasCooling': hasCooling,
+      'systems.heatingType': property.heatingType === 'UNKNOWN' ? null : property.heatingType,
+      'systems.coolingType': property.coolingType === 'UNKNOWN' ? null : property.coolingType,
+      'systems.waterHeaterType': property.waterHeaterType === 'UNKNOWN' ? null : property.waterHeaterType,
       'systems.installedItemTypes': installedItemTypes,
     };
     return Object.entries(values).map(([key, value]) =>

@@ -4,7 +4,8 @@
 //
 // Targeting rule fields (all optional; absent = constraint not applied):
 //
-//   propertyTypes?:          PropertyType[]       - matches if property.propertyType is in list
+//   propertyTypes?:          PropertyType[]       - legacy targeting values mapped to dwelling type
+//   dwellingTypes?:          string[]             - canonical Property Context dwelling values
 //   seasons?:                Season[]             - matches if current season is in list
 //   months?:                 number[]             - 1–12, matches if current month is in list
 //   climateRegions?:         ClimateRegion[]      - matches if property climate region is in list
@@ -43,6 +44,7 @@ export type PropertyContextFlag =
 
 export interface HabitTargetingRules {
   propertyTypes?: PropertyType[];
+  dwellingTypes?: string[];
   seasons?: Season[];
   months?: number[];
   climateRegions?: ClimateRegion[];
@@ -59,7 +61,7 @@ export interface HabitTargetingRules {
 }
 
 export interface PropertyEvalContext {
-  propertyType?: PropertyType | null;
+  propertyType?: PropertyType | string | null;
   yearBuilt?: number | null;
   state?: string | null;
   climateRegion?: ClimateRegion | null;
@@ -76,6 +78,25 @@ export interface PropertyEvalContext {
   hasSecuritySystem?: boolean | null;
   hasIrrigation?: boolean | null;
   hasDrainageIssues?: boolean | null;
+}
+
+const dwellingTypesByLegacyPropertyType: Record<PropertyType, string[]> = {
+  SINGLE_FAMILY: ['DETACHED_SINGLE_FAMILY', 'ATTACHED_SINGLE_FAMILY'],
+  TOWNHOME: ['TOWNHOUSE'],
+  CONDO: ['CONDO_UNIT'],
+  APARTMENT: ['APARTMENT_UNIT'],
+  MULTI_UNIT: ['DUPLEX', 'MULTI_FAMILY'],
+  INVESTMENT_PROPERTY: [],
+};
+
+export function matchesDwellingTarget(
+  dwellingType: string,
+  rules: Pick<HabitTargetingRules, 'propertyTypes' | 'dwellingTypes'>,
+): boolean {
+  if (rules.dwellingTypes?.length) return rules.dwellingTypes.includes(dwellingType);
+  return (rules.propertyTypes ?? []).some((legacyType) =>
+    legacyType === dwellingType || dwellingTypesByLegacyPropertyType[legacyType].includes(dwellingType),
+  );
 }
 
 export interface EvalResult {
@@ -116,12 +137,12 @@ export function evaluateTargetingRules(
   };
 
   // Property type
-  if (rules.propertyTypes?.length) {
+  if (rules.propertyTypes?.length || rules.dwellingTypes?.length) {
     if (ctx.propertyType) {
-      if (rules.propertyTypes.includes(ctx.propertyType)) {
+      if (matchesDwellingTarget(String(ctx.propertyType), rules)) {
         matched.push(`propertyType:${ctx.propertyType}`);
       } else {
-        return fail(`propertyType:${ctx.propertyType} not in [${rules.propertyTypes.join(',')}]`);
+        return fail(`propertyType:${ctx.propertyType} not in requested dwelling types`);
       }
     }
     // null/undefined propertyType → skip constraint silently

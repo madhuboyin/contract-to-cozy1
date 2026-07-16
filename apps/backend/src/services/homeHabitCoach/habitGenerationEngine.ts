@@ -10,16 +10,20 @@
 //   5. For each template: evaluate targeting rules → dedupe check → create
 //   6. Return a structured summary of what was created vs. skipped
 
-import type { HabitCadence, HabitDifficulty, HabitImpactType, Prisma, Season } from '@prisma/client';
+import type { HabitCadence, HabitDifficulty, HabitImpactType, Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
+import type { PropertyContextSnapshot } from '../../modules/propertyContext/domain/contracts';
 import {
   evaluateTargetingRules,
-  getCurrentSeason,
   getHomeAgeYears,
   PropertyEvalContext,
   EvalResult,
   HabitTargetingRules,
 } from './habitRuleEvaluator';
+import {
+  buildHabitEvaluationContext,
+  evaluateHabitTemplateApplicability,
+} from './applicabilityPolicy';
 
 // ─── Priority scoring ──────────────────────────────────────────────────────
 
@@ -247,35 +251,13 @@ export interface GenerationResult {
 
 export async function generateHabitsForProperty(
   propertyId: string,
+  propertyContext: PropertyContextSnapshot,
 ): Promise<GenerationResult> {
-  // 1. Load property context
-  const property = await prisma.property.findUnique({
-    where: { id: propertyId },
-    select: {
-      id: true,
-      state: true,
-      yearBuilt: true,
-      propertyType: true,
-      heatingType: true,
-      coolingType: true,
-      waterHeaterType: true,
-      roofType: true,
-      hasSumpPumpBackup: true,
-      hasFireExtinguisher: true,
-      hasSmokeDetectors: true,
-      hasCoDetectors: true,
-      hasSecuritySystem: true,
-      hasIrrigation: true,
-      hasDrainageIssues: true,
-      climateSetting: { select: { climateRegion: true } },
-    },
-  });
-
-  if (!property) {
-    throw new Error(`Property ${propertyId} not found`);
+  if (propertyContext.propertyId !== propertyId) {
+    throw new Error('Property Context snapshot does not match the requested property');
   }
 
-  // 2. Check preferences
+  // 1. Check preferences
   const prefs = await prisma.propertyHabitPreference.findUnique({
     where: { propertyId },
   });
@@ -287,38 +269,17 @@ export async function generateHabitsForProperty(
   const hiddenCategories: string[] =
     Array.isArray(prefs?.hiddenCategoriesJson) ? (prefs!.hiddenCategoriesJson as string[]) : [];
 
-  // 3. Build evaluation context
+  // 2. Build the legacy reason/ranking view from the canonical context contract.
   const now = new Date();
-  const currentMonth = now.getMonth() + 1; // 1–12
-  const currentSeason: Season = getCurrentSeason(currentMonth);
+  const ctx: PropertyEvalContext = buildHabitEvaluationContext(propertyContext, now);
 
-  const ctx: PropertyEvalContext = {
-    propertyType: property.propertyType,
-    yearBuilt: property.yearBuilt,
-    state: property.state,
-    climateRegion: property.climateSetting?.climateRegion ?? null,
-    currentMonth,
-    currentSeason,
-    heatingType: property.heatingType,
-    coolingType: property.coolingType,
-    waterHeaterType: property.waterHeaterType,
-    roofType: property.roofType,
-    hasSumpPump: property.hasSumpPumpBackup,
-    hasFireExtinguisher: property.hasFireExtinguisher,
-    hasSmokeDetectors: property.hasSmokeDetectors,
-    hasCoDetectors: property.hasCoDetectors,
-    hasSecuritySystem: property.hasSecuritySystem,
-    hasIrrigation: property.hasIrrigation,
-    hasDrainageIssues: property.hasDrainageIssues,
-  };
-
-  // 4. Load templates
+  // 3. Load templates
   const templates = await prisma.habitTemplate.findMany({
     where: { isActive: true },
     orderBy: [{ priority: 'asc' }, { createdAt: 'asc' }],
   });
 
-  // 5. Load currently alive habits to deduplicate (ACTIVE/SNOOZED)
+  // 4. Load currently alive habits to deduplicate (ACTIVE/SNOOZED)
   const aliveHabits = await prisma.propertyHabit.findMany({
     where: {
       propertyId,
@@ -328,7 +289,7 @@ export async function generateHabitsForProperty(
   });
   const aliveTemplateIds = new Set(aliveHabits.map((h) => h.habitTemplateId));
 
-  // 5b. Load recently completed/dismissed habits to enforce cooldown windows.
+  // 4b. Load recently completed/dismissed habits to enforce cooldown windows.
   //     Completed → skip until the cadence window has mostly elapsed.
   //     Dismissed → suppress for 90 days so the user isn't badgered.
   const recentlyActedHabits = await prisma.propertyHabit.findMany({
@@ -362,7 +323,7 @@ export async function generateHabitsForProperty(
     }
   }
 
-  // 6. Evaluate and create
+  // 5. Evaluate and create
   const result: GenerationResult = { created: 0, skipped: 0, details: [] };
 
   for (const template of templates) {
@@ -377,8 +338,27 @@ export async function generateHabitsForProperty(
       continue;
     }
 
-    // Evaluate targeting rules
+    // Apply the authoritative feature policy before generation/persistence.
     const rules = template.targetingRulesJson as HabitTargetingRules | null;
+    const applicability = evaluateHabitTemplateApplicability(propertyContext, {
+      key: template.key,
+      category: template.category,
+      impactType: template.impactType,
+      targetingRulesJson: rules,
+    }, now);
+
+    if (applicability.status !== 'APPLICABLE') {
+      result.skipped++;
+      result.details.push({
+        templateKey: template.key,
+        action: 'skipped',
+        reason: applicability.reasonCodes[0] ?? applicability.status,
+      });
+      continue;
+    }
+
+    // Reuse the existing evaluator only for matched-condition explanation and
+    // scoring. Applicability has already handled unknown/conflicted facts.
     const evalResult = evaluateTargetingRules(rules, ctx);
 
     if (!evalResult.matches) {
@@ -421,9 +401,18 @@ export async function generateHabitsForProperty(
       isFallback: evalResult.isFallback,
       generationSource: 'SYSTEM_RULE',
       generatedAt: now.toISOString(),
+      applicability: {
+        status: applicability.status,
+        reasonCodes: applicability.reasonCodes,
+        usedFactKeys: applicability.usedFactKeys,
+        missingFactKeys: applicability.missingFactKeys,
+        conflictedFactKeys: applicability.conflictedFactKeys,
+        validUntil: applicability.validUntil,
+      },
     };
     const contextJson: Prisma.InputJsonValue = {
-      propertyType: ctx.propertyType ?? null,
+      dwellingType: ctx.propertyType ?? null,
+      contextVersion: propertyContext.contextVersion,
       yearBuilt: ctx.yearBuilt ?? null,
       state: ctx.state ?? null,
       climateRegion: ctx.climateRegion ?? null,

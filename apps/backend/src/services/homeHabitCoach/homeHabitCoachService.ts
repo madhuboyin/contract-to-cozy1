@@ -5,6 +5,7 @@ import { prisma } from '../../lib/prisma';
 import { APIError } from '../../middleware/error.middleware';
 import { generateHabitsForProperty } from './habitGenerationEngine';
 import { rankHabits, selectSpotlight } from './habitRankingEngine';
+import { getPropertyContext } from '../../modules/propertyContext';
 
 // ─── Status transition rules ───────────────────────────────────────────────
 
@@ -112,8 +113,11 @@ async function assertHabitAccess(
 export class HomeHabitCoachService {
   // ── Generation ───────────────────────────────────────────────────────────
 
-  async generateHabits(propertyId: string) {
-    return generateHabitsForProperty(propertyId);
+  async generateHabits(propertyId: string, userId: string) {
+    const context = await getPropertyContext(propertyId, { userId }, {
+      scopes: ['CORE', 'LOCATION', 'STRUCTURE', 'EXTERIOR', 'RESPONSIBILITY', 'SYSTEMS', 'SAFETY'],
+    });
+    return generateHabitsForProperty(propertyId, context);
   }
 
   // ── Read ─────────────────────────────────────────────────────────────────

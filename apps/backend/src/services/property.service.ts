@@ -16,6 +16,7 @@ import { hasPendingCriticalAssetVerification } from './inventoryVerification.ser
 import { incrementStreak } from './gamification.service';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from './analytics';
 import { generateHabitsForProperty } from './homeHabitCoach/habitGenerationEngine';
+import { getPropertyContext } from '../modules/propertyContext';
 import { HouseholdService } from './household.service';
 import { reevaluateActiveWeatherIncidentsForProperty } from './incidents/incident.evaluator';
 
@@ -550,9 +551,11 @@ export async function createProperty(userId: string, data: CreatePropertyData): 
   await new HouseholdService().ensurePrimaryOwnerMember(property.id, userId);
 
   // Fire-and-forget: seed initial habits for the new property
-  generateHabitsForProperty(property.id).catch((err) =>
-    logger.error({ err }, '[HABIT-GEN] Initial generation failed for new property'),
-  );
+  getPropertyContext(property.id, { userId }, {
+    scopes: ['CORE', 'LOCATION', 'STRUCTURE', 'EXTERIOR', 'RESPONSIBILITY', 'SYSTEMS', 'SAFETY'],
+  })
+    .then((context) => generateHabitsForProperty(property.id, context))
+    .catch((err) => logger.error({ err }, '[HABIT-GEN] Initial generation failed for new property'));
 
   // NEW STEP: Handle assets AFTER property creation
   if (data.homeAssets !== undefined) {

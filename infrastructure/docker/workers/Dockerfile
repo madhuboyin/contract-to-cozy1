@@ -126,6 +126,7 @@ COPY apps/backend/src/services/hiddenAssets/ruleEngine.ts \
      src/shared/backend/services/hiddenAssets/
 # Copy homeHabitCoach service files needed by habitGeneration.job.ts
 COPY apps/backend/src/services/homeHabitCoach/habitGenerationEngine.ts \
+     apps/backend/src/services/homeHabitCoach/applicabilityPolicy.ts \
      apps/backend/src/services/homeHabitCoach/habitRankingEngine.ts \
      apps/backend/src/services/homeHabitCoach/habitRuleEvaluator.ts \
      src/shared/backend/services/homeHabitCoach/
