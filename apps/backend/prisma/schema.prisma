@@ -93,6 +93,94 @@ enum OwnershipType {
   RENTED_OUT
 }
 
+// Property Context Platform canonical classifications. PropertyType and
+// OwnershipType remain temporarily while their existing consumers are moved to
+// these non-conflated fields; they are not read by the context provider.
+enum DwellingType {
+  DETACHED_SINGLE_FAMILY
+  ATTACHED_SINGLE_FAMILY
+  TOWNHOUSE
+  CONDO_UNIT
+  APARTMENT_UNIT
+  DUPLEX
+  MULTI_FAMILY
+  MANUFACTURED_HOME
+  OTHER
+  UNKNOWN
+}
+
+enum OwnershipForm {
+  FEE_SIMPLE
+  CONDOMINIUM
+  COOPERATIVE
+  LEASEHOLD
+  OTHER
+  UNKNOWN
+}
+
+enum PropertyUse {
+  PRIMARY_RESIDENCE
+  SECOND_HOME
+  LONG_TERM_RENTAL
+  SHORT_TERM_RENTAL
+  VACANT
+  UNDER_RENOVATION
+  FOR_SALE
+  OTHER
+  UNKNOWN
+}
+
+enum OccupancyStatus {
+  OWNER_OCCUPIED
+  TENANT_OCCUPIED
+  FAMILY_OCCUPIED
+  MIXED
+  VACANT
+  UNKNOWN
+}
+
+enum OutdoorSpaceType {
+  PRIVATE_YARD
+  BALCONY
+  PATIO
+  DECK
+  GARDEN_BED
+  SHARED_YARD
+  ROOFTOP
+}
+
+enum PropertyResponsibilityScope {
+  ROOF
+  BUILDING_EXTERIOR
+  LANDSCAPING
+  TREES_SHRUBS
+  DRIVEWAY_WALKWAYS
+  DECK_PATIO_BALCONY
+  PLUMBING
+  HVAC
+  COMMON_SAFETY
+  SNOW_ICE
+  PEST_CONTROL
+  SHARED_SYSTEMS
+}
+
+enum ResponsibleParty {
+  OWNER
+  ASSOCIATION
+  LANDLORD
+  SHARED
+  UNKNOWN
+}
+
+enum PropertyFactSourceType {
+  USER_REPORTED
+  DOCUMENT
+  INSPECTION
+  PUBLIC_RECORD
+  INTEGRATION
+  SYSTEM_DERIVED
+}
+
 enum HeatingType {
   HVAC
   FURNACE
@@ -1948,11 +2036,17 @@ model Property {
 
   isPrimary Boolean @default(true)
 
-  propertyType PropertyType?
-  propertySize Int? // Square footage
-  yearBuilt    Int?
-  bedrooms     Int?
-  bathrooms    Float?
+  propertyType    PropertyType?
+  // Canonical Property Context classifications. UNKNOWN is explicit; null is
+  // reserved for records not yet captured under the target schema.
+  dwellingType    DwellingType    @default(UNKNOWN)
+  ownershipForm   OwnershipForm   @default(UNKNOWN)
+  propertyUse     PropertyUse     @default(UNKNOWN)
+  occupancyStatus OccupancyStatus @default(UNKNOWN)
+  propertySize    Int? // Square footage
+  yearBuilt       Int?
+  bedrooms        Int?
+  bathrooms       Float?
 
   ownershipType  OwnershipType?
   occupantsCount Int? // Number of Occupants (Layer 2 - Usage/Wear Factor)
@@ -2199,6 +2293,11 @@ model Property {
   personalizationRecommendations            PersonalizedRecommendation[]
   personalizationRecommendationSuppressions RecommendationSuppression[]
 
+  // Property Context Platform canonical extensions and provenance.
+  exteriorProfile      PropertyExteriorProfile?
+  responsibilities     PropertyResponsibility[]
+  propertyFactEvidence PropertyFactEvidence[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -2206,6 +2305,62 @@ model Property {
   @@index([coverPhotoDocumentId])
   @@index([activationStatus])
   @@map("properties")
+}
+
+model PropertyExteriorProfile {
+  id                     String             @id @default(uuid())
+  propertyId             String             @unique
+  hasPrivateOutdoorSpace Boolean?
+  outdoorSpaceTypes      OutdoorSpaceType[] @default([])
+  lotSizeSqFt            Float?
+  hasLawn                Boolean?
+  hasTreesOrShrubs       Boolean?
+  hasDriveway            Boolean?
+  hasFence               Boolean?
+  hasPoolOrSpa           Boolean?
+  hasIrrigation          Boolean?
+  hasOutdoorFaucets      Boolean?
+  hasDrainageIssues      Boolean?
+  updatedAt              DateTime           @updatedAt
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@map("property_exterior_profiles")
+}
+
+model PropertyResponsibility {
+  id         String                      @id @default(uuid())
+  propertyId String
+  scope      PropertyResponsibilityScope
+  party      ResponsibleParty
+  notes      String?
+  updatedAt  DateTime                    @updatedAt
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@unique([propertyId, scope])
+  @@index([propertyId])
+  @@map("property_responsibilities")
+}
+
+// Evidence describes why a typed canonical field is trusted. It is not a
+// generic value store; factKey is allowlisted by the application catalog.
+model PropertyFactEvidence {
+  id               String                 @id @default(uuid())
+  propertyId       String
+  factKey          String
+  sourceType       PropertyFactSourceType
+  sourceEntityType String?
+  sourceEntityId   String?
+  confidence       Float?
+  observedAt       DateTime
+  validUntil       DateTime?
+  verifiedAt       DateTime?
+  supersededAt     DateTime?
+  property         Property               @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId, factKey, supersededAt])
+  @@map("property_fact_evidence")
 }
 
 // ============================================================================

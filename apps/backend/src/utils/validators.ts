@@ -15,6 +15,40 @@ const PropertyTypeEnum = z.enum([
 
 const OwnershipTypeEnum = z.enum(['OWNER_OCCUPIED', 'RENTED_OUT']);
 
+const DwellingTypeEnum = z.enum([
+  'DETACHED_SINGLE_FAMILY', 'ATTACHED_SINGLE_FAMILY', 'TOWNHOUSE', 'CONDO_UNIT',
+  'APARTMENT_UNIT', 'DUPLEX', 'MULTI_FAMILY', 'MANUFACTURED_HOME', 'OTHER', 'UNKNOWN',
+]);
+const OwnershipFormEnum = z.enum(['FEE_SIMPLE', 'CONDOMINIUM', 'COOPERATIVE', 'LEASEHOLD', 'OTHER', 'UNKNOWN']);
+const PropertyUseEnum = z.enum([
+  'PRIMARY_RESIDENCE', 'SECOND_HOME', 'LONG_TERM_RENTAL', 'SHORT_TERM_RENTAL',
+  'VACANT', 'UNDER_RENOVATION', 'FOR_SALE', 'OTHER', 'UNKNOWN',
+]);
+const OccupancyStatusEnum = z.enum(['OWNER_OCCUPIED', 'TENANT_OCCUPIED', 'FAMILY_OCCUPIED', 'MIXED', 'VACANT', 'UNKNOWN']);
+const OutdoorSpaceTypeEnum = z.enum(['PRIVATE_YARD', 'BALCONY', 'PATIO', 'DECK', 'GARDEN_BED', 'SHARED_YARD', 'ROOFTOP']);
+
+const PropertyExteriorProfileSchema = z.object({
+  hasPrivateOutdoorSpace: z.boolean().nullable().optional(),
+  outdoorSpaceTypes: z.array(OutdoorSpaceTypeEnum).optional(),
+  lotSizeSqFt: z.number().positive().nullable().optional(),
+  hasLawn: z.boolean().nullable().optional(),
+  hasTreesOrShrubs: z.boolean().nullable().optional(),
+  hasDriveway: z.boolean().nullable().optional(),
+  hasFence: z.boolean().nullable().optional(),
+  hasPoolOrSpa: z.boolean().nullable().optional(),
+  hasIrrigation: z.boolean().nullable().optional(),
+  hasOutdoorFaucets: z.boolean().nullable().optional(),
+  hasDrainageIssues: z.boolean().nullable().optional(),
+}).superRefine((value, ctx) => {
+  if (value.hasPrivateOutdoorSpace === false && (value.outdoorSpaceTypes?.length ?? 0) > 0) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['outdoorSpaceTypes'],
+      message: 'Outdoor space types cannot be set when private outdoor space is explicitly absent',
+    });
+  }
+});
+
 const HeatingTypeEnum = z.enum(['HVAC', 'FURNACE', 'HEAT_PUMP', 'RADIATORS', 'UNKNOWN']);
 
 const CoolingTypeEnum = z.enum(['CENTRAL_AC', 'WINDOW_AC', 'UNKNOWN']);
@@ -172,6 +206,10 @@ export const createPropertySchema = z.object({
 
   // Layer 1 - Basic/Migrated Fields
   propertyType: PropertyTypeEnum.optional(),
+  dwellingType: DwellingTypeEnum.optional(),
+  ownershipForm: OwnershipFormEnum.optional(),
+  propertyUse: PropertyUseEnum.optional(),
+  occupancyStatus: OccupancyStatusEnum.optional(),
   propertySize: z.number().int().positive().optional(),
   yearBuilt: z.number().int().min(1700).optional(),
 
@@ -193,6 +231,7 @@ export const createPropertySchema = z.object({
   lotSize: z.number().positive().optional(),
   hasIrrigation: z.boolean().optional(),
   hasDrainageIssues: z.boolean().optional(),
+  exteriorProfile: PropertyExteriorProfileSchema.optional(),
   hasSmokeDetectors: z.boolean().optional(),
   hasCoDetectors: z.boolean().optional(),
   hasSecuritySystem: z.boolean().optional(),

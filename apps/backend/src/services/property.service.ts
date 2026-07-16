@@ -1,6 +1,6 @@
 // apps/backend/src/services/property.service.ts
 
-import { Property, PropertyType, OwnershipType, HeatingType, CoolingType, WaterHeaterType, RoofType, FoundationType, Prisma, ChecklistItem, Warranty, DocumentType } from '@prisma/client';
+import { Property, PropertyType, OwnershipType, DwellingType, OwnershipForm, PropertyUse, OccupancyStatus, OutdoorSpaceType, HeatingType, CoolingType, WaterHeaterType, RoofType, FoundationType, Prisma, ChecklistItem, Warranty, DocumentType } from '@prisma/client';
 import { calculateHealthScore, HealthScoreResult } from '../utils/propertyScore.util'; 
 import JobQueueService from './JobQueue.service';
 import type { HomeAssetDTO } from './propertyApplianceInventory.service';
@@ -40,6 +40,10 @@ interface CreatePropertyData {
 
   // Layer 1 - Basic/Migrated Fields
   propertyType?: PropertyType | null;
+  dwellingType?: DwellingType;
+  ownershipForm?: OwnershipForm;
+  propertyUse?: PropertyUse;
+  occupancyStatus?: OccupancyStatus;
   propertySize?: number | null; // FIX
   yearBuilt?: number | null;     // FIX
   
@@ -76,6 +80,19 @@ interface CreatePropertyData {
   lastAppraisalDate?: Date | null;
   isEquityVerified?: boolean;
   coverPhotoDocumentId?: string | null;
+  exteriorProfile?: {
+    hasPrivateOutdoorSpace?: boolean | null;
+    outdoorSpaceTypes?: OutdoorSpaceType[];
+    lotSizeSqFt?: number | null;
+    hasLawn?: boolean | null;
+    hasTreesOrShrubs?: boolean | null;
+    hasDriveway?: boolean | null;
+    hasFence?: boolean | null;
+    hasPoolOrSpa?: boolean | null;
+    hasIrrigation?: boolean | null;
+    hasOutdoorFaucets?: boolean | null;
+    hasDrainageIssues?: boolean | null;
+  };
   
   homeAssets?: HomeAssetInput[];
 }
@@ -455,6 +472,10 @@ export async function createProperty(userId: string, data: CreatePropertyData): 
       
       // PHASE 2 ADDITIONS - FIX: Ensure all optional fields are explicitly null if undefined/missing
       propertyType: data.propertyType || null,
+      dwellingType: data.dwellingType ?? 'UNKNOWN',
+      ownershipForm: data.ownershipForm ?? 'UNKNOWN',
+      propertyUse: data.propertyUse ?? 'UNKNOWN',
+      occupancyStatus: data.occupancyStatus ?? 'UNKNOWN',
       propertySize: data.propertySize || null,
       yearBuilt: data.yearBuilt || null,
       bedrooms: data.bedrooms || null,
@@ -493,6 +514,7 @@ export async function createProperty(userId: string, data: CreatePropertyData): 
           data.purchasePriceCents !== undefined &&
           data.purchaseDate !== null &&
           data.purchaseDate !== undefined),
+      exteriorProfile: data.exteriorProfile ? { create: data.exteriorProfile } : undefined,
       // END PHASE 2 ADDITIONS
     },
   });
@@ -1073,7 +1095,7 @@ export async function updateProperty(
   
 
   // Use a proper type for updatePayload for better type checking
-  const updatePayload: Partial<Omit<CreatePropertyData, 'address' | 'city' | 'state' | 'zipCode' | 'homeAssets'>> & {
+  const updatePayload: Partial<Omit<CreatePropertyData, 'address' | 'city' | 'state' | 'zipCode' | 'homeAssets' | 'exteriorProfile'>> & {
     name?: string | null;
     address?: string;
     city?: string;
@@ -1093,6 +1115,10 @@ export async function updateProperty(
   // PHASE 2 ADDITIONS - Dynamically set new fields for update
   // FIX: Ensure optional fields are explicitly handled to prevent undefined data corruption
   if (data.propertyType !== undefined) updatePayload.propertyType = data.propertyType || null;
+  if (data.dwellingType !== undefined) updatePayload.dwellingType = data.dwellingType;
+  if (data.ownershipForm !== undefined) updatePayload.ownershipForm = data.ownershipForm;
+  if (data.propertyUse !== undefined) updatePayload.propertyUse = data.propertyUse;
+  if (data.occupancyStatus !== undefined) updatePayload.occupancyStatus = data.occupancyStatus;
   if (data.propertySize !== undefined) updatePayload.propertySize = data.propertySize || null;
   if (data.yearBuilt !== undefined) updatePayload.yearBuilt = data.yearBuilt || null;
   if (data.bedrooms !== undefined) updatePayload.bedrooms = data.bedrooms || null;
@@ -1151,13 +1177,21 @@ export async function updateProperty(
     updatePayload.coverPhotoDocumentId = resolvedCoverPhotoDocumentId ?? null;
   }
 
+  const propertyUpdateData: Prisma.PropertyUpdateInput = {
+    ...updatePayload,
+    ...(data.exteriorProfile !== undefined ? {
+      exteriorProfile: {
+        upsert: { create: data.exteriorProfile, update: data.exteriorProfile },
+      },
+    } : {}),
+  };
   const property = await prisma.property.update({
     where: { id: propertyId },
-    data: updatePayload,
+    data: propertyUpdateData,
   });
 
   // Analytics: property updated (only when there are actual changes)
-  if (Object.keys(updatePayload).length > 0) {
+  if (Object.keys(propertyUpdateData).length > 0) {
     analyticsEmitter.track({
       eventType: AnalyticsEvent.PROPERTY_UPDATED,
       userId,
@@ -1172,7 +1206,7 @@ export async function updateProperty(
   }
 
   // PHASE 2 ADDITION: FIX: Use the comprehensive job enqueuer
-  if (Object.keys(updatePayload).length > 0) {
+  if (Object.keys(propertyUpdateData).length > 0) {
       await JobQueueService.enqueuePropertyIntelligenceJobs(propertyId);
   }
 
