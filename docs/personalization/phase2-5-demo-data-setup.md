@@ -60,8 +60,9 @@ Create **DEMO — Safety gap home**.
 3. Confirm **Confirm smoke-detector coverage for this home** appears before
    selecting **Improve my recommendations**. Its explanation must identify the
    property's smoke-detector record as the reason.
-4. Open **AI Tools → Personalized Home Guidance**. Alternatively, open
-   **Maintenance**, then use **Personalization settings** on the suggestion.
+4. Open **Personalized Guidance** from the desktop homeowner sidebar or from
+   **More → Personalized Guidance** on mobile. The page remains available even
+   when the property currently has zero recommendations.
 5. Under **What personalization knows**, confirm the corresponding property
    signal is present and optional household facts show zero/not enabled.
 

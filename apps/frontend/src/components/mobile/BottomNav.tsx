@@ -120,7 +120,7 @@ export function BottomNav() {
       }));
 
   // More drawer: remaining jobs (+ secondary links for homeowner nav only)
-  const moreJobKeys = ['my-home', 'protect', 'save', 'home-lab'];
+  const moreJobKeys = ['my-home', 'protect', 'save', 'personalization', 'home-lab'];
   const moreJobs = isAdminNav
     ? ADMIN_NAV.filter((j) => (ADMIN_MORE_JOB_KEYS as readonly string[]).includes(j.key)).map((job) => ({
         label: job.name,

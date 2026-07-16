@@ -12,7 +12,8 @@ import {
   FileText,
   PieChart,
   LifeBuoy,
-  Users
+  Users,
+  Sparkles,
 } from 'lucide-react';
 import { ElementType } from 'react';
 import { ADMIN_NAV } from './adminNavigation';
@@ -127,6 +128,15 @@ export const PRIMARY_JOBS: NavJob[] = [
     icon: Users,
     description: 'Trusted contractors in your neighbourhood',
     engines: ['neighbourhood-trust', 'neighbourhood-feed', 'endorsements'],
+    globalHref: true,
+  },
+  {
+    key: 'personalization',
+    name: 'Personalized Guidance',
+    href: '/dashboard/personalization',
+    icon: Sparkles,
+    description: 'Suggestions based on your home',
+    engines: ['personalization'],
     globalHref: true,
   },
   {

@@ -39,11 +39,13 @@ Personalization page all recompute on a fresh read, so an owner does not need
 to construct a `/dashboard/personalization?propertyId=...` URL or enable the
 optional profile.
 
-Use **AI Tools → Personalized Home Guidance** (or **Personalization settings**
-from a Maintenance suggestion) when validating the explanation and **What
-personalization knows**. Treat the direct URL as a QA/troubleshooting shortcut.
-Use the page's **Refresh** action only when facts changed while the page stayed
-open or when an explicit recomputation is required for test evidence.
+Use **Personalized Guidance** in the desktop homeowner sidebar or **More →
+Personalized Guidance** on mobile when validating the explanation and **What
+personalization knows**. The navigation entry is always present, including for
+properties with zero current recommendations. Treat the direct URL as a
+QA/troubleshooting shortcut. Use the page's **Refresh** action only when facts
+changed while the page stayed open or when an explicit recomputation is
+required for test evidence.
 
 ## Optional household profile
 
