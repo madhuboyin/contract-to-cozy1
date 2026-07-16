@@ -111,9 +111,13 @@ COPY apps/backend/src/services/hiddenAssets.service.ts src/shared/backend/servic
 # Risk assessment service chain (RiskAssessment.service → riskAssessmentIntegration → PropertyMaintenanceTask)
 COPY apps/backend/src/config/risk-job-types.ts src/shared/backend/config/
 COPY apps/backend/src/services/PropertyMaintenanceTask.service.ts \
+     apps/backend/src/services/seasonalChecklistStatus.service.ts \
      apps/backend/src/services/riskAssessmentIntegration.service.ts \
      apps/backend/src/services/RiskAssessment.service.ts \
      src/shared/backend/services/
+COPY apps/backend/src/utils/maintenanceDueDate.ts \
+     apps/backend/src/utils/seasonalProgress.ts \
+     src/shared/backend/utils/
 # Pure (Express-free) property-access resolution used by PropertyMaintenanceTask.service.ts
 COPY apps/backend/src/services/propertyAccess.service.ts src/shared/backend/services/
 COPY apps/backend/src/services/seasonal/applicabilityPolicy.ts src/shared/backend/services/seasonal/
