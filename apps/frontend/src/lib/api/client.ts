@@ -97,6 +97,14 @@ import {
   ResolutionCenterPayload,
   EnvironmentReportDTO,
   FoundationType,
+  PropertyContextCompleteness,
+  PropertyContextScope,
+  PropertyContextSnapshot,
+  PropertyExteriorProfile,
+  DwellingType,
+  OwnershipForm,
+  PropertyUse,
+  OccupancyStatus,
 } from '@/types';
 
 // REMOVED: import { RiskReportSummary } from '@/app/(dashboard)/dashboard/types'; as it was not defined or needed.
@@ -1300,6 +1308,22 @@ class APIClient {
     return this.request(`/api/properties/${id}/dashboard-bootstrap`);
   }
 
+  async getPropertyContext(
+    id: string,
+    scopes?: PropertyContextScope[],
+  ): Promise<APIResponse<PropertyContextSnapshot>> {
+    const query = scopes?.length ? `?scopes=${encodeURIComponent(scopes.join(','))}` : '';
+    return this.request(`/api/properties/${id}/context${query}`);
+  }
+
+  async getPropertyContextCompleteness(
+    id: string,
+    scopes?: PropertyContextScope[],
+  ): Promise<APIResponse<PropertyContextCompleteness>> {
+    const query = scopes?.length ? `?scopes=${encodeURIComponent(scopes.join(','))}` : '';
+    return this.request(`/api/properties/${id}/context/completeness${query}`);
+  }
+
   /**
    * Create a new property
    */
@@ -1312,6 +1336,11 @@ class APIClient {
     isPrimary?: boolean;
     coverPhotoDocumentId?: string | null;
     propertyType?: string | null;
+    dwellingType?: DwellingType;
+    ownershipForm?: OwnershipForm;
+    propertyUse?: PropertyUse;
+    occupancyStatus?: OccupancyStatus;
+    exteriorProfile?: PropertyExteriorProfile;
     propertySize?: number | null;
     yearBuilt?: number | null;
     bedrooms?: number | null;
@@ -1342,6 +1371,11 @@ class APIClient {
       
       // Layer 1 - Basic/Migrated Fields
       propertyType?: string; // Expects enum string
+      dwellingType?: DwellingType;
+      ownershipForm?: OwnershipForm;
+      propertyUse?: PropertyUse;
+      occupancyStatus?: OccupancyStatus;
+      exteriorProfile?: PropertyExteriorProfile;
       propertySize?: number;
       yearBuilt?: number;
       

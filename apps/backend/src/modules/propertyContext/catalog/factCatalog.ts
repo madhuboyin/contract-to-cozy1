@@ -26,6 +26,12 @@ export const PROPERTY_FACT_CATALOG = [
   { key: 'location.zipCode', scope: 'LOCATION', canonicalOwner: 'Property.zipCode', correctionPath: propertyPath('address'), writable: true },
   { key: 'location.timezone', scope: 'LOCATION', canonicalOwner: 'Property.timezone', correctionPath: propertyPath('address'), writable: true },
   { key: 'location.geocoded', scope: 'LOCATION', canonicalOwner: 'Property.latitude/longitude', correctionPath: propertyPath('address'), writable: false },
+  { key: 'structure.roofType', scope: 'STRUCTURE', canonicalOwner: 'Property.roofType', correctionPath: propertyPath('structure'), writable: true },
+  { key: 'structure.roofReplacementYear', scope: 'STRUCTURE', canonicalOwner: 'Property.roofReplacementYear', correctionPath: propertyPath('structure'), writable: true },
+  { key: 'structure.roofAgeYears', scope: 'STRUCTURE', canonicalOwner: 'Derived from Property.roofReplacementYear', correctionPath: propertyPath('structure'), writable: false },
+  { key: 'structure.foundationType', scope: 'STRUCTURE', canonicalOwner: 'Property.foundationType', correctionPath: propertyPath('structure'), writable: true },
+  { key: 'structure.sidingType', scope: 'STRUCTURE', canonicalOwner: 'Property.sidingType', correctionPath: propertyPath('structure'), writable: true },
+  { key: 'structure.electricalPanelAgeYears', scope: 'STRUCTURE', canonicalOwner: 'Property.electricalPanelAge', correctionPath: propertyPath('structure'), writable: true },
   { key: 'exterior.hasPrivateOutdoorSpace', scope: 'EXTERIOR', canonicalOwner: 'PropertyExteriorProfile.hasPrivateOutdoorSpace', correctionPath: propertyPath('exterior'), writable: true },
   { key: 'exterior.outdoorSpaceTypes', scope: 'EXTERIOR', canonicalOwner: 'PropertyExteriorProfile.outdoorSpaceTypes', correctionPath: propertyPath('exterior'), writable: true },
   { key: 'exterior.lotSizeSqFt', scope: 'EXTERIOR', canonicalOwner: 'PropertyExteriorProfile.lotSizeSqFt', correctionPath: propertyPath('exterior'), writable: true },
@@ -49,6 +55,14 @@ export const PROPERTY_FACT_CATALOG = [
   { key: 'responsibility.snowIce', scope: 'RESPONSIBILITY', canonicalOwner: 'PropertyResponsibility.SNOW_ICE', correctionPath: propertyPath('responsibility'), writable: true },
   { key: 'responsibility.pestControl', scope: 'RESPONSIBILITY', canonicalOwner: 'PropertyResponsibility.PEST_CONTROL', correctionPath: propertyPath('responsibility'), writable: true },
   { key: 'responsibility.sharedSystems', scope: 'RESPONSIBILITY', canonicalOwner: 'PropertyResponsibility.SHARED_SYSTEMS', correctionPath: propertyPath('responsibility'), writable: true },
+  { key: 'rooms.list', scope: 'ROOMS', canonicalOwner: 'InventoryRoom', correctionPath: '/dashboard/properties/:propertyId/rooms', writable: false },
+  { key: 'inventory.items', scope: 'INVENTORY', canonicalOwner: 'InventoryItem', correctionPath: '/dashboard/properties/:propertyId/inventory', writable: false },
+  { key: 'product.onboardingStatus', scope: 'PRODUCT_CONTEXT', canonicalOwner: 'PropertyOnboarding.status', correctionPath: '/dashboard/properties/:propertyId/onboarding', writable: false },
+  { key: 'product.onboardingStep', scope: 'PRODUCT_CONTEXT', canonicalOwner: 'PropertyOnboarding.currentStep', correctionPath: '/dashboard/properties/:propertyId/onboarding', writable: false },
+  { key: 'product.setupScore', scope: 'PRODUCT_CONTEXT', canonicalOwner: 'PropertyOnboarding.setupScore', correctionPath: '/dashboard/properties/:propertyId/onboarding', writable: false },
+  { key: 'product.homeownerSegment', scope: 'PRODUCT_CONTEXT', canonicalOwner: 'HomeownerProfile.segment', correctionPath: '/dashboard/profile', writable: false },
+  { key: 'product.canViewFacts', scope: 'PRODUCT_CONTEXT', canonicalOwner: 'HouseholdMember.role', correctionPath: null, writable: false },
+  { key: 'product.canCorrectFacts', scope: 'PRODUCT_CONTEXT', canonicalOwner: 'HouseholdMember.role', correctionPath: null, writable: false },
 ] as const satisfies readonly PropertyFactDefinition[];
 
 const catalogByKey = new Map<string, PropertyFactDefinition>(

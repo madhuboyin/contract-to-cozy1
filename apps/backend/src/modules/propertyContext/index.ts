@@ -3,3 +3,4 @@ export * from './domain/facts';
 export * from './catalog/factCatalog';
 export * from './policies/featurePolicy';
 export * from './application/getPropertyContext';
+export * from './application/getContextCompleteness';

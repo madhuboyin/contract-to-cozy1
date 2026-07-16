@@ -1,12 +1,12 @@
 import { PropertyFactEvidence, PropertyFactSourceType, PropertyResponsibilityScope } from '@prisma/client';
 import { prisma } from '../../../lib/prisma';
 import { getFactDefinitionsForScope } from '../catalog/factCatalog';
-import { PropertyContextScope, PropertyFact } from '../domain/contracts';
+import { PropertyContextActor, PropertyContextScope, PropertyFact } from '../domain/contracts';
 import { createPropertyFact, FactEvidenceMetadata } from '../domain/facts';
 
 export interface PropertyContextAssembler {
   readonly scope: PropertyContextScope;
-  assemble(propertyId: string, now: Date): Promise<PropertyFact[]>;
+  assemble(propertyId: string, now: Date, actor?: PropertyContextActor): Promise<PropertyFact[]>;
 }
 
 const sourcePriority: Record<PropertyFactSourceType, number> = {
@@ -122,6 +122,47 @@ export const locationAssembler: PropertyContextAssembler = {
   },
 };
 
+export const structureAssembler: PropertyContextAssembler = {
+  scope: 'STRUCTURE',
+  async assemble(propertyId, now) {
+    const [property, evidence] = await Promise.all([
+      prisma.property.findUnique({
+        where: { id: propertyId },
+        select: {
+          roofType: true,
+          roofReplacementYear: true,
+          foundationType: true,
+          sidingType: true,
+          electricalPanelAge: true,
+        },
+      }),
+      loadEvidence(propertyId, 'STRUCTURE'),
+    ]);
+    if (!property) return [];
+    const roofReplacementYear = property.roofReplacementYear;
+    const values: Record<string, unknown> = {
+      'structure.roofType': property.roofType === 'UNKNOWN' ? null : property.roofType,
+      'structure.roofReplacementYear': roofReplacementYear,
+      'structure.roofAgeYears': roofReplacementYear === null ? null : Math.max(0, now.getUTCFullYear() - roofReplacementYear),
+      'structure.foundationType': property.foundationType === 'UNKNOWN' ? null : property.foundationType,
+      'structure.sidingType': property.sidingType,
+      'structure.electricalPanelAgeYears': property.electricalPanelAge,
+    };
+    return Object.entries(values).map(([key, value]) => {
+      const derivedEvidence = key === 'structure.roofAgeYears' && value !== null ? {
+        source: 'SYSTEM_DERIVED' as const,
+        verified: false,
+        confidence: null,
+        // Roof age changes at the year boundary. A deterministic observation
+        // time keeps contextVersion stable for identical source records.
+        observedAt: new Date(Date.UTC(now.getUTCFullYear(), 0, 1)),
+        validUntil: null,
+      } : undefined;
+      return withPropertyId(createPropertyFact(key, value, evidence.get(key) ?? derivedEvidence, now), propertyId);
+    });
+  },
+};
+
 export const exteriorAssembler: PropertyContextAssembler = {
   scope: 'EXTERIOR',
   async assemble(propertyId, now) {
@@ -180,9 +221,92 @@ export const responsibilityAssembler: PropertyContextAssembler = {
   },
 };
 
+export const roomsAssembler: PropertyContextAssembler = {
+  scope: 'ROOMS',
+  async assemble(propertyId, now) {
+    const rooms = await prisma.inventoryRoom.findMany({
+      where: { propertyId },
+      select: { id: true, name: true, type: true, floorLevel: true, sortOrder: true, updatedAt: true },
+      orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+    });
+    return [withPropertyId(createPropertyFact('rooms.list', rooms.map((room) => ({
+      ...room,
+      updatedAt: room.updatedAt.toISOString(),
+    })), undefined, now), propertyId)];
+  },
+};
+
+export const inventoryAssembler: PropertyContextAssembler = {
+  scope: 'INVENTORY',
+  async assemble(propertyId, now) {
+    const items = await prisma.inventoryItem.findMany({
+      where: { propertyId },
+      select: {
+        id: true,
+        roomId: true,
+        name: true,
+        category: true,
+        condition: true,
+        manufacturer: true,
+        modelNumber: true,
+        serialNumber: true,
+        installedOn: true,
+        purchasedOn: true,
+        lastServicedOn: true,
+        expectedExpiryDate: true,
+        replacementCostCents: true,
+        currency: true,
+        isVerified: true,
+        verificationSource: true,
+        updatedAt: true,
+      },
+      orderBy: [{ roomId: 'asc' }, { name: 'asc' }],
+    });
+    const serialized = items.map((item) => Object.fromEntries(
+      Object.entries(item).map(([key, value]) => [key, value instanceof Date ? value.toISOString() : value]),
+    ));
+    return [withPropertyId(createPropertyFact('inventory.items', serialized, undefined, now), propertyId)];
+  },
+};
+
+export const productContextAssembler: PropertyContextAssembler = {
+  scope: 'PRODUCT_CONTEXT',
+  async assemble(propertyId, now, actor) {
+    const [property, member] = await Promise.all([
+      prisma.property.findUnique({
+        where: { id: propertyId },
+        select: {
+          homeownerProfile: { select: { segment: true } },
+          onboarding: { select: { status: true, currentStep: true, setupScore: true } },
+        },
+      }),
+      actor ? prisma.householdMember.findUnique({
+        where: { propertyId_userId: { propertyId, userId: actor.userId } },
+        select: { role: true },
+      }) : Promise.resolve(null),
+    ]);
+    if (!property) return [];
+    const values: Record<string, unknown> = {
+      'product.onboardingStatus': property.onboarding?.status,
+      'product.onboardingStep': property.onboarding?.currentStep,
+      'product.setupScore': property.onboarding?.setupScore,
+      'product.homeownerSegment': property.homeownerProfile.segment,
+      'product.canViewFacts': true,
+      'product.canCorrectFacts': member?.role === 'OWNER' || member?.role === 'CONTRIBUTOR',
+    };
+    return Object.entries(values).map(([key, value]) =>
+      withPropertyId(createPropertyFact(key, value, undefined, now), propertyId),
+    );
+  },
+};
+
 export const INITIAL_PROPERTY_CONTEXT_ASSEMBLERS: PropertyContextAssembler[] = [
   coreAssembler,
   locationAssembler,
+  structureAssembler,
   exteriorAssembler,
   responsibilityAssembler,
+  roomsAssembler,
+  inventoryAssembler,
+  productContextAssembler,
 ];

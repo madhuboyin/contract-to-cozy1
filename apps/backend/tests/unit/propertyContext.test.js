@@ -5,6 +5,7 @@ require('ts-node/register');
 
 const {
   createPropertyFact,
+  getContextCompleteness,
   getPropertyContext,
   inspectDecisionFacts,
   PropertyContextAccessDeniedError,
@@ -12,6 +13,10 @@ const {
   validateExteriorProfile,
 } = require('../../src/modules/propertyContext/index.ts');
 const { createPropertySchema } = require('../../src/utils/validators.ts');
+const {
+  parseContextScopes,
+  PHASE_ONE_CONTEXT_SCOPES,
+} = require('../../src/modules/propertyContext/api/propertyContext.controller.ts');
 
 const NOW = new Date('2026-07-16T12:00:00.000Z');
 
@@ -141,4 +146,32 @@ test('feature policy helper reports unknown, stale, and conflicted dependencies'
   ]);
   assert.deepEqual(result.missingFactKeys, ['exterior.hasLawn', 'exterior.hasOutdoorFaucets']);
   assert.deepEqual(result.conflictedFactKeys, ['exterior.hasIrrigation']);
+});
+
+test('transparency API scope parsing defaults to Phase 1 and rejects unknown scopes', () => {
+  assert.deepEqual(parseContextScopes(undefined), PHASE_ONE_CONTEXT_SCOPES);
+  assert.deepEqual(parseContextScopes('core, exterior,CORE'), ['CORE', 'EXTERIOR']);
+  assert.throws(() => parseContextScopes('CORE,NOT_A_SCOPE'), /NOT_A_SCOPE/);
+});
+
+test('completeness counts only KNOWN facts as complete and reports actionable states', () => {
+  const snapshot = {
+    propertyId: 'property-1',
+    contextVersion: 'v1',
+    generatedAt: NOW.toISOString(),
+    scopes: ['EXTERIOR'],
+    facts: {
+      'exterior.hasLawn': createPropertyFact('exterior.hasLawn', true, undefined, NOW),
+      'exterior.hasIrrigation': { ...createPropertyFact('exterior.hasIrrigation', true, undefined, NOW), state: 'CONFLICTED' },
+      'exterior.hasFence': createPropertyFact('exterior.hasFence', null, undefined, NOW),
+      'exterior.hasDrainageIssues': { ...createPropertyFact('exterior.hasDrainageIssues', true, undefined, NOW), state: 'STALE' },
+    },
+    warnings: [],
+  };
+  const completeness = getContextCompleteness(snapshot);
+  assert.equal(completeness.scopes[0].knownFacts, 1);
+  assert.ok(completeness.scopes[0].missingFactKeys.includes('exterior.hasFence'));
+  assert.deepEqual(completeness.scopes[0].conflictedFactKeys, ['exterior.hasIrrigation']);
+  assert.deepEqual(completeness.scopes[0].staleFactKeys, ['exterior.hasDrainageIssues']);
+  assert.ok(completeness.completenessPercent < 100);
 });

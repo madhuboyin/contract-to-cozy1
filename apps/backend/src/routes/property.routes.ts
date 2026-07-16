@@ -10,6 +10,10 @@ import { AuthRequest } from '../types/auth.types';
 import { logger } from '../lib/logger';
 import { prisma } from '../lib/prisma';
 import { apiRateLimiter } from '../middleware/rateLimiter.middleware';
+import {
+  getPropertyContextCompleteness,
+  getPropertyContextSnapshot,
+} from '../modules/propertyContext/api/propertyContext.controller';
 
 const router = Router();
 
@@ -94,6 +98,11 @@ router.get('/address-details', authenticate, apiRateLimiter, propertyController.
  */
 router.get('/:id/resolutions', authenticate, propertyController.getPropertyResolutions);
 router.get('/:id/resolution-center', authenticate, propertyController.getPropertyResolutionCenter);
+
+// Property Context transparency endpoints. Authorization is enforced inside
+// the provider so API and non-HTTP consumers share the same access boundary.
+router.get('/:id/context/completeness', authenticate, getPropertyContextCompleteness);
+router.get('/:id/context', authenticate, getPropertyContextSnapshot);
 
 /**
  * @swagger

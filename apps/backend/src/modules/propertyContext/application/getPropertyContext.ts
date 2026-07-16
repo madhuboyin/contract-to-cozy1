@@ -53,7 +53,7 @@ export async function getPropertyContext(
   const unsupportedScopes = scopes.filter((scope) => !assemblerByScope.has(scope));
   const now = dependencies.now();
   const assembled = await Promise.all(
-    supportedScopes.map((scope) => assemblerByScope.get(scope)!.assemble(propertyId, now)),
+    supportedScopes.map((scope) => assemblerByScope.get(scope)!.assemble(propertyId, now, actor)),
   );
   const facts = Object.fromEntries(assembled.flat().map((fact) => [fact.key, fact]));
   const warnings: PropertyContextSnapshot['warnings'] = [];

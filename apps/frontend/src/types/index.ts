@@ -210,6 +210,30 @@ export const OwnershipTypes = {
 } as const;
 export type OwnershipType = keyof typeof OwnershipTypes;
 
+export type DwellingType =
+  | 'DETACHED_SINGLE_FAMILY' | 'ATTACHED_SINGLE_FAMILY' | 'TOWNHOUSE' | 'CONDO_UNIT'
+  | 'APARTMENT_UNIT' | 'DUPLEX' | 'MULTI_FAMILY' | 'MANUFACTURED_HOME' | 'OTHER' | 'UNKNOWN';
+export type OwnershipForm = 'FEE_SIMPLE' | 'CONDOMINIUM' | 'COOPERATIVE' | 'LEASEHOLD' | 'OTHER' | 'UNKNOWN';
+export type PropertyUse =
+  | 'PRIMARY_RESIDENCE' | 'SECOND_HOME' | 'LONG_TERM_RENTAL' | 'SHORT_TERM_RENTAL'
+  | 'VACANT' | 'UNDER_RENOVATION' | 'FOR_SALE' | 'OTHER' | 'UNKNOWN';
+export type OccupancyStatus = 'OWNER_OCCUPIED' | 'TENANT_OCCUPIED' | 'FAMILY_OCCUPIED' | 'MIXED' | 'VACANT' | 'UNKNOWN';
+export type OutdoorSpaceType = 'PRIVATE_YARD' | 'BALCONY' | 'PATIO' | 'DECK' | 'GARDEN_BED' | 'SHARED_YARD' | 'ROOFTOP';
+
+export interface PropertyExteriorProfile {
+  hasPrivateOutdoorSpace?: boolean | null;
+  outdoorSpaceTypes?: OutdoorSpaceType[];
+  lotSizeSqFt?: number | null;
+  hasLawn?: boolean | null;
+  hasTreesOrShrubs?: boolean | null;
+  hasDriveway?: boolean | null;
+  hasFence?: boolean | null;
+  hasPoolOrSpa?: boolean | null;
+  hasIrrigation?: boolean | null;
+  hasOutdoorFaucets?: boolean | null;
+  hasDrainageIssues?: boolean | null;
+}
+
 export const HeatingTypes = {
   HVAC: 'HVAC',
   FURNACE: 'FURNACE',
@@ -1152,6 +1176,10 @@ export interface Property {
   
   // New Basic/Migrated Fields
   propertyType: PropertyType | null; // Use new type
+  dwellingType: DwellingType;
+  ownershipForm: OwnershipForm;
+  propertyUse: PropertyUse;
+  occupancyStatus: OccupancyStatus;
   propertySize: number | null;
   yearBuilt: number | null;
   bedrooms: number | null;
@@ -1195,6 +1223,7 @@ export interface Property {
   coverPhotoDocumentId: string | null;
   applianceAges: any;
   coverPhoto?: Document | null;
+  exteriorProfile?: PropertyExteriorProfile | null;
   
   // Home Assets relation
   homeAssets?: HomeAsset[];
@@ -1202,6 +1231,48 @@ export interface Property {
   createdAt: string;
   updatedAt: string;
   // ... include any other existing fields ...
+}
+
+export type PropertyContextScope =
+  | 'CORE' | 'LOCATION' | 'STRUCTURE' | 'EXTERIOR' | 'RESPONSIBILITY' | 'SYSTEMS'
+  | 'SAFETY' | 'ROOMS' | 'INVENTORY' | 'MAINTENANCE' | 'RECALLS' | 'INSPECTION'
+  | 'COVERAGE' | 'RISK' | 'FINANCIAL' | 'COMPLIANCE' | 'PROJECTS' | 'EVENTS'
+  | 'ENVIRONMENT' | 'GUIDANCE_STATE' | 'PRODUCT_CONTEXT' | 'OPTIONAL_HOUSEHOLD';
+
+export interface PropertyContextFact<T = unknown> {
+  key: string;
+  value: T | null;
+  state: 'KNOWN' | 'UNKNOWN' | 'CONFLICTED' | 'STALE';
+  source: 'USER_REPORTED' | 'DOCUMENT' | 'INSPECTION' | 'PUBLIC_RECORD' | 'INTEGRATION' | 'SYSTEM_DERIVED' | null;
+  verified: boolean;
+  confidence: number | null;
+  observedAt: string | null;
+  validUntil: string | null;
+  correctionPath: string | null;
+}
+
+export interface PropertyContextSnapshot {
+  propertyId: string;
+  contextVersion: string;
+  generatedAt: string;
+  scopes: PropertyContextScope[];
+  facts: Record<string, PropertyContextFact>;
+  warnings: Array<{ code: 'CONFLICT' | 'STALE_SOURCE' | 'PARTIAL_SCOPE'; factKeys: string[] }>;
+}
+
+export interface PropertyContextCompleteness {
+  propertyId: string;
+  contextVersion: string;
+  completenessPercent: number;
+  scopes: Array<{
+    scope: PropertyContextScope;
+    totalFacts: number;
+    knownFacts: number;
+    completenessPercent: number;
+    missingFactKeys: string[];
+    conflictedFactKeys: string[];
+    staleFactKeys: string[];
+  }>;
 }
 
 /**
