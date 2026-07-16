@@ -5,6 +5,8 @@ import { prisma } from '../lib/prisma';
 import { sendEmail } from '../email/email.service';
 import { escapeHtml } from '../email/buildDigestHtml';
 import { logger } from '../lib/logger';
+import { evaluateSeasonalTemplateApplicability } from '../../../backend/src/services/seasonal/applicabilityPolicy';
+import { buildSeasonalPropertyContext } from './seasonalChecklistGeneration.job';
 
 // Type for checklist item with relations
 type ChecklistItemWithTemplate = {
@@ -46,6 +48,17 @@ export async function sendSeasonalNotifications() {
         property: {
           include: {
             user: true,
+            exteriorProfile: true,
+            responsibilities: true,
+            inventoryItems: { select: { category: true, name: true, tags: true } },
+            maintenanceTasks: {
+              select: {
+                status: true,
+                lastCompletedDate: true,
+                updatedAt: true,
+                seasonalChecklistItem: { select: { taskKey: true } },
+              },
+            },
           },
         },
         items: {
@@ -102,12 +115,12 @@ export async function sendSeasonalNotifications() {
 
       // Count successes and failures
       results.forEach((result, idx) => {
-        if (result.status === 'fulfilled') {
+        if (result.status === 'fulfilled' && result.value) {
           sent++;
           logger.info(
             `[SEASONAL-NOTIFY] ✅ Sent notification for checklist ${batch[idx].id}`
           );
-        } else {
+        } else if (result.status === 'rejected') {
           errors++;
           logger.error(
             `[SEASONAL-NOTIFY] ❌ Failed to send for checklist ${batch[idx].id}:`,
@@ -135,9 +148,22 @@ export async function sendSeasonalNotifications() {
 /**
  * Send notification for a single checklist
  */
-async function sendNotificationForChecklist(checklist: any): Promise<void> {
+async function sendNotificationForChecklist(checklist: any): Promise<boolean> {
   const user = checklist.property.user;
   const firstName = user.firstName || 'Homeowner';
+  const propertyContext = buildSeasonalPropertyContext(checklist.property);
+  const applicableItems = checklist.items.filter((item: any) =>
+    evaluateSeasonalTemplateApplicability(propertyContext, {
+      taskKey: item.taskKey,
+      priority: item.priority,
+      requiredAssetCheck: item.seasonalTaskTemplate.requiredAssetCheck,
+      requiredAssetType: item.seasonalTaskTemplate.requiredAssetType,
+    }).status === 'APPLICABLE',
+  );
+  if (applicableItems.length === 0) {
+    logger.info(`[SEASONAL-NOTIFY] Skipping checklist ${checklist.id}; no tasks remain applicable`);
+    return false;
+  }
 
   // Calculate days until season starts
   const daysUntil = Math.floor(
@@ -146,13 +172,13 @@ async function sendNotificationForChecklist(checklist: any): Promise<void> {
   );
 
   // Group tasks by priority
-  const criticalTasks = checklist.items.filter(
+  const criticalTasks = applicableItems.filter(
     (item: ChecklistItemWithTemplate) => item.priority === 'CRITICAL'
   );
-  const recommendedTasks = checklist.items.filter(
+  const recommendedTasks = applicableItems.filter(
     (item: ChecklistItemWithTemplate) => item.priority === 'RECOMMENDED'
   );
-  const optionalTasks = checklist.items.filter(
+  const optionalTasks = applicableItems.filter(
     (item: ChecklistItemWithTemplate) => item.priority === 'OPTIONAL'
   );
 
@@ -163,7 +189,7 @@ async function sendNotificationForChecklist(checklist: any): Promise<void> {
     year: checklist.year,
     daysUntil,
     climateRegion: checklist.climateRegion,
-    totalTasks: checklist.totalTasks,
+    totalTasks: applicableItems.length,
     criticalTasks: criticalTasks.map((item: ChecklistItemWithTemplate) => ({
       title: escapeHtml(item.title),
       description: item.description ? escapeHtml(item.description) : null,
@@ -185,7 +211,7 @@ async function sendNotificationForChecklist(checklist: any): Promise<void> {
   // Send email
   await sendEmail(
     user.email,
-    `${getSeasonName(checklist.season)} is approaching - ${checklist.totalTasks} tasks to prepare your home`,
+    `${getSeasonName(checklist.season)} is approaching - ${applicableItems.length} tasks to prepare your home`,
     emailHtml
   );
 
@@ -197,6 +223,7 @@ async function sendNotificationForChecklist(checklist: any): Promise<void> {
       notificationSentAt: new Date(),
     },
   });
+  return true;
 }
 
 /**

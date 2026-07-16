@@ -115,6 +115,9 @@ export const locationAssembler: PropertyContextAssembler = {
       'location.zipCode': property.zipCode,
       'location.timezone': property.timezone,
       'location.geocoded': property.latitude !== null && property.longitude !== null,
+      // No canonical coastal-exposure source exists yet. Do not infer it from
+      // state or ZIP; consumers must see UNKNOWN until a verified source lands.
+      'location.isCoastal': null,
     };
     return Object.entries(values).map(([key, value]) =>
       withPropertyId(createPropertyFact(key, value, evidence.get(key), now), propertyId),
@@ -221,6 +224,102 @@ export const responsibilityAssembler: PropertyContextAssembler = {
   },
 };
 
+function normalizeInstalledItemType(item: { category: string; name: string; tags: string[] }): string[] {
+  const text = `${item.category} ${item.name} ${item.tags.join(' ')}`.toUpperCase();
+  const types = new Set<string>([item.category]);
+  const patterns: Array<[RegExp, string]> = [
+    [/\b(AIR CONDITION|CENTRAL AC|WINDOW AC|HVAC_AC)\b/, 'AIR_CONDITIONER'],
+    [/\bFURNACE\b/, 'FURNACE'],
+    [/\b(WATER HEATER|BOILER)\b/, 'WATER_HEATER'],
+    [/\b(FIREPLACE|CHIMNEY)\b/, 'CHIMNEY'],
+    [/\bIRRIGATION|SPRINKLER\b/, 'IRRIGATION'],
+  ];
+  for (const [pattern, type] of patterns) {
+    if (pattern.test(text)) types.add(type);
+  }
+  return [...types];
+}
+
+export const systemsAssembler: PropertyContextAssembler = {
+  scope: 'SYSTEMS',
+  async assemble(propertyId, now) {
+    const property = await prisma.property.findUnique({
+      where: { id: propertyId },
+      select: {
+        coolingType: true,
+        inventoryItems: { select: { category: true, name: true, tags: true } },
+      },
+    });
+    if (!property) return [];
+    const installedItemTypes = [...new Set(property.inventoryItems.flatMap(normalizeInstalledItemType))].sort();
+    const hasCoolingFromProfile = property.coolingType && property.coolingType !== 'UNKNOWN' ? true : null;
+    const hasCooling = hasCoolingFromProfile ?? (installedItemTypes.includes('AIR_CONDITIONER') ? true : null);
+    const values: Record<string, unknown> = {
+      'systems.hasCooling': hasCooling,
+      'systems.installedItemTypes': installedItemTypes,
+    };
+    return Object.entries(values).map(([key, value]) =>
+      withPropertyId(createPropertyFact(key, value, undefined, now), propertyId),
+    );
+  },
+};
+
+export const safetyAssembler: PropertyContextAssembler = {
+  scope: 'SAFETY',
+  async assemble(propertyId, now) {
+    const property = await prisma.property.findUnique({
+      where: { id: propertyId },
+      select: {
+        hasSmokeDetectors: true,
+        hasCoDetectors: true,
+        hasSecuritySystem: true,
+        hasFireExtinguisher: true,
+        hasSumpPumpBackup: true,
+      },
+    });
+    if (!property) return [];
+    const values: Record<string, unknown> = {
+      'safety.hasSmokeDetectors': property.hasSmokeDetectors,
+      'safety.hasCoDetectors': property.hasCoDetectors,
+      'safety.hasSecuritySystem': property.hasSecuritySystem,
+      'safety.hasFireExtinguisher': property.hasFireExtinguisher,
+      'safety.hasSumpPumpBackup': property.hasSumpPumpBackup,
+    };
+    return Object.entries(values).map(([key, value]) =>
+      withPropertyId(createPropertyFact(key, value, undefined, now), propertyId),
+    );
+  },
+};
+
+export const maintenanceAssembler: PropertyContextAssembler = {
+  scope: 'MAINTENANCE',
+  async assemble(propertyId, now) {
+    const tasks = await prisma.propertyMaintenanceTask.findMany({
+      where: { propertyId },
+      select: {
+        id: true,
+        actionKey: true,
+        status: true,
+        nextDueDate: true,
+        lastCompletedDate: true,
+        updatedAt: true,
+        seasonalChecklistItem: { select: { taskKey: true } },
+      },
+      orderBy: { updatedAt: 'desc' },
+    });
+    const serialized = tasks.map((task) => ({
+      id: task.id,
+      actionKey: task.actionKey,
+      seasonalTaskKey: task.seasonalChecklistItem?.taskKey ?? null,
+      status: task.status,
+      nextDueDate: task.nextDueDate?.toISOString() ?? null,
+      lastCompletedDate: task.lastCompletedDate?.toISOString() ?? null,
+      updatedAt: task.updatedAt.toISOString(),
+    }));
+    return [withPropertyId(createPropertyFact('maintenance.tasks', serialized, undefined, now), propertyId)];
+  },
+};
+
 export const roomsAssembler: PropertyContextAssembler = {
   scope: 'ROOMS',
   async assemble(propertyId, now) {
@@ -306,7 +405,10 @@ export const INITIAL_PROPERTY_CONTEXT_ASSEMBLERS: PropertyContextAssembler[] = [
   structureAssembler,
   exteriorAssembler,
   responsibilityAssembler,
+  systemsAssembler,
+  safetyAssembler,
   roomsAssembler,
   inventoryAssembler,
+  maintenanceAssembler,
   productContextAssembler,
 ];

@@ -20,6 +20,21 @@ const prismaMock = {
           electricalPanelAge: 12,
         };
       }
+      if (args.select.coolingType) {
+        return {
+          coolingType: 'CENTRAL_AC',
+          inventoryItems: [{ category: 'HVAC', name: 'Gas Furnace', tags: ['heating'] }],
+        };
+      }
+      if (args.select.hasSmokeDetectors) {
+        return {
+          hasSmokeDetectors: true,
+          hasCoDetectors: null,
+          hasSecuritySystem: false,
+          hasFireExtinguisher: true,
+          hasSumpPumpBackup: null,
+        };
+      }
       return {
         homeownerProfile: { segment: 'EXISTING_OWNER' },
         onboarding: { status: 'IN_PROGRESS', currentStep: 3, setupScore: 60 },
@@ -51,6 +66,17 @@ const prismaMock = {
   householdMember: {
     findUnique: async (args) => { calls.push(['member', args]); return { role: 'CONTRIBUTOR' }; },
   },
+  propertyMaintenanceTask: {
+    findMany: async (args) => {
+      calls.push(['maintenance', args]);
+      return [{
+        id: 'task-1', actionKey: 'seasonal:test', status: 'COMPLETED', nextDueDate: null,
+        lastCompletedDate: new Date('2026-06-01T00:00:00.000Z'),
+        updatedAt: new Date('2026-06-01T00:00:00.000Z'),
+        seasonalChecklistItem: { taskKey: 'SPRING_HVAC_AC_INSPECTION' },
+      }];
+    },
+  },
 };
 
 const prismaPath = require.resolve('../../src/lib/prisma.ts');
@@ -66,6 +92,9 @@ const {
   roomsAssembler,
   inventoryAssembler,
   productContextAssembler,
+  systemsAssembler,
+  safetyAssembler,
+  maintenanceAssembler,
 } = require('../../src/modules/propertyContext/infrastructure/prismaAssemblers.ts');
 const { getPropertyContext } = require('../../src/modules/propertyContext/application/getPropertyContext.ts');
 
@@ -121,4 +150,15 @@ test('PRODUCT_CONTEXT keeps permissions and product state separate from physical
   assert.equal(facts['product.canViewFacts'].value, true);
   assert.equal(facts['product.canCorrectFacts'].value, true);
   assert.ok(calls.some(([name]) => name === 'member'));
+});
+
+test('SYSTEMS, SAFETY, and MAINTENANCE expose bounded preventive-care facts', async () => {
+  const systems = byKey(await systemsAssembler.assemble('property-1', NOW));
+  const safety = byKey(await safetyAssembler.assemble('property-1', NOW));
+  const maintenance = byKey(await maintenanceAssembler.assemble('property-1', NOW));
+  assert.equal(systems['systems.hasCooling'].value, true);
+  assert.ok(systems['systems.installedItemTypes'].value.includes('FURNACE'));
+  assert.equal(safety['safety.hasCoDetectors'].state, 'UNKNOWN');
+  assert.equal(maintenance['maintenance.tasks'].value[0].seasonalTaskKey, 'SPRING_HVAC_AC_INSPECTION');
+  assert.equal(maintenance['maintenance.tasks'].value[0].lastCompletedDate, '2026-06-01T00:00:00.000Z');
 });

@@ -1,6 +1,7 @@
 // apps/workers/src/jobs/seasonalChecklistGeneration.job.ts
 import { prisma } from '../lib/prisma';
 import { logger } from '../lib/logger';
+import { evaluateSeasonalTemplateApplicability } from '../../../backend/src/services/seasonal/applicabilityPolicy';
 
 // Define types locally since they may not be exported from Prisma client
 type Season = 'SPRING' | 'SUMMER' | 'FALL' | 'WINTER';
@@ -16,6 +17,90 @@ type SeasonalTaskTemplate = {
   requiredAssetType: string | null;
   requiredAssetCheck: string | null;
 };
+
+function contextFact(key: string, value: unknown) {
+  return {
+    key,
+    value: value ?? null,
+    state: value === null || value === undefined ? 'UNKNOWN' : 'KNOWN',
+    source: null,
+    verified: false,
+    confidence: null,
+    observedAt: null,
+    validUntil: null,
+    correctionPath: null,
+  };
+}
+
+function installedItemTypes(items: Array<{ category: string; name: string; tags: string[] }>): string[] {
+  const result = new Set<string>();
+  for (const item of items) {
+    const text = `${item.category} ${item.name} ${item.tags.join(' ')}`.toUpperCase();
+    result.add(item.category);
+    if (/\b(AIR CONDITION|CENTRAL AC|WINDOW AC|HVAC_AC)\b/.test(text)) result.add('AIR_CONDITIONER');
+    if (/\bFURNACE\b/.test(text)) result.add('FURNACE');
+    if (/\b(WATER HEATER|BOILER)\b/.test(text)) result.add('WATER_HEATER');
+    if (/\b(FIREPLACE|CHIMNEY)\b/.test(text)) result.add('CHIMNEY');
+    if (/\bIRRIGATION|SPRINKLER\b/.test(text)) result.add('IRRIGATION');
+  }
+  return [...result].sort();
+}
+
+const responsibilityKeys: Record<string, string> = {
+  ROOF: 'responsibility.roof',
+  BUILDING_EXTERIOR: 'responsibility.buildingExterior',
+  LANDSCAPING: 'responsibility.landscaping',
+  TREES_SHRUBS: 'responsibility.treesShrubs',
+  DRIVEWAY_WALKWAYS: 'responsibility.drivewayWalkways',
+  DECK_PATIO_BALCONY: 'responsibility.deckPatioBalcony',
+  PLUMBING: 'responsibility.plumbing',
+  HVAC: 'responsibility.hvac',
+  COMMON_SAFETY: 'responsibility.commonSafety',
+  SNOW_ICE: 'responsibility.snowIce',
+  PEST_CONTROL: 'responsibility.pestControl',
+  SHARED_SYSTEMS: 'responsibility.sharedSystems',
+};
+
+export function buildSeasonalPropertyContext(property: any, now: Date = new Date()): any {
+  const types = installedItemTypes(property.inventoryItems ?? []);
+  const exterior = property.exteriorProfile;
+  const facts: Record<string, any> = {};
+  const add = (key: string, value: unknown) => { facts[key] = contextFact(key, value); };
+  add('location.isCoastal', null);
+  add('structure.roofType', property.roofType === 'UNKNOWN' ? null : property.roofType);
+  add('exterior.hasPrivateOutdoorSpace', exterior?.hasPrivateOutdoorSpace);
+  add('exterior.outdoorSpaceTypes', exterior?.outdoorSpaceTypes);
+  add('exterior.hasLawn', exterior?.hasLawn);
+  add('exterior.hasTreesOrShrubs', exterior?.hasTreesOrShrubs);
+  add('exterior.hasDriveway', exterior?.hasDriveway);
+  add('exterior.hasPoolOrSpa', exterior?.hasPoolOrSpa);
+  add('exterior.hasIrrigation', exterior?.hasIrrigation);
+  add('exterior.hasOutdoorFaucets', exterior?.hasOutdoorFaucets);
+  add('systems.hasCooling', property.coolingType && property.coolingType !== 'UNKNOWN'
+    ? true
+    : types.includes('AIR_CONDITIONER') ? true : null);
+  add('systems.installedItemTypes', types);
+  add('safety.hasSmokeDetectors', property.hasSmokeDetectors);
+  add('safety.hasCoDetectors', property.hasCoDetectors);
+  for (const responsibility of property.responsibilities ?? []) {
+    const key = responsibilityKeys[responsibility.scope];
+    if (key) add(key, responsibility.party);
+  }
+  add('maintenance.tasks', (property.maintenanceTasks ?? []).map((task: any) => ({
+    seasonalTaskKey: task.seasonalChecklistItem?.taskKey ?? null,
+    status: task.status,
+    lastCompletedDate: task.lastCompletedDate?.toISOString() ?? null,
+    updatedAt: task.updatedAt.toISOString(),
+  })));
+  return {
+    propertyId: property.id,
+    contextVersion: 'worker-current',
+    generatedAt: now.toISOString(),
+    scopes: ['LOCATION', 'STRUCTURE', 'EXTERIOR', 'RESPONSIBILITY', 'SYSTEMS', 'SAFETY', 'MAINTENANCE'],
+    facts,
+    warnings: [],
+  };
+}
 
 /**
  * Background job to auto-generate seasonal checklists
@@ -214,7 +299,17 @@ async function generateChecklistForProperty(
   const property = await prisma.property.findUnique({
     where: { id: propertyId },
     include: {
-      homeAssets: true,
+      exteriorProfile: true,
+      responsibilities: true,
+      inventoryItems: { select: { category: true, name: true, tags: true } },
+      maintenanceTasks: {
+        select: {
+          status: true,
+          lastCompletedDate: true,
+          updatedAt: true,
+          seasonalChecklistItem: { select: { taskKey: true } },
+        },
+      },
     },
   });
 
@@ -246,13 +341,17 @@ async function generateChecklistForProperty(
 
   // Filter templates based on user exclusions
   const excludedTaskKeys = climateSetting?.excludedTaskKeys || [];
-  const filteredTemplates = templates.filter((template: SeasonalTaskTemplate) => {
+  const includedTemplates = templates.filter((template: SeasonalTaskTemplate) => {
     return !excludedTaskKeys.includes(template.taskKey);
   });
+  const propertyContext = buildSeasonalPropertyContext(property);
+  const filteredTemplates = includedTemplates.filter((template: SeasonalTaskTemplate) =>
+    evaluateSeasonalTemplateApplicability(propertyContext, template).status === 'APPLICABLE',
+  );
 
   logger.info(
     `[SEASONAL] After filtering: ${filteredTemplates.length} tasks ` +
-    `(excluded ${templates.length - filteredTemplates.length})`
+    `(excluded or inapplicable ${templates.length - filteredTemplates.length})`
   );
 
   // Calculate season dates

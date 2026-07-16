@@ -54,6 +54,7 @@ RUN mkdir -p src/shared/backend/utils \
              src/shared/backend/services/incidents/integrations \
              src/shared/backend/services/hiddenAssets \
              src/shared/backend/services/homeHabitCoach \
+             src/shared/backend/services/seasonal \
              src/shared/backend/services/analytics \
              src/shared/backend/services/guidanceEngine \
              src/shared/backend/types \
@@ -63,6 +64,7 @@ RUN mkdir -p src/shared/backend/utils \
              src/shared/backend/modules/gazette/types \
              src/shared/backend/modules/gazette/dto \
              src/shared/backend/modules/gazette/mappers \
+             src/shared/backend/modules/propertyContext/domain \
              src/shared/backend/neighborhoodIntelligence \
              src/shared/backend/refinanceRadar/engine \
              src/shared/backend/refinanceRadar/config \
@@ -114,6 +116,8 @@ COPY apps/backend/src/services/PropertyMaintenanceTask.service.ts \
      src/shared/backend/services/
 # Pure (Express-free) property-access resolution used by PropertyMaintenanceTask.service.ts
 COPY apps/backend/src/services/propertyAccess.service.ts src/shared/backend/services/
+COPY apps/backend/src/services/seasonal/applicabilityPolicy.ts src/shared/backend/services/seasonal/
+COPY apps/backend/src/modules/propertyContext/domain/contracts.ts src/shared/backend/modules/propertyContext/domain/
 # Stub: breaks the JobQueue.service ↔ RiskAssessment.service circular import
 COPY apps/workers/stubs/job-queue-service.ts src/shared/backend/services/JobQueue.service.ts
 COPY apps/backend/src/services/hiddenAssets/ruleEngine.ts \
@@ -242,6 +246,7 @@ RUN sed -i 's/\.\.\/\.\.\/backend\/src\/utils\/riskCalculator\.util/\.\/shared\/
     sed -i 's/\.\.\/\.\.\/backend\/src\/services\/incidents\/incident\.service/\.\/shared\/backend\/services\/incidents\/incident\.service/g' src/jobs/freezeRiskIncidents.job.ts && \
     sed -i 's/\.\.\/\.\.\/backend\/src\/services\/hiddenAssets\.service/\.\/shared\/backend\/services\/hiddenAssets\.service/g' src/worker.ts && \
     sed -i 's/\.\.\/\.\.\/backend\/src\/services\/RiskAssessment\.service/\.\/shared\/backend\/services\/RiskAssessment\.service/g' src/worker.ts && \
+    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/seasonal\/applicabilityPolicy/\.\.\/shared\/backend\/services\/seasonal\/applicabilityPolicy/g' src/jobs/seasonalChecklistGeneration.job.ts src/jobs/seasonalNotification.job.ts && \
     sed -i 's/\.\.\/\.\.\/backend\/src\/config\/workerJobRegistry/\.\/shared\/backend\/config\/workerJobRegistry/g' src/worker.ts && \
     sed -i 's/\.\.\/\.\.\/backend\/src\/config\/queueDefaults/\.\/shared\/backend\/config\/queueDefaults/g' src/worker.ts && \
     sed -i 's/\.\.\/\.\.\/backend\/src\/config\/queueDefaults/\.\/shared\/backend\/config\/queueDefaults/g' src/runners/highPriorityEmailEnqueue.poller.ts && \

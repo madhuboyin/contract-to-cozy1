@@ -6,6 +6,8 @@ import { syncSeasonalChecklistStatus } from './seasonalChecklistStatus.service';
 import { deriveChecklistProgress, isDismissibleSeasonalPriority } from '../utils/seasonalProgress';
 import { prisma } from '../lib/prisma';
 import { logger } from '../lib/logger';
+import { getPropertyContext } from '../modules/propertyContext';
+import { evaluateSeasonalTemplateApplicability } from './seasonal/applicabilityPolicy';
 
 export class SeasonalChecklistService {
   private static async assertPropertyOwnership(propertyId: string, userId: string) {
@@ -115,10 +117,26 @@ export class SeasonalChecklistService {
       ],
     });
 
-    // Filter tasks based on property assets
-    const filteredTemplates = templates.filter((template) => {
-      return this.shouldIncludeTask(template, property);
-    });
+    const propertyContext = await getPropertyContext(
+      propertyId,
+      { userId },
+      { scopes: ['LOCATION', 'STRUCTURE', 'EXTERIOR', 'RESPONSIBILITY', 'SYSTEMS', 'SAFETY', 'MAINTENANCE'] },
+    );
+    const decisions = templates.map((template) => ({
+      template,
+      decision: evaluateSeasonalTemplateApplicability(propertyContext, template),
+    }));
+    const filteredTemplates = decisions
+      .filter(({ decision }) => decision.status === 'APPLICABLE')
+      .map(({ template }) => template);
+    const skippedByStatus = decisions.reduce<Record<string, number>>((counts, { decision }) => {
+      counts[decision.status] = (counts[decision.status] ?? 0) + 1;
+      return counts;
+    }, {});
+    logger.info(
+      { propertyId, season, year, templateCount: templates.length, includedCount: filteredTemplates.length, skippedByStatus },
+      'Seasonal templates evaluated against Property Context',
+    );
 
     // Create checklist
     const checklist = await prisma.seasonalChecklist.create({
@@ -159,39 +177,6 @@ export class SeasonalChecklistService {
     });
 
     return checklist;
-  }
-
-  /**
-   * Check if task should be included based on property assets
-   */
-  private static shouldIncludeTask(template: any, property: any): boolean {
-    // If no asset requirement, include task
-    if (!template.requiredAssetCheck) {
-      return true;
-    }
-
-    // Check property fields
-    const assetCheck = template.requiredAssetCheck;
-    
-    // Direct property field checks
-    if (assetCheck === 'has_pool' && property.hasPool) return true;
-    if (assetCheck === 'has_deck' && property.hasDeck) return true;
-    if (assetCheck === 'has_fireplace' && property.hasFireplace) return true;
-    if (assetCheck === 'has_sprinkler_system' && property.hasIrrigation) return true;
-    if (assetCheck === 'has_lawn' && property.lotSize && property.lotSize > 0) return true;
-    if (assetCheck === 'has_driveway' && property.hasDriveway) return true;
-    if (assetCheck === 'has_ac' && (property.coolingType || property.homeAssets?.some((a: any) => a.assetType === 'HVAC_AC'))) return true;
-    if (assetCheck === 'is_coastal' && property.isCoastal) return true;
-
-    // Check homeAssets array
-    if (template.requiredAssetType && property.homeAssets) {
-      const hasAsset = property.homeAssets.some(
-        (asset: any) => asset.assetType === template.requiredAssetType
-      );
-      if (hasAsset) return true;
-    }
-
-    return false;
   }
 
   /**
