@@ -62,7 +62,6 @@ function shouldReuseJourney(existing, incoming) {
     existing.propertyId === incoming.propertyId &&
     existing.journeyTypeKey === incoming.journeyTypeKey &&
     existing.inventoryItemId === incoming.inventoryItemId &&
-    existing.homeAssetId === incoming.homeAssetId &&
     existing.mergedSignalGroupKey === incoming.mergedSignalGroupKey &&
     existing.status === 'ACTIVE'
   );
@@ -358,7 +357,6 @@ test('duplicate active journey reuse evaluates true for same property/scope/grou
     propertyId: 'p1',
     journeyTypeKey: 'asset_lifecycle_resolution',
     inventoryItemId: 'item1',
-    homeAssetId: null,
     mergedSignalGroupKey: 'p1:ASSET_LIFECYCLE:lifecycle_end_or_past_life:item1',
     status: 'ACTIVE',
   };
@@ -367,7 +365,6 @@ test('duplicate active journey reuse evaluates true for same property/scope/grou
     propertyId: 'p1',
     journeyTypeKey: 'asset_lifecycle_resolution',
     inventoryItemId: 'item1',
-    homeAssetId: null,
     mergedSignalGroupKey: 'p1:ASSET_LIFECYCLE:lifecycle_end_or_past_life:item1',
   };
 

@@ -58,7 +58,7 @@ test.describe('CTA Promise Validation', () => {
       const filter = url.searchParams.get('filter');
       const expectedCount = url.searchParams.get('expectedCount');
       
-      let items = [];
+      let items: Array<{ id: string; type: string; title: string; priority: string }> = [];
       if (filter === 'maintenance') {
         items = Array.from({ length: parseInt(expectedCount || '0') }, (_, i) => ({
           id: `maintenance-${i}`,
@@ -209,7 +209,7 @@ test.describe('CTA Promise Validation', () => {
       const filter = url.searchParams.get('filter');
       const expectedCount = url.searchParams.get('expectedCount');
       
-      let gaps = [];
+      let gaps: Array<{ id: string; type: string; asset: string; gapAmount: number }> = [];
       if (filter === 'gaps') {
         gaps = Array.from({ length: parseInt(expectedCount || '0') }, (_, i) => ({
           id: `gap-${i}`,

@@ -10,7 +10,7 @@ const {
   HVAC_FILTER_PROOF_RULE_VERSION,
 } = require('../../src/modules/personalization/catalog/proofDefinition.ts');
 
-function createPrismaMock({ definition = null, homeAssets = [], property = { id: 'prop-1' }, killSwitchPaused = false } = {}) {
+function createPrismaMock({ definition = null, inventoryItems = [], property = { id: 'prop-1' }, killSwitchPaused = false } = {}) {
   const runs = [];
 
   const prismaMock = {
@@ -31,7 +31,7 @@ function createPrismaMock({ definition = null, homeAssets = [], property = { id:
             roofReplacementYear: null,
             homeownerProfile: { userId: 'owner-1' },
             ...property,
-            inventoryItems: homeAssets.map((asset) => ({
+            inventoryItems: inventoryItems.map((asset) => ({
               name: asset.assetType,
               category: asset.assetType,
               tags: [],
@@ -187,8 +187,8 @@ test('returns FAILED/INVALID_RULE_AST and records a failed run when the stored r
 });
 
 test('positive fixture: HVAC serviced 200 days ago -> eligible TRUE, run recorded COMPLETED', async () => {
-  const homeAssets = [{ assetType: 'HVAC_FURNACE', lastServiced: new Date(Date.now() - 200 * 24 * 60 * 60 * 1000) }];
-  const { prismaMock, runs } = createPrismaMock({ definition: REAL_DEFINITION, homeAssets });
+  const inventoryItems = [{ assetType: 'HVAC_FURNACE', lastServiced: new Date(Date.now() - 200 * 24 * 60 * 60 * 1000) }];
+  const { prismaMock, runs } = createPrismaMock({ definition: REAL_DEFINITION, inventoryItems });
   installPrismaMock(prismaMock);
   const { evaluateDefinitionForProperty } = loadUseCase();
 
@@ -208,8 +208,8 @@ test('positive fixture: HVAC serviced 200 days ago -> eligible TRUE, run recorde
 });
 
 test('negative fixture: HVAC serviced 5 days ago -> not eligible FALSE', async () => {
-  const homeAssets = [{ assetType: 'HVAC_FURNACE', lastServiced: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000) }];
-  const { prismaMock, runs } = createPrismaMock({ definition: REAL_DEFINITION, homeAssets });
+  const inventoryItems = [{ assetType: 'HVAC_FURNACE', lastServiced: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000) }];
+  const { prismaMock, runs } = createPrismaMock({ definition: REAL_DEFINITION, inventoryItems });
   installPrismaMock(prismaMock);
   const { evaluateDefinitionForProperty } = loadUseCase();
 
@@ -221,7 +221,7 @@ test('negative fixture: HVAC serviced 5 days ago -> not eligible FALSE', async (
 });
 
 test('unknown fixture: no HVAC asset at all -> UNKNOWN, never treated as eligible', async () => {
-  const { prismaMock, runs } = createPrismaMock({ definition: REAL_DEFINITION, homeAssets: [] });
+  const { prismaMock, runs } = createPrismaMock({ definition: REAL_DEFINITION, inventoryItems: [] });
   installPrismaMock(prismaMock);
   const { evaluateDefinitionForProperty } = loadUseCase();
 

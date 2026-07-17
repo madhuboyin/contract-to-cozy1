@@ -14,6 +14,11 @@ import {
   capturePropertyFactInputSchema,
   listPropertyFactEvidence,
 } from '../application/capturePropertyFact';
+import { evaluateProtectionContext } from '../../../services/protection/applicabilityPolicy';
+import { evaluateFinancialContext } from '../../../services/financialContext/applicabilityPolicy';
+import { evaluatePlanningContext } from '../../../services/planningContext/applicabilityPolicy';
+import { evaluateAggregationContext } from '../../../services/aggregationContext/applicabilityPolicy';
+import { evaluateProjectComplianceContext } from '../../../services/projectCompliance/applicabilityPolicy';
 
 export const PHASE_ONE_CONTEXT_SCOPES: PropertyContextScope[] = [
   'CORE',
@@ -64,6 +69,30 @@ export async function getPropertyContextCompleteness(req: AuthRequest, res: Resp
     const scopes = parseContextScopes(req.query.scopes);
     const snapshot = await getPropertyContext(req.params.id, { userId: req.user!.userId }, { scopes });
     return res.json({ success: true, data: getContextCompleteness(snapshot) });
+  } catch (error) {
+    return handleContextError(error, res);
+  }
+}
+
+export async function getPropertyContextDecisionMatrix(req: AuthRequest, res: Response): Promise<Response> {
+  try {
+    const snapshot = await getPropertyContext(
+      req.params.id,
+      { userId: req.user!.userId },
+      { scopes: [...PROPERTY_CONTEXT_SCOPES] },
+    );
+    return res.json({
+      success: true,
+      data: {
+        propertyId: snapshot.propertyId,
+        contextVersion: snapshot.contextVersion,
+        protection: evaluateProtectionContext(snapshot),
+        projectCompliance: evaluateProjectComplianceContext(snapshot),
+        financial: evaluateFinancialContext(snapshot),
+        planning: evaluatePlanningContext(snapshot),
+        aggregation: evaluateAggregationContext(snapshot),
+      },
+    });
   } catch (error) {
     return handleContextError(error, res);
   }

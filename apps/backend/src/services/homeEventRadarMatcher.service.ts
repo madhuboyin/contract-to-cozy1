@@ -549,8 +549,10 @@ async function findMatchingProperties(
       break;
     case 'county':
     case 'polygon':
-      // MVP: county field not on Property; polygon requires geo library.
-      // TODO: implement when county is added to schema or geo library is available.
+      // Evidence-backed deferral: Property has no canonical county identifier,
+      // and Radar polygon events do not yet have an approved GeoJSON/SRID
+      // contract. Never broaden these events to city/ZIP matches or infer a
+      // boundary; see PHASE8_DEFERRED_EVIDENCE.md.
       return [];
     default:
       return [];

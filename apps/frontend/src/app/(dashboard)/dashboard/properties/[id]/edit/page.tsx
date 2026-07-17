@@ -15,7 +15,17 @@ import {
   WaterHeaterTypes,
   RoofTypes,
   FoundationTypes,
+  type OutdoorSpaceType,
 } from "@/types"; 
+import {
+  OUTDOOR_SPACE_TYPE_OPTIONS,
+  RESPONSIBILITY_SCOPES,
+  RESPONSIBLE_PARTY_OPTIONS,
+  defaultResponsibilityParties,
+  mapResponsibilitiesToForm,
+  mapResponsibilitiesToPayload,
+  normalizeOutdoorSpaceTypes,
+} from "@/lib/property/propertyContextForm";
 import { api } from "@/lib/api/client";
 import { Card, CardContent, CardDescription } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -61,8 +71,6 @@ const DWELLING_OPTIONS = ['DETACHED_SINGLE_FAMILY', 'ATTACHED_SINGLE_FAMILY', 'T
 const OWNERSHIP_FORM_OPTIONS = ['FEE_SIMPLE', 'CONDOMINIUM', 'COOPERATIVE', 'LEASEHOLD', 'OTHER', 'UNKNOWN'] as const;
 const PROPERTY_USE_OPTIONS = ['PRIMARY_RESIDENCE', 'SECOND_HOME', 'LONG_TERM_RENTAL', 'SHORT_TERM_RENTAL', 'VACANT', 'UNDER_RENOVATION', 'FOR_SALE', 'OTHER', 'UNKNOWN'] as const;
 const OCCUPANCY_STATUS_OPTIONS = ['OWNER_OCCUPIED', 'TENANT_OCCUPIED', 'FAMILY_OCCUPIED', 'MIXED', 'VACANT', 'UNKNOWN'] as const;
-const RESPONSIBLE_PARTY_OPTIONS = ['OWNER', 'ASSOCIATION', 'LANDLORD', 'SHARED', 'UNKNOWN'] as const;
-const RESPONSIBILITY_SCOPES = ['ROOF', 'BUILDING_EXTERIOR', 'LANDSCAPING', 'TREES_SHRUBS', 'DRIVEWAY_WALKWAYS', 'DECK_PATIO_BALCONY', 'PLUMBING', 'HVAC', 'COMMON_SAFETY', 'SNOW_ICE', 'PEST_CONTROL', 'SHARED_SYSTEMS'] as const;
 
 const APPLIANCE_DISPLAY_LABELS: Record<string, string> = {
   DISHWASHER: 'Dishwasher',
@@ -187,7 +195,7 @@ const propertySchema = z.object({
   ownershipForm: z.enum(OWNERSHIP_FORM_OPTIONS),
   propertyUse: z.enum(PROPERTY_USE_OPTIONS),
   occupancyStatus: z.enum(OCCUPANCY_STATUS_OPTIONS),
-  responsibilityParty: z.enum(RESPONSIBLE_PARTY_OPTIONS),
+  responsibilities: z.record(z.enum(RESPONSIBILITY_SCOPES), z.enum(RESPONSIBLE_PARTY_OPTIONS)),
   
   propertySize: z.coerce.number().int().positive().optional().nullable(),
   yearBuilt: z.coerce.number().int().min(1700).optional().nullable(),
@@ -222,6 +230,7 @@ const propertySchema = z.object({
   hasFireExtinguisher: z.boolean().nullable().optional(),
   hasIrrigation: z.boolean().nullable().optional(),
   hasPrivateOutdoorSpace: z.boolean().nullable().optional(),
+  outdoorSpaceTypes: z.array(z.enum(OUTDOOR_SPACE_TYPE_OPTIONS)),
   hasLawn: z.boolean().nullable().optional(),
   hasTreesOrShrubs: z.boolean().nullable().optional(),
   hasDriveway: z.boolean().nullable().optional(),
@@ -284,7 +293,7 @@ const mapDbToForm = (property: any): PropertyFormValues => {
         ownershipForm: property.ownershipForm || "UNKNOWN",
         propertyUse: property.propertyUse || "UNKNOWN",
         occupancyStatus: property.occupancyStatus || "UNKNOWN",
-        responsibilityParty: property.responsibilities?.[0]?.party || "UNKNOWN",
+        responsibilities: mapResponsibilitiesToForm(property.responsibilities),
         propertySize: property.propertySize,
         yearBuilt: property.yearBuilt,
         
@@ -307,6 +316,10 @@ const mapDbToForm = (property: any): PropertyFormValues => {
         hasFireExtinguisher: property.hasFireExtinguisher ?? null,
         hasIrrigation: property.hasIrrigation ?? null,
         hasPrivateOutdoorSpace: property.exteriorProfile?.hasPrivateOutdoorSpace ?? null,
+        outdoorSpaceTypes: normalizeOutdoorSpaceTypes(
+          property.exteriorProfile?.hasPrivateOutdoorSpace,
+          property.exteriorProfile?.outdoorSpaceTypes as OutdoorSpaceType[] | undefined,
+        ),
         hasLawn: property.exteriorProfile?.hasLawn ?? null,
         hasTreesOrShrubs: property.exteriorProfile?.hasTreesOrShrubs ?? null,
         hasDriveway: property.exteriorProfile?.hasDriveway ?? null,
@@ -590,14 +603,14 @@ export default function EditPropertyPage() {
     defaultValues: {
       name: "", isPrimary: false, address: "", city: "", state: "", zipCode: "",
       dwellingType: "UNKNOWN", ownershipForm: "UNKNOWN", propertyUse: "UNKNOWN",
-      occupancyStatus: "UNKNOWN", responsibilityParty: "UNKNOWN",
+      occupancyStatus: "UNKNOWN", responsibilities: defaultResponsibilityParties('UNKNOWN'),
       propertySize: null, yearBuilt: null, bedrooms: null, bathrooms: null,
       heatingType: "" as any, coolingType: "" as any, waterHeaterType: "" as any, 
       roofType: "" as any, hvacInstallYear: null, waterHeaterInstallYear: null,
       roofReplacementYear: null, foundationType: "" as any, hasDrainageIssues: null, hasSmokeDetectors: null,
       hasCoDetectors: null, hasSecuritySystem: null, hasFireExtinguisher: null,
       hasIrrigation: null,
-      hasPrivateOutdoorSpace: null, hasLawn: null, hasTreesOrShrubs: null, hasDriveway: null,
+      hasPrivateOutdoorSpace: null, outdoorSpaceTypes: [], hasLawn: null, hasTreesOrShrubs: null, hasDriveway: null,
       purchasePriceDollars: null,
       purchaseDate: null,
       lastAppraisedValueDollars: null,
@@ -687,14 +700,14 @@ export default function EditPropertyPage() {
         hasIrrigation: data.hasIrrigation ?? undefined,
         exteriorProfile: {
           hasPrivateOutdoorSpace: data.hasPrivateOutdoorSpace,
-          outdoorSpaceTypes: data.hasPrivateOutdoorSpace ? ['PRIVATE_YARD' as const] : [],
+          outdoorSpaceTypes: normalizeOutdoorSpaceTypes(data.hasPrivateOutdoorSpace, data.outdoorSpaceTypes),
           hasLawn: data.hasLawn,
           hasTreesOrShrubs: data.hasTreesOrShrubs,
           hasDriveway: data.hasDriveway,
           hasIrrigation: data.hasIrrigation,
           hasDrainageIssues: data.hasDrainageIssues,
         },
-        responsibilities: RESPONSIBILITY_SCOPES.map((scope) => ({ scope, party: data.responsibilityParty })),
+        responsibilities: mapResponsibilitiesToPayload(data.responsibilities),
         purchasePriceCents: dollarsToCents(data.purchasePriceDollars),
         purchaseDate: data.purchaseDate ?? null,
         lastAppraisedValue: dollarsToCents(data.lastAppraisedValueDollars),
@@ -767,7 +780,7 @@ export default function EditPropertyPage() {
     watchOwnershipForm,
     watchPropertyUse,
     watchOccupancyStatus,
-    watchResponsibilityParty,
+    watchResponsibilities,
     watchPropertySize,
     watchYearBuilt,
     watchHeatingType,
@@ -797,7 +810,7 @@ export default function EditPropertyPage() {
     "ownershipForm",
     "propertyUse",
     "occupancyStatus",
-    "responsibilityParty",
+    "responsibilities",
     "propertySize",
     "yearBuilt",
     "heatingType",
@@ -875,7 +888,7 @@ export default function EditPropertyPage() {
         ownershipForm: watchOwnershipForm,
         propertyUse: watchPropertyUse,
         occupancyStatus: watchOccupancyStatus,
-        responsibilityParty: watchResponsibilityParty,
+        responsibilityParty: Object.values(watchResponsibilities ?? {}).some((party) => party !== 'UNKNOWN') ? 'OWNER' : 'UNKNOWN',
         propertySize: watchPropertySize,
         yearBuilt: watchYearBuilt,
         heatingType: watchHeatingType,
@@ -908,7 +921,7 @@ export default function EditPropertyPage() {
     watchOwnershipForm,
     watchPropertyUse,
     watchOccupancyStatus,
-    watchResponsibilityParty,
+    watchResponsibilities,
     watchPropertySize,
     watchYearBuilt,
     watchHeatingType,
@@ -1983,21 +1996,26 @@ export default function EditPropertyPage() {
               </div>
 
               <div id="responsibility" className="mt-5 border-t border-black/10 pt-4 dark:border-white/10">
-                <FormField
-                  control={form.control}
-                  name="responsibilityParty"
-                  render={({ field }) => (
-                    <FormItem className="max-w-sm">
-                      <FormLabel>Default maintenance responsibility</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl><SelectTrigger id="field-responsibilityParty"><SelectValue /></SelectTrigger></FormControl>
-                        <SelectContent>{RESPONSIBLE_PARTY_OPTIONS.map((option) => <SelectItem key={option} value={option}>{formatEnumLabel(option)}</SelectItem>)}</SelectContent>
-                      </Select>
-                      <p className="text-xs text-muted-foreground">Applied to roof, exterior, landscaping, shared systems, and other maintenance scopes.</p>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                <p className="mb-3 text-sm text-muted-foreground">Set responsibility separately so association-, landlord-, shared-, and owner-managed work stays accurate.</p>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {RESPONSIBILITY_SCOPES.map((scope) => (
+                    <FormField
+                      key={scope}
+                      control={form.control}
+                      name={`responsibilities.${scope}` as const}
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>{formatEnumLabel(scope)}</FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value}>
+                            <FormControl><SelectTrigger id={`field-responsibility-${scope}`}><SelectValue /></SelectTrigger></FormControl>
+                            <SelectContent>{RESPONSIBLE_PARTY_OPTIONS.map((option) => <SelectItem key={option} value={option}>{formatEnumLabel(option)}</SelectItem>)}</SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  ))}
+                </div>
               </div>
 
               <div id="exterior" className="mt-5 grid grid-cols-1 gap-3 border-t border-black/10 pt-4 dark:border-white/10 sm:grid-cols-2">
@@ -2020,6 +2038,38 @@ export default function EditPropertyPage() {
                   />
                 ))}
               </div>
+              {form.watch('hasPrivateOutdoorSpace') === true && (
+                <FormField
+                  control={form.control}
+                  name="outdoorSpaceTypes"
+                  render={({ field }) => (
+                    <FormItem className="mt-3">
+                      <FormLabel>Outdoor space types</FormLabel>
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                        {OUTDOOR_SPACE_TYPE_OPTIONS.map((type) => {
+                          const checked = field.value?.includes(type) ?? false;
+                          return (
+                            <FormItem key={type} className="flex items-center gap-3 rounded-lg border border-black/10 p-3 dark:border-white/10">
+                              <FormControl>
+                                <Checkbox
+                                  checked={checked}
+                                  onCheckedChange={(next) => field.onChange(
+                                    next === true
+                                      ? Array.from(new Set([...(field.value ?? []), type]))
+                                      : (field.value ?? []).filter((value) => value !== type),
+                                  )}
+                                />
+                              </FormControl>
+                              <FormLabel className="!mt-0 cursor-pointer">{formatEnumLabel(type)}</FormLabel>
+                            </FormItem>
+                          );
+                        })}
+                      </div>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
             </PropertyEditSection>
 
             <PropertyEditSection

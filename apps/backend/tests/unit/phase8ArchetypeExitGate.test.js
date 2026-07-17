@@ -150,7 +150,9 @@ function workerProperty(archetype) {
     climateSetting: { climateRegion: 'HOT_HUMID' },
     exteriorProfile: {
       hasPrivateOutdoorSpace: archetype.privateOutdoor,
-      outdoorSpaceTypes: archetype.privateOutdoor ? ['YARD'] : [],
+      outdoorSpaceTypes: archetype.privateOutdoor
+        ? [archetype.id === 'condo-balcony-unit-hvac' ? 'BALCONY' : 'PRIVATE_YARD']
+        : [],
       hasLawn: archetype.hasLawn,
       hasTreesOrShrubs: archetype.hasLawn,
       hasDriveway: archetype.dwellingType !== 'CONDO_UNIT',

@@ -15,7 +15,7 @@ function createPrismaMock({ property = null } = {}) {
           return {
             ...property,
             homeownerProfile: { userId: 'owner-1' },
-            inventoryItems: (property.homeAssets ?? []).map((asset, index) => ({
+            inventoryItems: (property.inventoryItems ?? []).map((asset, index) => ({
               name: asset.assetType,
               category: asset.assetType,
               tags: [],
@@ -77,7 +77,7 @@ test('all traits known: persists property-owned DerivedTrait rows without househ
     id: 'prop-1',
     hasSmokeDetectors: false,
     roofReplacementYear: 1990,
-    homeAssets: [{ assetType: 'HVAC_FURNACE', lastServiced: new Date(Date.now() - 200 * 24 * 60 * 60 * 1000) }],
+    inventoryItems: [{ assetType: 'HVAC_FURNACE', lastServiced: new Date(Date.now() - 200 * 24 * 60 * 60 * 1000) }],
   };
   const { prismaMock, derivedTraitUpserts } = createPrismaMock({ property });
   installPrismaMock(prismaMock);
@@ -104,7 +104,7 @@ test('unknown traits delete stale DerivedTrait rows instead of persisting unknow
     id: 'prop-2',
     hasSmokeDetectors: null, // unknown
     roofReplacementYear: null, // unknown
-    homeAssets: [], // unknown (no HVAC asset)
+    inventoryItems: [], // unknown (no HVAC asset)
   };
   const { prismaMock, derivedTraitUpserts, derivedTraitDeletes } = createPrismaMock({ property });
   installPrismaMock(prismaMock);
@@ -144,7 +144,7 @@ test('all traits known: persists a DerivedTrait per trait', async () => {
     id: 'prop-6',
     hasSmokeDetectors: true,
     roofReplacementYear: 1990,
-    homeAssets: [
+    inventoryItems: [
       { assetType: 'HVAC_FURNACE', lastServiced: new Date(Date.now() - 200 * 24 * 60 * 60 * 1000) },
       { assetType: 'SMOKE_DETECTOR', lastServiced: new Date(Date.now() - 400 * 24 * 60 * 60 * 1000) },
       { assetType: 'DRYER', lastServiced: new Date(Date.now() - 400 * 24 * 60 * 60 * 1000) },
@@ -167,7 +167,7 @@ test('partial knowledge: only known traits get a DerivedTrait row', async () => 
     id: 'prop-3',
     hasSmokeDetectors: true, // known, not missing
     roofReplacementYear: null, // unknown
-    homeAssets: [{ assetType: 'HVAC_FURNACE', lastServiced: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000) }], // known, not overdue
+    inventoryItems: [{ assetType: 'HVAC_FURNACE', lastServiced: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000) }], // known, not overdue
   };
   const { prismaMock, derivedTraitUpserts, derivedTraitDeletes } = createPrismaMock({ property });
   installPrismaMock(prismaMock);

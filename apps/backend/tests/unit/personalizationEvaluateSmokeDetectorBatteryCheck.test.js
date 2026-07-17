@@ -13,7 +13,7 @@ const { installPersonalizationContextMock } = require('../helpers/installPersona
 const DEFINITION_CODE = 'smoke_co_detector_battery_check';
 const RULE_AST = { op: 'trait', key: 'smokeDetectorBatteryOverdue', cmp: 'eq', value: true };
 
-function createPrismaMock({ definition = null, homeAssets = [], property = { id: 'prop-1' } } = {}) {
+function createPrismaMock({ definition = null, inventoryItems = [], property = { id: 'prop-1' } } = {}) {
   const runs = [];
 
   const prismaMock = {
@@ -34,7 +34,7 @@ function createPrismaMock({ definition = null, homeAssets = [], property = { id:
             hasSmokeDetectors: null,
             roofReplacementYear: null,
             ...property,
-            inventoryItems: homeAssets.map((asset) => ({
+            inventoryItems: inventoryItems.map((asset) => ({
               name: asset.assetType,
               category: asset.assetType,
               tags: [],
@@ -131,10 +131,10 @@ test('real seeded state is DRAFT, so it is never evaluated (DEFINITION_NOT_ACTIV
 });
 
 test('positive fixture: battery checked 400 days ago -> eligible TRUE', async () => {
-  const homeAssets = [{ assetType: 'SMOKE_DETECTOR', lastServiced: new Date(Date.now() - 400 * 24 * 60 * 60 * 1000) }];
+  const inventoryItems = [{ assetType: 'SMOKE_DETECTOR', lastServiced: new Date(Date.now() - 400 * 24 * 60 * 60 * 1000) }];
   const { prismaMock } = createPrismaMock({
     definition: ACTIVE_DEFINITION,
-    homeAssets,
+    inventoryItems,
     property: { id: 'prop-1', hasSmokeDetectors: true },
   });
   installPrismaMock(prismaMock);
@@ -147,10 +147,10 @@ test('positive fixture: battery checked 400 days ago -> eligible TRUE', async ()
 });
 
 test('negative fixture: battery checked 30 days ago -> not eligible FALSE', async () => {
-  const homeAssets = [{ assetType: 'SMOKE_DETECTOR', lastServiced: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) }];
+  const inventoryItems = [{ assetType: 'SMOKE_DETECTOR', lastServiced: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) }];
   const { prismaMock } = createPrismaMock({
     definition: ACTIVE_DEFINITION,
-    homeAssets,
+    inventoryItems,
     property: { id: 'prop-1', hasSmokeDetectors: true },
   });
   installPrismaMock(prismaMock);
@@ -165,7 +165,7 @@ test('negative fixture: battery checked 30 days ago -> not eligible FALSE', asyn
 test('unknown fixture: detector presence never recorded -> UNKNOWN, never treated as eligible', async () => {
   const { prismaMock } = createPrismaMock({
     definition: ACTIVE_DEFINITION,
-    homeAssets: [],
+    inventoryItems: [],
     property: { id: 'prop-1', hasSmokeDetectors: null },
   });
   installPrismaMock(prismaMock);

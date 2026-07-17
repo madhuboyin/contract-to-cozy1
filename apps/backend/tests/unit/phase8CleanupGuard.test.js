@@ -170,9 +170,14 @@ test('canonical item ownership aliases cannot return to active source', () => {
 test('Phase 8 runtime gate covers API, UI, worker health, and evidence output', () => {
   const runner = read('../../scripts/phase8-runtime-acceptance.js');
   assert.match(runner, /\/api\/properties\/.*\/context/);
+  assert.match(runner, /\/context\/decisions/);
+  for (const group of ['preventive', 'protection', 'financial', 'planning', 'aggregation']) {
+    assert.match(runner, new RegExp(`group: '${group}'`));
+  }
   assert.match(runner, /page\.goto\(/);
   assert.match(runner, /bullmq_jobs_processed_total/);
   assert.match(runner, /cron_job_last_success_timestamp_seconds/);
+  assert.match(runner, /No worker cron job has recorded a successful run/);
   assert.match(runner, /fs\.writeFileSync\(evidencePath/);
 
   const example = JSON.parse(read('../../../../docs/property-context/phase8-archetypes.example.json'));

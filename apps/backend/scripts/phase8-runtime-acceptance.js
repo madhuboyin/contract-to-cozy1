@@ -29,6 +29,26 @@ function assertEqual(actual, expected, label) {
   }
 }
 
+function valueAtPath(value, dottedPath) {
+  return dottedPath.split('.').reduce((current, segment) => current?.[segment], value);
+}
+
+function metricSamples(text, name) {
+  return text
+    .split('\n')
+    .filter((line) => line.startsWith(name) && !line.startsWith('#'))
+    .map((line) => Number(line.trim().split(/\s+/).at(-1)))
+    .filter(Number.isFinite);
+}
+
+const DEFAULT_UI_ASSERTIONS = [
+  { group: 'preventive', path: '/dashboard/maintenance' },
+  { group: 'protection', path: '/dashboard/properties/{propertyId}/protect' },
+  { group: 'financial', path: '/dashboard/properties/{propertyId}/tools/capital-timeline' },
+  { group: 'planning', path: '/dashboard/properties/{propertyId}/seller-prep' },
+  { group: 'aggregation', path: '/dashboard/properties/{propertyId}/tools/guidance-overview', expectedText: ['Guidance'] },
+];
+
 async function responseJson(response, label) {
   const body = await response.text();
   let parsed;
@@ -98,26 +118,52 @@ async function main() {
         factAssertions.push({ factKey, expected, actual, passed: true });
       }
 
-      const page = await context.newPage();
-      const uiStartedAt = Date.now();
-      const uiPath = archetype.uiPath || `/dashboard/properties/${propertyId}/tools/guidance-overview`;
-      const uiUrl = `${webBaseUrl}${uiPath.startsWith('/') ? uiPath : `/${uiPath}`}`;
-      const navigation = await page.goto(uiUrl, { waitUntil: 'domcontentloaded', timeout: 45_000 });
-      if (!navigation || navigation.status() >= 400) {
-        throw new Error(`${key} UI returned ${navigation?.status() ?? 'no response'} for ${uiUrl}.`);
-      }
-      await page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => undefined);
-      if (/\/login(?:\?|$)/.test(page.url())) throw new Error(`${key} UI redirected to login.`);
-      const bodyText = await page.locator('body').innerText();
-      if (/application error|internal server error|failed to load property/i.test(bodyText)) {
-        throw new Error(`${key} UI rendered an application failure.`);
-      }
-      for (const expectedText of archetype.expectedUiText || []) {
-        if (!bodyText.toLowerCase().includes(String(expectedText).toLowerCase())) {
-          throw new Error(`${key} UI did not contain expected text: ${expectedText}`);
+
+      const decisionsResponse = await context.request.get(
+        `${apiBaseUrl}/api/properties/${encodeURIComponent(propertyId)}/context/decisions`,
+      );
+      const decisionsPayload = await responseJson(decisionsResponse, `${key} decisions`);
+      const decisions = decisionsPayload.data;
+      assertEqual(decisions.propertyId, propertyId, `${key}.decisions.propertyId`);
+      assertEqual(decisions.contextVersion, snapshot.contextVersion, `${key}.decisions.contextVersion`);
+      for (const group of ['protection', 'projectCompliance', 'financial', 'planning', 'aggregation']) {
+        if (!decisions[group] || Object.keys(decisions[group]).length === 0) {
+          throw new Error(`${key} did not return ${group} decisions.`);
         }
       }
-      await page.close();
+      const decisionAssertions = [];
+      for (const [decisionPath, expected] of Object.entries(archetype.expectedDecisionStatuses || {})) {
+        const actual = valueAtPath(decisions, `${decisionPath}.status`);
+        assertEqual(actual, expected, `${key}.${decisionPath}.status`);
+        decisionAssertions.push({ decisionPath, expected, actual, passed: true });
+      }
+
+      const uiStartedAt = Date.now();
+      const uiAssertions = archetype.uiAssertions || DEFAULT_UI_ASSERTIONS;
+      const uiResults = [];
+      for (const assertion of uiAssertions) {
+        const page = await context.newPage();
+        const uiPath = String(assertion.path).replaceAll('{propertyId}', propertyId);
+        const uiUrl = `${webBaseUrl}${uiPath.startsWith('/') ? uiPath : `/${uiPath}`}`;
+        const navigation = await page.goto(uiUrl, { waitUntil: 'domcontentloaded', timeout: 45_000 });
+        if (!navigation || navigation.status() >= 400) {
+          throw new Error(`${key} ${assertion.group} UI returned ${navigation?.status() ?? 'no response'} for ${uiUrl}.`);
+        }
+        await page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => undefined);
+        if (/\/login(?:\?|$)/.test(page.url())) throw new Error(`${key} ${assertion.group} UI redirected to login.`);
+        const bodyText = await page.locator('body').innerText();
+        if (/application error|internal server error|failed to load property/i.test(bodyText)) {
+          throw new Error(`${key} ${assertion.group} UI rendered an application failure.`);
+        }
+        const expectedTexts = assertion.expectedText || (assertion.group === 'aggregation' ? archetype.expectedUiText : []) || [];
+        for (const expectedText of expectedTexts) {
+          if (!bodyText.toLowerCase().includes(String(expectedText).toLowerCase())) {
+            throw new Error(`${key} ${assertion.group} UI did not contain expected text: ${expectedText}`);
+          }
+        }
+        uiResults.push({ group: assertion.group, uiUrl, passed: true });
+        await page.close();
+      }
 
       evidence.archetypes.push({
         key,
@@ -125,8 +171,9 @@ async function main() {
         contextVersion: snapshot.contextVersion,
         apiDurationMs: Date.now() - apiStartedAt,
         uiDurationMs: Date.now() - uiStartedAt,
-        uiUrl,
+        uiResults,
         factAssertions,
+        decisionAssertions,
         passed: true,
       });
     }
@@ -137,22 +184,27 @@ async function main() {
     if (!workerResponse.ok()) {
       throw new Error(`Worker metrics failed (${workerResponse.status()}).`);
     }
-    for (const metric of [
+    const requiredMetrics = [
       'process_start_time_seconds',
       'bullmq_jobs_processed_total',
       'cron_job_runs_total',
       'cron_job_last_success_timestamp_seconds',
-    ]) {
-      if (!workerMetrics.includes(metric)) throw new Error(`Worker metric missing: ${metric}`);
+    ];
+    for (const metric of requiredMetrics) {
+      const samples = metricSamples(workerMetrics, metric);
+      if (samples.length === 0) throw new Error(`Worker metric missing or non-numeric: ${metric}`);
+      if (samples.some((sample) => sample < 0)) throw new Error(`Worker metric contains a negative value: ${metric}`);
+    }
+    if (!metricSamples(workerMetrics, 'process_start_time_seconds').some((sample) => sample > 0)) {
+      throw new Error('Worker process start metric has no positive sample.');
+    }
+    if (!metricSamples(workerMetrics, 'cron_job_last_success_timestamp_seconds').some((sample) => sample > 0)) {
+      throw new Error('No worker cron job has recorded a successful run.');
     }
     evidence.worker = {
       durationMs: Date.now() - workerStartedAt,
-      requiredMetrics: [
-        'process_start_time_seconds',
-        'bullmq_jobs_processed_total',
-        'cron_job_runs_total',
-        'cron_job_last_success_timestamp_seconds',
-      ],
+      requiredMetrics,
+      cronLastSuccessObserved: true,
       passed: true,
     };
     evidence.passed = true;

@@ -381,9 +381,10 @@ export class CostVolatilityService {
       }
     }
 
-    // --- CLIMATE SHOCK YEARS (Phase-2 placeholder: infer from regional sensitivity only)
-    // No external dataset ingestion in Phase 2 drop-in; keep event list empty unless you add real sources.
-    // When you wire FEMA/NOAA later, push years here and keep the same event shape.
+    // --- CLIMATE SHOCK YEARS
+    // Evidence-backed deferral: no reviewed event-to-cost attribution source is
+    // available. Do not infer event years from regional sensitivity alone; see
+    // PHASE8_DEFERRED_EVIDENCE.md.
     const climateShockYears: number[] = [];
     for (const y of climateShockYears) {
       eventsFull.push({

@@ -15,7 +15,16 @@ import {
   StatusChip,
 } from '@/components/mobile/dashboard/MobilePrimitives';
 import { AddressAutocomplete } from '@/components/property/AddressAutocomplete';
-import type { OutdoorSpaceType } from '@/types';
+import type { OutdoorSpaceType, PropertyResponsibilityScope, ResponsibleParty } from '@/types';
+import {
+  OUTDOOR_SPACE_TYPE_OPTIONS,
+  RESPONSIBILITY_SCOPES,
+  RESPONSIBLE_PARTY_OPTIONS,
+  defaultResponsibilityParties,
+  mapResponsibilitiesToPayload,
+  normalizeOutdoorSpaceTypes,
+  type ResponsibilityParties,
+} from '@/lib/property/propertyContextForm';
 
 const PROPERTY_SETUP_SKIPPED_KEY = 'propertySetupSkipped';
 
@@ -39,7 +48,8 @@ interface PropertyFormData {
   occupancyStatus: string;
   yearBuilt: string;
   propertySize: string;
-  responsibilityParty: string;
+  responsibilities: ResponsibilityParties;
+  outdoorSpaceTypes: OutdoorSpaceType[];
   heatingType: string;
   coolingType: string;
   waterHeaterType: string;
@@ -64,8 +74,6 @@ const DWELLING_OPTIONS = ['DETACHED_SINGLE_FAMILY', 'ATTACHED_SINGLE_FAMILY', 'T
 const OWNERSHIP_FORM_OPTIONS = ['FEE_SIMPLE', 'CONDOMINIUM', 'COOPERATIVE', 'LEASEHOLD', 'OTHER', 'UNKNOWN'];
 const PROPERTY_USE_OPTIONS = ['PRIMARY_RESIDENCE', 'SECOND_HOME', 'LONG_TERM_RENTAL', 'SHORT_TERM_RENTAL', 'VACANT', 'UNDER_RENOVATION', 'FOR_SALE', 'OTHER', 'UNKNOWN'];
 const OCCUPANCY_STATUS_OPTIONS = ['OWNER_OCCUPIED', 'TENANT_OCCUPIED', 'FAMILY_OCCUPIED', 'MIXED', 'VACANT', 'UNKNOWN'];
-const RESPONSIBLE_PARTY_OPTIONS = ['OWNER', 'ASSOCIATION', 'LANDLORD', 'SHARED', 'UNKNOWN'];
-const RESPONSIBILITY_SCOPES = ['ROOF', 'BUILDING_EXTERIOR', 'LANDSCAPING', 'TREES_SHRUBS', 'DRIVEWAY_WALKWAYS', 'DECK_PATIO_BALCONY', 'PLUMBING', 'HVAC', 'COMMON_SAFETY', 'SNOW_ICE', 'PEST_CONTROL', 'SHARED_SYSTEMS'] as const;
 const HEATING_OPTIONS = ['HVAC', 'FURNACE', 'HEAT_PUMP', 'RADIATORS', 'UNKNOWN'];
 const COOLING_OPTIONS = ['CENTRAL_AC', 'WINDOW_AC', 'UNKNOWN'];
 const WATER_HEATER_OPTIONS = ['TANK', 'TANKLESS', 'HEAT_PUMP', 'SOLAR', 'UNKNOWN'];
@@ -114,7 +122,8 @@ export default function NewPropertyPage() {
     occupancyStatus: '',
     yearBuilt: '',
     propertySize: '',
-    responsibilityParty: 'OWNER',
+    responsibilities: defaultResponsibilityParties('OWNER'),
+    outdoorSpaceTypes: [],
     heatingType: '',
     coolingType: '',
     waterHeaterType: '',
@@ -156,6 +165,22 @@ export default function NewPropertyPage() {
     setFormData(prev => ({
       ...prev,
       [name]: value,
+    }));
+  };
+
+  const handleResponsibilityChange = (scope: PropertyResponsibilityScope, party: ResponsibleParty) => {
+    setFormData(prev => ({
+      ...prev,
+      responsibilities: { ...prev.responsibilities, [scope]: party },
+    }));
+  };
+
+  const handleOutdoorSpaceTypeChange = (type: OutdoorSpaceType, checked: boolean) => {
+    setFormData(prev => ({
+      ...prev,
+      outdoorSpaceTypes: checked
+        ? Array.from(new Set([...prev.outdoorSpaceTypes, type]))
+        : prev.outdoorSpaceTypes.filter(existing => existing !== type),
     }));
   };
   
@@ -279,17 +304,14 @@ export default function NewPropertyPage() {
       hasDrainageIssues: formData.hasDrainageIssues,
       exteriorProfile: {
         hasPrivateOutdoorSpace: formData.hasPrivateOutdoorSpace,
-        outdoorSpaceTypes: formData.hasPrivateOutdoorSpace ? (['PRIVATE_YARD'] as OutdoorSpaceType[]) : [],
+        outdoorSpaceTypes: normalizeOutdoorSpaceTypes(formData.hasPrivateOutdoorSpace, formData.outdoorSpaceTypes),
         hasLawn: formData.hasLawn,
         hasTreesOrShrubs: formData.hasTreesOrShrubs,
         hasDriveway: formData.hasDriveway,
         hasIrrigation: formData.hasIrrigation,
         hasDrainageIssues: formData.hasDrainageIssues,
       },
-      responsibilities: RESPONSIBILITY_SCOPES.map((scope) => ({
-        scope,
-        party: formData.responsibilityParty as any,
-      })),
+      responsibilities: mapResponsibilitiesToPayload(formData.responsibilities),
 
       majorAppliances: majorAppliancesPayload.length > 0 ? majorAppliancesPayload : undefined,
     };
@@ -669,7 +691,7 @@ export default function NewPropertyPage() {
     formData.coolingType,
     formData.waterHeaterType,
     formData.roofType,
-    formData.responsibilityParty,
+    Object.values(formData.responsibilities).some((party) => party !== 'UNKNOWN') ? 'RESPONSIBILITY' : null,
     formData.hvacInstallYear,
     formData.waterHeaterInstallYear,
     formData.roofReplacementYear,
@@ -800,7 +822,26 @@ export default function NewPropertyPage() {
                   <SelectInput label="Ownership Form" name="ownershipForm" value={formData.ownershipForm} options={OWNERSHIP_FORM_OPTIONS} />
                   <SelectInput label="Property Use" name="propertyUse" value={formData.propertyUse} options={PROPERTY_USE_OPTIONS} />
                   <SelectInput label="Occupancy Status" name="occupancyStatus" value={formData.occupancyStatus} options={OCCUPANCY_STATUS_OPTIONS} />
-                  <SelectInput label="Who handles property work?" name="responsibilityParty" value={formData.responsibilityParty} options={RESPONSIBLE_PARTY_OPTIONS} />
+                </div>
+
+                <div className="grid grid-cols-1 gap-3 border-t border-slate-200 pt-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {RESPONSIBILITY_SCOPES.map((scope) => (
+                    <div key={scope} className="space-y-1.5">
+                      <label htmlFor={`responsibility-${scope}`} className="block text-sm font-medium text-slate-700">
+                        {scope.replace(/_/g, ' ')}
+                      </label>
+                      <select
+                        id={`responsibility-${scope}`}
+                        value={formData.responsibilities[scope]}
+                        onChange={(event) => handleResponsibilityChange(scope, event.target.value as ResponsibleParty)}
+                        className={selectBaseClass}
+                      >
+                        {RESPONSIBLE_PARTY_OPTIONS.map((party) => (
+                          <option key={party} value={party}>{party.replace(/_/g, ' ')}</option>
+                        ))}
+                      </select>
+                    </div>
+                  ))}
                 </div>
 
                 <div id="exterior" className="grid grid-cols-1 gap-2.5 border-t border-slate-200 pt-3 sm:grid-cols-2">
@@ -809,6 +850,22 @@ export default function NewPropertyPage() {
                   <BooleanInput label="Trees or shrubs" name="hasTreesOrShrubs" checked={formData.hasTreesOrShrubs} />
                   <BooleanInput label="Driveway" name="hasDriveway" checked={formData.hasDriveway} />
                 </div>
+
+                {formData.hasPrivateOutdoorSpace && (
+                  <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3" aria-label="Outdoor space types">
+                    {OUTDOOR_SPACE_TYPE_OPTIONS.map((type) => (
+                      <label key={type} className="flex min-h-[44px] items-center justify-between rounded-xl border border-slate-200 bg-white px-3 py-2.5">
+                        <span className="pr-2 text-sm font-medium text-slate-700">{type.replace(/_/g, ' ')}</span>
+                        <input
+                          type="checkbox"
+                          checked={formData.outdoorSpaceTypes.includes(type)}
+                          onChange={(event) => handleOutdoorSpaceTypeChange(type, event.target.checked)}
+                          className="h-4 w-4 shrink-0 rounded border-slate-300 text-teal-600 focus:ring-teal-500"
+                        />
+                      </label>
+                    ))}
+                  </div>
+                )}
 
                 <div className="grid grid-cols-1 gap-2.5 border-t border-slate-200 pt-3 sm:grid-cols-2">
                   <BooleanInput label="Has Smoke Detectors" name="hasSmokeDetectors" checked={formData.hasSmokeDetectors} />

@@ -150,6 +150,14 @@ Implemented:
 - Added a credential-free ten-archetype manifest example and
   `PHASE8_RUNTIME_ACCEPTANCE_RUNBOOK.md`, including prerequisites, execution,
   failure handling, and evidence-retention rules.
+- Remediation follow-up added an authenticated cross-phase decision-matrix API,
+  five representative UI surface checks per archetype, meaningful worker metric
+  validation, and explicit balcony/mixed-responsibility assertions.
+- Property create/edit now captures every responsibility scope independently and
+  preserves typed outdoor spaces instead of flattening them to one party/yard.
+- Test-only HomeAsset vocabulary was removed. Frost dates, county/polygon Radar
+  matching, and climate-shock attribution are now formally deferred with source
+  evidence and revisit triggers rather than left as undocumented placeholders.
 - Updated the Phase 8 FRD evidence references and cleanup guards.
 
 The live gate requires a running database-backed API, frontend, worker metrics

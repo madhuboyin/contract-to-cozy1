@@ -46,18 +46,24 @@ For each of the ten archetypes, the runner:
 1. authenticates using the normal cookie-backed API session;
 2. retrieves the canonical Property Context snapshot;
 3. verifies the property ID, context version, and manifest fact assertions;
-4. opens the property Guidance UI in a real headless browser session;
-5. rejects login redirects, HTTP failures, and rendered application failures;
-6. verifies any archetype-specific UI text assertions.
+4. retrieves the shared Protection, Project/Compliance, Financial, Planning, and
+   Aggregation decision matrix at the same context version;
+5. verifies any archetype-specific decision-status assertions;
+6. opens representative Preventive, Protection, Financial, Planning, and
+   Aggregation surfaces in a real headless browser session;
+7. rejects login redirects, HTTP failures, and rendered application failures;
+8. verifies any archetype-specific UI text assertions.
 
-After all archetypes pass, it verifies that the running worker exposes process,
-BullMQ, cron-run, and last-success metrics. The local unit gate separately
+After all archetypes pass, it verifies that the running worker exposes numeric,
+non-negative process, BullMQ, cron-run, and last-success metrics, and requires at
+least one positive cron last-success timestamp. The local unit gate separately
 executes the worker-owned seasonal and habit context transformations for all
 ten archetypes and verifies that they reuse shared applicability behavior.
 
 The runner always writes its evidence record after service execution starts.
 A passing record contains ten archetype entries, context versions, assertion
-results, UI URLs, durations, worker metric checks, and `"passed": true`.
+results, decision assertions, per-feature UI URLs, durations, worker metric
+checks, and `"passed": true`.
 
 ## Failure handling
 

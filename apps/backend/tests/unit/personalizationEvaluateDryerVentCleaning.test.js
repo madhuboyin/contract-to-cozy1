@@ -10,7 +10,7 @@ const { installPersonalizationContextMock } = require('../helpers/installPersona
 const DEFINITION_CODE = 'dryer_vent_cleaning_reminder';
 const RULE_AST = { op: 'trait', key: 'dryerVentCleaningOverdue', cmp: 'eq', value: true };
 
-function createPrismaMock({ definition = null, homeAssets = [], property = { id: 'prop-1' } } = {}) {
+function createPrismaMock({ definition = null, inventoryItems = [], property = { id: 'prop-1' } } = {}) {
   const runs = [];
 
   const prismaMock = {
@@ -31,7 +31,7 @@ function createPrismaMock({ definition = null, homeAssets = [], property = { id:
             roofReplacementYear: null,
             homeownerProfile: { userId: 'owner-1' },
             ...property,
-            inventoryItems: homeAssets.map((asset) => ({
+            inventoryItems: inventoryItems.map((asset) => ({
               name: asset.assetType,
               category: asset.assetType,
               tags: [],
@@ -108,8 +108,8 @@ test('real seeded state is DRAFT, so it is never evaluated (DEFINITION_NOT_ACTIV
 });
 
 test('positive: vent cleaned 400 days ago -> eligible TRUE', async () => {
-  const homeAssets = [{ assetType: 'DRYER', lastServiced: new Date(Date.now() - 400 * 24 * 60 * 60 * 1000) }];
-  const { prismaMock } = createPrismaMock({ definition: ACTIVE_DEFINITION, homeAssets });
+  const inventoryItems = [{ assetType: 'DRYER', lastServiced: new Date(Date.now() - 400 * 24 * 60 * 60 * 1000) }];
+  const { prismaMock } = createPrismaMock({ definition: ACTIVE_DEFINITION, inventoryItems });
   installPrismaMock(prismaMock);
   const { evaluateDefinitionForProperty } = loadUseCase();
 
@@ -120,8 +120,8 @@ test('positive: vent cleaned 400 days ago -> eligible TRUE', async () => {
 });
 
 test('negative: vent cleaned 30 days ago -> not eligible FALSE', async () => {
-  const homeAssets = [{ assetType: 'DRYER', lastServiced: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) }];
-  const { prismaMock } = createPrismaMock({ definition: ACTIVE_DEFINITION, homeAssets });
+  const inventoryItems = [{ assetType: 'DRYER', lastServiced: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) }];
+  const { prismaMock } = createPrismaMock({ definition: ACTIVE_DEFINITION, inventoryItems });
   installPrismaMock(prismaMock);
   const { evaluateDefinitionForProperty } = loadUseCase();
 
@@ -132,7 +132,7 @@ test('negative: vent cleaned 30 days ago -> not eligible FALSE', async () => {
 });
 
 test('unknown: no DRYER-type asset at all -> UNKNOWN, never treated as eligible', async () => {
-  const { prismaMock } = createPrismaMock({ definition: ACTIVE_DEFINITION, homeAssets: [] });
+  const { prismaMock } = createPrismaMock({ definition: ACTIVE_DEFINITION, inventoryItems: [] });
   installPrismaMock(prismaMock);
   const { evaluateDefinitionForProperty } = loadUseCase();
 
