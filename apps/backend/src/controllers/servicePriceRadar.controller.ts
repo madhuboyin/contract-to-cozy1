@@ -10,6 +10,7 @@ import {
 } from '../validators/servicePriceRadar.validators';
 import { logger } from '../lib/logger';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
+import { getProjectComplianceEnvelope } from '../services/projectCompliance/context';
 
 const service = new ServicePriceRadarService();
 
@@ -49,6 +50,7 @@ export async function createServicePriceRadarCheck(
     const userId = requireUserId(req);
     const payload = req.body as CreateServicePriceRadarBody;
     const result = await service.createCheck(req.params.propertyId, userId, payload);
+    const propertyContext = await getProjectComplianceEnvelope(req.params.propertyId, userId, 'SERVICE_PRICE_RADAR');
 
     const guidanceSignalIntentFamily =
       payload.guidanceSignalIntentFamily?.trim().toLowerCase() || null;
@@ -108,7 +110,7 @@ export async function createServicePriceRadarCheck(
       },
     });
 
-    return res.status(201).json({ success: true, data: result });
+    return res.status(201).json({ success: true, data: { ...result, propertyContext } });
   } catch (error) {
     return next(error);
   }
@@ -127,7 +129,10 @@ export async function listServicePriceRadarChecks(
     }
 
     const query = queryResult.data;
-    const result = await service.listChecks(req.params.propertyId, userId, query);
+    const [result, propertyContext] = await Promise.all([
+      service.listChecks(req.params.propertyId, userId, query),
+      getProjectComplianceEnvelope(req.params.propertyId, userId, 'SERVICE_PRICE_RADAR'),
+    ]);
 
     analyticsEmitter.track({
       eventType: AnalyticsEvent.TOOL_USED,
@@ -138,7 +143,7 @@ export async function listServicePriceRadarChecks(
       metadataJson: {},
     });
 
-    return res.status(200).json({ success: true, data: result });
+    return res.status(200).json({ success: true, data: { ...result, propertyContext } });
   } catch (error) {
     return next(error);
   }
@@ -151,8 +156,11 @@ export async function getServicePriceRadarCheckDetail(
 ) {
   try {
     const userId = requireUserId(req);
-    const result = await service.getCheckDetail(req.params.propertyId, req.params.checkId, userId);
-    return res.status(200).json({ success: true, data: result });
+    const [result, propertyContext] = await Promise.all([
+      service.getCheckDetail(req.params.propertyId, req.params.checkId, userId),
+      getProjectComplianceEnvelope(req.params.propertyId, userId, 'SERVICE_PRICE_RADAR'),
+    ]);
+    return res.status(200).json({ success: true, data: { ...result, propertyContext } });
   } catch (error) {
     return next(error);
   }

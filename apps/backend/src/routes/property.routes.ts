@@ -16,6 +16,7 @@ import { apiRateLimiter } from '../middleware/rateLimiter.middleware';
 import {
   getPropertyContextCompleteness,
   getPropertyContextSnapshot,
+  getProjectCompliancePropertyContext,
 } from '../modules/propertyContext/api/propertyContext.controller';
 
 const router = Router();
@@ -105,6 +106,7 @@ router.get('/:id/resolution-center', authenticate, propertyController.getPropert
 // Property Context transparency endpoints. Authorization is enforced inside
 // the provider so API and non-HTTP consumers share the same access boundary.
 router.get('/:id/context/completeness', authenticate, getPropertyContextCompleteness);
+router.get('/:id/context/project-compliance', authenticate, getProjectCompliancePropertyContext);
 router.get('/:id/context', authenticate, getPropertyContextSnapshot);
 
 /**

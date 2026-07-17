@@ -42,6 +42,7 @@ import {
   buildExecutionGuardMessage,
 } from '@/features/guidance/utils/executionGuardMessaging';
 import { extractGuidanceContinuityContext, hasGuidanceContinuityContext } from '@/features/guidance/utils/guidanceContinuity';
+import { PropertyContextNotice, type PropertyContextEnvelope } from '@/components/property-context/PropertyContextNotice';
 
 const DEFAULT_RADIUS = 25;
 
@@ -443,6 +444,7 @@ export default function ProvidersPage() {
   const [error, setError] = useState<string | null>(null);
   const [contextItemName, setContextItemName] = useState<string | null>(null);
   const [propertyZipCode, setPropertyZipCode] = useState<string>('');
+  const [propertyContext, setPropertyContext] = useState<PropertyContextEnvelope | null>(null);
   const isExecutionBlocked = hasGuardScopeContext && Boolean(providerGuardQuery.data?.blocked);
   const isGuardLoading =
     hasGuardScopeContext &&
@@ -487,7 +489,8 @@ export default function ProvidersPage() {
       setDataLoading(true);
       setError(null);
       try {
-        const params: { category?: string; radius: number; zipCode?: string } = {
+        const params: { propertyId?: string; category?: string; radius: number; zipCode?: string } = {
+          propertyId: targetPropertyId,
           category: currentFilters.category === 'ALL' || !currentFilters.category ? undefined : currentFilters.category,
           radius: DEFAULT_RADIUS,
         };
@@ -500,6 +503,7 @@ export default function ProvidersPage() {
 
         if (response.success && response.data) {
           setProviders(response.data.providers);
+          setPropertyContext(response.data.propertyContext ?? null);
           track('provider_searched', {
             category: currentFilters.category === 'ALL' ? 'ALL' : (currentFilters.category || 'ALL'),
             location: currentFilters.zipCode || 'any',
@@ -517,7 +521,7 @@ export default function ProvidersPage() {
         setDataLoading(false);
       }
     },
-    [dataLoading, isHomeBuyer]
+    [dataLoading, isHomeBuyer, targetPropertyId]
   );
 
   const handleFilterChange = useCallback(
@@ -659,20 +663,23 @@ export default function ProvidersPage() {
         rationale: 'Transparent ranking and fit signals reduce homeowner anxiety before booking.',
       }}
       summary={
-        <MobileKpiStrip className="sm:grid-cols-3">
-          <MobileKpiTile
-            label="Matches"
-            value={dataLoading ? '...' : providers.length}
-            hint={dataLoading ? 'Searching now' : providers.length === 1 ? 'Provider found' : 'Providers found'}
-            tone={providers.length > 0 ? 'positive' : 'neutral'}
-          />
-          <MobileKpiTile label="ZIP" value={filters.zipCode || 'Any'} hint="Location filter" />
-          <MobileKpiTile
-            label="Category"
-            value={filters.category === 'ALL' ? 'All' : formatEnumLabel(filters.category)}
-            hint="Primary service"
-          />
-        </MobileKpiStrip>
+        <div className="space-y-3">
+          <PropertyContextNotice context={propertyContext} title="Provider and booking context" />
+          <MobileKpiStrip className="sm:grid-cols-3">
+            <MobileKpiTile
+              label="Matches"
+              value={dataLoading ? '...' : providers.length}
+              hint={dataLoading ? 'Searching now' : providers.length === 1 ? 'Provider found' : 'Providers found'}
+              tone={providers.length > 0 ? 'positive' : 'neutral'}
+            />
+            <MobileKpiTile label="ZIP" value={filters.zipCode || 'Any'} hint="Location filter" />
+            <MobileKpiTile
+              label="Category"
+              value={filters.category === 'ALL' ? 'All' : formatEnumLabel(filters.category)}
+              hint="Primary service"
+            />
+          </MobileKpiStrip>
+        </div>
       }
       filters={
         <ServiceFilter

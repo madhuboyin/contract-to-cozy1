@@ -12,6 +12,7 @@ import { ZodError } from 'zod';
 import { ProviderManagementService } from '../services/provider-management.service';
 import { AuthRequest } from '../types/auth.types';
 import { z } from 'zod';
+import { getProjectComplianceEnvelope } from '../services/projectCompliance/context';
 
 const createServiceSchema = z.object({
   category: z.enum(['INSPECTION', 'HANDYMAN']),
@@ -49,12 +50,18 @@ export class ProviderController {
       // --- END FIX ---
 
       // --- FIX: Pass userId to the service ---
-      const result = await ProviderService.searchProviders(query, userId);
+      const { propertyId, ...providerQuery } = query;
+      const [result, propertyContext] = await Promise.all([
+        ProviderService.searchProviders(providerQuery, userId),
+        propertyId && userId
+          ? getProjectComplianceEnvelope(propertyId, userId, 'PROVIDER_BOOKING')
+          : Promise.resolve(null),
+      ]);
       // --- END FIX ---
 
       res.status(200).json({
         success: true,
-        data: result,
+        data: propertyContext ? { ...result, propertyContext } : result,
       });
     } catch (error) {
       if (error instanceof ZodError) {

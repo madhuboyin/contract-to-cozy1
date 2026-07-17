@@ -903,6 +903,7 @@ class APIClient {
    * Search providers
    */
   async searchProviders(params: {
+    propertyId?: string;
     zipCode?: string;
     latitude?: number;
     longitude?: number;
@@ -915,6 +916,7 @@ class APIClient {
   }): Promise<APIResponse<{
     providers: Provider[];
     pagination: any;
+    propertyContext?: PropertyContextEnvelope;
   }>> {
     const queryParams = new URLSearchParams();
     Object.entries(params).forEach(([key, value]) => {

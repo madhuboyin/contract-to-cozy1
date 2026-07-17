@@ -14,6 +14,7 @@ import {
 import { formatEnumLabel } from '@/lib/utils/formatters';
 import {
   listServicePriceRadarChecks,
+  getProjectComplianceContext,
   type ServicePriceRadarCheckSummary,
   type ServiceRadarVerdict,
 } from '../service-price-radar/servicePriceRadarApi';
@@ -22,6 +23,7 @@ import CompareTemplate from '../../components/route-templates/CompareTemplate';
 import { pricingLoopTrust } from '@/lib/trust/trustPresets';
 import { buildGuidanceOverviewHref } from '@/lib/navigation/guidanceOverviewHref';
 import { track } from '@/lib/analytics/events';
+import { PropertyContextNotice, type PropertyContextEnvelope } from '@/components/property-context/PropertyContextNotice';
 
 type SearchParamSource = { get(name: string): string | null };
 
@@ -215,6 +217,7 @@ export default function QuoteComparisonWorkspaceClient() {
   const [manualVendorName, setManualVendorName] = React.useState('');
   const [manualQuoteAmount, setManualQuoteAmount] = React.useState('');
   const [manualInputError, setManualInputError] = React.useState<string | null>(null);
+  const [propertyContext, setPropertyContext] = React.useState<PropertyContextEnvelope | null>(null);
 
   const prefilledQuote = React.useMemo<QuoteCandidate | null>(() => {
     const parsedAmount = toNumberOrNull(defaultQuoteAmount);
@@ -239,7 +242,11 @@ export default function QuoteComparisonWorkspaceClient() {
     setLoading(true);
     setError(null);
     try {
-      const checks = await listServicePriceRadarChecks(propertyId, 24);
+      const [checks, context] = await Promise.all([
+        listServicePriceRadarChecks(propertyId, 24),
+        getProjectComplianceContext(propertyId, 'QUOTE_COMPARISON'),
+      ]);
+      setPropertyContext(context);
 
       const mappedChecks = checks.map(mapRadarCheckToQuote);
       const merged = prefilledQuote ? [prefilledQuote, ...mappedChecks] : mappedChecks;
@@ -254,6 +261,7 @@ export default function QuoteComparisonWorkspaceClient() {
     } catch (loadError: any) {
       setError(loadError?.message || 'Unable to load quote candidates.');
       setQuotes(prefilledQuote ? [prefilledQuote] : []);
+      setPropertyContext(null);
     } finally {
       setLoading(false);
     }
@@ -433,21 +441,24 @@ export default function QuoteComparisonWorkspaceClient() {
           : undefined
       }
       summary={
-        <ResultHeroCard
-          eyebrow="Compare"
-          title="Quote Decision Snapshot"
-          value={selectedQuotes.length}
-          status={
-            <StatusChip tone={recommendedQuote ? verdictTone(recommendedQuote.verdict) : 'info'}>
-              {recommendedQuote?.verdict ? formatEnumLabel(recommendedQuote.verdict) : 'Select quotes'}
-            </StatusChip>
-          }
-          summary={
-            comparisonSpread
-              ? `Lowest: ${formatMoney(comparisonSpread.low)} · Highest: ${formatMoney(comparisonSpread.high)}`
-              : 'Select at least two quotes to see spread and recommendation strength.'
-          }
-        />
+        <div className="space-y-3">
+          <PropertyContextNotice context={propertyContext} title="Quote comparison context" />
+          <ResultHeroCard
+            eyebrow="Compare"
+            title="Quote Decision Snapshot"
+            value={selectedQuotes.length}
+            status={
+              <StatusChip tone={recommendedQuote ? verdictTone(recommendedQuote.verdict) : 'info'}>
+                {recommendedQuote?.verdict ? formatEnumLabel(recommendedQuote.verdict) : 'Select quotes'}
+              </StatusChip>
+            }
+            summary={
+              comparisonSpread
+                ? `Lowest: ${formatMoney(comparisonSpread.low)} · Highest: ${formatMoney(comparisonSpread.high)}`
+                : 'Select at least two quotes to see spread and recommendation strength.'
+            }
+          />
+        </div>
       }
       compareContent={
         <div className="space-y-4">

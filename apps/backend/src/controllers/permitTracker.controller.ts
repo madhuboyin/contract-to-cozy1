@@ -6,6 +6,7 @@ import { permitDetectionService } from '../services/permitDetection.service';
 import { prisma } from '../lib/prisma';
 import { APIError } from '../middleware/error.middleware';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
+import { getProjectComplianceEnvelope } from '../services/projectCompliance/context';
 
 // ── Open Data Fetch ────────────────────────────────────────────────────────────
 
@@ -37,7 +38,10 @@ export async function getPermitFetchStatus(req: Request, res: Response, next: Ne
 
 export async function listPermits(req: Request, res: Response, next: NextFunction) {
   try {
-    const result = await permitTrackerService.listPermits(req.params.propertyId, req.query as any);
+    const [result, propertyContext] = await Promise.all([
+      permitTrackerService.listPermits(req.params.propertyId, req.query as any),
+      getProjectComplianceEnvelope(req.params.propertyId, req.user!.userId, 'PERMIT_TRACKER'),
+    ]);
 
     analyticsEmitter.track({
       eventType: AnalyticsEvent.TOOL_USED,
@@ -48,13 +52,14 @@ export async function listPermits(req: Request, res: Response, next: NextFunctio
       metadataJson: { count: Array.isArray((result as any)?.permits) ? (result as any).permits.length : undefined },
     });
 
-    res.json({ success: true, data: result });
+    res.json({ success: true, data: { ...result, propertyContext } });
   } catch (err) { next(err); }
 }
 
 export async function createManualPermit(req: Request, res: Response, next: NextFunction) {
   try {
     const permit = await permitTrackerService.createManualPermit(req.params.propertyId, req.body);
+    const propertyContext = await getProjectComplianceEnvelope(req.params.propertyId, req.user!.userId, 'PERMIT_TRACKER');
 
     analyticsEmitter.track({
       eventType: AnalyticsEvent.ACTION_COMPLETED,
@@ -65,7 +70,7 @@ export async function createManualPermit(req: Request, res: Response, next: Next
       metadataJson: { actionType: 'create_manual_permit', permitId: (permit as any)?.id },
     });
 
-    res.status(201).json({ success: true, data: { permit } });
+    res.status(201).json({ success: true, data: { permit, propertyContext } });
   } catch (err) { next(err); }
 }
 

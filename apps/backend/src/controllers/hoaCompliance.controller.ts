@@ -2,10 +2,14 @@ import { Response, NextFunction } from 'express';
 import { CustomRequest as Request } from '../types';
 import { hoaComplianceService } from '../services/hoaCompliance.service';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
+import { getProjectComplianceEnvelope } from '../services/projectCompliance/context';
 
 export async function getAssociation(req: Request, res: Response, next: NextFunction) {
   try {
-    const association = await hoaComplianceService.getAssociation(req.params.propertyId);
+    const [association, propertyContext] = await Promise.all([
+      hoaComplianceService.getAssociation(req.params.propertyId),
+      getProjectComplianceEnvelope(req.params.propertyId, req.user!.userId, 'HOA_COMPLIANCE'),
+    ]);
 
     analyticsEmitter.track({
       eventType: AnalyticsEvent.TOOL_USED,
@@ -16,13 +20,14 @@ export async function getAssociation(req: Request, res: Response, next: NextFunc
       metadataJson: { hasAssociation: !!association },
     });
 
-    res.json({ success: true, data: { association } });
+    res.json({ success: true, data: { association, propertyContext } });
   } catch (err) { next(err); }
 }
 
 export async function upsertAssociation(req: Request, res: Response, next: NextFunction) {
   try {
     const association = await hoaComplianceService.upsertAssociation(req.params.propertyId, req.body);
+    const propertyContext = await getProjectComplianceEnvelope(req.params.propertyId, req.user!.userId, 'HOA_COMPLIANCE');
 
     analyticsEmitter.track({
       eventType: AnalyticsEvent.ACTION_COMPLETED,
@@ -33,20 +38,24 @@ export async function upsertAssociation(req: Request, res: Response, next: NextF
       metadataJson: { actionType: 'upsert_association' },
     });
 
-    res.json({ success: true, data: { association } });
+    res.json({ success: true, data: { association, propertyContext } });
   } catch (err) { next(err); }
 }
 
 export async function listApprovalRecords(req: Request, res: Response, next: NextFunction) {
   try {
-    const records = await hoaComplianceService.listApprovalRecords(req.params.propertyId);
-    res.json({ success: true, data: { records } });
+    const [records, propertyContext] = await Promise.all([
+      hoaComplianceService.listApprovalRecords(req.params.propertyId),
+      getProjectComplianceEnvelope(req.params.propertyId, req.user!.userId, 'HOA_COMPLIANCE'),
+    ]);
+    res.json({ success: true, data: { records, propertyContext } });
   } catch (err) { next(err); }
 }
 
 export async function createApprovalRecord(req: Request, res: Response, next: NextFunction) {
   try {
     const record = await hoaComplianceService.createApprovalRecord(req.params.propertyId, req.body);
+    const propertyContext = await getProjectComplianceEnvelope(req.params.propertyId, req.user!.userId, 'HOA_COMPLIANCE');
 
     analyticsEmitter.track({
       eventType: AnalyticsEvent.ACTION_COMPLETED,
@@ -57,7 +66,7 @@ export async function createApprovalRecord(req: Request, res: Response, next: Ne
       metadataJson: { actionType: 'create_approval_record', recordId: (record as any)?.id },
     });
 
-    res.status(201).json({ success: true, data: { record } });
+    res.status(201).json({ success: true, data: { record, propertyContext } });
   } catch (err) { next(err); }
 }
 

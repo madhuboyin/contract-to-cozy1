@@ -720,6 +720,118 @@ export const productContextAssembler: PropertyContextAssembler = {
   },
 };
 
+function serializeContextRow(row: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(row).map(([key, value]) => {
+    if (value instanceof Date) return [key, value.toISOString()];
+    if (value && typeof value === 'object' && 'toNumber' in value && typeof value.toNumber === 'function') {
+      return [key, value.toNumber()];
+    }
+    return [key, value];
+  }));
+}
+
+export const complianceAssembler: PropertyContextAssembler = {
+  scope: 'COMPLIANCE',
+  async assemble(propertyId, now) {
+    const [activePermits, hoaAssociation, openHoaApprovals, openUnpermittedFlags] = await Promise.all([
+      prisma.propertyPermitRecord.findMany({
+        where: { propertyId, isActive: true, status: { in: ['APPLIED', 'ISSUED', 'INSPECTION_PENDING', 'INSPECTION_FAILED'] } },
+        select: { id: true, category: true, workTypes: true, status: true, expirationDate: true, contractorName: true, contractorLicense: true, updatedAt: true },
+        orderBy: { updatedAt: 'desc' },
+        take: 100,
+      }),
+      prisma.hoaAssociation.findFirst({
+        where: { propertyId, isActive: true },
+        select: { id: true, name: true, managementCompany: true, updatedAt: true },
+      }),
+      prisma.hoaApprovalRecord.findMany({
+        where: { propertyId, isActive: true, status: { in: ['NOT_SUBMITTED', 'SUBMITTED', 'UNDER_REVIEW'] } },
+        select: { id: true, workType: true, status: true, submittedDate: true, expirationDate: true, updatedAt: true },
+        orderBy: { updatedAt: 'desc' },
+        take: 100,
+      }),
+      prisma.permitUnpermittedFlag.findMany({
+        where: { propertyId, status: { in: ['FLAGGED', 'INVESTIGATING', 'CONFIRMED_UNPERMITTED', 'WILL_REMEDIATE'] } },
+        select: { id: true, workType: true, status: true, disclosureRisk: true, homeAssetId: true, inventoryItemId: true, updatedAt: true },
+        orderBy: { updatedAt: 'desc' },
+        take: 100,
+      }),
+    ]);
+    const values: Record<string, unknown> = {
+      'compliance.activePermits': activePermits.map((row) => serializeContextRow(row)),
+      'compliance.hoaAssociation': hoaAssociation ? serializeContextRow(hoaAssociation) : null,
+      'compliance.openHoaApprovals': openHoaApprovals.map((row) => serializeContextRow(row)),
+      'compliance.openUnpermittedFlags': openUnpermittedFlags.map((row) => serializeContextRow(row)),
+    };
+    return Object.entries(values).map(([key, value]) =>
+      withPropertyId(createPropertyFact(key, value, undefined, now), propertyId),
+    );
+  },
+};
+
+export const projectsAssembler: PropertyContextAssembler = {
+  scope: 'PROJECTS',
+  async assemble(propertyId, now) {
+    const recentThreshold = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
+    const [activeProjects, materialSpecs, quoteWorkspaces, activeBookings, priceChecks, finalizations, negotiations] = await Promise.all([
+      prisma.projectRecord.findMany({
+        where: { propertyId, status: { in: ['DRAFT', 'PLANNING', 'IN_PROGRESS', 'PAUSED', 'DISPUTED'] } },
+        select: { id: true, projectType: true, name: true, status: true, serviceCategory: true, homeSystemsAffected: true, contractorId: true, startDate: true, expectedEndDate: true, updatedAt: true },
+        orderBy: { updatedAt: 'desc' },
+        take: 100,
+      }),
+      prisma.materialSpec.findMany({
+        where: { propertyId, isActive: true },
+        select: { id: true, roomId: true, scopeLevel: true, category: true, surface: true, label: true, linkedInventoryItemId: true, linkedHomeAssetId: true, updatedAt: true },
+        orderBy: { updatedAt: 'desc' },
+        take: 200,
+      }),
+      prisma.quoteComparisonWorkspace.findMany({
+        where: { propertyId, status: { in: ['DRAFT', 'SHORTLISTED'] } },
+        select: { id: true, status: true, serviceCategory: true, inventoryItemId: true, homeAssetId: true, updatedAt: true },
+        orderBy: { updatedAt: 'desc' },
+        take: 100,
+      }),
+      prisma.booking.findMany({
+        where: { propertyId, status: { in: ['DRAFT', 'PENDING', 'CONFIRMED', 'IN_PROGRESS', 'DISPUTED'] } },
+        select: { id: true, status: true, category: true, serviceId: true, providerProfileId: true, inventoryItemId: true, executionScopeType: true, executionScopeKey: true, activeExecutionScopeKey: true, requestedDate: true, scheduledDate: true, updatedAt: true },
+        orderBy: { updatedAt: 'desc' },
+        take: 100,
+      }),
+      prisma.serviceRadarCheck.findMany({
+        where: { propertyId, createdAt: { gte: recentThreshold } },
+        select: { id: true, serviceCategory: true, serviceSubcategory: true, status: true, verdict: true, quoteAmount: true, expectedLow: true, expectedHigh: true, confidenceScore: true, createdAt: true, updatedAt: true },
+        orderBy: { createdAt: 'desc' },
+        take: 100,
+      }),
+      prisma.priceFinalization.findMany({
+        where: { propertyId, status: 'DRAFT' },
+        select: { id: true, sourceType: true, serviceCategory: true, vendorName: true, inventoryItemId: true, homeAssetId: true, updatedAt: true },
+        orderBy: { updatedAt: 'desc' },
+        take: 100,
+      }),
+      prisma.negotiationShieldCase.findMany({
+        where: { propertyId, status: { in: ['DRAFT', 'READY_FOR_REVIEW', 'ANALYZED'] } },
+        select: { id: true, scenarioType: true, status: true, sourceType: true, updatedAt: true },
+        orderBy: { updatedAt: 'desc' },
+        take: 100,
+      }),
+    ]);
+    const values: Record<string, unknown> = {
+      'projects.activeProjects': activeProjects.map((row) => serializeContextRow(row)),
+      'projects.materialSpecs': materialSpecs.map((row) => serializeContextRow(row)),
+      'projects.openQuoteWorkspaces': quoteWorkspaces.map((row) => serializeContextRow(row)),
+      'projects.activeBookings': activeBookings.map((row) => serializeContextRow(row)),
+      'projects.recentPriceChecks': priceChecks.map((row) => serializeContextRow(row)),
+      'projects.openPriceFinalizations': finalizations.map((row) => serializeContextRow(row)),
+      'projects.openNegotiations': negotiations.map((row) => serializeContextRow(row)),
+    };
+    return Object.entries(values).map(([key, value]) =>
+      withPropertyId(createPropertyFact(key, value, undefined, now), propertyId),
+    );
+  },
+};
+
 export const INITIAL_PROPERTY_CONTEXT_ASSEMBLERS: PropertyContextAssembler[] = [
   coreAssembler,
   locationAssembler,
@@ -738,5 +850,7 @@ export const INITIAL_PROPERTY_CONTEXT_ASSEMBLERS: PropertyContextAssembler[] = [
   environmentAssembler,
   eventsAssembler,
   guidanceStateAssembler,
+  complianceAssembler,
+  projectsAssembler,
   productContextAssembler,
 ];

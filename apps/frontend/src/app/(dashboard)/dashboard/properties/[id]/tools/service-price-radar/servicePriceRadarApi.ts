@@ -1,4 +1,5 @@
 import { api } from '@/lib/api/client';
+import type { PropertyContextEnvelope } from '@/components/property-context/PropertyContextNotice';
 
 export type ServicePriceRadarLaunchSurface =
   | 'home_tools'
@@ -230,4 +231,15 @@ export async function trackServicePriceRadarEvent(
   }
 ): Promise<void> {
   await api.trackServicePriceRadarEvent(propertyId, payload);
+}
+
+export async function getProjectComplianceContext(
+  propertyId: string,
+  feature: 'SERVICE_PRICE_RADAR' | 'QUOTE_COMPARISON' | 'PRICE_FINALIZATION' | 'NEGOTIATION_SHIELD'
+): Promise<PropertyContextEnvelope> {
+  const res = await api.get<PropertyContextEnvelope>(
+    `/api/properties/${propertyId}/context/project-compliance`,
+    { params: { feature } }
+  );
+  return res.data;
 }

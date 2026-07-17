@@ -4,6 +4,11 @@ import { logger } from '../../../lib/logger';
 import { getContextCompleteness } from '../application/getContextCompleteness';
 import { getPropertyContext, PropertyContextAccessDeniedError } from '../application/getPropertyContext';
 import { PROPERTY_CONTEXT_SCOPES, PropertyContextScope } from '../domain/contracts';
+import {
+  getProjectComplianceEnvelope,
+  PROJECT_COMPLIANCE_FEATURES,
+  type ProjectComplianceFeature,
+} from '../../../services/projectCompliance/context';
 
 export const PHASE_ONE_CONTEXT_SCOPES: PropertyContextScope[] = [
   'CORE',
@@ -54,6 +59,23 @@ export async function getPropertyContextCompleteness(req: AuthRequest, res: Resp
     const scopes = parseContextScopes(req.query.scopes);
     const snapshot = await getPropertyContext(req.params.id, { userId: req.user!.userId }, { scopes });
     return res.json({ success: true, data: getContextCompleteness(snapshot) });
+  } catch (error) {
+    return handleContextError(error, res);
+  }
+}
+
+export async function getProjectCompliancePropertyContext(req: AuthRequest, res: Response): Promise<Response> {
+  try {
+    const rawFeature = String(req.query.feature ?? 'AGGREGATE').trim().toUpperCase();
+    if (!PROJECT_COMPLIANCE_FEATURES.includes(rawFeature as ProjectComplianceFeature)) {
+      return res.status(400).json({ success: false, message: `Invalid project/compliance feature: ${rawFeature}` });
+    }
+    const context = await getProjectComplianceEnvelope(
+      req.params.id,
+      req.user!.userId,
+      rawFeature as ProjectComplianceFeature,
+    );
+    return res.json({ success: true, data: context });
   } catch (error) {
     return handleContextError(error, res);
   }

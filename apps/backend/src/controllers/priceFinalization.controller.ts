@@ -11,6 +11,7 @@ import {
 } from '../validators/priceFinalization.validators';
 import { logger } from '../lib/logger';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
+import { getProjectComplianceEnvelope } from '../services/projectCompliance/context';
 
 function requireUser(req: CustomRequest) {
   const userId = req.user?.userId;
@@ -60,6 +61,7 @@ export async function listPriceFinalizations(
         homeAssetId: queryResult.data.homeAssetId,
       }
     );
+    const propertyContext = await getProjectComplianceEnvelope(req.params.propertyId, userId, 'PRICE_FINALIZATION');
 
     analyticsEmitter.track({
       eventType: AnalyticsEvent.TOOL_USED,
@@ -70,7 +72,7 @@ export async function listPriceFinalizations(
       metadataJson: { count: Array.isArray((result as any)?.finalizations) ? (result as any).finalizations.length : undefined },
     });
 
-    res.status(200).json({ success: true, data: result });
+    res.status(200).json({ success: true, data: { ...result, propertyContext } });
   } catch (error) {
     next(error);
   }
@@ -88,8 +90,9 @@ export async function getPriceFinalizationDetail(
       userId,
       req.params.finalizationId
     );
+    const propertyContext = await getProjectComplianceEnvelope(req.params.propertyId, userId, 'PRICE_FINALIZATION');
 
-    res.status(200).json({ success: true, data: { finalization: detail } });
+    res.status(200).json({ success: true, data: { finalization: detail, propertyContext } });
   } catch (error) {
     next(error);
   }
@@ -111,6 +114,7 @@ export async function createPriceFinalizationDraft(
         ...payload,
       }
     );
+    const propertyContext = await getProjectComplianceEnvelope(req.params.propertyId, userId, 'PRICE_FINALIZATION');
 
     analyticsEmitter.track({
       eventType: AnalyticsEvent.ACTION_COMPLETED,
@@ -121,7 +125,7 @@ export async function createPriceFinalizationDraft(
       metadataJson: { actionType: 'create_draft', finalizationId: detail.id, serviceCategory: detail.serviceCategory },
     });
 
-    res.status(201).json({ success: true, data: { finalization: detail } });
+    res.status(201).json({ success: true, data: { finalization: detail, propertyContext } });
   } catch (error) {
     next(error);
   }
@@ -144,8 +148,9 @@ export async function updatePriceFinalizationDraft(
         ...payload,
       }
     );
+    const propertyContext = await getProjectComplianceEnvelope(req.params.propertyId, userId, 'PRICE_FINALIZATION');
 
-    res.status(200).json({ success: true, data: { finalization: detail } });
+    res.status(200).json({ success: true, data: { finalization: detail, propertyContext } });
   } catch (error) {
     next(error);
   }
@@ -171,6 +176,7 @@ export async function finalizePriceFinalization(
         ...payload,
       }
     );
+    const propertyContext = await getProjectComplianceEnvelope(req.params.propertyId, userId, 'PRICE_FINALIZATION');
 
     analyticsEmitter.track({
       eventType: AnalyticsEvent.ACTION_COMPLETED,
@@ -225,7 +231,7 @@ export async function finalizePriceFinalization(
       logger.warn({ guidanceError }, '[GUIDANCE] price finalization hook failed');
     }
 
-    res.status(200).json({ success: true, data: { finalization: detail } });
+    res.status(200).json({ success: true, data: { finalization: detail, propertyContext } });
   } catch (error) {
     next(error);
   }

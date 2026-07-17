@@ -2,20 +2,24 @@ import { Response, NextFunction } from 'express';
 import { CustomRequest } from '../types';
 import { MaterialSpecService } from '../services/materialSpec.service';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
+import { getProjectComplianceEnvelope } from '../services/projectCompliance/context';
 
 const service = new MaterialSpecService();
 
 export async function listSpecs(req: CustomRequest, res: Response, next: NextFunction) {
   try {
     const { propertyId } = req.params;
-    const result = await service.listSpecs(propertyId, {
-      category: req.query.category as any,
-      scopeLevel: req.query.scopeLevel as any,
-      roomId: req.query.roomId ? String(req.query.roomId) : undefined,
-      isActive: req.query.isActive !== undefined ? req.query.isActive === 'true' : undefined,
-      limit: req.query.limit ? Number(req.query.limit) : undefined,
-      cursor: req.query.cursor ? String(req.query.cursor) : undefined,
-    });
+    const [result, propertyContext] = await Promise.all([
+      service.listSpecs(propertyId, {
+        category: req.query.category as any,
+        scopeLevel: req.query.scopeLevel as any,
+        roomId: req.query.roomId ? String(req.query.roomId) : undefined,
+        isActive: req.query.isActive !== undefined ? req.query.isActive === 'true' : undefined,
+        limit: req.query.limit ? Number(req.query.limit) : undefined,
+        cursor: req.query.cursor ? String(req.query.cursor) : undefined,
+      }),
+      getProjectComplianceEnvelope(propertyId, req.user!.userId, 'MATERIAL_SPECS'),
+    ]);
 
     analyticsEmitter.track({
       eventType: AnalyticsEvent.TOOL_USED,
@@ -26,7 +30,7 @@ export async function listSpecs(req: CustomRequest, res: Response, next: NextFun
       metadataJson: { count: Array.isArray((result as any)?.specs) ? (result as any).specs.length : undefined },
     });
 
-    res.json({ success: true, data: result });
+    res.json({ success: true, data: { ...result, propertyContext } });
   } catch (err) {
     next(err);
   }
@@ -56,6 +60,7 @@ export async function createSpec(req: CustomRequest, res: Response, next: NextFu
   try {
     const { propertyId } = req.params;
     const spec = await service.createSpec(propertyId, req.body);
+    const propertyContext = await getProjectComplianceEnvelope(propertyId, req.user!.userId, 'MATERIAL_SPECS');
 
     analyticsEmitter.track({
       eventType: AnalyticsEvent.ACTION_COMPLETED,
@@ -66,7 +71,7 @@ export async function createSpec(req: CustomRequest, res: Response, next: NextFu
       metadataJson: { actionType: 'create_spec', specId: (spec as any)?.id, category: (spec as any)?.category },
     });
 
-    res.status(201).json({ success: true, data: { spec } });
+    res.status(201).json({ success: true, data: { spec, propertyContext } });
   } catch (err) {
     next(err);
   }

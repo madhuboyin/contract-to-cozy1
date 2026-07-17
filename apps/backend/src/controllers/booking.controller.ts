@@ -20,6 +20,7 @@ import { guidanceBookingGuardService } from '../services/guidanceEngine/guidance
 import { guidanceJourneyService } from '../services/guidanceEngine/guidanceJourney.service';
 import { logger } from '../lib/logger';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
+import { getProjectComplianceEnvelope } from '../services/projectCompliance/context';
 
 export class BookingController {
   /**
@@ -91,6 +92,7 @@ export class BookingController {
           homeAssetId: homeAssetId ?? null,
         }
       );
+      const propertyContext = await getProjectComplianceEnvelope(bookingInput.propertyId, userId, 'PROVIDER_BOOKING');
 
       if (guidanceJourneyId) {
         try {
@@ -131,7 +133,7 @@ export class BookingController {
       res.status(201).json({
         success: true,
         message: 'Booking created successfully',
-        data: booking,
+        data: { ...booking, propertyContext },
       });
     } catch (error) {
       if (error instanceof ZodError) {
@@ -178,7 +180,12 @@ export class BookingController {
       // Validate query parameters
       const query = listBookingsSchema.parse(req.query) as ListBookingsQuery;
 
-      const result = await BookingService.listBookings(userId, userRole, query);
+      const [result, propertyContext] = await Promise.all([
+        BookingService.listBookings(userId, userRole, query),
+        query.propertyId
+          ? getProjectComplianceEnvelope(query.propertyId, userId, 'PROVIDER_BOOKING')
+          : Promise.resolve(null),
+      ]);
 
       analyticsEmitter.track({
         eventType: AnalyticsEvent.TOOL_USED,
@@ -191,7 +198,9 @@ export class BookingController {
 
       res.status(200).json({
         success: true,
-        data: result,
+        data: propertyContext && result && typeof result === 'object'
+          ? { ...result, propertyContext }
+          : result,
       });
     } catch (error) {
       if (error instanceof ZodError) {

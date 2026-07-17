@@ -2,12 +2,16 @@ import { Response, NextFunction } from 'express';
 import { CustomRequest as Request } from '../types';
 import * as svc from '../services/projectTracker.service';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
+import { getProjectComplianceEnvelope } from '../services/projectCompliance/context';
 
 // ── Projects ──────────────────────────────────────────────────────────────────
 
 export async function listProjects(req: Request, res: Response, next: NextFunction) {
   try {
-    const data = await svc.listProjects(req.params.propertyId);
+    const [data, propertyContext] = await Promise.all([
+      svc.listProjects(req.params.propertyId),
+      getProjectComplianceEnvelope(req.params.propertyId, req.user!.userId, 'PROJECT_TRACKER'),
+    ]);
 
     analyticsEmitter.track({
       eventType: AnalyticsEvent.TOOL_USED,
@@ -18,13 +22,14 @@ export async function listProjects(req: Request, res: Response, next: NextFuncti
       metadataJson: { count: Array.isArray(data) ? data.length : undefined },
     });
 
-    res.json({ success: true, data });
+    res.json({ success: true, data, propertyContext });
   } catch (err) { next(err); }
 }
 
 export async function createProject(req: Request, res: Response, next: NextFunction) {
   try {
     const data = await svc.createProject(req.params.propertyId, req.body);
+    const propertyContext = await getProjectComplianceEnvelope(req.params.propertyId, req.user!.userId, 'PROJECT_TRACKER');
 
     analyticsEmitter.track({
       eventType: AnalyticsEvent.ACTION_COMPLETED,
@@ -35,7 +40,7 @@ export async function createProject(req: Request, res: Response, next: NextFunct
       metadataJson: { actionType: 'create_project', projectId: (data as any)?.id },
     });
 
-    res.status(201).json({ success: true, data });
+    res.status(201).json({ success: true, data, propertyContext });
   } catch (err) { next(err); }
 }
 

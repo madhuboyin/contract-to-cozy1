@@ -13,6 +13,7 @@ import {
   UpdateSessionBody,
 } from './validators/homeRenovationAdvisor.validators';
 import { ListSessionsQuery } from './types/homeRenovationAdvisor.types';
+import { getProjectComplianceEnvelope } from '../services/projectCompliance/context';
 
 const service = new HomeRenovationAdvisorService();
 
@@ -23,7 +24,8 @@ export class HomeRenovationAdvisorController {
       const userId = req.user!.userId;
       const input = req.body as CreateSessionBody;
       const session = await service.createSession(userId, input);
-      res.status(201).json({ success: true, data: { session } });
+      const propertyContext = await getProjectComplianceEnvelope(input.propertyId, userId, 'RENOVATION_ADVISOR');
+      res.status(201).json({ success: true, data: { session, propertyContext } });
     } catch (err) {
       next(err);
     }
@@ -49,7 +51,8 @@ export class HomeRenovationAdvisorController {
       const { id } = req.params;
       const input = req.body as EvaluateSessionBody;
       const session = await service.evaluateSession(userId, id, input);
-      res.json({ success: true, data: { session } });
+      const propertyContext = await getProjectComplianceEnvelope((session as any).propertyId, userId, 'RENOVATION_ADVISOR');
+      res.json({ success: true, data: { session, propertyContext } });
     } catch (err) {
       next(err);
     }
@@ -79,8 +82,11 @@ export class HomeRenovationAdvisorController {
         limit: req.query.limit ? Number(req.query.limit) : 20,
         cursor: req.query.cursor as string | undefined,
       };
-      const result = await service.listSessionsForProperty(userId, propertyId, query);
-      res.json({ success: true, data: result });
+      const [result, propertyContext] = await Promise.all([
+        service.listSessionsForProperty(userId, propertyId, query),
+        getProjectComplianceEnvelope(propertyId, userId, 'RENOVATION_ADVISOR'),
+      ]);
+      res.json({ success: true, data: { ...result, propertyContext } });
     } catch (err) {
       next(err);
     }

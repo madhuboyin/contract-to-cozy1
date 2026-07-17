@@ -10,6 +10,7 @@ import {
 } from '../services/negotiationShield.types';
 import { NegotiationShieldService } from '../services/negotiationShield.service';
 import { logger } from '../lib/logger';
+import { getProjectComplianceEnvelope } from '../services/projectCompliance/context';
 
 const service = new NegotiationShieldService();
 
@@ -43,8 +44,12 @@ export async function listNegotiationShieldCases(
   next: NextFunction
 ) {
   try {
-    const cases = await service.listCasesForProperty(req.params.propertyId);
-    res.json({ success: true, data: { cases } });
+    const { userId } = requireUser(req);
+    const [cases, propertyContext] = await Promise.all([
+      service.listCasesForProperty(req.params.propertyId),
+      getProjectComplianceEnvelope(req.params.propertyId, userId, 'NEGOTIATION_SHIELD'),
+    ]);
+    res.json({ success: true, data: { cases, propertyContext } });
   } catch (error) {
     next(error);
   }
@@ -59,7 +64,8 @@ export async function createNegotiationShieldCase(
     const { userId } = requireUser(req);
     const payload = req.body as CreateNegotiationShieldCaseInput;
     const detail = await service.createCase(req.params.propertyId, userId, payload);
-    res.status(201).json({ success: true, data: detail });
+    const propertyContext = await getProjectComplianceEnvelope(req.params.propertyId, userId, 'NEGOTIATION_SHIELD');
+    res.status(201).json({ success: true, data: { ...detail, propertyContext } });
   } catch (error) {
     next(error);
   }
@@ -71,8 +77,12 @@ export async function getNegotiationShieldCaseDetail(
   next: NextFunction
 ) {
   try {
-    const detail = await service.getCaseDetail(req.params.propertyId, req.params.caseId);
-    res.json({ success: true, data: detail });
+    const { userId } = requireUser(req);
+    const [detail, propertyContext] = await Promise.all([
+      service.getCaseDetail(req.params.propertyId, req.params.caseId),
+      getProjectComplianceEnvelope(req.params.propertyId, userId, 'NEGOTIATION_SHIELD'),
+    ]);
+    res.json({ success: true, data: { ...detail, propertyContext } });
   } catch (error) {
     next(error);
   }
