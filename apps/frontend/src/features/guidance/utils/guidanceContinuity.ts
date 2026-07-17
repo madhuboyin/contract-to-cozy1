@@ -3,7 +3,6 @@ export type GuidanceContinuityContext = {
   guidanceStepKey?: string | null;
   guidanceSignalIntentFamily?: string | null;
   itemId?: string | null;
-  homeAssetId?: string | null;
 };
 
 type SearchParamLike = {
@@ -22,7 +21,6 @@ function buildGuidanceParams(context: GuidanceContinuityContext): URLSearchParam
     params.set('guidanceSignalIntentFamily', context.guidanceSignalIntentFamily);
   }
   if (context.itemId) params.set('itemId', context.itemId);
-  if (context.homeAssetId) params.set('homeAssetId', context.homeAssetId);
   return params;
 }
 
@@ -39,7 +37,6 @@ export function extractGuidanceContinuityContext(searchParams: SearchParamLike):
     guidanceStepKey,
     guidanceSignalIntentFamily: searchParams.get('guidanceSignalIntentFamily'),
     itemId,
-    homeAssetId: searchParams.get('homeAssetId'),
   };
 }
 

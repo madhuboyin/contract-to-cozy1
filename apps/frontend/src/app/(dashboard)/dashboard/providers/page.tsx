@@ -206,7 +206,6 @@ const ProviderList = ({
   actionKey,
   predictionId,
   inventoryItemId,
-  homeAssetId,
   guidanceJourneyId,
   guidanceStepKey,
   guidanceSignalIntentFamily,
@@ -228,7 +227,6 @@ const ProviderList = ({
   actionKey?: string;
   predictionId?: string;
   inventoryItemId?: string;
-  homeAssetId?: string;
   guidanceJourneyId?: string;
   guidanceStepKey?: string;
   guidanceSignalIntentFamily?: string;
@@ -272,7 +270,6 @@ const ProviderList = ({
         if (actionKey) queryParams.append('actionKey', actionKey);
         if (predictionId) queryParams.append('predictionId', predictionId);
         if (inventoryItemId) queryParams.append('itemId', inventoryItemId);
-        if (homeAssetId) queryParams.append('homeAssetId', homeAssetId);
         if (guidanceJourneyId) queryParams.append('guidanceJourneyId', guidanceJourneyId);
         if (guidanceStepKey) queryParams.append('guidanceStepKey', guidanceStepKey);
         if (guidanceSignalIntentFamily) {
@@ -401,7 +398,6 @@ export default function ProvidersPage() {
   const targetPropertyId = searchParams.get('propertyId') || dashboardSelectedPropertyId || undefined;
   const predictionId = searchParams.get('predictionId') || undefined;
   const inventoryItemId = searchParams.get('itemId') || undefined;
-  const homeAssetId = searchParams.get('homeAssetId') || undefined;
   const fromSource = searchParams.get('from') || undefined;
   const returnTo = searchParams.get('returnTo') || undefined;
   const intent = searchParams.get('intent') || undefined;
@@ -417,8 +413,7 @@ export default function ProvidersPage() {
     guidanceJourneyId ||
       guidanceStepKey ||
       guidanceSignalIntentFamily ||
-      inventoryItemId ||
-      homeAssetId
+      inventoryItemId
   );
   const guidanceContext = extractGuidanceContinuityContext(searchParams);
   const derivedReturnTo =
@@ -428,7 +423,6 @@ export default function ProvidersPage() {
           journeyId: guidanceContext.guidanceJourneyId,
           stepKey: guidanceContext.guidanceStepKey,
           inventoryItemId: guidanceContext.itemId ?? inventoryItemId ?? null,
-          homeAssetId: guidanceContext.homeAssetId ?? homeAssetId ?? null,
         })
       : null;
   const effectiveReturnTo = returnTo || derivedReturnTo || undefined;
@@ -436,7 +430,6 @@ export default function ProvidersPage() {
     enabled: Boolean(targetPropertyId) && hasGuardScopeContext,
     journeyId: guidanceJourneyId,
     inventoryItemId,
-    homeAssetId,
   });
   const providerGuidanceQuery = useGuidance(targetPropertyId, {
     enabled: Boolean(targetPropertyId) && hasGuardScopeContext,
@@ -861,7 +854,6 @@ export default function ProvidersPage() {
           actionKey={actionKey}
           predictionId={predictionId}
           inventoryItemId={inventoryItemId}
-          homeAssetId={homeAssetId}
           guidanceJourneyId={guidanceJourneyId}
           guidanceStepKey={guidanceStepKey}
           guidanceSignalIntentFamily={guidanceSignalIntentFamily}

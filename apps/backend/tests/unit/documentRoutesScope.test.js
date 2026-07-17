@@ -4,7 +4,6 @@ const assert = require('node:assert/strict');
 require('ts-node/register');
 
 let inventoryWhere = null;
-let assetWhere = null;
 
 const prismaPath = require.resolve('../../src/lib/prisma.ts');
 require.cache[prismaPath] = {
@@ -16,12 +15,6 @@ require.cache[prismaPath] = {
       inventoryItem: {
         findMany: async (args) => {
           inventoryWhere = args.where;
-          return [];
-        },
-      },
-      homeAsset: {
-        findMany: async (args) => {
-          assetWhere = args.where;
           return [];
         },
       },
@@ -175,7 +168,6 @@ function getAssetSuggestionHandler() {
 
 test('asset suggestions ignore query property override and use owned document property', async () => {
   inventoryWhere = null;
-  assetWhere = null;
 
   const handler = getAssetSuggestionHandler();
   const req = {
@@ -196,6 +188,5 @@ test('asset suggestions ignore query property override and use owned document pr
 
   assert.equal(res.statusCode, 200);
   assert.equal(inventoryWhere.propertyId, 'owned-property-id');
-  assert.equal(assetWhere.propertyId, 'owned-property-id');
   assert.equal(res.payload.data.document.propertyId, 'owned-property-id');
 });

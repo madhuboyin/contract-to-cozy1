@@ -8,7 +8,6 @@ type UseExecutionGuardOptions = {
   enabled?: boolean;
   journeyId?: string;
   inventoryItemId?: string;
-  homeAssetId?: string;
 };
 
 export function useExecutionGuard(
@@ -24,14 +23,12 @@ export function useExecutionGuard(
       targetAction,
       options?.journeyId,
       options?.inventoryItemId,
-      options?.homeAssetId,
     ],
     queryFn: async () => {
       if (!propertyId) throw new Error('Property ID is required');
       return getGuidanceExecutionGuard(propertyId, targetAction, {
         journeyId: options?.journeyId,
         inventoryItemId: options?.inventoryItemId,
-        homeAssetId: options?.homeAssetId,
       });
     },
     enabled: Boolean(propertyId) && (options?.enabled ?? true),

@@ -327,9 +327,6 @@ function buildGuidanceOverviewHref(propertyId: string, journey: GuidanceJourneyD
     params.set('scopeCategory', 'ITEM');
     params.set('itemId', journey.inventoryItemId);
     params.set('inventoryItemId', journey.inventoryItemId);
-  } else if (journey.homeAssetId) {
-    params.set('scopeCategory', 'ASSET');
-    params.set('homeAssetId', journey.homeAssetId);
   } else {
     params.set('scopeCategory', 'PROPERTY');
   }

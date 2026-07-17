@@ -38,7 +38,6 @@ export default function CoverageIntelligenceToolClient() {
         journeyId: guidanceJourneyId,
         stepKey: guidanceStepKey,
         inventoryItemId: searchParams.get('itemId') ?? searchParams.get('inventoryItemId'),
-        homeAssetId: searchParams.get('homeAssetId'),
         issueType: searchParams.get('issueType'),
       })
     : null;

@@ -54,7 +54,6 @@ export default function CoverageClient({ propertyId }: { propertyId: string }) {
         journeyId: guidanceJourneyId,
         stepKey: guidanceStepKey,
         inventoryItemId: searchParams.get('itemId'),
-        homeAssetId: searchParams.get('homeAssetId'),
         issueType: searchParams.get('issueType'),
       })
     : null;

@@ -166,10 +166,7 @@ export function ScopedWorkspaceGuidanceStep({
     ],
   };
 
-  const assetName =
-    journey.inventoryItem?.name?.trim() ||
-    (journey.homeAsset?.assetType ? buildJourneyTitle(journey) : null) ||
-    buildJourneyTitle(journey);
+  const assetName = journey.inventoryItem?.name?.trim() || buildJourneyTitle(journey);
   const issueLabel = formatIssueTypeLabel(journey.issueType) ?? 'Current guided issue';
 
   return (

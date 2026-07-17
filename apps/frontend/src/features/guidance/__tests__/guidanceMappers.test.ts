@@ -35,7 +35,6 @@ function buildJourney(steps: GuidanceStepDTO[]): GuidanceJourneyDTO {
   return {
     id: 'journey-1',
     propertyId: 'property-1',
-    homeAssetId: null,
     inventoryItemId: 'item-1',
     journeyKey: 'journey_asset_lifecycle_resolution',
     journeyTypeKey: 'asset_lifecycle_resolution',
@@ -79,7 +78,6 @@ function buildJourney(steps: GuidanceStepDTO[]): GuidanceJourneyDTO {
     primarySignal: {
       id: 'signal-1',
       propertyId: 'property-1',
-      homeAssetId: null,
       inventoryItemId: 'item-1',
       signalIntentFamily: 'lifecycle_end_or_past_life',
       issueDomain: 'ASSET_LIFECYCLE',
@@ -130,9 +128,10 @@ describe('guidance mappers', () => {
     });
 
     expect(mapped.title).toContain('Aging System');
-    expect(mapped.href).toContain('/dashboard/properties/property-1/inventory/items/item-1/replace-repair');
+    expect(mapped.href).toContain('/dashboard/properties/property-1/guidance/step');
     expect(mapped.href).toContain('guidanceJourneyId=journey-1');
     expect(mapped.href).toContain('guidanceStepKey=repair_replace_decision');
+    expect(mapped.href).toContain('inventoryItemId=item-1');
     expect(mapped.nextStep?.label).toBe('Compare repair vs replace');
   });
 

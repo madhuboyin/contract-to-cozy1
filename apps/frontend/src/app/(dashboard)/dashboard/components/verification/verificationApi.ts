@@ -14,7 +14,6 @@ export interface VerificationNudgeItem {
   installedOn?: string | null;
   isVerified: boolean;
   room?: { id: string; name: string } | null;
-  homeAsset?: { id: string } | null;
 }
 
 export interface VerificationNudgeDTO {

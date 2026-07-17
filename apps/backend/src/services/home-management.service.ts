@@ -294,12 +294,10 @@ export async function createWarranty(
         homeownerProfile: { connect: { id: homeownerProfileId } },
         property: data.propertyId && data.propertyId !== "" ? { connect: { id: data.propertyId } } : undefined,
         category: data.category, 
-        // NEW: Use inventoryItem relation instead of homeAsset
+        // Warranty ownership is canonicalized through the inventory relation.
         inventoryItem: inventoryItemId && inventoryItemId !== "" 
           ? { connect: { id: inventoryItemId } } 
           : undefined,
-        // DEPRECATED: Keep homeAsset null for new records
-        // homeAsset: undefined,
         providerName: data.providerName,
         policyNumber: data.policyNumber,
         coverageDetails: data.coverageDetails,

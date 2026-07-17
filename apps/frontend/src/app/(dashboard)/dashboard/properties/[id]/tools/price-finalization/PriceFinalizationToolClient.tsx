@@ -92,7 +92,6 @@ function withGuidanceQuery(
     guidanceStepKey?: string | null;
     guidanceSignalIntentFamily?: string | null;
     itemId?: string | null;
-    homeAssetId?: string | null;
     priceFinalizationId?: string | null;
     finalPrice?: string | null;
     vendorName?: string | null;
@@ -107,7 +106,6 @@ function withGuidanceQuery(
     query.set('guidanceSignalIntentFamily', params.guidanceSignalIntentFamily);
   }
   if (params.itemId) query.set('itemId', params.itemId);
-  if (params.homeAssetId) query.set('homeAssetId', params.homeAssetId);
   if (params.priceFinalizationId) query.set('priceFinalizationId', params.priceFinalizationId);
   if (params.finalPrice) query.set('finalPrice', params.finalPrice);
   if (params.vendorName) query.set('vendorName', params.vendorName);
@@ -123,7 +121,6 @@ export default function PriceFinalizationToolClient() {
   const guidanceStepKey = searchParams.get('guidanceStepKey');
   const guidanceSignalIntentFamily = searchParams.get('guidanceSignalIntentFamily');
   const itemId = searchParams.get('itemId');
-  const homeAssetId = searchParams.get('homeAssetId');
   const defaultCategory = searchParams.get('serviceCategory') || searchParams.get('category');
   const defaultVendorName = searchParams.get('vendorName');
 
@@ -174,7 +171,6 @@ export default function PriceFinalizationToolClient() {
         const list = await listPriceFinalizations(propertyId, 20, {
           guidanceJourneyId: guidanceJourneyId || undefined,
           inventoryItemId: itemId || undefined,
-          homeAssetId: homeAssetId || undefined,
         });
         if (cancelled) return;
         setItems(list);
@@ -200,7 +196,7 @@ export default function PriceFinalizationToolClient() {
     return () => {
       cancelled = true;
     };
-  }, [guidanceJourneyId, homeAssetId, itemId, propertyId]);
+  }, [guidanceJourneyId, itemId, propertyId]);
 
   const setField = <K extends keyof FormState>(key: K, value: FormState[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -250,7 +246,6 @@ export default function PriceFinalizationToolClient() {
 
     return {
       inventoryItemId: itemId || undefined,
-      homeAssetId: homeAssetId || undefined,
       guidanceJourneyId: guidanceJourneyId || undefined,
       guidanceStepKey: guidanceStepKey || undefined,
       guidanceSignalIntentFamily: guidanceSignalIntentFamily || undefined,
@@ -284,7 +279,6 @@ export default function PriceFinalizationToolClient() {
     guidanceJourneyId,
     guidanceSignalIntentFamily,
     guidanceStepKey,
-    homeAssetId,
     itemId,
     negotiationShieldCaseId,
     quoteComparisonWorkspaceId,
@@ -353,7 +347,6 @@ export default function PriceFinalizationToolClient() {
       guidanceStepKey: guidanceStepKey ?? 'finalize_price',
       guidanceSignalIntentFamily,
       itemId,
-      homeAssetId,
       priceFinalizationId: selected.id,
       finalPrice:
         typeof selected.acceptedPrice === 'number' ? selected.acceptedPrice.toFixed(2) : null,
@@ -369,7 +362,6 @@ export default function PriceFinalizationToolClient() {
     guidanceStepKey,
     guidanceSignalIntentFamily,
     itemId,
-    homeAssetId,
   ]);
   const backHref = guidanceJourneyId
     ? buildGuidanceOverviewHref({
@@ -377,7 +369,6 @@ export default function PriceFinalizationToolClient() {
         journeyId: guidanceJourneyId,
         stepKey: guidanceStepKey,
         inventoryItemId: itemId,
-        homeAssetId,
         issueType: searchParams.get('issueType'),
       })
     : `/dashboard/properties/${propertyId}`;

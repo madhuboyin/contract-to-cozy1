@@ -1643,7 +1643,6 @@ export default function ResolutionCenterClient() {
     const guidanceStepKey = searchParams.get('guidanceStepKey');
     const guidanceSignalIntentFamily = searchParams.get('guidanceSignalIntentFamily');
     const itemId = searchParams.get('itemId');
-    const homeAssetId = searchParams.get('homeAssetId');
 
     if (guidanceJourneyId) params.set('guidanceJourneyId', guidanceJourneyId);
     if (guidanceStepKey) params.set('guidanceStepKey', guidanceStepKey);
@@ -1651,7 +1650,6 @@ export default function ResolutionCenterClient() {
       params.set('guidanceSignalIntentFamily', guidanceSignalIntentFamily);
     }
     if (itemId) params.set('itemId', itemId);
-    if (homeAssetId) params.set('homeAssetId', homeAssetId);
 
     const href = params.toString()
       ? `/dashboard/providers/${encodeURIComponent(providerId)}?${params.toString()}`

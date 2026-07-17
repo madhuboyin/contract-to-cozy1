@@ -27,7 +27,6 @@ function buildAiToolHref(
     guidanceStepKey?: string;
     guidanceSignalIntentFamily?: string;
     itemId?: string;
-    homeAssetId?: string;
   }
 ): string {
   const canonicalHref = buildPropertyAwareDashboardHref(propertyId, toolHref);
@@ -38,7 +37,6 @@ function buildAiToolHref(
   if (guidanceContext?.guidanceStepKey) queryParams.set('guidanceStepKey', guidanceContext.guidanceStepKey);
   if (guidanceContext?.guidanceSignalIntentFamily) queryParams.set('guidanceSignalIntentFamily', guidanceContext.guidanceSignalIntentFamily);
   if (guidanceContext?.itemId) queryParams.set('itemId', guidanceContext.itemId);
-  if (guidanceContext?.homeAssetId) queryParams.set('homeAssetId', guidanceContext.homeAssetId);
   const suffix = queryParams.toString();
   if (!suffix) return canonicalHref;
   return canonicalHref.includes('?') ? `${canonicalHref}&${suffix}` : `${canonicalHref}?${suffix}`;
@@ -52,7 +50,6 @@ export default function AIToolsPage() {
   const guidanceStepKey = searchParams.get('guidanceStepKey') || undefined;
   const guidanceSignalIntentFamily = searchParams.get('guidanceSignalIntentFamily') || undefined;
   const itemId = searchParams.get('itemId') || undefined;
-  const homeAssetId = searchParams.get('homeAssetId') || undefined;
   const resolvedPropertyId = selectedPropertyId || propertyIdFromQuery;
 
   const tools = MOBILE_AI_TOOL_CATALOG.filter((tool) => tool.key !== 'view-all');
@@ -96,7 +93,6 @@ export default function AIToolsPage() {
                         guidanceStepKey,
                         guidanceSignalIntentFamily,
                         itemId,
-                        homeAssetId,
                       })}
                       badgeLabel=""
                       variant="compact"

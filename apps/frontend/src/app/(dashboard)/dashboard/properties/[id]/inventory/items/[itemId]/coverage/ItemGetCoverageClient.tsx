@@ -268,7 +268,7 @@ export default function ItemGetCoverageClient() {
   const defaultWarrantyCategory = getWarrantyCategoryForInventoryCategory(analysis?.item?.category);
   const addWarrantyHref =
     propertyId && itemId
-      ? `/dashboard/warranties?action=new&from=coverage-buy&propertyId=${encodeURIComponent(propertyId)}&homeAssetId=${encodeURIComponent(itemId)}&category=${encodeURIComponent(defaultWarrantyCategory)}&returnTo=${encodeURIComponent(currentPathWithQuery)}`
+      ? `/dashboard/warranties?action=new&from=coverage-buy&propertyId=${encodeURIComponent(propertyId)}&inventoryItemId=${encodeURIComponent(itemId)}&category=${encodeURIComponent(defaultWarrantyCategory)}&returnTo=${encodeURIComponent(currentPathWithQuery)}`
       : '/dashboard/warranties';
 
   const replaceHref = propertyId

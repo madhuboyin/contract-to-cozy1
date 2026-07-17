@@ -48,7 +48,6 @@ const CONTEXT_KEYS = [
   'guidanceStepKey',
   'guidanceSignalIntentFamily',
   'itemId',
-  'homeAssetId',
   'serviceCategory',
   'vendorName',
   'quoteAmount',
@@ -199,7 +198,6 @@ export default function QuoteComparisonWorkspaceClient() {
   const guidanceJourneyId = searchParams.get('guidanceJourneyId');
   const guidanceSignalIntentFamily = searchParams.get('guidanceSignalIntentFamily');
   const itemId = searchParams.get('itemId');
-  const homeAssetId = searchParams.get('homeAssetId');
   const contextQuery = buildContextQuery(searchParams);
 
   React.useEffect(() => {
@@ -254,7 +252,6 @@ export default function QuoteComparisonWorkspaceClient() {
         getOrCreateQuoteComparisonWorkspace(propertyId, {
           serviceCategory: (defaultCategory as ServicePriceRadarCheckSummary['serviceCategory']) || null,
           inventoryItemId: itemId,
-          homeAssetId,
           guidanceJourneyId,
           guidanceStepKey,
           guidanceSignalIntentFamily,
@@ -285,7 +282,6 @@ export default function QuoteComparisonWorkspaceClient() {
     prefilledQuote,
     propertyId,
     itemId,
-    homeAssetId,
     guidanceJourneyId,
     guidanceStepKey,
     guidanceSignalIntentFamily,
@@ -403,7 +399,6 @@ export default function QuoteComparisonWorkspaceClient() {
         journeyId: guidanceJourneyId,
         stepKey: guidanceStepKey,
         inventoryItemId: itemId,
-        homeAssetId,
         issueType: searchParams.get('issueType'),
       })
     : `/dashboard/properties/${propertyId}`;

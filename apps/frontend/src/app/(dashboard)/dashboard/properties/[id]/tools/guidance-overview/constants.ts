@@ -10,7 +10,6 @@ export type AssetScopeOption = {
   actionCta: string | null;
   outOfPocketCost: number;
   inventoryItemId: string | null;
-  homeAssetId: string | null;
 };
 
 export const DOMAIN_FOCUS_LABELS: Record<string, string> = {

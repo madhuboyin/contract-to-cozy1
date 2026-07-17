@@ -1354,7 +1354,8 @@ lifecycle everywhere it appears.
 
 Implementation tracking: `PHASE8_IMPLEMENTATION_STATUS.md`. Evidence-backed
 deferrals: `PHASE8_DEFERRED_EVIDENCE.md`. Financial, item, and persisted
-projection decisions: `PHASE8_OWNERSHIP_AUDIT.md`.
+projection decisions: `PHASE8_OWNERSHIP_AUDIT.md`. Live ten-archetype release
+validation: `PHASE8_RUNTIME_ACCEPTANCE_RUNBOOK.md`.
 
 - Re-scan backend, frontend, workers, tests, docs, and Prisma for old fields.
 - Remove adapters, compatibility code, duplicate fact loaders, and obsolete

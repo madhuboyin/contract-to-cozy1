@@ -17,7 +17,6 @@ type GuidanceContextBadge = {
   guidanceStepKey?: string | null;
   guidanceSignalIntentFamily?: string | null;
   itemId?: string | null;
-  homeAssetId?: string | null;
 };
 
 

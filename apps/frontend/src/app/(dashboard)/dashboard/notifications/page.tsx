@@ -37,7 +37,6 @@ function appendGuidanceContext(
     guidanceStepKey?: string | null;
     guidanceSignalIntentFamily?: string | null;
     itemId?: string | null;
-    homeAssetId?: string | null;
   } | null
 ): string {
   if (!guidanceContext) return actionUrl;
@@ -46,8 +45,7 @@ function appendGuidanceContext(
     Boolean(guidanceContext.guidanceJourneyId) ||
     Boolean(guidanceContext.guidanceStepKey) ||
     Boolean(guidanceContext.guidanceSignalIntentFamily) ||
-    Boolean(guidanceContext.itemId) ||
-    Boolean(guidanceContext.homeAssetId);
+    Boolean(guidanceContext.itemId);
   if (!hasAnyGuidance) return actionUrl;
 
   try {
@@ -64,10 +62,6 @@ function appendGuidanceContext(
     if (guidanceContext.itemId && !url.searchParams.get('itemId')) {
       url.searchParams.set('itemId', guidanceContext.itemId);
     }
-    if (guidanceContext.homeAssetId && !url.searchParams.get('homeAssetId')) {
-      url.searchParams.set('homeAssetId', guidanceContext.homeAssetId);
-    }
-
     return `${url.pathname}${url.search}${url.hash}`;
   } catch {
     return actionUrl;

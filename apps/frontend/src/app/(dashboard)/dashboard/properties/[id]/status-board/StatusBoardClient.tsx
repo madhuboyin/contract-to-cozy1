@@ -181,7 +181,7 @@ const LINK_ACTION_BUTTON_CLASS =
 const INSTALL_DATE_MISSING_TOOLTIP =
   "Install date is empty. Add install date for accurate prediction.";
 
-/** Normalise HOME_ASSET display names that arrive as ALL_CAPS from the backend. */
+/** Normalize canonical inventory display names that arrive as ALL_CAPS. */
 const ASSET_NAME_MAP: Record<string, string> = {
   "HVAC FURNACE": "HVAC Furnace",
   "HVAC AC": "HVAC Air Conditioner",
@@ -334,8 +334,6 @@ export default function StatusBoardClient() {
       if (item.inventoryItemId) {
         params.set("inventoryItemId", item.inventoryItemId);
         params.set("itemId", item.inventoryItemId);
-      } else if (item.homeAssetId) {
-        params.set("homeAssetId", item.homeAssetId);
       }
       if (issueLabel) {
         params.set("customIssueLabel", issueLabel);
@@ -351,8 +349,8 @@ export default function StatusBoardClient() {
     (item: StatusBoardItemDTO, ctaKey: string) => {
       if (!hasGuidanceContext || !guidanceContext.guidanceJourneyId || !guidanceContext.guidanceStepKey) return;
 
-      const sourceEntityId = item.inventoryItemId ?? item.homeAssetId ?? item.id;
-      const sourceEntityType = item.inventoryItemId ? 'INVENTORY_ITEM' : item.homeAssetId ? 'HOME_ASSET' : 'HOME_ITEM';
+      const sourceEntityId = item.inventoryItemId ?? item.id;
+      const sourceEntityType = item.inventoryItemId ? 'INVENTORY_ITEM' : 'HOME_ITEM';
 
       void recordGuidanceToolStatus(propertyId, {
         journeyId: guidanceContext.guidanceJourneyId,
@@ -362,7 +360,6 @@ export default function StatusBoardClient() {
         sourceEntityType,
         sourceEntityId,
         inventoryItemId: item.inventoryItemId ?? undefined,
-        homeAssetId: item.homeAssetId ?? undefined,
         status: 'IN_PROGRESS',
         producedData: {
           proofType: 'cta_engagement',
@@ -1059,9 +1056,9 @@ export default function StatusBoardClient() {
                     </Link>
                   )}
                   {/* FRD-FR-02: Report Issue — launches a user-initiated guidance journey */}
-                  {(item.inventoryItemId || item.homeAssetId) && (
+                  {item.inventoryItemId && (
                     <Link
-                      href={`/dashboard/properties/${propertyId}/tools/guidance-overview?scopeCategory=ITEM${item.inventoryItemId ? `&inventoryItemId=${item.inventoryItemId}&itemId=${item.inventoryItemId}` : `&homeAssetId=${item.homeAssetId}`}&assetName=${encodeURIComponent(item.displayName)}`}
+                      href={`/dashboard/properties/${propertyId}/tools/guidance-overview?scopeCategory=ITEM&inventoryItemId=${item.inventoryItemId}&itemId=${item.inventoryItemId}&assetName=${encodeURIComponent(item.displayName)}`}
                     >
                       <Button
                         variant="outline"
@@ -1290,10 +1287,10 @@ export default function StatusBoardClient() {
                   {expandedId === item.id ? "Close Adjustments" : "Adjust Status"}
                 </Button>
                 {/* FRD-FR-02: Report Issue CTA — launches a user-initiated guidance journey */}
-                {(item.inventoryItemId || item.homeAssetId) && (
+                {item.inventoryItemId && (
                   <Button size="sm" variant="outline" className="border-rose-200 text-rose-700 hover:bg-rose-50 hover:text-rose-800 dark:border-rose-900/70 dark:text-rose-300 dark:hover:bg-rose-950/40" asChild>
                     <Link
-                      href={`/dashboard/properties/${propertyId}/tools/guidance-overview?scopeCategory=ITEM${item.inventoryItemId ? `&inventoryItemId=${item.inventoryItemId}&itemId=${item.inventoryItemId}` : `&homeAssetId=${item.homeAssetId}`}&assetName=${encodeURIComponent(item.displayName)}`}
+                      href={`/dashboard/properties/${propertyId}/tools/guidance-overview?scopeCategory=ITEM&inventoryItemId=${item.inventoryItemId}&itemId=${item.inventoryItemId}&assetName=${encodeURIComponent(item.displayName)}`}
                     >
                       <AlertCircle className="h-3.5 w-3.5 mr-1" /> Report Issue
                     </Link>

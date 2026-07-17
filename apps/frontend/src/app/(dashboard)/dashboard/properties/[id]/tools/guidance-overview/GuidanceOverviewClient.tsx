@@ -137,7 +137,6 @@ export default function GuidanceOverviewClient() {
   // ---- URL param state ----
   const selectedInventoryItemId =
     searchParams.get('itemId') ?? searchParams.get('inventoryItemId');
-  const selectedHomeAssetId = searchParams.get('homeAssetId');
   const selectedAssetName = searchParams.get('assetName')?.trim() ?? '';
   const selectedServiceKey = searchParams.get('serviceKey');
   const selectedIssueType = searchParams.get('issueType');
@@ -152,10 +151,10 @@ export default function GuidanceOverviewClient() {
   const rawScopeCategory = searchParams.get('scopeCategory') as GuidanceScopeCategory | null;
   const scopeCategory: GuidanceScopeCategory | null =
     rawScopeCategory ??
-    (selectedInventoryItemId || selectedHomeAssetId || selectedAssetName ? 'ITEM' : null);
+    (selectedInventoryItemId || selectedAssetName ? 'ITEM' : null);
 
   const hasAssetSelected = Boolean(
-    selectedInventoryItemId || selectedHomeAssetId || selectedAssetName
+    selectedInventoryItemId || selectedAssetName
   );
   const hasServiceSelected = Boolean(selectedServiceKey);
   const hasTargetSelected =
@@ -163,7 +162,7 @@ export default function GuidanceOverviewClient() {
   const hasIssueSelected = Boolean(selectedIssueType);
 
   const userSelectedScopeId =
-    selectedInventoryItemId ?? selectedHomeAssetId ?? selectedServiceKey ?? undefined;
+    selectedInventoryItemId ?? selectedServiceKey ?? undefined;
 
   // ---- URL navigation helpers ----
   const baseHref = `/dashboard/properties/${propertyId}/tools/guidance-overview`;
@@ -189,7 +188,6 @@ export default function GuidanceOverviewClient() {
     if (option.inventoryItemId) {
       next.set('itemId', option.inventoryItemId);
     }
-    if (option.homeAssetId) next.set('homeAssetId', option.homeAssetId);
     next.set('assetName', option.assetName);
     router.push(`${baseHref}?${next.toString()}`);
   }
@@ -261,7 +259,6 @@ export default function GuidanceOverviewClient() {
         actionCta: null,
         outOfPocketCost: item.replacementCostCents ? item.replacementCostCents / 100 : 0,
         inventoryItemId: item.id,
-        homeAssetId: null,
       });
     }
     return deduped;
@@ -291,13 +288,12 @@ export default function GuidanceOverviewClient() {
     return (
       allAssetScopeOptions.find((o) => {
         if (selectedInventoryItemId && o.inventoryItemId === selectedInventoryItemId) return true;
-        if (selectedHomeAssetId && o.homeAssetId === selectedHomeAssetId) return true;
         if (selectedAssetName && o.assetName.toLowerCase() === selectedAssetName.toLowerCase())
           return true;
         return false;
       }) ?? null
     );
-  }, [allAssetScopeOptions, hasAssetSelected, selectedAssetName, selectedHomeAssetId, selectedInventoryItemId]);
+  }, [allAssetScopeOptions, hasAssetSelected, selectedAssetName, selectedInventoryItemId]);
 
   // Full InventoryItem for the drawer — looked up from the already-fetched list
   const selectedDrawerItem = React.useMemo(() => {
@@ -320,7 +316,6 @@ export default function GuidanceOverviewClient() {
       }
       if (selectedInventoryItemId && action.journey.inventoryItemId === selectedInventoryItemId)
         return true;
-      if (selectedHomeAssetId && action.journey.homeAssetId === selectedHomeAssetId) return true;
       if (assetNameNeedle) {
         const haystack = [
           resolveAssetLabel(action),
@@ -336,7 +331,7 @@ export default function GuidanceOverviewClient() {
       }
       return false;
     });
-  }, [allActions, hasTargetSelected, scopeCategory, selectedAssetName, selectedHomeAssetId, selectedInventoryItemId, selectedServiceKey]);
+  }, [allActions, hasTargetSelected, scopeCategory, selectedAssetName, selectedInventoryItemId, selectedServiceKey]);
 
   // Further filter by issueType if one is selected (match user-initiated journeys).
   // No fallback to all scoped actions — an unmatched issueType must surface the
@@ -390,14 +385,13 @@ export default function GuidanceOverviewClient() {
         selectedInventoryItemId ?? selectedAssetOption?.inventoryItemId ?? undefined;
       const scopeId =
         scopeCategory === 'ITEM'
-          ? effectiveInventoryItemId ?? selectedHomeAssetId ?? ''
+          ? effectiveInventoryItemId ?? ''
           : selectedServiceKey ?? '';
       return startGuidanceJourney(propertyId, {
         scopeCategory: scopeCategory ?? 'ITEM',
         scopeId,
         issueType: selectedIssueType!,
         inventoryItemId: effectiveInventoryItemId,
-        homeAssetId: selectedHomeAssetId ?? undefined,
         serviceKey: selectedServiceKey ?? undefined,
       });
     },
@@ -432,7 +426,7 @@ export default function GuidanceOverviewClient() {
 
   React.useEffect(() => {
     setShowAllIssueTypes(false);
-  }, [selectedInventoryItemId, selectedHomeAssetId, selectedServiceKey, selectedAssetName, scopeCategory]);
+  }, [selectedInventoryItemId, selectedServiceKey, selectedAssetName, scopeCategory]);
 
   React.useEffect(() => {
     setShowSkipConfirm(false);
@@ -601,9 +595,7 @@ export default function GuidanceOverviewClient() {
                     {inProgressActions.map((action) => {
                       const assetLabel = resolveAssetLabel(action);
                       const itemCategory =
-                        action.journey.inventoryItem?.category ??
-                        action.journey.homeAsset?.assetType ??
-                        '';
+                        action.journey.inventoryItem?.category ?? '';
                       const { icon: ItemIcon, bg, color } = getGuidanceItemVisual({
                         name: action.journey.inventoryItem?.name?.trim() ?? assetLabel,
                         category: itemCategory,
@@ -1105,7 +1097,6 @@ export default function GuidanceOverviewClient() {
     ? {
         ...resolvedJourney,
         inventoryItemId: resolvedJourney.inventoryItemId ?? selectedInventoryItemId ?? null,
-        homeAssetId: resolvedJourney.homeAssetId ?? selectedHomeAssetId ?? null,
       }
     : null;
   const selectedStepWorkspaceHref =
@@ -1561,7 +1552,6 @@ export default function GuidanceOverviewClient() {
                       activeJourneySteps={activeJourneySteps}
                       journeyForSelectedStepHref={journeyForSelectedStepHref}
                       selectedInventoryItemId={selectedInventoryItemId}
-                      selectedHomeAssetId={selectedHomeAssetId}
                       selectedIssueType={selectedIssueType}
                       selectedAssetOption={selectedAssetOption}
                       router={router}

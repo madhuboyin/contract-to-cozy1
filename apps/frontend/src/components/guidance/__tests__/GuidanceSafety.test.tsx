@@ -20,7 +20,6 @@ function buildAction(overrides: Partial<GuidanceActionModel> = {}): GuidanceActi
     journey: {
       id: 'journey-1',
       propertyId: 'property-1',
-      homeAssetId: null,
       inventoryItemId: null,
       journeyKey: 'journey_asset_lifecycle_resolution',
       journeyTypeKey: 'asset_lifecycle_resolution',

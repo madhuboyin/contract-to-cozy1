@@ -11,7 +11,7 @@ export type WarrantyBadge = 'active' | 'expiring_soon' | 'expired' | 'none';
 
 export interface StatusBoardItemDTO {
   id: string;
-  kind: 'INVENTORY_ITEM' | 'HOME_ASSET';
+  kind: 'INVENTORY_ITEM';
   displayName: string;
   category: string;
   ageYears: number | null;
@@ -36,7 +36,6 @@ export interface StatusBoardItemDTO {
   needsInstallDateForPrediction: boolean;
   deepLinks: Record<string, string>;
   inventoryItemId: string | null;
-  homeAssetId: string | null;
 }
 
 export interface StatusBoardSummary {

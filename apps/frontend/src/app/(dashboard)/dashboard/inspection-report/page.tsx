@@ -37,7 +37,6 @@ function InspectionReportContent() {
           journeyId: guidanceJourneyId,
           stepKey: guidanceStepKey,
           inventoryItemId: guidanceContext.itemId ?? null,
-          homeAssetId: guidanceContext.homeAssetId ?? null,
         })
       : null);
 

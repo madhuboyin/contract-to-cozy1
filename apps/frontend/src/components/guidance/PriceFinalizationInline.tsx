@@ -45,7 +45,6 @@ type PriceFinalizationInlineProps = {
   stepKey: string;
   inventoryItemId: string | null;
   inventoryItemCategory: string | null;
-  homeAssetId: string | null;
   guidanceSignalIntentFamily?: string | null;
   assetName?: string;
   issueType?: string | null;
@@ -117,7 +116,6 @@ function withGuidanceQuery(
     guidanceStepKey?: string | null;
     guidanceSignalIntentFamily?: string | null;
     itemId?: string | null;
-    homeAssetId?: string | null;
     priceFinalizationId?: string | null;
     finalPrice?: string | null;
     vendorName?: string | null;
@@ -132,7 +130,6 @@ function withGuidanceQuery(
     query.set('guidanceSignalIntentFamily', params.guidanceSignalIntentFamily);
   }
   if (params.itemId) query.set('itemId', params.itemId);
-  if (params.homeAssetId) query.set('homeAssetId', params.homeAssetId);
   if (params.priceFinalizationId) query.set('priceFinalizationId', params.priceFinalizationId);
   if (params.finalPrice) query.set('finalPrice', params.finalPrice);
   if (params.vendorName) query.set('vendorName', params.vendorName);
@@ -146,7 +143,6 @@ export function PriceFinalizationInline({
   stepKey,
   inventoryItemId,
   inventoryItemCategory,
-  homeAssetId,
   guidanceSignalIntentFamily,
   assetName = 'this item',
   issueType,
@@ -190,7 +186,6 @@ export function PriceFinalizationInline({
         const scopedItems = await listPriceFinalizations(propertyId, 10, {
           guidanceJourneyId: journeyId,
           inventoryItemId,
-          homeAssetId,
         });
         if (cancelled) return;
 
@@ -227,7 +222,7 @@ export function PriceFinalizationInline({
     return () => {
       cancelled = true;
     };
-  }, [defaultServiceCategory, homeAssetId, inventoryItemId, journeyId, propertyId]);
+  }, [defaultServiceCategory, inventoryItemId, journeyId, propertyId]);
 
   const setField = <K extends keyof FormState>(key: K, value: FormState[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -277,7 +272,6 @@ export function PriceFinalizationInline({
 
     return {
       inventoryItemId: inventoryItemId || undefined,
-      homeAssetId: homeAssetId || undefined,
       guidanceJourneyId: journeyId,
       guidanceStepKey: stepKey,
       guidanceSignalIntentFamily: guidanceSignalIntentFamily || undefined,
@@ -294,7 +288,7 @@ export function PriceFinalizationInline({
       notes: form.notes.trim() || undefined,
       terms: terms.length > 0 ? terms : undefined,
     };
-  }, [form, guidanceSignalIntentFamily, homeAssetId, inventoryItemId, journeyId, stepKey]);
+  }, [form, guidanceSignalIntentFamily, inventoryItemId, journeyId, stepKey]);
 
   const bookingHref = React.useMemo(() => {
     const selected = finalizedDetail ?? activeDetail;
@@ -306,7 +300,6 @@ export function PriceFinalizationInline({
       guidanceStepKey: stepKey,
       guidanceSignalIntentFamily,
       itemId: inventoryItemId,
-      homeAssetId,
       priceFinalizationId: selected.id,
       finalPrice:
         typeof selected.acceptedPrice === 'number' ? selected.acceptedPrice.toFixed(2) : null,
@@ -317,7 +310,6 @@ export function PriceFinalizationInline({
     finalizedDetail,
     form.serviceCategory,
     form.vendorName,
-    homeAssetId,
     inventoryItemId,
     journeyId,
     propertyId,

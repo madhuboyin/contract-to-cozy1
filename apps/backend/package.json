@@ -16,6 +16,7 @@
     "test:e2e": "node --test $(find tests/e2e -type f -name '*.test.js')",
     "test:watch": "node --test --watch $(find tests -type f -name '*.test.js')",
     "smoke:health-score-ui": "node scripts/healthScoreUiSmokeCheck.js",
+    "acceptance:phase8": "node scripts/phase8-runtime-acceptance.js",
     "lint:ssrf": "node scripts/check-ssrf-guards.js",
     "report:weekly": "ts-node scripts/weekly-retention-report.ts",
     "backfill:property-activation": "ts-node scripts/backfill-property-activation.ts"

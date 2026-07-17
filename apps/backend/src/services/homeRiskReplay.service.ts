@@ -150,17 +150,17 @@ function pickInventoryItem(
 
 function makePropertySystem(
   type: string,
-  homeAsset: { id: string; assetType: string | null; installedOn: Date | null } | null,
+  inventoryItem: { id: string; assetType: string | null; installedOn: Date | null } | null,
   fallbackLabel: string,
   fallbackInstallYear: number | null = null,
 ): ReplayPropertySystemContext | null {
-  if (!homeAsset && !fallbackLabel) return null;
+  if (!inventoryItem && !fallbackLabel) return null;
 
   return {
     type,
-    id: homeAsset?.id ?? null,
-    label: homeAsset ? humanizeEventType(homeAsset.assetType ?? fallbackLabel) : fallbackLabel,
-    installationYear: homeAsset?.installedOn?.getUTCFullYear() ?? fallbackInstallYear,
+    id: inventoryItem?.id ?? null,
+    label: inventoryItem ? humanizeEventType(inventoryItem.assetType ?? fallbackLabel) : fallbackLabel,
+    installationYear: inventoryItem?.installedOn?.getUTCFullYear() ?? fallbackInstallYear,
   };
 }
 

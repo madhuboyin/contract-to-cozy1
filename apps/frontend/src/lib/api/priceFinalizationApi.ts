@@ -32,7 +32,6 @@ export type PriceFinalizationDetail = {
   propertyId: string;
   createdByUserId: string | null;
   inventoryItemId: string | null;
-  homeAssetId: string | null;
   guidanceJourneyId: string | null;
   guidanceStepKey: string | null;
   guidanceSignalIntentFamily: string | null;
@@ -70,7 +69,6 @@ export type PriceFinalizationTermInput = {
 
 export type PriceFinalizationDraftInput = {
   inventoryItemId?: string | null;
-  homeAssetId?: string | null;
   guidanceJourneyId?: string | null;
   guidanceStepKey?: string | null;
   guidanceSignalIntentFamily?: string | null;
@@ -100,7 +98,6 @@ export type PriceFinalizationUpdateInput = PriceFinalizationDraftInput & {
 export type PriceFinalizationListFilters = {
   guidanceJourneyId?: string | null;
   inventoryItemId?: string | null;
-  homeAssetId?: string | null;
 };
 
 export async function listPriceFinalizations(
@@ -114,7 +111,7 @@ export async function listPriceFinalizations(
       params: {
         limit,
         guidanceJourneyId: filters?.guidanceJourneyId ?? undefined,
-        inventoryItemId: filters?.inventoryItemId ?? filters?.homeAssetId ?? undefined,
+        inventoryItemId: filters?.inventoryItemId ?? undefined,
       },
     }
   );
@@ -135,10 +132,9 @@ export async function createPriceFinalizationDraft(
   propertyId: string,
   payload: PriceFinalizationDraftInput
 ): Promise<PriceFinalizationDetail> {
-  const { homeAssetId, ...canonicalPayload } = payload;
   const res = await api.post<{ finalization: PriceFinalizationDetail }>(
     `/api/properties/${propertyId}/price-finalizations`,
-    { ...canonicalPayload, inventoryItemId: payload.inventoryItemId ?? homeAssetId }
+    payload
   );
   return res.data.finalization;
 }
@@ -148,10 +144,9 @@ export async function updatePriceFinalizationDraft(
   finalizationId: string,
   payload: PriceFinalizationUpdateInput
 ): Promise<PriceFinalizationDetail> {
-  const { homeAssetId, ...canonicalPayload } = payload;
   const res = await api.put<{ finalization: PriceFinalizationDetail }>(
     `/api/properties/${propertyId}/price-finalizations/${finalizationId}`,
-    { ...canonicalPayload, inventoryItemId: payload.inventoryItemId ?? homeAssetId }
+    payload
   );
   return res.data.finalization;
 }
@@ -161,10 +156,9 @@ export async function finalizePriceFinalization(
   finalizationId: string,
   payload: PriceFinalizationUpdateInput
 ): Promise<PriceFinalizationDetail> {
-  const { homeAssetId, ...canonicalPayload } = payload;
   const res = await api.post<{ finalization: PriceFinalizationDetail }>(
     `/api/properties/${propertyId}/price-finalizations/${finalizationId}/finalize`,
-    { ...canonicalPayload, inventoryItemId: payload.inventoryItemId ?? homeAssetId }
+    payload
   );
   return res.data.finalization;
 }

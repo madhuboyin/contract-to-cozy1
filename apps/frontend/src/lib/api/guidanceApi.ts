@@ -48,7 +48,6 @@ export type RepairReplaceBranchChoice =
 export type GuidanceSignalDTO = {
   id: string;
   propertyId: string;
-  homeAssetId: string | null;
   inventoryItemId: string | null;
   signalIntentFamily: string;
   issueDomain: GuidanceIssueDomain;
@@ -105,7 +104,6 @@ export type GuidanceStepDTO = {
 export type GuidanceJourneyDTO = {
   id: string;
   propertyId: string;
-  homeAssetId: string | null;
   inventoryItemId: string | null;
   journeyKey: string | null;
   journeyTypeKey: string | null;
@@ -162,9 +160,6 @@ export type GuidanceJourneyDTO = {
   inventoryItem?: {
     name: string | null;
     category: string | null;
-  } | null;
-  homeAsset?: {
-    assetType: string | null;
   } | null;
   primarySignal: GuidanceSignalDTO | null;
   steps: GuidanceStepDTO[];
@@ -249,7 +244,6 @@ export type GuidanceJourneyDetailResponse = {
     journeyId: string;
     stepId: string;
     signalId: string | null;
-    homeAssetId: string | null;
     inventoryItemId: string | null;
     evidenceType: string;
     sourceType: string;
@@ -349,7 +343,6 @@ export async function getGuidanceExecutionGuard(
   options?: {
     journeyId?: string;
     inventoryItemId?: string;
-    homeAssetId?: string;
   }
 ): Promise<GuidanceExecutionGuardResult> {
   const res = await api.get<GuidanceExecutionGuardResult>(
@@ -358,7 +351,7 @@ export async function getGuidanceExecutionGuard(
       params: {
         targetAction,
         journeyId: options?.journeyId,
-        inventoryItemId: options?.inventoryItemId ?? options?.homeAssetId,
+        inventoryItemId: options?.inventoryItemId,
       },
     }
   );
@@ -418,7 +411,6 @@ export async function recordGuidanceToolCompletion(
     journeyId?: string;
     signalIntentFamily?: string;
     issueDomain?: GuidanceIssueDomain;
-    homeAssetId?: string;
     inventoryItemId?: string;
     sourceEntityType?: string;
     sourceEntityId?: string;
@@ -441,7 +433,6 @@ export async function recordGuidanceToolStatus(
     journeyId?: string;
     signalIntentFamily?: string;
     issueDomain?: GuidanceIssueDomain;
-    homeAssetId?: string;
     inventoryItemId?: string;
     sourceEntityType?: string;
     sourceEntityId?: string;
@@ -453,13 +444,11 @@ export async function recordGuidanceToolStatus(
     metadata?: Record<string, unknown>;
   }
 ): Promise<{ step: GuidanceStepDTO | null; journey: GuidanceJourneyDTO | null }> {
-  const { homeAssetId, ...canonicalPayload } = payload;
   const res = await api.post<{ step: GuidanceStepDTO | null; journey: GuidanceJourneyDTO | null }>(
     `/api/properties/${propertyId}/guidance/tool-completions`,
     {
       sourceToolKey: payload.sourceToolKey ?? 'frontend',
-      ...canonicalPayload,
-      inventoryItemId: payload.inventoryItemId ?? homeAssetId,
+      ...payload,
     }
   );
   return res.data;
@@ -472,7 +461,6 @@ export type StartGuidanceJourneyInput = {
   scopeId: string;
   issueType: string;
   inventoryItemId?: string;
-  homeAssetId?: string;
   serviceKey?: string;
 };
 
@@ -490,13 +478,11 @@ export async function startGuidanceJourney(
   propertyId: string,
   input: StartGuidanceJourneyInput
 ): Promise<{ journey: GuidanceJourneyDTO }> {
-  const { homeAssetId, ...canonicalInput } = input;
   const res = await api.post<{ journey: GuidanceJourneyDTO }>(
     `/api/properties/${propertyId}/guidance/journeys/start`,
     {
-      ...canonicalInput,
-      inventoryItemId: input.inventoryItemId ?? homeAssetId,
-      scopeId: input.scopeCategory === 'ITEM' ? (input.inventoryItemId ?? homeAssetId ?? input.scopeId) : input.scopeId,
+      ...input,
+      scopeId: input.scopeCategory === 'ITEM' ? (input.inventoryItemId ?? input.scopeId) : input.scopeId,
     }
   );
   return res.data;

@@ -172,7 +172,6 @@ export default function BookingDetailsPage() {
           journeyId: guidanceJourneyId,
           stepKey: guidanceStepKey,
           inventoryItemId: guidanceContext.itemId ?? booking.inventoryItemId ?? null,
-          homeAssetId: guidanceContext.homeAssetId ?? null,
         })
       : null);
   const contextualBackLabel = guidanceJourneyId ? 'Back to guidance' : 'Back to previous step';

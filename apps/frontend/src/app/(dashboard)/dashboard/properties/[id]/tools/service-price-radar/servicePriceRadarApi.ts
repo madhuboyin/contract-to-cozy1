@@ -249,7 +249,6 @@ export type QuoteComparisonWorkspaceSummary = {
   status: 'DRAFT' | 'SHORTLISTED' | 'DECIDED' | 'ARCHIVED';
   serviceCategory: ServiceRadarCategory | null;
   inventoryItemId: string | null;
-  homeAssetId: string | null;
 };
 
 export async function getOrCreateQuoteComparisonWorkspace(
@@ -257,19 +256,16 @@ export async function getOrCreateQuoteComparisonWorkspace(
   input: {
     serviceCategory?: ServiceRadarCategory | null;
     inventoryItemId?: string | null;
-    homeAssetId?: string | null;
     guidanceJourneyId?: string | null;
     guidanceStepKey?: string | null;
     guidanceSignalIntentFamily?: string | null;
   }
 ): Promise<{ workspace: QuoteComparisonWorkspaceSummary; reused: boolean }> {
-  const { homeAssetId, ...canonicalInput } = input;
   const res = await api.post<{
     workspace: QuoteComparisonWorkspaceSummary;
     reused: boolean;
   }>(`/api/properties/${propertyId}/quote-comparison/workspaces`, {
-    ...canonicalInput,
-    inventoryItemId: input.inventoryItemId ?? homeAssetId,
+    ...input,
   });
   return { workspace: res.data.workspace, reused: res.data.reused };
 }

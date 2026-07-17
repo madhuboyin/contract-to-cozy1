@@ -4,7 +4,6 @@ type GuidanceOverviewHrefOptions = {
   stepKey?: string | null;
   scopeCategory?: 'ITEM' | 'SERVICE' | null;
   inventoryItemId?: string | null;
-  homeAssetId?: string | null;
   assetName?: string | null;
   issueType?: string | null;
   customIssueLabel?: string | null;
@@ -46,7 +45,6 @@ export function buildGuidanceOverviewHref({
   stepKey,
   scopeCategory,
   inventoryItemId,
-  homeAssetId,
   assetName,
   issueType,
   customIssueLabel,
@@ -57,15 +55,10 @@ export function buildGuidanceOverviewHref({
   if (journeyId) params.set('journeyId', journeyId);
   if (stepKey) params.set('stepKey', stepKey);
 
-  if (inventoryItemId || homeAssetId) {
+  if (inventoryItemId) {
     params.set('scopeCategory', 'ITEM');
-    if (inventoryItemId) {
-      params.set('itemId', inventoryItemId);
-      params.set('inventoryItemId', inventoryItemId);
-    }
-    if (homeAssetId) {
-      params.set('homeAssetId', homeAssetId);
-    }
+    params.set('itemId', inventoryItemId);
+    params.set('inventoryItemId', inventoryItemId);
   } else if (scopeCategory) {
     params.set('scopeCategory', scopeCategory);
   }

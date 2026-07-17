@@ -77,7 +77,6 @@ export const FavoriteProvidersCard = ({ className }: { className?: string }) => 
       params.set('guidanceSignalIntentFamily', guidanceContext.guidanceSignalIntentFamily);
     }
     if (guidanceContext.itemId) params.set('itemId', guidanceContext.itemId);
-    if (guidanceContext.homeAssetId) params.set('homeAssetId', guidanceContext.homeAssetId);
 
     const from = searchParams.get('from');
     if (from) params.set('from', from);
@@ -95,7 +94,6 @@ export const FavoriteProvidersCard = ({ className }: { className?: string }) => 
       params.set('guidanceSignalIntentFamily', guidanceContext.guidanceSignalIntentFamily);
     }
     if (guidanceContext.itemId) params.set('itemId', guidanceContext.itemId);
-    if (guidanceContext.homeAssetId) params.set('homeAssetId', guidanceContext.homeAssetId);
 
     const from = searchParams.get('from');
     if (from) params.set('from', from);

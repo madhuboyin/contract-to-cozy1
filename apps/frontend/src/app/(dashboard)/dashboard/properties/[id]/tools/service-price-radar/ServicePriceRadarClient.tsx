@@ -687,7 +687,6 @@ export default function ServicePriceRadarClient() {
         journeyId: guidanceContext.guidanceJourneyId,
         stepKey: guidanceContext.guidanceStepKey,
         inventoryItemId: guidanceItemId,
-        homeAssetId: searchParams.get('homeAssetId'),
         issueType: searchParams.get('issueType'),
       })
     : null;

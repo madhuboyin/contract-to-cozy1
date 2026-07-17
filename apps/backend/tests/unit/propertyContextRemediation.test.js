@@ -81,10 +81,10 @@ test('Property Context observability uses bounded privacy-safe labels', () => {
   assert.doesNotMatch(metrics, /propertyId|userId/);
 });
 
-test('legacy item request aliases are mapped at API boundaries', () => {
+test('item request boundaries accept canonical inventory ownership only', () => {
   const quoteApi = read('../../../frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/service-price-radar/servicePriceRadarApi.ts');
   const booking = read('../../../frontend/src/app/(dashboard)/dashboard/providers/[id]/book/page.tsx');
-  assert.match(quoteApi, /inventoryItemId: input\.inventoryItemId \?\? homeAssetId/);
-  assert.match(booking, /inventoryItemId: inventoryItemId \|\| homeAssetId/);
-  assert.doesNotMatch(booking, /\.\.\.\(homeAssetId && \{ homeAssetId \}\)/);
+  assert.match(quoteApi, /inventoryItemId\?: string \| null/);
+  assert.match(booking, /\.\.\.\(inventoryItemId && \{ inventoryItemId \}\)/);
+  assert.doesNotMatch(`${quoteApi}\n${booking}`, /homeAsset|HOME_ASSET/);
 });

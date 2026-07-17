@@ -36,7 +36,6 @@ export default function InsuranceTrendClient() {
         journeyId: guidanceJourneyId,
         stepKey: guidanceStepKey,
         inventoryItemId: searchParams.get('itemId'),
-        homeAssetId: searchParams.get('homeAssetId'),
         issueType: searchParams.get('issueType'),
       })
     : null;

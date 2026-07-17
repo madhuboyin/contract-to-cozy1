@@ -1,0 +1,14 @@
+{
+  "archetypes": [
+    { "key": "detached-owner-aging", "propertyId": "REPLACE_WITH_PROPERTY_ID", "expectedFacts": { "core.dwellingType": "DETACHED_SINGLE_FAMILY", "core.occupancyStatus": "OWNER_OCCUPIED", "responsibility.landscaping": "OWNER" }, "expectedUiText": ["Guidance"] },
+    { "key": "condo-association-exterior", "propertyId": "REPLACE_WITH_PROPERTY_ID", "expectedFacts": { "core.dwellingType": "CONDO_UNIT", "exterior.hasPrivateOutdoorSpace": false, "responsibility.buildingExterior": "ASSOCIATION" }, "expectedUiText": ["Guidance"] },
+    { "key": "condo-balcony-unit-hvac", "propertyId": "REPLACE_WITH_PROPERTY_ID", "expectedFacts": { "core.dwellingType": "CONDO_UNIT", "exterior.hasPrivateOutdoorSpace": true, "responsibility.hvac": "OWNER" }, "expectedUiText": ["Guidance"] },
+    { "key": "townhouse-owner-yard", "propertyId": "REPLACE_WITH_PROPERTY_ID", "expectedFacts": { "core.dwellingType": "TOWNHOUSE", "exterior.hasLawn": true, "responsibility.landscaping": "OWNER" }, "expectedUiText": ["Guidance"] },
+    { "key": "townhouse-association-managed", "propertyId": "REPLACE_WITH_PROPERTY_ID", "expectedFacts": { "core.dwellingType": "TOWNHOUSE", "responsibility.roof": "ASSOCIATION", "responsibility.landscaping": "ASSOCIATION" }, "expectedUiText": ["Guidance"] },
+    { "key": "landlord-managed-rental", "propertyId": "REPLACE_WITH_PROPERTY_ID", "expectedFacts": { "core.propertyUse": "LONG_TERM_RENTAL", "core.occupancyStatus": "TENANT_OCCUPIED", "responsibility.roof": "LANDLORD" }, "expectedUiText": ["Guidance"] },
+    { "key": "vacant-renovation", "propertyId": "REPLACE_WITH_PROPERTY_ID", "expectedFacts": { "core.propertyUse": "UNDER_RENOVATION", "core.occupancyStatus": "VACANT" }, "expectedUiText": ["Guidance"] },
+    { "key": "newer-no-overdue", "propertyId": "REPLACE_WITH_PROPERTY_ID", "expectedFacts": { "core.dwellingType": "DETACHED_SINGLE_FAMILY", "core.yearBuilt": 2023 }, "expectedUiText": ["Guidance"] },
+    { "key": "older-findings-warranty", "propertyId": "REPLACE_WITH_PROPERTY_ID", "expectedFacts": { "core.dwellingType": "DETACHED_SINGLE_FAMILY", "core.yearBuilt": 1955 }, "expectedUiText": ["Guidance"] },
+    { "key": "storm-drainage-exposed", "propertyId": "REPLACE_WITH_PROPERTY_ID", "expectedFacts": { "core.dwellingType": "DETACHED_SINGLE_FAMILY", "exterior.hasDrainageIssues": true }, "expectedUiText": ["Guidance"] }
+  ]
+}

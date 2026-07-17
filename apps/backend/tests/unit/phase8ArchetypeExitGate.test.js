@@ -9,6 +9,10 @@ const { evaluateProtectionContext } = require('../../src/services/protection/app
 const { evaluateFinancialContext } = require('../../src/services/financialContext/applicabilityPolicy.ts');
 const { evaluatePlanningContext } = require('../../src/services/planningContext/applicabilityPolicy.ts');
 const { evaluateAggregationContext } = require('../../src/services/aggregationContext/applicabilityPolicy.ts');
+const { evaluateSeasonalTemplateApplicability } = require('../../src/services/seasonal/applicabilityPolicy.ts');
+const { buildSeasonalPropertyContext } = require('../../../workers/src/jobs/seasonalChecklistGeneration.job.ts');
+const { buildHabitPropertyContext } = require('../../../workers/src/jobs/habitGeneration.job.ts');
+const { buildGuidanceOverviewHref } = require('../../../frontend/src/lib/navigation/guidanceOverviewHref.ts');
 
 const NOW = new Date('2026-07-17T12:00:00.000Z');
 const ACTIVE_POLICY = [{ startDate: '2026-01-01T00:00:00.000Z', expiryDate: '2027-01-01T00:00:00.000Z' }];
@@ -126,4 +130,87 @@ test('archetype matrix contains all FRD variants and both applicability outcomes
   assert.ok(ARCHETYPES.some((item) => item.drainage && item.activeIncident));
   assert.deepEqual(new Set(ARCHETYPES.map((item) => item.lawn)), new Set(['APPLICABLE', 'NOT_APPLICABLE']));
   assert.deepEqual(new Set(ARCHETYPES.map((item) => item.roof)), new Set(['APPLICABLE', 'NOT_APPLICABLE']));
+});
+
+function workerProperty(archetype) {
+  return {
+    id: archetype.id,
+    dwellingType: archetype.dwellingType,
+    yearBuilt: archetype.yearBuilt,
+    state: 'TX',
+    roofType: 'ASPHALT_SHINGLE',
+    heatingType: 'FURNACE',
+    coolingType: 'CENTRAL_AC',
+    waterHeaterType: 'TANK',
+    hasSmokeDetectors: true,
+    hasCoDetectors: true,
+    hasSumpPumpBackup: false,
+    hasFireExtinguisher: true,
+    hasSecuritySystem: false,
+    climateSetting: { climateRegion: 'HOT_HUMID' },
+    exteriorProfile: {
+      hasPrivateOutdoorSpace: archetype.privateOutdoor,
+      outdoorSpaceTypes: archetype.privateOutdoor ? ['YARD'] : [],
+      hasLawn: archetype.hasLawn,
+      hasTreesOrShrubs: archetype.hasLawn,
+      hasDriveway: archetype.dwellingType !== 'CONDO_UNIT',
+      hasPoolOrSpa: false,
+      hasIrrigation: archetype.hasLawn,
+      hasOutdoorFaucets: archetype.privateOutdoor,
+      hasDrainageIssues: archetype.drainage,
+    },
+    responsibilities: [
+      { scope: 'ROOF', party: archetype.roofResponsibility },
+      { scope: 'BUILDING_EXTERIOR', party: archetype.roofResponsibility },
+      { scope: 'LANDSCAPING', party: archetype.landscapingResponsibility },
+      { scope: 'PLUMBING', party: archetype.systemResponsibility },
+      { scope: 'HVAC', party: archetype.systemResponsibility },
+    ],
+    inventoryItems: archetype.hasAppliance
+      ? [{ id: `${archetype.id}-item`, category: 'APPLIANCE', name: 'Dishwasher', tags: [] }]
+      : [],
+    maintenanceTasks: [],
+  };
+}
+
+test('all ten archetypes execute the worker context and shared applicability path', () => {
+  const lawnTemplate = {
+    taskKey: 'SPRING_LAWN_CARE',
+    priority: 'RECOMMENDED',
+    requiredAssetCheck: 'has_lawn',
+    requiredAssetType: null,
+  };
+
+  for (const archetype of ARCHETYPES) {
+    const property = workerProperty(archetype);
+    const seasonalContext = buildSeasonalPropertyContext(property, NOW);
+    const habitContext = buildHabitPropertyContext(property, NOW);
+    const seasonalDecision = evaluateSeasonalTemplateApplicability(seasonalContext, lawnTemplate, NOW);
+
+    assert.equal(seasonalContext.propertyId, archetype.id);
+    assert.equal(seasonalContext.facts['exterior.hasLawn'].value, archetype.hasLawn);
+    assert.equal(seasonalDecision.status, archetype.lawn, `${archetype.id}: worker lawn`);
+    assert.equal(habitContext.facts['core.dwellingType'].value, archetype.dwellingType);
+    assert.equal(habitContext.facts['exterior.hasDrainageIssues'].value, archetype.drainage);
+    assert.match(habitContext.contextVersion, /^[a-f0-9]{64}$/);
+  }
+});
+
+test('all ten archetypes execute canonical UI navigation without legacy item aliases', () => {
+  for (const archetype of ARCHETYPES) {
+    const inventoryItemId = archetype.hasAppliance ? `${archetype.id}-item` : null;
+    const href = buildGuidanceOverviewHref({
+      propertyId: archetype.id,
+      scopeCategory: inventoryItemId ? 'ITEM' : 'SERVICE',
+      inventoryItemId,
+      assetName: inventoryItemId ? 'Dishwasher' : null,
+    });
+
+    assert.match(href, new RegExp(`/dashboard/properties/${archetype.id}/tools/guidance-overview`));
+    assert.doesNotMatch(href, /homeAsset|HOME_ASSET/);
+    if (inventoryItemId) {
+      assert.match(href, new RegExp(`inventoryItemId=${inventoryItemId}`));
+      assert.match(href, new RegExp(`itemId=${inventoryItemId}`));
+    }
+  }
 });

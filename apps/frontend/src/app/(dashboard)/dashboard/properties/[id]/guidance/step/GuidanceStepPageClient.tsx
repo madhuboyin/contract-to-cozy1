@@ -42,8 +42,7 @@ function shellBackHref(propertyId: string, journey: GuidanceJourneyDTO): string 
     params.set('itemId', journey.inventoryItemId);
     params.set('inventoryItemId', journey.inventoryItemId);
   }
-  if (journey.homeAssetId) params.set('homeAssetId', journey.homeAssetId);
-  const assetName = journey.inventoryItem?.name?.trim() || journey.homeAsset?.assetType || '';
+  const assetName = journey.inventoryItem?.name?.trim() || '';
   if (assetName) params.set('assetName', assetName);
   if (journey.issueType) params.set('issueType', journey.issueType);
   return `/dashboard/properties/${propertyId}/tools/guidance-overview?${params.toString()}`;
@@ -90,7 +89,7 @@ function JourneyContextCard({
 }: {
   journey: GuidanceJourneyDTO;
 }) {
-  const assetName = journey.inventoryItem?.name?.trim() || journey.homeAsset?.assetType || 'This item';
+  const assetName = journey.inventoryItem?.name?.trim() || 'This item';
   const issueLabel = formatIssueTypeLabel(journey.issueType);
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">

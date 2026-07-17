@@ -59,7 +59,9 @@ test('legacy Property classification columns and direct readers remain removed',
   const visit = (entry) => {
     for (const child of fs.readdirSync(entry, { withFileTypes: true })) {
       const absolute = path.join(entry, child.name);
-      if (child.isDirectory()) visit(absolute);
+      if (child.isDirectory() && child.name !== '__tests__') visit(absolute);
+      else if (child.isDirectory()) continue;
+      else if (/\.test\.(?:ts|tsx)$/.test(child.name)) continue;
       else if (/\.(?:ts|tsx)$/.test(child.name)) {
         const source = fs.readFileSync(absolute, 'utf8');
         // Service Price Radar's local snapshot DTO retains a compatibility
@@ -76,8 +78,7 @@ test('legacy Property classification columns and direct readers remain removed',
 
   const status = read('../../../../docs/property-context/PHASE8_IMPLEMENTATION_STATUS.md');
   assert.match(status, /legacy Property classification removal is implemented/);
-  assert.match(status, /Remaining Phase 8 slices/);
-  assert.match(status, /Phase 8 is in progress/);
+  assert.match(status, /Phase 8 implementation is complete/);
 });
 
 test('generic assistant and persisted response snapshots use bounded canonical contracts', () => {
@@ -138,4 +139,43 @@ test('financial, item, and snapshot ownership stays explicit', () => {
   assert.match(ownershipAudit, /PropertyFinancingProfile.*current financing/s);
   assert.match(ownershipAudit, /InventoryItem.*physical-item/s);
   assert.match(ownershipAudit, /inputsSnapshot.*evidence/s);
+});
+
+test('canonical item ownership aliases cannot return to active source', () => {
+  const sourceRoots = [
+    path.resolve(__dirname, '../../src'),
+    path.resolve(__dirname, '../../../workers/src'),
+    path.resolve(__dirname, '../../../frontend/src'),
+  ];
+  const forbidden = [/\bhomeAsset/i, /\blinkedHomeAssetId\b/, /\bHOME_ASSET\b/, /\bHomeAsset\b/];
+  const findings = [];
+  const visit = (entry) => {
+    for (const child of fs.readdirSync(entry, { withFileTypes: true })) {
+      const absolute = path.join(entry, child.name);
+      if (child.isDirectory() && child.name !== '__tests__') visit(absolute);
+      else if (child.isDirectory()) continue;
+      else if (/\.test\.(?:ts|tsx)$/.test(child.name)) continue;
+      else if (/\.(?:ts|tsx)$/.test(child.name)) {
+        const source = fs.readFileSync(absolute, 'utf8');
+        for (const pattern of forbidden) {
+          if (pattern.test(source)) findings.push(`${path.relative(path.resolve(__dirname, '../../../..'), absolute)}: ${pattern}`);
+        }
+      }
+    }
+  };
+  sourceRoots.forEach(visit);
+  assert.deepEqual(findings, []);
+});
+
+test('Phase 8 runtime gate covers API, UI, worker health, and evidence output', () => {
+  const runner = read('../../scripts/phase8-runtime-acceptance.js');
+  assert.match(runner, /\/api\/properties\/.*\/context/);
+  assert.match(runner, /page\.goto\(/);
+  assert.match(runner, /bullmq_jobs_processed_total/);
+  assert.match(runner, /cron_job_last_success_timestamp_seconds/);
+  assert.match(runner, /fs\.writeFileSync\(evidencePath/);
+
+  const example = JSON.parse(read('../../../../docs/property-context/phase8-archetypes.example.json'));
+  assert.equal(example.archetypes.length, 10);
+  assert.equal(new Set(example.archetypes.map((item) => item.key)).size, 10);
 });

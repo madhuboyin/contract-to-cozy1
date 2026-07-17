@@ -21,13 +21,12 @@ import {
 
 export function appendScopeParams(
   baseHref: string,
-  option: Pick<AssetScopeOption, 'inventoryItemId' | 'homeAssetId' | 'assetName'>
+  option: Pick<AssetScopeOption, 'inventoryItemId' | 'assetName'>
 ): string {
   const params = new URLSearchParams();
   if (option.inventoryItemId) {
     params.set('itemId', option.inventoryItemId);
   }
-  if (option.homeAssetId) params.set('homeAssetId', option.homeAssetId);
   params.set('assetName', option.assetName);
   const query = params.toString();
   return query ? `${baseHref}${baseHref.includes('?') ? '&' : '?'}${query}` : baseHref;
@@ -39,7 +38,6 @@ export function buildProvidersHref(propertyId: string, option: AssetScopeOption)
   params.set('category', getProviderCategoryForSystemType(option.systemType));
   params.set('insightFactor', option.systemType || option.assetName);
   if (option.inventoryItemId) params.set('itemId', option.inventoryItemId);
-  if (option.homeAssetId) params.set('homeAssetId', option.homeAssetId);
   params.set('assetName', option.assetName);
   return `/dashboard/providers?${params.toString()}`;
 }
@@ -47,8 +45,6 @@ export function buildProvidersHref(propertyId: string, option: AssetScopeOption)
 export function resolveAssetLabel(action: GuidanceActionModel): string {
   const itemName = action.journey.inventoryItem?.name?.trim();
   if (itemName) return itemName;
-  const assetType = action.journey.homeAsset?.assetType;
-  if (assetType) return `${formatEnumLabel(assetType)} system`;
   return DOMAIN_FOCUS_LABELS[action.issueDomain] ?? formatIssueDomain(action.issueDomain);
 }
 

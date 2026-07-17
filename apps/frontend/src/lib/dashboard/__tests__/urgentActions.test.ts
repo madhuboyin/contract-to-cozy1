@@ -6,7 +6,6 @@ function createInventoryItem(overrides: Partial<InventoryItem>): InventoryItem {
     id: 'item-default',
     propertyId: 'prop-1',
     roomId: null,
-    homeAssetId: null,
     warrantyId: null,
     insurancePolicyId: null,
     name: 'Default Item',

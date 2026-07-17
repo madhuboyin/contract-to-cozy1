@@ -161,7 +161,6 @@ export type InventoryItem = {
   // If your backend includes these (it does in our code)
   warranty?: any | null;
   insurancePolicy?: any | null;
-  homeAsset?: any | null;
 
   documents?: any[]; // Document type exists already in your project; you can replace later
 };
@@ -1963,7 +1962,7 @@ export interface OrchestratedActionDTO {
 
   hasRelatedChecklistItem?: boolean;
   relatedEntity?: {
-    type: 'INVENTORY_ITEM' | 'HOME_ASSET' | 'BOOKING' | 'WARRANTY' | 'INSURANCE' | 'CHECKLIST';
+    type: 'INVENTORY_ITEM' | 'BOOKING' | 'WARRANTY' | 'INSURANCE' | 'CHECKLIST';
     id: string;
   } | null;
 

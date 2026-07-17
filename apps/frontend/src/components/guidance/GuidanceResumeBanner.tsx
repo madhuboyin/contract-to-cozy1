@@ -39,9 +39,6 @@ export function GuidanceResumeBanner({ propertyId, className }: GuidanceResumeBa
   if (activeJourney.inventoryItemId) {
     params.set('scopeCategory', 'ITEM');
     params.set('inventoryItemId', activeJourney.inventoryItemId);
-  } else if (activeJourney.homeAssetId) {
-    params.set('scopeCategory', 'ITEM');
-    params.set('homeAssetId', activeJourney.homeAssetId);
   } else {
     params.set('scopeCategory', 'PROPERTY');
   }

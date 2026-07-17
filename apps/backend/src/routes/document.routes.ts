@@ -440,7 +440,6 @@ router.get(
             document,
             extractedData: {},
             inventoryItemSuggestions: [],
-            homeAssetSuggestions: [],
             reason: 'Document has no propertyId (and none provided)',
           },
         });
@@ -538,57 +537,6 @@ router.get(
         .sort((a, b) => b.score - a.score)
         .slice(0, 10);
 
-      // InventoryItem scoring (best-effort; align if fields differ)
-      const homeAssetSuggestions = items.filter((item) => Boolean(item.assetType))
-      .map((a: any) => {
-        let score = 0;
-        const reasons: string[] = [];
-    
-        const aType = norm(a.assetType || '');
-        const aModel = norm(a.modelNumber || '');
-        const aSerial = norm(a.serialNumber || '');
-    
-        const pn = norm(productName);
-        const br = norm(brand);
-        const mn = norm(model);
-        const sn = norm(serialNo);
-        const cat = norm(category);
-    
-        // STRONG
-        if (sn && aSerial && sn === aSerial) {
-          score += 60;
-          reasons.push('Serial number exact match');
-        }
-    
-        if (mn && aModel && mn === aModel) {
-          score += 35;
-          reasons.push('Model exact match');
-        }
-    
-        // MEDIUM
-        if (pn && includes(aType, pn)) {
-          score += 20;
-          reasons.push('Asset type matches product name');
-        }
-    
-        if (cat && includes(aType, cat)) {
-          score += 15;
-          reasons.push('Asset type matches document category');
-        }
-    
-        // LIGHT
-        if (br && includes(aType, br)) {
-          score += 8;
-          reasons.push('Brand hint in asset type');
-        }
-    
-        return { ...a, score, reasons };
-      })
-      .filter((x: any) => x.score > 0)
-      .sort((a: any, b: any) => b.score - a.score)
-      .slice(0, 10);
-    
-
       return res.json({
         success: true,
         data: {
@@ -601,7 +549,6 @@ router.get(
           },
           extractedData: { productName, brand, model, serialNo, category, raw: extracted },
           inventoryItemSuggestions,
-          homeAssetSuggestions,
         },
       });
     } catch (error: any) {

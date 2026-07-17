@@ -108,9 +108,6 @@ function appendGuidanceContext(
     params.set('itemId', journey.inventoryItemId);
     params.set('inventoryItemId', journey.inventoryItemId);
   }
-  if (journey.homeAssetId) {
-    params.set('homeAssetId', journey.homeAssetId);
-  }
   if (step.toolKey === 'service-price-radar' && journey.inventoryItemId) {
     params.set('linkedEntityType', 'APPLIANCE');
     params.set('linkedEntityId', journey.inventoryItemId);
@@ -124,9 +121,7 @@ function appendGuidanceContext(
   // FRD-FR-10: For booking steps, pass asset name and issue description so the
   // booking form can auto-populate the description field.
   if (step.toolKey === 'booking') {
-    const assetName =
-      journey.inventoryItem?.name?.trim() ??
-      (journey.homeAsset?.assetType ? formatEnumLabel(journey.homeAsset.assetType) : null);
+    const assetName = journey.inventoryItem?.name?.trim() ?? null;
     if (assetName) params.set('assetName', assetName);
     const issueDescription = formatIssueTypeLabel(journey.issueType) ?? journey.issueType ?? null;
     if (issueDescription) params.set('issueDescription', issueDescription);
@@ -274,7 +269,6 @@ export function resolveGuidanceStepHref(args: {
   route = replaceRouteParam(route, 'propertyId', propertyId);
   route = replaceRouteParam(route, 'itemId', journey.inventoryItemId ?? null);
   route = replaceRouteParam(route, 'inventoryItemId', journey.inventoryItemId ?? null);
-  route = replaceRouteParam(route, 'homeAssetId', journey.homeAssetId ?? null);
   // FRD-FR-10: Substitute :issueType from the journey's issueType for booking step pre-population
   route = replaceRouteParam(route, 'issueType', journey.issueType ?? null);
 
@@ -284,7 +278,6 @@ export function resolveGuidanceStepHref(args: {
       journeyId: journey.id,
       stepKey: step.stepKey,
       inventoryItemId: journey.inventoryItemId,
-      homeAssetId: journey.homeAssetId,
       assetName: journey.inventoryItem?.name ?? null,
       issueType: journey.issueType,
     });
@@ -324,10 +317,7 @@ export function resolveGuidanceStepHref(args: {
       journeyId: journey.id,
       stepKey: step.stepKey,
       inventoryItemId: journey.inventoryItemId,
-      homeAssetId: journey.homeAssetId,
-      assetName:
-        journey.inventoryItem?.name?.trim() ??
-        (journey.homeAsset?.assetType ? formatEnumLabel(journey.homeAsset.assetType) : null),
+      assetName: journey.inventoryItem?.name?.trim() ?? null,
       issueType: journey.issueType,
     });
     const joiner = bookingRoute.includes('?') ? '&' : '?';

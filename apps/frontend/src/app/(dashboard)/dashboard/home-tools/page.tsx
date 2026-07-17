@@ -26,7 +26,6 @@ function buildPropertyAwareHref(
     guidanceStepKey?: string;
     guidanceSignalIntentFamily?: string;
     itemId?: string;
-    homeAssetId?: string;
   }
 ): string {
   const queryParams = new URLSearchParams();
@@ -34,7 +33,6 @@ function buildPropertyAwareHref(
   if (guidanceContext?.guidanceStepKey) queryParams.set('guidanceStepKey', guidanceContext.guidanceStepKey);
   if (guidanceContext?.guidanceSignalIntentFamily) queryParams.set('guidanceSignalIntentFamily', guidanceContext.guidanceSignalIntentFamily);
   if (guidanceContext?.itemId) queryParams.set('itemId', guidanceContext.itemId);
-  if (guidanceContext?.homeAssetId) queryParams.set('homeAssetId', guidanceContext.homeAssetId);
   const suffix = queryParams.toString();
 
   if (propertyId) {
@@ -59,7 +57,6 @@ export default function HomeToolsPage() {
   const guidanceStepKey = searchParams.get('guidanceStepKey') || undefined;
   const guidanceSignalIntentFamily = searchParams.get('guidanceSignalIntentFamily') || undefined;
   const itemId = searchParams.get('itemId') || undefined;
-  const homeAssetId = searchParams.get('homeAssetId') || undefined;
   const resolvedPropertyId = selectedPropertyId || propertyIdFromQuery;
   const propertyFallbackBackHref = resolvedPropertyId
     ? `/dashboard/properties/${resolvedPropertyId}`
@@ -101,7 +98,6 @@ export default function HomeToolsPage() {
                       guidanceStepKey,
                       guidanceSignalIntentFamily,
                       itemId,
-                      homeAssetId,
                     })}
                     badgeLabel=""
                     variant="compact"

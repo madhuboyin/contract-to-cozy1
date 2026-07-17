@@ -117,14 +117,50 @@ Implemented:
 This slice changes the Prisma schema but includes no migration script. The
 repository owner must apply the schema through the normal database workflow.
 
-## Remaining Phase 8 slices
+## Slice 5 — canonical item and final forbidden-field cleanup
 
-1. Run API/UI/worker runtime scenarios for all ten archetypes in an environment
-   with the database and Docker services available.
-2. Re-run the final forbidden-field scan and update affected feature FRDs and
-   operational runbooks.
+Implemented:
+
+- Removed remaining frontend `homeAssetId`, `linkedHomeAssetId`, `HOME_ASSET`,
+  `HomeAsset`, and `homeAsset` compatibility contracts and navigation branches.
+  Guidance, bookings, providers, notifications, status board, coverage,
+  warranties, quote comparison, and price finalization now carry canonical
+  `inventoryItemId` ownership only.
+- Removed legacy asset fallbacks from the active Property setup, guidance,
+  verification, and repair-versus-replace UI models.
+- Re-ran active backend, frontend, and worker source scans with zero legacy item
+  ownership findings.
+- Added a permanent cleanup guard that fails if a legacy item identity or model
+  token is restored in production TypeScript source.
+
+No Prisma schema changes or migration scripts are included in this slice.
+
+## Slice 6 — executable archetype acceptance and operations evidence
+
+Implemented:
+
+- Expanded the deterministic ten-archetype gate to execute API/shared feature
+  policy decisions, frontend canonical route generation, and worker-owned
+  seasonal/habit context transformations.
+- Added `npm run acceptance:phase8` as a live API/UI/worker release gate. It
+  authenticates normally, validates canonical context facts for exactly ten
+  UI-created properties, opens each property's Guidance UI in Playwright,
+  checks worker process/BullMQ/cron metrics, and writes machine-readable JSON
+  evidence.
+- Added a credential-free ten-archetype manifest example and
+  `PHASE8_RUNTIME_ACCEPTANCE_RUNBOOK.md`, including prerequisites, execution,
+  failure handling, and evidence-retention rules.
+- Updated the Phase 8 FRD evidence references and cleanup guards.
+
+The live gate requires a running database-backed API, frontend, worker metrics
+service, and operator-created demo properties. It is intentionally not marked
+as executed in this repository-only implementation environment. Each release
+must retain the generated evidence as an operational artifact.
 
 ## Current status
 
-Phase 8 is in progress. Slices 1 through 4 are implemented; runtime archetype
-validation and the final repository/documentation scan remain.
+Phase 8 implementation is complete. Slices 1 through 6 are implemented, the
+final active-source scan is clean, and the runtime gate is executable and
+evidence-producing. Running that gate against the ten UI-created properties is
+a release-validation activity described in the runbook, not a remaining code
+implementation item.

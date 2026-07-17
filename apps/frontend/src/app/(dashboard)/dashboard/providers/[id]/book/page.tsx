@@ -54,7 +54,6 @@ export default function BookProviderPage() {
   const maintenancePredictionId = searchParams.get('predictionId');
   const guidanceContext = extractGuidanceContinuityContext(searchParams);
   const inventoryItemId = searchParams.get('itemId') || guidanceContext.itemId;
-  const homeAssetId = searchParams.get('homeAssetId');
   const guidanceJourneyId = guidanceContext.guidanceJourneyId ?? null;
   const guidanceStepKey = guidanceContext.guidanceStepKey ?? null;
   const guidanceSignalIntentFamily = searchParams.get('guidanceSignalIntentFamily');
@@ -70,8 +69,7 @@ export default function BookProviderPage() {
     guidanceJourneyId ||
       guidanceStepKey ||
       guidanceSignalIntentFamily ||
-      inventoryItemId ||
-      homeAssetId
+      inventoryItemId
   );
   const providerId = params.id as string;
 
@@ -102,7 +100,6 @@ export default function BookProviderPage() {
     enabled: Boolean(selectedPropertyId) && hasGuardScopeContext,
     journeyId: guidanceJourneyId ?? undefined,
     inventoryItemId: inventoryItemId ?? undefined,
-    homeAssetId: homeAssetId ?? undefined,
   });
   const bookingGuidanceQuery = useGuidance(selectedPropertyId, {
     enabled: Boolean(selectedPropertyId) && hasGuardScopeContext,
@@ -131,7 +128,6 @@ export default function BookProviderPage() {
           journeyId: guidanceJourneyId,
           stepKey: guidanceStepKey,
           inventoryItemId: inventoryItemId ?? null,
-          homeAssetId: homeAssetId ?? null,
           assetName: guidanceAssetName,
           issueType: guidanceIssueDescription,
         })
@@ -181,9 +177,8 @@ export default function BookProviderPage() {
   }, [providerId, serviceCategory]);
 
   useEffect(() => {
-    const targetItemId = inventoryItemId || homeAssetId;
-    if (selectedPropertyId && targetItemId) {
-      api.get<{ item: { name: string } }>(`/api/properties/${selectedPropertyId}/inventory/items/${targetItemId}`)
+    if (selectedPropertyId && inventoryItemId) {
+      api.get<{ item: { name: string } }>(`/api/properties/${selectedPropertyId}/inventory/items/${inventoryItemId}`)
         .then(res => {
           if (res.data?.item?.name) {
             setContextItemName(res.data.item.name);
@@ -191,7 +186,7 @@ export default function BookProviderPage() {
         })
         .catch(err => console.warn('[BOOKING] Failed to load context item name:', err));
     }
-  }, [selectedPropertyId, inventoryItemId, homeAssetId]);
+  }, [selectedPropertyId, inventoryItemId]);
 
   const loadData = async () => {
     try {
@@ -367,7 +362,7 @@ export default function BookProviderPage() {
       ...(insightFactor && { insightFactor }),
       ...(insightContext && { insightContext }),
       ...(maintenancePredictionId && { maintenancePredictionId }),
-      ...((inventoryItemId || homeAssetId) && { inventoryItemId: inventoryItemId || homeAssetId || undefined }),
+      ...(inventoryItemId && { inventoryItemId }),
       ...(priceFinalizationId && { priceFinalizationId }),
       ...(guidanceJourneyId && { guidanceJourneyId }),
       ...(guidanceJourneyId && guidanceStepKey && { guidanceStepKey }),
@@ -425,13 +420,11 @@ export default function BookProviderPage() {
             bookingDetailParams.set('guidanceSignalIntentFamily', guidanceSignalIntentFamily);
           }
           if (inventoryItemId) bookingDetailParams.set('itemId', inventoryItemId);
-          if (homeAssetId) bookingDetailParams.set('homeAssetId', homeAssetId);
           const fallbackReturnTo = buildGuidanceOverviewHref({
             propertyId: selectedPropertyId,
             journeyId: guidanceJourneyId,
             stepKey: guidanceStepKey,
             inventoryItemId: inventoryItemId ?? null,
-            homeAssetId: homeAssetId ?? null,
             assetName: guidanceAssetName,
             issueType: guidanceIssueDescription,
           });
@@ -453,7 +446,6 @@ export default function BookProviderPage() {
         if (guidanceStepKey) params.set('guidanceStepKey', guidanceStepKey);
         if (guidanceSignalIntentFamily) params.set('guidanceSignalIntentFamily', guidanceSignalIntentFamily);
         if (inventoryItemId) params.set('itemId', inventoryItemId);
-        if (homeAssetId) params.set('homeAssetId', homeAssetId);
         if (contextualBackHref) params.set('returnTo', contextualBackHref);
         const suffix = params.toString();
         router.push(suffix ? `/dashboard/bookings/${existingBookingId}?${suffix}` : `/dashboard/bookings/${existingBookingId}`);

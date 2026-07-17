@@ -470,7 +470,6 @@ function renderRepairReplaceSupportingDetails(payload: Record<string, unknown>) 
 
 function formatScopeLabel(category: string | null | undefined) {
   if (category === 'ITEM') return 'Item-specific';
-  if (category === 'HOME_ASSET') return 'Asset-level';
   if (category === 'SERVICE') return 'Service-level';
   if (category === 'PROPERTY') return 'Home-wide';
   return 'Scope unknown';
@@ -525,9 +524,7 @@ function evidenceRank(evidence: GuidanceEvidenceView) {
   const scopeRank =
     evidence.actualScopeCategory === 'ITEM'
       ? 4
-      : evidence.actualScopeCategory === 'HOME_ASSET'
-        ? 3
-        : evidence.actualScopeCategory === 'SERVICE'
+      : evidence.actualScopeCategory === 'SERVICE'
           ? 2
           : evidence.actualScopeCategory === 'PROPERTY'
             ? 1
@@ -720,9 +717,7 @@ function CompletedStepDetail({
       ? 'SERVICE'
       : journey.inventoryItemId
         ? 'ITEM'
-        : journey.homeAssetId
-          ? 'HOME_ASSET'
-          : 'PROPERTY');
+        : 'PROPERTY');
   const actualScopeCategory = primaryEvidence?.actualScopeCategory ?? null;
   const compatibility = primaryEvidence?.compatibility ?? 'UNKNOWN';
   const scopeMessage = buildScopeMessage({

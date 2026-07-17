@@ -95,11 +95,6 @@ function inferAgeYears(item: InventoryItem): number | null {
     if (!Number.isFinite(years) || years < 0) return null;
     return years;
   }
-  const installYear = item.homeAsset?.installationYear;
-  if (installYear && Number.isFinite(installYear)) {
-    const age = new Date().getFullYear() - installYear;
-    return age >= 0 ? age : null;
-  }
   return null;
 }
 

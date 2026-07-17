@@ -149,7 +149,6 @@ export default function MaintenancePage() {
           journeyId: guidanceJourneyId,
           stepKey: guidanceStepKey,
           inventoryItemId: guidanceContext.itemId ?? null,
-          homeAssetId: guidanceContext.homeAssetId ?? null,
         }),
         label: guidanceJourneyId ? 'Back to guidance' : 'Back to previous step',
       };

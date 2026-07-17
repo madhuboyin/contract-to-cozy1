@@ -34,12 +34,11 @@ export type GuidanceStepCtaProps = {
   propertyId: string;
   activePrimaryAction: GuidanceActionModel | null;
   activeJourneySteps: GuidanceStepDTO[];
-  /** Resolved journey with inventoryItemId/homeAssetId patched in from URL params */
-  journeyForSelectedStepHref: (GuidanceJourneyDTO & { inventoryItemId: string | null; homeAssetId: string | null }) | null;
+  /** Resolved journey with inventoryItemId patched in from URL params. */
+  journeyForSelectedStepHref: (GuidanceJourneyDTO & { inventoryItemId: string | null }) | null;
 
   // URL param state used to fill in gaps in the journey row
   selectedInventoryItemId: string | null;
-  selectedHomeAssetId: string | null;
   selectedIssueType: string | null;
   selectedAssetOption: { assetName: string; category: string } | null;
 
@@ -60,7 +59,6 @@ export function GuidanceStepCta({
   activeJourneySteps,
   journeyForSelectedStepHref,
   selectedInventoryItemId,
-  selectedHomeAssetId,
   selectedIssueType,
   selectedAssetOption,
   router,
@@ -338,7 +336,6 @@ export function GuidanceStepCta({
         stepKey={step.stepKey}
         inventoryItemId={priceFinalizationItemId}
         inventoryItemCategory={priceFinalizationItemCategory}
-        homeAssetId={resolvedJourney?.homeAssetId ?? selectedHomeAssetId ?? null}
         guidanceSignalIntentFamily={resolvedJourney?.primarySignal?.signalIntentFamily ?? null}
         assetName={displayAssetName}
         issueType={resolvedJourney?.issueType ?? selectedIssueType ?? null}
@@ -412,10 +409,8 @@ export function GuidanceStepCta({
     );
   }
 
-  // Patch: if the journey lacks inventoryItemId/homeAssetId but the user explicitly
-  // selected one via URL params, inject it so resolveGuidanceStepHref can substitute
-  // :itemId in the route template. This handles journeys originally linked via
-  // homeAsset signals where inventoryItemId was not stored on the journey row.
+  // If the journey lacks inventoryItemId but the user selected one via URL params,
+  // inject it so resolveGuidanceStepHref can substitute :itemId in the route template.
   const href = resolvedJourney
     ? resolveGuidanceStepHref({ propertyId, journey: resolvedJourney, step })
     : null;
