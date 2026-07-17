@@ -20,6 +20,7 @@ import {
 import { PreferencePostureDefaults, PreferenceProfileService } from './preferenceProfile.service';
 import { signalService } from './signal.service';
 import { logger } from '../lib/logger';
+import { isCoverageActive } from './coverage/contextPolicy';
 
 type Impact = 'POSITIVE' | 'NEGATIVE' | 'NEUTRAL';
 type Severity = 'LOW' | 'MEDIUM' | 'HIGH';
@@ -794,6 +795,7 @@ export class CoverageIntelligenceService {
   }> {
     const property = await assertPropertyForUser(propertyId, userId);
     const homeownerProfileId = property.homeownerProfileId;
+    const evaluatedAt = new Date();
 
     const lookback = new Date();
     lookback.setMonth(lookback.getMonth() - 24);
@@ -834,7 +836,12 @@ export class CoverageIntelligenceService {
           },
         }),
         prisma.insurancePolicy.findMany({
-          where: { propertyId, homeownerProfileId },
+          where: {
+            propertyId,
+            homeownerProfileId,
+            startDate: { lte: evaluatedAt },
+            expiryDate: { gt: evaluatedAt },
+          },
           select: {
             id: true,
             coverageType: true,
@@ -842,7 +849,12 @@ export class CoverageIntelligenceService {
           },
         }),
         prisma.warranty.findMany({
-          where: { propertyId, homeownerProfileId },
+          where: {
+            propertyId,
+            homeownerProfileId,
+            startDate: { lte: evaluatedAt },
+            expiryDate: { gt: evaluatedAt },
+          },
           select: {
             id: true,
             category: true,
@@ -1135,11 +1147,11 @@ export class CoverageIntelligenceService {
           expectedNetImpactUsd > 150 ? 'POSITIVE' : expectedNetImpactUsd < -150 ? 'NEGATIVE' : 'NEUTRAL',
       },
       {
-        label: 'Coverage gaps scan',
+        label: 'Current coverage applicability',
         detail:
           coverageGaps.length > 0
-            ? `${coverageGaps.length} gap(s) detected from inventory coverage mapping.`
-            : 'No high-value coverage gaps were detected.',
+            ? `${coverageGaps.length} gap(s) remain after excluding future, expired, and property-mismatched coverage.`
+            : 'No high-value gaps remain after checking current policy and warranty dates.',
         impact: coverageGaps.length > 0 ? 'NEGATIVE' : 'POSITIVE',
       },
       {
@@ -1391,6 +1403,9 @@ export class CoverageIntelligenceService {
           select: {
             id: true,
             cost: true,
+            propertyId: true,
+            startDate: true,
+            expiryDate: true,
           },
         },
       },
@@ -1422,7 +1437,13 @@ export class CoverageIntelligenceService {
       replacementCostCents: number | null;
       purchaseCostCents: number | null;
       homeAssetId: string | null;
-      warranty: { id: string; cost: Prisma.Decimal | null } | null;
+      warranty: {
+        id: string;
+        cost: Prisma.Decimal | null;
+        propertyId: string | null;
+        startDate: Date;
+        expiryDate: Date;
+      } | null;
     };
   }> {
     const property = await assertPropertyForUser(propertyId, userId);
@@ -1572,6 +1593,7 @@ export class CoverageIntelligenceService {
       propertyRiskScore < 45 ? 1.25 : propertyRiskScore < 60 ? 1.12 : propertyRiskScore > 80 ? 0.9 : 1;
 
     const gapForItem = coverageGaps.some((gap) => gap.inventoryItemId === item.id);
+    const hasActiveWarranty = !!item.warranty && isCoverageActive(item.warranty, propertyId);
     const expectedCallsPerYear =
       defaults.expectedCallsPerYear +
       (failureProb >= 0.5 ? 0.35 : failureProb >= 0.3 ? 0.15 : 0) +
@@ -1607,7 +1629,10 @@ export class CoverageIntelligenceService {
 
     let warrantyVerdict: CoverageVerdict;
     let recommendation: 'BUY_NOW' | 'WAIT' | 'REPLACE_SOON';
-    if (expectedRemainingYears <= 2.5) {
+    if (hasActiveWarranty) {
+      recommendation = 'WAIT';
+      warrantyVerdict = CoverageVerdict.SITUATIONAL;
+    } else if (expectedRemainingYears <= 2.5) {
       recommendation = 'REPLACE_SOON';
       if (expectedNetImpactUsd >= 650) warrantyVerdict = CoverageVerdict.WORTH_IT;
       else if (expectedNetImpactUsd >= 250) warrantyVerdict = CoverageVerdict.SITUATIONAL;
@@ -1694,6 +1719,13 @@ export class CoverageIntelligenceService {
         impact: relevantTaskCount + relevantClaimCount >= 2 || propertyRiskScore < 50 ? 'NEGATIVE' : 'NEUTRAL',
       },
       {
+        label: 'Current warranty applicability',
+        detail: hasActiveWarranty
+          ? 'An active warranty is already linked to this item; duplicate purchase guidance is suppressed.'
+          : 'No active linked warranty was found for this item.',
+        impact: hasActiveWarranty ? 'POSITIVE' : 'NEUTRAL',
+      },
+      {
         label: 'Coverage gaps considered',
         detail: gapForItem
           ? 'Item has a current coverage gap signal in inventory coverage data.'
@@ -1703,7 +1735,7 @@ export class CoverageIntelligenceService {
     ];
 
     const nextSteps: NextStep[] = [];
-    if (warrantyVerdict === CoverageVerdict.WORTH_IT) {
+    if (!hasActiveWarranty && warrantyVerdict === CoverageVerdict.WORTH_IT) {
       nextSteps.push({
         title: `Request ${coverageType === 'SERVICE_PLAN' ? 'service plan' : 'warranty'} quotes for this item`,
         detail: 'Compare annual cost and service fee terms against this estimate.',
@@ -1715,7 +1747,7 @@ export class CoverageIntelligenceService {
         },
       });
     }
-    if (warrantyVerdict === CoverageVerdict.SITUATIONAL) {
+    if (!hasActiveWarranty && warrantyVerdict === CoverageVerdict.SITUATIONAL) {
       nextSteps.push({
         title: 'Run 2-3 pricing scenarios before buying coverage',
         detail: 'Try lower annual cost or service fee assumptions to see break-even shifts.',

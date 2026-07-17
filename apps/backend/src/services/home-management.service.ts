@@ -16,6 +16,7 @@ import { markDoNothingRunsStale } from './doNothingSimulator.service';
 import { logger } from '../lib/logger';
 import { uploadDocumentBuffer } from './storage/reportStorage';
 import { presignGetObject } from './storage/presign';
+import { evaluateCoverageRecord } from './coverage/contextPolicy';
 
 // Helper interface for safe Decimal conversion (the object must have a toNumber method)
 interface DecimalLike {
@@ -61,7 +62,7 @@ const mapRawExpenseToExpense = (rawExpense: any): Expense => {
     }
 
     // Explicitly list ALL fields
-    return {
+    const mapped = {
         id: rawExpense.id,
         homeownerProfileId: rawExpense.homeownerProfileId,
         propertyId: rawExpense.propertyId,
@@ -73,6 +74,7 @@ const mapRawExpenseToExpense = (rawExpense: any): Expense => {
         createdAt: rawExpense.createdAt,
         updatedAt: rawExpense.updatedAt,
     } as Expense;
+    return mapped;
 };
 
 /**
@@ -91,7 +93,7 @@ const mapRawWarrantyToWarranty = (rawWarranty: any): Warranty => {
     }
 
     // Explicitly list ALL fields
-    return {
+    const mapped = {
         id: rawWarranty.id,
         homeownerProfileId: rawWarranty.homeownerProfileId,
         propertyId: rawWarranty.propertyId,
@@ -107,6 +109,15 @@ const mapRawWarrantyToWarranty = (rawWarranty: any): Warranty => {
         updatedAt: rawWarranty.updatedAt,
         documents: rawWarranty.documents || [],
     } as Warranty;
+    if (rawWarranty.propertyId) {
+      mapped.applicability = evaluateCoverageRecord(rawWarranty, rawWarranty.propertyId);
+    } else {
+      mapped.applicability = {
+        status: 'NOT_APPLICABLE', lifecycle: 'INVALID', reasonCodes: ['COVERAGE_PROPERTY_UNLINKED'],
+        evaluatedAt: new Date().toISOString(), validUntil: null,
+      };
+    }
+    return mapped;
 };
 
 /**
@@ -127,7 +138,7 @@ const mapRawPolicyToInsurancePolicy = (rawPolicy: any): InsurancePolicy => {
 
 
     // Explicitly list ALL fields
-    return {
+    const mapped = {
         id: rawPolicy.id,
         homeownerProfileId: rawPolicy.homeownerProfileId,
         propertyId: rawPolicy.propertyId,
@@ -145,6 +156,15 @@ const mapRawPolicyToInsurancePolicy = (rawPolicy: any): InsurancePolicy => {
         updatedAt: rawPolicy.updatedAt,
         documents: rawPolicy.documents || [],
     } as InsurancePolicy;
+    if (rawPolicy.propertyId) {
+      mapped.applicability = evaluateCoverageRecord(rawPolicy, rawPolicy.propertyId);
+    } else {
+      mapped.applicability = {
+        status: 'NOT_APPLICABLE', lifecycle: 'INVALID', reasonCodes: ['COVERAGE_PROPERTY_UNLINKED'],
+        evaluatedAt: new Date().toISOString(), validUntil: null,
+      };
+    }
+    return mapped;
 };
 
 // --- EXPENSE SERVICE LOGIC (USING MAPPED HELPERS) ---

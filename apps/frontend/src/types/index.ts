@@ -893,6 +893,7 @@ export interface Warranty {
   documents: Document[]; // Array of associated documents
   createdAt: string;
   updatedAt: string;
+  applicability?: CoverageApplicability;
 }
 
 /**
@@ -915,6 +916,15 @@ export interface InsurancePolicy {
   documents: Document[]; // Array of associated documents
   createdAt: string;
   updatedAt: string;
+  applicability?: CoverageApplicability;
+}
+
+export interface CoverageApplicability {
+  status: 'APPLICABLE' | 'NOT_APPLICABLE' | 'UNKNOWN';
+  lifecycle: 'ACTIVE' | 'FUTURE' | 'EXPIRED' | 'INVALID';
+  reasonCodes: string[];
+  evaluatedAt: string;
+  validUntil: string | null;
 }
 
 export interface InsuranceProtectionGapSummary {

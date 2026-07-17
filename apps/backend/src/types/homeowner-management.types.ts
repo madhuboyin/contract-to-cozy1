@@ -70,6 +70,7 @@ export interface Warranty {
   createdAt: Date;
   updatedAt: Date;
   documents: Document[]; 
+  applicability?: CoverageApplicabilityDTO;
 }
 
 /**
@@ -92,6 +93,15 @@ export interface InsurancePolicy {
   createdAt: Date;
   updatedAt: Date;
   documents: Document[];
+  applicability?: CoverageApplicabilityDTO;
+}
+
+export interface CoverageApplicabilityDTO {
+  status: 'APPLICABLE' | 'NOT_APPLICABLE' | 'UNKNOWN';
+  lifecycle: 'ACTIVE' | 'FUTURE' | 'EXPIRED' | 'INVALID';
+  reasonCodes: string[];
+  evaluatedAt: string;
+  validUntil: string | null;
 }
 
 // ============================================================================

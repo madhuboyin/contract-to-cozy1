@@ -3,7 +3,7 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { FileText, Plus, Loader2, Shield, Trash2, Edit, X, Upload, CalendarDays, ChevronDown, MoreHorizontal, Sparkles, ShieldCheck, Save, ArrowLeft } from 'lucide-react';
-import { differenceInCalendarDays, format, isPast, isValid, parseISO } from 'date-fns';
+import { differenceInCalendarDays, format, isValid, parseISO } from 'date-fns';
 import { api } from '@/lib/api/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -84,9 +84,9 @@ const COMMON_INSURANCE_CARRIERS = [
   'American Family Insurance',
 ];
 
-type PolicyStatusLevel = 'active' | 'expiringSoon' | 'expired';
+type PolicyStatusLevel = 'active' | 'expiringSoon' | 'expired' | 'future' | 'unknown';
 
-function getPolicyStatusMeta(expiryDateISO: string): {
+function getPolicyStatusMeta(policy: InsurancePolicy): {
   status: PolicyStatusLevel;
   tone: 'good' | 'elevated' | 'danger' | 'info';
   label: string;
@@ -95,7 +95,27 @@ function getPolicyStatusMeta(expiryDateISO: string): {
   expiryLine: string;
   helperLine: string;
 } {
-  const expiryDate = parseISO(expiryDateISO);
+  const expiryDate = parseISO(policy.expiryDate);
+  if (policy.applicability?.lifecycle === 'FUTURE') {
+    const startDate = parseISO(policy.startDate);
+    return {
+      status: 'future', tone: 'info', label: 'Starts Later', daysRemaining: null, expiryDate,
+      expiryLine: `Starts ${format(startDate, 'MMM dd, yyyy')}`,
+      helperLine: 'Not active for current claims yet.',
+    };
+  }
+  if (policy.applicability?.status === 'UNKNOWN') {
+    return {
+      status: 'unknown', tone: 'info', label: 'Check Dates', daysRemaining: null, expiryDate: null,
+      expiryLine: 'Coverage dates need review', helperLine: 'This policy is not used as active coverage.',
+    };
+  }
+  if (policy.applicability?.reasonCodes.includes('COVERAGE_PROPERTY_UNLINKED')) {
+    return {
+      status: 'unknown', tone: 'info', label: 'Unlinked', daysRemaining: null, expiryDate,
+      expiryLine: 'Not linked to a property', helperLine: 'Link this policy before using it for coverage decisions.',
+    };
+  }
   if (!isValid(expiryDate)) {
     return {
       status: 'active',
@@ -787,7 +807,7 @@ export default function InsurancePage() {
     () =>
       sortedPolicies.map((policy) => ({
         policy,
-        meta: getPolicyStatusMeta(policy.expiryDate),
+        meta: getPolicyStatusMeta(policy),
       })),
     [sortedPolicies]
   );
@@ -1086,11 +1106,12 @@ export default function InsurancePage() {
             </TableHeader>
             <TableBody>
               {sortedPolicies.map(policy => {
-                const expired = isPast(parseISO(policy.expiryDate));
-                const statusClass = expired ? 'text-red-600' : 'text-green-600';
+                const status = getPolicyStatusMeta(policy);
+                const inactive = status.status !== 'active' && status.status !== 'expiringSoon';
+                const statusClass = status.status === 'expired' ? 'text-red-600' : inactive ? 'text-slate-600' : 'text-green-600';
                 
                 return (
-                  <TableRow key={policy.id} className={expired ? 'bg-red-50/50 hover:bg-red-50' : ''}>
+                  <TableRow key={policy.id} className={status.status === 'expired' ? 'bg-red-50/50 hover:bg-red-50' : ''}>
                     <TableCell className="font-medium">
                       {policy.carrierName}
                       <div className="text-xs text-muted-foreground mt-0.5">
@@ -1117,9 +1138,9 @@ export default function InsurancePage() {
                     <TableCell className="text-center">
                       <span className={cn(
                         "text-xs font-semibold px-2 py-0.5 rounded-full",
-                        expired ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'
+                        status.status === 'expired' ? 'bg-red-100 text-red-800' : inactive ? 'bg-slate-100 text-slate-800' : 'bg-green-100 text-green-800'
                       )}>
-                        {expired ? 'Expired' : 'Active'}
+                        {status.label}
                       </span>
                     </TableCell>
                     <TableCell className="text-center">

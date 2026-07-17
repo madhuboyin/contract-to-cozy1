@@ -1,4 +1,5 @@
 import { prisma } from '../lib/prisma';
+import { isCoverageActive } from './coverage/contextPolicy';
 
 const HIGH_VALUE_THRESHOLD_CENTS = 50000;       // $500
 const APPLIANCE_THRESHOLD_CENTS = 25000;        // $250
@@ -32,13 +33,6 @@ export type WaivedCoverageResult = {
   exposureCents: number;
   currency: string;
 };
-
-function isActive(expiryDate: Date | null | undefined, today: Date) {
-  if (!expiryDate) return false;
-  const d = new Date(expiryDate);
-  if (Number.isNaN(d.getTime())) return false;
-  return d > today;
-}
 
 export type CoverageGapDetectResult = {
   gaps: CoverageGapResult[];
@@ -93,8 +87,10 @@ export async function detectCoverageGaps(
     const hasWarranty = !!item.warranty;
     const hasInsurance = !!item.insurancePolicy;
 
-    const warrantyActive = hasWarranty && isActive(item.warranty?.expiryDate as any, today);
-    const insuranceActive = hasInsurance && isActive(item.insurancePolicy?.expiryDate as any, today);
+    const warrantyActive =
+      hasWarranty && isCoverageActive(item.warranty as any, propertyId, today);
+    const insuranceActive =
+      hasInsurance && isCoverageActive(item.insurancePolicy as any, propertyId, today);
 
     const reasons: string[] = [];
     const currency = item.currency || 'USD';
@@ -117,8 +113,8 @@ export async function detectCoverageGaps(
     }
 
     // 2) Expired coverage (even if present)
-    if (hasWarranty && !warrantyActive) reasons.push('Warranty has expired');
-    if (hasInsurance && !insuranceActive) reasons.push('Insurance policy has expired');
+    if (hasWarranty && !warrantyActive) reasons.push('Warranty is not active for this property');
+    if (hasInsurance && !insuranceActive) reasons.push('Insurance policy is not active for this property');
 
     // 3) Warranty only (active warranty, missing/expired insurance)
     if (warrantyActive && (!hasInsurance || !insuranceActive)) {

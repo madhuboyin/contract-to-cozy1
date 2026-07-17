@@ -123,7 +123,11 @@ export class ClaimsController {
       const data = await ClaimsService.createClaim(propertyId, userId, input);
       return res.status(201).json({ success: true, data });
     } catch (e: any) {
-      return res.status(400).json({ message: e.message || 'Failed to create claim' });
+      return res.status(e?.statusCode ?? 400).json({
+        code: e?.code,
+        message: e.message || 'Failed to create claim',
+        ...(e?.details ?? {}),
+      });
     }
   }
 
@@ -138,7 +142,7 @@ export class ClaimsController {
       return res.json({ success: true, data });
     } catch (e: any) {
       // ✅ NEW: Submit gating error (checklist requirements not met)
-      if (e?.statusCode === 409 && e?.code === 'CLAIM_SUBMIT_BLOCKED') {
+      if (e?.statusCode === 409) {
         return res.status(409).json({
           code: e.code,
           message: e.message,

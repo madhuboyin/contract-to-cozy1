@@ -9,6 +9,7 @@ import { apiRateLimiter, ocrRateLimiter } from '../middleware/rateLimiter.middle
 import { CustomRequest } from '../types';
 import { prisma } from '../lib/prisma';
 import { detectCoverageGaps } from '../services/coverageGap.service';
+import { evaluateCoverageRecord } from '../services/coverage/contextPolicy';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
 import { InventoryImportService } from '../services/inventoryImport.service';
 import { checkDuplicateAppliance, listImportBatches, rollbackImportBatch } from '../controllers/inventory.controller';
@@ -337,6 +338,7 @@ router.get(
               providerName: true,
               policyNumber: true,
               coverageDetails: true,
+              propertyId: true,
               startDate: true,
               expiryDate: true,
             },
@@ -348,6 +350,7 @@ router.get(
               policyNumber: true,
               coverageType: true,
               premiumAmount: true,
+              propertyId: true,
               startDate: true,
               expiryDate: true,
             },
@@ -357,9 +360,12 @@ router.get(
 
       if (!item) return res.status(404).json({ success: false, message: 'Inventory item not found' });
 
-      const today = new Date();
-      const warrantyActive = !!item.warranty && item.warranty.expiryDate > today;
-      const insuranceActive = !!item.insurancePolicy && item.insurancePolicy.expiryDate > today;
+      const warrantyDecision = item.warranty
+        ? evaluateCoverageRecord(item.warranty, propertyId)
+        : null;
+      const insuranceDecision = item.insurancePolicy
+        ? evaluateCoverageRecord(item.insurancePolicy, propertyId)
+        : null;
 
       return res.json({
         success: true,
@@ -372,10 +378,10 @@ router.get(
             currency: item.currency,
           },
           warranty: item.warranty
-            ? { ...item.warranty, active: warrantyActive }
+            ? { ...item.warranty, active: warrantyDecision?.status === 'APPLICABLE', applicability: warrantyDecision }
             : null,
           insurancePolicy: item.insurancePolicy
-            ? { ...item.insurancePolicy, active: insuranceActive }
+            ? { ...item.insurancePolicy, active: insuranceDecision?.status === 'APPLICABLE', applicability: insuranceDecision }
             : null,
         },
       });

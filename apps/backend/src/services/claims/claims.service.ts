@@ -19,6 +19,12 @@ import { ClaimStatus } from '../../types/claims.types';
 
 import { ClaimDocumentType, ClaimTimelineEventType} from '@prisma/client';
 import { HomeEventsAutoGen } from '../homeEvents/homeEvents.autogen';
+import {
+  claimCoverageDate,
+  evaluateCoverageRecord,
+  requiredCoverageKind,
+  type ClaimCoverageInput,
+} from '../coverage/contextPolicy';
 
 
 type UploadAndAttachArgs = {
@@ -286,6 +292,65 @@ function isoToDateOrNull(iso?: string | null) {
   return d;
 }
 
+function coverageError(message: string, code: string, details?: Record<string, unknown>) {
+  return Object.assign(new Error(message), { statusCode: 409, code, details });
+}
+
+async function assertClaimCoverage(propertyId: string, input: ClaimCoverageInput) {
+  const requiredKind = requiredCoverageKind(input.sourceType);
+  if (requiredKind === 'INSURANCE' && !input.insurancePolicyId) {
+    throw coverageError(
+      'Select an active insurance policy before starting an insurance claim.',
+      'CLAIM_COVERAGE_REQUIRED',
+      { requiredCoverage: 'INSURANCE' },
+    );
+  }
+  if (requiredKind === 'WARRANTY' && !input.warrantyId) {
+    throw coverageError(
+      'Select an active warranty before starting a warranty claim.',
+      'CLAIM_COVERAGE_REQUIRED',
+      { requiredCoverage: 'WARRANTY' },
+    );
+  }
+
+  const at = claimCoverageDate(input);
+  if (input.insurancePolicyId) {
+    const policy = await prisma.insurancePolicy.findFirst({
+      where: { id: input.insurancePolicyId, propertyId },
+      select: { id: true, propertyId: true, startDate: true, expiryDate: true },
+    });
+    if (!policy) {
+      throw coverageError('Insurance policy is not linked to this property.', 'CLAIM_COVERAGE_MISMATCH');
+    }
+    const decision = evaluateCoverageRecord(policy, propertyId, at);
+    if (decision.status !== 'APPLICABLE') {
+      throw coverageError(
+        'The selected insurance policy was not active on the incident date.',
+        'CLAIM_COVERAGE_INACTIVE',
+        { decision },
+      );
+    }
+  }
+
+  if (input.warrantyId) {
+    const warranty = await prisma.warranty.findFirst({
+      where: { id: input.warrantyId, propertyId },
+      select: { id: true, propertyId: true, startDate: true, expiryDate: true },
+    });
+    if (!warranty) {
+      throw coverageError('Warranty is not linked to this property.', 'CLAIM_COVERAGE_MISMATCH');
+    }
+    const decision = evaluateCoverageRecord(warranty, propertyId, at);
+    if (decision.status !== 'APPLICABLE') {
+      throw coverageError(
+        'The selected warranty was not active on the incident date.',
+        'CLAIM_COVERAGE_INACTIVE',
+        { decision },
+      );
+    }
+  }
+}
+
 async function recomputeChecklistCompletionPct(claimId: string) {
   const items = await prisma.claimChecklistItem.findMany({
     where: { claimId },
@@ -452,6 +517,28 @@ export class ClaimsService {
     mustHave(input.title, 'title is required');
     mustHave(input.type, 'type is required');
 
+    await assertClaimCoverage(propertyId, input);
+
+    if (input.insurancePolicyId || input.warrantyId) {
+      const existing = await prisma.claim.findFirst({
+        where: {
+          propertyId,
+          type: input.type as any,
+          status: { notIn: ['DENIED', 'CLOSED'] },
+          ...(input.insurancePolicyId ? { insurancePolicyId: input.insurancePolicyId } : {}),
+          ...(input.warrantyId ? { warrantyId: input.warrantyId } : {}),
+        },
+        select: { id: true, title: true, status: true },
+      });
+      if (existing) {
+        throw coverageError(
+          'An open claim already uses this coverage for the same incident type.',
+          'CLAIM_DUPLICATE_OPEN',
+          { existingClaim: existing },
+        );
+      }
+    }
+
     const generateChecklist = input.generateChecklist !== false;
 
     const claim = await prisma.claim.create({
@@ -551,6 +638,16 @@ export class ClaimsService {
       where: { id: claimId, propertyId },
     });
     if (!claim) throw new Error('Claim not found');
+
+    const nextCoverage: ClaimCoverageInput = {
+      sourceType: input.sourceType ?? (claim.sourceType as any),
+      insurancePolicyId:
+        input.insurancePolicyId === undefined ? claim.insurancePolicyId : input.insurancePolicyId,
+      warrantyId: input.warrantyId === undefined ? claim.warrantyId : input.warrantyId,
+      incidentAt:
+        input.incidentAt === undefined ? (claim.incidentAt ?? claim.createdAt) : input.incidentAt,
+    };
+    await assertClaimCoverage(propertyId, nextCoverage);
   
     const now = new Date();
   

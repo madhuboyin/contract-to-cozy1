@@ -20,6 +20,7 @@ export async function coverageLapseIncidentsJob() {
 
   const policies = await prisma.insurancePolicy.findMany({
     where: {
+      startDate: { lte: now },
       expiryDate: { gte: now, lte: lookahead },
       propertyId: { not: null },
     },
@@ -31,6 +32,17 @@ export async function coverageLapseIncidentsJob() {
 
   for (const p of policies) {
     if (!p.propertyId) continue;
+
+    const replacementPolicy = await prisma.insurancePolicy.findFirst({
+      where: {
+        propertyId: p.propertyId,
+        id: { not: p.id },
+        startDate: { lte: p.expiryDate },
+        expiryDate: { gt: p.expiryDate },
+      },
+      select: { id: true },
+    });
+    if (replacementPolicy) continue;
 
     const days = daysBetween(now, p.expiryDate);
     const score = days <= 3 ? 75 : days <= 7 ? 60 : 40;

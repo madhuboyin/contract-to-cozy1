@@ -1,8 +1,12 @@
 'use client';
 
-import React, { useState } from 'react';
-import type { ClaimDTO, ClaimType } from '@/types/claims.types';
+import React, { useEffect, useState } from 'react';
+import type { ClaimDTO, ClaimSourceType, ClaimType } from '@/types/claims.types';
 import { createClaim } from '@/app/(dashboard)/dashboard/properties/[id]/claims/claimsApi';
+import {
+  listPropertyInsurancePolicies,
+  listPropertyWarranties,
+} from '@/app/(dashboard)/dashboard/inventory/inventoryApi';
 import { toast } from '@/components/ui/use-toast';
 
 const TYPE_OPTIONS: ClaimType[] = [
@@ -34,7 +38,30 @@ export default function ClaimCreateModal({
   const [desc, setDesc] = useState('');
   const [providerName, setProviderName] = useState('');
   const [claimNumber, setClaimNumber] = useState('');
+  const [sourceType, setSourceType] = useState<ClaimSourceType>('UNKNOWN');
+  const [insurancePolicyId, setInsurancePolicyId] = useState('');
+  const [warrantyId, setWarrantyId] = useState('');
+  const [policies, setPolicies] = useState<Array<{ id: string; carrierName: string; policyNumber: string }>>([]);
+  const [warranties, setWarranties] = useState<Array<{ id: string; providerName: string; policyNumber?: string | null }>>([]);
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    Promise.all([listPropertyInsurancePolicies(propertyId), listPropertyWarranties(propertyId)])
+      .then(([allPolicies, allWarranties]) => {
+        if (cancelled) return;
+        setPolicies(allPolicies.filter((item: any) => item.applicability?.status === 'APPLICABLE'));
+        setWarranties(allWarranties.filter((item: any) => item.applicability?.status === 'APPLICABLE'));
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setPolicies([]);
+          setWarranties([]);
+        }
+      });
+    return () => { cancelled = true; };
+  }, [open, propertyId]);
 
   if (!open) return null;
 
@@ -44,6 +71,9 @@ export default function ClaimCreateModal({
     setDesc('');
     setProviderName('');
     setClaimNumber('');
+    setSourceType('UNKNOWN');
+    setInsurancePolicyId('');
+    setWarrantyId('');
   }
 
   async function submit() {
@@ -56,6 +86,12 @@ export default function ClaimCreateModal({
         title: t,
         description: desc.trim() || null,
         type,
+        sourceType,
+        insurancePolicyId: sourceType === 'INSURANCE' ? insurancePolicyId : null,
+        warrantyId:
+          sourceType === 'HOME_WARRANTY' || sourceType === 'MANUFACTURER_WARRANTY'
+            ? warrantyId
+            : null,
         providerName: providerName.trim() || null,
         claimNumber: claimNumber.trim() || null,
         generateChecklist: true,
@@ -161,6 +197,62 @@ export default function ClaimCreateModal({
 
           <div className="grid gap-3 md:grid-cols-2">
             <div>
+              <div className="text-xs font-semibold text-gray-700">Claim path</div>
+              <select
+                className="mt-1 w-full rounded-lg border px-3 py-2 text-sm"
+                value={sourceType}
+                onChange={(e) => {
+                  setSourceType(e.target.value as ClaimSourceType);
+                  setInsurancePolicyId('');
+                  setWarrantyId('');
+                }}
+                disabled={busy}
+              >
+                <option value="UNKNOWN">Decide later</option>
+                <option value="INSURANCE">Insurance</option>
+                <option value="HOME_WARRANTY">Home warranty</option>
+                <option value="MANUFACTURER_WARRANTY">Manufacturer warranty</option>
+                <option value="OUT_OF_POCKET">Out of pocket</option>
+              </select>
+            </div>
+
+            {sourceType === 'INSURANCE' && (
+              <div>
+                <div className="text-xs font-semibold text-gray-700">Active policy</div>
+                <select
+                  className="mt-1 w-full rounded-lg border px-3 py-2 text-sm"
+                  value={insurancePolicyId}
+                  onChange={(e) => setInsurancePolicyId(e.target.value)}
+                  disabled={busy}
+                >
+                  <option value="">Select a policy</option>
+                  {policies.map((policy) => (
+                    <option key={policy.id} value={policy.id}>{policy.carrierName} · {policy.policyNumber}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {(sourceType === 'HOME_WARRANTY' || sourceType === 'MANUFACTURER_WARRANTY') && (
+              <div>
+                <div className="text-xs font-semibold text-gray-700">Active warranty</div>
+                <select
+                  className="mt-1 w-full rounded-lg border px-3 py-2 text-sm"
+                  value={warrantyId}
+                  onChange={(e) => setWarrantyId(e.target.value)}
+                  disabled={busy}
+                >
+                  <option value="">Select a warranty</option>
+                  {warranties.map((warranty) => (
+                    <option key={warranty.id} value={warranty.id}>{warranty.providerName}{warranty.policyNumber ? ` · ${warranty.policyNumber}` : ''}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-2">
+            <div>
               <div className="text-xs font-semibold text-gray-700">Claim # (optional)</div>
               <input
                 className="mt-1 w-full rounded-lg border px-3 py-2 text-sm"
@@ -201,7 +293,12 @@ export default function ClaimCreateModal({
             <button
               className="rounded-lg bg-emerald-700 px-3 py-2.5 sm:py-2 text-sm min-h-[44px] text-white hover:bg-emerald-800"
               onClick={submit}
-              disabled={busy || !title.trim()}
+              disabled={
+                busy ||
+                !title.trim() ||
+                (sourceType === 'INSURANCE' && !insurancePolicyId) ||
+                ((sourceType === 'HOME_WARRANTY' || sourceType === 'MANUFACTURER_WARRANTY') && !warrantyId)
+              }
             >
               {busy ? 'Creating…' : 'Create'}
             </button>

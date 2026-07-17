@@ -3,7 +3,7 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { FileText, Plus, Loader2, Trash2, Edit, Upload, AlertCircle, ArrowLeft, BadgeCheck, CalendarDays, ChevronDown, MoreHorizontal, Sparkles, ShieldCheck, Save, X } from 'lucide-react';
-import { differenceInCalendarDays, format, isPast, isValid, parseISO } from 'date-fns';
+import { differenceInCalendarDays, format, isValid, parseISO } from 'date-fns';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
 import { api } from '@/lib/api/client';
@@ -112,6 +112,7 @@ interface Warranty {
     createdAt: string;
     updatedAt: string;
     documents?: Document[];
+    applicability?: import('@/types').CoverageApplicability;
 }
 
 interface CreateWarrantyInput {
@@ -747,9 +748,9 @@ const WarrantyForm = ({ initialData, properties, homeAssets, providerSuggestions
 
 const EXPIRING_SOON_DAYS = 60;
 
-type WarrantyStatusLevel = 'active' | 'expiringSoon' | 'expired';
+type WarrantyStatusLevel = 'active' | 'expiringSoon' | 'expired' | 'future' | 'unknown';
 
-function getWarrantyStatusMeta(expiryDateISO: string): {
+function getWarrantyStatusMeta(warranty: Warranty): {
   status: WarrantyStatusLevel;
   tone: 'good' | 'elevated' | 'danger' | 'info';
   label: string;
@@ -758,7 +759,27 @@ function getWarrantyStatusMeta(expiryDateISO: string): {
   expiryLine: string;
   helperLine: string;
 } {
-  const expiryDate = parseISO(expiryDateISO);
+  const expiryDate = parseISO(warranty.expiryDate);
+  if (warranty.applicability?.lifecycle === 'FUTURE') {
+    const startDate = parseISO(warranty.startDate);
+    return {
+      status: 'future', tone: 'info', label: 'Starts Later', daysRemaining: null, expiryDate,
+      expiryLine: `Starts ${format(startDate, 'MMM dd, yyyy')}`,
+      helperLine: 'Not active for current claims yet.',
+    };
+  }
+  if (warranty.applicability?.status === 'UNKNOWN') {
+    return {
+      status: 'unknown', tone: 'info', label: 'Check Dates', daysRemaining: null, expiryDate: null,
+      expiryLine: 'Coverage dates need review', helperLine: 'This warranty is not used as active coverage.',
+    };
+  }
+  if (warranty.applicability?.reasonCodes.includes('COVERAGE_PROPERTY_UNLINKED')) {
+    return {
+      status: 'unknown', tone: 'info', label: 'Unlinked', daysRemaining: null, expiryDate,
+      expiryLine: 'Not linked to a property', helperLine: 'Link this warranty before using it for coverage decisions.',
+    };
+  }
   if (!isValid(expiryDate)) {
     return {
       status: 'active',
@@ -1138,7 +1159,7 @@ export default function WarrantiesPage() {
     () =>
       sortedWarranties.map((warranty) => ({
         warranty,
-        meta: getWarrantyStatusMeta(warranty.expiryDate),
+        meta: getWarrantyStatusMeta(warranty),
       })),
     [sortedWarranties]
   );
@@ -1489,11 +1510,12 @@ export default function WarrantiesPage() {
             </TableHeader>
             <TableBody>
               {sortedWarranties.map(warranty => {
-                const expired = isPast(parseISO(warranty.expiryDate));
-                const statusClass = expired ? 'text-red-600' : 'text-green-600';
+                const status = getWarrantyStatusMeta(warranty);
+                const inactive = status.status !== 'active' && status.status !== 'expiringSoon';
+                const statusClass = status.status === 'expired' ? 'text-red-600' : inactive ? 'text-slate-600' : 'text-green-600';
                 
                 return (
-                  <TableRow key={warranty.id} className={expired ? 'bg-red-50/50 hover:bg-red-50' : ''}>
+                  <TableRow key={warranty.id} className={status.status === 'expired' ? 'bg-red-50/50 hover:bg-red-50' : ''}>
                     <TableCell className="font-medium">
                       {warranty.providerName}
                       <div className="text-xs text-muted-foreground mt-0.5">
@@ -1526,9 +1548,9 @@ export default function WarrantiesPage() {
                     <TableCell className="text-center">
                       <span className={cn(
                         "text-xs font-semibold px-2 py-0.5 rounded-full",
-                        expired ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'
+                        status.status === 'expired' ? 'bg-red-100 text-red-800' : inactive ? 'bg-slate-100 text-slate-800' : 'bg-green-100 text-green-800'
                       )}>
-                        {expired ? 'Expired' : 'Active'}
+                        {status.label}
                       </span>
                     </TableCell>
                     <TableCell className="text-center">

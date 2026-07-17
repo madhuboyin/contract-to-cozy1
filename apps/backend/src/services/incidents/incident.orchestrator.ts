@@ -13,6 +13,7 @@ import {
 
 import { prisma } from '../../lib/prisma';
 import { logIncidentEvent } from './incident.events';
+import { isCoverageActive } from '../coverage/contextPolicy';
 
 /**
  * ✅ Action recommendation for incident types.
@@ -127,6 +128,42 @@ export async function orchestrateIncident(incidentId: string) {
     incident.status === IncidentStatus.ACTIONED;
 
   if (!isOrchestratable) return incident;
+
+  if (incident.typeKey === 'COVERAGE_LAPSE') {
+    const lapseDetails =
+      incident.details && typeof incident.details === 'object' && !Array.isArray(incident.details)
+        ? (incident.details as Record<string, unknown>)
+        : {};
+    const lapsePolicyId =
+      typeof lapseDetails.insurancePolicyId === 'string' ? lapseDetails.insurancePolicyId : null;
+    const recordedExpiry =
+      typeof lapseDetails.expiryDate === 'string' ? new Date(lapseDetails.expiryDate) : null;
+    const policies = await prisma.insurancePolicy.findMany({
+      where: { propertyId: incident.propertyId },
+      select: { id: true, propertyId: true, startDate: true, expiryDate: true },
+    });
+    const activePolicy = policies.find((policy) => {
+      if (!isCoverageActive(policy, incident.propertyId)) return false;
+      if (!lapsePolicyId || policy.id !== lapsePolicyId) return true;
+      return !!recordedExpiry && !Number.isNaN(recordedExpiry.getTime()) && policy.expiryDate > recordedExpiry;
+    });
+    if (activePolicy) {
+      const resolved = await prisma.incident.update({
+        where: { id: incident.id },
+        data: { status: IncidentStatus.RESOLVED, resolvedAt: new Date() },
+        include: { actions: true },
+      });
+      await logIncidentEvent({
+        incidentId: incident.id,
+        propertyId: incident.propertyId,
+        userId: incident.userId,
+        type: IncidentEventType.RESOLVED,
+        message: 'Coverage lapse resolved because an active property policy is now on file.',
+        payload: { policyId: activePolicy.id, reasonCode: 'ACTIVE_POLICY_SUPPRESSES_LAPSE' },
+      });
+      return resolved;
+    }
+  }
 
   const existingActionKeys = incident.actions
     .map((a) => extractActionKeyFromPayload(a.payload))

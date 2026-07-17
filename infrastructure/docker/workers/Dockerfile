@@ -78,6 +78,8 @@ RUN mkdir -p src/shared/backend/utils \
              src/shared/backend/refinanceRadar/types \
              src/shared/backend/services/permitAdapters \
              src/shared/backend/services/taxAssessorAdapters
+RUN mkdir -p src/shared/backend/services/coverage
+COPY apps/backend/src/services/coverage/contextPolicy.ts src/shared/backend/services/coverage/
 
 COPY apps/backend/src/utils/riskCalculator.util.ts apps/backend/src/utils/FinancialCalculator.util.ts src/shared/backend/utils/
 COPY apps/backend/src/config/risk-constants.ts apps/backend/src/config/workerJobRegistry.ts apps/backend/src/config/queueDefaults.ts src/shared/backend/config/

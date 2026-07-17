@@ -11,6 +11,7 @@ import { logger } from '../lib/logger';
 import { prisma } from '../lib/prisma';
 import { deriveChecklistProgress } from '../utils/seasonalProgress';
 import { syncSeasonalChecklistStatus } from '../services/seasonalChecklistStatus.service';
+import { evaluateCoverageRecord } from '../services/coverage/contextPolicy';
 import { apiRateLimiter } from '../middleware/rateLimiter.middleware';
 import {
   getPropertyContextCompleteness,
@@ -500,7 +501,15 @@ router.get('/:propertyId/warranties', authenticate, propertyAuthMiddleware, asyn
       orderBy: { expiryDate: 'asc' }
     });
 
-    return res.json({ success: true, data: { warranties } });
+    return res.json({
+      success: true,
+      data: {
+        warranties: warranties.map((warranty) => ({
+          ...warranty,
+          applicability: evaluateCoverageRecord(warranty, propertyId),
+        })),
+      },
+    });
   } catch (error) {
     return res.status(500).json({ success: false, error: 'Failed to fetch warranties' });
   }
@@ -522,7 +531,15 @@ router.get('/:propertyId/insurance', authenticate, propertyAuthMiddleware, async
       orderBy: { expiryDate: 'asc' }
     });
 
-    return res.json({ success: true, data: { policies } });
+    return res.json({
+      success: true,
+      data: {
+        policies: policies.map((policy) => ({
+          ...policy,
+          applicability: evaluateCoverageRecord(policy, propertyId),
+        })),
+      },
+    });
   } catch (error) {
     return res.status(500).json({ success: false, error: 'Failed to fetch insurance policies' });
   }
