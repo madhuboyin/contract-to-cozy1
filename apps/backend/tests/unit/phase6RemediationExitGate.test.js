@@ -206,6 +206,11 @@ test('remaining planning surfaces reuse their authoritative policies', () => {
   const worker = read('../../../workers/src/jobs/neighborhoodChangeNotification.job.ts');
   assert.ok(worker.includes("'NEIGHBORHOOD_RADAR'"));
   assert.ok(worker.includes("planning.decision.status !== 'APPLICABLE'"));
+
+  const workerDockerfile = read('../../../../infrastructure/docker/workers/Dockerfile');
+  assert.ok(workerDockerfile.includes(
+    "backend\\/src\\/services\\/planningContext\\/context/\\.\\.\\/shared\\/backend\\/services\\/planningContext\\/context",
+  ));
 });
 
 // ─── Stale shared output reconciliation ─────────────────────────────────────

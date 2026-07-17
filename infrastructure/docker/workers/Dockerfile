@@ -319,7 +319,8 @@ RUN sed -i 's/\.\.\/\.\.\/backend\/src\/utils\/riskCalculator\.util/\.\/shared\/
     sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/guidanceEngine\/guidanceJourney\.service/\.\.\/shared\/backend\/services\/guidanceEngine\/guidanceJourney\.service/g' src/jobs/freezeRiskIncidents.job.ts && \
     sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/guidanceEngine\/guidanceJourney\.service/\.\.\/shared\/backend\/services\/guidanceEngine\/guidanceJourney\.service/g' src/jobs/neighborhoodChangeNotification.job.ts && \
     sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/neighborhoodIntelligence\/impactRules/\.\.\/shared\/backend\/neighborhoodIntelligence\/impactRules/g' src/jobs/neighborhoodChangeNotification.job.ts && \
-    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/neighborhoodIntelligence\/geoUtils/\.\.\/shared\/backend\/neighborhoodIntelligence\/geoUtils/g' src/jobs/neighborhoodChangeNotification.job.ts
+    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/neighborhoodIntelligence\/geoUtils/\.\.\/shared\/backend\/neighborhoodIntelligence\/geoUtils/g' src/jobs/neighborhoodChangeNotification.job.ts && \
+    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/planningContext\/context/\.\.\/shared\/backend\/services\/planningContext\/context/g' src/jobs/neighborhoodChangeNotification.job.ts
 
 # Rewrite paths introduced by DIY and permit features
 RUN sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/diyAiGuide\.service/\.\.\/shared\/backend\/services\/diyAiGuide\.service/g' src/jobs/generateDiyAiGuide.job.ts && \
