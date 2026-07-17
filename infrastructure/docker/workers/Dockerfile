@@ -104,6 +104,7 @@ COPY apps/backend/src/services/domainEvents/domainEvents.service.ts src/shared/b
 COPY apps/backend/src/lib/prisma.ts \
      apps/backend/src/lib/logger.ts \
      apps/backend/src/lib/requestContext.ts \
+     apps/backend/src/lib/metrics.ts \
      src/shared/backend/lib/
 COPY apps/backend/src/services/incidents/incident.service.ts src/shared/backend/services/incidents/
 COPY apps/backend/src/types/incidents.types.ts src/shared/backend/types/
@@ -290,6 +291,7 @@ RUN sed -i 's/\.\.\/\.\.\/backend\/src\/utils\/riskCalculator\.util/\.\/shared\/
     sed -i 's/\.\.\/\.\.\/backend\/src\/config\/risk-constants/\.\/shared\/backend\/config\/risk-constants/g' src/worker.ts && \
     sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/storage\/reportStorage/\.\.\/shared\/backend\/services\/storage\/reportStorage/g' src/jobs/generateHomeReportExport.job.ts && \
     sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/pdf\/renderHomeReportPackPdf/\.\.\/shared\/backend\/services\/pdf\/renderHomeReportPackPdf/g' src/jobs/generateHomeReportExport.job.ts && \
+    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/planningContext\/reportSnapshot/\.\.\/shared\/backend\/services\/planningContext\/reportSnapshot/g' src/jobs/generateHomeReportExport.job.ts && \
     sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/homeEventRadarMatcher\.service/\.\.\/shared\/backend\/services\/homeEventRadarMatcher\.service/g' src/jobs/ingestRadarSignals.job.ts && \
     sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/sharedDataBackfill\.service/\.\.\/shared\/backend\/services\/sharedDataBackfill\.service/g' src/jobs/sharedDataBackfill.job.ts && \
     sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/sharedDataBackfill\.service/\.\.\/shared\/backend\/services\/sharedDataBackfill\.service/g' src/jobs/sharedDataConsistencyAudit.job.ts && \
@@ -315,7 +317,9 @@ RUN sed -i 's/\.\.\/\.\.\/backend\/src\/utils\/riskCalculator\.util/\.\/shared\/
     sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/modules\/gazette\/services\/gazetteGenerationJobRunner\.service/\.\.\/shared\/backend\/modules\/gazette\/services\/gazetteGenerationJobRunner\.service/g' src/jobs/gazetteGeneration.job.ts && \
     sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/guidanceEngine\/guidanceJourney\.service/\.\.\/shared\/backend\/services\/guidanceEngine\/guidanceJourney\.service/g' src/jobs/coverageLapseIncidents.job.ts && \
     sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/guidanceEngine\/guidanceJourney\.service/\.\.\/shared\/backend\/services\/guidanceEngine\/guidanceJourney\.service/g' src/jobs/freezeRiskIncidents.job.ts && \
-    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/guidanceEngine\/guidanceJourney\.service/\.\.\/shared\/backend\/services\/guidanceEngine\/guidanceJourney\.service/g' src/jobs/neighborhoodChangeNotification.job.ts
+    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/guidanceEngine\/guidanceJourney\.service/\.\.\/shared\/backend\/services\/guidanceEngine\/guidanceJourney\.service/g' src/jobs/neighborhoodChangeNotification.job.ts && \
+    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/neighborhoodIntelligence\/impactRules/\.\.\/shared\/backend\/neighborhoodIntelligence\/impactRules/g' src/jobs/neighborhoodChangeNotification.job.ts && \
+    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/neighborhoodIntelligence\/geoUtils/\.\.\/shared\/backend\/neighborhoodIntelligence\/geoUtils/g' src/jobs/neighborhoodChangeNotification.job.ts
 
 # Rewrite paths introduced by DIY and permit features
 RUN sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/diyAiGuide\.service/\.\.\/shared\/backend\/services\/diyAiGuide\.service/g' src/jobs/generateDiyAiGuide.job.ts && \
