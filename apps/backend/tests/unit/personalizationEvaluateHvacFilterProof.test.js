@@ -29,7 +29,13 @@ function createPrismaMock({ definition = null, homeAssets = [], property = { id:
             hasSmokeDetectors: null,
             roofReplacementYear: null,
             ...property,
-            homeAssets,
+            inventoryItems: homeAssets.map((asset) => ({
+              name: asset.assetType,
+              category: asset.assetType,
+              tags: [],
+              assetType: asset.assetType,
+              lastServicedOn: asset.lastServiced,
+            })),
           };
         }
         return null;
@@ -88,7 +94,7 @@ const REAL_DEFINITION = {
   code: HVAC_FILTER_PROOF_DEFINITION_CODE,
   id: 'def-1',
   status: 'ACTIVE',
-  rules: [{ version: HVAC_FILTER_PROOF_RULE_VERSION, ruleAst: HVAC_FILTER_PROOF_RULE_AST, status: 'ACTIVE' }],
+  rules: [{ version: HVAC_FILTER_PROOF_RULE_VERSION, ruleAst: HVAC_FILTER_PROOF_RULE_AST, status: 'ACTIVE', reviewedBy: 'reviewer-1' }],
 };
 
 test('returns PAUSED and persists nothing when the kill switch is engaged', async () => {
@@ -163,7 +169,7 @@ test('returns FAILED/INVALID_RULE_AST and records a failed run when the stored r
     code: 'broken',
     id: 'def-2',
     status: 'ACTIVE',
-    rules: [{ version: 1, ruleAst: { op: 'not_a_real_op' }, status: 'ACTIVE' }],
+    rules: [{ version: 1, ruleAst: { op: 'not_a_real_op' }, status: 'ACTIVE', reviewedBy: 'reviewer-1' }],
   };
   const { prismaMock, runs } = createPrismaMock({ definition: brokenDefinition });
   installPrismaMock(prismaMock);

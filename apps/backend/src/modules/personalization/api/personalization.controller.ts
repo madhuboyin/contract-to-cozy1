@@ -17,6 +17,7 @@ import type { PersonalizationModule } from '../catalog/personalizationDefinition
 import { ModuleRecommendationQuerySchema } from './personalization.validators';
 import { getHouseholdContextMap } from '../application/getHouseholdContextMap.usecase';
 import { isPersonalizationPaused } from '../../../services/personalizationKillSwitch.service';
+import { getAggregationContextEnvelope } from '../../../services/aggregationContext/context';
 
 function personalizationContext(req: CustomRequest, res: Response): { propertyId: string; userId: string } | null {
   const propertyId = req.params.propertyId;
@@ -41,8 +42,11 @@ export async function getPersonalization(req: CustomRequest, res: Response) {
   const context = personalizationContext(req, res);
   if (!context) return;
   const capabilities = getPersonalizationCapabilities(req.householdRole!);
-  const data = await loadPersonalization(context.propertyId, context.userId, capabilities);
-  return res.json({ success: true, data });
+  const [data, propertyContext] = await Promise.all([
+    loadPersonalization(context.propertyId, context.userId, capabilities),
+    getAggregationContextEnvelope(context.propertyId, context.userId, 'PERSONALIZED_GUIDANCE'),
+  ]);
+  return res.json({ success: true, data: { ...data, propertyContext } });
 }
 
 export async function getPersonalizationContextMap(req: CustomRequest, res: Response) {
@@ -128,13 +132,16 @@ export async function getPersonalizationModuleRecommendations(req: CustomRequest
     return res.status(400).json({ success: false, error: { code: 'INVALID_QUERY', message: 'Limit must be between 1 and 25.' } });
   }
   const capabilities = getPersonalizationCapabilities(req.householdRole!);
-  const data = await getModuleRecommendations(
-    context.propertyId,
-    module as PersonalizationModule,
-    capabilities,
-    query.data.limit,
-  );
-  return res.json({ success: true, data });
+  const [data, propertyContext] = await Promise.all([
+    getModuleRecommendations(
+      context.propertyId,
+      module as PersonalizationModule,
+      capabilities,
+      query.data.limit,
+    ),
+    getAggregationContextEnvelope(context.propertyId, context.userId, 'PERSONALIZED_GUIDANCE'),
+  ]);
+  return res.json({ success: true, data: { ...data, propertyContext } });
 }
 
 export async function convertPersonalizationRecommendationToTask(req: CustomRequest, res: Response) {

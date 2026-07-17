@@ -2,6 +2,7 @@ import { Response } from 'express';
 import { CustomRequest } from '../types';
 import { dailyHomePulseService } from '../services/dailyHomePulse.service';
 import { logger } from '../lib/logger';
+import { getAggregationContextEnvelope } from '../services/aggregationContext/context';
 
 export async function getDailySnapshot(req: CustomRequest, res: Response) {
   try {
@@ -12,8 +13,11 @@ export async function getDailySnapshot(req: CustomRequest, res: Response) {
       return res.status(401).json({ success: false, message: 'Authentication required.' });
     }
 
-    const snapshot = await dailyHomePulseService.getOrCreateTodaySnapshot(propertyId, userId);
-    return res.json({ success: true, data: { snapshot } });
+    const [snapshot, context] = await Promise.all([
+      dailyHomePulseService.getOrCreateTodaySnapshot(propertyId, userId),
+      getAggregationContextEnvelope(propertyId, userId, 'DASHBOARD_TODAY'),
+    ]);
+    return res.json({ success: true, data: { snapshot, context } });
   } catch (error: any) {
     logger.error({ err: error }, 'Error fetching daily snapshot');
     return res.status(500).json({
@@ -84,4 +88,3 @@ export async function dismissDailyMicroAction(req: CustomRequest, res: Response)
     });
   }
 }
-

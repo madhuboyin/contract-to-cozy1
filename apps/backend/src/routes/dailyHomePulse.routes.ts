@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { authenticate } from '../middleware/auth.middleware';
-import { propertyAuthMiddleware } from '../middleware/propertyAuth.middleware';
+import { propertyAuthMiddleware, requireHouseholdRole } from '../middleware/propertyAuth.middleware';
 import { apiRateLimiter } from '../middleware/rateLimiter.middleware';
 import {
   checkinDailySnapshot,
@@ -18,18 +18,20 @@ router.get('/properties/:propertyId/daily-snapshot', propertyAuthMiddleware, get
 router.post(
   '/properties/:propertyId/daily-snapshot/checkin',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   checkinDailySnapshot
 );
 router.post(
   '/properties/:propertyId/micro-actions/:actionId/complete',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   completeDailyMicroAction
 );
 router.post(
   '/properties/:propertyId/micro-actions/:actionId/dismiss',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   dismissDailyMicroAction
 );
 
 export default router;
-

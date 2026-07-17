@@ -2071,6 +2071,7 @@ export interface OrchestrationHandoffDTO {
 export interface OrchestrationSummaryDTO {
   propertyId: string;
   pendingActionCount: number;
+  aggregationContext?: import('@/components/property-context/PropertyContextNotice').PropertyContextEnvelope | null;
 
   derivedFrom: {
     riskAssessment: boolean;

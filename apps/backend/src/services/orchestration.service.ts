@@ -41,6 +41,7 @@ import {
 import { createTaskFromActionCenter } from './orchestrationIntegration.service';
 import { logger } from '../lib/logger';
 import { analyticsEmitter, AnalyticsModule } from './analytics';
+import { getAggregationContextEnvelope } from './aggregationContext/context';
 
 
 type DerivedFrom = {
@@ -300,6 +301,7 @@ export type OrchestrationSummary = {
       };
     };
   } | null;
+  aggregationContext?: Awaited<ReturnType<typeof getAggregationContextEnvelope>> | null;
 };
 
 export interface CompletionCreateInput {
@@ -1827,6 +1829,10 @@ async function mapChecklistItemToAction(params: {
  * - coverage is now action-level for risk items
  */
 export async function getOrchestrationSummary(propertyId: string, userId?: string | null): Promise<OrchestrationSummary> {
+  const aggregationContext = userId
+    ? await getAggregationContextEnvelope(propertyId, userId, 'ACTION_CENTER')
+    : null;
+
   // 0) Booking context
   const { categorySet: bookingCategorySet, bookingByCategory } =
     await getActiveBookingCategorySet(propertyId);
@@ -2324,6 +2330,7 @@ export async function getOrchestrationSummary(propertyId: string, userId?: strin
     nextBestMove,
     sharedContext,
     handoffs,
+    aggregationContext,
     decisionEngine: decisionEngineResult
       ? {
           recommendations: decisionEngineResult.recommendations.map((entry) => ({

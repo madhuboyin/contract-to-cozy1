@@ -1,4 +1,5 @@
 import { api } from './client';
+import type { PropertyContextEnvelope } from '@/components/property-context/PropertyContextNotice';
 
 export type PulseSummaryKind = 'HEALTH' | 'RISK' | 'FINANCIAL';
 export type PulseSeverity = 'LOW' | 'MEDIUM' | 'HIGH';
@@ -58,6 +59,7 @@ export type DailySnapshotDTO = {
     noOverdueTasks: number;
   };
   generatedAt: string;
+  propertyContext?: PropertyContextEnvelope;
 };
 
 type CachedSnapshot = {
@@ -109,8 +111,9 @@ export async function getDailySnapshot(
   }
 
   const request = api
-    .get<{ snapshot: DailySnapshotDTO }>(`/api/properties/${propertyId}/daily-snapshot`)
+    .get<{ snapshot: DailySnapshotDTO; context?: PropertyContextEnvelope }>(`/api/properties/${propertyId}/daily-snapshot`)
     .then((res) => {
+      res.data.snapshot.propertyContext = res.data.context;
       setSnapshotCache(propertyId, res.data.snapshot);
       return res.data.snapshot;
     })

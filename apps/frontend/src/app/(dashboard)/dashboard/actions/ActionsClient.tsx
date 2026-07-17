@@ -37,6 +37,7 @@ import {
   resolveGuidanceForOrchestrationAction,
 } from '@/components/orchestration/guidanceActionLinking';
 import { track } from '@/lib/analytics/events';
+import { PropertyContextNotice, type PropertyContextEnvelope } from '@/components/property-context/PropertyContextNotice';
 
 function orchestrationPriorityLabel(action: OrchestratedActionDTO): string {
   if (action.overdue) return 'URGENT';
@@ -65,6 +66,7 @@ export function ActionsClient() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [propertyName, setPropertyName] = useState<string | null>(null);
+  const [aggregationContext, setAggregationContext] = useState<PropertyContextEnvelope | null>(null);
 
   // Modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -137,6 +139,7 @@ export function ActionsClient() {
       const adapted = adaptOrchestrationSummary(summary);
 
       setActions(adapted.actions);
+      setAggregationContext(summary.aggregationContext ?? null);
       setSuppressedActions(adapted.suppressedActions ?? []);
       setSnoozedActions(summary.snoozedActions || []);
 
@@ -430,6 +433,7 @@ export function ActionsClient() {
           title="What needs attention"
           subtitle="Everything your home needs right now."
         />
+        <PropertyContextNotice context={aggregationContext} title="Action Center context" />
         <MobileKpiStrip className="sm:grid-cols-4">
           <MobileKpiTile
             label="Active"

@@ -12,7 +12,7 @@ import {
 } from '../controllers/orchestration.controller';
 
 import { authenticate } from '../middleware/auth.middleware';
-import { propertyAuthMiddleware } from '../middleware/propertyAuth.middleware';
+import { propertyAuthMiddleware, requireHouseholdRole } from '../middleware/propertyAuth.middleware';
 import completionRoutes from './orchestrationCompletion.routes';
 
 const router = Router();
@@ -37,6 +37,7 @@ router.post(
   '/:propertyId/actions/mark-completed',
   authenticate,
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   markOrchestrationActionCompleted
 );
 
@@ -45,6 +46,7 @@ router.post(
   '/:propertyId/actions/:actionKey/undo',
   authenticate,
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   undoOrchestrationAction
 );
 
@@ -53,6 +55,7 @@ router.post(
   '/:propertyId/actions/:actionKey/snooze',
   authenticate,
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   snoozeOrchestrationAction
 );
 
@@ -61,6 +64,7 @@ router.post(
   '/:propertyId/actions/:actionKey/unsnooze',
   authenticate,
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   unsnoozeOrchestrationAction
 );
 

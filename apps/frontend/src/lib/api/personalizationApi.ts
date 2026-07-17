@@ -1,4 +1,5 @@
 import { api } from './client';
+import type { PropertyContextEnvelope } from '@/components/property-context/PropertyContextNotice';
 
 export interface PersonalizationRecommendation {
   id: string;
@@ -17,6 +18,7 @@ export interface PersonalizationRecommendation {
 }
 
 export interface PersonalizationResponse {
+  propertyContext?: PropertyContextEnvelope;
   available: boolean;
   profileEnabled: boolean;
   consentedAt?: string | null;

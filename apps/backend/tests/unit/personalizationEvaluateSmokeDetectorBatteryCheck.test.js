@@ -32,7 +32,13 @@ function createPrismaMock({ definition = null, homeAssets = [], property = { id:
             hasSmokeDetectors: null,
             roofReplacementYear: null,
             ...property,
-            homeAssets,
+            inventoryItems: homeAssets.map((asset) => ({
+              name: asset.assetType,
+              category: asset.assetType,
+              tags: [],
+              assetType: asset.assetType,
+              lastServicedOn: asset.lastServiced,
+            })),
           };
         }
         return null;

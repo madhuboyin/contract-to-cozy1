@@ -13,7 +13,7 @@ const page = fs.readFileSync(path.resolve(
 ), 'utf8');
 
 test('Maintenance consumes the shared personalization module placement', () => {
-  assert.match(page, /<PersonalizedMaintenanceSuggestions propertyId=\{selectedPropertyId\}/);
+  assert.match(page, /<PersonalizedMaintenanceSuggestions propertyId=\{effectivePropertyId\}/);
   assert.match(component, /getModulePersonalizationRecommendations\(propertyId!, 'MAINTENANCE', 3\)/);
 });
 

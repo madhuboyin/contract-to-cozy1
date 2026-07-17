@@ -23,6 +23,7 @@ import {
   StatusChip,
   SummaryCard,
 } from '@/components/mobile/dashboard/MobilePrimitives';
+import { PropertyContextNotice } from '@/components/property-context/PropertyContextNotice';
 
 type PersonalizationFeedbackReason = 'ALREADY_DONE' | 'TOO_EXPENSIVE' | 'NOT_APPLICABLE' | 'BAD_TIMING' | 'WRONG_PROFILE' | 'OTHER';
 
@@ -168,6 +169,8 @@ export default function PersonalizationPage() {
         </Link>
         <MobileSectionHeader title="Personalized home guidance" subtitle="Explainable suggestions based on your home" />
       </MobileSection>
+
+      <PropertyContextNotice context={personalization?.propertyContext} title="Guidance context" />
 
       {personalizationQuery.isLoading ? (
         <SummaryCard title="Loading guidance" subtitle="Checking this home's current signals"><div /></SummaryCard>

@@ -10,7 +10,19 @@ function createPrismaMock({ property = null } = {}) {
   const prismaMock = {
     property: {
       findUnique: async ({ where }) => {
-        if (property && where.id === property.id) return property;
+        if (property && where.id === property.id) {
+          return {
+            ...property,
+            inventoryItems: (property.homeAssets ?? []).map((asset, index) => ({
+              name: asset.assetType,
+              category: asset.assetType,
+              tags: [],
+              assetType: asset.assetType,
+              lastServicedOn: asset.lastServiced,
+              id: `inventory-${index}`,
+            })),
+          };
+        }
         return null;
       },
     },

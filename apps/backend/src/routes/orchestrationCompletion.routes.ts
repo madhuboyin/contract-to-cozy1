@@ -8,7 +8,7 @@ import {
   uploadMiddleware,
 } from '../controllers/orchestrationCompletion.controller';
 import { authenticate } from '../middleware/auth.middleware';
-import { propertyAuthMiddleware } from '../middleware/propertyAuth.middleware';
+import { propertyAuthMiddleware, requireHouseholdRole } from '../middleware/propertyAuth.middleware';
 import { validateImageUpload } from '../utils/documentValidator.util';
 
 const router = Router();
@@ -26,6 +26,7 @@ router.put(
   '/:propertyId/completions/:completionId',
   authenticate,
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   updateCompletionHandler
 );
 
@@ -34,6 +35,7 @@ router.post(
   '/:propertyId/completions/photos',
   authenticate,
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   uploadMiddleware,
   validateImageUpload,
   uploadPhotoHandler
@@ -44,6 +46,7 @@ router.delete(
   '/:propertyId/completions/photos/:photoId',
   authenticate,
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   deletePhotoHandler
 );
 
