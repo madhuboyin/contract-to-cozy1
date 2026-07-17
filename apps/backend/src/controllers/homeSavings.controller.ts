@@ -9,6 +9,7 @@ import { HomeSavingsService } from '../services/homeSavings.service';
 import { guidanceJourneyService } from '../services/guidanceEngine/guidanceJourney.service';
 import { logger } from '../lib/logger';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
+import { getFinancialContextEnvelope } from '../services/financialContext/context';
 
 const service = new HomeSavingsService();
 
@@ -39,6 +40,12 @@ export async function getHomeSavingsSummary(req: CustomRequest, res: Response) {
   try {
     const userId = requireUserId(req);
     const result = await service.getSummary(req.params.propertyId, userId);
+    const propertyContext = await getFinancialContextEnvelope(
+      req.params.propertyId,
+      userId,
+      'HOME_SAVINGS',
+      result.propertyContextVersion,
+    );
 
     analyticsEmitter.track({
       eventType: AnalyticsEvent.TOOL_USED,
@@ -52,7 +59,7 @@ export async function getHomeSavingsSummary(req: CustomRequest, res: Response) {
       },
     });
 
-    return res.json({ success: true, data: result });
+    return res.json({ success: true, data: { ...result, propertyContext } });
   } catch (error: any) {
     const status = error?.message === 'Authentication required.' ? 401 : 500;
     logger.error({ err: error }, 'Error fetching home savings summary');
@@ -71,7 +78,14 @@ export async function getHomeSavingsCategoryDetail(req: CustomRequest, res: Resp
       req.params.categoryKey,
       userId
     );
-    return res.json({ success: true, data: result });
+    const summary = await service.getSummary(req.params.propertyId, userId);
+    const propertyContext = await getFinancialContextEnvelope(
+      req.params.propertyId,
+      userId,
+      'HOME_SAVINGS',
+      summary.propertyContextVersion,
+    );
+    return res.json({ success: true, data: { ...result, propertyContext } });
   } catch (error: any) {
     const status = error?.message === 'Authentication required.' ? 401 : 500;
     logger.error({ err: error }, 'Error fetching home savings category detail');
@@ -130,6 +144,12 @@ export async function runHomeSavingsComparison(req: CustomRequest, res: Response
     } = payload;
 
     const result = await service.runComparison(req.params.propertyId, userId, comparisonInput);
+    const propertyContext = await getFinancialContextEnvelope(
+      req.params.propertyId,
+      userId,
+      'HOME_SAVINGS',
+      result.summary.propertyContextVersion,
+    );
 
     try {
       await guidanceJourneyService.recordToolCompletion({
@@ -170,7 +190,7 @@ export async function runHomeSavingsComparison(req: CustomRequest, res: Response
       },
     });
 
-    return res.json({ success: true, data: result });
+    return res.json({ success: true, data: { ...result, propertyContext } });
   } catch (error: any) {
     const status = error?.message === 'Authentication required.' ? 401 : 500;
     logger.error({ err: error }, 'Error running home savings comparison');

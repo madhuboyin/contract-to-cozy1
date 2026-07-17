@@ -3,6 +3,7 @@ import { Response, NextFunction } from 'express';
 import { CustomRequest } from '../types';
 import { CostVolatilityService } from '../services/costVolatility.service';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
+import { getCurrentFinancialContextEnvelope } from '../services/financialContext/context';
 
 const svc = new CostVolatilityService();
 
@@ -18,6 +19,7 @@ export async function getCostVolatility(req: CustomRequest, res: Response, next:
     const years = parseYears(req.query);
 
     const costVolatility = await svc.compute(propertyId, { years });
+    const propertyContext = await getCurrentFinancialContextEnvelope(propertyId, req.user!.userId, 'COST_VOLATILITY');
 
     analyticsEmitter.track({
       eventType: AnalyticsEvent.TOOL_USED,
@@ -28,7 +30,16 @@ export async function getCostVolatility(req: CustomRequest, res: Response, next:
       metadataJson: { volatilityIndex: costVolatility.index.volatilityIndex, band: costVolatility.index.band },
     });
 
-    return res.json({ success: true, data: { costVolatility } });
+    return res.json({
+      success: true,
+      data: {
+        costVolatility: {
+          ...costVolatility,
+          propertyContext,
+          calculationContext: { mode: 'CANONICAL', overrideFields: [] },
+        },
+      },
+    });
   } catch (e) {
     next(e);
   }

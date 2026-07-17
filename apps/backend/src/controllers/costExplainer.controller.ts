@@ -3,6 +3,7 @@ import { Response } from 'express';
 import { CustomRequest } from '../types';
 import { CostExplainerService } from '../services/costExplainer.service';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
+import { getCurrentFinancialContextEnvelope } from '../services/financialContext/context';
 
 const service = new CostExplainerService();
 
@@ -11,6 +12,7 @@ export async function getCostExplainer(req: CustomRequest, res: Response) {
   const years = (req.query.years ? Number(req.query.years) : 5) as 5 | 10;
 
   const data = await service.explain(propertyId, years);
+  const propertyContext = await getCurrentFinancialContextEnvelope(propertyId, req.user!.userId, 'COST_EXPLAINER');
 
   analyticsEmitter.track({
     eventType: AnalyticsEvent.TOOL_USED,
@@ -23,6 +25,12 @@ export async function getCostExplainer(req: CustomRequest, res: Response) {
 
   return res.json({
     success: true,
-    data: { costExplainer: data },
+    data: {
+      costExplainer: {
+        ...data,
+        propertyContext,
+        calculationContext: { mode: 'CANONICAL', overrideFields: [] },
+      },
+    },
   });
 }

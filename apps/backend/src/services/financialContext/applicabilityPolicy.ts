@@ -27,6 +27,19 @@ function availableCollection(
     : facts.decision('APPLICABLE', [availableReason]);
 }
 
+function requiresFacts(
+  context: PropertyContextSnapshot,
+  keys: string[],
+  availableReason: string,
+  unavailableReason: string,
+): FeatureDecision {
+  const facts = new PropertyContextDecisionBuilder(context);
+  const values = keys.map((key) => facts.read<unknown>(key));
+  return values.every((value) => value !== undefined && value !== null)
+    ? facts.decision('APPLICABLE', [availableReason])
+    : facts.unknown(unavailableReason);
+}
+
 export function evaluateFinancialContext(
   context: PropertyContextSnapshot,
   input: FinancialContextInput = {},
@@ -91,11 +104,47 @@ export function evaluateFinancialContext(
     repairReplace,
     reservePlanning,
     capitalPlanning,
-    ownershipCostModeling: availableCollection(
+    ownershipCostModeling: requiresFacts(
       context,
-      'financial.ownershipExpenseSummary',
-      'OWNERSHIP_EXPENSE_SUMMARY_AVAILABLE',
-      'OWNERSHIP_EXPENSE_SUMMARY_UNAVAILABLE',
+      ['core.propertyUse', 'core.occupancyStatus', 'location.state', 'location.zipCode'],
+      'OWNERSHIP_CONTEXT_AVAILABLE',
+      'OWNERSHIP_CONTEXT_INCOMPLETE',
+    ),
+    doNothingModeling: requiresFacts(
+      context,
+      ['core.propertyUse', 'core.occupancyStatus'],
+      'OCCUPANCY_CONTEXT_AVAILABLE_FOR_DELAY_MODELING',
+      'OCCUPANCY_CONTEXT_INCOMPLETE',
+    ),
+    homeSavingsModeling: requiresFacts(
+      context,
+      ['core.propertyUse', 'core.occupancyStatus', 'location.state', 'location.zipCode'],
+      'PROPERTY_AND_LOCATION_AVAILABLE_FOR_SAVINGS_COMPARISON',
+      'SAVINGS_COMPARISON_CONTEXT_INCOMPLETE',
+    ),
+    budgetPlanning: requiresFacts(
+      context,
+      ['core.propertyUse', 'core.occupancyStatus', 'core.dwellingType'],
+      'PROPERTY_USE_AVAILABLE_FOR_BUDGET_PLANNING',
+      'BUDGET_PLANNING_CONTEXT_INCOMPLETE',
+    ),
+    costGrowthModeling: requiresFacts(
+      context,
+      ['core.propertyUse', 'core.occupancyStatus', 'location.state', 'location.zipCode'],
+      'PROPERTY_AND_LOCATION_AVAILABLE_FOR_COST_GROWTH',
+      'COST_GROWTH_CONTEXT_INCOMPLETE',
+    ),
+    costVolatilityModeling: requiresFacts(
+      context,
+      ['core.propertyUse', 'core.occupancyStatus', 'location.state', 'location.zipCode'],
+      'PROPERTY_AND_LOCATION_AVAILABLE_FOR_COST_VOLATILITY',
+      'COST_VOLATILITY_CONTEXT_INCOMPLETE',
+    ),
+    costExplainerModeling: requiresFacts(
+      context,
+      ['core.propertyUse', 'core.occupancyStatus', 'location.state', 'location.zipCode'],
+      'PROPERTY_AND_LOCATION_AVAILABLE_FOR_COST_EXPLANATION',
+      'COST_EXPLAINER_CONTEXT_INCOMPLETE',
     ),
     scenarioSeparation: availableCollection(
       context,

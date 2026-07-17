@@ -139,7 +139,16 @@ export class TrueCostOwnershipService {
   async estimate(propertyId: string, input: TrueCostOwnershipInput = {}): Promise<TrueCostOwnershipDTO> {
     const property = await prisma.property.findUnique({
       where: { id: propertyId },
-      select: { id: true, address: true, city: true, state: true, zipCode: true, propertySize: true },
+      select: {
+        id: true,
+        address: true,
+        city: true,
+        state: true,
+        zipCode: true,
+        propertySize: true,
+        lastAppraisedValue: true,
+        financingProfile: { select: { purchasePriceCents: true } },
+      },
     });
     if (!property) throw new Error('Property not found');
 
@@ -165,6 +174,15 @@ export class TrueCostOwnershipService {
       homeValueNow = input.homeValueNow;
       notes.push('Home value override provided by client.');
       confidence = 'HIGH';
+    } else if (property.lastAppraisedValue || property.financingProfile?.purchasePriceCents) {
+      homeValueNow = (property.lastAppraisedValue ?? property.financingProfile!.purchasePriceCents!) / 100;
+      notes.push(
+        property.lastAppraisedValue
+          ? 'Home value sourced from the latest canonical appraisal.'
+          : 'Home value sourced from the canonical financing profile purchase price.',
+      );
+      dataSources.push('Canonical property financing profile');
+      confidence = property.lastAppraisedValue ? 'HIGH' : 'MEDIUM';
     } else {
       const hv = estimateHomeValueNowUSD({ state, propertySize: property.propertySize });
       homeValueNow = hv.value;
@@ -327,13 +345,19 @@ export class TrueCostOwnershipService {
     const assumptions: TrueCostOwnershipDTO['meta']['assumptions'] = [
       {
         field: 'homeValueNow',
-        source: input.homeValueNow !== undefined ? 'USER_OVERRIDE' : (property.propertySize ? 'HEURISTIC' : 'HEURISTIC'),
+        source: input.homeValueNow !== undefined
+          ? 'USER_OVERRIDE'
+          : property.lastAppraisedValue || property.financingProfile?.purchasePriceCents
+            ? 'DATA_BACKED'
+            : 'HEURISTIC',
         value: toMoney(homeValueNow),
         note: input.homeValueNow !== undefined
           ? 'Client-provided override.'
-          : property.propertySize
-            ? `Estimated from regional benchmark of $${VALUE_PER_SQFT_BY_STATE[state] ?? 200}/sqft × ${property.propertySize} sqft.`
-            : 'Generic $350,000 fallback used — no property size on file.',
+          : property.lastAppraisedValue || property.financingProfile?.purchasePriceCents
+            ? 'Canonical appraisal or financing profile value.'
+            : property.propertySize
+              ? `Estimated from regional benchmark of $${VALUE_PER_SQFT_BY_STATE[state] ?? 200}/sqft × ${property.propertySize} sqft.`
+              : 'Generic $350,000 fallback used — no property size on file.',
       },
       {
         field: 'annualInsurance',

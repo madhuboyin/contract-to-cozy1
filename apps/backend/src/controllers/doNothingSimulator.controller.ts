@@ -9,6 +9,7 @@ import {
 import { guidanceJourneyService } from '../services/guidanceEngine/guidanceJourney.service';
 import { logger } from '../lib/logger';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
+import { getFinancialContextEnvelope } from '../services/financialContext/context';
 
 const service = new DoNothingSimulatorService();
 
@@ -129,6 +130,12 @@ export async function getLatestDoNothingRun(req: CustomRequest, res: Response) {
       scenarioId,
       horizonMonths: Number.isFinite(horizonMonths) ? horizonMonths : undefined,
     });
+    const propertyContext = await getFinancialContextEnvelope(
+      propertyId,
+      userId,
+      'DO_NOTHING',
+      result.exists ? result.run.propertyContextVersion : null,
+    );
 
     analyticsEmitter.track({
       eventType: AnalyticsEvent.TOOL_USED,
@@ -139,7 +146,12 @@ export async function getLatestDoNothingRun(req: CustomRequest, res: Response) {
       metadataJson: { exists: result.exists, riskScoreDelta: result.exists ? result.run.riskScoreDelta : null },
     });
 
-    return res.json({ success: true, data: result });
+    return res.json({
+      success: true,
+      data: result.exists
+        ? { ...result, run: { ...result.run, propertyContext }, propertyContext }
+        : { ...result, propertyContext },
+    });
   } catch (error: any) {
     logger.error({ err: error }, 'Error fetching latest do-nothing run');
     return res.status(500).json({
@@ -172,6 +184,12 @@ export async function runDoNothingSimulation(req: CustomRequest, res: Response) 
     } = payload;
 
     const result = await service.run(propertyId, userId, runInput);
+    const propertyContext = await getFinancialContextEnvelope(
+      propertyId,
+      userId,
+      'DO_NOTHING',
+      result.run.propertyContextVersion,
+    );
 
     try {
       await guidanceJourneyService.recordToolCompletion({
@@ -216,7 +234,10 @@ export async function runDoNothingSimulation(req: CustomRequest, res: Response) 
       },
     });
 
-    return res.json({ success: true, data: result });
+    return res.json({
+      success: true,
+      data: { ...result, run: { ...result.run, propertyContext }, propertyContext },
+    });
   } catch (error: any) {
     logger.error({ err: error }, 'Error running do-nothing simulation');
     return res.status(500).json({

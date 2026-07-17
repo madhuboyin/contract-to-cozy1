@@ -5,6 +5,7 @@ import { DollarSign, TrendingUp, Calendar, PieChart, Lightbulb, Loader2, Chevron
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { api } from '@/lib/api/client';
+import { PropertyContextNotice, type PropertyContextEnvelope } from '@/components/property-context/PropertyContextNotice';
 import {
   ActionPriorityRow,
   ReadOnlySummaryBlock,
@@ -42,6 +43,8 @@ interface NormalizedRecommendation {
 }
 
 interface BudgetForecast {
+  propertyContext?: PropertyContextEnvelope;
+  calculationContext?: { mode: 'CANONICAL'; overrideFields: string[] };
   propertyId: string;
   propertyAddress: string;
   propertyAge: number;
@@ -200,6 +203,7 @@ export default function BudgetForecaster({ propertyId }: BudgetForecasterProps) 
 
   return (
     <div className="space-y-6">
+      <PropertyContextNotice context={forecast.propertyContext} title="Maintenance budget context" />
       <ResultHeroCard
         title="Annual Maintenance Budget"
         value={`$${forecast.totalAnnualCost.toLocaleString()}`}

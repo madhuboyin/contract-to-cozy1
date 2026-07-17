@@ -1,7 +1,10 @@
 // apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/cost-volatility/costVolatilityApi.ts
 import { api } from '@/lib/api/client';
+import type { PropertyContextEnvelope } from '@/components/property-context/PropertyContextNotice';
 
 export type CostVolatilityDTO = {
+  propertyContext?: PropertyContextEnvelope;
+  calculationContext?: { mode: 'CANONICAL'; overrideFields: string[] };
   input: {
     propertyId: string;
     years: 5 | 10;

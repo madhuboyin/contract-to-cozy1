@@ -1,7 +1,10 @@
 // apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/true-cost/trueCostApi.ts
 import { api } from '@/lib/api/client';
+import type { PropertyContextEnvelope } from '@/components/property-context/PropertyContextNotice';
 
 export type TrueCostOwnershipDTO = {
+  propertyContext?: PropertyContextEnvelope;
+  calculationContext?: { mode: 'CANONICAL' | 'SCENARIO'; overrideFields: string[] };
   input: {
     propertyId: string;
     years: 5 | 10;

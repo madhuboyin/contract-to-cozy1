@@ -251,6 +251,8 @@ export class HomeCostGrowthService {
         state: true,
         zipCode: true,
         propertySize: true,
+        lastAppraisedValue: true,
+        financingProfile: { select: { purchasePriceCents: true } },
       },
     });
 
@@ -278,6 +280,15 @@ export class HomeCostGrowthService {
       homeValueNow = opts.homeValueNow;
       notes.push('Home value override was provided by the client.');
       confidence = 'HIGH';
+    } else if (property.lastAppraisedValue || property.financingProfile?.purchasePriceCents) {
+      homeValueNow = (property.lastAppraisedValue ?? property.financingProfile!.purchasePriceCents!) / 100;
+      notes.push(
+        property.lastAppraisedValue
+          ? 'Home value sourced from the latest canonical appraisal.'
+          : 'Home value sourced from the canonical financing profile purchase price.',
+      );
+      dataSources.push('Canonical property financing profile');
+      confidence = property.lastAppraisedValue ? 'HIGH' : 'MEDIUM';
     } else {
       const r = estimateHomeValueNowUSD({ state, propertySize: property.propertySize });
       homeValueNow = r.value;
@@ -453,13 +464,19 @@ export class HomeCostGrowthService {
     const assumptions: HomeCostGrowthDTO['meta']['assumptions'] = [
       {
         field: 'homeValueNow',
-        source: opts.homeValueNow !== undefined ? 'USER_OVERRIDE' : (property.propertySize ? 'HEURISTIC' : 'HEURISTIC'),
+        source: opts.homeValueNow !== undefined
+          ? 'USER_OVERRIDE'
+          : property.lastAppraisedValue || property.financingProfile?.purchasePriceCents
+            ? 'DATA_BACKED'
+            : 'HEURISTIC',
         value: toMoney(homeValueNow),
         note: opts.homeValueNow !== undefined
           ? 'Client-provided override.'
-          : property.propertySize
-            ? `Estimated from regional benchmark of $${VALUE_PER_SQFT_BY_STATE[state] ?? 200}/sqft × ${property.propertySize} sqft.`
-            : 'Generic $350,000 fallback used — no property size on file.',
+          : property.lastAppraisedValue || property.financingProfile?.purchasePriceCents
+            ? 'Canonical appraisal or financing profile value.'
+            : property.propertySize
+              ? `Estimated from regional benchmark of $${VALUE_PER_SQFT_BY_STATE[state] ?? 200}/sqft × ${property.propertySize} sqft.`
+              : 'Generic $350,000 fallback used — no property size on file.',
       },
       {
         field: 'appreciationRate',

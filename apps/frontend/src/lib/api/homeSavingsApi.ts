@@ -1,4 +1,5 @@
 import { api } from './client';
+import type { PropertyContextEnvelope } from '@/components/property-context/PropertyContextNotice';
 
 export type HomeSavingsCategoryKey =
   | 'HOME_INSURANCE'
@@ -81,12 +82,15 @@ export type HomeSavingsSummaryDTO = {
   potentialAnnualSavings: number;
   categories: HomeSavingsSummaryCategoryDTO[];
   updatedAt: string;
+  propertyContextVersion?: string | null;
+  propertyContext?: PropertyContextEnvelope;
 };
 
 export type HomeSavingsCategoryDetailDTO = {
   category: HomeSavingsCategoryDTO;
   account: HomeSavingsAccountDTO | null;
   opportunities: HomeSavingsOpportunityDTO[];
+  propertyContext?: PropertyContextEnvelope;
 };
 
 export type HomeSavingsAccountUpsertPayload = {

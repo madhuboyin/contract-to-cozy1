@@ -7,6 +7,7 @@ import { CustomRequest } from '../types'; // <-- MODIFIED IMPORT: Use CustomRequ
 import { aiOracleRateLimiter } from '../middleware/rateLimiter.middleware'; // <-- NEW IMPORT
 import { budgetForecasterService } from '../services/budgetForecaster.service';
 import { logger } from '../lib/logger';
+import { getCurrentFinancialContextEnvelope } from '../services/financialContext/context';
 
 const router = Router();
 
@@ -43,10 +44,15 @@ router.get(
       logger.info({ propertyId }, '[BUDGET-FORECASTER] Generating forecast for property');
 
       const forecast = await budgetForecasterService.generateBudgetForecast(propertyId, userId);
+      const propertyContext = await getCurrentFinancialContextEnvelope(propertyId, userId, 'BUDGET_PLANNER');
 
       res.json({
         success: true,
-        data: forecast
+        data: {
+          ...forecast,
+          propertyContext,
+          calculationContext: { mode: 'CANONICAL', overrideFields: [] },
+        }
       });
 
     } catch (error: any) {

@@ -5,6 +5,7 @@ import { CustomRequest } from '../types';
 import { guidanceJourneyService } from '../services/guidanceEngine/guidanceJourney.service';
 import { logger } from '../lib/logger';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
+import { getCurrentFinancialContextEnvelope } from '../services/financialContext/context';
 
 const svc = new TrueCostOwnershipService();
 
@@ -39,6 +40,14 @@ export async function getTrueCostOwnership(req: CustomRequest, res: Response) {
     utilitiesAnnualNow,
     inflationRate,
   });
+  const propertyContext = await getCurrentFinancialContextEnvelope(propertyId, req.user!.userId, 'TRUE_COST');
+  const overrideFields = Object.entries({
+    homeValueNow,
+    insuranceAnnualNow,
+    maintenanceAnnualNow,
+    utilitiesAnnualNow,
+    inflationRate,
+  }).filter(([, value]) => value !== undefined).map(([key]) => key);
 
   const guidanceJourneyId = readQueryString(req.query.guidanceJourneyId);
   const guidanceStepKey = readQueryString(req.query.guidanceStepKey);
@@ -92,6 +101,15 @@ export async function getTrueCostOwnership(req: CustomRequest, res: Response) {
 
   return res.json({
     success: true,
-    data: { trueCostOwnership: dto },
+    data: {
+      trueCostOwnership: {
+        ...dto,
+        propertyContext,
+        calculationContext: {
+          mode: overrideFields.length > 0 ? 'SCENARIO' : 'CANONICAL',
+          overrideFields,
+        },
+      },
+    },
   });
 }

@@ -1,4 +1,5 @@
 import { api } from './client';
+import type { PropertyContextEnvelope } from '@/components/property-context/PropertyContextNotice';
 
 export type DoNothingRiskTolerance = 'LOW' | 'MEDIUM' | 'HIGH';
 export type DoNothingDeductibleStrategy = 'KEEP_HIGH' | 'RAISE' | 'LOWER' | 'UNCHANGED';
@@ -32,6 +33,8 @@ export type DoNothingRunDTO = {
   assumptionSetId?: string | null;
   preferenceProfileId?: string | null;
   sharedSignalsUsed?: string[];
+  propertyContextVersion?: string | null;
+  propertyContext?: PropertyContextEnvelope;
 
   status: 'READY' | 'STALE' | 'ERROR';
   confidence: 'HIGH' | 'MEDIUM' | 'LOW';

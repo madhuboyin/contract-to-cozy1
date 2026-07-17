@@ -22,6 +22,7 @@ import {
 import { amountToAnnual, amountToMonthly, asNumber, round2, toRecord } from './homeSavings/helpers';
 import { signalService } from './signal.service';
 import { logger } from '../lib/logger';
+import { getFinancialContextDecisions } from './financialContext/context';
 
 export type HomeSavingsCategoryStatus = 'NOT_SET_UP' | 'CONNECTED' | 'FOUND_SAVINGS';
 
@@ -86,7 +87,14 @@ export type HomeSavingsSummaryDTO = {
   potentialAnnualSavings: number;
   categories: HomeSavingsSummaryCategoryDTO[];
   updatedAt: string;
+  propertyContextVersion: string | null;
 };
+
+function readContextVersion(value: Prisma.JsonValue | null): string | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const version = (value as Record<string, unknown>).propertyContextVersion;
+  return typeof version === 'string' ? version : null;
+}
 
 export type HomeSavingsCategoryDetailDTO = {
   category: HomeSavingsCategoryDTO;
@@ -330,6 +338,11 @@ export class HomeSavingsService {
     const categorySummaries: HomeSavingsSummaryCategoryDTO[] = [];
     let potentialMonthlySavings = 0;
     let potentialAnnualSavings = 0;
+    const latestRun = await prisma.homeSavingsRun.findFirst({
+      where: { propertyId: property.id, homeownerProfileId: property.homeownerProfileId },
+      orderBy: [{ ranAt: 'desc' }, { createdAt: 'desc' }],
+      select: { inputsJson: true },
+    });
 
     for (const category of categories) {
       const categoryKey = normalizeCategoryKey(category.key);
@@ -357,6 +370,7 @@ export class HomeSavingsService {
       potentialAnnualSavings: round2(potentialAnnualSavings),
       categories: categorySummaries,
       updatedAt: new Date().toISOString(),
+      propertyContextVersion: readContextVersion(latestRun?.inputsJson ?? null),
     };
   }
 
@@ -482,6 +496,7 @@ export class HomeSavingsService {
     input: RunComparisonInput
   ): Promise<{ runId: string; summary: HomeSavingsSummaryDTO }> {
     const property = await assertPropertyForUser(propertyId, userId);
+    const financialContext = await getFinancialContextDecisions(propertyId, userId, 'HOME_SAVINGS');
     const categories = await getEnabledCategories();
     const moduleMap = mapCategoryModule(ALL_HOME_SAVINGS_CATEGORY_MODULES);
 
@@ -580,6 +595,9 @@ export class HomeSavingsService {
         trigger: HomeSavingsRunTrigger.MANUAL,
         inputsJson: {
           version: 1,
+          propertyContextVersion: financialContext.contextVersion,
+          canonicalContext: { feature: 'HOME_SAVINGS', scopes: financialContext.scopes },
+          scenarioOverridesPresent: Boolean(requestedCategoryKey),
           categoryKey: requestedCategoryKey ?? null,
           generatedByCategory,
         },
@@ -593,7 +611,7 @@ export class HomeSavingsService {
 
     return {
       runId: run.id,
-      summary,
+      summary: { ...summary, propertyContextVersion: financialContext.contextVersion },
     };
   }
 

@@ -11,6 +11,7 @@ import HomeToolsRail from '../../components/HomeToolsRail';
 import { Button } from '@/components/ui/button';
 import ToolWorkspaceTemplate from '../../components/route-templates/ToolWorkspaceTemplate';
 import HomeToolHeader from '@/components/tools/HomeToolHeader';
+import { PropertyContextNotice } from '@/components/property-context/PropertyContextNotice';
 
 function money(n: number | null | undefined, currency = 'USD') {
   if (n === null || n === undefined) return '—';
@@ -171,6 +172,8 @@ export default function HomeCostGrowthClient() {
         context="cost-growth"
         currentToolId="cost-growth"
       />
+
+      <PropertyContextNotice context={data?.propertyContext} title="Cost growth context" />
 
       {/* Main Story Card */}
       <div className="rounded-[26px] border border-white/70 bg-gradient-to-br from-white/80 via-slate-50/70 to-teal-50/45 p-4 sm:p-5 shadow-[0_20px_42px_-30px_rgba(15,23,42,0.55)] backdrop-blur-xl dark:border-slate-700/70 dark:from-slate-900/60 dark:via-slate-900/50 dark:to-teal-950/20">

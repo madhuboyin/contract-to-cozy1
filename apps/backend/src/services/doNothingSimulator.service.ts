@@ -18,6 +18,7 @@ import {
 import { PreferencePostureDefaults, PreferenceProfileService } from './preferenceProfile.service';
 import { SharedSignalKey, signalService } from './signal.service';
 import { logSharedDataEvent } from './sharedDataObservability.service';
+import { getFinancialContextDecisions } from './financialContext/context';
 
 type RiskTolerance = 'LOW' | 'MEDIUM' | 'HIGH';
 type DeductibleStrategy = 'KEEP_HIGH' | 'RAISE' | 'LOWER' | 'UNCHANGED';
@@ -72,6 +73,7 @@ export type DoNothingRunDTO = {
   assumptionSetId?: string | null;
   preferenceProfileId?: string | null;
   sharedSignalsUsed?: string[];
+  propertyContextVersion?: string | null;
   scenarioId?: string | null;
 
   status: 'READY' | 'STALE' | 'ERROR';
@@ -309,11 +311,12 @@ function parseOutputsSnapshot(value: Prisma.JsonValue | null | undefined): DoNot
 
 function parseSharedMetaFromSnapshot(
   value: Prisma.JsonValue | null | undefined
-): { preferenceProfileId: string | null; sharedSignalsUsed: string[] } {
+): { preferenceProfileId: string | null; sharedSignalsUsed: string[]; propertyContextVersion: string | null } {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return {
       preferenceProfileId: null,
       sharedSignalsUsed: [],
+      propertyContextVersion: null,
     };
   }
 
@@ -326,6 +329,8 @@ function parseSharedMetaFromSnapshot(
     preferenceProfileId:
       typeof root.preferenceProfileId === 'string' ? root.preferenceProfileId : null,
     sharedSignalsUsed,
+    propertyContextVersion:
+      typeof root.propertyContextVersion === 'string' ? root.propertyContextVersion : null,
   };
 }
 
@@ -359,6 +364,7 @@ function mapRunToDto(run: DoNothingSimulationRun): DoNothingRunDTO {
     assumptionSetId: run.assumptionSetId ?? null,
     preferenceProfileId: sharedMeta.preferenceProfileId,
     sharedSignalsUsed: sharedMeta.sharedSignalsUsed,
+    propertyContextVersion: sharedMeta.propertyContextVersion,
     scenarioId: run.scenarioId ?? null,
     status: run.status,
     confidence: run.confidence,
@@ -564,6 +570,7 @@ export class DoNothingSimulatorService {
 
   async run(propertyId: string, userId: string, input: RunDoNothingSimulationInput) {
     const property = await assertPropertyForUser(propertyId, userId);
+    const financialContext = await getFinancialContextDecisions(propertyId, userId, 'DO_NOTHING');
     const horizonMonths = normalizeHorizon(input.horizonMonths);
     const posture = await this.preferenceProfileService.resolvePostureDefaults(propertyId);
     let assumptionSetId: string | null = null;
@@ -1398,6 +1405,14 @@ export class DoNothingSimulatorService {
 
     const inputsSnapshot = {
       version: 1,
+      propertyContextVersion: financialContext.contextVersion,
+      canonicalContext: {
+        feature: 'DO_NOTHING',
+        scopes: financialContext.scopes,
+      },
+      scenarioOverridesPresent: Boolean(
+        input.scenarioId || input.assumptionSetId || hasAssumptionOverrides(input.inputOverrides),
+      ),
       baselineAt: now.toISOString(),
       horizonMonths,
       scenarioId: scenario?.id ?? null,

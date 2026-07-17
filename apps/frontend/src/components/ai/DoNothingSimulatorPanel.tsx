@@ -24,6 +24,7 @@ import {
   updateDoNothingScenario,
 } from '@/lib/api/doNothingSimulatorApi';
 import { Button } from '@/components/ui/button';
+import { PropertyContextNotice } from '@/components/property-context/PropertyContextNotice';
 import {
   ActionPriorityRow,
   ReadOnlySummaryBlock,
@@ -358,6 +359,7 @@ export default function DoNothingSimulatorPanel({ propertyId }: DoNothingSimulat
 
   return (
     <div className="space-y-4">
+      <PropertyContextNotice context={run?.propertyContext} title="Delay simulation context" />
       {error && (
         <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 flex items-start gap-2">
           <AlertCircle className="h-4 w-4 mt-0.5" />
