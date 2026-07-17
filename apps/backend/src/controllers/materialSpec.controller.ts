@@ -2,7 +2,10 @@ import { Response, NextFunction } from 'express';
 import { CustomRequest } from '../types';
 import { MaterialSpecService } from '../services/materialSpec.service';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
-import { getProjectComplianceEnvelope } from '../services/projectCompliance/context';
+import {
+  assertProjectComplianceApplicable,
+  getProjectComplianceEnvelope,
+} from '../services/projectCompliance/context';
 
 const service = new MaterialSpecService();
 
@@ -59,6 +62,13 @@ export async function getSpec(req: CustomRequest, res: Response, next: NextFunct
 export async function createSpec(req: CustomRequest, res: Response, next: NextFunction) {
   try {
     const { propertyId } = req.params;
+    await assertProjectComplianceApplicable(
+      propertyId,
+      req.user!.userId,
+      'MATERIAL_SPECS',
+      {},
+      'materialSpecifications',
+    );
     const spec = await service.createSpec(propertyId, req.body);
     const propertyContext = await getProjectComplianceEnvelope(propertyId, req.user!.userId, 'MATERIAL_SPECS');
 

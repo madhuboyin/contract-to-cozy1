@@ -2,7 +2,9 @@ import type { FeatureDecision, PropertyContextSnapshot } from '../../modules/pro
 import { PropertyContextDecisionBuilder } from '../propertyContextDecision';
 import {
   classifyPermitApplicability,
+  classifyExecutionAppropriateness,
   hasWorkDescriptor,
+  hasUnresolvedResponsibilityScope,
   ProjectComplianceWorkInput,
   resolvePermitWorkTypes,
   resolveResponsibilityFactKeys,
@@ -22,6 +24,8 @@ export interface ProjectComplianceDecisions {
   negotiationShield: FeatureDecision;
   providerBooking: FeatureDecision;
   bookingDeduplication: FeatureDecision;
+  professionalReview: FeatureDecision;
+  diyExecution: FeatureDecision;
 }
 
 type ResponsibleParty = 'OWNER' | 'ASSOCIATION' | 'LANDLORD' | 'SHARED' | 'UNKNOWN';
@@ -102,7 +106,10 @@ export function evaluateProjectComplianceContext(
   const knownParties = parties.filter((party): party is Exclude<ResponsibleParty, 'UNKNOWN'> => Boolean(party && party !== 'UNKNOWN'));
   const hasUnknownParty = parties.some((party) => !party || party === 'UNKNOWN');
   const workIsScoped = hasWorkDescriptor(work);
-  const ownerProjectExecution = responsibilityKeys.length === 0 && workIsScoped
+  const unresolvedResponsibilityScope = hasUnresolvedResponsibilityScope(work);
+  const ownerProjectExecution = unresolvedResponsibilityScope
+    ? responsibilityFacts.unknown('WORK_SCOPE_RESPONSIBILITY_MAPPING_UNKNOWN')
+    : responsibilityKeys.length === 0 && workIsScoped
     ? responsibilityFacts.decision('APPLICABLE', ['NO_PROPERTY_RESPONSIBILITY_REQUIRED'])
     : workIsScoped && knownParties.some((party) => party === 'ASSOCIATION' || party === 'LANDLORD')
       ? responsibilityFacts.decision('NOT_APPLICABLE', ['WORK_SCOPE_RESPONSIBILITY_ASSIGNED_ELSEWHERE'])
@@ -121,6 +128,27 @@ export function evaluateProjectComplianceContext(
     ? pricingFacts.unknown('LOCAL_PRICING_CONTEXT_UNKNOWN')
     : pricingFacts.decision('APPLICABLE', ['LOCAL_PRICING_CONTEXT_AVAILABLE']);
 
+  const executionClass = classifyExecutionAppropriateness(work);
+  const professionalFacts = new PropertyContextDecisionBuilder(context);
+  const professionalReview = executionClass === 'LICENSED_PROFESSIONAL_REQUIRED'
+    ? professionalFacts.decision('APPLICABLE', ['LICENSED_PROFESSIONAL_REQUIRED_FOR_WORK_SCOPE'])
+    : executionClass === 'PROFESSIONAL_REVIEW_RECOMMENDED'
+      ? professionalFacts.decision('APPLICABLE', ['PROFESSIONAL_REVIEW_RECOMMENDED_FOR_WORK_SCOPE'])
+      : executionClass === 'DIY_ELIGIBLE'
+        ? professionalFacts.decision('NOT_APPLICABLE', ['PROFESSIONAL_REVIEW_NOT_REQUIRED_FOR_LOW_RISK_SCOPE'])
+        : professionalFacts.unknown('WORK_SCOPE_UNKNOWN_FOR_EXECUTION_GUIDANCE');
+
+  const diyFacts = new PropertyContextDecisionBuilder(context);
+  const diyExecution = executionClass === 'LICENSED_PROFESSIONAL_REQUIRED'
+    ? diyFacts.decision('NOT_APPLICABLE', ['DIY_NOT_APPROPRIATE_FOR_REGULATED_WORK_SCOPE'])
+    : executionClass === 'DIY_ELIGIBLE'
+      ? diyFacts.decision('APPLICABLE', ['DIY_APPROPRIATE_FOR_LOW_RISK_WORK_SCOPE'])
+      : diyFacts.unknown(
+        executionClass === 'PROFESSIONAL_REVIEW_RECOMMENDED'
+          ? 'DIY_REQUIRES_SCOPE_AND_LOCAL_RULE_REVIEW'
+          : 'WORK_SCOPE_UNKNOWN_FOR_EXECUTION_GUIDANCE',
+      );
+
   return {
     renovationAdvisor,
     permitTracking,
@@ -135,5 +163,7 @@ export function evaluateProjectComplianceContext(
     negotiationShield: availableCollection(context, 'projects.openNegotiations', 'NEGOTIATION_STATE_AVAILABLE', 'NEGOTIATION_STATE_UNAVAILABLE'),
     providerBooking: ownerProjectExecution,
     bookingDeduplication: availableCollection(context, 'projects.activeBookings', 'ACTIVE_BOOKING_STATE_AVAILABLE', 'ACTIVE_BOOKING_STATE_UNAVAILABLE'),
+    professionalReview,
+    diyExecution,
   };
 }

@@ -11,7 +11,10 @@ import {
 } from '../validators/priceFinalization.validators';
 import { logger } from '../lib/logger';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
-import { getProjectComplianceEnvelope } from '../services/projectCompliance/context';
+import {
+  assertProjectComplianceDecisionsApplicable,
+  getProjectComplianceEnvelope,
+} from '../services/projectCompliance/context';
 
 function requireUser(req: CustomRequest) {
   const userId = req.user?.userId;
@@ -106,12 +109,26 @@ export async function createPriceFinalizationDraft(
   try {
     const { userId } = requireUser(req);
     const payload = req.body as CreatePriceFinalizationBody;
+    const serviceCategory = await priceFinalizationService.resolveServiceCategory(
+      req.params.propertyId,
+      userId,
+      payload,
+    );
+
+    await assertProjectComplianceDecisionsApplicable(
+      req.params.propertyId,
+      userId,
+      'PRICE_FINALIZATION',
+      { serviceCategory: serviceCategory ?? 'UNSPECIFIED' },
+      ['priceFinalization', 'providerBooking'],
+    );
 
     const detail = await priceFinalizationService.createDraft(
       req.params.propertyId,
       userId,
       {
         ...payload,
+        serviceCategory: payload.serviceCategory ?? serviceCategory,
       }
     );
     const propertyContext = await getProjectComplianceEnvelope(req.params.propertyId, userId, 'PRICE_FINALIZATION');
@@ -164,9 +181,23 @@ export async function finalizePriceFinalization(
   try {
     const { userId } = requireUser(req);
     const payload = req.body as FinalizePriceFinalizationBody & {
+      serviceCategory?: string | null;
       guidanceStepKey?: string | null;
       guidanceSignalIntentFamily?: string | null;
     };
+
+    const existing = await priceFinalizationService.getDetail(
+      req.params.propertyId,
+      userId,
+      req.params.finalizationId,
+    );
+    await assertProjectComplianceDecisionsApplicable(
+      req.params.propertyId,
+      userId,
+      'PRICE_FINALIZATION',
+      { serviceCategory: payload.serviceCategory ?? existing.serviceCategory ?? 'UNSPECIFIED' },
+      ['priceFinalization', 'providerBooking'],
+    );
 
     const detail = await priceFinalizationService.finalize(
       req.params.propertyId,

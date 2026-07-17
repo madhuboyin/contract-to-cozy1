@@ -9,6 +9,7 @@ const { createPropertyFact } = require('../../src/modules/propertyContext/index.
 const { evaluateProjectComplianceContext } = require('../../src/services/projectCompliance/applicabilityPolicy.ts');
 const { PROJECT_COMPLIANCE_FEATURE_SCOPES } = require('../../src/services/projectCompliance/context.ts');
 const {
+  classifyExecutionAppropriateness,
   classifyPermitApplicability,
   resolvePermitWorkTypes,
   resolveResponsibilityFactKeys,
@@ -78,6 +79,18 @@ test('work-specific responsibility cannot be enabled by an unrelated owner-manag
   assert.deepEqual(plumbing.providerBooking.usedFactKeys, ['responsibility.plumbing']);
 });
 
+test('unmapped physical work remains unknown while known non-property services can proceed', () => {
+  const custom = evaluateProjectComplianceContext(snapshot({}), { projectType: 'CUSTOM' });
+  assert.equal(custom.ownerProjectExecution.status, 'UNKNOWN');
+  assert.ok(custom.ownerProjectExecution.reasonCodes.includes('WORK_SCOPE_RESPONSIBILITY_MAPPING_UNKNOWN'));
+
+  const hoaOther = evaluateProjectComplianceContext(snapshot({}), { hoaWorkTypes: ['OTHER'] });
+  assert.equal(hoaOther.ownerProjectExecution.status, 'UNKNOWN');
+
+  const cleaning = evaluateProjectComplianceContext(snapshot({}), { serviceCategory: 'CLEANING' });
+  assert.equal(cleaning.ownerProjectExecution.status, 'APPLICABLE');
+});
+
 test('project and inventory scopes map to canonical responsibility facts', () => {
   assert.deepEqual(resolveResponsibilityFactKeys({ projectType: 'ROOF_REPLACEMENT' }), ['responsibility.roof']);
   assert.deepEqual(resolveResponsibilityFactKeys({ homeSystemsAffected: ['HVAC'] }), ['responsibility.hvac']);
@@ -101,6 +114,28 @@ test('permit applicability uses work type plus known jurisdiction and remains co
     evaluateProjectComplianceContext(context, { permitWorkTypes: ['ROOF_REPAIR'] }).permitApplicability.status,
     'UNKNOWN',
   );
+});
+
+test('contractor and DIY guidance is explicit and conservative by work scope', () => {
+  assert.equal(
+    classifyExecutionAppropriateness({ serviceCategory: 'ELECTRICAL' }),
+    'LICENSED_PROFESSIONAL_REQUIRED',
+  );
+  assert.equal(
+    classifyExecutionAppropriateness({ projectType: 'PAINTING_INTERIOR' }),
+    'DIY_ELIGIBLE',
+  );
+
+  const regulated = evaluateProjectComplianceContext(snapshot({}), { serviceCategory: 'ELECTRICAL' });
+  assert.equal(regulated.professionalReview.status, 'APPLICABLE');
+  assert.equal(regulated.diyExecution.status, 'NOT_APPLICABLE');
+
+  const lowRisk = evaluateProjectComplianceContext(snapshot({}), { projectType: 'PAINTING_INTERIOR' });
+  assert.equal(lowRisk.professionalReview.status, 'NOT_APPLICABLE');
+  assert.equal(lowRisk.diyExecution.status, 'APPLICABLE');
+
+  const unscoped = evaluateProjectComplianceContext(snapshot({}));
+  assert.equal(unscoped.diyExecution.status, 'UNKNOWN');
 });
 
 test('project, quote, price, negotiation, and booking states are explicit collections', () => {
@@ -163,4 +198,24 @@ test('mutations enforce context before persistence and dedupe active work', () =
   assert.match(read('../../src/services/projectTracker.service.ts'), /ACTIVE_PROJECT_DUPLICATE/);
   assert.match(read('../../src/services/quoteComparison.service.ts'), /OPEN_WORKSPACE_STATUSES/);
   assert.match(booking, /activeExecutionScopeKey/);
+
+  for (const [file, persistenceCall] of [
+    ['../../src/controllers/servicePriceRadar.controller.ts', 'service.createCheck'],
+    ['../../src/controllers/quoteComparison.controller.ts', 'getOrCreateQuoteComparisonWorkspace'],
+    ['../../src/controllers/priceFinalization.controller.ts', 'priceFinalizationService.createDraft'],
+    ['../../src/controllers/negotiationShield.controller.ts', 'service.createCase'],
+    ['../../src/controllers/materialSpec.controller.ts', 'service.createSpec'],
+    ['../../src/controllers/hoaCompliance.controller.ts', 'hoaComplianceService.createApprovalRecord'],
+  ]) {
+    const source = read(file);
+    const persistenceIndex = source.lastIndexOf(persistenceCall);
+    const contextIndex = source.lastIndexOf('await assertProjectCompliance', persistenceIndex);
+    assert.ok(
+      persistenceIndex > 0 &&
+      contextIndex >= 0 &&
+      contextIndex < persistenceIndex,
+      file,
+    );
+  }
+  assert.match(read('../../src/services/priceFinalization.service.ts'), /withSerializableDedupe/);
 });

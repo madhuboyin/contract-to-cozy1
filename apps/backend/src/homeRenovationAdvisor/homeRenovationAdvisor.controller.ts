@@ -13,7 +13,10 @@ import {
   UpdateSessionBody,
 } from './validators/homeRenovationAdvisor.validators';
 import { ListSessionsQuery } from './types/homeRenovationAdvisor.types';
-import { getProjectComplianceEnvelope } from '../services/projectCompliance/context';
+import {
+  assertProjectComplianceApplicable,
+  getProjectComplianceEnvelope,
+} from '../services/projectCompliance/context';
 
 const service = new HomeRenovationAdvisorService();
 
@@ -23,8 +26,20 @@ export class HomeRenovationAdvisorController {
     try {
       const userId = req.user!.userId;
       const input = req.body as CreateSessionBody;
+      await assertProjectComplianceApplicable(
+        input.propertyId,
+        userId,
+        'RENOVATION_ADVISOR',
+        { projectType: input.renovationType },
+        'renovationAdvisor',
+      );
       const session = await service.createSession(userId, input);
-      const propertyContext = await getProjectComplianceEnvelope(input.propertyId, userId, 'RENOVATION_ADVISOR');
+      const propertyContext = await getProjectComplianceEnvelope(
+        input.propertyId,
+        userId,
+        'RENOVATION_ADVISOR',
+        { projectType: input.renovationType },
+      );
       res.status(201).json({ success: true, data: { session, propertyContext } });
     } catch (err) {
       next(err);
@@ -50,8 +65,21 @@ export class HomeRenovationAdvisorController {
       const userId = req.user!.userId;
       const { id } = req.params;
       const input = req.body as EvaluateSessionBody;
+      const existing = await service.getSession(userId, id);
+      await assertProjectComplianceApplicable(
+        (existing as any).propertyId,
+        userId,
+        'RENOVATION_ADVISOR',
+        { projectType: (existing as any).renovationType },
+        'renovationAdvisor',
+      );
       const session = await service.evaluateSession(userId, id, input);
-      const propertyContext = await getProjectComplianceEnvelope((session as any).propertyId, userId, 'RENOVATION_ADVISOR');
+      const propertyContext = await getProjectComplianceEnvelope(
+        (session as any).propertyId,
+        userId,
+        'RENOVATION_ADVISOR',
+        { projectType: (session as any).renovationType },
+      );
       res.json({ success: true, data: { session, propertyContext } });
     } catch (err) {
       next(err);

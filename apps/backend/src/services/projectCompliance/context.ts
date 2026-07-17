@@ -66,6 +66,8 @@ const PRIMARY_DECISION_BY_FEATURE = {
   PROVIDER_BOOKING: 'providerBooking',
 } as const;
 
+export type ProjectComplianceDecisionKey = keyof ReturnType<typeof evaluateProjectComplianceContext>;
+
 export async function getProjectComplianceEnvelope(
   propertyId: string,
   userId: string,
@@ -85,18 +87,45 @@ export async function assertProjectComplianceApplicable(
   userId: string,
   feature: ProjectComplianceFeature,
   work: ProjectComplianceWorkInput,
-  decisionKey: 'permitTracking' | 'ownerProjectExecution' | 'providerBooking',
+  decisionKey: ProjectComplianceDecisionKey,
+) {
+  return assertProjectComplianceDecisionsApplicable(
+    propertyId,
+    userId,
+    feature,
+    work,
+    [decisionKey],
+  );
+}
+
+export async function assertProjectComplianceDecisionsApplicable(
+  propertyId: string,
+  userId: string,
+  feature: ProjectComplianceFeature,
+  work: ProjectComplianceWorkInput,
+  decisionKeys: ProjectComplianceDecisionKey[],
 ) {
   const context = await getProjectComplianceContextDecisions(propertyId, userId, feature, work);
-  const decision = context.decisions[decisionKey];
+  const blocked = decisionKeys
+    .map((key) => ({ key, decision: context.decisions[key] }))
+    .find(({ decision }) => decision.status !== 'APPLICABLE');
+  if (!blocked) return context;
+
+  const { decision } = blocked;
   if (decision.status !== 'APPLICABLE') {
+    const responsibilityConflict = decision.status === 'NOT_APPLICABLE' &&
+      (blocked.key === 'ownerProjectExecution' || blocked.key === 'providerBooking');
     throw new APIError(
       decision.status === 'NOT_APPLICABLE'
-        ? 'This work is assigned to another responsible party for this property.'
+        ? 'This action is not applicable to the current property and work context.'
         : 'Complete the required property context before starting this work.',
       409,
-      decision.status === 'NOT_APPLICABLE' ? 'WORK_RESPONSIBILITY_CONFLICT' : 'PROPERTY_CONTEXT_INCOMPLETE',
-      { contextVersion: context.contextVersion, decision, feature },
+      responsibilityConflict
+        ? 'WORK_RESPONSIBILITY_CONFLICT'
+        : decision.status === 'NOT_APPLICABLE'
+          ? 'PROPERTY_CONTEXT_NOT_APPLICABLE'
+          : 'PROPERTY_CONTEXT_INCOMPLETE',
+      { contextVersion: context.contextVersion, decision, decisionKey: blocked.key, feature },
     );
   }
   return context;

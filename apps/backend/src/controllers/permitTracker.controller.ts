@@ -15,6 +15,13 @@ import {
 
 export async function triggerPermitFetch(req: Request, res: Response, next: NextFunction) {
   try {
+    await assertProjectComplianceApplicable(
+      req.params.propertyId,
+      req.user!.userId,
+      'PERMIT_TRACKER',
+      {},
+      'permitTracking',
+    );
     const result = await permitFetchService.triggerFetch(req.params.propertyId, 'USER_REQUEST');
 
     analyticsEmitter.track({

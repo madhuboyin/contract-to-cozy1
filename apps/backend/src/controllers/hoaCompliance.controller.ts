@@ -2,7 +2,10 @@ import { Response, NextFunction } from 'express';
 import { CustomRequest as Request } from '../types';
 import { hoaComplianceService } from '../services/hoaCompliance.service';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
-import { getProjectComplianceEnvelope } from '../services/projectCompliance/context';
+import {
+  assertProjectComplianceDecisionsApplicable,
+  getProjectComplianceEnvelope,
+} from '../services/projectCompliance/context';
 
 export async function getAssociation(req: Request, res: Response, next: NextFunction) {
   try {
@@ -54,6 +57,13 @@ export async function listApprovalRecords(req: Request, res: Response, next: Nex
 
 export async function createApprovalRecord(req: Request, res: Response, next: NextFunction) {
   try {
+    await assertProjectComplianceDecisionsApplicable(
+      req.params.propertyId,
+      req.user!.userId,
+      'HOA_COMPLIANCE',
+      { hoaWorkTypes: [req.body.workType] },
+      ['hoaCompliance', 'ownerProjectExecution'],
+    );
     const record = await hoaComplianceService.createApprovalRecord(req.params.propertyId, req.body);
     const propertyContext = await getProjectComplianceEnvelope(
       req.params.propertyId,

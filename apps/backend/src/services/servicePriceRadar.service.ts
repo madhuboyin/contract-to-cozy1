@@ -634,7 +634,7 @@ function benchmarkRegionWeight(regionType: ServiceBenchmarkRegionTypeValue): num
   return 10;
 }
 
-function scoreBenchmark(
+export function scoreBenchmark(
   benchmark: ServicePriceBenchmarkRecord,
   property: PropertyContext,
   normalizedSubcategory: string | null
@@ -665,20 +665,22 @@ function scoreBenchmark(
 
   const benchmarkHomeType = normalizeRegionKey(benchmark.homeType);
   const propertyHomeType = normalizeRegionKey(property.homeType);
-  if (benchmarkHomeType && propertyHomeType && benchmarkHomeType === propertyHomeType) {
+  if (benchmarkHomeType) {
+    if (!propertyHomeType || benchmarkHomeType !== propertyHomeType) {
+      return Number.NEGATIVE_INFINITY;
+    }
     score += 14;
-  } else if (!benchmarkHomeType) {
-    score += 4;
   } else {
-    score -= 6;
+    score += 4;
   }
 
-  if (benchmark.sizeBand && property.sizeBand && normalizeLooseToken(benchmark.sizeBand) === property.sizeBand) {
+  if (benchmark.sizeBand) {
+    if (!property.sizeBand || normalizeLooseToken(benchmark.sizeBand) !== property.sizeBand) {
+      return Number.NEGATIVE_INFINITY;
+    }
     score += 10;
-  } else if (!benchmark.sizeBand) {
-    score += 4;
   } else {
-    score -= 4;
+    score += 4;
   }
 
   return score;

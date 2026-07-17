@@ -9,4 +9,12 @@ export const getOrCreateQuoteWorkspaceSchema = z.object({
   guidanceStepKey: z.string().max(200).optional().nullable(),
   guidanceSignalIntentFamily: z.string().max(200).optional().nullable(),
   scopeSummary: z.string().max(1000).optional().nullable(),
-});
+}).refine(
+  (value) => Boolean(
+    value.serviceCategory ||
+    value.inventoryItemId ||
+    value.homeAssetId ||
+    value.guidanceJourneyId
+  ),
+  { message: 'A service category, linked item/asset, or guidance journey is required.' },
+);

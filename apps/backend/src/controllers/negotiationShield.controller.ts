@@ -10,7 +10,10 @@ import {
 } from '../services/negotiationShield.types';
 import { NegotiationShieldService } from '../services/negotiationShield.service';
 import { logger } from '../lib/logger';
-import { getProjectComplianceEnvelope } from '../services/projectCompliance/context';
+import {
+  assertProjectComplianceApplicable,
+  getProjectComplianceEnvelope,
+} from '../services/projectCompliance/context';
 
 const service = new NegotiationShieldService();
 
@@ -63,6 +66,13 @@ export async function createNegotiationShieldCase(
   try {
     const { userId } = requireUser(req);
     const payload = req.body as CreateNegotiationShieldCaseInput;
+    await assertProjectComplianceApplicable(
+      req.params.propertyId,
+      userId,
+      'NEGOTIATION_SHIELD',
+      {},
+      'negotiationShield',
+    );
     const detail = await service.createCase(req.params.propertyId, userId, payload);
     const propertyContext = await getProjectComplianceEnvelope(req.params.propertyId, userId, 'NEGOTIATION_SHIELD');
     res.status(201).json({ success: true, data: { ...detail, propertyContext } });

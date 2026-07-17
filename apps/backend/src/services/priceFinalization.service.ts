@@ -11,6 +11,7 @@ import {
   PriceFinalizationTermInput,
   PriceFinalizationUpdateInput,
 } from './priceFinalization.types';
+import { withSerializableDedupe } from './projectCompliance/serializableDedupe';
 
 const prismaAny = prisma as any;
 
@@ -259,6 +260,32 @@ async function loadDetailOrThrow(propertyId: string, finalizationId: string): Pr
 }
 
 export class PriceFinalizationService {
+  async resolveServiceCategory(
+    propertyId: string,
+    userId: string,
+    input: Pick<PriceFinalizationCreateInput,
+      'serviceCategory' | 'quoteComparisonWorkspaceId' | 'serviceRadarCheckId'>,
+  ): Promise<string | null> {
+    await ensurePropertyAccess(propertyId, userId);
+    if (input.serviceCategory) return input.serviceCategory;
+
+    if (input.quoteComparisonWorkspaceId) {
+      const workspace = await prismaAny.quoteComparisonWorkspace.findFirst({
+        where: { id: input.quoteComparisonWorkspaceId, propertyId },
+        select: { serviceCategory: true },
+      });
+      if (workspace?.serviceCategory) return String(workspace.serviceCategory);
+    }
+    if (input.serviceRadarCheckId) {
+      const check = await prismaAny.serviceRadarCheck.findFirst({
+        where: { id: input.serviceRadarCheckId, propertyId },
+        select: { serviceCategory: true },
+      });
+      if (check?.serviceCategory) return String(check.serviceCategory);
+    }
+    return null;
+  }
+
   async listForProperty(
     propertyId: string,
     userId: string,
@@ -307,52 +334,84 @@ export class PriceFinalizationService {
     await assertScopedReferences(propertyId, input);
 
     const normalizedTerms = normalizeTerms(input.terms);
+    const scopeCandidates: Record<string, unknown>[] = [
+      ...(input.quoteComparisonWorkspaceId
+        ? [{ quoteComparisonWorkspaceId: input.quoteComparisonWorkspaceId }]
+        : []),
+      ...(input.serviceRadarCheckId ? [{ serviceRadarCheckId: input.serviceRadarCheckId }] : []),
+      ...(input.negotiationShieldCaseId
+        ? [{ negotiationShieldCaseId: input.negotiationShieldCaseId }]
+        : []),
+      ...(input.guidanceJourneyId ? [{ guidanceJourneyId: input.guidanceJourneyId }] : []),
+      ...(input.inventoryItemId || input.homeAssetId || input.serviceCategory
+        ? [{
+          inventoryItemId: input.inventoryItemId ?? null,
+          homeAssetId: input.homeAssetId ?? null,
+          serviceCategory: input.serviceCategory ?? null,
+        }]
+        : []),
+    ];
+    const data = {
+      propertyId,
+      createdByUserId: userId,
 
-    const created = await prismaAny.priceFinalization.create({
-      data: {
-        propertyId,
-        createdByUserId: userId,
+      inventoryItemId: input.inventoryItemId ?? null,
+      homeAssetId: input.homeAssetId ?? null,
+      guidanceJourneyId: input.guidanceJourneyId ?? null,
+      guidanceStepKey: input.guidanceStepKey ?? null,
+      guidanceSignalIntentFamily: input.guidanceSignalIntentFamily ?? null,
 
-        inventoryItemId: input.inventoryItemId ?? null,
-        homeAssetId: input.homeAssetId ?? null,
-        guidanceJourneyId: input.guidanceJourneyId ?? null,
-        guidanceStepKey: input.guidanceStepKey ?? null,
-        guidanceSignalIntentFamily: input.guidanceSignalIntentFamily ?? null,
+      sourceType: input.sourceType ?? 'MANUAL',
+      status: 'DRAFT',
 
-        sourceType: input.sourceType ?? 'MANUAL',
-        status: 'DRAFT',
+      serviceCategory: input.serviceCategory ?? null,
+      vendorName: input.vendorName ?? null,
+      acceptedPrice: input.acceptedPrice ?? null,
+      quotePrice: input.quotePrice ?? null,
+      currency: normalizeCurrency(input.currency),
 
-        serviceCategory: input.serviceCategory ?? null,
-        vendorName: input.vendorName ?? null,
-        acceptedPrice: input.acceptedPrice ?? null,
-        quotePrice: input.quotePrice ?? null,
-        currency: normalizeCurrency(input.currency),
+      scopeSummary: input.scopeSummary ?? null,
+      paymentTerms: input.paymentTerms ?? null,
+      warrantyTerms: input.warrantyTerms ?? null,
+      timelineTerms: input.timelineTerms ?? null,
+      notes: input.notes ?? null,
 
-        scopeSummary: input.scopeSummary ?? null,
-        paymentTerms: input.paymentTerms ?? null,
-        warrantyTerms: input.warrantyTerms ?? null,
-        timelineTerms: input.timelineTerms ?? null,
-        notes: input.notes ?? null,
+      acceptedTermsJson: input.acceptedTermsJson ?? null,
+      metadataJson: input.actualSpendCents !== undefined
+        ? { ...(input.metadataJson ?? {}), _actualSpendCents: input.actualSpendCents }
+        : (input.metadataJson ?? null),
 
-        acceptedTermsJson: input.acceptedTermsJson ?? null,
-        metadataJson: input.actualSpendCents !== undefined
-          ? { ...(input.metadataJson ?? {}), _actualSpendCents: input.actualSpendCents }
-          : (input.metadataJson ?? null),
+      negotiationShieldCaseId: input.negotiationShieldCaseId ?? null,
+      serviceRadarCheckId: input.serviceRadarCheckId ?? null,
+      quoteComparisonWorkspaceId: input.quoteComparisonWorkspaceId ?? null,
+    };
 
-        negotiationShieldCaseId: input.negotiationShieldCaseId ?? null,
-        serviceRadarCheckId: input.serviceRadarCheckId ?? null,
-        quoteComparisonWorkspaceId: input.quoteComparisonWorkspaceId ?? null,
-      },
+    const created = await withSerializableDedupe(async (tx) => {
+      const txAny = tx as any;
+      if (scopeCandidates.length > 0) {
+        const existing = await txAny.priceFinalization.findFirst({
+          where: {
+            propertyId,
+            status: 'DRAFT',
+            OR: scopeCandidates,
+          },
+          orderBy: { updatedAt: 'desc' },
+          select: { id: true },
+        });
+        if (existing) return existing;
+      }
+
+      const row = await txAny.priceFinalization.create({ data });
+      if (normalizedTerms.length > 0) {
+        await txAny.priceFinalizationTerm.createMany({
+          data: normalizedTerms.map((term) => ({
+            priceFinalizationId: row.id,
+            ...term,
+          })),
+        });
+      }
+      return row;
     });
-
-    if (normalizedTerms.length > 0) {
-      await prismaAny.priceFinalizationTerm.createMany({
-        data: normalizedTerms.map((term) => ({
-          priceFinalizationId: created.id,
-          ...term,
-        })),
-      });
-    }
 
     const full = await loadDetailOrThrow(propertyId, created.id);
     return mapDetail(full);

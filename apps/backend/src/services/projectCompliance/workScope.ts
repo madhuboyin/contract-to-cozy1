@@ -38,6 +38,17 @@ const PROJECT_TYPE_RESPONSIBILITY: Record<string, ProjectResponsibilityFactKey[]
   SOLAR_INSTALLATION: ['responsibility.roof'],
   LANDSCAPING_MAJOR: ['responsibility.landscaping'],
   GENERAL_REPAIR: ['responsibility.sharedSystems'],
+  ROOM_ADDITION: ['responsibility.sharedSystems', 'responsibility.buildingExterior'],
+  BATHROOM_ADDITION: ['responsibility.plumbing', 'responsibility.sharedSystems'],
+  BATHROOM_FULL_REMODEL: ['responsibility.plumbing', 'responsibility.sharedSystems'],
+  GARAGE_CONVERSION: ['responsibility.sharedSystems'],
+  BASEMENT_FINISHING: ['responsibility.sharedSystems'],
+  ADU_CONSTRUCTION: ['responsibility.sharedSystems', 'responsibility.buildingExterior'],
+  DECK_ADDITION: ['responsibility.deckPatioBalcony'],
+  PATIO_MAJOR_ADDITION: ['responsibility.deckPatioBalcony'],
+  STRUCTURAL_WALL_REMOVAL: ['responsibility.sharedSystems'],
+  STRUCTURAL_WALL_ADDITION: ['responsibility.sharedSystems'],
+  STRUCTURAL_REPAIR_MAJOR: ['responsibility.sharedSystems'],
 };
 
 const SERVICE_CATEGORY_RESPONSIBILITY: Record<string, ProjectResponsibilityFactKey[]> = {
@@ -118,6 +129,11 @@ const HOA_WORK_RESPONSIBILITY: Record<string, ProjectResponsibilityFactKey[]> = 
   SATELLITE_ANTENNA: ['responsibility.buildingExterior'],
 };
 
+const SERVICE_CATEGORIES_WITHOUT_PROPERTY_RESPONSIBILITY = new Set([
+  'INSPECTION', 'APPLIANCE_REPAIR', 'APPLIANCE_REPLACEMENT', 'CLEANING', 'MOVING',
+  'INSURANCE', 'ATTORNEY', 'FINANCE', 'WARRANTY', 'ADMIN',
+]);
+
 export function hasWorkDescriptor(work?: ProjectComplianceWorkInput): boolean {
   return Boolean(
     work?.projectType ||
@@ -140,7 +156,27 @@ export function resolveResponsibilityFactKeys(work?: ProjectComplianceWorkInput)
   return [...keys];
 }
 
+export function hasUnresolvedResponsibilityScope(work?: ProjectComplianceWorkInput): boolean {
+  if (!work) return false;
+  if (work.projectType && !PROJECT_TYPE_RESPONSIBILITY[work.projectType]) return true;
+  if (
+    work.serviceCategory &&
+    !SERVICE_CATEGORY_RESPONSIBILITY[work.serviceCategory] &&
+    !SERVICE_CATEGORIES_WITHOUT_PROPERTY_RESPONSIBILITY.has(work.serviceCategory)
+  ) return true;
+  if ((work.homeSystemsAffected ?? []).some((value) => !INVENTORY_CATEGORY_RESPONSIBILITY[value])) return true;
+  if ((work.permitWorkTypes ?? []).some((value) => !PERMIT_WORK_RESPONSIBILITY[value])) return true;
+  if ((work.hoaWorkTypes ?? []).some((value) => !HOA_WORK_RESPONSIBILITY[value])) return true;
+  return false;
+}
+
 export type PermitApplicabilityClass = 'REQUIRED' | 'LIKELY_REQUIRED' | 'CONDITIONAL' | 'UNSCOPED';
+
+export type ExecutionAppropriatenessClass =
+  | 'LICENSED_PROFESSIONAL_REQUIRED'
+  | 'PROFESSIONAL_REVIEW_RECOMMENDED'
+  | 'DIY_ELIGIBLE'
+  | 'UNSCOPED';
 
 const REQUIRED_PERMIT_WORK = new Set([
   'HVAC_NEW', 'ELECTRICAL_PANEL', 'ELECTRICAL_WIRING', 'PLUMBING_NEW', 'ROOM_ADDITION',
@@ -151,6 +187,19 @@ const REQUIRED_PERMIT_WORK = new Set([
 const LIKELY_PERMIT_WORK = new Set([
   'HVAC_REPLACEMENT', 'ROOF_REPLACEMENT', 'DECK_PATIO', 'FENCE', 'SWIMMING_POOL',
   'WINDOWS_DOORS', 'FIREPLACE', 'INTERIOR_REMODEL', 'EXTERIOR_REMODEL', 'GRADING_DRAINAGE',
+]);
+
+const REGULATED_SERVICE_CATEGORIES = new Set([
+  'ELECTRICAL', 'PLUMBING', 'HVAC', 'ROOFING', 'FOUNDATION', 'SOLAR',
+  'WATER_HEATER', 'MOLD_REMEDIATION', 'SECURITY_SAFETY',
+]);
+
+const DIY_ELIGIBLE_PROJECT_TYPES = new Set([
+  'FLOORING', 'PAINTING_INTERIOR', 'GENERAL_REPAIR',
+]);
+
+const DIY_ELIGIBLE_SERVICE_CATEGORIES = new Set([
+  'PAINTING', 'CLEANING', 'HANDYMAN', 'GENERAL_HANDYMAN',
 ]);
 
 const PROJECT_TYPE_PERMIT_WORK: Record<string, string[]> = {
@@ -168,6 +217,17 @@ const PROJECT_TYPE_PERMIT_WORK: Record<string, string[]> = {
   SEWER_LINE: ['SEWER_WATER_LINE'],
   SOLAR_INSTALLATION: ['SOLAR'],
   LANDSCAPING_MAJOR: ['GRADING_DRAINAGE'],
+  ROOM_ADDITION: ['ROOM_ADDITION'],
+  BATHROOM_ADDITION: ['ROOM_ADDITION', 'PLUMBING_NEW', 'ELECTRICAL_WIRING'],
+  BATHROOM_FULL_REMODEL: ['INTERIOR_REMODEL'],
+  GARAGE_CONVERSION: ['GARAGE_CONVERSION'],
+  BASEMENT_FINISHING: ['BASEMENT_FINISH'],
+  ADU_CONSTRUCTION: ['ADU'],
+  DECK_ADDITION: ['DECK_PATIO'],
+  PATIO_MAJOR_ADDITION: ['DECK_PATIO'],
+  STRUCTURAL_WALL_REMOVAL: ['STRUCTURAL_REPAIR'],
+  STRUCTURAL_WALL_ADDITION: ['STRUCTURAL_REPAIR'],
+  STRUCTURAL_REPAIR_MAJOR: ['STRUCTURAL_REPAIR'],
 };
 
 const SERVICE_CATEGORY_PERMIT_WORK: Record<string, string[]> = {
@@ -194,4 +254,26 @@ export function classifyPermitApplicability(workTypes?: string[] | null): Permit
   if (workTypes.some((workType) => REQUIRED_PERMIT_WORK.has(workType))) return 'REQUIRED';
   if (workTypes.some((workType) => LIKELY_PERMIT_WORK.has(workType))) return 'LIKELY_REQUIRED';
   return 'CONDITIONAL';
+}
+
+export function classifyExecutionAppropriateness(
+  work?: ProjectComplianceWorkInput,
+): ExecutionAppropriatenessClass {
+  if (!hasWorkDescriptor(work)) return 'UNSCOPED';
+
+  const permitClass = classifyPermitApplicability(resolvePermitWorkTypes(work));
+  if (
+    permitClass === 'REQUIRED' ||
+    (work?.serviceCategory && REGULATED_SERVICE_CATEGORIES.has(work.serviceCategory))
+  ) {
+    return 'LICENSED_PROFESSIONAL_REQUIRED';
+  }
+  if (permitClass === 'LIKELY_REQUIRED') return 'PROFESSIONAL_REVIEW_RECOMMENDED';
+  if (
+    (work?.projectType && DIY_ELIGIBLE_PROJECT_TYPES.has(work.projectType)) ||
+    (work?.serviceCategory && DIY_ELIGIBLE_SERVICE_CATEGORIES.has(work.serviceCategory))
+  ) {
+    return 'DIY_ELIGIBLE';
+  }
+  return 'PROFESSIONAL_REVIEW_RECOMMENDED';
 }

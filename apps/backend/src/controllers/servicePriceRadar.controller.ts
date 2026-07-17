@@ -10,7 +10,10 @@ import {
 } from '../validators/servicePriceRadar.validators';
 import { logger } from '../lib/logger';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
-import { getProjectComplianceEnvelope } from '../services/projectCompliance/context';
+import {
+  assertProjectComplianceApplicable,
+  getProjectComplianceEnvelope,
+} from '../services/projectCompliance/context';
 
 const service = new ServicePriceRadarService();
 
@@ -49,8 +52,20 @@ export async function createServicePriceRadarCheck(
   try {
     const userId = requireUserId(req);
     const payload = req.body as CreateServicePriceRadarBody;
+    await assertProjectComplianceApplicable(
+      req.params.propertyId,
+      userId,
+      'SERVICE_PRICE_RADAR',
+      { serviceCategory: payload.serviceCategory },
+      'localPriceBenchmarking',
+    );
     const result = await service.createCheck(req.params.propertyId, userId, payload);
-    const propertyContext = await getProjectComplianceEnvelope(req.params.propertyId, userId, 'SERVICE_PRICE_RADAR');
+    const propertyContext = await getProjectComplianceEnvelope(
+      req.params.propertyId,
+      userId,
+      'SERVICE_PRICE_RADAR',
+      { serviceCategory: payload.serviceCategory },
+    );
 
     const guidanceSignalIntentFamily =
       payload.guidanceSignalIntentFamily?.trim().toLowerCase() || null;

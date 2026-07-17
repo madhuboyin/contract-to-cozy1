@@ -1,10 +1,20 @@
 import { NextFunction, Response } from 'express';
 import { CustomRequest } from '../types';
 import { getOrCreateQuoteComparisonWorkspace } from '../services/quoteComparison.service';
-import { getProjectComplianceEnvelope } from '../services/projectCompliance/context';
+import {
+  assertProjectComplianceDecisionsApplicable,
+  getProjectComplianceEnvelope,
+} from '../services/projectCompliance/context';
 
 export async function getOrCreateWorkspace(req: CustomRequest, res: Response, next: NextFunction) {
   try {
+    await assertProjectComplianceDecisionsApplicable(
+      req.params.propertyId,
+      req.user!.userId,
+      'QUOTE_COMPARISON',
+      { serviceCategory: req.body.serviceCategory ?? 'UNSPECIFIED' },
+      ['quoteComparison', 'providerBooking'],
+    );
     const result = await getOrCreateQuoteComparisonWorkspace(
       req.params.propertyId,
       req.user!.userId,
