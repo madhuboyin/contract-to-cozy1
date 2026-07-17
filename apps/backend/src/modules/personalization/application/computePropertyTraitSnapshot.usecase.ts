@@ -16,7 +16,6 @@ import {
   deriveSmokeDetectorMissing,
 } from '../domain/traits';
 import {
-  loadPropertyTraitFacts,
   loadPropertyTraitFactsFromContext,
   persistDerivedTraits,
 } from '../infrastructure/propertyTraitRepository';
@@ -33,11 +32,7 @@ export async function computePropertyTraitSnapshot(
   propertyId: string,
   actorUserId?: string,
 ): Promise<ComputePropertyTraitSnapshotResult> {
-  // The fallback keeps standalone catalog/unit evaluation possible. Every
-  // authenticated production entry point supplies actorUserId.
-  const facts = actorUserId
-    ? await loadPropertyTraitFactsFromContext(propertyId, actorUserId)
-    : await loadPropertyTraitFacts(propertyId);
+  const facts = await loadPropertyTraitFactsFromContext(propertyId, actorUserId);
   if (!facts) {
     return { status: 'FAILED', errorCode: 'PROPERTY_NOT_FOUND' };
   }

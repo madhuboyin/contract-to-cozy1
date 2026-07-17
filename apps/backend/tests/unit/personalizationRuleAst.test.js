@@ -35,7 +35,7 @@ test('rejects a fact path not on the allowlist', () => {
 });
 
 test('accepts an allowlisted fact path', () => {
-  const result = validateRuleAst({ op: 'fact', path: 'property.yearBuilt', cmp: 'lte', value: 1980 });
+  const result = validateRuleAst({ op: 'fact', path: 'core.yearBuilt', cmp: 'lte', value: 1980 });
   assert.equal(result.success, true);
 });
 

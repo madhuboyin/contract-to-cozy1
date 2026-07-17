@@ -23,9 +23,9 @@ export const DATE_COMPARATORS = ['before', 'after', 'withinDays'] as const;
  * paths against, per the doc's "Validation limits... paths" requirement.
  */
 export const ALLOWED_FACT_PATHS = [
-  'property.propertyType',
-  'property.yearBuilt',
-  'property.zipCode',
+  'core.dwellingType',
+  'core.yearBuilt',
+  'location.zipCode',
 ] as const;
 
 export const ALLOWED_HISTORY_EVENTS = [
@@ -34,8 +34,8 @@ export const ALLOWED_HISTORY_EVENTS = [
 ] as const;
 
 export const ALLOWED_DATE_PATHS = [
-  'property.purchaseDate',
-  'property.lastAppraisalDate',
+  'financial.financingProfile.purchaseDate',
+  'financial.latestEquity.asOfDate',
 ] as const;
 
 export const MAX_RULE_DEPTH = 6;

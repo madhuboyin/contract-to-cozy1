@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 require('ts-node/register');
+const { installPersonalizationContextMock } = require('../helpers/installPersonalizationContextMock');
 
 function createPrismaMock({ property = null } = {}) {
   const derivedTraitUpserts = [];
@@ -13,6 +14,7 @@ function createPrismaMock({ property = null } = {}) {
         if (property && where.id === property.id) {
           return {
             ...property,
+            homeownerProfile: { userId: 'owner-1' },
             inventoryItems: (property.homeAssets ?? []).map((asset, index) => ({
               name: asset.assetType,
               category: asset.assetType,
@@ -49,6 +51,7 @@ function installPrismaMock(prismaMock) {
     loaded: true,
     exports: { prisma: prismaMock },
   };
+  installPersonalizationContextMock(prismaMock);
 }
 
 function loadUseCase() {

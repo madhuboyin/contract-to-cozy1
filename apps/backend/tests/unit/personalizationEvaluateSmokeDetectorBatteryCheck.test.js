@@ -8,6 +8,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 require('ts-node/register');
+const { installPersonalizationContextMock } = require('../helpers/installPersonalizationContextMock');
 
 const DEFINITION_CODE = 'smoke_co_detector_battery_check';
 const RULE_AST = { op: 'trait', key: 'smokeDetectorBatteryOverdue', cmp: 'eq', value: true };
@@ -29,6 +30,7 @@ function createPrismaMock({ definition = null, homeAssets = [], property = { id:
       findUnique: async ({ where }) => {
         if (property && where.id === property.id) {
           return {
+            homeownerProfile: { userId: 'owner-1' },
             hasSmokeDetectors: null,
             roofReplacementYear: null,
             ...property,
@@ -74,6 +76,7 @@ function installPrismaMock(prismaMock) {
     loaded: true,
     exports: { prisma: prismaMock },
   };
+  installPersonalizationContextMock(prismaMock);
 }
 
 function loadUseCase() {

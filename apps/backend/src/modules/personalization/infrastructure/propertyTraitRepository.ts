@@ -24,8 +24,7 @@ interface InventoryServiceFact {
 /**
  * Inventory is the homeowner-facing asset record. Normalize the small set of
  * asset families used by the reviewed personalization catalog so demo and
- * production properties can be configured entirely through the UI. Legacy
- * HomeAsset rows remain supported and are combined with these facts.
+ * production properties can be configured entirely through the UI.
  */
 export function inventoryItemToPersonalizationAssetFact(
   item: InventoryServiceFact,
@@ -44,39 +43,21 @@ export function inventoryItemToPersonalizationAssetFact(
   return assetType ? { assetType, lastServiced: item.lastServicedOn } : null;
 }
 
-export async function loadPropertyTraitFacts(propertyId: string): Promise<PropertyTraitFacts | null> {
-  const property = await prisma.property.findUnique({
-    where: { id: propertyId },
-    select: {
-      hasSmokeDetectors: true,
-      roofReplacementYear: true,
-      inventoryItems: {
-        select: { name: true, category: true, tags: true, lastServicedOn: true, assetType: true },
-      },
-    },
-  });
-  if (!property) return null;
-
-  return {
-    hasSmokeDetectors: property.hasSmokeDetectors,
-    roofReplacementYear: property.roofReplacementYear,
-    homeAssets: (property.inventoryItems ?? [])
-      .map((item) => item.assetType
-        ? { assetType: item.assetType, lastServiced: item.lastServicedOn }
-        : inventoryItemToPersonalizationAssetFact(item))
-      .filter((asset): asset is HomeAssetFact => asset !== null),
-  };
-}
-
 /**
- * Production personalization adapter. Trait inputs come from the authorized,
- * bounded Property Context snapshot instead of a second feature-owned query.
+ * Personalization trait inputs always come from the authorized, bounded
+ * Property Context snapshot. Standalone evaluation resolves the property
+ * owner as its actor; it never falls back to a duplicate fact query.
  */
 export async function loadPropertyTraitFactsFromContext(
   propertyId: string,
-  userId: string,
+  userId?: string,
 ): Promise<PropertyTraitFacts | null> {
-  const context = await getAggregationPropertyContext(propertyId, userId, 'PERSONALIZED_GUIDANCE');
+  const actorUserId = userId ?? (await prisma.property.findUnique({
+    where: { id: propertyId },
+    select: { homeownerProfile: { select: { userId: true } } },
+  }))?.homeownerProfile?.userId;
+  if (!actorUserId) return null;
+  const context = await getAggregationPropertyContext(propertyId, actorUserId, 'PERSONALIZED_GUIDANCE');
   const known = <T>(key: string): T | null => {
     const fact = context.facts[key];
     return fact?.state === 'KNOWN' ? fact.value as T : null;

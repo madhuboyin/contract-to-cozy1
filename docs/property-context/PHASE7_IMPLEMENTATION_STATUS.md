@@ -50,9 +50,10 @@ Implemented:
 7. Added canonical lifecycle identity and deterministic duplicate precedence.
    Action Center reconciles active, completed, snoozed, suppressed, and
    expired maintenance/guidance states before ranking.
-8. Personalization production entry points now compute traits from the
-   authorized `PERSONALIZED_GUIDANCE` snapshot. The direct repository loader
-   remains only as a standalone evaluation/test compatibility seam.
+8. Personalization computes traits from the authorized
+   `PERSONALIZED_GUIDANCE` snapshot. Phase 8 removed the former direct
+   repository compatibility loader; standalone evaluation resolves the owner
+   actor and uses the same Property Context path.
 9. Added archetype, lifecycle, optional-consent-boundary, and API/UI/worker
    source-parity coverage.
 

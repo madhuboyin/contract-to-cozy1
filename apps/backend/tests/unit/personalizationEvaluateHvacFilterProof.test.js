@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 require('ts-node/register');
+const { installPersonalizationContextMock } = require('../helpers/installPersonalizationContextMock');
 
 const {
   HVAC_FILTER_PROOF_DEFINITION_CODE,
@@ -28,6 +29,7 @@ function createPrismaMock({ definition = null, homeAssets = [], property = { id:
           return {
             hasSmokeDetectors: null,
             roofReplacementYear: null,
+            homeownerProfile: { userId: 'owner-1' },
             ...property,
             inventoryItems: homeAssets.map((asset) => ({
               name: asset.assetType,
@@ -71,6 +73,7 @@ function installPrismaMock(prismaMock) {
     loaded: true,
     exports: { prisma: prismaMock },
   };
+  installPersonalizationContextMock(prismaMock);
 }
 
 function loadUseCase() {
