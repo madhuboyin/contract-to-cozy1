@@ -12,6 +12,7 @@ const serviceCategoryEnum = z.nativeEnum(ServiceCategory);
  * Zod schema for validating the incoming 'MaintenanceTaskConfig' payload.
  */
 const maintenanceTaskConfigSchema = z.object({
+  templateId: z.string().uuid().optional(),
   title: z.string().min(1, 'Title is required'),
   description: z.string().nullable().optional(),
   isRecurring: z.boolean(),

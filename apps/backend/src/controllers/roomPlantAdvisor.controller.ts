@@ -8,11 +8,11 @@ const service = new RoomPlantAdvisorService();
 const carePlanner = new PlantCarePlannerService();
 
 export async function getPlantCareOutlook(req: CustomRequest, res: Response, next: NextFunction) {
-  try { res.json({ success: true, data: await carePlanner.getOutlook(req.params.propertyId) }); } catch (err) { next(err); }
+  try { res.json({ success: true, data: await carePlanner.getOutlook(req.params.propertyId, req.user!.userId) }); } catch (err) { next(err); }
 }
 
 export async function createHomePlant(req: CustomRequest, res: Response, next: NextFunction) {
-  try { res.status(201).json({ success: true, data: await carePlanner.createPlant(req.params.propertyId, req.body) }); } catch (err) { next(err); }
+  try { res.status(201).json({ success: true, data: await carePlanner.createPlant(req.params.propertyId, req.user!.userId, req.body) }); } catch (err) { next(err); }
 }
 
 export async function updateHomePlantCare(req: CustomRequest, res: Response, next: NextFunction) {
@@ -20,11 +20,11 @@ export async function updateHomePlantCare(req: CustomRequest, res: Response, nex
 }
 
 export async function createGardenZone(req: CustomRequest, res: Response, next: NextFunction) {
-  try { res.status(201).json({ success: true, data: await carePlanner.createGardenZone(req.params.propertyId, req.body) }); } catch (err) { next(err); }
+  try { res.status(201).json({ success: true, data: await carePlanner.createGardenZone(req.params.propertyId, req.user!.userId, req.body) }); } catch (err) { next(err); }
 }
 
 export async function updateGardenZone(req: CustomRequest, res: Response, next: NextFunction) {
-  try { res.json({ success: true, data: await carePlanner.updateGardenZone(req.params.propertyId, req.params.zoneId, req.body) }); } catch (err) { next(err); }
+  try { res.json({ success: true, data: await carePlanner.updateGardenZone(req.params.propertyId, req.user!.userId, req.params.zoneId, req.body) }); } catch (err) { next(err); }
 }
 
 export async function listEligiblePlantAdvisorRooms(req: CustomRequest, res: Response, next: NextFunction) {

@@ -213,6 +213,33 @@ export function GardenZonesSection({ propertyId }: { propertyId: string }) {
   if (outlook.isError || !outlook.data) return <OutlookErrorCard onRetry={() => outlook.refetch()} />;
 
   const data = outlook.data;
+  const outdoorDecision = data.applicability.outdoor;
+
+  if (outdoorDecision.status !== 'APPLICABLE') {
+    return (
+      <section className="space-y-4" aria-labelledby="garden-zones-title">
+        <div>
+          <h2 id="garden-zones-title" className="text-lg font-bold">Outdoor garden zones</h2>
+          <p className="mt-1 text-sm text-muted-foreground">Outdoor planning uses your private-space and landscaping-responsibility details.</p>
+        </div>
+        <Card className="border-amber-200 bg-amber-50/50">
+          <CardContent className="flex items-start gap-3 p-5">
+            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" />
+            <div>
+              <p className="text-sm font-semibold text-amber-900">
+                {outdoorDecision.status === 'UNKNOWN' ? 'Confirm your outdoor-space details' : 'Outdoor planning does not apply to this property'}
+              </p>
+              <p className="mt-1 text-sm text-amber-800">
+                {outdoorDecision.status === 'UNKNOWN'
+                  ? `Missing: ${outdoorDecision.missingFactKeys.join(', ') || 'property responsibility details'}.`
+                  : 'Indoor Plant Advisor remains available.'}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </section>
+    );
+  }
 
   return (
     <section className="space-y-4" aria-labelledby="garden-zones-title">

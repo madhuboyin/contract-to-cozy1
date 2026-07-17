@@ -438,6 +438,7 @@ export function MaintenanceConfigModal({
               : undefined;
             
             const createTaskData = {
+              templateId: idToUse,
               title: title.trim(),
               description: (description || '').trim(),
               serviceCategory: mappedCategory,

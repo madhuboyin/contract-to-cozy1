@@ -245,6 +245,7 @@ function normalizeInstalledItemType(item: { category: string; name: string; tags
     [/\bDISHWASHER\b/, 'DISHWASHER'],
     [/\b(DRYER|CLOTHES DRYER)\b/, 'DRYER'],
     [/\b(REFRIGERATOR|FRIDGE)\b/, 'REFRIGERATOR'],
+    [/\bGUTTERS?\b/, 'GUTTER'],
   ];
   for (const [pattern, type] of patterns) {
     if (pattern.test(text)) types.add(type);

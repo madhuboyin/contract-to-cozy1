@@ -1,7 +1,8 @@
 // apps/backend/src/services/maintenance.service.ts
 
-import { PrismaClient } from '@prisma/client';
 import { prisma } from '../lib/prisma';
+import { getPropertyContext } from '../modules/propertyContext';
+import { evaluateMaintenanceTemplateApplicability } from './maintenance/applicabilityPolicy';
 
 
 export class MaintenanceService {
@@ -11,7 +12,7 @@ export class MaintenanceService {
    *
    * @returns A list of maintenance task templates.
    */
-  static async getMaintenanceTemplates() {
+  static async getMaintenanceTemplates(userId?: string, propertyId?: string) {
     const templates = await prisma.maintenanceTaskTemplate.findMany({
       where: {
         isActive: true,
@@ -21,6 +22,13 @@ export class MaintenanceService {
       },
     });
 
-    return templates;
+    if (!userId || !propertyId) return templates;
+    const context = await getPropertyContext(propertyId, { userId }, {
+      scopes: ['EXTERIOR', 'RESPONSIBILITY', 'SYSTEMS', 'SAFETY', 'MAINTENANCE'],
+    });
+    return templates.map((template) => ({
+      ...template,
+      applicability: evaluateMaintenanceTemplateApplicability(context, template),
+    }));
   }
 }

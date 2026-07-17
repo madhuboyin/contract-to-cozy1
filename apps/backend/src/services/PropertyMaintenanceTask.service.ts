@@ -17,6 +17,11 @@ import { logger } from '../lib/logger';
 import { resolveSeasonalTaskDueDate } from '../utils/maintenanceDueDate';
 import { syncSeasonalChecklistStatus } from './seasonalChecklistStatus.service';
 import { resolvePropertyAccess, ROLE_RANK } from './propertyAccess.service';
+import { getPropertyContext } from '../modules/propertyContext';
+import {
+  evaluateMaintenanceTemplateApplicability,
+  maintenanceTemplateActionKey,
+} from './maintenance/applicabilityPolicy';
 
   /**
    * Service for managing property maintenance tasks.
@@ -135,6 +140,7 @@ import { resolvePropertyAccess, ROLE_RANK } from './propertyAccess.service';
         isRecurring?: boolean;
         frequency?: RecurrenceFrequency;
         nextDueDate?: string;
+        templateId?: string;
       }
     ): Promise<PropertyMaintenanceTask> {
       // Verify property access (CONTRIBUTOR+ required to create tasks)
@@ -144,6 +150,44 @@ import { resolvePropertyAccess, ROLE_RANK } from './propertyAccess.service';
       if (data.serviceCategory) {
         await this.validateServiceCategory(data.serviceCategory);
       }
+
+      const template = data.templateId ? await prisma.maintenanceTaskTemplate.findFirst({
+        where: { id: data.templateId, isActive: true },
+      }) : null;
+      if (data.templateId && !template) throw new Error('Maintenance template not found.');
+
+      const actionKey = template ? maintenanceTemplateActionKey(template.id) : null;
+      if (template) {
+        const context = await getPropertyContext(propertyId, { userId }, {
+          scopes: ['EXTERIOR', 'RESPONSIBILITY', 'SYSTEMS', 'SAFETY', 'MAINTENANCE'],
+        });
+        const decision = evaluateMaintenanceTemplateApplicability(context, template);
+        if (decision.status !== 'APPLICABLE') {
+          const error = new Error(`Maintenance template is not available: ${decision.reasonCodes.join(', ')}`);
+          (error as any).decision = decision;
+          throw error;
+        }
+        const existing = await prisma.propertyMaintenanceTask.findUnique({
+          where: { propertyId_actionKey: { propertyId, actionKey: maintenanceTemplateActionKey(template.id) } },
+        });
+        if (existing) {
+          return prisma.propertyMaintenanceTask.update({
+            where: { id: existing.id },
+            data: {
+              title: data.title,
+              description: data.description ?? null,
+              status: 'PENDING',
+              source: 'TEMPLATE',
+              priority: data.priority ?? 'MEDIUM',
+              serviceCategory: data.serviceCategory ?? template.serviceCategory,
+              estimatedCost: data.estimatedCost ?? null,
+              isRecurring: data.isRecurring ?? true,
+              frequency: data.frequency ?? template.defaultFrequency,
+              nextDueDate: data.nextDueDate ? new Date(data.nextDueDate) : this.calculateNextDueDate(template.defaultFrequency),
+            },
+          });
+        }
+      }
   
       const task = await prisma.propertyMaintenanceTask.create({
         data: {
@@ -151,7 +195,8 @@ import { resolvePropertyAccess, ROLE_RANK } from './propertyAccess.service';
           title: data.title,
           description: data.description ?? null,
           status: 'PENDING',
-          source: 'USER_CREATED',
+          source: template ? 'TEMPLATE' : 'USER_CREATED',
+          actionKey,
           priority: data.priority ?? 'MEDIUM',
           serviceCategory: data.serviceCategory ?? null,
           estimatedCost: data.estimatedCost ?? null,
@@ -169,7 +214,7 @@ import { resolvePropertyAccess, ROLE_RANK } from './propertyAccess.service';
         moduleKey: AnalyticsModule.MAINTENANCE,
         featureKey: AnalyticsFeature.MAINTENANCE_TASK,
         metadataJson: {
-          source: 'USER_CREATED',
+          source: template ? 'TEMPLATE' : 'USER_CREATED',
           priority: data.priority ?? 'MEDIUM',
           isRecurring: data.isRecurring ?? false,
         },
@@ -420,19 +465,15 @@ import { resolvePropertyAccess, ROLE_RANK } from './propertyAccess.service';
           }
         }
   
-        const task = await prisma.propertyMaintenanceTask.create({
-          data: {
-            propertyId,
-            title: template.title,
-            description: template.description ?? null,
-            status: 'PENDING',
-            source: 'TEMPLATE',
-            priority: 'MEDIUM',
-            serviceCategory: template.serviceCategory as ServiceCategory | null,
-            isRecurring: true,
-            frequency: template.defaultFrequency,
-            nextDueDate: this.calculateNextDueDate(template.defaultFrequency),
-          },
+        const task = await this.createUserTask(userId, propertyId, {
+          templateId: template.id,
+          title: template.title,
+          description: template.description ?? undefined,
+          priority: 'MEDIUM',
+          serviceCategory: template.serviceCategory as ServiceCategory | undefined,
+          isRecurring: true,
+          frequency: template.defaultFrequency,
+          nextDueDate: this.calculateNextDueDate(template.defaultFrequency).toISOString(),
         });
   
         tasks.push(task);

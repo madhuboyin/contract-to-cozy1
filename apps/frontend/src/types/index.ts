@@ -1260,6 +1260,15 @@ export interface PropertyContextSnapshot {
   warnings: Array<{ code: 'CONFLICT' | 'STALE_SOURCE' | 'PARTIAL_SCOPE'; factKeys: string[] }>;
 }
 
+export interface PropertyContextFeatureDecision {
+  status: 'APPLICABLE' | 'NOT_APPLICABLE' | 'UNKNOWN';
+  reasonCodes: string[];
+  usedFactKeys: string[];
+  missingFactKeys: string[];
+  conflictedFactKeys: string[];
+  validUntil: string | null;
+}
+
 export interface PropertyContextCompleteness {
   propertyId: string;
   contextVersion: string;
@@ -1563,6 +1572,7 @@ export interface MaintenanceTaskTemplate {
   serviceCategory: ServiceCategory | null;
   defaultFrequency: RecurrenceFrequency;
   sortOrder: number;
+  applicability?: PropertyContextFeatureDecision;
 }
 
 /**
@@ -2383,6 +2393,7 @@ export interface CreateMaintenanceTaskInput {
   nextDueDate?: string | null;
   homeAssetId?: string | null;
   warrantyId?: string | null;
+  templateId?: string;
 }
 
 export interface CreateMaintenanceTaskFromActionCenterInput {

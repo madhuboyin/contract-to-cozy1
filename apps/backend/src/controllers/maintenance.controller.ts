@@ -19,7 +19,8 @@ const handleGetMaintenanceTemplates = async (
       return res.status(401).json({ message: 'Authentication required.' });
     }
 
-    const templates = await MaintenanceService.getMaintenanceTemplates();
+    const propertyId = typeof req.query.propertyId === 'string' ? req.query.propertyId : undefined;
+    const templates = await MaintenanceService.getMaintenanceTemplates(req.user.userId, propertyId);
 
     analyticsEmitter.track({
       eventType: AnalyticsEvent.TOOL_USED,
@@ -70,6 +71,7 @@ const handleCreateCustomMaintenanceItems = async (
           isRecurring: task.isRecurring,
           frequency: task.frequency ?? undefined,
           nextDueDate: task.nextDueDate ? (task.nextDueDate as unknown as Date).toISOString() : undefined,
+          templateId: task.templateId,
         })
       )
     );

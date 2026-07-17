@@ -5,6 +5,9 @@ import { getAirQuality } from './environment/airQuality.service';
 import { getDrought } from './environment/drought.service';
 import { getHardinessZone } from './environment/hardinessZone.service';
 import { resolveCountyFips } from './environment/fipsResolver.service';
+import { getPropertyContext } from '../modules/propertyContext';
+import { evaluatePlantAdvisorApplicability } from './plantAdvisor/applicabilityPolicy';
+import type { PropertyContextSnapshot } from '../modules/propertyContext';
 
 export interface PlantWeatherSignals {
   heat: boolean;
@@ -200,10 +203,29 @@ export function deriveGardenZoneRecommendations(
 }
 
 export class PlantCarePlannerService {
-  async getOutlook(propertyId: string) {
+  private async getContext(propertyId: string, userId: string): Promise<PropertyContextSnapshot> {
+    return getPropertyContext(propertyId, { userId }, {
+      scopes: ['EXTERIOR', 'RESPONSIBILITY', 'ROOMS'],
+    });
+  }
+
+  private async assertOutdoorApplicable(propertyId: string, userId: string): Promise<void> {
+    const decision = evaluatePlantAdvisorApplicability(await this.getContext(propertyId, userId), 'OUTDOOR');
+    if (decision.status !== 'APPLICABLE') {
+      const error = new APIError(`Outdoor Plant Advisor is not available: ${decision.reasonCodes.join(', ')}`, 422, 'PLANT_ADVISOR_NOT_APPLICABLE');
+      (error as any).decision = decision;
+      throw error;
+    }
+  }
+
+  async getOutlook(propertyId: string, userId: string) {
+    const context = await this.getContext(propertyId, userId);
+    const featureDecision = evaluatePlantAdvisorApplicability(context, 'FEATURE');
+    const indoorDecision = evaluatePlantAdvisorApplicability(context, 'INDOOR');
+    const outdoorDecision = evaluatePlantAdvisorApplicability(context, 'OUTDOOR');
     const property = await prisma.property.findUnique({
       where: { id: propertyId },
-      select: { id: true, latitude: true, longitude: true, zipCode: true, hasIrrigation: true },
+      select: { id: true, latitude: true, longitude: true, zipCode: true },
     });
     if (!property) throw new APIError('Property not found', 404, 'PROPERTY_NOT_FOUND');
 
@@ -237,7 +259,13 @@ export class PlantCarePlannerService {
         : null,
     };
     const hardinessZone = hardiness.status === 'ok' ? hardiness.data.zone : null;
-    const plannerPlants: PlannerPlant[] = plants.map(plant => ({
+    const applicablePlants = outdoorDecision.status === 'APPLICABLE'
+      ? plants
+      : plants.filter(plant => plant.locationType === 'INDOOR');
+    const applicableZones = outdoorDecision.status === 'APPLICABLE' ? zones : [];
+    const irrigationFact = context.facts['exterior.hasIrrigation'];
+    const hasIrrigation = irrigationFact?.state === 'KNOWN' ? irrigationFact.value === true : null;
+    const plannerPlants: PlannerPlant[] = applicablePlants.map(plant => ({
       id: plant.id,
       name: plant.nickname || plant.name,
       locationType: plant.locationType,
@@ -248,25 +276,33 @@ export class PlantCarePlannerService {
       wateringCadenceDays: plant.plantCatalog?.wateringCadenceDays ?? null,
       lastWateredAt: plant.lastWateredAt,
     }));
-    const plannerZones: PlannerZone[] = zones.map(zone => ({
+    const plannerZones: PlannerZone[] = applicableZones.map(zone => ({
       id: zone.id,
       name: zone.name,
       sunExposure: zone.sunExposure,
       soilDrainage: zone.soilDrainage,
-      irrigationType: zone.irrigationType === 'UNKNOWN' && property.hasIrrigation === false ? 'NONE' : zone.irrigationType,
+      irrigationType: zone.irrigationType === 'UNKNOWN' && hasIrrigation === false ? 'NONE' : zone.irrigationType,
       frostPocket: zone.frostPocket,
     }));
     return {
+      applicability: {
+        feature: featureDecision,
+        indoor: indoorDecision,
+        outdoor: outdoorDecision,
+      },
       signals,
       hardinessZone,
-      plants,
-      zones,
+      plants: applicablePlants,
+      zones: applicableZones,
       careRecommendations: derivePlantCareRecommendations(plannerPlants, signals),
       gardenRecommendations: deriveGardenZoneRecommendations(plannerZones, signals, hardinessZone),
     };
   }
 
-  async createPlant(propertyId: string, input: any) {
+  async createPlant(propertyId: string, userId: string, input: any) {
+    if (input.locationType === 'OUTDOOR' || input.gardenZoneId) {
+      await this.assertOutdoorApplicable(propertyId, userId);
+    }
     if (input.roomId) {
       const room = await prisma.inventoryRoom.findFirst({ where: { id: input.roomId, propertyId }, select: { id: true } });
       if (!room) throw new APIError('Room not found', 404, 'ROOM_NOT_FOUND');
@@ -284,11 +320,13 @@ export class PlantCarePlannerService {
     return prisma.homePlant.update({ where: { id: plantId }, data: input });
   }
 
-  async createGardenZone(propertyId: string, input: any) {
+  async createGardenZone(propertyId: string, userId: string, input: any) {
+    await this.assertOutdoorApplicable(propertyId, userId);
     return prisma.gardenZone.create({ data: { propertyId, ...input } });
   }
 
-  async updateGardenZone(propertyId: string, zoneId: string, input: any) {
+  async updateGardenZone(propertyId: string, userId: string, zoneId: string, input: any) {
+    await this.assertOutdoorApplicable(propertyId, userId);
     const zone = await prisma.gardenZone.findFirst({ where: { id: zoneId, propertyId }, select: { id: true } });
     if (!zone) throw new APIError('Garden zone not found', 404, 'GARDEN_ZONE_NOT_FOUND');
     return prisma.gardenZone.update({ where: { id: zoneId }, data: input });

@@ -152,6 +152,7 @@ function DesktopTemplateRow({
   const categoryLabel = template.serviceCategory ? formatEnumLabel(template.serviceCategory) : 'General';
   const frequencyLabel = formatEnumLabel(template.defaultFrequency);
   const Icon = visual.icon;
+  const applicability = template.applicability;
 
   return (
     <div className="group flex items-center gap-4 rounded-xl border border-slate-200/90 bg-white px-4 py-3 transition-colors duration-200 hover:border-slate-300 hover:bg-slate-50/70">
@@ -175,7 +176,15 @@ function DesktopTemplateRow({
           >
             {frequencyLabel}
           </Badge>
+          {applicability?.status !== 'APPLICABLE' && (
+            <Badge variant="outline" className="rounded-full border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] text-amber-800">
+              {applicability?.status === 'UNKNOWN' ? 'Needs property details' : 'Not applicable'}
+            </Badge>
+          )}
         </div>
+        {applicability?.status === 'UNKNOWN' && applicability.missingFactKeys.length > 0 && (
+          <p className="mt-1 text-xs text-amber-700">Confirm: {applicability.missingFactKeys.join(', ')}</p>
+        )}
       </div>
       <Button
         size="sm"
@@ -211,8 +220,9 @@ export default function MaintenanceSetupPage() {
   
   // 2. Fetch Templates
   const { data: templatesData, isLoading: isLoadingTemplates } = useQuery({
-    queryKey: ['maintenanceTemplates'],
-    queryFn: () => api.getMaintenanceTemplates(),
+    queryKey: ['maintenanceTemplates', selectedPropertyId],
+    queryFn: () => api.getMaintenanceTemplates(selectedPropertyId),
+    enabled: Boolean(selectedPropertyId),
   });
   
   const properties = useMemo(
@@ -347,7 +357,7 @@ export default function MaintenanceSetupPage() {
                     size="sm"
                     className="shrink-0"
                     onClick={() => handleTemplateSelect(template)}
-                    disabled={!selectedPropertyId}
+                    disabled={!selectedPropertyId || template.applicability?.status !== 'APPLICABLE'}
                   >
                     Select <ChevronRight className="ml-1 h-4 w-4" />
                   </Button>
@@ -383,7 +393,7 @@ export default function MaintenanceSetupPage() {
                   <DesktopTemplateRow
                     key={template.id}
                     template={template}
-                    disabled={!selectedPropertyId}
+                    disabled={!selectedPropertyId || template.applicability?.status !== 'APPLICABLE'}
                     onSelect={handleTemplateSelect}
                   />
                 ))}

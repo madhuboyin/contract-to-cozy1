@@ -43,6 +43,7 @@ import {
     isRecurring?: boolean;
     frequency?: RecurrenceFrequency;
     nextDueDate?: string;
+    templateId?: string;
   }
   
   /**

@@ -54,6 +54,7 @@ RUN mkdir -p src/shared/backend/utils \
              src/shared/backend/services/incidents/integrations \
              src/shared/backend/services/hiddenAssets \
              src/shared/backend/services/homeHabitCoach \
+             src/shared/backend/services/maintenance \
              src/shared/backend/services/seasonal \
              src/shared/backend/services/analytics \
              src/shared/backend/services/guidanceEngine \
@@ -120,8 +121,10 @@ COPY apps/backend/src/utils/maintenanceDueDate.ts \
      src/shared/backend/utils/
 # Pure (Express-free) property-access resolution used by PropertyMaintenanceTask.service.ts
 COPY apps/backend/src/services/propertyAccess.service.ts src/shared/backend/services/
+COPY apps/backend/src/services/maintenance/applicabilityPolicy.ts src/shared/backend/services/maintenance/
 COPY apps/backend/src/services/seasonal/applicabilityPolicy.ts src/shared/backend/services/seasonal/
 COPY apps/backend/src/modules/propertyContext/domain/contracts.ts src/shared/backend/modules/propertyContext/domain/
+COPY apps/workers/stubs/property-context.ts src/shared/backend/modules/propertyContext/index.ts
 # Stub: breaks the JobQueue.service ↔ RiskAssessment.service circular import
 COPY apps/workers/stubs/job-queue-service.ts src/shared/backend/services/JobQueue.service.ts
 COPY apps/backend/src/services/hiddenAssets/ruleEngine.ts \

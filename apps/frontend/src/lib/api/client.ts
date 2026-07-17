@@ -1462,10 +1462,11 @@ class APIClient {
   /**
    * Fetches the list of available maintenance task templates.
    */
-  async getMaintenanceTemplates(): Promise<
+  async getMaintenanceTemplates(propertyId?: string): Promise<
     APIResponse<{ templates: MaintenanceTaskTemplate[] }>
   > {
-    return this.request('/api/maintenance-templates');
+    const query = propertyId ? `?propertyId=${encodeURIComponent(propertyId)}` : '';
+    return this.request(`/api/maintenance-templates${query}`);
   }
 
   /**

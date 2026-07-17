@@ -150,6 +150,11 @@ export interface GardenZoneRecommendationDTO {
 }
 
 export interface PlantCareOutlookDTO {
+  applicability: {
+    feature: PropertyContextFeatureDecision;
+    indoor: PropertyContextFeatureDecision;
+    outdoor: PropertyContextFeatureDecision;
+  };
   signals: Record<string, boolean | string | null>;
   hardinessZone: string | null;
   plants: HomePlantDTO[];
@@ -157,3 +162,4 @@ export interface PlantCareOutlookDTO {
   careRecommendations: PlantCareRecommendationDTO[];
   gardenRecommendations: GardenZoneRecommendationDTO[];
 }
+import type { PropertyContextFeatureDecision } from '@/types';
