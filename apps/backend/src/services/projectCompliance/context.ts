@@ -3,6 +3,7 @@ import type { PropertyContextScope } from '../../modules/propertyContext';
 import { evaluateProjectComplianceContext } from './applicabilityPolicy';
 import { APIError } from '../../middleware/error.middleware';
 import type { ProjectComplianceWorkInput } from './workScope';
+import { reconcileProjectComplianceOutputs } from './reconciliation';
 
 export type ProjectComplianceFeature =
   | 'AGGREGATE'
@@ -44,11 +45,13 @@ export async function getProjectComplianceContextDecisions(
   work?: ProjectComplianceWorkInput,
 ) {
   const context = await getPropertyContext(propertyId, { userId }, { scopes: PROJECT_COMPLIANCE_FEATURE_SCOPES[feature] });
+  const decisions = evaluateProjectComplianceContext(context, work);
   return {
     contextVersion: context.contextVersion,
     feature,
     scopes: context.scopes,
-    decisions: evaluateProjectComplianceContext(context, work),
+    decisions,
+    reconciliation: reconcileProjectComplianceOutputs(context, decisions),
   };
 }
 
@@ -73,12 +76,18 @@ export async function getProjectComplianceEnvelope(
   userId: string,
   feature: ProjectComplianceFeature,
   work?: ProjectComplianceWorkInput,
+  generatedContextVersion?: string | null,
 ) {
   const context = await getProjectComplianceContextDecisions(propertyId, userId, feature, work);
   return {
     contextVersion: context.contextVersion,
     decision: context.decisions[PRIMARY_DECISION_BY_FEATURE[feature]],
     relatedDecisions: context.decisions,
+    reconciliation: context.reconciliation,
+    generatedContextVersion: generatedContextVersion ?? null,
+    isStale: Boolean(
+      generatedContextVersion && generatedContextVersion !== context.contextVersion,
+    ),
   };
 }
 

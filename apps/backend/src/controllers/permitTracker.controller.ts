@@ -251,6 +251,13 @@ export async function createManualFlag(req: Request, res: Response, next: NextFu
 
 export async function runDetectionScan(req: Request, res: Response, next: NextFunction) {
   try {
+    await assertProjectComplianceApplicable(
+      req.params.propertyId,
+      req.user!.userId,
+      'PERMIT_TRACKER',
+      {},
+      'permitTracking',
+    );
     const flagsCreated = await permitDetectionService.detectUnpermittedWork(req.params.propertyId);
 
     analyticsEmitter.track({
@@ -270,9 +277,21 @@ export async function runDetectionScan(req: Request, res: Response, next: NextFu
 
 export async function requestDisclosureExport(req: Request, res: Response, next: NextFunction) {
   try {
+    await assertProjectComplianceApplicable(
+      req.params.propertyId,
+      req.user!.userId,
+      'PERMIT_TRACKER',
+      {},
+      'permitTracking',
+    );
     const result = await permitTrackerService.requestDisclosureExport(
       req.params.propertyId,
       req.user!.userId,
+    );
+    const propertyContext = await getProjectComplianceEnvelope(
+      req.params.propertyId,
+      req.user!.userId,
+      'PERMIT_TRACKER',
     );
 
     analyticsEmitter.track({
@@ -284,7 +303,7 @@ export async function requestDisclosureExport(req: Request, res: Response, next:
       metadataJson: { actionType: 'request_disclosure_export' },
     });
 
-    res.status(202).json({ success: true, data: result });
+    res.status(202).json({ success: true, data: { ...result, propertyContext } });
   } catch (err) { next(err); }
 }
 
@@ -294,14 +313,26 @@ export async function getDisclosureExport(req: Request, res: Response, next: Nex
       req.params.exportId,
       req.params.propertyId,
     );
-    res.json({ success: true, data: { export: exportRecord } });
+    const propertyContext = await getProjectComplianceEnvelope(
+      req.params.propertyId,
+      req.user!.userId,
+      'PERMIT_TRACKER',
+      {},
+      exportRecord.generatedContextVersion,
+    );
+    res.json({ success: true, data: { export: exportRecord, propertyContext } });
   } catch (err) { next(err); }
 }
 
 export async function listDisclosureExports(req: Request, res: Response, next: NextFunction) {
   try {
     const exports = await permitTrackerService.listDisclosureExports(req.params.propertyId);
-    res.json({ success: true, data: { exports } });
+    const propertyContext = await getProjectComplianceEnvelope(
+      req.params.propertyId,
+      req.user!.userId,
+      'PERMIT_TRACKER',
+    );
+    res.json({ success: true, data: { exports, propertyContext } });
   } catch (err) { next(err); }
 }
 

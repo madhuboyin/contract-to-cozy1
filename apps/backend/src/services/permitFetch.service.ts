@@ -7,6 +7,7 @@ import { socrataAdapter } from './permitAdapters/socrata.adapter';
 import { accelaAdapter } from './permitAdapters/accela.adapter';
 import { permitNormalizer, PropertyAddress } from './permitAdapters/permitNormalizer';
 import { permitFetchQueue, detectUnpermittedWorkQueue } from './JobQueue.service';
+import { checkPermitWorkerContext } from './projectCompliance/permitWorkerContext.service';
 
 function buildNormalizedKey(city: string, state: string): string {
   const citySlug = city.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
@@ -80,6 +81,23 @@ export class PermitFetchService {
     });
 
     if (!job) throw new Error(`PermitFetchJob ${fetchJobId} not found`);
+
+    const contextCheck = await checkPermitWorkerContext(job.propertyId);
+    if (!contextCheck.allowed) {
+      await prisma.permitFetchJob.update({
+        where: { id: fetchJobId },
+        data: {
+          status: 'FAILED',
+          errorMessage: `PROPERTY_CONTEXT_RECHECK_BLOCKED:${contextCheck.reasonCodes.join(',')}`,
+          completedAt: new Date(),
+        },
+      });
+      logger.info(
+        { fetchJobId, propertyId: job.propertyId, reasonCodes: contextCheck.reasonCodes },
+        '[PermitFetchService] skipped after property context recheck',
+      );
+      return;
+    }
 
     await prisma.permitFetchJob.update({
       where: { id: fetchJobId },

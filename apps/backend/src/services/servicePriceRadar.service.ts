@@ -787,7 +787,12 @@ async function hydrateStoredLinkedEntities(propertyId: string, rows: any[]): Pro
 }
 
 export class ServicePriceRadarService {
-  async createCheck(propertyId: string, userId: string, input: ServiceRadarCreateInput): Promise<ServiceRadarCreateResponseDTO> {
+  async createCheck(
+    propertyId: string,
+    userId: string,
+    input: ServiceRadarCreateInput,
+    propertyContextVersion?: string | null,
+  ): Promise<ServiceRadarCreateResponseDTO> {
     const property = await assertPropertyForUser(propertyId, userId);
     const normalizedInput: ServiceRadarCreateInput = {
       ...input,
@@ -823,7 +828,10 @@ export class ServicePriceRadarService {
           confidenceScore: evaluation.confidenceScore,
           explanationShort: evaluation.explanationShort,
           explanationJson: evaluation.explanationJson,
-          propertySnapshotJson: evaluation.propertySnapshotJson,
+          propertySnapshotJson: {
+            ...((evaluation.propertySnapshotJson ?? {}) as Record<string, unknown>),
+            propertyContextVersion: propertyContextVersion ?? null,
+          },
           pricingFactorsJson: evaluation.pricingFactorsJson,
           engineVersion: evaluation.engineVersion,
         },

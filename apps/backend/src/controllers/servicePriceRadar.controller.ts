@@ -52,19 +52,25 @@ export async function createServicePriceRadarCheck(
   try {
     const userId = requireUserId(req);
     const payload = req.body as CreateServicePriceRadarBody;
-    await assertProjectComplianceApplicable(
+    const currentContext = await assertProjectComplianceApplicable(
       req.params.propertyId,
       userId,
       'SERVICE_PRICE_RADAR',
       { serviceCategory: payload.serviceCategory },
       'localPriceBenchmarking',
     );
-    const result = await service.createCheck(req.params.propertyId, userId, payload);
+    const result = await service.createCheck(
+      req.params.propertyId,
+      userId,
+      payload,
+      currentContext.contextVersion,
+    );
     const propertyContext = await getProjectComplianceEnvelope(
       req.params.propertyId,
       userId,
       'SERVICE_PRICE_RADAR',
       { serviceCategory: payload.serviceCategory },
+      currentContext.contextVersion,
     );
 
     const guidanceSignalIntentFamily =
@@ -171,10 +177,18 @@ export async function getServicePriceRadarCheckDetail(
 ) {
   try {
     const userId = requireUserId(req);
-    const [result, propertyContext] = await Promise.all([
-      service.getCheckDetail(req.params.propertyId, req.params.checkId, userId),
-      getProjectComplianceEnvelope(req.params.propertyId, userId, 'SERVICE_PRICE_RADAR'),
-    ]);
+    const result = await service.getCheckDetail(req.params.propertyId, req.params.checkId, userId);
+    const snapshot = result.check.propertySnapshotJson;
+    const generatedContextVersion = snapshot && typeof snapshot === 'object' && !Array.isArray(snapshot)
+      ? String((snapshot as Record<string, unknown>).propertyContextVersion ?? '') || null
+      : null;
+    const propertyContext = await getProjectComplianceEnvelope(
+      req.params.propertyId,
+      userId,
+      'SERVICE_PRICE_RADAR',
+      { serviceCategory: result.check.serviceCategory },
+      generatedContextVersion,
+    );
     return res.status(200).json({ success: true, data: { ...result, propertyContext } });
   } catch (error) {
     return next(error);

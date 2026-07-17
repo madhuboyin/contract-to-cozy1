@@ -52,10 +52,11 @@ interface ServiceFilterProps {
   defaultZipCode?: string;
   isHomeBuyer: boolean;
   isSearching: boolean;
+  lockZipToProperty?: boolean;
 }
 
 const ServiceFilter = React.memo(
-  ({ onFilterChange, defaultCategory, defaultZipCode, isHomeBuyer, isSearching }: ServiceFilterProps) => {
+  ({ onFilterChange, defaultCategory, defaultZipCode, isHomeBuyer, isSearching, lockZipToProperty }: ServiceFilterProps) => {
     const [zipCode, setZipCode] = useState(defaultZipCode || '');
     const [selectedCategory, setSelectedCategory] = useState<string>(defaultCategory || 'ALL');
 
@@ -129,6 +130,7 @@ const ServiceFilter = React.memo(
                 placeholder="e.g., 78701"
                 value={zipCode}
                 onChange={(e) => setZipCode(e.target.value)}
+                disabled={lockZipToProperty}
                 inputMode="numeric"
                 autoComplete="postal-code"
                 className="h-11 w-full text-sm"
@@ -169,13 +171,14 @@ const ServiceFilter = React.memo(
                 {isSearching ? 'Searching' : 'Search'}
               </button>
 
-              {(zipCode || selectedCategory !== 'ALL') ? (
+              {((!lockZipToProperty && zipCode) || selectedCategory !== 'ALL') ? (
                 <button
                   type="button"
                   onClick={() => {
-                    setZipCode('');
+                    const resetZip = lockZipToProperty ? (defaultZipCode || '') : '';
+                    setZipCode(resetZip);
                     setSelectedCategory('ALL');
-                    onFilterChange({ zipCode: '', category: undefined });
+                    onFilterChange({ zipCode: resetZip, category: undefined });
                   }}
                   className="inline-flex min-h-[44px] items-center rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50"
                 >
@@ -445,7 +448,24 @@ export default function ProvidersPage() {
   const [contextItemName, setContextItemName] = useState<string | null>(null);
   const [propertyZipCode, setPropertyZipCode] = useState<string>('');
   const [propertyContext, setPropertyContext] = useState<PropertyContextEnvelope | null>(null);
-  const isExecutionBlocked = hasGuardScopeContext && Boolean(providerGuardQuery.data?.blocked);
+  const isHomeBuyer = user?.segment === 'HOME_BUYER';
+  const initialZipCode = '';
+  const initialCategory = defaultCategory || '';
+  const hasInitialFetchedRef = useRef(false);
+  const [filters, setFilters] = useState({
+    zipCode: initialZipCode,
+    category: initialCategory,
+  });
+  const isGuidanceExecutionBlocked = hasGuardScopeContext && Boolean(providerGuardQuery.data?.blocked);
+  const isPropertyContextBlocked = Boolean(
+    targetPropertyId && propertyContext && propertyContext.decision.status !== 'APPLICABLE',
+  );
+  const isExecutionBlocked = isGuidanceExecutionBlocked || isPropertyContextBlocked;
+  const requiresServiceCategory = Boolean(
+    isPropertyContextBlocked &&
+    filters.category === 'ALL' &&
+    propertyContext?.decision.reasonCodes.includes('WORK_SCOPE_RESPONSIBILITY_MAPPING_UNKNOWN'),
+  );
   const isGuardLoading =
     hasGuardScopeContext &&
     !providerGuardQuery.data &&
@@ -466,17 +486,11 @@ export default function ProvidersPage() {
     (targetPropertyId
       ? `/dashboard/properties/${targetPropertyId}/risk-assessment`
       : '/dashboard/maintenance');
-
-  const isHomeBuyer = user?.segment === 'HOME_BUYER';
-  const initialZipCode = '';
-  const initialCategory = defaultCategory || '';
-
-  const hasInitialFetchedRef = useRef(false);
-
-  const [filters, setFilters] = useState({
-    zipCode: initialZipCode,
-    category: initialCategory,
-  });
+  const effectiveBlockedActionHref = isPropertyContextBlocked
+    ? requiresServiceCategory
+      ? undefined
+      : propertyContext?.decision.correctionPaths?.[0] ?? `/dashboard/properties/${targetPropertyId}/edit`
+    : blockedActionHref;
 
   const fetchProviders = useCallback(
     async (currentFilters: typeof filters) => {
@@ -647,7 +661,10 @@ export default function ProvidersPage() {
         supportingAction: (
           <button
             type="button"
-            onClick={() => handleFilterChange({ zipCode: '', category: undefined })}
+            onClick={() => handleFilterChange({
+              zipCode: targetPropertyId ? propertyZipCode : '',
+              category: undefined,
+            })}
             className="inline-flex min-h-[40px] w-full items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
           >
             Reset filters
@@ -688,6 +705,7 @@ export default function ProvidersPage() {
           defaultZipCode={propertyZipCode}
           isHomeBuyer={isHomeBuyer}
           isSearching={dataLoading}
+          lockZipToProperty={Boolean(targetPropertyId)}
         />
       }
     >
@@ -775,7 +793,27 @@ export default function ProvidersPage() {
         </MobileCard>
       ) : null}
 
-      {isExecutionBlocked ? (
+      {isPropertyContextBlocked ? (
+        <GuidanceWarningBanner
+          title={requiresServiceCategory
+            ? 'Select a service category before choosing a provider'
+            : 'Complete property details before choosing a provider'}
+          message={
+            requiresServiceCategory
+              ? 'Property-scoped provider recommendations require a specific type of work so responsibility can be checked correctly.'
+              : propertyContext?.decision.status === 'UNKNOWN'
+              ? 'Provider recommendations are paused until the required responsibility and work context is known.'
+              : 'This work is assigned to another responsible party for the selected property.'
+          }
+          details={propertyContext?.decision.reasonCodes ?? []}
+          actionLabel={requiresServiceCategory ? undefined : 'Review property details'}
+          actionHref={requiresServiceCategory
+            ? undefined
+            : propertyContext?.decision.correctionPaths?.[0] ?? `/dashboard/properties/${targetPropertyId}/edit`}
+        />
+      ) : null}
+
+      {isGuidanceExecutionBlocked ? (
         <GuidanceWarningBanner
           title={
             blockedStepLabel
@@ -832,7 +870,7 @@ export default function ProvidersPage() {
           vendorName={vendorName}
           executionBlocked={isExecutionBlocked}
           executionGuardLoading={isGuardLoading}
-          blockedActionHref={blockedActionHref}
+          blockedActionHref={effectiveBlockedActionHref}
         />
       ) : (
         <EmptyStateCard

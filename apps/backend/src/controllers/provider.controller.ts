@@ -13,6 +13,7 @@ import { ProviderManagementService } from '../services/provider-management.servi
 import { AuthRequest } from '../types/auth.types';
 import { z } from 'zod';
 import { getProjectComplianceEnvelope } from '../services/projectCompliance/context';
+import { prisma } from '../lib/prisma';
 
 const createServiceSchema = z.object({
   category: z.enum(['INSPECTION', 'HANDYMAN']),
@@ -49,20 +50,53 @@ export class ProviderController {
       const userId = req.user?.userId;
       // --- END FIX ---
 
-      // --- FIX: Pass userId to the service ---
       const { propertyId, ...providerQuery } = query;
-      const [result, propertyContext] = await Promise.all([
-        ProviderService.searchProviders(providerQuery, userId),
-        propertyId && userId
-          ? getProjectComplianceEnvelope(
-              propertyId,
-              userId,
-              'PROVIDER_BOOKING',
-              { serviceCategory: providerQuery.category },
-            )
-          : Promise.resolve(null),
-      ]);
-      // --- END FIX ---
+      let propertyContext = null;
+      let effectiveQuery = providerQuery;
+
+      if (propertyId && userId) {
+        propertyContext = await getProjectComplianceEnvelope(
+          propertyId,
+          userId,
+          'PROVIDER_BOOKING',
+          { serviceCategory: providerQuery.category ?? 'UNSPECIFIED' },
+        );
+        const property = await prisma.property.findUnique({
+          where: { id: propertyId },
+          select: {
+            city: true,
+            state: true,
+            zipCode: true,
+            latitude: true,
+            longitude: true,
+            geocodedZipCode: true,
+          },
+        });
+        if (property) {
+          const coordinatesAreCurrent = property.geocodedZipCode === property.zipCode;
+          effectiveQuery = {
+            ...providerQuery,
+            zipCode: property.zipCode,
+            city: property.city,
+            state: property.state,
+            latitude: coordinatesAreCurrent ? property.latitude ?? undefined : undefined,
+            longitude: coordinatesAreCurrent ? property.longitude ?? undefined : undefined,
+          };
+        }
+      }
+
+      const result = propertyContext && propertyContext.decision.status !== 'APPLICABLE'
+        ? {
+          providers: [],
+          pagination: {
+            page: providerQuery.page,
+            limit: providerQuery.limit,
+            total: 0,
+            totalPages: 0,
+          },
+          filters: {},
+        }
+        : await ProviderService.searchProviders(effectiveQuery, userId);
 
       res.status(200).json({
         success: true,

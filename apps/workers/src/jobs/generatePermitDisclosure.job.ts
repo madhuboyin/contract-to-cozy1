@@ -3,6 +3,7 @@ import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { prisma } from '../lib/prisma';
 import { uploadPdfBuffer } from '../../../backend/src/services/storage/reportStorage';
 import { logger } from '../lib/logger';
+import { checkPermitWorkerContext } from '../../../backend/src/services/projectCompliance/permitWorkerContext.service';
 
 export const GENERATE_PERMIT_DISCLOSURE_JOB = 'generate-permit-disclosure';
 
@@ -163,6 +164,22 @@ export async function generatePermitDisclosureJob(exportId: string): Promise<voi
   if (!exp) return;
   if (exp.status !== 'PENDING') return;
 
+  const contextCheck = await checkPermitWorkerContext(exp.propertyId);
+  if (!contextCheck.allowed) {
+    await (prisma as any).permitDisclosureExport.update({
+      where: { id: exportId },
+      data: {
+        status: 'FAILED',
+        errorMessage: `PROPERTY_CONTEXT_RECHECK_BLOCKED:${contextCheck.reasonCodes.join(',')}`,
+      },
+    });
+    logger.info(
+      { exportId, propertyId: exp.propertyId, reasonCodes: contextCheck.reasonCodes },
+      '[PermitDisclosure] skipped after property context recheck',
+    );
+    return;
+  }
+
   await (prisma as any).permitDisclosureExport.update({
     where: { id: exportId },
     data: { status: 'GENERATING' },
@@ -192,7 +209,10 @@ export async function generatePermitDisclosureJob(exportId: string): Promise<voi
         fileUrl,
         totalPermits: snapshot.permits.length,
         openFlags: snapshot.flags.length,
-        snapshotJson: snapshot as any,
+        snapshotJson: {
+          ...snapshot,
+          propertyContextVersion: contextCheck.contextVersion,
+        } as any,
         expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
       },
     });

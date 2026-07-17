@@ -37,6 +37,11 @@ function inferIssueDomainFromSignalFamily(signalIntentFamily?: string | null) {
   return 'ASSET_LIFECYCLE' as const;
 }
 
+function propertyContextVersionFromMetadata(metadata: Record<string, unknown> | null): string | null {
+  const value = metadata?._propertyContextVersion;
+  return typeof value === 'string' && value.trim() ? value : null;
+}
+
 export async function listPriceFinalizations(
   req: CustomRequest,
   res: Response,
@@ -64,7 +69,11 @@ export async function listPriceFinalizations(
         homeAssetId: queryResult.data.homeAssetId,
       }
     );
-    const propertyContext = await getProjectComplianceEnvelope(req.params.propertyId, userId, 'PRICE_FINALIZATION');
+    const propertyContext = await getProjectComplianceEnvelope(
+      req.params.propertyId,
+      userId,
+      'PRICE_FINALIZATION',
+    );
 
     analyticsEmitter.track({
       eventType: AnalyticsEvent.TOOL_USED,
@@ -93,7 +102,13 @@ export async function getPriceFinalizationDetail(
       userId,
       req.params.finalizationId
     );
-    const propertyContext = await getProjectComplianceEnvelope(req.params.propertyId, userId, 'PRICE_FINALIZATION');
+    const propertyContext = await getProjectComplianceEnvelope(
+      req.params.propertyId,
+      userId,
+      'PRICE_FINALIZATION',
+      { serviceCategory: detail.serviceCategory },
+      propertyContextVersionFromMetadata(detail.metadataJson),
+    );
 
     res.status(200).json({ success: true, data: { finalization: detail, propertyContext } });
   } catch (error) {
@@ -115,7 +130,7 @@ export async function createPriceFinalizationDraft(
       payload,
     );
 
-    await assertProjectComplianceDecisionsApplicable(
+    const currentContext = await assertProjectComplianceDecisionsApplicable(
       req.params.propertyId,
       userId,
       'PRICE_FINALIZATION',
@@ -129,9 +144,19 @@ export async function createPriceFinalizationDraft(
       {
         ...payload,
         serviceCategory: payload.serviceCategory ?? serviceCategory,
+        metadataJson: {
+          ...(payload.metadataJson ?? {}),
+          _propertyContextVersion: currentContext.contextVersion,
+        },
       }
     );
-    const propertyContext = await getProjectComplianceEnvelope(req.params.propertyId, userId, 'PRICE_FINALIZATION');
+    const propertyContext = await getProjectComplianceEnvelope(
+      req.params.propertyId,
+      userId,
+      'PRICE_FINALIZATION',
+      { serviceCategory: detail.serviceCategory },
+      currentContext.contextVersion,
+    );
 
     analyticsEmitter.track({
       eventType: AnalyticsEvent.ACTION_COMPLETED,
@@ -156,6 +181,18 @@ export async function updatePriceFinalizationDraft(
   try {
     const { userId } = requireUser(req);
     const payload = req.body as UpdatePriceFinalizationBody;
+    const existing = await priceFinalizationService.getDetail(
+      req.params.propertyId,
+      userId,
+      req.params.finalizationId,
+    );
+    const currentContext = await assertProjectComplianceDecisionsApplicable(
+      req.params.propertyId,
+      userId,
+      'PRICE_FINALIZATION',
+      { serviceCategory: payload.serviceCategory ?? existing.serviceCategory ?? 'UNSPECIFIED' },
+      ['priceFinalization', 'providerBooking'],
+    );
 
     const detail = await priceFinalizationService.updateDraft(
       req.params.propertyId,
@@ -163,9 +200,20 @@ export async function updatePriceFinalizationDraft(
       req.params.finalizationId,
       {
         ...payload,
+        metadataJson: {
+          ...(existing.metadataJson ?? {}),
+          ...(payload.metadataJson ?? {}),
+          _propertyContextVersion: currentContext.contextVersion,
+        },
       }
     );
-    const propertyContext = await getProjectComplianceEnvelope(req.params.propertyId, userId, 'PRICE_FINALIZATION');
+    const propertyContext = await getProjectComplianceEnvelope(
+      req.params.propertyId,
+      userId,
+      'PRICE_FINALIZATION',
+      { serviceCategory: detail.serviceCategory },
+      currentContext.contextVersion,
+    );
 
     res.status(200).json({ success: true, data: { finalization: detail, propertyContext } });
   } catch (error) {
@@ -191,7 +239,7 @@ export async function finalizePriceFinalization(
       userId,
       req.params.finalizationId,
     );
-    await assertProjectComplianceDecisionsApplicable(
+    const currentContext = await assertProjectComplianceDecisionsApplicable(
       req.params.propertyId,
       userId,
       'PRICE_FINALIZATION',
@@ -205,9 +253,20 @@ export async function finalizePriceFinalization(
       req.params.finalizationId,
       {
         ...payload,
+        metadataJson: {
+          ...(existing.metadataJson ?? {}),
+          ...((payload as any).metadataJson ?? {}),
+          _propertyContextVersion: currentContext.contextVersion,
+        },
       }
     );
-    const propertyContext = await getProjectComplianceEnvelope(req.params.propertyId, userId, 'PRICE_FINALIZATION');
+    const propertyContext = await getProjectComplianceEnvelope(
+      req.params.propertyId,
+      userId,
+      'PRICE_FINALIZATION',
+      { serviceCategory: detail.serviceCategory },
+      currentContext.contextVersion,
+    );
 
     analyticsEmitter.track({
       eventType: AnalyticsEvent.ACTION_COMPLETED,

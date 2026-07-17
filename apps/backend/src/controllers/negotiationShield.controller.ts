@@ -88,10 +88,18 @@ export async function getNegotiationShieldCaseDetail(
 ) {
   try {
     const { userId } = requireUser(req);
-    const [detail, propertyContext] = await Promise.all([
-      service.getCaseDetail(req.params.propertyId, req.params.caseId),
-      getProjectComplianceEnvelope(req.params.propertyId, userId, 'NEGOTIATION_SHIELD'),
-    ]);
+    const detail = await service.getCaseDetail(req.params.propertyId, req.params.caseId);
+    const pricingAssessment = detail.latestAnalysis?.pricingAssessment;
+    const generatedContextVersion = pricingAssessment && typeof pricingAssessment === 'object'
+      ? String((pricingAssessment as Record<string, unknown>)._propertyContextVersion ?? '') || null
+      : null;
+    const propertyContext = await getProjectComplianceEnvelope(
+      req.params.propertyId,
+      userId,
+      'NEGOTIATION_SHIELD',
+      {},
+      generatedContextVersion,
+    );
     res.json({ success: true, data: { ...detail, propertyContext } });
   } catch (error) {
     next(error);
@@ -163,9 +171,17 @@ export async function analyzeNegotiationShieldCase(
 ) {
   try {
     const { userId } = requireUser(req);
+    const currentContext = await assertProjectComplianceApplicable(
+      req.params.propertyId,
+      userId,
+      'NEGOTIATION_SHIELD',
+      {},
+      'negotiationShield',
+    );
     const detail = await service.analyzeCase(
       req.params.propertyId,
-      req.params.caseId
+      req.params.caseId,
+      currentContext.contextVersion,
     );
 
     const guidanceJourneyId = readQueryString(req.query.guidanceJourneyId);
@@ -229,7 +245,14 @@ export async function analyzeNegotiationShieldCase(
       logger.warn({ guidanceError }, '[GUIDANCE] negotiation shield hook failed');
     }
 
-    res.status(201).json({ success: true, data: detail });
+    const propertyContext = await getProjectComplianceEnvelope(
+      req.params.propertyId,
+      userId,
+      'NEGOTIATION_SHIELD',
+      {},
+      currentContext.contextVersion,
+    );
+    res.status(201).json({ success: true, data: { ...detail, propertyContext } });
   } catch (error) {
     next(error);
   }

@@ -1,6 +1,7 @@
 import { prisma } from '../lib/prisma';
 import { NotificationService } from '../../../backend/src/services/notification.service';
 import { logger } from '../lib/logger';
+import { checkPermitWorkerContext } from '../../../backend/src/services/projectCompliance/permitWorkerContext.service';
 
 export async function permitInspectionReminderJob(): Promise<void> {
   const now = new Date();
@@ -22,7 +23,7 @@ export async function permitInspectionReminderJob(): Promise<void> {
           homeownerProfile: { select: { userId: true } },
         },
       },
-      permitRecord: { select: { category: true, permitNumber: true } },
+      permitRecord: { select: { category: true, permitNumber: true, workTypes: true } },
     },
   });
 
@@ -31,6 +32,19 @@ export async function permitInspectionReminderJob(): Promise<void> {
   for (const milestone of milestones) {
     const userId = milestone.property?.homeownerProfile?.userId;
     if (!userId) continue;
+
+    const contextCheck = await checkPermitWorkerContext(
+      milestone.propertyId,
+      { permitWorkTypes: milestone.permitRecord?.workTypes ?? [] },
+      true,
+    );
+    if (!contextCheck.allowed) {
+      logger.info(
+        { milestoneId: milestone.id, propertyId: milestone.propertyId, reasonCodes: contextCheck.reasonCodes },
+        '[PermitInspectionReminder] skipped after property context recheck',
+      );
+      continue;
+    }
 
     const scheduledDate = milestone.scheduledDate
       ? new Date(milestone.scheduledDate).toLocaleDateString('en-US', {

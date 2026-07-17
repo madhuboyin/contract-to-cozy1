@@ -1126,7 +1126,8 @@ export class NegotiationShieldService {
       | 'INSURANCE_CLAIM_SETTLEMENT'
       | 'BUYER_INSPECTION_NEGOTIATION'
       | 'CONTRACTOR_URGENCY_PRESSURE',
-    result: NegotiationShieldGeneratedAnalysisResult
+    result: NegotiationShieldGeneratedAnalysisResult,
+    propertyContextVersion?: string | null,
   ) {
     const now = new Date();
 
@@ -1144,7 +1145,10 @@ export class NegotiationShieldService {
           findings: result.findings,
           negotiationLeverage: result.negotiationLeverage,
           recommendedActions: result.recommendedActions,
-          pricingAssessment: result.pricingAssessment,
+          pricingAssessment: {
+            ...(result.pricingAssessment ?? {}),
+            _propertyContextVersion: propertyContextVersion ?? null,
+          },
           confidence: result.confidence,
           generatedAt: now,
           modelVersion: result.modelVersion,
@@ -1571,7 +1575,8 @@ export class NegotiationShieldService {
 
   async analyzeContractorQuoteCase(
     propertyId: string,
-    caseId: string
+    caseId: string,
+    propertyContextVersion?: string | null,
   ): Promise<NegotiationShieldCaseDetailDTO> {
     const record = await this.models.caseModel.findFirst({
       where: { id: caseId, propertyId },
@@ -1639,13 +1644,14 @@ export class NegotiationShieldService {
       );
     }
 
-    await this.persistAnalysisResult(caseId, 'CONTRACTOR_QUOTE_REVIEW', result);
+    await this.persistAnalysisResult(caseId, 'CONTRACTOR_QUOTE_REVIEW', result, propertyContextVersion);
     return this.getCaseDetail(propertyId, caseId);
   }
 
   async analyzeInsurancePremiumIncreaseCase(
     propertyId: string,
-    caseId: string
+    caseId: string,
+    propertyContextVersion?: string | null,
   ): Promise<NegotiationShieldCaseDetailDTO> {
     const record = await this.models.caseModel.findFirst({
       where: { id: caseId, propertyId },
@@ -1684,13 +1690,14 @@ export class NegotiationShieldService {
 
     const result: InsurancePremiumIncreaseAnalysisResult =
       generateInsurancePremiumIncreaseAnalysis(context.analysisInput);
-    await this.persistAnalysisResult(caseId, 'INSURANCE_PREMIUM_INCREASE', result);
+    await this.persistAnalysisResult(caseId, 'INSURANCE_PREMIUM_INCREASE', result, propertyContextVersion);
     return this.getCaseDetail(propertyId, caseId);
   }
 
   async analyzeInsuranceClaimSettlementCase(
     propertyId: string,
-    caseId: string
+    caseId: string,
+    propertyContextVersion?: string | null,
   ): Promise<NegotiationShieldCaseDetailDTO> {
     const record = await this.models.caseModel.findFirst({
       where: { id: caseId, propertyId },
@@ -1729,13 +1736,14 @@ export class NegotiationShieldService {
 
     const result: InsuranceClaimSettlementAnalysisResult =
       generateInsuranceClaimSettlementAnalysis(context.analysisInput);
-    await this.persistAnalysisResult(caseId, 'INSURANCE_CLAIM_SETTLEMENT', result);
+    await this.persistAnalysisResult(caseId, 'INSURANCE_CLAIM_SETTLEMENT', result, propertyContextVersion);
     return this.getCaseDetail(propertyId, caseId);
   }
 
   async analyzeBuyerInspectionNegotiationCase(
     propertyId: string,
-    caseId: string
+    caseId: string,
+    propertyContextVersion?: string | null,
   ): Promise<NegotiationShieldCaseDetailDTO> {
     const record = await this.models.caseModel.findFirst({
       where: { id: caseId, propertyId },
@@ -1774,13 +1782,14 @@ export class NegotiationShieldService {
 
     const result: BuyerInspectionNegotiationAnalysisResult =
       generateBuyerInspectionNegotiationAnalysis(context.analysisInput);
-    await this.persistAnalysisResult(caseId, 'BUYER_INSPECTION_NEGOTIATION', result);
+    await this.persistAnalysisResult(caseId, 'BUYER_INSPECTION_NEGOTIATION', result, propertyContextVersion);
     return this.getCaseDetail(propertyId, caseId);
   }
 
   async analyzeContractorUrgencyPressureCase(
     propertyId: string,
-    caseId: string
+    caseId: string,
+    propertyContextVersion?: string | null,
   ): Promise<NegotiationShieldCaseDetailDTO> {
     const record = await this.models.caseModel.findFirst({
       where: { id: caseId, propertyId },
@@ -1818,31 +1827,35 @@ export class NegotiationShieldService {
 
     const result: ContractorUrgencyPressureAnalysisResult =
       generateContractorUrgencyPressureAnalysis(context.analysisInput);
-    await this.persistAnalysisResult(caseId, 'CONTRACTOR_URGENCY_PRESSURE', result);
+    await this.persistAnalysisResult(caseId, 'CONTRACTOR_URGENCY_PRESSURE', result, propertyContextVersion);
     return this.getCaseDetail(propertyId, caseId);
   }
 
-  async analyzeCase(propertyId: string, caseId: string): Promise<NegotiationShieldCaseDetailDTO> {
+  async analyzeCase(
+    propertyId: string,
+    caseId: string,
+    propertyContextVersion?: string | null,
+  ): Promise<NegotiationShieldCaseDetailDTO> {
     const record = await this.assertCaseBelongsToProperty(propertyId, caseId);
 
     if (record.scenarioType === 'CONTRACTOR_QUOTE_REVIEW') {
-      return this.analyzeContractorQuoteCase(propertyId, caseId);
+      return this.analyzeContractorQuoteCase(propertyId, caseId, propertyContextVersion);
     }
 
     if (record.scenarioType === 'INSURANCE_PREMIUM_INCREASE') {
-      return this.analyzeInsurancePremiumIncreaseCase(propertyId, caseId);
+      return this.analyzeInsurancePremiumIncreaseCase(propertyId, caseId, propertyContextVersion);
     }
 
     if (record.scenarioType === 'INSURANCE_CLAIM_SETTLEMENT') {
-      return this.analyzeInsuranceClaimSettlementCase(propertyId, caseId);
+      return this.analyzeInsuranceClaimSettlementCase(propertyId, caseId, propertyContextVersion);
     }
 
     if (record.scenarioType === 'BUYER_INSPECTION_NEGOTIATION') {
-      return this.analyzeBuyerInspectionNegotiationCase(propertyId, caseId);
+      return this.analyzeBuyerInspectionNegotiationCase(propertyId, caseId, propertyContextVersion);
     }
 
     if (record.scenarioType === 'CONTRACTOR_URGENCY_PRESSURE') {
-      return this.analyzeContractorUrgencyPressureCase(propertyId, caseId);
+      return this.analyzeContractorUrgencyPressureCase(propertyId, caseId, propertyContextVersion);
     }
 
     throw new APIError(

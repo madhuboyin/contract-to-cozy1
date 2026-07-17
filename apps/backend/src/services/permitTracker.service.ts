@@ -556,6 +556,9 @@ export class PermitTrackerService {
     if (!record) throw new APIError('Export not found', 404, 'NOT_FOUND');
 
     const urlExpired = record.expiresAt != null && record.expiresAt < new Date();
+    const snapshot = record.snapshotJson && typeof record.snapshotJson === 'object' && !Array.isArray(record.snapshotJson)
+      ? record.snapshotJson as Record<string, unknown>
+      : null;
 
     return {
       id: record.id,
@@ -565,6 +568,9 @@ export class PermitTrackerService {
       fileUrl: record.status === 'COMPLETED' && !urlExpired ? record.fileUrl : null,
       expiresAt: record.expiresAt?.toISOString(),
       errorMessage: record.errorMessage,
+      generatedContextVersion: typeof snapshot?.propertyContextVersion === 'string'
+        ? snapshot.propertyContextVersion
+        : null,
       createdAt: record.createdAt.toISOString(),
     };
   }
@@ -581,6 +587,7 @@ export class PermitTrackerService {
         fileUrl: true,
         expiresAt: true,
         errorMessage: true,
+        snapshotJson: true,
         createdAt: true,
       },
     });
@@ -588,6 +595,12 @@ export class PermitTrackerService {
     const now = new Date();
     return records.map((r) => ({
       ...r,
+      snapshotJson: undefined,
+      generatedContextVersion:
+        r.snapshotJson && typeof r.snapshotJson === 'object' && !Array.isArray(r.snapshotJson) &&
+        typeof (r.snapshotJson as Record<string, unknown>).propertyContextVersion === 'string'
+          ? (r.snapshotJson as Record<string, unknown>).propertyContextVersion
+          : null,
       fileUrl: r.status === 'COMPLETED' && r.expiresAt != null && r.expiresAt > now ? r.fileUrl : null,
       expiresAt: r.expiresAt?.toISOString(),
       createdAt: r.createdAt.toISOString(),

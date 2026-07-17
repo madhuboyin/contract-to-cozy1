@@ -13,6 +13,7 @@ type PermitUnpermittedFlagTrigger =
   | 'INSPECTION_REPORT_FINDING' | 'MANUAL';
 import { prisma } from '../lib/prisma';
 import { logger } from '../lib/logger';
+import { checkPermitWorkerContext } from './projectCompliance/permitWorkerContext.service';
 
 const WINDOW_YEARS = 2;
 
@@ -75,6 +76,15 @@ interface WorkCandidate {
 
 export class PermitDetectionService {
   async detectUnpermittedWork(propertyId: string): Promise<number> {
+    const contextCheck = await checkPermitWorkerContext(propertyId);
+    if (!contextCheck.allowed) {
+      logger.info(
+        { propertyId, reasonCodes: contextCheck.reasonCodes },
+        '[PermitDetectionService] skipped after property context recheck',
+      );
+      return 0;
+    }
+
     const [assets, inventoryItems, permits] = await Promise.all([
       prisma.homeAsset.findMany({
         where: { propertyId },

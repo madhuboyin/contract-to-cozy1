@@ -17,6 +17,13 @@ export type PropertyContextEnvelope = {
   generatedContextVersion?: string | null;
   isStale?: boolean;
   decision: PropertyContextDecision;
+  reconciliation?: {
+    status: 'CURRENT' | 'REVIEW_REQUIRED';
+    requiresReview: boolean;
+    contextVersion: string;
+    reasonCodes: string[];
+    affectedOutputs: Array<{ factKey: string; outputType: string; count: number }>;
+  };
 };
 
 function label(value: string) {

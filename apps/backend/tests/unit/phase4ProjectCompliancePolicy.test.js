@@ -8,6 +8,7 @@ require('ts-node/register');
 const { createPropertyFact } = require('../../src/modules/propertyContext/index.ts');
 const { evaluateProjectComplianceContext } = require('../../src/services/projectCompliance/applicabilityPolicy.ts');
 const { PROJECT_COMPLIANCE_FEATURE_SCOPES } = require('../../src/services/projectCompliance/context.ts');
+const { reconcileProjectComplianceOutputs } = require('../../src/services/projectCompliance/reconciliation.ts');
 const {
   classifyExecutionAppropriateness,
   classifyPermitApplicability,
@@ -50,6 +51,27 @@ test('renovation and local pricing require dwelling, jurisdiction, and size cont
   assert.equal(complete.localPriceBenchmarking.status, 'APPLICABLE');
 });
 
+test('stale and conflicted jurisdiction facts remain non-actionable', () => {
+  const conflictedDwelling = createPropertyFact('core.dwellingType', 'CONDO', undefined, NOW);
+  conflictedDwelling.state = 'CONFLICTED';
+  const staleState = createPropertyFact('location.state', 'NJ', undefined, NOW);
+  staleState.state = 'STALE';
+  const context = {
+    ...snapshot({ 'location.zipCode': '07030' }),
+    facts: {
+      'core.dwellingType': conflictedDwelling,
+      'location.state': staleState,
+      'location.zipCode': createPropertyFact('location.zipCode', '07030', undefined, NOW),
+    },
+  };
+
+  const decisions = evaluateProjectComplianceContext(context);
+  assert.equal(decisions.renovationAdvisor.status, 'UNKNOWN');
+  assert.deepEqual(decisions.renovationAdvisor.conflictedFactKeys, ['core.dwellingType']);
+  assert.equal(decisions.permitTracking.status, 'UNKNOWN');
+  assert.ok(decisions.permitTracking.missingFactKeys.includes('location.state'));
+});
+
 test('HOA existence enables compliance tracking but never implies association work responsibility', () => {
   const unknownResponsibility = evaluateProjectComplianceContext(snapshot({
     'compliance.hoaAssociation': { id: 'hoa-1' },
@@ -89,6 +111,46 @@ test('unmapped physical work remains unknown while known non-property services c
 
   const cleaning = evaluateProjectComplianceContext(snapshot({}), { serviceCategory: 'CLEANING' });
   assert.equal(cleaning.ownerProjectExecution.status, 'APPLICABLE');
+});
+
+test('Phase 4 responsibility behavior holds across owner and association archetypes', () => {
+  const cases = [
+    { dwelling: 'SINGLE_FAMILY_DETACHED', party: 'OWNER', expected: 'APPLICABLE' },
+    { dwelling: 'CONDO', party: 'ASSOCIATION', expected: 'NOT_APPLICABLE' },
+    { dwelling: 'TOWNHOME', party: 'SHARED', expected: 'APPLICABLE' },
+    { dwelling: 'CONDO', party: 'UNKNOWN', expected: 'UNKNOWN' },
+  ];
+  for (const entry of cases) {
+    const decisions = evaluateProjectComplianceContext(snapshot({
+      'core.dwellingType': entry.dwelling,
+      'responsibility.roof': entry.party,
+    }), { serviceCategory: 'ROOFING' });
+    assert.equal(decisions.providerBooking.status, entry.expected, entry.dwelling);
+  }
+});
+
+test('open Phase 4 outputs reconcile when responsibility changes', () => {
+  const ownerContext = snapshot({
+    'responsibility.roof': 'OWNER',
+    'projects.activeProjects': [{ id: 'project-1' }],
+    'projects.openQuoteWorkspaces': [{ id: 'quote-1' }],
+  });
+  const ownerDecisions = evaluateProjectComplianceContext(ownerContext, { serviceCategory: 'ROOFING' });
+  assert.equal(reconcileProjectComplianceOutputs(ownerContext, ownerDecisions).status, 'CURRENT');
+
+  const associationContext = snapshot({
+    'responsibility.roof': 'ASSOCIATION',
+    'projects.activeProjects': [{ id: 'project-1' }],
+    'projects.openQuoteWorkspaces': [{ id: 'quote-1' }],
+  });
+  const associationDecisions = evaluateProjectComplianceContext(
+    associationContext,
+    { serviceCategory: 'ROOFING' },
+  );
+  const reconciliation = reconcileProjectComplianceOutputs(associationContext, associationDecisions);
+  assert.equal(reconciliation.status, 'REVIEW_REQUIRED');
+  assert.equal(reconciliation.requiresReview, true);
+  assert.equal(reconciliation.affectedOutputs.length, 2);
 });
 
 test('project and inventory scopes map to canonical responsibility facts', () => {
