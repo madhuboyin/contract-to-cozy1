@@ -5,6 +5,8 @@ import { diyService } from '../services/diy.service';
 import { diyDecisionService } from '../services/diyDecision.service';
 import { diyAiGuideService } from '../services/diyAiGuide.service';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
+import { getPropertyContext } from '../modules/propertyContext';
+import { evaluateDiyApplicability } from '../services/diy/applicabilityPolicy';
 
 // ── Skill Profile ─────────────────────────────────────────────────────────────
 
@@ -49,6 +51,20 @@ export async function getTemplateDetail(req: Request, res: Response, next: NextF
 
 export async function getDiyDecision(req: Request, res: Response, next: NextFunction) {
   try {
+    const context = await getPropertyContext(
+      req.params.propertyId,
+      { userId: req.user!.userId },
+      { scopes: ['EXTERIOR', 'RESPONSIBILITY', 'SYSTEMS', 'INVENTORY'] },
+    );
+    const applicability = evaluateDiyApplicability(context, req.body.projectCategory);
+    if (applicability.status !== 'APPLICABLE') {
+      res.status(409).json({
+        success: false,
+        error: 'This project does not apply to the selected property, or required property facts are missing.',
+        data: { applicability },
+      });
+      return;
+    }
     const result = await diyDecisionService.score({ ...req.body, userId: req.user!.userId });
 
     analyticsEmitter.track({
@@ -60,7 +76,7 @@ export async function getDiyDecision(req: Request, res: Response, next: NextFunc
       metadataJson: { verdict: (result as any)?.verdict, score: (result as any)?.score },
     });
 
-    res.json({ success: true, data: result });
+    res.json({ success: true, data: { ...result, applicability } });
   } catch (err) { next(err); }
 }
 

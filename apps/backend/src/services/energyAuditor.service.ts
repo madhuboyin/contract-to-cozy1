@@ -3,6 +3,9 @@
 import { GoogleGenAI } from "@google/genai";
 import { prisma } from '../config/database';
 import { logger } from '../lib/logger';
+import type { PropertyContextSnapshot } from '../modules/propertyContext';
+import { knownContextValue } from './propertyContextDecision';
+import type { EnergyApplicability } from './energy/applicabilityPolicy';
 
 interface EnergyInputData {
   averageMonthlyKWh: number;
@@ -47,6 +50,7 @@ interface EnergyRecommendation {
 interface EnergyAuditReport {
   propertyId: string;
   propertyAddress: string;
+  applicability: EnergyApplicability;
   
   score: number; // 0-100
   grade: 'A' | 'B' | 'C' | 'D' | 'F';
@@ -156,18 +160,25 @@ export class EnergyAuditorService {
     propertyId: string,
     userId: string,
     inputData: EnergyInputData,
-    billFiles?: Express.Multer.File[]
+    billFiles: Express.Multer.File[] | undefined,
+    context: PropertyContextSnapshot,
+    applicability: EnergyApplicability,
   ): Promise<EnergyAuditReport> {
-    const property = await prisma.property.findFirst({
-      where: {
-        id: propertyId,
-        homeownerProfile: { userId }
-      }
-    });
+    const property = await prisma.property.findUnique({ where: { id: propertyId } });
 
     if (!property) {
       throw new Error('Property not found');
     }
+
+    const canonicalSquareFeet = knownContextValue<number>(context, 'core.propertySizeSqFt');
+    const canonicalCooling = knownContextValue<boolean>(context, 'systems.hasCooling');
+    const canonicalPool = knownContextValue<boolean>(context, 'exterior.hasPoolOrSpa');
+    inputData = {
+      ...inputData,
+      squareFootage: canonicalSquareFeet ?? inputData.squareFootage,
+      hasCentralAC: canonicalCooling ?? inputData.hasCentralAC,
+      hasPool: canonicalPool ?? inputData.hasPool,
+    };
 
     // Get state data
     const stateData = STATE_ELECTRICITY_DATA[property.state] || STATE_ELECTRICITY_DATA['DEFAULT'];
@@ -220,7 +231,7 @@ export class EnergyAuditorService {
     );
 
     // Get AI recommendations
-    const recommendations = await this.getAIRecommendations(
+    let recommendations = await this.getAIRecommendations(
       property,
       inputData,
       annualKWh,
@@ -228,6 +239,9 @@ export class EnergyAuditorService {
       stateData,
       billData
     );
+    if (applicability.hvacRecommendations.status !== 'APPLICABLE') {
+      recommendations = recommendations.filter((recommendation) => recommendation.category !== 'HVAC');
+    }
 
     // Calculate carbon footprint
     const carbonFootprint = this.calculateCarbonFootprint(
@@ -245,6 +259,7 @@ export class EnergyAuditorService {
     return {
       propertyId,
       propertyAddress: property.address,
+      applicability,
       score,
       grade,
       annualUsage: {

@@ -4864,6 +4864,10 @@ export interface EnvironmentReportDTO {
     zipCode: string | null;
   };
   generatedAt: string;
+  applicability: {
+    feature: PropertyContextFeatureDecision;
+    hvacFilterMaintenance: PropertyContextFeatureDecision;
+  };
   insights: EnvironmentInsight[];
   questions: EnvironmentQuestion[];
   plantAdvisorModules: PlantAdvisorWeatherModule[];

@@ -5,6 +5,7 @@ import { CustomRequest } from '../types/express-extension.types';
 import { prisma } from '../lib/prisma';
 import { logger } from '../lib/logger';
 import { getEnvironmentReport, recordHvacFilterMaintenance } from '../services/environmentReport.service';
+import { getPropertyContext } from '../modules/propertyContext';
 
 class EnvironmentReportController {
   async recordMaintenanceContext(req: CustomRequest, res: Response) {
@@ -14,7 +15,12 @@ class EnvironmentReportController {
       if (field !== 'hvacFilterLastCompletedDate' || typeof completedDate !== 'string') {
         return res.status(400).json({ success: false, message: 'A supported maintenance field and completion date are required.' });
       }
-      const task = await recordHvacFilterMaintenance(propertyId, completedDate);
+      const context = await getPropertyContext(
+        propertyId,
+        { userId: req.user!.userId },
+        { scopes: ['SYSTEMS', 'RESPONSIBILITY'] },
+      );
+      const task = await recordHvacFilterMaintenance(propertyId, completedDate, context);
       return res.json({ success: true, data: { taskId: task.id, completedDate: task.lastCompletedDate } });
     } catch (error: any) {
       return res.status(400).json({ success: false, message: error.message || 'Failed to record maintenance context' });
@@ -59,7 +65,12 @@ class EnvironmentReportController {
         return res.status(404).json({ success: false, message: 'Property not found' });
       }
 
-      const report = await getEnvironmentReport(property);
+      const context = await getPropertyContext(
+        propertyId,
+        { userId: req.user!.userId },
+        { scopes: ['LOCATION', 'STRUCTURE', 'EXTERIOR', 'RESPONSIBILITY', 'SYSTEMS', 'SAFETY', 'MAINTENANCE'] },
+      );
+      const report = await getEnvironmentReport(property, context);
       return res.json({ success: true, data: report });
     } catch (error: any) {
       logger.error({ err: error }, '[ENV_REPORT] /report/:propertyId error');

@@ -4,7 +4,8 @@ import { Response } from 'express';
 import { authenticate } from '../middleware/auth.middleware';
 import { AuthRequest } from '../types/auth.types';
 import { emergencyService } from '../services/emergencyTroubleshooter.service';
-import { getPropertyContextForAI } from '../services/property.service';
+import { getPropertyContext, PropertyContextAccessDeniedError } from '../modules/propertyContext/application/getPropertyContext';
+import { evaluateEmergencyContext } from '../services/emergency/applicabilityPolicy';
 import { apiRateLimiter } from '../middleware/rateLimiter.middleware';
 import { logger } from '../lib/logger';
 
@@ -86,11 +87,16 @@ router.post('/chat', authenticate, apiRateLimiter, async (req: AuthRequest, res:
     
     // Get property context if propertyId provided
     let propertyContext: string | undefined;
+    let applicability;
     if (propertyId) {
-      const property = await getPropertyContextForAI(propertyId, userId);
-      if (property) {
-        propertyContext = `${property.address}, ${property.city}, ${property.state}. Built ${property.yearBuilt || 'unknown'}`;
-      }
+      const context = await getPropertyContext(
+        String(propertyId),
+        { userId },
+        { scopes: ['CORE', 'STRUCTURE', 'SYSTEMS', 'SAFETY'] },
+      );
+      const emergencyContext = evaluateEmergencyContext(context);
+      propertyContext = emergencyContext.promptContext;
+      applicability = emergencyContext.applicability;
     }
     
     const result = await emergencyService.chat(messages, propertyContext, {
@@ -102,12 +108,12 @@ router.post('/chat', authenticate, apiRateLimiter, async (req: AuthRequest, res:
     
     res.json({
       success: true,
-      data: result
+      data: { ...result, applicability }
     });
   } catch (error: any) {
     const userId = (req as AuthRequest).user?.userId || 'N/A';
     logger.error({ err: error }, `[ERROR] /api/emergency/chat failed for user: ${userId}`);
-    res.status(500).json({
+    res.status(error instanceof PropertyContextAccessDeniedError ? 404 : 500).json({
       success: false,
       message: error.message || 'Failed to process emergency chat'
     });

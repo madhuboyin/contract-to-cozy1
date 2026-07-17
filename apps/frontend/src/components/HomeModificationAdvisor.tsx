@@ -52,7 +52,11 @@ interface ModificationReport {
   propertyId: string;
   propertyAddress: string;
   userNeeds: string[];
-  propertyAge: number;
+  propertyAge: number | null;
+  applicability: {
+    feature: { status: 'APPLICABLE' | 'NOT_APPLICABLE' | 'UNKNOWN'; reasonCodes: string[] };
+    outdoor: { status: 'APPLICABLE' | 'NOT_APPLICABLE' | 'UNKNOWN'; reasonCodes: string[]; missingFactKeys: string[] };
+  };
   recommendations: ModificationRecommendation[];
   totalEstimatedCost: number;
   averageROI: number;
@@ -223,6 +227,14 @@ export default function HomeModificationAdvisor({ propertyId }: HomeModification
           { label: 'Generated', value: new Date(report.generatedAt).toLocaleDateString() },
         ]}
       />
+
+      {report.applicability.outdoor.status !== 'APPLICABLE' ? (
+        <Card className="border-amber-200 bg-amber-50">
+          <CardContent className="p-4 text-sm text-amber-900">
+            Outdoor projects were omitted because the selected property either has no owner-managed private outdoor space or still needs those property details completed.
+          </CardContent>
+        </Card>
+      ) : null}
 
       {report.meta?.disclaimer ? (
         <Card className="border-amber-200 bg-amber-50">

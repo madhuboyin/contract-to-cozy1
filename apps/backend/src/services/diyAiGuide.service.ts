@@ -6,6 +6,9 @@ import { LLM_MODEL_CONFIG } from '../config/ai-constants';
 import { Queue } from 'bullmq';
 import { connection } from './JobQueue.service';
 import { DEFAULT_JOB_RETENTION } from '../config/queueDefaults';
+import { getPropertyContext } from '../modules/propertyContext';
+import { evaluateDiyApplicability } from './diy/applicabilityPolicy';
+import { knownContextValue } from './propertyContextDecision';
 
 export const DIY_AI_GUIDE_JOB = 'GENERATE_DIY_AI_GUIDE';
 export const DIY_AI_GUIDE_QUEUE = 'diy-ai-guide-queue';
@@ -50,21 +53,20 @@ class DiyAiGuideService {
     await prisma.diyAiGuide.update({ where: { id: guideId }, data: { status: 'GENERATING' } });
 
     try {
-      const [skillProfile, property] = await Promise.all([
+      const [skillProfile, context] = await Promise.all([
         prisma.diySkillProfile.findUnique({ where: { userId: guide.userId } }),
-        prisma.property.findUnique({
-          where: { id: guide.propertyId },
-          select: { propertyType: true, yearBuilt: true, heatingType: true, coolingType: true },
-        }),
+        getPropertyContext(
+          guide.propertyId,
+          { userId: guide.userId },
+          { scopes: ['CORE', 'EXTERIOR', 'RESPONSIBILITY', 'SYSTEMS', 'INVENTORY'] },
+        ),
       ]);
 
       const skillSummary = skillProfile
         ? `HVAC: ${skillProfile.hvac}, Plumbing: ${skillProfile.plumbing}, Electrical: ${skillProfile.electrical}, Painting: ${skillProfile.painting}, General: ${skillProfile.general}`
         : 'Not assessed';
 
-      const propertySummary = property
-        ? `${property.propertyType ?? 'home'}, built ${property.yearBuilt ?? 'unknown'}, heating: ${property.heatingType ?? 'unknown'}, cooling: ${property.coolingType ?? 'unknown'}`
-        : 'Unknown property';
+      const propertySummary = `${knownContextValue<string>(context, 'core.dwellingType') ?? 'unknown dwelling'}, built ${knownContextValue<number>(context, 'core.yearBuilt') ?? 'unknown'}, heating: ${knownContextValue<string>(context, 'systems.heatingType') ?? 'unknown'}, cooling: ${knownContextValue<string>(context, 'systems.coolingType') ?? 'unknown'}`;
 
       const prompt = `You are a home maintenance expert helping a homeowner safely complete a DIY project.
 
@@ -95,6 +97,17 @@ If the project involves main electrical panels, gas lines, load-bearing structur
       const rawText = response.text ?? '';
       const cleaned = rawText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
       const parsed = JSON.parse(cleaned);
+      const applicability = evaluateDiyApplicability(context, parsed.category ?? 'OTHER');
+      if (applicability.status !== 'APPLICABLE') {
+        await prisma.diyAiGuide.update({
+          where: { id: guideId },
+          data: {
+            status: 'FAILED',
+            errorMessage: `Property applicability: ${applicability.reasonCodes.join(', ')}`,
+          },
+        });
+        return;
+      }
 
       await prisma.diyAiGuide.update({
         where: { id: guideId },

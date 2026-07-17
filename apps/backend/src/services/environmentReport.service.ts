@@ -32,6 +32,9 @@ import {
   getPlantAdvisorWeatherModules,
   PlantAdvisorWeatherModule,
 } from './environment/plantAdvisorWeather.service';
+import type { FeatureDecision, PropertyContextSnapshot } from '../modules/propertyContext';
+import { knownContextValue } from './propertyContextDecision';
+import { evaluateEnvironmentApplicability } from './environment/applicabilityPolicy';
 
 export interface ClimateSectionData {
   normals: SectionResult<ClimateNormalsData>;
@@ -54,6 +57,10 @@ export interface EnvironmentReportDTO {
     zipCode: string | null;
   };
   generatedAt: string;
+  applicability: {
+    feature: FeatureDecision;
+    hvacFilterMaintenance: FeatureDecision;
+  };
   insights: EnvironmentInsight[];
   questions: EnvironmentQuestion[];
   plantAdvisorModules: PlantAdvisorWeatherModule[];
@@ -138,8 +145,23 @@ function unavailable<T>(reason: string): SectionResult<T> {
   return { status: 'unavailable', reason };
 }
 
-export async function getEnvironmentReport(property: GeocodableProperty): Promise<EnvironmentReportDTO> {
-  const geo = await resolvePropertyGeo(property);
+export async function getEnvironmentReport(
+  property: GeocodableProperty,
+  context: PropertyContextSnapshot,
+): Promise<EnvironmentReportDTO> {
+  const applicability = evaluateEnvironmentApplicability(context);
+  const contextualProperty: GeocodableProperty = {
+    ...property,
+    hasDrainageIssues: knownContextValue<boolean>(context, 'exterior.hasDrainageIssues') ?? null,
+    hasSumpPumpBackup: knownContextValue<boolean>(context, 'safety.hasSumpPumpBackup') ?? null,
+    coolingType: knownContextValue<string>(context, 'systems.coolingType') ?? null,
+    heatingType: knownContextValue<string>(context, 'systems.heatingType') ?? null,
+    roofType: knownContextValue<string>(context, 'structure.roofType') ?? null,
+    roofReplacementYear: knownContextValue<number>(context, 'structure.roofReplacementYear') ?? null,
+    foundationType: (knownContextValue<string>(context, 'structure.foundationType') as FoundationType | undefined) ?? null,
+    hasIrrigation: knownContextValue<boolean>(context, 'exterior.hasIrrigation') ?? null,
+  };
+  const geo = await resolvePropertyGeo(contextualProperty);
   const zipCode = property.zipCode ?? null;
 
   if (!geo) {
@@ -149,6 +171,7 @@ export async function getEnvironmentReport(property: GeocodableProperty): Promis
       property: { name: property.name, address: property.address, city: property.city, state: property.state, zipCode: property.zipCode },
       location: { latitude: null, longitude: null, countyFips: null, zipCode },
       generatedAt: new Date().toISOString(),
+      applicability,
       insights: [],
       questions: [],
       plantAdvisorModules: [],
@@ -229,7 +252,7 @@ export async function getEnvironmentReport(property: GeocodableProperty): Promis
     select: { lastCompletedDate: true },
   });
   const insightProperty = {
-    ...property,
+    ...contextualProperty,
     hvacFilterLastCompletedDate: latestHvacFilterTask?.lastCompletedDate?.toISOString() ?? null,
   };
   const derivedInsights = deriveEnvironmentInsights(insightProperty, sections);
@@ -259,8 +282,11 @@ export async function getEnvironmentReport(property: GeocodableProperty): Promis
       };
     })
   );
-  const questions = deriveEnvironmentQuestions(insightProperty, insights);
-  const plantAdvisorModules = await getPlantAdvisorWeatherModules(property, sections, insights).catch(error => {
+  const questions = deriveEnvironmentQuestions(insightProperty, insights).filter((question) => (
+    question.field !== 'hvacFilterLastCompletedDate'
+    || applicability.hvacFilterMaintenance.status === 'APPLICABLE'
+  ));
+  const plantAdvisorModules = await getPlantAdvisorWeatherModules(contextualProperty, sections, insights).catch(error => {
     logger.error({ err: error }, '[ENV_REPORT] Failed to build Plant Advisor weather modules');
     return [];
   });
@@ -270,6 +296,7 @@ export async function getEnvironmentReport(property: GeocodableProperty): Promis
     property: { name: property.name, address: property.address, city: property.city, state: property.state, zipCode: property.zipCode },
     location: { latitude: lat, longitude: lon, countyFips: countyFips ?? null, zipCode },
     generatedAt: new Date().toISOString(),
+    applicability,
     insights,
     questions,
     plantAdvisorModules,
@@ -277,7 +304,17 @@ export async function getEnvironmentReport(property: GeocodableProperty): Promis
   };
 }
 
-export async function recordHvacFilterMaintenance(propertyId: string, completedDate: string) {
+export async function recordHvacFilterMaintenance(
+  propertyId: string,
+  completedDate: string,
+  context: PropertyContextSnapshot,
+) {
+  const decision = evaluateEnvironmentApplicability(context).hvacFilterMaintenance;
+  if (decision.status !== 'APPLICABLE') {
+    const error = new Error('HVAC filter maintenance is not applicable until the property system and responsibility facts support it.');
+    Object.assign(error, { applicability: decision });
+    throw error;
+  }
   const parsed = new Date(`${completedDate}T12:00:00Z`);
   const now = new Date();
   if (Number.isNaN(parsed.getTime()) || parsed > now || parsed.getUTCFullYear() < 2000) {

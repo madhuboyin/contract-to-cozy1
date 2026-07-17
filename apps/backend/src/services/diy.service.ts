@@ -3,6 +3,8 @@ import { Prisma, DiyProjectStatus, DiyProjectCategory, DiyTemplateStatus, DiySki
 import { prisma } from '../lib/prisma';
 import { APIError } from '../middleware/error.middleware';
 import { diyCompletionService } from './diyCompletion.service';
+import { getPropertyContext } from '../modules/propertyContext';
+import { evaluateDiyApplicability } from './diy/applicabilityPolicy';
 
 const SKILL_RANK: Record<DiySkillLevel, number> = { BEGINNER: 0, INTERMEDIATE: 1, ADVANCED: 2 };
 
@@ -149,6 +151,20 @@ export class DiyService {
         },
       });
       if (!template) throw new APIError('Template not found', 404);
+      const context = await getPropertyContext(
+        propertyId,
+        { userId },
+        { scopes: ['EXTERIOR', 'RESPONSIBILITY', 'SYSTEMS', 'INVENTORY'] },
+      );
+      const applicability = evaluateDiyApplicability(context, template.category);
+      if (applicability.status !== 'APPLICABLE') {
+        throw new APIError(
+          'This DIY project is not applicable to the selected property.',
+          409,
+          'DIY_PROPERTY_NOT_APPLICABLE',
+          { applicability },
+        );
+      }
 
       return prisma.$transaction(async (tx) => {
         const project = await tx.diyProject.create({
@@ -220,6 +236,20 @@ export class DiyService {
     if (aiGuideId) {
       const guide = await prisma.diyAiGuide.findFirst({ where: { id: aiGuideId, propertyId } });
       if (!guide || guide.status !== 'COMPLETED') throw new APIError('AI guide not ready', 400);
+      const context = await getPropertyContext(
+        propertyId,
+        { userId },
+        { scopes: ['EXTERIOR', 'RESPONSIBILITY', 'SYSTEMS', 'INVENTORY'] },
+      );
+      const applicability = evaluateDiyApplicability(context, guide.category ?? 'OTHER');
+      if (applicability.status !== 'APPLICABLE') {
+        throw new APIError(
+          'This DIY project is not applicable to the selected property.',
+          409,
+          'DIY_PROPERTY_NOT_APPLICABLE',
+          { applicability },
+        );
+      }
 
       const stepsJson = (guide.stepsJson as any[]) ?? [];
       const materialsJson = (guide.materialsJson as any[]) ?? [];

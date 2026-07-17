@@ -54,6 +54,7 @@ RUN mkdir -p src/shared/backend/utils \
              src/shared/backend/services/incidents/integrations \
              src/shared/backend/services/hiddenAssets \
              src/shared/backend/services/homeHabitCoach \
+             src/shared/backend/services/diy \
              src/shared/backend/services/maintenance \
              src/shared/backend/services/seasonal \
              src/shared/backend/services/analytics \
@@ -66,6 +67,10 @@ RUN mkdir -p src/shared/backend/utils \
              src/shared/backend/modules/gazette/dto \
              src/shared/backend/modules/gazette/mappers \
              src/shared/backend/modules/propertyContext/domain \
+             src/shared/backend/modules/propertyContext/application \
+             src/shared/backend/modules/propertyContext/catalog \
+             src/shared/backend/modules/propertyContext/infrastructure \
+             src/shared/backend/modules/propertyContext/policies \
              src/shared/backend/neighborhoodIntelligence \
              src/shared/backend/refinanceRadar/engine \
              src/shared/backend/refinanceRadar/config \
@@ -123,8 +128,16 @@ COPY apps/backend/src/utils/maintenanceDueDate.ts \
 COPY apps/backend/src/services/propertyAccess.service.ts src/shared/backend/services/
 COPY apps/backend/src/services/maintenance/applicabilityPolicy.ts src/shared/backend/services/maintenance/
 COPY apps/backend/src/services/seasonal/applicabilityPolicy.ts src/shared/backend/services/seasonal/
-COPY apps/backend/src/modules/propertyContext/domain/contracts.ts src/shared/backend/modules/propertyContext/domain/
-COPY apps/workers/stubs/property-context.ts src/shared/backend/modules/propertyContext/index.ts
+COPY apps/backend/src/modules/propertyContext/index.ts src/shared/backend/modules/propertyContext/
+COPY apps/backend/src/modules/propertyContext/application/getPropertyContext.ts \
+     apps/backend/src/modules/propertyContext/application/getContextCompleteness.ts \
+     src/shared/backend/modules/propertyContext/application/
+COPY apps/backend/src/modules/propertyContext/catalog/factCatalog.ts src/shared/backend/modules/propertyContext/catalog/
+COPY apps/backend/src/modules/propertyContext/domain/contracts.ts \
+     apps/backend/src/modules/propertyContext/domain/facts.ts \
+     src/shared/backend/modules/propertyContext/domain/
+COPY apps/backend/src/modules/propertyContext/infrastructure/prismaAssemblers.ts src/shared/backend/modules/propertyContext/infrastructure/
+COPY apps/backend/src/modules/propertyContext/policies/featurePolicy.ts src/shared/backend/modules/propertyContext/policies/
 # Stub: breaks the JobQueue.service ↔ RiskAssessment.service circular import
 COPY apps/workers/stubs/job-queue-service.ts src/shared/backend/services/JobQueue.service.ts
 COPY apps/backend/src/services/hiddenAssets/ruleEngine.ts \
@@ -203,8 +216,11 @@ COPY apps/backend/src/services/guidanceEngine/guidanceTypes.ts \
      apps/backend/src/services/guidanceEngine/guidanceBookingGuard.service.ts \
      apps/backend/src/services/guidanceEngine/guidanceJourney.service.ts \
      src/shared/backend/services/guidanceEngine/
-# Copy DIY AI guide service (used by generateDiyAiGuide.job.ts)
-COPY apps/backend/src/services/diyAiGuide.service.ts src/shared/backend/services/
+# Copy DIY AI guide service and current Property Context policy used by the worker.
+COPY apps/backend/src/services/diyAiGuide.service.ts \
+     apps/backend/src/services/propertyContextDecision.ts \
+     src/shared/backend/services/
+COPY apps/backend/src/services/diy/applicabilityPolicy.ts src/shared/backend/services/diy/
 # Copy permit services and adapters (used by permit worker jobs)
 COPY apps/backend/src/services/permitAdapters/permitNormalizer.ts \
      apps/backend/src/services/permitAdapters/socrata.adapter.ts \

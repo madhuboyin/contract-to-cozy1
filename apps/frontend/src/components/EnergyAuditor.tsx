@@ -47,6 +47,11 @@ interface EnergyRecommendation {
 interface EnergyAuditReport {
   propertyId: string;
   propertyAddress: string;
+  applicability: {
+    feature: { status: 'APPLICABLE' | 'NOT_APPLICABLE' | 'UNKNOWN'; reasonCodes: string[] };
+    hvacRecommendations: { status: 'APPLICABLE' | 'NOT_APPLICABLE' | 'UNKNOWN'; reasonCodes: string[] };
+    poolRecommendations: { status: 'APPLICABLE' | 'NOT_APPLICABLE' | 'UNKNOWN'; reasonCodes: string[] };
+  };
   score: number;
   grade: 'A' | 'B' | 'C' | 'D' | 'F';
   annualUsage: {

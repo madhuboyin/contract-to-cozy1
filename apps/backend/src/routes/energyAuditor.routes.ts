@@ -9,6 +9,8 @@ import { AuthRequest } from '../types/auth.types';
 import { energyAuditorService } from '../services/energyAuditor.service';
 import { logger } from '../lib/logger';
 import { validateImageArrayUpload } from '../utils/documentValidator.util';
+import { getPropertyContext, PropertyContextAccessDeniedError } from '../modules/propertyContext';
+import { evaluateEnergyApplicability } from '../services/energy/applicabilityPolicy';
 
 const router = Router();
 
@@ -118,6 +120,20 @@ router.post('/audit', authenticate, expensiveAiRateLimiter, upload.array('bills'
       hasSolarPanels: hasSolarPanels === 'true',
     };
 
+    const context = await getPropertyContext(
+      String(propertyId),
+      { userId },
+      { scopes: ['CORE', 'LOCATION', 'EXTERIOR', 'SYSTEMS', 'INVENTORY'] },
+    );
+    const applicability = evaluateEnergyApplicability(context);
+    if (applicability.feature.status !== 'APPLICABLE') {
+      return res.status(409).json({
+        success: false,
+        message: 'Complete the property size and location details before generating an energy audit.',
+        data: { applicability },
+      });
+    }
+
     logger.info({ propertyId }, '[ENERGY-AUDITOR] Generating audit for property');
     logger.info({ count: req.files?.length || 0 }, '[ENERGY-AUDITOR] Bills uploaded');
 
@@ -125,7 +141,9 @@ router.post('/audit', authenticate, expensiveAiRateLimiter, upload.array('bills'
       propertyId,
       userId,
       inputData,
-      req.files as Express.Multer.File[]
+      req.files as Express.Multer.File[],
+      context,
+      applicability,
     );
 
     res.json({
@@ -135,7 +153,7 @@ router.post('/audit', authenticate, expensiveAiRateLimiter, upload.array('bills'
 
   } catch (error: any) {
     logger.error({ err: error }, '[ENERGY-AUDITOR] Error');
-    res.status(500).json({
+    res.status(error instanceof PropertyContextAccessDeniedError ? 404 : 500).json({
       success: false,
       message: error.message || 'Failed to generate energy audit'
     });

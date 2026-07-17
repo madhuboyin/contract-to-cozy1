@@ -3,6 +3,9 @@
 import { GoogleGenAI } from "@google/genai";
 import { prisma } from '../config/database';
 import { logger } from '../lib/logger';
+import type { PropertyContextSnapshot } from '../modules/propertyContext';
+import type { HomeModificationApplicability } from './homeModification/applicabilityPolicy';
+import { knownContextValue } from './propertyContextDecision';
 
 type RecommendationCategory = 'ACCESSIBILITY' | 'AGING_IN_PLACE' | 'FAMILY' | 'RESALE' | 'ENERGY' | 'SAFETY';
 type RecommendationPriority = 'IMMEDIATE' | 'HIGH' | 'MEDIUM' | 'LOW';
@@ -34,7 +37,8 @@ interface ModificationReport {
   propertyId: string;
   propertyAddress: string;
   userNeeds: string[];
-  propertyAge: number;
+  propertyAge: number | null;
+  applicability: HomeModificationApplicability;
   recommendations: ModificationRecommendation[];
   totalEstimatedCost: number;
   averageROI: number;
@@ -142,32 +146,36 @@ export class HomeModificationAdvisorService {
   async generateModificationReport(
     propertyId: string,
     userId: string,
-    userNeeds: string[]
+    userNeeds: string[],
+    context: PropertyContextSnapshot,
+    applicability: HomeModificationApplicability,
   ): Promise<ModificationReport> {
-    const property = await prisma.property.findFirst({
-      where: {
-        id: propertyId,
-        homeownerProfile: { userId }
-      }
-    });
+    const property = await prisma.property.findUnique({ where: { id: propertyId } });
 
     if (!property) {
       throw new Error('Property not found');
     }
 
-    const propertyAge = property.yearBuilt 
-      ? new Date().getFullYear() - property.yearBuilt 
-      : 10;
+    const canonicalYearBuilt = knownContextValue<number>(context, 'core.yearBuilt');
+    const propertyAge = canonicalYearBuilt
+      ? new Date().getFullYear() - canonicalYearBuilt
+      : null;
+    const applicableNeeds = applicability.outdoor.status === 'APPLICABLE'
+      ? userNeeds
+      : userNeeds.filter((need) => !/outdoor/i.test(need));
 
     const rawRecommendations = await this.getAIRecommendations(
       property,
-      userNeeds,
+      applicableNeeds,
       propertyAge
     );
-    const recommendations = this.applyRegionalGuardrails(
+    let recommendations = this.applyRegionalGuardrails(
       rawRecommendations,
       property.state,
     );
+    if (applicability.outdoor.status !== 'APPLICABLE') {
+      recommendations = recommendations.filter((recommendation) => !/(deck|patio|outdoor|curb appeal|landscap)/i.test(recommendation.title));
+    }
 
     // Calculate totals
     const totalEstimatedCost = recommendations.reduce((sum, r) => sum + r.estimatedCost, 0);
@@ -189,6 +197,7 @@ export class HomeModificationAdvisorService {
       propertyAddress: property.address,
       userNeeds,
       propertyAge,
+      applicability,
       recommendations: recommendations.sort((a, b) => {
         const priorityOrder = { 'IMMEDIATE': 4, 'HIGH': 3, 'MEDIUM': 2, 'LOW': 1 };
         return priorityOrder[b.priority] - priorityOrder[a.priority];
@@ -212,7 +221,7 @@ export class HomeModificationAdvisorService {
   private async getAIRecommendations(
     property: any,
     userNeeds: string[],
-    propertyAge: number
+    propertyAge: number | null
   ): Promise<ModificationRecommendation[]> {
     if (!this.ai) {
       return this.getBasicRecommendations(userNeeds, propertyAge);
@@ -223,7 +232,7 @@ export class HomeModificationAdvisorService {
 
 Property Details:
 - Type: ${property.propertyType}
-- Age: ${propertyAge} years
+- Age: ${propertyAge === null ? 'unknown' : `${propertyAge} years`}
 - Location: ${property.city}, ${property.state}
 
 User Needs/Goals:
@@ -393,7 +402,7 @@ Include diverse recommendations across categories.`;
     return match ?? catalog[0];
   }
 
-  private getBasicRecommendations(userNeeds: string[], propertyAge: number): ModificationRecommendation[] {
+  private getBasicRecommendations(userNeeds: string[], propertyAge: number | null): ModificationRecommendation[] {
     const recommendations: ModificationRecommendation[] = [];
 
     // Map user needs to categories
@@ -480,7 +489,7 @@ Include diverse recommendations across categories.`;
     }
 
     // Add universal recommendations
-    if (propertyAge > 20) {
+    if (propertyAge !== null && propertyAge > 20) {
       recommendations.push({
         title: 'Energy-Efficient Windows',
         category: 'ENERGY',
