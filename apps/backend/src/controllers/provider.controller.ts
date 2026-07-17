@@ -54,7 +54,12 @@ export class ProviderController {
       const [result, propertyContext] = await Promise.all([
         ProviderService.searchProviders(providerQuery, userId),
         propertyId && userId
-          ? getProjectComplianceEnvelope(propertyId, userId, 'PROVIDER_BOOKING')
+          ? getProjectComplianceEnvelope(
+              propertyId,
+              userId,
+              'PROVIDER_BOOKING',
+              { serviceCategory: providerQuery.category },
+            )
           : Promise.resolve(null),
       ]);
       // --- END FIX ---

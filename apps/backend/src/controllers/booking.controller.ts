@@ -92,7 +92,12 @@ export class BookingController {
           homeAssetId: homeAssetId ?? null,
         }
       );
-      const propertyContext = await getProjectComplianceEnvelope(bookingInput.propertyId, userId, 'PROVIDER_BOOKING');
+      const propertyContext = await getProjectComplianceEnvelope(
+        bookingInput.propertyId,
+        userId,
+        'PROVIDER_BOOKING',
+        { serviceCategory: booking.category },
+      );
 
       if (guidanceJourneyId) {
         try {
@@ -183,7 +188,12 @@ export class BookingController {
       const [result, propertyContext] = await Promise.all([
         BookingService.listBookings(userId, userRole, query),
         query.propertyId
-          ? getProjectComplianceEnvelope(query.propertyId, userId, 'PROVIDER_BOOKING')
+          ? getProjectComplianceEnvelope(
+              query.propertyId,
+              userId,
+              'PROVIDER_BOOKING',
+              { serviceCategory: query.category },
+            )
           : Promise.resolve(null),
       ]);
 

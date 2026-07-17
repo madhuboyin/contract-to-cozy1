@@ -32,6 +32,7 @@ import { priceFinalizationService } from './priceFinalization.service';
 import { guidanceJourneyService } from './guidanceEngine/guidanceJourney.service';
 import { bookingEligibilityService } from './bookingEligibility.service';
 import { logger } from '../lib/logger';
+import { assertProjectComplianceApplicable } from './projectCompliance/context';
 
 const ACTIVE_BOOKING_STATUSES: BookingStatus[] = [
   BookingStatus.PENDING,
@@ -180,6 +181,16 @@ export class BookingService {
     if (input.providerId !== service.providerProfileId) {
       throw new Error('Provider ID does not match service provider');
     }
+
+    // Enforce the canonical, work-specific responsibility decision before any
+    // booking, timeline, notification, or linkage record is written.
+    await assertProjectComplianceApplicable(
+      input.propertyId,
+      homeownerId,
+      'PROVIDER_BOOKING',
+      { serviceCategory: service.category },
+      'providerBooking',
+    );
 
     // Soft check only — a homeowner window-shopping isn't blocked from creating
     // the booking, but the response surfaces a clear warning rather than

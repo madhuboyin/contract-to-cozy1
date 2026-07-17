@@ -1,9 +1,17 @@
 import type { FeatureDecision, PropertyContextSnapshot } from '../../modules/propertyContext';
 import { PropertyContextDecisionBuilder } from '../propertyContextDecision';
+import {
+  classifyPermitApplicability,
+  hasWorkDescriptor,
+  ProjectComplianceWorkInput,
+  resolvePermitWorkTypes,
+  resolveResponsibilityFactKeys,
+} from './workScope';
 
 export interface ProjectComplianceDecisions {
   renovationAdvisor: FeatureDecision;
   permitTracking: FeatureDecision;
+  permitApplicability: FeatureDecision;
   hoaCompliance: FeatureDecision;
   ownerProjectExecution: FeatureDecision;
   projectTracking: FeatureDecision;
@@ -40,7 +48,10 @@ function availableCollection(
     : facts.decision('APPLICABLE', [availableReason]);
 }
 
-export function evaluateProjectComplianceContext(context: PropertyContextSnapshot): ProjectComplianceDecisions {
+export function evaluateProjectComplianceContext(
+  context: PropertyContextSnapshot,
+  work?: ProjectComplianceWorkInput,
+): ProjectComplianceDecisions {
   const renovationFacts = new PropertyContextDecisionBuilder(context);
   const dwellingType = renovationFacts.read<string>('core.dwellingType');
   const state = renovationFacts.read<string>('location.state');
@@ -56,6 +67,20 @@ export function evaluateProjectComplianceContext(context: PropertyContextSnapsho
     ? permitFacts.unknown('PERMIT_JURISDICTION_UNKNOWN')
     : permitFacts.decision('APPLICABLE', ['PERMIT_JURISDICTION_AVAILABLE']);
 
+  const permitApplicabilityFacts = new PropertyContextDecisionBuilder(context);
+  const applicabilityState = permitApplicabilityFacts.read<string>('location.state');
+  const applicabilityZip = permitApplicabilityFacts.read<string>('location.zipCode');
+  const permitClass = classifyPermitApplicability(resolvePermitWorkTypes(work));
+  const permitApplicability = !applicabilityState || !applicabilityZip
+    ? permitApplicabilityFacts.unknown('PERMIT_JURISDICTION_UNKNOWN')
+    : permitClass === 'REQUIRED'
+      ? permitApplicabilityFacts.decision('APPLICABLE', ['PERMIT_REQUIRED_FOR_WORK_SCOPE', 'VERIFY_LOCAL_PERMIT_RULES'])
+      : permitClass === 'LIKELY_REQUIRED'
+        ? permitApplicabilityFacts.decision('APPLICABLE', ['PERMIT_LIKELY_REQUIRED_FOR_WORK_SCOPE', 'VERIFY_LOCAL_PERMIT_RULES'])
+        : permitClass === 'CONDITIONAL'
+          ? permitApplicabilityFacts.unknown('PERMIT_REQUIREMENT_CONDITIONAL_VERIFY_LOCAL_RULES')
+          : permitApplicabilityFacts.unknown('PERMIT_WORK_SCOPE_UNKNOWN');
+
   const hoaFacts = new PropertyContextDecisionBuilder(context);
   const association = hoaFacts.read<{ id?: string } | null>('compliance.hoaAssociation');
   const hoaCompliance = association === undefined
@@ -67,13 +92,25 @@ export function evaluateProjectComplianceContext(context: PropertyContextSnapsho
   // HOA existence deliberately does not participate in this decision. Physical
   // work responsibility comes only from canonical responsibility facts.
   const responsibilityFacts = new PropertyContextDecisionBuilder(context);
-  const parties = PROJECT_RESPONSIBILITY_KEYS.map((key) => responsibilityFacts.read<ResponsibleParty>(key));
+  const resolvedResponsibilityKeys = resolveResponsibilityFactKeys(work);
+  const responsibilityKeys = resolvedResponsibilityKeys.length > 0
+    ? resolvedResponsibilityKeys
+    : hasWorkDescriptor(work)
+      ? []
+      : PROJECT_RESPONSIBILITY_KEYS;
+  const parties = responsibilityKeys.map((key) => responsibilityFacts.read<ResponsibleParty>(key));
   const knownParties = parties.filter((party): party is Exclude<ResponsibleParty, 'UNKNOWN'> => Boolean(party && party !== 'UNKNOWN'));
-  const ownerProjectExecution = knownParties.length === 0
-    ? responsibilityFacts.unknown('PROJECT_RESPONSIBILITY_UNKNOWN')
-    : knownParties.some((party) => party === 'OWNER' || party === 'SHARED')
-      ? responsibilityFacts.decision('APPLICABLE', ['OWNER_OR_SHARED_PROJECT_RESPONSIBILITY'])
-      : responsibilityFacts.decision('NOT_APPLICABLE', ['PROJECT_RESPONSIBILITY_ASSIGNED_ELSEWHERE']);
+  const hasUnknownParty = parties.some((party) => !party || party === 'UNKNOWN');
+  const workIsScoped = hasWorkDescriptor(work);
+  const ownerProjectExecution = responsibilityKeys.length === 0 && workIsScoped
+    ? responsibilityFacts.decision('APPLICABLE', ['NO_PROPERTY_RESPONSIBILITY_REQUIRED'])
+    : workIsScoped && knownParties.some((party) => party === 'ASSOCIATION' || party === 'LANDLORD')
+      ? responsibilityFacts.decision('NOT_APPLICABLE', ['WORK_SCOPE_RESPONSIBILITY_ASSIGNED_ELSEWHERE'])
+      : knownParties.length === 0 || (workIsScoped && hasUnknownParty)
+        ? responsibilityFacts.unknown('WORK_SCOPE_RESPONSIBILITY_UNKNOWN')
+        : !workIsScoped && !knownParties.some((party) => party === 'OWNER' || party === 'SHARED')
+          ? responsibilityFacts.decision('NOT_APPLICABLE', ['PROJECT_RESPONSIBILITY_ASSIGNED_ELSEWHERE'])
+          : responsibilityFacts.decision('APPLICABLE', ['OWNER_OR_SHARED_WORK_SCOPE_RESPONSIBILITY']);
 
   const pricingFacts = new PropertyContextDecisionBuilder(context);
   const pricingState = pricingFacts.read<string>('location.state');
@@ -87,6 +124,7 @@ export function evaluateProjectComplianceContext(context: PropertyContextSnapsho
   return {
     renovationAdvisor,
     permitTracking,
+    permitApplicability,
     hoaCompliance,
     ownerProjectExecution,
     projectTracking: availableCollection(context, 'projects.activeProjects', 'PROJECT_STATE_AVAILABLE', 'PROJECT_STATE_UNAVAILABLE'),

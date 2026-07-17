@@ -11,6 +11,7 @@ import {
 } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { APIError } from '../middleware/error.middleware';
+import { withSerializableDedupe } from './projectCompliance/serializableDedupe';
 
 // ── Guards ────────────────────────────────────────────────────────────────────
 
@@ -242,45 +243,79 @@ export async function listProjects(propertyId: string) {
 export async function createProject(propertyId: string, data: any) {
   const { milestones: initialMilestones, ...projectData } = data;
 
-  const project = await prisma.projectRecord.create({
-    data: {
-      propertyId,
-      name: projectData.name,
-      projectType: projectData.projectType,
-      contractorName: projectData.contractorName,
-      contractorLicense: projectData.contractorLicense,
-      contractorPhone: projectData.contractorPhone,
-      contractorEmail: projectData.contractorEmail,
-      contractorId: projectData.contractorId,
-      description: projectData.description,
-      sourceType: projectData.sourceType ?? 'MANUAL',
-      priceFinalizationId: projectData.priceFinalizationId,
-      bookingId: projectData.bookingId,
-      contractAmountCents: projectData.contractAmountCents,
-      currentContractAmountCents: projectData.contractAmountCents,
-      startDate: new Date(projectData.startDate),
-      expectedEndDate: projectData.expectedEndDate ? new Date(projectData.expectedEndDate) : undefined,
-      homeSystemsAffected: (projectData.homeSystemsAffected ?? []) as InventoryItemCategory[],
-      serviceCategory: projectData.serviceCategory,
-      contractDocumentKey: projectData.contractDocumentKey,
-      status: 'DRAFT',
-    },
-  });
-
-  if (initialMilestones?.length) {
-    await prisma.projectMilestone.createMany({
-      data: initialMilestones.map((m: any) => ({
-        projectId: project.id,
+  const activeStatuses: ProjectRecordStatus[] = ['DRAFT', 'PLANNING', 'IN_PROGRESS', 'PAUSED', 'DISPUTED'];
+  const sourceConflict = projectData.priceFinalizationId
+    ? { priceFinalizationId: projectData.priceFinalizationId }
+    : projectData.bookingId
+      ? { bookingId: projectData.bookingId }
+      : null;
+  const project = await withSerializableDedupe(async (tx) => {
+    const duplicate = await tx.projectRecord.findFirst({
+      where: {
         propertyId,
-        name: m.name,
-        description: m.description,
-        milestoneType: m.milestoneType ?? 'STANDARD',
-        scheduledDate: m.scheduledDate ? new Date(m.scheduledDate) : undefined,
-        requiresPhotoEvidence: m.requiresPhotoEvidence ?? false,
-        position: m.position,
-      })),
+        status: { in: activeStatuses },
+        ...(sourceConflict ?? {
+          projectType: projectData.projectType,
+          ...(projectData.homeSystemsAffected?.length
+            ? { homeSystemsAffected: { hasSome: projectData.homeSystemsAffected as InventoryItemCategory[] } }
+            : projectData.serviceCategory
+              ? { serviceCategory: projectData.serviceCategory }
+              : {}),
+        }),
+      },
+      select: { id: true, name: true, status: true, projectType: true },
+      orderBy: { updatedAt: 'desc' },
     });
-  }
+    if (duplicate) {
+      throw new APIError(
+        `An active ${duplicate.projectType.toLowerCase().replace(/_/g, ' ')} project already exists.`,
+        409,
+        'ACTIVE_PROJECT_DUPLICATE',
+        { existingProjectId: duplicate.id, existingProjectName: duplicate.name, existingProjectStatus: duplicate.status },
+      );
+    }
+
+    const created = await tx.projectRecord.create({
+      data: {
+        propertyId,
+        name: projectData.name,
+        projectType: projectData.projectType,
+        contractorName: projectData.contractorName,
+        contractorLicense: projectData.contractorLicense,
+        contractorPhone: projectData.contractorPhone,
+        contractorEmail: projectData.contractorEmail,
+        contractorId: projectData.contractorId,
+        description: projectData.description,
+        sourceType: projectData.sourceType ?? 'MANUAL',
+        priceFinalizationId: projectData.priceFinalizationId,
+        bookingId: projectData.bookingId,
+        contractAmountCents: projectData.contractAmountCents,
+        currentContractAmountCents: projectData.contractAmountCents,
+        startDate: new Date(projectData.startDate),
+        expectedEndDate: projectData.expectedEndDate ? new Date(projectData.expectedEndDate) : undefined,
+        homeSystemsAffected: (projectData.homeSystemsAffected ?? []) as InventoryItemCategory[],
+        serviceCategory: projectData.serviceCategory,
+        contractDocumentKey: projectData.contractDocumentKey,
+        status: 'DRAFT',
+      },
+    });
+
+    if (initialMilestones?.length) {
+      await tx.projectMilestone.createMany({
+        data: initialMilestones.map((m: any) => ({
+          projectId: created.id,
+          propertyId,
+          name: m.name,
+          description: m.description,
+          milestoneType: m.milestoneType ?? 'STANDARD',
+          scheduledDate: m.scheduledDate ? new Date(m.scheduledDate) : undefined,
+          requiresPhotoEvidence: m.requiresPhotoEvidence ?? false,
+          position: m.position,
+        })),
+      });
+    }
+    return created;
+  });
 
   return getProjectDetail(project.id, propertyId);
 }

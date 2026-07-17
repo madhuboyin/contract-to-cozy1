@@ -2,7 +2,10 @@ import { Response, NextFunction } from 'express';
 import { CustomRequest as Request } from '../types';
 import * as svc from '../services/projectTracker.service';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
-import { getProjectComplianceEnvelope } from '../services/projectCompliance/context';
+import {
+  assertProjectComplianceApplicable,
+  getProjectComplianceEnvelope,
+} from '../services/projectCompliance/context';
 
 // ── Projects ──────────────────────────────────────────────────────────────────
 
@@ -28,8 +31,25 @@ export async function listProjects(req: Request, res: Response, next: NextFuncti
 
 export async function createProject(req: Request, res: Response, next: NextFunction) {
   try {
+    const work = {
+      projectType: req.body.projectType,
+      serviceCategory: req.body.serviceCategory,
+      homeSystemsAffected: req.body.homeSystemsAffected ?? [],
+    };
+    await assertProjectComplianceApplicable(
+      req.params.propertyId,
+      req.user!.userId,
+      'PROJECT_TRACKER',
+      work,
+      'ownerProjectExecution',
+    );
     const data = await svc.createProject(req.params.propertyId, req.body);
-    const propertyContext = await getProjectComplianceEnvelope(req.params.propertyId, req.user!.userId, 'PROJECT_TRACKER');
+    const propertyContext = await getProjectComplianceEnvelope(
+      req.params.propertyId,
+      req.user!.userId,
+      'PROJECT_TRACKER',
+      work,
+    );
 
     analyticsEmitter.track({
       eventType: AnalyticsEvent.ACTION_COMPLETED,

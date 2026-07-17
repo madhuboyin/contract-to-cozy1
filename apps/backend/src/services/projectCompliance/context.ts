@@ -1,6 +1,8 @@
 import { getPropertyContext } from '../../modules/propertyContext';
 import type { PropertyContextScope } from '../../modules/propertyContext';
 import { evaluateProjectComplianceContext } from './applicabilityPolicy';
+import { APIError } from '../../middleware/error.middleware';
+import type { ProjectComplianceWorkInput } from './workScope';
 
 export type ProjectComplianceFeature =
   | 'AGGREGATE'
@@ -39,13 +41,14 @@ export async function getProjectComplianceContextDecisions(
   propertyId: string,
   userId: string,
   feature: ProjectComplianceFeature = 'AGGREGATE',
+  work?: ProjectComplianceWorkInput,
 ) {
   const context = await getPropertyContext(propertyId, { userId }, { scopes: PROJECT_COMPLIANCE_FEATURE_SCOPES[feature] });
   return {
     contextVersion: context.contextVersion,
     feature,
     scopes: context.scopes,
-    decisions: evaluateProjectComplianceContext(context),
+    decisions: evaluateProjectComplianceContext(context, work),
   };
 }
 
@@ -67,11 +70,34 @@ export async function getProjectComplianceEnvelope(
   propertyId: string,
   userId: string,
   feature: ProjectComplianceFeature,
+  work?: ProjectComplianceWorkInput,
 ) {
-  const context = await getProjectComplianceContextDecisions(propertyId, userId, feature);
+  const context = await getProjectComplianceContextDecisions(propertyId, userId, feature, work);
   return {
     contextVersion: context.contextVersion,
     decision: context.decisions[PRIMARY_DECISION_BY_FEATURE[feature]],
     relatedDecisions: context.decisions,
   };
+}
+
+export async function assertProjectComplianceApplicable(
+  propertyId: string,
+  userId: string,
+  feature: ProjectComplianceFeature,
+  work: ProjectComplianceWorkInput,
+  decisionKey: 'permitTracking' | 'ownerProjectExecution' | 'providerBooking',
+) {
+  const context = await getProjectComplianceContextDecisions(propertyId, userId, feature, work);
+  const decision = context.decisions[decisionKey];
+  if (decision.status !== 'APPLICABLE') {
+    throw new APIError(
+      decision.status === 'NOT_APPLICABLE'
+        ? 'This work is assigned to another responsible party for this property.'
+        : 'Complete the required property context before starting this work.',
+      409,
+      decision.status === 'NOT_APPLICABLE' ? 'WORK_RESPONSIBILITY_CONFLICT' : 'PROPERTY_CONTEXT_INCOMPLETE',
+      { contextVersion: context.contextVersion, decision, feature },
+    );
+  }
+  return context;
 }

@@ -8,6 +8,11 @@ require('ts-node/register');
 const { createPropertyFact } = require('../../src/modules/propertyContext/index.ts');
 const { evaluateProjectComplianceContext } = require('../../src/services/projectCompliance/applicabilityPolicy.ts');
 const { PROJECT_COMPLIANCE_FEATURE_SCOPES } = require('../../src/services/projectCompliance/context.ts');
+const {
+  classifyPermitApplicability,
+  resolvePermitWorkTypes,
+  resolveResponsibilityFactKeys,
+} = require('../../src/services/projectCompliance/workScope.ts');
 
 const NOW = new Date('2026-07-16T12:00:00.000Z');
 
@@ -60,6 +65,44 @@ test('HOA existence enables compliance tracking but never implies association wo
   assert.equal(ownerInterior.ownerProjectExecution.status, 'APPLICABLE');
 });
 
+test('work-specific responsibility cannot be enabled by an unrelated owner-managed system', () => {
+  const facts = {
+    'responsibility.roof': 'ASSOCIATION',
+    'responsibility.plumbing': 'OWNER',
+  };
+  const roofing = evaluateProjectComplianceContext(snapshot(facts), { serviceCategory: 'ROOFING' });
+  const plumbing = evaluateProjectComplianceContext(snapshot(facts), { serviceCategory: 'PLUMBING' });
+  assert.equal(roofing.providerBooking.status, 'NOT_APPLICABLE');
+  assert.deepEqual(roofing.providerBooking.usedFactKeys, ['responsibility.roof']);
+  assert.equal(plumbing.providerBooking.status, 'APPLICABLE');
+  assert.deepEqual(plumbing.providerBooking.usedFactKeys, ['responsibility.plumbing']);
+});
+
+test('project and inventory scopes map to canonical responsibility facts', () => {
+  assert.deepEqual(resolveResponsibilityFactKeys({ projectType: 'ROOF_REPLACEMENT' }), ['responsibility.roof']);
+  assert.deepEqual(resolveResponsibilityFactKeys({ homeSystemsAffected: ['HVAC'] }), ['responsibility.hvac']);
+  assert.deepEqual(
+    resolveResponsibilityFactKeys({ projectType: 'BATHROOM_REMODEL' }),
+    ['responsibility.plumbing', 'responsibility.sharedSystems'],
+  );
+});
+
+test('permit applicability uses work type plus known jurisdiction and remains conservative', () => {
+  const context = snapshot({ 'location.state': 'NJ', 'location.zipCode': '07030' });
+  assert.equal(classifyPermitApplicability(['ELECTRICAL_PANEL']), 'REQUIRED');
+  assert.equal(classifyPermitApplicability(['ROOF_REPLACEMENT']), 'LIKELY_REQUIRED');
+  assert.equal(classifyPermitApplicability(['ROOF_REPAIR']), 'CONDITIONAL');
+  assert.deepEqual(resolvePermitWorkTypes({ projectType: 'ELECTRICAL_PANEL' }), ['ELECTRICAL_PANEL']);
+  assert.equal(
+    evaluateProjectComplianceContext(context, { permitWorkTypes: ['ELECTRICAL_PANEL'] }).permitApplicability.status,
+    'APPLICABLE',
+  );
+  assert.equal(
+    evaluateProjectComplianceContext(context, { permitWorkTypes: ['ROOF_REPAIR'] }).permitApplicability.status,
+    'UNKNOWN',
+  );
+});
+
 test('project, quote, price, negotiation, and booking states are explicit collections', () => {
   const decisions = evaluateProjectComplianceContext(snapshot({
     'projects.activeProjects': [],
@@ -107,4 +150,17 @@ test('Phase 4 entry points consume the shared context boundary and quote UI expl
     read('../../../frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/quote-comparison/QuoteComparisonWorkspaceClient.tsx'),
     /PropertyContextNotice/,
   );
+});
+
+test('mutations enforce context before persistence and dedupe active work', () => {
+  const read = (file) => fs.readFileSync(path.resolve(__dirname, file), 'utf8');
+  const permit = read('../../src/controllers/permitTracker.controller.ts');
+  const project = read('../../src/controllers/projectTracker.controller.ts');
+  const booking = read('../../src/services/booking.service.ts');
+  assert.ok(permit.indexOf('await assertProjectComplianceApplicable') < permit.indexOf('const permit = await permitTrackerService.createManualPermit'));
+  assert.ok(project.indexOf('await assertProjectComplianceApplicable') < project.indexOf('const data = await svc.createProject'));
+  assert.ok(booking.indexOf('await assertProjectComplianceApplicable') < booking.indexOf('const booking = await prisma.booking.create'));
+  assert.match(read('../../src/services/projectTracker.service.ts'), /ACTIVE_PROJECT_DUPLICATE/);
+  assert.match(read('../../src/services/quoteComparison.service.ts'), /OPEN_WORKSPACE_STATUSES/);
+  assert.match(booking, /activeExecutionScopeKey/);
 });

@@ -55,7 +55,12 @@ export async function listApprovalRecords(req: Request, res: Response, next: Nex
 export async function createApprovalRecord(req: Request, res: Response, next: NextFunction) {
   try {
     const record = await hoaComplianceService.createApprovalRecord(req.params.propertyId, req.body);
-    const propertyContext = await getProjectComplianceEnvelope(req.params.propertyId, req.user!.userId, 'HOA_COMPLIANCE');
+    const propertyContext = await getProjectComplianceEnvelope(
+      req.params.propertyId,
+      req.user!.userId,
+      'HOA_COMPLIANCE',
+      { hoaWorkTypes: [req.body.workType] },
+    );
 
     analyticsEmitter.track({
       eventType: AnalyticsEvent.ACTION_COMPLETED,

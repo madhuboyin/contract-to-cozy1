@@ -15,6 +15,7 @@ import { formatEnumLabel } from '@/lib/utils/formatters';
 import {
   listServicePriceRadarChecks,
   getProjectComplianceContext,
+  getOrCreateQuoteComparisonWorkspace,
   type ServicePriceRadarCheckSummary,
   type ServiceRadarVerdict,
 } from '../service-price-radar/servicePriceRadarApi';
@@ -91,6 +92,7 @@ function buildForwardQuery(
     quoteAmount: string;
     serviceCategory: string;
     serviceRadarCheckId: string;
+    quoteComparisonWorkspaceId: string;
   }>
 ): string {
   const query = new URLSearchParams();
@@ -105,6 +107,7 @@ function buildForwardQuery(
   if (overrides?.quoteAmount) query.set('quoteAmount', overrides.quoteAmount);
   if (overrides?.serviceCategory) query.set('serviceCategory', overrides.serviceCategory);
   if (overrides?.serviceRadarCheckId) query.set('serviceRadarCheckId', overrides.serviceRadarCheckId);
+  if (overrides?.quoteComparisonWorkspaceId) query.set('quoteComparisonWorkspaceId', overrides.quoteComparisonWorkspaceId);
 
   const serialized = query.toString();
   return serialized ? `?${serialized}` : '';
@@ -218,6 +221,9 @@ export default function QuoteComparisonWorkspaceClient() {
   const [manualQuoteAmount, setManualQuoteAmount] = React.useState('');
   const [manualInputError, setManualInputError] = React.useState<string | null>(null);
   const [propertyContext, setPropertyContext] = React.useState<PropertyContextEnvelope | null>(null);
+  const [workspaceId, setWorkspaceId] = React.useState<string | null>(
+    searchParams.get('quoteComparisonWorkspaceId')
+  );
 
   const prefilledQuote = React.useMemo<QuoteCandidate | null>(() => {
     const parsedAmount = toNumberOrNull(defaultQuoteAmount);
@@ -242,11 +248,20 @@ export default function QuoteComparisonWorkspaceClient() {
     setLoading(true);
     setError(null);
     try {
-      const [checks, context] = await Promise.all([
+      const [checks, context, workspaceResult] = await Promise.all([
         listServicePriceRadarChecks(propertyId, 24),
         getProjectComplianceContext(propertyId, 'QUOTE_COMPARISON'),
+        getOrCreateQuoteComparisonWorkspace(propertyId, {
+          serviceCategory: (defaultCategory as ServicePriceRadarCheckSummary['serviceCategory']) || null,
+          inventoryItemId: itemId,
+          homeAssetId,
+          guidanceJourneyId,
+          guidanceStepKey,
+          guidanceSignalIntentFamily,
+        }),
       ]);
       setPropertyContext(context);
+      setWorkspaceId(workspaceResult.workspace.id);
 
       const mappedChecks = checks.map(mapRadarCheckToQuote);
       const merged = prefilledQuote ? [prefilledQuote, ...mappedChecks] : mappedChecks;
@@ -265,7 +280,16 @@ export default function QuoteComparisonWorkspaceClient() {
     } finally {
       setLoading(false);
     }
-  }, [defaultCategory, prefilledQuote, propertyId]);
+  }, [
+    defaultCategory,
+    prefilledQuote,
+    propertyId,
+    itemId,
+    homeAssetId,
+    guidanceJourneyId,
+    guidanceStepKey,
+    guidanceSignalIntentFamily,
+  ]);
 
   React.useEffect(() => {
     loadQuotes();
@@ -323,8 +347,9 @@ export default function QuoteComparisonWorkspaceClient() {
             : '',
         serviceCategory: recommendedQuote?.serviceCategory ?? '',
         serviceRadarCheckId: recommendedQuote?.serviceRadarCheckId ?? '',
+        quoteComparisonWorkspaceId: workspaceId ?? '',
       }),
-    [recommendedQuote, searchParams]
+    [recommendedQuote, searchParams, workspaceId]
   );
 
   const toggleSelection = (quoteId: string) => {

@@ -6,7 +6,10 @@ import { permitDetectionService } from '../services/permitDetection.service';
 import { prisma } from '../lib/prisma';
 import { APIError } from '../middleware/error.middleware';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
-import { getProjectComplianceEnvelope } from '../services/projectCompliance/context';
+import {
+  assertProjectComplianceApplicable,
+  getProjectComplianceEnvelope,
+} from '../services/projectCompliance/context';
 
 // ── Open Data Fetch ────────────────────────────────────────────────────────────
 
@@ -58,8 +61,20 @@ export async function listPermits(req: Request, res: Response, next: NextFunctio
 
 export async function createManualPermit(req: Request, res: Response, next: NextFunction) {
   try {
+    await assertProjectComplianceApplicable(
+      req.params.propertyId,
+      req.user!.userId,
+      'PERMIT_TRACKER',
+      { permitWorkTypes: req.body.workTypes ?? [] },
+      'permitTracking',
+    );
     const permit = await permitTrackerService.createManualPermit(req.params.propertyId, req.body);
-    const propertyContext = await getProjectComplianceEnvelope(req.params.propertyId, req.user!.userId, 'PERMIT_TRACKER');
+    const propertyContext = await getProjectComplianceEnvelope(
+      req.params.propertyId,
+      req.user!.userId,
+      'PERMIT_TRACKER',
+      { permitWorkTypes: req.body.workTypes ?? [] },
+    );
 
     analyticsEmitter.track({
       eventType: AnalyticsEvent.ACTION_COMPLETED,
