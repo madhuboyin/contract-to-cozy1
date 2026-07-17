@@ -1,10 +1,11 @@
 // apps/backend/src/routes/diy.routes.ts
 import { Router } from 'express';
-import { authenticate } from '../middleware/auth.middleware';
+import { authenticate, requireMfa } from '../middleware/auth.middleware';
 import { propertyAuthMiddleware } from '../middleware/propertyAuth.middleware';
 import { validateBody, validate } from '../middleware/validate.middleware';
 import { apiRateLimiter } from '../middleware/rateLimiter.middleware';
 import { requireRole } from '../middleware/auth.middleware';
+import { requireCapability } from '../middleware/adminCapability.middleware';
 import { UserRole } from '../types/auth.types';
 
 import {
@@ -76,10 +77,13 @@ router.post('/properties/:propertyId/diy/ai-guide', propertyAuthMiddleware, vali
 router.get('/properties/:propertyId/diy/ai-guide/:guideId', propertyAuthMiddleware, getAiGuide);
 
 // ── Admin ─────────────────────────────────────────────────────────────────────
-router.get('/admin/diy/templates', requireRole(UserRole.ADMIN), adminListTemplates);
-router.get('/admin/diy/templates/:templateId', requireRole(UserRole.ADMIN), adminGetTemplate);
-router.post('/admin/diy/templates', requireRole(UserRole.ADMIN), validateBody(AdminCreateTemplateSchema), adminCreateTemplate);
-router.put('/admin/diy/templates/:templateId', requireRole(UserRole.ADMIN), validateBody(AdminUpdateTemplateSchema), adminUpdateTemplate);
-router.patch('/admin/diy/templates/:templateId/status', requireRole(UserRole.ADMIN), adminUpdateTemplateStatus);
+// MFA + capability gate applied per-route (this file also serves non-admin
+// homeowner routes above, so it cannot use a single router.use() prefix gate).
+const requireDiyAdmin = [requireRole(UserRole.ADMIN), requireMfa, requireCapability('CONTENT_AUTHOR' as const)];
+router.get('/admin/diy/templates', ...requireDiyAdmin, adminListTemplates);
+router.get('/admin/diy/templates/:templateId', ...requireDiyAdmin, adminGetTemplate);
+router.post('/admin/diy/templates', ...requireDiyAdmin, validateBody(AdminCreateTemplateSchema), adminCreateTemplate);
+router.put('/admin/diy/templates/:templateId', ...requireDiyAdmin, validateBody(AdminUpdateTemplateSchema), adminUpdateTemplate);
+router.patch('/admin/diy/templates/:templateId/status', ...requireDiyAdmin, adminUpdateTemplateStatus);
 
 export default router;

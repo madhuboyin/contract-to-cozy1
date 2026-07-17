@@ -1,9 +1,10 @@
 // apps/backend/src/routes/financing.routes.ts
 import { Router } from 'express';
-import { authenticate, requireRole } from '../middleware/auth.middleware';
+import { authenticate, requireMfa, requireRole } from '../middleware/auth.middleware';
 import { propertyAuthMiddleware } from '../middleware/propertyAuth.middleware';
 import { validateBody } from '../middleware/validate.middleware';
 import { apiRateLimiter } from '../middleware/rateLimiter.middleware';
+import { requireCapability } from '../middleware/adminCapability.middleware';
 import { UserRole } from '../types/auth.types';
 
 import {
@@ -91,10 +92,11 @@ router.delete(
 );
 
 // ─── Admin: Rate Config ───────────────────────────────────────────────────────
-router.get('/admin/financing/rates', requireRole(UserRole.ADMIN), listRateConfigs);
+const requireFinancingAdmin = [requireRole(UserRole.ADMIN), requireMfa, requireCapability('FINANCING_CONFIG' as const)];
+router.get('/admin/financing/rates', ...requireFinancingAdmin, listRateConfigs);
 router.patch(
   '/admin/financing/rates/:type',
-  requireRole(UserRole.ADMIN),
+  ...requireFinancingAdmin,
   validateBody(UpdateRateConfigSchema),
   updateRateConfig,
 );

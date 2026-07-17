@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { UserRole } from '../types/auth.types';
 import { authenticate, requireMfa, requireRole } from '../middleware/auth.middleware';
+import { requireCapability } from '../middleware/adminCapability.middleware';
 import { apiRateLimiter } from '../middleware/rateLimiter.middleware';
 import { validate, validateBody } from '../middleware/validate.middleware';
 import {
@@ -19,7 +20,7 @@ import {
 const router = Router();
 
 router.use(apiRateLimiter);
-router.use('/admin/shared-data', authenticate, requireMfa, requireRole(UserRole.ADMIN));
+router.use('/admin/shared-data', authenticate, requireMfa, requireRole(UserRole.ADMIN), requireCapability('SHARED_DATA_OPERATE'));
 
 router.post(
   '/admin/shared-data/backfill',

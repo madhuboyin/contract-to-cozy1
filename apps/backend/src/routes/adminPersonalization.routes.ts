@@ -6,6 +6,7 @@
 import { Router } from 'express';
 import { UserRole } from '../types/auth.types';
 import { authenticate, requireMfa, requireRole } from '../middleware/auth.middleware';
+import { requireCapability } from '../middleware/adminCapability.middleware';
 import {
   getKillSwitchHandler,
   pauseKillSwitchHandler,
@@ -20,7 +21,7 @@ import {
 
 const router = Router();
 
-router.use('/admin/personalization', authenticate, requireMfa, requireRole(UserRole.ADMIN));
+router.use('/admin/personalization', authenticate, requireMfa, requireRole(UserRole.ADMIN), requireCapability('PERSONALIZATION_OPERATE'));
 
 /**
  * @swagger

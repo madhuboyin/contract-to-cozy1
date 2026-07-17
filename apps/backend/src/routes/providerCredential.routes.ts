@@ -10,6 +10,7 @@
 import { Router } from 'express';
 import multer from 'multer';
 import { authenticate, requireMfa, requireRole } from '../middleware/auth.middleware';
+import { requireCapability } from '../middleware/adminCapability.middleware';
 import { validateBody } from '../middleware/validate.middleware';
 import { validateDocumentUpload } from '../utils/documentValidator.util';
 import { apiRateLimiter, uploadRateLimiter } from '../middleware/rateLimiter.middleware';
@@ -65,7 +66,7 @@ router.get('/providers/me/compliance-alerts', ProviderCredentialController.listC
 
 // ── Admin-facing review queue — same requireRole(ADMIN) + MFA gate as
 // releaseGate.routes.ts / adminWorkerJobs.routes.ts (Section 8) ────────────
-router.use('/admin/provider-credentials', authenticate, requireMfa, requireRole(UserRole.ADMIN));
+router.use('/admin/provider-credentials', authenticate, requireMfa, requireRole(UserRole.ADMIN), requireCapability('PROVIDER_COMPLIANCE_REVIEW'));
 
 router.get('/admin/provider-credentials/queue', ProviderCredentialController.listQueue);
 router.post('/admin/provider-credentials/:id/approve', ProviderCredentialController.approve);

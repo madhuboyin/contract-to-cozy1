@@ -1,10 +1,11 @@
 import { Router } from 'express';
 import multer from 'multer';
-import { authenticate, requireRole } from '../middleware/auth.middleware';
+import { authenticate, requireMfa, requireRole } from '../middleware/auth.middleware';
 import { propertyAuthMiddleware } from '../middleware/propertyAuth.middleware';
 import { validateBody, validate } from '../middleware/validate.middleware';
 import { apiRateLimiter, expensiveAiRateLimiter } from '../middleware/rateLimiter.middleware';
 import { validateImageArrayUpload } from '../utils/documentValidator.util';
+import { requireCapability } from '../middleware/adminCapability.middleware';
 import { UserRole } from '../types/auth.types';
 
 import {
@@ -189,28 +190,29 @@ router.get(
 );
 
 // ── Admin — Data Sources ───────────────────────────────────────────────────────
-router.get('/admin/permits/data-sources', requireRole(UserRole.ADMIN), adminListDataSources);
+const requirePermitAdmin = [requireRole(UserRole.ADMIN), requireMfa, requireCapability('INTEGRATION_MANAGE' as const)];
+router.get('/admin/permits/data-sources', ...requirePermitAdmin, adminListDataSources);
 router.post(
   '/admin/permits/data-sources',
-  requireRole(UserRole.ADMIN),
+  ...requirePermitAdmin,
   validateBody(AdminCreateDataSourceSchema),
   adminCreateDataSource,
 );
 router.put(
   '/admin/permits/data-sources/:id',
-  requireRole(UserRole.ADMIN),
+  ...requirePermitAdmin,
   validateBody(AdminUpdateDataSourceSchema),
   adminUpdateDataSource,
 );
 router.patch(
   '/admin/permits/data-sources/:id/status',
-  requireRole(UserRole.ADMIN),
+  ...requirePermitAdmin,
   validateBody(AdminPatchDataSourceStatusSchema),
   adminPatchDataSourceStatus,
 );
 router.post(
   '/admin/permits/data-sources/:id/test',
-  requireRole(UserRole.ADMIN),
+  ...requirePermitAdmin,
   adminTestDataSource,
 );
 

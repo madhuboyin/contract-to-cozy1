@@ -1531,6 +1531,9 @@ model User {
   // Admin Analytics relations
   analyticsEvents ProductAnalyticsEvent[]
 
+  // Admin capability grants held by this user (ADMIN role only in practice)
+  adminCapabilityGrants AdminCapabilityGrant[] @relation("AdminCapabilityGrantHolder")
+
   // Home Habit Coach relations
   habitActions PropertyHabitAction[]
 
@@ -8198,6 +8201,11 @@ model AuditLog {
   signatureHash String?  @db.VarChar(64)
   createdAt     DateTime @default(now())
 
+  // Structured admin action context (reason, disposition, capability used,
+  // linked case/approval/release/payment references) that doesn't fit the
+  // generic old/new value columns. See adminAudit.service.ts.
+  metadata Json?
+
   @@index([userId])
   @@index([entityType, entityId])
   @@index([requestId])
@@ -8216,6 +8224,35 @@ model SystemSetting {
   updatedAt   DateTime @updatedAt
 
   @@map("system_settings")
+}
+
+// Named-capability grants for the ADMIN role (ADMIN_MODULE_FRD.md §8.2/§8.3).
+// The capability catalog and persona bundles are code-owned in
+// apps/backend/src/config/adminCapabilities.ts; this table only records
+// who currently holds which capability. Revocation sets revokedAt rather
+// than deleting the row, so grant history stays reviewable (§11.2, §16.1).
+model AdminCapabilityGrant {
+  id   String @id @default(uuid())
+  user User   @relation("AdminCapabilityGrantHolder", fields: [userId], references: [id], onDelete: Cascade)
+
+  userId     String
+  capability String // one of ADMIN_CAPABILITIES in adminCapabilities.ts
+  bundleName String? // persona bundle this grant originated from, e.g. "FINANCE_OPERATIONS_OPERATOR"; null for an individually-granted capability
+
+  resourceScope Json? // optional scope, e.g. { "maxRefundAmountCents": 50000 }
+  reason        String?
+
+  grantedBy String // userId of the actor who granted this
+  grantedAt DateTime @default(now())
+
+  revokedAt    DateTime?
+  revokedBy    String?
+  revokeReason String?
+
+  @@index([userId])
+  @@index([capability])
+  @@index([userId, capability])
+  @@map("admin_capability_grants")
 }
 
 // ============================================================================

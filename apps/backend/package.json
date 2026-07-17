@@ -19,7 +19,8 @@
     "acceptance:phase8": "node scripts/phase8-runtime-acceptance.js",
     "lint:ssrf": "node scripts/check-ssrf-guards.js",
     "report:weekly": "ts-node scripts/weekly-retention-report.ts",
-    "backfill:property-activation": "ts-node scripts/backfill-property-activation.ts"
+    "backfill:property-activation": "ts-node scripts/backfill-property-activation.ts",
+    "bootstrap:admin-capabilities": "ts-node scripts/adminCapabilityBootstrap.ts"
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"

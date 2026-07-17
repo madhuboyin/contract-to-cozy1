@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { UserRole } from '../types/auth.types';
 import { authenticate, requireMfa, requireRole } from '../middleware/auth.middleware';
+import { requireCapability } from '../middleware/adminCapability.middleware';
 import { validate, validateBody } from '../middleware/validate.middleware';
 import {
   createKnowledgeArticle,
@@ -16,7 +17,10 @@ import {
 
 const router = Router();
 
-router.use('/knowledge/admin', authenticate, requireMfa, requireRole(UserRole.ADMIN));
+// CONTENT_AUTHOR gates the whole router for now — author/review/publish are
+// not yet separate workflows here (that separation is Phase 4, per
+// ADMIN_MODULE_FRD.md §10.6); this endpoint set does both today.
+router.use('/knowledge/admin', authenticate, requireMfa, requireRole(UserRole.ADMIN), requireCapability('CONTENT_AUTHOR'));
 
 router.get('/knowledge/admin/options', getKnowledgeEditorOptions);
 router.get('/knowledge/admin/articles', listKnowledgeArticlesForAdmin);

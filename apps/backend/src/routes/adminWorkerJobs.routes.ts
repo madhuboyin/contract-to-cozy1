@@ -6,6 +6,7 @@
 import { Router } from 'express';
 import { UserRole } from '../types/auth.types';
 import { authenticate, requireMfa, requireRole } from '../middleware/auth.middleware';
+import { requireCapability } from '../middleware/adminCapability.middleware';
 import { getWorkerJobsHandler, triggerJobHandler } from '../controllers/adminWorkerJobs.controller';
 
 const router = Router();
@@ -24,7 +25,7 @@ router.use('/admin/worker-jobs', authenticate, requireMfa, requireRole(UserRole.
  *       200:
  *         description: Job registry with BullMQ queue stats and recent runs
  */
-router.get('/admin/worker-jobs', getWorkerJobsHandler);
+router.get('/admin/worker-jobs', requireCapability('WORKER_JOB_VIEW'), getWorkerJobsHandler);
 
 /**
  * @swagger
@@ -47,6 +48,6 @@ router.get('/admin/worker-jobs', getWorkerJobsHandler);
  *       400:
  *         description: Trigger not supported for this job
  */
-router.post('/admin/worker-jobs/:jobKey/trigger', triggerJobHandler);
+router.post('/admin/worker-jobs/:jobKey/trigger', requireCapability('WORKER_JOB_TRIGGER'), triggerJobHandler);
 
 export default router;

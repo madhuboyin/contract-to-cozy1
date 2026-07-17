@@ -67,6 +67,7 @@ import orchestrationRoutes from './routes/orchestration.routes';
 // Import middleware
 import { errorHandler } from './middleware/error.middleware';
 import { authenticate, requireMfa, requireRole } from './middleware/auth.middleware';
+import { requireCapability } from './middleware/adminCapability.middleware';
 import { apiRateLimiter } from './middleware/rateLimiter.middleware';
 import { csrfProtection, getCsrfToken } from './middleware/csrf.middleware';
 import cspReportRoutes from './routes/cspReport.routes';
@@ -129,6 +130,7 @@ import navigationAnalyticsRoutes from './routes/navigationAnalytics.routes';
 import adminWorkerJobsRoutes from './routes/adminWorkerJobs.routes';
 import adminSharedDataRoutes from './routes/adminSharedData.routes';
 import adminPersonalizationRoutes from './routes/adminPersonalization.routes';
+import adminCapabilityRoutes from './routes/adminCapability.routes';
 import personalizationRoutes from './routes/personalization.routes';
 import homeHabitCoachRoutes from './routes/homeHabitCoach.routes';
 import homeRenovationAdvisorRoutes from './homeRenovationAdvisor/homeRenovationAdvisor.routes';
@@ -547,6 +549,7 @@ app.use('/api', navigationAnalyticsRoutes);
 app.use('/api', adminWorkerJobsRoutes);
 app.use('/api', adminSharedDataRoutes);
 app.use('/api', adminPersonalizationRoutes);
+app.use('/api', adminCapabilityRoutes);
 app.use('/api', personalizationRoutes);
 app.use('/api', homeHabitCoachRoutes);
 app.use('/api', homeRenovationAdvisorRoutes);
@@ -562,7 +565,7 @@ app.use('/api', inspectionHubRoutes);
 app.use('/api', projectTrackerRoutes);
 app.use('/api', gazetteRoutes);
 app.use('/api', gazetteInternalRoutes);
-app.use('/api/admin/release-gates', authenticate, requireMfa, requireRole(UserRole.ADMIN), releaseGateRoutes);
+app.use('/api/admin/release-gates', authenticate, requireMfa, requireRole(UserRole.ADMIN), requireCapability('RELEASE_GATE_VIEW'), releaseGateRoutes);
 
 // 404 handler
 app.use((req: Request, res: Response) => {
