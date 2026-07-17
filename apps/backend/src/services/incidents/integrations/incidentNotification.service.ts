@@ -1,6 +1,8 @@
 // apps/backend/src/services/incidents/integrations/incidentNotification.service.ts
 import { prisma } from '../../../lib/prisma';
-import { DeliveryStatus, IncidentSeverity, NotificationChannel } from '@prisma/client';
+import { DeliveryStatus, IncidentSeverity, NotificationChannel, Prisma } from '@prisma/client';
+import { getProtectionContextDecisions } from '../../protection/context';
+import type { FeatureDecision } from '../../../modules/propertyContext';
 
 type GuidanceContextBadge = {
   guidanceJourneyId?: string | null;
@@ -47,6 +49,31 @@ async function resolvePropertyOwnerUserId(propertyId: string): Promise<string | 
     select: { homeownerProfile: { select: { userId: true } } },
   });
   return property?.homeownerProfile?.userId ?? null;
+}
+
+async function resolveIncidentNotificationContext(propertyId: string, userId: string): Promise<{
+  contextVersion: string;
+  decision: FeatureDecision;
+}> {
+  try {
+    const context = await getProtectionContextDecisions(propertyId, userId, 'INCIDENT_NOTIFICATION');
+    return { contextVersion: context.contextVersion, decision: context.decisions.incidentNotifications };
+  } catch {
+    // Safety alerts fail open when context is temporarily unavailable, but the
+    // UNKNOWN decision is retained in notification metadata for auditability.
+    return {
+      contextVersion: 'unavailable',
+      decision: {
+        status: 'UNKNOWN',
+        reasonCodes: ['PROPERTY_CONTEXT_UNAVAILABLE'],
+        usedFactKeys: [],
+        missingFactKeys: ['risk.activeIncidents'],
+        conflictedFactKeys: [],
+        validUntil: null,
+        correctionPaths: [],
+      },
+    };
+  }
 }
 
 /**
@@ -247,6 +274,10 @@ export class IncidentNotificationService {
       args.incident.userId || args.userId || (await resolvePropertyOwnerUserId(args.incident.propertyId));
     if (!recipientUserId) return;
 
+    const protectionContext = await resolveIncidentNotificationContext(args.incident.propertyId, recipientUserId);
+    const notificationDecision = protectionContext.decision;
+    if (notificationDecision.status === 'NOT_APPLICABLE') return;
+
     const type = 'INCIDENT_ACTIVATED';
     const dedupeKey = buildDedupeKey([type, args.incident.id, String(sev)]);
 
@@ -289,6 +320,10 @@ export class IncidentNotificationService {
           propertyId: args.incident.propertyId,
           typeKey: args.incident.typeKey,
           guidanceContext,
+          propertyContext: {
+            contextVersion: protectionContext.contextVersion,
+            decision: notificationDecision,
+          },
           // Used by buildWeatherAlertCardHtml (email builders) to render a
           // hazard-specific card instead of the generic title/message one.
           ...(weather ? { weather } : {}),
@@ -296,7 +331,7 @@ export class IncidentNotificationService {
           // digest and go out via the immediate-send path instead — see
           // highPriorityEmailEnqueue.poller.ts + sendEmailNotification.job.ts.
           ...(sev === IncidentSeverity.CRITICAL ? { priority: 'HIGH' } : {}),
-        },
+        } as unknown as Prisma.InputJsonValue,
       },
     });
 
@@ -340,6 +375,10 @@ export class IncidentNotificationService {
       args.incident.userId || args.userId || (await resolvePropertyOwnerUserId(args.incident.propertyId));
     if (!recipientUserId) return;
 
+    const protectionContext = await resolveIncidentNotificationContext(args.incident.propertyId, recipientUserId);
+    const notificationDecision = protectionContext.decision;
+    if (notificationDecision.status === 'NOT_APPLICABLE') return;
+
     const type = 'INCIDENT_ACTION_CREATED';
     const dedupeKey = buildDedupeKey([type, args.incident.id, args.action.id]);
 
@@ -380,7 +419,11 @@ export class IncidentNotificationService {
           linkedEntityType: args.action.entityType,
           linkedEntityId: args.action.entityId,
           guidanceContext,
-        },
+          propertyContext: {
+            contextVersion: protectionContext.contextVersion,
+            decision: notificationDecision,
+          },
+        } as unknown as Prisma.InputJsonValue,
       },
     });
 

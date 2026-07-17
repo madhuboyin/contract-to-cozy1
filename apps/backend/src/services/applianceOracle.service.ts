@@ -108,7 +108,7 @@ export class ApplianceOracleService {
   }
 
   async generateOracleReport(propertyId: string, userId: string): Promise<OracleReport> {
-    const protectionContext = await getProtectionContextDecisions(propertyId, userId);
+    const protectionContext = await getProtectionContextDecisions(propertyId, userId, 'APPLIANCE_ORACLE');
     // Get property with all appliance data
     const property = await prisma.property.findFirst({
       where: { id: propertyId, homeownerProfile: { userId } },

@@ -59,15 +59,30 @@ export async function getPropertyGuidance(req: CustomRequest, res: Response, nex
       metadataJson: { journeyCount: payload.journeys.length },
     });
 
+    const reconciledSuppressedIds = new Set(protectionContext.reconciliation.suppressedGuidanceSignalIds);
+    const signals = payload.signals.filter((signal: any) => !reconciledSuppressedIds.has(signal.id));
+    const journeys = payload.journeys.filter((journey: any) => !reconciledSuppressedIds.has(journey.primarySignalId));
+    const next = payload.next.filter((item: any) => !reconciledSuppressedIds.has(item.signalId));
+    const contextSuppressions = [...reconciledSuppressedIds].map((signalId) => ({
+      signalId,
+      reasonCode: protectionContext.reconciliation.suppressionReasons[signalId],
+      source: 'PROPERTY_CONTEXT_RECONCILIATION',
+    }));
+
     res.json({
       success: true,
       data: {
         propertyId,
-        counts: payload.counts,
-        signals: payload.signals.map(mapGuidanceSignal),
-        journeys: payload.journeys.map(mapGuidanceJourney),
-        next: payload.next,
-        suppressedSignals: payload.suppressedSignals ?? [],
+        counts: {
+          ...payload.counts,
+          surfacedSignals: signals.length,
+          surfacedJourneys: journeys.length,
+          suppressedSignals: (payload.suppressedSignals?.length ?? 0) + contextSuppressions.length,
+        },
+        signals: signals.map(mapGuidanceSignal),
+        journeys: journeys.map(mapGuidanceJourney),
+        next,
+        suppressedSignals: [...(payload.suppressedSignals ?? []), ...contextSuppressions],
         protectionContext,
       },
     });

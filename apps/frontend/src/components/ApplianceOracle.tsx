@@ -25,6 +25,7 @@ import {
   ScenarioInputCard,
   StatusChip,
 } from '@/components/mobile/dashboard/MobilePrimitives';
+import { PropertyContextNotice, type PropertyContextEnvelope } from '@/components/property-context/PropertyContextNotice';
 
 interface ApplianceRecommendation {
   brand: string;
@@ -59,6 +60,7 @@ interface OracleReport {
   estimatedTotalCost: number;
   predictions: AppliancePrediction[];
   generatedAt: string;
+  propertyContext?: PropertyContextEnvelope;
 }
 
 interface ApplianceOracleProps {
@@ -146,18 +148,23 @@ export default function ApplianceOracle({ propertyId }: ApplianceOracleProps) {
     );
   }
 
-  if (!report || report.predictions.length === 0) {
+  if (!report) return null;
+
+  if (report.predictions.length === 0) {
     return (
-      <ScenarioInputCard
-        title="No Appliance Data"
-        subtitle="Add appliance details to unlock AI replacement predictions."
-        badge={<StatusChip tone="info">Data needed</StatusChip>}
-      >
-        <div className="flex items-center gap-3 text-sm text-gray-600">
-          <Sparkles className="w-5 h-5 text-gray-400" />
-          <span>No tracked appliances found for this property yet.</span>
-        </div>
-      </ScenarioInputCard>
+      <div className="space-y-4">
+        <PropertyContextNotice context={report.propertyContext} title="Appliance applicability" />
+        <ScenarioInputCard
+          title="No Appliance Data"
+          subtitle="Add appliance details to unlock AI replacement predictions."
+          badge={<StatusChip tone="info">Data needed</StatusChip>}
+        >
+          <div className="flex items-center gap-3 text-sm text-gray-600">
+            <Sparkles className="w-5 h-5 text-gray-400" />
+            <span>No tracked appliances found for this property yet.</span>
+          </div>
+        </ScenarioInputCard>
+      </div>
     );
   }
 
@@ -169,6 +176,8 @@ export default function ApplianceOracle({ propertyId }: ApplianceOracleProps) {
         status={<StatusChip tone={report.criticalCount > 0 ? 'danger' : report.highRiskCount > 0 ? 'elevated' : 'good'}>{report.criticalCount} critical</StatusChip>}
         summary="Failure-risk forecasting and replacement guidance across tracked appliances."
       />
+
+      <PropertyContextNotice context={report.propertyContext} title="Appliance applicability" />
 
       <ReadOnlySummaryBlock
         title="Portfolio Snapshot"

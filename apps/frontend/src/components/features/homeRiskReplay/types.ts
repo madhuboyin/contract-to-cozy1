@@ -1,3 +1,5 @@
+import type { PropertyContextEnvelope } from '@/components/property-context/PropertyContextNotice';
+
 export type HomeRiskReplayWindowType = 'since_built' | 'last_5_years' | 'custom_range';
 
 export type HomeRiskReplaySeverity = 'info' | 'low' | 'moderate' | 'high' | 'severe';
@@ -30,6 +32,7 @@ export interface HomeRiskReplaySummaryJson {
 }
 
 export interface HomeRiskReplayPropertySnapshotJson {
+  propertyContextVersion?: string | null;
   yearBuilt?: number | null;
   squareFootage?: number | null;
   propertyType?: string | null;
@@ -117,6 +120,7 @@ export interface HomeRiskReplayDetail {
   matchedSystems?: HomeRiskReplaySystem[];
   recommendedActions?: HomeRiskReplayAction[];
   timelineEvents: HomeRiskReplayTimelineEvent[];
+  propertyContext?: PropertyContextEnvelope;
 }
 
 export interface HomeRiskReplayRunSummary {
@@ -130,4 +134,6 @@ export interface HomeRiskReplayRunSummary {
   highImpactEvents: number;
   moderateImpactEvents: number;
   summaryText: string | null;
+  generatedContextVersion?: string | null;
+  isStale?: boolean;
 }

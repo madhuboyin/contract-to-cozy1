@@ -1278,6 +1278,7 @@ export interface PropertyContextFeatureDecision {
   missingFactKeys: string[];
   conflictedFactKeys: string[];
   validUntil: string | null;
+  correctionPaths?: string[];
 }
 
 export interface ProtectionContextSummary {
@@ -1700,6 +1701,7 @@ export interface OracleReport {
   estimatedTotalCost: number;
   predictions: ApplianceFailurePrediction[];
   generatedAt: string; // ISO Date string
+  propertyContext?: import('@/components/property-context/PropertyContextNotice').PropertyContextEnvelope;
 }
 
 // ============================================================================
@@ -2607,6 +2609,12 @@ export interface RadarRecommendedAction {
   code: string;
   label: string;
   priority: 'high' | 'medium' | 'low';
+  responsibility?: {
+    status: 'APPLICABLE' | 'NOT_APPLICABLE' | 'UNKNOWN';
+    reasonCodes: string[];
+    missingFactKeys: string[];
+    correctionPaths?: string[];
+  };
 }
 
 export interface RadarImpactDriver {

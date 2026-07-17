@@ -70,7 +70,7 @@ export class ClimateRiskPredictorService {
   }
 
   async generateClimateReport(propertyId: string, userId: string): Promise<ClimateReport> {
-    const protectionContext = await getProtectionContextDecisions(propertyId, userId);
+    const protectionContext = await getProtectionContextDecisions(propertyId, userId, 'CLIMATE_RISK');
     const climateDecision = protectionContext.decisions.climateRisk;
     if (climateDecision.status !== 'APPLICABLE') {
       throw Object.assign(

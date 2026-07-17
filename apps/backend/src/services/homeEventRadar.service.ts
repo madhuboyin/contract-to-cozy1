@@ -91,6 +91,46 @@ function serializeState(state: any): Record<string, unknown> {
   };
 }
 
+const RADAR_ACTION_RESPONSIBILITY: Record<string, keyof Pick<
+  ReturnType<typeof import('./protection/applicabilityPolicy').evaluateProtectionContext>,
+  'roofActions' | 'exteriorActions' | 'plumbingActions' | 'hvacActions' | 'commonSafetyActions'
+>> = {
+  INSPECT_ROOF: 'roofActions',
+  DOCUMENT_ROOF: 'roofActions',
+  CHECK_GUTTERS: 'exteriorActions',
+  SHUT_OFF_IRRIGATION: 'exteriorActions',
+  SECURE_OUTDOOR_ITEMS: 'exteriorActions',
+  CLEAR_DRAINS: 'exteriorActions',
+  CHECK_FENCING: 'exteriorActions',
+  SERVICE_HVAC: 'hvacActions',
+  CHECK_AIR_FILTERS: 'hvacActions',
+  PREPARE_BACKUP_HEAT: 'hvacActions',
+  GET_COOLING: 'hvacActions',
+  PROTECT_PIPES: 'plumbingActions',
+  INSPECT_SUMP_PUMP: 'plumbingActions',
+};
+
+function applyResponsibilityToRadarDetail(
+  detail: Record<string, unknown>,
+  decisions: ReturnType<typeof import('./protection/applicabilityPolicy').evaluateProtectionContext>,
+): Record<string, unknown> {
+  const recommended = detail.recommendedActionsJson as { actions?: Array<Record<string, unknown>> } | null;
+  if (!recommended?.actions) return detail;
+  const actions = recommended.actions.map((action) => {
+    const decisionKey = RADAR_ACTION_RESPONSIBILITY[String(action.code ?? '')];
+    if (!decisionKey) return action;
+    const decision = decisions[decisionKey];
+    const delegated = decision.status === 'NOT_APPLICABLE';
+    const delegate = decision.reasonCodes.includes('ASSOCIATION_RESPONSIBILITY') ? 'association' : 'landlord';
+    return {
+      ...action,
+      label: delegated ? `Coordinate with your ${delegate}: ${String(action.label ?? '')}` : action.label,
+      responsibility: decision,
+    };
+  });
+  return { ...detail, recommendedActionsJson: { ...recommended, actions } };
+}
+
 function toSignalNumber(value: unknown): number | null {
   if (typeof value === 'number' && Number.isFinite(value)) return value;
   if (typeof value === 'string') {
@@ -397,7 +437,7 @@ export class HomeEventRadarService {
 
     const nextCursor = hasMore ? String(page[page.length - 1].id) : null;
 
-    const protectionContext = await getProtectionContextDecisions(propertyId, userId);
+    const protectionContext = await getProtectionContextDecisions(propertyId, userId, 'EVENT_RADAR');
 
     return {
       items: prioritizedItems,
@@ -456,7 +496,18 @@ export class HomeEventRadarService {
       where: { propertyRadarMatchId: matchId, userId },
     });
 
-    return serializeMatchDetail(match, refreshedState);
+    const protectionContext = await getProtectionContextDecisions(propertyId, userId, 'EVENT_RADAR');
+    const detail = applyResponsibilityToRadarDetail(
+      serializeMatchDetail(match, refreshedState),
+      protectionContext.decisions,
+    );
+    return {
+      ...detail,
+      propertyContext: {
+        contextVersion: protectionContext.contextVersion,
+        decision: protectionContext.decisions.eventRadar,
+      },
+    };
   }
 
   // --------------------------------------------------------------------------

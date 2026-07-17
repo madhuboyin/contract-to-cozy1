@@ -26,6 +26,7 @@ import { track } from '@/lib/analytics/events';
 import type { Property, RadarFeedItem as RadarFeedItemType, RadarUserState } from '@/types';
 import { buildGuidanceOverviewHref } from '@/lib/navigation/guidanceOverviewHref';
 import { ScrollFadeX } from '@/components/ui/ScrollFadeX';
+import { PropertyContextNotice } from '@/components/property-context/PropertyContextNotice';
 
 // ---------------------------------------------------------------------------
 // Filter chip type
@@ -556,6 +557,8 @@ export default function HomeEventRadarPageClient({ propertyId: propertyIdOverrid
             propertyId={propertyId}
             monitoringAddress={propertyAddress || undefined}
           />
+
+          <PropertyContextNotice context={feedQuery.data?.propertyContext} title="Event matching context" />
 
           <MobileSection className="space-y-3 lg:space-y-4">
             <div className="lg:hidden">

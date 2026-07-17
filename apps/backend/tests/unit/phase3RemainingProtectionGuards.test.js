@@ -24,6 +24,7 @@ test('recall follow-ups require confirmation or verified exact item identity', (
   assert.match(followups, /confirmedAt: \{ not: null \}/);
   assert.match(followups, /isVerified: true/);
   assert.match(followups, /recall: \{ status: 'ACTIVE' \}/);
+  assert.match(followups, /inspectionFindings/);
 });
 
 test('event radar and replay enforce event validity and context-version reuse', () => {

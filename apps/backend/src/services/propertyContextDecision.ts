@@ -3,6 +3,7 @@ import type {
   PropertyContextSnapshot,
   PropertyFact,
 } from '../modules/propertyContext/domain/contracts';
+import { getFactDefinition } from '../modules/propertyContext/catalog/factCatalog';
 
 export class PropertyContextDecisionBuilder {
   readonly used = new Set<string>();
@@ -28,6 +29,13 @@ export class PropertyContextDecisionBuilder {
   }
 
   decision(status: FeatureDecision['status'], reasonCodes: string[]): FeatureDecision {
+    const correctionKeys = status === 'APPLICABLE'
+      ? [...this.missing, ...this.conflicted]
+      : [...this.missing, ...this.conflicted, ...this.used];
+    const correctionPaths = correctionKeys
+      .map((key) => getFactDefinition(key).correctionPath)
+      .filter((path): path is string => Boolean(path))
+      .map((path) => path.replace(':propertyId', this.context.propertyId));
     return {
       status,
       reasonCodes,
@@ -35,6 +43,7 @@ export class PropertyContextDecisionBuilder {
       missingFactKeys: [...this.missing],
       conflictedFactKeys: [...this.conflicted],
       validUntil: this.validUntil.sort()[0] ?? null,
+      correctionPaths: [...new Set(correctionPaths)],
     };
   }
 

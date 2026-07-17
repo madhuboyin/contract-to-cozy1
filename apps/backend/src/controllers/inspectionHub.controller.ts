@@ -13,7 +13,7 @@ export async function getHub(req: Request, res: Response, next: NextFunction) {
   try {
     const [data, protectionContext] = await Promise.all([
       hubService.getHub(req.params.propertyId),
-      getProtectionContextDecisions(req.params.propertyId, req.user!.userId),
+      getProtectionContextDecisions(req.params.propertyId, req.user!.userId, 'INSPECTION'),
     ]);
 
     analyticsEmitter.track({
@@ -179,7 +179,7 @@ export async function listOpenItems(req: Request, res: Response, next: NextFunct
         limit: Number(req.query.limit ?? 50),
         cursor: req.query.cursor as string | undefined,
       }),
-      getProtectionContextDecisions(req.params.propertyId, req.user!.userId),
+      getProtectionContextDecisions(req.params.propertyId, req.user!.userId, 'INSPECTION'),
     ]);
     res.json({
       success: true,

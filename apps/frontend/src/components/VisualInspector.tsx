@@ -26,6 +26,7 @@ import {
   ScenarioInputCard,
   StatusChip,
 } from '@/components/mobile/dashboard/MobilePrimitives';
+import { PropertyContextNotice, type PropertyContextEnvelope } from '@/components/property-context/PropertyContextNotice';
 
 interface DetectedIssue {
   title: string;
@@ -73,6 +74,7 @@ interface InspectionReport {
     classification: 'PROVISIONAL_VISUAL_ASSESSMENT';
     requiresConfirmation: true;
   };
+  propertyContext?: PropertyContextEnvelope;
 }
 
 interface VisualInspectorProps {
@@ -207,6 +209,8 @@ export default function VisualInspector({ propertyId }: VisualInspectorProps) {
             This is a provisional visual assessment. Confirm material findings through the Inspection Hub before creating repair, disclosure, or coverage actions.
           </div>
         ) : null}
+
+        <PropertyContextNotice context={report.propertyContext} title="Visual inspection context" />
 
         <ReadOnlySummaryBlock
           title="Inspection Snapshot"

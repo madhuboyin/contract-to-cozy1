@@ -84,7 +84,7 @@ export class VisualInspectorService {
     userId: string,
     images: { file: Express.Multer.File; roomType: string }[]
   ): Promise<InspectionReport> {
-    const protectionContext = await getProtectionContextDecisions(propertyId, userId);
+    const protectionContext = await getProtectionContextDecisions(propertyId, userId, 'VISUAL_INSPECTOR');
     const property = await prisma.property.findFirst({
       where: {
         id: propertyId,

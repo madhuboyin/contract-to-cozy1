@@ -1,4 +1,5 @@
 import { api } from './client';
+import type { PropertyContextEnvelope } from '@/components/property-context/PropertyContextNotice';
 
 export type RiskPremiumRiskTolerance = 'LOW' | 'MEDIUM' | 'HIGH';
 export type RiskPremiumSeverity = 'LOW' | 'MEDIUM' | 'HIGH';
@@ -20,17 +21,7 @@ export type RiskPremiumOptimizationDTO = {
   homeownerProfileId: string;
   assumptionSetId?: string | null;
   preferenceProfileId?: string | null;
-  propertyContext?: {
-    contextVersion: string;
-    decision: {
-      status: 'APPLICABLE' | 'NOT_APPLICABLE' | 'UNKNOWN';
-      reasonCodes: string[];
-      usedFactKeys: string[];
-      missingFactKeys: string[];
-      conflictedFactKeys: string[];
-      validUntil: string | null;
-    };
-  };
+  propertyContext?: PropertyContextEnvelope;
   sharedSignalsUsed?: string[];
   status: 'READY' | 'STALE' | 'ERROR';
   confidence: 'HIGH' | 'MEDIUM' | 'LOW';

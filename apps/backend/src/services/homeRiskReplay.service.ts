@@ -405,7 +405,9 @@ function serializeReplaySummary(run: {
   highImpactEvents: number | null;
   moderateImpactEvents: number | null;
   summaryText: string | null;
+  propertySnapshotJson?: Prisma.JsonValue | null;
 }): JsonRecord {
+  const snapshot = run.propertySnapshotJson as JsonRecord | null | undefined;
   return {
     id: run.id,
     createdAt: run.createdAt.toISOString(),
@@ -417,6 +419,28 @@ function serializeReplaySummary(run: {
     highImpactEvents: run.highImpactEvents ?? 0,
     moderateImpactEvents: run.moderateImpactEvents ?? 0,
     summaryText: run.summaryText,
+    generatedContextVersion: typeof snapshot?.propertyContextVersion === 'string'
+      ? snapshot.propertyContextVersion
+      : null,
+  };
+}
+
+function attachReplayContext(
+  replay: JsonRecord,
+  protectionContext: Awaited<ReturnType<typeof getProtectionContextDecisions>>,
+): JsonRecord {
+  const snapshot = replay.propertySnapshotJson as JsonRecord | null | undefined;
+  const generatedContextVersion = typeof snapshot?.propertyContextVersion === 'string'
+    ? snapshot.propertyContextVersion
+    : null;
+  return {
+    ...replay,
+    propertyContext: {
+      contextVersion: protectionContext.contextVersion,
+      generatedContextVersion,
+      isStale: generatedContextVersion !== protectionContext.contextVersion,
+      decision: protectionContext.decisions.riskReplay,
+    },
   };
 }
 
@@ -579,7 +603,7 @@ export class HomeRiskReplayService {
   }
 
   async generateRun(propertyId: string, userId: string, input: GenerateReplayInput): Promise<{ replay: JsonRecord; reused: boolean }> {
-    const protectionContext = await getProtectionContextDecisions(propertyId, userId);
+    const protectionContext = await getProtectionContextDecisions(propertyId, userId, 'RISK_REPLAY');
     const property = await prisma.property.findUnique({
       where: { id: propertyId },
       select: PROPERTY_CONTEXT_SELECT,
@@ -620,7 +644,10 @@ export class HomeRiskReplayService {
       if (existing) {
         const snapshot = existing.propertySnapshotJson as JsonRecord | null;
         if (snapshot?.propertyContextVersion === protectionContext.contextVersion) {
-          return { replay: await this.enrichReplayWithSignals(existing), reused: true };
+          return {
+            replay: attachReplayContext(await this.enrichReplayWithSignals(existing), protectionContext),
+            reused: true,
+          };
         }
       }
     }
@@ -739,7 +766,7 @@ export class HomeRiskReplayService {
       });
 
       return {
-        replay: await this.enrichReplayWithSignals(finalizedRun),
+        replay: attachReplayContext(await this.enrichReplayWithSignals(finalizedRun), protectionContext),
         reused: false,
       };
     } catch (error) {
@@ -759,8 +786,9 @@ export class HomeRiskReplayService {
     }
   }
 
-  async listRuns(propertyId: string, query: ListRunsQuery = {}): Promise<{ runs: JsonRecord[] }> {
+  async listRuns(propertyId: string, userId: string, query: ListRunsQuery = {}): Promise<{ runs: JsonRecord[] }> {
     const limit = Math.min(Math.max(query.limit ?? 20, 1), 50);
+    const protectionContext = await getProtectionContextDecisions(propertyId, userId, 'RISK_REPLAY');
 
     const runs = await prisma.homeRiskReplayRun.findMany({
       where: { propertyId },
@@ -777,15 +805,24 @@ export class HomeRiskReplayService {
         highImpactEvents: true,
         moderateImpactEvents: true,
         summaryText: true,
+        propertySnapshotJson: true,
       },
     });
 
     return {
-      runs: runs.map(serializeReplaySummary),
+      runs: runs.map((run) => {
+        const summary = serializeReplaySummary(run);
+        const generatedContextVersion = summary.generatedContextVersion as string | null;
+        return {
+          ...summary,
+          isStale: generatedContextVersion !== protectionContext.contextVersion,
+        };
+      }),
     };
   }
 
-  async getRunDetail(propertyId: string, replayRunId: string): Promise<JsonRecord> {
+  async getRunDetail(propertyId: string, replayRunId: string, userId: string): Promise<JsonRecord> {
+    const protectionContext = await getProtectionContextDecisions(propertyId, userId, 'RISK_REPLAY');
     const run = await prisma.homeRiskReplayRun.findFirst({
       where: {
         id: replayRunId,
@@ -804,7 +841,7 @@ export class HomeRiskReplayService {
       throw new APIError('Replay run not found', 404, 'HOME_RISK_REPLAY_NOT_FOUND');
     }
 
-    return this.enrichReplayWithSignals(run);
+    return attachReplayContext(await this.enrichReplayWithSignals(run), protectionContext);
   }
 
   async trackEvent(

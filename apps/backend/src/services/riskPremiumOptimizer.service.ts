@@ -54,7 +54,12 @@ export type RiskPremiumOptimizationDTO = {
   homeownerProfileId: string;
   assumptionSetId?: string | null;
   preferenceProfileId?: string | null;
-  propertyContext?: { contextVersion: string; decision: FeatureDecision };
+  propertyContext?: {
+    contextVersion: string;
+    generatedContextVersion: string | null;
+    isStale: boolean;
+    decision: FeatureDecision;
+  };
   sharedSignalsUsed?: string[];
   status: 'READY' | 'STALE' | 'ERROR';
   confidence: 'HIGH' | 'MEDIUM' | 'LOW';
@@ -354,6 +359,14 @@ function mapAnalysisToDto(record: LatestAnalysisRecord): RiskPremiumOptimization
   };
 }
 
+function generatedContextVersionFromSnapshot(snapshot: unknown): string | null {
+  if (!snapshot || typeof snapshot !== 'object' || Array.isArray(snapshot)) return null;
+  const propertyContext = (snapshot as Record<string, unknown>).propertyContext;
+  if (!propertyContext || typeof propertyContext !== 'object' || Array.isArray(propertyContext)) return null;
+  const version = (propertyContext as Record<string, unknown>).contextVersion;
+  return typeof version === 'string' && version.length > 0 ? version : null;
+}
+
 function deductibleFromPreferenceStyle(
   style: PreferencePostureDefaults['deductiblePreferenceStyle']
 ): number | undefined {
@@ -485,7 +498,7 @@ export class RiskPremiumOptimizerService {
 
   async getLatest(propertyId: string, userId: string) {
     await assertPropertyForUser(propertyId, userId);
-    const protectionContext = await getProtectionContextDecisions(propertyId, userId);
+    const protectionContext = await getProtectionContextDecisions(propertyId, userId, 'RISK_PREMIUM_OPTIMIZER');
 
     const latest = await prisma.riskPremiumOptimizationAnalysis.findFirst({
       where: { propertyId },
@@ -499,12 +512,19 @@ export class RiskPremiumOptimizerService {
       return { exists: false as const };
     }
 
+    const generatedContextVersion = generatedContextVersionFromSnapshot(latest.inputsSnapshot);
+    const isContextStale = generatedContextVersion !== protectionContext.contextVersion;
+    const dto = mapAnalysisToDto(latest);
+
     return {
       exists: true as const,
       analysis: {
-        ...mapAnalysisToDto(latest),
+        ...dto,
+        status: isContextStale ? 'STALE' as const : dto.status,
         propertyContext: {
           contextVersion: protectionContext.contextVersion,
+          generatedContextVersion,
+          isStale: isContextStale,
           decision: protectionContext.decisions.riskPremiumOptimizer,
         },
       },
@@ -517,7 +537,7 @@ export class RiskPremiumOptimizerService {
     overrides?: RiskPremiumOptimizerOverrides,
     options?: RiskPremiumRunOptions
   ) {
-    const protectionContext = await getProtectionContextDecisions(propertyId, userId);
+    const protectionContext = await getProtectionContextDecisions(propertyId, userId, 'RISK_PREMIUM_OPTIMIZER');
     const posture = await this.preferenceProfileService.resolvePostureDefaults(propertyId);
     let assumptionSetId: string | null = null;
     let assumptionOverrides: RiskPremiumOptimizerOverrides = {};
@@ -1274,16 +1294,32 @@ export class RiskPremiumOptimizerService {
       return bSavings - aSavings;
     });
 
+    const responsibilityByAction: Partial<Record<MitigationActionType, FeatureDecision>> = {
+      [MitigationActionType.LEAK_SENSORS]: protectionContext.decisions.plumbingActions,
+      [MitigationActionType.AUTO_SHUTOFF_VALVE]: protectionContext.decisions.plumbingActions,
+      [MitigationActionType.SUMP_PUMP_OR_BACKUP]: protectionContext.decisions.plumbingActions,
+      [MitigationActionType.WATER_HEATER_REPLACEMENT]: protectionContext.decisions.plumbingActions,
+      [MitigationActionType.ROOF_INSPECTION_OR_REPAIR]: protectionContext.decisions.roofActions,
+      [MitigationActionType.TREE_TRIMMING]: protectionContext.decisions.exteriorActions,
+      [MitigationActionType.WIND_HAIL_HARDENING]: protectionContext.decisions.exteriorActions,
+      [MitigationActionType.SMOKE_CO_DETECTORS]: protectionContext.decisions.commonSafetyActions,
+      [MitigationActionType.ELECTRICAL_PANEL_INSPECTION]: protectionContext.decisions.commonSafetyActions,
+      [MitigationActionType.SECURITY_SYSTEM]: protectionContext.decisions.commonSafetyActions,
+    };
+    const contextualRecommendations = sortedRecommendations.filter((recommendation) => (
+      responsibilityByAction[recommendation.actionType]?.status !== 'NOT_APPLICABLE'
+    ));
+
     const discountBoost = assumeBundled ? 1.15 : 1;
     const savingsSignalBoost =
       savingsRealizationAnnual !== null && savingsRealizationAnnual > 0
         ? Math.min(280, savingsRealizationAnnual * 0.18)
         : 0;
-    const totalSavingsMinRaw = sortedRecommendations.reduce(
+    const totalSavingsMinRaw = contextualRecommendations.reduce(
       (sum, recommendation) => sum + (recommendation.estimatedSavingsMin ?? 0),
       0
     ) * discountBoost + savingsSignalBoost * 0.5;
-    const totalSavingsMaxRaw = sortedRecommendations.reduce(
+    const totalSavingsMaxRaw = contextualRecommendations.reduce(
       (sum, recommendation) => sum + (recommendation.estimatedSavingsMax ?? 0),
       0
     ) * discountBoost + savingsSignalBoost;
@@ -1346,7 +1382,7 @@ export class RiskPremiumOptimizerService {
           }
         : undefined;
 
-    const topRecommendation = sortedRecommendations[0];
+    const topRecommendation = contextualRecommendations[0];
     const summaryParts: string[] = [];
     if (topRecommendation) {
       summaryParts.push(`Top lever: ${topRecommendation.title.toLowerCase()}.`);
@@ -1362,8 +1398,8 @@ export class RiskPremiumOptimizerService {
     summaryParts.push('Educational guidance only; validate assumptions before policy changes.');
     const summary = summaryParts.join(' ');
 
-    const persistedRecommendations = sortedRecommendations.map(({ actionType: _actionType, ...rest }) => rest);
-    const planItemInputs = sortedRecommendations
+    const persistedRecommendations = contextualRecommendations.map(({ actionType: _actionType, ...rest }) => rest);
+    const planItemInputs = contextualRecommendations
       .filter((recommendation) => recommendation.type === 'MITIGATE' || recommendation.type === 'POLICY_LEVER')
       .slice(0, 7);
 
@@ -1404,6 +1440,9 @@ export class RiskPremiumOptimizerService {
             },
             sharedSignalsUsed,
             mitigationVerification: mitigationVerification ?? null,
+            propertyContext: {
+              contextVersion: protectionContext.contextVersion,
+            },
           },
           premiumDrivers: drivers.slice(0, 6),
           recommendations: persistedRecommendations.slice(0, 8),
@@ -1449,6 +1488,8 @@ export class RiskPremiumOptimizerService {
       ...mapAnalysisToDto(created),
       propertyContext: {
         contextVersion: protectionContext.contextVersion,
+        generatedContextVersion: protectionContext.contextVersion,
+        isStale: false,
         decision: effectiveOverrides.annualPremium !== undefined
           ? {
               ...protectionContext.decisions.riskPremiumOptimizer,

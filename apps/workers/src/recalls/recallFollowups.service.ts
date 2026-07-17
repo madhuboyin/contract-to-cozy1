@@ -146,6 +146,12 @@ export async function createFollowupsForOpenMatches(limit = 200) {
       status: 'OPEN',
       maintenanceTaskId: null,
       recall: { status: 'ACTIVE' },
+      inspectionFindings: {
+        none: {
+          status: 'OPEN',
+          report: { status: 'CONFIRMED' },
+        },
+      },
       OR: [
         { confirmedAt: { not: null } },
         {

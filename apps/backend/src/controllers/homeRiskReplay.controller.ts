@@ -48,7 +48,7 @@ export async function listHomeRiskReplayRuns(req: CustomRequest, res: Response, 
     const { userId } = requireUser(req);
     const { propertyId } = req.params;
     const limit = req.query.limit ? Number(req.query.limit) : undefined;
-    const result = await service.listRuns(propertyId, { limit });
+    const result = await service.listRuns(propertyId, userId, { limit });
 
     analyticsEmitter.track({
       eventType: AnalyticsEvent.TOOL_USED,
@@ -70,9 +70,9 @@ export async function listHomeRiskReplayRuns(req: CustomRequest, res: Response, 
 
 export async function getHomeRiskReplayDetail(req: CustomRequest, res: Response, next: NextFunction) {
   try {
-    requireUser(req);
+    const { userId } = requireUser(req);
     const { propertyId, replayRunId } = req.params;
-    const replay = await service.getRunDetail(propertyId, replayRunId);
+    const replay = await service.getRunDetail(propertyId, replayRunId, userId);
 
     res.json({
       success: true,

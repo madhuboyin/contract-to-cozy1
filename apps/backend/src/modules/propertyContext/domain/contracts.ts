@@ -75,4 +75,5 @@ export interface FeatureDecision {
   missingFactKeys: string[];
   conflictedFactKeys: string[];
   validUntil: string | null;
+  correctionPaths?: string[];
 }

@@ -14,6 +14,24 @@ export interface ProtectionContextDecisions {
   climateRisk: FeatureDecision;
   eventRadar: FeatureDecision;
   riskReplay: FeatureDecision;
+  roofActions: FeatureDecision;
+  exteriorActions: FeatureDecision;
+  plumbingActions: FeatureDecision;
+  hvacActions: FeatureDecision;
+  commonSafetyActions: FeatureDecision;
+  incidentNotifications: FeatureDecision;
+}
+
+type ResponsibleParty = 'OWNER' | 'ASSOCIATION' | 'LANDLORD' | 'SHARED' | 'UNKNOWN';
+
+function responsibilityDecision(context: PropertyContextSnapshot, key: string): FeatureDecision {
+  const facts = new PropertyContextDecisionBuilder(context);
+  const party = facts.read<ResponsibleParty>(key);
+  if (!party || party === 'UNKNOWN') return facts.unknown('RESPONSIBILITY_UNKNOWN');
+  if (party === 'OWNER' || party === 'SHARED') {
+    return facts.decision('APPLICABLE', [party === 'SHARED' ? 'SHARED_RESPONSIBILITY' : 'OWNER_RESPONSIBILITY']);
+  }
+  return facts.decision('NOT_APPLICABLE', [party === 'ASSOCIATION' ? 'ASSOCIATION_RESPONSIBILITY' : 'LANDLORD_RESPONSIBILITY']);
 }
 
 function outputDecision(
@@ -82,6 +100,14 @@ export function evaluateProtectionContext(context: PropertyContextSnapshot): Pro
   const visualFacts = new PropertyContextDecisionBuilder(context);
   const visualInspector = visualFacts.decision('APPLICABLE', ['VISUAL_OUTPUT_PROVISIONAL']);
 
+  const incidentFacts = new PropertyContextDecisionBuilder(context);
+  const activeIncidents = incidentFacts.read<unknown[]>('risk.activeIncidents');
+  const incidentNotifications = activeIncidents === undefined
+    ? incidentFacts.unknown('INCIDENT_STATE_UNAVAILABLE')
+    : activeIncidents.length > 0
+      ? incidentFacts.decision('APPLICABLE', ['ACTIVE_INCIDENT_PRESENT'])
+      : incidentFacts.decision('NOT_APPLICABLE', ['NO_ACTIVE_INCIDENT']);
+
   return {
     riskAssessment,
     currentRiskOutput: outputDecision(context, 'risk.report', 'CURRENT_RISK_REPORT_AVAILABLE', 'CURRENT_RISK_REPORT_UNAVAILABLE'),
@@ -95,5 +121,11 @@ export function evaluateProtectionContext(context: PropertyContextSnapshot): Pro
     climateRisk,
     eventRadar,
     riskReplay,
+    roofActions: responsibilityDecision(context, 'responsibility.roof'),
+    exteriorActions: responsibilityDecision(context, 'responsibility.buildingExterior'),
+    plumbingActions: responsibilityDecision(context, 'responsibility.plumbing'),
+    hvacActions: responsibilityDecision(context, 'responsibility.hvac'),
+    commonSafetyActions: responsibilityDecision(context, 'responsibility.commonSafety'),
+    incidentNotifications,
   };
 }
