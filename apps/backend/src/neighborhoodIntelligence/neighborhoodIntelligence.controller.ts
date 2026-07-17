@@ -9,10 +9,15 @@ import { NeighborhoodSignalService } from './neighborhoodSignalService';
 import { NeighborhoodEventType } from '@prisma/client';
 import { EventListQuery } from './neighborhoodIntelligence.validators';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
+import { getPlanningContextEnvelope } from '../services/planningContext/context';
 
 const intelligenceService = new NeighborhoodIntelligenceService();
 const queryService = new NeighborhoodRadarQueryService();
 const signalService = new NeighborhoodSignalService();
+
+function getRadarContext(req: CustomRequest, propertyId: string) {
+  return getPlanningContextEnvelope(propertyId, req.user!.userId, 'NEIGHBORHOOD_RADAR');
+}
 
 // ---------------------------------------------------------------------------
 // GET /api/properties/:propertyId/neighborhood-radar/summary
@@ -25,7 +30,10 @@ export async function getNeighborhoodRadarSummary(
 ): Promise<void> {
   try {
     const { propertyId } = req.params;
-    const summary = await queryService.getSummary(propertyId);
+    const [summary, context] = await Promise.all([
+      queryService.getSummary(propertyId),
+      getRadarContext(req, propertyId),
+    ]);
 
     analyticsEmitter.track({
       eventType: AnalyticsEvent.TOOL_USED,
@@ -36,7 +44,7 @@ export async function getNeighborhoodRadarSummary(
       metadataJson: {},
     });
 
-    res.json({ success: true, data: { summary } });
+    res.json({ success: true, data: { summary, context } });
   } catch (err) {
     next(err);
   }
@@ -55,15 +63,18 @@ export async function getNeighborhoodRadarEvents(
     const { propertyId } = req.params;
     const query = req.query as EventListQuery;
 
-    const result = await queryService.getEventList(propertyId, {
-      sortBy: query.sortBy,
-      filterType: query.filterType as NeighborhoodEventType | undefined,
-      filterEffect: query.filterEffect as 'POSITIVE' | 'NEGATIVE' | 'MIXED' | undefined,
-      limit: query.limit ? Number(query.limit) : 20,
-      offset: query.offset ? Number(query.offset) : 0,
-    });
+    const [result, context] = await Promise.all([
+      queryService.getEventList(propertyId, {
+        sortBy: query.sortBy,
+        filterType: query.filterType as NeighborhoodEventType | undefined,
+        filterEffect: query.filterEffect as 'POSITIVE' | 'NEGATIVE' | 'MIXED' | undefined,
+        limit: query.limit ? Number(query.limit) : 20,
+        offset: query.offset ? Number(query.offset) : 0,
+      }),
+      getRadarContext(req, propertyId),
+    ]);
 
-    res.json({ success: true, data: result });
+    res.json({ success: true, data: { ...result, context } });
   } catch (err) {
     next(err);
   }
@@ -80,8 +91,11 @@ export async function getNeighborhoodRadarEventDetail(
 ): Promise<void> {
   try {
     const { propertyId, eventId } = req.params;
-    const detail = await queryService.getEventDetail(propertyId, eventId);
-    res.json({ success: true, data: { event: detail } });
+    const [detail, context] = await Promise.all([
+      queryService.getEventDetail(propertyId, eventId),
+      getRadarContext(req, propertyId),
+    ]);
+    res.json({ success: true, data: { event: detail, context } });
   } catch (err) {
     next(err);
   }
@@ -98,8 +112,11 @@ export async function getNeighborhoodRadarTrends(
 ): Promise<void> {
   try {
     const { propertyId } = req.params;
-    const trends = await queryService.getTrends(propertyId);
-    res.json({ success: true, data: { trends } });
+    const [trends, context] = await Promise.all([
+      queryService.getTrends(propertyId),
+      getRadarContext(req, propertyId),
+    ]);
+    res.json({ success: true, data: { trends, context } });
   } catch (err) {
     next(err);
   }
@@ -151,8 +168,11 @@ export async function getNeighborhoodSignals(
 ): Promise<void> {
   try {
     const { propertyId } = req.params;
-    const signals = await signalService.getSignalsForProperty(propertyId);
-    res.json({ success: true, data: { signals } });
+    const [signals, context] = await Promise.all([
+      signalService.getSignalsForProperty(propertyId),
+      getRadarContext(req, propertyId),
+    ]);
+    res.json({ success: true, data: { signals, context } });
   } catch (err) {
     next(err);
   }

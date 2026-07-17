@@ -60,6 +60,7 @@ import {
   hasGuidanceContinuityContext,
 } from '@/features/guidance/utils/guidanceContinuity';
 import { ScrollFadeX } from '@/components/ui/ScrollFadeX';
+import { PropertyContextNotice } from '@/components/property-context/PropertyContextNotice';
 
 // ============================================================================
 // DISPLAY CONSTANTS
@@ -609,15 +610,18 @@ function SummaryStrip({ propertyId }: { propertyId: string }) {
     return <div className="h-24 animate-pulse rounded-[22px] bg-gray-100" />;
   }
 
-  if (!summary || summary.meaningfulChangeCount === 0) {
+  if (!summary) {
     return null;
   }
 
   return (
-    <MobileCard
-      variant="hero"
-      className="bg-[linear-gradient(145deg,#ffffff,hsl(var(--mobile-brand-soft)))]"
-    >
+    <div className="space-y-3">
+      <PropertyContextNotice context={summary.propertyContext} title="Neighborhood context" />
+      {summary.meaningfulChangeCount > 0 ? (
+      <MobileCard
+        variant="hero"
+        className="bg-[linear-gradient(145deg,#ffffff,hsl(var(--mobile-brand-soft)))]"
+      >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <p className="mb-1 text-[11px] font-medium tracking-normal text-[hsl(var(--mobile-text-muted))]">
@@ -669,7 +673,9 @@ function SummaryStrip({ propertyId }: { propertyId: string }) {
           Last updated {formatDate(summary.lastScanAt)}
         </p>
       )}
-    </MobileCard>
+      </MobileCard>
+      ) : null}
+    </div>
   );
 }
 

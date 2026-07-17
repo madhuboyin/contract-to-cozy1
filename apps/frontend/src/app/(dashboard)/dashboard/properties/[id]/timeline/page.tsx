@@ -21,6 +21,7 @@ import {
 } from '@/components/mobile/dashboard/MobilePrimitives';
 import HomeToolHeader from '@/components/tools/HomeToolHeader';
 import { resolveDashboardBackHref } from '@/lib/navigation/backNavigation';
+import { PropertyContextNotice, type PropertyContextEnvelope } from '@/components/property-context/PropertyContextNotice';
 
 type Mode = 'LIST' | 'VISUAL';
 
@@ -447,7 +448,7 @@ export default function Page() {
     [propertyId, type, limit, fromDate, toDate]
   );
 
-  const { data: events = [], isLoading, error, refetch, isFetching } = useQuery({
+  const { data: timelineData, isLoading, error, refetch, isFetching } = useQuery({
     queryKey,
     enabled: !!propertyId,
     queryFn: async () => {
@@ -461,12 +462,21 @@ export default function Page() {
       const inner = payload?.data ?? payload;
       const timelineEntries = inner?.timelineEntries ?? [];
       if (Array.isArray(timelineEntries) && timelineEntries.length > 0) {
-        return timelineEntries.map((entry: TimelineProjectionEntry) => toTimelineEvent(entry));
+        return {
+          events: timelineEntries.map((entry: TimelineProjectionEntry) => toTimelineEvent(entry)),
+          context: inner?.context as PropertyContextEnvelope | undefined,
+        };
       }
       const ev = inner?.events ?? [];
-      return Array.isArray(ev) ? ev : [];
+      return {
+        events: Array.isArray(ev) ? ev : [],
+        context: inner?.context as PropertyContextEnvelope | undefined,
+      };
     },
   });
+
+  const events = timelineData?.events ?? [];
+  const timelineContext = timelineData?.context;
 
   // Client-side keyword search
   const filteredEvents = useMemo(() => {
@@ -543,6 +553,7 @@ export default function Page() {
             backLabel="Back to property"
             showBackLink
           />
+          <PropertyContextNotice context={timelineContext} title="Timeline context" />
           <ResultHeroCard
             eyebrow="Property History"
             title={mode === 'VISUAL' ? 'Visual Timeline' : 'Event Timeline'}

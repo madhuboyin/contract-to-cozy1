@@ -1,7 +1,7 @@
 // apps/backend/src/routes/homeEvents.routes.ts
 import { Router } from 'express';
 import { authenticate } from '../middleware/auth.middleware';
-import { propertyAuthMiddleware } from '../middleware/propertyAuth.middleware';
+import { propertyAuthMiddleware, requireHouseholdRole } from '../middleware/propertyAuth.middleware';
 import { validateBody, validate } from '../middleware/validate.middleware';
 import { apiRateLimiter } from '../middleware/rateLimiter.middleware';
 
@@ -41,6 +41,7 @@ router.get('/properties/:propertyId/home-events/:eventId', propertyAuthMiddlewar
 router.post(
   '/properties/:propertyId/home-events',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(createHomeEventBodySchema),
   createHomeEvent
 );
@@ -48,16 +49,23 @@ router.post(
 router.patch(
   '/properties/:propertyId/home-events/:eventId',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(updateHomeEventBodySchema),
   updateHomeEvent
 );
 
-router.delete('/properties/:propertyId/home-events/:eventId', propertyAuthMiddleware, deleteHomeEvent);
+router.delete(
+  '/properties/:propertyId/home-events/:eventId',
+  propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
+  deleteHomeEvent,
+);
 
 // documents attach/detach
 router.post(
   '/properties/:propertyId/home-events/:eventId/documents',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(attachHomeEventDocumentBodySchema),
   attachHomeEventDocument
 );
@@ -65,6 +73,7 @@ router.post(
 router.delete(
   '/properties/:propertyId/home-events/:eventId/documents/:documentId',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   detachHomeEventDocument
 );
 

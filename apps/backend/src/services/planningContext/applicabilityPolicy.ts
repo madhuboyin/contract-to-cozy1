@@ -1,6 +1,30 @@
 import type { FeatureDecision, PropertyContextSnapshot } from '../../modules/propertyContext';
 import { PropertyContextDecisionBuilder } from '../propertyContextDecision';
 
+export function evaluateHomeBuyerSegment(segment: string | null | undefined) {
+  if (!segment) {
+    return { status: 'UNKNOWN' as const, reasonCode: 'HOMEOWNER_SEGMENT_UNKNOWN' };
+  }
+  return segment === 'HOME_BUYER'
+    ? { status: 'APPLICABLE' as const, reasonCode: 'HOME_BUYER_SEGMENT_ACTIVE' }
+    : { status: 'NOT_APPLICABLE' as const, reasonCode: 'SEGMENT_NOT_HOME_BUYER' };
+}
+
+export function evaluateNeighborhoodLocation(
+  zipCode: string | null | undefined,
+  geocoded: boolean | null | undefined,
+) {
+  return zipCode
+    ? {
+        status: 'APPLICABLE' as const,
+        reasonCodes: [
+          'GEOGRAPHIC_MATCH_AVAILABLE',
+          ...(geocoded ? ['PRECISE_GEOCODING_AVAILABLE'] : []),
+        ],
+      }
+    : { status: 'UNKNOWN' as const, reasonCodes: ['LOCATION_CONTEXT_MISSING'] };
+}
+
 function requiresFacts(
   context: PropertyContextSnapshot,
   keys: string[],
@@ -55,11 +79,10 @@ export function evaluatePlanningContext(context: PropertyContextSnapshot) {
 
   const buyerFacts = new PropertyContextDecisionBuilder(context);
   const segment = buyerFacts.read<string>('product.homeownerSegment');
-  const homeBuyerWorkflow = segment === undefined
-    ? buyerFacts.unknown('HOMEOWNER_SEGMENT_UNKNOWN')
-    : segment === 'HOME_BUYER'
-      ? buyerFacts.decision('APPLICABLE', ['HOME_BUYER_SEGMENT_ACTIVE'])
-      : buyerFacts.decision('NOT_APPLICABLE', ['SEGMENT_NOT_HOME_BUYER']);
+  const homeBuyerSegment = evaluateHomeBuyerSegment(segment);
+  const homeBuyerWorkflow = homeBuyerSegment.status === 'UNKNOWN'
+    ? buyerFacts.unknown(homeBuyerSegment.reasonCode)
+    : buyerFacts.decision(homeBuyerSegment.status, [homeBuyerSegment.reasonCode]);
 
   const movingPlanning = requiresFacts(
     context,
@@ -71,12 +94,10 @@ export function evaluatePlanningContext(context: PropertyContextSnapshot) {
   const neighborhoodFacts = new PropertyContextDecisionBuilder(context);
   const zip = neighborhoodFacts.read<string>('location.zipCode');
   const geocoded = neighborhoodFacts.read<boolean>('location.geocoded');
-  const neighborhoodRelevance = zip
-    ? neighborhoodFacts.decision('APPLICABLE', [
-        'GEOGRAPHIC_MATCH_AVAILABLE',
-        ...(geocoded ? ['PRECISE_GEOCODING_AVAILABLE'] : []),
-      ])
-    : neighborhoodFacts.unknown('LOCATION_CONTEXT_MISSING');
+  const neighborhoodLocation = evaluateNeighborhoodLocation(zip, geocoded);
+  const neighborhoodRelevance = neighborhoodLocation.status === 'APPLICABLE'
+    ? neighborhoodFacts.decision('APPLICABLE', neighborhoodLocation.reasonCodes)
+    : neighborhoodFacts.unknown(neighborhoodLocation.reasonCodes[0]);
 
   const localFacts = new PropertyContextDecisionBuilder(context);
   const localCity = localFacts.read<string>('location.city');

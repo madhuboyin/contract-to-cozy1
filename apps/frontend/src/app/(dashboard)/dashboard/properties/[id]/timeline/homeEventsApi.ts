@@ -1,5 +1,6 @@
 // apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/timeline/homeEventsApi.ts
 import { api } from '@/lib/api/client';
+import type { PropertyContextEnvelope } from '@/components/property-context/PropertyContextNotice';
 
 export type HomeEventType =
   | 'PURCHASE' | 'DOCUMENT' | 'REPAIR' | 'MAINTENANCE'
@@ -84,6 +85,7 @@ type HomeEventsResponse = {
   events: HomeEvent[];
   signalEvents?: TimelineProjectionEntry[];
   timelineEntries?: TimelineProjectionEntry[];
+  context?: PropertyContextEnvelope;
 };
 export async function createHomeEvent(propertyId: string, payload: CreateHomeEventPayload) {
   return api.post<{ event: HomeEvent }>(

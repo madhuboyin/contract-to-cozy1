@@ -17,6 +17,7 @@ import { prisma } from '../lib/prisma';
 import { guidanceJourneyService } from '../../../backend/src/services/guidanceEngine/guidanceJourney.service';
 import { NEIGHBORHOOD_IMPACT_RULES } from '../../../backend/src/neighborhoodIntelligence/impactRules';
 import { haversineDistanceMiles, isValidLatLng } from '../../../backend/src/neighborhoodIntelligence/geoUtils';
+import { getPlanningContextEnvelope } from '../../../backend/src/services/planningContext/context';
 import { logger } from '../lib/logger';
 
 /**
@@ -141,6 +142,23 @@ export async function neighborhoodChangeNotificationJob(): Promise<void> {
     const linkId: string = link.id;
 
     try {
+      // Reuse the authoritative feature policy before applying the
+      // event-specific distance check below. Notifications fail closed when
+      // the property's location context is incomplete or conflicted.
+      const planning = await getPlanningContextEnvelope(
+        propertyId,
+        userId,
+        'NEIGHBORHOOD_RADAR',
+      );
+      if (planning.decision.status !== 'APPLICABLE') {
+        logger.info(
+          `[NEIGHBORHOOD-NOTIFY] Suppressed by Property Context policy: link=${linkId}` +
+          ` property=${propertyId} status=${planning.decision.status}`,
+        );
+        skipped++;
+        continue;
+      }
+
       // --- Freshness suppression ---
       // Compute a simple freshness score inline to avoid importing backend modules.
       // Events older than ~18 months (or whose expected end is well in the past)

@@ -53,35 +53,25 @@ const EVENT_TYPE_LABELS: Record<NeighborhoodEventType, string> = {
   LARGE_CONSTRUCTION: 'Large Construction',
 };
 
-// Include spec for property-level event queries. Impacts are read from the
-// property-event link (property-specific projections); event-level rows are
-// kept as a fallback for records written before link ownership existed.
+// Include spec for property-level event queries. Impacts are required to be
+// owned by the property-event link; no legacy event-owned fallback remains.
 const PROPERTY_EVENT_INCLUDE = {
   impacts: true,
   demographics: true,
-  event: {
-    include: {
-      impacts: true,
-      demographics: true,
-    },
-  },
+  event: true,
 } as const;
 
 type LinkImpactRows = {
   impacts: Array<{ category: string; direction: string; description: string | null; confidence: unknown }>;
   demographics: Array<{ segment: string; description: string | null; confidence: unknown }>;
-  event: {
-    impacts: Array<{ category: string; direction: string; description: string | null; confidence: unknown }>;
-    demographics: Array<{ segment: string; description: string | null; confidence: unknown }>;
-  };
 };
 
 function linkImpacts(link: LinkImpactRows) {
-  return link.impacts.length > 0 ? link.impacts : link.event.impacts;
+  return link.impacts;
 }
 
 function linkDemographics(link: LinkImpactRows) {
-  return link.demographics.length > 0 ? link.demographics : link.event.demographics;
+  return link.demographics;
 }
 
 export class NeighborhoodRadarQueryService {
@@ -324,17 +314,6 @@ export class NeighborhoodRadarQueryService {
       expectedStartDate: Date | null;
       expectedEndDate: Date | null;
       createdAt: Date;
-      impacts: Array<{
-        category: string;
-        direction: string;
-        description: string | null;
-        confidence: unknown;
-      }>;
-      demographics: Array<{
-        segment: string;
-        description: string | null;
-        confidence: unknown;
-      }>;
     };
   }): NeighborhoodEventCard {
     const impacts = linkImpacts(link) as ImpactSnippet[];

@@ -1,6 +1,7 @@
 // apps/backend/src/services/HomeBuyerTask.service.ts
 import { HomeBuyerTask, HomeBuyerTaskStatus, RecurrenceFrequency, ServiceCategory } from '@prisma/client';
 import { prisma } from '../lib/prisma';
+import { evaluateHomeBuyerSegment } from './planningContext/applicabilityPolicy';
 
 /**
  * Service for managing HOME_BUYER tasks.
@@ -30,8 +31,9 @@ export class HomeBuyerTaskService {
       throw new Error('Homeowner profile not found for this user.');
     }
 
-    // 2. Verify user is HOME_BUYER segment
-    if (profile.segment !== 'HOME_BUYER') {
+    // 2. Apply the same authoritative segment rule used by Property Context.
+    const workflowDecision = evaluateHomeBuyerSegment(profile.segment);
+    if (workflowDecision.status !== 'APPLICABLE') {
       throw new Error('This feature is only available for home buyers.');
     }
 

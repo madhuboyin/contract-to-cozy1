@@ -9340,7 +9340,7 @@ model NeighborhoodImpact {
   eventId String
 
   // Owning property-event link; impacts are property-specific projections.
-  propertyNeighborhoodEventId String?
+  propertyNeighborhoodEventId String
 
   category  ImpactCategory
   direction ImpactDirection
@@ -9352,7 +9352,7 @@ model NeighborhoodImpact {
   createdAt DateTime @default(now())
 
   event        NeighborhoodEvent          @relation(fields: [eventId], references: [id])
-  propertyLink PropertyNeighborhoodEvent? @relation(fields: [propertyNeighborhoodEventId], references: [id], onDelete: Cascade)
+  propertyLink PropertyNeighborhoodEvent @relation(fields: [propertyNeighborhoodEventId], references: [id], onDelete: Cascade)
 
   @@index([eventId])
   @@index([propertyNeighborhoodEventId])
@@ -9366,7 +9366,7 @@ model DemographicImpact {
   eventId String
 
   // Owning property-event link; demographic impacts are property-specific.
-  propertyNeighborhoodEventId String?
+  propertyNeighborhoodEventId String
 
   segment DemographicSegment
 
@@ -9377,7 +9377,7 @@ model DemographicImpact {
   createdAt DateTime @default(now())
 
   event        NeighborhoodEvent          @relation(fields: [eventId], references: [id])
-  propertyLink PropertyNeighborhoodEvent? @relation(fields: [propertyNeighborhoodEventId], references: [id], onDelete: Cascade)
+  propertyLink PropertyNeighborhoodEvent @relation(fields: [propertyNeighborhoodEventId], references: [id], onDelete: Cascade)
 
   @@index([eventId])
   @@index([propertyNeighborhoodEventId])

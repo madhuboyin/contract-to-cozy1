@@ -2,6 +2,7 @@
 import { Response, NextFunction } from 'express';
 import { CustomRequest } from '../types';
 import { HomeEventsService } from '../services/homeEvents.service';
+import { getPlanningContextEnvelope } from '../services/planningContext/context';
 
 const service = new HomeEventsService();
 
@@ -24,7 +25,13 @@ export async function listHomeEvents(req: CustomRequest, res: Response, next: Ne
       includeSignals,
     });
 
-    res.json({ success: true, data });
+    const context = await getPlanningContextEnvelope(
+      propertyId,
+      req.user!.userId,
+      'TIMELINE',
+    );
+
+    res.json({ success: true, data: { ...data, context } });
   } catch (err) {
     next(err);
   }
@@ -35,7 +42,12 @@ export async function getHomeEvent(req: CustomRequest, res: Response, next: Next
     const propertyId = req.params.propertyId;
     const eventId = req.params.eventId;
     const event = await service.getHomeEvent(propertyId, eventId);
-    res.json({ success: true, data: { event } });
+    const context = await getPlanningContextEnvelope(
+      propertyId,
+      req.user!.userId,
+      'TIMELINE',
+    );
+    res.json({ success: true, data: { event, context } });
   } catch (err) {
     next(err);
   }

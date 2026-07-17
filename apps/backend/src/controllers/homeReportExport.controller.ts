@@ -8,7 +8,12 @@ import { getS3Client } from '../services/storage/s3Client';
 import { DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { logger } from '../lib/logger';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
+import { resolvePropertyAccess, ROLE_RANK } from '../services/propertyAccess.service';
 
+async function canMutateReport(propertyId: string, userId: string): Promise<boolean> {
+  const access = await resolvePropertyAccess(userId, propertyId);
+  return Boolean(access && ROLE_RANK[access.role] >= ROLE_RANK.CONTRIBUTOR);
+}
 
 export async function createHomeReportExport(req: Request, res: Response) {
   try {
@@ -191,6 +196,10 @@ export async function createShareLinkForReport(req: Request, res: Response) {
       });
     }
 
+    if (!(await canMutateReport(exp.propertyId, userId))) {
+      return res.status(403).json({ success: false, message: 'Report changes require CONTRIBUTOR access.' });
+    }
+
     if (exp.status === 'DELETED') {
       return res.status(410).json({
         success: false,
@@ -270,6 +279,10 @@ export async function revokeShareLinkForReport(req: Request, res: Response) {
         success: false,
         message: 'Forbidden' 
       });
+    }
+
+    if (!(await canMutateReport(exp.propertyId, userId))) {
+      return res.status(403).json({ success: false, message: 'Report changes require CONTRIBUTOR access.' });
     }
 
     if (exp.status === 'DELETED') {
@@ -406,6 +419,10 @@ export async function regenerateHomeReportExport(req: Request, res: Response) {
       return res.status(403).json({ success: false, message: 'Forbidden' });
     }
 
+    if (!(await canMutateReport(existing.propertyId, userId))) {
+      return res.status(403).json({ success: false, message: 'Report changes require CONTRIBUTOR access.' });
+    }
+
     if (existing.deletedAt) {
       return res.status(409).json({ success: false, message: 'Report was deleted' });
     }
@@ -484,6 +501,10 @@ export async function deleteHomeReportExport(req: Request, res: Response) {
       return res.status(403).json({ success: false, message: 'Forbidden' });
     }
 
+    if (!(await canMutateReport(exp.propertyId, userId))) {
+      return res.status(403).json({ success: false, message: 'Report changes require CONTRIBUTOR access.' });
+    }
+
     // Idempotent delete
     if (exp.status === 'DELETED') {
       return res.json({ success: true, data: { ok: true } });
@@ -536,6 +557,5 @@ export async function deleteHomeReportExport(req: Request, res: Response) {
     });
   }
 }
-
 
 

@@ -10,6 +10,7 @@ import { haversineDistanceMiles, isValidLatLng } from './geoUtils';
 import { NeighborhoodImpactEngine } from './neighborhoodImpactEngine';
 import { PropertyContext } from './types';
 import { logger } from '../lib/logger';
+import { evaluateNeighborhoodLocation } from '../services/planningContext/applicabilityPolicy';
 
 const impactEngine = new NeighborhoodImpactEngine();
 
@@ -30,6 +31,9 @@ export class NeighborhoodPropertyMatchService {
 
     if (!isValidLatLng(event.latitude, event.longitude)) {
       logger.warn(`[NeighborhoodIntelligence] Event ${eventId} has invalid coordinates — skipping match`);
+      // Invalid event location cannot support any property projection. Remove
+      // existing links so an event edit cannot leave stale radar results.
+      await prisma.propertyNeighborhoodEvent.deleteMany({ where: { eventId } });
       return { matched: 0 };
     }
 
@@ -48,6 +52,7 @@ export class NeighborhoodPropertyMatchService {
         state: true,
         latitude: true,
         longitude: true,
+        zipCode: true,
         propertyUse: true,
         dwellingType: true,
         exteriorProfile: { select: { hasDrainageIssues: true } },
@@ -59,6 +64,11 @@ export class NeighborhoodPropertyMatchService {
     // when the property has no coordinates.
     const eligibleProperties = properties
       .map((p) => {
+        const locationDecision = evaluateNeighborhoodLocation(
+          p.zipCode,
+          isValidLatLng(p.latitude, p.longitude),
+        );
+        if (locationDecision.status !== 'APPLICABLE') return null;
         const geoDistance = this.getDistanceMiles(
           p.latitude,
           p.longitude,
@@ -177,11 +187,16 @@ export class NeighborhoodPropertyMatchService {
 
     if (!property) return { processed: 0 };
 
-    // Find all events in the same city/state
+    // Re-evaluate both current-area candidates and every event already linked
+    // to this property. Including existing links is essential when a property
+    // moves: old-city events must run through matching again so their links are
+    // deleted as no longer eligible.
     const events = await prisma.neighborhoodEvent.findMany({
       where: {
-        city: property.city ?? undefined,
-        state: property.state ?? undefined,
+        OR: [
+          { city: property.city, state: property.state },
+          { propertyMatches: { some: { propertyId } } },
+        ],
       },
       select: { id: true },
     });

@@ -155,3 +155,41 @@ test('planning reconciliation flags stale and unversioned outputs for review', (
   const notApplicable = { ...applicable, status: 'NOT_APPLICABLE' };
   assert.ok(reconcilePlanningOutput('v2', 'v2', notApplicable).reasonCodes.includes('PLANNING_OUTPUT_NO_LONGER_APPLICABLE'));
 });
+
+test('representative condo, rental, and vacant archetypes remain explicit and location-aware', () => {
+  for (const propertyUse of ['RENTAL', 'VACANT', 'PRIMARY_RESIDENCE']) {
+    const decisions = evaluatePlanningContext(snapshot({
+      'core.propertyUse': propertyUse,
+      'core.occupancyStatus': propertyUse === 'VACANT' ? 'VACANT' : 'OCCUPIED',
+      'core.dwellingType': propertyUse === 'PRIMARY_RESIDENCE' ? 'CONDO_UNIT' : 'DETACHED_SINGLE_FAMILY',
+      'location.city': 'Austin',
+      'location.state': 'TX',
+      'location.zipCode': '78701',
+      'location.geocoded': true,
+    }));
+    assert.equal(decisions.sellerPrepPlanning.status, 'APPLICABLE', propertyUse);
+    assert.equal(decisions.movingPlanning.status, 'APPLICABLE', propertyUse);
+    assert.equal(decisions.neighborhoodRelevance.status, 'APPLICABLE', propertyUse);
+    assert.equal(decisions.localUpdatesTargeting.status, 'APPLICABLE', propertyUse);
+  }
+});
+
+test('conflicted and stale Phase 6 facts remain unknown rather than becoming false defaults', () => {
+  const conflictedUse = createPropertyFact('core.propertyUse', 'RENTAL', undefined, NOW);
+  conflictedUse.state = 'CONFLICTED';
+  const staleZip = createPropertyFact('location.zipCode', '78701', undefined, NOW);
+  staleZip.state = 'STALE';
+
+  const context = snapshot({
+    'location.state': 'TX',
+    'location.city': 'Austin',
+  });
+  context.facts['core.propertyUse'] = conflictedUse;
+  context.facts['location.zipCode'] = staleZip;
+
+  const decisions = evaluatePlanningContext(context);
+  assert.equal(decisions.sellerPrepPlanning.status, 'UNKNOWN');
+  assert.ok(decisions.sellerPrepPlanning.conflictedFactKeys.includes('core.propertyUse'));
+  assert.equal(decisions.neighborhoodRelevance.status, 'UNKNOWN');
+  assert.ok(decisions.neighborhoodRelevance.missingFactKeys.includes('location.zipCode'));
+});

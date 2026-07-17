@@ -18,6 +18,7 @@ import { calculateHealthScore } from '../utils/propertyScore.util';
 import { getOwnerLocalUpdates } from '../localUpdates/localUpdates.service';
 import { logger } from '../lib/logger';
 import { weatherService } from './weather.service';
+import { getPlanningContextEnvelope } from './planningContext/context';
 
 type SummaryKind = 'HEALTH' | 'RISK' | 'FINANCIAL';
 type InsightSeverity = 'LOW' | 'MEDIUM' | 'HIGH';
@@ -911,16 +912,20 @@ export class DailyHomePulseService {
           orderBy: [{ confidencePct: 'desc' }, { createdAt: 'desc' }],
           take: 5,
         }),
-        getOwnerLocalUpdates({
-          userId,
-          zip: property.zipCode,
-          city: property.city,
-          state: property.state,
-          dwellingType:
-            property.dwellingType && property.dwellingType !== 'UNKNOWN'
-              ? String(property.dwellingType)
-              : undefined,
-        }).catch(() => []),
+        (async () => {
+          const context = await getPlanningContextEnvelope(propertyId, userId, 'LOCAL_UPDATES');
+          if (context.decision.status === 'NOT_APPLICABLE') return [];
+          return getOwnerLocalUpdates({
+            userId,
+            zip: property.zipCode,
+            city: property.city,
+            state: property.state,
+            dwellingType:
+              property.dwellingType && property.dwellingType !== 'UNKNOWN'
+                ? String(property.dwellingType)
+                : undefined,
+          });
+        })().catch(() => []),
         liveForecastPromise,
       ]);
 

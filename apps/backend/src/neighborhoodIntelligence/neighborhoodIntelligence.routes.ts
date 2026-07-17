@@ -3,7 +3,7 @@
 import { Router } from 'express';
 import { authenticate, requireRole } from '../middleware/auth.middleware';
 import { UserRole } from '../types/auth.types';
-import { propertyAuthMiddleware } from '../middleware/propertyAuth.middleware';
+import { propertyAuthMiddleware, requireHouseholdRole } from '../middleware/propertyAuth.middleware';
 import { apiRateLimiter } from '../middleware/rateLimiter.middleware';
 import { validateBody } from '../middleware/validate.middleware';
 import { ingestEventBodySchema } from './neighborhoodIntelligence.validators';
@@ -106,6 +106,7 @@ router.get(
 router.post(
   '/properties/:propertyId/neighborhood-radar/recompute',
   propertyAuthMiddleware,
+  requireHouseholdRole('OWNER'),
   recomputePropertyRadar,
 );
 

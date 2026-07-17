@@ -202,6 +202,13 @@ export const updateProperty = async (req: AuthRequest, res: Response) => {
     // Pass the comprehensive payload, allowing the service to save all fields
     const property = await propertyService.updateProperty(id, userId, updateData);
 
+    const locationFields = ['address', 'city', 'state', 'zipCode', 'latitude', 'longitude'];
+    if (locationFields.some((field) => Object.prototype.hasOwnProperty.call(updateData, field))) {
+      void neighborhoodService.recomputePropertyNeighborhoodRadar(id).catch((err) => {
+        logger.error({ err }, `[NeighborhoodRadar] Location-change recompute failed for property ${id}`);
+      });
+    }
+
     res.json({
       success: true,
       data: property,

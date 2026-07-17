@@ -3689,9 +3689,15 @@ class APIClient {
   async getNeighborhoodRadarSummary(
     propertyId: string,
   ): Promise<import('@/types').NeighborhoodRadarSummaryDTO | null> {
-    const res = await this.get<{ summary: import('@/types').NeighborhoodRadarSummaryDTO }>(
+    const res = await this.get<{
+      summary: import('@/types').NeighborhoodRadarSummaryDTO;
+      context?: PropertyContextEnvelope;
+    }>(
       `/api/properties/${propertyId}/neighborhood-radar/summary`,
     );
+    if (res.data?.summary) {
+      res.data.summary.propertyContext = res.data.context;
+    }
     return res.data?.summary ?? null;
   }
 

@@ -17,6 +17,7 @@ import {
   MobileToolWorkspace,
   StatusChip,
 } from '@/components/mobile/dashboard/MobilePrimitives';
+import { PropertyContextNotice } from '@/components/property-context/PropertyContextNotice';
 
 type CommunityTab = 'events' | 'trash' | 'alerts';
 
@@ -145,13 +146,19 @@ export default function CommunityPage() {
     <MobileToolWorkspace className="lg:max-w-7xl lg:px-8 lg:pb-10"
       intro={<MobilePageIntro title="Community" subtitle="Local events, city services, and municipal alerts." />}
       summary={
-        <MobileCard variant="compact" className="flex items-center justify-between gap-3">
-          <div>
-            <p className="mb-0 text-xs tracking-normal text-slate-500">Coverage area</p>
-            <p className="mb-0 mt-1 text-sm font-semibold text-slate-900">{locationLabel}</p>
-          </div>
-          <StatusChip tone="info">Live feed</StatusChip>
-        </MobileCard>
+        <div className="space-y-3">
+          <PropertyContextNotice
+            context={eventsQuery.data?.success ? eventsQuery.data.data.context : undefined}
+            title="Community context"
+          />
+          <MobileCard variant="compact" className="flex items-center justify-between gap-3">
+            <div>
+              <p className="mb-0 text-xs tracking-normal text-slate-500">Coverage area</p>
+              <p className="mb-0 mt-1 text-sm font-semibold text-slate-900">{locationLabel}</p>
+            </div>
+            <StatusChip tone="info">Live feed</StatusChip>
+          </MobileCard>
+        </div>
       }
       filters={
         <MobileFilterSurface className="space-y-2.5">

@@ -3,6 +3,9 @@
 import { Request, Response } from 'express';
 import { CommunityService } from './community.service';
 import { logger } from '../lib/logger';
+import { CustomRequest } from '../types';
+import { resolvePropertyAccess } from '../services/propertyAccess.service';
+import { getPlanningContextEnvelope } from '../services/planningContext/context';
 
 function normalizeCityState(req: Request) {
   const city = String(req.query.city ?? '').trim();
@@ -10,6 +13,11 @@ function normalizeCityState(req: Request) {
   const propertyId = String(req.query.propertyId ?? '').trim();
 
   return { city, state, propertyId };
+}
+
+async function canReadOptionalProperty(req: CustomRequest, propertyId: string): Promise<boolean> {
+  if (!propertyId || !req.user?.userId) return !propertyId;
+  return Boolean(await resolvePropertyAccess(req.user.userId, propertyId));
 }
 
 export class CommunityController {
@@ -36,13 +44,16 @@ export class CommunityController {
   };
 
   // Back-compat: GET /api/v1/properties/:propertyId/community/events?limit=...&category=...
-  getEventsByProperty = async (req: Request, res: Response) => {
+  getEventsByProperty = async (req: CustomRequest, res: Response) => {
     const propertyId = req.params.propertyId;
     const limit = req.query.limit ? Number(req.query.limit) : 50;
     const category = req.query.category ? String(req.query.category) : undefined;
 
-    const events = await this.service.getCommunityEventsByProperty(propertyId, limit, category);
-    return res.json({ success: true, data: { events } });
+    const [events, context] = await Promise.all([
+      this.service.getCommunityEventsByProperty(propertyId, limit, category),
+      getPlanningContextEnvelope(propertyId, req.user!.userId, 'COMMUNITY_EVENTS'),
+    ]);
+    return res.json({ success: true, data: { events, context } });
   };
 
   // GET /api/v1/community/open-data?city=...&state=...
@@ -59,19 +70,26 @@ export class CommunityController {
   };
 
   // GET /api/community/trash?city=...&state=... OR ?propertyId=...
-  getTrash = async (req: Request, res: Response) => {
+  getTrash = async (req: CustomRequest, res: Response) => {
     const { city, state, propertyId } = normalizeCityState(req);
     const limit = req.query.limit ? Number(req.query.limit) : 20;
+
+    if (!(await canReadOptionalProperty(req, propertyId))) {
+      return res.status(404).json({ success: false, message: 'Property not found or access denied.' });
+    }
 
     const data = await this.service.getTrashOnTheFly({ city, state, propertyId, limit });
     return res.json({ success: true, data });
   };
 
   // ✅ NEW: GET /api/community/trash-schedule?propertyId=...
-  getTrashSchedule = async (req: Request, res: Response) => {
+  getTrashSchedule = async (req: CustomRequest, res: Response) => {
     const { city, state, propertyId } = normalizeCityState(req);
 
     try {
+      if (!(await canReadOptionalProperty(req, propertyId))) {
+        return res.status(404).json({ success: false, message: 'Property not found or access denied.' });
+      }
       const schedule = await this.service.getTrashSchedule({ city, state, propertyId });
       return res.json({ success: true, data: schedule });
     } catch (error: any) {
@@ -84,9 +102,13 @@ export class CommunityController {
   };
 
   // GET /api/community/alerts?city=...&state=... OR ?propertyId=...
-  getAlerts = async (req: Request, res: Response) => {
+  getAlerts = async (req: CustomRequest, res: Response) => {
     const { city, state, propertyId } = normalizeCityState(req);
     const limit = req.query.limit ? Number(req.query.limit) : 20;
+
+    if (!(await canReadOptionalProperty(req, propertyId))) {
+      return res.status(404).json({ success: false, message: 'Property not found or access denied.' });
+    }
 
     const data = await this.service.getAlertsOnTheFly({ city, state, propertyId, limit });
     return res.json({ success: true, data });

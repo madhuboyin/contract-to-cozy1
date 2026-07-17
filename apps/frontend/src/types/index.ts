@@ -2189,6 +2189,7 @@ export type SignalSourceBadgeDTO = {
  */
 export interface CommunityEventsResponse {
   events: CommunityEvent[];
+  context?: import('@/components/property-context/PropertyContextNotice').PropertyContextEnvelope;
 }
 
 /**
@@ -2946,6 +2947,7 @@ export interface NeighborhoodEventCard {
 }
 
 export interface NeighborhoodRadarSummaryDTO {
+  propertyContext?: import('@/components/property-context/PropertyContextNotice').PropertyContextEnvelope;
   propertyId: string;
   meaningfulChangeCount: number;
   topHeadline: string | null;

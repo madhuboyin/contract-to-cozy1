@@ -1,7 +1,7 @@
 // apps/backend/src/routes/homeReportExport.routes.ts
 import { Router } from 'express';
 import { authenticate } from '../middleware/auth.middleware';
-import { propertyAuthMiddleware } from '../middleware/propertyAuth.middleware';
+import { propertyAuthMiddleware, requireHouseholdRole } from '../middleware/propertyAuth.middleware';
 import {
   createHomeReportExport,
   listHomeReportExportsForProperty,
@@ -24,6 +24,7 @@ router.post(
   '/properties/:propertyId/reports/exports',
   authenticate,
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   createHomeReportExport
 );
 

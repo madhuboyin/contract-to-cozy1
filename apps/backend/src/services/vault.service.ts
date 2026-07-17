@@ -80,6 +80,19 @@ export interface VaultData {
   serviceTimeline: VaultServiceEntry[];
 }
 
+/**
+ * Explicit contract for the owner-configured emergency Vault channel.
+ * Exact property location is intentionally allowed because a recipient uses
+ * this view for a specific home. Device identifiers, model/serial numbers and
+ * financial amounts are never included. The allowlist implementation below
+ * prevents newly-added Vault fields from leaking automatically.
+ */
+export const VAULT_EMERGENCY_SHARE_POLICY = Object.freeze({
+  projection: 'VAULT_EMERGENCY_SHARE_V1',
+  allowsExactPropertyLocation: true,
+  forbiddenFields: ['modelNumber', 'serialNumber', 'finalPrice'] as const,
+});
+
 async function loadVaultData(propertyId: string): Promise<VaultData> {
   const property = await prisma.property.findUnique({
     where: { id: propertyId },
@@ -189,20 +202,47 @@ async function loadVaultData(propertyId: string): Promise<VaultData> {
  *
  * The vault is a deliberate owner-configured emergency-access channel, so the
  * recipient keeps operational facts (address they are standing at, appliance
- * identity, service history). What they never receive: serial numbers (theft
- * and warranty-fraud value) and service pricing (financial detail). The
- * owner's authenticated views are unaffected.
+ * category/manufacturer, service history). Model/serial numbers and service
+ * pricing are excluded. Both password and bearer-token entry points expose
+ * this same emergency-share projection.
  */
 export function redactVaultDataForSharedAccess(data: VaultData): VaultData {
   return {
-    ...data,
+    overview: {
+      address: data.overview.address,
+      city: data.overview.city,
+      state: data.overview.state,
+      zipCode: data.overview.zipCode,
+      name: data.overview.name,
+      yearBuilt: data.overview.yearBuilt,
+      propertySize: data.overview.propertySize,
+      healthScore: data.overview.healthScore,
+    },
+    gamification: {
+      currentStreak: data.gamification.currentStreak,
+      longestStreak: data.gamification.longestStreak,
+      bonusMultiplier: data.gamification.bonusMultiplier,
+      unlockedBadges: [...data.gamification.unlockedBadges],
+    },
     verifiedAssets: data.verifiedAssets.map((asset) => ({
-      ...asset,
+      id: asset.id,
+      name: asset.name,
+      category: asset.category,
+      manufacturer: asset.manufacturer,
+      modelNumber: null,
       serialNumber: null,
+      installedOn: asset.installedOn,
+      purchasedOn: asset.purchasedOn,
+      condition: asset.condition,
+      expectedExpiryDate: asset.expectedExpiryDate,
     })),
     serviceTimeline: data.serviceTimeline.map((entry) => ({
-      ...entry,
+      id: entry.id,
+      category: entry.category,
+      description: entry.description,
+      completedAt: entry.completedAt,
       finalPrice: null,
+      providerBusinessName: entry.providerBusinessName,
     })),
   };
 }

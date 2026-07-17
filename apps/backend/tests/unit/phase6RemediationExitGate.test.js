@@ -5,8 +5,15 @@ const path = require('node:path');
 
 require('ts-node/register');
 
-const { redactVaultDataForSharedAccess } = require('../../src/services/vault.service.ts');
+const {
+  redactVaultDataForSharedAccess,
+  VAULT_EMERGENCY_SHARE_POLICY,
+} = require('../../src/services/vault.service.ts');
 const { requireHouseholdRole } = require('../../src/middleware/propertyAuth.middleware.ts');
+const {
+  evaluateHomeBuyerSegment,
+  evaluateNeighborhoodLocation,
+} = require('../../src/services/planningContext/applicabilityPolicy.ts');
 
 const read = (relative) => fs.readFileSync(path.resolve(__dirname, relative), 'utf8');
 
@@ -50,8 +57,10 @@ const VAULT_FIXTURE = {
   ],
 };
 
-test('vault shared access strips serial numbers and service pricing', () => {
+test('vault emergency-share projection follows its explicit allowlist contract', () => {
   const redacted = redactVaultDataForSharedAccess(VAULT_FIXTURE);
+  assert.equal(VAULT_EMERGENCY_SHARE_POLICY.projection, 'VAULT_EMERGENCY_SHARE_V1');
+  assert.equal(redacted.verifiedAssets[0].modelNumber, null);
   assert.equal(redacted.verifiedAssets[0].serialNumber, null);
   assert.equal(redacted.serviceTimeline[0].finalPrice, null);
   // Operational emergency-access facts are deliberately retained.
@@ -123,6 +132,29 @@ test('twin, will, and vault mutation routes enforce role floors', () => {
   }
 });
 
+test('timeline, radar recompute, and report generation routes enforce role floors', () => {
+  const timeline = read('../../src/routes/homeEvents.routes.ts');
+  for (const route of [
+    "router.post(\n  '/properties/:propertyId/home-events',",
+    "router.patch(\n  '/properties/:propertyId/home-events/:eventId',",
+    "router.post(\n  '/properties/:propertyId/home-events/:eventId/documents',",
+  ]) {
+    const mutation = timeline.slice(timeline.indexOf(route));
+    assert.ok(mutation.slice(0, 240).includes("requireHouseholdRole('CONTRIBUTOR')"));
+  }
+
+  const radar = read('../../src/neighborhoodIntelligence/neighborhoodIntelligence.routes.ts');
+  const recompute = radar.slice(radar.indexOf("'/properties/:propertyId/neighborhood-radar/recompute',"));
+  assert.ok(recompute.slice(0, 220).includes("requireHouseholdRole('OWNER')"));
+
+  const reports = read('../../src/routes/homeReportExport.routes.ts');
+  const create = reports.slice(reports.indexOf("'/properties/:propertyId/reports/exports',"));
+  assert.ok(create.slice(0, 220).includes("requireHouseholdRole('CONTRIBUTOR')"));
+  const controller = read('../../src/controllers/homeReportExport.controller.ts');
+  assert.ok(controller.includes('canMutateReport'));
+  assert.ok(controller.includes('ROLE_RANK.CONTRIBUTOR'));
+});
+
 // ─── Policy wiring ──────────────────────────────────────────────────────────
 
 test('moving plan generation evaluates the authoritative movingPlanning decision', () => {
@@ -153,6 +185,29 @@ test('local updates controller loads canonical facts and applies the targeting d
   assert.ok(controller.includes('NOT_APPLICABLE'));
 });
 
+test('remaining planning surfaces reuse their authoritative policies', () => {
+  assert.equal(evaluateHomeBuyerSegment('HOME_BUYER').status, 'APPLICABLE');
+  assert.equal(evaluateHomeBuyerSegment('EXISTING_OWNER').status, 'NOT_APPLICABLE');
+  assert.equal(evaluateNeighborhoodLocation('78701', true).status, 'APPLICABLE');
+  assert.equal(evaluateNeighborhoodLocation(null, false).status, 'UNKNOWN');
+
+  const buyer = read('../../src/services/HomeBuyerTask.service.ts');
+  assert.ok(buyer.includes('evaluateHomeBuyerSegment'));
+
+  const timeline = read('../../src/controllers/homeEvents.controller.ts');
+  assert.ok(timeline.includes("'TIMELINE'"));
+
+  const community = read('../../src/community/community.controller.ts');
+  assert.ok(community.includes("'COMMUNITY_EVENTS'"));
+
+  const pulse = read('../../src/services/dailyHomePulse.service.ts');
+  assert.ok(pulse.includes("getPlanningContextEnvelope(propertyId, userId, 'LOCAL_UPDATES')"));
+
+  const worker = read('../../../workers/src/jobs/neighborhoodChangeNotification.job.ts');
+  assert.ok(worker.includes("'NEIGHBORHOOD_RADAR'"));
+  assert.ok(worker.includes("planning.decision.status !== 'APPLICABLE'"));
+});
+
 // ─── Stale shared output reconciliation ─────────────────────────────────────
 
 test('share-token downloads stop serving when generation context is stale or missing', () => {
@@ -173,9 +228,20 @@ test('neighborhood links are unique per property-event and impacts are link-owne
   for (const model of ['model NeighborhoodImpact {', 'model DemographicImpact {']) {
     const start = schema.indexOf(model);
     const section = schema.slice(start, schema.indexOf('model ', start + 10));
-    assert.ok(section.includes('propertyNeighborhoodEventId'), `${model} must be link-owned`);
+    assert.ok(section.includes('propertyNeighborhoodEventId String\n'), `${model} link ownership must be required`);
     assert.ok(section.includes('onDelete: Cascade'), `${model} must cascade with its link`);
   }
+});
+
+test('property relocation reconciles old-area radar links and property updates trigger recompute', () => {
+  const matcher = read('../../src/neighborhoodIntelligence/neighborhoodPropertyMatchService.ts');
+  const propertyRecompute = matcher.slice(matcher.indexOf('async recomputePropertyNeighborhoodRadar'));
+  assert.ok(propertyRecompute.includes('propertyMatches: { some: { propertyId } }'));
+
+  const propertyController = read('../../src/controllers/property.controller.ts');
+  const update = propertyController.slice(propertyController.indexOf('export const updateProperty'));
+  assert.ok(update.includes('recomputePropertyNeighborhoodRadar(id)'));
+  assert.ok(update.includes("'address', 'city', 'state', 'zipCode', 'latitude', 'longitude'"));
 });
 
 test('neighborhood matching upserts links, scopes impact replacement, and removes stale links', () => {
