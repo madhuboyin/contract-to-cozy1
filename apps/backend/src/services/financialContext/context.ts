@@ -1,7 +1,9 @@
+import { createHash } from 'node:crypto';
 import type { PropertyContextScope } from '../../modules/propertyContext';
 import { getPropertyContext } from '../../modules/propertyContext';
 import { APIError } from '../../middleware/error.middleware';
-import { evaluateFinancialContext } from './applicabilityPolicy';
+import { evaluateFinancialContext, type FinancialContextInput } from './applicabilityPolicy';
+import { reconcileFinancialOutput } from './reconciliation';
 
 export type FinancialContextFeature =
   | 'AGGREGATE'
@@ -28,10 +30,37 @@ export const FINANCIAL_FEATURE_SCOPES: Record<FinancialContextFeature, PropertyC
   SAVINGS_OPPORTUNITIES: ['CORE', 'LOCATION', 'SYSTEMS', 'COVERAGE', 'FINANCIAL'],
 };
 
+const FINANCIAL_FEATURE_FACT_KEYS: Record<FinancialContextFeature, string[]> = {
+  AGGREGATE: [],
+  REPAIR_REPLACE: ['inventory.items', 'maintenance.tasks', 'inspection.openFindings', 'projects.activeProjects'],
+  CAPITAL_TIMELINE: ['inventory.items', 'maintenance.tasks', 'inspection.openFindings', 'projects.activeProjects'],
+  RESERVE_FUND: ['financial.upcomingCapitalExposure', 'financial.reserveFund'],
+  OWNERSHIP_COSTS: ['core.propertyUse', 'core.occupancyStatus', 'location.state', 'location.zipCode', 'financial.financingProfile', 'financial.ownershipExpenseSummary'],
+  SELL_HOLD_RENT: ['core.propertyUse', 'core.occupancyStatus', 'location.state', 'location.zipCode', 'financial.currentMortgage', 'financial.latestEquity'],
+  PROPERTY_TAX_VALUE: ['core.dwellingType', 'core.propertySizeSqFt', 'location.state', 'location.zipCode', 'financial.financingProfile'],
+  REFINANCE_RADAR: ['financial.currentMortgage', 'financial.latestEquity'],
+  FINANCING_CENTER: ['financial.financingProfile', 'financial.currentMortgage', 'financial.latestEquity'],
+  SAVINGS_OPPORTUNITIES: ['core.propertyUse', 'location.state', 'location.zipCode', 'systems.installedItemTypes', 'coverage.insurancePolicies', 'financial.financingProfile'],
+};
+
+function featureContextVersion(
+  propertyId: string,
+  feature: FinancialContextFeature,
+  facts: Record<string, unknown>,
+): string {
+  const configuredKeys = FINANCIAL_FEATURE_FACT_KEYS[feature];
+  const keys = configuredKeys.length > 0 ? [...configuredKeys] : Object.keys(facts);
+  const selectedFacts = keys.sort().map((key) => [key, facts[key] ?? null]);
+  return createHash('sha256')
+    .update(JSON.stringify({ propertyId, feature, facts: selectedFacts }))
+    .digest('hex');
+}
+
 export async function getFinancialContextDecisions(
   propertyId: string,
   userId: string,
   feature: FinancialContextFeature = 'AGGREGATE',
+  input: FinancialContextInput = {},
 ) {
   const context = await getPropertyContext(
     propertyId,
@@ -39,15 +68,15 @@ export async function getFinancialContextDecisions(
     { scopes: FINANCIAL_FEATURE_SCOPES[feature] },
   );
   return {
-    contextVersion: context.contextVersion,
+    contextVersion: featureContextVersion(propertyId, feature, context.facts),
     feature,
     scopes: context.scopes,
-    decisions: evaluateFinancialContext(context),
+    decisions: evaluateFinancialContext(context, input),
   };
 }
 const PRIMARY_DECISION_BY_FEATURE = {
   AGGREGATE: 'canonicalFinancingSource',
-  REPAIR_REPLACE: 'capitalPlanning',
+  REPAIR_REPLACE: 'repairReplace',
   CAPITAL_TIMELINE: 'capitalPlanning',
   RESERVE_FUND: 'reservePlanning',
   OWNERSHIP_COSTS: 'ownershipCostModeling',
@@ -65,14 +94,21 @@ export async function getFinancialContextEnvelope(
   userId: string,
   feature: FinancialContextFeature,
   generatedContextVersion?: string | null,
+  input: FinancialContextInput = {},
 ) {
-  const context = await getFinancialContextDecisions(propertyId, userId, feature);
+  const context = await getFinancialContextDecisions(propertyId, userId, feature, input);
+  const decision = context.decisions[PRIMARY_DECISION_BY_FEATURE[feature]];
   return {
     contextVersion: context.contextVersion,
-    decision: context.decisions[PRIMARY_DECISION_BY_FEATURE[feature]],
+    decision,
     relatedDecisions: context.decisions,
     generatedContextVersion: generatedContextVersion ?? null,
     isStale: Boolean(generatedContextVersion && generatedContextVersion !== context.contextVersion),
+    reconciliation: reconcileFinancialOutput(
+      context.contextVersion,
+      generatedContextVersion,
+      decision,
+    ),
   };
 }
 
@@ -81,8 +117,9 @@ export async function assertFinancialContextApplicable(
   userId: string,
   feature: FinancialContextFeature,
   decisionKey: FinancialDecisionKey,
+  input: FinancialContextInput = {},
 ) {
-  const context = await getFinancialContextDecisions(propertyId, userId, feature);
+  const context = await getFinancialContextDecisions(propertyId, userId, feature, input);
   const decision = context.decisions[decisionKey];
   if (decision.status === 'APPLICABLE') return context;
   throw new APIError(

@@ -1,5 +1,6 @@
 // apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/capital-timeline/capitalTimelineApi.ts
 import { api } from '@/lib/api/client';
+import type { PropertyContextEnvelope } from '@/components/property-context/PropertyContextNotice';
 
 export type ConfidenceFactor = 'INSTALL_DATE' | 'CONDITION' | 'REPLACEMENT_COST';
 
@@ -40,6 +41,7 @@ export type TimelineAnalysisResult = {
   analysis: TimelineAnalysisDTO | null;
   assumptionSetId: string | null;
   nextAction: TimelineNextAction | null;
+  propertyContext?: PropertyContextEnvelope;
 };
 
 export type OverrideType =
@@ -64,6 +66,7 @@ export async function getLatestTimeline(propertyId: string): Promise<TimelineAna
     analysis: (res.data?.analysis as TimelineAnalysisDTO | null) ?? null,
     assumptionSetId: (res.data?.assumptionSetId as string | null) ?? null,
     nextAction: (res.data?.nextAction as TimelineNextAction | null) ?? null,
+    propertyContext: res.data?.propertyContext as PropertyContextEnvelope | undefined,
   };
 }
 
@@ -80,6 +83,7 @@ export async function runTimeline(
     analysis: (res.data?.analysis as TimelineAnalysisDTO | null) ?? null,
     assumptionSetId: (res.data?.assumptionSetId as string | null) ?? null,
     nextAction: (res.data?.nextAction as TimelineNextAction | null) ?? null,
+    propertyContext: res.data?.propertyContext as PropertyContextEnvelope | undefined,
   };
 }
 

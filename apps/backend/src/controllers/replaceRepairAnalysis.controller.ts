@@ -4,6 +4,10 @@ import { ReplaceRepairOverrides, ReplaceRepairService } from '../services/replac
 import { guidanceJourneyService } from '../services/guidanceEngine/guidanceJourney.service';
 import { logger } from '../lib/logger';
 import { APIError } from '../middleware/error.middleware';
+import {
+  assertFinancialContextApplicable,
+  getFinancialContextEnvelope,
+} from '../services/financialContext/context';
 
 const service = new ReplaceRepairService();
 
@@ -18,7 +22,17 @@ export async function getReplaceRepairAnalysis(req: CustomRequest, res: Response
     }
 
     const result = await service.getLatestForItem(propertyId, itemId, userId);
-    return res.json({ success: true, data: result });
+    const generatedContextVersion = result.exists
+      ? result.analysis.generatedContextVersion ?? null
+      : null;
+    const propertyContext = await getFinancialContextEnvelope(
+      propertyId,
+      userId,
+      'REPAIR_REPLACE',
+      generatedContextVersion,
+      { inventoryItemId: itemId },
+    );
+    return res.json({ success: true, data: { ...result, propertyContext } });
   } catch (error: any) {
     logger.error({ err: error }, 'Error fetching replace/repair analysis');
     return res.status(500).json({
@@ -48,7 +62,20 @@ export async function runReplaceRepairAnalysis(req: CustomRequest, res: Response
         : null;
 
     const overrides = (req.body?.overrides ?? {}) as ReplaceRepairOverrides;
-    const analysis = await service.runItemAnalysis(propertyId, itemId, userId, overrides);
+    const currentContext = await assertFinancialContextApplicable(
+      propertyId,
+      userId,
+      'REPAIR_REPLACE',
+      'repairReplace',
+      { inventoryItemId: itemId },
+    );
+    const analysis = await service.runItemAnalysis(
+      propertyId,
+      itemId,
+      userId,
+      overrides,
+      currentContext.contextVersion,
+    );
 
     const guidanceProducedData = {
       proofType: 'repair_replace_analysis',
@@ -124,11 +151,20 @@ export async function runReplaceRepairAnalysis(req: CustomRequest, res: Response
       logger.warn({ guidanceError }, '[GUIDANCE] replace/repair analysis hook failed');
     }
 
-    return res.json({ success: true, data: { analysis } });
+    const propertyContext = await getFinancialContextEnvelope(
+      propertyId,
+      userId,
+      'REPAIR_REPLACE',
+      currentContext.contextVersion,
+      { inventoryItemId: itemId },
+    );
+    return res.json({ success: true, data: { analysis, propertyContext } });
   } catch (error: any) {
     logger.error({ err: error }, 'Error running replace/repair analysis');
-    return res.status(500).json({
+    const statusCode = error instanceof APIError ? error.statusCode : 500;
+    return res.status(statusCode).json({
       success: false,
+      code: error instanceof APIError ? error.code : undefined,
       message: error?.message || 'Failed to run replace/repair analysis.',
     });
   }

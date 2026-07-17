@@ -49,6 +49,7 @@ import InventoryItemDrawer from '../../../../components/inventory/InventoryItemD
 import { getInventoryItem, listInventoryRooms } from '../../../../inventory/inventoryApi';
 import { InventoryItem, InventoryRoom } from '@/types';
 import { track } from '@/lib/analytics/events';
+import { PropertyContextNotice, type PropertyContextEnvelope } from '@/components/property-context/PropertyContextNotice';
 
 // ─── Helpers ────────────────────────────────────────────────────────
 function money(cents: number | null | undefined) {
@@ -250,6 +251,7 @@ export default function ReserveFundClient() {
   const backHref = `/dashboard/properties/${propertyId}`;
 
   const [fund, setFund] = useState<ReserveFundDTO | null>(null);
+  const [propertyContext, setPropertyContext] = useState<PropertyContextEnvelope | null>(null);
   const [lineItems, setLineItems] = useState<ReserveFundLineItemDTO[]>([]);
   const [contributions, setContributions] = useState<ReserveFundContributionDTO[]>([]);
   const [suggestions, setSuggestions] = useState<ReconciliationSuggestionDTO[]>([]);
@@ -318,7 +320,8 @@ export default function ReserveFundClient() {
         listContributions(propertyId, { limit: 20 }),
         listReconciliationSuggestions(propertyId),
       ]);
-      setFund(fundResult);
+      setFund(fundResult.fund);
+      setPropertyContext(fundResult.propertyContext ?? null);
       setLineItems(lineItemsResult);
       setContributions(contributionsResult.items);
       setSuggestions(suggestionsResult);
@@ -342,7 +345,8 @@ export default function ReserveFundClient() {
     setRecalculating(true);
     try {
       const updated = await updateFund(propertyId, { posture });
-      setFund(updated);
+      setFund(updated.fund);
+      setPropertyContext(updated.propertyContext ?? null);
       const refreshedLineItems = await listLineItems(propertyId);
       setLineItems(refreshedLineItems);
     } catch (e: unknown) {
@@ -357,7 +361,8 @@ export default function ReserveFundClient() {
     setRecalculating(true);
     try {
       const updated = await recalculateFund(propertyId);
-      setFund(updated);
+      setFund(updated.fund);
+      setPropertyContext(updated.propertyContext ?? null);
       const refreshedLineItems = await listLineItems(propertyId);
       setLineItems(refreshedLineItems);
     } catch (e: unknown) {
@@ -385,7 +390,8 @@ export default function ReserveFundClient() {
         getFund(propertyId),
         listContributions(propertyId, { limit: 20 }),
       ]);
-      setFund(updatedFund);
+      setFund(updatedFund.fund);
+      setPropertyContext(updatedFund.propertyContext ?? null);
       setContributions(updatedContributions.items);
       track('action_completed', { tool: 'reserve-fund', actionType: 'log_contribution', propertyId });
     } catch (e: unknown) {
@@ -403,7 +409,8 @@ export default function ReserveFundClient() {
         getFund(propertyId),
         listContributions(propertyId, { limit: 20 }),
       ]);
-      setFund(updatedFund);
+      setFund(updatedFund.fund);
+      setPropertyContext(updatedFund.propertyContext ?? null);
       setContributions(updatedContributions.items);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to remove entry');
@@ -483,6 +490,7 @@ export default function ReserveFundClient() {
         </div>
       )}
     >
+      <PropertyContextNotice context={propertyContext} title="Reserve planning context" />
       {loading && !fund && (
         <div className="flex h-48 items-center justify-center rounded-2xl border border-white/70 bg-white/65 backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/45">
           <div className="h-10 w-10 animate-spin rounded-full border-b-2 border-slate-900 dark:border-slate-100" />

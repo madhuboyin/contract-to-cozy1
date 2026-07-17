@@ -56,6 +56,7 @@ export type ReplaceRepairAnalysisDTO = {
   estimatedReplacementCostCents?: number;
   expectedAnnualRepairRiskCents?: number;
   breakEvenMonths?: number | null;
+  generatedContextVersion?: string | null;
 
   computedAt: string;
 };
@@ -118,6 +119,12 @@ function toInt(value?: number | null): number | undefined {
 function safeArray<T>(value: Prisma.JsonValue | null | undefined): T[] {
   if (!Array.isArray(value)) return [];
   return value as T[];
+}
+
+function contextVersionFromSnapshot(value: Prisma.JsonValue | null | undefined): string | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const version = (value as Record<string, unknown>)._propertyContextVersion;
+  return typeof version === 'string' && version.trim() ? version : null;
 }
 
 function ageYearsFromDate(date?: Date | null): number | undefined {
@@ -224,6 +231,7 @@ function mapAnalysisToDto(analysis: ReplaceRepairAnalysis): ReplaceRepairAnalysi
     estimatedReplacementCostCents: analysis.estimatedReplacementCostCents ?? undefined,
     expectedAnnualRepairRiskCents: analysis.expectedAnnualRepairRiskCents ?? undefined,
     breakEvenMonths: analysis.breakEvenMonths ?? null,
+    generatedContextVersion: contextVersionFromSnapshot(analysis.inputsSnapshot),
     computedAt: analysis.computedAt.toISOString(),
   };
 }
@@ -321,7 +329,13 @@ export class ReplaceRepairService {
     };
   }
 
-  async runItemAnalysis(propertyId: string, itemId: string, userId: string, overrides?: ReplaceRepairOverrides) {
+  async runItemAnalysis(
+    propertyId: string,
+    itemId: string,
+    userId: string,
+    overrides?: ReplaceRepairOverrides,
+    propertyContextVersion?: string | null,
+  ) {
     const property = await assertPropertyForUser(propertyId, userId);
     const item = await this.assertItemForProperty(propertyId, itemId);
 
@@ -645,6 +659,7 @@ export class ReplaceRepairService {
           nextSteps: dedupeSteps(nextSteps).slice(0, 6),
           decisionTrace: decisionTrace.slice(0, 12),
           inputsSnapshot: {
+            _propertyContextVersion: propertyContextVersion ?? null,
             item: {
               itemId: item.id,
               name: item.name,

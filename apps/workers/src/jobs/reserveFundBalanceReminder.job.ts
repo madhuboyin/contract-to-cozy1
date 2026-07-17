@@ -15,6 +15,7 @@
 import { prisma } from '../lib/prisma';
 import { NotificationService } from '../../../backend/src/services/notification.service';
 import { logger } from '../lib/logger';
+import { checkReserveFundWorkerContext } from '../../../backend/src/services/financialContext/reserveFundWorkerContext.service';
 
 const STALE_BALANCE_DAYS = 45;
 
@@ -49,6 +50,14 @@ export async function reserveFundBalanceReminderJob(): Promise<void> {
     if (referenceDate > cutoff) continue;
 
     try {
+      const context = await checkReserveFundWorkerContext(fund.propertyId);
+      if (!context.allowed) {
+        logger.warn(
+          { propertyId: fund.propertyId, reasonCodes: context.reasonCodes },
+          '[ReserveFundBalanceReminder] Skipping because Property Context is not applicable',
+        );
+        continue;
+      }
       await NotificationService.create({
         userId,
         type: 'RESERVE_FUND_BALANCE_REMINDER',

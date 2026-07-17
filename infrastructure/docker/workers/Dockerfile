@@ -61,6 +61,7 @@ RUN mkdir -p src/shared/backend/utils \
              src/shared/backend/services/analytics \
              src/shared/backend/services/guidanceEngine \
              src/shared/backend/services/projectCompliance \
+             src/shared/backend/services/financialContext \
              src/shared/backend/types \
              src/shared/backend/lib \
              src/shared/backend/modules/gazette/services \
@@ -149,6 +150,11 @@ COPY apps/backend/src/services/projectCompliance/applicabilityPolicy.ts \
      apps/backend/src/services/projectCompliance/reconciliation.ts \
      apps/backend/src/services/projectCompliance/permitWorkerContext.service.ts \
      src/shared/backend/services/projectCompliance/
+COPY apps/backend/src/services/financialContext/applicabilityPolicy.ts \
+     apps/backend/src/services/financialContext/context.ts \
+     apps/backend/src/services/financialContext/reconciliation.ts \
+     apps/backend/src/services/financialContext/reserveFundWorkerContext.service.ts \
+     src/shared/backend/services/financialContext/
 COPY apps/backend/src/modules/propertyContext/index.ts src/shared/backend/modules/propertyContext/
 COPY apps/backend/src/modules/propertyContext/application/getPropertyContext.ts \
      apps/backend/src/modules/propertyContext/application/getContextCompleteness.ts \
@@ -323,7 +329,8 @@ RUN sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/incidents\/incident\.ser
 RUN sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/homeReserveFundCalculation\.service/\.\.\/shared\/backend\/services\/homeReserveFundCalculation\.service/g' src/jobs/recalculateReserveFunds.job.ts && \
     sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/homeReserveFundReconciliation\.service/\.\.\/shared\/backend\/services\/homeReserveFundReconciliation\.service/g' src/jobs/reserveFundReconciliation.job.ts && \
     sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/notification\.service/\.\.\/shared\/backend\/services\/notification\.service/g' src/jobs/reserveFundReconciliation.job.ts && \
-    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/notification\.service/\.\.\/shared\/backend\/services\/notification\.service/g' src/jobs/reserveFundBalanceReminder.job.ts
+    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/notification\.service/\.\.\/shared\/backend\/services\/notification\.service/g' src/jobs/reserveFundBalanceReminder.job.ts && \
+    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/financialContext\/reserveFundWorkerContext\.service/\.\.\/shared\/backend\/services\/financialContext\/reserveFundWorkerContext.service/g' src/jobs/recalculateReserveFunds.job.ts src/jobs/reserveFundBalanceReminder.job.ts src/jobs/reserveFundReconciliation.job.ts
 
 # Rewrite paths introduced by the Provider Trust & Compliance Verification jobs
 RUN sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/providerCompliance\.service/\.\.\/shared\/backend\/services\/providerCompliance\.service/g' src/jobs/providerCredentialExpire.job.ts && \

@@ -20,6 +20,7 @@ import {
 import { projectValueAtYear } from './tools/financialProjectionMath';
 import { NotificationService } from './notification.service';
 import { homeReserveFundCalculationService } from './homeReserveFundCalculation.service';
+import { getFinancialContextDecisions } from './financialContext/context';
 import { logger } from '../lib/logger';
 
 // ─── Phase-3: Seasonal/climate wear adjustment by state ────────────
@@ -226,6 +227,7 @@ export class HomeCapitalTimelineService {
       assumptionSetId?: string;
       financialAssumptions?: FinancialAssumptionInput;
       createdByUserId?: string | null;
+      propertyContextVersion?: string | null;
     }
   ) {
     // 1. Fetch inputs (Phase-3: also fetch property state for climate adjustments)
@@ -533,6 +535,7 @@ export class HomeCapitalTimelineService {
         horizonYears,
         summary,
         inputsSnapshot: {
+          _propertyContextVersion: options?.propertyContextVersion ?? null,
           inventoryItemCount: inventoryItems.length,
           overrideCount: overrides.length,
           horizonYears,
@@ -563,9 +566,36 @@ export class HomeCapitalTimelineService {
       },
     });
 
+    // The generated timeline becomes part of FINANCIAL context itself. Refresh
+    // once after persistence and stamp the stable post-generation version so
+    // the output does not report itself stale immediately.
+    let effectiveContextVersion = options?.propertyContextVersion ?? null;
+    let contextAllowsEffects = true;
+    if (options?.createdByUserId) {
+      const refreshedContext = await getFinancialContextDecisions(
+        propertyId,
+        options.createdByUserId,
+        'CAPITAL_TIMELINE',
+      );
+      effectiveContextVersion = refreshedContext.contextVersion;
+      contextAllowsEffects = refreshedContext.decisions.capitalPlanning.status === 'APPLICABLE';
+      const currentSnapshot = analysis.inputsSnapshot && typeof analysis.inputsSnapshot === 'object'
+        && !Array.isArray(analysis.inputsSnapshot)
+        ? analysis.inputsSnapshot as Prisma.JsonObject
+        : {};
+      analysis.inputsSnapshot = {
+        ...currentSnapshot,
+        _propertyContextVersion: effectiveContextVersion,
+      };
+      await prisma.homeCapitalTimelineAnalysis.update({
+        where: { id: analysis.id },
+        data: { inputsSnapshot: analysis.inputsSnapshot as Prisma.InputJsonObject },
+      });
+    }
+
     // Fire-and-forget in-app alerts for HIGH priority items due within 18 months
     const enriched = attachMissingFactors(analysis);
-    if (options?.createdByUserId) {
+    if (options?.createdByUserId && contextAllowsEffects) {
       const cutoff = new Date();
       cutoff.setMonth(cutoff.getMonth() + 18);
       const urgentItems = (enriched.items ?? []).filter(
@@ -597,11 +627,21 @@ export class HomeCapitalTimelineService {
     // fresh timeline. See docs/functional/HOME_RESERVE_FUND_PLANNER_FRD.md —
     // this is the "event-driven" trigger; recalculateReserveFunds.job.ts is
     // only the safety net for cases this call is ever missed.
-    homeReserveFundCalculationService
-      .recalculate(propertyId, 'TIMELINE_REFRESH')
-      .catch((err) =>
-        logger.warn({ err, propertyId }, '[HomeCapitalTimeline] reserve fund recalculation failed')
-      );
+    if (contextAllowsEffects) {
+      const reserveContext = options?.createdByUserId
+        ? await getFinancialContextDecisions(propertyId, options.createdByUserId, 'RESERVE_FUND')
+        : null;
+      homeReserveFundCalculationService
+        .recalculate(
+          propertyId,
+          'TIMELINE_REFRESH',
+          reserveContext?.contextVersion ?? null,
+          options?.createdByUserId ?? null,
+        )
+        .catch((err) =>
+          logger.warn({ err, propertyId }, '[HomeCapitalTimeline] reserve fund recalculation failed')
+        );
+    }
 
     return enriched;
   }

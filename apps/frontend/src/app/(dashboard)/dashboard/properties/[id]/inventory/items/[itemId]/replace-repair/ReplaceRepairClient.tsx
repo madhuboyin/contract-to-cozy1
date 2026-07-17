@@ -30,6 +30,7 @@ import { useJourney } from '@/features/guidance/hooks/useJourney';
 import { mapGuidanceJourneyToActionModel } from '@/features/guidance/utils/guidanceMappers';
 
 import { navigateBackWithDashboardFallback } from '@/lib/navigation/backNavigation';
+import { PropertyContextNotice, type PropertyContextEnvelope } from '@/components/property-context/PropertyContextNotice';
 const CATEGORY_LIFESPAN_YEARS: Record<string, number> = {
   APPLIANCE: 12,
   HVAC: 15,
@@ -159,6 +160,7 @@ export default function ReplaceRepairClient() {
 
   const [item, setItem] = useState<InventoryItem | null>(null);
   const [analysis, setAnalysis] = useState<ReplaceRepairAnalysisDTO | null>(null);
+  const [propertyContext, setPropertyContext] = useState<PropertyContextEnvelope | null>(null);
   const [hasAnalysis, setHasAnalysis] = useState(false);
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
@@ -193,6 +195,7 @@ export default function ReplaceRepairClient() {
       }
 
       if (analysisResult.status === 'fulfilled') {
+        setPropertyContext(analysisResult.value.propertyContext ?? null);
         if (analysisResult.value.exists) {
           setHasAnalysis(true);
           setAnalysis(analysisResult.value.analysis);
@@ -334,6 +337,7 @@ export default function ReplaceRepairClient() {
     try {
       const next = await runReplaceRepairAnalysis(propertyId, itemId, overrides, guidanceContext);
       setAnalysis(next);
+      setPropertyContext(next.propertyContext ?? null);
       setHasAnalysis(true);
     } catch (err: any) {
       setError(err?.message || 'Failed to run replace or repair analysis.');
@@ -372,6 +376,7 @@ export default function ReplaceRepairClient() {
       }
       summary={
         <div className="space-y-4">
+          <PropertyContextNotice context={propertyContext} title="Repair or replace context" />
           <ResultHeroCard
             title={item?.name || 'Inventory Item'}
             value={analysis ? verdictLabel(analysis.verdict) : 'No analysis'}

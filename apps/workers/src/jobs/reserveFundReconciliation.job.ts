@@ -16,6 +16,7 @@ import { prisma } from '../lib/prisma';
 import { homeReserveFundReconciliationService } from '../../../backend/src/services/homeReserveFundReconciliation.service';
 import { NotificationService } from '../../../backend/src/services/notification.service';
 import { logger } from '../lib/logger';
+import { checkReserveFundWorkerContext } from '../../../backend/src/services/financialContext/reserveFundWorkerContext.service';
 
 export async function reserveFundReconciliationJob(): Promise<void> {
   const funds = await prisma.homeReserveFund.findMany({
@@ -35,6 +36,17 @@ export async function reserveFundReconciliationJob(): Promise<void> {
     if (!userId) continue;
 
     try {
+      const context = await checkReserveFundWorkerContext(fund.propertyId, {
+        requireCurrentFund: true,
+        requireCurrentTimeline: true,
+      });
+      if (!context.allowed) {
+        logger.warn(
+          { propertyId: fund.propertyId, reasonCodes: context.reasonCodes },
+          '[ReserveFundReconciliation] Skipping because Property Context is not current',
+        );
+        continue;
+      }
       const suggestions = await homeReserveFundReconciliationService.findMatchSuggestions(fund.propertyId);
       if (suggestions.length === 0) continue;
 

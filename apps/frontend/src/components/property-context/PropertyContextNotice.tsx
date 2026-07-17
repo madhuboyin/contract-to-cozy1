@@ -20,9 +20,9 @@ export type PropertyContextEnvelope = {
   reconciliation?: {
     status: 'CURRENT' | 'REVIEW_REQUIRED';
     requiresReview: boolean;
-    contextVersion: string;
+    contextVersion?: string;
     reasonCodes: string[];
-    affectedOutputs: Array<{ factKey: string; outputType: string; count: number }>;
+    affectedOutputs?: Array<{ factKey: string; outputType: string; count: number }>;
   };
 };
 

@@ -3,6 +3,11 @@ import { Response, NextFunction } from 'express';
 import { CustomRequest } from '../types';
 import { HomeCapitalTimelineService } from '../services/homeCapitalTimeline.service';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
+import { APIError } from '../middleware/error.middleware';
+import {
+  assertFinancialContextApplicable,
+  getFinancialContextEnvelope,
+} from '../services/financialContext/context';
 
 type TimelineNextAction = { href: string; label: string; reason: string };
 
@@ -41,9 +46,23 @@ function buildTimelineNextAction(propertyId: string, analysis: any): TimelineNex
 
 const service = new HomeCapitalTimelineService();
 
+function requireUserId(req: CustomRequest): string {
+  const userId = req.user?.userId;
+  if (!userId) throw new APIError('Authentication required.', 401, 'AUTH_REQUIRED');
+  return userId;
+}
+
+function generatedContextVersion(analysis: any): string | null {
+  const snapshot = analysis?.inputsSnapshot;
+  if (!snapshot || typeof snapshot !== 'object' || Array.isArray(snapshot)) return null;
+  const value = snapshot._propertyContextVersion;
+  return typeof value === 'string' && value.trim() ? value : null;
+}
+
 export async function getLatestTimeline(req: CustomRequest, res: Response, next: NextFunction) {
   try {
     const propertyId = req.params.propertyId;
+    const userId = requireUserId(req);
     const analysis = await service.getLatestTimeline(propertyId);
     const snapshot =
       analysis?.inputsSnapshot &&
@@ -54,6 +73,12 @@ export async function getLatestTimeline(req: CustomRequest, res: Response, next:
     const assumptionSetId =
       typeof snapshot.assumptionSetId === 'string' ? snapshot.assumptionSetId : null;
     const nextAction = buildTimelineNextAction(propertyId, analysis);
+    const propertyContext = await getFinancialContextEnvelope(
+      propertyId,
+      userId,
+      'CAPITAL_TIMELINE',
+      generatedContextVersion(analysis),
+    );
 
     analyticsEmitter.track({
       eventType: AnalyticsEvent.TOOL_USED,
@@ -64,7 +89,7 @@ export async function getLatestTimeline(req: CustomRequest, res: Response, next:
       metadataJson: { confidence: analysis?.confidence ?? null },
     });
 
-    res.json({ success: true, data: { analysis, assumptionSetId, nextAction } });
+    res.json({ success: true, data: { analysis, assumptionSetId, nextAction, propertyContext } });
   } catch (err) {
     next(err);
   }
@@ -77,7 +102,13 @@ export async function runTimeline(req: CustomRequest, res: Response, next: NextF
     if (!homeownerProfileId) {
       return res.status(403).json({ success: false, error: 'Homeowner profile required' });
     }
-    const userId = req.user?.userId;
+    const userId = requireUserId(req);
+    const currentContext = await assertFinancialContextApplicable(
+      propertyId,
+      userId,
+      'CAPITAL_TIMELINE',
+      'capitalPlanning',
+    );
     const horizonYears = req.body.horizonYears ?? 10;
     const analysis = await service.runTimeline(propertyId, homeownerProfileId, horizonYears, {
       assumptionSetId:
@@ -87,6 +118,7 @@ export async function runTimeline(req: CustomRequest, res: Response, next: NextF
           ? req.body.financialAssumptions
           : undefined,
       createdByUserId: userId ?? null,
+      propertyContextVersion: currentContext.contextVersion,
     });
     const snapshot =
       analysis.inputsSnapshot &&
@@ -97,6 +129,12 @@ export async function runTimeline(req: CustomRequest, res: Response, next: NextF
     const assumptionSetId =
       typeof snapshot.assumptionSetId === 'string' ? snapshot.assumptionSetId : null;
     const nextAction = buildTimelineNextAction(propertyId, analysis);
+    const propertyContext = await getFinancialContextEnvelope(
+      propertyId,
+      userId,
+      'CAPITAL_TIMELINE',
+      generatedContextVersion(analysis),
+    );
 
     analyticsEmitter.track({
       eventType: AnalyticsEvent.ACTION_COMPLETED,
@@ -107,7 +145,7 @@ export async function runTimeline(req: CustomRequest, res: Response, next: NextF
       metadataJson: { actionType: 'run_timeline', horizonYears },
     });
 
-    res.status(201).json({ success: true, data: { analysis, assumptionSetId, nextAction } });
+    res.status(201).json({ success: true, data: { analysis, assumptionSetId, nextAction, propertyContext } });
   } catch (err) {
     next(err);
   }
@@ -128,6 +166,8 @@ export async function listOverrides(req: CustomRequest, res: Response, next: Nex
 export async function createOverride(req: CustomRequest, res: Response, next: NextFunction) {
   try {
     const propertyId = req.params.propertyId;
+    const userId = requireUserId(req);
+    await assertFinancialContextApplicable(propertyId, userId, 'CAPITAL_TIMELINE', 'capitalPlanning');
     const override = await service.createOverride(propertyId, req.body);
     res.status(201).json({ success: true, data: { override } });
   } catch (err) {
@@ -138,6 +178,8 @@ export async function createOverride(req: CustomRequest, res: Response, next: Ne
 export async function updateOverride(req: CustomRequest, res: Response, next: NextFunction) {
   try {
     const propertyId = req.params.propertyId;
+    const userId = requireUserId(req);
+    await assertFinancialContextApplicable(propertyId, userId, 'CAPITAL_TIMELINE', 'capitalPlanning');
     const overrideId = req.params.overrideId;
     const override = await service.updateOverride(propertyId, overrideId, req.body);
     res.json({ success: true, data: { override } });
@@ -149,6 +191,8 @@ export async function updateOverride(req: CustomRequest, res: Response, next: Ne
 export async function deleteOverride(req: CustomRequest, res: Response, next: NextFunction) {
   try {
     const propertyId = req.params.propertyId;
+    const userId = requireUserId(req);
+    await assertFinancialContextApplicable(propertyId, userId, 'CAPITAL_TIMELINE', 'capitalPlanning');
     const overrideId = req.params.overrideId;
     await service.deleteOverride(propertyId, overrideId);
     res.status(204).send();

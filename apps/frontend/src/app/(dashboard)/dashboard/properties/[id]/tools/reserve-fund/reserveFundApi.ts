@@ -1,5 +1,6 @@
 // apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/reserve-fund/reserveFundApi.ts
 import { api } from '@/lib/api/client';
+import type { PropertyContextEnvelope } from '@/components/property-context/PropertyContextNotice';
 
 export type ReserveFundPosture = 'CONSERVATIVE' | 'MODERATE' | 'AGGRESSIVE';
 export type ReserveFundLineItemStatus = 'ACTIVE' | 'FUNDED' | 'RETIRED' | 'OVERDUE';
@@ -16,6 +17,12 @@ export type ReserveFundDTO = {
   currentShortfallCents: number;
   lastRecalculatedAt: string | null;
   isActive: boolean;
+  propertyContextVersion?: string | null;
+};
+
+export type ReserveFundResult = {
+  fund: ReserveFundDTO;
+  propertyContext?: PropertyContextEnvelope;
 };
 
 export type TimelineItemSummary = {
@@ -67,22 +74,31 @@ export type ReconciliationSuggestionDTO = {
   expenseDate: string;
 };
 
-export async function getFund(propertyId: string): Promise<ReserveFundDTO> {
+export async function getFund(propertyId: string): Promise<ReserveFundResult> {
   const res = await api.get(`/api/properties/${propertyId}/reserve-fund`);
-  return res.data?.fund as ReserveFundDTO;
+  return {
+    fund: res.data?.fund as ReserveFundDTO,
+    propertyContext: res.data?.propertyContext as PropertyContextEnvelope | undefined,
+  };
 }
 
 export async function updateFund(
   propertyId: string,
   body: { posture?: ReserveFundPosture; isActive?: boolean }
-): Promise<ReserveFundDTO> {
+): Promise<ReserveFundResult> {
   const res = await api.patch(`/api/properties/${propertyId}/reserve-fund`, body);
-  return res.data?.fund as ReserveFundDTO;
+  return {
+    fund: res.data?.fund as ReserveFundDTO,
+    propertyContext: res.data?.propertyContext as PropertyContextEnvelope | undefined,
+  };
 }
 
-export async function recalculateFund(propertyId: string): Promise<ReserveFundDTO> {
+export async function recalculateFund(propertyId: string): Promise<ReserveFundResult> {
   const res = await api.post(`/api/properties/${propertyId}/reserve-fund/recalculate`);
-  return res.data?.fund as ReserveFundDTO;
+  return {
+    fund: res.data?.fund as ReserveFundDTO,
+    propertyContext: res.data?.propertyContext as PropertyContextEnvelope | undefined,
+  };
 }
 
 export async function listLineItems(

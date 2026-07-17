@@ -1,4 +1,5 @@
 import { api } from './client';
+import type { PropertyContextEnvelope } from '@/components/property-context/PropertyContextNotice';
 
 export type ReplaceRepairRiskTolerance = 'LOW' | 'MEDIUM' | 'HIGH';
 export type ReplaceRepairUsageIntensity = 'LOW' | 'MEDIUM' | 'HIGH';
@@ -51,11 +52,13 @@ export type ReplaceRepairAnalysisDTO = {
   breakEvenMonths?: number | null;
 
   computedAt: string;
+  propertyContext?: PropertyContextEnvelope;
 };
 
-export type ReplaceRepairAnalysisStatusResponse =
+export type ReplaceRepairAnalysisStatusResponse = (
   | { exists: false }
-  | { exists: true; analysis: ReplaceRepairAnalysisDTO };
+  | { exists: true; analysis: ReplaceRepairAnalysisDTO }
+) & { propertyContext?: PropertyContextEnvelope };
 
 export async function getReplaceRepairAnalysis(
   propertyId: string,
@@ -73,7 +76,7 @@ export async function runReplaceRepairAnalysis(
   overrides?: ReplaceRepairOverrides,
   guidanceContext?: GuidanceToolContext
 ): Promise<ReplaceRepairAnalysisDTO> {
-  const res = await api.post<{ analysis: ReplaceRepairAnalysisDTO }>(
+  const res = await api.post<{ analysis: ReplaceRepairAnalysisDTO; propertyContext?: PropertyContextEnvelope }>(
     `/api/properties/${propertyId}/inventory/items/${itemId}/replace-repair/run`,
     {
       overrides: overrides ?? {},
@@ -88,5 +91,5 @@ export async function runReplaceRepairAnalysis(
         : {}),
     }
   );
-  return res.data.analysis;
+  return { ...res.data.analysis, propertyContext: res.data.propertyContext };
 }

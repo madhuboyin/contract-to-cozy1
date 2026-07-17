@@ -14,6 +14,7 @@
 import { prisma } from '../lib/prisma';
 import { homeReserveFundCalculationService } from '../../../backend/src/services/homeReserveFundCalculation.service';
 import { logger } from '../lib/logger';
+import { checkReserveFundWorkerContext } from '../../../backend/src/services/financialContext/reserveFundWorkerContext.service';
 
 const STALE_RECALC_DAYS = 35;
 
@@ -31,6 +32,17 @@ export async function recalculateReserveFundsJob(): Promise<void> {
 
   for (const fund of funds) {
     try {
+      const context = await checkReserveFundWorkerContext(fund.propertyId, {
+        requireCurrentTimeline: true,
+      });
+      if (!context.allowed || !context.userId) {
+        skipped++;
+        logger.warn(
+          { propertyId: fund.propertyId, reasonCodes: context.reasonCodes },
+          '[ReserveFundRecalculate] Skipping because Property Context is not current',
+        );
+        continue;
+      }
       const latestAnalysis = await prisma.homeCapitalTimelineAnalysis.findFirst({
         where: { propertyId: fund.propertyId, status: 'READY' },
         orderBy: { computedAt: 'desc' },
@@ -47,7 +59,12 @@ export async function recalculateReserveFundsJob(): Promise<void> {
         continue;
       }
 
-      await homeReserveFundCalculationService.recalculate(fund.propertyId, 'SCHEDULED');
+      await homeReserveFundCalculationService.recalculate(
+        fund.propertyId,
+        'SCHEDULED',
+        context.contextVersion,
+        context.userId,
+      );
       recalculated++;
     } catch (err) {
       failed++;

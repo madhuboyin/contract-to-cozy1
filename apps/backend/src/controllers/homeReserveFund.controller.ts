@@ -4,11 +4,29 @@ import { CustomRequest } from '../types';
 import { homeReserveFundService } from '../services/homeReserveFund.service';
 import { homeReserveFundReconciliationService } from '../services/homeReserveFundReconciliation.service';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
+import { APIError } from '../middleware/error.middleware';
+import {
+  assertFinancialContextApplicable,
+  getFinancialContextEnvelope,
+} from '../services/financialContext/context';
+
+function requireUserId(req: CustomRequest): string {
+  const userId = req.user?.userId;
+  if (!userId) throw new APIError('Authentication required.', 401, 'AUTH_REQUIRED');
+  return userId;
+}
 
 export async function getFund(req: CustomRequest, res: Response, next: NextFunction) {
   try {
     const propertyId = req.params.propertyId;
+    const userId = requireUserId(req);
     const fund = await homeReserveFundService.getSummary(propertyId);
+    const propertyContext = await getFinancialContextEnvelope(
+      propertyId,
+      userId,
+      'RESERVE_FUND',
+      fund.propertyContextVersion,
+    );
 
     analyticsEmitter.track({
       eventType: AnalyticsEvent.TOOL_USED,
@@ -19,7 +37,7 @@ export async function getFund(req: CustomRequest, res: Response, next: NextFunct
       metadataJson: { posture: fund.posture },
     });
 
-    res.json({ success: true, data: { fund } });
+    res.json({ success: true, data: { fund, propertyContext } });
   } catch (err) {
     next(err);
   }
@@ -28,14 +46,32 @@ export async function getFund(req: CustomRequest, res: Response, next: NextFunct
 export async function updateFund(req: CustomRequest, res: Response, next: NextFunction) {
   try {
     const propertyId = req.params.propertyId;
+    const userId = requireUserId(req);
+    const currentContext = await assertFinancialContextApplicable(
+      propertyId,
+      userId,
+      'RESERVE_FUND',
+      'reservePlanning',
+    );
     let fund;
     if (req.body.posture !== undefined) {
-      fund = await homeReserveFundService.updatePosture(propertyId, req.body.posture);
+      fund = await homeReserveFundService.updatePosture(
+        propertyId,
+        req.body.posture,
+        currentContext.contextVersion,
+        userId,
+      );
     }
     if (req.body.isActive !== undefined) {
-      fund = await homeReserveFundService.updateActiveState(propertyId, req.body.isActive);
+      fund = await homeReserveFundService.updateActiveState(propertyId, req.body.isActive, userId);
     }
-    res.json({ success: true, data: { fund } });
+    const propertyContext = await getFinancialContextEnvelope(
+      propertyId,
+      userId,
+      'RESERVE_FUND',
+      fund?.propertyContextVersion ?? null,
+    );
+    res.json({ success: true, data: { fund, propertyContext } });
   } catch (err) {
     next(err);
   }
@@ -44,7 +80,24 @@ export async function updateFund(req: CustomRequest, res: Response, next: NextFu
 export async function recalculateFund(req: CustomRequest, res: Response, next: NextFunction) {
   try {
     const propertyId = req.params.propertyId;
-    const fund = await homeReserveFundService.recalculate(propertyId);
+    const userId = requireUserId(req);
+    const currentContext = await assertFinancialContextApplicable(
+      propertyId,
+      userId,
+      'RESERVE_FUND',
+      'reservePlanning',
+    );
+    const fund = await homeReserveFundService.recalculate(
+      propertyId,
+      currentContext.contextVersion,
+      userId,
+    );
+    const propertyContext = await getFinancialContextEnvelope(
+      propertyId,
+      userId,
+      'RESERVE_FUND',
+      fund.propertyContextVersion,
+    );
 
     analyticsEmitter.track({
       eventType: AnalyticsEvent.ACTION_COMPLETED,
@@ -55,7 +108,7 @@ export async function recalculateFund(req: CustomRequest, res: Response, next: N
       metadataJson: { actionType: 'recalculate' },
     });
 
-    res.json({ success: true, data: { fund } });
+    res.json({ success: true, data: { fund, propertyContext } });
   } catch (err) {
     next(err);
   }

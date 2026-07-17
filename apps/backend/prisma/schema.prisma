@@ -6143,6 +6143,7 @@ model HomeReserveFund {
 
   lastRecalculatedAt DateTime?
   sourceAnalysisId   String?
+  propertyContextVersion String?
 
   isActive Boolean @default(true)
 

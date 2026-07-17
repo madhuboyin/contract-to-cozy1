@@ -18,6 +18,7 @@ import {
   HomeReserveFundRecalculationTrigger,
 } from '@prisma/client';
 import { guidanceJourneyService } from './guidanceEngine/guidanceJourney.service';
+import { getFinancialContextDecisions } from './financialContext/context';
 
 // A capital item due within this many months is treated as a lump-sum
 // shortfall rather than something that can be smoothed into a monthly rate.
@@ -107,8 +108,32 @@ export class HomeReserveFundCalculationService {
   // ── Core recalculation (FRD Section 5) ─────────────────────────────
   async recalculate(
     propertyId: string,
-    trigger: HomeReserveFundRecalculationTrigger = 'MANUAL'
+    trigger: HomeReserveFundRecalculationTrigger = 'MANUAL',
+    expectedContextVersion?: string | null,
+    actorUserId?: string | null,
   ): Promise<RecalculationResult> {
+    if (actorUserId) {
+      const currentContext = await getFinancialContextDecisions(
+        propertyId,
+        actorUserId,
+        'RESERVE_FUND',
+      );
+      if (
+        currentContext.decisions.reservePlanning.status !== 'APPLICABLE' ||
+        (expectedContextVersion && expectedContextVersion !== currentContext.contextVersion)
+      ) {
+        throw new APIError(
+          'Reserve fund inputs changed before recalculation. Refresh the capital plan and try again.',
+          409,
+          'STALE_RESERVE_FUND_CONTEXT',
+          {
+            expectedContextVersion: expectedContextVersion ?? null,
+            currentContextVersion: currentContext.contextVersion,
+            decision: currentContext.decisions.reservePlanning,
+          },
+        );
+      }
+    }
     const fund = await this.getOrCreateFund(propertyId);
 
     const analysis = await prisma.homeCapitalTimelineAnalysis.findFirst({
@@ -133,7 +158,16 @@ export class HomeReserveFundCalculationService {
           itemsRetired: 0,
         },
       });
-      return fund;
+      if (!actorUserId) return fund;
+      const postRecalculationContext = await getFinancialContextDecisions(
+        propertyId,
+        actorUserId,
+        'RESERVE_FUND',
+      );
+      return prisma.homeReserveFund.update({
+        where: { id: fund.id },
+        data: { propertyContextVersion: postRecalculationContext.contextVersion },
+      });
     }
 
     const now = new Date();
@@ -279,7 +313,19 @@ export class HomeReserveFundCalculationService {
       }),
     ]);
 
-    const updatedFund = await prisma.homeReserveFund.findUniqueOrThrow({ where: { id: fund.id } });
+    let updatedFund = await prisma.homeReserveFund.findUniqueOrThrow({ where: { id: fund.id } });
+
+    if (actorUserId) {
+      const postRecalculationContext = await getFinancialContextDecisions(
+        propertyId,
+        actorUserId,
+        'RESERVE_FUND',
+      );
+      updatedFund = await prisma.homeReserveFund.update({
+        where: { id: fund.id },
+        data: { propertyContextVersion: postRecalculationContext.contextVersion },
+      });
+    }
 
     // Fire-and-forget — a Guidance Engine hiccup must not fail the recalculation.
     this.maybeEmitShortfallSignal(propertyId, updatedFund, urgentShortfallItems).catch((err) =>

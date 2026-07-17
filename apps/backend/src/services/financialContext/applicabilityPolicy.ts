@@ -11,6 +11,10 @@ interface FinancingProfileContext {
   monthlyPaymentCents?: number | null;
 }
 
+export interface FinancialContextInput {
+  inventoryItemId?: string | null;
+}
+
 function availableCollection(
   context: PropertyContextSnapshot,
   key: string,
@@ -23,7 +27,10 @@ function availableCollection(
     : facts.decision('APPLICABLE', [availableReason]);
 }
 
-export function evaluateFinancialContext(context: PropertyContextSnapshot) {
+export function evaluateFinancialContext(
+  context: PropertyContextSnapshot,
+  input: FinancialContextInput = {},
+) {
   const financingFacts = new PropertyContextDecisionBuilder(context);
   const profile = financingFacts.read<FinancingProfileContext>('financial.financingProfile');
   const canonicalFinancingSource = profile
@@ -49,22 +56,41 @@ export function evaluateFinancialContext(context: PropertyContextSnapshot) {
     ? equityFacts.decision('APPLICABLE', ['CURRENT_EQUITY_POSITION_AVAILABLE'])
     : equityFacts.unknown('CURRENT_EQUITY_POSITION_MISSING');
 
+  const lifecycleFacts = new PropertyContextDecisionBuilder(context);
+  const inventoryItems = lifecycleFacts.read<Array<{ id?: string; condition?: string | null }>>('inventory.items');
+  const selectedItem = input.inventoryItemId
+    ? inventoryItems?.find((item) => item.id === input.inventoryItemId)
+    : undefined;
+  const repairReplace = inventoryItems === undefined
+    ? lifecycleFacts.unknown('CANONICAL_INVENTORY_UNAVAILABLE')
+    : input.inventoryItemId && !selectedItem
+      ? lifecycleFacts.decision('NOT_APPLICABLE', ['INVENTORY_ITEM_NOT_IN_PROPERTY_CONTEXT'])
+      : lifecycleFacts.decision('APPLICABLE', [
+          selectedItem ? 'CANONICAL_INVENTORY_ITEM_AVAILABLE' : 'CANONICAL_INVENTORY_AVAILABLE',
+          selectedItem?.condition && selectedItem.condition !== 'UNKNOWN'
+            ? 'ITEM_CONDITION_AVAILABLE'
+            : 'ITEM_CONDITION_MISSING_CONFIDENCE_REDUCED',
+        ]);
+
+  const capitalPlanning = availableCollection(
+    context,
+    'inventory.items',
+    'CANONICAL_INVENTORY_AVAILABLE_FOR_CAPITAL_PLANNING',
+    'CANONICAL_INVENTORY_UNAVAILABLE',
+  );
+
   const reserveFacts = new PropertyContextDecisionBuilder(context);
-  const reservePlanning = reserveFacts.read<Record<string, unknown>>('financial.reserveFund')
-    ? reserveFacts.decision('APPLICABLE', ['RESERVE_FUND_POSTURE_AVAILABLE'])
-    : reserveFacts.unknown('RESERVE_FUND_POSTURE_MISSING');
+  const reservePlanning = reserveFacts.read<unknown[]>('financial.upcomingCapitalExposure') === undefined
+    ? reserveFacts.unknown('CAPITAL_EXPOSURE_UNAVAILABLE')
+    : reserveFacts.decision('APPLICABLE', ['CAPITAL_EXPOSURE_SOURCE_AVAILABLE']);
 
   return {
     canonicalFinancingSource,
     mortgageModeling,
     equityModeling,
+    repairReplace,
     reservePlanning,
-    capitalPlanning: availableCollection(
-      context,
-      'financial.upcomingCapitalExposure',
-      'CAPITAL_EXPOSURE_AVAILABLE',
-      'CAPITAL_EXPOSURE_UNAVAILABLE',
-    ),
+    capitalPlanning,
     ownershipCostModeling: availableCollection(
       context,
       'financial.ownershipExpenseSummary',

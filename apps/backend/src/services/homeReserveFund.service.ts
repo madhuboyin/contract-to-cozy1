@@ -15,6 +15,7 @@ import {
   HomeReserveFundPosture,
 } from '@prisma/client';
 import { homeReserveFundCalculationService } from './homeReserveFundCalculation.service';
+import { getFinancialContextDecisions } from './financialContext/context';
 
 export type AddContributionInput = {
   type: HomeReserveFundContributionType;
@@ -32,22 +33,50 @@ export class HomeReserveFundService {
   }
 
   // ── PATCH /reserve-fund ─────────────────────────────────────────────
-  async updatePosture(propertyId: string, posture: HomeReserveFundPosture) {
+  async updatePosture(
+    propertyId: string,
+    posture: HomeReserveFundPosture,
+    contextVersion?: string | null,
+    actorUserId?: string | null,
+  ) {
     const fund = await homeReserveFundCalculationService.getOrCreateFund(propertyId);
     await prisma.homeReserveFund.update({ where: { id: fund.id }, data: { posture } });
+    const recalculationContextVersion = actorUserId
+      ? (await getFinancialContextDecisions(propertyId, actorUserId, 'RESERVE_FUND')).contextVersion
+      : contextVersion;
     // Posture changes which end of the cost range is used, so the target
     // figures are stale the instant it changes — recompute immediately.
-    return homeReserveFundCalculationService.recalculate(propertyId, 'MANUAL');
+    return homeReserveFundCalculationService.recalculate(
+      propertyId,
+      'MANUAL',
+      recalculationContextVersion,
+      actorUserId,
+    );
   }
 
-  async updateActiveState(propertyId: string, isActive: boolean) {
+  async updateActiveState(propertyId: string, isActive: boolean, actorUserId?: string | null) {
     const fund = await homeReserveFundCalculationService.getOrCreateFund(propertyId);
-    return prisma.homeReserveFund.update({ where: { id: fund.id }, data: { isActive } });
+    const updated = await prisma.homeReserveFund.update({ where: { id: fund.id }, data: { isActive } });
+    if (!actorUserId) return updated;
+    const context = await getFinancialContextDecisions(propertyId, actorUserId, 'RESERVE_FUND');
+    return prisma.homeReserveFund.update({
+      where: { id: fund.id },
+      data: { propertyContextVersion: context.contextVersion },
+    });
   }
 
   // ── POST /reserve-fund/recalculate ──────────────────────────────────
-  async recalculate(propertyId: string) {
-    return homeReserveFundCalculationService.recalculate(propertyId, 'MANUAL');
+  async recalculate(
+    propertyId: string,
+    contextVersion?: string | null,
+    actorUserId?: string | null,
+  ) {
+    return homeReserveFundCalculationService.recalculate(
+      propertyId,
+      'MANUAL',
+      contextVersion,
+      actorUserId,
+    );
   }
 
   // ── GET /reserve-fund/line-items ────────────────────────────────────
