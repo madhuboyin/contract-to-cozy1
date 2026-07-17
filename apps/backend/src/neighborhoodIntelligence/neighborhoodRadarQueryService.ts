@@ -53,8 +53,12 @@ const EVENT_TYPE_LABELS: Record<NeighborhoodEventType, string> = {
   LARGE_CONSTRUCTION: 'Large Construction',
 };
 
-// Include spec for property-level event queries
+// Include spec for property-level event queries. Impacts are read from the
+// property-event link (property-specific projections); event-level rows are
+// kept as a fallback for records written before link ownership existed.
 const PROPERTY_EVENT_INCLUDE = {
+  impacts: true,
+  demographics: true,
   event: {
     include: {
       impacts: true,
@@ -62,6 +66,23 @@ const PROPERTY_EVENT_INCLUDE = {
     },
   },
 } as const;
+
+type LinkImpactRows = {
+  impacts: Array<{ category: string; direction: string; description: string | null; confidence: unknown }>;
+  demographics: Array<{ segment: string; description: string | null; confidence: unknown }>;
+  event: {
+    impacts: Array<{ category: string; direction: string; description: string | null; confidence: unknown }>;
+    demographics: Array<{ segment: string; description: string | null; confidence: unknown }>;
+  };
+};
+
+function linkImpacts(link: LinkImpactRows) {
+  return link.impacts.length > 0 ? link.impacts : link.event.impacts;
+}
+
+function linkDemographics(link: LinkImpactRows) {
+  return link.demographics.length > 0 ? link.demographics : link.event.demographics;
+}
 
 export class NeighborhoodRadarQueryService {
   // ---------------------------------------------------------------------------
@@ -191,15 +212,15 @@ export class NeighborhoodRadarQueryService {
 
     const card = this.toEventCard(link);
 
-    const allImpacts: ImpactSnippet[] = link.event.impacts.map((i) => ({
-      category: i.category,
-      direction: i.direction,
+    const allImpacts: ImpactSnippet[] = linkImpacts(link).map((i) => ({
+      category: i.category as ImpactSnippet['category'],
+      direction: i.direction as ImpactSnippet['direction'],
       description: i.description ?? '',
       confidence: Number(i.confidence ?? 0),
     }));
 
-    const allDemographics: DemographicSnippet[] = link.event.demographics.map((d) => ({
-      segment: d.segment,
+    const allDemographics: DemographicSnippet[] = linkDemographics(link).map((d) => ({
+      segment: d.segment as DemographicSnippet['segment'],
       description: d.description ?? '',
       confidence: Number(d.confidence ?? 0),
     }));
@@ -262,8 +283,8 @@ export class NeighborhoodRadarQueryService {
       NEUTRAL: 0,
     };
     for (const link of links) {
-      for (const impact of link.event.impacts) {
-        countByDirection[impact.direction]++;
+      for (const impact of linkImpacts(link)) {
+        countByDirection[impact.direction as ImpactDirection]++;
       }
     }
 
@@ -285,7 +306,7 @@ export class NeighborhoodRadarQueryService {
   // Mapping helpers
   // ---------------------------------------------------------------------------
 
-  private toEventCard(link: {
+  private toEventCard(link: LinkImpactRows & {
     id: string;
     eventId: string;
     distanceMiles: number;
@@ -316,10 +337,10 @@ export class NeighborhoodRadarQueryService {
       }>;
     };
   }): NeighborhoodEventCard {
-    const impacts = link.event.impacts as ImpactSnippet[];
+    const impacts = linkImpacts(link) as ImpactSnippet[];
     const positives = impacts.filter((i) => i.direction === 'POSITIVE').slice(0, 3);
     const negatives = impacts.filter((i) => i.direction === 'NEGATIVE').slice(0, 3);
-    const demographics = (link.event.demographics as DemographicSnippet[]).slice(0, 3);
+    const demographics = (linkDemographics(link) as DemographicSnippet[]).slice(0, 3);
 
     const overallEffect = impactEngine.computeOverallEffect(impacts);
 

@@ -6,6 +6,7 @@ import { uploadPdfBuffer } from './storage/reportStorage';
 import { presignGetObject } from './storage/presign';
 import { buildAuthoritativeReportSnapshot } from './planningContext/reportSnapshot';
 import { buildRedactedReportSnapshot } from './planningContext/redaction';
+import { getPlanningContextEnvelope } from './planningContext/context';
 
 type CreateExportArgs = {
   userId: string;
@@ -148,6 +149,13 @@ export async function prepareShareArtifacts(exportId: string) {
     throw new Error('Report is not ready to share');
   }
 
+  // Authoritative shared-report decision: sharing is refused when the
+  // redacted-projection context is NOT_APPLICABLE for this property.
+  const sharedProjection = await getPlanningContextEnvelope(exp.propertyId, exp.userId, 'SHARED_REPORT');
+  if (sharedProjection.decision.status === 'NOT_APPLICABLE') {
+    throw new Error('Sharing is not applicable for this property context');
+  }
+
   const redactedSnapshot = buildRedactedReportSnapshot(exp.snapshot as Record<string, unknown>);
   const pdfBuffer = await renderHomeReportPackPdf(redactedSnapshot, {
     propertyLabel: [redactedSnapshot.property.city, redactedSnapshot.property.state]
@@ -175,7 +183,15 @@ export async function prepareShareArtifacts(exportId: string) {
   });
 
   await prisma.homeReportExportEvent.create({
-    data: { reportId: exportId, type: 'SHARE_ARTIFACTS_PREPARED', meta: { checksum } },
+    data: {
+      reportId: exportId,
+      type: 'SHARE_ARTIFACTS_PREPARED',
+      meta: {
+        checksum,
+        decisionStatus: sharedProjection.decision.status,
+        decisionReasonCodes: sharedProjection.decision.reasonCodes,
+      },
+    },
   });
 
   return updated;

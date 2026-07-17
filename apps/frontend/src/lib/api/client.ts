@@ -3592,9 +3592,15 @@ class APIClient {
   async getHomeDigitalTwin(
     propertyId: string
   ): Promise<import('@/types').HomeDigitalTwinDTO | null> {
-    const res = await this.get<{ twin: import('@/types').HomeDigitalTwinDTO }>(
+    const res = await this.get<{
+      twin: import('@/types').HomeDigitalTwinDTO;
+      context?: PropertyContextEnvelope | null;
+    }>(
       `/api/properties/${propertyId}/home-digital-twin`
     );
+    if (res.data?.twin) {
+      res.data.twin.context = res.data.context ?? null;
+    }
     return res.data?.twin ?? null;
   }
 

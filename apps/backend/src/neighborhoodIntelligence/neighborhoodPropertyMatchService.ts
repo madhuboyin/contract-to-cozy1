@@ -95,40 +95,33 @@ export class NeighborhoodPropertyMatchService {
         context,
       );
 
-      // Upsert PropertyNeighborhoodEvent
-      const existingLink = await prisma.propertyNeighborhoodEvent.findFirst({
-        where: { propertyId: property.id, eventId },
+      // Upsert PropertyNeighborhoodEvent via its unique (propertyId, eventId)
+      // key so concurrent reruns cannot create duplicate links.
+      const link = await prisma.propertyNeighborhoodEvent.upsert({
+        where: { propertyId_eventId: { propertyId: property.id, eventId } },
+        update: {
+          distanceMiles,
+          impactScore: generated.impactScore,
+        },
+        create: {
+          propertyId: property.id,
+          eventId,
+          distanceMiles,
+          impactScore: generated.impactScore,
+        },
       });
 
-      let linkId: string;
-
-      if (existingLink) {
-        await prisma.propertyNeighborhoodEvent.update({
-          where: { id: existingLink.id },
-          data: {
-            distanceMiles,
-            impactScore: generated.impactScore,
-          },
-        });
-        linkId = existingLink.id;
-      } else {
-        const link = await prisma.propertyNeighborhoodEvent.create({
-          data: {
-            propertyId: property.id,
-            eventId,
-            distanceMiles,
-            impactScore: generated.impactScore,
-          },
-        });
-        linkId = link.id;
-      }
-
-      // Replace existing impacts for this event
-      await prisma.neighborhoodImpact.deleteMany({ where: { eventId } });
+      // Replace impacts owned by THIS property-event link only. Impacts are
+      // property-specific projections; one property's results never overwrite
+      // another property's.
+      await prisma.neighborhoodImpact.deleteMany({
+        where: { propertyNeighborhoodEventId: link.id },
+      });
       if (generated.impacts.length > 0) {
         await prisma.neighborhoodImpact.createMany({
           data: generated.impacts.map((imp) => ({
             eventId,
+            propertyNeighborhoodEventId: link.id,
             category: imp.category,
             direction: imp.direction,
             description: imp.description,
@@ -137,12 +130,14 @@ export class NeighborhoodPropertyMatchService {
         });
       }
 
-      // Replace demographic impacts
-      await prisma.demographicImpact.deleteMany({ where: { eventId } });
+      await prisma.demographicImpact.deleteMany({
+        where: { propertyNeighborhoodEventId: link.id },
+      });
       if (generated.demographics.length > 0) {
         await prisma.demographicImpact.createMany({
           data: generated.demographics.map((d) => ({
             eventId,
+            propertyNeighborhoodEventId: link.id,
             segment: d.segment,
             description: d.description,
             confidence: d.confidence,
@@ -152,12 +147,19 @@ export class NeighborhoodPropertyMatchService {
 
       matched++;
       logger.info(
-        `[NeighborhoodIntelligence] Matched property=${property.id} to event=${eventId} score=${generated.impactScore} linkId=${linkId}`,
+        `[NeighborhoodIntelligence] Matched property=${property.id} to event=${eventId} score=${generated.impactScore} linkId=${link.id}`,
       );
     }
 
+    // Remove links (and their cascade-owned impacts) for properties that are
+    // no longer geographically relevant to this event after a rerun.
+    const eligibleIds = eligibleProperties.map(({ property }) => property.id);
+    const removed = await prisma.propertyNeighborhoodEvent.deleteMany({
+      where: { eventId, propertyId: { notIn: eligibleIds } },
+    });
+
     logger.info(
-      `[NeighborhoodIntelligence] matchPropertiesForEvent complete — eventId=${eventId} matched=${matched}`,
+      `[NeighborhoodIntelligence] matchPropertiesForEvent complete — eventId=${eventId} matched=${matched} removedStaleLinks=${removed.count}`,
     );
 
     return { matched };

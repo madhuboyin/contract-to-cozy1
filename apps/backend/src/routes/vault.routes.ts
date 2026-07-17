@@ -2,7 +2,7 @@
 
 import { Router, Request, Response } from 'express';
 import { authenticate } from '../middleware/auth.middleware';
-import { propertyAuthMiddleware } from '../middleware/propertyAuth.middleware';
+import { propertyAuthMiddleware, requireHouseholdRole } from '../middleware/propertyAuth.middleware';
 import {
   vaultPasswordRateLimiter,
   vaultShareAccessRateLimiter,
@@ -242,6 +242,7 @@ router.post(
   '/share-link/:propertyId',
   authenticate,
   propertyAuthMiddleware,
+  requireHouseholdRole('OWNER'),
   async (req: AuthRequest, res: Response) => {
     const { propertyId } = req.params;
     const userId = req.user!.userId;
@@ -293,6 +294,7 @@ router.post(
   '/setup/:propertyId',
   authenticate,
   propertyAuthMiddleware,
+  requireHouseholdRole('OWNER'),
   async (req: AuthRequest, res: Response) => {
     const { propertyId } = req.params;
     const userId = req.user!.userId;

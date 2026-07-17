@@ -31,6 +31,7 @@ import {
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
+import { PropertyContextNotice } from '@/components/property-context/PropertyContextNotice';
 import { Button } from '@/components/ui/button';
 import {
   Sheet,
@@ -1159,6 +1160,11 @@ export default function HomeDigitalTwinClient() {
       <MobileFilterSurface className="lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none lg:rounded-none">
         <HomeToolsRail propertyId={propertyId} />
       </MobileFilterSurface>
+
+      {/* Projection context status */}
+      {twin?.context && (
+        <PropertyContextNotice context={twin.context} title="Digital twin context" />
+      )}
 
       {/* Content states */}
       {twinLoading ? (

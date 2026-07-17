@@ -23,5 +23,13 @@ export type SellerReadinessReport = {
     };
   
     disclaimers: string[];
+
+    // Property Context sale-readiness decision backing this report.
+    saleReadiness: {
+      status: 'APPLICABLE' | 'NOT_APPLICABLE' | 'UNKNOWN';
+      reasonCodes: string[];
+      missingFactKeys: string[];
+      contextVersion: string;
+    };
   };
   

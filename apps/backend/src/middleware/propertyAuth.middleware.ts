@@ -2,7 +2,7 @@
 import { Response, NextFunction } from 'express';
 import { CustomRequest } from '../types';
 import { logger } from '../lib/logger';
-import { resolvePropertyAccess } from '../services/propertyAccess.service';
+import { resolvePropertyAccess, ROLE_RANK } from '../services/propertyAccess.service';
 import {
   securityAuthDenialsTotal,
   securityPropertyScopeDenialsTotal,
@@ -49,4 +49,25 @@ export const propertyAuthMiddleware = async (
       .status(500)
       .json({ message: 'Internal server error during property authorization check.' });
   }
+};
+
+/**
+ * Minimum household-role floor for property-scoped mutations. Must run after
+ * propertyAuthMiddleware (which attaches req.householdRole). VIEWERs can read
+ * property surfaces but never mutate them.
+ */
+export const requireHouseholdRole = (minimumRole: 'CONTRIBUTOR' | 'OWNER') => {
+  return (req: CustomRequest, res: Response, next: NextFunction) => {
+    const role = req.householdRole;
+    if (!role || ROLE_RANK[role] < ROLE_RANK[minimumRole]) {
+      securityPropertyScopeDenialsTotal.inc({
+        source: 'household_role_floor',
+        status_code: '403',
+      });
+      return res.status(403).json({
+        message: `This action requires the ${minimumRole} role for the property.`,
+      });
+    }
+    return next();
+  };
 };

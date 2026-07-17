@@ -2,6 +2,7 @@
 import { prisma } from '../../lib/prisma';
 import { SellerReadinessReport } from './sellerReadiness.types';
 import { resolveCompsProvider } from '../providers/compsResolver';
+import { getPlanningContextDecisions } from '../../services/planningContext/context';
 
 export async function buildSellerReadinessReport(
   userId: string,
@@ -16,6 +17,10 @@ export async function buildSellerReadinessReport(
   if (!plan) {
     throw new Error('Seller prep plan not found');
   }
+
+  // Sale readiness is judged against current open-work and coverage context.
+  const planning = await getPlanningContextDecisions(propertyId, userId, 'SELLER_PREP');
+  const saleReadiness = planning.decisions.saleReadiness;
 
   const total = plan.items.length;
   const completed = plan.items.filter(i => i.status === 'DONE').length;
@@ -50,6 +55,15 @@ export async function buildSellerReadinessReport(
       'Estimates are based on historical data and public records.',
       'Actual sale price may vary due to market conditions.',
       'This report is for informational purposes only.',
+      ...(saleReadiness.status !== 'APPLICABLE'
+        ? ['Open-work and coverage context is incomplete; readiness confidence is reduced.']
+        : []),
     ],
+    saleReadiness: {
+      status: saleReadiness.status,
+      reasonCodes: saleReadiness.reasonCodes,
+      missingFactKeys: saleReadiness.missingFactKeys,
+      contextVersion: planning.contextVersion,
+    },
   };
 }

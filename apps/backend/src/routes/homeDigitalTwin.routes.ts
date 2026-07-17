@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { authenticate } from '../middleware/auth.middleware';
-import { propertyAuthMiddleware } from '../middleware/propertyAuth.middleware';
+import { propertyAuthMiddleware, requireHouseholdRole } from '../middleware/propertyAuth.middleware';
 import { apiRateLimiter } from '../middleware/rateLimiter.middleware';
 import { validateBody } from '../middleware/validate.middleware';
 import {
@@ -59,6 +59,7 @@ router.get(
 router.post(
   '/properties/:propertyId/home-digital-twin/init',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(initTwinBodySchema),
   initTwin,
 );
@@ -75,6 +76,7 @@ router.post(
 router.post(
   '/properties/:propertyId/home-digital-twin/refresh',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   refreshTwin,
 );
 
@@ -166,6 +168,7 @@ router.get(
 router.post(
   '/properties/:propertyId/home-digital-twin/scenarios',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(createScenarioBodySchema),
   createScenario,
 );
@@ -199,6 +202,7 @@ router.get(
 router.patch(
   '/properties/:propertyId/home-digital-twin/scenarios/:scenarioId',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(updateScenarioBodySchema),
   updateScenario,
 );
@@ -215,6 +219,7 @@ router.patch(
 router.post(
   '/properties/:propertyId/home-digital-twin/scenarios/:scenarioId/compute',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   computeScenario,
 );
 

@@ -2,6 +2,7 @@
 import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
 import { createExportAndGeneratePdf, buildShareToken, prepareShareArtifacts } from '../services/homeReportExport.service';
+import { checkReportWorkerContext } from '../services/planningContext/reportSnapshot';
 import { presignGetObject } from '../services/storage/presign';
 import { getS3Client } from '../services/storage/s3Client';
 import { DeleteObjectCommand } from '@aws-sdk/client-s3';
@@ -343,6 +344,24 @@ export async function downloadHomeReportByShareToken(req: Request, res: Response
       return res.status(409).json({
         success: false,
         message: 'Shared report not ready'
+      });
+    }
+
+    // Stale-output reconciliation (feature policy): a shared report whose
+    // generation context no longer matches the property's current context
+    // stops serving. The owner re-shares to publish a fresh artifact.
+    const currentContext = await checkReportWorkerContext(exp.propertyId);
+    if (!exp.contextVersion || currentContext.contextVersion !== exp.contextVersion) {
+      await prisma.homeReportExportEvent.create({
+        data: {
+          reportId: exp.id,
+          type: 'EXPIRED',
+          meta: { by: 'SHARE_LINK', reason: 'CONTEXT_CHANGED_SINCE_GENERATION' },
+        },
+      });
+      return res.status(410).json({
+        success: false,
+        message: 'This shared report is out of date. Ask the owner to share a fresh report.',
       });
     }
 

@@ -201,6 +201,12 @@ export class MovingConciergeService {
       throw new Error('Moving Concierge is only available for home buyers');
     }
 
+    // Evaluate the authoritative moving-planning decision before generating.
+    const planning = await getPlanningContextEnvelope(propertyId, userId, 'MOVING_PLAN');
+    if (planning.decision.status === 'NOT_APPLICABLE') {
+      throw new Error('Moving planning does not apply to this property context');
+    }
+
     const closingDate = new Date(input.closingDate);
     const today = new Date();
     const daysUntilMove = Math.ceil((closingDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
@@ -231,6 +237,7 @@ export class MovingConciergeService {
       changeOfAddressChecklist: CHANGE_OF_ADDRESS_CATEGORIES,
       aiRecommendations,
       generatedAt: new Date(),
+      context: planning,
     };
   }
 

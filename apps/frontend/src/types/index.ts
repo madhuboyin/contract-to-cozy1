@@ -2818,6 +2818,10 @@ export interface HomeDigitalTwinDTO {
   notes: string | null;
   createdAt: string;
   updatedAt: string;
+  /** Property Context version the projection was computed from. */
+  contextVersion: string | null;
+  /** Current-context decision envelope attached by the twin read API. */
+  context?: import('@/components/property-context/PropertyContextNotice').PropertyContextEnvelope | null;
   components: HomeTwinComponentDTO[];
   dataQuality: HomeTwinDataQualityDTO[];
   recentScenarios: HomeTwinScenarioDTO[];

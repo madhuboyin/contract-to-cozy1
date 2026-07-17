@@ -5,6 +5,7 @@ import { APIError } from '../middleware/error.middleware';
 import { HomeDigitalTwinService } from '../services/homeDigitalTwin.service';
 import { HomeDigitalTwinScenarioService } from '../services/homeDigitalTwinScenario.service';
 import { HomeDigitalTwinRecommendationsService } from '../services/homeDigitalTwinRecommendations.service';
+import { getPlanningContextEnvelope } from '../services/planningContext/context';
 
 const twinService = new HomeDigitalTwinService();
 const scenarioService = new HomeDigitalTwinScenarioService();
@@ -22,7 +23,19 @@ export async function getTwin(
   try {
     const { propertyId } = req.params;
     const twin = await twinService.getTwin(propertyId);
-    res.json({ success: true, data: { twin } });
+
+    // Projection staleness: compare the context version the twin was computed
+    // from with the property's current DIGITAL_TWIN context.
+    const context = req.user?.userId
+      ? await getPlanningContextEnvelope(
+          propertyId,
+          req.user.userId,
+          'DIGITAL_TWIN',
+          (twin as { contextVersion?: string | null } | null)?.contextVersion ?? null,
+        )
+      : null;
+
+    res.json({ success: true, data: { twin, context } });
   } catch (err) {
     next(err);
   }

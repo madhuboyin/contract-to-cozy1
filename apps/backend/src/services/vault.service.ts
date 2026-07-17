@@ -183,6 +183,30 @@ async function loadVaultData(propertyId: string): Promise<VaultData> {
   };
 }
 
+/**
+ * Redaction applied to every password/share-token vault access (Property
+ * Context §18: shared surfaces expose a redacted projection).
+ *
+ * The vault is a deliberate owner-configured emergency-access channel, so the
+ * recipient keeps operational facts (address they are standing at, appliance
+ * identity, service history). What they never receive: serial numbers (theft
+ * and warranty-fraud value) and service pricing (financial detail). The
+ * owner's authenticated views are unaffected.
+ */
+export function redactVaultDataForSharedAccess(data: VaultData): VaultData {
+  return {
+    ...data,
+    verifiedAssets: data.verifiedAssets.map((asset) => ({
+      ...asset,
+      serialNumber: null,
+    })),
+    serviceTimeline: data.serviceTimeline.map((entry) => ({
+      ...entry,
+      finalPrice: null,
+    })),
+  };
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Service
 // ─────────────────────────────────────────────────────────────────────────────
@@ -293,7 +317,7 @@ export async function getVaultData(propertyId: string, password: string): Promis
     throw new APIError('Invalid vault password', 401, 'INVALID_VAULT_PASSWORD');
   }
 
-  return loadVaultData(propertyId);
+  return redactVaultDataForSharedAccess(await loadVaultData(propertyId));
 }
 
 export async function getVaultDataWithShareToken(
@@ -318,5 +342,5 @@ export async function getVaultDataWithShareToken(
     throw new APIError('Vault share link has expired', 401, 'EXPIRED_VAULT_SHARE_TOKEN');
   }
 
-  return loadVaultData(propertyId);
+  return redactVaultDataForSharedAccess(await loadVaultData(propertyId));
 }

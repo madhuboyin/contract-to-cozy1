@@ -1,10 +1,75 @@
 # Property Context Phase 6 Completion Audit
 
-Date: 2026-07-17
+Date: 2026-07-17 (revised after independent review remediation)
 
 Scope: Seller Prep, Home Buyer workflows, Moving Plan, Neighborhood Change
 Radar, Community/Local Updates, Home Digital Will, Home Digital Twin, Home
 Timeline, Reports, and Document/Vault sharing (FRD §21.8).
+
+## Remediation history
+
+The initial Phase 6 implementation was independently reviewed and nine
+findings were raised (six confirmed as stated, two partially valid, one
+overstated — see conversation record for the full triage). All confirmed and
+partially-valid findings were remediated in a second pass and are folded into
+this document. The findings and fixes:
+
+1. **Local Updates received no location/dwelling context.**
+   `propertyAuthMiddleware` only attaches `{ id }` to `req.property`, so the
+   controller's `city`/`state`/`zipCode`/`dwellingType` reads had always been
+   `undefined` — the targeting query's `OR: []` matched nothing. Fixed: the
+   controller now loads the property's canonical facts directly and evaluates
+   `localUpdatesTargeting` before querying. This was pre-existing and made the
+   feature functionally dead; Phase 6 inherited rather than caused it, but it
+   is in scope and now fixed.
+2. **VIEWER role could perform Phase 6 mutations.** No minimum-role check
+   existed on Vault password/share-link creation, Digital Will creation, or
+   Digital Twin init/refresh/scenario mutations. Added
+   `requireHouseholdRole(minimumRole)` middleware (CONTRIBUTOR floor for twin
+   and will mutations, OWNER floor for vault password and share-link
+   creation); scenario reads remain open to VIEWER.
+3. **Four policy decisions were defined but never evaluated.**
+   `movingPlanning` is now asserted in `generateMovingPlan` before generation;
+   `saleReadiness` is attached to the seller readiness report; `sharedReportProjection`
+   is evaluated in `prepareShareArtifacts` before a share is created;
+   `localUpdatesTargeting` gates the Local Updates response (see #1).
+4. **Neighborhood impacts were owned by event, not by property-event link.**
+   `NeighborhoodImpact`/`DemographicImpact` were keyed by `eventId` alone and
+   deleted/recreated per property inside the matching loop — the last matched
+   property's impacts silently overwrote every other property's. Fixed with a
+   schema change: both models now carry `propertyNeighborhoodEventId` (cascade
+   delete), and `PropertyNeighborhoodEvent` has `@@unique([propertyId, eventId])`.
+   The match loop upserts via that key, deletes/recreates only the link's own
+   impacts, and removes links that are no longer geographically eligible on
+   rerun. The radar query service reads link-owned impacts with a fallback to
+   legacy event-owned rows for pre-existing data.
+5. **Shared reports never expired when context changed.** A redacted share
+   link remained downloadable indefinitely regardless of property changes.
+   Fixed: the share-token download route now rechecks the current REPORTS
+   context version against the version stored at generation and returns 410
+   (with an `EXPIRED` event logged) when they differ or no version was
+   recorded, rather than serving a stale artifact.
+6. **Vault password/token access returned the unredacted payload.** The vault
+   is a deliberate owner-configured emergency-access channel (not a public
+   report), so full operational detail — address, item identity, service
+   history — is appropriate for its recipients. Serial numbers and service
+   pricing are not: `redactVaultDataForSharedAccess` strips both from every
+   password- and token-authenticated response; owner-authenticated views are
+   unaffected.
+7. **Digital Twin staleness was computed but never surfaced.** The backend
+   serialized `contextVersion` but no endpoint attached a decision envelope,
+   and the frontend DTO didn't carry the field. Fixed: `getTwin` now attaches
+   a `DIGITAL_TWIN` envelope (current vs. generated context version), the
+   frontend `HomeDigitalTwinDTO` gained `contextVersion`/`context`, and the
+   twin client renders `PropertyContextNotice`.
+8. **Report-generation policy on UNKNOWN and reconciliation scope** were
+   reviewed and found to be working as designed: UNKNOWN correctly does not
+   block report generation (FRD principle 5 — unknown is a recorded state, not
+   suppression), and owner-facing `REVIEW_REQUIRED` reconciliation matches the
+   Phase 3/5 precedent. The one real gap in this area was the unbounded shared
+   artifact, covered by #5.
+9. **Behavioral test coverage** was added for every fix above — see the
+   remediation exit gate below — rather than left as a follow-up.
 
 ## Architecture
 
@@ -71,6 +136,11 @@ Phase 6 follows the established family-module pattern:
   `shareStorageBucket String?`, `shareStorageKey String? @unique`
 - `HomeReportExportEventType.SHARE_ARTIFACTS_PREPARED`
 - `LocalUpdate.dwellingTypes DwellingType[]` (replaces `propertyTypes`)
+- `PropertyNeighborhoodEvent.@@unique([propertyId, eventId])` (remediation #4)
+- `NeighborhoodImpact.propertyNeighborhoodEventId String?` + cascade relation
+  (remediation #4)
+- `DemographicImpact.propertyNeighborhoodEventId String?` + cascade relation
+  (remediation #4)
 
 ## Workers
 
@@ -94,14 +164,37 @@ Phase 6 follows the established family-module pattern:
   artifact and fails closed, and verifies single-builder parity.
 - `phase6PlanningContextPolicy.test.js` covers applicable/not-applicable/
   unknown behavior for every Phase 6 decision, plus reconciliation.
-- Full regression: 153/153 property-context tests pass; backend, workers, and
-  frontend type-check clean.
+- `phase6RemediationExitGate.test.js` covers the nine remediation items
+  behaviorally where the module boundary allows (vault redaction is invoked
+  and asserted against a fixture; the role-floor middleware is invoked with
+  VIEWER/CONTRIBUTOR/OWNER and asserted to allow/block) and via source
+  verification for route/service wiring that requires the full Express app to
+  exercise end-to-end (role floors present on every mutation route; policy
+  decisions evaluated in each generation path; share downloads recheck context
+  version; neighborhood impacts are link-scoped with no cross-property
+  deletion).
+- Full regression: 166/166 property-context tests pass; Prisma schema
+  validates; backend, workers, and frontend type-check clean.
 
 ## Frontend
 
 - Seller Prep page and Home Digital Will client render `PropertyContextNotice`
   with the Phase 6 envelopes; Moving Plan API returns the envelope for its
-  client; twin serializes `contextVersion` for staleness display.
+  client; Digital Twin client renders `PropertyContextNotice` from the new
+  `context` field on `HomeDigitalTwinDTO`.
+
+## Known residual gaps (not blocking, tracked for a later pass)
+
+- End-to-end (supertest/integration) coverage of the role-floor and
+  redaction routes through the real Express app was not added — the
+  remediation suite verifies the invoked units and the route source directly.
+- The legacy-fallback path in `neighborhoodRadarQueryService` (reading
+  event-owned impact rows for links created before this remediation) has no
+  dedicated test; it will stop mattering once existing data is backfilled or
+  ages out.
+- Full archetype-matrix behavioral tests (condo/rental/vacant end-to-end
+  through Phase 6 surfaces) remain future work, consistent with the same gap
+  noted for earlier phases.
 
 No database migration scripts are included. Schema changes must be applied by
 the repository owner (`npx prisma db push`), followed by the workers
