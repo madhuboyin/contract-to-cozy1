@@ -215,7 +215,6 @@ function buildAssetGuidanceHref(
     return buildGuidanceOverviewHref({
         propertyId,
         inventoryItemId: asset.inventoryItemId ?? null,
-        homeAssetId: asset.homeAssetId ?? null,
         assetName: asset.assetName,
         issueType: options?.issueType ?? seededEntry?.issueType ?? null,
         customIssueLabel:
@@ -247,9 +246,7 @@ function normalizeMatchId(value: string | null | undefined): string | null {
 
 function scoreStableScopeMatch(item: AssetRiskDetail, action: GuidanceActionModel): number {
     const itemInventoryId = normalizeMatchId(item.inventoryItemId);
-    const itemHomeAssetId = normalizeMatchId(item.homeAssetId);
     const actionInventoryId = normalizeMatchId(action.journey.inventoryItemId);
-    const actionHomeAssetId = normalizeMatchId(action.journey.homeAssetId);
 
     let score = 0;
 
@@ -258,14 +255,6 @@ function scoreStableScopeMatch(item: AssetRiskDetail, action: GuidanceActionMode
             score += 120;
         } else if (actionInventoryId) {
             score -= 80;
-        }
-    }
-
-    if (itemHomeAssetId) {
-        if (actionHomeAssetId === itemHomeAssetId) {
-            score += 80;
-        } else if (actionHomeAssetId) {
-            score -= 60;
         }
     }
 
@@ -312,7 +301,7 @@ function scoreGuidanceActionForAsset(item: AssetRiskDetail, action: GuidanceActi
         if (actionTokens.has(token)) tokenOverlap += 1;
     }
 
-    const hasScopedJourney = Boolean(action.journey.inventoryItemId || action.journey.homeAssetId);
+    const hasScopedJourney = Boolean(action.journey.inventoryItemId);
     const pastLifeBoost =
         item.age > item.expectedLife && family.includes('lifecycle') ? 4 : 0;
 
@@ -560,7 +549,7 @@ function saveSnoozed(map: Map<string, Date>): void {
 }
 
 function snoozeItemKey(item: AssetRiskDetail): string {
-    return item.inventoryItemId ?? item.homeAssetId ?? `${item.systemType}:${item.assetName}`;
+    return item.inventoryItemId ?? `${item.systemType}:${item.assetName}`;
 }
 
 function getActionStatus(
@@ -584,11 +573,11 @@ const SNOOZE_OPTIONS = [
 // --- Component for Phase 3.2: Detailed Asset Matrix Table ---
 const AssetMatrixTable = ({ 
     details, 
-    tasksByHomeAssetId,
+    tasksByInventoryItemId,
     tasksBySystemType,
     bookingsByInventoryItemId,
     bookingsByInsightFactor,
-    warrantiesByHomeAssetId,
+    warrantiesByInventoryItemId,
     warrantiesBySystemType,
     propertyId,
     onScheduleInspection, 
@@ -596,11 +585,11 @@ const AssetMatrixTable = ({
     onViewBooking,
 }: { 
     details: AssetRiskDetail[];
-    tasksByHomeAssetId: Map<string, PropertyMaintenanceTask>;
+    tasksByInventoryItemId: Map<string, PropertyMaintenanceTask>;
     tasksBySystemType: Map<string, PropertyMaintenanceTask>;
     bookingsByInventoryItemId: Map<string, any>;
     bookingsByInsightFactor: Map<string, any>;
-    warrantiesByHomeAssetId: Map<string, any>;
+    warrantiesByInventoryItemId: Map<string, any>;
     warrantiesBySystemType: Map<string, any>;
     propertyId: string;
     onScheduleInspection: (asset: AssetRiskDetail) => void;
@@ -679,13 +668,13 @@ const AssetMatrixTable = ({
                 : undefined) ?? bookingsByInsightFactor.get(insightFactor);
         const hasBooking = !!existingBooking;
         const existingTask =
-            (item.homeAssetId
-                ? tasksByHomeAssetId.get(item.homeAssetId)
+            (item.inventoryItemId
+                ? tasksByInventoryItemId.get(item.inventoryItemId)
                 : undefined) ?? tasksBySystemType.get(item.systemType);
         const hasTask = !!existingTask;
         const existingWarranty =
-            (item.homeAssetId
-                ? warrantiesByHomeAssetId.get(item.homeAssetId)
+            (item.inventoryItemId
+                ? warrantiesByInventoryItemId.get(item.inventoryItemId)
                 : undefined) ?? warrantiesBySystemType.get(item.systemType);
         const hasWarranty = !!existingWarranty;
         const isPastLife = item.age > item.expectedLife;
@@ -988,7 +977,6 @@ const AssetMatrixTable = ({
                         const data = getAssetRowData(item);
                         const rowKey =
                             item.inventoryItemId ??
-                            item.homeAssetId ??
                             `${item.systemType}-${item.assetName}-${index}`;
                         const itemKey = snoozeItemKey(item);
                         const isSnoozed = snoozedItems.has(itemKey);
@@ -1129,7 +1117,6 @@ const AssetMatrixTable = ({
                                 const data = getAssetRowData(item);
                                 const rowKey =
                                     item.inventoryItemId ??
-                                    item.homeAssetId ??
                                     `${item.systemType}-${item.assetName}-${index}`;
                                 const itemKey = snoozeItemKey(item);
                                 const isSnoozed = snoozedItems.has(itemKey);
@@ -1373,14 +1360,14 @@ export default function RiskAssessmentPage() {
 
     // 🔑 Create lookup map: systemType -> task
     const tasksBySystemType = new Map<string, PropertyMaintenanceTask>();
-    const tasksByHomeAssetId = new Map<string, PropertyMaintenanceTask>();
+    const tasksByInventoryItemId = new Map<string, PropertyMaintenanceTask>();
     if (Array.isArray(maintenanceTasks)) {
         maintenanceTasks.forEach(task => {
             if (task.assetType) {
                 tasksBySystemType.set(task.assetType, task);
             }
-            if (task.homeAssetId) {
-                tasksByHomeAssetId.set(task.homeAssetId, task);
+            if (task.inventoryItemId) {
+                tasksByInventoryItemId.set(task.inventoryItemId, task);
             }
         });
     }
@@ -1399,7 +1386,7 @@ export default function RiskAssessmentPage() {
         });
     }
 
-    const warrantiesByHomeAssetId = new Map<string, any>();
+    const warrantiesByInventoryItemId = new Map<string, any>();
     // 🔑 NEW: Create lookup map: systemType -> warranty (for badge display)
     const warrantiesBySystemType = new Map<string, any>();
     if (Array.isArray(activeWarranties)) {
@@ -1408,10 +1395,8 @@ export default function RiskAssessmentPage() {
                 warrantiesBySystemType.set(systemType, warranty);
             });
             
-            // If warranty is linked to specific asset, add that too
-            if (warranty.linkedAssetId && warranty.linkedAsset?.assetType) {
-                warrantiesBySystemType.set(warranty.linkedAsset.assetType, warranty);
-                warrantiesByHomeAssetId.set(warranty.linkedAssetId, warranty);
+            if (warranty.inventoryItemId) {
+                warrantiesByInventoryItemId.set(warranty.inventoryItemId, warranty);
             }
         });
     }
@@ -1730,11 +1715,11 @@ export default function RiskAssessmentPage() {
 
                     <AssetMatrixTable
                         details={report.details}
-                        tasksByHomeAssetId={tasksByHomeAssetId}
+                        tasksByInventoryItemId={tasksByInventoryItemId}
                         tasksBySystemType={tasksBySystemType}
                         bookingsByInventoryItemId={bookingsByInventoryItemId}
                         bookingsByInsightFactor={bookingsByInsightFactor}
-                        warrantiesByHomeAssetId={warrantiesByHomeAssetId}
+                        warrantiesByInventoryItemId={warrantiesByInventoryItemId}
                         warrantiesBySystemType={warrantiesBySystemType}
                         propertyId={propertyId}
                         onScheduleInspection={handleScheduleInspection}
@@ -1755,7 +1740,7 @@ export default function RiskAssessmentPage() {
                                 <div className="divide-y">
                                     {top3HighRisk.map((item, idx) => (
                                         <div
-                                            key={item.inventoryItemId ?? item.homeAssetId ?? `top3-${idx}`}
+                                            key={item.inventoryItemId ?? `top3-${idx}`}
                                             className="flex items-center justify-between py-3 first:pt-0 last:pb-0"
                                         >
                                             <div className="flex items-center gap-3 min-w-0">

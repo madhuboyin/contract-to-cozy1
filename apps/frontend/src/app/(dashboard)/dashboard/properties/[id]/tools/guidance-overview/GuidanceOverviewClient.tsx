@@ -261,7 +261,7 @@ export default function GuidanceOverviewClient() {
         actionCta: null,
         outOfPocketCost: item.replacementCostCents ? item.replacementCostCents / 100 : 0,
         inventoryItemId: item.id,
-        homeAssetId: item.homeAssetId ?? null,
+        homeAssetId: null,
       });
     }
     return deduped;

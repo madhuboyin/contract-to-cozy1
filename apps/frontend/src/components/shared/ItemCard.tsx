@@ -139,7 +139,6 @@ export default function ItemCard({
     router.push(buildGuidanceOverviewHref({
       propertyId: item.propertyId,
       inventoryItemId: item.id,
-      homeAssetId: item.homeAssetId,
       assetName: item.name,
       issueType: 'past_life',
       backTo: currentPathWithQuery,
