@@ -9,6 +9,11 @@ import {
   PROJECT_COMPLIANCE_FEATURES,
   type ProjectComplianceFeature,
 } from '../../../services/projectCompliance/context';
+import {
+  capturePropertyFact,
+  capturePropertyFactInputSchema,
+  listPropertyFactEvidence,
+} from '../application/capturePropertyFact';
 
 export const PHASE_ONE_CONTEXT_SCOPES: PropertyContextScope[] = [
   'CORE',
@@ -77,6 +82,34 @@ export async function getProjectCompliancePropertyContext(req: AuthRequest, res:
     );
     return res.json({ success: true, data: context });
   } catch (error) {
+    return handleContextError(error, res);
+  }
+}
+
+export async function patchPropertyContextFact(req: AuthRequest, res: Response): Promise<Response> {
+  try {
+    const input = capturePropertyFactInputSchema.parse(req.body);
+    const data = await capturePropertyFact(req.params.id, req.user!.userId, req.params.factKey, input);
+    return res.json({ success: true, data });
+  } catch (error) {
+    if (error instanceof Error && (/not writable|not supported|allowlisted/.test(error.message))) {
+      return res.status(400).json({ success: false, message: error.message });
+    }
+    if (error instanceof Error && error.name === 'ZodError') {
+      return res.status(400).json({ success: false, message: 'Invalid fact value' });
+    }
+    return handleContextError(error, res);
+  }
+}
+
+export async function getPropertyContextFactEvidence(req: AuthRequest, res: Response): Promise<Response> {
+  try {
+    const evidence = await listPropertyFactEvidence(req.params.id, req.user!.userId, req.params.factKey);
+    return res.json({ success: true, data: { evidence } });
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('not allowlisted')) {
+      return res.status(400).json({ success: false, message: error.message });
+    }
     return handleContextError(error, res);
   }
 }

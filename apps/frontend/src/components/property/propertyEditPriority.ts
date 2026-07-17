@@ -47,7 +47,10 @@ export const PROPERTY_PRIORITY_FIELDS: PropertyPriorityField[] = [
   { key: "city", label: "city", tier: "P0", impactWeight: 90, sectionId: "basics", fieldRefId: "field-city", isFilled: (v) => hasText(v.city) },
   { key: "state", label: "state", tier: "P0", impactWeight: 90, sectionId: "basics", fieldRefId: "field-state", isFilled: (v) => hasText(v.state) },
   { key: "zipCode", label: "zip code", tier: "P0", impactWeight: 90, sectionId: "basics", fieldRefId: "field-zipCode", isFilled: (v) => hasText(v.zipCode) },
-  { key: "propertyType", label: "property type", tier: "P0", impactWeight: 84, sectionId: "systems", fieldRefId: "field-propertyType", isFilled: (v) => hasText(v.propertyType) },
+  { key: "dwellingType", label: "dwelling type", tier: "P0", impactWeight: 87, sectionId: "systems", fieldRefId: "field-dwellingType", isFilled: (v) => hasText(v.dwellingType) && v.dwellingType !== "UNKNOWN" },
+  { key: "ownershipForm", label: "ownership form", tier: "P0", impactWeight: 86, sectionId: "occupancy", fieldRefId: "field-ownershipForm", isFilled: (v) => hasText(v.ownershipForm) && v.ownershipForm !== "UNKNOWN" },
+  { key: "propertyUse", label: "property use", tier: "P0", impactWeight: 85, sectionId: "occupancy", fieldRefId: "field-propertyUse", isFilled: (v) => hasText(v.propertyUse) && v.propertyUse !== "UNKNOWN" },
+  { key: "occupancyStatus", label: "occupancy status", tier: "P0", impactWeight: 84, sectionId: "occupancy", fieldRefId: "field-occupancyStatus", isFilled: (v) => hasText(v.occupancyStatus) && v.occupancyStatus !== "UNKNOWN" },
   { key: "propertySize", label: "approximate size", tier: "P0", impactWeight: 83, sectionId: "systems", fieldRefId: "field-propertySize", isFilled: (v) => hasNumber(v.propertySize) },
   { key: "yearBuilt", label: "year built", tier: "P0", impactWeight: 82, sectionId: "systems", fieldRefId: "field-yearBuilt", isFilled: (v) => hasNonNullNumber(v.yearBuilt) },
 
@@ -68,8 +71,7 @@ export const PROPERTY_PRIORITY_FIELDS: PropertyPriorityField[] = [
   { key: "hasIrrigation", label: "irrigation detail", tier: "P2", impactWeight: 65, sectionId: "safety", isFilled: (v) => v.hasIrrigation !== null && v.hasIrrigation !== undefined },
   { key: "bedrooms", label: "bedrooms", tier: "P2", impactWeight: 55, sectionId: "occupancy", fieldRefId: "field-bedrooms", isFilled: (v) => hasNonNullNumber(v.bedrooms) },
   { key: "bathrooms", label: "bathrooms", tier: "P2", impactWeight: 54, sectionId: "occupancy", fieldRefId: "field-bathrooms", isFilled: (v) => hasNonNullNumber(v.bathrooms) },
-  { key: "occupantsCount", label: "people living here", tier: "P2", impactWeight: 53, sectionId: "occupancy", fieldRefId: "field-occupantsCount", isFilled: (v) => hasNonNullNumber(v.occupantsCount) },
-  { key: "ownershipType", label: "property use", tier: "P2", impactWeight: 52, sectionId: "occupancy", fieldRefId: "field-ownershipType", isFilled: (v) => hasText(v.ownershipType) },
+  { key: "responsibilityParty", label: "maintenance responsibility", tier: "P2", impactWeight: 53, sectionId: "occupancy", fieldRefId: "field-responsibilityParty", isFilled: (v) => hasText(v.responsibilityParty) && v.responsibilityParty !== "UNKNOWN" },
 
   { key: "appliances", label: "appliances", tier: "P3", impactWeight: 20, sectionId: "appliances", isFilled: (v) => hasArrayItems(v.appliances) },
 ];

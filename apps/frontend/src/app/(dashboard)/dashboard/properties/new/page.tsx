@@ -15,6 +15,7 @@ import {
   StatusChip,
 } from '@/components/mobile/dashboard/MobilePrimitives';
 import { AddressAutocomplete } from '@/components/property/AddressAutocomplete';
+import type { OutdoorSpaceType } from '@/types';
 
 const PROPERTY_SETUP_SKIPPED_KEY = 'propertySetupSkipped';
 
@@ -32,11 +33,13 @@ interface PropertyFormData {
   state: string;
   zipCode: string;
   isPrimary: boolean;
-  propertyType: string;
+  dwellingType: string;
+  ownershipForm: string;
+  propertyUse: string;
+  occupancyStatus: string;
   yearBuilt: string;
   propertySize: string;
-  ownershipType: string;
-  occupantsCount: string;
+  responsibilityParty: string;
   heatingType: string;
   coolingType: string;
   waterHeaterType: string;
@@ -50,11 +53,19 @@ interface PropertyFormData {
   hasFireExtinguisher: boolean;
   hasIrrigation: boolean;
   hasDrainageIssues: boolean;
+  hasPrivateOutdoorSpace: boolean;
+  hasLawn: boolean;
+  hasTreesOrShrubs: boolean;
+  hasDriveway: boolean;
   // REMOVED: applianceAges: string; (Managed internally by majorAppliances state)
 }
 
-const PROPERTY_TYPE_OPTIONS = ['SINGLE_FAMILY', 'TOWNHOME', 'CONDO', 'APARTMENT', 'MULTI_UNIT', 'INVESTMENT_PROPERTY'];
-const OWNERSHIP_OPTIONS = ['OWNER_OCCUPIED', 'RENTED_OUT'];
+const DWELLING_OPTIONS = ['DETACHED_SINGLE_FAMILY', 'ATTACHED_SINGLE_FAMILY', 'TOWNHOUSE', 'CONDO_UNIT', 'APARTMENT_UNIT', 'DUPLEX', 'MULTI_FAMILY', 'MANUFACTURED_HOME', 'OTHER', 'UNKNOWN'];
+const OWNERSHIP_FORM_OPTIONS = ['FEE_SIMPLE', 'CONDOMINIUM', 'COOPERATIVE', 'LEASEHOLD', 'OTHER', 'UNKNOWN'];
+const PROPERTY_USE_OPTIONS = ['PRIMARY_RESIDENCE', 'SECOND_HOME', 'LONG_TERM_RENTAL', 'SHORT_TERM_RENTAL', 'VACANT', 'UNDER_RENOVATION', 'FOR_SALE', 'OTHER', 'UNKNOWN'];
+const OCCUPANCY_STATUS_OPTIONS = ['OWNER_OCCUPIED', 'TENANT_OCCUPIED', 'FAMILY_OCCUPIED', 'MIXED', 'VACANT', 'UNKNOWN'];
+const RESPONSIBLE_PARTY_OPTIONS = ['OWNER', 'ASSOCIATION', 'LANDLORD', 'SHARED', 'UNKNOWN'];
+const RESPONSIBILITY_SCOPES = ['ROOF', 'BUILDING_EXTERIOR', 'LANDSCAPING', 'TREES_SHRUBS', 'DRIVEWAY_WALKWAYS', 'DECK_PATIO_BALCONY', 'PLUMBING', 'HVAC', 'COMMON_SAFETY', 'SNOW_ICE', 'PEST_CONTROL', 'SHARED_SYSTEMS'] as const;
 const HEATING_OPTIONS = ['HVAC', 'FURNACE', 'HEAT_PUMP', 'RADIATORS', 'UNKNOWN'];
 const COOLING_OPTIONS = ['CENTRAL_AC', 'WINDOW_AC', 'UNKNOWN'];
 const WATER_HEATER_OPTIONS = ['TANK', 'TANKLESS', 'HEAT_PUMP', 'SOLAR', 'UNKNOWN'];
@@ -97,11 +108,13 @@ export default function NewPropertyPage() {
     state: '',
     zipCode: '',
     isPrimary: false,
-    propertyType: '',
+    dwellingType: '',
+    ownershipForm: '',
+    propertyUse: '',
+    occupancyStatus: '',
     yearBuilt: '',
     propertySize: '',
-    ownershipType: '',
-    occupantsCount: '',
+    responsibilityParty: 'OWNER',
     heatingType: '',
     coolingType: '',
     waterHeaterType: '',
@@ -115,6 +128,10 @@ export default function NewPropertyPage() {
     hasFireExtinguisher: false,
     hasIrrigation: false,
     hasDrainageIssues: false,
+    hasPrivateOutdoorSpace: false,
+    hasLawn: false,
+    hasTreesOrShrubs: false,
+    hasDriveway: false,
     // REMOVED: applianceAges: '',
   });
 
@@ -197,7 +214,10 @@ export default function NewPropertyPage() {
     if (!formData.city.trim()) return 'City is required.';
     if (!formData.state.trim() || formData.state.length !== 2) return 'State must be 2 characters (e.g., NJ).';
     if (!/^\d{5}$/.test(formData.zipCode)) return 'ZIP code must be 5 digits.';
-    if (!formData.propertyType) return 'Property Type is required.';
+    if (!formData.dwellingType) return 'Dwelling type is required.';
+    if (!formData.ownershipForm) return 'Ownership form is required.';
+    if (!formData.propertyUse) return 'Property use is required.';
+    if (!formData.occupancyStatus) return 'Occupancy status is required.';
     if (!/^\d{4}$/.test(formData.yearBuilt)) return 'Year Built must be a 4-digit year.';
 
     // NEW: Validate structured appliance inputs
@@ -238,11 +258,12 @@ export default function NewPropertyPage() {
       zipCode: formData.zipCode.trim(),
       isPrimary: formData.isPrimary,
       
-      propertyType: formData.propertyType || undefined,
+      dwellingType: formData.dwellingType as any,
+      ownershipForm: formData.ownershipForm as any,
+      propertyUse: formData.propertyUse as any,
+      occupancyStatus: formData.occupancyStatus as any,
       yearBuilt: parseInt(formData.yearBuilt) || undefined,
       propertySize: parseInt(formData.propertySize) || undefined,
-      ownershipType: formData.ownershipType || undefined,
-      occupantsCount: parseInt(formData.occupantsCount) || undefined,
       heatingType: formData.heatingType || undefined,
       coolingType: formData.coolingType || undefined,
       waterHeaterType: formData.waterHeaterType || undefined,
@@ -257,6 +278,19 @@ export default function NewPropertyPage() {
       hasFireExtinguisher: formData.hasFireExtinguisher,
       hasIrrigation: formData.hasIrrigation,
       hasDrainageIssues: formData.hasDrainageIssues,
+      exteriorProfile: {
+        hasPrivateOutdoorSpace: formData.hasPrivateOutdoorSpace,
+        outdoorSpaceTypes: formData.hasPrivateOutdoorSpace ? (['PRIVATE_YARD'] as OutdoorSpaceType[]) : [],
+        hasLawn: formData.hasLawn,
+        hasTreesOrShrubs: formData.hasTreesOrShrubs,
+        hasDriveway: formData.hasDriveway,
+        hasIrrigation: formData.hasIrrigation,
+        hasDrainageIssues: formData.hasDrainageIssues,
+      },
+      responsibilities: RESPONSIBILITY_SCOPES.map((scope) => ({
+        scope,
+        party: formData.responsibilityParty as any,
+      })),
 
       // FIXED: Send homeAssets array to backend
       homeAssets: homeAssetsPayload.length > 0 ? homeAssetsPayload : undefined,
@@ -450,11 +484,11 @@ export default function NewPropertyPage() {
           />
         </div>
 
-        <SelectInput 
-          label="Property Type" 
-          name="propertyType" 
-          value={formData.propertyType} 
-          options={PROPERTY_TYPE_OPTIONS}
+        <SelectInput
+          label="Dwelling Type"
+          name="dwellingType"
+          value={formData.dwellingType}
+          options={DWELLING_OPTIONS}
           required
           placeholder="Select property type"
         />
@@ -622,7 +656,10 @@ export default function NewPropertyPage() {
     Boolean(formData.city.trim()),
     Boolean(formData.state.trim()),
     Boolean(formData.zipCode.trim()),
-    Boolean(formData.propertyType),
+    Boolean(formData.dwellingType),
+    Boolean(formData.ownershipForm),
+    Boolean(formData.propertyUse),
+    Boolean(formData.occupancyStatus),
     Boolean(formData.yearBuilt),
   ];
   const completedRequired = requiredProgress.filter(Boolean).length;
@@ -634,8 +671,7 @@ export default function NewPropertyPage() {
     formData.coolingType,
     formData.waterHeaterType,
     formData.roofType,
-    formData.occupantsCount,
-    formData.ownershipType,
+    formData.responsibilityParty,
     formData.hvacInstallYear,
     formData.waterHeaterInstallYear,
     formData.roofReplacementYear,
@@ -761,13 +797,19 @@ export default function NewPropertyPage() {
               </div>
 
               <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50/70 p-3.5">
-                <h3 className="mb-0 text-sm font-semibold text-slate-900">Safety & Usage</h3>
+                <h3 className="mb-0 text-sm font-semibold text-slate-900">Ownership, use & responsibility</h3>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  <SelectInput label="Ownership Status" name="ownershipType" value={formData.ownershipType} options={OWNERSHIP_OPTIONS} />
-                  <div className="space-y-1.5">
-                    <label htmlFor="occupantsCount" className="block text-sm font-medium text-slate-700">Occupants</label>
-                    <input type="number" id="occupantsCount" name="occupantsCount" value={formData.occupantsCount} onChange={handleChange} placeholder="e.g., 4" inputMode="numeric" className={inputBaseClass} />
-                  </div>
+                  <SelectInput label="Ownership Form" name="ownershipForm" value={formData.ownershipForm} options={OWNERSHIP_FORM_OPTIONS} />
+                  <SelectInput label="Property Use" name="propertyUse" value={formData.propertyUse} options={PROPERTY_USE_OPTIONS} />
+                  <SelectInput label="Occupancy Status" name="occupancyStatus" value={formData.occupancyStatus} options={OCCUPANCY_STATUS_OPTIONS} />
+                  <SelectInput label="Who handles property work?" name="responsibilityParty" value={formData.responsibilityParty} options={RESPONSIBLE_PARTY_OPTIONS} />
+                </div>
+
+                <div id="exterior" className="grid grid-cols-1 gap-2.5 border-t border-slate-200 pt-3 sm:grid-cols-2">
+                  <BooleanInput label="Private outdoor space" name="hasPrivateOutdoorSpace" checked={formData.hasPrivateOutdoorSpace} />
+                  <BooleanInput label="Lawn" name="hasLawn" checked={formData.hasLawn} />
+                  <BooleanInput label="Trees or shrubs" name="hasTreesOrShrubs" checked={formData.hasTreesOrShrubs} />
+                  <BooleanInput label="Driveway" name="hasDriveway" checked={formData.hasDriveway} />
                 </div>
 
                 <div className="grid grid-cols-1 gap-2.5 border-t border-slate-200 pt-3 sm:grid-cols-2">

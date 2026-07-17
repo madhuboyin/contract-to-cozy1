@@ -44,6 +44,7 @@ function ProfileQuestionCard({
   question: NonNullable<Awaited<ReturnType<typeof getPersonalization>>['nextQuestion']>;
   onSaved: () => Promise<unknown>;
 }) {
+  const [integerValue, setIntegerValue] = useState('');
   const answer = useMutation({
     mutationFn: ({ action, answerJson }: { action: 'ANSWERED' | 'SKIPPED' | 'SNOOZED'; answerJson?: unknown }) =>
       answerProfileQuestion(propertyId, question.id, action, answerJson),
@@ -59,7 +60,27 @@ function ProfileQuestionCard({
       <div className="space-y-3">
         <p className="text-xs text-[hsl(var(--mobile-text-secondary))]">{question.privacyNote}</p>
         <div className="flex flex-wrap gap-2">
-          {question.answerSchema.type === 'select_with_detail' ? (
+          {question.answerSchema.type === 'integer' ? (
+            <>
+              <input
+                type="number"
+                min={question.answerSchema.min ?? 1}
+                max={question.answerSchema.max ?? 25}
+                value={integerValue}
+                onChange={(event) => setIntegerValue(event.target.value)}
+                aria-label="Household size"
+                className="min-h-[44px] w-28 rounded-xl border px-3 py-2 text-sm"
+              />
+              <button
+                type="button"
+                disabled={!integerValue || answer.isPending}
+                onClick={() => answer.mutate({ action: 'ANSWERED', answerJson: { value: Number(integerValue) } })}
+                className="min-h-[44px] rounded-xl border px-4 py-2 text-sm font-semibold disabled:opacity-50"
+              >
+                Save
+              </button>
+            </>
+          ) : question.answerSchema.type === 'select_with_detail' ? (
             <>
               <button type="button" onClick={() => answer.mutate({ action: 'ANSWERED', answerJson: { hasPet: true, petType: 'DOG' } })} className="min-h-[44px] rounded-xl border px-4 py-2 text-sm font-semibold">Dog</button>
               <button type="button" onClick={() => answer.mutate({ action: 'ANSWERED', answerJson: { hasPet: true, petType: 'CAT' } })} className="min-h-[44px] rounded-xl border px-4 py-2 text-sm font-semibold">Cat</button>

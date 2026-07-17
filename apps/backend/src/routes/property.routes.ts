@@ -17,6 +17,8 @@ import {
   getPropertyContextCompleteness,
   getPropertyContextSnapshot,
   getProjectCompliancePropertyContext,
+  getPropertyContextFactEvidence,
+  patchPropertyContextFact,
 } from '../modules/propertyContext/api/propertyContext.controller';
 
 const router = Router();
@@ -107,6 +109,8 @@ router.get('/:id/resolution-center', authenticate, propertyController.getPropert
 // the provider so API and non-HTTP consumers share the same access boundary.
 router.get('/:id/context/completeness', authenticate, getPropertyContextCompleteness);
 router.get('/:id/context/project-compliance', authenticate, getProjectCompliancePropertyContext);
+router.patch('/:id/context/:factKey', authenticate, patchPropertyContextFact);
+router.get('/:id/context/:factKey/evidence', authenticate, getPropertyContextFactEvidence);
 router.get('/:id/context', authenticate, getPropertyContextSnapshot);
 
 /**

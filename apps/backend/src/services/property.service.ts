@@ -1,6 +1,6 @@
 // apps/backend/src/services/property.service.ts
 
-import { Property, PropertyType, OwnershipType, DwellingType, OwnershipForm, PropertyUse, OccupancyStatus, OutdoorSpaceType, HeatingType, CoolingType, WaterHeaterType, RoofType, FoundationType, Prisma, ChecklistItem, Warranty, DocumentType } from '@prisma/client';
+import { Property, PropertyType, OwnershipType, DwellingType, OwnershipForm, PropertyUse, OccupancyStatus, OutdoorSpaceType, HeatingType, CoolingType, WaterHeaterType, RoofType, FoundationType, Prisma, ChecklistItem, Warranty, DocumentType, PropertyResponsibilityScope, ResponsibleParty } from '@prisma/client';
 import { calculateHealthScore, HealthScoreResult } from '../utils/propertyScore.util'; 
 import JobQueueService from './JobQueue.service';
 import type { HomeAssetDTO } from './propertyApplianceInventory.service';
@@ -52,7 +52,6 @@ interface CreatePropertyData {
   bedrooms?: number | null;
   bathrooms?: number | null;
   ownershipType?: OwnershipType | null;
-  occupantsCount?: number | null;
   heatingType?: HeatingType | null;
   coolingType?: CoolingType | null;
   waterHeaterType?: WaterHeaterType | null;
@@ -94,12 +93,75 @@ interface CreatePropertyData {
     hasOutdoorFaucets?: boolean | null;
     hasDrainageIssues?: boolean | null;
   };
+  responsibilities?: Array<{
+    scope: PropertyResponsibilityScope;
+    party: ResponsibleParty;
+    notes?: string | null;
+  }>;
   
   homeAssets?: HomeAssetInput[];
 }
 
 interface UpdatePropertyData extends Partial<CreatePropertyData> {
 
+}
+
+const responsibilityFactKeyByScope: Record<PropertyResponsibilityScope, string> = {
+  ROOF: 'responsibility.roof',
+  BUILDING_EXTERIOR: 'responsibility.buildingExterior',
+  LANDSCAPING: 'responsibility.landscaping',
+  TREES_SHRUBS: 'responsibility.treesShrubs',
+  DRIVEWAY_WALKWAYS: 'responsibility.drivewayWalkways',
+  DECK_PATIO_BALCONY: 'responsibility.deckPatioBalcony',
+  PLUMBING: 'responsibility.plumbing',
+  HVAC: 'responsibility.hvac',
+  COMMON_SAFETY: 'responsibility.commonSafety',
+  SNOW_ICE: 'responsibility.snowIce',
+  PEST_CONTROL: 'responsibility.pestControl',
+  SHARED_SYSTEMS: 'responsibility.sharedSystems',
+};
+
+function capturedFactKeys(data: CreatePropertyData | UpdatePropertyData): string[] {
+  const direct: Array<[keyof CreatePropertyData, string]> = [
+    ['dwellingType', 'core.dwellingType'], ['ownershipForm', 'core.ownershipForm'],
+    ['propertyUse', 'core.propertyUse'], ['occupancyStatus', 'core.occupancyStatus'],
+    ['isPrimary', 'core.isPrimary'], ['yearBuilt', 'core.yearBuilt'],
+    ['propertySize', 'core.propertySizeSqFt'], ['bedrooms', 'core.bedrooms'],
+    ['bathrooms', 'core.bathrooms'], ['city', 'location.city'], ['state', 'location.state'],
+    ['zipCode', 'location.zipCode'], ['roofType', 'structure.roofType'],
+    ['roofReplacementYear', 'structure.roofReplacementYear'], ['foundationType', 'structure.foundationType'],
+    ['sidingType', 'structure.sidingType'], ['electricalPanelAge', 'structure.electricalPanelAgeYears'],
+    ['heatingType', 'systems.heatingType'], ['coolingType', 'systems.coolingType'],
+    ['waterHeaterType', 'systems.waterHeaterType'], ['hasSmokeDetectors', 'safety.hasSmokeDetectors'],
+    ['hasCoDetectors', 'safety.hasCoDetectors'], ['hasSecuritySystem', 'safety.hasSecuritySystem'],
+    ['hasFireExtinguisher', 'safety.hasFireExtinguisher'], ['hasSumpPumpBackup', 'safety.hasSumpPumpBackup'],
+  ];
+  const result = direct.filter(([field]) => data[field] !== undefined).map(([, factKey]) => factKey);
+  const exteriorKeyByField: Record<string, string> = {
+    hasPrivateOutdoorSpace: 'exterior.hasPrivateOutdoorSpace', outdoorSpaceTypes: 'exterior.outdoorSpaceTypes',
+    lotSizeSqFt: 'exterior.lotSizeSqFt', hasLawn: 'exterior.hasLawn', hasTreesOrShrubs: 'exterior.hasTreesOrShrubs',
+    hasDriveway: 'exterior.hasDriveway', hasFence: 'exterior.hasFence', hasPoolOrSpa: 'exterior.hasPoolOrSpa',
+    hasIrrigation: 'exterior.hasIrrigation', hasOutdoorFaucets: 'exterior.hasOutdoorFaucets',
+    hasDrainageIssues: 'exterior.hasDrainageIssues',
+  };
+  for (const field of Object.keys(data.exteriorProfile ?? {})) {
+    if (exteriorKeyByField[field]) result.push(exteriorKeyByField[field]);
+  }
+  for (const responsibility of data.responsibilities ?? []) result.push(responsibilityFactKeyByScope[responsibility.scope]);
+  return [...new Set(result)];
+}
+
+function evidenceCreateData(propertyId: string, userId: string, factKeys: string[], observedAt: Date) {
+  return factKeys.map((factKey) => ({
+    propertyId,
+    factKey,
+    sourceType: 'USER_REPORTED' as const,
+    sourceEntityType: 'PROPERTY_PROFILE',
+    sourceEntityId: userId,
+    confidence: 0.9,
+    observedAt,
+    verifiedAt: observedAt,
+  }));
 }
 
 interface InventoryItemForAI {
@@ -408,7 +470,7 @@ export async function getUserProperties(userId: string): Promise<ScoredProperty[
   const ownedProperties = await prisma.property.findMany({
     where: { homeownerProfileId },
     orderBy: [{ isPrimary: 'desc' }, { createdAt: 'desc' }],
-    include: { homeownerProfile: true, warranties: true, coverPhoto: true, financingProfile: true },
+    include: { homeownerProfile: true, warranties: true, coverPhoto: true, financingProfile: true, exteriorProfile: true, responsibilities: true },
   });
 
   const hydrated = await Promise.all(ownedProperties.map(hydrateHomeAssetsFromInventory));
@@ -421,7 +483,7 @@ export async function getUserProperties(userId: string): Promise<ScoredProperty[
       property: { homeownerProfileId: { not: homeownerProfileId } },
     },
     include: {
-      property: { include: { warranties: true, coverPhoto: true, financingProfile: true } },
+      property: { include: { warranties: true, coverPhoto: true, financingProfile: true, exteriorProfile: true, responsibilities: true } },
     },
   });
 
@@ -467,6 +529,7 @@ export async function createProperty(userId: string, data: CreatePropertyData): 
     });
   }
 
+  const capturedAt = new Date();
   const property = await prisma.property.create({
     data: {
       homeownerProfileId,
@@ -488,7 +551,6 @@ export async function createProperty(userId: string, data: CreatePropertyData): 
       bedrooms: data.bedrooms || null,
       bathrooms: data.bathrooms || null,
       ownershipType: data.ownershipType || null,
-      occupantsCount: data.occupantsCount || null,
       heatingType: data.heatingType || null,
       coolingType: data.coolingType || null,
       waterHeaterType: data.waterHeaterType || null,
@@ -520,6 +582,20 @@ export async function createProperty(userId: string, data: CreatePropertyData): 
           data.purchaseDate !== null &&
           data.purchaseDate !== undefined),
       exteriorProfile: data.exteriorProfile ? { create: data.exteriorProfile } : undefined,
+      responsibilities: data.responsibilities?.length ? {
+        create: data.responsibilities.map((entry) => ({ scope: entry.scope, party: entry.party, notes: entry.notes ?? null })),
+      } : undefined,
+      propertyFactEvidence: {
+        create: capturedFactKeys(data).map((factKey) => ({
+          factKey,
+          sourceType: 'USER_REPORTED',
+          sourceEntityType: 'PROPERTY_PROFILE',
+          sourceEntityId: userId,
+          confidence: 0.9,
+          observedAt: capturedAt,
+          verifiedAt: capturedAt,
+        })),
+      },
       // END PHASE 2 ADDITIONS
     },
   });
@@ -595,6 +671,8 @@ export async function createProperty(userId: string, data: CreatePropertyData): 
           warranties: true,
           coverPhoto: true,
           financingProfile: true,
+          exteriorProfile: true,
+          responsibilities: true,
       }
   });
 
@@ -613,7 +691,7 @@ export async function getPropertyById(propertyId: string, userId: string): Promi
   // Primary path: user owns the property
   let property = await prisma.property.findFirst({
     where: { id: propertyId, homeownerProfileId },
-    include: { warranties: true, coverPhoto: true, financingProfile: true },
+    include: { warranties: true, coverPhoto: true, financingProfile: true, exteriorProfile: true, responsibilities: true },
   });
 
   let householdRole: string | null = null;
@@ -622,7 +700,7 @@ export async function getPropertyById(propertyId: string, userId: string): Promi
     // Fallback: user is a household member of this property
     const membership = await prisma.householdMember.findUnique({
       where: { propertyId_userId: { propertyId, userId } },
-      include: { property: { include: { warranties: true, coverPhoto: true, financingProfile: true } } },
+      include: { property: { include: { warranties: true, coverPhoto: true, financingProfile: true, exteriorProfile: true, responsibilities: true } } },
     });
     if (!membership) return null;
     property = membership.property as any;
@@ -1115,7 +1193,7 @@ export async function updateProperty(
   
 
   // Use a proper type for updatePayload for better type checking
-  const updatePayload: Partial<Omit<CreatePropertyData, 'address' | 'city' | 'state' | 'zipCode' | 'homeAssets' | 'exteriorProfile'>> & {
+  const updatePayload: Partial<Omit<CreatePropertyData, 'address' | 'city' | 'state' | 'zipCode' | 'homeAssets' | 'exteriorProfile' | 'responsibilities'>> & {
     name?: string | null;
     address?: string;
     city?: string;
@@ -1144,7 +1222,6 @@ export async function updateProperty(
   if (data.bedrooms !== undefined) updatePayload.bedrooms = data.bedrooms || null;
   if (data.bathrooms !== undefined) updatePayload.bathrooms = data.bathrooms || null;
   if (data.ownershipType !== undefined) updatePayload.ownershipType = data.ownershipType || null;
-  if (data.occupantsCount !== undefined) updatePayload.occupantsCount = data.occupantsCount || null;
   if (data.heatingType !== undefined) updatePayload.heatingType = data.heatingType || null;
   if (data.coolingType !== undefined) updatePayload.coolingType = data.coolingType || null;
   if (data.waterHeaterType !== undefined) updatePayload.waterHeaterType = data.waterHeaterType || null;
@@ -1203,9 +1280,33 @@ export async function updateProperty(
       },
     } : {}),
   };
-  const property = await prisma.property.update({
-    where: { id: propertyId },
-    data: propertyUpdateData,
+  const factKeys = capturedFactKeys(data);
+  const capturedAt = new Date();
+  const property = await prisma.$transaction(async (tx) => {
+    const updated = await tx.property.update({
+      where: { id: propertyId },
+      data: propertyUpdateData,
+    });
+
+    for (const entry of data.responsibilities ?? []) {
+      await tx.propertyResponsibility.upsert({
+        where: { propertyId_scope: { propertyId, scope: entry.scope } },
+        create: { propertyId, scope: entry.scope, party: entry.party, notes: entry.notes ?? null },
+        update: { party: entry.party, notes: entry.notes ?? null },
+      });
+    }
+
+    if (factKeys.length > 0) {
+      await tx.propertyFactEvidence.updateMany({
+        where: { propertyId, factKey: { in: factKeys }, supersededAt: null },
+        data: { supersededAt: capturedAt },
+      });
+      await tx.propertyFactEvidence.createMany({
+        data: evidenceCreateData(propertyId, userId, factKeys, capturedAt),
+      });
+    }
+
+    return updated;
   });
 
   if (data.purchasePriceCents !== undefined || data.purchaseDate !== undefined) {
@@ -1271,6 +1372,8 @@ export async function updateProperty(
           warranties: true,
           coverPhoto: true,
           financingProfile: true,
+          exteriorProfile: true,
+          responsibilities: true,
       }
   });
 

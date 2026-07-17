@@ -219,6 +219,17 @@ export type PropertyUse =
   | 'VACANT' | 'UNDER_RENOVATION' | 'FOR_SALE' | 'OTHER' | 'UNKNOWN';
 export type OccupancyStatus = 'OWNER_OCCUPIED' | 'TENANT_OCCUPIED' | 'FAMILY_OCCUPIED' | 'MIXED' | 'VACANT' | 'UNKNOWN';
 export type OutdoorSpaceType = 'PRIVATE_YARD' | 'BALCONY' | 'PATIO' | 'DECK' | 'GARDEN_BED' | 'SHARED_YARD' | 'ROOFTOP';
+export type PropertyResponsibilityScope =
+  | 'ROOF' | 'BUILDING_EXTERIOR' | 'LANDSCAPING' | 'TREES_SHRUBS'
+  | 'DRIVEWAY_WALKWAYS' | 'DECK_PATIO_BALCONY' | 'PLUMBING' | 'HVAC'
+  | 'COMMON_SAFETY' | 'SNOW_ICE' | 'PEST_CONTROL' | 'SHARED_SYSTEMS';
+export type ResponsibleParty = 'OWNER' | 'ASSOCIATION' | 'LANDLORD' | 'SHARED' | 'UNKNOWN';
+
+export interface PropertyResponsibilityInput {
+  scope: PropertyResponsibilityScope;
+  party: ResponsibleParty;
+  notes?: string | null;
+}
 
 export interface PropertyExteriorProfile {
   hasPrivateOutdoorSpace?: boolean | null;

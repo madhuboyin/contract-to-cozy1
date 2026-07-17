@@ -37,7 +37,7 @@ export interface PersonalizationResponse {
     prompt: string;
     whyAsked: string;
     privacyNote: string;
-    answerSchema: { type?: string };
+    answerSchema: { type?: string; min?: number; max?: number };
   } | null;
 }
 

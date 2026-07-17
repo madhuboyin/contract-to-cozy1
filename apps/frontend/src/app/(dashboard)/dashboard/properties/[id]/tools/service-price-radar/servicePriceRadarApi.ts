@@ -263,9 +263,13 @@ export async function getOrCreateQuoteComparisonWorkspace(
     guidanceSignalIntentFamily?: string | null;
   }
 ): Promise<{ workspace: QuoteComparisonWorkspaceSummary; reused: boolean }> {
+  const { homeAssetId, ...canonicalInput } = input;
   const res = await api.post<{
     workspace: QuoteComparisonWorkspaceSummary;
     reused: boolean;
-  }>(`/api/properties/${propertyId}/quote-comparison/workspaces`, input);
+  }>(`/api/properties/${propertyId}/quote-comparison/workspaces`, {
+    ...canonicalInput,
+    inventoryItemId: input.inventoryItemId ?? homeAssetId,
+  });
   return { workspace: res.data.workspace, reused: res.data.reused };
 }

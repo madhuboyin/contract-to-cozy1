@@ -51,3 +51,36 @@ export const securityMfaFailuresTotal = new Counter({
   labelNames: ['stage', 'reason'] as const,
   registers: [register],
 });
+
+// ─── Property Context metrics ───────────────────────────────────────────────
+// Labels are bounded catalog identifiers only. Never attach property IDs,
+// addresses, users, or fact values to these metrics.
+
+export const propertyContextReadsTotal = new Counter({
+  name: 'property_context_reads_total',
+  help: 'Property Context scope reads by outcome',
+  labelNames: ['scope', 'outcome'] as const,
+  registers: [register],
+});
+
+export const propertyContextReadDurationSeconds = new Histogram({
+  name: 'property_context_read_duration_seconds',
+  help: 'Property Context read latency by requested scope',
+  labelNames: ['scope'] as const,
+  buckets: [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5],
+  registers: [register],
+});
+
+export const propertyContextFactStatesTotal = new Counter({
+  name: 'property_context_fact_states_total',
+  help: 'Facts returned by catalog key and typed state',
+  labelNames: ['scope', 'fact_key', 'state'] as const,
+  registers: [register],
+});
+
+export const propertyContextCapturesTotal = new Counter({
+  name: 'property_context_captures_total',
+  help: 'Canonical contextual fact captures by catalog key and outcome',
+  labelNames: ['scope', 'fact_key', 'outcome'] as const,
+  registers: [register],
+});

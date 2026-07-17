@@ -10,8 +10,6 @@ import * as z from "zod";
 import { Loader2, Save, X, Home as HomeIcon, AlertCircle, Trash2, Plus, ChevronDown } from "lucide-react";
 
 import {
-  PropertyTypes,
-  OwnershipTypes,
   HeatingTypes,
   CoolingTypes,
   WaterHeaterTypes,
@@ -59,6 +57,12 @@ const MAJOR_APPLIANCE_OPTIONS = [
 ];
 const MAX_PROPERTY_PHOTO_SIZE_MB = 10;
 const ALLOWED_PROPERTY_PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
+const DWELLING_OPTIONS = ['DETACHED_SINGLE_FAMILY', 'ATTACHED_SINGLE_FAMILY', 'TOWNHOUSE', 'CONDO_UNIT', 'APARTMENT_UNIT', 'DUPLEX', 'MULTI_FAMILY', 'MANUFACTURED_HOME', 'OTHER', 'UNKNOWN'] as const;
+const OWNERSHIP_FORM_OPTIONS = ['FEE_SIMPLE', 'CONDOMINIUM', 'COOPERATIVE', 'LEASEHOLD', 'OTHER', 'UNKNOWN'] as const;
+const PROPERTY_USE_OPTIONS = ['PRIMARY_RESIDENCE', 'SECOND_HOME', 'LONG_TERM_RENTAL', 'SHORT_TERM_RENTAL', 'VACANT', 'UNDER_RENOVATION', 'FOR_SALE', 'OTHER', 'UNKNOWN'] as const;
+const OCCUPANCY_STATUS_OPTIONS = ['OWNER_OCCUPIED', 'TENANT_OCCUPIED', 'FAMILY_OCCUPIED', 'MIXED', 'VACANT', 'UNKNOWN'] as const;
+const RESPONSIBLE_PARTY_OPTIONS = ['OWNER', 'ASSOCIATION', 'LANDLORD', 'SHARED', 'UNKNOWN'] as const;
+const RESPONSIBILITY_SCOPES = ['ROOF', 'BUILDING_EXTERIOR', 'LANDSCAPING', 'TREES_SHRUBS', 'DRIVEWAY_WALKWAYS', 'DECK_PATIO_BALCONY', 'PLUMBING', 'HVAC', 'COMMON_SAFETY', 'SNOW_ICE', 'PEST_CONTROL', 'SHARED_SYSTEMS'] as const;
 
 const APPLIANCE_DISPLAY_LABELS: Record<string, string> = {
   DISHWASHER: 'Dishwasher',
@@ -179,19 +183,17 @@ const propertySchema = z.object({
   state: z.string().min(2, { message: "State must be 2 characters." }),
   zipCode: z.string().min(5, { message: "Zip Code is required." }),
   
-  propertyType: z.union([z.nativeEnum(PropertyTypes), z.literal("")])
-    .transform(val => val === "" ? null : val)
-    .refine(val => val !== null, { message: "Property Type is required." }),
+  dwellingType: z.enum(DWELLING_OPTIONS),
+  ownershipForm: z.enum(OWNERSHIP_FORM_OPTIONS),
+  propertyUse: z.enum(PROPERTY_USE_OPTIONS),
+  occupancyStatus: z.enum(OCCUPANCY_STATUS_OPTIONS),
+  responsibilityParty: z.enum(RESPONSIBLE_PARTY_OPTIONS),
   
   propertySize: z.coerce.number().int().positive().optional().nullable(),
   yearBuilt: z.coerce.number().int().min(1700).optional().nullable(),
   
   bedrooms: z.coerce.number().int().min(0).optional().nullable(),
   bathrooms: z.coerce.number().min(0).optional().nullable(),
-  ownershipType: z.union([z.nativeEnum(OwnershipTypes), z.literal("")])
-    .transform(val => val === "" ? null : val)
-    .optional().nullable(),
-  occupantsCount: z.coerce.number().int().min(0).optional().nullable(),
 
   heatingType: z.union([z.nativeEnum(HeatingTypes), z.literal("")])
     .transform(val => val === "" ? null : val)
@@ -219,6 +221,10 @@ const propertySchema = z.object({
   hasSecuritySystem: z.boolean().nullable().optional(),
   hasFireExtinguisher: z.boolean().nullable().optional(),
   hasIrrigation: z.boolean().nullable().optional(),
+  hasPrivateOutdoorSpace: z.boolean().nullable().optional(),
+  hasLawn: z.boolean().nullable().optional(),
+  hasTreesOrShrubs: z.boolean().nullable().optional(),
+  hasDriveway: z.boolean().nullable().optional(),
   purchasePriceDollars: z.number().nonnegative().optional().nullable(),
   purchaseDate: z.string().optional().nullable(),
   lastAppraisedValueDollars: z.number().nonnegative().optional().nullable(),
@@ -277,14 +283,16 @@ const mapDbToForm = (property: any): PropertyFormValues => {
         state: property.state,
         zipCode: property.zipCode,
         
-        propertyType: property.propertyType || ("" as any), 
+        dwellingType: property.dwellingType || "UNKNOWN",
+        ownershipForm: property.ownershipForm || "UNKNOWN",
+        propertyUse: property.propertyUse || "UNKNOWN",
+        occupancyStatus: property.occupancyStatus || "UNKNOWN",
+        responsibilityParty: property.responsibilities?.[0]?.party || "UNKNOWN",
         propertySize: property.propertySize,
         yearBuilt: property.yearBuilt,
         
         bedrooms: property.bedrooms,
         bathrooms: property.bathrooms,
-        ownershipType: property.ownershipType || ("" as any),
-        occupantsCount: property.occupantsCount,
         heatingType: property.heatingType || ("" as any),
         coolingType: property.coolingType || ("" as any),
         waterHeaterType: property.waterHeaterType || ("" as any),
@@ -301,6 +309,10 @@ const mapDbToForm = (property: any): PropertyFormValues => {
         hasSecuritySystem: property.hasSecuritySystem ?? null,
         hasFireExtinguisher: property.hasFireExtinguisher ?? null,
         hasIrrigation: property.hasIrrigation ?? null,
+        hasPrivateOutdoorSpace: property.exteriorProfile?.hasPrivateOutdoorSpace ?? null,
+        hasLawn: property.exteriorProfile?.hasLawn ?? null,
+        hasTreesOrShrubs: property.exteriorProfile?.hasTreesOrShrubs ?? null,
+        hasDriveway: property.exteriorProfile?.hasDriveway ?? null,
         purchasePriceDollars:
           typeof property.purchasePriceCents === "number"
             ? property.purchasePriceCents / 100
@@ -580,13 +592,15 @@ export default function EditPropertyPage() {
     resolver: zodResolver(propertySchema) as any,
     defaultValues: {
       name: "", isPrimary: false, address: "", city: "", state: "", zipCode: "",
-      propertyType: "" as any, propertySize: null, yearBuilt: null, bedrooms: null,
-      bathrooms: null, ownershipType: "" as any, occupantsCount: null,
+      dwellingType: "UNKNOWN", ownershipForm: "UNKNOWN", propertyUse: "UNKNOWN",
+      occupancyStatus: "UNKNOWN", responsibilityParty: "UNKNOWN",
+      propertySize: null, yearBuilt: null, bedrooms: null, bathrooms: null,
       heatingType: "" as any, coolingType: "" as any, waterHeaterType: "" as any, 
       roofType: "" as any, hvacInstallYear: null, waterHeaterInstallYear: null,
       roofReplacementYear: null, foundationType: "" as any, hasDrainageIssues: null, hasSmokeDetectors: null,
       hasCoDetectors: null, hasSecuritySystem: null, hasFireExtinguisher: null,
       hasIrrigation: null,
+      hasPrivateOutdoorSpace: null, hasLawn: null, hasTreesOrShrubs: null, hasDriveway: null,
       purchasePriceDollars: null,
       purchaseDate: null,
       lastAppraisedValueDollars: null,
@@ -651,13 +665,14 @@ export default function EditPropertyPage() {
         zipCode: data.zipCode,
         isPrimary: data.isPrimary,
         
-        propertyType: data.propertyType ?? undefined,
+        dwellingType: data.dwellingType,
+        ownershipForm: data.ownershipForm,
+        propertyUse: data.propertyUse,
+        occupancyStatus: data.occupancyStatus,
         propertySize: data.propertySize ?? undefined,
         yearBuilt: data.yearBuilt ?? undefined,
         bedrooms: data.bedrooms ?? undefined,
         bathrooms: data.bathrooms ?? undefined,
-        ownershipType: data.ownershipType ?? undefined,
-        occupantsCount: data.occupantsCount ?? undefined,
         heatingType: data.heatingType ?? undefined,
         coolingType: data.coolingType ?? undefined,
         waterHeaterType: data.waterHeaterType ?? undefined,
@@ -673,6 +688,16 @@ export default function EditPropertyPage() {
         hasSecuritySystem: data.hasSecuritySystem ?? undefined,
         hasFireExtinguisher: data.hasFireExtinguisher ?? undefined,
         hasIrrigation: data.hasIrrigation ?? undefined,
+        exteriorProfile: {
+          hasPrivateOutdoorSpace: data.hasPrivateOutdoorSpace,
+          outdoorSpaceTypes: data.hasPrivateOutdoorSpace ? ['PRIVATE_YARD' as const] : [],
+          hasLawn: data.hasLawn,
+          hasTreesOrShrubs: data.hasTreesOrShrubs,
+          hasDriveway: data.hasDriveway,
+          hasIrrigation: data.hasIrrigation,
+          hasDrainageIssues: data.hasDrainageIssues,
+        },
+        responsibilities: RESPONSIBILITY_SCOPES.map((scope) => ({ scope, party: data.responsibilityParty })),
         purchasePriceCents: dollarsToCents(data.purchasePriceDollars),
         purchaseDate: data.purchaseDate ?? null,
         lastAppraisedValue: dollarsToCents(data.lastAppraisedValueDollars),
@@ -742,7 +767,11 @@ export default function EditPropertyPage() {
     watchCity,
     watchState,
     watchZipCode,
-    watchPropertyType,
+    watchDwellingType,
+    watchOwnershipForm,
+    watchPropertyUse,
+    watchOccupancyStatus,
+    watchResponsibilityParty,
     watchPropertySize,
     watchYearBuilt,
     watchHeatingType,
@@ -755,8 +784,6 @@ export default function EditPropertyPage() {
     watchFoundationType,
     watchBedrooms,
     watchBathrooms,
-    watchOccupantsCount,
-    watchOwnershipType,
     watchHasSmokeDetectors,
     watchHasCoDetectors,
     watchHasDrainageIssues,
@@ -770,7 +797,11 @@ export default function EditPropertyPage() {
     "city",
     "state",
     "zipCode",
-    "propertyType",
+    "dwellingType",
+    "ownershipForm",
+    "propertyUse",
+    "occupancyStatus",
+    "responsibilityParty",
     "propertySize",
     "yearBuilt",
     "heatingType",
@@ -783,8 +814,6 @@ export default function EditPropertyPage() {
     "foundationType",
     "bedrooms",
     "bathrooms",
-    "occupantsCount",
-    "ownershipType",
     "hasSmokeDetectors",
     "hasCoDetectors",
     "hasDrainageIssues",
@@ -846,7 +875,11 @@ export default function EditPropertyPage() {
         city: watchCity,
         state: watchState,
         zipCode: watchZipCode,
-        propertyType: watchPropertyType,
+        dwellingType: watchDwellingType,
+        ownershipForm: watchOwnershipForm,
+        propertyUse: watchPropertyUse,
+        occupancyStatus: watchOccupancyStatus,
+        responsibilityParty: watchResponsibilityParty,
         propertySize: watchPropertySize,
         yearBuilt: watchYearBuilt,
         heatingType: watchHeatingType,
@@ -859,8 +892,6 @@ export default function EditPropertyPage() {
         foundationType: watchFoundationType,
         bedrooms: watchBedrooms,
         bathrooms: watchBathrooms,
-        occupantsCount: watchOccupantsCount,
-        ownershipType: watchOwnershipType,
         hasSmokeDetectors: watchHasSmokeDetectors,
         hasCoDetectors: watchHasCoDetectors,
         hasDrainageIssues: watchHasDrainageIssues,
@@ -877,7 +908,11 @@ export default function EditPropertyPage() {
     watchCity,
     watchState,
     watchZipCode,
-    watchPropertyType,
+    watchDwellingType,
+    watchOwnershipForm,
+    watchPropertyUse,
+    watchOccupancyStatus,
+    watchResponsibilityParty,
     watchPropertySize,
     watchYearBuilt,
     watchHeatingType,
@@ -890,8 +925,6 @@ export default function EditPropertyPage() {
     watchRoofReplacementYear,
     watchBedrooms,
     watchBathrooms,
-    watchOccupantsCount,
-    watchOwnershipType,
     watchHasSmokeDetectors,
     watchHasCoDetectors,
     watchHasDrainageIssues,
@@ -938,9 +971,20 @@ export default function EditPropertyPage() {
   const nextBestStepText = startField ? `Add ${startField.label}` : null;
   const saveBarCopy = getSaveBarCopy(confidenceScore);
   const startSectionId = startField?.sectionId ?? null;
+  const [correctionAnchor, setCorrectionAnchor] = React.useState('');
   const applianceCount = Array.isArray(watchAppliances) ? watchAppliances.length : 0;
   const [appliancesExpanded, setAppliancesExpanded] = React.useState(false);
   const [highlightHomeValue, setHighlightHomeValue] = React.useState(false);
+
+  React.useEffect(() => {
+    const anchor = window.location.hash.slice(1);
+    if (!anchor) return;
+    setCorrectionAnchor(anchor);
+    const timeout = window.setTimeout(() => {
+      document.getElementById(anchor)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 150);
+    return () => window.clearTimeout(timeout);
+  }, []);
 
   React.useEffect(() => {
     if (startSectionId === "appliances") {
@@ -1242,13 +1286,13 @@ export default function EditPropertyPage() {
               helperText="Keeps your home organized and tips matched to your area."
               defaultExpandedDesktop={true}
               defaultExpandedMobile={true}
-              forceExpandOnMobile={startSectionId === "basics"}
+              forceExpandOnMobile={startSectionId === "basics" || correctionAnchor === 'address'}
               headerChip={startSectionId === "basics" ? <FieldNudgeChip variant="start" /> : undefined}
               className="basics-section-card"
               headerClassName="p-5 pb-3 sm:p-5 sm:pb-3"
               contentClassName="p-5 pt-0 sm:p-5 sm:pt-0"
             >
-              <div className="grid grid-cols-1 gap-[14px] lg:grid-cols-12">
+              <div id="address" className="grid grid-cols-1 gap-[14px] lg:grid-cols-12">
                 <FormField
                   control={form.control}
                   name="name"
@@ -1508,7 +1552,7 @@ export default function EditPropertyPage() {
               helperText="Helps plan maintenance and avoid surprises."
               defaultExpandedDesktop={true}
               defaultExpandedMobile={false}
-              forceExpandOnMobile={startSectionId === "systems"}
+              forceExpandOnMobile={startSectionId === "systems" || ['property-type', 'structure', 'systems'].includes(correctionAnchor)}
               headerChip={(
                 <span
                   className={cn(
@@ -1523,22 +1567,22 @@ export default function EditPropertyPage() {
               )}
             >
               <div className="space-y-5">
-                <div className="grid grid-cols-1 gap-4 border-b border-black/10 pb-5 dark:border-white/10 md:grid-cols-[1.2fr_1fr_1fr]">
+                <div id="structure" className="grid grid-cols-1 gap-4 border-b border-black/10 pb-5 dark:border-white/10 md:grid-cols-[1.2fr_1fr_1fr]">
                   <FormField
                     control={form.control}
-                    name="propertyType"
+                    name="dwellingType"
                     render={({ field }) => (
-                      <FormItem className="w-full">
+                      <FormItem id="property-type" className="w-full">
                         <div className="flex items-center gap-2">
-                          <FormLabel>Property type</FormLabel>
-                          {isRecommended("propertyType") ? <FieldNudgeChip variant="recommended" /> : null}
+                          <FormLabel>Dwelling type</FormLabel>
+                          {isRecommended("dwellingType") ? <FieldNudgeChip variant="recommended" /> : null}
                         </div>
-                        <Select onValueChange={(value) => field.onChange(value === "" ? null : value)} value={field.value || ""}>
+                        <Select onValueChange={field.onChange} value={field.value}>
                           <FormControl>
-                            <SelectTrigger id="field-propertyType" className="h-9 text-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40"><SelectValue placeholder="Select type" /></SelectTrigger>
+                            <SelectTrigger id="field-dwellingType" className="h-9 text-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40"><SelectValue placeholder="Select type" /></SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            {Object.values(PropertyTypes).map((type) => (
+                            {DWELLING_OPTIONS.map((type) => (
                               <SelectItem key={type} value={type}>{formatEnumLabel(type)}</SelectItem>
                             ))}
                           </SelectContent>
@@ -1792,7 +1836,7 @@ export default function EditPropertyPage() {
               helperText="Quick checks that help protect your home."
               defaultExpandedDesktop={true}
               defaultExpandedMobile={false}
-              forceExpandOnMobile={startSectionId === "safety"}
+              forceExpandOnMobile={startSectionId === "safety" || correctionAnchor === 'safety'}
               headerChip={startSectionId === "safety" ? <FieldNudgeChip variant="start" /> : undefined}
               className="safety-section-card"
               headerClassName="p-4 pb-2.5 sm:px-5 sm:pb-2.5 sm:pt-4"
@@ -1888,7 +1932,7 @@ export default function EditPropertyPage() {
               helperText="Helps personalize your home plan."
               defaultExpandedDesktop={true}
               defaultExpandedMobile={false}
-              forceExpandOnMobile={startSectionId === "occupancy"}
+              forceExpandOnMobile={startSectionId === "occupancy" || ['occupancy', 'exterior', 'responsibility'].includes(correctionAnchor)}
               headerChip={startSectionId === "occupancy" ? <FieldNudgeChip variant="start" /> : undefined}
               className="occupancy-section-card"
               headerClassName="p-4 pb-2.5 sm:px-5 sm:pb-2.5 sm:pt-4"
@@ -1917,39 +1961,68 @@ export default function EditPropertyPage() {
                     </FormItem>
                   )}
                 />
+              </div>
+              <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                {([
+                  ['ownershipForm', 'Ownership form', OWNERSHIP_FORM_OPTIONS],
+                  ['propertyUse', 'Property use', PROPERTY_USE_OPTIONS],
+                  ['occupancyStatus', 'Occupancy status', OCCUPANCY_STATUS_OPTIONS],
+                ] as const).map(([name, fieldLabel, options]) => (
+                  <FormField
+                    key={name}
+                    control={form.control}
+                    name={name}
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{fieldLabel}</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                          <FormControl><SelectTrigger id={`field-${name}`}><SelectValue /></SelectTrigger></FormControl>
+                          <SelectContent>{options.map((option) => <SelectItem key={option} value={option}>{formatEnumLabel(option)}</SelectItem>)}</SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                ))}
+              </div>
+
+              <div id="responsibility" className="mt-5 border-t border-black/10 pt-4 dark:border-white/10">
                 <FormField
                   control={form.control}
-                  name="occupantsCount"
+                  name="responsibilityParty"
                   render={({ field }) => (
-                    <FormItem className="occupancy-numeric-field w-[80px] max-w-[80px]">
-                      <FormLabel className="mb-1 block text-xs text-gray-500 dark:text-slate-400">Occupants</FormLabel>
-                      <FormControl><Input id="field-occupantsCount" className="h-10 w-full px-3 text-center text-[15px] font-medium focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40" placeholder="4" type="number" {...field} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value === "" ? null : parseInt(e.target.value, 10))} /></FormControl>
+                    <FormItem className="max-w-sm">
+                      <FormLabel>Default maintenance responsibility</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl><SelectTrigger id="field-responsibilityParty"><SelectValue /></SelectTrigger></FormControl>
+                        <SelectContent>{RESPONSIBLE_PARTY_OPTIONS.map((option) => <SelectItem key={option} value={option}>{formatEnumLabel(option)}</SelectItem>)}</SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">Applied to roof, exterior, landscaping, shared systems, and other maintenance scopes.</p>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
               </div>
-              <div className="occupancy-row mt-[14px] flex flex-wrap items-end gap-5">
-                <FormField
-                  control={form.control}
-                  name="ownershipType"
-                  render={({ field }) => (
-                    <FormItem className="w-full max-w-[280px]">
-                      <FormLabel className="mb-1 block text-xs text-gray-500 dark:text-slate-400">How you use this property</FormLabel>
-                      <Select onValueChange={(value) => field.onChange(value === "" ? null : value)} value={field.value || ""}>
-                        <FormControl>
-                          <SelectTrigger id="field-ownershipType" className="h-9 min-w-[200px] max-w-[280px] text-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40"><SelectValue placeholder="Select type" /></SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {Object.values(OwnershipTypes).map((type) => (
-                            <SelectItem key={type} value={type}>{formatEnumLabel(type)}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+
+              <div id="exterior" className="mt-5 grid grid-cols-1 gap-3 border-t border-black/10 pt-4 dark:border-white/10 sm:grid-cols-2">
+                {([
+                  ['hasPrivateOutdoorSpace', 'Private outdoor space'],
+                  ['hasLawn', 'Lawn'],
+                  ['hasTreesOrShrubs', 'Trees or shrubs'],
+                  ['hasDriveway', 'Driveway'],
+                ] as const).map(([name, fieldLabel]) => (
+                  <FormField
+                    key={name}
+                    control={form.control}
+                    name={name}
+                    render={({ field }) => (
+                      <FormItem className="flex items-center gap-3 rounded-lg border border-black/10 p-3 dark:border-white/10">
+                        <FormControl><Checkbox checked={field.value === true} onCheckedChange={(checked) => field.onChange(checked === true)} /></FormControl>
+                        <FormLabel className="!mt-0 cursor-pointer">{fieldLabel}</FormLabel>
+                      </FormItem>
+                    )}
+                  />
+                ))}
               </div>
             </PropertyEditSection>
 

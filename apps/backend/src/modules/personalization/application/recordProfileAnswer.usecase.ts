@@ -42,6 +42,7 @@ export interface RecordProfileAnswerResult {
 }
 
 const booleanAnswerSchema = z.object({ value: z.boolean() }).strict();
+const householdSizeAnswerSchema = z.object({ value: z.number().int().min(1).max(25) }).strict();
 const memberAnswerSchema = z.object({
   hasChildren: z.boolean(),
   hasSeniors: z.boolean(),
@@ -69,6 +70,9 @@ function validateAnswer(answerSchema: unknown, answerJson: unknown): boolean {
   }
   if (schemaType === 'boolean') {
     return booleanAnswerSchema.safeParse(answerJson).success;
+  }
+  if (schemaType === 'integer') {
+    return householdSizeAnswerSchema.safeParse(answerJson).success;
   }
   return false;
 }

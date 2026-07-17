@@ -105,6 +105,7 @@ import {
   OwnershipForm,
   PropertyUse,
   OccupancyStatus,
+  PropertyResponsibilityInput,
 } from '@/types';
 import type { PropertyContextEnvelope } from '@/components/property-context/PropertyContextNotice';
 
@@ -1327,6 +1328,17 @@ class APIClient {
     return this.request(`/api/properties/${id}/context/completeness${query}`);
   }
 
+  async capturePropertyContextFact(
+    id: string,
+    factKey: string,
+    value: unknown,
+  ): Promise<APIResponse<{ fact: unknown; contextVersion: string }>> {
+    return this.request(`/api/properties/${id}/context/${encodeURIComponent(factKey)}`, {
+      method: 'PATCH',
+      body: { value, sourceType: 'USER_REPORTED' },
+    });
+  }
+
   /**
    * Create a new property
    */
@@ -1344,6 +1356,7 @@ class APIClient {
     propertyUse?: PropertyUse;
     occupancyStatus?: OccupancyStatus;
     exteriorProfile?: PropertyExteriorProfile;
+    responsibilities?: PropertyResponsibilityInput[];
     propertySize?: number | null;
     yearBuilt?: number | null;
     bedrooms?: number | null;
@@ -1379,6 +1392,7 @@ class APIClient {
       propertyUse?: PropertyUse;
       occupancyStatus?: OccupancyStatus;
       exteriorProfile?: PropertyExteriorProfile;
+      responsibilities?: PropertyResponsibilityInput[];
       propertySize?: number;
       yearBuilt?: number;
       
@@ -1386,7 +1400,6 @@ class APIClient {
       bedrooms?: number;
       bathrooms?: number;
       ownershipType?: string; // Expects enum string
-      occupantsCount?: number;
       heatingType?: string;
       coolingType?: string;
       waterHeaterType?: string;

@@ -49,6 +49,16 @@ const PropertyExteriorProfileSchema = z.object({
   }
 });
 
+const PropertyResponsibilityInputSchema = z.object({
+  scope: z.enum([
+    'ROOF', 'BUILDING_EXTERIOR', 'LANDSCAPING', 'TREES_SHRUBS',
+    'DRIVEWAY_WALKWAYS', 'DECK_PATIO_BALCONY', 'PLUMBING', 'HVAC',
+    'COMMON_SAFETY', 'SNOW_ICE', 'PEST_CONTROL', 'SHARED_SYSTEMS',
+  ]),
+  party: z.enum(['OWNER', 'ASSOCIATION', 'LANDLORD', 'SHARED', 'UNKNOWN']),
+  notes: z.string().trim().max(500).nullable().optional(),
+});
+
 const HeatingTypeEnum = z.enum(['HVAC', 'FURNACE', 'HEAT_PUMP', 'RADIATORS', 'UNKNOWN']);
 
 const CoolingTypeEnum = z.enum(['CENTRAL_AC', 'WINDOW_AC', 'UNKNOWN']);
@@ -217,7 +227,6 @@ export const createPropertySchema = z.object({
   bedrooms: z.number().int().positive().optional(),
   bathrooms: z.number().positive().optional(),
   ownershipType: OwnershipTypeEnum.optional(),
-  occupantsCount: z.number().int().positive().optional(),
   heatingType: HeatingTypeEnum.optional(),
   coolingType: CoolingTypeEnum.optional(),
   waterHeaterType: WaterHeaterTypeEnum.optional(),
@@ -232,6 +241,7 @@ export const createPropertySchema = z.object({
   hasIrrigation: z.boolean().optional(),
   hasDrainageIssues: z.boolean().optional(),
   exteriorProfile: PropertyExteriorProfileSchema.optional(),
+  responsibilities: z.array(PropertyResponsibilityInputSchema).max(12).optional(),
   hasSmokeDetectors: z.boolean().optional(),
   hasCoDetectors: z.boolean().optional(),
   hasSecuritySystem: z.boolean().optional(),

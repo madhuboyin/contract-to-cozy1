@@ -11,6 +11,12 @@ import {
   INITIAL_PROPERTY_CONTEXT_ASSEMBLERS,
   PropertyContextAssembler,
 } from '../infrastructure/prismaAssemblers';
+import {
+  propertyContextFactStatesTotal,
+  propertyContextReadDurationSeconds,
+  propertyContextReadsTotal,
+} from '../../../lib/metrics';
+import { getFactDefinition } from '../catalog/factCatalog';
 
 export class PropertyContextAccessDeniedError extends Error {
   constructor() {
@@ -43,7 +49,9 @@ export async function getPropertyContext(
   request: PropertyContextRequest,
   dependencies: PropertyContextDependencies = defaultDependencies,
 ): Promise<PropertyContextSnapshot> {
+  const startedAt = process.hrtime.bigint();
   if (!await dependencies.authorize(actor.userId, propertyId)) {
+    for (const scope of request.scopes) propertyContextReadsTotal.inc({ scope, outcome: 'denied' });
     throw new PropertyContextAccessDeniedError();
   }
 
@@ -62,6 +70,16 @@ export async function getPropertyContext(
   if (conflictedFactKeys.length) warnings.push({ code: 'CONFLICT', factKeys: conflictedFactKeys });
   if (staleFactKeys.length) warnings.push({ code: 'STALE_SOURCE', factKeys: staleFactKeys });
   if (unsupportedScopes.length) warnings.push({ code: 'PARTIAL_SCOPE', factKeys: unsupportedScopes.map((scope) => `scope.${scope}`) });
+
+  const durationSeconds = Number(process.hrtime.bigint() - startedAt) / 1_000_000_000;
+  for (const scope of scopes) {
+    propertyContextReadsTotal.inc({ scope, outcome: supportedScopes.includes(scope) ? 'success' : 'unsupported' });
+    propertyContextReadDurationSeconds.observe({ scope }, durationSeconds);
+  }
+  for (const fact of Object.values(facts)) {
+    const scope = getFactDefinition(fact.key).scope;
+    propertyContextFactStatesTotal.inc({ scope, fact_key: fact.key, state: fact.state });
+  }
 
   return {
     propertyId,

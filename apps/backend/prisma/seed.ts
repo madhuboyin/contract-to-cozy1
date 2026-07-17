@@ -7,6 +7,34 @@ import { seedKnowledgeHub } from './knowledgeHub.seed';
 
 const prisma = new PrismaClient();
 
+async function seedOptionalProfileQuestions() {
+  await prisma.profileQuestion.upsert({
+    where: { code_version: { code: 'HOUSEHOLD_SIZE', version: 1 } },
+    create: {
+      code: 'HOUSEHOLD_SIZE',
+      version: 1,
+      status: 'ACTIVE',
+      prompt: 'How many people live in your household?',
+      whyAsked: 'Household size can improve optional usage and maintenance recommendations.',
+      privacyNote: 'Optional and stored only in your consented household profile, not on the property record.',
+      answerSchema: { type: 'integer', min: 1, max: 25 },
+      valueScore: 0.55,
+      effortScore: 0.15,
+      maxImpressions: 3,
+    },
+    update: {
+      status: 'ACTIVE',
+      prompt: 'How many people live in your household?',
+      whyAsked: 'Household size can improve optional usage and maintenance recommendations.',
+      privacyNote: 'Optional and stored only in your consented household profile, not on the property record.',
+      answerSchema: { type: 'integer', min: 1, max: 25 },
+      valueScore: 0.55,
+      effortScore: 0.15,
+      maxImpressions: 3,
+    },
+  });
+}
+
 async function seedPlantCatalog() {
   const starterCatalog = [
     {
@@ -1341,6 +1369,7 @@ async function main() {
   console.log('✅ ATTORNEY: attorney@example.com');
 
   console.log('');
+  await seedOptionalProfileQuestions();
   await seedKnowledgeHub(prisma);
   console.log('');
   console.log('🎉 Seed completed successfully!');
