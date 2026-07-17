@@ -91,7 +91,7 @@ export class MaintenanceTaskAdapter {
         estimatedCost: payload.estimatedCost ?? null,
 
         warrantyId: payload.warrantyId ?? null,
-        homeAssetId: payload.homeAssetId ?? null,
+        inventoryItemId: payload.inventoryItemId ?? null,
       },
     });
 

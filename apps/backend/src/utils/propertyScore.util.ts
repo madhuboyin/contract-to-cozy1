@@ -1,5 +1,5 @@
 // apps/backend/src/utils/propertyScore.util.ts
-import { Property, PropertyType, HeatingType, CoolingType, WaterHeaterType, RoofType, HomeAsset, Warranty, Booking } from '@prisma/client';
+import { Property, PropertyType, HeatingType, CoolingType, WaterHeaterType, RoofType, InventoryItem, Warranty, Booking } from '@prisma/client';
 
 export interface HealthScoreResult {
   totalScore: number;
@@ -75,8 +75,8 @@ export function calculateHealthScore(
 
   // Relations are optional at runtime depending on how the caller loaded Property.
   // Default to empty arrays to avoid runtime crashes when relations are omitted.
-  const relatedHomeAssets = Array.isArray((property as { homeAssets?: HomeAsset[] }).homeAssets)
-    ? ((property as { homeAssets?: HomeAsset[] }).homeAssets ?? [])
+  const relatedHomeAssets = Array.isArray((property as { inventoryItems?: InventoryItem[] }).inventoryItems)
+    ? ((property as { inventoryItems?: InventoryItem[] }).inventoryItems ?? [])
     : [];
   const relatedWarranties = Array.isArray((property as { warranties?: Warranty[] }).warranties)
     ? ((property as { warranties?: Warranty[] }).warranties ?? [])
@@ -316,12 +316,12 @@ export function calculateHealthScore(
     
     // Determine Age Risk: Flag if any primary asset is over 15 years old.
     const criticallyAging = relatedHomeAssets.some(
-        (a: HomeAsset) => a.installationYear !== null && currentYear - a.installationYear > 15 
+        (a: InventoryItem) => a.installedOn !== null && currentYear - a.installedOn.getUTCFullYear() > 15
     );
     
     // Count appliances needing warranty
-    const appliancesNeedingWarranty = relatedHomeAssets.filter((a: HomeAsset) => {
-        const age = a.installationYear ? currentYear - a.installationYear : 0;
+    const appliancesNeedingWarranty = relatedHomeAssets.filter((a: InventoryItem) => {
+        const age = a.installedOn ? currentYear - a.installedOn.getUTCFullYear() : 0;
         return age > 15; // Critically aging appliance
     });
     
@@ -332,8 +332,8 @@ export function calculateHealthScore(
             insights.push({ factor: 'Appliances', status: 'Complete', score: appScore });
         } else {
             // One insight per aging appliance so each gets its own named card
-            appliancesNeedingWarranty.forEach((a: HomeAsset, index: number) => {
-                const assetName = a.assetType.split('_').map((w: string) =>
+            appliancesNeedingWarranty.forEach((a: InventoryItem, index: number) => {
+                const assetName = (a.assetType ?? a.name).split('_').map((w: string) =>
                     w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()
                 ).join(' ');
                 insights.push({

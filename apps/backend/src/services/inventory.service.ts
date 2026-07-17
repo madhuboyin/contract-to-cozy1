@@ -227,7 +227,6 @@ export class InventoryService {
         room: true,
         warranty: true,
         insurancePolicy: true,
-        homeAsset: true,
         documents: { orderBy: { createdAt: 'desc' } },
       },
     });
@@ -266,7 +265,6 @@ export class InventoryService {
         room: true,
         warranty: true,
         insurancePolicy: true,
-        homeAsset: true,
         documents: { orderBy: { createdAt: 'desc' } },
       },
       orderBy: [{ updatedAt: 'desc' }],
@@ -277,7 +275,6 @@ export class InventoryService {
     await this.assertRoomBelongs(propertyId, data.roomId);
     await this.assertWarrantyBelongs(propertyId, data.warrantyId);
     await this.assertInsuranceBelongs(propertyId, data.insurancePolicyId);
-    await this.assertHomeAssetBelongs(propertyId, data.homeAssetId);
   
     const manufacturerNorm = norm(data.manufacturer);
     const modelNumberNorm = norm(data.modelNumber);
@@ -339,7 +336,8 @@ export class InventoryService {
         roomId: data.roomId || null,
         warrantyId: data.warrantyId || null,
         insurancePolicyId: data.insurancePolicyId || null,
-        homeAssetId: data.homeAssetId || null,
+        assetType: data.assetType || null,
+        efficiencyRating: data.efficiencyRating || null,
   
         brand: data.brand || null,
         model: data.model || null,
@@ -373,7 +371,6 @@ export class InventoryService {
         room: true,
         warranty: true,
         insurancePolicy: true,
-        homeAsset: true,
         documents: { orderBy: { createdAt: 'desc' } },
       },
     });
@@ -492,7 +489,6 @@ export class InventoryService {
     if ('roomId' in patch) await this.assertRoomBelongs(propertyId, patch.roomId);
     if ('warrantyId' in patch) await this.assertWarrantyBelongs(propertyId, patch.warrantyId);
     if ('insurancePolicyId' in patch) await this.assertInsuranceBelongs(propertyId, patch.insurancePolicyId);
-    if ('homeAssetId' in patch) await this.assertHomeAssetBelongs(propertyId, patch.homeAssetId);
   
     // Build update payload
     const updateData: any = { ...patch };
@@ -522,7 +518,6 @@ export class InventoryService {
         room: true,
         warranty: true,
         insurancePolicy: true,
-        homeAsset: true,
         documents: { orderBy: { createdAt: 'desc' } },
       },
     });
@@ -728,12 +723,6 @@ export class InventoryService {
       select: { id: true },
     });
     if (!p) throw new APIError('Insurance policy not found for property', 404, 'INSURANCE_NOT_FOUND');
-  }
-
-  private async assertHomeAssetBelongs(propertyId: string, homeAssetId?: string | null) {
-    if (!homeAssetId) return;
-    const a = await prisma.homeAsset.findFirst({ where: { id: homeAssetId, propertyId }, select: { id: true } });
-    if (!a) throw new APIError('Home asset not found for property', 404, 'HOME_ASSET_NOT_FOUND');
   }
 
 }

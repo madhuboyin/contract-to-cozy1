@@ -2482,7 +2482,7 @@ export class HomeScoreReportService {
     const property = await prisma.property.findUnique({
       where: { id: propertyId },
       include: {
-        homeAssets: true,
+        inventoryItems: true,
         warranties: true,
       },
     });

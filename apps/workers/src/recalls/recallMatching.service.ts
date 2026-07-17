@@ -75,7 +75,6 @@ export async function runRecallMatchingScan() {
             data: {
               propertyId: c.propertyId,
               inventoryItemId: c.inventoryItemId,
-              homeAssetId: null,
               recallId: recall.id,
               method: 'MAKE_MODEL',
               confidencePct,

@@ -989,9 +989,15 @@ export default function WarrantiesPage() {
         }
     }
 
+    const { homeAssetId, ...warrantyPayload } = dataToSend;
+    const canonicalWarrantyPayload = {
+      ...warrantyPayload,
+      inventoryItemId: homeAssetId || undefined,
+    };
+
     const res = editingWarranty
-        ? await api.updateWarranty(editingWarranty.id, dataToSend as UpdateWarrantyInput)
-        : await api.createWarranty(dataToSend as CreateWarrantyInput);
+        ? await api.updateWarranty(editingWarranty.id, canonicalWarrantyPayload as UpdateWarrantyInput)
+        : await api.createWarranty(canonicalWarrantyPayload as CreateWarrantyInput);
 
     if (res.success) {
         toast({

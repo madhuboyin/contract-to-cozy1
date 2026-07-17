@@ -1,6 +1,6 @@
 // apps/backend/src/services/home-management.service.ts
 
-import { PrismaClient, Prisma, Document, DocumentType, HomeAsset } from '@prisma/client'; // ADDED HomeAsset
+import { PrismaClient, Prisma, Document, DocumentType } from '@prisma/client';
 import { 
   CreateWarrantyDTO, UpdateWarrantyDTO, Warranty, 
   CreateInsurancePolicyDTO, UpdateInsurancePolicyDTO, InsurancePolicy,
@@ -97,7 +97,7 @@ const mapRawWarrantyToWarranty = (rawWarranty: any): Warranty => {
         id: rawWarranty.id,
         homeownerProfileId: rawWarranty.homeownerProfileId,
         propertyId: rawWarranty.propertyId,
-        homeAssetId: rawWarranty.homeAssetId, // ADDED for asset linking
+        inventoryItemId: rawWarranty.inventoryItemId,
         category: rawWarranty.category,       // ADDED for specific categorization
         providerName: rawWarranty.providerName,
         policyNumber: rawWarranty.policyNumber,
@@ -287,8 +287,7 @@ export async function createWarranty(
   data: CreateWarrantyDTO
 ): Promise<Warranty> {
   try {
-    // Support both old homeAssetId and new inventoryItemId for backward compatibility
-    const inventoryItemId = data.inventoryItemId || data.homeAssetId;
+    const inventoryItemId = data.inventoryItemId;
     
     const rawWarranty = await prisma.warranty.create({
       data: {
@@ -348,11 +347,9 @@ export async function updateWarranty(
       ...(data.startDate && { startDate: new Date(data.startDate) }),
       ...(data.expiryDate && { expiryDate: new Date(data.expiryDate) }),
       // Handle inventoryItemId update (supports both old and new field names)
-      ...((data.inventoryItemId || data.homeAssetId) && {
-        inventoryItem: { connect: { id: data.inventoryItemId || data.homeAssetId } }
+      ...(data.inventoryItemId && {
+        inventoryItem: { connect: { id: data.inventoryItemId } }
       }),
-      // Remove homeAssetId from spread to prevent it being set directly
-      homeAssetId: undefined,
     } as Prisma.WarrantyUpdateInput,
     include: { documents: true }
   });
@@ -456,7 +453,18 @@ function inferAssetTypeFromInventoryItem(item: any): string {
 export async function listLinkedHomeAssets(
   homeownerProfileId: string,
   propertyId: string
-): Promise<HomeAsset[]> { 
+): Promise<Array<{
+  id: string;
+  propertyId: string;
+  assetType: string;
+  installationYear: number | null;
+  modelNumber: string | null;
+  serialNumber: string | null;
+  lastServiced: Date | null;
+  efficiencyRating: string | null;
+  manufacturer: string | null;
+  brand: string | null;
+}>> {
   // 1. Verify the property belongs to the homeowner (critical security check)
   const property = await prisma.property.findFirst({
       where: { id: propertyId, homeownerProfileId },
@@ -479,17 +487,15 @@ export async function listLinkedHomeAssets(
   return inventoryItems.map(item => ({
     id: item.id,
     propertyId: item.propertyId,
-    assetType: inferAssetTypeFromInventoryItem(item),
+    assetType: item.assetType ?? inferAssetTypeFromInventoryItem(item),
     installationYear: item.installedOn ? new Date(item.installedOn).getUTCFullYear() : null,
     modelNumber: item.modelNumber || item.model || null,
     serialNumber: item.serialNumber || item.serialNo || null,
     lastServiced: item.lastServicedOn,
-    efficiencyRating: null,
+    efficiencyRating: item.efficiencyRating,
     manufacturer: item.manufacturer || null,
     brand: item.brand || null,
-    manufacturerNorm: null,
-    modelNumberNorm: null,
-  })) as HomeAsset[];
+  }));
 }
 
 // --- INSURANCE POLICY SERVICE LOGIC (USING MAPPED HELPERS) ---

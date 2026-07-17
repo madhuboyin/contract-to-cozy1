@@ -127,7 +127,6 @@ export const CreateManualFlagSchema = z.object({
   workType: permitWorkType,
   flagReason: z.string().min(1).max(500),
   disclosureRisk: permitDisclosureRisk,
-  homeAssetId: z.string().optional(),
   inventoryItemId: z.string().optional(),
   resolutionNotes: z.string().optional(),
 });

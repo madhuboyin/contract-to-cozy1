@@ -454,7 +454,6 @@ export class ApplianceOracleService {
     try {
       const item = await prisma.inventoryItem.findUnique({
         where: { id: itemId },
-        include: { homeAsset: true },
       });
 
       if (!item) {
@@ -512,9 +511,8 @@ export class ApplianceOracleService {
         logger.info(`[LIFESPAN] Category default calculation for item ${itemId} — base life: ${adjustedLife}yr`);
       }
 
-      // Determine base date: purchasedOn → homeAsset.installedAt → installedOn
+      // Determine base date from the canonical inventory item.
       const baseDate = item.purchasedOn
-        || (item.homeAsset as any)?.installedAt
         || item.installedOn;
 
       if (!baseDate) {

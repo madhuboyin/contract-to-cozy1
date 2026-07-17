@@ -54,7 +54,6 @@ export class BookingService {
     maintenancePredictionId?: string | null;
     priceFinalizationId?: string | null;
     inventoryItemId?: string | null;
-    homeAssetId?: string | null;
     guidanceJourneyId?: string | null;
     guidanceStepKey?: string | null;
   }): BookingExecutionScope {
@@ -76,13 +75,6 @@ export class BookingService {
       return {
         type: 'INVENTORY_ITEM',
         key: `inventory-item:${args.propertyId}:${args.inventoryItemId}`,
-      };
-    }
-
-    if (args.homeAssetId) {
-      return {
-        type: 'HOME_ASSET',
-        key: `home-asset:${args.propertyId}:${args.homeAssetId}`,
       };
     }
 
@@ -144,7 +136,6 @@ export class BookingService {
       guidanceJourneyId?: string | null;
       guidanceStepKey?: string | null;
       guidanceSignalIntentFamily?: string | null;
-      homeAssetId?: string | null;
     }
   ): Promise<BookingResponse> {
     // Validate service exists and get details
@@ -253,7 +244,6 @@ export class BookingService {
           propertyId: string;
           name: string;
           category: InventoryItemCategory;
-          homeAssetId: string | null;
           manufacturer: string | null;
           modelNumber: string | null;
           serialNumber: string | null;
@@ -274,7 +264,6 @@ export class BookingService {
           propertyId: true,
           name: true,
           category: true,
-          homeAssetId: true,
           manufacturer: true,
           modelNumber: true,
           serialNumber: true,
@@ -323,7 +312,6 @@ export class BookingService {
       maintenancePredictionId: linkedPrediction?.id ?? null,
       priceFinalizationId: linkedPriceFinalizationId,
       inventoryItemId: resolvedInventoryItemId,
-      homeAssetId: options?.homeAssetId ?? null,
       guidanceJourneyId: options?.guidanceJourneyId ?? null,
       guidanceStepKey: options?.guidanceStepKey ?? null,
     });
@@ -448,9 +436,6 @@ export class BookingService {
       }
     }
     
-    const resolvedHomeAssetId =
-      options?.homeAssetId ?? input.homeAssetId ?? linkedInventoryItem?.homeAssetId ?? null;
-
     const actionUrlParams = new URLSearchParams();
     if (options?.guidanceJourneyId) actionUrlParams.set('guidanceJourneyId', options.guidanceJourneyId);
     if (options?.guidanceStepKey) actionUrlParams.set('guidanceStepKey', options.guidanceStepKey);
@@ -458,7 +443,6 @@ export class BookingService {
       actionUrlParams.set('guidanceSignalIntentFamily', options.guidanceSignalIntentFamily);
     }
     if (resolvedInventoryItemId) actionUrlParams.set('itemId', resolvedInventoryItemId);
-    if (resolvedHomeAssetId) actionUrlParams.set('homeAssetId', resolvedHomeAssetId);
     if (linkedPriceFinalizationForBooking && linkedPriceFinalizationId) {
       actionUrlParams.set('priceFinalizationId', linkedPriceFinalizationId);
     }
@@ -479,14 +463,12 @@ export class BookingService {
           options?.guidanceJourneyId ||
           options?.guidanceStepKey ||
           options?.guidanceSignalIntentFamily ||
-          resolvedInventoryItemId ||
-          resolvedHomeAssetId
+          resolvedInventoryItemId
             ? {
                 guidanceJourneyId: options?.guidanceJourneyId ?? null,
                 guidanceStepKey: options?.guidanceStepKey ?? null,
                 guidanceSignalIntentFamily: options?.guidanceSignalIntentFamily ?? null,
                 itemId: resolvedInventoryItemId ?? null,
-                homeAssetId: resolvedHomeAssetId ?? null,
                 priceFinalizationId:
                   linkedPriceFinalizationForBooking && linkedPriceFinalizationId
                     ? linkedPriceFinalizationId
@@ -1050,11 +1032,6 @@ export class BookingService {
         providerProfile: true,
         service: true,
         property: true,
-        inventoryItem: {
-          select: {
-            homeAssetId: true,
-          },
-        },
         timeline: {
           orderBy: { createdAt: 'asc' },
         },
@@ -1063,7 +1040,6 @@ export class BookingService {
 
     const cancelActionUrlParams = new URLSearchParams();
     if (updated.inventoryItemId) cancelActionUrlParams.set('itemId', updated.inventoryItemId);
-    if (updated.inventoryItem?.homeAssetId) cancelActionUrlParams.set('homeAssetId', updated.inventoryItem.homeAssetId);
     const cancelActionUrlQuery = cancelActionUrlParams.toString();
     const cancelNotificationActionUrl = cancelActionUrlQuery
       ? `/bookings/${updated.id}?${cancelActionUrlQuery}`
@@ -1078,10 +1054,9 @@ export class BookingService {
       metadata: {
         priority: 'HIGH', // 🔴 REQUIRED for immediate email
         guidanceContext:
-          updated.inventoryItemId || updated.inventoryItem?.homeAssetId
+          updated.inventoryItemId
             ? {
                 itemId: updated.inventoryItemId ?? null,
-                homeAssetId: updated.inventoryItem?.homeAssetId ?? null,
               }
             : null,
       },

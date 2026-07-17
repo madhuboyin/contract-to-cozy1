@@ -117,7 +117,7 @@ class HoaComplianceService {
     // Repeat HOA violations on the same property all reuse ONE merged journey
     // (guidanceJourneyService.findReusableJourney matches on
     // mergedSignalGroupKey, which is identical for every hoa_violation_detected
-    // signal on a given property since none carry an inventoryItemId/homeAssetId).
+    // signal on a given property since none carry an inventoryItemId).
     // So this can't be a simple incident->journey.primarySignalId join — that
     // only ever matches whichever incident happened to create the journey
     // first. Instead, join through each signal's own duplicateGroupKey (the

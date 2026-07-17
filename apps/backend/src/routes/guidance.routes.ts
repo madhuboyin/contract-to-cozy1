@@ -68,12 +68,10 @@ const executionGuardQuerySchema = z.object({
       .optional(),
     journeyId: z.string().uuid().optional(),
     inventoryItemId: z.string().uuid().optional(),
-    homeAssetId: z.string().uuid().optional(),
   }),
 });
 
 const resolveSignalBodySchema = z.object({
-  homeAssetId: z.string().uuid().optional(),
   inventoryItemId: z.string().uuid().optional(),
   signalIntentFamily: z.string().trim().min(2).max(120).optional(),
   issueDomain: z.string().trim().min(2).max(40).optional(),
@@ -111,7 +109,6 @@ const toolCompletionBodySchema = z.object({
   journeyId: z.string().uuid().optional(),
   signalIntentFamily: z.string().trim().min(2).max(120).optional(),
   issueDomain: z.string().trim().min(2).max(40).optional(),
-  homeAssetId: z.string().uuid().optional(),
   inventoryItemId: z.string().uuid().optional(),
   sourceEntityType: z.string().trim().min(2).max(120).optional(),
   sourceEntityId: z.string().trim().min(2).max(120).optional(),
@@ -129,7 +126,6 @@ const startJourneyBodySchema = z.object({
   scopeId: z.string().trim().min(1).max(255),
   issueType: z.string().trim().min(1).max(120),
   inventoryItemId: z.string().uuid().optional(),
-  homeAssetId: z.string().uuid().optional(),
   serviceKey: z.string().trim().min(1).max(120).optional(),
 });
 

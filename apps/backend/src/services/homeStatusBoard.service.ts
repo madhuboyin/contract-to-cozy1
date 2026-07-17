@@ -206,7 +206,7 @@ function buildStatusBoardDecisionCandidates(params: {
   ];
 }
 
-async function ensureHomeAssetsFromRiskReport(propertyId: string): Promise<void> {
+async function ensureInventoryItemsFromRiskReport(propertyId: string): Promise<void> {
   const report = await prisma.riskAssessmentReport.findUnique({
     where: { propertyId },
     select: { details: true },
@@ -235,7 +235,7 @@ async function ensureHomeAssetsFromRiskReport(propertyId: string): Promise<void>
   if (candidates.size === 0) return;
 
   const systemTypes = Array.from(candidates.keys());
-  const existing = await prisma.homeAsset.findMany({
+  const existing = await prisma.inventoryItem.findMany({
     where: {
       propertyId,
       assetType: { in: systemTypes },
@@ -247,17 +247,24 @@ async function ensureHomeAssetsFromRiskReport(propertyId: string): Promise<void>
   if (missingTypes.length === 0) return;
 
   const currentYear = new Date().getFullYear();
-  await prisma.homeAsset.createMany({
+  await prisma.inventoryItem.createMany({
     data: missingTypes.map((assetType) => {
       const ageYears = candidates.get(assetType) ?? null;
-      let installationYear: number | null = null;
+      let installedOn: Date | null = null;
       if (ageYears != null) {
         const inferredYear = currentYear - Math.round(ageYears);
         if (inferredYear >= 1900 && inferredYear <= currentYear) {
-          installationYear = inferredYear;
+          installedOn = new Date(inferredYear, 0, 1);
         }
       }
-      return { propertyId, assetType, installationYear };
+      return {
+        propertyId,
+        assetType,
+        name: assetType.toLowerCase().replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
+        category: 'OTHER' as const,
+        installedOn,
+        sourceType: 'MANUAL' as const,
+      };
     }),
     skipDuplicates: true,
   });
@@ -302,8 +309,7 @@ function getWarrantyStatus(warranties: { expiryDate?: Date | null }[]): Warranty
 function buildDeepLinks(
   item: {
     id: string;
-    inventoryItemId: string | null;
-    homeAssetId: string | null;
+    inventoryItemId: string;
     roomId: string | null;
     categoryKey: string | null;
   },
@@ -321,12 +327,6 @@ function buildDeepLinks(
     });
     links.viewItem = `${base}/inventory?${itemParams.toString()}`;
     links.replaceRepair = `${base}/inventory/items/${item.inventoryItemId}/replace-repair`;
-  } else if (showRiskLink) {
-    // Risk-matrix system rows are not inventory-backed; route "View Item" to property edit.
-    links.viewItem = `${base}/edit?from=status-board`;
-  }
-  if (item.homeAssetId) {
-    links.viewAsset = `${base}/systems/${item.homeAssetId}`;
   }
   if (item.roomId) {
     links.viewRoom = `${base}/rooms/${item.roomId}?from=status-board`;
@@ -400,31 +400,22 @@ function getCostEstimates(
 // ---------------------------------------------------------------------------
 
 export async function ensureHomeItems(propertyId: string): Promise<void> {
-  // Risk report can contain SYSTEMS/SAFETY/STRUCTURE assets not yet persisted as home assets.
-  // Sync these first so status board can include them.
-  await ensureHomeAssetsFromRiskReport(propertyId);
+  // Materialize risk-report systems as canonical inventory items before projecting status rows.
+  await ensureInventoryItemsFromRiskReport(propertyId);
 
-  // Fetch inventory items and home assets
-  const [inventoryItems, homeAssets, existingHomeItems] = await Promise.all([
+  const [inventoryItems, existingHomeItems] = await Promise.all([
     prisma.inventoryItem.findMany({
       where: { propertyId },
-      select: { id: true, name: true, category: true, roomId: true, homeAssetId: true },
-    }),
-    prisma.homeAsset.findMany({
-      where: { propertyId },
-      select: { id: true, assetType: true },
+      select: { id: true, name: true, category: true, roomId: true, assetType: true },
     }),
     prisma.homeItem.findMany({
       where: { propertyId },
-      select: { id: true, inventoryItemId: true, homeAssetId: true, categoryKey: true, roomId: true },
+      select: { id: true, inventoryItemId: true, categoryKey: true, roomId: true },
     }),
   ]);
 
   const inventoryById = new Map(inventoryItems.map((ii) => [ii.id, ii]));
-  const homeAssetById = new Map(homeAssets.map((ha) => [ha.id, ha]));
-
-  const existingInvIds = new Set(existingHomeItems.map((h) => h.inventoryItemId).filter(Boolean));
-  const existingAssetIds = new Set(existingHomeItems.map((h) => h.homeAssetId).filter(Boolean));
+  const existingInvIds = new Set(existingHomeItems.map((h) => h.inventoryItemId));
 
   const creates: any[] = [];
 
@@ -435,30 +426,9 @@ export async function ensureHomeItems(propertyId: string): Promise<void> {
       prisma.homeItem.create({
         data: {
           propertyId,
-          kind: 'INVENTORY_ITEM',
           inventoryItemId: ii.id,
           roomId: ii.roomId,
-          categoryKey: deriveStatusBoardCategory(homeAssetById.get(ii.homeAssetId ?? '')?.assetType, ii.category),
-          status: {
-            create: {},
-          },
-        },
-      })
-    );
-  }
-
-  // Upsert for each home asset not yet tracked.
-  // Keep HOME_ASSET rows even when an inventory item links to the same asset so
-  // SYSTEMS / SAFETY / STRUCTURE entries are visible in Status Board.
-  for (const ha of homeAssets) {
-    if (existingAssetIds.has(ha.id)) continue;
-    creates.push(
-      prisma.homeItem.create({
-        data: {
-          propertyId,
-          kind: 'HOME_ASSET',
-          homeAssetId: ha.id,
-          categoryKey: deriveStatusBoardCategory(ha.assetType, null),
+          categoryKey: deriveStatusBoardCategory(ii.assetType, ii.category),
           status: {
             create: {},
           },
@@ -477,28 +447,13 @@ export async function ensureHomeItems(propertyId: string): Promise<void> {
     if (existing.inventoryItemId) {
       const ii = inventoryById.get(existing.inventoryItemId);
       if (!ii) continue;
-      const desiredCategory = deriveStatusBoardCategory(homeAssetById.get(ii.homeAssetId ?? '')?.assetType, ii.category);
+      const desiredCategory = deriveStatusBoardCategory(ii.assetType, ii.category);
       const desiredRoomId = ii.roomId ?? null;
       if (existing.categoryKey !== desiredCategory || (existing.roomId ?? null) !== desiredRoomId) {
         updates.push(
           prisma.homeItem.update({
             where: { id: existing.id },
             data: { categoryKey: desiredCategory, roomId: desiredRoomId },
-          })
-        );
-      }
-      continue;
-    }
-
-    if (existing.homeAssetId) {
-      const ha = homeAssetById.get(existing.homeAssetId);
-      if (!ha) continue;
-      const desiredCategory = deriveStatusBoardCategory(ha.assetType, null);
-      if (existing.categoryKey !== desiredCategory) {
-        updates.push(
-          prisma.homeItem.update({
-            where: { id: existing.id },
-            data: { categoryKey: desiredCategory },
           })
         );
       }
@@ -523,20 +478,6 @@ export async function computeStatuses(propertyId: string): Promise<void> {
         include: {
           warranty: { select: { expiryDate: true } },
           linkedWarranties: { select: { expiryDate: true } },
-          homeAsset: {
-            include: {
-              warranties: { select: { expiryDate: true } },
-              maintenanceTasks: {
-                where: { status: { not: 'COMPLETED' } },
-                select: { id: true, priority: true, nextDueDate: true },
-              },
-            },
-          },
-        },
-      },
-      homeAsset: {
-        include: {
-          warranties: { select: { expiryDate: true } },
           maintenanceTasks: {
             where: { status: { not: 'COMPLETED' } },
             select: { id: true, priority: true, nextDueDate: true },
@@ -565,22 +506,8 @@ export async function computeStatuses(propertyId: string): Promise<void> {
       // Collect warranties
       if (item.inventoryItem.warranty) allWarranties.push(item.inventoryItem.warranty);
       allWarranties.push(...(item.inventoryItem.linkedWarranties || []));
-      // Check linked home asset
-      if (item.inventoryItem.homeAsset) {
-        assetType = item.inventoryItem.homeAsset.assetType;
-        allWarranties.push(...(item.inventoryItem.homeAsset.warranties || []));
-        maintenanceTasks = item.inventoryItem.homeAsset.maintenanceTasks || [];
-        if (!installDate && item.inventoryItem.homeAsset.installationYear) {
-          installDate = new Date(item.inventoryItem.homeAsset.installationYear, 0, 1);
-        }
-      }
-    } else if (item.homeAsset) {
-      assetType = item.homeAsset.assetType;
-      allWarranties = item.homeAsset.warranties || [];
-      maintenanceTasks = item.homeAsset.maintenanceTasks || [];
-      if (item.homeAsset.installationYear) {
-        installDate = new Date(item.homeAsset.installationYear, 0, 1);
-      }
+      assetType = item.inventoryItem.assetType;
+      maintenanceTasks = item.inventoryItem.maintenanceTasks || [];
     }
 
     // Use override dates if present
@@ -736,7 +663,7 @@ export async function listBoard(propertyId: string, query: ListBoardQuery, userI
   if (q) {
     where.OR = [
       { inventoryItem: { name: { contains: q, mode: 'insensitive' } } },
-      { homeAsset: { assetType: { contains: q, mode: 'insensitive' } } },
+      { inventoryItem: { assetType: { contains: q, mode: 'insensitive' } } },
       { displayName: { contains: q, mode: 'insensitive' } },
       { categoryKey: { contains: q, mode: 'insensitive' } },
     ];
@@ -760,24 +687,11 @@ export async function listBoard(propertyId: string, query: ListBoardQuery, userI
       include: {
         warranty: { select: { id: true, expiryDate: true, providerName: true } },
         linkedWarranties: { select: { id: true, expiryDate: true, providerName: true } },
-        homeAsset: {
-          select: {
-            id: true,
-            assetType: true,
-            installationYear: true,
-            warranties: { select: { id: true, expiryDate: true } },
-          },
-        },
-        room: { select: { id: true, name: true } },
-      },
-    },
-    homeAsset: {
-      include: {
-        warranties: { select: { id: true, expiryDate: true, providerName: true } },
         maintenanceTasks: {
           where: { status: { not: 'COMPLETED' as const } },
           select: { id: true },
         },
+        room: { select: { id: true, name: true } },
       },
     },
   };
@@ -805,27 +719,6 @@ export async function listBoard(propertyId: string, query: ListBoardQuery, userI
     // Display name
     let displayName = item.displayName || '';
     if (!displayName && item.inventoryItem) displayName = item.inventoryItem.name;
-    if (!displayName && item.homeAsset) {
-      const ASSET_NAME_MAP: Record<string, string> = {
-        HVAC_FURNACE: 'HVAC Furnace',
-        HVAC_AC: 'HVAC Air Conditioner',
-        HVAC_HEAT_PUMP: 'HVAC Heat Pump',
-        WATER_HEATER_TANK: 'Water Heater (Tank)',
-        WATER_HEATER_TANKLESS: 'Water Heater (Tankless)',
-        SAFETY_SMOKE_CO_DETECTORS: 'Smoke & CO Detectors',
-        ELECTRICAL_PANEL: 'Electrical Panel',
-        ROOF: 'Roof',
-        FOUNDATION: 'Foundation',
-        SUMP_PUMP: 'Sump Pump',
-        WATER_SOFTENER: 'Water Softener',
-      };
-      displayName =
-        ASSET_NAME_MAP[item.homeAsset.assetType] ??
-        item.homeAsset.assetType
-          .toLowerCase()
-          .replace(/_/g, ' ')
-          .replace(/\b\w/g, (c) => c.toUpperCase());
-    }
 
     // Category
     const category = item.categoryKey || 'OTHER';
@@ -834,12 +727,6 @@ export async function listBoard(propertyId: string, query: ListBoardQuery, userI
     let installDate: Date | null = s?.overrideInstalledAt ?? null;
     if (!installDate && item.inventoryItem) {
       installDate = item.inventoryItem.installedOn ?? item.inventoryItem.purchasedOn ?? null;
-      if (!installDate && item.inventoryItem.homeAsset?.installationYear) {
-        installDate = new Date(item.inventoryItem.homeAsset.installationYear, 0, 1);
-      }
-    }
-    if (!installDate && item.homeAsset?.installationYear) {
-      installDate = new Date(item.homeAsset.installationYear, 0, 1);
     }
 
     const ageYears = installDate
@@ -850,13 +737,11 @@ export async function listBoard(propertyId: string, query: ListBoardQuery, userI
     const allWarranties: { expiryDate?: Date | null }[] = [];
     if (item.inventoryItem?.warranty) allWarranties.push(item.inventoryItem.warranty);
     if (item.inventoryItem?.linkedWarranties) allWarranties.push(...item.inventoryItem.linkedWarranties);
-    if (item.inventoryItem?.homeAsset?.warranties) allWarranties.push(...item.inventoryItem.homeAsset.warranties);
-    if (item.homeAsset?.warranties) allWarranties.push(...item.homeAsset.warranties);
 
     const warrantyInfo = getWarrantyStatus(allWarranties);
 
     // Pending maintenance count
-    const pendingMaintenance = item.homeAsset?.maintenanceTasks?.length ?? 0;
+    const pendingMaintenance = item.inventoryItem?.maintenanceTasks?.length ?? 0;
 
     // Room
     const room = item.inventoryItem?.room ?? null;
@@ -865,14 +750,14 @@ export async function listBoard(propertyId: string, query: ListBoardQuery, userI
       !installDate && effectiveCondition === 'GOOD' && effectiveRecommendation === 'OK';
 
     // Phase-3: cost context per item
-    const assetTypeForCost = item.homeAsset?.assetType ?? item.inventoryItem?.homeAsset?.assetType ?? null;
+    const assetTypeForCost = item.inventoryItem?.assetType ?? null;
     const invCategoryForCost = item.inventoryItem?.category ?? null;
     const { estimatedReplaceCostUsd, estimatedRepairCostUsd } = getCostEstimates(assetTypeForCost, invCategoryForCost);
     const categoryPriorityWeight = getCategoryPriorityWeight(category);
 
     return {
       id: item.id,
-      kind: item.kind,
+      kind: 'INVENTORY_ITEM' as const,
       displayName,
       category,
       ageYears,
@@ -903,14 +788,12 @@ export async function listBoard(propertyId: string, query: ListBoardQuery, userI
         {
           id: item.id,
           inventoryItemId: item.inventoryItemId,
-          homeAssetId: item.homeAssetId,
           roomId: item.roomId,
           categoryKey: item.categoryKey,
         },
         propertyId
       ),
       inventoryItemId: item.inventoryItemId,
-      homeAssetId: item.homeAssetId,
     };
   });
 

@@ -62,7 +62,7 @@ export class BudgetForecasterService {
       },
       include: {
         homeownerProfile: true,
-        homeAssets: true
+        inventoryItems: true
       }
     });
 
@@ -100,8 +100,8 @@ export class BudgetForecasterService {
     const recommendations = await this.getAIRecommendations(property, totalAnnualCost, propertyAge);
 
     // Confidence level (higher for more data)
-    const homeAssets = property.homeAssets || [];
-    const confidenceLevel = Math.min(95, 60 + (homeAssets.length * 5));
+    const inventoryItems = property.inventoryItems || [];
+    const confidenceLevel = Math.min(95, 60 + (inventoryItems.length * 5));
 
     return {
       propertyId,

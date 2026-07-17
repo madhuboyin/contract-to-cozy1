@@ -104,8 +104,6 @@ export async function calculateHomeEquity(propertyId: string): Promise<HomeEquit
     where: { id: propertyId },
     select: {
       id: true,
-      purchasePriceCents: true,
-      purchaseDate: true,
       lastAppraisedValue: true,
       isEquityVerified: true,
       bonusMultiplier: true,
@@ -137,8 +135,8 @@ export async function calculateHomeEquity(propertyId: string): Promise<HomeEquit
     property.bonusMultiplier
   );
   const lastAppraisedValueCents = property.lastAppraisedValue ?? 0;
-  const purchasePriceCents = property.financingProfile?.purchasePriceCents ?? property.purchasePriceCents ?? null;
-  const purchaseDate = property.financingProfile?.purchaseDate ?? property.purchaseDate;
+  const purchasePriceCents = property.financingProfile?.purchasePriceCents ?? null;
+  const purchaseDate = property.financingProfile?.purchaseDate ?? null;
   const appreciationCents =
     purchasePriceCents !== null ? lastAppraisedValueCents - purchasePriceCents : 0;
   const baseEquityCents = appreciationCents;

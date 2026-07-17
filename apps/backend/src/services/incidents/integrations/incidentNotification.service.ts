@@ -9,7 +9,6 @@ type GuidanceContextBadge = {
   guidanceStepKey?: string | null;
   guidanceSignalIntentFamily?: string | null;
   itemId?: string | null;
-  homeAssetId?: string | null;
 };
 
 function shouldSendInApp(sev: IncidentSeverity) {
@@ -103,8 +102,7 @@ function hasGuidanceContext(context: GuidanceContextBadge | null | undefined): c
     context.guidanceJourneyId ||
       context.guidanceStepKey ||
       context.guidanceSignalIntentFamily ||
-      context.itemId ||
-      context.homeAssetId
+      context.itemId
   );
 }
 
@@ -133,9 +131,6 @@ function appendGuidanceContextToActionUrl(
     }
     if (context.itemId && !url.searchParams.get('itemId')) {
       url.searchParams.set('itemId', context.itemId);
-    }
-    if (context.homeAssetId && !url.searchParams.get('homeAssetId')) {
-      url.searchParams.set('homeAssetId', context.homeAssetId);
     }
 
     return `${url.pathname}${url.search}${url.hash}`;
@@ -169,10 +164,6 @@ async function resolveGuidanceContextForIncident(args: {
       typeof details.inventoryItemId === 'string' && details.inventoryItemId.trim().length > 0
         ? details.inventoryItemId
         : null,
-    homeAssetId:
-      typeof details.homeAssetId === 'string' && details.homeAssetId.trim().length > 0
-        ? details.homeAssetId
-        : null,
   };
 
   if (!context.guidanceJourneyId) {
@@ -191,7 +182,6 @@ async function resolveGuidanceContextForIncident(args: {
         id: true,
         currentStepKey: true,
         inventoryItemId: true,
-        homeAssetId: true,
         primarySignal: {
           select: {
             signalIntentFamily: true,
@@ -213,9 +203,6 @@ async function resolveGuidanceContextForIncident(args: {
       }
       if (!context.itemId) {
         context.itemId = journey.inventoryItemId ?? null;
-      }
-      if (!context.homeAssetId) {
-        context.homeAssetId = journey.homeAssetId ?? null;
       }
     }
   }

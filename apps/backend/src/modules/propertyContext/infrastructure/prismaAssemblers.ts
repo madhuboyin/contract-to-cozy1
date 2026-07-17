@@ -456,7 +456,6 @@ export const coverageAssembler: PropertyContextAssembler = {
         select: {
           id: true,
           category: true,
-          homeAssetId: true,
           inventoryItemId: true,
           startDate: true,
           expiryDate: true,
@@ -632,7 +631,6 @@ export const recallsAssembler: PropertyContextAssembler = {
       select: {
         id: true,
         inventoryItemId: true,
-        homeAssetId: true,
         recallId: true,
         method: true,
         confidencePct: true,
@@ -660,7 +658,6 @@ export const guidanceStateAssembler: PropertyContextAssembler = {
       },
       select: {
         id: true,
-        homeAssetId: true,
         inventoryItemId: true,
         signalIntentFamily: true,
         issueDomain: true,
@@ -897,7 +894,7 @@ export const complianceAssembler: PropertyContextAssembler = {
       }),
       prisma.permitUnpermittedFlag.findMany({
         where: { propertyId, status: { in: ['FLAGGED', 'INVESTIGATING', 'CONFIRMED_UNPERMITTED', 'WILL_REMEDIATE'] } },
-        select: { id: true, workType: true, status: true, disclosureRisk: true, homeAssetId: true, inventoryItemId: true, updatedAt: true },
+        select: { id: true, workType: true, status: true, disclosureRisk: true, inventoryItemId: true, updatedAt: true },
         orderBy: { updatedAt: 'desc' },
         take: 100,
       }),
@@ -927,13 +924,13 @@ export const projectsAssembler: PropertyContextAssembler = {
       }),
       prisma.materialSpec.findMany({
         where: { propertyId, isActive: true },
-        select: { id: true, roomId: true, scopeLevel: true, category: true, surface: true, label: true, linkedInventoryItemId: true, linkedHomeAssetId: true, updatedAt: true },
+        select: { id: true, roomId: true, scopeLevel: true, category: true, surface: true, label: true, linkedInventoryItemId: true, updatedAt: true },
         orderBy: { updatedAt: 'desc' },
         take: 200,
       }),
       prisma.quoteComparisonWorkspace.findMany({
         where: { propertyId, status: { in: ['DRAFT', 'SHORTLISTED'] } },
-        select: { id: true, status: true, serviceCategory: true, inventoryItemId: true, homeAssetId: true, updatedAt: true },
+        select: { id: true, status: true, serviceCategory: true, inventoryItemId: true, updatedAt: true },
         orderBy: { updatedAt: 'desc' },
         take: 100,
       }),
@@ -951,7 +948,7 @@ export const projectsAssembler: PropertyContextAssembler = {
       }),
       prisma.priceFinalization.findMany({
         where: { propertyId, status: 'DRAFT' },
-        select: { id: true, sourceType: true, serviceCategory: true, vendorName: true, inventoryItemId: true, homeAssetId: true, updatedAt: true },
+        select: { id: true, sourceType: true, serviceCategory: true, vendorName: true, inventoryItemId: true, updatedAt: true },
         orderBy: { updatedAt: 'desc' },
         take: 100,
       }),

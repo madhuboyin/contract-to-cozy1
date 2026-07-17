@@ -14,7 +14,7 @@ test('permit workers recheck the shared Phase 4 policy before effects', () => {
   assert.ok(fetchService.indexOf('await checkPermitWorkerContext') < fetchService.indexOf("status: 'RUNNING'"));
 
   const detectionService = read('../../src/services/permitDetection.service.ts');
-  assert.ok(detectionService.indexOf('await checkPermitWorkerContext') < detectionService.indexOf('prisma.homeAsset.findMany'));
+  assert.ok(detectionService.indexOf('await checkPermitWorkerContext') < detectionService.indexOf('prisma.inventoryItem.findMany'));
 
   const reminder = read('../../../workers/src/jobs/permitInspectionReminder.job.ts');
   assert.ok(reminder.indexOf('await checkPermitWorkerContext') < reminder.indexOf('await NotificationService.create'));

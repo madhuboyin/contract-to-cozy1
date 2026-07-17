@@ -66,7 +66,6 @@ export async function listPriceFinalizations(
       {
         guidanceJourneyId: queryResult.data.guidanceJourneyId,
         inventoryItemId: queryResult.data.inventoryItemId,
-        homeAssetId: queryResult.data.homeAssetId,
       }
     );
     const propertyContext = await getProjectComplianceEnvelope(
@@ -305,7 +304,6 @@ export async function finalizePriceFinalization(
         stepKey: resolvedStepKey,
         status: 'COMPLETED',
         inventoryItemId: detail.inventoryItemId,
-        homeAssetId: detail.homeAssetId,
         producedData: {
           proofType: 'price_finalization',
           proofId: detail.id,

@@ -71,19 +71,12 @@ const PROPERTY_CONTEXT_SELECT = {
   hvacInstallYear: true,
   waterHeaterInstallYear: true,
   roofReplacementYear: true,
-  homeAssets: {
-    select: {
-      id: true,
-      assetType: true,
-      installationYear: true,
-    },
-  },
   inventoryItems: {
     select: {
       id: true,
       name: true,
       category: true,
-      homeAssetId: true,
+      assetType: true,
       installedOn: true,
     },
   },
@@ -148,16 +141,16 @@ function relevanceWeight(relevance: string): number {
 }
 
 function pickHomeAsset(
-  homeAssets: Array<{ id: string; assetType: string; installationYear: number | null }>,
+  homeAssets: Array<{ id: string; assetType: string | null; installedOn: Date | null }>,
   keywords: string[],
-): { id: string; assetType: string; installationYear: number | null } | null {
+): { id: string; assetType: string | null; installedOn: Date | null } | null {
   const hit = homeAssets.find((asset) => keywords.some((keyword) => normalizeString(asset.assetType).includes(keyword)));
   return hit ?? null;
 }
 
 function makePropertySystem(
   type: string,
-  homeAsset: { id: string; assetType: string; installationYear: number | null } | null,
+  homeAsset: { id: string; assetType: string | null; installedOn: Date | null } | null,
   fallbackLabel: string,
   fallbackInstallYear: number | null = null,
 ): ReplayPropertySystemContext | null {
@@ -166,18 +159,18 @@ function makePropertySystem(
   return {
     type,
     id: homeAsset?.id ?? null,
-    label: homeAsset ? humanizeEventType(homeAsset.assetType) : fallbackLabel,
-    installationYear: homeAsset?.installationYear ?? fallbackInstallYear,
+    label: homeAsset ? humanizeEventType(homeAsset.assetType ?? fallbackLabel) : fallbackLabel,
+    installationYear: homeAsset?.installedOn?.getUTCFullYear() ?? fallbackInstallYear,
   };
 }
 
 function buildPropertyContext(
   property: Prisma.PropertyGetPayload<{ select: typeof PROPERTY_CONTEXT_SELECT }>,
 ): ReplayPropertyContext {
-  const roofAsset = pickHomeAsset(property.homeAssets, ['roof']);
-  const hvacAsset = pickHomeAsset(property.homeAssets, ['hvac', 'ac', 'furnace', 'heat pump', 'boiler']);
-  const plumbingAsset = pickHomeAsset(property.homeAssets, ['water heater', 'plumbing', 'pipe']);
-  const electricalAsset = pickHomeAsset(property.homeAssets, ['electrical', 'panel', 'generator']);
+  const roofAsset = pickHomeAsset(property.inventoryItems, ['roof']);
+  const hvacAsset = pickHomeAsset(property.inventoryItems, ['hvac', 'ac', 'furnace', 'heat pump', 'boiler']);
+  const plumbingAsset = pickHomeAsset(property.inventoryItems, ['water heater', 'plumbing', 'pipe']);
+  const electricalAsset = pickHomeAsset(property.inventoryItems, ['electrical', 'panel', 'generator']);
 
   const hasBelowGradeSpace = normalizeString(property.foundationType).includes('basement')
     || normalizeString(property.foundationType).includes('crawl');

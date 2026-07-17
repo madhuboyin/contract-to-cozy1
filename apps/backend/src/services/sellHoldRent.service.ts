@@ -4,7 +4,7 @@ import { prisma } from '../lib/prisma';
 import { HomeCostGrowthService } from './homeCostGrowth.service';
 import { TrueCostOwnershipService } from './trueCostOwnership.service';
 import { listToolOverrides } from './toolOverride.service';
-import { getFinanceSnapshot } from './propertyFinanceSnapshot.service';
+import { getCanonicalMortgage } from './canonicalFinanceAdapter.service';
 import {
   FinancialAssumptionService,
   FinancialAssumptions,
@@ -38,7 +38,7 @@ export type SellHoldRentInput = {
   vacancyRate?: number;          // decimal
   managementRate?: number;       // decimal
 
-  // Debt overrides (optional; normally sourced from propertyFinanceSnapshot)
+  // Debt overrides (optional; normally sourced from PropertyFinancingProfile)
   mortgageBalance?: number;
   mortgageAnnualRate?: number;   // decimal
   remainingTermMonths?: number;
@@ -356,7 +356,7 @@ export class SellHoldRentService {
           })();
 
     // --- Debt aware (Phase 3) ---
-    const snap = await getFinanceSnapshot(propertyId);
+    const snap = await getCanonicalMortgage(propertyId);
 
     // allow request/tool overrides to override snapshot
     const mortgageBalanceNow =

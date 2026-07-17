@@ -8,7 +8,7 @@ import { RefinanceConfidenceLevel, RefinanceRadarState, RefinanceScenarioTerm } 
 // ─── Internal Domain Objects ─────────────────────────────────────────────────
 
 /**
- * Normalized mortgage context extracted from PropertyFinanceSnapshot.
+ * Normalized mortgage context extracted from PropertyFinancingProfile.
  * All rates are in percentage form (e.g., 6.25 for 6.25%).
  */
 export interface MortgageInputContext {

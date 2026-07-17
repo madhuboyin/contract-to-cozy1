@@ -49,9 +49,8 @@ export async function loadPropertyTraitFacts(propertyId: string): Promise<Proper
     select: {
       hasSmokeDetectors: true,
       roofReplacementYear: true,
-      homeAssets: { select: { assetType: true, lastServiced: true } },
       inventoryItems: {
-        select: { name: true, category: true, tags: true, lastServicedOn: true },
+        select: { name: true, category: true, tags: true, lastServicedOn: true, assetType: true },
       },
     },
   });
@@ -60,12 +59,11 @@ export async function loadPropertyTraitFacts(propertyId: string): Promise<Proper
   return {
     hasSmokeDetectors: property.hasSmokeDetectors,
     roofReplacementYear: property.roofReplacementYear,
-    homeAssets: [
-      ...property.homeAssets,
-      ...(property.inventoryItems ?? [])
-        .map(inventoryItemToPersonalizationAssetFact)
-        .filter((asset): asset is HomeAssetFact => asset !== null),
-    ],
+    homeAssets: (property.inventoryItems ?? [])
+      .map((item) => item.assetType
+        ? { assetType: item.assetType, lastServiced: item.lastServicedOn }
+        : inventoryItemToPersonalizationAssetFact(item))
+      .filter((asset): asset is HomeAssetFact => asset !== null),
   };
 }
 

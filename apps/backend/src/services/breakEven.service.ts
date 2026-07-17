@@ -11,7 +11,7 @@ import {
 } from './financialAssumption.service';
 import { buildAnnualCostSeries, buildAnnualGainSeries } from './tools/financialProjectionMath';
 import { computeMonthlyPayment } from './tools/mortgageMath';
-import { getFinanceSnapshot } from './propertyFinanceSnapshot.service';
+import { getCanonicalMortgage } from './canonicalFinanceAdapter.service';
 
 export type BreakEvenYears = 5 | 10 | 20 | 30;
 
@@ -265,7 +265,7 @@ export class BreakEvenService {
     const zipCode = String(property.zipCode || '');
     const addressLabel = `${property.address}, ${property.city} ${property.state} ${property.zipCode}`;
     const nowYear = new Date().getFullYear();
-    const financeSnapshot = await getFinanceSnapshot(propertyId);
+    const financeSnapshot = await getCanonicalMortgage(propertyId);
 
     const notes: string[] = [];
     const dataSources: string[] = [
@@ -604,7 +604,7 @@ export class BreakEvenService {
         ? {
             toolKey: 'sell-hold-rent',
             label: 'Add mortgage details for debt-aware modeling',
-            href: `/dashboard/properties/${propertyId}/tools/sell-hold-rent${assumptionSetSuffix}#finance-snapshot`,
+            href: `/dashboard/properties/${propertyId}/tools/sell-hold-rent${assumptionSetSuffix}#financing-profile`,
             reason: 'Debt context is missing, so break-even is currently directional.',
           }
         : reached

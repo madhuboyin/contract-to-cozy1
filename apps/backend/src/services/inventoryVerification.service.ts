@@ -79,7 +79,7 @@ export async function getHighestPriorityUnverifiedItem(propertyId: string) {
         },
       },
     },
-    include: { room: true, homeAsset: true },
+    include: { room: true },
     orderBy: { createdAt: 'asc' },
   });
 
@@ -94,7 +94,7 @@ export async function getHighestPriorityUnverifiedItem(propertyId: string) {
       isVerified: false,
       category: { in: HIGH_VALUE_CATEGORIES as any },
     },
-    include: { room: true, homeAsset: true },
+    include: { room: true },
     orderBy: [
       { purchasedOn: { sort: 'desc', nulls: 'last' } },
       { createdAt: 'asc' },
@@ -112,7 +112,7 @@ export async function getHighestPriorityUnverifiedItem(propertyId: string) {
       isVerified: false,
       purchasedOn: { not: null },
     },
-    include: { room: true, homeAsset: true },
+    include: { room: true },
     orderBy: { createdAt: 'asc' },
   });
 
@@ -123,7 +123,7 @@ export async function getHighestPriorityUnverifiedItem(propertyId: string) {
   // Priority 4: Fallback — oldest unverified item
   const fallbackItem = await prisma.inventoryItem.findFirst({
     where: { propertyId, isVerified: false },
-    include: { room: true, homeAsset: true },
+    include: { room: true },
     orderBy: { createdAt: 'asc' },
   });
 
@@ -166,7 +166,7 @@ export async function markItemVerified(
       verificationSource: source,
       ...(technicalSpecs ? { technicalSpecs } : {}),
     },
-    include: { room: true, homeAsset: true },
+    include: { room: true },
   });
 
   // Fire-and-forget lifespan recalculation

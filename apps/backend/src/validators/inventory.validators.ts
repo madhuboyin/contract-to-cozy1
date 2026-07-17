@@ -58,7 +58,6 @@ export const createItemBodySchema = z.object({
   condition: z.nativeEnum(InventoryItemCondition).optional(),
 
   roomId: z.string().uuid().nullable().optional(),
-  homeAssetId: z.string().uuid().nullable().optional(),
   warrantyId: z.string().uuid().nullable().optional(),
   insurancePolicyId: z.string().uuid().nullable().optional(),
 
@@ -92,7 +91,6 @@ export const updateItemBodySchema = z.object({
   condition: z.nativeEnum(InventoryItemCondition).optional(),
 
   roomId: z.string().uuid().nullable().optional(),
-  homeAssetId: z.string().uuid().nullable().optional(),
   warrantyId: z.string().uuid().nullable().optional(),
   insurancePolicyId: z.string().uuid().nullable().optional(),
 

@@ -137,7 +137,6 @@ function normalizeEvidenceScopeCategory(value: unknown): GuidanceEvidenceScopeCa
   if (
     normalized === 'PROPERTY' ||
     normalized === 'ITEM' ||
-    normalized === 'HOME_ASSET' ||
     normalized === 'SERVICE' ||
     normalized === 'UNKNOWN'
   ) {
@@ -162,9 +161,6 @@ function inferExpectedEvidenceScope(journey: any): GuidanceEvidenceScopeSnapshot
   }
   if (journey?.inventoryItemId) {
     return buildEvidenceScopeSnapshot('ITEM', journey.inventoryItemId);
-  }
-  if (journey?.homeAssetId) {
-    return buildEvidenceScopeSnapshot('HOME_ASSET', journey.homeAssetId);
   }
   return buildEvidenceScopeSnapshot('PROPERTY', journey?.propertyId ?? null);
 }
@@ -194,9 +190,7 @@ function inferActualEvidenceScope(args: {
           ? toNonEmptyString(args.journey?.scopeId ?? args.journey?.serviceKey ?? null)
           : explicitCategory === 'ITEM'
             ? toNonEmptyString(args.input.inventoryItemId ?? args.journey?.inventoryItemId ?? args.signal?.inventoryItemId ?? null)
-            : explicitCategory === 'HOME_ASSET'
-              ? toNonEmptyString(args.input.homeAssetId ?? args.journey?.homeAssetId ?? args.signal?.homeAssetId ?? null)
-              : null;
+            : null;
     return buildEvidenceScopeSnapshot(explicitCategory, explicitScopeId ?? fallbackScopeId ?? null);
   }
 
@@ -204,13 +198,6 @@ function inferActualEvidenceScope(args: {
     return buildEvidenceScopeSnapshot(
       'ITEM',
       toNonEmptyString(args.input.inventoryItemId ?? args.signal?.inventoryItemId ?? args.journey?.inventoryItemId ?? null)
-    );
-  }
-
-  if (args.input.homeAssetId ?? args.signal?.homeAssetId ?? args.journey?.homeAssetId) {
-    return buildEvidenceScopeSnapshot(
-      'HOME_ASSET',
-      toNonEmptyString(args.input.homeAssetId ?? args.signal?.homeAssetId ?? args.journey?.homeAssetId ?? null)
     );
   }
 
@@ -383,19 +370,17 @@ export class GuidanceJourneyService {
     sourceEntityType?: string | null;
     sourceEntityId?: string | null;
     inventoryItemId?: string | null;
-    homeAssetId?: string | null;
-  }): Promise<{ inventoryItemId: string | null; homeAssetId: string | null }> {
+  }): Promise<{ inventoryItemId: string | null }> {
     let inventoryItemId = input.inventoryItemId ?? null;
-    let homeAssetId = input.homeAssetId ?? null;
 
-    if (inventoryItemId || homeAssetId) {
-      return { inventoryItemId, homeAssetId };
+    if (inventoryItemId) {
+      return { inventoryItemId };
     }
 
     const sourceEntityType = String(input.sourceEntityType ?? '').trim().toUpperCase();
     const sourceEntityId = toNonEmptyString(input.sourceEntityId);
     if (!sourceEntityType || !sourceEntityId) {
-      return { inventoryItemId, homeAssetId };
+      return { inventoryItemId };
     }
 
     const db = prisma as any;
@@ -410,24 +395,21 @@ export class GuidanceJourneyService {
       } else if (sourceEntityType === 'RECALL_MATCH' && db.recallMatch) {
         const row = await db.recallMatch.findFirst({
           where: { id: sourceEntityId, propertyId: input.propertyId },
-          select: { inventoryItemId: true, homeAssetId: true },
+          select: { inventoryItemId: true },
         });
         if (row?.inventoryItemId) inventoryItemId = row.inventoryItemId;
-        if (row?.homeAssetId) homeAssetId = row.homeAssetId;
       } else if (sourceEntityType === 'PRICE_FINALIZATION' && db.priceFinalization) {
         const row = await db.priceFinalization.findFirst({
           where: { id: sourceEntityId, propertyId: input.propertyId },
-          select: { inventoryItemId: true, homeAssetId: true },
+          select: { inventoryItemId: true },
         });
         if (row?.inventoryItemId) inventoryItemId = row.inventoryItemId;
-        if (row?.homeAssetId) homeAssetId = row.homeAssetId;
       } else if (sourceEntityType === 'BOOKING' && db.booking) {
         const row = await db.booking.findFirst({
           where: { id: sourceEntityId, propertyId: input.propertyId },
-          select: { inventoryItemId: true, homeAssetId: true },
+          select: { inventoryItemId: true },
         });
         if (row?.inventoryItemId) inventoryItemId = row.inventoryItemId;
-        if (row?.homeAssetId) homeAssetId = row.homeAssetId;
       } else if (sourceEntityType === 'SERVICE_PRICE_RADAR_CHECK' && db.serviceRadarCheckSystemLink) {
         const applianceLink = await db.serviceRadarCheckSystemLink.findFirst({
           where: {
@@ -445,7 +427,7 @@ export class GuidanceJourneyService {
           },
           select: { linkedEntityId: true },
         });
-        if (systemLink?.linkedEntityId) homeAssetId = systemLink.linkedEntityId;
+        if (systemLink?.linkedEntityId) inventoryItemId = systemLink.linkedEntityId;
       }
     } catch (error) {
       logger.warn({
@@ -456,7 +438,7 @@ export class GuidanceJourneyService {
       }, '[GUIDANCE] failed to infer scope from source entity');
     }
 
-    return { inventoryItemId, homeAssetId };
+    return { inventoryItemId };
   }
 
   private async captureStepEvidence(args: {
@@ -565,7 +547,6 @@ export class GuidanceJourneyService {
           journeyId: args.journey.id,
           stepId: args.step.id,
           signalId: args.signal?.id ?? args.journey.primarySignalId ?? null,
-          homeAssetId: actualScope.category === 'HOME_ASSET' ? actualScope.scopeId : null,
           inventoryItemId: actualScope.category === 'ITEM' ? actualScope.scopeId : null,
           evidenceType,
           sourceType,
@@ -789,7 +770,7 @@ export class GuidanceJourneyService {
       coverageImpact: financial.coverageImpact,
       confidenceLabel: adjustedConfidenceLabel,
       itemName: (journey as any).inventoryItem?.name ?? null,
-      assetType: (journey as any).homeAsset?.assetType ?? null,
+      assetType: (journey as any).inventoryItem?.assetType ?? null,
     });
 
     const baseWarnings = guidanceCopyService.polishWarnings(next?.warnings ?? [], {
@@ -808,7 +789,7 @@ export class GuidanceJourneyService {
         journeyId: journey.id,
         issueDomain: journey.issueDomain,
         signalIntentFamily: signal?.signalIntentFamily ?? null,
-        assetName: (journey as any).inventoryItem?.name ?? (journey as any).homeAsset?.assetType ?? null,
+        assetName: (journey as any).inventoryItem?.name ?? (journey as any).inventoryItem?.assetType ?? null,
         symptom: (journey as any).producedDataJson?.symptomKey ?? (journey as any).issueType ?? null,
         currentStepLabel: explanation.nextStep,
         priorityBucket: adjustedPriorityBucket,
@@ -890,7 +871,6 @@ export class GuidanceJourneyService {
     propertyId: string;
     journeyTypeKey: string;
     inventoryItemId: string | null;
-    homeAssetId: string | null;
     duplicateGroupKey: string;
   }) {
     const { guidanceJourney } = getGuidanceModels();
@@ -901,7 +881,6 @@ export class GuidanceJourneyService {
         status: 'ACTIVE',
         mergedSignalGroupKey: args.duplicateGroupKey,
         inventoryItemId: args.inventoryItemId,
-        homeAssetId: args.homeAssetId,
       },
       include: {
         steps: {
@@ -920,7 +899,6 @@ export class GuidanceJourneyService {
         journeyTypeKey: args.journeyTypeKey,
         mergedSignalGroupKey: args.duplicateGroupKey,
         inventoryItemId: args.inventoryItemId,
-        homeAssetId: args.homeAssetId,
       },
       include: {
         steps: {
@@ -938,7 +916,6 @@ export class GuidanceJourneyService {
         status: 'ACTIVE',
         journeyTypeKey: args.journeyTypeKey,
         inventoryItemId: args.inventoryItemId,
-        homeAssetId: args.homeAssetId,
       },
       include: {
         steps: {
@@ -961,7 +938,6 @@ export class GuidanceJourneyService {
       propertyId: params.propertyId,
       journeyTypeKey: template.journeyTypeKey,
       inventoryItemId: params.signal.inventoryItemId ?? null,
-      homeAssetId: params.signal.homeAssetId ?? null,
       duplicateGroupKey: params.signal.duplicateGroupKey,
     });
 
@@ -971,7 +947,6 @@ export class GuidanceJourneyService {
       journey = await guidanceJourney.create({
         data: {
           propertyId: params.propertyId,
-          homeAssetId: params.signal.homeAssetId ?? null,
           inventoryItemId: params.signal.inventoryItemId ?? null,
           primarySignalId: params.signal.id,
           journeyKey: template.journeyKey,
@@ -1123,10 +1098,8 @@ export class GuidanceJourneyService {
       sourceEntityType: input.sourceEntityType ?? null,
       sourceEntityId: input.sourceEntityId ?? null,
       inventoryItemId: input.inventoryItemId ?? null,
-      homeAssetId: input.homeAssetId ?? null,
     });
     const resolvedInventoryItemId = input.inventoryItemId ?? inferredScope.inventoryItemId ?? null;
-    const resolvedHomeAssetId = input.homeAssetId ?? inferredScope.homeAssetId ?? null;
 
     if (input.journeyId) {
       journey = await guidanceJourney.findFirst({
@@ -1150,7 +1123,6 @@ export class GuidanceJourneyService {
     } else {
       const ingest = await this.ingestSignal({
         propertyId: input.propertyId,
-        homeAssetId: resolvedHomeAssetId,
         inventoryItemId: resolvedInventoryItemId,
         signalIntentFamily: input.signalIntentFamily ?? null,
         issueDomain: input.issueDomain ?? null,
@@ -1600,10 +1572,7 @@ export class GuidanceJourneyService {
             take: 75,
           },
           inventoryItem: {
-            select: { name: true, category: true },
-          },
-          homeAsset: {
-            select: { assetType: true },
+            select: { name: true, category: true, assetType: true },
           },
         },
       });
@@ -1693,10 +1662,7 @@ export class GuidanceJourneyService {
           take: 50,
         },
         inventoryItem: {
-          select: { name: true, category: true },
-        },
-        homeAsset: {
-          select: { assetType: true },
+          select: { name: true, category: true, assetType: true },
         },
       },
       orderBy: [{ updatedAt: 'desc' }],
@@ -1822,7 +1788,6 @@ export class GuidanceJourneyService {
     scopeCategory: 'ITEM' | 'SERVICE';
     scopeId: string;
     inventoryItemId?: string | null;
-    homeAssetId?: string | null;
     serviceKey?: string | null;
     parentJourneyId?: string | null;
     branchFromStepKey?: string | null;
@@ -1838,7 +1803,6 @@ export class GuidanceJourneyService {
     const journey = await guidanceJourney.create({
       data: {
         propertyId: args.propertyId,
-        homeAssetId: args.homeAssetId ?? null,
         inventoryItemId: args.inventoryItemId ?? null,
         parentJourneyId: args.parentJourneyId ?? null,
         primarySignalId: null,
@@ -1924,7 +1888,6 @@ export class GuidanceJourneyService {
     const issueType = input.issueType.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
     const scopeId = input.scopeId;
     const inventoryItemId = input.inventoryItemId ?? (input.scopeCategory === 'ITEM' ? input.scopeId : null) ?? null;
-    const homeAssetId = input.homeAssetId ?? null;
     const serviceKey = input.serviceKey ?? (input.scopeCategory === 'SERVICE' ? input.scopeId : null) ?? null;
     const template = getTemplateByIssueType(issueType, input.scopeCategory, serviceKey);
 
@@ -1936,7 +1899,6 @@ export class GuidanceJourneyService {
       scopeCategory: input.scopeCategory,
       scopeId,
       inventoryItemId,
-      homeAssetId,
       serviceKey,
     });
 
@@ -1996,8 +1958,7 @@ export class GuidanceJourneyService {
       where: { id: args.journeyId, propertyId: args.propertyId },
       include: {
         steps: { orderBy: [{ stepOrder: 'asc' }] },
-        inventoryItem: { select: { name: true, category: true } },
-        homeAsset: { select: { assetType: true } },
+        inventoryItem: { select: { name: true, category: true, assetType: true } },
       },
     });
 
@@ -2169,11 +2130,9 @@ export class GuidanceJourneyService {
       scopeId:
         sourceJourney.scopeId ??
         sourceJourney.inventoryItemId ??
-        sourceJourney.homeAssetId ??
         sourceJourney.serviceKey ??
         sourceJourney.id,
       inventoryItemId: sourceJourney.inventoryItemId ?? null,
-      homeAssetId: sourceJourney.homeAssetId ?? null,
       serviceKey: sourceJourney.serviceKey ?? null,
       parentJourneyId: sourceJourney.id,
       branchFromStepKey: args.stepKey,
@@ -2184,7 +2143,7 @@ export class GuidanceJourneyService {
         sourceJourneyId: sourceJourney.id,
         sourceIssueType: sourceJourney.issueType ?? null,
         sourceJourneyTypeKey: sourceJourney.journeyTypeKey ?? null,
-        sourceAssetName: sourceJourney.inventoryItem?.name ?? sourceJourney.homeAsset?.assetType ?? null,
+        sourceAssetName: sourceJourney.inventoryItem?.name ?? null,
         repairReplaceAnalysisId: args.analysisId,
         repairReplaceVerdict: args.verdict,
       },

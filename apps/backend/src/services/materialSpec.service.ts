@@ -84,15 +84,6 @@ export class MaterialSpecService {
     if (!item) throw new APIError('Inventory item not found', 404, 'ITEM_NOT_FOUND');
   }
 
-  private async assertHomeAssetBelongs(propertyId: string, id?: string | null) {
-    if (!id) return;
-    const asset = await prisma.homeAsset.findFirst({
-      where: { id, propertyId },
-      select: { id: true },
-    });
-    if (!asset) throw new APIError('Home asset not found', 404, 'ASSET_NOT_FOUND');
-  }
-
   // ── List / Search ─────────────────────────────────────────────────────────
 
   async listSpecs(
@@ -195,11 +186,9 @@ export class MaterialSpecService {
     notes?: string | null;
     isActive?: boolean;
     linkedInventoryItemId?: string | null;
-    linkedHomeAssetId?: string | null;
   }) {
     await this.assertRoomBelongs(propertyId, payload.roomId);
     await this.assertInventoryItemBelongs(propertyId, payload.linkedInventoryItemId);
-    await this.assertHomeAssetBelongs(propertyId, payload.linkedHomeAssetId);
 
     // Auto-populate colorHex from paint brand lookup if missing
     let colorHex = payload.colorHex ?? null;
@@ -232,7 +221,6 @@ export class MaterialSpecService {
         notes: payload.notes ?? null,
         isActive: payload.isActive ?? true,
         linkedInventoryItemId: payload.linkedInventoryItemId ?? null,
-        linkedHomeAssetId: payload.linkedHomeAssetId ?? null,
       },
       include: {
         photos: { orderBy: { sortOrder: 'asc' } },
@@ -247,7 +235,6 @@ export class MaterialSpecService {
     await this.assertSpecBelongs(propertyId, specId);
     if (payload.roomId !== undefined) await this.assertRoomBelongs(propertyId, payload.roomId);
     if (payload.linkedInventoryItemId !== undefined) await this.assertInventoryItemBelongs(propertyId, payload.linkedInventoryItemId);
-    if (payload.linkedHomeAssetId !== undefined) await this.assertHomeAssetBelongs(propertyId, payload.linkedHomeAssetId);
 
     // Re-run color lookup if colorCode changed and colorHex not explicitly set
     const updateData: Prisma.MaterialSpecUpdateInput = {};
@@ -274,11 +261,6 @@ export class MaterialSpecService {
     if (payload.linkedInventoryItemId !== undefined) {
       updateData.inventoryItem = payload.linkedInventoryItemId
         ? { connect: { id: payload.linkedInventoryItemId } }
-        : { disconnect: true };
-    }
-    if (payload.linkedHomeAssetId !== undefined) {
-      updateData.homeAsset = payload.linkedHomeAssetId
-        ? { connect: { id: payload.linkedHomeAssetId } }
         : { disconnect: true };
     }
 

@@ -122,7 +122,6 @@ export interface UpdateExpenseDTO extends Partial<CreateExpenseDTO> {}
 
 export interface CreateWarrantyDTO {
   propertyId?: string;
-  homeAssetId?: string;
   inventoryItemId?: string; 
   providerName: string;
   policyNumber?: string;

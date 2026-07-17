@@ -136,7 +136,7 @@ export type OrchestratedAction = {
   hasRelatedChecklistItem?: boolean;
 
   relatedEntity?: {
-    type: 'INVENTORY_ITEM' | 'HOME_ASSET' | 'BOOKING' | 'WARRANTY' | 'INSURANCE' | 'CHECKLIST';
+    type: 'INVENTORY_ITEM' | 'BOOKING' | 'WARRANTY' | 'INSURANCE' | 'CHECKLIST';
     id: string;
   } | null;
 
@@ -1641,8 +1641,6 @@ async function mapRiskDetailToAction(params: {
   const relatedEntity =
     typeof d.inventoryItemId === 'string' && d.inventoryItemId.length > 0
       ? { type: 'INVENTORY_ITEM' as const, id: d.inventoryItemId }
-      : typeof d.homeAssetId === 'string' && d.homeAssetId.length > 0
-      ? { type: 'HOME_ASSET' as const, id: d.homeAssetId }
       : null;
 
   return {
@@ -1845,8 +1843,8 @@ export async function getOrchestrationSummary(propertyId: string, userId?: strin
             id: true,
             expiryDate: true,
             category: true,
-            homeAssetId: true,
-            homeAsset: {
+            inventoryItemId: true,
+            inventoryItem: {
               select: {
                 assetType: true
               }

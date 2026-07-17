@@ -29,19 +29,15 @@ function resolveScopeFromLinkedEntities(
   entities: Array<{ linkedEntityType: string; linkedEntityId: string }> | undefined
 ) {
   let inventoryItemId: string | null = null;
-  let homeAssetId: string | null = null;
 
   for (const entity of entities ?? []) {
-    if (!inventoryItemId && entity.linkedEntityType === 'APPLIANCE') {
+    if (!inventoryItemId && (entity.linkedEntityType === 'APPLIANCE' || entity.linkedEntityType === 'SYSTEM')) {
       inventoryItemId = entity.linkedEntityId;
     }
-    if (!homeAssetId && entity.linkedEntityType === 'SYSTEM') {
-      homeAssetId = entity.linkedEntityId;
-    }
-    if (inventoryItemId && homeAssetId) break;
+    if (inventoryItemId) break;
   }
 
-  return { inventoryItemId, homeAssetId };
+  return { inventoryItemId };
 }
 
 export async function createServicePriceRadarCheck(
@@ -88,7 +84,6 @@ export async function createServicePriceRadarCheck(
         actorUserId: userId,
         journeyId: payload.guidanceJourneyId ?? null,
         inventoryItemId: guidanceScope.inventoryItemId,
-        homeAssetId: guidanceScope.homeAssetId,
         signalIntentFamily: guidanceSignalIntentFamily ?? 'lifecycle_end_or_past_life',
         issueDomain,
         sourceToolKey: 'service-price-radar',

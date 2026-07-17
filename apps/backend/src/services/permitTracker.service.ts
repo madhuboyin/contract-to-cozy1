@@ -500,9 +500,7 @@ export class PermitTrackerService {
   }
 
   async createManualFlag(propertyId: string, payload: any) {
-    const triggerSource = payload.homeAssetId
-      ? `asset:${payload.homeAssetId}`
-      : payload.inventoryItemId
+    const triggerSource = payload.inventoryItemId
       ? `inventory:${payload.inventoryItemId}`
       : `manual:${Date.now()}`;
 
@@ -516,7 +514,6 @@ export class PermitTrackerService {
         flagReason: payload.flagReason,
         status: 'FLAGGED',
         disclosureRisk: payload.disclosureRisk,
-        homeAssetId: payload.homeAssetId,
         inventoryItemId: payload.inventoryItemId,
         resolutionNotes: payload.resolutionNotes,
         dedupeKey,

@@ -512,8 +512,7 @@ router.get(
       }
 
       // Candidates
-      const [items, assets] = await Promise.all([
-        prisma.inventoryItem.findMany({
+      const items = await prisma.inventoryItem.findMany({
           where: { propertyId: effectivePropertyId },
           select: {
             id: true,
@@ -525,23 +524,10 @@ router.get(
             model: true,
             serialNo: true,
             tags: true,
-            homeAssetId: true,
-          },
-          take: 80,
-        }),
-        prisma.homeAsset.findMany({
-          where: { propertyId: effectivePropertyId },
-          // adjust if your HomeAsset field names differ
-          select: {
-            id: true,
-            propertyId: true,
             assetType: true,
-            modelNumber: true,
-            serialNumber: true,
           },
           take: 80,
-        }),
-      ]);
+        });
 
       const inventoryItemSuggestions = items
         .map((it) => {
@@ -553,7 +539,7 @@ router.get(
         .slice(0, 10);
 
       // HomeAsset scoring (best-effort; align if your fields differ)
-      const homeAssetSuggestions = assets
+      const homeAssetSuggestions = items.filter((item) => Boolean(item.assetType))
       .map((a: any) => {
         let score = 0;
         const reasons: string[] = [];

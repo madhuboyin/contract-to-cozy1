@@ -64,10 +64,6 @@ export class GuidanceBookingGuardService {
       where.inventoryItemId = request.inventoryItemId;
     }
 
-    if (request.homeAssetId) {
-      where.homeAssetId = request.homeAssetId;
-    }
-
     const journeys = await guidanceJourney.findMany({
       where,
       include: {

@@ -49,7 +49,6 @@ export async function listPropertyRecallMatches(propertyId: string) {
     include: {
       recall: true,
       inventoryItem: true,
-      homeAsset: true,
       maintenanceTask: true,
     },
     orderBy: { createdAt: 'desc' },

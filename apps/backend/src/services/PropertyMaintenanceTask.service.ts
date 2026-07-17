@@ -77,7 +77,7 @@ import {
         include: {
           booking: true,
           warranty: true,
-          homeAsset: true,
+          inventoryItem: true,
           seasonalChecklistItem: true,
         },
         orderBy: [
@@ -104,7 +104,7 @@ import {
           },
           booking: true,
           warranty: true,
-          homeAsset: true,
+          inventoryItem: true,
           seasonalChecklistItem: true,
         },
       });

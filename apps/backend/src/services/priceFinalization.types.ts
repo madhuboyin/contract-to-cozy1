@@ -35,7 +35,6 @@ export type PriceFinalizationTermInput = {
 
 export type PriceFinalizationCreateInput = {
   inventoryItemId?: string | null;
-  homeAssetId?: string | null;
   guidanceJourneyId?: string | null;
   guidanceStepKey?: string | null;
   guidanceSignalIntentFamily?: string | null;
@@ -89,7 +88,6 @@ export type PriceFinalizationDetailDTO = {
   propertyId: string;
   createdByUserId: string | null;
   inventoryItemId: string | null;
-  homeAssetId: string | null;
   guidanceJourneyId: string | null;
   guidanceStepKey: string | null;
   guidanceSignalIntentFamily: string | null;
@@ -122,7 +120,6 @@ export type PriceFinalizationDetailDTO = {
 export type PriceFinalizationListFilters = {
   guidanceJourneyId?: string | null;
   inventoryItemId?: string | null;
-  homeAssetId?: string | null;
 };
 
 export type PriceFinalizationListResponse = {

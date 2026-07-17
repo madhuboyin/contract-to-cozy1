@@ -351,7 +351,7 @@ export class DailyHomePulseService {
         homeownerProfile: {
           select: { id: true, userId: true },
         },
-        homeAssets: true,
+        inventoryItems: true,
         warranties: true,
         riskReport: {
           select: {

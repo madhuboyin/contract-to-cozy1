@@ -32,7 +32,6 @@ export type DiscoveryNudge =
         installedOn: Date | null;
         isVerified: boolean;
         room: { id: string; name: string } | null;
-        homeAsset: { id: string } | null;
       };
       totalUnverified: number;
       totalItems: number;
@@ -163,7 +162,7 @@ async function getCriticalAssetNudge(
           },
         ],
       },
-      include: { room: true, homeAsset: true },
+      include: { room: true },
       orderBy: [{ createdAt: 'asc' }],
       take: 25,
     }),
@@ -200,7 +199,6 @@ async function getCriticalAssetNudge(
         installedOn: item.installedOn,
         isVerified: item.isVerified,
         room: item.room ? { id: item.room.id, name: item.room.name } : null,
-        homeAsset: item.homeAsset ? { id: item.homeAsset.id } : null,
       },
       totalUnverified,
       totalItems,
@@ -325,16 +323,15 @@ async function getEquityNudge(
     where: { id: propertyId },
     select: {
       isEquityVerified: true,
-      purchasePriceCents: true,
-      purchaseDate: true,
+      financingProfile: { select: { purchasePriceCents: true, purchaseDate: true } },
       lastAppraisedValue: true,
     },
   });
 
   if (!property) return null;
 
-  const isMissingPurchasePrice = property.purchasePriceCents === null;
-  const isMissingPurchaseDate = property.purchaseDate === null;
+  const isMissingPurchasePrice = property.financingProfile?.purchasePriceCents == null;
+  const isMissingPurchaseDate = property.financingProfile?.purchaseDate == null;
   const isMissingEquityCore = isMissingPurchasePrice || isMissingPurchaseDate;
 
   if (property.isEquityVerified && !isMissingEquityCore) {
@@ -381,8 +378,8 @@ async function getEquityNudge(
     longestStreak: streak.longestStreak,
     bonusMultiplier: streak.bonusMultiplier,
     actionType: 'INPUT',
-    purchasePriceCents: property.purchasePriceCents,
-    purchaseDate: property.purchaseDate,
+    purchasePriceCents: property.financingProfile?.purchasePriceCents ?? null,
+    purchaseDate: property.financingProfile?.purchaseDate ?? null,
     lastAppraisedValueCents: property.lastAppraisedValue ?? 0,
   };
 }

@@ -30,7 +30,6 @@ export const createSpecBodySchema = z.object({
   isActive: z.boolean().optional(),
 
   linkedInventoryItemId: z.string().uuid().optional().nullable(),
-  linkedHomeAssetId: z.string().uuid().optional().nullable(),
 });
 
 export const updateSpecBodySchema = createSpecBodySchema.partial();

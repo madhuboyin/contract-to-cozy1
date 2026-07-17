@@ -84,7 +84,8 @@ export class PropertyAppreciationService {
       where: {
         id: propertyId,
         homeownerProfile: { userId }
-      }
+      },
+      include: { financingProfile: true },
     });
 
     if (!property) {
@@ -96,8 +97,8 @@ export class PropertyAppreciationService {
         ? purchasePrice
         : undefined;
     const storedPurchasePrice =
-      typeof property.purchasePriceCents === 'number' && property.purchasePriceCents > 0
-        ? property.purchasePriceCents / 100
+      typeof property.financingProfile?.purchasePriceCents === 'number' && property.financingProfile.purchasePriceCents > 0
+        ? property.financingProfile.purchasePriceCents / 100
         : undefined;
     const finalPurchasePrice = parsedRequestPurchasePrice ?? storedPurchasePrice;
 
@@ -110,8 +111,8 @@ export class PropertyAppreciationService {
         ? purchaseDate
         : undefined;
     const storedPurchaseDate =
-      property.purchaseDate && !Number.isNaN(new Date(property.purchaseDate).getTime())
-        ? new Date(property.purchaseDate).toISOString()
+      property.financingProfile?.purchaseDate && !Number.isNaN(new Date(property.financingProfile.purchaseDate).getTime())
+        ? new Date(property.financingProfile.purchaseDate).toISOString()
         : undefined;
     const finalPurchaseDate =
       parsedRequestPurchaseDate ||

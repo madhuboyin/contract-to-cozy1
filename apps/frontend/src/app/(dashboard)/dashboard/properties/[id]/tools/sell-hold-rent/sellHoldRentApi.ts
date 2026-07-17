@@ -262,16 +262,31 @@ export async function saveSellHoldRentOverrides(propertyId: string, patch: SellH
 }
 
 export async function getFinanceSnapshot(propertyId: string) {
-  const res = await api.get<{ financeSnapshot: FinanceSnapshotDTO | null }>(
-    `/api/properties/${propertyId}/finance-snapshot`
+  const res = await api.get<{ profile: any | null }>(
+    `/api/properties/${propertyId}/financing/profile`
   );
-  return res.data.financeSnapshot;
+  const profile = res.data.profile;
+  if (!profile) return null;
+  return {
+    propertyId,
+    mortgageBalance: profile.currentMortgageBalanceCents == null ? null : profile.currentMortgageBalanceCents / 100,
+    interestRate: profile.interestRateBps == null ? null : profile.interestRateBps / 10_000,
+    remainingTermMonths: profile.remainingTermMonths ?? null,
+    monthlyPayment: profile.monthlyPaymentCents == null ? null : profile.monthlyPaymentCents / 100,
+    lastVerifiedAt: profile.mortgageBalanceAsOfDate ?? profile.updatedAt ?? null,
+  } satisfies FinanceSnapshotDTO;
 }
 
 export async function saveFinanceSnapshot(propertyId: string, patch: Partial<FinanceSnapshotDTO>) {
-  const res = await api.put<{ financeSnapshot: FinanceSnapshotDTO }>(
-    `/api/properties/${propertyId}/finance-snapshot`,
-    patch
+  await api.put(
+    `/api/properties/${propertyId}/financing/profile`,
+    {
+      ...(patch.mortgageBalance != null ? { currentMortgageBalanceCents: Math.round(patch.mortgageBalance * 100) } : {}),
+      ...(patch.interestRate != null ? { interestRateBps: Math.round(patch.interestRate * 10_000) } : {}),
+      ...(patch.remainingTermMonths != null ? { remainingTermMonths: patch.remainingTermMonths } : {}),
+      ...(patch.monthlyPayment != null ? { monthlyPaymentCents: Math.round(patch.monthlyPayment * 100) } : {}),
+      mortgageBalanceAsOfDate: patch.lastVerifiedAt ?? new Date().toISOString(),
+    }
   );
-  return res.data.financeSnapshot;
+  return getFinanceSnapshot(propertyId) as Promise<FinanceSnapshotDTO>;
 }

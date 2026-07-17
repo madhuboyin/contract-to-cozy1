@@ -212,7 +212,7 @@ export class HomeDigitalTwinQualityService {
           waterHeaterInstallYear: true,
           roofReplacementYear: true,
           electricalPanelAge: true,
-          purchasePriceCents: true,
+          financingProfile: { select: { purchasePriceCents: true } },
           lastAppraisedValue: true,
           primaryHeatingFuel: true,
         },
@@ -232,6 +232,11 @@ export class HomeDigitalTwinQualityService {
       }),
     ]);
 
+    const propertyWithFinance = {
+      ...property,
+      purchasePriceCents: property.financingProfile?.purchasePriceCents ?? null,
+    };
+
     const applianceItems = inventoryItems.filter(
       (i) => i.category === 'APPLIANCE' || i.category === 'HVAC',
     );
@@ -246,12 +251,12 @@ export class HomeDigitalTwinQualityService {
     ).length;
 
     const dimensionResults: DimensionResult[] = [
-      evaluatePropertyProfile(property),
-      evaluateSystems(property),
+      evaluatePropertyProfile(propertyWithFinance),
+      evaluateSystems(propertyWithFinance),
       evaluateAppliances(applianceItems.length),
       evaluateDocumentation(documentCount),
-      evaluateCostBasis(property, componentsWithCost, components.length),
-      evaluateEnergyBasis(property, hasSolarItems),
+      evaluateCostBasis(propertyWithFinance, componentsWithCost, components.length),
+      evaluateEnergyBasis(propertyWithFinance, hasSolarItems),
       evaluateRiskBasis(riskReport != null),
     ];
 

@@ -27,11 +27,6 @@ interface PropertyWithRelations extends Property {
   warranties: Warranty[];
   insurancePolicies: InsurancePolicy[];
   riskReport: RiskAssessmentReport | null;
-  homeAssets: Array<{
-    id: string;
-    assetType: string;
-  }>;
-
   // ✅ New: Inventory source of truth
   inventoryItems: Array<
     InventoryItem & {
@@ -243,14 +238,14 @@ class RiskAssessmentService {
           logger.info(`[RISK-SERVICE] Filtered from ${RISK_ASSET_CONFIG.length} to ${relevantConfigs.length} relevant assets`);
         
           for (const config of relevantConfigs) {
-            const homeAssetId = this.resolveHomeAssetIdForSystemType(property as PropertyWithRelations, config.systemType);
+            const inventoryItemId = this.resolveInventoryItemIdForSystemType(property as PropertyWithRelations, config.systemType);
             const assetRisk = calculateAssetRisk(
               config.systemType,
               config,
               property as PropertyWithRelations,
               currentYear,
               {
-                homeAssetId,
+                inventoryItemId,
               }
             );
             if (assetRisk) assetRisks.push(assetRisk);
@@ -456,17 +451,17 @@ class RiskAssessmentService {
     return Math.max(0, currentYear - year);
   }
 
-  private resolveHomeAssetIdForSystemType(
+  private resolveInventoryItemIdForSystemType(
     property: PropertyWithRelations,
     systemType: string
   ): string | null {
-    const homeAssets = Array.isArray(property.homeAssets) ? property.homeAssets : [];
-    if (homeAssets.length === 0) return null;
+    const inventoryItems = Array.isArray(property.inventoryItems) ? property.inventoryItems : [];
+    if (inventoryItems.length === 0) return null;
 
     const normalizedSystemType = String(systemType || '').trim().toUpperCase();
     if (!normalizedSystemType) return null;
 
-    const exact = homeAssets.find((asset) => String(asset.assetType || '').toUpperCase() === normalizedSystemType);
+    const exact = inventoryItems.find((asset) => String(asset.assetType || '').toUpperCase() === normalizedSystemType);
     if (exact?.id) return exact.id;
 
     const prefixMappings: Array<{ from: string; to: string }> = [
@@ -480,7 +475,7 @@ class RiskAssessmentService {
 
     for (const mapping of prefixMappings) {
       if (!normalizedSystemType.startsWith(mapping.from)) continue;
-      const prefixMatch = homeAssets.find((asset) =>
+      const prefixMatch = inventoryItems.find((asset) =>
         String(asset.assetType || '').toUpperCase().startsWith(mapping.to)
       );
       if (prefixMatch?.id) return prefixMatch.id;
@@ -530,7 +525,6 @@ class RiskAssessmentService {
         assetName,
         systemType,
         category: 'SYSTEMS' as any,
-        homeAssetId: item.homeAssetId ?? null,
         inventoryItemId: item.id,
   
         age: ageYears,
@@ -604,13 +598,6 @@ class RiskAssessmentService {
         warranties: true,
         insurancePolicies: true,
         riskReport: true,
-        homeAssets: {
-          select: {
-            id: true,
-            assetType: true,
-          },
-        },
-  
         // ✅ New: inventory items drive MAJOR_APPLIANCE risks
         inventoryItems: {
           include: {

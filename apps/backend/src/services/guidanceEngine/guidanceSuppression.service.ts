@@ -36,16 +36,13 @@ function signalDedupKey(action: EnrichedGuidanceAction) {
   const signalFamily = String(action.signal?.signalIntentFamily ?? '').trim() || 'unknown';
   const issueDomain = String(action.journey?.issueDomain ?? action.signal?.issueDomain ?? 'OTHER');
   const inventoryItemId = String(action.journey?.inventoryItemId ?? action.signal?.inventoryItemId ?? '');
-  const homeAssetId = String(action.journey?.homeAssetId ?? action.signal?.homeAssetId ?? '');
-
-  return `journey:${issueDomain}:${signalFamily}:${inventoryItemId}:${homeAssetId}`;
+  return `journey:${issueDomain}:${signalFamily}:${inventoryItemId}`;
 }
 
 function conflictScopeKey(action: EnrichedGuidanceAction) {
   const inventoryItemId = String(action.journey?.inventoryItemId ?? action.signal?.inventoryItemId ?? '');
-  const homeAssetId = String(action.journey?.homeAssetId ?? action.signal?.homeAssetId ?? '');
   const issueDomain = String(action.journey?.issueDomain ?? action.signal?.issueDomain ?? 'OTHER');
-  return `${issueDomain}:${inventoryItemId}:${homeAssetId}`;
+  return `${issueDomain}:${inventoryItemId}`;
 }
 
 function classifyActionIntent(action: EnrichedGuidanceAction) {
@@ -120,7 +117,7 @@ export class GuidanceSuppressionService {
     const pinnedJourneyIds = new Set<string>();
     if (options?.userSelectedScopeId) {
       for (const action of actions) {
-        const journeyScopeId = action.journey?.scopeId ?? action.journey?.inventoryItemId ?? action.journey?.homeAssetId ?? null;
+        const journeyScopeId = action.journey?.scopeId ?? action.journey?.inventoryItemId ?? null;
         if (journeyScopeId === options.userSelectedScopeId || action.journey?.id === options.userSelectedScopeId) {
           pinnedJourneyIds.add(action.journey.id);
         }

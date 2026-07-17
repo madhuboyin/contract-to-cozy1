@@ -24,7 +24,6 @@ export interface AssetRiskDetail {
   assetName: string;
   systemType: string;
   category: RiskCategory;
-  homeAssetId?: string | null;
   inventoryItemId?: string | null;
   age: number;
   expectedLife: number;
@@ -196,7 +195,6 @@ export const calculateAssetRisk = (
   property: PropertyWithDetails,
   currentYear: number,
   scope?: {
-    homeAssetId?: string | null;
     inventoryItemId?: string | null;
   }
 ): AssetRiskDetail | null => {
@@ -275,7 +273,6 @@ export const calculateAssetRisk = (
     assetName,
     systemType: assetConfig.systemType,
     category: assetConfig.category,
-    homeAssetId: scope?.homeAssetId ?? null,
     inventoryItemId: scope?.inventoryItemId ?? null,
     age,
     expectedLife,

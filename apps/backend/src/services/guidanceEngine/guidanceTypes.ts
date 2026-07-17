@@ -41,7 +41,7 @@ export const GUIDANCE_EXECUTION_READINESS = [
 export const GUIDANCE_SIGNAL_STATUS = ['ACTIVE', 'RESOLVED', 'SUPPRESSED', 'ARCHIVED'] as const;
 export const GUIDANCE_SCOPE_CATEGORIES = ['ITEM', 'SERVICE'] as const;
 export type GuidanceScopeCategory = (typeof GUIDANCE_SCOPE_CATEGORIES)[number];
-export const GUIDANCE_EVIDENCE_SCOPE_CATEGORIES = ['PROPERTY', 'ITEM', 'HOME_ASSET', 'SERVICE', 'UNKNOWN'] as const;
+export const GUIDANCE_EVIDENCE_SCOPE_CATEGORIES = ['PROPERTY', 'ITEM', 'SERVICE', 'UNKNOWN'] as const;
 export const GUIDANCE_EVIDENCE_COMPATIBILITY = ['MATCHED', 'BROADER_CONTEXT', 'MISMATCHED', 'UNKNOWN'] as const;
 
 export const GUIDANCE_JOURNEY_STATUS = ['NOT_STARTED', 'ACTIVE', 'BRANCHED', 'COMPLETED', 'ABORTED', 'ARCHIVED', 'DISMISSED'] as const;
@@ -65,7 +65,6 @@ export type UserInitiatedJourneyInput = {
   scopeId: string;
   issueType: string;
   inventoryItemId?: string | null;
-  homeAssetId?: string | null;
   serviceKey?: string | null;
 };
 
@@ -89,7 +88,6 @@ export type RepairReplaceVerdict = (typeof REPAIR_REPLACE_VERDICTS)[number];
 
 export type GuidanceSignalSourceInput = {
   propertyId: string;
-  homeAssetId?: string | null;
   inventoryItemId?: string | null;
 
   signalIntentFamily?: string | null;
@@ -125,7 +123,6 @@ export type GuidanceSignalSourceInput = {
 
 export type NormalizedGuidanceSignalInput = {
   propertyId: string;
-  homeAssetId: string | null;
   inventoryItemId: string | null;
   signalIntentFamily: string;
   issueDomain: GuidanceIssueDomain;
@@ -194,7 +191,6 @@ export type GuidanceToolCompletionInput = {
   journeyId?: string | null;
   signalIntentFamily?: string | null;
   issueDomain?: GuidanceIssueDomain | null;
-  homeAssetId?: string | null;
   inventoryItemId?: string | null;
   sourceEntityType?: string | null;
   sourceEntityId?: string | null;
@@ -245,7 +241,6 @@ export type GuidanceExecutionGuardRequest = {
   targetAction: 'BOOKING' | 'CLAIM_ESCALATION' | 'INSPECTION_SCHEDULING' | 'PROVIDER_HANDOFF' | 'EXECUTION';
   journeyId?: string | null;
   inventoryItemId?: string | null;
-  homeAssetId?: string | null;
 };
 
 export type GuidanceExecutionGuardResult = {

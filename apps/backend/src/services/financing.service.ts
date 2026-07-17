@@ -131,7 +131,7 @@ async function computeEquity(propertyId: string, propertyContextVersion?: string
 
   const property = await prisma.property.findUnique({
     where: { id: propertyId },
-    select: { purchasePriceCents: true, lastAppraisedValue: true },
+    select: { lastAppraisedValue: true },
   });
 
   if (property?.lastAppraisedValue) {
@@ -139,9 +139,6 @@ async function computeEquity(propertyId: string, propertyContextVersion?: string
     estimatedValueSource = 'APPRECIATION_TRACKER';
   } else if (profile?.purchasePriceCents) {
     estimatedValueCents = profile.purchasePriceCents;
-    estimatedValueSource = 'PURCHASE_PRICE';
-  } else if (property?.purchasePriceCents) {
-    estimatedValueCents = property.purchasePriceCents;
     estimatedValueSource = 'PURCHASE_PRICE';
   }
 

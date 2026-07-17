@@ -19,7 +19,7 @@ export class SeasonalChecklistService {
         },
       },
       include: {
-        homeAssets: true,
+        inventoryItems: true,
         homeownerProfile: true,
       },
     });

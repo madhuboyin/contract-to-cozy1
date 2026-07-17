@@ -454,18 +454,29 @@ async function seedLivedInPropertyData(propertyId: string, homeownerProfileId: s
   await prisma.property.update({
     where: { id: propertyId },
     data: {
-      purchasePriceCents: 38000000, // $380,000 purchase in 2018
       lastAppraisedValue: 46500000, // $465,000 current appraised value
     },
   });
-  await prisma.propertyFinanceSnapshot.create({
-    data: {
+  await prisma.propertyFinancingProfile.upsert({
+    where: { propertyId },
+    create: {
       propertyId,
-      mortgageBalance: 268000, // dollars, not cents (Float column)
-      interestRate: 0.0435,
-      remainingTermMonths: 264, // 22 years remaining on a 30-year loan taken in 2018
-      monthlyPayment: 1685,
-      lastVerifiedAt: new Date(),
+      purchasePriceCents: 38000000,
+      purchaseDate: new Date('2018-01-01T00:00:00.000Z'),
+      currentMortgageBalanceCents: 26800000,
+      interestRateBps: 435,
+      remainingTermMonths: 264,
+      monthlyPaymentCents: 168500,
+      mortgageBalanceAsOfDate: new Date(),
+    },
+    update: {
+      purchasePriceCents: 38000000,
+      purchaseDate: new Date('2018-01-01T00:00:00.000Z'),
+      currentMortgageBalanceCents: 26800000,
+      interestRateBps: 435,
+      remainingTermMonths: 264,
+      monthlyPaymentCents: 168500,
+      mortgageBalanceAsOfDate: new Date(),
     },
   });
 }

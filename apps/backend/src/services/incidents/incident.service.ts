@@ -287,16 +287,11 @@ async function bridgeIncidentToGuidance(incident: any) {
     typeof details.inventoryItemId === 'string' && details.inventoryItemId.trim().length > 0
       ? details.inventoryItemId
       : null;
-  const homeAssetId =
-    typeof details.homeAssetId === 'string' && details.homeAssetId.trim().length > 0
-      ? details.homeAssetId
-      : null;
 
   await guidanceJourneyService.ingestSignal({
     propertyId: incident.propertyId,
     actorUserId: incident.userId ?? null,
     inventoryItemId,
-    homeAssetId,
     signalIntentFamily: mapped.signalIntentFamily,
     issueDomain: mapped.issueDomain,
     executionReadiness: mapped.readiness,

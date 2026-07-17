@@ -94,15 +94,17 @@ test('scenario state remains explicitly separate from canonical financing facts'
   assert.deepEqual(decisions.scenarioSeparation.usedFactKeys, ['financial.activeScenarios']);
 });
 
-test('legacy finance snapshot consumers are routed through PropertyFinancingProfile', () => {
-  const adapter = read('../../src/services/propertyFinanceSnapshot.service.ts');
+test('mortgage consumers are routed through PropertyFinancingProfile', () => {
+  const adapter = read('../../src/services/canonicalFinanceAdapter.service.ts');
   assert.match(adapter, /propertyFinancingProfile\.findUnique/);
-  assert.match(adapter, /propertyFinancingProfile\.upsert/);
-  assert.doesNotMatch(adapter, /prisma\.propertyFinanceSnapshot/);
+  assert.doesNotMatch(adapter, /PropertyFinanceSnapshot/);
+
+  const financing = read('../../src/services/financing.service.ts');
+  assert.match(financing, /propertyFinancingProfile\.upsert/);
 
   const refinance = read('../../src/refinanceRadar/refinanceRadar.service.ts');
   assert.match(refinance, /propertyFinancingProfile\.findUnique/);
-  assert.doesNotMatch(refinance, /prisma\.propertyFinanceSnapshot/);
+  assert.doesNotMatch(refinance, /PropertyFinanceSnapshot/);
 });
 
 test('FINANCIAL context exposes canonical facts without projecting scenario assumptions', () => {

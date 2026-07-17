@@ -70,7 +70,6 @@ interface WorkCandidate {
   installYear: number;
   triggerType: PermitUnpermittedFlagTrigger;
   flagReason: string;
-  homeAssetId?: string;
   inventoryItemId?: string;
 }
 
@@ -85,18 +84,13 @@ export class PermitDetectionService {
       return 0;
     }
 
-    const [assets, inventoryItems, permits] = await Promise.all([
-      prisma.homeAsset.findMany({
-        where: { propertyId },
-        select: { id: true, assetType: true, installationYear: true },
-      }),
+    const [inventoryItems, permits] = await Promise.all([
       prisma.inventoryItem.findMany({
         where: {
           propertyId,
           installedOn: { not: null },
-          category: { in: ['HVAC', 'ELECTRICAL', 'PLUMBING'] },
         },
-        select: { id: true, category: true, installedOn: true, name: true },
+        select: { id: true, category: true, assetType: true, installedOn: true, name: true },
       }),
       prisma.propertyPermitRecord.findMany({
         where: { propertyId, isActive: true },
@@ -117,26 +111,12 @@ export class PermitDetectionService {
 
     const candidates: WorkCandidate[] = [];
 
-    // Step 1 — HomeAsset cross-reference
-    for (const asset of assets) {
-      if (!asset.installationYear) continue;
-      const workType = ASSET_TYPE_TO_WORK_TYPE[asset.assetType.toUpperCase()];
-      if (!workType) continue;
-
-      candidates.push({
-        workType,
-        installYear: asset.installationYear,
-        triggerType: 'ASSET_CROSS_REFERENCE',
-        flagReason: `${asset.assetType} installed ~${asset.installationYear} per inventory; no matching permit found within ±${WINDOW_YEARS} years`,
-        homeAssetId: asset.id,
-      });
-    }
-
-    // Step 2 — InventoryItem cross-reference
+    // Canonical InventoryItem cross-reference
     for (const item of inventoryItems) {
       if (!item.installedOn) continue;
       const installYear = new Date(item.installedOn).getFullYear();
-      const workType = INVENTORY_CATEGORY_TO_WORK_TYPE[item.category as InventoryItemCategory];
+      const workType = (item.assetType ? ASSET_TYPE_TO_WORK_TYPE[item.assetType.toUpperCase()] : undefined)
+        ?? INVENTORY_CATEGORY_TO_WORK_TYPE[item.category as InventoryItemCategory];
       if (!workType) continue;
 
       candidates.push({
@@ -148,7 +128,7 @@ export class PermitDetectionService {
       });
     }
 
-    // Step 3 — filter candidates that have no permit coverage
+    // Filter candidates that have no permit coverage
     const flagsToCreate = candidates.filter((c) => {
       const covered = coverage.get(c.workType);
       if (!covered) return true;
@@ -158,12 +138,10 @@ export class PermitDetectionService {
       return true;
     });
 
-    // Step 4 — create flags, skip duplicates
+    // Create flags, skip duplicates
     let created = 0;
     for (const candidate of flagsToCreate) {
-      const triggerSource = candidate.homeAssetId
-        ? `asset:${candidate.homeAssetId}`
-        : `inventory:${candidate.inventoryItemId}`;
+      const triggerSource = `inventory:${candidate.inventoryItemId}`;
       const dedupeKey = `${propertyId}:${candidate.workType}:${triggerSource}`;
 
       try {
@@ -176,7 +154,6 @@ export class PermitDetectionService {
             flagReason: candidate.flagReason,
             status: 'FLAGGED',
             disclosureRisk: DISCLOSURE_RISK[candidate.workType] ?? 'LOW',
-            homeAssetId: candidate.homeAssetId,
             inventoryItemId: candidate.inventoryItemId,
             dedupeKey,
           },

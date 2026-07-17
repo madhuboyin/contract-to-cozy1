@@ -68,7 +68,6 @@ function mapDetail(row: any): PriceFinalizationDetailDTO {
     propertyId: String(row.propertyId),
     createdByUserId: row.createdByUserId ? String(row.createdByUserId) : null,
     inventoryItemId: row.inventoryItemId ? String(row.inventoryItemId) : null,
-    homeAssetId: row.homeAssetId ? String(row.homeAssetId) : null,
     guidanceJourneyId: cleanString(row.guidanceJourneyId),
     guidanceStepKey: cleanString(row.guidanceStepKey),
     guidanceSignalIntentFamily: cleanString(row.guidanceSignalIntentFamily),
@@ -193,7 +192,6 @@ function buildUpdateData(input: PriceFinalizationUpdateInput) {
   const data: Record<string, unknown> = {};
 
   if (input.inventoryItemId !== undefined) data.inventoryItemId = input.inventoryItemId;
-  if (input.homeAssetId !== undefined) data.homeAssetId = input.homeAssetId;
   if (input.guidanceJourneyId !== undefined) data.guidanceJourneyId = input.guidanceJourneyId;
   if (input.guidanceStepKey !== undefined) data.guidanceStepKey = input.guidanceStepKey;
   if (input.guidanceSignalIntentFamily !== undefined) {
@@ -299,7 +297,6 @@ export class PriceFinalizationService {
         propertyId,
         ...(filters?.guidanceJourneyId ? { guidanceJourneyId: filters.guidanceJourneyId } : {}),
         ...(filters?.inventoryItemId ? { inventoryItemId: filters.inventoryItemId } : {}),
-        ...(filters?.homeAssetId ? { homeAssetId: filters.homeAssetId } : {}),
       },
       orderBy: {
         createdAt: 'desc',
@@ -343,10 +340,9 @@ export class PriceFinalizationService {
         ? [{ negotiationShieldCaseId: input.negotiationShieldCaseId }]
         : []),
       ...(input.guidanceJourneyId ? [{ guidanceJourneyId: input.guidanceJourneyId }] : []),
-      ...(input.inventoryItemId || input.homeAssetId || input.serviceCategory
+      ...(input.inventoryItemId || input.serviceCategory
         ? [{
           inventoryItemId: input.inventoryItemId ?? null,
-          homeAssetId: input.homeAssetId ?? null,
           serviceCategory: input.serviceCategory ?? null,
         }]
         : []),
@@ -356,7 +352,6 @@ export class PriceFinalizationService {
       createdByUserId: userId,
 
       inventoryItemId: input.inventoryItemId ?? null,
-      homeAssetId: input.homeAssetId ?? null,
       guidanceJourneyId: input.guidanceJourneyId ?? null,
       guidanceStepKey: input.guidanceStepKey ?? null,
       guidanceSignalIntentFamily: input.guidanceSignalIntentFamily ?? null,

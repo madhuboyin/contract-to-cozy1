@@ -133,7 +133,7 @@ export async function generateSeasonalChecklists() {
       },
       include: {
         homeownerProfile: true,
-        homeAssets: true,
+        inventoryItems: true,
       },
     });
 

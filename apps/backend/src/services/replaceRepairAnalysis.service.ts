@@ -297,7 +297,6 @@ export class ReplaceRepairService {
         lastServicedOn: true,
         purchaseCostCents: true,
         replacementCostCents: true,
-        homeAsset: { select: { installationYear: true } },
       },
     });
 
@@ -343,9 +342,7 @@ export class ReplaceRepairService {
     const usageIntensity: UsageIntensity = overrides?.usageIntensity ?? 'MEDIUM';
 
     const defaults = inferDefaults(item.category, item.name);
-    const installYear = item.homeAsset?.installationYear;
-    const installYearDate = installYear ? new Date(installYear, 0, 1) : null;
-    const ageYearsRaw = ageYearsFromDate(item.installedOn ?? item.purchasedOn ?? installYearDate);
+    const ageYearsRaw = ageYearsFromDate(item.installedOn ?? item.purchasedOn);
     const ageYears = ageYearsRaw !== undefined ? Math.max(0, Math.round(ageYearsRaw)) : undefined;
 
     const inferredRemainingYears = ageYears !== undefined ? Math.max(0, defaults.lifespanYears - ageYears) : Math.round(defaults.lifespanYears * 0.5);

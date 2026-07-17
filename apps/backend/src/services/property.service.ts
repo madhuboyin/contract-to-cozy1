@@ -272,7 +272,13 @@ async function hydrateHomeAssetsFromInventory<T extends { id: string }>(
   property: T
 ): Promise<T & { homeAssets: HomeAssetDTO[] }> {
   const homeAssets = await listPropertyAppliancesAsHomeAssets(property.id);
-  return { ...(property as any), homeAssets };
+  const financingProfile = (property as any).financingProfile ?? null;
+  return {
+    ...(property as any),
+    purchasePriceCents: financingProfile?.purchasePriceCents ?? null,
+    purchaseDate: financingProfile?.purchaseDate ?? null,
+    homeAssets,
+  };
 }
 
 
@@ -402,7 +408,7 @@ export async function getUserProperties(userId: string): Promise<ScoredProperty[
   const ownedProperties = await prisma.property.findMany({
     where: { homeownerProfileId },
     orderBy: [{ isPrimary: 'desc' }, { createdAt: 'desc' }],
-    include: { homeownerProfile: true, warranties: true, coverPhoto: true },
+    include: { homeownerProfile: true, warranties: true, coverPhoto: true, financingProfile: true },
   });
 
   const hydrated = await Promise.all(ownedProperties.map(hydrateHomeAssetsFromInventory));
@@ -415,7 +421,7 @@ export async function getUserProperties(userId: string): Promise<ScoredProperty[
       property: { homeownerProfileId: { not: homeownerProfileId } },
     },
     include: {
-      property: { include: { warranties: true, coverPhoto: true } },
+      property: { include: { warranties: true, coverPhoto: true, financingProfile: true } },
     },
   });
 
@@ -505,8 +511,6 @@ export async function createProperty(userId: string, data: CreatePropertyData): 
       hasSecondaryHeat: data.hasSecondaryHeat ?? null,
       isResilienceVerified: data.isResilienceVerified ?? false,
       isUtilityVerified: data.isUtilityVerified ?? false,
-      purchasePriceCents: data.purchasePriceCents ?? null,
-      purchaseDate: data.purchaseDate ?? null,
       lastAppraisedValue: data.lastAppraisedValue ?? null,
       lastAppraisalDate: data.lastAppraisalDate ?? null,
       isEquityVerified:
@@ -519,6 +523,21 @@ export async function createProperty(userId: string, data: CreatePropertyData): 
       // END PHASE 2 ADDITIONS
     },
   });
+
+  if (data.purchasePriceCents !== undefined || data.purchaseDate !== undefined) {
+    await prisma.propertyFinancingProfile.upsert({
+      where: { propertyId: property.id },
+      create: {
+        propertyId: property.id,
+        purchasePriceCents: data.purchasePriceCents ?? null,
+        purchaseDate: data.purchaseDate ?? null,
+      },
+      update: {
+        ...(data.purchasePriceCents !== undefined ? { purchasePriceCents: data.purchasePriceCents } : {}),
+        ...(data.purchaseDate !== undefined ? { purchaseDate: data.purchaseDate } : {}),
+      },
+    });
+  }
 
   const resolvedCoverPhotoDocumentId = await resolveCoverPhotoDocumentIdForProperty({
     homeownerProfileId,
@@ -575,6 +594,7 @@ export async function createProperty(userId: string, data: CreatePropertyData): 
           // FIX 4: Include warranties
           warranties: true,
           coverPhoto: true,
+          financingProfile: true,
       }
   });
 
@@ -593,7 +613,7 @@ export async function getPropertyById(propertyId: string, userId: string): Promi
   // Primary path: user owns the property
   let property = await prisma.property.findFirst({
     where: { id: propertyId, homeownerProfileId },
-    include: { warranties: true, coverPhoto: true },
+    include: { warranties: true, coverPhoto: true, financingProfile: true },
   });
 
   let householdRole: string | null = null;
@@ -602,7 +622,7 @@ export async function getPropertyById(propertyId: string, userId: string): Promi
     // Fallback: user is a household member of this property
     const membership = await prisma.householdMember.findUnique({
       where: { propertyId_userId: { propertyId, userId } },
-      include: { property: { include: { warranties: true, coverPhoto: true } } },
+      include: { property: { include: { warranties: true, coverPhoto: true, financingProfile: true } } },
     });
     if (!membership) return null;
     property = membership.property as any;
@@ -622,8 +642,7 @@ export async function getNextPropertyNudge(propertyId: string): Promise<Property
       primaryHeatingFuel: true,
       isResilienceVerified: true,
       isUtilityVerified: true,
-      purchasePriceCents: true,
-      purchaseDate: true,
+      financingProfile: { select: { purchasePriceCents: true, purchaseDate: true } },
       lastAppraisedValue: true,
       isEquityVerified: true,
     },
@@ -697,8 +716,8 @@ export async function getNextPropertyNudge(propertyId: string): Promise<Property
 
   const isEquityMissing =
     !property.isEquityVerified ||
-    property.purchasePriceCents === null ||
-    property.purchaseDate === null;
+    property.financingProfile?.purchasePriceCents === null ||
+    property.financingProfile?.purchaseDate === null;
 
   if (!hasPendingCriticalVerification && isEquityMissing) {
     return {
@@ -709,8 +728,8 @@ export async function getNextPropertyNudge(propertyId: string): Promise<Property
         "What is your home worth today? Enter your purchase details to track your equity and see how much value your maintenance has added.",
       question:
         "What is your home worth today? Enter your purchase details to track your equity and see how much value your maintenance has added.",
-      purchasePriceCents: property.purchasePriceCents,
-      purchaseDate: property.purchaseDate,
+      purchasePriceCents: property.financingProfile?.purchasePriceCents ?? null,
+      purchaseDate: property.financingProfile?.purchaseDate ?? null,
       lastAppraisedValueCents: property.lastAppraisedValue ?? 0,
     };
   }
@@ -839,9 +858,6 @@ export async function getPropertyContextForAI(propertyId: string, userId: string
           confidencePct: true,              // FIXED: not severity
           inventoryItem: {
             select: { name: true }
-          },
-          homeAsset: {
-            select: { assetType: true }
           },
           recall: {
             select: {
@@ -1026,7 +1042,7 @@ export async function getPropertyContextForAI(propertyId: string, userId: string
     recallMatches: property.recallMatches.map(r => ({
       status: r.status,
       confidencePct: r.confidencePct,
-      itemName: r.inventoryItem?.name || r.homeAsset?.assetType || null,
+      itemName: r.inventoryItem?.name || null,
       recallTitle: r.recall?.title || null,
       recallSeverity: r.recall?.severity || null,
       hazard: r.recall?.hazard || null,
@@ -1050,6 +1066,7 @@ export async function updateProperty(
       id: propertyId,
       homeownerProfileId,
     },
+    include: { financingProfile: true },
   });
 
   if (!existingProperty) {
@@ -1088,9 +1105,9 @@ export async function updateProperty(
   const completedUtilityNudge = existingHeatingFuel.length === 0 && !!nextHeatingFuel;
 
   const nextPurchasePriceCents =
-    data.purchasePriceCents !== undefined ? data.purchasePriceCents : existingProperty.purchasePriceCents;
+    data.purchasePriceCents !== undefined ? data.purchasePriceCents : existingProperty.financingProfile?.purchasePriceCents ?? null;
   const nextPurchaseDate =
-    data.purchaseDate !== undefined ? data.purchaseDate : existingProperty.purchaseDate;
+    data.purchaseDate !== undefined ? data.purchaseDate : existingProperty.financingProfile?.purchaseDate ?? null;
   const nextIsEquityVerified =
     data.isEquityVerified ??
     (nextPurchasePriceCents !== null && nextPurchaseDate !== null);
@@ -1162,8 +1179,6 @@ export async function updateProperty(
   if (data.hasSecondaryHeat !== undefined) updatePayload.hasSecondaryHeat = data.hasSecondaryHeat;
   if (data.isResilienceVerified !== undefined) updatePayload.isResilienceVerified = data.isResilienceVerified;
   if (data.isUtilityVerified !== undefined) updatePayload.isUtilityVerified = data.isUtilityVerified;
-  if (data.purchasePriceCents !== undefined) updatePayload.purchasePriceCents = data.purchasePriceCents ?? null;
-  if (data.purchaseDate !== undefined) updatePayload.purchaseDate = data.purchaseDate ?? null;
   if (data.lastAppraisedValue !== undefined) updatePayload.lastAppraisedValue = data.lastAppraisedValue ?? null;
   if (data.lastAppraisalDate !== undefined) updatePayload.lastAppraisalDate = data.lastAppraisalDate ?? null;
   if (data.isEquityVerified !== undefined) {
@@ -1192,6 +1207,21 @@ export async function updateProperty(
     where: { id: propertyId },
     data: propertyUpdateData,
   });
+
+  if (data.purchasePriceCents !== undefined || data.purchaseDate !== undefined) {
+    await prisma.propertyFinancingProfile.upsert({
+      where: { propertyId },
+      create: {
+        propertyId,
+        purchasePriceCents: data.purchasePriceCents ?? null,
+        purchaseDate: data.purchaseDate ?? null,
+      },
+      update: {
+        ...(data.purchasePriceCents !== undefined ? { purchasePriceCents: data.purchasePriceCents } : {}),
+        ...(data.purchaseDate !== undefined ? { purchaseDate: data.purchaseDate } : {}),
+      },
+    });
+  }
 
   // Analytics: property updated (only when there are actual changes)
   if (Object.keys(propertyUpdateData).length > 0) {
@@ -1240,6 +1270,7 @@ export async function updateProperty(
           // FIX 6: Include warranties
           warranties: true,
           coverPhoto: true,
+          financingProfile: true,
       }
   });
 

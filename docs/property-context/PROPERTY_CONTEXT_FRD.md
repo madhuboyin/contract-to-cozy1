@@ -1453,11 +1453,13 @@ Do not treat pilot/demo events as real user learning or product evidence.
 - Greenfield schema corrections are preferred over compatibility layers.
 - No migration scripts are included.
 - Asset and financial source duplication must be resolved during Phase 0.
+- `InventoryItem` is the canonical physical-item identity. `HomeItem` is
+  retained only as a one-to-one Status Board lifecycle projection.
+- `PropertyFinancingProfile` is the sole current purchase and mortgage source;
+  equity and tool outputs remain projections.
 
 ### 26.2 Questions to resolve during Phase 0
 
-- Whether `HomeItem` has audited consumers requiring an identity anchor after
-  `HomeAsset` consolidation.
 - Which public-record facts may override user reports, fact by fact.
 - Whether responsibility requires effective dates for property-management
   transitions before launch.

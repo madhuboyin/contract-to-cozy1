@@ -214,5 +214,11 @@ export async function saveFinanceSnapshot(
     monthlyPayment?: number;
   },
 ): Promise<void> {
-  await api.put(`/api/properties/${propertyId}/finance-snapshot`, body);
+  await api.put(`/api/properties/${propertyId}/financing/profile`, {
+    currentMortgageBalanceCents: Math.round(body.mortgageBalance * 100),
+    interestRateBps: Math.round(body.interestRate * 10_000),
+    remainingTermMonths: body.remainingTermMonths,
+    ...(body.monthlyPayment != null ? { monthlyPaymentCents: Math.round(body.monthlyPayment * 100) } : {}),
+    mortgageBalanceAsOfDate: new Date().toISOString(),
+  });
 }

@@ -114,8 +114,7 @@ export async function listPriceFinalizations(
       params: {
         limit,
         guidanceJourneyId: filters?.guidanceJourneyId ?? undefined,
-        inventoryItemId: filters?.inventoryItemId ?? undefined,
-        homeAssetId: filters?.homeAssetId ?? undefined,
+        inventoryItemId: filters?.inventoryItemId ?? filters?.homeAssetId ?? undefined,
       },
     }
   );
@@ -136,9 +135,10 @@ export async function createPriceFinalizationDraft(
   propertyId: string,
   payload: PriceFinalizationDraftInput
 ): Promise<PriceFinalizationDetail> {
+  const { homeAssetId, ...canonicalPayload } = payload;
   const res = await api.post<{ finalization: PriceFinalizationDetail }>(
     `/api/properties/${propertyId}/price-finalizations`,
-    payload
+    { ...canonicalPayload, inventoryItemId: payload.inventoryItemId ?? homeAssetId }
   );
   return res.data.finalization;
 }
@@ -148,9 +148,10 @@ export async function updatePriceFinalizationDraft(
   finalizationId: string,
   payload: PriceFinalizationUpdateInput
 ): Promise<PriceFinalizationDetail> {
+  const { homeAssetId, ...canonicalPayload } = payload;
   const res = await api.put<{ finalization: PriceFinalizationDetail }>(
     `/api/properties/${propertyId}/price-finalizations/${finalizationId}`,
-    payload
+    { ...canonicalPayload, inventoryItemId: payload.inventoryItemId ?? homeAssetId }
   );
   return res.data.finalization;
 }
@@ -160,9 +161,10 @@ export async function finalizePriceFinalization(
   finalizationId: string,
   payload: PriceFinalizationUpdateInput
 ): Promise<PriceFinalizationDetail> {
+  const { homeAssetId, ...canonicalPayload } = payload;
   const res = await api.post<{ finalization: PriceFinalizationDetail }>(
     `/api/properties/${propertyId}/price-finalizations/${finalizationId}/finalize`,
-    payload
+    { ...canonicalPayload, inventoryItemId: payload.inventoryItemId ?? homeAssetId }
   );
   return res.data.finalization;
 }

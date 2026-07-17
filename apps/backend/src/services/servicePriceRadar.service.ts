@@ -198,6 +198,7 @@ async function assertPropertyForUser(propertyId: string, userId: string): Promis
     },
     select: {
       id: true,
+      name: true,
       homeownerProfileId: true,
       propertyType: true,
       propertySize: true,
@@ -304,19 +305,20 @@ function mapDetail(row: any, linkedEntities: LinkedEntityContext[]): ServiceRada
 }
 
 async function loadSystemContext(propertyId: string, linkedEntityId: string, relevanceScore: number | null): Promise<LinkedEntityContext> {
-  const asset = await prisma.homeAsset.findFirst({
+  const asset = await prisma.inventoryItem.findFirst({
     where: {
       id: linkedEntityId,
       propertyId,
     },
     select: {
       id: true,
+      name: true,
       assetType: true,
-      installationYear: true,
+      installedOn: true,
       modelNumber: true,
       serialNumber: true,
       efficiencyRating: true,
-      lastServiced: true,
+      lastServicedOn: true,
     },
   });
 
@@ -325,14 +327,14 @@ async function loadSystemContext(propertyId: string, linkedEntityId: string, rel
       linkedEntityType: 'SYSTEM',
       linkedEntityId: asset.id,
       relevanceScore,
-      label: asset.assetType,
+      label: asset.assetType ?? asset.name,
       summary: [textOrNull(asset.modelNumber), textOrNull(asset.efficiencyRating)].filter(Boolean).join(' • ') || null,
       facts: {
-        installedYear: asset.installationYear ?? null,
+        installedYear: asset.installedOn?.getUTCFullYear() ?? null,
         modelNumber: textOrNull(asset.modelNumber),
         serialNumber: textOrNull(asset.serialNumber),
         efficiencyRating: textOrNull(asset.efficiencyRating),
-        lastServiced: asset.lastServiced ? asset.lastServiced.toISOString() : null,
+        lastServiced: asset.lastServicedOn ? asset.lastServicedOn.toISOString() : null,
         isVerified: true,
       },
     };

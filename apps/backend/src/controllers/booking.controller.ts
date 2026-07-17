@@ -52,21 +52,18 @@ export class BookingController {
         guidanceStepKey,
         guidanceSignalIntentFamily,
         guidanceEnforceGuard,
-        homeAssetId,
         ...bookingInput
       } = input as CreateBookingInput & {
         guidanceJourneyId?: string;
         guidanceStepKey?: string;
         guidanceSignalIntentFamily?: string;
         guidanceEnforceGuard?: boolean;
-        homeAssetId?: string;
       };
 
       const shouldEnforceGuard = Boolean(
         guidanceEnforceGuard ||
           guidanceJourneyId ||
-          bookingInput.inventoryItemId ||
-          homeAssetId
+          bookingInput.inventoryItemId
       );
 
       if (shouldEnforceGuard) {
@@ -74,22 +71,17 @@ export class BookingController {
           propertyId: bookingInput.propertyId,
           journeyId: guidanceJourneyId ?? null,
           inventoryItemId: bookingInput.inventoryItemId ?? null,
-          homeAssetId: homeAssetId ?? null,
           targetAction: 'BOOKING',
         });
       }
 
       const booking = await BookingService.createBooking(
         userId,
-        {
-          ...bookingInput,
-          ...(homeAssetId ? { homeAssetId } : {}),
-        },
+        bookingInput,
         {
           guidanceJourneyId: guidanceJourneyId ?? null,
           guidanceStepKey: guidanceStepKey ?? null,
           guidanceSignalIntentFamily: guidanceSignalIntentFamily ?? null,
-          homeAssetId: homeAssetId ?? null,
         }
       );
       const propertyContext = await getProjectComplianceEnvelope(
@@ -111,7 +103,6 @@ export class BookingController {
             stepKey: guidanceStepKey ?? undefined,
             status: 'COMPLETED',
             inventoryItemId: bookingInput.inventoryItemId ?? null,
-            homeAssetId: homeAssetId ?? null,
             producedData: {
               proofType: 'booking_confirmation',
               proofId: booking.id,

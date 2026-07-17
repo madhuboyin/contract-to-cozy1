@@ -1398,7 +1398,6 @@ export class CoverageIntelligenceService {
         purchasedOn: true,
         replacementCostCents: true,
         purchaseCostCents: true,
-        homeAssetId: true,
         warranty: {
           select: {
             id: true,
@@ -1436,7 +1435,6 @@ export class CoverageIntelligenceService {
       purchasedOn: Date | null;
       replacementCostCents: number | null;
       purchaseCostCents: number | null;
-      homeAssetId: string | null;
       warranty: {
         id: string;
         cost: Prisma.Decimal | null;
@@ -1462,7 +1460,7 @@ export class CoverageIntelligenceService {
           status: true,
           priority: true,
           serviceCategory: true,
-          homeAssetId: true,
+          inventoryItemId: true,
         },
       }),
       prisma.claim.findMany({
@@ -1545,7 +1543,7 @@ export class CoverageIntelligenceService {
     for (const task of maintenanceTasks) {
       let contribution = 0;
 
-      if (item.homeAssetId && task.homeAssetId && item.homeAssetId === task.homeAssetId) {
+      if (task.inventoryItemId && item.id === task.inventoryItemId) {
         contribution = Math.max(contribution, 1.0);
       }
 
@@ -1872,7 +1870,6 @@ export class CoverageIntelligenceService {
         purchasedOn: item.purchasedOn,
         replacementCostCents: item.replacementCostCents,
         purchaseCostCents: item.purchaseCostCents,
-        homeAssetId: item.homeAssetId,
         warranty: item.warranty,
       },
     };

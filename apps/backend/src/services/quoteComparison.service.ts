@@ -8,7 +8,6 @@ const OPEN_WORKSPACE_STATUSES: QuoteComparisonWorkspaceStatus[] = ['DRAFT', 'SHO
 export interface GetOrCreateQuoteWorkspaceInput {
   serviceCategory?: ServiceCategory | null;
   inventoryItemId?: string | null;
-  homeAssetId?: string | null;
   guidanceJourneyId?: string | null;
   guidanceStepKey?: string | null;
   guidanceSignalIntentFamily?: string | null;
@@ -16,19 +15,11 @@ export interface GetOrCreateQuoteWorkspaceInput {
 }
 
 async function validateScope(propertyId: string, input: GetOrCreateQuoteWorkspaceInput) {
-  const [inventoryItem, homeAsset] = await Promise.all([
-    input.inventoryItemId
-      ? prisma.inventoryItem.findFirst({ where: { id: input.inventoryItemId, propertyId }, select: { id: true } })
-      : Promise.resolve(null),
-    input.homeAssetId
-      ? prisma.homeAsset.findFirst({ where: { id: input.homeAssetId, propertyId }, select: { id: true } })
-      : Promise.resolve(null),
-  ]);
+  const inventoryItem = input.inventoryItemId
+    ? await prisma.inventoryItem.findFirst({ where: { id: input.inventoryItemId, propertyId }, select: { id: true } })
+    : null;
   if (input.inventoryItemId && !inventoryItem) {
     throw new APIError('Inventory item not found for this property.', 404, 'QUOTE_SCOPE_NOT_FOUND');
-  }
-  if (input.homeAssetId && !homeAsset) {
-    throw new APIError('Home asset not found for this property.', 404, 'QUOTE_SCOPE_NOT_FOUND');
   }
 }
 
@@ -41,7 +32,6 @@ export async function getOrCreateQuoteComparisonWorkspace(
 
   const exactScope = {
     inventoryItemId: input.inventoryItemId ?? null,
-    homeAssetId: input.homeAssetId ?? null,
     serviceCategory: input.serviceCategory ?? null,
   };
   return withSerializableDedupe(async (tx) => {

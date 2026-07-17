@@ -371,22 +371,9 @@ async function capturePropertyScoreSnapshots(
   }
 
   if (propertyCore) {
-    const homeAssets = (applianceItems || [])
-      .map((item: any) => {
-        const type = inferApplianceTypeFromItem(item);
-        if (!type) return null;
-        return {
-          id: item.id,
-          propertyId,
-          assetType: type,
-          installationYear: item.installedOn ? new Date(item.installedOn).getUTCFullYear() : null,
-        };
-      })
-      .filter(Boolean);
-
     const healthInput = {
       ...(propertyCore as Record<string, unknown>),
-      homeAssets,
+      inventoryItems: applianceItems || [],
       warranties: warranties || [],
     };
 
@@ -514,7 +501,7 @@ async function sendMaintenanceReminders() {
 /**
  * Process risk assessment calculation.
  * Delegates to RiskAssessmentService.calculateAndSaveReport which fetches
- * the full property including homeAssets and inventoryItems.
+ * the full property including canonical inventory items.
  */
 async function processRiskCalculation(jobData: PropertyIntelligenceJobPayload) {
   const { propertyId } = jobData;

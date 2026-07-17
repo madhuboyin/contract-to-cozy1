@@ -303,7 +303,6 @@ export async function getGuidanceExecutionGuard(req: CustomRequest, res: Respons
       targetAction,
       journeyId: req.query.journeyId ? String(req.query.journeyId) : null,
       inventoryItemId: req.query.inventoryItemId ? String(req.query.inventoryItemId) : null,
-      homeAssetId: req.query.homeAssetId ? String(req.query.homeAssetId) : null,
     });
 
     res.json({

@@ -10,7 +10,6 @@ export function mapGuidanceSignal(signal: any) {
   return {
     id: signal.id,
     propertyId: signal.propertyId,
-    homeAssetId: signal.homeAssetId ?? null,
     inventoryItemId: signal.inventoryItemId ?? null,
     signalIntentFamily: signal.signalIntentFamily,
     issueDomain: signal.issueDomain,
@@ -80,7 +79,6 @@ export function mapGuidanceJourney(journey: any) {
   return {
     id: journey.id,
     propertyId: journey.propertyId,
-    homeAssetId: journey.homeAssetId ?? null,
     inventoryItemId: journey.inventoryItemId ?? null,
     journeyKey: journey.journeyKey ?? null,
     journeyTypeKey: journey.journeyTypeKey ?? null,
@@ -133,11 +131,7 @@ export function mapGuidanceJourney(journey: any) {
       ? {
           name: journey.inventoryItem.name ?? null,
           category: journey.inventoryItem.category ?? null,
-        }
-      : null,
-    homeAsset: journey.homeAsset
-      ? {
-          assetType: journey.homeAsset.assetType ?? null,
+          assetType: journey.inventoryItem.assetType ?? null,
         }
       : null,
     steps,
@@ -170,7 +164,6 @@ export function mapGuidanceEvidence(evidence: any) {
     journeyId: evidence.journeyId,
     stepId: evidence.stepId,
     signalId: evidence.signalId ?? null,
-    homeAssetId: evidence.homeAssetId ?? null,
     inventoryItemId: evidence.inventoryItemId ?? null,
     evidenceType: evidence.evidenceType,
     sourceType: evidence.sourceType,
@@ -189,12 +182,11 @@ export function mapGuidanceEvidence(evidence: any) {
       (evidence.sourceToolKey === 'true-cost'
         ? 'PROPERTY'
         : null) ??
-      (evidence.inventoryItemId ? 'ITEM' : evidence.homeAssetId ? 'HOME_ASSET' : 'PROPERTY'),
+      (evidence.inventoryItemId ? 'ITEM' : 'PROPERTY'),
     actualScopeId:
       evidence.actualScopeId ??
       (evidence.sourceToolKey === 'true-cost' ? evidence.propertyId : null) ??
       evidence.inventoryItemId ??
-      evidence.homeAssetId ??
       evidence.propertyId ??
       null,
     compatibility: evidence.compatibility ?? 'UNKNOWN',

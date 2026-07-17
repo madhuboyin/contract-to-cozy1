@@ -203,11 +203,10 @@ function computeDedupeKey(input: {
   propertyId: string;
   signalIntentFamily: string;
   inventoryItemId: string | null;
-  homeAssetId: string | null;
   sourceEntityType: string | null;
   sourceEntityId: string | null;
 }): string {
-  const scope = input.inventoryItemId ?? input.homeAssetId ?? (input.sourceEntityId ? `${input.sourceEntityType ?? 'ENTITY'}:${input.sourceEntityId}` : 'PROPERTY');
+  const scope = input.inventoryItemId ?? (input.sourceEntityId ? `${input.sourceEntityType ?? 'ENTITY'}:${input.sourceEntityId}` : 'PROPERTY');
   return [input.propertyId, input.signalIntentFamily, scope].join(':');
 }
 
@@ -215,9 +214,8 @@ function computeDuplicateGroupKey(input: {
   propertyId: string;
   mergeCluster: string;
   inventoryItemId: string | null;
-  homeAssetId: string | null;
 }): string {
-  const scope = input.inventoryItemId ?? input.homeAssetId ?? 'PROPERTY';
+  const scope = input.inventoryItemId ?? 'PROPERTY';
   return [input.propertyId, input.mergeCluster, scope].join(':');
 }
 
@@ -273,7 +271,6 @@ export class GuidanceSignalResolverService {
         propertyId: input.propertyId,
         signalIntentFamily,
         inventoryItemId: input.inventoryItemId ?? null,
-        homeAssetId: input.homeAssetId ?? null,
         sourceEntityType,
         sourceEntityId,
       });
@@ -286,7 +283,6 @@ export class GuidanceSignalResolverService {
           MERGE_CLUSTER_BY_FAMILY[signalIntentFamily] ??
           [issueDomain, signalIntentFamily].join(':'),
         inventoryItemId: input.inventoryItemId ?? null,
-        homeAssetId: input.homeAssetId ?? null,
       });
 
     const payloadJson = input.payloadJson ?? null;
@@ -335,7 +331,6 @@ export class GuidanceSignalResolverService {
 
     return {
       propertyId: input.propertyId,
-      homeAssetId: input.homeAssetId ?? null,
       inventoryItemId: input.inventoryItemId ?? null,
       signalIntentFamily,
       issueDomain,
@@ -412,7 +407,6 @@ export class GuidanceSignalResolverService {
           recommendedFlowKey: normalized.recommendedFlowKey,
           payloadJson: normalized.payloadJson,
           metadataJson: normalized.metadataJson,
-          homeAssetId: normalized.homeAssetId,
           inventoryItemId: normalized.inventoryItemId,
           lastObservedAt: now,
           archivedAt: null,
@@ -426,7 +420,6 @@ export class GuidanceSignalResolverService {
     return guidanceSignal.create({
       data: {
         propertyId: normalized.propertyId,
-        homeAssetId: normalized.homeAssetId,
         inventoryItemId: normalized.inventoryItemId,
         signalIntentFamily: normalized.signalIntentFamily,
         issueDomain: normalized.issueDomain,

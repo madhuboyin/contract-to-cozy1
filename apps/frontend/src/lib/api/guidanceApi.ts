@@ -358,8 +358,7 @@ export async function getGuidanceExecutionGuard(
       params: {
         targetAction,
         journeyId: options?.journeyId,
-        inventoryItemId: options?.inventoryItemId,
-        homeAssetId: options?.homeAssetId,
+        inventoryItemId: options?.inventoryItemId ?? options?.homeAssetId,
       },
     }
   );
@@ -454,9 +453,14 @@ export async function recordGuidanceToolStatus(
     metadata?: Record<string, unknown>;
   }
 ): Promise<{ step: GuidanceStepDTO | null; journey: GuidanceJourneyDTO | null }> {
+  const { homeAssetId, ...canonicalPayload } = payload;
   const res = await api.post<{ step: GuidanceStepDTO | null; journey: GuidanceJourneyDTO | null }>(
     `/api/properties/${propertyId}/guidance/tool-completions`,
-    { sourceToolKey: payload.sourceToolKey ?? 'frontend', ...payload }
+    {
+      sourceToolKey: payload.sourceToolKey ?? 'frontend',
+      ...canonicalPayload,
+      inventoryItemId: payload.inventoryItemId ?? homeAssetId,
+    }
   );
   return res.data;
 }
@@ -486,9 +490,14 @@ export async function startGuidanceJourney(
   propertyId: string,
   input: StartGuidanceJourneyInput
 ): Promise<{ journey: GuidanceJourneyDTO }> {
+  const { homeAssetId, ...canonicalInput } = input;
   const res = await api.post<{ journey: GuidanceJourneyDTO }>(
     `/api/properties/${propertyId}/guidance/journeys/start`,
-    input
+    {
+      ...canonicalInput,
+      inventoryItemId: input.inventoryItemId ?? homeAssetId,
+      scopeId: input.scopeCategory === 'ITEM' ? (input.inventoryItemId ?? homeAssetId ?? input.scopeId) : input.scopeId,
+    }
   );
   return res.data;
 }

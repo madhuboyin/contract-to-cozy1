@@ -628,14 +628,15 @@ model InventoryItem {
   importedAt      DateTime?
 
   // Mapping & Coverage
-  homeAssetId       String?
   warrantyId        String?
   insurancePolicyId String?
 
   // Core fields
   name      String
+  assetType String?
   category  InventoryItemCategory  @default(OTHER)
   condition InventoryItemCondition @default(UNKNOWN)
+  efficiencyRating String?
 
   // Identity fields
   brand    String?
@@ -688,7 +689,6 @@ model InventoryItem {
   // Relations
   property         Property              @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   room             InventoryRoom?        @relation(fields: [roomId], references: [id], onDelete: SetNull)
-  homeAsset        HomeAsset?            @relation(fields: [homeAssetId], references: [id], onDelete: SetNull)
   warranty         Warranty?             @relation(fields: [warrantyId], references: [id], onDelete: SetNull)
   linkedWarranties Warranty[]            @relation("WarrantyToInventoryItem")
   insurancePolicy  InsurancePolicy?      @relation(fields: [insurancePolicyId], references: [id], onDelete: SetNull)
@@ -709,12 +709,14 @@ model InventoryItem {
   homeCapitalTimelineItems     HomeCapitalTimelineItem[]
   homeCapitalTimelineOverrides HomeCapitalTimelineOverride[]
   maintenancePredictions       MaintenancePrediction[]
+  maintenanceTasks             PropertyMaintenanceTask[]
   bookings                     Booking[]
   materialSpecs                MaterialSpec[]
   permitUnpermittedFlags       PermitUnpermittedFlag[]
   inspectionFindings           InspectionFinding[]
 
   @@unique([propertyId, sourceHash])
+  @@index([propertyId, assetType])
   @@index([manufacturerNorm, modelNumberNorm])
   @@index([upc])
   @@index([propertyId])
@@ -1982,8 +1984,8 @@ model PropertyMaintenanceTask {
   warrantyId String?
   warranty   Warranty? @relation(fields: [warrantyId], references: [id], onDelete: SetNull)
 
-  homeAssetId String?
-  homeAsset   HomeAsset? @relation(fields: [homeAssetId], references: [id], onDelete: SetNull)
+  inventoryItemId String?
+  inventoryItem   InventoryItem? @relation(fields: [inventoryItemId], references: [id], onDelete: SetNull)
 
   // Task assignment
   assignedToUserId String?
@@ -2010,6 +2012,7 @@ model PropertyMaintenanceTask {
   @@index([source])
   @@index([nextDueDate])
   @@index([assetType])
+  @@index([inventoryItemId])
   @@index([assignedToUserId])
   @@map("property_maintenance_tasks")
 }
@@ -2082,8 +2085,6 @@ model Property {
   hasSecondaryHeat   Boolean? // (Wood stove, Generator)
 
   // NEW: Equity Baseline
-  purchasePriceCents Int?
-  purchaseDate       DateTime?
   lastAppraisedValue Int?
   lastAppraisalDate  DateTime?
 
@@ -2103,7 +2104,6 @@ model Property {
   isResilienceVerified Boolean      @default(false)
   isUtilityVerified    Boolean      @default(false)
   // Appliances
-  homeAssets           HomeAsset[]
   movingPlans          MovingPlan[] // Add this line
 
   // Relations
@@ -2159,7 +2159,6 @@ model Property {
   homePlants               HomePlant[]
   gardenZones              GardenZone[]
   homeEvents               HomeEvent[]
-  financeSnapshots         PropertyFinanceSnapshot[]
   toolOverrides            ToolOverride[]
 
   roomScanSessions                InventoryRoomScanSession[]
@@ -2949,7 +2948,6 @@ model Warranty {
   homeownerProfileId String
   category           WarrantyCategory @default(HOME_WARRANTY_PLAN)
   propertyId         String? // Link to a specific property (e.g., HVAC unit warranty is for the main home)
-  homeAssetId        String?
   inventoryItemId    String? // NEW: Direct link to InventoryItem
   // Policy Details
   providerName       String
@@ -2965,7 +2963,6 @@ model Warranty {
   homeownerProfile HomeownerProfile @relation(fields: [homeownerProfileId], references: [id], onDelete: Cascade)
   property         Property?        @relation(fields: [propertyId], references: [id], onDelete: SetNull)
   documents        Document[]
-  homeAsset        HomeAsset?       @relation(fields: [homeAssetId], references: [id], onDelete: SetNull)
   inventoryItem    InventoryItem?   @relation("WarrantyToInventoryItem", fields: [inventoryItemId], references: [id], onDelete: SetNull)
 
   // PHASE 1: NEW RELATION
@@ -2979,7 +2976,6 @@ model Warranty {
 
   @@index([homeownerProfileId])
   @@index([expiryDate])
-  @@index([homeAssetId])
   @@index([inventoryItemId])
   @@map("warranties")
 }
@@ -3067,43 +3063,6 @@ model Expense {
   @@index([category])
   @@index([transactionDate])
   @@map("expenses")
-}
-
-model HomeAsset {
-  id               String     @id @default(uuid())
-  propertyId       String
-  property         Property   @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-  assetType        String // e.g., "HVAC_FURNACE", "WATER_HEATER" - should map to an Enum
-  installationYear Int? // Year the user installed it (more accurate than age)
-  modelNumber      String?
-  serialNumber     String?
-  // Optional fields for Maintenance Readiness/Energy:
-  lastServiced     DateTime?
-  efficiencyRating String?
-  warranties       Warranty[]
-
-  // PHASE 1: NEW RELATION
-  maintenanceTasks PropertyMaintenanceTask[]
-  inventoryItems   InventoryItem[]
-
-  manufacturer     String?
-  brand            String?
-  manufacturerNorm String?
-  modelNumberNorm  String?
-
-  recallMatches             RecallMatch[]
-  homeItems                 HomeItem[]
-  guidanceSignals           GuidanceSignal[]
-  guidanceJourneys          GuidanceJourney[]
-  guidanceStepEvidences     GuidanceStepEvidence[]
-  quoteComparisonWorkspaces QuoteComparisonWorkspace[]
-  priceFinalizations        PriceFinalization[]
-  materialSpecs             MaterialSpec[]
-  permitUnpermittedFlags    PermitUnpermittedFlag[]
-
-  @@unique([propertyId, assetType]) // Usually only one furnace per house
-  @@index([manufacturerNorm, modelNumberNorm])
-  @@index([propertyId])
 }
 
 model MovingPlan {
@@ -3908,7 +3867,6 @@ enum GuidanceEvidenceStatus {
 enum GuidanceEvidenceScopeCategory {
   PROPERTY
   ITEM
-  HOME_ASSET
   SERVICE
   UNKNOWN
 }
@@ -3925,7 +3883,6 @@ model GuidanceSignal {
   id String @id @default(uuid())
 
   propertyId      String
-  homeAssetId     String?
   inventoryItemId String?
 
   signalKey String? // Optional external signal id (for imports/backfills). No unique constraint — not guaranteed stable across sources.
@@ -3985,7 +3942,6 @@ model GuidanceSignal {
   updatedAt DateTime @updatedAt
 
   property         Property               @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-  homeAsset        HomeAsset?             @relation(fields: [homeAssetId], references: [id], onDelete: SetNull)
   inventoryItem    InventoryItem?         @relation(fields: [inventoryItemId], references: [id], onDelete: SetNull)
   sourceProvenance SignalProvenance?      @relation(fields: [sourceProvenanceId], references: [id], onDelete: SetNull)
   journeys         GuidanceJourney[]
@@ -3999,10 +3955,8 @@ model GuidanceSignal {
   @@index([propertyId, signalIntentFamily])
   @@index([propertyId, signalIntentFamily, status, lastObservedAt(sort: Desc)])
   @@index([duplicateGroupKey])
-  @@index([homeAssetId])
   @@index([inventoryItemId])
   @@index([propertyId, inventoryItemId, status, lastObservedAt(sort: Desc)])
-  @@index([propertyId, homeAssetId, status, lastObservedAt(sort: Desc)])
   @@index([sourceEntityType, sourceEntityId])
   @@index([sourceToolKey, sourceFeatureKey])
   @@index([sourceProvenanceId])
@@ -4015,7 +3969,6 @@ model GuidanceJourney {
   id String @id @default(uuid())
 
   propertyId      String
-  homeAssetId     String?
   inventoryItemId String?
   primarySignalId String?
   parentJourneyId String?
@@ -4063,9 +4016,9 @@ model GuidanceJourney {
   scopeCategory GuidanceScopeCategory?
 
   // Denormalized scope identifier for API simplicity.
-  // ITEM journeys: inventoryItemId if available, otherwise homeAssetId.
+  // ITEM journeys use the canonical inventoryItemId.
   // SERVICE journeys: serviceKey value.
-  // Nullable during migration window; backfill derives from COALESCE(inventory_item_id, home_asset_id).
+  // Nullable only for legacy rows and non-item scopes.
   scopeId String?
 
   // User-selected issue label. Free-text or from the suggested issue type list.
@@ -4104,7 +4057,6 @@ model GuidanceJourney {
   updatedAt DateTime @updatedAt
 
   property      Property          @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-  homeAsset     HomeAsset?        @relation(fields: [homeAssetId], references: [id], onDelete: SetNull)
   inventoryItem InventoryItem?    @relation(fields: [inventoryItemId], references: [id], onDelete: SetNull)
   primarySignal GuidanceSignal?   @relation(fields: [primarySignalId], references: [id], onDelete: SetNull)
   parentJourney GuidanceJourney?  @relation("GuidanceJourneyBranch", fields: [parentJourneyId], references: [id], onDelete: SetNull)
@@ -4121,11 +4073,9 @@ model GuidanceJourney {
   @@index([propertyId, journeyTypeKey, status]) // P4-13: supports ensureJourneyForSignal() lookup
   @@index([propertyId, currentStepOrder])
   @@index([propertyId, inventoryItemId, status, updatedAt(sort: Desc)])
-  @@index([propertyId, homeAssetId, status, updatedAt(sort: Desc)])
   @@index([primarySignalId])
   @@index([parentJourneyId])
   @@index([mergedSignalGroupKey])
-  @@index([homeAssetId])
   @@index([inventoryItemId])
   // IMP-GE-1: indexes for new user-first scope fields
   @@index([propertyId, scopeCategory, status, updatedAt(sort: Desc)])
@@ -4266,7 +4216,6 @@ model GuidanceStepEvidence {
   stepId     String
   signalId   String?
 
-  homeAssetId     String?
   inventoryItemId String?
 
   evidenceType GuidanceEvidenceType
@@ -4304,7 +4253,6 @@ model GuidanceStepEvidence {
   journey       GuidanceJourney        @relation(fields: [journeyId], references: [id], onDelete: Cascade)
   step          GuidanceJourneyStep    @relation(fields: [stepId], references: [id], onDelete: Cascade)
   signal        GuidanceSignal?        @relation(fields: [signalId], references: [id], onDelete: SetNull)
-  homeAsset     HomeAsset?             @relation(fields: [homeAssetId], references: [id], onDelete: SetNull)
   inventoryItem InventoryItem?         @relation(fields: [inventoryItemId], references: [id], onDelete: SetNull)
   supersededBy  GuidanceStepEvidence?  @relation("GuidanceStepEvidenceSupersession", fields: [supersededById], references: [id], onDelete: SetNull)
   supersedes    GuidanceStepEvidence[] @relation("GuidanceStepEvidenceSupersession")
@@ -4314,7 +4262,6 @@ model GuidanceStepEvidence {
   @@index([journeyId, stepId, status, observedAt(sort: Desc)])
   @@index([signalId, observedAt(sort: Desc)])
   @@index([inventoryItemId, observedAt(sort: Desc)])
-  @@index([homeAssetId, observedAt(sort: Desc)])
   @@index([evidenceRefType, evidenceRefId])
   @@index([sourceToolKey, sourceFeatureKey, observedAt(sort: Desc)])
   @@index([evidenceType, status, observedAt(sort: Desc)])
@@ -4534,22 +4481,6 @@ model PropertyClimateSetting {
   @@index([propertyId])
   @@index([climateRegion])
   @@map("property_climate_settings")
-}
-
-model PropertyFinanceSnapshot {
-  id                  String    @id @default(uuid())
-  propertyId          String    @unique
-  mortgageBalance     Float?
-  interestRate        Float? // decimal, e.g. 0.0625
-  remainingTermMonths Int?
-  monthlyPayment      Float? // optional override; if null, computed
-  lastVerifiedAt      DateTime?
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
-
-  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-
-  @@index([propertyId])
 }
 
 model ToolOverride {
@@ -7160,7 +7091,6 @@ model QuoteComparisonWorkspace {
   createdByUserId String?
 
   inventoryItemId String?
-  homeAssetId     String?
 
   guidanceJourneyId          String?
   guidanceStepKey            String?
@@ -7182,7 +7112,6 @@ model QuoteComparisonWorkspace {
   property      Property       @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   createdBy     User?          @relation("QuoteComparisonWorkspaceCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
   inventoryItem InventoryItem? @relation(fields: [inventoryItemId], references: [id], onDelete: SetNull)
-  homeAsset     HomeAsset?     @relation(fields: [homeAssetId], references: [id], onDelete: SetNull)
 
   quotes             QuoteComparisonQuote[]
   priceFinalizations PriceFinalization[]
@@ -7191,7 +7120,6 @@ model QuoteComparisonWorkspace {
   @@index([propertyId, status])
   @@index([createdByUserId])
   @@index([inventoryItemId])
-  @@index([homeAssetId])
   @@map("quote_comparison_workspaces")
 }
 
@@ -7232,7 +7160,6 @@ model PriceFinalization {
   createdByUserId String?
 
   inventoryItemId String?
-  homeAssetId     String?
 
   guidanceJourneyId          String?
   guidanceStepKey            String?
@@ -7268,7 +7195,6 @@ model PriceFinalization {
   property      Property       @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   createdBy     User?          @relation("PriceFinalizationCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
   inventoryItem InventoryItem? @relation(fields: [inventoryItemId], references: [id], onDelete: SetNull)
-  homeAsset     HomeAsset?     @relation(fields: [homeAssetId], references: [id], onDelete: SetNull)
   booking       Booking?       @relation(fields: [bookingId], references: [id], onDelete: SetNull)
 
   negotiationShieldCase    NegotiationShieldCase?    @relation(fields: [negotiationShieldCaseId], references: [id], onDelete: SetNull)
@@ -7282,7 +7208,6 @@ model PriceFinalization {
   @@index([propertyId, status])
   @@index([createdByUserId])
   @@index([inventoryItemId])
-  @@index([homeAssetId])
   @@index([negotiationShieldCaseId])
   @@index([serviceRadarCheckId])
   @@index([quoteComparisonWorkspaceId])
@@ -7312,11 +7237,6 @@ model PriceFinalizationTerm {
 // HOME STATUS BOARD (Whole Home Overview)
 // Canonical unified registry + computed/override status for compact grid view
 // ============================================================================
-
-enum HomeItemKind {
-  INVENTORY_ITEM
-  HOME_ASSET
-}
 
 enum HomeItemCondition {
   GOOD
@@ -7357,16 +7277,11 @@ model HomeItem {
   id         String @id @default(uuid())
   propertyId String
 
-  kind HomeItemKind
-
   // Optional link to room for grouping/navigation (when applicable)
   roomId String?
 
-  // Exactly one of these should be set based on kind (enforce in code):
-  // - INVENTORY_ITEM => inventoryItemId required, homeAssetId null
-  // - HOME_ASSET     => homeAssetId required, inventoryItemId null
-  inventoryItemId String?
-  homeAssetId     String?
+  // Status Board projection identity. InventoryItem remains canonical.
+  inventoryItemId String @unique
 
   // Optional display overrides (keep grid consistent)
   displayName String?
@@ -7378,17 +7293,13 @@ model HomeItem {
   property Property       @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   room     InventoryRoom? @relation(fields: [roomId], references: [id], onDelete: SetNull)
 
-  inventoryItem InventoryItem? @relation(fields: [inventoryItemId], references: [id], onDelete: Cascade)
-  homeAsset     HomeAsset?     @relation(fields: [homeAssetId], references: [id], onDelete: Cascade)
+  inventoryItem InventoryItem @relation(fields: [inventoryItemId], references: [id], onDelete: Cascade)
 
   status  HomeItemStatus?
   events  HomeItemStatusEvent[]
   signals Signal[]
 
   // Property-scoped uniqueness (safer for future)
-  @@unique([propertyId, inventoryItemId])
-  @@unique([propertyId, homeAssetId])
-  @@index([propertyId, kind])
   @@index([propertyId, roomId])
   @@index([propertyId, categoryKey])
   @@map("home_items")
@@ -7565,7 +7476,6 @@ model RecallMatch {
 
   propertyId      String
   inventoryItemId String?
-  homeAssetId     String?
 
   recallId String
   recall   RecallRecord @relation(fields: [recallId], references: [id], onDelete: Cascade)
@@ -7593,17 +7503,14 @@ model RecallMatch {
   // relations
   property           Property                 @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   inventoryItem      InventoryItem?           @relation(fields: [inventoryItemId], references: [id], onDelete: SetNull)
-  homeAsset          HomeAsset?               @relation(fields: [homeAssetId], references: [id], onDelete: SetNull)
   maintenanceTask    PropertyMaintenanceTask? @relation(fields: [maintenanceTaskId], references: [id], onDelete: SetNull)
   notifications      Notification[]
   inspectionFindings InspectionFinding[]
 
   // Prevent duplicates for same recall+asset within a property (important for idempotency)
   @@unique([propertyId, recallId, inventoryItemId])
-  @@unique([propertyId, recallId, homeAssetId])
   @@index([propertyId, status])
   @@index([inventoryItemId])
-  @@index([homeAssetId])
   @@index([recallId])
 }
 
@@ -10868,7 +10775,6 @@ model MaterialSpec {
   isActive          Boolean   @default(true)
 
   linkedInventoryItemId String?
-  linkedHomeAssetId     String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -10876,7 +10782,6 @@ model MaterialSpec {
   property      Property            @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   room          InventoryRoom?      @relation(fields: [roomId], references: [id], onDelete: SetNull)
   inventoryItem InventoryItem?      @relation(fields: [linkedInventoryItemId], references: [id], onDelete: SetNull)
-  homeAsset     HomeAsset?          @relation(fields: [linkedHomeAssetId], references: [id], onDelete: SetNull)
   photos        MaterialSpecPhoto[]
 
   @@index([propertyId])
@@ -11855,7 +11760,6 @@ model PermitUnpermittedFlag {
   status         PermitUnpermittedFlagStatus  @default(FLAGGED)
   disclosureRisk PermitDisclosureRisk
 
-  homeAssetId        String?
   inventoryItemId    String?
   resolvedByPermitId String?
   resolutionNotes    String?
@@ -11866,14 +11770,12 @@ model PermitUnpermittedFlag {
   updatedAt DateTime @updatedAt
 
   property           Property              @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-  homeAsset          HomeAsset?            @relation(fields: [homeAssetId], references: [id], onDelete: SetNull)
   inventoryItem      InventoryItem?        @relation(fields: [inventoryItemId], references: [id], onDelete: SetNull)
   resolvedByPermit   PropertyPermitRecord? @relation("ResolvedByPermit", fields: [resolvedByPermitId], references: [id], onDelete: SetNull)
   inspectionFindings InspectionFinding[]
 
   @@index([propertyId, status])
   @@index([propertyId, disclosureRisk])
-  @@index([homeAssetId])
   @@index([inventoryItemId])
   @@map("permit_unpermitted_flags")
 }

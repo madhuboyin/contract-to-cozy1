@@ -19,7 +19,6 @@ type GuidanceContextBadge = {
   guidanceStepKey?: string | null;
   guidanceSignalIntentFamily?: string | null;
   itemId?: string | null;
-  homeAssetId?: string | null;
 };
 
 function inferGuidanceContextFromNotification(n: any): GuidanceContextBadge | null {
@@ -33,7 +32,6 @@ function inferGuidanceContextFromNotification(n: any): GuidanceContextBadge | nu
       context.guidanceSignalIntentFamily = metadataContext.guidanceSignalIntentFamily;
     }
     if (typeof metadataContext.itemId === 'string') context.itemId = metadataContext.itemId;
-    if (typeof metadataContext.homeAssetId === 'string') context.homeAssetId = metadataContext.homeAssetId;
   }
 
   if (typeof n?.actionUrl === 'string' && n.actionUrl.length > 0) {
@@ -46,7 +44,6 @@ function inferGuidanceContextFromNotification(n: any): GuidanceContextBadge | nu
         context.guidanceSignalIntentFamily = qp.get('guidanceSignalIntentFamily');
       }
       if (!context.itemId && qp.get('itemId')) context.itemId = qp.get('itemId');
-      if (!context.homeAssetId && qp.get('homeAssetId')) context.homeAssetId = qp.get('homeAssetId');
     } catch {
       // Ignore malformed URLs for resilience.
     }

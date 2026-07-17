@@ -779,7 +779,7 @@ function getToolsActions(ctx: SidebarContext): SidebarAction[] {
 
   if (ctx.activeTool?.includes('break-even') || ctx.activeTool?.includes('sell-hold-rent')) {
     actions.push({
-      id: 'add-finance-snapshot',
+      id: 'add-financing-profile',
       title: 'Add mortgage details',
       description: 'Enable debt-aware modeling',
       icon: Building,

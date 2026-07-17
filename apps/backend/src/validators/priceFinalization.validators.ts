@@ -89,7 +89,6 @@ export const priceFinalizationListQuerySchema = z.object({
     }),
   guidanceJourneyId: optionalUuidFilterSchema,
   inventoryItemId: optionalUuidFilterSchema,
-  homeAssetId: optionalUuidFilterSchema,
 });
 
 export const priceFinalizationPropertyParamsSchema = z.object({
@@ -107,7 +106,6 @@ export const priceFinalizationDetailParamsSchema = z.object({
 
 export const createPriceFinalizationBodySchema = z.object({
   inventoryItemId: uuidSchema.optional().nullable(),
-  homeAssetId: uuidSchema.optional().nullable(),
   guidanceJourneyId: uuidSchema.optional().nullable(),
   guidanceStepKey: z.string().trim().min(1).max(80).optional().nullable(),
   guidanceSignalIntentFamily: z.string().trim().min(1).max(120).optional().nullable(),
