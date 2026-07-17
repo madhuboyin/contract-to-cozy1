@@ -713,6 +713,7 @@ export interface HomeScoreMethodology {
 
 export interface HomeScoreReport {
   propertyId: string;
+  protectionContext?: ProtectionContextSummary;
   generatedAt: string;
   homeScore: number;
   scoreBand: 'EXCELLENT' | 'GOOD' | 'FAIR' | 'NEEDS_ATTENTION';
@@ -1267,6 +1268,18 @@ export interface PropertyContextFeatureDecision {
   missingFactKeys: string[];
   conflictedFactKeys: string[];
   validUntil: string | null;
+}
+
+export interface ProtectionContextSummary {
+  contextVersion: string;
+  decisions: {
+    riskAssessment: PropertyContextFeatureDecision;
+    currentRiskOutput: PropertyContextFeatureDecision;
+    inspectionEvidence: PropertyContextFeatureDecision;
+    coverageEvidence: PropertyContextFeatureDecision;
+    recallEvidence: PropertyContextFeatureDecision;
+    guidanceState: PropertyContextFeatureDecision;
+  };
 }
 
 export interface PropertyContextCompleteness {

@@ -3,12 +3,20 @@ import { CustomRequest } from '../types';
 import { listBoard, ensureHomeItems, computeStatuses, patchItemStatus } from '../services/homeStatusBoard.service';
 import { listBoardQuerySchema } from '../validators/homeStatusBoard.validators';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
+import { getProtectionContextDecisions } from '../services/protection/context';
 
 export async function getBoard(req: CustomRequest, res: Response, next: NextFunction) {
   try {
     const propertyId = req.params.propertyId;
     const query = listBoardQuerySchema.parse(req.query);
-    const data = await listBoard(propertyId, query, req.user?.userId ?? null);
+    const userId = req.user?.userId;
+    if (!userId) {
+      return res.status(401).json({ success: false, error: { message: 'Authentication required' } });
+    }
+    const [data, protectionContext] = await Promise.all([
+      listBoard(propertyId, query, userId),
+      getProtectionContextDecisions(propertyId, userId),
+    ]);
 
     analyticsEmitter.track({
       eventType: AnalyticsEvent.TOOL_USED,
@@ -19,7 +27,7 @@ export async function getBoard(req: CustomRequest, res: Response, next: NextFunc
       metadataJson: {},
     });
 
-    res.status(200).json({ success: true, data });
+    res.status(200).json({ success: true, data: { ...data, protectionContext } });
   } catch (error) {
     next(error);
   }

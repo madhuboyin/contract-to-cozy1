@@ -386,6 +386,236 @@ export const inventoryAssembler: PropertyContextAssembler = {
   },
 };
 
+export const inspectionAssembler: PropertyContextAssembler = {
+  scope: 'INSPECTION',
+  async assemble(propertyId, now) {
+    const [reports, findings] = await Promise.all([
+      prisma.inspectionReport.findMany({
+        where: { propertyId, status: 'CONFIRMED' },
+        select: {
+          id: true,
+          reportType: true,
+          inspectionDate: true,
+          totalFindings: true,
+          openFindings: true,
+          safetyFindings: true,
+          majorFindings: true,
+          confirmedAt: true,
+        },
+        orderBy: { inspectionDate: 'desc' },
+      }),
+      prisma.inspectionFinding.findMany({
+        where: { propertyId, status: 'OPEN', report: { status: 'CONFIRMED' } },
+        select: {
+          id: true,
+          reportId: true,
+          homeSystem: true,
+          conditionRating: true,
+          severity: true,
+          inspectorRecommendation: true,
+          estimatedCostCentsLow: true,
+          estimatedCostCentsHigh: true,
+          inventoryItemId: true,
+          recallMatchId: true,
+          updatedAt: true,
+        },
+        orderBy: [{ severity: 'desc' }, { updatedAt: 'desc' }],
+      }),
+    ]);
+    const serializeDates = (row: Record<string, unknown>) => Object.fromEntries(
+      Object.entries(row).map(([key, value]) => [key, value instanceof Date ? value.toISOString() : value]),
+    );
+    return [
+      withPropertyId(createPropertyFact('inspection.confirmedReports', reports.map((row) => serializeDates(row)), undefined, now), propertyId),
+      withPropertyId(createPropertyFact('inspection.openFindings', findings.map((row) => serializeDates(row)), undefined, now), propertyId),
+    ];
+  },
+};
+
+export const coverageAssembler: PropertyContextAssembler = {
+  scope: 'COVERAGE',
+  async assemble(propertyId, now) {
+    const [insurancePolicies, warranties, claims] = await Promise.all([
+      prisma.insurancePolicy.findMany({
+        where: { propertyId },
+        select: {
+          id: true,
+          coverageType: true,
+          startDate: true,
+          expiryDate: true,
+          deductibleAmount: true,
+          personalPropertyLimitCents: true,
+          isVerified: true,
+          lastVerifiedAt: true,
+          updatedAt: true,
+        },
+        orderBy: { expiryDate: 'desc' },
+      }),
+      prisma.warranty.findMany({
+        where: { propertyId },
+        select: {
+          id: true,
+          category: true,
+          homeAssetId: true,
+          inventoryItemId: true,
+          startDate: true,
+          expiryDate: true,
+          updatedAt: true,
+        },
+        orderBy: { expiryDate: 'desc' },
+      }),
+      prisma.claim.findMany({
+        where: { propertyId, status: { notIn: ['CLOSED', 'DENIED'] } },
+        select: {
+          id: true,
+          type: true,
+          status: true,
+          sourceType: true,
+          insurancePolicyId: true,
+          warrantyId: true,
+          incidentAt: true,
+          lastActivityAt: true,
+          nextFollowUpAt: true,
+          updatedAt: true,
+        },
+        orderBy: { lastActivityAt: 'desc' },
+      }),
+    ]);
+    const serialize = (row: Record<string, unknown>) => Object.fromEntries(
+      Object.entries(row).map(([key, value]) => [
+        key,
+        value instanceof Date ? value.toISOString() : value && typeof value === 'object' && 'toNumber' in value
+          ? (value as { toNumber(): number }).toNumber()
+          : value,
+      ]),
+    );
+    return [
+      withPropertyId(createPropertyFact('coverage.insurancePolicies', insurancePolicies.map((row) => serialize(row)), undefined, now), propertyId),
+      withPropertyId(createPropertyFact('coverage.warranties', warranties.map((row) => serialize(row)), undefined, now), propertyId),
+      withPropertyId(createPropertyFact('coverage.activeClaims', claims.map((row) => serialize(row)), undefined, now), propertyId),
+    ];
+  },
+};
+
+export const riskAssembler: PropertyContextAssembler = {
+  scope: 'RISK',
+  async assemble(propertyId, now) {
+    const [report, incidents] = await Promise.all([
+      prisma.riskAssessmentReport.findUnique({
+        where: { propertyId },
+        select: { id: true, riskScore: true, financialExposureTotal: true, details: true, lastCalculatedAt: true },
+      }),
+      prisma.incident.findMany({
+        where: {
+          propertyId,
+          isSuppressed: false,
+          status: { in: ['DETECTED', 'EVALUATED', 'ACTIVE', 'ACTIONED', 'MITIGATED'] },
+        },
+        select: {
+          id: true,
+          sourceType: true,
+          typeKey: true,
+          category: true,
+          status: true,
+          severity: true,
+          severityScore: true,
+          confidence: true,
+          openedAt: true,
+          nextReevalAt: true,
+          updatedAt: true,
+        },
+        orderBy: [{ severityScore: 'desc' }, { updatedAt: 'desc' }],
+      }),
+    ]);
+    const serializedReport = report ? {
+      ...report,
+      financialExposureTotal: report.financialExposureTotal.toNumber(),
+      lastCalculatedAt: report.lastCalculatedAt.toISOString(),
+    } : null;
+    const reportEvidence = report ? {
+      source: 'SYSTEM_DERIVED' as const,
+      verified: false,
+      confidence: null,
+      observedAt: report.lastCalculatedAt,
+      validUntil: new Date(report.lastCalculatedAt.getTime() + 30 * 60 * 1000),
+    } : undefined;
+    return [
+      withPropertyId(createPropertyFact('risk.report', serializedReport, reportEvidence, now), propertyId),
+      withPropertyId(createPropertyFact('risk.activeIncidents', incidents.map((incident) => ({
+        ...incident,
+        openedAt: incident.openedAt.toISOString(),
+        nextReevalAt: incident.nextReevalAt?.toISOString() ?? null,
+        updatedAt: incident.updatedAt.toISOString(),
+      })), undefined, now), propertyId),
+    ];
+  },
+};
+
+export const recallsAssembler: PropertyContextAssembler = {
+  scope: 'RECALLS',
+  async assemble(propertyId, now) {
+    const matches = await prisma.recallMatch.findMany({
+      where: { propertyId, status: { in: ['OPEN', 'NEEDS_CONFIRMATION'] } },
+      select: {
+        id: true,
+        inventoryItemId: true,
+        homeAssetId: true,
+        recallId: true,
+        method: true,
+        confidencePct: true,
+        status: true,
+        maintenanceTaskId: true,
+        updatedAt: true,
+      },
+      orderBy: [{ status: 'asc' }, { confidencePct: 'desc' }],
+    });
+    return [withPropertyId(createPropertyFact('recalls.unresolvedMatches', matches.map((match) => ({
+      ...match,
+      updatedAt: match.updatedAt.toISOString(),
+    })), undefined, now), propertyId)];
+  },
+};
+
+export const guidanceStateAssembler: PropertyContextAssembler = {
+  scope: 'GUIDANCE_STATE',
+  async assemble(propertyId, now) {
+    const signals = await prisma.guidanceSignal.findMany({
+      where: {
+        propertyId,
+        status: 'ACTIVE',
+        OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+      },
+      select: {
+        id: true,
+        homeAssetId: true,
+        inventoryItemId: true,
+        signalIntentFamily: true,
+        issueDomain: true,
+        decisionStage: true,
+        executionReadiness: true,
+        severity: true,
+        severityScore: true,
+        confidenceScore: true,
+        sourceFeatureKey: true,
+        sourceEntityType: true,
+        sourceEntityId: true,
+        dedupeKey: true,
+        missingContextKeys: true,
+        recommendedToolKey: true,
+        lastObservedAt: true,
+        expiresAt: true,
+      },
+      orderBy: [{ severityScore: 'desc' }, { lastObservedAt: 'desc' }],
+    });
+    return [withPropertyId(createPropertyFact('guidance.activeSignals', signals.map((signal) => ({
+      ...signal,
+      confidenceScore: signal.confidenceScore?.toNumber() ?? null,
+      lastObservedAt: signal.lastObservedAt.toISOString(),
+      expiresAt: signal.expiresAt?.toISOString() ?? null,
+    })), undefined, now), propertyId)];
+  },
+};
+
 export const productContextAssembler: PropertyContextAssembler = {
   scope: 'PRODUCT_CONTEXT',
   async assemble(propertyId, now, actor) {
@@ -428,5 +658,10 @@ export const INITIAL_PROPERTY_CONTEXT_ASSEMBLERS: PropertyContextAssembler[] = [
   roomsAssembler,
   inventoryAssembler,
   maintenanceAssembler,
+  inspectionAssembler,
+  coverageAssembler,
+  riskAssembler,
+  recallsAssembler,
+  guidanceStateAssembler,
   productContextAssembler,
 ];

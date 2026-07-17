@@ -2,7 +2,7 @@ import { Prisma } from '@prisma/client';
 import { createHash } from 'crypto';
 import { prisma } from '../lib/prisma';
 import { calculateHealthScore, HealthScoreResult } from '../utils/propertyScore.util';
-import RiskAssessmentService from './RiskAssessment.service';
+import RiskAssessmentService, { RiskAssessmentContextError } from './RiskAssessment.service';
 import { FinancialReportService } from './FinancialReport.service';
 import {
   formatMajorApplianceType,
@@ -2529,7 +2529,10 @@ export class HomeScoreReportService {
 
     const [healthResult, riskReportOrQueued, financialSummary, scoreSummary, qualitySignals, homeEvents, canonicalAppliances, doNothingRuns] = await Promise.all([
       this.getHealthScore(propertyId),
-      RiskAssessmentService.getOrCreateRiskReport(propertyId),
+      RiskAssessmentService.getOrCreateRiskReport(propertyId, userId).catch((error) => {
+        if (error instanceof RiskAssessmentContextError) return 'QUEUED' as const;
+        throw error;
+      }),
       this.financialService.getFinancialEfficiencySummary(propertyId),
       getPropertyScoreSnapshotSummary(propertyId, userId, weeks),
       this.getPropertyQualitySignals(propertyId),
@@ -3195,7 +3198,10 @@ export class HomeScoreReportService {
     const preferenceProfile = await this.preferenceProfileService.getCurrentProfile(propertyId);
 
     await Promise.all([
-      RiskAssessmentService.calculateAndSaveReport(propertyId),
+      RiskAssessmentService.calculateAndSaveReport(propertyId, undefined, userId).catch((error) => {
+        if (error instanceof RiskAssessmentContextError) return null;
+        throw error;
+      }),
       this.financialService.calculateAndSaveFES(propertyId),
     ]);
     const result = await this.build(propertyId, userId, weeks);

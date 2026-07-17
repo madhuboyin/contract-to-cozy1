@@ -1150,6 +1150,11 @@ export default function HomeScoreReportPage() {
             </Button>
           </div>
         </div>
+        {report.protectionContext?.decisions.currentRiskOutput.status === "UNKNOWN" ? (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 print:hidden">
+            The risk component is using a conservative low-confidence state because the current risk report is missing or stale. Complete the property details and refresh the report to update it.
+          </div>
+        ) : null}
 
         <section className="rounded-2xl border border-slate-200 bg-[linear-gradient(150deg,#ffffff,#f8fafc)] p-4 shadow-sm md:p-5">
           <PriorityActionHero

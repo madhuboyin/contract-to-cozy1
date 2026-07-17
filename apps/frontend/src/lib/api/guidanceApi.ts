@@ -221,6 +221,7 @@ export type GuidancePropertyResponse = {
     journeyId: string;
     reason: string;
   }>;
+  protectionContext?: import('@/types').ProtectionContextSummary;
 };
 
 export type GuidanceJourneyDetailResponse = {

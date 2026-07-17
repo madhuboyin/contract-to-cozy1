@@ -64,6 +64,7 @@ export function useGuidance(propertyId: string | null | undefined, options?: Use
     counts: query.data?.counts ?? null,
     signals: query.data?.signals ?? [],
     journeys: query.data?.journeys ?? [],
+    protectionContext: query.data?.protectionContext ?? null,
     actions,
     nextByJourney,
   };

@@ -1362,6 +1362,11 @@ export default function StatusBoardClient() {
 
   return (
     <TooltipProvider delayDuration={120}>
+      {data?.protectionContext?.decisions.currentRiskOutput.status === "UNKNOWN" ? (
+        <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+          Current risk context is incomplete or stale. Item condition remains available, but risk-backed prioritization will stay conservative until the property details are refreshed.
+        </div>
+      ) : null}
       <div className="lg:hidden">
         <MobileToolWorkspace
           intro={

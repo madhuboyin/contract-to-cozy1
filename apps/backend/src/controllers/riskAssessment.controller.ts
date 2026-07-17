@@ -27,7 +27,7 @@ class RiskAssessmentController {
       const userId = req.user.userId;
       const { propertyId } = req.params;
 
-      const report = await RiskAssessmentService.getOrCreateRiskReport(propertyId);
+      const report = await RiskAssessmentService.getOrCreateRiskReport(propertyId, userId);
 
       analyticsEmitter.track({
         eventType: AnalyticsEvent.TOOL_USED,
@@ -80,7 +80,7 @@ class RiskAssessmentController {
 
       // Use the robust report retrieval logic (getOrCreateRiskReport)
       // This method queues a job if needed and returns the freshest data (or 'QUEUED')
-      const reportOrStatus = await RiskAssessmentService.getOrCreateRiskReport(propertyId);
+      const reportOrStatus = await RiskAssessmentService.getOrCreateRiskReport(propertyId, userId);
 
       if (reportOrStatus === 'QUEUED') {
           // If QUEUED, return minimal status so frontend shows the loading spinner
@@ -126,7 +126,7 @@ class RiskAssessmentController {
 
       // Phase 3.4: PDF generation logic (using service placeholder)
       try {
-        const pdfBuffer = await RiskAssessmentService.generateRiskReportPdf(propertyId);
+        const pdfBuffer = await RiskAssessmentService.generateRiskReportPdf(propertyId, userId);
 
         analyticsEmitter.track({
           eventType: AnalyticsEvent.ACTION_COMPLETED,
@@ -165,7 +165,7 @@ class RiskAssessmentController {
       const userId = req.user.userId;
       const { propertyId } = req.params;
 
-      const report = await RiskAssessmentService.calculateAndSaveReport(propertyId);
+      const report = await RiskAssessmentService.calculateAndSaveReport(propertyId, undefined, userId);
       await markCoverageAnalysisStale(propertyId);
       await markItemCoverageAnalysesStale(propertyId);
       await markRiskPremiumOptimizerStale(propertyId);

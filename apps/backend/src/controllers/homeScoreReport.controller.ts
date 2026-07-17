@@ -7,6 +7,7 @@ import {
 } from '../services/homeScoreReport.service';
 import { logger } from '../lib/logger';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
+import { getProtectionContextDecisions } from '../services/protection/context';
 
 const service = new HomeScoreReportService();
 
@@ -25,7 +26,10 @@ export async function getHomeScoreReport(req: CustomRequest, res: Response) {
     }
 
     const weeks = parseWeeks(req.query.weeks, 26);
-    const report = await service.getReport(propertyId, userId, weeks);
+    const [report, protectionContext] = await Promise.all([
+      service.getReport(propertyId, userId, weeks),
+      getProtectionContextDecisions(propertyId, userId),
+    ]);
 
     analyticsEmitter.track({
       eventType: AnalyticsEvent.TOOL_USED,
@@ -36,7 +40,7 @@ export async function getHomeScoreReport(req: CustomRequest, res: Response) {
       metadataJson: { weeks },
     });
 
-    return res.json({ success: true, data: { report } });
+    return res.json({ success: true, data: { report: { ...report, protectionContext } } });
   } catch (error: any) {
     logger.error({ err: error }, 'Error fetching home score report');
     return res.status(500).json({
@@ -56,6 +60,7 @@ export async function refreshHomeScoreReport(req: CustomRequest, res: Response) 
 
     const weeks = parseWeeks(req.query.weeks, 26);
     const report = await service.refresh(propertyId, userId, weeks);
+    const protectionContext = await getProtectionContextDecisions(propertyId, userId);
 
     analyticsEmitter.track({
       eventType: AnalyticsEvent.ACTION_COMPLETED,
@@ -66,7 +71,7 @@ export async function refreshHomeScoreReport(req: CustomRequest, res: Response) 
       metadataJson: { actionType: 'refresh' },
     });
 
-    return res.json({ success: true, data: { report } });
+    return res.json({ success: true, data: { report: { ...report, protectionContext } } });
   } catch (error: any) {
     logger.error({ err: error }, 'Error refreshing home score report');
     return res.status(500).json({

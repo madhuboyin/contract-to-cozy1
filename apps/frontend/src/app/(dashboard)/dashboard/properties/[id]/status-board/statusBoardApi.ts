@@ -1,4 +1,5 @@
 import { api } from '@/lib/api/client';
+import type { ProtectionContextSummary } from '@/types';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -69,6 +70,7 @@ export interface StatusBoardResponse {
   pagination: StatusBoardPagination;
   groups?: Record<string, StatusBoardItemDTO[]>;
   signalSummary?: StatusBoardSignalSummary;
+  protectionContext?: ProtectionContextSummary;
 }
 
 export interface ListBoardParams {

@@ -19,6 +19,9 @@ import { PropertyIntelligenceJobType, PropertyIntelligenceJobPayload } from '../
 // PHASE 2.4 INTEGRATION
 import { createTasksFromRiskAssessment } from './riskAssessmentIntegration.service';
 import { logger } from '../lib/logger';
+import { getPropertyContext } from '../modules/propertyContext';
+import { evaluateProtectionContext } from './protection/applicabilityPolicy';
+import type { FeatureDecision, PropertyContextSnapshot } from '../modules/propertyContext';
 
 interface PropertyWithRelations extends Property {
   warranties: Warranty[];
@@ -47,13 +50,26 @@ export type RiskSummaryDto = {
   status: 'CALCULATED' | 'QUEUED' | 'MISSING_DATA' | 'NO_PROPERTY';
 };
 
+export class RiskAssessmentContextError extends Error {
+  readonly statusCode = 409;
+  readonly code = 'RISK_CONTEXT_INCOMPLETE';
+  readonly details: { applicability: FeatureDecision };
+
+  constructor(readonly applicability: FeatureDecision) {
+    super('Complete the required property facts before calculating risk.');
+    this.name = 'RiskAssessmentContextError';
+    this.details = { applicability };
+  }
+}
+
 class RiskAssessmentService {
 
   private get jobQueueService(): typeof JobQueueService { 
     return JobQueueService; 
   }
 
-  async getOrCreateRiskReport(propertyId: string): Promise<RiskAssessmentReport | 'QUEUED'> {
+  async getOrCreateRiskReport(propertyId: string, actorUserId?: string): Promise<RiskAssessmentReport | 'QUEUED'> {
+    await this.requireApplicableContext(propertyId, actorUserId);
     const property = await this.fetchPropertyDetails(propertyId);
     if (!property) {
       throw new Error("Property not found.");
@@ -170,8 +186,10 @@ class RiskAssessmentService {
    */
   async calculateAndSaveReport(
     propertyId: string,
-    property?: PropertyWithRelations
+    property?: PropertyWithRelations,
+    actorUserId?: string,
   ): Promise<RiskAssessmentReport> {
+    await this.requireApplicableContext(propertyId, actorUserId);
     
     let fetchedProperty: PropertyWithRelations | null | undefined = property; 
     let reportData: any; 
@@ -359,8 +377,8 @@ class RiskAssessmentService {
     return updatedReport;
   }
   
-  async generateRiskReportPdf(propertyId: string): Promise<Buffer> {
-    const report = await this.getOrCreateRiskReport(propertyId);
+  async generateRiskReportPdf(propertyId: string, actorUserId?: string): Promise<Buffer> {
+    const report = await this.getOrCreateRiskReport(propertyId, actorUserId);
 
     if (report === 'QUEUED') {
         throw new Error("Risk assessment report is currently calculating. Please try again in a moment.");
@@ -602,6 +620,31 @@ class RiskAssessmentService {
       },
     }) as Promise<PropertyWithRelations | null>;
   }  
+
+  private async requireApplicableContext(
+    propertyId: string,
+    actorUserId?: string,
+  ): Promise<PropertyContextSnapshot> {
+    let userId = actorUserId;
+    if (!userId) {
+      const property = await prisma.property.findUnique({
+        where: { id: propertyId },
+        select: { homeownerProfile: { select: { userId: true } } },
+      });
+      userId = property?.homeownerProfile.userId;
+    }
+    if (!userId) throw new Error('Property not found.');
+    const context = await getPropertyContext(
+      propertyId,
+      { userId },
+      { scopes: ['CORE', 'STRUCTURE', 'EXTERIOR', 'SYSTEMS', 'SAFETY', 'INVENTORY', 'INSPECTION', 'COVERAGE', 'RISK'] },
+    );
+    const applicability = evaluateProtectionContext(context).riskAssessment;
+    if (applicability.status !== 'APPLICABLE') {
+      throw new RiskAssessmentContextError(applicability);
+    }
+    return context;
+  }
 }
 
 export default new RiskAssessmentService();

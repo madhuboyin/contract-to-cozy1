@@ -19,6 +19,7 @@ import { APIError } from '../middleware/error.middleware';
 import { modelShortlistAdvisorService } from '../services/guidanceEngine/modelShortlistAdvisor.service';
 import { vendorSuggestionsAdvisorService } from '../services/guidanceEngine/vendorSuggestionsAdvisor.service';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
+import { getProtectionContextDecisions } from '../services/protection/context';
 
 const GUIDANCE_TARGET_ACTIONS = new Set([
   'BOOKING',
@@ -44,9 +45,10 @@ export async function getPropertyGuidance(req: CustomRequest, res: Response, nex
       ? String(req.query.userSelectedScopeId)
       : undefined;
 
-    const payload = await guidanceJourneyService.getPropertyGuidance(propertyId, {
-      userSelectedScopeId,
-    });
+    const [payload, protectionContext] = await Promise.all([
+      guidanceJourneyService.getPropertyGuidance(propertyId, { userSelectedScopeId }),
+      getProtectionContextDecisions(propertyId, userId),
+    ]);
 
     analyticsEmitter.track({
       eventType: AnalyticsEvent.TOOL_USED,
@@ -66,6 +68,7 @@ export async function getPropertyGuidance(req: CustomRequest, res: Response, nex
         journeys: payload.journeys.map(mapGuidanceJourney),
         next: payload.next,
         suppressedSignals: payload.suppressedSignals ?? [],
+        protectionContext,
       },
     });
   } catch (error) {
