@@ -30,8 +30,8 @@ function formatCurrency(value: number): string {
   }).format(value);
 }
 
-function normalizedPropertyType(propertyType: string | null): string {
-  return String(propertyType || '').toUpperCase();
+function normalizedDwellingType(dwellingType: string | null): string {
+  return String(dwellingType || '').toUpperCase();
 }
 
 function moneyRange(snapshot: InsightSnapshotData): { min: number; max: number } {
@@ -56,7 +56,7 @@ function moneyRange(snapshot: InsightSnapshotData): { min: number; max: number }
   let min = Math.round((base.min * multiplier) / 100) * 100;
   let max = Math.round((base.max * multiplier) / 100) * 100;
 
-  if (normalizedPropertyType(snapshot.inputs.propertyType).includes('CONDO')) {
+  if (normalizedDwellingType(snapshot.inputs.dwellingType).includes('CONDO')) {
     min = Math.round((min * 0.7) / 100) * 100;
     max = Math.round((max * 0.7) / 100) * 100;
   }
@@ -170,7 +170,7 @@ function confidenceNudgeBlock(planBlock: NarrativePlanBlock): NarrativePayloadBl
       body: 'Home size is one of the strongest inputs for cost spread.',
       cta: 'Add square footage',
     },
-    propertyType: {
+    dwellingType: {
       title: 'Confirm property type for sharper assumptions',
       body: 'Type helps calibrate shared vs in-unit exposure and actions.',
       cta: 'Add property type',

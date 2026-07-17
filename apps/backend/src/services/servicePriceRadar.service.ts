@@ -165,19 +165,18 @@ function toIso(value: unknown): string {
 
 function buildPropertyContext(property: any): PropertyContext {
   const propertySize = typeof property.propertySize === 'number' ? property.propertySize : null;
-  const propertyType = textOrNull(property.dwellingType);
+  const dwellingType = property.dwellingType === 'UNKNOWN' ? null : textOrNull(property.dwellingType);
 
   return {
     propertyId: property.id,
     homeownerProfileId: property.homeownerProfileId,
-    propertyType,
+    dwellingType,
     propertySize,
     sizeBand: computeSizeBand(propertySize),
     yearBuilt: typeof property.yearBuilt === 'number' ? property.yearBuilt : null,
     city: textOrNull(property.city),
     state: textOrNull(property.state),
     zipCode: textOrNull(property.zipCode),
-    homeType: propertyType,
     systems: {
       heatingType: textOrNull(property.heatingType),
       coolingType: textOrNull(property.coolingType),
@@ -666,7 +665,7 @@ export function scoreBenchmark(
   }
 
   const benchmarkHomeType = normalizeRegionKey(benchmark.homeType);
-  const propertyHomeType = normalizeRegionKey(property.homeType);
+  const propertyHomeType = normalizeRegionKey(property.dwellingType);
   if (benchmarkHomeType) {
     if (!propertyHomeType || benchmarkHomeType !== propertyHomeType) {
       return Number.NEGATIVE_INFINITY;

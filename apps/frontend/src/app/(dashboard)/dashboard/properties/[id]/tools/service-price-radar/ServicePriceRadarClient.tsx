@@ -427,8 +427,8 @@ function extractFactorChips(check: ServicePriceRadarCheckDetail): string[] {
   const systems = asRecord(snapshot?.systems ?? null);
   const chips: string[] = [];
 
-  if (snapshot?.propertyType && typeof snapshot.propertyType === 'string') {
-    chips.push(optionLabel(snapshot.propertyType));
+  if (snapshot?.dwellingType && typeof snapshot.dwellingType === 'string') {
+    chips.push(optionLabel(snapshot.dwellingType));
   }
   if (typeof snapshot?.propertySize === 'number') {
     chips.push(`${snapshot.propertySize.toLocaleString()} sq ft`);

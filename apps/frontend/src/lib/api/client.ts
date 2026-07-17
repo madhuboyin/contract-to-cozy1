@@ -139,6 +139,7 @@ interface SendMessageToChatPayload {
 
 interface ChatResponse {
   text: string; // The backend returns the model's text in the 'text' field
+  propertyContext?: PropertyContextEnvelope;
 }
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';

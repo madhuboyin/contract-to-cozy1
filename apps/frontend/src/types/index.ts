@@ -530,7 +530,7 @@ export interface HomeScoreReportMeta {
   propertyAddress: string;
   reportId: string;
   generatedDate: string;
-  propertyType?: string | null;
+  dwellingType?: string | null;
   yearBuilt?: number | null;
   preparedFor: string | null;
   ownerName: string | null;
@@ -2638,7 +2638,7 @@ export interface RadarMatchDetail {
   impactLevel: RadarImpactLevel;
   impactSummary: string | null;
   impactFactorsJson: {
-    property?: { yearBuilt?: number | null; squareFootage?: number | null; homeType?: string | null };
+    property?: { yearBuilt?: number | null; propertySize?: number | null; dwellingType?: string | null };
     location?: { state?: string; city?: string; zip?: string };
     event?: { eventType?: string; eventSubType?: string | null; severity?: string };
     drivers?: RadarImpactDriver[];

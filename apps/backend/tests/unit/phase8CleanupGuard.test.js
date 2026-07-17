@@ -79,3 +79,31 @@ test('legacy Property classification columns and direct readers remain removed',
   assert.match(status, /Remaining Phase 8 slices/);
   assert.match(status, /Phase 8 is in progress/);
 });
+
+test('generic assistant and persisted response snapshots use bounded canonical contracts', () => {
+  const gemini = read('../../src/services/gemini.service.ts');
+  const propertyService = read('../../src/services/property.service.ts');
+  assert.doesNotMatch(gemini, /private getPropertyContext\(/);
+  assert.doesNotMatch(gemini, /PropertyAIGuidance|=== PROPERTY OVERVIEW ===/);
+  assert.match(gemini, /getAggregationPropertyContext\(propertyId, userId, 'SEARCH_ASSISTANT'\)/);
+  assert.doesNotMatch(propertyService, /getPropertyContextForAI|PropertyAIGuidance/);
+
+  const canonicalSnapshotSources = [
+    read('../../src/services/propertyInsight.service.ts'),
+    read('../../src/services/homeRiskReplay.service.ts'),
+    read('../../src/services/homeRiskReplay.engine.ts'),
+    read('../../src/services/servicePriceRadar.engine.ts'),
+    read('../../src/services/homeEventRadarMatcher.service.ts'),
+  ];
+  for (const source of canonicalSnapshotSources) {
+    assert.doesNotMatch(source, /propertyType:\s*(?:property|context)\./);
+    assert.doesNotMatch(source, /homeType:\s*(?:property|context)\./);
+    assert.doesNotMatch(source, /squareFootage:\s*(?:property|context)\./);
+  }
+
+  const homeScore = read('../../src/services/homeScoreReport.service.ts');
+  const frontendTypes = read('../../../frontend/src/types/index.ts');
+  assert.doesNotMatch(homeScore, /propertyType\?:\s*string/);
+  assert.doesNotMatch(frontendTypes, /reportMeta\.propertyType/);
+  assert.match(homeScore, /dwellingType:\s*propertyContext\.dwellingType/);
+});

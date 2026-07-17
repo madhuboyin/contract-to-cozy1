@@ -181,7 +181,7 @@ export default function BuyerReportView({
                 </p>
                 <h1 className="mt-1 text-xl font-bold text-slate-900">{reportMeta.propertyAddress}</h1>
                 <div className="mt-1 flex flex-wrap gap-1 text-xs text-slate-500">
-                  {reportMeta.propertyType && <span>{formatConstant(reportMeta.propertyType)}</span>}
+                  {reportMeta.dwellingType && <span>{formatConstant(reportMeta.dwellingType)}</span>}
                   {reportMeta.yearBuilt && <span>· Built {reportMeta.yearBuilt}</span>}
                   <span>· Report date: {formatDate(reportMeta.generatedDate || report.generatedAt)}</span>
                 </div>

@@ -168,7 +168,7 @@ export type HomeScoreReportMetaDTO = {
   propertyAddress: string;
   reportId: string;
   generatedDate: string;
-  propertyType?: string | null;
+  dwellingType?: string | null;
   yearBuilt?: number | null;
   preparedFor: string | null;
   ownerName: string | null;
@@ -2998,7 +2998,7 @@ export class HomeScoreReportService {
       ]),
       reportId,
       generatedDate: generatedAtIso,
-      propertyType: propertyContext.dwellingType === 'UNKNOWN' ? null : propertyContext.dwellingType,
+      dwellingType: propertyContext.dwellingType === 'UNKNOWN' ? null : propertyContext.dwellingType,
       yearBuilt: propertyContext.yearBuilt,
       preparedFor: ownerName || null,
       ownerName: ownerName || null,

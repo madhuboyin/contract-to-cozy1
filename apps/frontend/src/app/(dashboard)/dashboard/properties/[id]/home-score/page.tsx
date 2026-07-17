@@ -1259,7 +1259,7 @@ export default function HomeScoreReportPage() {
               { label: "Generated", value: formatDate(meta?.generatedDate) },
               { label: "Prepared For", value: meta?.preparedFor || "Property Owner" },
               { label: "Data Coverage", value: `${meta?.dataCoveragePercentage ?? report.trustAndVerification?.dataCoveragePct ?? 0}%` },
-              { label: "Dwelling Type", value: formatPropertyType(meta?.propertyType) || formatPropertyType(propertyQuery.data?.dwellingType) || "Not available" },
+              { label: "Dwelling Type", value: formatPropertyType(meta?.dwellingType) || formatPropertyType(propertyQuery.data?.dwellingType) || "Not available" },
               { label: "Year Built", value: meta?.yearBuilt || propertyQuery.data?.yearBuilt || "Not available" },
             ].map((item) => (
               <div key={item.label} className="border-t border-slate-200 px-6 py-3 sm:[&:nth-child(odd)]:border-r lg:[&:not(:nth-child(3n))]:border-r">

@@ -495,8 +495,8 @@ function computeImpact(event: any, property: PropertySnapshot): ImpactResult {
   const impactFactorsJson: Record<string, unknown> = {
     property: {
       yearBuilt: property.yearBuilt,
-      squareFootage: property.propertySize,
-      homeType: property.dwellingType,
+      propertySize: property.propertySize,
+      dwellingType: property.dwellingType,
     },
     location: {
       state: property.state,

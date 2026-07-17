@@ -74,18 +74,38 @@ Implemented:
 The legacy Property classification removal is implemented. The user must apply
 the schema change through the normal database schema workflow.
 
+## Slice 3 — assistant and compatibility-response cleanup
+
+Implemented:
+
+- Removed the unused generic-assistant property formatter and the duplicate
+  `getPropertyContextForAI` relational loader. Search Assistant now has one
+  bounded source: the `SEARCH_ASSISTANT` aggregation context.
+- Kept the assistant response contract explicit by typing its returned
+  Property Context envelope in the frontend client.
+- Replaced persisted/output snapshot aliases with canonical names across
+  Property Insight, narrative planning, Home Risk Replay, Service Price Radar,
+  HomeScore report metadata, Home Event Radar, and report rendering.
+- Migrated active frontend consumers from `propertyType`, `homeType`, and
+  `squareFootage` aliases to `dwellingType` and `propertySize`.
+- Retained `propertyType`, `homeType`, and `squareFootage` only where they are
+  owned by an external payload, user-entered feature input, legacy targeting
+  rule, or benchmark catalog—not as aliases for Property response truth.
+- Extended the Phase 8 cleanup guard to reject restoration of the assistant
+  loader/formatter or canonical snapshot aliases.
+
+No Prisma schema changes or migration scripts are included in this slice.
+
 ## Remaining Phase 8 slices
 
-1. Remove dead generic-assistant formatting code and remaining compatibility
-   response aliases after frontend consumers use bounded context contracts.
-2. Audit financial, item, and snapshot ownership for obsolete schema and
+1. Audit financial, item, and snapshot ownership for obsolete schema and
    adapters beyond the Phase 0 consolidation already completed.
-3. Run API/UI/worker runtime scenarios for all ten archetypes in an environment
+2. Run API/UI/worker runtime scenarios for all ten archetypes in an environment
    with the database and Docker services available.
-4. Re-run the final forbidden-field scan and update affected feature FRDs and
+3. Re-run the final forbidden-field scan and update affected feature FRDs and
    operational runbooks.
 
 ## Current status
 
-Phase 8 is in progress. Slices 1 and 2 are implemented; generic-assistant and
-compatibility-response cleanup is the next implementation slice.
+Phase 8 is in progress. Slices 1 through 3 are implemented; financial, item,
+and snapshot ownership cleanup is the next implementation slice.

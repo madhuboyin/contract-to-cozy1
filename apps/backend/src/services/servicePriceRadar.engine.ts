@@ -559,8 +559,7 @@ export class ServicePriceRadarEngine {
 
     const propertySnapshotJson = {
       propertyId: property.propertyId,
-      propertyType: property.propertyType,
-      homeType: property.homeType,
+      dwellingType: property.dwellingType,
       propertySize: property.propertySize,
       sizeBand: property.sizeBand,
       yearBuilt: property.yearBuilt,
@@ -572,9 +571,9 @@ export class ServicePriceRadarEngine {
 
     const pricingFactorsJson = {
       property: {
-        squareFootage: property.propertySize,
+        propertySize: property.propertySize,
         yearBuilt: property.yearBuilt,
-        homeType: property.homeType,
+        dwellingType: property.dwellingType,
         sizeBand: property.sizeBand,
       },
       region: {

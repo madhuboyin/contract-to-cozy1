@@ -8,14 +8,13 @@ const { scoreBenchmark } = require('../../src/services/servicePriceRadar.service
 const property = {
   propertyId: 'property-1',
   homeownerProfileId: 'profile-1',
-  propertyType: 'SINGLE_FAMILY_DETACHED',
+  dwellingType: 'SINGLE_FAMILY_DETACHED',
   propertySize: 1900,
   sizeBand: 'MEDIUM',
   yearBuilt: 1995,
   city: 'Hoboken',
   state: 'NJ',
   zipCode: '07030',
-  homeType: 'SINGLE_FAMILY_DETACHED',
   systems: {
     heatingType: null,
     coolingType: null,

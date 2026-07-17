@@ -49,8 +49,8 @@ export interface ReplayPropertyContext {
   state: string;
   zipCode: string;
   county: string | null;
-  propertyType: string | null;
-  squareFootage: number | null;
+  dwellingType: string | null;
+  propertySize: number | null;
   yearBuilt: number | null;
   foundationType: string | null;
   hasIrrigation: boolean | null;
@@ -279,7 +279,7 @@ function computeHailImpact(
     });
   }
 
-  if (normalize(context.propertyType).includes('manufactured') || normalize(context.propertyType).includes('mobile')) {
+  if (normalize(context.dwellingType).includes('manufactured') || normalize(context.dwellingType).includes('mobile')) {
     score += 0.05;
     drivers.push({
       code: 'LIGHTWEIGHT_ENVELOPE',
@@ -482,7 +482,7 @@ function computeHeatImpact(
     });
   }
 
-  if (context.squareFootage !== null && context.squareFootage >= 3000) {
+  if (context.propertySize !== null && context.propertySize >= 3000) {
     score += 0.03;
     drivers.push({
       code: 'LARGER_COOLING_LOAD',
@@ -892,8 +892,8 @@ export function evaluateReplayEvent(event: ReplayCandidateEvent, context: Replay
       },
       property: {
         yearBuilt: context.yearBuilt,
-        squareFootage: context.squareFootage,
-        propertyType: context.propertyType,
+        propertySize: context.propertySize,
+        dwellingType: context.dwellingType,
       },
       locationMatch: {
         basis: locationMatch.basis,

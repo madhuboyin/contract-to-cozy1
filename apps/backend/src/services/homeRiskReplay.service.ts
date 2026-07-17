@@ -182,8 +182,8 @@ function buildPropertyContext(
     state: property.state,
     zipCode: property.zipCode,
     county: null,
-    propertyType: property.dwellingType === 'UNKNOWN' ? null : property.dwellingType,
-    squareFootage: property.propertySize,
+    dwellingType: property.dwellingType === 'UNKNOWN' ? null : property.dwellingType,
+    propertySize: property.propertySize,
     yearBuilt: property.yearBuilt,
     foundationType: property.foundationType,
     hasIrrigation: property.hasIrrigation,
@@ -215,8 +215,8 @@ function buildPropertyContext(
 function buildPropertySnapshotJson(context: ReplayPropertyContext): JsonRecord {
   return {
     yearBuilt: context.yearBuilt,
-    squareFootage: context.squareFootage,
-    propertyType: context.propertyType,
+    propertySize: context.propertySize,
+    dwellingType: context.dwellingType,
     location: {
       state: context.state,
       county: context.county,

@@ -36,8 +36,8 @@ export interface NarrativePlan {
   generatedAt: string;
 }
 
-function isCondo(propertyType: string | null): boolean {
-  return String(propertyType || '').toUpperCase().includes('CONDO');
+function isCondo(dwellingType: string | null): boolean {
+  return String(dwellingType || '').toUpperCase().includes('CONDO');
 }
 
 function chooseHeroVariant(snapshot: InsightSnapshotData): NarrativeVariantKey {
@@ -54,7 +54,7 @@ function chooseHeroVariant(snapshot: InsightSnapshotData): NarrativeVariantKey {
 }
 
 function chooseMoneyVariant(snapshot: InsightSnapshotData): NarrativeVariantKey {
-  if (isCondo(snapshot.inputs.propertyType)) return 'CONDO_SHARED_RISK';
+  if (isCondo(snapshot.inputs.dwellingType)) return 'CONDO_SHARED_RISK';
   if (snapshot.derived.sizeBand === 'LARGE') return 'LARGE_HOME';
   return 'STANDARD_HOME';
 }
@@ -82,12 +82,12 @@ function chooseNudgeVariant(snapshot: InsightSnapshotData): NarrativePlanBlock |
     };
   }
 
-  if (missing.includes('propertyType')) {
+  if (missing.includes('dwellingType')) {
     return {
       id: 'confidence-nudge',
       type: 'CONFIDENCE_NUDGE',
       variant: 'PROPERTY_TYPE_NUDGE',
-      data: { fieldKey: 'propertyType' },
+      data: { fieldKey: 'dwellingType' },
     };
   }
 

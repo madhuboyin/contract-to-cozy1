@@ -19,7 +19,7 @@ export interface InsightSnapshotData {
   inputs: {
     yearBuilt: number | null;
     propertySize: number | null;
-    propertyType: string | null;
+    dwellingType: string | null;
     address: string | null;
     city: string | null;
     state: string | null;
@@ -189,7 +189,7 @@ function buildInsightSnapshotData(property: PropertyInsightInput): InsightSnapsh
     inputs: {
       yearBuilt: property.yearBuilt,
       propertySize: property.propertySize,
-      propertyType: property.dwellingType === 'UNKNOWN' ? null : property.dwellingType,
+      dwellingType: property.dwellingType === 'UNKNOWN' ? null : property.dwellingType,
       address: property.address || null,
       city: property.city || null,
       state: property.state || null,
@@ -242,7 +242,7 @@ export function parseInsightSnapshot(snapshot: PropertyInsightSnapshot): Insight
     inputs: {
       yearBuilt: parsed.inputs?.yearBuilt ?? null,
       propertySize: parsed.inputs?.propertySize ?? null,
-      propertyType: parsed.inputs?.propertyType ?? null,
+      dwellingType: parsed.inputs?.dwellingType ?? null,
       address: parsed.inputs?.address ?? null,
       city: parsed.inputs?.city ?? null,
       state: parsed.inputs?.state ?? null,

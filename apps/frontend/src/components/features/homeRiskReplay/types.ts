@@ -34,8 +34,8 @@ export interface HomeRiskReplaySummaryJson {
 export interface HomeRiskReplayPropertySnapshotJson {
   propertyContextVersion?: string | null;
   yearBuilt?: number | null;
-  squareFootage?: number | null;
-  propertyType?: string | null;
+  propertySize?: number | null;
+  dwellingType?: string | null;
   location?: {
     state?: string | null;
     county?: string | null;
@@ -69,8 +69,8 @@ export interface HomeRiskReplayTimelineEvent {
     };
     property?: {
       yearBuilt?: number | null;
-      squareFootage?: number | null;
-      propertyType?: string | null;
+      propertySize?: number | null;
+      dwellingType?: string | null;
     };
     locationMatch?: {
       basis?: string;

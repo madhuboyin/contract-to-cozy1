@@ -228,7 +228,7 @@ export function buildHomeReportPackHtml(snapshot: any) {
   <div class="page break-before" id="summary">
     <div class="sectionTitle">
       <div class="h2">Home Summary</div>
-      <div class="chip">${safe(p.dwellingType ?? p.propertyType ?? 'Property')}</div>
+      <div class="chip">${safe(p.dwellingType ?? 'Property')}</div>
     </div>
 
     <div class="grid2">

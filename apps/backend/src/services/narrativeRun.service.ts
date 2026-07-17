@@ -58,10 +58,7 @@ async function assertPropertyAccess(propertyId: string, userId: string) {
     throw new APIError('Property not found', 404, 'NOT_FOUND');
   }
 
-  return {
-    ...property,
-    propertyType: property.dwellingType !== 'UNKNOWN' ? String(property.dwellingType) : null,
-  };
+  return property;
 }
 
 function isRecentlyDismissed(dismissedAt: Date | null | undefined): boolean {

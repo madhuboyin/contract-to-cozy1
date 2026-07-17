@@ -163,14 +163,13 @@ export type ServicePriceRadarEventInput = {
 export type PropertyContext = {
   propertyId: string;
   homeownerProfileId: string;
-  propertyType: string | null;
+  dwellingType: string | null;
   propertySize: number | null;
   sizeBand: string | null;
   yearBuilt: number | null;
   city: string | null;
   state: string | null;
   zipCode: string | null;
-  homeType: string | null;
   systems: {
     heatingType: string | null;
     coolingType: string | null;
