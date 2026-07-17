@@ -11,38 +11,54 @@ export type FinanceSnapshotDTO = {
 };
 
 export async function getFinanceSnapshot(propertyId: string): Promise<FinanceSnapshotDTO | null> {
-  const row = await prisma.propertyFinanceSnapshot.findUnique({ where: { propertyId } });
+  const row = await prisma.propertyFinancingProfile.findUnique({ where: { propertyId } });
   if (!row) return null;
 
   return {
     propertyId: row.propertyId,
-    mortgageBalance: row.mortgageBalance ?? null,
-    interestRate: row.interestRate ?? null,
+    mortgageBalance: row.currentMortgageBalanceCents == null
+      ? null
+      : row.currentMortgageBalanceCents / 100,
+    interestRate: row.interestRateBps == null ? null : row.interestRateBps / 10_000,
     remainingTermMonths: row.remainingTermMonths ?? null,
-    monthlyPayment: row.monthlyPayment ?? null,
-    lastVerifiedAt: row.lastVerifiedAt ? row.lastVerifiedAt.toISOString() : null,
+    monthlyPayment: row.monthlyPaymentCents == null ? null : row.monthlyPaymentCents / 100,
+    lastVerifiedAt: row.mortgageBalanceAsOfDate
+      ? row.mortgageBalanceAsOfDate.toISOString()
+      : row.updatedAt.toISOString(),
   };
 }
 
 export async function upsertFinanceSnapshot(propertyId: string, patch: Partial<FinanceSnapshotDTO>) {
-  const row = await prisma.propertyFinanceSnapshot.upsert({
+  await prisma.propertyFinancingProfile.upsert({
     where: { propertyId },
     create: {
       propertyId,
-      mortgageBalance: patch.mortgageBalance ?? null,
-      interestRate: patch.interestRate ?? null,
+      currentMortgageBalanceCents: patch.mortgageBalance == null
+        ? null
+        : Math.round(patch.mortgageBalance * 100),
+      interestRateBps: patch.interestRate == null
+        ? null
+        : Math.round(patch.interestRate * 10_000),
       remainingTermMonths: patch.remainingTermMonths ?? null,
-      monthlyPayment: patch.monthlyPayment ?? null,
-      lastVerifiedAt: patch.lastVerifiedAt ? new Date(patch.lastVerifiedAt) : new Date(),
+      monthlyPaymentCents: patch.monthlyPayment == null
+        ? null
+        : Math.round(patch.monthlyPayment * 100),
+      mortgageBalanceAsOfDate: patch.lastVerifiedAt ? new Date(patch.lastVerifiedAt) : new Date(),
     },
     update: {
-      mortgageBalance: patch.mortgageBalance ?? undefined,
-      interestRate: patch.interestRate ?? undefined,
+      currentMortgageBalanceCents: patch.mortgageBalance == null
+        ? undefined
+        : Math.round(patch.mortgageBalance * 100),
+      interestRateBps: patch.interestRate == null
+        ? undefined
+        : Math.round(patch.interestRate * 10_000),
       remainingTermMonths: patch.remainingTermMonths ?? undefined,
-      monthlyPayment: patch.monthlyPayment ?? undefined,
-      lastVerifiedAt: patch.lastVerifiedAt ? new Date(patch.lastVerifiedAt) : new Date(),
+      monthlyPaymentCents: patch.monthlyPayment == null
+        ? undefined
+        : Math.round(patch.monthlyPayment * 100),
+      mortgageBalanceAsOfDate: patch.lastVerifiedAt ? new Date(patch.lastVerifiedAt) : new Date(),
     },
   });
 
-  return row;
+  return getFinanceSnapshot(propertyId);
 }

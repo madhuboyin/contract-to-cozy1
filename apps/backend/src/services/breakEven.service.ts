@@ -306,13 +306,13 @@ export class BreakEvenService {
       confidence = bumpConfidence(confidence, 'MEDIUM');
     }
     if (debtMode === 'ON') {
-      dataSources.push('PropertyFinanceSnapshot + mortgage amortization context');
+      dataSources.push('PropertyFinancingProfile + mortgage amortization context');
       notes.push('Debt-aware modeling is ON using mortgage snapshot/override inputs.');
       confidence = bumpConfidence(confidence, 'MEDIUM');
     } else if (financeSnapshot) {
-      notes.push('Finance snapshot is partial; add missing mortgage fields to enable debt-aware break-even.');
+      notes.push('Canonical financing profile is partial; add missing mortgage fields to enable debt-aware break-even.');
     } else {
-      notes.push('No finance snapshot found; break-even runs without debt context until mortgage details are added.');
+      notes.push('No canonical financing profile found; break-even runs without debt context until mortgage details are added.');
     }
 
     // ✅ Phase-3: swap appreciationRate to real comps when user did NOT override appreciationRate

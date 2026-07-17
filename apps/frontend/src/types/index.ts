@@ -3510,6 +3510,7 @@ export interface PropertyFinancingProfile {
   currentMortgageBalanceCents?: number;
   mortgageBalanceAsOfDate?: string;
   interestRateBps?: number;
+  remainingTermMonths?: number;
   monthlyPaymentCents?: number;
   hasSecondMortgage: boolean;
   secondMortgageBalanceCents?: number;
@@ -3615,6 +3616,7 @@ export interface FinancingProfilePayload {
   currentMortgageBalanceCents?: number;
   mortgageBalanceAsOfDate?: string;
   interestRateBps?: number;
+  remainingTermMonths?: number;
   monthlyPaymentCents?: number;
   hasSecondMortgage?: boolean;
   secondMortgageBalanceCents?: number;

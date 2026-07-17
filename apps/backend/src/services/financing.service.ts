@@ -83,6 +83,7 @@ export async function upsertProfile(
     currentMortgageBalanceCents?: number;
     mortgageBalanceAsOfDate?: string;
     interestRateBps?: number;
+    remainingTermMonths?: number;
     monthlyPaymentCents?: number;
     hasSecondMortgage?: boolean;
     secondMortgageBalanceCents?: number;
@@ -103,6 +104,7 @@ export async function upsertProfile(
       mortgageBalanceAsOfDate: new Date(payload.mortgageBalanceAsOfDate),
     }),
     ...(payload.interestRateBps !== undefined && { interestRateBps: payload.interestRateBps }),
+    ...(payload.remainingTermMonths !== undefined && { remainingTermMonths: payload.remainingTermMonths }),
     ...(payload.monthlyPaymentCents !== undefined && { monthlyPaymentCents: payload.monthlyPaymentCents }),
     ...(payload.hasSecondMortgage !== undefined && { hasSecondMortgage: payload.hasSecondMortgage }),
     ...(payload.secondMortgageBalanceCents !== undefined && {

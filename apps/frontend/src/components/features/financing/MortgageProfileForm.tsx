@@ -47,6 +47,9 @@ export default function MortgageProfileForm({ initial, onSave, saving }: Mortgag
     initial?.mortgageBalanceAsOfDate ? initial.mortgageBalanceAsOfDate.slice(0, 10) : '',
   );
   const [interestRate, setInterestRate] = useState(rateBpsToString(initial?.interestRateBps));
+  const [remainingTermMonths, setRemainingTermMonths] = useState(
+    initial?.remainingTermMonths != null ? String(initial.remainingTermMonths) : '',
+  );
   const [monthlyPayment, setMonthlyPayment] = useState(
     centsToString(initial?.monthlyPaymentCents),
   );
@@ -76,6 +79,7 @@ export default function MortgageProfileForm({ initial, onSave, saving }: Mortgag
       return;
     }
     const ratePct = parseFloat(interestRate);
+    const termMonths = Number.parseInt(remainingTermMonths, 10);
     const payload: FinancingProfilePayload = {
       ...(purchasePrice && { purchasePriceCents: dollarsToCents(purchasePrice) }),
       ...(purchaseDate && { purchaseDate: new Date(purchaseDate).toISOString() }),
@@ -84,6 +88,7 @@ export default function MortgageProfileForm({ initial, onSave, saving }: Mortgag
       ...(currentBalance && { currentMortgageBalanceCents: dollarsToCents(currentBalance) }),
       ...(balanceAsOf && { mortgageBalanceAsOfDate: new Date(balanceAsOf).toISOString() }),
       ...(!isNaN(ratePct) && ratePct > 0 && { interestRateBps: Math.round(ratePct * 100) }),
+      ...(Number.isInteger(termMonths) && termMonths > 0 && { remainingTermMonths: termMonths }),
       ...(monthlyPayment && { monthlyPaymentCents: dollarsToCents(monthlyPayment) }),
       hasSecondMortgage,
       ...(hasSecondMortgage && secondBalance && {
@@ -196,16 +201,30 @@ export default function MortgageProfileForm({ initial, onSave, saving }: Mortgag
             />
           </div>
         </div>
-        <div className="space-y-1">
-          <Label className="text-xs">Monthly payment (P+I or PITI)</Label>
-          <div className="relative">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-400">$</span>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1">
+            <Label className="text-xs">Remaining term (months)</Label>
             <Input
-              className={`${fieldClass} pl-6`}
-              placeholder="2,400"
-              value={monthlyPayment}
-              onChange={(e) => setMonthlyPayment(e.target.value)}
+              type="number"
+              min={1}
+              max={600}
+              className={fieldClass}
+              placeholder="312"
+              value={remainingTermMonths}
+              onChange={(e) => setRemainingTermMonths(e.target.value)}
             />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Monthly payment</Label>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-400">$</span>
+              <Input
+                className={`${fieldClass} pl-6`}
+                placeholder="2,400"
+                value={monthlyPayment}
+                onChange={(e) => setMonthlyPayment(e.target.value)}
+              />
+            </div>
           </div>
         </div>
       </section>

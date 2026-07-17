@@ -4,12 +4,26 @@ import { CustomRequest } from '../types';
 import { RateConfigType } from '@prisma/client';
 import * as svc from '../services/financing.service';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
+import { APIError } from '../middleware/error.middleware';
+import { getFinancialContextEnvelope } from '../services/financialContext/context';
+
+function requireUserId(req: CustomRequest): string {
+  const userId = req.user?.userId;
+  if (!userId) throw new APIError('Authentication required.', 401, 'AUTH_REQUIRED');
+  return userId;
+}
 
 // ─── Financing Profile ────────────────────────────────────────────────────────
 
 export async function getFinancingProfile(req: CustomRequest, res: Response, next: NextFunction) {
   try {
+    const userId = requireUserId(req);
     const profile = await svc.getProfile(req.params.propertyId);
+    const propertyContext = await getFinancialContextEnvelope(
+      req.params.propertyId,
+      userId,
+      'FINANCING_CENTER',
+    );
 
     analyticsEmitter.track({
       eventType: AnalyticsEvent.TOOL_USED,
@@ -20,7 +34,7 @@ export async function getFinancingProfile(req: CustomRequest, res: Response, nex
       metadataJson: { hasProfile: !!profile, mortgageType: profile?.mortgageType ?? null },
     });
 
-    res.json({ success: true, data: { profile } });
+    res.json({ success: true, data: { profile, propertyContext } });
   } catch (err) {
     next(err);
   }
@@ -28,8 +42,14 @@ export async function getFinancingProfile(req: CustomRequest, res: Response, nex
 
 export async function upsertFinancingProfile(req: CustomRequest, res: Response, next: NextFunction) {
   try {
+    const userId = requireUserId(req);
     const profile = await svc.upsertProfile(req.params.propertyId, req.body);
-    res.json({ success: true, data: { profile } });
+    const propertyContext = await getFinancialContextEnvelope(
+      req.params.propertyId,
+      userId,
+      'FINANCING_CENTER',
+    );
+    res.json({ success: true, data: { profile, propertyContext } });
   } catch (err) {
     next(err);
   }
@@ -47,8 +67,14 @@ function serializeEquity(e: Awaited<ReturnType<typeof svc.getLatestEquity>>) {
 
 export async function getEquityPosition(req: CustomRequest, res: Response, next: NextFunction) {
   try {
+    const userId = requireUserId(req);
     const equity = await svc.getLatestEquity(req.params.propertyId);
-    res.json({ success: true, data: { equity: serializeEquity(equity) } });
+    const propertyContext = await getFinancialContextEnvelope(
+      req.params.propertyId,
+      userId,
+      'FINANCING_CENTER',
+    );
+    res.json({ success: true, data: { equity: serializeEquity(equity), propertyContext } });
   } catch (err) {
     next(err);
   }
@@ -56,7 +82,13 @@ export async function getEquityPosition(req: CustomRequest, res: Response, next:
 
 export async function refreshEquityPosition(req: CustomRequest, res: Response, next: NextFunction) {
   try {
+    const userId = requireUserId(req);
     const equity = await svc.refreshEquity(req.params.propertyId);
+    const propertyContext = await getFinancialContextEnvelope(
+      req.params.propertyId,
+      userId,
+      'FINANCING_CENTER',
+    );
 
     analyticsEmitter.track({
       eventType: AnalyticsEvent.ACTION_COMPLETED,
@@ -67,7 +99,7 @@ export async function refreshEquityPosition(req: CustomRequest, res: Response, n
       metadataJson: { actionType: 'refresh_equity', equityPercent: Number(equity.equityPercent), ltvPercent: Number(equity.ltvPercent) },
     });
 
-    res.status(201).json({ success: true, data: { equity: serializeEquity(equity) } });
+    res.status(201).json({ success: true, data: { equity: serializeEquity(equity), propertyContext } });
   } catch (err) {
     next(err);
   }

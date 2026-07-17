@@ -730,6 +730,151 @@ function serializeContextRow(row: Record<string, unknown>): Record<string, unkno
   }));
 }
 
+export const financialAssembler: PropertyContextAssembler = {
+  scope: 'FINANCIAL',
+  async assemble(propertyId, now) {
+    const expenseThreshold = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
+    const [profile, latestEquity, reserveFund, capitalExposure, expenseSummary, activeScenarios, evidence] = await Promise.all([
+      prisma.propertyFinancingProfile.findUnique({
+        where: { propertyId },
+        select: {
+          purchasePriceCents: true,
+          purchaseDate: true,
+          mortgageType: true,
+          originalMortgageBalanceCents: true,
+          currentMortgageBalanceCents: true,
+          mortgageBalanceAsOfDate: true,
+          interestRateBps: true,
+          remainingTermMonths: true,
+          monthlyPaymentCents: true,
+          hasSecondMortgage: true,
+          secondMortgageBalanceCents: true,
+          hasPMI: true,
+          updatedAt: true,
+        },
+      }),
+      prisma.equityPosition.findFirst({
+        where: { propertyId },
+        select: {
+          estimatedValueCents: true,
+          estimatedValueSource: true,
+          mortgageBalanceCents: true,
+          secondMortgageBalanceCents: true,
+          equityCents: true,
+          equityPercent: true,
+          ltvPercent: true,
+          helocCapacityCents: true,
+          helocEligible: true,
+          computedAt: true,
+        },
+        orderBy: { computedAt: 'desc' },
+      }),
+      prisma.homeReserveFund.findUnique({
+        where: { propertyId },
+        select: {
+          posture: true,
+          horizonYears: true,
+          currentBalanceCents: true,
+          recommendedMonthlyContributionCents: true,
+          currentShortfallCents: true,
+          lastRecalculatedAt: true,
+          isActive: true,
+        },
+      }),
+      prisma.homeCapitalTimelineItem.findMany({
+        where: { propertyId, windowEnd: { gte: now }, analysis: { status: 'READY' } },
+        select: {
+          id: true,
+          category: true,
+          eventType: true,
+          windowStart: true,
+          windowEnd: true,
+          estimatedCostMinCents: true,
+          estimatedCostMaxCents: true,
+          confidence: true,
+          priority: true,
+          inventoryItemId: true,
+          updatedAt: true,
+        },
+        orderBy: { windowStart: 'asc' },
+        take: 100,
+      }),
+      prisma.expense.groupBy({
+        by: ['category'],
+        where: { propertyId, transactionDate: { gte: expenseThreshold } },
+        _sum: { amount: true },
+        _count: { _all: true },
+      }),
+      prisma.financingScenario.findMany({
+        where: { propertyId, status: { in: ['DRAFT', 'SAVED'] } },
+        select: {
+          id: true,
+          title: true,
+          status: true,
+          entryPoint: true,
+          projectCostCents: true,
+          selectedOption: true,
+          sourceEntityType: true,
+          sourceEntityId: true,
+          updatedAt: true,
+        },
+        orderBy: { updatedAt: 'desc' },
+        take: 100,
+      }),
+      loadEvidence(propertyId, 'FINANCIAL'),
+    ]);
+
+    const currentMortgage = profile && profile.currentMortgageBalanceCents !== null
+      ? {
+          mortgageType: profile.mortgageType,
+          originalMortgageBalanceCents: profile.originalMortgageBalanceCents,
+          currentMortgageBalanceCents: profile.currentMortgageBalanceCents,
+          mortgageBalanceAsOfDate: profile.mortgageBalanceAsOfDate,
+          interestRateBps: profile.interestRateBps,
+          remainingTermMonths: profile.remainingTermMonths,
+          monthlyPaymentCents: profile.monthlyPaymentCents,
+          hasSecondMortgage: profile.hasSecondMortgage,
+          secondMortgageBalanceCents: profile.secondMortgageBalanceCents,
+          hasPMI: profile.hasPMI,
+        }
+      : null;
+    const mortgageObservedAt = profile?.mortgageBalanceAsOfDate ?? profile?.updatedAt ?? null;
+    const mortgageEvidence = mortgageObservedAt
+      ? {
+          source: 'USER_REPORTED' as const,
+          verified: false,
+          confidence: null,
+          observedAt: mortgageObservedAt,
+          validUntil: new Date(mortgageObservedAt.getTime() + 90 * 24 * 60 * 60 * 1000),
+        }
+      : undefined;
+    const values: Record<string, unknown> = {
+      'financial.financingProfile': profile ? serializeContextRow(profile) : null,
+      'financial.currentMortgage': currentMortgage ? serializeContextRow(currentMortgage) : null,
+      'financial.latestEquity': latestEquity ? serializeContextRow(latestEquity) : null,
+      'financial.reserveFund': reserveFund ? serializeContextRow(reserveFund) : null,
+      'financial.upcomingCapitalExposure': capitalExposure.map((row) => serializeContextRow(row)),
+      'financial.ownershipExpenseSummary': expenseSummary.map((row) => ({
+        category: row.category,
+        amount: row._sum.amount?.toNumber() ?? 0,
+        transactionCount: row._count._all,
+        periodStart: expenseThreshold.toISOString(),
+        periodEnd: now.toISOString(),
+      })),
+      // Scenario inputs and selections stay visibly separate from canonical
+      // financing facts. Results/assumptions are intentionally not projected.
+      'financial.activeScenarios': activeScenarios.map((row) => serializeContextRow(row)),
+    };
+
+    return Object.entries(values).map(([key, value]) => {
+      const metadata = key === 'financial.currentMortgage'
+        ? evidence.get(key) ?? mortgageEvidence
+        : evidence.get(key);
+      return withPropertyId(createPropertyFact(key, value, metadata, now), propertyId);
+    });
+  },
+};
+
 export const complianceAssembler: PropertyContextAssembler = {
   scope: 'COMPLIANCE',
   async assemble(propertyId, now) {
@@ -846,6 +991,7 @@ export const INITIAL_PROPERTY_CONTEXT_ASSEMBLERS: PropertyContextAssembler[] = [
   inspectionAssembler,
   coverageAssembler,
   riskAssembler,
+  financialAssembler,
   recallsAssembler,
   environmentAssembler,
   eventsAssembler,

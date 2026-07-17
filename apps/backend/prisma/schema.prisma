@@ -11097,6 +11097,7 @@ model PropertyFinancingProfile {
   currentMortgageBalanceCents  Int?
   mortgageBalanceAsOfDate      DateTime?
   interestRateBps              Int?
+  remainingTermMonths          Int?
   monthlyPaymentCents          Int?
   hasSecondMortgage            Boolean       @default(false)
   secondMortgageBalanceCents   Int?

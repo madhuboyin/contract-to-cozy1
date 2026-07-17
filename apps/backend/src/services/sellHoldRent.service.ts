@@ -533,7 +533,7 @@ export class SellHoldRentService {
     if (financialContext.sharedSignalsUsed.length > 0) {
       dataSources.push('SignalService (shared financial signal context)');
     }
-    if (debtMode === 'ON') dataSources.push('PropertyFinanceSnapshot + mortgageMath (debt modeling)');
+    if (debtMode === 'ON') dataSources.push('PropertyFinancingProfile + mortgageMath (debt modeling)');
 
     return {
       assumptionSetId: financialContext.assumptionSetId,

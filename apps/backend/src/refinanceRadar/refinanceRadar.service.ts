@@ -96,34 +96,30 @@ export class RefinanceRadarService {
 
   // ── Internal helpers ─────────────────────────────────────────────────────────
 
-  /**
-   * Extract normalized mortgage context from PropertyFinanceSnapshot.
-   *
-   * IMPORTANT: PropertyFinanceSnapshot stores interestRate as a decimal fraction
-   * (e.g., 0.0625 for 6.25%). The engine works in percentage form (6.25).
-   * Conversion happens here — all engine inputs use percentage form.
-   */
+  /** Extract normalized mortgage context from the canonical financing profile. */
   private async getMortgageContext(
     propertyId: string,
   ): Promise<MortgageInputContext | null> {
-    const snap = await prisma.propertyFinanceSnapshot.findUnique({
+    const profile = await prisma.propertyFinancingProfile.findUnique({
       where: { propertyId },
     });
 
     if (
-      !snap ||
-      snap.mortgageBalance == null ||
-      snap.interestRate == null ||
-      snap.remainingTermMonths == null
+      !profile ||
+      profile.currentMortgageBalanceCents == null ||
+      profile.interestRateBps == null ||
+      profile.remainingTermMonths == null
     ) {
       return null;
     }
 
     return {
-      loanBalance: snap.mortgageBalance,
-      currentRatePct: snap.interestRate * 100, // fraction → percentage
-      remainingTermMonths: snap.remainingTermMonths,
-      currentMonthlyPayment: snap.monthlyPayment ?? undefined,
+      loanBalance: profile.currentMortgageBalanceCents / 100,
+      currentRatePct: profile.interestRateBps / 100,
+      remainingTermMonths: profile.remainingTermMonths,
+      currentMonthlyPayment: profile.monthlyPaymentCents == null
+        ? undefined
+        : profile.monthlyPaymentCents / 100,
     };
   }
 

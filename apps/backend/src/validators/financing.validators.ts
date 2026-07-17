@@ -16,6 +16,7 @@ export const UpsertFinancingProfileSchema = z.object({
   currentMortgageBalanceCents: z.number().int().min(0).optional(),
   mortgageBalanceAsOfDate: z.string().datetime({ offset: true }).optional(),
   interestRateBps: z.number().int().min(0).max(5000).optional(),
+  remainingTermMonths: z.number().int().min(1).max(600).optional(),
   monthlyPaymentCents: z.number().int().min(0).optional(),
   hasSecondMortgage: z.boolean().optional(),
   secondMortgageBalanceCents: z.number().int().min(0).optional(),
