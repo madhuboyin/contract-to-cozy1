@@ -237,7 +237,6 @@ export async function listPropertyApplianceInventory(propertyId: string): Promis
 
     // Prefer property_appliance items if both exist
     const isPropertyBacked = !!it.sourceHash?.startsWith(SOURCE_HASH_PREFIX);
-    const existingIsPropertyBacked = existing ? existing.id.startsWith('') : false; // placeholder
 
     if (!existing) {
       byType.set(t, dto);

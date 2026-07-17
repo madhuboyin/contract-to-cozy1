@@ -130,6 +130,8 @@ test('financial, item, and snapshot ownership stays explicit', () => {
   assert.doesNotMatch(propertyValidation, /homeAssets|HomeAsset/);
   assert.doesNotMatch(homeManagementRoutes, /home-assets/);
   assert.match(propertyService, /majorAppliances/);
+  const propertyApplianceInventory = read('../../src/services/propertyApplianceInventory.service.ts');
+  assert.doesNotMatch(propertyApplianceInventory, /startsWith\(''\)|placeholder/);
 
   const sellHoldRentApi = read('../../../frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/sell-hold-rent/sellHoldRentApi.ts');
   assert.doesNotMatch(sellHoldRentApi, /FinanceSnapshot|getFinanceSnapshot|saveFinanceSnapshot/);

@@ -1,3 +1,5 @@
+import { RESPONSIBILITY_SCOPES } from '@/lib/property/propertyContextForm';
+
 export type PropertyPriorityTier = "P0" | "P1" | "P2" | "P3";
 export type PropertySectionId = "basics" | "systems" | "safety" | "occupancy" | "appliances";
 
@@ -40,6 +42,14 @@ const hasNumber = (value: unknown) => typeof value === "number" && Number.isFini
 const hasNonNullNumber = (value: unknown) => typeof value === "number" && Number.isFinite(value);
 const hasBooleanTrue = (value: unknown) => value === true;
 const hasArrayItems = (value: unknown) => Array.isArray(value) && value.length > 0;
+const hasCompleteResponsibilities = (value: unknown) => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const responsibilities = value as Record<string, unknown>;
+  return RESPONSIBILITY_SCOPES.every((scope) => {
+    const party = responsibilities[scope];
+    return hasText(party) && party !== 'UNKNOWN';
+  });
+};
 
 export const PROPERTY_PRIORITY_FIELDS: PropertyPriorityField[] = [
   { key: "name", label: "property nickname", tier: "P0", impactWeight: 70, sectionId: "basics", fieldRefId: "field-name", isFilled: (v) => hasText(v.name) },
@@ -71,7 +81,7 @@ export const PROPERTY_PRIORITY_FIELDS: PropertyPriorityField[] = [
   { key: "hasIrrigation", label: "irrigation detail", tier: "P2", impactWeight: 65, sectionId: "safety", isFilled: (v) => v.hasIrrigation !== null && v.hasIrrigation !== undefined },
   { key: "bedrooms", label: "bedrooms", tier: "P2", impactWeight: 55, sectionId: "occupancy", fieldRefId: "field-bedrooms", isFilled: (v) => hasNonNullNumber(v.bedrooms) },
   { key: "bathrooms", label: "bathrooms", tier: "P2", impactWeight: 54, sectionId: "occupancy", fieldRefId: "field-bathrooms", isFilled: (v) => hasNonNullNumber(v.bathrooms) },
-  { key: "responsibilityParty", label: "maintenance responsibility", tier: "P2", impactWeight: 53, sectionId: "occupancy", fieldRefId: "field-responsibilityParty", isFilled: (v) => hasText(v.responsibilityParty) && v.responsibilityParty !== "UNKNOWN" },
+  { key: "responsibilities", label: "maintenance responsibilities", tier: "P2", impactWeight: 53, sectionId: "occupancy", fieldRefId: "responsibility", isFilled: (v) => hasCompleteResponsibilities(v.responsibilities) },
 
   { key: "appliances", label: "appliances", tier: "P3", impactWeight: 20, sectionId: "appliances", isFilled: (v) => hasArrayItems(v.appliances) },
 ];

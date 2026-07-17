@@ -888,7 +888,7 @@ export default function EditPropertyPage() {
         ownershipForm: watchOwnershipForm,
         propertyUse: watchPropertyUse,
         occupancyStatus: watchOccupancyStatus,
-        responsibilityParty: Object.values(watchResponsibilities ?? {}).some((party) => party !== 'UNKNOWN') ? 'OWNER' : 'UNKNOWN',
+        responsibilities: watchResponsibilities,
         propertySize: watchPropertySize,
         yearBuilt: watchYearBuilt,
         heatingType: watchHeatingType,
