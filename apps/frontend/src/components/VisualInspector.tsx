@@ -69,6 +69,10 @@ interface InspectionReport {
   }[];
   prioritizedActions: DetectedIssue[];
   generatedAt: string;
+  meta?: {
+    classification: 'PROVISIONAL_VISUAL_ASSESSMENT';
+    requiresConfirmation: true;
+  };
 }
 
 interface VisualInspectorProps {
@@ -197,6 +201,12 @@ export default function VisualInspector({ propertyId }: VisualInspectorProps) {
           status={<StatusChip tone={report.overallCondition === 'EXCELLENT' || report.overallCondition === 'GOOD' ? 'good' : report.overallCondition === 'FAIR' ? 'elevated' : 'danger'}>{report.overallCondition}</StatusChip>}
           summary="AI-detected issues, severity ranking, and estimated repair exposure."
         />
+
+        {report.meta?.requiresConfirmation ? (
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+            This is a provisional visual assessment. Confirm material findings through the Inspection Hub before creating repair, disclosure, or coverage actions.
+          </div>
+        ) : null}
 
         <ReadOnlySummaryBlock
           title="Inspection Snapshot"

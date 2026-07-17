@@ -23,6 +23,7 @@ import {
 import { SharedSignalKey, signalService } from './signal.service';
 import { PreferenceProfileService } from './preferenceProfile.service';
 import { logSharedDataEvent } from './sharedDataObservability.service';
+import { getProtectionContextDecisions } from './protection/context';
 
 type JsonRecord = Record<string, unknown>;
 
@@ -577,7 +578,8 @@ export class HomeRiskReplayService {
     };
   }
 
-  async generateRun(propertyId: string, input: GenerateReplayInput): Promise<{ replay: JsonRecord; reused: boolean }> {
+  async generateRun(propertyId: string, userId: string, input: GenerateReplayInput): Promise<{ replay: JsonRecord; reused: boolean }> {
+    const protectionContext = await getProtectionContextDecisions(propertyId, userId);
     const property = await prisma.property.findUnique({
       where: { id: propertyId },
       select: PROPERTY_CONTEXT_SELECT,
@@ -616,12 +618,19 @@ export class HomeRiskReplayService {
       });
 
       if (existing) {
-        return { replay: await this.enrichReplayWithSignals(existing), reused: true };
+        const snapshot = existing.propertySnapshotJson as JsonRecord | null;
+        if (snapshot?.propertyContextVersion === protectionContext.contextVersion) {
+          return { replay: await this.enrichReplayWithSignals(existing), reused: true };
+        }
       }
     }
 
     const propertyContext = buildPropertyContext(property);
-    const propertySnapshotJson = buildPropertySnapshotJson(propertyContext);
+    const propertySnapshotJson = {
+      ...buildPropertySnapshotJson(propertyContext),
+      propertyContextVersion: protectionContext.contextVersion,
+      applicability: protectionContext.decisions.riskReplay,
+    };
 
     const run = await prisma.homeRiskReplayRun.create({
       data: {
@@ -630,7 +639,7 @@ export class HomeRiskReplayService {
         windowStart: replayWindow.windowStart,
         windowEnd: replayWindow.windowEnd,
         status: HomeRiskReplayStatus.pending,
-        propertySnapshotJson: propertySnapshotJson as Prisma.InputJsonValue,
+        propertySnapshotJson: propertySnapshotJson as unknown as Prisma.InputJsonValue,
         engineVersion: HOME_RISK_REPLAY_ENGINE_VERSION,
       },
     });
@@ -717,7 +726,7 @@ export class HomeRiskReplayService {
           moderateImpactEvents,
           summaryText,
           summaryJson: summaryJson as Prisma.InputJsonValue,
-          propertySnapshotJson: propertySnapshotJson as Prisma.InputJsonValue,
+          propertySnapshotJson: propertySnapshotJson as unknown as Prisma.InputJsonValue,
           engineVersion: HOME_RISK_REPLAY_ENGINE_VERSION,
         },
         include: {

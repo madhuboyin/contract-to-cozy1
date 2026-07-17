@@ -5,12 +5,16 @@ import { ingestInspectionReport } from '../services/inspectionExtraction.service
 import { applyWriteBacks, getWriteBackPreview } from '../services/inspectionWriteBack.service';
 import { APIError } from '../middleware/error.middleware';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
+import { getProtectionContextDecisions } from '../services/protection/context';
 
 // ── Hub overview ──────────────────────────────────────────────────────────────
 
 export async function getHub(req: Request, res: Response, next: NextFunction) {
   try {
-    const data = await hubService.getHub(req.params.propertyId);
+    const [data, protectionContext] = await Promise.all([
+      hubService.getHub(req.params.propertyId),
+      getProtectionContextDecisions(req.params.propertyId, req.user!.userId),
+    ]);
 
     analyticsEmitter.track({
       eventType: AnalyticsEvent.TOOL_USED,
@@ -21,7 +25,16 @@ export async function getHub(req: Request, res: Response, next: NextFunction) {
       metadataJson: { openItemCount: (data as any)?.openItemCount ?? (data as any)?.openItemsCount },
     });
 
-    res.json({ success: true, data });
+    res.json({
+      success: true,
+      data: {
+        ...data,
+        propertyContext: {
+          contextVersion: protectionContext.contextVersion,
+          decision: protectionContext.decisions.inspectionEvidence,
+        },
+      },
+    });
   } catch (err) { next(err); }
 }
 
@@ -158,14 +171,26 @@ export async function confirmReport(req: Request, res: Response, next: NextFunct
 
 export async function listOpenItems(req: Request, res: Response, next: NextFunction) {
   try {
-    const result = await hubService.listOpenItems(req.params.propertyId, {
-      severity: req.query.severity as any,
-      homeSystem: req.query.homeSystem as any,
-      reportId: req.query.reportId as string | undefined,
-      limit: Number(req.query.limit ?? 50),
-      cursor: req.query.cursor as string | undefined,
+    const [result, protectionContext] = await Promise.all([
+      hubService.listOpenItems(req.params.propertyId, {
+        severity: req.query.severity as any,
+        homeSystem: req.query.homeSystem as any,
+        reportId: req.query.reportId as string | undefined,
+        limit: Number(req.query.limit ?? 50),
+        cursor: req.query.cursor as string | undefined,
+      }),
+      getProtectionContextDecisions(req.params.propertyId, req.user!.userId),
+    ]);
+    res.json({
+      success: true,
+      data: {
+        ...result,
+        propertyContext: {
+          contextVersion: protectionContext.contextVersion,
+          decision: protectionContext.decisions.inspectionEvidence,
+        },
+      },
     });
-    res.json({ success: true, data: result });
   } catch (err) { next(err); }
 }
 

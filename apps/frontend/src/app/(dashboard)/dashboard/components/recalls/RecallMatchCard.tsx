@@ -32,6 +32,7 @@ export default function RecallMatchCard({ match, highlighted, onConfirm, onDismi
     const s = `${mfg} ${model}`.trim();
     return s || (match.inventoryItemId ? 'Asset' : 'Unknown asset');
   }, [match]);
+  const requiresIdentityConfirmation = match.applicability?.status === 'UNKNOWN';
 
   return (
     <div
@@ -98,6 +99,22 @@ export default function RecallMatchCard({ match, highlighted, onConfirm, onDismi
       ) : null}
 
       <div className="mt-4 flex flex-wrap items-center gap-2">
+        {requiresIdentityConfirmation && match.status === 'OPEN' ? (
+          <>
+            <button
+              className="rounded-lg bg-slate-900 px-3 py-2 text-xs text-white"
+              onClick={() => onConfirm(match.id)}
+            >
+              Confirm item identity
+            </button>
+            <button
+              className="rounded-lg border border-slate-200 px-3 py-2 text-xs hover:bg-slate-50"
+              onClick={() => onDismiss(match.id)}
+            >
+              Not my model
+            </button>
+          </>
+        ) : null}
         {match.status === 'NEEDS_CONFIRMATION' ? (
           <>
             <button
@@ -115,7 +132,7 @@ export default function RecallMatchCard({ match, highlighted, onConfirm, onDismi
           </>
         ) : null}
 
-        {match.status === 'OPEN' ? (
+        {match.status === 'OPEN' && !requiresIdentityConfirmation ? (
           <>
             <button
               className="rounded-lg bg-slate-900 px-3 py-2 text-xs text-white"

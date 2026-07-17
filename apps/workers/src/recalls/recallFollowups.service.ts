@@ -145,6 +145,20 @@ export async function createFollowupsForOpenMatches(limit = 200) {
     where: {
       status: 'OPEN',
       maintenanceTaskId: null,
+      recall: { status: 'ACTIVE' },
+      OR: [
+        { confirmedAt: { not: null } },
+        {
+          confidencePct: { gte: 90 },
+          inventoryItem: {
+            is: {
+              isVerified: true,
+              manufacturer: { not: null },
+              modelNumber: { not: null },
+            },
+          },
+        },
+      ],
     },
     include: {
       recall: true,

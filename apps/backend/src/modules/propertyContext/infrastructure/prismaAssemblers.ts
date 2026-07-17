@@ -551,6 +551,79 @@ export const riskAssembler: PropertyContextAssembler = {
   },
 };
 
+export const environmentAssembler: PropertyContextAssembler = {
+  scope: 'ENVIRONMENT',
+  async assemble(propertyId, now) {
+    const setting = await prisma.propertyClimateSetting.findUnique({
+      where: { propertyId },
+      select: {
+        climateRegion: true,
+        climateRegionSource: true,
+        notificationEnabled: true,
+        updatedAt: true,
+      },
+    });
+    const value = setting
+      ? {
+          ...setting,
+          updatedAt: setting.updatedAt.toISOString(),
+        }
+      : null;
+    return [withPropertyId(createPropertyFact('environment.climateSetting', value, undefined, now), propertyId)];
+  },
+};
+
+export const eventsAssembler: PropertyContextAssembler = {
+  scope: 'EVENTS',
+  async assemble(propertyId, now) {
+    const lookback = new Date(now);
+    lookback.setFullYear(lookback.getFullYear() - 2);
+    const [radarMatches, homeEvents] = await Promise.all([
+      prisma.propertyRadarMatch.findMany({
+        where: {
+          propertyId,
+          isVisible: true,
+          OR: [{ visibleFrom: null }, { visibleFrom: { lte: now } }],
+          AND: [{ OR: [{ visibleUntil: null }, { visibleUntil: { gt: now } }] }],
+          radarEvent: { status: 'active' },
+        },
+        select: {
+          id: true,
+          radarEventId: true,
+          impactLevel: true,
+          visibleUntil: true,
+          updatedAt: true,
+        },
+        orderBy: { updatedAt: 'desc' },
+        take: 100,
+      }),
+      prisma.homeEvent.findMany({
+        where: { propertyId, occurredAt: { gte: lookback, lte: now } },
+        select: {
+          id: true,
+          type: true,
+          importance: true,
+          occurredAt: true,
+          inventoryItemId: true,
+          claimId: true,
+          sourceBadge: true,
+          confidenceScore: true,
+          updatedAt: true,
+        },
+        orderBy: { occurredAt: 'desc' },
+        take: 200,
+      }),
+    ]);
+    const serialize = (row: Record<string, unknown>) => Object.fromEntries(
+      Object.entries(row).map(([key, value]) => [key, value instanceof Date ? value.toISOString() : value]),
+    );
+    return [
+      withPropertyId(createPropertyFact('events.activeRadarMatches', radarMatches.map((row) => serialize(row)), undefined, now), propertyId),
+      withPropertyId(createPropertyFact('events.recentHomeEvents', homeEvents.map((row) => serialize(row)), undefined, now), propertyId),
+    ];
+  },
+};
+
 export const recallsAssembler: PropertyContextAssembler = {
   scope: 'RECALLS',
   async assemble(propertyId, now) {
@@ -662,6 +735,8 @@ export const INITIAL_PROPERTY_CONTEXT_ASSEMBLERS: PropertyContextAssembler[] = [
   coverageAssembler,
   riskAssembler,
   recallsAssembler,
+  environmentAssembler,
+  eventsAssembler,
   guidanceStateAssembler,
   productContextAssembler,
 ];

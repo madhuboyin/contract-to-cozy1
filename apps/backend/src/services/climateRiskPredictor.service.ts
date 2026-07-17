@@ -3,6 +3,8 @@
 import { GoogleGenAI } from "@google/genai";
 import { prisma } from '../config/database';
 import { logger } from '../lib/logger';
+import { getProtectionContextDecisions } from './protection/context';
+import type { FeatureDecision } from '../modules/propertyContext';
 
 interface ClimateRisk {
   category: string;
@@ -41,6 +43,7 @@ interface ClimateReport {
     disclaimer: string;
   };
   generatedAt: Date;
+  propertyContext: { contextVersion: string; decision: FeatureDecision };
 }
 
 const CLIMATE_RISK_CATEGORIES = [
@@ -67,6 +70,14 @@ export class ClimateRiskPredictorService {
   }
 
   async generateClimateReport(propertyId: string, userId: string): Promise<ClimateReport> {
+    const protectionContext = await getProtectionContextDecisions(propertyId, userId);
+    const climateDecision = protectionContext.decisions.climateRisk;
+    if (climateDecision.status !== 'APPLICABLE') {
+      throw Object.assign(
+        new Error('Property location must include a valid state and ZIP code before climate risk can be generated.'),
+        { statusCode: 409, code: 'CLIMATE_CONTEXT_REQUIRED', details: { decision: climateDecision } },
+      );
+    }
     const property = await prisma.property.findFirst({
       where: {
         id: propertyId,
@@ -137,6 +148,10 @@ export class ClimateRiskPredictorService {
           'Climate risk percentages are educational estimates and are not grounded to FEMA/NOAA property-level datasets in this version.',
       },
       generatedAt: new Date(),
+      propertyContext: {
+        contextVersion: protectionContext.contextVersion,
+        decision: climateDecision,
+      },
     };
   }
 

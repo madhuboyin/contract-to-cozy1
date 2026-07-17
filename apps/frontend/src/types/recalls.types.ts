@@ -35,6 +35,7 @@ export type InventoryItemLiteDTO = {
   manufacturer?: string | null;
   modelNumber?: string | null;
   name?: string | null; // if you have this field; safe optional
+  isVerified?: boolean;
 };
 
 export type RecallMatchDTO = {
@@ -59,6 +60,14 @@ export type RecallMatchDTO = {
 
   recall: RecallRecordDTO;
   inventoryItem?: InventoryItemLiteDTO | null;
+  applicability?: {
+    status: 'APPLICABLE' | 'NOT_APPLICABLE' | 'UNKNOWN';
+    reasonCodes: string[];
+    usedFactKeys: string[];
+    missingFactKeys: string[];
+    conflictedFactKeys: string[];
+    validUntil: string | null;
+  };
 };
 
 export type ListPropertyRecallsResponse = {

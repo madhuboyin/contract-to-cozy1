@@ -8,6 +8,7 @@ export async function getProtectionContextDecisions(propertyId: string, userId: 
     {
       scopes: [
         'CORE',
+        'LOCATION',
         'STRUCTURE',
         'EXTERIOR',
         'SYSTEMS',
@@ -19,6 +20,8 @@ export async function getProtectionContextDecisions(propertyId: string, userId: 
         'RISK',
         'RECALLS',
         'GUIDANCE_STATE',
+        'EVENTS',
+        'ENVIRONMENT',
       ],
     },
   );

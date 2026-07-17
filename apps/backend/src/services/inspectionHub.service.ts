@@ -30,13 +30,13 @@ export async function getHub(propertyId: string) {
       },
     }),
     prisma.inspectionFinding.count({
-      where: { propertyId, status: 'OPEN' },
+      where: { propertyId, status: 'OPEN', report: { status: 'CONFIRMED' } },
     }),
     prisma.inspectionFinding.count({
-      where: { propertyId, status: 'OPEN', severity: 'SAFETY' },
+      where: { propertyId, status: 'OPEN', severity: 'SAFETY', report: { status: 'CONFIRMED' } },
     }),
     prisma.inspectionFinding.count({
-      where: { propertyId, status: 'OPEN', severity: 'MAJOR' },
+      where: { propertyId, status: 'OPEN', severity: 'MAJOR', report: { status: 'CONFIRMED' } },
     }),
   ]);
 
@@ -189,6 +189,7 @@ export async function listOpenItems(
   const where: Prisma.InspectionFindingWhereInput = {
     propertyId,
     status: 'OPEN',
+    report: { status: 'CONFIRMED' },
     ...(severities.length > 0 && { severity: { in: severities as any[] } }),
     ...(systems.length > 0 && { homeSystem: { in: systems } }),
     ...(params.reportId && { reportId: params.reportId }),
@@ -221,13 +222,26 @@ export async function resolveFinding(
 ) {
   const finding = await prisma.inspectionFinding.findUnique({
     where: { id: findingId },
-    select: { id: true, propertyId: true, reportId: true, status: true },
+    select: {
+      id: true,
+      propertyId: true,
+      reportId: true,
+      status: true,
+      report: { select: { status: true } },
+    },
   });
   if (!finding || finding.propertyId !== propertyId) {
     throw new APIError('Finding not found', 404, 'NOT_FOUND');
   }
   if (finding.status === 'RESOLVED') {
     throw new APIError('Finding already resolved', 409, 'ALREADY_RESOLVED');
+  }
+  if (finding.report.status !== 'CONFIRMED') {
+    throw new APIError(
+      'Confirm the inspection report before resolving findings or creating downstream actions',
+      409,
+      'REPORT_NOT_CONFIRMED',
+    );
   }
 
   const updated = await prisma.inspectionFinding.update({
@@ -318,9 +332,12 @@ export async function generateNegotiationPackage(
 ) {
   const report = await prisma.inspectionReport.findUnique({
     where: { id: reportId },
-    select: { reportType: true, propertyId: true, inspectionDate: true, inspectorName: true, inspectorCompany: true },
+    select: { reportType: true, propertyId: true, status: true, inspectionDate: true, inspectorName: true, inspectorCompany: true },
   });
   if (!report || report.propertyId !== propertyId) throw new APIError('Report not found', 404, 'NOT_FOUND');
+  if (report.status !== 'CONFIRMED') {
+    throw new APIError('Confirm the inspection report before generating a negotiation package', 409, 'REPORT_NOT_CONFIRMED');
+  }
   if (report.reportType !== 'PRE_PURCHASE') {
     throw new APIError('Negotiation package is only available for PRE_PURCHASE reports', 400, 'INVALID_REPORT_TYPE');
   }
@@ -378,9 +395,12 @@ export async function generateNegotiationPackage(
 export async function getFixDisclosureDecisions(reportId: string, propertyId: string) {
   const report = await prisma.inspectionReport.findUnique({
     where: { id: reportId },
-    select: { reportType: true, propertyId: true },
+    select: { reportType: true, propertyId: true, status: true },
   });
   if (!report || report.propertyId !== propertyId) throw new APIError('Report not found', 404, 'NOT_FOUND');
+  if (report.status !== 'CONFIRMED') {
+    throw new APIError('Confirm the inspection report before making fix or disclosure decisions', 409, 'REPORT_NOT_CONFIRMED');
+  }
   if (report.reportType !== 'PRE_LISTING') {
     throw new APIError('Fix/disclose is only available for PRE_LISTING reports', 400, 'INVALID_REPORT_TYPE');
   }
@@ -417,9 +437,12 @@ export async function saveFixDisclosureDecisions(
 ) {
   const report = await prisma.inspectionReport.findUnique({
     where: { id: reportId },
-    select: { reportType: true, propertyId: true },
+    select: { reportType: true, propertyId: true, status: true },
   });
   if (!report || report.propertyId !== propertyId) throw new APIError('Report not found', 404, 'NOT_FOUND');
+  if (report.status !== 'CONFIRMED') {
+    throw new APIError('Confirm the inspection report before saving fix or disclosure decisions', 409, 'REPORT_NOT_CONFIRMED');
+  }
   if (report.reportType !== 'PRE_LISTING') {
     throw new APIError('Fix/disclose is only available for PRE_LISTING reports', 400, 'INVALID_REPORT_TYPE');
   }

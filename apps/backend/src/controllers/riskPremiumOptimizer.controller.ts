@@ -33,8 +33,10 @@ export async function getRiskPremiumOptimizer(req: CustomRequest, res: Response)
     return res.json({ success: true, data: result });
   } catch (error: any) {
     logger.error({ err: error }, 'Error fetching risk-premium optimization');
-    return res.status(500).json({
+    return res.status(error?.statusCode ?? 500).json({
       success: false,
+      code: error?.code,
+      details: error?.details,
       message: error?.message || 'Failed to fetch risk-premium optimization.',
     });
   }
@@ -66,8 +68,10 @@ export async function runRiskPremiumOptimizer(req: CustomRequest, res: Response)
     return res.json({ success: true, data: { analysis } });
   } catch (error: any) {
     logger.error({ err: error }, 'Error running risk-premium optimization');
-    return res.status(500).json({
+    return res.status(error?.statusCode ?? 500).json({
       success: false,
+      code: error?.code,
+      details: error?.details,
       message: error?.message || 'Failed to run risk-premium optimization.',
     });
   }

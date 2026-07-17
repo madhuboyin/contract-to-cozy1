@@ -7,6 +7,7 @@ type Candidate = {
   inventoryItemId: string;
   manufacturerNorm: string;
   modelNorm: string;
+  isVerified: boolean;
 };
 
 function scoreMatch(assetMfg: string, assetModel: string, recallMfg: string, recallModel: string) {
@@ -30,6 +31,7 @@ export async function runRecallMatchingScan() {
       propertyId: true,
       manufacturer: true,
       modelNumber: true,
+      isVerified: true,
     },
   });
 
@@ -39,6 +41,7 @@ export async function runRecallMatchingScan() {
       inventoryItemId: it.id,
       manufacturerNorm: normManufacturer(it.manufacturer),
       modelNorm: normModel(it.modelNumber),
+      isVerified: it.isVerified,
     }))
     .filter((c) => c.manufacturerNorm || c.modelNorm);
 
@@ -54,12 +57,16 @@ export async function runRecallMatchingScan() {
       if (!recallMfg && !recallModel) continue;
 
       for (const c of candidates) {
-        const { confidencePct, status } = scoreMatch(
+        const scored = scoreMatch(
           c.manufacturerNorm,
           c.modelNorm,
           recallMfg,
           recallModel
         );
+        const confidencePct = scored.confidencePct;
+        const status = scored.status === 'OPEN' && !c.isVerified
+          ? 'NEEDS_CONFIRMATION' as const
+          : scored.status;
 
         if (confidencePct < 70) continue; // v1 threshold
 

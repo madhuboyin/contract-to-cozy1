@@ -19,6 +19,8 @@ import {
 import { PreferencePostureDefaults, PreferenceProfileService } from './preferenceProfile.service';
 import { SharedSignalKey, signalService } from './signal.service';
 import { logSharedDataEvent } from './sharedDataObservability.service';
+import { getProtectionContextDecisions } from './protection/context';
+import type { FeatureDecision } from '../modules/propertyContext';
 
 type RiskTolerance = 'LOW' | 'MEDIUM' | 'HIGH';
 type Severity = 'LOW' | 'MEDIUM' | 'HIGH';
@@ -52,6 +54,7 @@ export type RiskPremiumOptimizationDTO = {
   homeownerProfileId: string;
   assumptionSetId?: string | null;
   preferenceProfileId?: string | null;
+  propertyContext?: { contextVersion: string; decision: FeatureDecision };
   sharedSignalsUsed?: string[];
   status: 'READY' | 'STALE' | 'ERROR';
   confidence: 'HIGH' | 'MEDIUM' | 'LOW';
@@ -482,6 +485,7 @@ export class RiskPremiumOptimizerService {
 
   async getLatest(propertyId: string, userId: string) {
     await assertPropertyForUser(propertyId, userId);
+    const protectionContext = await getProtectionContextDecisions(propertyId, userId);
 
     const latest = await prisma.riskPremiumOptimizationAnalysis.findFirst({
       where: { propertyId },
@@ -497,7 +501,13 @@ export class RiskPremiumOptimizerService {
 
     return {
       exists: true as const,
-      analysis: mapAnalysisToDto(latest),
+      analysis: {
+        ...mapAnalysisToDto(latest),
+        propertyContext: {
+          contextVersion: protectionContext.contextVersion,
+          decision: protectionContext.decisions.riskPremiumOptimizer,
+        },
+      },
     };
   }
 
@@ -507,6 +517,7 @@ export class RiskPremiumOptimizerService {
     overrides?: RiskPremiumOptimizerOverrides,
     options?: RiskPremiumRunOptions
   ) {
+    const protectionContext = await getProtectionContextDecisions(propertyId, userId);
     const posture = await this.preferenceProfileService.resolvePostureDefaults(propertyId);
     let assumptionSetId: string | null = null;
     let assumptionOverrides: RiskPremiumOptimizerOverrides = {};
@@ -525,6 +536,20 @@ export class RiskPremiumOptimizerService {
       ...(overrides ?? {}),
     };
     const effectiveOverrides = applyPreferenceDefaults(mergedOverrides, posture);
+
+    if (
+      protectionContext.decisions.riskPremiumOptimizer.status !== 'APPLICABLE' &&
+      effectiveOverrides.annualPremium === undefined
+    ) {
+      throw Object.assign(
+        new Error('Add an active property insurance policy or enter an annual premium scenario before running the optimizer.'),
+        {
+          statusCode: 409,
+          code: 'ACTIVE_POLICY_OR_PREMIUM_REQUIRED',
+          details: { decision: protectionContext.decisions.riskPremiumOptimizer },
+        },
+      );
+    }
 
     if (hasAssumptionOverrides(overrides)) {
       const createdSet = await this.assumptionSetService.create({
@@ -630,7 +655,7 @@ export class RiskPremiumOptimizerService {
     }
 
     const activePolicy =
-      policies.find((policy) => policy.startDate <= now && policy.expiryDate >= now) ?? policies[0] ?? null;
+      policies.find((policy) => policy.startDate <= now && policy.expiryDate > now) ?? null;
 
     const annualPremium =
       effectiveOverrides.annualPremium ?? (activePolicy ? asNumber(activePolicy.premiumAmount) : undefined);
@@ -1420,7 +1445,19 @@ export class RiskPremiumOptimizerService {
       return withPlanItems;
     });
 
-    return mapAnalysisToDto(created);
+    return {
+      ...mapAnalysisToDto(created),
+      propertyContext: {
+        contextVersion: protectionContext.contextVersion,
+        decision: effectiveOverrides.annualPremium !== undefined
+          ? {
+              ...protectionContext.decisions.riskPremiumOptimizer,
+              status: 'APPLICABLE' as const,
+              reasonCodes: ['SCENARIO_PREMIUM_OVERRIDE'],
+            }
+          : protectionContext.decisions.riskPremiumOptimizer,
+      },
+    };
   }
 
   private async assertPlanItemAccess(propertyId: string, planItemId: string) {

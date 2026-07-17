@@ -6,6 +6,8 @@ import { runMatchingForEvent } from './homeEventRadarMatcher.service';
 import { SharedSignalKey, signalService } from './signal.service';
 import { logSharedDataEvent } from './sharedDataObservability.service';
 import { applyBoundedSignalPriorityBoost } from './signalPriorityBoost.service';
+import { getProtectionContextDecisions } from './protection/context';
+import type { FeatureDecision } from '../modules/propertyContext';
 
 // ---------------------------------------------------------------------------
 // DTO serializers
@@ -225,6 +227,10 @@ export class HomeEventRadarService {
       costPressurePattern: unknown;
       interactions: unknown;
     };
+    propertyContext: {
+      contextVersion: string;
+      decision: FeatureDecision;
+    };
   }> {
     const limit = Math.min(query.limit ?? 40, 100);
 
@@ -235,8 +241,13 @@ export class HomeEventRadarService {
 
     if (!query.includeResolved) {
       where.radarEvent = {
-        status: { not: 'archived' },
+        status: 'active',
       };
+      const now = new Date();
+      where.AND = [
+        { OR: [{ visibleFrom: null }, { visibleFrom: { lte: now } }] },
+        { OR: [{ visibleUntil: null }, { visibleUntil: { gt: now } }] },
+      ];
     }
 
     if (query.severity) {
@@ -386,6 +397,8 @@ export class HomeEventRadarService {
 
     const nextCursor = hasMore ? String(page[page.length - 1].id) : null;
 
+    const protectionContext = await getProtectionContextDecisions(propertyId, userId);
+
     return {
       items: prioritizedItems,
       hasMore,
@@ -397,6 +410,10 @@ export class HomeEventRadarService {
         riskAccumulation: latestSignals.RISK_ACCUMULATION ?? null,
         costPressurePattern: latestSignals.COST_PRESSURE_PATTERN ?? null,
         interactions: signalInteractions.interactions,
+      },
+      propertyContext: {
+        contextVersion: protectionContext.contextVersion,
+        decision: protectionContext.decisions.eventRadar,
       },
     };
   }

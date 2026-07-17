@@ -4,6 +4,8 @@ import { GoogleGenAI } from "@google/genai";
 import { prisma } from '../config/database';
 import { logger } from '../lib/logger';
 import { analyzeImagesWithPrompt } from './ai/geminiImageAnalysis.util';
+import { getProtectionContextDecisions } from './protection/context';
+import type { FeatureDecision } from '../modules/propertyContext';
 
 interface DetectedIssue {
   title: string;
@@ -53,6 +55,11 @@ interface InspectionReport {
   prioritizedActions: DetectedIssue[];
   
   generatedAt: Date;
+  meta: {
+    classification: 'PROVISIONAL_VISUAL_ASSESSMENT';
+    requiresConfirmation: true;
+  };
+  propertyContext: { contextVersion: string; decision: FeatureDecision };
 }
 
 const ROOM_TYPES = [
@@ -77,6 +84,7 @@ export class VisualInspectorService {
     userId: string,
     images: { file: Express.Multer.File; roomType: string }[]
   ): Promise<InspectionReport> {
+    const protectionContext = await getProtectionContextDecisions(propertyId, userId);
     const property = await prisma.property.findFirst({
       where: {
         id: propertyId,
@@ -145,6 +153,14 @@ export class VisualInspectorService {
       issuesByCategory,
       prioritizedActions: prioritizedActions.slice(0, 10),
       generatedAt: new Date(),
+      meta: {
+        classification: 'PROVISIONAL_VISUAL_ASSESSMENT',
+        requiresConfirmation: true,
+      },
+      propertyContext: {
+        contextVersion: protectionContext.contextVersion,
+        decision: protectionContext.decisions.visualInspector,
+      },
     };
   }
 

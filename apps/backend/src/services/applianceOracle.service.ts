@@ -9,6 +9,8 @@ import {
 } from '../config/ai-constants';
 import { listPropertyAppliancesAsHomeAssets } from './propertyApplianceInventory.service';
 import { logger } from '../lib/logger';
+import { getProtectionContextDecisions } from './protection/context';
+import type { FeatureDecision } from '../modules/propertyContext';
 
 interface ApplianceFailurePrediction {
   applianceName: string;
@@ -55,6 +57,7 @@ interface OracleReport {
     disclaimer: string;
   };
   generatedAt: Date;
+  propertyContext: { contextVersion: string; decision: FeatureDecision };
 }
 
 const APPLIANCE_LIFESPAN_DATA = {
@@ -105,6 +108,7 @@ export class ApplianceOracleService {
   }
 
   async generateOracleReport(propertyId: string, userId: string): Promise<OracleReport> {
+    const protectionContext = await getProtectionContextDecisions(propertyId, userId);
     // Get property with all appliance data
     const property = await prisma.property.findFirst({
       where: { id: propertyId, homeownerProfile: { userId } },
@@ -138,6 +142,10 @@ export class ApplianceOracleService {
             'Obtain contractor bids before making purchasing or budgeting decisions.',
         },
         generatedAt: new Date(),
+        propertyContext: {
+          contextVersion: protectionContext.contextVersion,
+          decision: protectionContext.decisions.applianceOracle,
+        },
       };
     }
 
@@ -183,6 +191,10 @@ export class ApplianceOracleService {
           'Obtain contractor bids before making purchasing or budgeting decisions.',
       },
       generatedAt: new Date(),
+      propertyContext: {
+        contextVersion: protectionContext.contextVersion,
+        decision: protectionContext.decisions.applianceOracle,
+      },
     };
   }
 

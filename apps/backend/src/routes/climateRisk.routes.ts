@@ -44,8 +44,10 @@ router.get('/analyze/:propertyId', authenticate, propertyAuthMiddleware, async (
 
   } catch (error: any) {
     logger.error({ err: error }, '[CLIMATE-RISK] Error');
-    res.status(500).json({
+    res.status(error?.statusCode ?? 500).json({
       success: false,
+      code: error?.code,
+      details: error?.details,
       message: error.message || 'Failed to generate climate risk report'
     });
   }

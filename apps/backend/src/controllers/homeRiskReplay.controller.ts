@@ -20,7 +20,7 @@ export async function generateHomeRiskReplay(req: CustomRequest, res: Response, 
   try {
     const { userId } = requireUser(req);
     const { propertyId } = req.params;
-    const result = await service.generateRun(propertyId, req.body);
+    const result = await service.generateRun(propertyId, userId, req.body);
 
     analyticsEmitter.track({
       eventType: AnalyticsEvent.ACTION_COMPLETED,

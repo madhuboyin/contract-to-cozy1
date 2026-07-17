@@ -50,6 +50,21 @@ const prismaMock = {
   guidanceSignal: {
     findMany: async (args) => { calls.push(['guidance', args]); return []; },
   },
+  propertyClimateSetting: {
+    findUnique: async (args) => {
+      calls.push(['climate', args]);
+      return {
+        climateRegion: 'HUMID_SUBTROPICAL', climateRegionSource: 'AUTO_DETECTED',
+        notificationEnabled: true, updatedAt: new Date('2026-07-01T00:00:00.000Z'),
+      };
+    },
+  },
+  propertyRadarMatch: {
+    findMany: async (args) => { calls.push(['radar', args]); return []; },
+  },
+  homeEvent: {
+    findMany: async (args) => { calls.push(['homeEvent', args]); return []; },
+  },
 };
 
 const prismaPath = require.resolve('../../src/lib/prisma.ts');
@@ -66,6 +81,8 @@ const {
   riskAssembler,
   recallsAssembler,
   guidanceStateAssembler,
+  environmentAssembler,
+  eventsAssembler,
 } = require('../../src/modules/propertyContext/infrastructure/prismaAssemblers.ts');
 
 const NOW = new Date('2026-07-16T12:00:00.000Z');
@@ -106,4 +123,18 @@ test('RECALLS and GUIDANCE_STATE include unresolved, active, unexpired records o
   assert.deepEqual(guidance['guidance.activeSignals'].value, []);
   assert.deepEqual(calls.find(([name]) => name === 'recall')[1].where.status.in, ['OPEN', 'NEEDS_CONFIRMATION']);
   assert.equal(calls.find(([name]) => name === 'guidance')[1].where.status, 'ACTIVE');
+});
+
+test('ENVIRONMENT and EVENTS expose bounded current property state', async () => {
+  const environment = byKey(await environmentAssembler.assemble('property-1', NOW));
+  const events = byKey(await eventsAssembler.assemble('property-1', NOW));
+  assert.equal(environment['environment.climateSetting'].value.climateRegion, 'HUMID_SUBTROPICAL');
+  assert.deepEqual(events['events.activeRadarMatches'].value, []);
+  assert.deepEqual(events['events.recentHomeEvents'].value, []);
+  const radarWhere = calls.find(([name]) => name === 'radar')[1].where;
+  assert.equal(radarWhere.isVisible, true);
+  assert.equal(radarWhere.radarEvent.status, 'active');
+  assert.ok(radarWhere.AND);
+  const homeEventWhere = calls.find(([name]) => name === 'homeEvent')[1].where;
+  assert.equal(homeEventWhere.occurredAt.lte.toISOString(), NOW.toISOString());
 });
