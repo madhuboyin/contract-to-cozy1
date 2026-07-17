@@ -1,6 +1,7 @@
 import { prisma } from '../../lib/prisma';
 import { knownContextValue } from '../propertyContextDecision';
 import { getPlanningContextDecisions } from './context';
+import { getAggregationContextEnvelope } from '../aggregationContext/context';
 
 export interface ReportWorkerContextResult {
   allowed: boolean;
@@ -53,6 +54,7 @@ export async function buildAuthoritativeReportSnapshot(args: {
   const { userId, propertyId } = args;
 
   const planning = await getPlanningContextDecisions(propertyId, userId, 'REPORTS');
+  const aggregationContext = await getAggregationContextEnvelope(propertyId, userId, 'REPORT_SUMMARIES');
   const { context } = planning;
 
   const property = await prisma.property.findUnique({
@@ -80,6 +82,7 @@ export async function buildAuthoritativeReportSnapshot(args: {
         reasonCodes: planning.decisions.reportGeneration.reasonCodes,
         missingFactKeys: planning.decisions.reportGeneration.missingFactKeys,
       },
+      aggregationContext,
     },
     property: {
       id: property.id,

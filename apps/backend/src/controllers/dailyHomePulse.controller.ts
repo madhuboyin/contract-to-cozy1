@@ -13,10 +13,8 @@ export async function getDailySnapshot(req: CustomRequest, res: Response) {
       return res.status(401).json({ success: false, message: 'Authentication required.' });
     }
 
-    const [snapshot, context] = await Promise.all([
-      dailyHomePulseService.getOrCreateTodaySnapshot(propertyId, userId),
-      getAggregationContextEnvelope(propertyId, userId, 'DASHBOARD_TODAY'),
-    ]);
+    const context = await getAggregationContextEnvelope(propertyId, userId, 'DASHBOARD_TODAY');
+    const snapshot = await dailyHomePulseService.getOrCreateTodaySnapshot(propertyId, userId, context);
     return res.json({ success: true, data: { snapshot, context } });
   } catch (error: any) {
     logger.error({ err: error }, 'Error fetching daily snapshot');

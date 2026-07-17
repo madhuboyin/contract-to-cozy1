@@ -11,6 +11,7 @@ import { shareTokenSchema, editionIdParamSchema } from '../validators/gazette.va
 import { GazetteEdition } from '@prisma/client';
 import { analyticsEmitter } from '../../../services/analytics/emitter';
 import { AnalyticsModule, AnalyticsFeature, AnalyticsSource, ProductAnalyticsEventType } from '../../../services/analytics/taxonomy';
+import { getAggregationContextEnvelope } from '../../../services/aggregationContext/context';
 
 export class GazetteController {
   /**
@@ -26,6 +27,11 @@ export class GazetteController {
       }
 
       await GazetteController._verifyPropertyOwnership(propertyId, req.user!.userId);
+      const propertyContext = await getAggregationContextEnvelope(
+        propertyId,
+        req.user!.userId,
+        'HOME_GAZETTE',
+      );
 
       const edition = await prisma.gazetteEdition.findFirst({
         where: {
@@ -44,6 +50,7 @@ export class GazetteController {
         return res.json({
           success: true,
           data: null,
+          propertyContext,
           message: 'No published edition found',
         });
       }
@@ -60,7 +67,7 @@ export class GazetteController {
 
       return res.json({
         success: true,
-        data: GazetteMapper.toEditionDto(edition as any),
+        data: { ...GazetteMapper.toEditionDto(edition as any), propertyContext },
       });
     } catch (err) {
       next(err);
@@ -84,6 +91,7 @@ export class GazetteController {
       }
 
       await GazetteController._verifyPropertyOwnership(propertyId, req.user!.userId);
+      const propertyContext = await getAggregationContextEnvelope(propertyId, req.user!.userId, 'HOME_GAZETTE');
 
       const pageNum = Math.max(1, parseInt(page, 10) || 1);
       const pageSizeNum = Math.min(50, Math.max(1, parseInt(pageSize, 10) || 10));
@@ -109,6 +117,7 @@ export class GazetteController {
             total,
             totalPages: Math.ceil(total / pageSizeNum),
           },
+          propertyContext,
         },
       });
     } catch (err) {

@@ -45,6 +45,7 @@ import {
 } from './homeGazetteApi';
 import { recordGuidanceToolStatus } from '@/lib/api/guidanceApi';
 import { track } from '@/lib/analytics/events';
+import { PropertyContextNotice } from '@/components/property-context/PropertyContextNotice';
 import {
   appendGuidanceContinuityToHref,
   extractGuidanceContinuityContext,
@@ -924,6 +925,8 @@ export default function HomeGazetteClient() {
         title="Home Gazette"
         subtitle="Your weekly home intelligence briefing — risks, maintenance, finances, and more."
        className="lg:hidden"/>
+
+      <PropertyContextNotice context={currentEdition?.propertyContext} title="Gazette context" />
 
       {/* Filter surface: tool rail + tabs + actions */}
       <MobileFilterSurface className="lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none lg:rounded-none">

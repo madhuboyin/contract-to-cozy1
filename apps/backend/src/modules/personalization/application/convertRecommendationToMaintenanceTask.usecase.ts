@@ -12,7 +12,11 @@ export async function convertRecommendationToMaintenanceTask(params: {
   userId: string;
   idempotencyKey: string;
 }) {
-  const materialization = await materializeRecommendationsForProperty(params.propertyId, 'RECOMMENDATION_ACTION');
+  const materialization = await materializeRecommendationsForProperty(
+    params.propertyId,
+    'RECOMMENDATION_ACTION',
+    params.userId,
+  );
   if (materialization.paused) return { status: 'PERSONALIZATION_PAUSED' as const };
 
   const recommendation = await loadActiveRecommendationForAction(

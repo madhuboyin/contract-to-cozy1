@@ -19,7 +19,7 @@ export async function getPersonalization(
   const household = capabilities.canManageSensitiveProfile
     ? await findConsentedHouseholdForProperty(propertyId, userId)
     : null;
-  const materialization = await materializeRecommendationsForProperty(propertyId);
+  const materialization = await materializeRecommendationsForProperty(propertyId, 'PROPERTY_READ', userId);
   if (materialization.paused) {
     return {
       available: false,
@@ -75,6 +75,6 @@ export async function resetOptionalProfile(propertyId: string, userId: string) {
   return { reset: await resetHouseholdProfile(propertyId, userId) };
 }
 
-export async function refreshPersonalization(propertyId: string) {
-  return materializeRecommendationsForProperty(propertyId, 'MANUAL');
+export async function refreshPersonalization(propertyId: string, userId: string) {
+  return materializeRecommendationsForProperty(propertyId, 'MANUAL', userId);
 }

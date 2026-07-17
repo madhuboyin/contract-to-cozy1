@@ -5,6 +5,7 @@ import { DeliveryStatus, NotificationChannel } from '@prisma/client';
 import { buildDigestHtml, escapeHtml } from '../email/buildDigestHtml';
 import { buildWeatherAlertCardHtml, isWeatherCardMetadata } from '../email/buildWeatherAlertCardHtml';
 import { logger } from '../lib/logger';
+import { filterDeliveriesByAggregationPolicy } from '../services/aggregationDeliveryPolicy';
 
 const MAX_NOTIFICATIONS_PER_EMAIL = 10;
 
@@ -39,7 +40,7 @@ export async function sendEmailNotificationJob(
   if (!user?.email) return;
 
   // 2️⃣ Fetch MORE pending notifications for same user
-  const deliveries = await prisma.notificationDelivery.findMany({
+  const pendingDeliveries = await prisma.notificationDelivery.findMany({
     where: {
       channel: NotificationChannel.EMAIL,
       status: DeliveryStatus.PENDING,
@@ -61,6 +62,7 @@ export async function sendEmailNotificationJob(
     },
     take: MAX_NOTIFICATIONS_PER_EMAIL,
   });
+  const deliveries = await filterDeliveriesByAggregationPolicy(pendingDeliveries);
 
   if (deliveries.length === 0) return;
 
@@ -219,7 +221,7 @@ export async function runDailyEmailDigest() {
 }
 
 async function sendUserDigest(userId: string) {
-  const deliveries = await prisma.notificationDelivery.findMany({
+  const pendingDeliveries = await prisma.notificationDelivery.findMany({
     where: {
       channel: NotificationChannel.EMAIL,
       status: DeliveryStatus.PENDING,
@@ -233,6 +235,7 @@ async function sendUserDigest(userId: string) {
     },
     take: 20,
   });
+  const deliveries = await filterDeliveriesByAggregationPolicy(pendingDeliveries);
 
   if (deliveries.length === 0) return;
 

@@ -7,6 +7,7 @@ import {
   pushNotificationQueue,
   smsNotificationQueue,
 } from './JobQueue.service';
+import { getAggregationContextEnvelope } from './aggregationContext/context';
 
 type CreateNotificationInput = {
   userId: string;
@@ -48,6 +49,39 @@ export class NotificationService {
    * ============================================================
    */
   static async create(input: CreateNotificationInput) {
+    const propertyId = typeof input.metadata?.propertyId === 'string'
+      ? input.metadata.propertyId
+      : undefined;
+    if (propertyId) {
+      const propertyContext = await getAggregationContextEnvelope(propertyId, input.userId, 'NOTIFICATIONS');
+      if (propertyContext.decision.status !== 'APPLICABLE') {
+        return null;
+      }
+      const explicitIdentity = typeof input.metadata?.aggregationIdentity === 'string'
+        ? input.metadata.aggregationIdentity
+        : null;
+      const actionKey = typeof input.metadata?.actionKey === 'string'
+        ? input.metadata.actionKey.toUpperCase()
+        : null;
+      const lifecycle = propertyContext.lifecycle.find((item) =>
+        (explicitIdentity && item.identity === explicitIdentity) ||
+        (input.entityId && item.sourceId === input.entityId) ||
+        (actionKey && item.actionKey?.toUpperCase() === actionKey),
+      );
+      if (lifecycle && lifecycle.status !== 'ACTIVE') {
+        return null;
+      }
+      input = {
+        ...input,
+        metadata: {
+          ...input.metadata,
+          propertyContextVersion: propertyContext.contextVersion,
+          aggregationDecision: propertyContext.decision,
+          aggregationLifecycle: propertyContext.lifecycle,
+          aggregationIdentity: explicitIdentity ?? lifecycle?.identity ?? null,
+        },
+      };
+    }
     /**
      * 1️⃣ Load user notification preferences
      */

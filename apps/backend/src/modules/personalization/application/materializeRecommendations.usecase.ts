@@ -18,11 +18,12 @@ export interface MaterializeRecommendationsResult {
 export async function materializeRecommendationsForProperty(
   propertyId: string,
   trigger = 'PROPERTY_READ',
+  actorUserId?: string,
 ): Promise<MaterializeRecommendationsResult> {
   let active = 0;
 
   for (const definition of PERSONALIZATION_DEFINITIONS) {
-    const evaluation = await evaluateDefinitionForProperty(propertyId, definition.code, trigger);
+    const evaluation = await evaluateDefinitionForProperty(propertyId, definition.code, trigger, actorUserId);
 
     // The evaluator owns the kill-switch check. Stop after its first PAUSED
     // result so a read performs one setting lookup, not one per definition.

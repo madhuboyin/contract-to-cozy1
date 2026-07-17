@@ -19,6 +19,7 @@ import { getOwnerLocalUpdates } from '../localUpdates/localUpdates.service';
 import { logger } from '../lib/logger';
 import { weatherService } from './weather.service';
 import { getPlanningContextEnvelope } from './planningContext/context';
+import type { getAggregationContextEnvelope } from './aggregationContext/context';
 
 type SummaryKind = 'HEALTH' | 'RISK' | 'FINANCIAL';
 type InsightSeverity = 'LOW' | 'MEDIUM' | 'HIGH';
@@ -1186,6 +1187,8 @@ export class DailyHomePulseService {
             etaMinutes: true,
             completedAt: true,
             dismissedAt: true,
+            sourceType: true,
+            sourceId: true,
           },
         },
       },
@@ -1196,7 +1199,11 @@ export class DailyHomePulseService {
     return dto;
   }
 
-  async getOrCreateTodaySnapshot(propertyId: string, userId: string): Promise<DailySnapshotDTO> {
+  async getOrCreateTodaySnapshot(
+    propertyId: string,
+    userId: string,
+    aggregationContext?: Awaited<ReturnType<typeof getAggregationContextEnvelope>>,
+  ): Promise<DailySnapshotDTO> {
     const property = await this.assertProperty(propertyId, userId);
     const timezone = property.timezone || DEFAULT_TIMEZONE;
     const todayKey = formatDateKeyInTimezone(new Date(), timezone);
@@ -1220,6 +1227,8 @@ export class DailyHomePulseService {
             etaMinutes: true,
             completedAt: true,
             dismissedAt: true,
+            sourceType: true,
+            sourceId: true,
           },
         },
       },
@@ -1256,6 +1265,8 @@ export class DailyHomePulseService {
                 etaMinutes: true,
                 completedAt: true,
                 dismissedAt: true,
+                sourceType: true,
+                sourceId: true,
               },
             },
           },
@@ -1265,6 +1276,24 @@ export class DailyHomePulseService {
 
     if (!snapshot) {
       throw new Error('Failed to generate daily snapshot.');
+    }
+
+    const sourceId = snapshot.microAction?.sourceId;
+    if (sourceId && snapshot.microAction?.status === MicroActionStatus.PENDING && aggregationContext) {
+      const lifecycle = aggregationContext.lifecycle.find((item) => item.sourceId === sourceId);
+      if (lifecycle && lifecycle.status !== 'ACTIVE') {
+        const completed = lifecycle.status === 'COMPLETED';
+        const reconciledAt = new Date();
+        await prisma.propertyMicroAction.update({
+          where: { id: snapshot.microAction.id },
+          data: completed
+            ? { status: MicroActionStatus.COMPLETED, completedAt: reconciledAt }
+            : { status: MicroActionStatus.DISMISSED, dismissedAt: reconciledAt },
+        });
+        snapshot.microAction.status = completed ? MicroActionStatus.COMPLETED : MicroActionStatus.DISMISSED;
+        snapshot.microAction.completedAt = completed ? reconciledAt : null;
+        snapshot.microAction.dismissedAt = completed ? null : reconciledAt;
+      }
     }
 
     await this.bumpStreak(propertyId, userId, PropertyStreakType.DAILY_PULSE_CHECKIN, todayKey);

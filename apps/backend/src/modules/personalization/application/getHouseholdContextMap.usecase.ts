@@ -108,7 +108,7 @@ export async function getHouseholdContextMap(
   ownerUserId: string,
   now = new Date(),
 ): Promise<HouseholdContextMap> {
-  const materialization = await materializeRecommendationsForProperty(propertyId, 'CONTEXT_MAP_READ');
+  const materialization = await materializeRecommendationsForProperty(propertyId, 'CONTEXT_MAP_READ', ownerUserId);
   const data = await loadHouseholdContextMapData(propertyId, ownerUserId);
   const paused = materialization.paused === true;
   const emptySummary: HouseholdContextMap['summary'] = {

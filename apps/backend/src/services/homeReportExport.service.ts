@@ -102,7 +102,7 @@ export async function createExportAndGeneratePdf(args: CreateExportArgs) {
         status: 'READY',
         completedAt: new Date(),
         documentId: doc.id,
-        snapshot,
+        snapshot: snapshot as any,
         contextVersion: snapshot.meta.contextVersion,
         storageBucket: uploaded.bucket,
         storageKey: uploaded.key,

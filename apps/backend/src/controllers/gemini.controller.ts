@@ -4,6 +4,7 @@ import { Response, NextFunction } from 'express';
 import { geminiService } from '../services/gemini.service';
 import { AuthRequest } from '../types/auth.types';
 import { APIError } from '../middleware/error.middleware';
+import { getAggregationContextEnvelope } from '../services/aggregationContext/context';
 
 class GeminiController {
   
@@ -33,16 +34,16 @@ class GeminiController {
       }
 
       // Pass userId, sessionId, message, and propertyId to the service
-      const response = await geminiService.sendMessageToChat(
-        userId, 
-        sessionId, 
-        message, 
+      const [response, propertyContext] = await Promise.all([
+        geminiService.sendMessageToChat(userId, sessionId, message, propertyId),
         propertyId
-      );
+          ? getAggregationContextEnvelope(propertyId, userId, 'SEARCH_ASSISTANT')
+          : Promise.resolve(undefined),
+      ]);
 
       res.status(200).json({
         success: true,
-        data: { text: response }, 
+        data: { text: response, propertyContext },
       });
     } catch (error) {
       if (error instanceof APIError) {

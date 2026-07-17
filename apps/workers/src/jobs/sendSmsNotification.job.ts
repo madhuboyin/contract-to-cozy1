@@ -1,6 +1,7 @@
 import { prisma } from '../lib/prisma';
 import { DeliveryStatus } from '@prisma/client';
 import { logger } from '../lib/logger';
+import { filterDeliveriesByAggregationPolicy } from '../services/aggregationDeliveryPolicy';
 
 // No Twilio/WhatsApp integration exists yet. Previously this job silently
 // no-op'd and BullMQ reported it as "completed" — the worker-jobs dashboard
@@ -11,10 +12,12 @@ import { logger } from '../lib/logger';
 export async function sendSmsNotificationJob(notificationDeliveryId: string) {
   const delivery = await prisma.notificationDelivery.findUnique({
     where: { id: notificationDeliveryId },
+    include: { notification: true },
   });
 
   if (!delivery) return;
   if (delivery.status !== DeliveryStatus.PENDING) return;
+  if (!(await filterDeliveriesByAggregationPolicy([delivery])).length) return;
 
   const reason = 'No SMS provider configured (Twilio) — SMS delivery is not implemented yet.';
 

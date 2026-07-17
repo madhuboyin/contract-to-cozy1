@@ -32,7 +32,7 @@ export class HouseholdNotificationService {
 
     await Promise.all(
       members.map((m) =>
-        NotificationService.create({ userId: m.userId, ...payload }).catch(() => undefined)
+        NotificationService.create({ userId: m.userId, ...payload, metadata: { propertyId } }).catch(() => undefined)
       )
     );
   }
@@ -59,7 +59,7 @@ export class HouseholdNotificationService {
 
     await Promise.all(
       members.map((m) =>
-        NotificationService.create({ userId: m.userId, ...payload }).catch(() => undefined)
+        NotificationService.create({ userId: m.userId, ...payload, metadata: { propertyId } }).catch(() => undefined)
       )
     );
   }

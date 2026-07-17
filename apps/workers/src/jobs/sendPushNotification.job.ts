@@ -1,6 +1,7 @@
 import { prisma } from '../lib/prisma';
 import { DeliveryStatus } from '@prisma/client';
 import { logger } from '../lib/logger';
+import { filterDeliveriesByAggregationPolicy } from '../services/aggregationDeliveryPolicy';
 
 // No Firebase/APNs integration exists yet, and no device-token field exists on
 // User either. Previously this job silently no-op'd and BullMQ reported it as
@@ -11,10 +12,12 @@ import { logger } from '../lib/logger';
 export async function sendPushNotificationJob(notificationDeliveryId: string) {
   const delivery = await prisma.notificationDelivery.findUnique({
     where: { id: notificationDeliveryId },
+    include: { notification: true },
   });
 
   if (!delivery) return;
   if (delivery.status !== DeliveryStatus.PENDING) return;
+  if (!(await filterDeliveriesByAggregationPolicy([delivery])).length) return;
 
   const reason = 'No push provider configured (Firebase/APNs) — push delivery is not implemented yet.';
 

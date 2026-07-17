@@ -1,5 +1,6 @@
 // apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/home-gazette/homeGazetteApi.ts
 import { api } from '@/lib/api/client';
+import type { PropertyContextEnvelope } from '@/components/property-context/PropertyContextNotice';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -59,6 +60,7 @@ export type GazetteEditionDto = {
   createdAt: string;
   updatedAt: string;
   stories: GazetteStoryDto[];
+  propertyContext?: PropertyContextEnvelope;
 };
 
 export type GazetteEditionCardDto = {

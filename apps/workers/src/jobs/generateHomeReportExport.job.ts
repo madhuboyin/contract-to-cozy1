@@ -105,7 +105,7 @@ export async function generateHomeReportExportJob(exportId: string) {
       data: {
         status: HomeReportExportStatus.READY,
         completedAt: new Date(),
-        snapshot,
+        snapshot: snapshot as any,
         contextVersion: snapshot.meta.contextVersion,
         storageBucket: uploaded.bucket,
         storageKey: uploaded.key,

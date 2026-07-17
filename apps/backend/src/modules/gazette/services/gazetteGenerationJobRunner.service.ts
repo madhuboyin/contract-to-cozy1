@@ -15,6 +15,7 @@ import { NotificationService } from '../../../services/notification.service';
 import { analyticsEmitter } from '../../../services/analytics/emitter';
 import { AnalyticsModule, AnalyticsFeature, AnalyticsSource, ProductAnalyticsEventType } from '../../../services/analytics/taxonomy';
 import { logger } from '../../../lib/logger';
+import { getAggregationContextEnvelope } from '../../../services/aggregationContext/context';
 
 type GazetteGenerationStage =
   | 'SIGNAL_COLLECTION'
@@ -32,6 +33,30 @@ export class GazetteGenerationJobRunnerService {
     const startTime = Date.now();
     const { propertyId, dryRun = false } = options;
     const completedStages: string[] = [];
+
+    // Worker-safe actor resolution followed by the same bounded policy used by
+    // the API. Location-unknown properties do not receive locally targeted copy.
+    const owner = await prisma.property.findUnique({
+      where: { id: propertyId },
+      select: { homeownerProfile: { select: { userId: true } } },
+    });
+    const ownerUserId = owner?.homeownerProfile?.userId;
+    if (!ownerUserId) {
+      return { status: 'SKIPPED', qualifiedCount: 0, selectedCount: 0, skippedReason: 'PROPERTY_OWNER_UNKNOWN', dryRun, stages: [], durationMs: Date.now() - startTime };
+    }
+    const aggregationContext = await getAggregationContextEnvelope(propertyId, ownerUserId, 'HOME_GAZETTE');
+    if (aggregationContext.decision.status !== 'APPLICABLE') {
+      return {
+        status: 'SKIPPED',
+        qualifiedCount: 0,
+        selectedCount: 0,
+        skippedReason: aggregationContext.decision.reasonCodes[0] ?? 'GAZETTE_CONTEXT_NOT_APPLICABLE',
+        dryRun,
+        stages: ['CONTEXT_POLICY'],
+        durationMs: Date.now() - startTime,
+      };
+    }
+    completedStages.push('CONTEXT_POLICY');
 
     // 1. Resolve week window
     const weekWindow: GazetteWeekWindow =
@@ -109,9 +134,12 @@ export class GazetteGenerationJobRunnerService {
             editionId,
           );
 
-      const candidates: GazetteStoryCandidate[] = candidateResults.map(
-        (r) => r.candidate,
-      );
+      const candidates: GazetteStoryCandidate[] = candidateResults
+        .map((r) => r.candidate)
+        .filter((candidate) => {
+          const lifecycle = aggregationContext.lifecycle.find((item) => item.sourceId === candidate.entityId);
+          return !lifecycle || lifecycle.status === 'ACTIVE';
+        });
       completedStages.push('CANDIDATE_GENERATION');
 
       await GazetteGenerationJobRunnerService._completeJob(candidateJob.id, {
@@ -420,6 +448,7 @@ export class GazetteGenerationJobRunnerService {
       entityId: editionId,
       metadata: {
         propertyId,
+        aggregationIdentity: `GAZETTE_EDITION:${editionId}`,
         selectedCount: edition.selectedCount,
         weekStart: edition.weekStart,
         weekEnd: edition.weekEnd,

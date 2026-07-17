@@ -13,14 +13,26 @@
 import { prisma } from '../lib/prisma';
 import { GazetteGenerationJobRunnerService } from '../../../backend/src/modules/gazette/services/gazetteGenerationJobRunner.service';
 import { logger } from '../lib/logger';
+import { getAggregationContextBatch } from '../../../backend/src/services/aggregationContext/batch';
 
 export async function runGazetteGenerationJob(): Promise<void> {
   const startedAt = new Date().toISOString();
   logger.info(`[GAZETTE-GENERATION] Starting weekly generation at ${startedAt}`);
 
   const properties = await prisma.property.findMany({
-    select: { id: true },
+    select: { id: true, homeownerProfile: { select: { userId: true } } },
   });
+
+  const batchContext = await getAggregationContextBatch(
+    properties.flatMap((property) => property.homeownerProfile?.userId
+      ? [{ propertyId: property.id, userId: property.homeownerProfile.userId }]
+      : []),
+    'HOME_GAZETTE',
+    10,
+  );
+  const eligibleProperties = new Set(batchContext
+    .filter((result) => result.status === 'READY' && result.envelope?.decision.status === 'APPLICABLE')
+    .map((result) => result.propertyId));
 
   logger.info(`[GAZETTE-GENERATION] Processing ${properties.length} properties`);
 
@@ -30,6 +42,10 @@ export async function runGazetteGenerationJob(): Promise<void> {
   let failed = 0;
 
   for (const property of properties) {
+    if (!eligibleProperties.has(property.id)) {
+      skipped++;
+      continue;
+    }
     try {
       const result = await GazetteGenerationJobRunnerService.generate({
         propertyId: property.id,

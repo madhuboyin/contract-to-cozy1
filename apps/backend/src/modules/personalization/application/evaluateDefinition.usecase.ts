@@ -48,6 +48,7 @@ export async function evaluateDefinitionForProperty(
   propertyId: string,
   definitionCode: string,
   trigger = 'MANUAL',
+  actorUserId?: string,
 ): Promise<EvaluateDefinitionResult> {
   const startedAt = new Date();
 
@@ -92,7 +93,7 @@ export async function evaluateDefinitionForProperty(
     };
   }
 
-  const snapshot = await computePropertyTraitSnapshot(propertyId);
+  const snapshot = await computePropertyTraitSnapshot(propertyId, actorUserId);
   if (snapshot.status === 'FAILED' || !snapshot.traits) {
     const run = await recordEvaluationRun({
       propertyId,

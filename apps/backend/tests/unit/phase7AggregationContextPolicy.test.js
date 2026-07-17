@@ -12,6 +12,10 @@ const {
 const {
   AGGREGATION_FEATURE_SCOPES,
 } = require('../../src/services/aggregationContext/context.ts');
+const {
+  aggregationLifecycleIdentity,
+  projectAggregationLifecycle,
+} = require('../../src/services/aggregationContext/lifecycle.ts');
 
 const read = (relative) => fs.readFileSync(path.resolve(__dirname, relative), 'utf8');
 
@@ -102,4 +106,74 @@ test('Phase 7 lifecycle mutations enforce a contributor role floor', () => {
     const source = read(relative);
     assert.ok(source.includes("requireHouseholdRole('CONTRIBUTOR')"), relative);
   }
+});
+
+test('canonical lifecycle collapses duplicates and terminal state wins across surfaces', () => {
+  const context = snapshot({
+    'maintenance.tasks': [
+      { id: 'task-1', actionKey: 'replace-filter', status: 'PENDING', updatedAt: '2026-07-16T00:00:00.000Z' },
+      { id: 'task-2', actionKey: 'replace-filter', status: 'COMPLETED', updatedAt: '2026-07-17T00:00:00.000Z' },
+    ],
+    'guidance.activeSignals': [
+      { signalId: 'signal-1', actionKey: 'replace-filter', status: 'ACTIVE' },
+      { signalId: 'signal-2', actionKey: 'inspect-roof', status: 'SNOOZED' },
+    ],
+  });
+  const lifecycle = projectAggregationLifecycle(context);
+  assert.equal(lifecycle.length, 2);
+  assert.equal(lifecycle.find((item) => item.identity === 'ACTION:REPLACE-FILTER').status, 'COMPLETED');
+  assert.equal(lifecycle.find((item) => item.identity === 'ACTION:INSPECT-ROOF').status, 'SNOOZED');
+  assert.equal(aggregationLifecycleIdentity({ actionKey: ' replace-filter ', fallback: 'x' }), 'ACTION:REPLACE-FILTER');
+});
+
+test('Phase 7 archetypes retain the same surface readiness when required facts are known', () => {
+  for (const archetype of [
+    { dwellingType: 'CONDO_UNIT', propertyUse: 'PRIMARY_RESIDENCE' },
+    { dwellingType: 'DETACHED_SINGLE_FAMILY', propertyUse: 'LONG_TERM_RENTAL' },
+    { dwellingType: 'TOWNHOUSE', propertyUse: 'VACANT' },
+  ]) {
+    const decisions = evaluateAggregationContext(snapshot({
+      'core.activationStatus': 'ACTIVATED',
+      'core.dwellingType': archetype.dwellingType,
+      'core.propertyUse': archetype.propertyUse,
+      'location.state': 'TX',
+      'location.zipCode': '78701',
+      'maintenance.tasks': [],
+      'inventory.items': [],
+      'guidance.activeSignals': [],
+      'events.recentHomeEvents': [],
+    }));
+    assert.ok(Object.values(decisions).every((decision) => decision.status === 'APPLICABLE'));
+  }
+});
+
+test('remaining Phase 7 API, UI, and worker consumers use shared contracts', () => {
+  const gazette = read('../../src/modules/gazette/services/gazetteGenerationJobRunner.service.ts');
+  assert.ok(gazette.includes("'HOME_GAZETTE'"));
+  const knowledge = read('../../src/controllers/knowledgeHub.controller.ts');
+  assert.ok(knowledge.includes("'KNOWLEDGE_TARGETING'"));
+  const assistant = read('../../src/services/gemini.service.ts');
+  assert.ok(assistant.includes("'SEARCH_ASSISTANT'"));
+  assert.ok(assistant.includes('missingFacts'));
+  const report = read('../../src/services/planningContext/reportSnapshot.ts');
+  assert.ok(report.includes("'REPORT_SUMMARIES'"));
+  const notification = read('../../src/services/notification.service.ts');
+  assert.ok(notification.includes("'NOTIFICATIONS'"));
+  const workerPolicy = read('../../../workers/src/services/aggregationDeliveryPolicy.ts');
+  assert.ok(workerPolicy.includes("getAggregationContextBatch(scoped, 'NOTIFICATIONS'"));
+  const gazetteWorker = read('../../../workers/src/jobs/gazetteGeneration.job.ts');
+  assert.ok(gazetteWorker.includes('getAggregationContextBatch'));
+  const knowledgeUi = read('../../../frontend/src/components/knowledge/KnowledgeTargetingNotice.tsx');
+  assert.ok(knowledgeUi.includes('PropertyContextNotice'));
+  const gazetteUi = read('../../../frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/home-gazette/HomeGazetteClient.tsx');
+  assert.ok(gazetteUi.includes('Gazette context'));
+});
+
+test('production personalization entries pass actor identity into Property Context trait evaluation', () => {
+  const traits = read('../../src/modules/personalization/infrastructure/propertyTraitRepository.ts');
+  assert.ok(traits.includes('getAggregationPropertyContext'));
+  const personalization = read('../../src/modules/personalization/application/getPersonalization.usecase.ts');
+  assert.ok(personalization.includes("'PROPERTY_READ', userId"));
+  const modules = read('../../src/modules/personalization/application/getModuleRecommendations.usecase.ts');
+  assert.ok(modules.includes('actorUserId') || modules.includes('userId'));
 });

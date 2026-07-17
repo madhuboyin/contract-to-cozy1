@@ -9,8 +9,9 @@ export async function getModuleRecommendations(
   module: PersonalizationModule,
   capabilities: PersonalizationCapabilities,
   limit = 10,
+  userId?: string,
 ) {
-  const materialization = await materializeRecommendationsForProperty(propertyId, `MODULE_${module}_READ`);
+  const materialization = await materializeRecommendationsForProperty(propertyId, `MODULE_${module}_READ`, userId);
   if (materialization.paused) {
     return { configured: true, available: false, module, generatedAt: new Date().toISOString(), items: [] };
   }

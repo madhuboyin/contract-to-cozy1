@@ -458,6 +458,7 @@ export class BookingService {
       message: `Your booking request for ${booking.service.name} has been submitted.`,
       actionUrl: notificationActionUrl,
       metadata: {
+        propertyId: input.propertyId,
         priority: 'HIGH', // 🔴 REQUIRED for immediate email
         guidanceContext:
           options?.guidanceJourneyId ||
@@ -1052,6 +1053,7 @@ export class BookingService {
       message: `Your booking has been cancelled.`,
       actionUrl: cancelNotificationActionUrl,
       metadata: {
+        propertyId: updated.propertyId,
         priority: 'HIGH', // 🔴 REQUIRED for immediate email
         guidanceContext:
           updated.inventoryItemId

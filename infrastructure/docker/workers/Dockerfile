@@ -146,6 +146,11 @@ COPY apps/backend/src/services/seasonal/applicabilityPolicy.ts \
      src/shared/backend/services/seasonal/
 COPY apps/backend/src/services/protection/applicabilityPolicy.ts src/shared/backend/services/protection/
 COPY apps/backend/src/services/propertyContextDecision.ts src/shared/backend/services/
+COPY apps/backend/src/services/aggregationContext/applicabilityPolicy.ts \
+     apps/backend/src/services/aggregationContext/context.ts \
+     apps/backend/src/services/aggregationContext/lifecycle.ts \
+     apps/backend/src/services/aggregationContext/batch.ts \
+     src/shared/backend/services/aggregationContext/
 COPY apps/backend/src/services/projectCompliance/applicabilityPolicy.ts \
      apps/backend/src/services/projectCompliance/context.ts \
      apps/backend/src/services/projectCompliance/workScope.ts \
@@ -321,6 +326,9 @@ RUN sed -i 's/\.\.\/\.\.\/backend\/src\/utils\/riskCalculator\.util/\.\/shared\/
     sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/neighborhoodIntelligence\/impactRules/\.\.\/shared\/backend\/neighborhoodIntelligence\/impactRules/g' src/jobs/neighborhoodChangeNotification.job.ts && \
     sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/neighborhoodIntelligence\/geoUtils/\.\.\/shared\/backend\/neighborhoodIntelligence\/geoUtils/g' src/jobs/neighborhoodChangeNotification.job.ts && \
     sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/planningContext\/context/\.\.\/shared\/backend\/services\/planningContext\/context/g' src/jobs/neighborhoodChangeNotification.job.ts
+
+RUN sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/aggregationContext\/batch/\.\.\/shared\/backend\/services\/aggregationContext\/batch/g' \
+    src/jobs/gazetteGeneration.job.ts src/services/aggregationDeliveryPolicy.ts
 
 # Rewrite paths introduced by DIY and permit features
 RUN sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/diyAiGuide\.service/\.\.\/shared\/backend\/services\/diyAiGuide\.service/g' src/jobs/generateDiyAiGuide.job.ts && \

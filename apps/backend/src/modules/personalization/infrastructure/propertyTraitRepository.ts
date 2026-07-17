@@ -6,6 +6,7 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '../../../lib/prisma';
 import { HomeAssetFact } from '../domain/traits';
+import { getAggregationPropertyContext } from '../../../services/aggregationContext/context';
 
 export interface PropertyTraitFacts {
   hasSmokeDetectors: boolean | null;
@@ -63,6 +64,34 @@ export async function loadPropertyTraitFacts(propertyId: string): Promise<Proper
       .map((item) => item.assetType
         ? { assetType: item.assetType, lastServiced: item.lastServicedOn }
         : inventoryItemToPersonalizationAssetFact(item))
+      .filter((asset): asset is HomeAssetFact => asset !== null),
+  };
+}
+
+/**
+ * Production personalization adapter. Trait inputs come from the authorized,
+ * bounded Property Context snapshot instead of a second feature-owned query.
+ */
+export async function loadPropertyTraitFactsFromContext(
+  propertyId: string,
+  userId: string,
+): Promise<PropertyTraitFacts | null> {
+  const context = await getAggregationPropertyContext(propertyId, userId, 'PERSONALIZED_GUIDANCE');
+  const known = <T>(key: string): T | null => {
+    const fact = context.facts[key];
+    return fact?.state === 'KNOWN' ? fact.value as T : null;
+  };
+  const items = known<Array<InventoryServiceFact & { assetType?: string | null }>>('inventory.items') ?? [];
+  return {
+    hasSmokeDetectors: known<boolean>('safety.hasSmokeDetectors'),
+    roofReplacementYear: known<number>('structure.roofReplacementYear'),
+    homeAssets: items
+      .map((item) => item.assetType
+        ? { assetType: item.assetType, lastServiced: item.lastServicedOn ? new Date(item.lastServicedOn) : null }
+        : inventoryItemToPersonalizationAssetFact({
+            ...item,
+            lastServicedOn: item.lastServicedOn ? new Date(item.lastServicedOn) : null,
+          }))
       .filter((asset): asset is HomeAssetFact => asset !== null),
   };
 }

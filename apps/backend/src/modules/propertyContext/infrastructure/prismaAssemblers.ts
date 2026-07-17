@@ -363,6 +363,8 @@ export const inventoryAssembler: PropertyContextAssembler = {
         roomId: true,
         name: true,
         category: true,
+        assetType: true,
+        tags: true,
         condition: true,
         manufacturer: true,
         modelNumber: true,

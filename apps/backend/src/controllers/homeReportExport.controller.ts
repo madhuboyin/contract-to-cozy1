@@ -9,6 +9,7 @@ import { DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { logger } from '../lib/logger';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
 import { resolvePropertyAccess, ROLE_RANK } from '../services/propertyAccess.service';
+import { getAggregationContextEnvelope } from '../services/aggregationContext/context';
 
 async function canMutateReport(propertyId: string, userId: string): Promise<boolean> {
   const access = await resolvePropertyAccess(userId, propertyId);
@@ -21,6 +22,14 @@ export async function createHomeReportExport(req: Request, res: Response) {
     const userId = (req as any).user?.userId as string;
 
     const { type = 'HOME_REPORT_PACK', sections } = req.body ?? {};
+    const propertyContext = await getAggregationContextEnvelope(propertyId, userId, 'REPORT_SUMMARIES');
+    if (propertyContext.decision.status !== 'APPLICABLE') {
+      return res.status(409).json({
+        success: false,
+        message: 'Report context is not ready.',
+        data: { propertyContext },
+      });
+    }
 
     const exp = await prisma.homeReportExport.create({
       data: {
@@ -56,6 +65,7 @@ export async function createHomeReportExport(req: Request, res: Response) {
       data: {
         exportId: exp.id,
         status: exp.status,
+        propertyContext,
       }
     });
   } catch (error: any) {
@@ -80,6 +90,7 @@ export async function listHomeReportExportsForProperty(req: Request, res: Respon
       },
       take: 50,
     });
+    const propertyContext = await getAggregationContextEnvelope(propertyId, userId, 'REPORT_SUMMARIES');
 
     analyticsEmitter.track({
       eventType: AnalyticsEvent.TOOL_USED,
@@ -93,7 +104,7 @@ export async function listHomeReportExportsForProperty(req: Request, res: Respon
     // ✅ FIX: Return standard format
     return res.json({
       success: true,
-      data: { exports }
+      data: { exports, propertyContext }
     });
   } catch (error: any) {
     logger.error({ err: error }, '[listHomeReportExportsForProperty] Error');
@@ -557,5 +568,4 @@ export async function deleteHomeReportExport(req: Request, res: Response) {
     });
   }
 }
-
 

@@ -42,6 +42,7 @@ import { createTaskFromActionCenter } from './orchestrationIntegration.service';
 import { logger } from '../lib/logger';
 import { analyticsEmitter, AnalyticsModule } from './analytics';
 import { getAggregationContextEnvelope } from './aggregationContext/context';
+import { aggregationLifecycleIdentity } from './aggregationContext/lifecycle';
 
 
 type DerivedFrom = {
@@ -2113,6 +2114,37 @@ export async function getOrchestrationSummary(propertyId: string, userId?: strin
   }
   
   // 5) Separate snoozed, suppressed, and active
+  if (aggregationContext) {
+    const lifecycleByIdentity = new Map(
+      aggregationContext.lifecycle.map((item) => [item.identity, item]),
+    );
+    for (const action of candidates) {
+      const identity = aggregationLifecycleIdentity({
+        actionKey: action.actionKey,
+        sourceId: action.id,
+        fallback: `ORCHESTRATION:${action.id}`,
+      });
+      const lifecycle = lifecycleByIdentity.get(identity);
+      if (!lifecycle || lifecycle.status === 'ACTIVE') continue;
+      if (lifecycle.status === 'SNOOZED') {
+        action.snooze = action.snooze ?? {
+          snoozedAt: lifecycle.updatedAt ?? new Date().toISOString(),
+          snoozeUntil: lifecycle.updatedAt ?? new Date().toISOString(),
+          snoozeReason: 'Reconciled from authoritative lifecycle state',
+          daysRemaining: 0,
+        };
+        continue;
+      }
+      action.suppression.suppressed = true;
+      pushUniqueReason(action.suppression.reasons, {
+        reason: lifecycle.status === 'COMPLETED' ? 'USER_MARKED_COMPLETE' : 'NOT_ACTIONABLE',
+        message: `Reconciled from authoritative ${lifecycle.source.toLowerCase()} lifecycle (${lifecycle.status.toLowerCase()}).`,
+        relatedId: lifecycle.sourceId,
+        relatedType: lifecycle.source === 'MAINTENANCE' ? 'MAINTENANCE_TASK' : null,
+      });
+    }
+  }
+
   const snoozedActions = candidates.filter(a => a.snooze);
   const suppressedActions = candidates.filter(a => !a.snooze && a.suppression.suppressed);
   const actionable = candidates.filter(a => !a.snooze && !a.suppression.suppressed);

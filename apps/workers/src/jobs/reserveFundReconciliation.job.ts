@@ -61,6 +61,7 @@ export async function reserveFundReconciliationJob(): Promise<void> {
         actionUrl: `/dashboard/properties/${fund.propertyId}/tools/reserve-fund`,
         entityType: 'HomeReserveFund',
         entityId: fund.propertyId,
+        metadata: { propertyId: fund.propertyId },
       });
       notified++;
     } catch (err) {

@@ -1,6 +1,7 @@
 import type { PropertyContextScope } from '../../modules/propertyContext';
 import { getPropertyContext } from '../../modules/propertyContext';
 import { evaluateAggregationContext } from './applicabilityPolicy';
+import { projectAggregationLifecycle } from './lifecycle';
 
 export type AggregationContextFeature =
   | 'DASHBOARD_TODAY'
@@ -16,8 +17,8 @@ export type AggregationContextFeature =
 export const AGGREGATION_FEATURE_SCOPES: Record<AggregationContextFeature, PropertyContextScope[]> = {
   DASHBOARD_TODAY: ['CORE', 'MAINTENANCE', 'RISK', 'FINANCIAL', 'GUIDANCE_STATE', 'PRODUCT_CONTEXT'],
   ACTION_CENTER: ['CORE', 'MAINTENANCE', 'COVERAGE', 'RISK', 'PROJECTS', 'GUIDANCE_STATE'],
-  PERSONALIZED_GUIDANCE: ['CORE', 'SYSTEMS', 'SAFETY', 'INVENTORY', 'MAINTENANCE', 'GUIDANCE_STATE'],
-  HOME_GAZETTE: ['CORE', 'LOCATION', 'EVENTS', 'GUIDANCE_STATE'],
+  PERSONALIZED_GUIDANCE: ['CORE', 'STRUCTURE', 'SYSTEMS', 'SAFETY', 'INVENTORY', 'MAINTENANCE', 'GUIDANCE_STATE'],
+  HOME_GAZETTE: ['CORE', 'LOCATION', 'EVENTS', 'MAINTENANCE', 'GUIDANCE_STATE'],
   KNOWLEDGE_TARGETING: ['CORE', 'LOCATION', 'SYSTEMS'],
   NOTIFICATIONS: ['CORE', 'MAINTENANCE', 'RISK', 'EVENTS', 'GUIDANCE_STATE'],
   SEARCH_ASSISTANT: ['CORE', 'LOCATION', 'PRODUCT_CONTEXT'],
@@ -42,11 +43,7 @@ export async function getAggregationContextEnvelope(
   userId: string,
   feature: AggregationContextFeature,
 ) {
-  const context = await getPropertyContext(
-    propertyId,
-    { userId },
-    { scopes: AGGREGATION_FEATURE_SCOPES[feature] },
-  );
+  const context = await getAggregationPropertyContext(propertyId, userId, feature);
   const relatedDecisions = evaluateAggregationContext(context);
   return {
     feature,
@@ -54,5 +51,19 @@ export async function getAggregationContextEnvelope(
     scopes: context.scopes,
     decision: relatedDecisions[PRIMARY_DECISION_BY_FEATURE[feature]],
     relatedDecisions,
+    lifecycle: projectAggregationLifecycle(context),
   };
+}
+
+/** Internal bounded snapshot. Consumers must select a feature rather than scopes. */
+export async function getAggregationPropertyContext(
+  propertyId: string,
+  userId: string,
+  feature: AggregationContextFeature,
+) {
+  return getPropertyContext(
+    propertyId,
+    { userId },
+    { scopes: AGGREGATION_FEATURE_SCOPES[feature] },
+  );
 }

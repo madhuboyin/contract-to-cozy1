@@ -616,7 +616,7 @@ export class HomeCapitalTimelineService {
               actionUrl: `/dashboard/properties/${propertyId}/tools/capital-timeline`,
               entityType: 'HOME_CAPITAL_TIMELINE',
               entityId: enriched.id,
-              metadata: { itemId: item.id, category: item.category, windowStart: item.windowStart },
+              metadata: { propertyId, itemId: item.id, category: item.category, windowStart: item.windowStart },
             });
           })
         ).catch(() => {/* never throw — notifications are best-effort */});

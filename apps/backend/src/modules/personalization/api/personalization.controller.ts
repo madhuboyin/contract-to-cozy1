@@ -79,7 +79,7 @@ export async function submitRecommendationFeedback(req: CustomRequest, res: Resp
 export async function refreshPersonalization(req: CustomRequest, res: Response) {
   const context = personalizationContext(req, res);
   if (!context) return;
-  const data = await refreshPersonalizationForProperty(context.propertyId);
+  const data = await refreshPersonalizationForProperty(context.propertyId, context.userId);
   return res.json({ success: true, data });
 }
 
@@ -138,6 +138,7 @@ export async function getPersonalizationModuleRecommendations(req: CustomRequest
       module as PersonalizationModule,
       capabilities,
       query.data.limit,
+      context.userId,
     ),
     getAggregationContextEnvelope(context.propertyId, context.userId, 'PERSONALIZED_GUIDANCE'),
   ]);

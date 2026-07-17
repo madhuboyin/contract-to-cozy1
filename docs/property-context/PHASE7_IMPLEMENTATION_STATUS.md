@@ -28,23 +28,38 @@ Implemented:
 
 No Prisma schema changes or migration scripts are included in this slice.
 
-## Remaining Phase 7 slices
+## Completion slice — cross-surface consumers
 
-1. Home Gazette and Knowledge Hub targeting: replace local targeting checks
-   with authoritative feature decisions and render the standard explanation.
-2. Notification consistency: require the originating feature policy decision
-   immediately before every send, with shared lifecycle suppression.
-3. Search and assistant entry points: pass bounded property context and expose
-   used/missing fact explanations without optional household data.
-4. Report-summary aggregation: consume report feature envelopes instead of
-   recomputing eligibility in summary composers.
-5. Worker batch context: add a scoped batch loader and update aggregation jobs
-   to avoid per-feature unbounded property reads.
-6. Cross-surface lifecycle reconciliation: use one identity for active,
-   completed, snoozed, suppressed, expired, and duplicate results across
-   Dashboard, Action Center, Guidance, Gazette, and notifications.
-7. Archetype and API/UI/worker parity tests covering the full Phase 7 exit
-   gate.
+Implemented:
+
+1. Home Gazette generation and reads use `HOME_GAZETTE`; location-unknown
+   properties are skipped instead of receiving fabricated local targeting.
+   The Gazette UI renders the standard explanation.
+2. The authenticated Knowledge Hub property endpoint uses
+   `KNOWLEDGE_TARGETING`, falls back safely when targeting is unavailable, and
+   the property-linked Knowledge UI renders the explanation.
+3. Property-bound notifications run `NOTIFICATIONS` at creation and workers
+   recheck the same policy immediately before email, push, or SMS delivery.
+4. Generic assistant sessions now receive only `SEARCH_ASSISTANT` facts plus
+   explicit used/missing fact lists; optional household, inventory, finance,
+   claim, and document data are no longer loaded by the generic entry point.
+5. Report APIs and authoritative report snapshots include the
+   `REPORT_SUMMARIES` envelope.
+6. Added a bounded-concurrency aggregation batch loader. Gazette and
+   notification workers use it rather than unbounded feature-owned reads.
+7. Added canonical lifecycle identity and deterministic duplicate precedence.
+   Action Center reconciles active, completed, snoozed, suppressed, and
+   expired maintenance/guidance states before ranking.
+8. Personalization production entry points now compute traits from the
+   authorized `PERSONALIZED_GUIDANCE` snapshot. The direct repository loader
+   remains only as a standalone evaluation/test compatibility seam.
+9. Added archetype, lifecycle, optional-consent-boundary, and API/UI/worker
+   source-parity coverage.
+
+## Phase 7 status
+
+Complete for FRD §21.9. No Prisma schema changes and no migration scripts were
+required.
 
 ## Slice 1 exit checks
 

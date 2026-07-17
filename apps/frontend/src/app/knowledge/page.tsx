@@ -6,6 +6,7 @@ import { KnowledgeMobileHeader } from '@/components/knowledge/KnowledgeMobileHea
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { KnowledgeArticleCard } from '@/components/knowledge/KnowledgeArticleCard';
+import { KnowledgeTargetingNotice } from '@/components/knowledge/KnowledgeTargetingNotice';
 import { getPublishedKnowledgeArticles } from '@/lib/knowledge/api';
 import { BottomNav } from '@/components/mobile/BottomNav';
 
@@ -43,6 +44,7 @@ export default async function KnowledgeHubPage({
     <div className="min-h-screen bg-[linear-gradient(180deg,#f8fafc_0%,#ffffff_14%,#f8fafc_100%)] pb-[calc(4rem+env(safe-area-inset-bottom))] lg:pb-0">
       <KnowledgeMobileHeader title="Knowledge Hub" backHref="/dashboard" backLabel="Dashboard" />
       <DashboardShell className="space-y-10 py-10 md:space-y-12 md:py-12">
+        <KnowledgeTargetingNotice propertyId={propertyId} />
         <section className="space-y-5 border-b border-slate-200/80 pb-8 md:pb-10">
           <Link href="/dashboard" className="hidden md:inline-flex items-center gap-1.5 text-sm text-slate-500 transition-colors hover:text-slate-800">
             <ArrowLeft className="h-4 w-4" />

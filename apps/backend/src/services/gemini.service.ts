@@ -4,7 +4,8 @@ import { GoogleGenAI, Chat, Content } from "@google/genai";
 import * as dotenv from 'dotenv';
 
 // [FIXED IMPORT] Import the necessary function and interface (PropertyAIGuidance) directly
-import { getPropertyContextForAI, PropertyAIGuidance } from './property.service'; 
+import type { PropertyAIGuidance } from './property.service';
+import { getAggregationPropertyContext } from './aggregationContext/context';
 // [NEW IMPORT] Import AI constants
 import { 
   LLM_MODEL_CONFIG, 
@@ -340,16 +341,25 @@ class GeminiService {
     let propertyContext: string | undefined;
 
     if (propertyId) {
-        // Fetch and authenticate the property (Database operation)
-        const property = await getPropertyContextForAI(propertyId, userId);
-
-        if (!property) {
-            logger.warn(`User ${userId} attempted to access missing or unauthorized property ${propertyId} for chat context.`);
-            throw new APIError('Property data does not exist or access is unauthorized.', 403, 'PROPERTY_ACCESS_DENIED');
+        const context = await getAggregationPropertyContext(propertyId, userId, 'SEARCH_ASSISTANT');
+        const usedFacts: string[] = [];
+        const missingFacts: string[] = [];
+        const boundedFacts: Record<string, unknown> = {};
+        for (const [key, fact] of Object.entries(context.facts)) {
+          if (fact.state === 'KNOWN') {
+            usedFacts.push(key);
+            boundedFacts[key] = fact.value;
+          } else {
+            missingFacts.push(key);
+          }
         }
-
-        // Generate context string
-        propertyContext = this.getPropertyContext(property);
+        propertyContext = JSON.stringify({
+          contextVersion: context.contextVersion,
+          boundedFacts,
+          usedFacts,
+          missingFacts,
+          instruction: 'Use only these facts. Treat missing facts as unknown and do not infer optional household details.',
+        });
     }
 
     try {

@@ -71,6 +71,7 @@ export async function permitInspectionReminderJob(): Promise<void> {
         actionUrl: `/dashboard/properties/${milestone.propertyId}/permits`,
         entityType: 'PermitInspectionMilestone',
         entityId: milestone.id,
+        metadata: { propertyId: milestone.propertyId },
       });
 
       await (prisma as any).permitInspectionMilestone.update({
