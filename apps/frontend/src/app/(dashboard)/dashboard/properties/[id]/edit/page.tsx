@@ -167,7 +167,7 @@ function dollarsToCents(value: number | null | undefined): number | null {
   return Math.round(value * 100);
 }
 
-// Schema for a single HomeAsset record being sent from the frontend
+// Schema for an InventoryItem-backed major appliance.
 const applianceSchema = z.object({
   id: z.string().optional(), 
   type: z.string().min(1, "Type required"),
@@ -236,22 +236,19 @@ const propertySchema = z.object({
 
 type PropertyFormValues = z.infer<typeof propertySchema>;
 
-// Helper to convert DB data (JSON string/object OR the new HomeAsset array) to structured form data 
+// Convert the canonical appliance projection to structured form data.
 const mapDbToForm = (property: any): PropertyFormValues => {
     let structuredAppliances: z.infer<typeof applianceSchema>[] = [];
     
-    // --- FIX START: Prioritize new HomeAsset relation and fall back defensively ---
-    
-    // 1. Prioritize NEW HomeAsset[] relation if it exists and is populated
-    if (property.homeAssets && Array.isArray(property.homeAssets) && property.homeAssets.length > 0) {
-        structuredAppliances = property.homeAssets.map((asset: any, index: number) => ({
+    if (property.majorAppliances && Array.isArray(property.majorAppliances) && property.majorAppliances.length > 0) {
+        structuredAppliances = property.majorAppliances.map((asset: any) => ({
             // CRITICAL: Map the DB ID to the form ID for persistence (Update/Delete tracking)
             id: asset.id, 
             type: asset.assetType, // DB field name
             installYear: asset.installationYear, // DB field name
         }));
     } 
-    // 2. Fallback to parsing OLD JSON field if the new relation is empty (for migration/old data)
+    // Fallback to the legacy JSON field until the property form stops accepting it.
     else if (property.applianceAges) {
         let applianceAges = property.applianceAges;
         
@@ -703,8 +700,7 @@ export default function EditPropertyPage() {
         lastAppraisedValue: dollarsToCents(data.lastAppraisedValueDollars),
         lastAppraisalDate: data.lastAppraisalDate ?? null,
         
-        // FIX: Send the structured array under the correct backend key: homeAssets
-        homeAssets: data.appliances?.map(app => ({
+        majorAppliances: data.appliances?.map(app => ({
             // CRITICAL FIX: Ensure the database ID is passed for existing records
             id: app.id, 
             type: app.type, 

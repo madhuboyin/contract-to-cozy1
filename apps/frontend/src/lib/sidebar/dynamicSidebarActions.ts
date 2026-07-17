@@ -70,7 +70,7 @@ export interface SidebarContext {
     hasWarranties?: boolean;
     hasInventory?: boolean;
     hasDocuments?: boolean;
-    hasFinanceSnapshot?: boolean;
+    hasFinancingProfile?: boolean;
     hasRooms?: boolean;
   };
   activeTool?: string;
@@ -389,11 +389,11 @@ function getSaveActions(ctx: SidebarContext): SidebarAction[] {
   });
 
   // Check tax/insurance trends
-  if (ctx.missingData?.hasFinanceSnapshot === false) {
+  if (ctx.missingData?.hasFinancingProfile === false) {
     actions.push({
       id: 'check-tax-insurance-trends',
       title: 'Check tax / insurance trends',
-      description: 'Add finance snapshot for insights',
+      description: 'Add financing details for insights',
       icon: FileText,
       href: `${propPath}`,
       priority: 'low',

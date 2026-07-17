@@ -2186,7 +2186,7 @@ export async function getOrchestrationSummary(propertyId: string, userId?: strin
       assumptionSetService.listRecent(propertyId, { limit: 12 }),
       signalService.getLatestSignalsByKey(propertyId, ORCHESTRATION_SIGNAL_KEYS, { freshOnly: false }),
       prisma.coverageAnalysis.findFirst({
-        where: { propertyId },
+        where: { propertyId, inventoryItemId: null },
         orderBy: { computedAt: 'desc' },
         select: {
           id: true,

@@ -1619,7 +1619,7 @@ export class SignalService {
 
     const [latestCoverageAnalysis, gaps, latestSavingsOpportunity] = await Promise.all([
       prisma.coverageAnalysis.findFirst({
-        where: { propertyId },
+        where: { propertyId, inventoryItemId: null },
         select: {
           id: true,
           confidence: true,

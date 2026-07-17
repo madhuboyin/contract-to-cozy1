@@ -3,10 +3,10 @@
 import { Property, DwellingType, OwnershipForm, PropertyUse, OccupancyStatus, OutdoorSpaceType, HeatingType, CoolingType, WaterHeaterType, RoofType, FoundationType, Prisma, Warranty, DocumentType, PropertyResponsibilityScope, ResponsibleParty } from '@prisma/client';
 import { calculateHealthScore, HealthScoreResult } from '../utils/propertyScore.util'; 
 import JobQueueService from './JobQueue.service';
-import type { HomeAssetDTO } from './propertyApplianceInventory.service';
+import type { PropertyApplianceDTO } from './propertyApplianceInventory.service';
 import {
   syncPropertyApplianceInventoryItems,
-  listPropertyAppliancesAsHomeAssets,
+  listPropertyApplianceInventory,
 } from './propertyApplianceInventory.service';
 import {
   calculateProtectionGap,
@@ -23,7 +23,7 @@ import { reevaluateActiveWeatherIncidentsForProperty } from './incidents/inciden
 import { prisma } from '../lib/prisma';
 import { logger } from '../lib/logger';
 
-interface HomeAssetInput {
+interface PropertyApplianceInput {
   id?: string; // Optional: Used for client-side tracking, ignored by service but kept for consistency
   type: string; // The canonical appliance type (e.g., 'DISHWASHER')
   installYear: number; // The installation year
@@ -97,7 +97,7 @@ interface CreatePropertyData {
     notes?: string | null;
   }>;
   
-  homeAssets?: HomeAssetInput[];
+  majorAppliances?: PropertyApplianceInput[];
 }
 
 interface UpdatePropertyData extends Partial<CreatePropertyData> {
@@ -165,7 +165,7 @@ function evidenceCreateData(propertyId: string, userId: string, factKeys: string
 // === INJECT MISSING INTERFACE DEFINITIONS ===
 // FIX 1: Add 'warranties: Warranty[]' to include the relation for scoring
 export interface PropertyWithAssets extends Property {
-  homeAssets: HomeAssetDTO[];
+  majorAppliances: PropertyApplianceDTO[];
   warranties: Warranty[];
 }
 
@@ -215,16 +215,16 @@ export type PropertyNudge =
       lastAppraisedValueCents: number;
     };
 
-async function hydrateHomeAssetsFromInventory<T extends { id: string }>(
+async function hydrateMajorAppliancesFromInventory<T extends { id: string }>(
   property: T
-): Promise<T & { homeAssets: HomeAssetDTO[] }> {
-  const homeAssets = await listPropertyAppliancesAsHomeAssets(property.id);
+): Promise<T & { majorAppliances: PropertyApplianceDTO[] }> {
+  const majorAppliances = await listPropertyApplianceInventory(property.id);
   const financingProfile = (property as any).financingProfile ?? null;
   return {
     ...(property as any),
     purchasePriceCents: financingProfile?.purchasePriceCents ?? null,
     purchaseDate: financingProfile?.purchaseDate ?? null,
-    homeAssets,
+    majorAppliances,
   };
 }
 
@@ -358,7 +358,7 @@ export async function getUserProperties(userId: string): Promise<ScoredProperty[
     include: { homeownerProfile: true, warranties: true, coverPhoto: true, financingProfile: true, exteriorProfile: true, responsibilities: true },
   });
 
-  const hydrated = await Promise.all(ownedProperties.map(hydrateHomeAssetsFromInventory));
+  const hydrated = await Promise.all(ownedProperties.map(hydrateMajorAppliancesFromInventory));
   const scored = await Promise.all(hydrated.map(attachHealthScore));
 
   // Household member properties (other owners' properties the user has been invited to)
@@ -374,7 +374,7 @@ export async function getUserProperties(userId: string): Promise<ScoredProperty[
 
   const memberProperties = await Promise.all(
     memberships.map(async (m) => {
-      const hydratedMember = await hydrateHomeAssetsFromInventory(m.property as any);
+      const hydratedMember = await hydrateMajorAppliancesFromInventory(m.property as any);
       const scoredMember = await attachHealthScore(hydratedMember as PropertyWithAssets);
       return { ...scoredMember, householdRole: m.role };
     })
@@ -536,8 +536,8 @@ export async function createProperty(userId: string, data: CreatePropertyData): 
     .catch((err) => logger.error({ err }, '[HABIT-GEN] Initial generation failed for new property'));
 
   // NEW STEP: Handle assets AFTER property creation
-  if (data.homeAssets !== undefined) {
-    await syncPropertyApplianceInventoryItems(property.id, data.homeAssets || []);
+  if (data.majorAppliances !== undefined) {
+    await syncPropertyApplianceInventoryItems(property.id, data.majorAppliances || []);
   }
 
 
@@ -545,11 +545,10 @@ export async function createProperty(userId: string, data: CreatePropertyData): 
   // This triggers both Risk and FES calculations
   await JobQueueService.enqueuePropertyIntelligenceJobs(property.id);
 
-  // FETCH FULL PROPERTY: Must include homeAssets and warranties for scoring/return
+  // Fetch the full property and then attach its canonical appliance projection.
   const fullProperty = await prisma.property.findUnique({
       where: { id: property.id },
       include: { 
-          //homeAssets: true, 
           // FIX 4: Include warranties
           warranties: true,
           coverPhoto: true,
@@ -561,7 +560,7 @@ export async function createProperty(userId: string, data: CreatePropertyData): 
 
   // ATTACH SCORE: Calculate and attach score before returning
   // Ensure fullProperty is not null (shouldn't be right after creation)
-  const hydrated = await hydrateHomeAssetsFromInventory(fullProperty as any);
+  const hydrated = await hydrateMajorAppliancesFromInventory(fullProperty as any);
   return attachHealthScore(hydrated as PropertyWithAssets);
 }
 
@@ -590,7 +589,7 @@ export async function getPropertyById(propertyId: string, userId: string): Promi
     householdRole = membership.role;
   }
 
-  const hydrated = await hydrateHomeAssetsFromInventory(property as any);
+  const hydrated = await hydrateMajorAppliancesFromInventory(property as any);
   const scored = await attachHealthScore(hydrated as PropertyWithAssets);
   return { ...scored, householdRole };
 }
@@ -735,8 +734,8 @@ export async function updateProperty(
 
   // NEW STEP: Sync assets if they are present in the update payload.
   // The 'undefined' check ensures we only sync if the frontend explicitly sends the field (which it does)
-  if (data.homeAssets !== undefined) {
-    await syncPropertyApplianceInventoryItems(propertyId, data.homeAssets || []);
+  if (data.majorAppliances !== undefined) {
+    await syncPropertyApplianceInventoryItems(propertyId, data.majorAppliances || []);
   }
 
   const existingHeatingFuel = String(existingProperty.primaryHeatingFuel || '').trim();
@@ -763,7 +762,7 @@ export async function updateProperty(
   
 
   // Use a proper type for updatePayload for better type checking
-  const updatePayload: Partial<Omit<CreatePropertyData, 'address' | 'city' | 'state' | 'zipCode' | 'homeAssets' | 'exteriorProfile' | 'responsibilities'>> & {
+  const updatePayload: Partial<Omit<CreatePropertyData, 'address' | 'city' | 'state' | 'zipCode' | 'majorAppliances' | 'exteriorProfile' | 'responsibilities'>> & {
     name?: string | null;
     address?: string;
     city?: string;
@@ -931,11 +930,10 @@ export async function updateProperty(
     }
   }
 
-  // FETCH FULL PROPERTY: Must include homeAssets and warranties for return/scoring
+  // Fetch the full property and then attach its canonical appliance projection.
   const updatedProperty = await prisma.property.findUnique({
       where: { id: propertyId },
       include: { 
-          //homeAssets: true,
           // FIX 6: Include warranties
           warranties: true,
           coverPhoto: true,
@@ -946,7 +944,7 @@ export async function updateProperty(
   });
 
   // ATTACH SCORE: Calculate and attach score before returning
-  const hydrated = await hydrateHomeAssetsFromInventory(updatedProperty as any);
+  const hydrated = await hydrateMajorAppliancesFromInventory(updatedProperty as any);
   return attachHealthScore(hydrated as PropertyWithAssets);
 
 }

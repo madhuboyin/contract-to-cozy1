@@ -75,7 +75,7 @@ export function calculateHealthScore(
 
   // Relations are optional at runtime depending on how the caller loaded Property.
   // Default to empty arrays to avoid runtime crashes when relations are omitted.
-  const relatedHomeAssets = Array.isArray((property as { inventoryItems?: InventoryItem[] }).inventoryItems)
+  const relatedInventoryItems = Array.isArray((property as { inventoryItems?: InventoryItem[] }).inventoryItems)
     ? ((property as { inventoryItems?: InventoryItem[] }).inventoryItems ?? [])
     : [];
   const relatedWarranties = Array.isArray((property as { warranties?: Warranty[] }).warranties)
@@ -304,7 +304,7 @@ export function calculateHealthScore(
   }
   
   // 7. Appliance Ages (Max 5) - FIX 3: Add detailed appliance list
-  const assetCount = relatedHomeAssets.length;
+  const assetCount = relatedInventoryItems.length;
   const maxAssetsForScore = 3; // Define completeness threshold
   
   // Check for active home warranty coverage for any appliance
@@ -319,12 +319,12 @@ export function calculateHealthScore(
     let appScore = Math.min(maxScore, assetCount * (maxScore / maxAssetsForScore)); 
     
     // Determine Age Risk: Flag if any primary asset is over 15 years old.
-    const criticallyAging = relatedHomeAssets.some(
+    const criticallyAging = relatedInventoryItems.some(
         (a: InventoryItem) => a.installedOn !== null && currentYear - a.installedOn.getUTCFullYear() > 15
     );
     
     // Count appliances needing warranty
-    const appliancesNeedingWarranty = relatedHomeAssets.filter((a: InventoryItem) => {
+    const appliancesNeedingWarranty = relatedInventoryItems.filter((a: InventoryItem) => {
         const age = a.installedOn ? currentYear - a.installedOn.getUTCFullYear() : 0;
         return age > 15; // Critically aging appliance
     });

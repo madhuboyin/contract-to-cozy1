@@ -21,7 +21,7 @@ import {
   getRadarStatus,
   getRateHistory,
   runScenario,
-  saveFinanceSnapshot,
+  saveFinancingProfile,
   type RadarStatusAvailable,
   type RadarStatusDTO,
   type RadarStatusUnavailable,
@@ -662,7 +662,7 @@ function MortgageSetupForm({
     setSaving(true);
     setError(null);
     try {
-      await saveFinanceSnapshot(propertyId, {
+      await saveFinancingProfile(propertyId, {
         mortgageBalance: balanceVal,
         interestRate: rateVal / 100, // convert % to decimal
         remainingTermMonths: termVal,

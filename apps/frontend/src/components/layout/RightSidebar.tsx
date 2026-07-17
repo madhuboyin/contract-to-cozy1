@@ -495,7 +495,7 @@ function DynamicActionsBlock({
         hasWarranties: undefined,
         hasInventory: undefined,
         hasDocuments: undefined,
-        hasFinanceSnapshot: undefined,
+        hasFinancingProfile: undefined,
         hasRooms: undefined,
       },
       activeTool: pathname?.includes('/tools/') 

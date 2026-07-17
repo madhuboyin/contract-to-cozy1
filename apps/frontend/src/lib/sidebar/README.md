@@ -243,7 +243,7 @@ interface SidebarContext {
     hasWarranties?: boolean;
     hasInventory?: boolean;
     hasDocuments?: boolean;
-    hasFinanceSnapshot?: boolean;
+    hasFinancingProfile?: boolean;
     hasRooms?: boolean;
   };
   activeTool?: string;              // Current tool name

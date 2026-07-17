@@ -194,7 +194,7 @@ function buildDrivers(args: {
       impact: 'MEDIUM',
       explanation:
         args.debtMode === 'ON'
-          ? 'Mortgage interest + principal paydown are modeled from the finance snapshot/overrides.'
+          ? 'Mortgage interest + principal paydown are modeled from the financing profile or explicit overrides.'
           : 'No mortgage snapshot/override provided; mortgage effects are not modeled.',
     },
     {
@@ -462,14 +462,14 @@ export class SellHoldRentService {
       `Selling costs assume ${(sellingCostRate * 100).toFixed(1)}% (agent + closing + fees).`,
     ];
     if (debtMode === 'ON') sellNotes.push(`Mortgage payoff modeled; ending balance at sale ≈ ${roundMoney(debt.endingBalance)}.`);
-    else sellNotes.push('Mortgage not modeled (no finance snapshot/override).');
+    else sellNotes.push('Mortgage not modeled (no financing profile or override).');
 
     const holdNotes: string[] = [
       'Ownership costs use True Cost model components (tax + insurance + maintenance + utilities).',
     ];
     if (years === 10) holdNotes.push('Years 6–10 ownership costs extend the 5y True Cost baseline with an inflation drift assumption.');
     if (debtMode === 'ON') holdNotes.push('Mortgage interest is treated as a cost; principal paydown increases equity.');
-    else holdNotes.push('Mortgage not modeled (no finance snapshot/override).');
+    else holdNotes.push('Mortgage not modeled (no financing profile or override).');
 
     const rentNotes: string[] = [
       'Rent modeled with simple growth + overhead assumptions.',
@@ -479,7 +479,7 @@ export class SellHoldRentService {
       rentNotes.push(`Rent estimated using $/sqft heuristic for ${state} (Phase 3 baseline). Override monthly rent for accuracy.`);
     }
     if (debtMode === 'ON') rentNotes.push('Mortgage interest is treated as a cost; principal paydown increases equity.');
-    else rentNotes.push('Mortgage not modeled (no finance snapshot/override).');
+    else rentNotes.push('Mortgage not modeled (no financing profile or override).');
 
     // --- history: keep chart calm (5 points) using last 5 years ending now ---
     const nowYear = new Date().getFullYear();

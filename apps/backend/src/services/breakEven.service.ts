@@ -265,7 +265,7 @@ export class BreakEvenService {
     const zipCode = String(property.zipCode || '');
     const addressLabel = `${property.address}, ${property.city} ${property.state} ${property.zipCode}`;
     const nowYear = new Date().getFullYear();
-    const financeSnapshot = await getCanonicalMortgage(propertyId);
+    const canonicalMortgage = await getCanonicalMortgage(propertyId);
 
     const notes: string[] = [];
     const dataSources: string[] = [
@@ -285,13 +285,13 @@ export class BreakEvenService {
     const annualExpensesNow = baseCg.current.annualExpensesNow;
 
     const mortgageBalanceNow =
-      input.mortgageBalance ?? financeSnapshot?.mortgageBalance ?? null;
+      input.mortgageBalance ?? canonicalMortgage?.mortgageBalance ?? null;
     const mortgageAnnualRate =
-      input.mortgageAnnualRate ?? financeSnapshot?.interestRate ?? null;
+      input.mortgageAnnualRate ?? canonicalMortgage?.interestRate ?? null;
     const remainingTermMonths =
-      input.remainingTermMonths ?? financeSnapshot?.remainingTermMonths ?? null;
+      input.remainingTermMonths ?? canonicalMortgage?.remainingTermMonths ?? null;
     const monthlyPaymentInput =
-      input.monthlyPayment ?? financeSnapshot?.monthlyPayment ?? null;
+      input.monthlyPayment ?? canonicalMortgage?.monthlyPayment ?? null;
     const debtMode: 'ON' | 'OFF' =
       mortgageBalanceNow !== null &&
       mortgageAnnualRate !== null &&
@@ -309,7 +309,7 @@ export class BreakEvenService {
       dataSources.push('PropertyFinancingProfile + mortgage amortization context');
       notes.push('Debt-aware modeling is ON using mortgage snapshot/override inputs.');
       confidence = bumpConfidence(confidence, 'MEDIUM');
-    } else if (financeSnapshot) {
+    } else if (canonicalMortgage) {
       notes.push('Canonical financing profile is partial; add missing mortgage fields to enable debt-aware break-even.');
     } else {
       notes.push('No canonical financing profile found; break-even runs without debt context until mortgage details are added.');

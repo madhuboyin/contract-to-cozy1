@@ -2,9 +2,8 @@
 //
 // The "one non-sensitive property trait" item in
 // docs/personalization/09-implementation-roadmap.md's first implementation
-// step. `hvacFilterReplacementOverdue` is derived purely from Property/
-// HomeAsset fields already in the schema (HomeAsset.assetType,
-// HomeAsset.lastServiced) — no household, pet, or profile data is read,
+// step. `hvacFilterReplacementOverdue` is derived from canonical InventoryItem
+// type and service-history facts; no household, pet, or profile data is read,
 // satisfying the roadmap's "without collecting household data" constraint.
 //
 // This is deliberately a *different*, simpler trait than the
@@ -15,7 +14,7 @@ import { TraitReading } from './evaluator';
 
 export const HVAC_FILTER_OVERDUE_THRESHOLD_DAYS = 90;
 
-export interface HomeAssetFact {
+export interface InventoryItemFact {
   assetType: string;
   lastServiced: Date | null;
 }
@@ -28,10 +27,10 @@ export interface HomeAssetFact {
  * counts as serviced" has one implementation — extracted once a third
  * near-identical trait made the duplication worth naming.
  */
-export function mostRecentAssetServiceDate(homeAssets: HomeAssetFact[], assetTypePrefix: string): Date | null {
-  const matchingAssets = homeAssets.filter((a) => a.assetType.toUpperCase().startsWith(assetTypePrefix));
+export function mostRecentAssetServiceDate(inventoryItems: InventoryItemFact[], assetTypePrefix: string): Date | null {
+  const matchingAssets = inventoryItems.filter((a) => a.assetType.toUpperCase().startsWith(assetTypePrefix));
   const serviced = matchingAssets.filter(
-    (a): a is HomeAssetFact & { lastServiced: Date } => a.lastServiced !== null,
+    (a): a is InventoryItemFact & { lastServiced: Date } => a.lastServiced !== null,
   );
   if (serviced.length === 0) {
     return null;
@@ -42,13 +41,13 @@ export function mostRecentAssetServiceDate(homeAssets: HomeAssetFact[], assetTyp
   );
 }
 
-function mostRecentHvacServiceDate(homeAssets: HomeAssetFact[]): Date | null {
-  return mostRecentAssetServiceDate(homeAssets, 'HVAC');
+function mostRecentHvacServiceDate(inventoryItems: InventoryItemFact[]): Date | null {
+  return mostRecentAssetServiceDate(inventoryItems, 'HVAC');
 }
 
 /**
  * Derives whether an HVAC filter is likely overdue for replacement, purely
- * from HomeAsset service history.
+ * from InventoryItem service history.
  *
  * Returns `{ known: false }` (UNKNOWN, not FALSE) when there's no HVAC-type
  * asset on the property at all, or one exists but was never serviced —
@@ -57,10 +56,10 @@ function mostRecentHvacServiceDate(homeAssets: HomeAssetFact[]): Date | null {
  * 04-target-architecture.md's evaluator section calls for.
  */
 export function deriveHvacFilterReplacementOverdue(
-  homeAssets: HomeAssetFact[],
+  inventoryItems: InventoryItemFact[],
   now: Date = new Date(),
 ): TraitReading {
-  const mostRecentServiceDate = mostRecentHvacServiceDate(homeAssets);
+  const mostRecentServiceDate = mostRecentHvacServiceDate(inventoryItems);
   if (!mostRecentServiceDate) {
     return { known: false };
   }
@@ -78,10 +77,10 @@ export function deriveHvacFilterReplacementOverdue(
  * deriveHvacFilterReplacementOverdue: no HVAC asset or never serviced -> unknown.
  */
 export function deriveHvacFilterDaysSinceServiced(
-  homeAssets: HomeAssetFact[],
+  inventoryItems: InventoryItemFact[],
   now: Date = new Date(),
 ): TraitReading {
-  const mostRecentServiceDate = mostRecentHvacServiceDate(homeAssets);
+  const mostRecentServiceDate = mostRecentHvacServiceDate(inventoryItems);
   if (!mostRecentServiceDate) {
     return { known: false };
   }
@@ -118,9 +117,8 @@ export const SMOKE_DETECTOR_BATTERY_CHECK_THRESHOLD_DAYS = 365;
 /**
  * Derives whether a smoke/CO detector battery check is overdue, for the
  * `smoke_co_detector_battery_check` definition (bootstrapped DRAFT by
- * apps/backend/prisma/seedPersonalization.sql). Same HomeAsset.lastServiced
- * pattern as the HVAC filter traits above — a battery check is modeled as a
- * HomeAsset row with assetType 'SMOKE_DETECTOR', `lastServiced` being the last
+ * apps/backend/prisma/seedPersonalization.sql). A battery check is modeled as
+ * InventoryItem service history for a `SMOKE_DETECTOR` item, with `lastServiced`
  * check date.
  *
  * UNKNOWN (not FALSE) whenever detector presence isn't confirmed true, or
@@ -130,14 +128,14 @@ export const SMOKE_DETECTOR_BATTERY_CHECK_THRESHOLD_DAYS = 365;
  */
 export function deriveSmokeDetectorBatteryOverdue(
   property: PropertySafetyFact,
-  homeAssets: HomeAssetFact[],
+  inventoryItems: InventoryItemFact[],
   now: Date = new Date(),
 ): TraitReading {
   if (property.hasSmokeDetectors !== true) {
     return { known: false };
   }
 
-  const mostRecentCheck = mostRecentAssetServiceDate(homeAssets, 'SMOKE_DETECTOR');
+  const mostRecentCheck = mostRecentAssetServiceDate(inventoryItems, 'SMOKE_DETECTOR');
   if (!mostRecentCheck) {
     return { known: false };
   }
@@ -149,13 +147,13 @@ export function deriveSmokeDetectorBatteryOverdue(
 
 export function deriveSmokeDetectorBatteryDaysSinceServiced(
   property: PropertySafetyFact,
-  homeAssets: HomeAssetFact[],
+  inventoryItems: InventoryItemFact[],
   now: Date = new Date(),
 ): TraitReading {
   if (property.hasSmokeDetectors !== true) {
     return { known: false };
   }
-  const mostRecentCheck = mostRecentAssetServiceDate(homeAssets, 'SMOKE_DETECTOR');
+  const mostRecentCheck = mostRecentAssetServiceDate(inventoryItems, 'SMOKE_DETECTOR');
   if (!mostRecentCheck) {
     return { known: false };
   }
@@ -170,18 +168,18 @@ export const DRYER_VENT_CLEANING_THRESHOLD_DAYS = 365;
 /**
  * Derives whether dryer vent cleaning is overdue, for the
  * `dryer_vent_cleaning_reminder` definition (bootstrapped DRAFT by
- * apps/backend/prisma/seedPersonalization.sql). Same HomeAsset.lastServiced
- * pattern as the traits above — a DRYER-type asset's `lastServiced` is the
+ * apps/backend/prisma/seedPersonalization.sql). A DRYER InventoryItem's
+ * `lastServiced` is the
  * last vent cleaning date. Unlike the smoke detector trait, there's no separate "is a dryer
  * present" property field to gate on first — no DRYER-type asset at all is
  * simply UNKNOWN, same as the original HVAC filter trait's approach.
  * 365-day threshold matches common fire-safety guidance (annual cleaning).
  */
 export function deriveDryerVentCleaningOverdue(
-  homeAssets: HomeAssetFact[],
+  inventoryItems: InventoryItemFact[],
   now: Date = new Date(),
 ): TraitReading {
-  const mostRecentCleaning = mostRecentAssetServiceDate(homeAssets, 'DRYER');
+  const mostRecentCleaning = mostRecentAssetServiceDate(inventoryItems, 'DRYER');
   if (!mostRecentCleaning) {
     return { known: false };
   }
@@ -192,10 +190,10 @@ export function deriveDryerVentCleaningOverdue(
 }
 
 export function deriveDryerVentDaysSinceServiced(
-  homeAssets: HomeAssetFact[],
+  inventoryItems: InventoryItemFact[],
   now: Date = new Date(),
 ): TraitReading {
-  const mostRecentCleaning = mostRecentAssetServiceDate(homeAssets, 'DRYER');
+  const mostRecentCleaning = mostRecentAssetServiceDate(inventoryItems, 'DRYER');
   if (!mostRecentCleaning) {
     return { known: false };
   }

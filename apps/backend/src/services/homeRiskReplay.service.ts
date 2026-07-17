@@ -140,11 +140,11 @@ function relevanceWeight(relevance: string): number {
   return 1;
 }
 
-function pickHomeAsset(
-  homeAssets: Array<{ id: string; assetType: string | null; installedOn: Date | null }>,
+function pickInventoryItem(
+  inventoryItems: Array<{ id: string; assetType: string | null; installedOn: Date | null }>,
   keywords: string[],
 ): { id: string; assetType: string | null; installedOn: Date | null } | null {
-  const hit = homeAssets.find((asset) => keywords.some((keyword) => normalizeString(asset.assetType).includes(keyword)));
+  const hit = inventoryItems.find((item) => keywords.some((keyword) => normalizeString(item.assetType).includes(keyword)));
   return hit ?? null;
 }
 
@@ -167,10 +167,10 @@ function makePropertySystem(
 function buildPropertyContext(
   property: Prisma.PropertyGetPayload<{ select: typeof PROPERTY_CONTEXT_SELECT }>,
 ): ReplayPropertyContext {
-  const roofAsset = pickHomeAsset(property.inventoryItems, ['roof']);
-  const hvacAsset = pickHomeAsset(property.inventoryItems, ['hvac', 'ac', 'furnace', 'heat pump', 'boiler']);
-  const plumbingAsset = pickHomeAsset(property.inventoryItems, ['water heater', 'plumbing', 'pipe']);
-  const electricalAsset = pickHomeAsset(property.inventoryItems, ['electrical', 'panel', 'generator']);
+  const roofAsset = pickInventoryItem(property.inventoryItems, ['roof']);
+  const hvacAsset = pickInventoryItem(property.inventoryItems, ['hvac', 'ac', 'furnace', 'heat pump', 'boiler']);
+  const plumbingAsset = pickInventoryItem(property.inventoryItems, ['water heater', 'plumbing', 'pipe']);
+  const electricalAsset = pickInventoryItem(property.inventoryItems, ['electrical', 'panel', 'generator']);
 
   const hasBelowGradeSpace = normalizeString(property.foundationType).includes('basement')
     || normalizeString(property.foundationType).includes('crawl');

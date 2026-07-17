@@ -55,7 +55,7 @@ type CoverageAnalysisRecord = {
   impactLevel: 'LOW' | 'MEDIUM' | 'HIGH' | null;
   summary: string | null;
   decisionTrace: unknown;
-  inputsSnapshot: unknown;
+  inventoryItemId: string | null;
 };
 
 type CoverageGapResult = {
@@ -200,22 +200,6 @@ function matchInventoryItemForHealthInsight(
   }
 
   return bestMatch;
-}
-
-function parseItemIdFromInputsSnapshot(value: unknown): string | null {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
-
-  const root = value as Record<string, unknown>;
-  if (typeof root.itemId === 'string' && root.itemId) {
-    return root.itemId;
-  }
-
-  const item = root.item;
-  if (!item || typeof item !== 'object' || Array.isArray(item)) return null;
-
-  const itemRecord = item as Record<string, unknown>;
-  const idFromItem = itemRecord.itemId ?? itemRecord.id;
-  return typeof idFromItem === 'string' && idFromItem ? idFromItem : null;
 }
 
 function dedupeReplaceRepairAnalyses<T extends {
@@ -970,6 +954,7 @@ export async function getResolutionCenter(propertyId: string, userId: string): P
       where: {
         propertyId,
         homeownerProfileId,
+        inventoryItemId: { not: null },
         status: 'READY',
       },
       select: {
@@ -985,7 +970,7 @@ export async function getResolutionCenter(propertyId: string, userId: string): P
         impactLevel: true,
         summary: true,
         decisionTrace: true,
-        inputsSnapshot: true,
+        inventoryItemId: true,
       },
       orderBy: {
         computedAt: 'desc',
@@ -1097,7 +1082,7 @@ export async function getResolutionCenter(propertyId: string, userId: string): P
 
   const coverageAnalysesByItemId = new Map<string, CoverageAnalysisRecord>();
   coverageAnalyses.forEach((analysis) => {
-    const itemId = parseItemIdFromInputsSnapshot(analysis.inputsSnapshot);
+    const itemId = analysis.inventoryItemId;
     if (!itemId || coverageAnalysesByItemId.has(itemId)) return;
     coverageAnalysesByItemId.set(itemId, analysis);
   });

@@ -96,16 +96,35 @@ Implemented:
 
 No Prisma schema changes or migration scripts are included in this slice.
 
+## Slice 4 — financial, item, and snapshot ownership cleanup
+
+Implemented:
+
+- Added a typed optional `CoverageAnalysis.inventoryItemId` relation and
+  recency index. Item analysis ownership and lookup no longer parse identity
+  from `inputsSnapshot`; the snapshot is retained only as calculation evidence.
+- Separated property-level and item-level coverage queries, staleness updates,
+  scenario attachment, resolution insights, signals, orchestration, and shared
+  data backfill with explicit relation predicates.
+- Removed the unused `/home-management/home-assets` endpoint and mapper.
+- Replaced active Property setup and warranty HomeAsset adapters with
+  InventoryItem-backed `majorAppliances`/`inventoryItemId` contracts.
+- Renamed active finance-snapshot UI/service adapters to canonical financing
+  profile projections and corrected user-facing copy.
+- Reclassified retained snapshot/run/scenario models by lifecycle and owner in
+  `PHASE8_OWNERSHIP_AUDIT.md` rather than deleting valid historical artifacts.
+
+This slice changes the Prisma schema but includes no migration script. The
+repository owner must apply the schema through the normal database workflow.
+
 ## Remaining Phase 8 slices
 
-1. Audit financial, item, and snapshot ownership for obsolete schema and
-   adapters beyond the Phase 0 consolidation already completed.
-2. Run API/UI/worker runtime scenarios for all ten archetypes in an environment
+1. Run API/UI/worker runtime scenarios for all ten archetypes in an environment
    with the database and Docker services available.
-3. Re-run the final forbidden-field scan and update affected feature FRDs and
+2. Re-run the final forbidden-field scan and update affected feature FRDs and
    operational runbooks.
 
 ## Current status
 
-Phase 8 is in progress. Slices 1 through 3 are implemented; financial, item,
-and snapshot ownership cleanup is the next implementation slice.
+Phase 8 is in progress. Slices 1 through 4 are implemented; runtime archetype
+validation and the final repository/documentation scan remain.

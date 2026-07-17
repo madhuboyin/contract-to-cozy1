@@ -7,7 +7,7 @@ import {
   LLM_MODEL_CONFIG, 
   ORACLE_RECOMMENDATION_PROMPT_TEMPLATE 
 } from '../config/ai-constants';
-import { listPropertyAppliancesAsHomeAssets } from './propertyApplianceInventory.service';
+import { listPropertyApplianceInventory } from './propertyApplianceInventory.service';
 import { logger } from '../lib/logger';
 import { getProtectionContextDecisions } from './protection/context';
 import type { FeatureDecision } from '../modules/propertyContext';
@@ -114,7 +114,6 @@ export class ApplianceOracleService {
       where: { id: propertyId, homeownerProfile: { userId } },
       include: {
         homeownerProfile: true,
-        // REMOVED: homeAssets: true
       }
     });
 
@@ -122,9 +121,9 @@ export class ApplianceOracleService {
       throw new Error('Property not found or access denied');
     }
     
-    const homeAssets = await listPropertyAppliancesAsHomeAssets(propertyId);  // ✅ NEW
+    const applianceInventory = await listPropertyApplianceInventory(propertyId);
 
-    if (!Array.isArray(homeAssets) || homeAssets.length === 0) {
+    if (!Array.isArray(applianceInventory) || applianceInventory.length === 0) {
       return {
         propertyId,
         propertyAddress: property.address,
@@ -152,7 +151,7 @@ export class ApplianceOracleService {
     // Analyze each appliance
     const predictions: ApplianceFailurePrediction[] = [];
 
-    for (const asset of homeAssets) {
+    for (const asset of applianceInventory) {
       const prediction = await this.analyzeSingleAppliance(asset, property);
       if (prediction) {
         predictions.push(prediction);

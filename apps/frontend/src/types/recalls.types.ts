@@ -42,7 +42,7 @@ export type RecallMatchDTO = {
   id: string;
   propertyId: string;
   inventoryItemId?: string | null;
-  homeAssetId?: string | null;
+  inventoryItemId?: string | null;
 
   method: string;
   confidencePct: number;

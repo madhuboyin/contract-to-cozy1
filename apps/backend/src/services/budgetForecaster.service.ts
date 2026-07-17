@@ -174,13 +174,13 @@ export class BudgetForecasterService {
   }
 
   private generateCategoryBreakdowns(property: any, totalAnnual: number): CategoryBreakdown[] {
-    const homeAssets = property.homeAssets || [];
+    const inventoryItems = property.inventoryItems || [];
     
     // [REFACTORED] Use imported constant
     const categories = MAINTENANCE_CATEGORY_BREAKDOWN;
 
     // Adjust percentages based on property specifics
-    if (homeAssets.length > 0) {
+    if (inventoryItems.length > 0) {
       // Custom logic based on actual appliances
     }
 

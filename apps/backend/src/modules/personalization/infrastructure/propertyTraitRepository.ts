@@ -5,13 +5,13 @@
 // than duplicated in a separate trait-snapshot history table.
 import { Prisma } from '@prisma/client';
 import { prisma } from '../../../lib/prisma';
-import { HomeAssetFact } from '../domain/traits';
+import { InventoryItemFact } from '../domain/traits';
 import { getAggregationPropertyContext } from '../../../services/aggregationContext/context';
 
 export interface PropertyTraitFacts {
   hasSmokeDetectors: boolean | null;
   roofReplacementYear: number | null;
-  homeAssets: HomeAssetFact[];
+  inventoryItems: InventoryItemFact[];
 }
 
 interface InventoryServiceFact {
@@ -28,7 +28,7 @@ interface InventoryServiceFact {
  */
 export function inventoryItemToPersonalizationAssetFact(
   item: InventoryServiceFact,
-): HomeAssetFact | null {
+): InventoryItemFact | null {
   const text = `${item.category} ${item.name} ${(item.tags || []).join(' ')}`.toUpperCase();
   let assetType: string | null = null;
 
@@ -66,14 +66,14 @@ export async function loadPropertyTraitFactsFromContext(
   return {
     hasSmokeDetectors: known<boolean>('safety.hasSmokeDetectors'),
     roofReplacementYear: known<number>('structure.roofReplacementYear'),
-    homeAssets: items
+    inventoryItems: items
       .map((item) => item.assetType
         ? { assetType: item.assetType, lastServiced: item.lastServicedOn ? new Date(item.lastServicedOn) : null }
         : inventoryItemToPersonalizationAssetFact({
             ...item,
             lastServicedOn: item.lastServicedOn ? new Date(item.lastServicedOn) : null,
           }))
-      .filter((asset): asset is HomeAssetFact => asset !== null),
+      .filter((item): item is InventoryItemFact => item !== null),
   };
 }
 

@@ -122,12 +122,12 @@ export type SellHoldRentDTO = {
 };
 
 // ---------------------------
-// Phase-3: Overrides + Finance Snapshot
+// Phase-3: Overrides + canonical financing profile projection
 // ---------------------------
 
 export type ToolOverrideRow = { key: string; value: number };
 
-export type FinanceSnapshotDTO = {
+export type FinancingProfileProjection = {
   propertyId: string;
   mortgageBalance: number | null;
   interestRate: number | null; // decimal
@@ -261,7 +261,7 @@ export async function saveSellHoldRentOverrides(propertyId: string, patch: SellH
   return res.data;
 }
 
-export async function getFinanceSnapshot(propertyId: string) {
+export async function getFinancingProfile(propertyId: string) {
   const res = await api.get<{ profile: any | null }>(
     `/api/properties/${propertyId}/financing/profile`
   );
@@ -274,10 +274,10 @@ export async function getFinanceSnapshot(propertyId: string) {
     remainingTermMonths: profile.remainingTermMonths ?? null,
     monthlyPayment: profile.monthlyPaymentCents == null ? null : profile.monthlyPaymentCents / 100,
     lastVerifiedAt: profile.mortgageBalanceAsOfDate ?? profile.updatedAt ?? null,
-  } satisfies FinanceSnapshotDTO;
+  } satisfies FinancingProfileProjection;
 }
 
-export async function saveFinanceSnapshot(propertyId: string, patch: Partial<FinanceSnapshotDTO>) {
+export async function saveFinancingProfile(propertyId: string, patch: Partial<FinancingProfileProjection>) {
   await api.put(
     `/api/properties/${propertyId}/financing/profile`,
     {
@@ -288,5 +288,5 @@ export async function saveFinanceSnapshot(propertyId: string, patch: Partial<Fin
       mortgageBalanceAsOfDate: patch.lastVerifiedAt ?? new Date().toISOString(),
     }
   );
-  return getFinanceSnapshot(propertyId) as Promise<FinanceSnapshotDTO>;
+  return getFinancingProfile(propertyId) as Promise<FinancingProfileProjection>;
 }

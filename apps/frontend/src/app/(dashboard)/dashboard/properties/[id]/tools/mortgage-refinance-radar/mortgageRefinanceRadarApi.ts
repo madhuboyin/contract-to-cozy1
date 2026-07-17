@@ -205,7 +205,7 @@ export async function getSavedScenarios(
   return (res.data?.scenarios as RefinanceScenarioSnapshotDTO[]) ?? [];
 }
 
-export async function saveFinanceSnapshot(
+export async function saveFinancingProfile(
   propertyId: string,
   body: {
     mortgageBalance: number;

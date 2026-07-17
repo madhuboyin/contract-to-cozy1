@@ -973,7 +973,7 @@ export class SharedDataBackfillService {
   private async collectPreferenceEvidence(propertyId: string): Promise<PreferenceEvidence[]> {
     const [coverageRuns, riskRuns, doNothingRuns] = await Promise.all([
       prisma.coverageAnalysis.findMany({
-        where: { propertyId },
+        where: { propertyId, inventoryItemId: null },
         select: {
           id: true,
           confidence: true,
@@ -1244,7 +1244,7 @@ export class SharedDataBackfillService {
       toolOverrides,
     ] = await Promise.all([
       prisma.coverageAnalysis.findMany({
-        where: { propertyId },
+        where: { propertyId, inventoryItemId: null },
         select: {
           id: true,
           assumptionSetId: true,
@@ -1553,7 +1553,7 @@ export class SharedDataBackfillService {
     });
 
     const latestCoverageAnalysis = await prisma.coverageAnalysis.findFirst({
-      where: { propertyId },
+      where: { propertyId, inventoryItemId: null },
       select: {
         id: true,
         confidence: true,

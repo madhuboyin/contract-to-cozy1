@@ -15,8 +15,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { navigateBackWithDashboardFallback } from '@/lib/navigation/backNavigation';
-// UPDATED IMPORT: Added HomeAsset
-import { Property, APIResponse, APIError, Document, DocumentUploadInput, DocumentType, HomeAsset, WarrantyCategory } from '@/types'; // Removed Warranty, Create/UpdateWarrantyInput to redefine locally
+import { Property, APIResponse, APIError, Document, DocumentUploadInput, DocumentType, PropertyAppliance, WarrantyCategory } from '@/types';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/components/ui/use-toast';
 import { cn } from '@/lib/utils';
@@ -71,7 +70,7 @@ import {
 } from '@/lib/config/warrantyConfig';
 
 /**
- * Infer appliance type from InventoryItem for HomeAsset compatibility
+ * Infer the property-setup appliance type from a canonical InventoryItem.
  */
 function inferAssetTypeFromItem(item: any): string {
   // 1. Check sourceHash first (canonical from Property page)
@@ -101,7 +100,7 @@ interface Warranty {
     id: string;
     homeownerProfileId: string;
     propertyId: string | null;
-    homeAssetId: string | null;
+    inventoryItemId: string | null;
     category: WarrantyCategory; // NEW
     providerName: string;
     policyNumber: string | null;
@@ -117,7 +116,7 @@ interface Warranty {
 
 interface CreateWarrantyInput {
     propertyId?: string; 
-    homeAssetId?: string;
+    inventoryItemId?: string;
     category: WarrantyCategory; // NEW
     providerName: string;
     policyNumber?: string;
@@ -270,11 +269,11 @@ const DocumentUploadModal = ({ parentEntityId, parentEntityType, onUploadSuccess
 interface WarrantyFormProps {
   initialData?: Warranty;
   properties: Property[];
-  homeAssets: HomeAsset[];
+  inventoryAppliances: PropertyAppliance[];
   providerSuggestions: string[];
   prefill?: {
     propertyId?: string;
-    homeAssetId?: string;
+    inventoryItemId?: string;
     category?: WarrantyCategory;
   };
   onSave: (data: CreateWarrantyInput | UpdateWarrantyInput) => Promise<void>;
@@ -282,7 +281,7 @@ interface WarrantyFormProps {
   isSubmitting: boolean;
 }
 
-const WarrantyForm = ({ initialData, properties, homeAssets, providerSuggestions, prefill, onSave, onClose, isSubmitting }: WarrantyFormProps) => {
+const WarrantyForm = ({ initialData, properties, inventoryAppliances, providerSuggestions, prefill, onSave, onClose, isSubmitting }: WarrantyFormProps) => {
   const buildInitialFormData = useCallback((): CreateWarrantyInput | UpdateWarrantyInput => ({
     providerName: initialData?.providerName || '',
     policyNumber: initialData?.policyNumber || '',
@@ -291,7 +290,7 @@ const WarrantyForm = ({ initialData, properties, homeAssets, providerSuggestions
     startDate: initialData?.startDate ? format(parseISO(initialData.startDate), 'yyyy-MM-dd') : '',
     expiryDate: initialData?.expiryDate ? format(parseISO(initialData.expiryDate), 'yyyy-MM-dd') : '',
     propertyId: initialData?.propertyId || prefill?.propertyId || undefined,
-    homeAssetId: initialData?.homeAssetId || prefill?.homeAssetId || undefined,
+    inventoryItemId: initialData?.inventoryItemId || prefill?.inventoryItemId || undefined,
     category: initialData?.category || prefill?.category || 'APPLIANCE',
   }), [initialData, prefill]);
 
@@ -314,8 +313,7 @@ const WarrantyForm = ({ initialData, properties, homeAssets, providerSuggestions
         return !!formData.category && ASSET_LINKING_DISABLED_WARRANTY_CATEGORIES.includes(formData.category as WarrantyCategory);
   }, [formData.category]);
 
-  // UPDATED: Handle change for propertyId, homeAssetId, AND category with synchronization
-  const handleSelectChange = (id: 'propertyId' | 'homeAssetId' | 'category', value: string) => {
+  const handleSelectChange = (id: 'propertyId' | 'inventoryItemId' | 'category', value: string) => {
       let nextValue: string | undefined = value === SELECT_NONE_VALUE ? undefined : value;
       
       setFormData(prev => {
@@ -327,22 +325,22 @@ const WarrantyForm = ({ initialData, properties, homeAssets, providerSuggestions
              const newCategory = nextValue as WarrantyCategory;
              
              // If category changes, clear any old asset selection
-             newState.homeAssetId = undefined;
+             newState.inventoryItemId = undefined;
           }
           
           // Logic to synchronize property and asset selection
           if (id === 'propertyId') {
-              const currentAssetId = prev.homeAssetId;
+              const currentAssetId = prev.inventoryItemId;
               if (currentAssetId) {
-                  const asset = homeAssets.find(a => a.id === currentAssetId);
+                  const asset = inventoryAppliances.find(a => a.id === currentAssetId);
                   // Clear asset if the newly selected property doesn't match the asset's property
                   if (asset && asset.propertyId !== nextValue) {
-                      newState.homeAssetId = undefined; 
+                      newState.inventoryItemId = undefined;
                   }
               }
           }
-          else if (id === 'homeAssetId' && nextValue) {
-              const asset = homeAssets.find(a => a.id === nextValue);
+          else if (id === 'inventoryItemId' && nextValue) {
+              const asset = inventoryAppliances.find(a => a.id === nextValue);
               // If an asset is selected, automatically select its property and category
               if (asset) {
                   // Property association is now always allowed, so we set it if an asset is chosen
@@ -379,22 +377,22 @@ const WarrantyForm = ({ initialData, properties, homeAssets, providerSuggestions
 
   // *** FIX 1: Blank Placeholder Bug Fix ***
   // When linking is disabled, force the value to undefined so the placeholder shows.
-  const selectedHomeAssetId = useMemo(() => {
+  const selectedInventoryItemId = useMemo(() => {
       if (isAssetLinkingExplicitlyDisabled) {
           return undefined;
       }
-      return formData.homeAssetId || SELECT_NONE_VALUE;
-  }, [formData.homeAssetId, isAssetLinkingExplicitlyDisabled]);
+      return formData.inventoryItemId || SELECT_NONE_VALUE;
+  }, [formData.inventoryItemId, isAssetLinkingExplicitlyDisabled]);
 
   // Filter assets based on the currently selected property AND the selected category (Fulfills Request)
-  const filteredHomeAssets = useMemo(() => {
+  const filteredInventoryAppliances = useMemo(() => {
     // If linking is explicitly disabled (e.g., HVAC), return empty array.
     if (isAssetLinkingExplicitlyDisabled || !formData.propertyId || !formData.category) {
        return [];
     }
     
     // 1. Base Filter: Filter only by Property ID
-    let assets = homeAssets.filter(asset => asset.propertyId === formData.propertyId);
+    const assets = inventoryAppliances.filter(asset => asset.propertyId === formData.propertyId);
     
     // *** FIX: Relaxing the type filter for APPLIANCE to restore functionality. ***
     // The filter is now ONLY applied for 'APPLIANCE' if the user needs to enforce it, 
@@ -404,9 +402,9 @@ const WarrantyForm = ({ initialData, properties, homeAssets, providerSuggestions
     // This returns the full list of assets for the selected property, solving the "non-populating" issue.
     return assets;
     
-  }, [formData.propertyId, formData.category, homeAssets, isAssetLinkingExplicitlyDisabled]);
+  }, [formData.propertyId, formData.category, inventoryAppliances, isAssetLinkingExplicitlyDisabled]);
   const prefilledAssetMissingFromOptions =
-    !!formData.homeAssetId && !filteredHomeAssets.some((asset) => asset.id === formData.homeAssetId);
+    !!formData.inventoryItemId && !filteredInventoryAppliances.some((asset) => asset.id === formData.inventoryItemId);
 
   const coverageLengthLabel = useMemo(() => {
     if (!formData.startDate || !formData.expiryDate) return null;
@@ -622,17 +620,17 @@ const WarrantyForm = ({ initialData, properties, homeAssets, providerSuggestions
             </div>
 
             <div className="grid content-start gap-2">
-              <Label htmlFor="homeAssetId" className={COVERAGE_MODAL_LABEL_CLASS}>
+              <Label htmlFor="inventoryItemId" className={COVERAGE_MODAL_LABEL_CLASS}>
                 Covered item
               </Label>
               <Select
-                value={selectedHomeAssetId}
-                onValueChange={(v) => handleSelectChange('homeAssetId', v)}
+                value={selectedInventoryItemId}
+                onValueChange={(v) => handleSelectChange('inventoryItemId', v)}
                 disabled={
                   isAssetLinkingExplicitlyDisabled ||
                   !formData.propertyId ||
-                  (filteredHomeAssets.length === 0 &&
-                    !formData.homeAssetId &&
+                  (filteredInventoryAppliances.length === 0 &&
+                    !formData.inventoryItemId &&
                     !isSubmitting &&
                     !isAssetLinkingExplicitlyDisabled)
                 }
@@ -646,7 +644,7 @@ const WarrantyForm = ({ initialData, properties, homeAssets, providerSuggestions
                         ? 'Select category first'
                         : !formData.propertyId
                         ? 'Select property first'
-                        : filteredHomeAssets.length === 0
+                        : filteredInventoryAppliances.length === 0
                         ? 'No compatible assets found'
                         : 'Entire category'
                     }
@@ -657,18 +655,18 @@ const WarrantyForm = ({ initialData, properties, homeAssets, providerSuggestions
                     <SelectItem value={SELECT_NONE_VALUE}>Entire category</SelectItem>
                   )}
 
-                  {filteredHomeAssets.map((asset) => (
+                  {filteredInventoryAppliances.map((asset) => (
                     <SelectItem key={asset.id} value={asset.id}>
                       {humanizeActionType(asset.assetType)} {asset.modelNumber ? `(${asset.modelNumber})` : ''}
                     </SelectItem>
                   ))}
-                  {prefilledAssetMissingFromOptions && formData.homeAssetId && (
-                    <SelectItem value={formData.homeAssetId}>
+                  {prefilledAssetMissingFromOptions && formData.inventoryItemId && (
+                    <SelectItem value={formData.inventoryItemId}>
                       Linked appliance
                     </SelectItem>
                   )}
 
-                  {filteredHomeAssets.length === 0 && formData.category && formData.propertyId && !isAssetLinkingExplicitlyDisabled && (
+                  {filteredInventoryAppliances.length === 0 && formData.category && formData.propertyId && !isAssetLinkingExplicitlyDisabled && (
                     <div className="p-2 text-sm text-muted-foreground italic">
                       No compatible assets found.
                     </div>
@@ -840,8 +838,7 @@ export default function WarrantiesPage() {
   // Use local Warranty interface
   const [warranties, setWarranties] = useState<Warranty[]>([]);
   const [properties, setProperties] = useState<Property[]>([]);
-  // NEW STATE: to hold all home assets
-  const [homeAssets, setHomeAssets] = useState<HomeAsset[]>([]); 
+  const [inventoryAppliances, setInventoryAppliances] = useState<PropertyAppliance[]>([]);
   
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -870,8 +867,8 @@ export default function WarrantiesPage() {
       dashboardSelectedPropertyId ||
       propertyIdFromDashboardPath(returnTo) ||
       undefined;
-    const homeAssetId =
-      searchParams.get('homeAssetId') ||
+    const inventoryItemId =
+      searchParams.get('inventoryItemId') ||
       searchParams.get('itemId') ||
       undefined;
     const categoryParam = searchParams.get('category');
@@ -879,7 +876,7 @@ export default function WarrantiesPage() {
 
     let category: WarrantyCategory | undefined = isWarrantyCategory(categoryParam) ? categoryParam : undefined;
 
-    if (!category && homeAssetId) {
+    if (!category && inventoryItemId) {
       category = 'APPLIANCE';
     }
 
@@ -887,13 +884,13 @@ export default function WarrantiesPage() {
       category = 'APPLIANCE';
     }
 
-    if (!propertyId && !homeAssetId && !category) {
+    if (!propertyId && !inventoryItemId && !category) {
       return undefined;
     }
 
     return {
       propertyId,
-      homeAssetId,
+      inventoryItemId,
       category,
     };
   }, [dashboardSelectedPropertyId, searchParams]);
@@ -923,13 +920,13 @@ export default function WarrantiesPage() {
       
       // ✅ NEW: Fetch appliances directly from Inventory for each property
       // This is more explicit and ensures we get the latest InventoryItem data
-      const allAssets: HomeAsset[] = [];
+      const allAppliances: PropertyAppliance[] = [];
       
       for (const property of propertiesRes.data.properties) {
         try {
           const items = await listInventoryItems(property.id, { category: 'APPLIANCE' });
           
-          // Transform InventoryItem to HomeAsset shape
+          // Create the small property-appliance projection used by this form.
           const transformed = items.map((item: any) => ({
             id: item.id,
             propertyId: item.propertyId,
@@ -943,13 +940,13 @@ export default function WarrantiesPage() {
             efficiencyRating: null,
           }));
           
-          allAssets.push(...transformed);
+          allAppliances.push(...transformed);
         } catch (error) {
           console.error(`Failed to fetch appliances for property ${property.id}:`, error);
         }
       }
   
-      setHomeAssets(allAssets);
+      setInventoryAppliances(allAppliances);
     }
     setIsLoading(false);
   }, [toast]);
@@ -982,18 +979,14 @@ export default function WarrantiesPage() {
 
     // Client-side guard: If an asset is linked but the top-level property isn't, 
     // infer the propertyId from the asset's propertyId.
-    if (!dataToSend.propertyId && dataToSend.homeAssetId) {
-        const asset = homeAssets.find(a => a.id === dataToSend.homeAssetId);
+    if (!dataToSend.propertyId && dataToSend.inventoryItemId) {
+        const asset = inventoryAppliances.find(a => a.id === dataToSend.inventoryItemId);
         if (asset) {
             dataToSend.propertyId = asset.propertyId;
         }
     }
 
-    const { homeAssetId, ...warrantyPayload } = dataToSend;
-    const canonicalWarrantyPayload = {
-      ...warrantyPayload,
-      inventoryItemId: homeAssetId || undefined,
-    };
+    const canonicalWarrantyPayload = dataToSend;
 
     const res = editingWarranty
         ? await api.updateWarranty(editingWarranty.id, canonicalWarrantyPayload as UpdateWarrantyInput)
@@ -1206,8 +1199,8 @@ export default function WarrantiesPage() {
       let propertyId = warranty.propertyId;
       
       // If propertyId is null but there is an assetId, try to find the propertyId through the asset
-      if (!propertyId && warranty.homeAssetId) {
-           const asset = homeAssets.find(a => a.id === warranty.homeAssetId);
+      if (!propertyId && warranty.inventoryItemId) {
+           const asset = inventoryAppliances.find(a => a.id === warranty.inventoryItemId);
            if (asset) {
                propertyId = asset.propertyId;
            }
@@ -1217,11 +1210,11 @@ export default function WarrantiesPage() {
       
       const property = properties.find(p => p.id === propertyId);
       return property ? property.name || property.address : 'N/A';
-  }, [properties, homeAssets]);
+  }, [properties, inventoryAppliances]);
   
   // Helper to get Asset Info - now accepts the full warranty object
   const getAssetInfo = useCallback((warranty: Warranty): string => {
-      const { homeAssetId, category } = warranty;
+      const { inventoryItemId, category } = warranty;
       
       // 1. If it's a system-wide warranty category, show that instead of N/A
       if (SYSTEM_COVERAGE_WARRANTY_CATEGORIES.includes(category)) {
@@ -1229,22 +1222,19 @@ export default function WarrantiesPage() {
       }
       
       // 2. Try to find the linked asset by ID
-      if (homeAssetId) {
-        const asset = homeAssets.find(a => a.id === homeAssetId);
+      if (inventoryItemId) {
+        const asset = inventoryAppliances.find(a => a.id === inventoryItemId);
         if (asset) {
           const assetName = humanizeActionType(asset.assetType);
           return asset.modelNumber ? `${assetName} (${asset.modelNumber})` : assetName;
         }
         
-        // ID not found in current homeAssets - might be old HomeAsset ID
-        // Try to match by property (best effort)
-        // For now, return "Linked Asset" to indicate something was linked
-        return 'Linked Asset';
+        return 'Linked inventory item';
       }
       
       // 3. For APPLIANCE or OTHER category with no link
       return 'N/A';
-  }, [homeAssets]);
+  }, [inventoryAppliances]);
 
 
   return (
@@ -1275,7 +1265,7 @@ export default function WarrantiesPage() {
               <WarrantyForm 
                 initialData={editingWarranty}
                 properties={properties}
-                homeAssets={homeAssets} // PASSED NEW PROP
+                inventoryAppliances={inventoryAppliances}
                 providerSuggestions={providerSuggestions}
                 prefill={!editingWarranty ? createModalPrefill : undefined}
                 onSave={handleSave}

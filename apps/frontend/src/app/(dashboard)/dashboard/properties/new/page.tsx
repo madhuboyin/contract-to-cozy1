@@ -242,8 +242,7 @@ export default function NewPropertyPage() {
       return;
     }
     
-    // FIXED: Convert structured appliances array to backend's expected homeAssets format
-    const homeAssetsPayload = majorAppliances
+    const majorAppliancesPayload = majorAppliances
       .filter(app => app.type && app.installYear)
       .map(app => ({
         type: app.type.toUpperCase(),
@@ -292,8 +291,7 @@ export default function NewPropertyPage() {
         party: formData.responsibilityParty as any,
       })),
 
-      // FIXED: Send homeAssets array to backend
-      homeAssets: homeAssetsPayload.length > 0 ? homeAssetsPayload : undefined,
+      majorAppliances: majorAppliancesPayload.length > 0 ? majorAppliancesPayload : undefined,
     };
 
     setSubmitting(true);

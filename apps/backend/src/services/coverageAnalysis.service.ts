@@ -506,22 +506,6 @@ function ageYearsFromDate(date?: Date | null): number | undefined {
   return Math.round(years * 10) / 10;
 }
 
-function parseItemIdFromInputsSnapshot(value: Prisma.JsonValue | null | undefined): string | null {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
-
-  const root = value as Record<string, unknown>;
-  if (typeof root.itemId === 'string' && root.itemId) {
-    return root.itemId;
-  }
-
-  const item = root.item;
-  if (!item || typeof item !== 'object' || Array.isArray(item)) return null;
-
-  const itemRecord = item as Record<string, unknown>;
-  const idFromItem = itemRecord.itemId ?? itemRecord.id;
-  return typeof idFromItem === 'string' && idFromItem ? idFromItem : null;
-}
-
 function parseItemMetaFromInputsSnapshot(
   value: Prisma.JsonValue | null | undefined
 ): { itemId: string; name: string; category?: string | null; roomId?: string | null } | null {
@@ -748,7 +732,7 @@ function mapAnalysisToItemDto(
         roomId: fallbackItem.roomId ?? null,
       }
     : parsedMeta ?? {
-        itemId: parseItemIdFromInputsSnapshot(analysis.inputsSnapshot) ?? 'unknown-item',
+        itemId: analysis.inventoryItemId ?? 'unknown-item',
         name: 'Inventory item',
         category: null,
         roomId: null,
@@ -1878,12 +1862,14 @@ export class CoverageIntelligenceService {
   private async createItemAnalysisRecord(
     propertyId: string,
     homeownerProfileId: string,
+    inventoryItemId: string,
     snapshot: ItemComputedSnapshot
   ): Promise<LatestAnalysisRecord> {
     const analysis = await prisma.coverageAnalysis.create({
       data: {
         propertyId,
         homeownerProfileId,
+        inventoryItemId,
         status: snapshot.status,
         confidence: snapshot.confidence,
         impactLevel: snapshot.impactLevel,
@@ -1915,8 +1901,8 @@ export class CoverageIntelligenceService {
   ): Promise<{ exists: false } | { exists: true; analysis: CoverageAnalysisDTO }> {
     await assertPropertyForUser(propertyId, userId);
 
-    const recentAnalyses = await prisma.coverageAnalysis.findMany({
-      where: { propertyId },
+    const latest = await prisma.coverageAnalysis.findFirst({
+      where: { propertyId, inventoryItemId: null },
       orderBy: { computedAt: 'desc' },
       include: {
         scenarios: {
@@ -1924,13 +1910,7 @@ export class CoverageIntelligenceService {
           take: 10,
         },
       },
-      take: 50,
     });
-
-    // Skip item-scoped analyses — only return property-level results.
-    const latest = recentAnalyses.find(
-      (a) => parseItemIdFromInputsSnapshot(a.inputsSnapshot) === null
-    );
 
     if (!latest) return { exists: false };
 
@@ -1945,8 +1925,8 @@ export class CoverageIntelligenceService {
     await assertPropertyForUser(propertyId, userId);
     const item = await this.assertItemForProperty(propertyId, itemId);
 
-    const recentAnalyses = await prisma.coverageAnalysis.findMany({
-      where: { propertyId },
+    const latestForItem = await prisma.coverageAnalysis.findFirst({
+      where: { propertyId, inventoryItemId: itemId },
       orderBy: { computedAt: 'desc' },
       include: {
         scenarios: {
@@ -1954,12 +1934,7 @@ export class CoverageIntelligenceService {
           take: 5,
         },
       },
-      take: 200,
     });
-
-    const latestForItem = recentAnalyses.find(
-      (analysis) => parseItemIdFromInputsSnapshot(analysis.inputsSnapshot) === itemId
-    );
     if (!latestForItem) return { exists: false };
 
     return {
@@ -2037,7 +2012,7 @@ export class CoverageIntelligenceService {
       userId,
       overrides
     );
-    const analysis = await this.createItemAnalysisRecord(propertyId, homeownerProfileId, snapshot);
+    const analysis = await this.createItemAnalysisRecord(propertyId, homeownerProfileId, item.id, snapshot);
     return mapAnalysisToItemDto(analysis, {
       id: item.id,
       name: item.name,
@@ -2102,7 +2077,7 @@ export class CoverageIntelligenceService {
     }
 
     let latest = await prisma.coverageAnalysis.findFirst({
-      where: { propertyId, homeownerProfileId },
+      where: { propertyId, homeownerProfileId, inventoryItemId: null },
       orderBy: { computedAt: 'desc' },
       include: {
         scenarios: {
@@ -2158,6 +2133,7 @@ export async function markCoverageAnalysisStale(propertyId: string) {
   await prisma.coverageAnalysis.updateMany({
     where: {
       propertyId,
+      inventoryItemId: null,
       status: CoverageAnalysisStatus.READY,
     },
     data: {
@@ -2167,38 +2143,10 @@ export async function markCoverageAnalysisStale(propertyId: string) {
 }
 
 export async function markItemCoverageAnalysesStale(propertyId: string, itemId?: string) {
-  const readyAnalyses = await prisma.coverageAnalysis.findMany({
-    where: {
-      propertyId,
-      status: CoverageAnalysisStatus.READY,
-    },
-    select: {
-      id: true,
-      computedAt: true,
-      inputsSnapshot: true,
-    },
-    orderBy: {
-      computedAt: 'desc',
-    },
-    take: 500,
-  });
-
-  const latestByItem = new Map<string, string>();
-  for (const analysis of readyAnalyses) {
-    const scopedItemId = parseItemIdFromInputsSnapshot(analysis.inputsSnapshot);
-    if (!scopedItemId) continue;
-    if (itemId && scopedItemId !== itemId) continue;
-    if (!latestByItem.has(scopedItemId)) {
-      latestByItem.set(scopedItemId, analysis.id);
-    }
-  }
-
-  const ids = [...latestByItem.values()];
-  if (!ids.length) return;
-
   await prisma.coverageAnalysis.updateMany({
     where: {
-      id: { in: ids },
+      propertyId,
+      inventoryItemId: itemId ? itemId : { not: null },
       status: CoverageAnalysisStatus.READY,
     },
     data: {

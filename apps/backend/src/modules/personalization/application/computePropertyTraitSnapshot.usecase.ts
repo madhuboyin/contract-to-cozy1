@@ -38,15 +38,15 @@ export async function computePropertyTraitSnapshot(
   }
 
   const traits: Record<string, TraitReading> = {
-    hvacFilterReplacementOverdue: deriveHvacFilterReplacementOverdue(facts.homeAssets),
+    hvacFilterReplacementOverdue: deriveHvacFilterReplacementOverdue(facts.inventoryItems),
     smokeDetectorMissing: deriveSmokeDetectorMissing(facts),
     roofReplacementOverdue: deriveRoofReplacementOverdue(facts),
     // Scoring input, not an eligibility trait — no rule AST references this key.
-    hvacFilterDaysSinceServiced: deriveHvacFilterDaysSinceServiced(facts.homeAssets),
-    smokeDetectorBatteryOverdue: deriveSmokeDetectorBatteryOverdue(facts, facts.homeAssets),
-    smokeDetectorBatteryDaysSinceServiced: deriveSmokeDetectorBatteryDaysSinceServiced(facts, facts.homeAssets),
-    dryerVentCleaningOverdue: deriveDryerVentCleaningOverdue(facts.homeAssets),
-    dryerVentDaysSinceServiced: deriveDryerVentDaysSinceServiced(facts.homeAssets),
+    hvacFilterDaysSinceServiced: deriveHvacFilterDaysSinceServiced(facts.inventoryItems),
+    smokeDetectorBatteryOverdue: deriveSmokeDetectorBatteryOverdue(facts, facts.inventoryItems),
+    smokeDetectorBatteryDaysSinceServiced: deriveSmokeDetectorBatteryDaysSinceServiced(facts, facts.inventoryItems),
+    dryerVentCleaningOverdue: deriveDryerVentCleaningOverdue(facts.inventoryItems),
+    dryerVentDaysSinceServiced: deriveDryerVentDaysSinceServiced(facts.inventoryItems),
     roofAgeYears: deriveRoofAgeYears(facts),
   };
 

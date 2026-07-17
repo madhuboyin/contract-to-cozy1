@@ -100,11 +100,10 @@ export const FoundationTypeEnum = z.preprocess(
 
 
 // ============================================================================
-// NEW ASSET SCHEMA (Strategic Fix for HomeAsset Table)
+// Major-appliance profile input; persistence is canonical InventoryItem.
 // ============================================================================
 
-// Schema for a single HomeAsset record being sent from the frontend
-const HomeAssetInputSchema = z.object({
+const PropertyApplianceInputSchema = z.object({
   // ID is needed for the robust sync logic in the service (Update/Delete tracking)
   id: z.string().optional(), 
   type: z.string().min(1, 'Asset type is required'),
@@ -245,8 +244,7 @@ export const createPropertySchema = z.object({
   isEquityVerified: z.boolean().optional(),
   coverPhotoDocumentId: z.string().uuid().nullable().optional(),
   
-  // FIX: REMOVED applianceAges and ADDED homeAssets array
-  homeAssets: z.array(HomeAssetInputSchema).optional(), // NEW STRUCTURED FIELD
+  majorAppliances: z.array(PropertyApplianceInputSchema).optional(),
 });
 
 export const updatePropertySchema = createPropertySchema.partial();

@@ -387,7 +387,7 @@ export default function BreakEvenClient() {
             {/* Mortgage Warning - Soft */}
             {data?.current?.debtMode === 'OFF' && (
               <div className="rounded-xl border border-amber-100 bg-amber-50/50 p-3 text-xs text-amber-900 leading-relaxed">
-                Mortgage context is missing, so this is a directional break-even read. Add finance snapshot details for debt-aware math.
+                Mortgage context is missing, so this is a directional break-even read. Add financing details for debt-aware math.
               </div>
             )}
           </div>
@@ -467,7 +467,7 @@ export default function BreakEvenClient() {
 
           {data?.meta?.confidence === 'LOW' && (
             <div className="mt-2 text-xs text-slate-500 leading-relaxed">
-              Estimated using localized appreciation and cost benchmarks. Add finance snapshot details for a more precise projection.
+              Estimated using localized appreciation and cost benchmarks. Add financing details for a more precise projection.
             </div>
           )}
 

@@ -107,3 +107,35 @@ test('generic assistant and persisted response snapshots use bounded canonical c
   assert.doesNotMatch(frontendTypes, /reportMeta\.propertyType/);
   assert.match(homeScore, /dwellingType:\s*propertyContext\.dwellingType/);
 });
+
+test('financial, item, and snapshot ownership stays explicit', () => {
+  const schema = read('../../prisma/schema.prisma');
+  const coverageAnalysis = schema.match(/model CoverageAnalysis\s*\{[\s\S]*?\n\}/)?.[0] ?? '';
+  assert.match(coverageAnalysis, /inventoryItemId\s+String\?/);
+  assert.match(coverageAnalysis, /inventoryItem\s+InventoryItem\?/);
+  assert.match(coverageAnalysis, /@@index\(\[inventoryItemId, computedAt\(sort: Desc\)\]\)/);
+
+  const coverageService = read('../../src/services/coverageAnalysis.service.ts');
+  const resolutionCenter = read('../../src/services/resolutionCenter.service.ts');
+  assert.doesNotMatch(coverageService, /parseItemIdFromInputsSnapshot/);
+  assert.doesNotMatch(resolutionCenter, /parseItemIdFromInputsSnapshot/);
+  assert.match(coverageService, /where: \{ propertyId, inventoryItemId: itemId \}/);
+  assert.match(coverageService, /where: \{ propertyId, inventoryItemId: null \}/);
+
+  const propertyService = read('../../src/services/property.service.ts');
+  const propertyValidation = read('../../src/utils/validators.ts');
+  const homeManagementRoutes = read('../../src/routes/home-management.routes.ts');
+  assert.doesNotMatch(propertyService, /homeAssets|HomeAsset/);
+  assert.doesNotMatch(propertyValidation, /homeAssets|HomeAsset/);
+  assert.doesNotMatch(homeManagementRoutes, /home-assets/);
+  assert.match(propertyService, /majorAppliances/);
+
+  const sellHoldRentApi = read('../../../frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/sell-hold-rent/sellHoldRentApi.ts');
+  assert.doesNotMatch(sellHoldRentApi, /FinanceSnapshot|getFinanceSnapshot|saveFinanceSnapshot/);
+  assert.match(sellHoldRentApi, /FinancingProfileProjection/);
+
+  const ownershipAudit = read('../../../../docs/property-context/PHASE8_OWNERSHIP_AUDIT.md');
+  assert.match(ownershipAudit, /PropertyFinancingProfile.*current financing/s);
+  assert.match(ownershipAudit, /InventoryItem.*physical-item/s);
+  assert.match(ownershipAudit, /inputsSnapshot.*evidence/s);
+});

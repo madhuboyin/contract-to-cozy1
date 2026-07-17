@@ -3,7 +3,7 @@
 import { Prisma, InventoryItemCategory, RoomType } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 
-export interface HomeAssetInput {
+export interface PropertyApplianceInput {
   id?: string;
   type: string;        // e.g. "DISHWASHER"
   installYear: number; // e.g. 2016
@@ -67,9 +67,9 @@ async function ensureRoomId(propertyId: string, roomType: RoomType): Promise<str
  */
 export async function syncPropertyApplianceInventoryItems(
   propertyId: string,
-  incomingAssets: HomeAssetInput[]
+  incomingAppliances: PropertyApplianceInput[]
 ): Promise<void> {
-  const normalized = (incomingAssets || [])
+  const normalized = (incomingAppliances || [])
     .filter((a) => a && a.type)
     .map((a) => ({
       type: String(a.type).trim().toUpperCase(),
@@ -146,16 +146,16 @@ export async function syncPropertyApplianceInventoryItems(
 }
 
 /**
- * Back-compat DTO (minimal shape the frontend already uses)
+ * Property-profile projection backed exclusively by canonical InventoryItem rows.
  */
-export type HomeAssetDTO = {
+export type PropertyApplianceDTO = {
   id: string;
   propertyId: string;
   assetType: string;
   installationYear: number | null;
 };
 
-export async function listPropertyAppliancesAsHomeAssets(propertyId: string): Promise<HomeAssetDTO[]> {
+export async function listPropertyApplianceInventory(propertyId: string): Promise<PropertyApplianceDTO[]> {
   const items = await prisma.inventoryItem.findMany({
     where: {
       propertyId,
@@ -218,7 +218,7 @@ export async function listPropertyAppliancesAsHomeAssets(propertyId: string): Pr
   }
 
   // Build canonical list and dedupe (prefer property_appliance sourceHash items)
-  const byType = new Map<string, HomeAssetDTO>();
+  const byType = new Map<string, PropertyApplianceDTO>();
 
   for (const it of items) {
     const t = inferMajorType({ sourceHash: it.sourceHash, name: it.name, tags: it.tags || [] });
@@ -226,7 +226,7 @@ export async function listPropertyAppliancesAsHomeAssets(propertyId: string): Pr
 
     const installationYear = it.installedOn ? it.installedOn.getUTCFullYear() : null;
 
-    const dto: HomeAssetDTO = {
+    const dto: PropertyApplianceDTO = {
       id: it.id,
       propertyId: it.propertyId,
       assetType: t,
@@ -255,4 +255,3 @@ export async function listPropertyAppliancesAsHomeAssets(propertyId: string): Pr
 
   return Array.from(byType.values());
 }
-

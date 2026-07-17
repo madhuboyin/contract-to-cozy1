@@ -1353,7 +1353,8 @@ lifecycle everywhere it appears.
 ### 21.10 Phase 8 — Final audit and cleanup
 
 Implementation tracking: `PHASE8_IMPLEMENTATION_STATUS.md`. Evidence-backed
-deferrals: `PHASE8_DEFERRED_EVIDENCE.md`.
+deferrals: `PHASE8_DEFERRED_EVIDENCE.md`. Financial, item, and persisted
+projection decisions: `PHASE8_OWNERSHIP_AUDIT.md`.
 
 - Re-scan backend, frontend, workers, tests, docs, and Prisma for old fields.
 - Remove adapters, compatibility code, duplicate fact loaders, and obsolete

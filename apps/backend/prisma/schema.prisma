@@ -693,6 +693,7 @@ model InventoryItem {
   homeItems                 HomeItem[]
   recallMatches             RecallMatch[]
   replaceRepairAnalyses     ReplaceRepairAnalysis[]
+  coverageAnalyses          CoverageAnalysis[]
   guidanceSignals           GuidanceSignal[]
   guidanceJourneys          GuidanceJourney[]
   guidanceStepEvidences     GuidanceStepEvidence[]
@@ -1040,6 +1041,7 @@ model CoverageAnalysis {
   id                 String  @id @default(uuid())
   homeownerProfileId String
   propertyId         String
+  inventoryItemId    String?
   assumptionSetId    String?
 
   status      CoverageAnalysisStatus @default(READY)
@@ -1069,6 +1071,7 @@ model CoverageAnalysis {
   // Relations
   homeownerProfile HomeownerProfile @relation(fields: [homeownerProfileId], references: [id], onDelete: Cascade)
   property         Property         @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  inventoryItem    InventoryItem?   @relation(fields: [inventoryItemId], references: [id], onDelete: Cascade)
   assumptionSet    AssumptionSet?   @relation(fields: [assumptionSetId], references: [id], onDelete: SetNull)
 
   // Optional: what-if scenarios saved by the user
@@ -1079,6 +1082,7 @@ model CoverageAnalysis {
 
   @@index([homeownerProfileId])
   @@index([assumptionSetId])
+  @@index([inventoryItemId, computedAt(sort: Desc)])
   @@index([propertyId, computedAt(sort: Desc)])
   @@index([propertyId, status])
   @@map("coverage_analyses")

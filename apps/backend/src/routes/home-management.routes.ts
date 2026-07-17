@@ -331,34 +331,6 @@ router.route('/warranties/:warrantyId')
 
 /**
  * @swagger
- * /api/home-management/home-assets:
- *   get:
- *     summary: Get linked home assets (for warranty linking)
- *     tags: [Home Management]
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: List of home assets
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                 data:
- *                   type: array
- *                   items:
- *                     type: object
- *       401:
- *         $ref: '#/components/responses/UnauthorizedError'
- */
-router.route('/home-assets')
-  .get(HomeManagementController.getLinkedAssets);
-
-/**
- * @swagger
  * /api/home-management/insurance-policies:
  *   post:
  *     summary: Create a new insurance policy

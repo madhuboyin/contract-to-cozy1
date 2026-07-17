@@ -538,7 +538,7 @@ router.get(
         .sort((a, b) => b.score - a.score)
         .slice(0, 10);
 
-      // HomeAsset scoring (best-effort; align if your fields differ)
+      // InventoryItem scoring (best-effort; align if fields differ)
       const homeAssetSuggestions = items.filter((item) => Boolean(item.assetType))
       .map((a: any) => {
         let score = 0;

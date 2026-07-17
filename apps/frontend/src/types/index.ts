@@ -128,7 +128,6 @@ export type InventoryItem = {
   propertyId: string;
   roomId: string | null;
 
-  homeAssetId: string | null;
   warrantyId: string | null;
   insurancePolicyId: string | null;
 
@@ -288,7 +287,6 @@ export interface AssetRiskDetail {
     assetName: string;
     systemType: string;
     category: RiskCategory;
-    homeAssetId?: string | null;
     inventoryItemId?: string | null;
     age: number;
     expectedLife: number;
@@ -878,7 +876,8 @@ export interface Warranty {
   id: string;
   homeownerProfileId: string;
   propertyId: string | null;
-  homeAssetId: string | null;
+  inventoryItemId: string | null;
+  category: WarrantyCategory;
   providerName: string;
   policyNumber: string | null;
   coverageDetails: string | null;
@@ -1153,9 +1152,9 @@ export interface HealthScoreResult {
 }
 
 /**
- * HomeAsset interface matching the Prisma schema
+ * Major-appliance projection backed by canonical InventoryItem records.
  */
-export interface HomeAsset {
+export interface PropertyAppliance {
   id: string;
   propertyId: string;
   assetType: string;
@@ -1231,8 +1230,8 @@ export interface Property {
   coverPhoto?: Document | null;
   exteriorProfile?: PropertyExteriorProfile | null;
   
-  // Home Assets relation
-  homeAssets?: HomeAsset[];
+  // Canonical InventoryItem-backed appliance projection for property setup.
+  majorAppliances?: PropertyAppliance[];
   
   createdAt: string;
   updatedAt: string;
@@ -1573,7 +1572,6 @@ export interface CreateBookingInput {
   insightContext?: string;    // e.g., "Property age: 35 years"
   maintenancePredictionId?: string;
   inventoryItemId?: string;
-  homeAssetId?: string;
   priceFinalizationId?: string;
   guidanceJourneyId?: string;
   guidanceStepKey?: string;
@@ -1633,7 +1631,7 @@ export interface UpdateExpenseInput extends Partial<CreateExpenseInput> {}
 
 export interface CreateWarrantyInput {
   propertyId?: string;
-  homeAssetId?: string;
+  inventoryItemId?: string;
   category: WarrantyCategory;
   providerName: string;
   policyNumber?: string;
@@ -2349,7 +2347,7 @@ export interface PropertyMaintenanceTask {
   bookingId: string | null;
   
   // Relationships
-  homeAssetId: string | null;
+  inventoryItemId: string | null;
   warrantyId: string | null;
   seasonalChecklistItemId: string | null;
   
@@ -2418,7 +2416,7 @@ export interface CreateMaintenanceTaskInput {
   isRecurring?: boolean;
   frequency?: MaintenanceTaskFrequency | null;
   nextDueDate?: string | null;
-  homeAssetId?: string | null;
+  inventoryItemId?: string | null;
   warrantyId?: string | null;
   templateId?: string;
 }
@@ -3361,7 +3359,7 @@ export interface MaterialSpec {
   dimensions?: string | null; material?: string | null; supplier?: string | null; supplierUrl?: string | null;
   purchaseDate?: string | null; quantityPurchased?: string | null; lotBatch?: string | null;
   notes?: string | null; isActive: boolean;
-  linkedInventoryItemId?: string | null; linkedHomeAssetId?: string | null;
+  linkedInventoryItemId?: string | null;
   createdAt: string; updatedAt: string;
   photos: MaterialSpecPhoto[];
   room?: { id: string; name: string } | null;
@@ -4205,7 +4203,6 @@ export interface PermitFlagItem {
   flagReason: string;
   status: PermitUnpermittedFlagStatus;
   disclosureRisk: PermitDisclosureRisk;
-  homeAssetId?: string;
   inventoryItemId?: string;
   resolvedByPermitId?: string;
   resolvedByPermitNumber?: string;
@@ -4312,7 +4309,6 @@ export interface CreateFlagPayload {
   workType: PermitWorkType;
   flagReason: string;
   disclosureRisk: PermitDisclosureRisk;
-  homeAssetId?: string;
   inventoryItemId?: string;
 }
 

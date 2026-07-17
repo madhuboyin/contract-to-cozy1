@@ -17,11 +17,11 @@ import {
   getSellHoldRent,
   getSellHoldRentOverrides,
   saveSellHoldRentOverrides,
-  getFinanceSnapshot,
-  saveFinanceSnapshot,
+  getFinancingProfile,
+  saveFinancingProfile,
   SellHoldRentDTO,
   SellHoldRentOverridePatch,
-  FinanceSnapshotDTO,
+  FinancingProfileProjection,
 } from './sellHoldRentApi';
 
 function impactBadge(impact: string) {
@@ -61,7 +61,7 @@ export default function SellHoldRentClient() {
   const [data, setData] = useState<SellHoldRentDTO | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Phase-3: overrides + finance snapshot state
+  // Phase-3: overrides + canonical financing profile state
   const [ovLoading, setOvLoading] = useState(false);
   const [ovSaving, setOvSaving] = useState(false);
   const [overrides, setOverrides] = useState<Record<string, number>>({});
@@ -69,7 +69,7 @@ export default function SellHoldRentClient() {
 
   const [snapLoading, setSnapLoading] = useState(false);
   const [snapSaving, setSnapSaving] = useState(false);
-  const [snapshot, setSnapshot] = useState<FinanceSnapshotDTO | null>(null);
+  const [financingProfile, setFinancingProfile] = useState<FinancingProfileProjection | null>(null);
   const [snapDraft, setSnapDraft] = useState({
     mortgageBalance: '',
     interestRatePct: '',
@@ -117,18 +117,18 @@ export default function SellHoldRentClient() {
     }
   }, [propertyId]);
 
-  const loadSnapshot = useCallback(async () => {
+  const loadFinancingProfile = useCallback(async () => {
     if (!propertyId) return;
     setSnapLoading(true);
     try {
-      const snap = await getFinanceSnapshot(propertyId);
-      setSnapshot(snap);
+      const profile = await getFinancingProfile(propertyId);
+      setFinancingProfile(profile);
 
       setSnapDraft({
-        mortgageBalance: snap?.mortgageBalance != null ? String(snap.mortgageBalance) : '',
-        interestRatePct: snap?.interestRate != null ? String((snap.interestRate * 100).toFixed(3)) : '',
-        remainingTermMonths: snap?.remainingTermMonths != null ? String(snap.remainingTermMonths) : '',
-        monthlyPayment: snap?.monthlyPayment != null ? String(snap.monthlyPayment) : '',
+        mortgageBalance: profile?.mortgageBalance != null ? String(profile.mortgageBalance) : '',
+        interestRatePct: profile?.interestRate != null ? String((profile.interestRate * 100).toFixed(3)) : '',
+        remainingTermMonths: profile?.remainingTermMonths != null ? String(profile.remainingTermMonths) : '',
+        monthlyPayment: profile?.monthlyPayment != null ? String(profile.monthlyPayment) : '',
       });
     } finally {
       setSnapLoading(false);
@@ -138,8 +138,8 @@ export default function SellHoldRentClient() {
   useEffect(() => {
     loadSimulator(years);
     loadOverrides();
-    loadSnapshot();
-  }, [loadSimulator, loadOverrides, loadSnapshot, years]);
+    loadFinancingProfile();
+  }, [loadSimulator, loadOverrides, loadFinancingProfile, years]);
 
   useEffect(() => {
     if (!propertyId) return;
@@ -183,9 +183,9 @@ export default function SellHoldRentClient() {
       trust={{
         confidenceLabel: data?.meta?.confidence
           ? `Model confidence: ${data.meta.confidence}`
-          : 'Confidence improves as finance snapshot and assumptions are completed',
+          : 'Confidence improves as the financing profile and assumptions are completed',
         freshnessLabel: data?.meta?.generatedAt ? 'Updated with latest simulation run' : 'Run the simulator to refresh',
-        sourceLabel: 'Property valuation signals + ownership costs + rental assumptions + debt snapshot',
+        sourceLabel: 'Property valuation signals + ownership costs + rental assumptions + financing profile',
         rationale: 'Compares three explainable scenarios over matching horizons so homeowners can choose with clearer trade-offs.',
       }}
       introAction={
@@ -557,9 +557,9 @@ export default function SellHoldRentClient() {
             </div>
           </div>
 
-          {/* Debt snapshot */}
+          {/* Canonical financing profile */}
           <div className="rounded-2xl border border-white/70 bg-white/72 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/48 lg:col-span-5">
-            <div className="text-sm font-semibold text-slate-800 dark:text-slate-100">Debt snapshot</div>
+            <div className="text-sm font-semibold text-slate-800 dark:text-slate-100">Financing profile</div>
             <div className="mt-1 text-xs text-slate-500 dark:text-slate-300">
               If provided, SELL/HOLD/RENT outcomes become mortgage-aware.
             </div>
@@ -593,7 +593,7 @@ export default function SellHoldRentClient() {
 
             <div className="mt-4 flex items-center justify-between gap-3">
               <div className="text-xs text-slate-500 dark:text-slate-300">
-                {snapshot?.lastVerifiedAt ? `Last verified: ${new Date(snapshot.lastVerifiedAt).toLocaleDateString()}` : 'Not set'}
+                {financingProfile?.lastVerifiedAt ? `Last verified: ${new Date(financingProfile.lastVerifiedAt).toLocaleDateString()}` : 'Not set'}
               </div>
 
               <button
@@ -607,7 +607,7 @@ export default function SellHoldRentClient() {
                   const term = toNum(snapDraft.remainingTermMonths);
                   const pay = toNum(snapDraft.monthlyPayment);
 
-                  const patch: Partial<FinanceSnapshotDTO> = {
+                  const patch: Partial<FinancingProfileProjection> = {
                     mortgageBalance: mb ?? null,
                     interestRate: irPct !== undefined ? irPct / 100 : null,
                     remainingTermMonths: term ?? null,
@@ -616,8 +616,8 @@ export default function SellHoldRentClient() {
 
                   setSnapSaving(true);
                   try {
-                    await saveFinanceSnapshot(propertyId, patch);
-                    await loadSnapshot();
+                    await saveFinancingProfile(propertyId, patch);
+                    await loadFinancingProfile();
                     await loadSimulator(years);
                   } finally {
                     setSnapSaving(false);
@@ -625,12 +625,12 @@ export default function SellHoldRentClient() {
                 }}
                 className="inline-flex h-9 items-center justify-center rounded-full border border-slate-300/70 bg-white/85 px-4 text-xs font-medium text-slate-700 shadow-sm transition-colors hover:bg-white disabled:opacity-60 dark:border-slate-700/70 dark:bg-slate-900/55 dark:text-slate-200 dark:hover:bg-slate-900"
               >
-                {snapSaving ? 'Saving…' : 'Save snapshot'}
+                {snapSaving ? 'Saving…' : 'Save financing details'}
               </button>
             </div>
 
             <div className="mt-3 text-xs text-slate-500 dark:text-slate-300">
-              Tip: This is not a full amortization import — it’s a lightweight snapshot for Phase-3 accuracy.
+              This updates the canonical financing profile used by ownership tools; it is not a full amortization import.
             </div>
           </div>
         </div>
