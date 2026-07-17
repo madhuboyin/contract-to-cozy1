@@ -6,9 +6,11 @@ import { validateBody } from '../middleware/validate.middleware';
 import * as propertyController from '../controllers/property.controller';
 // CRITICAL FIX: Import the comprehensive schemas (with all new fields) from validators.ts
 import { createPropertySchema, updatePropertySchema } from '../utils/validators'; 
-import { AuthRequest } from '../types/auth.types'; 
+import { AuthRequest } from '../types/auth.types';
 import { logger } from '../lib/logger';
 import { prisma } from '../lib/prisma';
+import { deriveChecklistProgress } from '../utils/seasonalProgress';
+import { syncSeasonalChecklistStatus } from '../services/seasonalChecklistStatus.service';
 import { apiRateLimiter } from '../middleware/rateLimiter.middleware';
 import {
   getPropertyContextCompleteness,
@@ -443,10 +445,34 @@ router.get('/:id/seasonal-checklist/current', authenticate, async (req: AuthRequ
 
     logger.info({ found: checklist ? 'Yes' : 'No' }, `[SEASONAL API] Found checklist for property ${propertyId}`);
 
+    // Progress is derived from item statuses (dismissed items leave the
+    // denominator); the stored running counter drifts and is not displayed.
+    let currentChecklist = checklist;
+    if (currentChecklist) {
+      const allItems = await (prisma as any).seasonalChecklistItem.findMany({
+        where: { seasonalChecklistId: currentChecklist.id },
+        select: { status: true },
+      });
+      const progress = deriveChecklistProgress(allItems);
+
+      if (progress.isFullyCompleted) {
+        // Season is done: heal the stale status and drop the dashboard card.
+        await syncSeasonalChecklistStatus(currentChecklist.id);
+        currentChecklist = null;
+      } else {
+        currentChecklist = {
+          ...currentChecklist,
+          tasksCompleted: progress.completedTasks,
+          totalTasks: progress.activeTotalTasks,
+          dismissedTasks: progress.dismissedTasks,
+        };
+      }
+    }
+
     return res.json({
       success: true,
       data: {
-        checklist,
+        checklist: currentChecklist,
       },
     });
   } catch (error) {

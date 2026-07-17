@@ -256,10 +256,18 @@ export class SeasonalChecklistService {
     // for display.
     const progress = deriveChecklistProgress(checklist.items);
 
+    // Self-heal stale status written before derived-status sync existed.
+    let status = checklist.status;
+    if (status !== 'DISMISSED' && progress.isFullyCompleted !== (status === 'COMPLETED')) {
+      await syncSeasonalChecklistStatus(checklist.id);
+      status = progress.isFullyCompleted ? 'COMPLETED' : 'IN_PROGRESS';
+    }
+
     return {
       checklist: {
         ...checklist,
         items: undefined, // Remove items from checklist object
+        status,
         tasksCompleted: progress.completedTasks,
         totalTasks: progress.activeTotalTasks,
         dismissedTasks: progress.dismissedTasks,
@@ -311,20 +319,30 @@ export class SeasonalChecklistService {
 
     // Calculate days remaining for each checklist
     const now = new Date();
-    const enrichedChecklists = checklists.map((checklist) => {
+    const enrichedChecklists = [];
+    for (const checklist of checklists) {
       const daysRemaining = Math.ceil(
         (new Date(checklist.seasonEndDate).getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
       );
       const progress = deriveChecklistProgress(checklist.items);
 
-      return {
+      // Self-heal stale status: data written before derived-status sync can
+      // sit at 100% while still marked IN_PROGRESS (or vice versa).
+      let status = checklist.status;
+      if (status !== 'DISMISSED' && progress.isFullyCompleted !== (status === 'COMPLETED')) {
+        await syncSeasonalChecklistStatus(checklist.id);
+        status = progress.isFullyCompleted ? 'COMPLETED' : 'IN_PROGRESS';
+      }
+
+      enrichedChecklists.push({
         ...checklist,
+        status,
         daysRemaining: Math.max(0, daysRemaining),
         tasksCompleted: progress.completedTasks,
         totalTasks: progress.activeTotalTasks,
         dismissedTasks: progress.dismissedTasks,
-      };
-    });
+      });
+    }
 
     return enrichedChecklists;
   }
