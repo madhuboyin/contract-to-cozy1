@@ -42,48 +42,51 @@ export class NeighborhoodPropertyMatchService {
     const lonDelta = radiusMiles / 69.0;
 
     const properties = await prisma.property.findMany({
-      where: {
-        // Only properties with valid coordinates
-        // Properties store address but lat/lng isn't a standard field in schema —
-        // we match via address city/state heuristic or via explicit lat/lng if added later.
-        // For now we fetch all properties in a reasonable city/state proximity.
-        // Extension point: add lat/lng columns to Property in a future migration.
-      },
       select: {
         id: true,
         city: true,
         state: true,
-        address: true,
-        ownershipType: true,
-        propertyType: true,
-        hasDrainageIssues: true,
+        latitude: true,
+        longitude: true,
+        propertyUse: true,
+        dwellingType: true,
+        exteriorProfile: { select: { hasDrainageIssues: true } },
       },
     });
 
-    // Filter properties that have a geocodable city/state match.
-    // For MVP, we use city+state co-location as a proxy since Property doesn't have lat/lng.
-    // When a property shares city+state with the event, we treat distance as 0.5 miles
-    // (intra-city default). Future: upgrade to real geocoded distance.
-    const eligibleProperties = properties.filter(
-      (p) =>
-        p.city?.toLowerCase() === event.city?.toLowerCase() &&
-        p.state?.toLowerCase() === event.state?.toLowerCase(),
-    );
+    // Geographic relevance: prefer real geocoded distance within the event
+    // radius; fall back to city+state co-location (treated as 0.5 miles) only
+    // when the property has no coordinates.
+    const eligibleProperties = properties
+      .map((p) => {
+        const geoDistance = this.getDistanceMiles(
+          p.latitude,
+          p.longitude,
+          event.latitude as number,
+          event.longitude as number,
+        );
+        if (geoDistance !== null) {
+          return geoDistance <= radiusMiles ? { property: p, distanceMiles: geoDistance } : null;
+        }
+        const sameCity =
+          p.city?.toLowerCase() === event.city?.toLowerCase() &&
+          p.state?.toLowerCase() === event.state?.toLowerCase();
+        return sameCity ? { property: p, distanceMiles: 0.5 } : null;
+      })
+      .filter((entry): entry is { property: (typeof properties)[number]; distanceMiles: number } => entry !== null);
 
     let matched = 0;
 
-    for (const property of eligibleProperties) {
-      const distanceMiles = 0.5; // MVP default for intra-city match
-
+    for (const { property, distanceMiles } of eligibleProperties) {
       const context: PropertyContext = {
         propertyId: property.id,
-        latitude: null,
-        longitude: null,
-        ownershipType: property.ownershipType,
-        propertyType: property.propertyType,
+        latitude: property.latitude,
+        longitude: property.longitude,
+        propertyUse: property.propertyUse !== 'UNKNOWN' ? property.propertyUse : null,
+        dwellingType: property.dwellingType !== 'UNKNOWN' ? property.dwellingType : null,
         city: property.city,
         state: property.state,
-        hasDrainageIssues: property.hasDrainageIssues,
+        hasDrainageIssues: property.exteriorProfile?.hasDrainageIssues ?? null,
       };
 
       const generated = impactEngine.generate(

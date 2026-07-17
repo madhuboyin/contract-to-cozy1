@@ -6,6 +6,8 @@ import { buildSellerReadinessReport } from './reports/sellerReadiness.builder';
 import { calculateBudgetAndValue } from './engines/valueCalculator.engine';
 import { personalizeChecklist, generatePersonalizedSummary, ChecklistItem, UserPreferences } from './engines/personalization.engine';
 import { resolvePropertyAccess, ROLE_RANK } from '../services/propertyAccess.service';
+import { getPlanningContextEnvelope, getPlanningContextDecisions } from '../services/planningContext/context';
+import { knownContextValue } from '../services/propertyContextDecision';
 
 export class SellerPrepService {
   static async getOverview(
@@ -20,7 +22,8 @@ export class SellerPrepService {
     budget: any;
     value: any;
     interviews: any[]; // NEW: Added for agent comparison
-    startDate: string; 
+    startDate: string;
+    context: Awaited<ReturnType<typeof getPlanningContextEnvelope>>;
   }> {
     // Verify access: owner OR household collaborator (CONTRIBUTOR/VIEWER), not owner-only.
     const access = await resolvePropertyAccess(userId, propertyId);
@@ -28,34 +31,32 @@ export class SellerPrepService {
       throw new Error('Property not found or unauthorized');
     }
 
-    const property = await prisma.property.findUnique({
-      where: { id: propertyId },
-      select: { id: true, state: true, yearBuilt: true, propertyType: true },
-    });
-
-    if (!property) {
-      throw new Error('Property not found or unauthorized');
-    }
+    // Canonical dwelling/location/open-work context (single applicability policy).
+    const planning = await getPlanningContextDecisions(propertyId, userId, 'SELLER_PREP');
+    const dwellingType = knownContextValue<string>(planning.context, 'core.dwellingType');
+    const state = knownContextValue<string>(planning.context, 'location.state');
+    const yearBuilt = knownContextValue<number>(planning.context, 'core.yearBuilt');
 
     let plan = await prisma.sellerPrepPlan.findFirst({
       where: { userId, propertyId },
-      include: { 
+      include: {
         items: true,
         interviews: true // NEW: Include agent interviews
       },
     });
-  
+
     if (!plan) {
       const baseItems = generateRoiChecklist({
-        propertyType: property.propertyType ? String(property.propertyType) : undefined,
-        yearBuilt: property.yearBuilt ?? undefined,
-        state: property.state,
+        propertyType: dwellingType && dwellingType !== 'UNKNOWN' ? dwellingType : undefined,
+        yearBuilt: yearBuilt ?? undefined,
+        state: state ?? '',
       });
-  
+
       plan = await prisma.sellerPrepPlan.create({
         data: {
           userId,
           propertyId,
+          contextVersion: planning.contextVersion,
           items: {
             create: baseItems.map((i) => ({
               code: i.code,
@@ -102,6 +103,13 @@ export class SellerPrepService {
       preferences?.budget
     );
   
+    const contextEnvelope = await getPlanningContextEnvelope(
+      propertyId,
+      userId,
+      'SELLER_PREP',
+      plan.contextVersion,
+    );
+
     return {
       propertyId,
       items: personalizedItems,
@@ -112,6 +120,7 @@ export class SellerPrepService {
       value: budgetAndValue.value,
       interviews: plan.interviews || [], // NEW: Return saved interviews
       startDate: plan.createdAt.toISOString(),
+      context: contextEnvelope,
     };
   }
 
@@ -227,7 +236,7 @@ export class SellerPrepService {
         city: true,
         state: true,
         zipCode: true,
-        propertyType: true,
+        dwellingType: true,
       },
     });
 
@@ -235,20 +244,22 @@ export class SellerPrepService {
       throw new Error('Property not found');
     }
 
+    const dwellingType = property.dwellingType !== 'UNKNOWN' ? String(property.dwellingType) : undefined;
+
     const provider = resolveCompsProvider({
       city: property.city,
       state: property.state,
       zipCode: property.zipCode,
-      propertyType: property.propertyType ? String(property.propertyType) : undefined,
+      propertyType: dwellingType,
     });
-  
+
     return provider.getComparables({
       city: property.city,
       state: property.state,
       zip: property.zipCode,
-      propertyType: property.propertyType ? String(property.propertyType) : undefined,
+      propertyType: dwellingType,
     });
-  } 
+  }
 
   static async getSellerReadinessReport(
     userId: string,

@@ -3070,6 +3070,8 @@ model MovingPlan {
   propertyId     String
   closingDate    DateTime
   planData       Json // Full moving plan (timeline, costs, utilities, etc.)
+  // Property Context version at generation; used to reconcile stale plans.
+  contextVersion String?
   completedTasks String[] // Array of completed task IDs
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
@@ -3122,6 +3124,8 @@ model SellerPrepPlan {
   userId      String
   propertyId  String
   preferences Json? // ADD THIS LINE
+  // Property Context version at generation; used to reconcile stale plans.
+  contextVersion String?
   createdAt   DateTime @default(now())
 
   items      SellerPrepPlanItem[]
@@ -3342,8 +3346,8 @@ model LocalUpdate {
   cities   String[]
   state    String?
 
-  // Eligibility
-  propertyTypes PropertyType[]
+  // Eligibility (canonical dwelling classification; empty means all dwellings)
+  dwellingTypes DwellingType[] @default([])
   ownerOnly     Boolean        @default(false)
 
   createdAt DateTime @default(now())
@@ -5187,6 +5191,7 @@ enum HomeReportExportEventType {
   GENERATED
   DOWNLOADED
   SHARED
+  SHARE_ARTIFACTS_PREPARED
   SHARE_REVOKED
   FAILED
   EXPIRED
@@ -5213,10 +5218,19 @@ model HomeReportExport {
   documentId String?
   document   Document? @relation(fields: [documentId], references: [id], onDelete: SetNull)
 
+  // Property Context version at generation; used to reconcile stale reports.
+  contextVersion String?
+
   // Shareable link support (no second table needed)
   shareToken     String?   @unique
   shareExpiresAt DateTime?
   shareRevokedAt DateTime?
+
+  // Approved redacted projection served to share-token consumers. The full
+  // snapshot/PDF is never exposed through the unauthenticated share route.
+  redactedSnapshot   Json?
+  shareStorageBucket String?
+  shareStorageKey    String? @unique
 
   storageBucket String?
   storageKey    String?   @unique
@@ -9076,7 +9090,8 @@ enum DemographicSegment {
 
 // -- Models --
 
-// Canonical digital twin record — one per property.
+// Digital twin record — one per property. The twin is a computed projection of
+// canonical property records; it never becomes a source of truth for facts.
 model HomeDigitalTwin {
   id         String @id @default(uuid())
   propertyId String @unique
@@ -9088,6 +9103,8 @@ model HomeDigitalTwin {
   lastComputedAt    DateTime?
   lastSyncedAt      DateTime?
   notes             String?
+  // Property Context version at last computation; used for staleness checks.
+  contextVersion    String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

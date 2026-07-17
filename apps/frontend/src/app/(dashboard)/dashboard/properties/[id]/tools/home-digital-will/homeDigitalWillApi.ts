@@ -1,4 +1,5 @@
 import { api } from '@/lib/api/client';
+import type { PropertyContextEnvelope } from '@/components/property-context/PropertyContextNotice';
 import type {
   DigitalWill,
   CreateEntryInput,
@@ -9,11 +10,13 @@ import type {
   UpdateTrustedContactInput,
 } from './types';
 
-export async function getDigitalWill(propertyId: string): Promise<DigitalWill | null> {
-  const res = await api.get<DigitalWill | null>(
+export async function getDigitalWill(
+  propertyId: string,
+): Promise<{ will: DigitalWill | null; context: PropertyContextEnvelope | null }> {
+  const res = (await api.get<DigitalWill | null>(
     `/api/properties/${propertyId}/home-digital-will`,
-  );
-  return res.data ?? null;
+  )) as { data?: DigitalWill | null; context?: PropertyContextEnvelope | null };
+  return { will: res.data ?? null, context: res.context ?? null };
 }
 
 export async function getOrCreateDigitalWill(

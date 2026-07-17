@@ -4,6 +4,7 @@ import { HomeDigitalWillService } from '../services/homeDigitalWill.service';
 import { HomeDigitalWillSectionType } from '@prisma/client';
 import { APIError } from '../middleware/error.middleware';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
+import { getPlanningContextEnvelope } from '../services/planningContext/context';
 
 const svc = new HomeDigitalWillService();
 
@@ -14,6 +15,12 @@ export async function getDigitalWillByProperty(req: CustomRequest, res: Response
     const { propertyId } = req.params;
     const data = await svc.getByProperty(propertyId);
 
+    // Continuity decision envelope: which authoritative sources back the will
+    // and whether canonical context changed since it was last maintained.
+    const context = req.user?.userId
+      ? await getPlanningContextEnvelope(propertyId, req.user.userId, 'DIGITAL_WILL')
+      : null;
+
     analyticsEmitter.track({
       eventType: AnalyticsEvent.TOOL_USED,
       userId: req.user?.userId,
@@ -23,7 +30,7 @@ export async function getDigitalWillByProperty(req: CustomRequest, res: Response
       metadataJson: {},
     });
 
-    res.json({ success: true, data });
+    res.json({ success: true, data, context });
   } catch (err) {
     next(err);
   }

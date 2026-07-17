@@ -178,7 +178,6 @@ export class HomeDigitalTwinBuilderService {
         select: {
           yearBuilt: true,
           propertySize: true,
-          occupantsCount: true,
           hvacInstallYear: true,
           waterHeaterInstallYear: true,
           roofReplacementYear: true,
@@ -272,7 +271,6 @@ export class HomeDigitalTwinBuilderService {
     property: {
       yearBuilt: number | null;
       propertySize: number | null;
-      occupantsCount: number | null;
       hvacInstallYear: number | null;
       waterHeaterInstallYear: number | null;
       roofReplacementYear: number | null;

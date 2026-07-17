@@ -15,7 +15,38 @@
 
 import { prisma } from '../lib/prisma';
 import { guidanceJourneyService } from '../../../backend/src/services/guidanceEngine/guidanceJourney.service';
+import { NEIGHBORHOOD_IMPACT_RULES } from '../../../backend/src/neighborhoodIntelligence/impactRules';
+import { haversineDistanceMiles, isValidLatLng } from '../../../backend/src/neighborhoodIntelligence/geoUtils';
 import { logger } from '../lib/logger';
+
+/**
+ * Location relevance recheck before sending: geocoded distance within the
+ * event-type radius when both sides have coordinates, otherwise city/state
+ * co-location. Missing location on either side fails closed (no notification).
+ */
+function isEventStillRelevantToProperty(
+  property: { city?: string | null; state?: string | null; latitude?: number | null; longitude?: number | null } | null,
+  event: { eventType?: string | null; city?: string | null; state?: string | null; latitude?: number | null; longitude?: number | null } | null,
+): boolean {
+  if (!property || !event) return false;
+  if (isValidLatLng(property.latitude, property.longitude) && isValidLatLng(event.latitude, event.longitude)) {
+    const radiusMiles =
+      NEIGHBORHOOD_IMPACT_RULES[event.eventType as keyof typeof NEIGHBORHOOD_IMPACT_RULES]?.defaultRadiusMiles ?? 2.0;
+    return (
+      haversineDistanceMiles(
+        property.latitude as number,
+        property.longitude as number,
+        event.latitude as number,
+        event.longitude as number,
+      ) <= radiusMiles
+    );
+  }
+  if (!property.city || !property.state || !event.city || !event.state) return false;
+  return (
+    property.city.toLowerCase() === event.city.toLowerCase() &&
+    property.state.toLowerCase() === event.state.toLowerCase()
+  );
+}
 
 const NOTIFICATION_THRESHOLD = 60;
 // 25 hours: catch up on links created since yesterday's run plus 1h jitter
@@ -65,15 +96,20 @@ export async function neighborhoodChangeNotificationJob(): Promise<void> {
           sourceName: true,
           sourceUrl: true,
           description: true,
+          city: true,
+          state: true,
+          latitude: true,
+          longitude: true,
         },
       },
       property: {
-        include: {
-          homeownerProfile: { select: { userId: true, notificationPreferences: true } },
-        },
         select: {
           id: true,
           address: true,
+          city: true,
+          state: true,
+          latitude: true,
+          longitude: true,
           homeownerProfile: {
             select: { userId: true, notificationPreferences: true },
           },
@@ -122,6 +158,18 @@ export async function neighborhoodChangeNotificationJob(): Promise<void> {
         logger.info(
           `[NEIGHBORHOOD-NOTIFY] Suppressed (stale event): link=${linkId} property=${propertyId}` +
           ` freshnessScore=${freshnessScore.toFixed(2)}`,
+        );
+        skipped++;
+        continue;
+      }
+
+      // --- Location relevance recheck (Property Context) ---
+      // The link was matched at ingest time; recheck the property's current
+      // location before notifying in case the property moved since matching.
+      const stillRelevant = isEventStillRelevantToProperty(link.property, link.event);
+      if (!stillRelevant) {
+        logger.info(
+          `[NEIGHBORHOOD-NOTIFY] Suppressed (location no longer matches): link=${linkId} property=${propertyId}`,
         );
         skipped++;
         continue;

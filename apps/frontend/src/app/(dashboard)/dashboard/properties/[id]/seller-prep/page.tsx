@@ -17,6 +17,7 @@ import {
   MobilePageIntro,
 } from "@/components/mobile/dashboard/MobilePrimitives";
 import HomeToolHeader from "@/components/tools/HomeToolHeader";
+import { PropertyContextNotice, type PropertyContextEnvelope } from "@/components/property-context/PropertyContextNotice";
 
 import SellerPrepOverview from "@/components/seller-prep/SellerPrepOverview";
 import { SellerPrepIntakeForm } from "@/components/seller-prep/SellerPrepIntakeForm";
@@ -40,6 +41,7 @@ interface SellerPrepOverviewData {
   completionPercent: number;
   preferences?: any;
   personalizedSummary?: string;
+  context?: PropertyContextEnvelope;
 }
 
 interface ComparableHome {
@@ -173,6 +175,10 @@ export default function SellerPrepPage() {
           onComplete={handleIntakeComplete}
           onSkip={() => setShowIntakeForm(false)}
         />
+      )}
+
+      {data?.overview?.context && (
+        <PropertyContextNotice context={data.overview.context} title="Seller prep context" />
       )}
 
       {/* Navigation & Header Section */}

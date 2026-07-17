@@ -19,7 +19,10 @@ export async function getLocalUpdates(req: CustomRequest, res: Response) {
     zip: property.zipCode || "",
     city: property.city,
     state: property.state,
-    propertyType: property.propertyType ? String(property.propertyType) : undefined,
+    dwellingType:
+      property.dwellingType && property.dwellingType !== "UNKNOWN"
+        ? String(property.dwellingType)
+        : undefined,
   });
 
   res.json({

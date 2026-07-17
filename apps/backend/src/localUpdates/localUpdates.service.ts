@@ -7,10 +7,21 @@ export async function getOwnerLocalUpdates(params: {
   zip: string;
   city: string;
   state?: string;
-  propertyType?: string;
+  dwellingType?: string;
 }): Promise<LocalUpdateDTO[]> {
   const now = new Date();
   const dismissalCutoff = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+  // Unknown dwelling type never satisfies dwelling-targeted eligibility:
+  // only broadly targeted updates (empty dwellingTypes) match in that case.
+  const dwellingFilter = params.dwellingType
+    ? {
+        OR: [
+          { dwellingTypes: { isEmpty: true } },
+          { dwellingTypes: { has: params.dwellingType as any } },
+        ],
+      }
+    : { dwellingTypes: { isEmpty: true } };
 
   const updates = await prisma.localUpdate.findMany({
     where: {
@@ -27,20 +38,18 @@ export async function getOwnerLocalUpdates(params: {
         },
       },
 
-      propertyTypes: params.propertyType
-        ? { has: params.propertyType as any }
-        : undefined,
-
-      OR: [
-        params.zip ? { zipCodes: { has: params.zip } } : undefined,
-        params.city ? { cities: { has: params.city } } : undefined,
-        params.state ? { state: params.state } : undefined,
-      ].filter(Boolean) as any,
+      AND: [
+        dwellingFilter,
+        {
+          OR: [
+            params.zip ? { zipCodes: { has: params.zip } } : undefined,
+            params.city ? { cities: { has: params.city } } : undefined,
+            params.state ? { state: params.state } : undefined,
+          ].filter(Boolean) as any,
+        },
+      ],
     },
   });
-
-  // ranking logic unchanged …
-
 
   // ranking (kept simple + deterministic)
   const ranked = updates
@@ -49,7 +58,7 @@ export async function getOwnerLocalUpdates(params: {
 
       if (u.zipCodes?.includes(params.zip)) score += 40;
       if (u.cities?.includes(params.city)) score += 25;
-      if (params.propertyType && u.propertyTypes?.includes(params.propertyType as any))
+      if (params.dwellingType && u.dwellingTypes?.includes(params.dwellingType as any))
         score += 15;
 
       score += 10; // owner baseline

@@ -3,6 +3,7 @@
 import { GoogleGenAI } from "@google/genai";
 import { prisma } from '../config/database';
 import { logger } from '../lib/logger';
+import { getPlanningContextDecisions, getPlanningContextEnvelope } from './planningContext/context';
 
 interface MovingPlanInput {
   closingDate: string;
@@ -80,8 +81,11 @@ interface MovingPlan {
   }[];
   
   aiRecommendations: string[];
-  
+
   generatedAt: Date;
+
+  // Property Context decision envelope attached when reading a saved plan.
+  context?: Awaited<ReturnType<typeof getPlanningContextEnvelope>>;
 }
 
 // Common utilities to set up
@@ -958,12 +962,15 @@ Focus on: timing, cost-saving tips, stress reduction, family-specific advice.`;
       where: { propertyId }
     });
 
+    const planning = await getPlanningContextDecisions(propertyId, userId, 'MOVING_PLAN');
+
     if (existingPlan) {
       await prisma.movingPlan.update({
         where: { id: existingPlan.id },
         data: {
           closingDate: new Date(planData.closingDate),
           planData: planData as any,
+          contextVersion: planning.contextVersion,
           updatedAt: new Date(),
         },
       });
@@ -973,6 +980,7 @@ Focus on: timing, cost-saving tips, stress reduction, family-specific advice.`;
           propertyId: propertyId,
           closingDate: new Date(planData.closingDate),
           planData: planData as any,
+          contextVersion: planning.contextVersion,
           completedTasks: [],
         },
       });
@@ -998,14 +1006,22 @@ Focus on: timing, cost-saving tips, stress reduction, family-specific advice.`;
     const savedPlan = await prisma.movingPlan.findFirst({
       where: { propertyId }
     });
-  
+
     if (!savedPlan) {
       return null;
     }
-  
+
+    const contextEnvelope = await getPlanningContextEnvelope(
+      propertyId,
+      userId,
+      'MOVING_PLAN',
+      savedPlan.contextVersion,
+    );
+
     return {
       ...(savedPlan.planData as any),
       completedTasks: savedPlan.completedTasks || [],
+      context: contextEnvelope,
     };
   }
   

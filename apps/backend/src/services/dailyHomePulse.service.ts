@@ -916,7 +916,10 @@ export class DailyHomePulseService {
           zip: property.zipCode,
           city: property.city,
           state: property.state,
-          propertyType: property.propertyType ?? undefined,
+          dwellingType:
+            property.dwellingType && property.dwellingType !== 'UNKNOWN'
+              ? String(property.dwellingType)
+              : undefined,
         }).catch(() => []),
         liveForecastPromise,
       ]);

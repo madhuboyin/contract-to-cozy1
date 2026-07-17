@@ -62,6 +62,7 @@ RUN mkdir -p src/shared/backend/utils \
              src/shared/backend/services/guidanceEngine \
              src/shared/backend/services/projectCompliance \
              src/shared/backend/services/financialContext \
+             src/shared/backend/services/planningContext \
              src/shared/backend/types \
              src/shared/backend/lib \
              src/shared/backend/modules/gazette/services \
@@ -155,6 +156,12 @@ COPY apps/backend/src/services/financialContext/applicabilityPolicy.ts \
      apps/backend/src/services/financialContext/reconciliation.ts \
      apps/backend/src/services/financialContext/reserveFundWorkerContext.service.ts \
      src/shared/backend/services/financialContext/
+COPY apps/backend/src/services/planningContext/applicabilityPolicy.ts \
+     apps/backend/src/services/planningContext/context.ts \
+     apps/backend/src/services/planningContext/reconciliation.ts \
+     apps/backend/src/services/planningContext/redaction.ts \
+     apps/backend/src/services/planningContext/reportSnapshot.ts \
+     src/shared/backend/services/planningContext/
 COPY apps/backend/src/modules/propertyContext/index.ts src/shared/backend/modules/propertyContext/
 COPY apps/backend/src/modules/propertyContext/application/getPropertyContext.ts \
      apps/backend/src/modules/propertyContext/application/getContextCompleteness.ts \

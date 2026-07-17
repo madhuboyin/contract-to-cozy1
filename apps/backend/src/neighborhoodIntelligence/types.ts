@@ -58,8 +58,8 @@ export interface PropertyContext {
   propertyId: string;
   latitude?: number | null;
   longitude?: number | null;
-  ownershipType?: string | null;
-  propertyType?: string | null;
+  propertyUse?: string | null;
+  dwellingType?: string | null;
   city?: string | null;
   state?: string | null;
   hasDrainageIssues?: boolean | null;

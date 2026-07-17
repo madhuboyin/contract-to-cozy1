@@ -13,10 +13,31 @@ import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } f
 import { HomeDigitalTwinBuilderService } from './homeDigitalTwinBuilder.service';
 import { HomeDigitalTwinQualityService } from './homeDigitalTwinQuality.service';
 import { maybeMarkPropertyActivated } from './property.service';
+import { getPlanningContextDecisions } from './planningContext/context';
 import { logger } from '../lib/logger';
 
 const builder = new HomeDigitalTwinBuilderService();
 const quality = new HomeDigitalTwinQualityService();
+
+/**
+ * Resolve the DIGITAL_TWIN Property Context version on behalf of the property
+ * owner. Returns null when the owner cannot be resolved rather than failing
+ * the computation — the twin then simply reports an unknown generation context.
+ */
+async function resolveTwinContextVersion(propertyId: string): Promise<string | null> {
+  const property = await prisma.property.findUnique({
+    where: { id: propertyId },
+    select: { homeownerProfile: { select: { userId: true } } },
+  });
+  const userId = property?.homeownerProfile?.userId;
+  if (!userId) return null;
+  try {
+    const planning = await getPlanningContextDecisions(propertyId, userId, 'DIGITAL_TWIN');
+    return planning.contextVersion;
+  } catch {
+    return null;
+  }
+}
 
 // ============================================================================
 // SERIALIZERS
@@ -113,6 +134,8 @@ function serializeTwin(twin: TwinWithRelations) {
     notes: twin.notes,
     createdAt: twin.createdAt,
     updatedAt: twin.updatedAt,
+    // Property Context version the projection was computed from.
+    contextVersion: twin.contextVersion ?? null,
     components: twin.components.map(serializeComponent),
     dataQuality: twin.dataQuality,
     recentScenarios: twin.scenarios,
@@ -212,12 +235,17 @@ export class HomeDigitalTwinService {
       // Evaluate data quality and update aggregate scores
       await quality.evaluate(twin.id, propertyId);
 
-      // Mark twin as ACTIVE
+      // Mark twin as ACTIVE. The twin is a projection of canonical property
+      // records; stamp the Property Context version it was computed from so
+      // staleness against current context is detectable.
+      const computedContextVersion = await resolveTwinContextVersion(propertyId);
       await prisma.homeDigitalTwin.update({
         where: { id: twin.id },
         data: {
           status: 'ACTIVE',
           lastSyncedAt: new Date(),
+          lastComputedAt: new Date(),
+          contextVersion: computedContextVersion,
           ...(existing ? { version: { increment: 1 } } : {}),
         },
       });
@@ -293,11 +321,14 @@ export class HomeDigitalTwinService {
       await builder.buildComponents(propertyId, existing.id);
       await quality.evaluate(existing.id, propertyId);
 
+      const refreshedContextVersion = await resolveTwinContextVersion(propertyId);
       await prisma.homeDigitalTwin.update({
         where: { id: existing.id },
         data: {
           status: 'ACTIVE',
           lastSyncedAt: new Date(),
+          lastComputedAt: new Date(),
+          contextVersion: refreshedContextVersion,
           version: { increment: 1 },
         },
       });

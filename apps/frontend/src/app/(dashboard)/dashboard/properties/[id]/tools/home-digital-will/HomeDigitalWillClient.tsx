@@ -29,6 +29,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { PropertyContextNotice } from '@/components/property-context/PropertyContextNotice';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -2315,7 +2316,8 @@ export default function HomeDigitalWillClient() {
     staleTime: 3 * 60 * 1000,
   });
 
-  const will = willQuery.data ?? null;
+  const will = willQuery.data?.will ?? null;
+  const willContext = willQuery.data?.context ?? null;
 
   // Auto-select the first section on desktop when loaded
   React.useEffect(() => {
@@ -2587,6 +2589,10 @@ export default function HomeDigitalWillClient() {
         </div>
 
         <HomeToolHeader toolId="home-digital-will" propertyId={propertyId} />
+
+        {willContext && (
+          <PropertyContextNotice context={willContext} title="Continuity context" />
+        )}
 
         {/* Header: always on desktop, hidden on mobile during section detail or contacts panel */}
         <div

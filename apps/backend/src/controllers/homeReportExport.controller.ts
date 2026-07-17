@@ -1,7 +1,7 @@
 // apps/backend/src/controllers/homeReportExport.controller.ts
 import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
-import { createExportAndGeneratePdf, buildShareToken } from '../services/homeReportExport.service';
+import { createExportAndGeneratePdf, buildShareToken, prepareShareArtifacts } from '../services/homeReportExport.service';
 import { presignGetObject } from '../services/storage/presign';
 import { getS3Client } from '../services/storage/s3Client';
 import { DeleteObjectCommand } from '@aws-sdk/client-s3';
@@ -201,6 +201,10 @@ export async function createShareLinkForReport(req: Request, res: Response) {
     const { expiresInDays = 14 } = req.body ?? {};
     const token = buildShareToken();
 
+    // Build the redacted share projection before any token exists. Share
+    // consumers never receive the full snapshot or full PDF.
+    await prepareShareArtifacts(exportId);
+
     const updated = await prisma.homeReportExport.update({
       where: { id: exportId },
       data: {
@@ -333,20 +337,22 @@ export async function downloadHomeReportByShareToken(req: Request, res: Response
       });
     }
     
-    if (exp.status !== 'READY' || !exp.storageBucket || !exp.storageKey) {
-      return res.status(409).json({ 
+    // Fail closed: share downloads only ever serve the redacted artifact.
+    // A share link without prepared redacted artifacts serves nothing.
+    if (exp.status !== 'READY' || !exp.shareStorageBucket || !exp.shareStorageKey) {
+      return res.status(409).json({
         success: false,
-        message: 'Report not ready' 
+        message: 'Shared report not ready'
       });
     }
 
     await prisma.homeReportExportEvent.create({
-      data: { reportId: exp.id, type: 'DOWNLOADED', meta: { by: 'SHARE_LINK' } },
+      data: { reportId: exp.id, type: 'DOWNLOADED', meta: { by: 'SHARE_LINK', artifact: 'REDACTED' } },
     });
 
     const url = await presignGetObject({
-      bucket: exp.storageBucket,
-      key: exp.storageKey,
+      bucket: exp.shareStorageBucket,
+      key: exp.shareStorageKey,
       expiresInSeconds: 60,
     });
 
