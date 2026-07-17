@@ -113,6 +113,13 @@ COPY apps/backend/src/services/incidents/incident.utils.ts \
      apps/backend/src/services/incidents/incident.events.ts \
      src/shared/backend/services/incidents/
 COPY apps/backend/src/services/incidents/integrations/incidentNotification.service.ts src/shared/backend/services/incidents/integrations/
+# Transitive dependencies used by incident notification context and coverage
+# policy. Keep the source tree layout intact so backend-relative imports resolve
+# inside the worker image.
+COPY apps/backend/src/types/claims.types.ts src/shared/backend/types/
+COPY apps/backend/src/services/protection/context.ts \
+     apps/backend/src/services/protection/issueReconciliation.ts \
+     src/shared/backend/services/protection/
 # Copy severe weather alert service (used by severeWeatherAlerts.job.ts) + its SSRF guard dependency
 COPY apps/backend/src/services/severeWeatherAlert.service.ts src/shared/backend/services/
 COPY apps/backend/src/utils/ssrfGuard.ts src/shared/backend/utils/
