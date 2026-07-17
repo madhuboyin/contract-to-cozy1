@@ -8,6 +8,7 @@ import { AuthRequest } from '../types/auth.types';
 import { taxAppealService } from '../services/taxAppeal.service';
 import { logger } from '../lib/logger';
 import { validatePdfOrImageUpload } from '../utils/documentValidator.util';
+import { getCurrentFinancialContextEnvelope } from '../services/financialContext/context';
 
 const router = Router();
 
@@ -138,10 +139,22 @@ router.post('/analyze', authenticate, async (req: AuthRequest, res: Response) =>
         recentImprovements,
       }
     );
+    const propertyContext = await getCurrentFinancialContextEnvelope(propertyId, userId, 'TAX_APPEAL');
+    const overrideFields = [
+      userMarketEstimate !== undefined ? 'userMarketEstimate' : null,
+      comparableSales?.length ? 'comparableSales' : null,
+      propertyConditionNotes ? 'propertyConditionNotes' : null,
+      recentImprovements ? 'recentImprovements' : null,
+      'taxBillData',
+    ].filter((value): value is string => Boolean(value));
 
     res.json({
       success: true,
-      data: report
+      data: {
+        ...report,
+        propertyContext,
+        calculationContext: { mode: 'SCENARIO', overrideFields },
+      }
     });
 
   } catch (error: any) {

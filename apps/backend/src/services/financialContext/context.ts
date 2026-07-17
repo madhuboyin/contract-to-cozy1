@@ -18,6 +18,10 @@ export type FinancialContextFeature =
   | 'COST_GROWTH'
   | 'COST_VOLATILITY'
   | 'COST_EXPLAINER'
+  | 'BREAK_EVEN'
+  | 'TAX_APPEAL'
+  | 'VALUE_TRACKER'
+  | 'HIDDEN_ASSETS'
   | 'SELL_HOLD_RENT'
   | 'PROPERTY_TAX_VALUE'
   | 'REFINANCE_RADAR'
@@ -37,6 +41,10 @@ export const FINANCIAL_FEATURE_SCOPES: Record<FinancialContextFeature, PropertyC
   COST_GROWTH: ['CORE', 'LOCATION', 'SYSTEMS', 'MAINTENANCE', 'COVERAGE', 'RISK', 'FINANCIAL'],
   COST_VOLATILITY: ['CORE', 'LOCATION', 'COVERAGE', 'RISK', 'FINANCIAL'],
   COST_EXPLAINER: ['CORE', 'LOCATION', 'SYSTEMS', 'MAINTENANCE', 'COVERAGE', 'RISK', 'FINANCIAL'],
+  BREAK_EVEN: ['CORE', 'LOCATION', 'SYSTEMS', 'MAINTENANCE', 'RISK', 'PROJECTS', 'FINANCIAL'],
+  TAX_APPEAL: ['CORE', 'LOCATION', 'STRUCTURE', 'COMPLIANCE', 'PROJECTS', 'FINANCIAL'],
+  VALUE_TRACKER: ['CORE', 'LOCATION', 'STRUCTURE', 'PROJECTS', 'FINANCIAL'],
+  HIDDEN_ASSETS: ['CORE', 'LOCATION', 'SYSTEMS', 'COVERAGE', 'FINANCIAL'],
   SELL_HOLD_RENT: ['CORE', 'LOCATION', 'INSPECTION', 'COMPLIANCE', 'PROJECTS', 'FINANCIAL'],
   PROPERTY_TAX_VALUE: ['CORE', 'LOCATION', 'STRUCTURE', 'COMPLIANCE', 'PROJECTS', 'FINANCIAL'],
   REFINANCE_RADAR: ['CORE', 'PROJECTS', 'FINANCIAL'],
@@ -57,6 +65,10 @@ const FINANCIAL_FEATURE_FACT_KEYS: Record<FinancialContextFeature, string[]> = {
   COST_GROWTH: ['core.propertyUse', 'core.occupancyStatus', 'core.dwellingType', 'location.state', 'location.zipCode', 'coverage.insurancePolicies', 'risk.report', 'financial.financingProfile', 'financial.ownershipExpenseSummary'],
   COST_VOLATILITY: ['core.propertyUse', 'core.occupancyStatus', 'location.state', 'location.zipCode', 'coverage.insurancePolicies', 'risk.report', 'financial.ownershipExpenseSummary'],
   COST_EXPLAINER: ['core.propertyUse', 'core.occupancyStatus', 'core.dwellingType', 'location.state', 'location.zipCode', 'coverage.insurancePolicies', 'risk.report', 'financial.ownershipExpenseSummary'],
+  BREAK_EVEN: ['core.propertyUse', 'core.occupancyStatus', 'core.dwellingType', 'location.state', 'location.zipCode', 'financial.financingProfile', 'financial.currentMortgage', 'financial.ownershipExpenseSummary'],
+  TAX_APPEAL: ['core.propertyUse', 'core.occupancyStatus', 'core.dwellingType', 'core.propertySizeSqFt', 'location.state', 'location.zipCode', 'compliance.activePermits', 'compliance.openUnpermittedFlags', 'projects.activeProjects', 'financial.financingProfile'],
+  VALUE_TRACKER: ['core.propertyUse', 'core.occupancyStatus', 'core.dwellingType', 'core.propertySizeSqFt', 'location.state', 'location.zipCode', 'projects.activeProjects', 'financial.financingProfile', 'financial.latestEquity'],
+  HIDDEN_ASSETS: ['core.propertyUse', 'core.occupancyStatus', 'core.dwellingType', 'location.state', 'location.zipCode', 'systems.installedItemTypes', 'coverage.insurancePolicies', 'financial.financingProfile'],
   SELL_HOLD_RENT: ['core.propertyUse', 'core.occupancyStatus', 'location.state', 'location.zipCode', 'financial.currentMortgage', 'financial.latestEquity'],
   PROPERTY_TAX_VALUE: ['core.dwellingType', 'core.propertySizeSqFt', 'location.state', 'location.zipCode', 'financial.financingProfile'],
   REFINANCE_RADAR: ['financial.currentMortgage', 'financial.latestEquity'],
@@ -108,6 +120,10 @@ const PRIMARY_DECISION_BY_FEATURE = {
   COST_GROWTH: 'costGrowthModeling',
   COST_VOLATILITY: 'costVolatilityModeling',
   COST_EXPLAINER: 'costExplainerModeling',
+  BREAK_EVEN: 'ownershipCostModeling',
+  TAX_APPEAL: 'propertyBenchmarking',
+  VALUE_TRACKER: 'propertyBenchmarking',
+  HIDDEN_ASSETS: 'hiddenAssetMatching',
   SELL_HOLD_RENT: 'mortgageModeling',
   PROPERTY_TAX_VALUE: 'canonicalFinancingSource',
   REFINANCE_RADAR: 'mortgageModeling',

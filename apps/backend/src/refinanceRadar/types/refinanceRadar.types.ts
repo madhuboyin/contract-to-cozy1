@@ -114,6 +114,7 @@ export interface RadarStatusResponse {
   // Phase-3 additive fields
   rateDataFreshnessAt: string | null;   // ISO date of latest rate snapshot
   loanProducts: LoanProductRate[];       // Modeled rates for multiple loan products
+  propertyContextVersion: string | null;
 }
 
 export interface RadarUnavailableResponse {
@@ -140,9 +141,11 @@ export interface RefinanceOpportunityDTO {
   closingCostAssumptionUsd: number | null;
   remainingTermMonths: number | null;
   createdAt: string;
+  propertyContextVersion: string | null;
 }
 
 export interface RefinanceScenarioResult {
+  propertyContextVersion: string;
   targetRatePct: number;
   targetTerm: RefinanceScenarioTerm;
   targetTermMonths: number;
@@ -180,6 +183,7 @@ export interface RefinanceScenarioSnapshotDTO {
   lifetimeSavings: number | null;
   isSaved: boolean;
   createdAt: string;
+  propertyContextVersion: string | null;
 }
 
 export interface MortgageRateSnapshotDTO {

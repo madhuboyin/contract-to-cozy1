@@ -109,6 +109,9 @@ export async function calculateHomeEquity(propertyId: string): Promise<HomeEquit
       lastAppraisedValue: true,
       isEquityVerified: true,
       bonusMultiplier: true,
+      financingProfile: {
+        select: { purchasePriceCents: true, purchaseDate: true },
+      },
     },
   });
 
@@ -134,7 +137,8 @@ export async function calculateHomeEquity(propertyId: string): Promise<HomeEquit
     property.bonusMultiplier
   );
   const lastAppraisedValueCents = property.lastAppraisedValue ?? 0;
-  const purchasePriceCents = property.purchasePriceCents ?? null;
+  const purchasePriceCents = property.financingProfile?.purchasePriceCents ?? property.purchasePriceCents ?? null;
+  const purchaseDate = property.financingProfile?.purchaseDate ?? property.purchaseDate;
   const appreciationCents =
     purchasePriceCents !== null ? lastAppraisedValueCents - purchasePriceCents : 0;
   const baseEquityCents = appreciationCents;
@@ -165,7 +169,7 @@ export async function calculateHomeEquity(propertyId: string): Promise<HomeEquit
     propertyId,
     isEquityVerified: property.isEquityVerified,
     purchasePriceCents,
-    purchaseDate: property.purchaseDate,
+    purchaseDate,
     lastAppraisedValueCents,
     appreciationCents,
     baseEquityCents,
@@ -179,4 +183,3 @@ export async function calculateHomeEquity(propertyId: string): Promise<HomeEquit
     hasResaleAdvantage,
   };
   }
-

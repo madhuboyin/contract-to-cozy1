@@ -23,6 +23,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { api } from '@/lib/api/client';
+import { PropertyContextNotice, type PropertyContextEnvelope } from '@/components/property-context/PropertyContextNotice';
 import {
   ReadOnlySummaryBlock,
   ResultHeroCard,
@@ -53,6 +54,8 @@ interface ComparableSale {
 }
 
 interface AppealReport {
+  propertyContext?: PropertyContextEnvelope;
+  calculationContext?: { mode: 'SCENARIO'; overrideFields: string[] };
   propertyId: string;
   propertyAddress: string;
   taxBillData: TaxBillData;
@@ -198,6 +201,7 @@ export default function TaxAppealAssistant({ propertyId }: TaxAppealAssistantPro
 
     return (
       <div className="space-y-6">
+        <PropertyContextNotice context={report.propertyContext} title="Tax appeal context" />
         <ResultHeroCard
           title="Appeal Analysis Complete"
           value={appealOpportunity.appealProbability}

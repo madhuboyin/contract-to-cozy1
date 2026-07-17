@@ -28,6 +28,7 @@ import {
   UpdateMatchStatusInput,
 } from './hiddenAssets/types';
 import { logger } from '../lib/logger';
+import { getFinancialContextDecisions } from './financialContext/context';
 
 // ============================================================================
 // SERIALIZERS
@@ -99,6 +100,7 @@ function serializeMatch(row: MatchWithProgram): HiddenAssetMatchDTO {
     dismissedAt: row.dismissedAt ? row.dismissedAt.toISOString() : null,
     claimedAt: row.claimedAt ? row.claimedAt.toISOString() : null,
     confidenceCalibrationSummary: buildConfidenceCalibrationSummary(row),
+    propertyContextVersion: row.propertyContextVersion ?? null,
   };
 }
 
@@ -174,6 +176,9 @@ async function assertPropertyForUser(
       propertySize: true,
       propertyType: true,
       ownershipType: true,
+      dwellingType: true,
+      propertyUse: true,
+      occupancyStatus: true,
       heatingType: true,
       waterHeaterType: true,
       roofType: true,
@@ -187,6 +192,7 @@ async function assertPropertyForUser(
       hasCoDetectors: true,
       hasFireExtinguisher: true,
       hasDrainageIssues: true,
+      homeownerProfile: { select: { userId: true } },
     },
   });
 
@@ -297,16 +303,19 @@ async function fetchMatchesForProperty(
 // LAST SCAN RUN FETCH
 // ============================================================================
 
-async function getLastCompletedScanAt(propertyId: string): Promise<Date | null> {
+async function getLastCompletedScan(propertyId: string) {
   const run = await prisma.propertyHiddenAssetScanRun.findFirst({
     where: {
       propertyId,
       status: PropertyHiddenAssetScanRunStatus.COMPLETED,
     },
     orderBy: { completedAt: 'desc' },
-    select: { completedAt: true },
+    select: { completedAt: true, propertyContextVersion: true },
   });
-  return run?.completedAt ?? null;
+  return {
+    completedAt: run?.completedAt ?? null,
+    propertyContextVersion: run?.propertyContextVersion ?? null,
+  };
 }
 
 // ============================================================================
@@ -328,6 +337,9 @@ async function fetchPropertyForScan(propertyId: string): Promise<PropertyScanInp
       propertySize: true,
       propertyType: true,
       ownershipType: true,
+      dwellingType: true,
+      propertyUse: true,
+      occupancyStatus: true,
       heatingType: true,
       waterHeaterType: true,
       roofType: true,
@@ -341,6 +353,7 @@ async function fetchPropertyForScan(propertyId: string): Promise<PropertyScanInp
       hasCoDetectors: true,
       hasFireExtinguisher: true,
       hasDrainageIssues: true,
+      homeownerProfile: { select: { userId: true } },
     },
   });
 }
@@ -354,6 +367,11 @@ async function executePropertyScan(
   property: PropertyScanInput,
 ): Promise<RefreshResultDTO> {
   const startedAt = Date.now();
+  const financialContext = await getFinancialContextDecisions(
+    propertyId,
+    property.homeownerProfile.userId,
+    'HIDDEN_ASSETS',
+  );
 
   // Guard: reject if a scan is already in progress for this property (within last 5 min).
   // Prevents duplicate scan runs from concurrent user actions or race conditions.
@@ -374,6 +392,7 @@ async function executePropertyScan(
       propertyId,
       status: PropertyHiddenAssetScanRunStatus.RUNNING,
       startedAt: new Date(),
+      propertyContextVersion: financialContext.contextVersion,
     },
   });
 
@@ -432,6 +451,7 @@ async function executePropertyScan(
           totalRuleCount: result.totalRuleCount,
           matchReasons: result.matchReasons,
           lastEvaluatedAt: now,
+          propertyContextVersion: financialContext.contextVersion,
           // Only update status if the user hasn't explicitly acted on this match
           ...(preserveStatus ? {} : { status: PropertyHiddenAssetMatchStatus.DETECTED }),
         },
@@ -449,6 +469,7 @@ async function executePropertyScan(
           status: PropertyHiddenAssetMatchStatus.DETECTED,
           lastEvaluatedAt: now,
           firstDetectedAt: now,
+          propertyContextVersion: financialContext.contextVersion,
         },
       });
     }
@@ -479,13 +500,13 @@ async function executePropertyScan(
         if (isExpired) {
           await prisma.propertyHiddenAssetMatch.update({
             where: { id: existing.id },
-            data: { status: PropertyHiddenAssetMatchStatus.EXPIRED, lastEvaluatedAt: now },
+            data: { status: PropertyHiddenAssetMatchStatus.EXPIRED, lastEvaluatedAt: now, propertyContextVersion: financialContext.contextVersion },
           });
           matchesExpired++;
         } else if (isInactive) {
           await prisma.propertyHiddenAssetMatch.update({
             where: { id: existing.id },
-            data: { status: PropertyHiddenAssetMatchStatus.INACTIVE, lastEvaluatedAt: now },
+            data: { status: PropertyHiddenAssetMatchStatus.INACTIVE, lastEvaluatedAt: now, propertyContextVersion: financialContext.contextVersion },
           });
           matchesInactivated++;
         }
@@ -529,6 +550,7 @@ async function executePropertyScan(
       matchesInactivated,
       durationMs,
       matches: freshMatches.map(serializeMatch),
+      propertyContextVersion: financialContext.contextVersion,
     };
   } catch (err) {
     await prisma.propertyHiddenAssetScanRun.update({
@@ -560,7 +582,7 @@ export class HiddenAssetService {
     await assertPropertyForUser(propertyId, userId);
 
     const rows = await fetchMatchesForProperty(propertyId, filters);
-    const lastScanAt = await getLastCompletedScanAt(propertyId);
+    const lastScan = await getLastCompletedScan(propertyId);
     const matches = rows.map(serializeMatch);
 
     // Analytics: hidden assets feature viewed
@@ -576,7 +598,8 @@ export class HiddenAssetService {
     return {
       propertyId,
       matches,
-      summary: buildSummary(matches, lastScanAt),
+      summary: buildSummary(matches, lastScan.completedAt),
+      propertyContextVersion: lastScan.propertyContextVersion,
     };
   }
 

@@ -38,6 +38,7 @@ import HomeToolsRail from '../../components/HomeToolsRail';
 import TrustStrip from '../../components/route-templates/TrustStrip';
 import { hiddenAssetTrust } from '@/lib/trust/trustPresets';
 import { track } from '@/lib/analytics/events';
+import { PropertyContextNotice } from '@/components/property-context/PropertyContextNotice';
 import type {
   HiddenAssetCategory,
   HiddenAssetConfidenceLevel,
@@ -777,6 +778,8 @@ export default function HiddenAssetFinderClient() {
         title="Hidden Asset Finder"
         subtitle="Discover potential rebates, tax benefits, discounts, and grants that may apply to your home. All results are potential matches — verify eligibility with each program's official source."
        className="lg:hidden"/>
+
+      <PropertyContextNotice context={data?.propertyContext} title="Hidden asset matching context" />
 
       {/* Filter surface: tool rail + filters */}
       <MobileFilterSurface className="lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none lg:rounded-none">

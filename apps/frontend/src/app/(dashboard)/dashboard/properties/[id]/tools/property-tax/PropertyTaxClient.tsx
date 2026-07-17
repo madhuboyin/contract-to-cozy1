@@ -9,6 +9,7 @@ import HomeToolsRail from '../../components/HomeToolsRail';
 import { Button } from '@/components/ui/button';
 import ToolWorkspaceTemplate from '../../components/route-templates/ToolWorkspaceTemplate';
 import HomeToolHeader from '@/components/tools/HomeToolHeader';
+import { PropertyContextNotice } from '@/components/property-context/PropertyContextNotice';
 import { propertyTaxTrust } from '@/lib/trust/trustPresets';
 import { track } from '@/lib/analytics/events';
 function money(n: number | null | undefined, currency = 'USD') {
@@ -276,6 +277,8 @@ export default function PropertyTaxClient() {
         context="property-tax"
         currentToolId="property-tax"
       />
+
+      <PropertyContextNotice context={estimate?.propertyContext} title="Property tax context" />
 
       {/* Controls */}
       <div className="rounded-2xl border border-white/70 bg-gradient-to-br from-white/80 via-slate-50/72 to-teal-50/45 p-4 shadow-[0_16px_30px_-24px_rgba(15,23,42,0.55)] backdrop-blur-xl dark:border-slate-700/70 dark:from-slate-900/55 dark:via-slate-900/48 dark:to-slate-900/38">

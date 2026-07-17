@@ -122,7 +122,7 @@ export async function upsertProfile(
 
 // ─── Equity Position ──────────────────────────────────────────────────────────
 
-async function computeEquity(propertyId: string) {
+async function computeEquity(propertyId: string, propertyContextVersion?: string | null) {
   const profile = await prisma.propertyFinancingProfile.findUnique({ where: { propertyId } });
 
   // Get best available property value estimate
@@ -179,6 +179,7 @@ async function computeEquity(propertyId: string) {
     ltvPercent,
     helocCapacityCents,
     helocEligible,
+    propertyContextVersion: propertyContextVersion ?? null,
   };
 
   try {
@@ -195,22 +196,22 @@ async function computeEquity(propertyId: string) {
   }
 }
 
-export async function getLatestEquity(propertyId: string) {
+export async function getLatestEquity(propertyId: string, propertyContextVersion?: string | null) {
   const latest = await prisma.equityPosition.findFirst({
     where: { propertyId },
     orderBy: { computedAt: 'desc' },
   });
 
-  if (!latest) return computeEquity(propertyId);
+  if (!latest) return computeEquity(propertyId, propertyContextVersion);
 
   const ageMs = Date.now() - latest.computedAt.getTime();
-  if (ageMs > STALE_EQUITY_DAYS * 24 * 60 * 60 * 1000) return computeEquity(propertyId);
+  if (ageMs > STALE_EQUITY_DAYS * 24 * 60 * 60 * 1000) return computeEquity(propertyId, propertyContextVersion);
 
   return latest;
 }
 
-export async function refreshEquity(propertyId: string) {
-  return computeEquity(propertyId);
+export async function refreshEquity(propertyId: string, propertyContextVersion?: string | null) {
+  return computeEquity(propertyId, propertyContextVersion);
 }
 
 export async function getEquityHistory(propertyId: string) {
@@ -264,6 +265,7 @@ export async function listScenarios(
       entryPoint: true,
       selectedOption: true,
       createdAt: true,
+      propertyContextVersion: true,
     },
   });
 }
@@ -280,6 +282,7 @@ export async function createScenario(
     sourceEntityId?: string;
     notes?: string;
   },
+  propertyContextVersion: string,
 ) {
   const [{ rates, asOf }, equity] = await Promise.all([
     loadRateSnapshot(),
@@ -308,6 +311,7 @@ export async function createScenario(
       rateSnapshotJson: rates as any,
       resultsJson: results as any,
       status: FinancingScenarioStatus.SAVED,
+      propertyContextVersion,
     },
   });
 }

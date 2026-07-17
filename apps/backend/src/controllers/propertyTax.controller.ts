@@ -3,6 +3,7 @@ import { Response, NextFunction } from 'express';
 import { CustomRequest } from '../types';
 import { PropertyTaxService } from '../services/propertyTax.service';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
+import { getCurrentFinancialContextEnvelope } from '../services/financialContext/context';
 
 const service = new PropertyTaxService();
 
@@ -26,6 +27,10 @@ export async function getPropertyTaxEstimate(req: CustomRequest, res: Response, 
       taxRate,
       historyYears: historyYears ? Math.round(historyYears) : undefined,
     });
+    const propertyContext = await getCurrentFinancialContextEnvelope(propertyId, req.user!.userId, 'PROPERTY_TAX_VALUE');
+    const overrideFields = Object.entries({ assessedValue, taxRate })
+      .filter(([, value]) => value !== undefined)
+      .map(([key]) => key);
 
     analyticsEmitter.track({
       eventType: AnalyticsEvent.TOOL_USED,
@@ -36,7 +41,19 @@ export async function getPropertyTaxEstimate(req: CustomRequest, res: Response, 
       metadataJson: { annualTax: estimate.current?.annualTax, confidence: estimate.current?.confidence },
     });
 
-    res.json({ success: true, data: { estimate } });
+    res.json({
+      success: true,
+      data: {
+        estimate: {
+          ...estimate,
+          propertyContext,
+          calculationContext: {
+            mode: overrideFields.length > 0 ? 'SCENARIO' : 'CANONICAL',
+            overrideFields,
+          },
+        },
+      },
+    });
   } catch (err) {
     next(err);
   }

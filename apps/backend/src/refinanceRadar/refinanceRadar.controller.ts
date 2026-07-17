@@ -16,6 +16,7 @@ import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } f
 import { APIError } from '../middleware/error.middleware';
 import {
   assertFinancialContextApplicable,
+  getFinancialContextDecisions,
   getFinancialContextEnvelope,
 } from '../services/financialContext/context';
 
@@ -34,8 +35,10 @@ export class RefinanceRadarController {
     try {
       const { propertyId } = req.params;
       const userId = requireUserId(req);
-      const result = await service.getCurrentStatus(propertyId);
-      const propertyContext = await getFinancialContextEnvelope(propertyId, userId, 'REFINANCE_RADAR');
+      const currentContext = await getFinancialContextDecisions(propertyId, userId, 'REFINANCE_RADAR');
+      const result = await service.getCurrentStatus(propertyId, currentContext.contextVersion);
+      const generatedVersion = result.available ? result.propertyContextVersion : null;
+      const propertyContext = await getFinancialContextEnvelope(propertyId, userId, 'REFINANCE_RADAR', generatedVersion);
 
       analyticsEmitter.track({
         eventType: AnalyticsEvent.TOOL_USED,
@@ -58,8 +61,14 @@ export class RefinanceRadarController {
     try {
       const { propertyId } = req.params;
       const userId = requireUserId(req);
-      const result = await service.evaluateProperty(propertyId);
-      const propertyContext = await getFinancialContextEnvelope(propertyId, userId, 'REFINANCE_RADAR');
+      const currentContext = await getFinancialContextDecisions(propertyId, userId, 'REFINANCE_RADAR');
+      const result = await service.evaluateProperty(propertyId, currentContext.contextVersion);
+      const propertyContext = await getFinancialContextEnvelope(
+        propertyId,
+        userId,
+        'REFINANCE_RADAR',
+        result.available ? result.propertyContextVersion : null,
+      );
       res.json({ success: true, data: { radarStatus: result, propertyContext } });
     } catch (err) {
       next(err);
@@ -71,9 +80,16 @@ export class RefinanceRadarController {
   static async getHistory(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const { propertyId } = req.params;
+      const userId = requireUserId(req);
       const { limit, offset } = req.query as unknown as HistoryQuery;
       const result = await service.getOpportunityHistory(propertyId, limit, offset);
-      res.json({ success: true, data: result });
+      const propertyContext = await getFinancialContextEnvelope(
+        propertyId,
+        userId,
+        'REFINANCE_RADAR',
+        result.opportunities[0]?.propertyContextVersion,
+      );
+      res.json({ success: true, data: { ...result, propertyContext } });
     } catch (err) {
       next(err);
     }
@@ -110,13 +126,14 @@ export class RefinanceRadarController {
       const { propertyId } = req.params;
       const userId = requireUserId(req);
       const body = req.body as RunScenarioBody;
-      await assertFinancialContextApplicable(propertyId, userId, 'REFINANCE_RADAR', 'mortgageModeling');
+      const currentContext = await assertFinancialContextApplicable(propertyId, userId, 'REFINANCE_RADAR', 'mortgageModeling');
       const result = await service.runScenario(propertyId, {
         targetRate: body.targetRate,
         targetTerm: body.targetTerm,
         closingCostAmount: body.closingCostAmount,
         closingCostPercent: body.closingCostPercent,
         saveScenario: body.saveScenario ?? false,
+        propertyContextVersion: currentContext.contextVersion,
       });
 
       analyticsEmitter.track({
@@ -128,7 +145,12 @@ export class RefinanceRadarController {
         metadataJson: { actionType: 'run_scenario', saved: body.saveScenario ?? false },
       });
 
-      const propertyContext = await getFinancialContextEnvelope(propertyId, userId, 'REFINANCE_RADAR');
+      const propertyContext = await getFinancialContextEnvelope(
+        propertyId,
+        userId,
+        'REFINANCE_RADAR',
+        result.propertyContextVersion,
+      );
       res.json({ success: true, data: { scenario: result, propertyContext } });
     } catch (err) {
       next(err);
@@ -140,8 +162,15 @@ export class RefinanceRadarController {
   static async getSavedScenarios(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const { propertyId } = req.params;
+      const userId = requireUserId(req);
       const scenarios = await service.getSavedScenarios(propertyId);
-      res.json({ success: true, data: { scenarios } });
+      const propertyContext = await getFinancialContextEnvelope(
+        propertyId,
+        userId,
+        'REFINANCE_RADAR',
+        scenarios[0]?.propertyContextVersion,
+      );
+      res.json({ success: true, data: { scenarios, propertyContext } });
     } catch (err) {
       next(err);
     }

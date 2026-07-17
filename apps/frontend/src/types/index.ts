@@ -940,6 +940,8 @@ export interface InsuranceProtectionGapSummary {
 }
 
 export interface HomeEquitySummary {
+  propertyContext?: import('@/components/property-context/PropertyContextNotice').PropertyContextEnvelope;
+  calculationContext?: { mode: 'CANONICAL'; overrideFields: string[] };
   propertyId: string;
   isEquityVerified: boolean;
   purchasePriceCents: number | null;
@@ -1768,6 +1770,7 @@ export interface HiddenAssetMatchDTO {
   firstDetectedAt: string;
   dismissedAt: string | null;
   claimedAt: string | null;
+  propertyContextVersion: string | null;
 }
 
 export interface HiddenAssetMatchSummaryDTO {
@@ -1783,6 +1786,8 @@ export interface HiddenAssetMatchListDTO {
   propertyId: string;
   matches: HiddenAssetMatchDTO[];
   summary: HiddenAssetMatchSummaryDTO;
+  propertyContextVersion: string | null;
+  propertyContext?: import('@/components/property-context/PropertyContextNotice').PropertyContextEnvelope;
 }
 
 export interface HiddenAssetProgramDetailDTO {
@@ -1815,6 +1820,8 @@ export interface HiddenAssetRefreshResultDTO {
   matchesInactivated: number;
   durationMs: number;
   matches: HiddenAssetMatchDTO[];
+  propertyContextVersion: string;
+  propertyContext?: import('@/components/property-context/PropertyContextNotice').PropertyContextEnvelope;
 }
 
 
@@ -3501,6 +3508,7 @@ export type FinancingEntryPoint =
   | 'GUIDANCE_STEP';
 
 export interface PropertyFinancingProfile {
+  propertyContext?: import('@/components/property-context/PropertyContextNotice').PropertyContextEnvelope;
   id: string;
   propertyId: string;
   purchasePriceCents?: number;
@@ -3520,6 +3528,8 @@ export interface PropertyFinancingProfile {
 }
 
 export interface EquityPosition {
+  propertyContext?: import('@/components/property-context/PropertyContextNotice').PropertyContextEnvelope;
+  propertyContextVersion?: string | null;
   id: string;
   propertyId: string;
   estimatedValueCents: number;
@@ -3576,6 +3586,8 @@ export interface PayCashResult {
 }
 
 export interface FinancingResultSet {
+  propertyContext?: import('@/components/property-context/PropertyContextNotice').PropertyContextEnvelope;
+  calculationContext?: { mode: 'SCENARIO'; overrideFields: string[] };
   projectCostCents: number;
   helocEligible: boolean;
   helocCapacityCents: number;
@@ -3589,6 +3601,8 @@ export interface FinancingResultSet {
 }
 
 export interface FinancingScenarioSummary {
+  propertyContext?: import('@/components/property-context/PropertyContextNotice').PropertyContextEnvelope;
+  propertyContextVersion?: string | null;
   id: string;
   title: string;
   projectCostCents: number;

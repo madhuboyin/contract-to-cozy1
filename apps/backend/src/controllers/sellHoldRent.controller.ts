@@ -1,8 +1,9 @@
 // apps/backend/src/controllers/sellHoldRent.controller.ts
 import { Response } from 'express';
 import { CustomRequest } from '../types';
-import { SellHoldRentService } from '../services/sellHoldRent.service';
+import { SellHoldRentService, SellHoldRentInput } from '../services/sellHoldRent.service';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
+import { getCurrentFinancialContextEnvelope } from '../services/financialContext/context';
 
 const svc = new SellHoldRentService();
 
@@ -17,9 +18,9 @@ export async function getSellHoldRent(req: CustomRequest, res: Response) {
   const userId = req.user?.userId;
 
   const yearsRaw = req.query.years;
-  const years = yearsRaw === '10' ? 10 : 5;
+  const years: 5 | 10 = yearsRaw === '10' ? 10 : 5;
 
-  const dto = await svc.estimate(propertyId, {
+  const inputs: SellHoldRentInput = {
     years,
     assumptionSetId: typeof req.query.assumptionSetId === 'string' ? req.query.assumptionSetId : undefined,
     homeValueNow: num(req.query.homeValueNow),
@@ -34,7 +35,12 @@ export async function getSellHoldRent(req: CustomRequest, res: Response) {
     rentGrowthRate: num(req.query.rentGrowthRate),
     vacancyRate: num(req.query.vacancyRate),
     managementRate: num(req.query.managementRate),
-  }, userId);
+  };
+  const dto = await svc.estimate(propertyId, inputs, userId);
+  const propertyContext = await getCurrentFinancialContextEnvelope(propertyId, req.user!.userId, 'SELL_HOLD_RENT');
+  const overrideFields = Object.entries(inputs)
+    .filter(([key, value]) => key !== 'years' && value !== undefined)
+    .map(([key]) => key);
 
   analyticsEmitter.track({
     eventType: AnalyticsEvent.TOOL_USED,
@@ -48,6 +54,15 @@ export async function getSellHoldRent(req: CustomRequest, res: Response) {
   // ✅ Option B: match your standard API envelope used by api.get()
   return res.json({
     success: true,
-    data: { sellHoldRent: dto },
+    data: {
+      sellHoldRent: {
+        ...dto,
+        propertyContext,
+        calculationContext: {
+          mode: overrideFields.length > 0 ? 'SCENARIO' : 'CANONICAL',
+          overrideFields,
+        },
+      },
+    },
   });
 }

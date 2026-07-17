@@ -195,6 +195,7 @@ export interface HiddenAssetMatchDTO {
   claimedAt: string | null;
   // Phase-3: confidence calibration transparency
   confidenceCalibrationSummary: HiddenAssetConfidenceCalibrationSummary;
+  propertyContextVersion: string | null;
 }
 
 export interface HiddenAssetMatchSummaryDTO {
@@ -210,6 +211,7 @@ export interface HiddenAssetMatchListDTO {
   propertyId: string;
   matches: HiddenAssetMatchDTO[];
   summary: HiddenAssetMatchSummaryDTO;
+  propertyContextVersion: string | null;
 }
 
 export interface HiddenAssetProgramDetailDTO {
@@ -242,4 +244,5 @@ export interface RefreshResultDTO {
   matchesInactivated: number;
   durationMs: number;
   matches: HiddenAssetMatchDTO[];
+  propertyContextVersion: string;
 }

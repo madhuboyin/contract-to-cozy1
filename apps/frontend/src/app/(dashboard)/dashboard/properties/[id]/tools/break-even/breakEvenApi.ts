@@ -1,6 +1,9 @@
 import { api } from '@/lib/api/client';
+import type { PropertyContextEnvelope } from '@/components/property-context/PropertyContextNotice';
 
 export type BreakEvenDTO = {
+  propertyContext?: PropertyContextEnvelope;
+  calculationContext?: { mode: 'CANONICAL' | 'SCENARIO'; overrideFields: string[] };
   input: {
     propertyId: string;
     years: 5 | 10 | 20 | 30;

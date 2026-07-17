@@ -11,6 +11,7 @@ import EquityCard from '@/components/features/financing/EquityCard';
 import ScenarioCard from '@/components/features/financing/ScenarioCard';
 import FinancingCalculatorSheet from '@/components/features/financing/FinancingCalculatorSheet';
 import { track } from '@/lib/analytics/events';
+import { PropertyContextNotice } from '@/components/property-context/PropertyContextNotice';
 import type {
   EquityPosition,
   PropertyFinancingProfile,
@@ -81,6 +82,10 @@ export default function FinancingToolClient() {
         />
       }
     >
+      <PropertyContextNotice
+        context={profile?.propertyContext ?? equity?.propertyContext ?? scenarios[0]?.propertyContext}
+        title="Financing context"
+      />
       {loading ? (
         <div className="flex items-center justify-center py-16">
           <Loader2 className="h-6 w-6 animate-spin text-slate-400" />

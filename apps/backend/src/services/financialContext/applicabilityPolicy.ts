@@ -146,6 +146,18 @@ export function evaluateFinancialContext(
       'PROPERTY_AND_LOCATION_AVAILABLE_FOR_COST_EXPLANATION',
       'COST_EXPLAINER_CONTEXT_INCOMPLETE',
     ),
+    propertyBenchmarking: requiresFacts(
+      context,
+      ['core.propertyUse', 'core.occupancyStatus', 'core.dwellingType', 'location.state', 'location.zipCode'],
+      'PROPERTY_CLASS_AND_LOCATION_AVAILABLE_FOR_BENCHMARKING',
+      'PROPERTY_BENCHMARK_CONTEXT_INCOMPLETE',
+    ),
+    hiddenAssetMatching: requiresFacts(
+      context,
+      ['core.propertyUse', 'core.occupancyStatus', 'location.state', 'location.zipCode'],
+      'PROPERTY_AND_LOCATION_AVAILABLE_FOR_PROGRAM_MATCHING',
+      'HIDDEN_ASSET_MATCHING_CONTEXT_INCOMPLETE',
+    ),
     scenarioSeparation: availableCollection(
       context,
       'financial.activeScenarios',

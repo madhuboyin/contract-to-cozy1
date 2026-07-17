@@ -31,6 +31,12 @@ function toDateStr(d: Date): string {
   return d.toISOString().split('T')[0];
 }
 
+function contextVersion(metadata: unknown): string | null {
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return null;
+  const value = (metadata as Record<string, unknown>).propertyContextVersion;
+  return typeof value === 'string' ? value : null;
+}
+
 // ─── Opportunity ─────────────────────────────────────────────────────────────
 
 export function mapOpportunityToDTO(row: RefinanceOpportunity): RefinanceOpportunityDTO {
@@ -51,6 +57,7 @@ export function mapOpportunityToDTO(row: RefinanceOpportunity): RefinanceOpportu
     closingCostAssumptionUsd: toNumOrNull(row.closingCostAssumption),
     remainingTermMonths: row.remainingTermMonths,
     createdAt: row.createdAt.toISOString(),
+    propertyContextVersion: contextVersion(row.metadataJson),
   };
 }
 
@@ -69,5 +76,6 @@ export function mapScenarioToDTO(row: RefinanceScenarioSnapshot): RefinanceScena
     lifetimeSavings: toNumOrNull(row.lifetimeSavings),
     isSaved: row.isSaved,
     createdAt: row.createdAt.toISOString(),
+    propertyContextVersion: contextVersion(row.metadataJson),
   };
 }

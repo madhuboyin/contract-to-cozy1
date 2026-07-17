@@ -1,5 +1,6 @@
 // apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/mortgage-refinance-radar/mortgageRefinanceRadarApi.ts
 import { api } from '@/lib/api/client';
+import type { PropertyContextEnvelope } from '@/components/property-context/PropertyContextNotice';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -51,7 +52,10 @@ export type RadarStatusUnavailable = {
   reason: 'MISSING_MORTGAGE_DATA' | 'NO_RATE_DATA' | 'PROPERTY_NOT_FOUND';
 };
 
-export type RadarStatusDTO = RadarStatusAvailable | RadarStatusUnavailable;
+export type RadarStatusDTO = (RadarStatusAvailable | RadarStatusUnavailable) & {
+  propertyContext?: PropertyContextEnvelope;
+  propertyContextVersion?: string | null;
+};
 
 export type RefinanceOpportunityDTO = {
   id: string;
@@ -81,6 +85,8 @@ export type ScenarioAssumptions = {
 };
 
 export type RefinanceScenarioResult = {
+  propertyContext?: PropertyContextEnvelope;
+  propertyContextVersion: string;
   targetRatePct: number;
   targetTerm: RefinanceScenarioTerm;
   targetTermMonths: number;
@@ -138,12 +144,14 @@ export type OpportunityHistoryDTO = {
 
 export async function getRadarStatus(propertyId: string): Promise<RadarStatusDTO | null> {
   const res = await api.get(`/api/properties/${propertyId}/refinance-radar`);
-  return (res.data?.radarStatus as RadarStatusDTO) ?? null;
+  const status = res.data?.radarStatus as RadarStatusDTO | undefined;
+  return status ? { ...status, propertyContext: res.data?.propertyContext } : null;
 }
 
 export async function evaluateRadar(propertyId: string): Promise<RadarStatusDTO | null> {
   const res = await api.post(`/api/properties/${propertyId}/refinance-radar/evaluate`, {});
-  return (res.data?.radarStatus as RadarStatusDTO) ?? null;
+  const status = res.data?.radarStatus as RadarStatusDTO | undefined;
+  return status ? { ...status, propertyContext: res.data?.propertyContext } : null;
 }
 
 export async function getOpportunityHistory(
@@ -184,7 +192,10 @@ export async function runScenario(
   },
 ): Promise<RefinanceScenarioResult> {
   const res = await api.post(`/api/properties/${propertyId}/refinance-scenario`, body);
-  return res.data?.scenario as RefinanceScenarioResult;
+  return {
+    ...(res.data?.scenario as RefinanceScenarioResult),
+    propertyContext: res.data?.propertyContext,
+  };
 }
 
 export async function getSavedScenarios(

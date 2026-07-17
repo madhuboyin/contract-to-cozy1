@@ -1,5 +1,6 @@
 // apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/sell-hold-rent/sellHoldRentApi.ts
 import { api } from '@/lib/api/client';
+import type { PropertyContextEnvelope } from '@/components/property-context/PropertyContextNotice';
 
 export type SellHoldRentInput = {
   years?: 5 | 10;
@@ -18,6 +19,8 @@ export type SellHoldRentInput = {
 };
 
 export type SellHoldRentDTO = {
+  propertyContext?: PropertyContextEnvelope;
+  calculationContext?: { mode: 'CANONICAL' | 'SCENARIO'; overrideFields: string[] };
   input: {
     propertyId: string;
     years: 5 | 10;

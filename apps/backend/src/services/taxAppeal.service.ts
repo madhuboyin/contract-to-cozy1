@@ -186,7 +186,19 @@ Lot size in acres.`;
       throw new Error('Property not found');
     }
 
-    const { taxBillData, userMarketEstimate, comparableSales, propertyConditionNotes } = input;
+    const {
+      taxBillData: suppliedTaxBillData,
+      userMarketEstimate,
+      comparableSales,
+      propertyConditionNotes,
+    } = input;
+    const taxBillData: TaxBillData = {
+      ...suppliedTaxBillData,
+      propertyType:
+        suppliedTaxBillData.propertyType ||
+        (property.dwellingType !== 'UNKNOWN' ? property.dwellingType : undefined),
+      squareFootage: suppliedTaxBillData.squareFootage ?? property.propertySize ?? undefined,
+    };
 
     // Calculate estimated market value
     const estimatedMarketValue = this.calculateMarketValue(

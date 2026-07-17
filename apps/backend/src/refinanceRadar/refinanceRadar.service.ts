@@ -83,6 +83,12 @@ function buildLoanProducts(rate30yr: number, rate15yr: number): LoanProductRate[
   ];
 }
 
+function readContextVersion(metadata: unknown): string | null {
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return null;
+  const value = (metadata as Record<string, unknown>).propertyContextVersion;
+  return typeof value === 'string' ? value : null;
+}
+
 // ─── Service ──────────────────────────────────────────────────────────────────
 
 export class RefinanceRadarService {
@@ -138,6 +144,7 @@ export class RefinanceRadarService {
     propertyId: string,
     evalResult: Awaited<ReturnType<RefinanceRadarEngine['evaluate']>>,
     latestSnapshotId: string | null,
+    propertyContextVersion: string,
   ): Promise<void> {
     const now = new Date();
 
@@ -189,12 +196,17 @@ export class RefinanceRadarService {
             triggerDate: isTransitionToOpen ? now : undefined,
             closingCostAssumption: evalResult.effectiveClosingCostUsd,
             remainingTermMonths: evalResult.remainingTermMonths,
+            metadataJson: { propertyContextVersion },
           },
           select: { id: true },
         });
         newOpportunityId = created.id;
       } else {
         newOpportunityId = existingTodayOpportunity.id;
+        await prisma.refinanceOpportunity.update({
+          where: { id: existingTodayOpportunity.id },
+          data: { metadataJson: { propertyContextVersion } },
+        });
       }
     }
 
@@ -203,6 +215,7 @@ export class RefinanceRadarService {
       radarState: evalResult.radarState,
       lastEvaluatedAt: now,
       lastRateSnapshotId: latestSnapshotId,
+      propertyContextVersion,
       currentOpportunityId: evalResult.isOpportunity
         ? (newOpportunityId ?? currentState?.currentOpportunityId ?? null)
         : null,
@@ -227,7 +240,7 @@ export class RefinanceRadarService {
    * Persists results and returns a complete status response.
    * Safe to call repeatedly — deduplicates same-day opportunity records.
    */
-  async evaluateProperty(propertyId: string): Promise<RadarStatusResult> {
+  async evaluateProperty(propertyId: string, propertyContextVersion: string): Promise<RadarStatusResult> {
     const mortgageContext = await this.getMortgageContext(propertyId);
     if (!mortgageContext) {
       return { available: false, reason: 'MISSING_MORTGAGE_DATA' };
@@ -243,7 +256,7 @@ export class RefinanceRadarService {
     const evalResult = await this.engine.evaluate(mortgageContext, existingState?.radarState ?? null);
 
     // Persist opportunity + radar state transition (fire-and-settle)
-    await this.persistEvaluationResult(propertyId, evalResult, evalResult.latestSnapshotId);
+    await this.persistEvaluationResult(propertyId, evalResult, evalResult.latestSnapshotId, propertyContextVersion);
 
     // Load trend and missed opportunity in parallel
     const [recentSnapshots, missedOpportunity] = await Promise.all([
@@ -285,6 +298,7 @@ export class RefinanceRadarService {
       disclaimer: REFINANCE_DISCLAIMER,
       rateDataFreshnessAt: latestSnapshot?.date ?? null,
       loanProducts,
+      propertyContextVersion,
     };
   }
 
@@ -293,7 +307,7 @@ export class RefinanceRadarService {
    * Reads from the persisted radar state and most recent opportunity.
    * Falls back to a live evaluation if no state exists yet.
    */
-  async getCurrentStatus(propertyId: string): Promise<RadarStatusResult> {
+  async getCurrentStatus(propertyId: string, propertyContextVersion: string): Promise<RadarStatusResult> {
     const mortgageContext = await this.getMortgageContext(propertyId);
     if (!mortgageContext) {
       return { available: false, reason: 'MISSING_MORTGAGE_DATA' };
@@ -306,7 +320,7 @@ export class RefinanceRadarService {
 
     // No state persisted yet — run a live evaluation to initialize
     if (!radarState) {
-      return this.evaluateProperty(propertyId);
+      return this.evaluateProperty(propertyId, propertyContextVersion);
     }
 
     const [recentSnapshots, missedOpportunity] = await Promise.all([
@@ -354,6 +368,8 @@ export class RefinanceRadarService {
       disclaimer: REFINANCE_DISCLAIMER,
       rateDataFreshnessAt: latestSnapshot?.date ?? null,
       loanProducts,
+      propertyContextVersion:
+        readContextVersion(opp?.metadataJson) ?? radarState.propertyContextVersion,
     };
   }
 
@@ -421,6 +437,7 @@ export class RefinanceRadarService {
       closingCostAmount?: number;
       closingCostPercent?: number;
       saveScenario: boolean;
+      propertyContextVersion: string;
     },
   ): Promise<RefinanceScenarioResult> {
     const mortgageContext = await this.getMortgageContext(propertyId);
@@ -475,12 +492,14 @@ export class RefinanceRadarService {
             closingCostSource,
             closingCostPctUsed,
             computedAt: new Date().toISOString(),
+            propertyContextVersion: input.propertyContextVersion,
           },
         },
       });
     }
 
     return {
+      propertyContextVersion: input.propertyContextVersion,
       targetRatePct: input.targetRate,
       targetTerm: input.targetTerm,
       targetTermMonths,

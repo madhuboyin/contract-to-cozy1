@@ -3,6 +3,7 @@ import { Response } from 'express';
 import { CustomRequest } from '../types';
 import { BreakEvenService } from '../services/breakEven.service';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
+import { getCurrentFinancialContextEnvelope } from '../services/financialContext/context';
 
 const svc = new BreakEvenService();
 
@@ -62,6 +63,24 @@ export async function getBreakEven(req: CustomRequest, res: Response) {
     remainingTermMonths,
     monthlyPayment,
   }, userId);
+  const propertyContext = await getCurrentFinancialContextEnvelope(propertyId, req.user!.userId, 'BREAK_EVEN');
+  const overrideFields = Object.entries({
+    assumptionSetId,
+    homeValueNow,
+    appreciationRate,
+    expenseGrowthRate,
+    inflationRate,
+    rentGrowthRate,
+    interestRate,
+    propertyTaxGrowthRate,
+    insuranceGrowthRate,
+    maintenanceGrowthRate,
+    sellingCostPercent,
+    mortgageBalance,
+    mortgageAnnualRate,
+    remainingTermMonths,
+    monthlyPayment,
+  }).filter(([, value]) => value !== undefined).map(([key]) => key);
 
   analyticsEmitter.track({
     eventType: AnalyticsEvent.TOOL_USED,
@@ -74,6 +93,15 @@ export async function getBreakEven(req: CustomRequest, res: Response) {
 
   return res.json({
     success: true,
-    data: { breakEven: dto },
+    data: {
+      breakEven: {
+        ...dto,
+        propertyContext,
+        calculationContext: {
+          mode: overrideFields.length > 0 ? 'SCENARIO' : 'CANONICAL',
+          overrideFields,
+        },
+      },
+    },
   });
 }

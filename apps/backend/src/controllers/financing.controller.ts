@@ -5,7 +5,11 @@ import { RateConfigType } from '@prisma/client';
 import * as svc from '../services/financing.service';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
 import { APIError } from '../middleware/error.middleware';
-import { getFinancialContextEnvelope } from '../services/financialContext/context';
+import {
+  getCurrentFinancialContextEnvelope,
+  getFinancialContextDecisions,
+  getFinancialContextEnvelope,
+} from '../services/financialContext/context';
 
 function requireUserId(req: CustomRequest): string {
   const userId = req.user?.userId;
@@ -19,11 +23,7 @@ export async function getFinancingProfile(req: CustomRequest, res: Response, nex
   try {
     const userId = requireUserId(req);
     const profile = await svc.getProfile(req.params.propertyId);
-    const propertyContext = await getFinancialContextEnvelope(
-      req.params.propertyId,
-      userId,
-      'FINANCING_CENTER',
-    );
+    const propertyContext = await getCurrentFinancialContextEnvelope(req.params.propertyId, userId, 'FINANCING_CENTER');
 
     analyticsEmitter.track({
       eventType: AnalyticsEvent.TOOL_USED,
@@ -44,11 +44,7 @@ export async function upsertFinancingProfile(req: CustomRequest, res: Response, 
   try {
     const userId = requireUserId(req);
     const profile = await svc.upsertProfile(req.params.propertyId, req.body);
-    const propertyContext = await getFinancialContextEnvelope(
-      req.params.propertyId,
-      userId,
-      'FINANCING_CENTER',
-    );
+    const propertyContext = await getCurrentFinancialContextEnvelope(req.params.propertyId, userId, 'FINANCING_CENTER');
     res.json({ success: true, data: { profile, propertyContext } });
   } catch (err) {
     next(err);
@@ -68,11 +64,13 @@ function serializeEquity(e: Awaited<ReturnType<typeof svc.getLatestEquity>>) {
 export async function getEquityPosition(req: CustomRequest, res: Response, next: NextFunction) {
   try {
     const userId = requireUserId(req);
-    const equity = await svc.getLatestEquity(req.params.propertyId);
+    const currentContext = await getFinancialContextDecisions(req.params.propertyId, userId, 'FINANCING_CENTER');
+    const equity = await svc.getLatestEquity(req.params.propertyId, currentContext.contextVersion);
     const propertyContext = await getFinancialContextEnvelope(
       req.params.propertyId,
       userId,
       'FINANCING_CENTER',
+      equity.propertyContextVersion,
     );
     res.json({ success: true, data: { equity: serializeEquity(equity), propertyContext } });
   } catch (err) {
@@ -83,11 +81,13 @@ export async function getEquityPosition(req: CustomRequest, res: Response, next:
 export async function refreshEquityPosition(req: CustomRequest, res: Response, next: NextFunction) {
   try {
     const userId = requireUserId(req);
-    const equity = await svc.refreshEquity(req.params.propertyId);
+    const currentContext = await getFinancialContextDecisions(req.params.propertyId, userId, 'FINANCING_CENTER');
+    const equity = await svc.refreshEquity(req.params.propertyId, currentContext.contextVersion);
     const propertyContext = await getFinancialContextEnvelope(
       req.params.propertyId,
       userId,
       'FINANCING_CENTER',
+      equity.propertyContextVersion,
     );
 
     analyticsEmitter.track({
@@ -107,8 +107,15 @@ export async function refreshEquityPosition(req: CustomRequest, res: Response, n
 
 export async function getEquityHistory(req: CustomRequest, res: Response, next: NextFunction) {
   try {
+    const userId = requireUserId(req);
     const history = await svc.getEquityHistory(req.params.propertyId);
-    res.json({ success: true, data: { history: history.map(serializeEquity) } });
+    const propertyContext = await getFinancialContextEnvelope(
+      req.params.propertyId,
+      userId,
+      'FINANCING_CENTER',
+      history[0]?.propertyContextVersion,
+    );
+    res.json({ success: true, data: { history: history.map(serializeEquity), propertyContext } });
   } catch (err) {
     next(err);
   }
@@ -118,8 +125,17 @@ export async function getEquityHistory(req: CustomRequest, res: Response, next: 
 
 export async function calculateFinancing(req: CustomRequest, res: Response, next: NextFunction) {
   try {
+    const userId = requireUserId(req);
     const results = await svc.calculate(req.params.propertyId, req.body.projectCostCents);
-    res.json({ success: true, data: { results } });
+    const propertyContext = await getCurrentFinancialContextEnvelope(req.params.propertyId, userId, 'FINANCING_CENTER');
+    res.json({
+      success: true,
+      data: {
+        results,
+        propertyContext,
+        calculationContext: { mode: 'SCENARIO', overrideFields: ['projectCostCents'] },
+      },
+    });
   } catch (err) {
     next(err);
   }
@@ -129,8 +145,15 @@ export async function calculateFinancing(req: CustomRequest, res: Response, next
 
 export async function listFinancingScenarios(req: CustomRequest, res: Response, next: NextFunction) {
   try {
+    const userId = requireUserId(req);
     const scenarios = await svc.listScenarios(req.params.propertyId);
-    res.json({ success: true, data: { scenarios } });
+    const propertyContext = await getFinancialContextEnvelope(
+      req.params.propertyId,
+      userId,
+      'FINANCING_CENTER',
+      scenarios[0]?.propertyContextVersion,
+    );
+    res.json({ success: true, data: { scenarios, propertyContext } });
   } catch (err) {
     next(err);
   }
@@ -141,7 +164,19 @@ export async function createFinancingScenario(req: CustomRequest, res: Response,
     const userId = req.user?.userId;
     if (!userId) return res.status(401).json({ success: false, error: 'Authentication required' });
 
-    const scenario = await svc.createScenario(req.params.propertyId, userId, req.body);
+    const currentContext = await getFinancialContextDecisions(req.params.propertyId, userId, 'FINANCING_CENTER');
+    const scenario = await svc.createScenario(
+      req.params.propertyId,
+      userId,
+      req.body,
+      currentContext.contextVersion,
+    );
+    const propertyContext = await getFinancialContextEnvelope(
+      req.params.propertyId,
+      userId,
+      'FINANCING_CENTER',
+      scenario.propertyContextVersion,
+    );
 
     analyticsEmitter.track({
       eventType: AnalyticsEvent.ACTION_COMPLETED,
@@ -152,7 +187,7 @@ export async function createFinancingScenario(req: CustomRequest, res: Response,
       metadataJson: { actionType: 'create_scenario', entryPoint: (scenario as any)?.entryPoint },
     });
 
-    res.status(201).json({ success: true, data: { scenario } });
+    res.status(201).json({ success: true, data: { scenario, propertyContext } });
   } catch (err) {
     next(err);
   }
@@ -160,9 +195,16 @@ export async function createFinancingScenario(req: CustomRequest, res: Response,
 
 export async function getFinancingScenario(req: CustomRequest, res: Response, next: NextFunction) {
   try {
+    const userId = requireUserId(req);
     const scenario = await svc.getScenario(req.params.scenarioId, req.params.propertyId);
     if (!scenario) return res.status(404).json({ success: false, error: 'Scenario not found' });
-    res.json({ success: true, data: { scenario } });
+    const propertyContext = await getFinancialContextEnvelope(
+      req.params.propertyId,
+      userId,
+      'FINANCING_CENTER',
+      scenario.propertyContextVersion,
+    );
+    res.json({ success: true, data: { scenario, propertyContext } });
   } catch (err) {
     next(err);
   }
@@ -170,9 +212,16 @@ export async function getFinancingScenario(req: CustomRequest, res: Response, ne
 
 export async function updateFinancingScenario(req: CustomRequest, res: Response, next: NextFunction) {
   try {
+    const userId = requireUserId(req);
     await svc.updateScenario(req.params.scenarioId, req.params.propertyId, req.body);
     const scenario = await svc.getScenario(req.params.scenarioId, req.params.propertyId);
-    res.json({ success: true, data: { scenario } });
+    const propertyContext = await getFinancialContextEnvelope(
+      req.params.propertyId,
+      userId,
+      'FINANCING_CENTER',
+      scenario?.propertyContextVersion,
+    );
+    res.json({ success: true, data: { scenario, propertyContext } });
   } catch (err) {
     next(err);
   }

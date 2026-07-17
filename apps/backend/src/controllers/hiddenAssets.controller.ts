@@ -11,6 +11,7 @@ import {
   PropertyHiddenAssetMatchStatus,
 } from '@prisma/client';
 import { logger } from '../lib/logger';
+import { getFinancialContextEnvelope } from '../services/financialContext/context';
 
 const service = new HiddenAssetService();
 
@@ -38,7 +39,13 @@ export async function getHiddenAssetsForProperty(req: CustomRequest, res: Respon
     };
 
     const result = await service.getMatchesForProperty(propertyId, userId, filters);
-    return res.json({ success: true, data: result });
+    const propertyContext = await getFinancialContextEnvelope(
+      propertyId,
+      userId,
+      'HIDDEN_ASSETS',
+      result.propertyContextVersion,
+    );
+    return res.json({ success: true, data: { ...result, propertyContext } });
   } catch (error: any) {
     const status = error?.message === 'Authentication required.' ? 401 : 500;
     logger.error({ err: error }, '[HiddenAssets] getHiddenAssetsForProperty error');
@@ -59,7 +66,13 @@ export async function refreshHiddenAssetsForProperty(req: CustomRequest, res: Re
     const { propertyId } = req.params;
 
     const result = await service.refreshMatchesForProperty(propertyId, userId);
-    return res.json({ success: true, data: result });
+    const propertyContext = await getFinancialContextEnvelope(
+      propertyId,
+      userId,
+      'HIDDEN_ASSETS',
+      result.propertyContextVersion,
+    );
+    return res.json({ success: true, data: { ...result, propertyContext } });
   } catch (error: any) {
     const msg = error?.message ?? '';
     const status =

@@ -8954,6 +8954,7 @@ model PropertyHiddenAssetMatch {
   matchedRuleCount Int?
   totalRuleCount   Int?
   matchReasons     Json? // array of human-readable match signals for display
+  propertyContextVersion String?
 
   lastEvaluatedAt DateTime  @default(now())
   firstDetectedAt DateTime  @default(now())
@@ -8989,6 +8990,7 @@ model PropertyHiddenAssetScanRun {
   programsEvaluated Int?
   matchesFound      Int?
   notes             String?
+  propertyContextVersion String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -10408,6 +10410,8 @@ model PropertyRefinanceRadarState {
   lastOpenedAt    DateTime?
   lastClosedAt    DateTime?
 
+  propertyContextVersion String?
+
   metadataJson Json?
 
   createdAt DateTime @default(now())
@@ -11143,6 +11147,7 @@ model FinancingScenario {
   resultsJson                Json
   selectedOption             FinancingOptionType?
   notes                      String?
+  propertyContextVersion     String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -11174,6 +11179,7 @@ model EquityPosition {
   helocCapacityCents         Int
   helocEligible              Boolean
   computedAt                 DateTime @default(now())
+  propertyContextVersion     String?
 
   property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
 

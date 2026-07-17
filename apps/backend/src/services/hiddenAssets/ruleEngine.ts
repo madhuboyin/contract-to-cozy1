@@ -734,6 +734,9 @@ export function buildPropertyAttributeMap(
     propertySize?: number | null;
     propertyType?: string | null;
     ownershipType?: string | null;
+    dwellingType?: string | null;
+    propertyUse?: string | null;
+    occupancyStatus?: string | null;
     heatingType?: string | null;
     waterHeaterType?: string | null;
     roofType?: string | null;
@@ -755,8 +758,11 @@ export function buildPropertyAttributeMap(
       ? currentYear - property.roofReplacementYear
       : null;
 
-  const isPrimaryResidence =
-    property.ownershipType === 'OWNER_OCCUPIED'
+  const isPrimaryResidence = property.propertyUse && property.propertyUse !== 'UNKNOWN'
+    ? property.propertyUse === 'PRIMARY_RESIDENCE'
+    : property.occupancyStatus && property.occupancyStatus !== 'UNKNOWN'
+      ? property.occupancyStatus === 'OWNER_OCCUPIED'
+      : property.ownershipType === 'OWNER_OCCUPIED'
       ? true
       : property.ownershipType === 'RENTED_OUT'
         ? false
@@ -786,7 +792,10 @@ export function buildPropertyAttributeMap(
     country: 'USA',
 
     // Ownership / classification
-    propertyType: property.propertyType ?? null,
+    propertyType:
+      property.dwellingType && property.dwellingType !== 'UNKNOWN'
+        ? property.dwellingType
+        : property.propertyType ?? null,
     isPrimaryResidence,
     yearBuilt: property.yearBuilt ?? null,
     squareFootage: property.propertySize ?? null,

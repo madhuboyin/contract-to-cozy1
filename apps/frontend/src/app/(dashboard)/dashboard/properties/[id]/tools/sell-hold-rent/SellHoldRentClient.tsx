@@ -8,6 +8,7 @@ import MultiLineChart from '../cost-growth/MultiLineChart';
 import { Button } from '@/components/ui/button';
 import ToolWorkspaceTemplate from '../../components/route-templates/ToolWorkspaceTemplate';
 import HomeToolHeader from '@/components/tools/HomeToolHeader';
+import { PropertyContextNotice } from '@/components/property-context/PropertyContextNotice';
 import PriorityActionHero from '@/components/system/PriorityActionHero';
 import { track } from '@/lib/analytics/events';
 
@@ -197,6 +198,8 @@ export default function SellHoldRentClient() {
         context="sell-hold-rent"
         currentToolId="sell-hold-rent"
       />
+
+      <PropertyContextNotice context={data?.propertyContext} title="Sell, hold, or rent context" />
 
       {hasScenarioData && winner && !loading && (
         <PriorityActionHero

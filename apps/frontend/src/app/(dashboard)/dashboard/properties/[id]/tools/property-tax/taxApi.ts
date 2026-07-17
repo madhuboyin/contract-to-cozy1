@@ -1,7 +1,10 @@
 // apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/tax/property-tax/taxApi.ts
 import { api } from '@/lib/api/client';
+import type { PropertyContextEnvelope } from '@/components/property-context/PropertyContextNotice';
 
 export type PropertyTaxEstimateDTO = {
+  propertyContext?: PropertyContextEnvelope;
+  calculationContext?: { mode: 'CANONICAL' | 'SCENARIO'; overrideFields: string[] };
   input: {
     propertyId: string;
     addressLabel: string;
