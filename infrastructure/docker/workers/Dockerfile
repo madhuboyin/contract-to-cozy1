@@ -60,6 +60,7 @@ RUN mkdir -p src/shared/backend/utils \
              src/shared/backend/services/seasonal \
              src/shared/backend/services/analytics \
              src/shared/backend/services/guidanceEngine \
+             src/shared/backend/services/projectCompliance \
              src/shared/backend/types \
              src/shared/backend/lib \
              src/shared/backend/modules/gazette/services \
@@ -137,9 +138,17 @@ COPY apps/backend/src/utils/maintenanceDueDate.ts \
 # Pure (Express-free) property-access resolution used by PropertyMaintenanceTask.service.ts
 COPY apps/backend/src/services/propertyAccess.service.ts src/shared/backend/services/
 COPY apps/backend/src/services/maintenance/applicabilityPolicy.ts src/shared/backend/services/maintenance/
-COPY apps/backend/src/services/seasonal/applicabilityPolicy.ts src/shared/backend/services/seasonal/
+COPY apps/backend/src/services/seasonal/applicabilityPolicy.ts \
+     apps/backend/src/services/seasonal/seasonWindow.ts \
+     src/shared/backend/services/seasonal/
 COPY apps/backend/src/services/protection/applicabilityPolicy.ts src/shared/backend/services/protection/
 COPY apps/backend/src/services/propertyContextDecision.ts src/shared/backend/services/
+COPY apps/backend/src/services/projectCompliance/applicabilityPolicy.ts \
+     apps/backend/src/services/projectCompliance/context.ts \
+     apps/backend/src/services/projectCompliance/workScope.ts \
+     apps/backend/src/services/projectCompliance/reconciliation.ts \
+     apps/backend/src/services/projectCompliance/permitWorkerContext.service.ts \
+     src/shared/backend/services/projectCompliance/
 COPY apps/backend/src/modules/propertyContext/index.ts src/shared/backend/modules/propertyContext/
 COPY apps/backend/src/modules/propertyContext/application/getPropertyContext.ts \
      apps/backend/src/modules/propertyContext/application/getContextCompleteness.ts \
@@ -281,6 +290,7 @@ RUN sed -i 's/\.\.\/\.\.\/backend\/src\/utils\/riskCalculator\.util/\.\/shared\/
     sed -i 's/\.\.\/\.\.\/backend\/src\/services\/hiddenAssets\.service/\.\/shared\/backend\/services\/hiddenAssets\.service/g' src/worker.ts && \
     sed -i 's/\.\.\/\.\.\/backend\/src\/services\/RiskAssessment\.service/\.\/shared\/backend\/services\/RiskAssessment\.service/g' src/worker.ts && \
     sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/seasonal\/applicabilityPolicy/\.\.\/shared\/backend\/services\/seasonal\/applicabilityPolicy/g' src/jobs/seasonalChecklistGeneration.job.ts src/jobs/seasonalNotification.job.ts && \
+    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/seasonal\/seasonWindow/\.\.\/shared\/backend\/services\/seasonal\/seasonWindow/g' src/jobs/seasonalChecklistGeneration.job.ts && \
     sed -i 's/\.\.\/\.\.\/backend\/src\/config\/workerJobRegistry/\.\/shared\/backend\/config\/workerJobRegistry/g' src/worker.ts && \
     sed -i 's/\.\.\/\.\.\/backend\/src\/config\/queueDefaults/\.\/shared\/backend\/config\/queueDefaults/g' src/worker.ts && \
     sed -i 's/\.\.\/\.\.\/backend\/src\/config\/queueDefaults/\.\/shared\/backend\/config\/queueDefaults/g' src/runners/highPriorityEmailEnqueue.poller.ts && \
@@ -301,7 +311,8 @@ RUN sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/diyAiGuide\.service/\.\.
     sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/permitFetch\.service/\.\.\/shared\/backend\/services\/permitFetch\.service/g' src/jobs/fetchPermitHistory.job.ts && \
     sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/permitDetection\.service/\.\.\/shared\/backend\/services\/permitDetection\.service/g' src/jobs/detectUnpermittedWork.job.ts && \
     sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/storage\/reportStorage/\.\.\/shared\/backend\/services\/storage\/reportStorage/g' src/jobs/generatePermitDisclosure.job.ts && \
-    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/notification\.service/\.\.\/shared\/backend\/services\/notification\.service/g' src/jobs/permitInspectionReminder.job.ts
+    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/notification\.service/\.\.\/shared\/backend\/services\/notification\.service/g' src/jobs/permitInspectionReminder.job.ts && \
+    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/projectCompliance\/permitWorkerContext\.service/\.\.\/shared\/backend\/services\/projectCompliance\/permitWorkerContext.service/g' src/jobs/generatePermitDisclosure.job.ts src/jobs/permitInspectionReminder.job.ts
 
 # Rewrite paths introduced by the severe weather alerts job
 RUN sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/incidents\/incident\.service/\.\.\/shared\/backend\/services\/incidents\/incident\.service/g' src/jobs/severeWeatherAlerts.job.ts && \

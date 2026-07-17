@@ -118,7 +118,12 @@ export class ClimateZoneService {
     const settings = await this.getOrCreateClimateSettings(propertyId);
     const currentSeason = this.getCurrentSeason(settings.climateRegion);
     const nextSeason = this.getNextSeason(currentSeason);
-    const nextSeasonDate = this.getSeasonStartDate(nextSeason, new Date().getFullYear());
+    // Next occurrence: in late December the next season (spring) starts in
+    // the following calendar year.
+    let nextSeasonDate = this.getSeasonStartDate(nextSeason, new Date().getFullYear());
+    if (nextSeasonDate <= new Date()) {
+      nextSeasonDate = this.getSeasonStartDate(nextSeason, new Date().getFullYear() + 1);
+    }
 
     const daysUntilNextSeason = Math.ceil(
       (nextSeasonDate.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)

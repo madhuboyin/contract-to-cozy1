@@ -36,11 +36,17 @@ export function SeasonalWidget({ propertyId }: SeasonalWidgetProps) {
   const { celebration, celebrate, dismiss } = useCelebration(`seasonal-${propertyId}`);
 
   // Pre-compute checklist state so the useEffect can watch it before any early returns
-  const currentYear = new Date().getFullYear();
+  const now = new Date();
   const currentSeason = climateInfo?.data?.currentSeason;
+  // A checklist's year is the year its season STARTS — a winter in progress
+  // during Jan–Mar belongs to the previous calendar year.
+  const currentSeasonYear =
+    currentSeason === 'WINTER' && now.getMonth() < 11
+      ? now.getFullYear() - 1
+      : now.getFullYear();
   const currentChecklist = currentSeason
     ? (checklistsData?.data?.checklists as any[] | undefined)?.find(
-        (c) => c.season === currentSeason && c.year === currentYear,
+        (c) => c.season === currentSeason && c.year === currentSeasonYear,
       )
     : undefined;
 
@@ -82,7 +88,14 @@ export function SeasonalWidget({ propertyId }: SeasonalWidgetProps) {
   const displayText = progress.noTasks
     ? 'No tasks yet'
     : `${progress.completedCount} of ${progress.totalCount} tasks completed`;
-  const isBeforeSeason = currentChecklist.daysRemaining && currentChecklist.daysRemaining > 0;
+  const seasonStart = currentChecklist.seasonStartDate
+    ? new Date(currentChecklist.seasonStartDate)
+    : null;
+  const daysUntilSeasonStart =
+    seasonStart && seasonStart > new Date()
+      ? Math.ceil((seasonStart.getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+      : 0;
+  const isBeforeSeason = daysUntilSeasonStart > 0;
 
   const handleViewChecklist = () => {
     setSelectedChecklistId(currentChecklist.id);
@@ -167,9 +180,9 @@ export function SeasonalWidget({ propertyId }: SeasonalWidgetProps) {
         </button>
 
         {/* Season info */}
-        {isBeforeSeason && currentChecklist.daysRemaining && (
+        {isBeforeSeason && (
           <div className="mt-3 text-xs text-center text-gray-500">
-            {seasonName} starts in {formatDaysRemaining(currentChecklist.daysRemaining)}
+            {seasonName} starts in {formatDaysRemaining(daysUntilSeasonStart)}
           </div>
         )}
       </div>

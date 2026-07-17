@@ -2,9 +2,15 @@
 import { prisma } from '../lib/prisma';
 import { logger } from '../lib/logger';
 import { evaluateSeasonalTemplateApplicability } from '../../../backend/src/services/seasonal/applicabilityPolicy';
+import {
+  Season,
+  getSeasonStartDate,
+  getSeasonEndDate,
+  resolveCurrentSeasonWindow,
+  resolveUpcomingSeasonWindow,
+} from '../../../backend/src/services/seasonal/seasonWindow';
 
 // Define types locally since they may not be exported from Prisma client
-type Season = 'SPRING' | 'SUMMER' | 'FALL' | 'WINTER';
 type NotificationTiming = 'EARLY' | 'STANDARD' | 'LATE';
 
 // Type for seasonal task template
@@ -117,8 +123,7 @@ export async function generateSeasonalChecklists() {
   
   try {
     const today = new Date();
-    const currentYear = today.getFullYear();
-    
+
     // Get all properties for EXISTING_OWNER homeowners
     const properties = await prisma.property.findMany({
       where: {
@@ -178,33 +183,20 @@ export async function generateSeasonalChecklists() {
         // Calculate notification offset days
         const offsetDays = getNotificationOffsetDays(notificationTiming);
         
-        // Get current season and next season
-        const currentSeason = getCurrentSeason(climateRegion, today);
-        const nextSeason = getNextSeason(currentSeason);
-        
-        // Calculate when next season starts
-        const nextSeasonStartDate = getSeasonStartDate(nextSeason, currentYear);
-        const daysUntilNextSeason = Math.floor(
-          (nextSeasonStartDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
-        );
-
-        // Handle year boundary for winter
-        let targetYear = currentYear;
-        if (nextSeason === 'WINTER' && currentSeason === 'FALL') {
-          targetYear = currentYear + 1;
-        } else if (nextSeason === 'SPRING' && currentSeason === 'WINTER') {
-          // Winter to Spring crosses year boundary if winter start date is in next year
-          if (nextSeasonStartDate.getFullYear() > currentYear) {
-            targetYear = nextSeasonStartDate.getFullYear();
-          }
-        }
+        // Current and upcoming season windows; a season's `year` is the year
+        // its start date falls in (winter in Jan–Mar belongs to the previous
+        // calendar year), so both queries and generation stay consistent.
+        const currentWindow = resolveCurrentSeasonWindow(today);
+        const upcoming = resolveUpcomingSeasonWindow(today);
+        const daysUntilNextSeason = upcoming.daysUntilStart;
 
         logger.info(
           `[SEASONAL] Property ${property.id.substring(0, 8)}: ` +
-          `Current=${currentSeason}, Next=${nextSeason}, Days until=${daysUntilNextSeason}, Offset=${offsetDays}`
+          `Current=${currentWindow.season} ${currentWindow.year}, Next=${upcoming.season} ${upcoming.year}, ` +
+          `Days until=${daysUntilNextSeason}, Offset=${offsetDays}`
         );
 
-        // FIX: Generate checklist if we're within the notification window (not exact match)
+        // Generate checklist if we're within the notification window (not exact match)
         // This ensures we don't miss generation if the cron runs slightly off schedule
         if (daysUntilNextSeason >= 0 && daysUntilNextSeason <= offsetDays) {
           // Check if checklist already exists
@@ -212,15 +204,15 @@ export async function generateSeasonalChecklists() {
           const existingChecklist = await (prisma as any).seasonalChecklist.findFirst({
             where: {
               propertyId: property.id,
-              season: nextSeason,
-              year: targetYear,
+              season: upcoming.season,
+              year: upcoming.year,
             },
           });
 
           if (existingChecklist) {
             logger.info(
               `[SEASONAL] Checklist already exists for ${property.id.substring(0, 8)} ` +
-              `(${nextSeason} ${targetYear})`
+              `(${upcoming.season} ${upcoming.year})`
             );
             skipped++;
             continue;
@@ -228,38 +220,38 @@ export async function generateSeasonalChecklists() {
 
           // Generate the checklist
           logger.info(
-            `[SEASONAL] Generating ${nextSeason} ${targetYear} checklist for property ` +
+            `[SEASONAL] Generating ${upcoming.season} ${upcoming.year} checklist for property ` +
             `${property.id.substring(0, 8)} (${daysUntilNextSeason} days until season)`
           );
 
           await generateChecklistForProperty(
             property.id,
-            nextSeason,
-            targetYear,
+            upcoming.season,
+            upcoming.year,
             climateRegion
           );
 
           generated++;
         } else {
-          // FIX: Also check current season - if season just started and no checklist exists, generate one
+          // Also check current season - if season already started and no checklist exists, generate one
           // @ts-ignore
           const currentSeasonChecklist = await (prisma as any).seasonalChecklist.findFirst({
             where: {
               propertyId: property.id,
-              season: currentSeason,
-              year: currentYear,
+              season: currentWindow.season,
+              year: currentWindow.year,
             },
           });
 
           if (!currentSeasonChecklist) {
             logger.info(
-              `[SEASONAL] No checklist for current season ${currentSeason} ${currentYear}, generating now for property ${property.id.substring(0, 8)}`
+              `[SEASONAL] No checklist for current season ${currentWindow.season} ${currentWindow.year}, generating now for property ${property.id.substring(0, 8)}`
             );
 
             await generateChecklistForProperty(
               property.id,
-              currentSeason,
-              currentYear,
+              currentWindow.season,
+              currentWindow.year,
               climateRegion
             );
 
@@ -479,71 +471,6 @@ function detectClimateRegionFallback(zipCode: string, state: string): string {
   // Default to MODERATE
   logger.info(`[SEASONAL] No mapping for state ${state}, defaulting to MODERATE`);
   return 'MODERATE';
-}
-
-/**
- * Get current season based on climate region and date
- */
-function getCurrentSeason(climateRegion: string, date: Date): Season {
-  const month = date.getMonth() + 1; // 1-12
-  const day = date.getDate();
-
-  // Astronomical seasons
-  if ((month === 3 && day >= 20) || month === 4 || month === 5 || (month === 6 && day < 21)) {
-    return 'SPRING';
-  } else if ((month === 6 && day >= 21) || month === 7 || month === 8 || (month === 9 && day < 23)) {
-    return 'SUMMER';
-  } else if ((month === 9 && day >= 23) || month === 10 || month === 11 || (month === 12 && day < 21)) {
-    return 'FALL';
-  } else {
-    return 'WINTER';
-  }
-}
-
-/**
- * Get next season
- */
-function getNextSeason(current: Season): Season {
-  const seasons: Season[] = ['SPRING', 'SUMMER', 'FALL', 'WINTER'];
-  const currentIndex = seasons.indexOf(current);
-  return seasons[(currentIndex + 1) % 4];
-}
-
-/**
- * Get season start date
- */
-function getSeasonStartDate(season: Season, year: number): Date {
-  switch (season) {
-    case 'SPRING':
-      return new Date(year, 2, 20); // March 20
-    case 'SUMMER':
-      return new Date(year, 5, 21); // June 21
-    case 'FALL':
-      return new Date(year, 8, 23); // September 23
-    case 'WINTER':
-      return new Date(year, 11, 21); // December 21
-    default:
-      return new Date(year, 2, 20);
-  }
-}
-
-/**
- * Get season end date
- */
-function getSeasonEndDate(season: Season, year: number): Date {
-  switch (season) {
-    case 'SPRING':
-      return new Date(year, 5, 20); // June 20
-    case 'SUMMER':
-      return new Date(year, 8, 22); // September 22
-    case 'FALL':
-      return new Date(year, 11, 20); // December 20
-    case 'WINTER':
-      // Winter ends in the NEXT year
-      return new Date(year + 1, 2, 19); // March 19 (next year)
-    default:
-      return new Date(year, 5, 20);
-  }
 }
 
 /**

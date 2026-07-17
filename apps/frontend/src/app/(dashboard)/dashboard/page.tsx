@@ -1005,13 +1005,19 @@ export default function DashboardPage() {
       const criticalItems = seasonalChecklist.items.filter(
         i => i.priority === 'CRITICAL' && ['recommended', 'added'].includes(String(i.status || '').toLowerCase()),
       );
+      const seasonStart = parseISO(seasonalChecklist.seasonStartDate);
+      const isUpcomingSeason = seasonStart > new Date();
+      const daysUntilStart = Math.max(differenceInDays(seasonStart, new Date()), 1);
       const daysRemaining = differenceInDays(parseISO(seasonalChecklist.seasonEndDate), new Date());
+      const timeframeText = isUpcomingSeason
+        ? `${seasonLabel} starts in ${daysUntilStart} day${daysUntilStart === 1 ? '' : 's'}.`
+        : `${daysRemaining} day${daysRemaining === 1 ? '' : 's'} left in the season.`;
       const title = criticalItems.length > 0
         ? `${seasonLabel} checklist: ${criticalItems.length} critical task${criticalItems.length === 1 ? '' : 's'} pending.`
         : `${seasonLabel} checklist: ${pendingTasks} task${pendingTasks === 1 ? '' : 's'} ready to action.`;
       const subtitle = criticalItems.length > 0
-        ? `${criticalItems.length} critical prep task${criticalItems.length === 1 ? '' : 's'} identified for ${seasonLabel.toLowerCase()}. ${daysRemaining} day${daysRemaining === 1 ? '' : 's'} left in the season.`
-        : `Your ${seasonLabel.toLowerCase()} home prep checklist is ready. ${pendingTasks} task${pendingTasks === 1 ? '' : 's'} remaining — ${daysRemaining} day${daysRemaining === 1 ? '' : 's'} left.`;
+        ? `${criticalItems.length} critical prep task${criticalItems.length === 1 ? '' : 's'} identified for ${seasonLabel.toLowerCase()}. ${timeframeText}`
+        : `Your ${seasonLabel.toLowerCase()} home prep checklist is ready. ${pendingTasks} task${pendingTasks === 1 ? '' : 's'} remaining. ${timeframeText}`;
       const seasonalHref = `/dashboard/seasonal${effectiveSelectedPropertyId ? `?propertyId=${effectiveSelectedPropertyId}` : ''}`;
       const completionPct = Math.round((seasonalChecklist.tasksCompleted / Math.max(seasonalChecklist.totalTasks, 1)) * 100);
       return {
@@ -1021,7 +1027,7 @@ export default function DashboardPage() {
         ctaLabel: 'View seasonal checklist',
         href: seasonalHref,
         impactLabel: `${pendingTasks} task${pendingTasks === 1 ? '' : 's'} pending`,
-        etaLabel: `${daysRemaining}d remaining`,
+        etaLabel: isUpcomingSeason ? `Starts in ${daysUntilStart}d` : `${daysRemaining}d remaining`,
         ...buildTopCardActionMeta(
           'Season',
           seasonLabel,

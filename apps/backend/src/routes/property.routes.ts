@@ -411,16 +411,25 @@ router.get('/:id/seasonal-checklist/current', authenticate, async (req: AuthRequ
       });
     }
 
-    // Get the most recent PENDING or IN_PROGRESS checklist
+    // Get PENDING or IN_PROGRESS checklists whose season is in progress, or
+    // starts within the pre-season prep window. Without the start-date bound
+    // a checklist generated for a far-future season (e.g. next winter) would
+    // surface on the dashboard year-round.
     // Using 'any' type since seasonal models may not be in generated Prisma types yet
-    const checklist = await (prisma as any).seasonalChecklist.findFirst({
+    const MAX_PRE_SEASON_LEAD_DAYS = 21; // matches the EARLY notification offset
+    const now = new Date();
+    const latestVisibleStart = new Date(now.getTime() + MAX_PRE_SEASON_LEAD_DAYS * 24 * 60 * 60 * 1000);
+    const candidateChecklists = await (prisma as any).seasonalChecklist.findMany({
       where: {
         propertyId,
         status: {
           in: ['PENDING', 'IN_PROGRESS'],
         },
         seasonEndDate: {
-          gte: new Date(), // Only return checklists whose season hasn't ended yet
+          gte: now, // Only return checklists whose season hasn't ended yet
+        },
+        seasonStartDate: {
+          lte: latestVisibleStart,
         },
       },
       include: {
@@ -442,34 +451,39 @@ router.get('/:id/seasonal-checklist/current', authenticate, async (req: AuthRequ
         },
       },
       orderBy: {
-        seasonStartDate: 'asc', // Get the next upcoming season
+        seasonStartDate: 'asc', // Current season first, then the upcoming one
       },
     });
 
-    logger.info({ found: checklist ? 'Yes' : 'No' }, `[SEASONAL API] Found checklist for property ${propertyId}`);
+    logger.info(
+      { found: candidateChecklists.length > 0 ? 'Yes' : 'No' },
+      `[SEASONAL API] Found checklist for property ${propertyId}`,
+    );
 
     // Progress is derived from item statuses (dismissed items leave the
     // denominator); the stored running counter drifts and is not displayed.
-    let currentChecklist = checklist;
-    if (currentChecklist) {
+    // Fully-completed checklists get their stale status healed and the next
+    // candidate (e.g. the upcoming season) is surfaced instead.
+    let currentChecklist: any = null;
+    for (const checklist of candidateChecklists) {
       const allItems = await (prisma as any).seasonalChecklistItem.findMany({
-        where: { seasonalChecklistId: currentChecklist.id },
+        where: { seasonalChecklistId: checklist.id },
         select: { status: true },
       });
       const progress = deriveChecklistProgress(allItems);
 
       if (progress.isFullyCompleted) {
-        // Season is done: heal the stale status and drop the dashboard card.
-        await syncSeasonalChecklistStatus(currentChecklist.id);
-        currentChecklist = null;
-      } else {
-        currentChecklist = {
-          ...currentChecklist,
-          tasksCompleted: progress.completedTasks,
-          totalTasks: progress.activeTotalTasks,
-          dismissedTasks: progress.dismissedTasks,
-        };
+        await syncSeasonalChecklistStatus(checklist.id);
+        continue;
       }
+
+      currentChecklist = {
+        ...checklist,
+        tasksCompleted: progress.completedTasks,
+        totalTasks: progress.activeTotalTasks,
+        dismissedTasks: progress.dismissedTasks,
+      };
+      break;
     }
 
     return res.json({
