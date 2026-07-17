@@ -1,6 +1,6 @@
 // apps/backend/src/config/ai-constants.ts
 
-import { PropertyType } from "@prisma/client";
+import { DwellingType } from "@prisma/client";
 
 // ============================================================================
 // LLM CONFIGURATION CONSTANTS
@@ -68,7 +68,7 @@ export const ORACLE_RECOMMENDATION_PROMPT_TEMPLATE = (applianceName: string, bud
 
 Property details:
 - Location: ${property.city}, ${property.state}
-- Property type: ${property.propertyType || 'Residential'}
+- Dwelling type: ${property.dwellingType || 'Residential'}
 - Budget range: $${Math.round(budget * 0.8)} - $${Math.round(budget * 1.2)}
 
 Provide recommendations in this EXACT JSON format (no markdown, no code blocks):
@@ -222,7 +222,7 @@ export const VENDOR_SUGGESTIONS_PROMPT_TEMPLATE = (params: {
 export const BUDGET_RECOMMENDATION_PROMPT_TEMPLATE = (property: any, totalAnnual: number, propertyAge: number) => `Analyze this property's maintenance budget and provide 5 actionable recommendations:
 
 Property Details:
-- Type: ${property.propertyType}
+- Dwelling type: ${property.dwellingType}
 - Age: ${propertyAge} years
 - Location: ${property.city}, ${property.state}
 - Annual Budget: $${totalAnnual}
@@ -246,13 +246,17 @@ Focus on:
 /**
  * Base estimated monthly maintenance cost by property type ($USD).
  */
-export const MONTHLY_BASE_COSTS: Record<PropertyType, number> = {
-  'SINGLE_FAMILY': 170,
-  'CONDO': 100,
-  'TOWNHOME': 130,
-  'APARTMENT': 100, // Assuming similar to condo/townhome for an owner
-  'MULTI_UNIT': 250,
-  'INVESTMENT_PROPERTY': 200, // Generic fallback if type is missing, or for calculation logic
+export const MONTHLY_BASE_COSTS: Record<DwellingType, number> = {
+  DETACHED_SINGLE_FAMILY: 170,
+  ATTACHED_SINGLE_FAMILY: 140,
+  TOWNHOUSE: 130,
+  CONDO_UNIT: 100,
+  APARTMENT_UNIT: 100,
+  DUPLEX: 200,
+  MULTI_FAMILY: 250,
+  MANUFACTURED_HOME: 140,
+  OTHER: 150,
+  UNKNOWN: 150,
 };
 
 /**

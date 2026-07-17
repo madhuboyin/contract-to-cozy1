@@ -38,9 +38,9 @@
  *           type: string
  *         zipCode:
  *           type: string
- *         propertyType:
+ *         dwellingType:
  *           type: string
- *           enum: [SINGLE_FAMILY, CONDO, TOWNHOUSE, MULTI_FAMILY]
+ *           enum: [DETACHED_SINGLE_FAMILY, ATTACHED_SINGLE_FAMILY, TOWNHOUSE, CONDO_UNIT, APARTMENT_UNIT, DUPLEX, MULTI_FAMILY, MANUFACTURED_HOME, OTHER, UNKNOWN]
  *         squareFootage:
  *           type: number
  *         yearBuilt:

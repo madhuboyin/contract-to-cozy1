@@ -263,18 +263,25 @@ given to:
 
 #### 8.3.1 Structural type is conflated with use
 
-`PropertyType` currently contains structural values (`SINGLE_FAMILY`,
+Historical `Property.propertyType` used `PropertyType`, which contains structural values (`SINGLE_FAMILY`,
 `TOWNHOME`, `CONDO`, `APARTMENT`, `MULTI_UNIT`) and
 `INVESTMENT_PROPERTY`, which is a use/financial classification. Features cannot
 reliably determine physical applicability from that enum.
 
+**Resolved in Phase 8:** `Property.propertyType` was removed. The enum remains
+only as a feature-specific benchmark/legacy-targeting dimension, with explicit
+mapping from canonical `dwellingType` at those boundaries.
+
 #### 8.3.2 Ownership and occupancy are ambiguous
 
-`Property.ownershipType` contains `OWNER_OCCUPIED` and `RENTED_OUT`, while
+Historical `Property.ownershipType` contained `OWNER_OCCUPIED` and `RENTED_OUT`, while
 `HouseholdProperty.occupancyType` is a string containing concepts such as
 primary, secondary, rental, and vacant. Structural ownership, property use,
 current occupancy, and optional household linkage are separate concepts and
 must not share one field.
+
+**Resolved in Phase 8:** the Property field and its enum were removed after
+consumers moved to `ownershipForm`, `propertyUse`, and `occupancyStatus`.
 
 #### 8.3.3 Household information is stored on Property
 
@@ -330,10 +337,13 @@ freshness consistently without evidence metadata.
 
 #### 8.3.10 Existing Personalization facts are too narrow
 
-The current property trait repository loads smoke-detector, roof-year, and a
-small normalized asset set. The rule AST allows `property.propertyType`, but the
-current evaluation call supplies derived traits rather than an assembled
-property fact map. It is not yet a shared context provider.
+The original property trait repository loaded smoke-detector, roof-year, and a
+small normalized asset set, while the rule AST allowed
+`property.propertyType` without an assembled property fact map.
+
+**Resolved in Phases 7–8:** Personalization evaluation consumes bounded
+Property Context and the obsolete rule path and duplicate fact loader are
+removed.
 
 ### 8.4 Canonical ownership decisions
 
@@ -730,10 +740,10 @@ occupancyStatus OccupancyStatus
 
 Actions:
 
-- Remove `INVESTMENT_PROPERTY` from the structural classification.
+- Remove `INVESTMENT_PROPERTY` from Property structural classification.
 - Replace string `HouseholdProperty.occupancyType` with a typed relationship
   role only if still needed for optional household linkage.
-- Remove `Property.ownershipType` after consumers use the new fields.
+- Remove `Property.ownershipType` after consumers use the new fields. **Done in Phase 8.**
 - Move `occupantsCount` out of default Property and into consented household
   context.
 

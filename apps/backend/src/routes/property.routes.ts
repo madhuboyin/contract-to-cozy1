@@ -145,9 +145,9 @@ router.get('/:id/context', authenticate, getPropertyContextSnapshot);
  *               zipCode:
  *                 type: string
  *                 example: "94102"
- *               propertyType:
+ *               dwellingType:
  *                 type: string
- *                 enum: [SINGLE_FAMILY, CONDO, TOWNHOUSE, MULTI_FAMILY]
+ *                 enum: [DETACHED_SINGLE_FAMILY, ATTACHED_SINGLE_FAMILY, TOWNHOUSE, CONDO_UNIT, APARTMENT_UNIT, DUPLEX, MULTI_FAMILY, MANUFACTURED_HOME, OTHER, UNKNOWN]
  *               squareFootage:
  *                 type: number
  *                 example: 2000
@@ -251,9 +251,9 @@ router.get('/:id/dashboard-bootstrap', authenticate, propertyController.getPrope
  *                 type: string
  *               zipCode:
  *                 type: string
- *               propertyType:
+ *               dwellingType:
  *                 type: string
- *                 enum: [SINGLE_FAMILY, CONDO, TOWNHOUSE, MULTI_FAMILY]
+ *                 enum: [DETACHED_SINGLE_FAMILY, ATTACHED_SINGLE_FAMILY, TOWNHOUSE, CONDO_UNIT, APARTMENT_UNIT, DUPLEX, MULTI_FAMILY, MANUFACTURED_HOME, OTHER, UNKNOWN]
  *               squareFootage:
  *                 type: number
  *               yearBuilt:

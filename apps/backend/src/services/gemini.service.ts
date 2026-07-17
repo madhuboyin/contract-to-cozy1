@@ -51,7 +51,7 @@ class GeminiService {
     // PROPERTY BASICS
     contextLines.push('=== PROPERTY OVERVIEW ===');
     contextLines.push(`Address: ${property.address}, ${property.city}, ${property.state} ${property.zipCode}`);
-    if (property.propertyType) contextLines.push(`Type: ${property.propertyType}`);
+    if (property.dwellingType !== 'UNKNOWN') contextLines.push(`Dwelling type: ${property.dwellingType}`);
     if (property.yearBuilt) contextLines.push(`Built: ${property.yearBuilt}`);
     if (property.heatingType) contextLines.push(`Heating: ${property.heatingType}`);
     if (property.coolingType) contextLines.push(`Cooling: ${property.coolingType}`);

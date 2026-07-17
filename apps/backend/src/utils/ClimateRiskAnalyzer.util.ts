@@ -18,7 +18,7 @@ export interface ClimateRiskInsight {
  */
 export function analyzeClimateRisk(property: Property): ClimateRiskInsight[] {
     // Check for mock high-risk coastal/wildfire property (e.g., California Single-Family)
-    if (property.state === 'CA' && property.propertyType === 'SINGLE_FAMILY') {
+    if (property.state === 'CA' && property.dwellingType === 'DETACHED_SINGLE_FAMILY') {
         const currentYear = new Date().getFullYear();
         
         return [

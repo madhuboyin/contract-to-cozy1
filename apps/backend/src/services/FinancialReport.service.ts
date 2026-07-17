@@ -58,19 +58,31 @@ export class FinancialReportService {
     
         // 2. Get benchmark
         let benchmark: any = null;
-        if (property.propertyType) {
+        const benchmarkPropertyType: PropertyType | null = {
+            DETACHED_SINGLE_FAMILY: PropertyType.SINGLE_FAMILY,
+            ATTACHED_SINGLE_FAMILY: PropertyType.TOWNHOME,
+            TOWNHOUSE: PropertyType.TOWNHOME,
+            CONDO_UNIT: PropertyType.CONDO,
+            APARTMENT_UNIT: PropertyType.APARTMENT,
+            DUPLEX: PropertyType.MULTI_UNIT,
+            MULTI_FAMILY: PropertyType.MULTI_UNIT,
+            MANUFACTURED_HOME: null,
+            OTHER: null,
+            UNKNOWN: null,
+        }[property.dwellingType];
+        if (benchmarkPropertyType) {
             benchmark = await prisma.financialEfficiencyConfig.findUnique({
                 where: { 
                     zipCode_propertyType: { 
                         zipCode: property.zipCode, 
-                        propertyType: property.propertyType 
+                        propertyType: benchmarkPropertyType
                     } 
                 },
             });
             
             if (!benchmark) {
                 benchmark = await prisma.financialEfficiencyConfig.findFirst({
-                    where: { zipCode: null, propertyType: property.propertyType },
+                    where: { zipCode: null, propertyType: benchmarkPropertyType },
                 });
             }
         }

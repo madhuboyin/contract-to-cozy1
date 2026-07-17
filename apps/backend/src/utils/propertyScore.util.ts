@@ -1,5 +1,5 @@
 // apps/backend/src/utils/propertyScore.util.ts
-import { Property, PropertyType, HeatingType, CoolingType, WaterHeaterType, RoofType, InventoryItem, Warranty, Booking } from '@prisma/client';
+import { Property, DwellingType, HeatingType, CoolingType, WaterHeaterType, RoofType, InventoryItem, Warranty, Booking } from '@prisma/client';
 
 export interface HealthScoreResult {
   totalScore: number;
@@ -112,11 +112,15 @@ export function calculateHealthScore(
   }
 
   // 2. Structure Factor (Max 10)
-  if (property.propertyType && property.roofType) {
+  if (property.dwellingType !== DwellingType.UNKNOWN && property.roofType) {
     let structureScore = 0;
     // Property Type (5 pts max)
-    if (property.propertyType === PropertyType.SINGLE_FAMILY) structureScore += 5;
-    else if (property.propertyType === PropertyType.TOWNHOME || property.propertyType === PropertyType.CONDO) structureScore += 3;
+    if (property.dwellingType === DwellingType.DETACHED_SINGLE_FAMILY) structureScore += 5;
+    else if (
+      property.dwellingType === DwellingType.ATTACHED_SINGLE_FAMILY ||
+      property.dwellingType === DwellingType.TOWNHOUSE ||
+      property.dwellingType === DwellingType.CONDO_UNIT
+    ) structureScore += 3;
 
     // Roof Type (5 pts max)
     if (property.roofType === RoofType.SHINGLE || property.roofType === RoofType.METAL) structureScore += 5;

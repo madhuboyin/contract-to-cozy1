@@ -231,7 +231,7 @@ export class HomeModificationAdvisorService {
       const prompt = `Analyze home modification needs and provide detailed recommendations:
 
 Property Details:
-- Type: ${property.propertyType}
+- Dwelling type: ${property.dwellingType}
 - Age: ${propertyAge === null ? 'unknown' : `${propertyAge} years`}
 - Location: ${property.city}, ${property.state}
 

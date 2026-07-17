@@ -84,7 +84,7 @@ const options: swaggerJsdoc.Options = {
             city: { type: 'string' },
             state: { type: 'string' },
             zipCode: { type: 'string' },
-            propertyType: { type: 'string' },
+            dwellingType: { type: 'string' },
             squareFootage: { type: 'number' },
             yearBuilt: { type: 'integer' },
           },

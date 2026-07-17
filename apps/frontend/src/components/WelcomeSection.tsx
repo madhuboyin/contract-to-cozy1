@@ -18,7 +18,7 @@ interface WelcomeSectionProps {
 function formatPropertyDisplay(property: Property): string {
   const name = property.name?.trim() || property.address || 'Unnamed property';
   const contextType = getPropertyContextType(property);
-  const structuralType = humanizeEnum(property.propertyType);
+  const structuralType = humanizeEnum(property.dwellingType);
   const dedupedContextType = contextType.toLowerCase() === name.toLowerCase() ? null : contextType;
   return [name, dedupedContextType, structuralType].filter(Boolean).join(' • ');
 }
@@ -35,8 +35,8 @@ function humanizeEnum(value: string | null | undefined): string {
 function getPropertyContextType(property: Property | null): string {
   if (!property) return 'Property';
   if (property.isPrimary) return 'Main Home';
-  if (property.ownershipType === 'RENTED_OUT') return 'Rental';
-  if (property.ownershipType === 'OWNER_OCCUPIED') return 'Owner Occupied';
+  if (property.propertyUse === 'LONG_TERM_RENTAL' || property.propertyUse === 'SHORT_TERM_RENTAL') return 'Rental';
+  if (property.occupancyStatus === 'OWNER_OCCUPIED') return 'Owner Occupied';
   return 'Secondary Home';
 }
 
@@ -54,7 +54,7 @@ export function WelcomeSection({
   const selectedPropertyName =
     selectedProperty?.name?.trim() || selectedProperty?.address || 'No property selected';
   const selectedPropertyContextType = getPropertyContextType(selectedProperty);
-  const selectedPropertyStructuralType = humanizeEnum(selectedProperty?.propertyType);
+  const selectedPropertyStructuralType = humanizeEnum(selectedProperty?.dwellingType);
   const coverPhotoUrl = selectedProperty?.coverPhoto?.fileUrl || null;
   const [hasCoverPhotoError, setHasCoverPhotoError] = useState(false);
 

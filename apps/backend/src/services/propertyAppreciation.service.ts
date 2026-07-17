@@ -236,7 +236,7 @@ export class PropertyAppreciationService {
 Purchase Price: $${purchasePrice.toLocaleString()}
 Purchase Date: ${yearsOwned.toFixed(1)} years ago
 Location: ${property.city}, ${property.state} ${property.zipCode || ''}
-Property Type: ${property.propertyType}
+Dwelling Type: ${property.dwellingType}
 Square Footage: ${property.squareFootage || 'Unknown'}
 Year Built: ${property.yearBuilt || 'Unknown'}
 FHFA Baseline Regional Appreciation Rate: ${regionalRate}% annually

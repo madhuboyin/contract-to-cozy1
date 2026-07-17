@@ -49,21 +49,43 @@ occurrences. These are not all the same concept:
    `Property.occupancyStatus` and is retained pending a relationship-model
    review.
 
+## Slice 2 — legacy Property classification removal
+
+Implemented:
+
+- Converted direct backend, frontend, and worker reads of
+  `Property.propertyType` to canonical `dwellingType` or a feature-boundary
+  mapping derived from it.
+- Replaced `Property.ownershipType` decisions with the non-conflated
+  `propertyUse`, `occupancyStatus`, and `ownershipForm` classifications.
+- Updated property create/update validation, API client contracts, onboarding,
+  property cards, workspace headers, health scoring, reports, assistant
+  context, event matching, and worker calculations to use canonical fields.
+- Preserved feature-specific and external `propertyType` dimensions for tax
+  bills, seller intake, benchmark records, and compatibility snapshot output;
+  these no longer read a legacy Property column.
+- Added an explicit canonical-to-benchmark mapping where the older benchmark
+  catalog still uses the `PropertyType` segmentation enum.
+- Removed `Property.propertyType`, `Property.ownershipType`, and the now-unused
+  `OwnershipType` enum from Prisma. No migration script was created.
+- Added a cleanup guard that fails on restored Prisma fields or direct source
+  readers.
+
+The legacy Property classification removal is implemented. The user must apply
+the schema change through the normal database schema workflow.
+
 ## Remaining Phase 8 slices
 
-1. Convert the audited direct legacy Property classification readers and UI
-   contracts to canonical fields, then remove `Property.propertyType` and
-   `Property.ownershipType` from Prisma. No migration script will be created.
-2. Remove dead generic-assistant formatting code and remaining compatibility
+1. Remove dead generic-assistant formatting code and remaining compatibility
    response aliases after frontend consumers use bounded context contracts.
-3. Audit financial, item, and snapshot ownership for obsolete schema and
+2. Audit financial, item, and snapshot ownership for obsolete schema and
    adapters beyond the Phase 0 consolidation already completed.
-4. Run API/UI/worker runtime scenarios for all ten archetypes in an environment
+3. Run API/UI/worker runtime scenarios for all ten archetypes in an environment
    with the database and Docker services available.
-5. Re-run the final forbidden-field scan and update affected feature FRDs and
+4. Re-run the final forbidden-field scan and update affected feature FRDs and
    operational runbooks.
 
 ## Current status
 
-Phase 8 is in progress. Slice 1 is implemented; the legacy Property
-classification removal is the next implementation slice.
+Phase 8 is in progress. Slices 1 and 2 are implemented; generic-assistant and
+compatibility-response cleanup is the next implementation slice.

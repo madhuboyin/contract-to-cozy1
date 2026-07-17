@@ -88,14 +88,7 @@ enum PropertyType {
   INVESTMENT_PROPERTY
 }
 
-enum OwnershipType {
-  OWNER_OCCUPIED
-  RENTED_OUT
-}
-
-// Property Context Platform canonical classifications. PropertyType and
-// OwnershipType remain temporarily while their existing consumers are moved to
-// these non-conflated fields; they are not read by the context provider.
+// Property Context Platform canonical classifications.
 enum DwellingType {
   DETACHED_SINGLE_FAMILY
   ATTACHED_SINGLE_FAMILY
@@ -2039,7 +2032,6 @@ model Property {
 
   isPrimary Boolean @default(true)
 
-  propertyType    PropertyType?
   // Canonical Property Context classifications. UNKNOWN is explicit; null is
   // reserved for records not yet captured under the target schema.
   dwellingType    DwellingType    @default(UNKNOWN)
@@ -2051,7 +2043,6 @@ model Property {
   bedrooms        Int?
   bathrooms       Float?
 
-  ownershipType  OwnershipType?
   occupantsCount Int? // Number of Occupants (Layer 2 - Usage/Wear Factor)
 
   // New Systems Snapshot (Layer 2 - Systems Factor)

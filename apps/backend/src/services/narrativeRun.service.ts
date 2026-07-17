@@ -46,7 +46,7 @@ async function assertPropertyAccess(propertyId: string, userId: string) {
       updatedAt: true,
       yearBuilt: true,
       propertySize: true,
-      propertyType: true,
+      dwellingType: true,
       address: true,
       city: true,
       state: true,
@@ -60,7 +60,7 @@ async function assertPropertyAccess(propertyId: string, userId: string) {
 
   return {
     ...property,
-    propertyType: property.propertyType ? String(property.propertyType) : null,
+    propertyType: property.dwellingType !== 'UNKNOWN' ? String(property.dwellingType) : null,
   };
 }
 

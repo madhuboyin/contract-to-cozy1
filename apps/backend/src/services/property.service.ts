@@ -1,6 +1,6 @@
 // apps/backend/src/services/property.service.ts
 
-import { Property, PropertyType, OwnershipType, DwellingType, OwnershipForm, PropertyUse, OccupancyStatus, OutdoorSpaceType, HeatingType, CoolingType, WaterHeaterType, RoofType, FoundationType, Prisma, ChecklistItem, Warranty, DocumentType, PropertyResponsibilityScope, ResponsibleParty } from '@prisma/client';
+import { Property, DwellingType, OwnershipForm, PropertyUse, OccupancyStatus, OutdoorSpaceType, HeatingType, CoolingType, WaterHeaterType, RoofType, FoundationType, Prisma, ChecklistItem, Warranty, DocumentType, PropertyResponsibilityScope, ResponsibleParty } from '@prisma/client';
 import { calculateHealthScore, HealthScoreResult } from '../utils/propertyScore.util'; 
 import JobQueueService from './JobQueue.service';
 import type { HomeAssetDTO } from './propertyApplianceInventory.service';
@@ -40,7 +40,6 @@ interface CreatePropertyData {
   isPrimary?: boolean;
 
   // Layer 1 - Basic/Migrated Fields
-  propertyType?: PropertyType | null;
   dwellingType?: DwellingType;
   ownershipForm?: OwnershipForm;
   propertyUse?: PropertyUse;
@@ -51,7 +50,6 @@ interface CreatePropertyData {
   // Layer 2 - Advanced Fields (Migrated and New)
   bedrooms?: number | null;
   bathrooms?: number | null;
-  ownershipType?: OwnershipType | null;
   heatingType?: HeatingType | null;
   coolingType?: CoolingType | null;
   waterHeaterType?: WaterHeaterType | null;
@@ -265,7 +263,7 @@ export interface PropertyAIGuidance {
   city: string;
   state: string;
   zipCode: string;
-  propertyType: PropertyType | null;
+  dwellingType: DwellingType;
   yearBuilt: number | null;
   heatingType: HeatingType | null;
   coolingType: CoolingType | null;
@@ -541,7 +539,6 @@ export async function createProperty(userId: string, data: CreatePropertyData): 
       isPrimary: data.isPrimary || false,
       
       // PHASE 2 ADDITIONS - FIX: Ensure all optional fields are explicitly null if undefined/missing
-      propertyType: data.propertyType || null,
       dwellingType: data.dwellingType ?? 'UNKNOWN',
       ownershipForm: data.ownershipForm ?? 'UNKNOWN',
       propertyUse: data.propertyUse ?? 'UNKNOWN',
@@ -550,7 +547,6 @@ export async function createProperty(userId: string, data: CreatePropertyData): 
       yearBuilt: data.yearBuilt || null,
       bedrooms: data.bedrooms || null,
       bathrooms: data.bathrooms || null,
-      ownershipType: data.ownershipType || null,
       heatingType: data.heatingType || null,
       coolingType: data.coolingType || null,
       waterHeaterType: data.waterHeaterType || null,
@@ -636,7 +632,7 @@ export async function createProperty(userId: string, data: CreatePropertyData): 
     moduleKey: AnalyticsModule.PROPERTY,
     featureKey: AnalyticsFeature.PROPERTY_PROFILE,
     metadataJson: {
-      propertyType: data.propertyType ?? null,
+      dwellingType: data.dwellingType ?? 'UNKNOWN',
       state: data.state.toUpperCase(),
       yearBuilt: data.yearBuilt ?? null,
     },
@@ -833,7 +829,7 @@ export async function getPropertyContextForAI(propertyId: string, userId: string
       city: true,
       state: true,
       zipCode: true,
-      propertyType: true,
+      dwellingType: true,
       yearBuilt: true,
       heatingType: true,
       coolingType: true,
@@ -1040,7 +1036,7 @@ export async function getPropertyContextForAI(propertyId: string, userId: string
     city: property.city,
     state: property.state,
     zipCode: property.zipCode,
-    propertyType: property.propertyType,
+    dwellingType: property.dwellingType,
     yearBuilt: property.yearBuilt,
     heatingType: property.heatingType,
     coolingType: property.coolingType,
@@ -1212,7 +1208,6 @@ export async function updateProperty(
   
   // PHASE 2 ADDITIONS - Dynamically set new fields for update
   // FIX: Ensure optional fields are explicitly handled to prevent undefined data corruption
-  if (data.propertyType !== undefined) updatePayload.propertyType = data.propertyType || null;
   if (data.dwellingType !== undefined) updatePayload.dwellingType = data.dwellingType;
   if (data.ownershipForm !== undefined) updatePayload.ownershipForm = data.ownershipForm;
   if (data.propertyUse !== undefined) updatePayload.propertyUse = data.propertyUse;
@@ -1221,7 +1216,6 @@ export async function updateProperty(
   if (data.yearBuilt !== undefined) updatePayload.yearBuilt = data.yearBuilt || null;
   if (data.bedrooms !== undefined) updatePayload.bedrooms = data.bedrooms || null;
   if (data.bathrooms !== undefined) updatePayload.bathrooms = data.bathrooms || null;
-  if (data.ownershipType !== undefined) updatePayload.ownershipType = data.ownershipType || null;
   if (data.heatingType !== undefined) updatePayload.heatingType = data.heatingType || null;
   if (data.coolingType !== undefined) updatePayload.coolingType = data.coolingType || null;
   if (data.waterHeaterType !== undefined) updatePayload.waterHeaterType = data.waterHeaterType || null;

@@ -38,10 +38,44 @@ test('Phase 0 obsolete item and finance models remain removed', () => {
   assert.doesNotMatch(homeItem, /homeAssetId|kind\s+HomeItemKind/);
 });
 
-test('remaining legacy classification work is explicitly inventoried, not silently accepted', () => {
+test('legacy Property classification columns and direct readers remain removed', () => {
+  const schema = read('../../prisma/schema.prisma');
+  const propertyModel = schema.match(/model Property\s*\{[\s\S]*?\n\}/)?.[0] ?? '';
+  assert.doesNotMatch(propertyModel, /\bpropertyType\b/);
+  assert.doesNotMatch(propertyModel, /\bownershipType\b/);
+
+  const sourceRoots = [
+    path.resolve(__dirname, '../../src'),
+    path.resolve(__dirname, '../../../workers/src'),
+    path.resolve(__dirname, '../../../frontend/src'),
+  ];
+  const directReaderPatterns = [
+    /property\.propertyType\b/,
+    /property\.ownershipType\b/,
+    /propertyType:\s*true/,
+    /ownershipType:\s*true/,
+  ];
+  const findings = [];
+  const visit = (entry) => {
+    for (const child of fs.readdirSync(entry, { withFileTypes: true })) {
+      const absolute = path.join(entry, child.name);
+      if (child.isDirectory()) visit(absolute);
+      else if (/\.(?:ts|tsx)$/.test(child.name)) {
+        const source = fs.readFileSync(absolute, 'utf8');
+        // Service Price Radar's local snapshot DTO retains a compatibility
+        // output key; its source value is canonical dwellingType.
+        if (absolute.endsWith('servicePriceRadar.engine.ts')) continue;
+        for (const pattern of directReaderPatterns) {
+          if (pattern.test(source)) findings.push(`${path.relative(path.resolve(__dirname, '../../../..'), absolute)}: ${pattern}`);
+        }
+      }
+    }
+  };
+  sourceRoots.forEach(visit);
+  assert.deepEqual(findings, []);
+
   const status = read('../../../../docs/property-context/PHASE8_IMPLEMENTATION_STATUS.md');
-  assert.match(status, /Property\.propertyType/);
-  assert.match(status, /Property\.ownershipType/);
+  assert.match(status, /legacy Property classification removal is implemented/);
   assert.match(status, /Remaining Phase 8 slices/);
   assert.match(status, /Phase 8 is in progress/);
 });

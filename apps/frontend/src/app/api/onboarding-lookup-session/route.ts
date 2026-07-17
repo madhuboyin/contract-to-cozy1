@@ -11,7 +11,7 @@ type OnboardingLookupPayload = {
   yearBuilt?: number | null;
   propertySize?: number | null;
   estimatedValue?: number | null;
-  propertyType?: string | null;
+  dwellingType?: string | null;
   lastSalePrice?: number | null;
   lastSaleDate?: string | null;
 };
@@ -38,7 +38,7 @@ function sanitizePayload(input: unknown): OnboardingLookupPayload | null {
     yearBuilt: normalizeNumber(source.yearBuilt),
     propertySize: normalizeNumber(source.propertySize),
     estimatedValue: normalizeNumber(source.estimatedValue),
-    propertyType: normalizeString(source.propertyType) ?? null,
+    dwellingType: normalizeString(source.dwellingType) ?? null,
     lastSalePrice: normalizeNumber(source.lastSalePrice),
     lastSaleDate: normalizeString(source.lastSaleDate) ?? null,
   };

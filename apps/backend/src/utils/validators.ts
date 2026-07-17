@@ -4,17 +4,6 @@ import { z } from 'zod';
 // PROPERTY ENUMS (Phase 2 Additions)
 // ============================================================================
 
-const PropertyTypeEnum = z.enum([
-  'SINGLE_FAMILY', 
-  'TOWNHOME', 
-  'CONDO', 
-  'APARTMENT', 
-  'MULTI_UNIT', 
-  'INVESTMENT_PROPERTY'
-]);
-
-const OwnershipTypeEnum = z.enum(['OWNER_OCCUPIED', 'RENTED_OUT']);
-
 const DwellingTypeEnum = z.enum([
   'DETACHED_SINGLE_FAMILY', 'ATTACHED_SINGLE_FAMILY', 'TOWNHOUSE', 'CONDO_UNIT',
   'APARTMENT_UNIT', 'DUPLEX', 'MULTI_FAMILY', 'MANUFACTURED_HOME', 'OTHER', 'UNKNOWN',
@@ -215,7 +204,6 @@ export const createPropertySchema = z.object({
   isPrimary: z.boolean().optional(),
 
   // Layer 1 - Basic/Migrated Fields
-  propertyType: PropertyTypeEnum.optional(),
   dwellingType: DwellingTypeEnum.optional(),
   ownershipForm: OwnershipFormEnum.optional(),
   propertyUse: PropertyUseEnum.optional(),
@@ -226,7 +214,6 @@ export const createPropertySchema = z.object({
   // Layer 2 - Advanced Fields (Migrated and New)
   bedrooms: z.number().int().positive().optional(),
   bathrooms: z.number().positive().optional(),
-  ownershipType: OwnershipTypeEnum.optional(),
   heatingType: HeatingTypeEnum.optional(),
   coolingType: CoolingTypeEnum.optional(),
   waterHeaterType: WaterHeaterTypeEnum.optional(),

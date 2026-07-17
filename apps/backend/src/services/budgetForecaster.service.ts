@@ -77,7 +77,7 @@ export class BudgetForecasterService {
 
     // Get base monthly cost
     // [REFACTORED] Use imported constant
-    const baseMonthlyCost = MONTHLY_BASE_COSTS[property.propertyType as keyof typeof MONTHLY_BASE_COSTS] || 150;
+    const baseMonthlyCost = MONTHLY_BASE_COSTS[property.dwellingType as keyof typeof MONTHLY_BASE_COSTS] || 150;
 
     // Age multiplier (older homes cost more)
     const ageMultiplier = 1 + (propertyAge / 100);

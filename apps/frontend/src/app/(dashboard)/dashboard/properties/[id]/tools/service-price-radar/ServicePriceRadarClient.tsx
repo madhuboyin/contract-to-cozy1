@@ -230,7 +230,7 @@ function propertyContextLine(property: Property | null): string {
   if (!property) return 'Property context unavailable';
 
   const bits = [
-    property.propertyType ? optionLabel(property.propertyType) : null,
+    property.dwellingType !== 'UNKNOWN' ? optionLabel(property.dwellingType) : null,
     property.propertySize ? `${property.propertySize.toLocaleString()} sq ft` : null,
     property.yearBuilt ? `Built ${property.yearBuilt}` : null,
   ].filter(Boolean);
@@ -1290,7 +1290,7 @@ export default function ServicePriceRadarClient() {
               <p className="mb-0 -mt-1 text-xs text-[hsl(var(--mobile-text-muted))]">
                 {[
                   [property.city, property.state].filter(Boolean).join(', '),
-                  property.propertyType ? optionLabel(property.propertyType) : null,
+                  property.dwellingType !== 'UNKNOWN' ? optionLabel(property.dwellingType) : null,
                   property.propertySize ? `${property.propertySize.toLocaleString()} sq ft` : null,
                   property.yearBuilt ? `Built ${property.yearBuilt}` : null,
                 ].filter(Boolean).join(' · ')}

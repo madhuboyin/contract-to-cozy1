@@ -310,7 +310,7 @@ const HeroMetaPill = ({ label }: { label: string }) => (
 );
 
 const PropertyHeroCard = ({ property }: { property: Property }) => {
-  const propertyTypeLabel = formatEnumLabel(property.propertyType, "Home");
+  const propertyTypeLabel = formatEnumLabel(property.dwellingType, "Home");
   const heroLocation = [property.city, property.state].filter(Boolean).join(", ");
   const heroMeta = [
     property.propertySize ? `${property.propertySize.toLocaleString()} sqft` : null,
@@ -409,7 +409,7 @@ const SellingPrepBanner = ({ propertyId }: { propertyId: string }) => (
 
 // UPDATED: PropertyOverview as the Executive Summary
 const PropertyOverview = ({ property }: { property: Property }) => {
-  const propertyTypeLabel = formatEnumLabel(property.propertyType);
+  const propertyTypeLabel = formatEnumLabel(property.dwellingType);
   const occupancyLabel =
     property.bedrooms != null || property.bathrooms != null
       ? `${property.bedrooms ?? "—"} bd · ${property.bathrooms ?? "—"} ba`
@@ -1001,7 +1001,7 @@ export default function PropertyDetailPage() {
   ]
     .filter(Boolean)
     .join(" • ");
-  const propertyTypeLabel = formatEnumLabel(property.propertyType, "Home");
+  const propertyTypeLabel = formatEnumLabel(property.dwellingType, "Home");
   const onboardingIncomplete = Boolean(onboardingStatus && !isOnboardingComplete(onboardingStatus));
   const criticalInsightCount =
     scoredProperty.healthScore?.insights?.filter((insight) =>

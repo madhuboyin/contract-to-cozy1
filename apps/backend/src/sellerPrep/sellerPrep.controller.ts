@@ -174,7 +174,7 @@ export class SellerPrepController {
             id: propertyId,
             homeownerProfile: { userId },
           },
-          select: { id: true, state: true, yearBuilt: true, propertyType: true },
+          select: { id: true, state: true, yearBuilt: true, dwellingType: true },
         });
 
         if (!property) {
@@ -185,7 +185,7 @@ export class SellerPrepController {
         }
 
         const baseItems = generateRoiChecklist({
-          propertyType: property.propertyType ? String(property.propertyType) : undefined,
+          propertyType: property.dwellingType !== 'UNKNOWN' ? String(property.dwellingType) : undefined,
           yearBuilt: property.yearBuilt ?? undefined,
           state: property.state,
         });

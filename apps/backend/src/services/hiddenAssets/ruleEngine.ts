@@ -41,7 +41,6 @@ const ATTRIBUTE_MAP: Record<string, keyof PropertyAttributeMap> = {
 
   // Ownership / classification
   propertyType: 'propertyType',
-  'property.propertyType': 'propertyType',
   isPrimaryResidence: 'isPrimaryResidence',
   'property.isPrimaryResidence': 'isPrimaryResidence',
   ownerOccupied: 'isPrimaryResidence',
@@ -732,8 +731,6 @@ export function buildPropertyAttributeMap(
     zipCode: string;
     yearBuilt?: number | null;
     propertySize?: number | null;
-    propertyType?: string | null;
-    ownershipType?: string | null;
     dwellingType?: string | null;
     propertyUse?: string | null;
     occupancyStatus?: string | null;
@@ -762,11 +759,7 @@ export function buildPropertyAttributeMap(
     ? property.propertyUse === 'PRIMARY_RESIDENCE'
     : property.occupancyStatus && property.occupancyStatus !== 'UNKNOWN'
       ? property.occupancyStatus === 'OWNER_OCCUPIED'
-      : property.ownershipType === 'OWNER_OCCUPIED'
-      ? true
-      : property.ownershipType === 'RENTED_OUT'
-        ? false
-        : null;
+      : null;
 
   // Derive heat pump presence from hvac/water heater type
   const heatPumpInstalled =
@@ -795,7 +788,7 @@ export function buildPropertyAttributeMap(
     propertyType:
       property.dwellingType && property.dwellingType !== 'UNKNOWN'
         ? property.dwellingType
-        : property.propertyType ?? null,
+        : null,
     isPrimaryResidence,
     yearBuilt: property.yearBuilt ?? null,
     squareFootage: property.propertySize ?? null,

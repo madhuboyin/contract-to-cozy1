@@ -46,7 +46,7 @@ type PropertyInsightInput = {
   zipCode: string;
   yearBuilt: number | null;
   propertySize: number | null;
-  propertyType: string | null;
+  dwellingType: string;
   updatedAt: Date;
 };
 
@@ -64,7 +64,7 @@ function buildInputFingerprint(property: PropertyInsightInput): string {
     property.id,
     property.yearBuilt ?? 'NA',
     property.propertySize ?? 'NA',
-    normalizeText(property.propertyType),
+    normalizeText(property.dwellingType === 'UNKNOWN' ? null : property.dwellingType),
     normalizeText(property.address),
     normalizeText(property.city),
     normalizeText(property.state),
@@ -118,8 +118,8 @@ function computeConfidenceScore(property: PropertyInsightInput): { confidenceSco
   if (property.propertySize) score += 15;
   else missingFieldKeys.push('propertySize');
 
-  if (property.propertyType) score += 15;
-  else missingFieldKeys.push('propertyType');
+  if (property.dwellingType !== 'UNKNOWN') score += 15;
+  else missingFieldKeys.push('dwellingType');
 
   const hasPreciseAddress = Boolean(property.address && property.zipCode && String(property.zipCode).trim().length >= 5);
   if (hasPreciseAddress) score += 15;
@@ -164,7 +164,7 @@ async function getPropertyInsightInput(propertyId: string, userId: string): Prom
       zipCode: true,
       yearBuilt: true,
       propertySize: true,
-      propertyType: true,
+      dwellingType: true,
       updatedAt: true,
     },
   });
@@ -173,10 +173,7 @@ async function getPropertyInsightInput(propertyId: string, userId: string): Prom
     throw new APIError('Property not found', 404, 'NOT_FOUND');
   }
 
-  return {
-    ...property,
-    propertyType: property.propertyType ? String(property.propertyType) : null,
-  };
+  return property;
 }
 
 function buildInsightSnapshotData(property: PropertyInsightInput): InsightSnapshotData {
@@ -192,7 +189,7 @@ function buildInsightSnapshotData(property: PropertyInsightInput): InsightSnapsh
     inputs: {
       yearBuilt: property.yearBuilt,
       propertySize: property.propertySize,
-      propertyType: property.propertyType,
+      propertyType: property.dwellingType === 'UNKNOWN' ? null : property.dwellingType,
       address: property.address || null,
       city: property.city || null,
       state: property.state || null,
@@ -219,7 +216,7 @@ function isWithinSnapshotTTL(computedAt: Date, now: Date = new Date()): boolean 
 
 export function isInsightSnapshotStale(
   snapshot: PropertyInsightSnapshot,
-  property: Pick<PropertyInsightInput, 'id' | 'yearBuilt' | 'propertySize' | 'propertyType' | 'address' | 'city' | 'state' | 'zipCode' | 'updatedAt'>,
+  property: Pick<PropertyInsightInput, 'id' | 'yearBuilt' | 'propertySize' | 'dwellingType' | 'address' | 'city' | 'state' | 'zipCode' | 'updatedAt'>,
   now: Date = new Date()
 ): boolean {
   if (!isWithinSnapshotTTL(snapshot.computedAt, now)) return true;
@@ -227,10 +224,7 @@ export function isInsightSnapshotStale(
   if (snapshot.computedAt < property.updatedAt) return true;
 
   const parsed = parseSnapshotJson(snapshot.snapshotJson);
-  const expectedFingerprint = buildInputFingerprint({
-    ...property,
-    propertyType: property.propertyType ? String(property.propertyType) : null,
-  });
+  const expectedFingerprint = buildInputFingerprint(property);
 
   return parsed.inputFingerprint !== expectedFingerprint;
 }

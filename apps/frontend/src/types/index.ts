@@ -194,22 +194,6 @@ export type HomeownerSegment = 'HOME_BUYER' | 'EXISTING_OWNER';
 // NEW PROPERTY ENUMS (FIX: ADDED RUNTIME CONSTANTS)
 // ============================================================================
 
-export const PropertyTypes = {
-  SINGLE_FAMILY: 'SINGLE_FAMILY',
-  TOWNHOME: 'TOWNHOME',
-  CONDO: 'CONDO',
-  APARTMENT: 'APARTMENT',
-  MULTI_UNIT: 'MULTI_UNIT',
-  INVESTMENT_PROPERTY: 'INVESTMENT_PROPERTY',
-} as const;
-export type PropertyType = keyof typeof PropertyTypes;
-
-export const OwnershipTypes = {
-  OWNER_OCCUPIED: 'OWNER_OCCUPIED',
-  RENTED_OUT: 'RENTED_OUT',
-} as const;
-export type OwnershipType = keyof typeof OwnershipTypes;
-
 export type DwellingType =
   | 'DETACHED_SINGLE_FAMILY' | 'ATTACHED_SINGLE_FAMILY' | 'TOWNHOUSE' | 'CONDO_UNIT'
   | 'APARTMENT_UNIT' | 'DUPLEX' | 'MULTI_FAMILY' | 'MANUFACTURED_HOME' | 'OTHER' | 'UNKNOWN';
@@ -1199,7 +1183,6 @@ export interface Property {
   householdRole?: HouseholdRole | null; // Present when user is a household member (not the owner)
   
   // New Basic/Migrated Fields
-  propertyType: PropertyType | null; // Use new type
   dwellingType: DwellingType;
   ownershipForm: OwnershipForm;
   propertyUse: PropertyUse;
@@ -1210,7 +1193,6 @@ export interface Property {
   bathrooms: number | null;
   
   // New Advanced Fields
-  ownershipType: OwnershipType | null; // Use new type
   occupantsCount: number | null;
   heatingType: HeatingType | null; // Use new type
   coolingType: CoolingType | null; // Use new type

@@ -54,23 +54,27 @@ function statusFromScore(score: number): HomeTwinDataQualityStatus {
 
 function evaluatePropertyProfile(property: {
   yearBuilt: number | null;
-  propertyType: string | null;
+  dwellingType: string;
+  ownershipForm: string;
+  propertyUse: string;
+  occupancyStatus: string;
   propertySize: number | null;
   heatingType: string | null;
   coolingType: string | null;
   waterHeaterType: string | null;
   roofType: string | null;
-  ownershipType: string | null;
 }): DimensionResult {
   const checks: Array<{ field: string; present: boolean }> = [
     { field: 'yearBuilt',     present: property.yearBuilt != null },
-    { field: 'propertyType',  present: property.propertyType != null },
+    { field: 'dwellingType',  present: property.dwellingType !== 'UNKNOWN' },
+    { field: 'ownershipForm', present: property.ownershipForm !== 'UNKNOWN' },
+    { field: 'propertyUse', present: property.propertyUse !== 'UNKNOWN' },
+    { field: 'occupancyStatus', present: property.occupancyStatus !== 'UNKNOWN' },
     { field: 'propertySize',  present: property.propertySize != null },
     { field: 'heatingType',   present: property.heatingType != null },
     { field: 'coolingType',   present: property.coolingType != null },
     { field: 'waterHeaterType', present: property.waterHeaterType != null },
     { field: 'roofType',      present: property.roofType != null },
-    { field: 'ownershipType', present: property.ownershipType != null },
   ];
 
   const present = checks.filter((c) => c.present).length;
@@ -201,13 +205,15 @@ export class HomeDigitalTwinQualityService {
         where: { id: propertyId },
         select: {
           yearBuilt: true,
-          propertyType: true,
+          dwellingType: true,
+          ownershipForm: true,
+          propertyUse: true,
+          occupancyStatus: true,
           propertySize: true,
           heatingType: true,
           coolingType: true,
           waterHeaterType: true,
           roofType: true,
-          ownershipType: true,
           hvacInstallYear: true,
           waterHeaterInstallYear: true,
           roofReplacementYear: true,

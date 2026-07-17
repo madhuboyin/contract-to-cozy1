@@ -2,6 +2,7 @@
 import {
   ChecklistItemStatus,
   Property,
+  PropertyType,
   Prisma
 } from '@prisma/client';
 import cron from 'node-cron';
@@ -564,12 +565,24 @@ async function processFESCalculation(jobData: PropertyIntelligenceJobPayload) {
 
     // 2. Get benchmark (matching the old getBenchmark logic)
     let benchmark = null;
-    if (property.propertyType) {
+    const benchmarkPropertyType = ({
+      DETACHED_SINGLE_FAMILY: PropertyType.SINGLE_FAMILY,
+      ATTACHED_SINGLE_FAMILY: PropertyType.TOWNHOME,
+      TOWNHOUSE: PropertyType.TOWNHOME,
+      CONDO_UNIT: PropertyType.CONDO,
+      APARTMENT_UNIT: PropertyType.APARTMENT,
+      DUPLEX: PropertyType.MULTI_UNIT,
+      MULTI_FAMILY: PropertyType.MULTI_UNIT,
+      MANUFACTURED_HOME: null,
+      OTHER: null,
+      UNKNOWN: null,
+    } as Record<string, PropertyType | null>)[String(property.dwellingType)] ?? null;
+    if (benchmarkPropertyType) {
       benchmark = await (prisma as any).financialEfficiencyConfig.findUnique({
         where: { 
           zipCode_propertyType: { 
             zipCode: property.zipCode, 
-            propertyType: property.propertyType 
+            propertyType: benchmarkPropertyType
           } 
         },
       });
@@ -577,7 +590,7 @@ async function processFESCalculation(jobData: PropertyIntelligenceJobPayload) {
       // Fallback to global benchmark for property type
       if (!benchmark) {
         benchmark = await (prisma as any).financialEfficiencyConfig.findFirst({
-          where: { zipCode: null, propertyType: property.propertyType },
+          where: { zipCode: null, propertyType: benchmarkPropertyType },
         });
       }
     }

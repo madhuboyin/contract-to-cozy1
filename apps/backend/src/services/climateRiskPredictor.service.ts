@@ -167,7 +167,7 @@ export class ClimateRiskPredictorService {
       const prompt = `Analyze climate risks for this property location and provide detailed assessment:
 
 Location: ${location.city}, ${location.state}
-Property Type: ${property.propertyType || 'Residential'}
+Dwelling Type: ${property.dwellingType || 'Residential'}
 
 For each applicable climate risk category, provide:
 1. Risk level (LOW, MODERATE, HIGH, SEVERE)

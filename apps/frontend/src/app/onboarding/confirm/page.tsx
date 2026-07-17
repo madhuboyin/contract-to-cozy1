@@ -60,7 +60,7 @@ export default function ConfirmOnboardingPage() {
         zipCode: data.zipCode,
         yearBuilt: data.yearBuilt,
         propertySize: data.propertySize,
-        propertyType: data.propertyType,
+        dwellingType: data.dwellingType,
         isPrimary: true,
         // Pre-populate other fields found during lookup
         purchasePriceCents: data.lastSalePrice,

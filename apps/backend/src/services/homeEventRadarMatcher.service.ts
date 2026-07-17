@@ -31,7 +31,7 @@ interface PropertySnapshot {
   hasSecondaryHeat: boolean | null;
   foundationType: string | null;
   propertySize: number | null;
-  propertyType: string | null;
+  dwellingType: string;
   zipCode: string;
   city: string;
   state: string;
@@ -102,7 +102,7 @@ const PROPERTY_FIELDS_SELECT = {
   hasSecondaryHeat: true,
   foundationType: true,
   propertySize: true,
-  propertyType: true,
+  dwellingType: true,
   zipCode: true,
   city: true,
   state: true,
@@ -496,7 +496,7 @@ function computeImpact(event: any, property: PropertySnapshot): ImpactResult {
     property: {
       yearBuilt: property.yearBuilt,
       squareFootage: property.propertySize,
-      homeType: property.propertyType,
+      homeType: property.dwellingType,
     },
     location: {
       state: property.state,

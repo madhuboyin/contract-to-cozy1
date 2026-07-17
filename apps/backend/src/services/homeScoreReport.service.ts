@@ -396,9 +396,11 @@ export type HomeScoreReportDTO = {
 type PropertyQualitySignals = {
   property: {
     yearBuilt: number | null;
-    propertyType: string | null;
+    dwellingType: string;
     propertySize: number | null;
-    ownershipType: string | null;
+    ownershipForm: string;
+    propertyUse: string;
+    occupancyStatus: string;
     occupantsCount: number | null;
     heatingType: string | null;
     coolingType: string | null;
@@ -650,7 +652,7 @@ export class HomeScoreReportService {
         state: true,
         zipCode: true,
         yearBuilt: true,
-        propertyType: true,
+        dwellingType: true,
         propertySize: true,
         homeownerProfile: {
           select: {
@@ -678,9 +680,11 @@ export class HomeScoreReportService {
       where: { id: propertyId },
       select: {
         yearBuilt: true,
-        propertyType: true,
+        dwellingType: true,
         propertySize: true,
-        ownershipType: true,
+        ownershipForm: true,
+        propertyUse: true,
+        occupancyStatus: true,
         occupantsCount: true,
         heatingType: true,
         coolingType: true,
@@ -742,9 +746,11 @@ export class HomeScoreReportService {
 
     const userStatedFields = [
       property.yearBuilt,
-      property.propertyType,
+      property.dwellingType !== 'UNKNOWN' ? property.dwellingType : null,
       property.propertySize,
-      property.ownershipType,
+      property.ownershipForm !== 'UNKNOWN' ? property.ownershipForm : null,
+      property.propertyUse !== 'UNKNOWN' ? property.propertyUse : null,
+      property.occupancyStatus !== 'UNKNOWN' ? property.occupancyStatus : null,
       property.occupantsCount,
       property.heatingType,
       property.coolingType,
@@ -2992,7 +2998,7 @@ export class HomeScoreReportService {
       ]),
       reportId,
       generatedDate: generatedAtIso,
-      propertyType: propertyContext.propertyType,
+      propertyType: propertyContext.dwellingType === 'UNKNOWN' ? null : propertyContext.dwellingType,
       yearBuilt: propertyContext.yearBuilt,
       preparedFor: ownerName || null,
       ownerName: ownerName || null,
@@ -3123,7 +3129,7 @@ export class HomeScoreReportService {
     const signals = await this.getPropertyQualitySignals(propertyId);
     const propertyFactMap: Record<string, unknown> = {
       yearBuilt: signals.property.yearBuilt,
-      propertyType: signals.property.propertyType,
+      dwellingType: signals.property.dwellingType,
       propertySize: signals.property.propertySize,
       roofReplacementYear: signals.property.roofReplacementYear,
       hvacInstallYear: signals.property.hvacInstallYear,

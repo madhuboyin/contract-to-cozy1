@@ -1350,7 +1350,6 @@ class APIClient {
     zipCode: string;
     isPrimary?: boolean;
     coverPhotoDocumentId?: string | null;
-    propertyType?: string | null;
     dwellingType?: DwellingType;
     ownershipForm?: OwnershipForm;
     propertyUse?: PropertyUse;
@@ -1386,7 +1385,6 @@ class APIClient {
       isPrimary?: boolean;
       
       // Layer 1 - Basic/Migrated Fields
-      propertyType?: string; // Expects enum string
       dwellingType?: DwellingType;
       ownershipForm?: OwnershipForm;
       propertyUse?: PropertyUse;
@@ -1399,7 +1397,6 @@ class APIClient {
       // Layer 2 - Advanced Fields (Migrated and New)
       bedrooms?: number;
       bathrooms?: number;
-      ownershipType?: string; // Expects enum string
       heatingType?: string;
       coolingType?: string;
       waterHeaterType?: string;

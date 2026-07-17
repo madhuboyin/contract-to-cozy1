@@ -165,7 +165,7 @@ function toIso(value: unknown): string {
 
 function buildPropertyContext(property: any): PropertyContext {
   const propertySize = typeof property.propertySize === 'number' ? property.propertySize : null;
-  const propertyType = textOrNull(property.propertyType);
+  const propertyType = textOrNull(property.dwellingType);
 
   return {
     propertyId: property.id,
@@ -200,7 +200,7 @@ async function assertPropertyForUser(propertyId: string, userId: string): Promis
       id: true,
       name: true,
       homeownerProfileId: true,
-      propertyType: true,
+      dwellingType: true,
       propertySize: true,
       yearBuilt: true,
       city: true,

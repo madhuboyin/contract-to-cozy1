@@ -23,13 +23,17 @@ import PortfolioListTemplate from './components/PortfolioListTemplate';
 import ConfirmDestructiveActionDialog from '@/components/system/ConfirmDestructiveActionDialog';
 import { resolvePropertyHrefFromNavTarget } from '@/lib/routes/dashboardPropertyAwareHref';
 
-const PROPERTY_TYPE_LABELS: Record<string, string> = {
-  SINGLE_FAMILY: 'Single Family',
-  TOWNHOME: 'Townhome',
-  CONDO: 'Condo',
-  APARTMENT: 'Apartment',
-  MULTI_UNIT: 'Multi-Unit',
-  INVESTMENT_PROPERTY: 'Investment Property',
+const DWELLING_TYPE_LABELS: Record<string, string> = {
+  DETACHED_SINGLE_FAMILY: 'Detached Single Family',
+  ATTACHED_SINGLE_FAMILY: 'Attached Single Family',
+  TOWNHOUSE: 'Townhouse',
+  CONDO_UNIT: 'Condo',
+  APARTMENT_UNIT: 'Apartment',
+  DUPLEX: 'Duplex',
+  MULTI_FAMILY: 'Multi-Family',
+  MANUFACTURED_HOME: 'Manufactured Home',
+  OTHER: 'Other',
+  UNKNOWN: 'Home',
 };
 
 const MAX_PROPERTIES = 10;
@@ -307,7 +311,7 @@ export default function PropertiesPage() {
               {properties.map((property) => {
                 const isMenuOpen = menuOpenId === property.id;
                 const isDeleting = deleting === property.id;
-                const typeLabel = property.propertyType ? PROPERTY_TYPE_LABELS[property.propertyType] : null;
+                const typeLabel = DWELLING_TYPE_LABELS[property.dwellingType] ?? null;
                 const metadata = formatPropertyMetadata(property);
                 const { lineOne, lineTwo } = getPropertyAddressLines(property);
                 const coverPhotoUrl = property.coverPhoto?.fileUrl || null;
@@ -435,7 +439,7 @@ export default function PropertiesPage() {
             {properties.map((property) => {
               const isMenuOpen = menuOpenId === property.id;
               const isDeleting = deleting === property.id;
-              const typeLabel = property.propertyType ? PROPERTY_TYPE_LABELS[property.propertyType] : null;
+              const typeLabel = DWELLING_TYPE_LABELS[property.dwellingType] ?? null;
               const hasMeta = property.bedrooms || property.bathrooms || property.yearBuilt;
               const coverPhotoUrl = property.coverPhoto?.fileUrl || null;
 

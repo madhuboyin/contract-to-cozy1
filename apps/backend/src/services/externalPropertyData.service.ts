@@ -1,6 +1,6 @@
 // apps/backend/src/services/externalPropertyData.service.ts
 
-import { PropertyType } from '@prisma/client';
+import { DwellingType } from '@prisma/client';
 import { logger } from '../lib/logger';
 
 export interface ExternalPropertyData {
@@ -10,7 +10,7 @@ export interface ExternalPropertyData {
   zipCode: string;
   yearBuilt: number | null;
   propertySize: number | null; // in sqft
-  propertyType: PropertyType | null;
+  dwellingType: DwellingType | null;
   bedrooms: number | null;
   bathrooms: number | null;
   lastSalePrice: number | null; // in cents
@@ -49,7 +49,7 @@ export class ExternalPropertyDataService {
       zipCode: zipCode || '78701',
       yearBuilt,
       propertySize: size,
-      propertyType: PropertyType.SINGLE_FAMILY,
+      dwellingType: DwellingType.DETACHED_SINGLE_FAMILY,
       bedrooms: isModern ? 4 : 3,
       bathrooms: isModern ? 3.5 : 2.5,
       lastSalePrice: (isModern ? 550000 : 320000) * 100,
