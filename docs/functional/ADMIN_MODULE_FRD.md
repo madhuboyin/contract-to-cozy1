@@ -408,6 +408,7 @@ Examples:
 
 ```text
 ADMIN_DASHBOARD_VIEW
+ADMIN_ROLE_MANAGE
 USER_VIEW
 USER_STATUS_CHANGE
 USER_SESSION_REVOKE
@@ -422,7 +423,10 @@ BOOKING_OPERATE
 PAYMENT_VIEW
 REFUND_REQUEST
 REFUND_APPROVE
+DISPUTE_MANAGE
+FINANCING_CONFIG
 REVIEW_MODERATE
+SAFETY_INCIDENT_MANAGE
 CONTENT_AUTHOR
 CONTENT_REVIEW
 CONTENT_PUBLISH
@@ -432,12 +436,29 @@ CATALOG_PUBLISH
 PERSONALIZATION_OPERATE
 WORKER_JOB_VIEW
 WORKER_JOB_TRIGGER
+SHARED_DATA_OPERATE
 INTEGRATION_MANAGE
 RELEASE_GATE_VIEW
+SYSTEM_SETTINGS_MANAGE
 ANALYTICS_VIEW
 AUDIT_VIEW
 BREAK_GLASS
 ```
+
+`ADMIN_ROLE_MANAGE`, `DISPUTE_MANAGE`, `FINANCING_CONFIG`,
+`SAFETY_INCIDENT_MANAGE`, `SHARED_DATA_OPERATE`, and `SYSTEM_SETTINGS_MANAGE`
+were not in the original example list but are required by domain requirements
+already stated elsewhere in this document and had no named capability to
+enforce them:
+
+| Capability | Backed by |
+|---|---|
+| `ADMIN_ROLE_MANAGE` | §8.2 requirement that "role/capability changes require MFA and audit" needs a capability to gate the grant action itself |
+| `DISPUTE_MANAGE` | §7.4 "Disputes and Chargebacks"; §10.4 dispute/chargeback case requirements |
+| `FINANCING_CONFIG` | §4.3 financing rate configuration; §7.4 "Financing Rates" |
+| `SAFETY_INCIDENT_MANAGE` | §10.5 safety incident severity/containment/evidence/notification workflow, which is materially richer than generic `SUPPORT_CASE_MANAGE` |
+| `SHARED_DATA_OPERATE` | §4.3 shared-data readiness/diagnostics; §10.9 dry-run/backfill workflow |
+| `SYSTEM_SETTINGS_MANAGE` | §4.3/§12.3 registered `SystemSetting` allow-list — "register allowed settings; never expose arbitrary key/value editing" |
 
 Requirements:
 
@@ -448,6 +469,39 @@ Requirements:
 - An administrator cannot grant themselves capabilities unless explicitly
   authorized through the highest-trust access workflow.
 - Access is periodically reviewable and revocable.
+
+### 8.3 Persona-to-capability bundle mapping
+
+This mapping is the default internal role bundle for each persona in §8.1,
+satisfying the §8.2 requirement that "capabilities can be bundled into
+internal roles." Bundles are intentionally minimal, consistent with the
+least-privilege principle (§3.2, principle 2): a capability needed outside a
+persona's default bundle is granted individually and audited, not added to
+the shared bundle. `ADMIN_DASHBOARD_VIEW` is granted to every persona as
+baseline access to the Command Center (§9, FR-1) and is omitted from each row
+below to avoid repetition. Capabilities marked "(read-only)" grant view access
+to another domain's entities for context only — they never carry that
+domain's mutation rights.
+
+| Persona | Target status | Default capability bundle | Rationale |
+|---|---|---|---|
+| Platform Administrator | PLANNED | `ADMIN_ROLE_MANAGE`, `USER_SESSION_REVOKE`, `SYSTEM_SETTINGS_MANAGE`, `INTEGRATION_MANAGE`, `RELEASE_GATE_VIEW`, `AUDIT_VIEW`, `BREAK_GLASS`, `PERSONALIZATION_OPERATE` | Owns administration of the admin system and platform-wide safety controls, not routine domain casework. Excludes standing `USER_VIEW`/`PAYMENT_VIEW`/etc. — customer and financial data access should route through a case-holding persona, not the platform admin bundle, per §3.2 principle 9 (privacy by default). `PERSONALIZATION_OPERATE` is grouped here because kill-switch actions (§10.8) function as an emergency safety control akin to `BREAK_GLASS`; see open question below. |
+| Customer Support Operator | PLANNED | `USER_VIEW`, `USER_STATUS_CHANGE`, `USER_SESSION_REVOKE`, `PROPERTY_SUPPORT_VIEW`, `SUPPORT_CASE_MANAGE` | Matches §10.1 target requirements directly. Excludes `PRIVACY_REQUEST_MANAGE` — assigned to Trust and Safety Reviewer below, pending the open question on a dedicated privacy persona. |
+| Provider Operations Reviewer | CURRENT — PARTIAL | `PROVIDER_VIEW`, `PROVIDER_COMPLIANCE_REVIEW`, `PROVIDER_SUSPEND`, `BOOKING_VIEW` (read-only) | `BOOKING_VIEW` supports §10.2's requirement that "provider suspension shows affected future bookings" without granting booking mutation. |
+| Marketplace Operations Operator | PLANNED | `BOOKING_VIEW`, `BOOKING_OPERATE`, `PROVIDER_VIEW` (read-only), `USER_VIEW` (read-only), `SUPPORT_CASE_MANAGE` | Booking-level "mark disputed" and escalation transitions (§10.3) are booking state changes under `BOOKING_OPERATE`. Financial chargebacks are a distinct workflow owned by Finance Operations Operator (next row), not this persona. |
+| Finance Operations Operator | PLANNED | `PAYMENT_VIEW`, `REFUND_REQUEST`, `REFUND_APPROVE`, `DISPUTE_MANAGE`, `FINANCING_CONFIG`, `BOOKING_VIEW` (read-only) | `REFUND_APPROVE` must carry a resource/amount scope per §10.4 and §8.2; requester and approver must differ above the configured threshold (§20.2, open question 2). |
+| Trust and Safety Reviewer | PLANNED | `REVIEW_MODERATE`, `SAFETY_INCIDENT_MANAGE`, `PRIVACY_REQUEST_MANAGE`, `USER_VIEW` (read-only), `PROVIDER_VIEW` (read-only) | §10.5 groups "safety and privacy incidents" under this persona, so `PRIVACY_REQUEST_MANAGE` is assigned here provisionally. A subject-rights privacy request (§11.4) is a distinct workflow from a privacy/safety incident — confirm ownership before Phase 3 (see new open question below). |
+| Content Author | CURRENT — PARTIAL | `CONTENT_AUTHOR`, `CATALOG_AUTHOR` | Matches current Knowledge/DIY authoring scope. |
+| Content/Catalog Reviewer | PLANNED | `CONTENT_REVIEW`, `CATALOG_REVIEW` | Deliberately excludes author/publish capabilities per the §10.6 separation-of-duties requirement. |
+| Content/Catalog Publisher | PLANNED | `CONTENT_PUBLISH`, `CATALOG_PUBLISH` | Deliberately excludes author/review capabilities per §10.6. |
+| Data/Platform Operator | CURRENT — PARTIAL | `WORKER_JOB_VIEW`, `WORKER_JOB_TRIGGER`, `SHARED_DATA_OPERATE`, `INTEGRATION_MANAGE`, `RELEASE_GATE_VIEW` | Matches current Worker Jobs scope plus the API-only shared-data/integration/release-gate capabilities named in §4.3 and §10.9. |
+| Analyst | CURRENT — PARTIAL | `ANALYTICS_VIEW` | Read-only by persona definition (§8.1); no mutation capability. |
+| Auditor/Security Reviewer | FUTURE | `AUDIT_VIEW` | Read-only by persona definition (§8.1). |
+
+This table is a starting default for Phase 0 (§17) role-bundle
+implementation, not a final access-control decision — it should be ratified
+alongside the named-individual assignment question already open in §20.2
+(open question 1).
 
 ---
 
@@ -1274,6 +1328,13 @@ The target ADMIN platform is complete when:
    to the payment provider?
 9. Which actions must be unavailable on mobile?
 10. Which jurisdictional privacy workflows must be supported first?
+11. Does `PERSONALIZATION_OPERATE` belong with Platform Administrator as an
+    emergency safety control (as bundled in §8.3), or with Content/Catalog
+    Publisher once content-version authoring is separated from rule authoring
+    per §10.8?
+12. Is subject-rights privacy request intake and execution (§11.4) owned by
+    Trust and Safety Reviewer as bundled in §8.3, or does it warrant a
+    dedicated Privacy/Legal persona ahead of Phase 3?
 
 ---
 
