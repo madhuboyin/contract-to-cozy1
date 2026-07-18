@@ -63,6 +63,7 @@ import feedbackRoutes from './feedback/feedback.routes';
 import inspectionReportRoutes from './routes/inspectionReport.routes';
 import localUpdatesRoutes from './localUpdates/localUpdates.routes';
 import orchestrationRoutes from './routes/orchestration.routes';
+import homeActionsRoutes from './routes/homeActions.routes';
 
 // Import middleware
 import { errorHandler } from './middleware/error.middleware';
@@ -506,6 +507,7 @@ app.use('/api', feedbackRoutes);
 app.use('/api/inspection-reports', inspectionReportRoutes);
 app.use('/api/local-updates', localUpdatesRoutes);
 app.use('/api/orchestration', orchestrationRoutes);
+app.use('/api', homeActionsRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api', seasonalChecklistRoutes);
 app.use('/api/home-buyer-tasks', homeBuyerTaskRoutes);

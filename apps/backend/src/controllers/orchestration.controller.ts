@@ -4,9 +4,9 @@
  * PHASE 2 INTEGRATION NOTE:
  * ========================
  * 
- * Action Center task creation now routes to segment-specific services:
- * - HOME_BUYER → HomeBuyerTaskService.createTask()
- * - EXISTING_OWNER → PropertyMaintenanceTaskService.createFromActionCenter()
+ * Action Center task creation now routes from property entry context:
+ * - purchase mode → HomeBuyerTaskService.createTask()
+ * - ownership mode → PropertyMaintenanceTaskService.createFromActionCenter()
  * 
  * Integration happens in orchestration.service.ts when generating actions.
  * See: orchestrationIntegration.service.ts for routing logic.
@@ -372,8 +372,8 @@ export async function unsnoozeOrchestrationAction(
  *    })
  * 
  * This automatically routes to:
- * - HomeBuyerTaskService for HOME_BUYER
- * - PropertyMaintenanceTaskService for EXISTING_OWNER
+ * - HomeBuyerTaskService for purchase-mode property context
+ * - PropertyMaintenanceTaskService for ownership-mode property context
  * - ChecklistService as fallback (deprecated)
  */
 

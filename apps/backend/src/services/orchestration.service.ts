@@ -58,6 +58,7 @@ export type SuppressionReason =
   | 'CHECKLIST_TRACKED'
   | 'USER_MARKED_COMPLETE'
   | 'USER_UNMARKED_COMPLETE'
+  | 'USER_DISMISSED'
   | 'UNKNOWN';
 
   type SuppressionReasonEntry = {
@@ -1577,10 +1578,10 @@ async function mapRiskDetailToAction(params: {
         relatedType: null,
         relatedId: null,
       });
-    } else if (suppressionSource.eventType === 'USER_UNMARKED_COMPLETE') {
+    } else if (suppressionSource.eventType === 'USER_DISMISSED') {
       reasons.push({
-        reason: 'USER_UNMARKED_COMPLETE',
-        message: 'User unmarked this action',
+        reason: 'USER_DISMISSED',
+        message: 'User dismissed this action',
         relatedType: null,
         relatedId: null,
       });
@@ -1685,9 +1686,9 @@ async function mapRiskDetailToAction(params: {
         outcome: 'APPLIED',
         details: {
           eventType: suppressionSource.eventType,
-          message: suppressionSource.eventType === 'USER_MARKED_COMPLETE' 
+          message: suppressionSource.eventType === 'USER_MARKED_COMPLETE'
             ? 'You marked this as complete'
-            : 'You unmarked this action',
+            : 'You dismissed this action',
         },
       });
     }
@@ -1826,10 +1827,10 @@ async function mapChecklistItemToAction(params: {
         relatedType: null,
         relatedId: null,
       });
-    } else if (suppressionSource.eventType === 'USER_UNMARKED_COMPLETE') {
+    } else if (suppressionSource.eventType === 'USER_DISMISSED') {
       reasons.push({
-        reason: 'USER_UNMARKED_COMPLETE',
-        message: 'User unmarked this action',
+        reason: 'USER_DISMISSED',
+        message: 'User dismissed this action',
         relatedType: null,
         relatedId: null,
       });

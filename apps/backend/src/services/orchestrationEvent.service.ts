@@ -35,7 +35,11 @@ export async function recordOrchestrationEvent(params: {
       createdBy: createdBy ?? null,
       payload: payload ?? undefined,
     },
-    update: {}, // no-op (idempotent)
+    update: {
+      source,
+      createdBy: createdBy ?? null,
+      payload: payload ?? undefined,
+    },
   });
 
   return event; // Return the event so we can link it to completion

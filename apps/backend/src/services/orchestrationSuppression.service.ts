@@ -26,7 +26,7 @@ export type SuppressionSource =
     }
   | {
       type: 'USER_EVENT';
-      eventType: 'USER_MARKED_COMPLETE' | 'USER_UNMARKED_COMPLETE';
+      eventType: 'USER_MARKED_COMPLETE' | 'USER_DISMISSED';
       createdAt: Date;
     }
   | null;
@@ -36,7 +36,7 @@ export class OrchestrationSuppressionService {
    * Canonical suppression resolution.
    *
    * Precedence:
-   * 1. Latest USER_EVENT (MARK / UNMARK)
+   * 1. Latest USER_EVENT (complete, restore, or dismiss)
    * 2. PropertyMaintenanceTask (new system)
    * 3. Checklist-backed suppression (legacy system)
    */
@@ -54,25 +54,24 @@ export class OrchestrationSuppressionService {
         propertyId,
         actionKey,
         actionType: {
-          in: ['USER_MARKED_COMPLETE', 'USER_UNMARKED_COMPLETE'],
+          in: ['USER_MARKED_COMPLETE', 'USER_UNMARKED_COMPLETE', 'USER_DISMISSED'],
         },
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { updatedAt: 'desc' },
       select: {
         actionType: true,
         createdAt: true,
+        updatedAt: true,
       },
     });
 
     if (latestEvent !== null) {
-      if (
-        latestEvent.actionType === 'USER_MARKED_COMPLETE' ||
-        latestEvent.actionType === 'USER_UNMARKED_COMPLETE'
-      ) {
+      if (latestEvent.actionType === 'USER_UNMARKED_COMPLETE') return null;
+      if (latestEvent.actionType === 'USER_MARKED_COMPLETE' || latestEvent.actionType === 'USER_DISMISSED') {
         return {
           type: 'USER_EVENT',
           eventType: latestEvent.actionType,
-          createdAt: latestEvent.createdAt,
+          createdAt: latestEvent.updatedAt ?? latestEvent.createdAt,
         };
       }
     }

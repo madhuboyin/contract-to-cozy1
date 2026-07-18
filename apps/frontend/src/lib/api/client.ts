@@ -109,6 +109,8 @@ import {
   ActivationEntryContextInput,
   ActivationFirstValueDTO,
   ActivationTriggerEvidenceInput,
+  HomeActionCommand,
+  HomeActionFeedDTO,
 } from '@/types';
 import type { PropertyContextEnvelope } from '@/components/property-context/propertyContextTypes';
 import type { FeatureContextCaptureResult, FeatureContextEvaluation } from '@/components/property-context/featureContextTypes';
@@ -2781,6 +2783,37 @@ class APIClient {
     }
 
     throw new APIError('Failed to load orchestration summary', 'ORCHESTRATION_ERROR');
+  }
+
+  async getHomeActions(propertyId: string): Promise<HomeActionFeedDTO> {
+    const response = await this.request<HomeActionFeedDTO>(
+      `/api/properties/${propertyId}/home-actions`,
+    );
+    if (response.success && response.data) return response.data;
+    throw new APIError('Failed to load home actions', 'HOME_ACTIONS_ERROR');
+  }
+
+  async executeHomeActionCommand(
+    propertyId: string,
+    actionId: string,
+    input: {
+      command: HomeActionCommand;
+      reason?: string | null;
+      nextTriggerAt?: string | null;
+      consequenceAcknowledged?: boolean;
+    },
+  ) {
+    return this.request<{
+      actionId: string;
+      command: HomeActionCommand;
+      state: string;
+      nextTriggerAt?: string | null;
+      correctionHref?: string;
+      recordedAt: string;
+    }>(`/api/properties/${propertyId}/home-actions/${encodeURIComponent(actionId)}/commands`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
   }
 
   /**

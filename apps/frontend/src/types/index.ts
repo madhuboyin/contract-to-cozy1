@@ -241,6 +241,53 @@ export type ActivationTriggerEvidenceInput = {
   consentContext: string;
 };
 
+export type HomeActionCommand =
+  | 'COMPLETE'
+  | 'DEFER'
+  | 'SNOOZE'
+  | 'DISMISS'
+  | 'ALREADY_DONE'
+  | 'NOT_RELEVANT'
+  | 'CORRECT_FACT';
+
+export type RankedHomeActionDTO = ActivationHomeActionDTO & {
+  lineageId: string;
+  state: 'OPEN' | 'IN_PROGRESS' | 'SNOOZED' | 'COMPLETED' | 'DEFERRED' | 'DISMISSED' | 'SUPERSEDED';
+  job: 'STAY_AHEAD' | 'DECIDE' | 'MAJOR_MOMENT';
+  source: { kind: string; entityId: string; version: string | null };
+  governance: { safetyTier: 'LOW_CONSEQUENCE' | 'MATERIAL_FINANCIAL' | 'REGULATED_COVERAGE' | 'SAFETY_EMERGENCY' };
+  feedbackControls: HomeActionCommand[];
+  ranking: {
+    rank: number;
+    score: number;
+    explanation: string;
+    components: {
+      consequence: number;
+      urgency: number;
+      confidence: number;
+      householdRelevance: number;
+      actionability: number;
+      missingContextPenalty: number;
+    };
+  };
+  deduplication: { canonicalKey: string; mergedActionIds: string[] };
+};
+
+export type HomeActionFeedDTO = {
+  contractVersion: 'phase2-v1';
+  propertyId: string;
+  generatedAt: string;
+  actions: RankedHomeActionDTO[];
+  buckets: Record<'NOW' | 'SOON' | 'PLAN' | 'CONSIDER', RankedHomeActionDTO[]>;
+  diagnostics: {
+    candidateCount: number;
+    surfacedCount: number;
+    duplicateCount: number;
+    suppressedCount: number;
+    snoozedCount: number;
+  };
+};
+
 // ============================================================================
 // NEW PROPERTY ENUMS (FIX: ADDED RUNTIME CONSTANTS)
 // ============================================================================

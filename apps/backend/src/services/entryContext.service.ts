@@ -17,6 +17,7 @@ import {
 } from '../productFramework';
 import { emitNorthStarLineageEvent } from './analytics';
 import { getOrCreateOnboarding } from './propertyOnboarding.service';
+import { resolvePropertyAccess } from './propertyAccess.service';
 
 const TRIGGER_SOURCES = ['USER_SELECTED', 'CONVERSATION', 'DOCUMENT', 'PHOTO', 'SYSTEM_SIGNAL', 'OTHER'] as const;
 
@@ -122,8 +123,10 @@ function deriveFirstValueType(input: EntryContextCaptureInput): typeof FIRST_VAL
 }
 
 async function assertPropertyAccess(propertyId: string, userId: string) {
-  const property = await prisma.property.findFirst({
-    where: { id: propertyId, homeownerProfile: { userId } },
+  const access = await resolvePropertyAccess(userId, propertyId);
+  if (!access) throw new Error('Property not found or access denied.');
+  const property = await prisma.property.findUnique({
+    where: { id: propertyId },
     select: {
       id: true,
       address: true,
