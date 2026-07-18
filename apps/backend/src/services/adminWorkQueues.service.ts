@@ -32,6 +32,8 @@ export async function getWorkQueues(): Promise<{ queues: WorkQueueSummary[]; gen
     articlesInReview,
     articlesAwaitingPublish,
     pendingCertificationDecisions,
+    diyInReview,
+    diyAwaitingPublish,
   ] = await Promise.all([
     prisma.providerCredential.count({ where: { status: 'PENDING_REVIEW' } }),
     prisma.providerComplianceAlert.count({ where: { status: 'NEW' } }),
@@ -49,6 +51,8 @@ export async function getWorkQueues(): Promise<{ queues: WorkQueueSummary[]; gen
     prisma.accessCertificationDecision.count({
       where: { state: 'PENDING', campaign: { status: 'OPEN' } },
     }),
+    prisma.diyProjectTemplate.count({ where: { status: 'REVIEW' } }),
+    prisma.diyProjectTemplate.count({ where: { status: 'APPROVED' } }),
   ]);
 
   const queues: WorkQueueSummary[] = [
@@ -128,6 +132,20 @@ export async function getWorkQueues(): Promise<{ queues: WorkQueueSummary[]; gen
       href: '/dashboard/admin/content-reviews',
       capability: 'CONTENT_PUBLISH',
       count: articlesAwaitingPublish,
+    },
+    {
+      key: 'diy-review',
+      label: 'DIY templates awaiting review',
+      href: '/dashboard/admin/content-reviews',
+      capability: 'CONTENT_REVIEW',
+      count: diyInReview,
+    },
+    {
+      key: 'diy-publish',
+      label: 'Approved DIY templates awaiting publish',
+      href: '/dashboard/admin/content-reviews',
+      capability: 'CONTENT_PUBLISH',
+      count: diyAwaitingPublish,
     },
     {
       key: 'access-certification',

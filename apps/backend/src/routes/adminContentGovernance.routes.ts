@@ -13,12 +13,14 @@ import { requireCapability } from '../middleware/adminCapability.middleware';
 import { validateBody } from '../middleware/validate.middleware';
 import {
   getEditorialQueuesHandler,
+  makeDiyTransitionHandler,
   makeTransitionHandler,
 } from '../controllers/adminContentGovernance.controller';
 
 const router = Router();
 
 router.use('/admin/content/knowledge', authenticate, requireMfa, requireRole(UserRole.ADMIN));
+router.use('/admin/content/diy', authenticate, requireMfa, requireRole(UserRole.ADMIN));
 
 const AuthorActionBodySchema = z.object({
   action: z.enum(['SUBMIT_FOR_REVIEW', 'REVIVE_TO_DRAFT']),
@@ -92,6 +94,54 @@ router.post(
   requireCapability('CONTENT_PUBLISH'),
   validateBody(PublishActionBodySchema),
   makeTransitionHandler(['PUBLISH', 'UNPUBLISH', 'ARCHIVE'])
+);
+
+/**
+ * @swagger
+ * /api/admin/content/diy/{templateId}/author-action:
+ *   post:
+ *     summary: DIY author lifecycle actions — submit for review, revive archived to draft
+ *     tags: [Admin Content Governance]
+ *     security:
+ *       - bearerAuth: []
+ */
+router.post(
+  '/admin/content/diy/:templateId/author-action',
+  requireCapability('CONTENT_AUTHOR'),
+  validateBody(AuthorActionBodySchema),
+  makeDiyTransitionHandler(['SUBMIT_FOR_REVIEW', 'REVIVE_TO_DRAFT'])
+);
+
+/**
+ * @swagger
+ * /api/admin/content/diy/{templateId}/review-decision:
+ *   post:
+ *     summary: DIY reviewer decisions — approve or return to draft
+ *     tags: [Admin Content Governance]
+ *     security:
+ *       - bearerAuth: []
+ */
+router.post(
+  '/admin/content/diy/:templateId/review-decision',
+  requireCapability('CONTENT_REVIEW'),
+  validateBody(ReviewDecisionBodySchema),
+  makeDiyTransitionHandler(['APPROVE', 'RETURN_TO_DRAFT'])
+);
+
+/**
+ * @swagger
+ * /api/admin/content/diy/{templateId}/publish-action:
+ *   post:
+ *     summary: DIY publisher actions — publish (HIGH-safety requires publisher ≠ approver), unpublish, archive
+ *     tags: [Admin Content Governance]
+ *     security:
+ *       - bearerAuth: []
+ */
+router.post(
+  '/admin/content/diy/:templateId/publish-action',
+  requireCapability('CONTENT_PUBLISH'),
+  validateBody(PublishActionBodySchema),
+  makeDiyTransitionHandler(['PUBLISH', 'UNPUBLISH', 'ARCHIVE'])
 );
 
 export default router;

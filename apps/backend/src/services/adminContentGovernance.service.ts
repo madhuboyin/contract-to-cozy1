@@ -12,7 +12,7 @@
 // unpublish/archive take effect immediately.
 
 import { Request } from 'express';
-import { KnowledgeArticleStatus, Prisma } from '@prisma/client';
+import { DiyTemplateStatus, KnowledgeArticleStatus, Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { recordAdminAction } from './adminAudit.service';
 import { AdminCapability } from '../config/adminCapabilities';
@@ -105,6 +105,92 @@ export async function transitionKnowledgeArticle(input: TransitionInput, ctx: Ac
   return { previousStatus: article.status, status: spec.to, action: input.action };
 }
 
+// ─── DIY template lifecycle ───────────────────────────────────────────────────
+//
+// Same editorial workflow as knowledge articles, with two DIY specifics:
+// ACTIVE is the published state (public DIY reads filter on it), and
+// HIGH-safety templates get stronger approval — the publisher must be a
+// different admin than the approver (FRD §10.6: "High-safety DIY content
+// receives stronger approval"). approvedBy/approvedAt carry that
+// attribution and are cleared whenever the template returns to DRAFT.
+
+const DIY_TRANSITIONS: Record<AuthorAction | ReviewDecision | PublishAction, { from: DiyTemplateStatus[]; to: DiyTemplateStatus; capability: AdminCapability }> = {
+  SUBMIT_FOR_REVIEW: { from: ['DRAFT'], to: 'REVIEW', capability: 'CONTENT_AUTHOR' },
+  REVIVE_TO_DRAFT: { from: ['ARCHIVED'], to: 'DRAFT', capability: 'CONTENT_AUTHOR' },
+  APPROVE: { from: ['REVIEW'], to: 'APPROVED', capability: 'CONTENT_REVIEW' },
+  RETURN_TO_DRAFT: { from: ['REVIEW'], to: 'DRAFT', capability: 'CONTENT_REVIEW' },
+  PUBLISH: { from: ['APPROVED'], to: 'ACTIVE', capability: 'CONTENT_PUBLISH' },
+  UNPUBLISH: { from: ['ACTIVE'], to: 'APPROVED', capability: 'CONTENT_PUBLISH' },
+  ARCHIVE: { from: ['ACTIVE', 'APPROVED'], to: 'ARCHIVED', capability: 'CONTENT_PUBLISH' },
+};
+
+export interface DiyTransitionInput {
+  templateId: string;
+  actorId: string;
+  action: AuthorAction | ReviewDecision | PublishAction;
+  reason: string;
+}
+
+export async function transitionDiyTemplate(input: DiyTransitionInput, ctx: ActionContext = {}) {
+  const spec = DIY_TRANSITIONS[input.action];
+  if (!spec) {
+    throw new AdminContentGovernanceError('INVALID_ACTION', `"${input.action}" is not a lifecycle action.`);
+  }
+
+  const template = await prisma.diyProjectTemplate.findUnique({
+    where: { id: input.templateId },
+    select: { id: true, slug: true, title: true, status: true, safetyLevel: true, approvedBy: true },
+  });
+  if (!template) {
+    throw new AdminContentGovernanceError('TEMPLATE_NOT_FOUND', `No DIY template with id "${input.templateId}".`);
+  }
+
+  if (!spec.from.includes(template.status)) {
+    throw new AdminContentGovernanceError(
+      'INVALID_TRANSITION',
+      `Cannot ${input.action} a ${template.status} template.`
+    );
+  }
+
+  if (
+    input.action === 'PUBLISH' &&
+    template.safetyLevel === 'HIGH' &&
+    template.approvedBy === input.actorId
+  ) {
+    throw new AdminContentGovernanceError(
+      'HIGH_SAFETY_SEPARATION_REQUIRED',
+      'HIGH-safety templates must be published by a different administrator than the one who approved them.'
+    );
+  }
+
+  await prisma.diyProjectTemplate.update({
+    where: { id: input.templateId },
+    data: {
+      status: spec.to,
+      ...(input.action === 'APPROVE' ? { approvedBy: input.actorId, approvedAt: new Date() } : {}),
+      ...(spec.to === 'DRAFT' ? { approvedBy: null, approvedAt: null } : {}),
+    },
+  });
+
+  await recordAdminAction({
+    actorId: input.actorId,
+    action: 'ADMIN_DIY_LIFECYCLE',
+    entityType: 'DIY_TEMPLATE',
+    entityId: input.templateId,
+    capability: spec.capability,
+    reason: input.reason,
+    disposition: input.action,
+    oldValues: { status: template.status } as Prisma.InputJsonValue,
+    newValues: { status: spec.to } as Prisma.InputJsonValue,
+    relatedRefs: { slug: template.slug, safetyLevel: template.safetyLevel },
+    req: ctx.req,
+  });
+
+  return { previousStatus: template.status, status: spec.to, action: input.action };
+}
+
+// ─── Editorial queues ─────────────────────────────────────────────────────────
+
 const QUEUE_SELECT = {
   id: true,
   slug: true,
@@ -116,13 +202,23 @@ const QUEUE_SELECT = {
   updatedAt: true,
 } as const;
 
+const DIY_QUEUE_SELECT = {
+  id: true,
+  slug: true,
+  title: true,
+  status: true,
+  safetyLevel: true,
+  approvedBy: true,
+  updatedAt: true,
+} as const;
+
 /**
- * The Pending Reviews workspace's two queues: articles awaiting a review
- * decision, and approved articles awaiting publication. Oldest-updated
+ * The Pending Reviews workspace's queues: knowledge articles and DIY
+ * templates awaiting a review decision or publication. Oldest-updated
  * first so the longest-waiting item is handled next.
  */
 export async function getEditorialQueues() {
-  const [reviewQueue, approvedQueue] = await Promise.all([
+  const [reviewQueue, approvedQueue, diyReviewQueue, diyApprovedQueue] = await Promise.all([
     prisma.knowledgeArticle.findMany({
       where: { status: 'REVIEW' },
       orderBy: { updatedAt: 'asc' },
@@ -133,7 +229,17 @@ export async function getEditorialQueues() {
       orderBy: { updatedAt: 'asc' },
       select: QUEUE_SELECT,
     }),
+    prisma.diyProjectTemplate.findMany({
+      where: { status: 'REVIEW' },
+      orderBy: { updatedAt: 'asc' },
+      select: DIY_QUEUE_SELECT,
+    }),
+    prisma.diyProjectTemplate.findMany({
+      where: { status: 'APPROVED' },
+      orderBy: { updatedAt: 'asc' },
+      select: DIY_QUEUE_SELECT,
+    }),
   ]);
 
-  return { reviewQueue, approvedQueue };
+  return { reviewQueue, approvedQueue, diyReviewQueue, diyApprovedQueue };
 }

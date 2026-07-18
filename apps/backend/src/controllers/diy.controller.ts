@@ -223,9 +223,3 @@ export async function adminUpdateTemplate(req: Request, res: Response, next: Nex
   } catch (err) { next(err); }
 }
 
-export async function adminUpdateTemplateStatus(req: Request, res: Response, next: NextFunction) {
-  try {
-    const template = await diyService.adminUpdateTemplateStatus(req.params.templateId, req.body.status);
-    res.json({ success: true, data: { template } });
-  } catch (err) { next(err); }
-}

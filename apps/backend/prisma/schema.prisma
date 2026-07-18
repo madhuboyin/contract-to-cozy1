@@ -11488,6 +11488,8 @@ enum DiyToolAction {
 
 enum DiyTemplateStatus {
   DRAFT
+  REVIEW
+  APPROVED
   ACTIVE
   ARCHIVED
 }
@@ -11552,6 +11554,12 @@ model DiyProjectTemplate {
   tags          String[]
   status        DiyTemplateStatus @default(DRAFT)
   featuredOrder Int?
+
+  // Editorial attribution (ADMIN_MODULE_FRD.md §10.6): who approved the
+  // current revision. Cleared when the template returns to DRAFT. For
+  // HIGH-safety templates the publisher must differ from the approver.
+  approvedBy String?
+  approvedAt DateTime?
 
   geminiPromptHint String?
 

@@ -28,7 +28,6 @@ import {
   adminGetTemplate,
   adminCreateTemplate,
   adminUpdateTemplate,
-  adminUpdateTemplateStatus,
 } from '../controllers/diy.controller';
 
 import {
@@ -84,6 +83,8 @@ router.get('/admin/diy/templates', ...requireDiyAdmin, adminListTemplates);
 router.get('/admin/diy/templates/:templateId', ...requireDiyAdmin, adminGetTemplate);
 router.post('/admin/diy/templates', ...requireDiyAdmin, validateBody(AdminCreateTemplateSchema), adminCreateTemplate);
 router.put('/admin/diy/templates/:templateId', ...requireDiyAdmin, validateBody(AdminUpdateTemplateSchema), adminUpdateTemplate);
-router.patch('/admin/diy/templates/:templateId/status', ...requireDiyAdmin, adminUpdateTemplateStatus);
+// Direct status changes were removed (ADMIN_MODULE_FRD.md §10.6): DIY
+// lifecycle now moves only through the capability-separated transitions in
+// adminContentGovernance.routes.ts (/api/admin/content/diy/...).
 
 export default router;

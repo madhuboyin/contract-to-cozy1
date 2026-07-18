@@ -6,14 +6,21 @@ import { logger } from '../lib/logger';
 import {
   AdminContentGovernanceError,
   getEditorialQueues,
+  transitionDiyTemplate,
   transitionKnowledgeArticle,
 } from '../services/adminContentGovernance.service';
 
-const CLIENT_ERROR_CODES = new Set(['ARTICLE_NOT_FOUND', 'INVALID_ACTION', 'INVALID_TRANSITION']);
+const CLIENT_ERROR_CODES = new Set([
+  'ARTICLE_NOT_FOUND',
+  'TEMPLATE_NOT_FOUND',
+  'INVALID_ACTION',
+  'INVALID_TRANSITION',
+  'HIGH_SAFETY_SEPARATION_REQUIRED',
+]);
 
 function handleClientError(err: unknown, res: Response): boolean {
   if (err instanceof AdminContentGovernanceError && CLIENT_ERROR_CODES.has(err.code)) {
-    const status = err.code === 'ARTICLE_NOT_FOUND' ? 404 : 409;
+    const status = err.code.endsWith('NOT_FOUND') ? 404 : 409;
     res.status(status).json({ success: false, error: { message: err.message, code: err.code } });
     return true;
   }
@@ -42,6 +49,32 @@ export function makeTransitionHandler(allowedActions: readonly string[]) {
       if (handleClientError(err, res)) return;
       logger.error({ err }, '[ADMIN-CONTENT-GOV] Failed to transition article');
       res.status(500).json({ success: false, error: { message: 'Failed to transition article' } });
+    }
+  };
+}
+
+export function makeDiyTransitionHandler(allowedActions: readonly string[]) {
+  return async function diyTransitionHandler(req: AuthRequest, res: Response): Promise<void> {
+    const { action, reason } = req.body as { action: string; reason: string };
+
+    if (!allowedActions.includes(action)) {
+      res.status(403).json({
+        success: false,
+        error: { message: `Action "${action}" is not available on this endpoint.`, code: 'ACTION_NOT_ALLOWED' },
+      });
+      return;
+    }
+
+    try {
+      const result = await transitionDiyTemplate(
+        { templateId: req.params.templateId, actorId: req.user!.userId, action: action as any, reason },
+        { req }
+      );
+      res.json({ success: true, data: result });
+    } catch (err: any) {
+      if (handleClientError(err, res)) return;
+      logger.error({ err }, '[ADMIN-CONTENT-GOV] Failed to transition DIY template');
+      res.status(500).json({ success: false, error: { message: 'Failed to transition DIY template' } });
     }
   };
 }

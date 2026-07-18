@@ -615,30 +615,19 @@ export function KnowledgeArticleEditor({ articleId }: KnowledgeArticleEditorProp
                   <CardDescription>Editorial state, discovery details, and publish timing.</CardDescription>
                 </CardHeader>
                 <CardContent className="grid gap-5 md:grid-cols-2">
-                  <FormField
-                    control={form.control}
-                    name="status"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Status</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value}>
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select status" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {options.statuses.map((status) => (
-                              <SelectItem key={status} value={status}>
-                                {status.replace(/_/g, ' ')}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                  <div>
+                    <p className="text-sm font-medium">Status</p>
+                    <p className="mt-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                      {form.watch('status').replace(/_/g, ' ')}
+                    </p>
+                    <p className="mt-1.5 text-xs text-slate-500">
+                      Saving never changes lifecycle state. Submit, approve, and publish happen in{' '}
+                      <Link href="/dashboard/admin/content-reviews" className="font-medium underline">
+                        Pending Reviews
+                      </Link>
+                      .
+                    </p>
+                  </div>
 
                   <FormField
                     control={form.control}

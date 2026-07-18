@@ -138,8 +138,6 @@ export default function TemplateForm({ templateId, initial }: Props) {
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const [showPublishDialog, setShowPublishDialog] = useState(false);
-  const [showArchiveDialog, setShowArchiveDialog] = useState(false);
   const [showDiscardDialog, setShowDiscardDialog] = useState(false);
 
   useEffect(() => {
@@ -179,73 +177,22 @@ export default function TemplateForm({ templateId, initial }: Props) {
     };
   }
 
-  function validateForPublish(): string | null {
-    if (!title.trim()) return 'Title is required';
-    if (!slug.trim()) return 'Slug is required';
-    if (!shortDescription.trim()) return 'Short description is required';
-    if (!estimatedMinutes || estimatedMinutes < 1) return 'Estimated minutes must be ≥ 1';
-    if (steps.length === 0) return 'At least 1 step is required to publish';
-    for (const s of steps) {
-      if (!s.title.trim()) return 'All steps must have a title';
-      if (!s.description.trim()) return 'All steps must have a description';
-    }
-    for (const m of materials) {
-      if (!m.name.trim()) return 'All materials must have a name';
-      if (!m.quantityFormula.trim()) return 'All materials must have a quantity formula';
-    }
-    for (const t of tools) {
-      if (!t.name.trim()) return 'All tools must have a name';
-    }
-    return null;
-  }
-
-  async function save(publish: boolean) {
+  // Saving never changes lifecycle state (ADMIN_MODULE_FRD.md §10.6) —
+  // submit/approve/publish/archive happen via the templates list actions or
+  // the Pending Reviews workspace, each with a required reason.
+  async function save() {
     setError('');
-    if (publish) {
-      const err = validateForPublish();
-      if (err) { setError(err); return; }
-    }
     setSaving(true);
     try {
       const payload = buildPayload();
-      let saved;
       if (isEdit) {
-        saved = await api.adminUpdateDiyTemplate(templateId!, payload);
+        await api.adminUpdateDiyTemplate(templateId!, payload);
       } else {
-        saved = await api.adminCreateDiyTemplate(payload);
-      }
-      if (publish && saved.status !== 'ACTIVE') {
-        await api.adminUpdateDiyTemplateStatus(saved.id, 'ACTIVE');
+        await api.adminCreateDiyTemplate(payload);
       }
       router.push('/dashboard/admin/diy/templates');
     } catch (e: any) {
       setError(e?.message ?? 'Save failed');
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function archive() {
-    if (!templateId) return;
-    setSaving(true);
-    try {
-      await api.adminUpdateDiyTemplateStatus(templateId, 'ARCHIVED');
-      router.push('/dashboard/admin/diy/templates');
-    } catch (e: any) {
-      setError(e?.message ?? 'Archive failed');
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function unpublishToDraft() {
-    if (!templateId) return;
-    setSaving(true);
-    try {
-      await api.adminUpdateDiyTemplateStatus(templateId, 'DRAFT');
-      router.push('/dashboard/admin/diy/templates');
-    } catch (e: any) {
-      setError(e?.message ?? 'Failed');
     } finally {
       setSaving(false);
     }
@@ -443,38 +390,10 @@ export default function TemplateForm({ templateId, initial }: Props) {
 
       {/* Sticky save bar */}
       <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-neutral-200 bg-white px-4 py-3 flex items-center justify-between gap-3 shadow-lg">
-        <div className="flex items-center gap-2">
-          {isEdit && initial?.status === 'ACTIVE' && (
-            <>
-              <button
-                type="button"
-                onClick={() => setShowArchiveDialog(true)}
-                disabled={saving}
-                className="rounded-lg border border-neutral-200 px-4 py-2 text-sm text-neutral-600 hover:bg-neutral-50 disabled:opacity-50"
-              >
-                Archive
-              </button>
-              <button
-                type="button"
-                onClick={unpublishToDraft}
-                disabled={saving}
-                className="rounded-lg border border-neutral-200 px-4 py-2 text-sm text-neutral-600 hover:bg-neutral-50 disabled:opacity-50"
-              >
-                Unpublish to Draft
-              </button>
-            </>
-          )}
-          {isEdit && initial?.status === 'ARCHIVED' && (
-            <button
-              type="button"
-              onClick={() => save(true)}
-              disabled={saving}
-              className="rounded-lg bg-green-600 px-4 py-2 text-sm text-white hover:bg-green-700 disabled:opacity-50"
-            >
-              Restore to Active
-            </button>
-          )}
-        </div>
+        <p className="text-xs text-neutral-500">
+          Saving never publishes. Submit, approve, publish, or archive from the templates list or{' '}
+          <span className="font-medium">Pending Reviews</span>.
+        </p>
         <div className="flex items-center gap-3">
           <button
             type="button"
@@ -486,66 +405,14 @@ export default function TemplateForm({ templateId, initial }: Props) {
           </button>
           <button
             type="button"
-            onClick={() => save(false)}
+            onClick={() => save()}
             disabled={saving}
-            className="rounded-lg border border-neutral-200 bg-white px-4 py-2 text-sm text-neutral-700 hover:bg-neutral-50 disabled:opacity-50"
+            className="rounded-lg bg-neutral-900 px-4 py-2 text-sm text-white hover:bg-neutral-800 disabled:opacity-50"
           >
-            {saving ? 'Saving…' : 'Save as Draft'}
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowPublishDialog(true)}
-            disabled={saving}
-            className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50"
-          >
-            Publish
+            {saving ? 'Saving…' : 'Save'}
           </button>
         </div>
       </div>
-
-      {/* Publish dialog */}
-      {showPublishDialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
-            <h3 className="font-semibold text-lg mb-2">Publish "{title}"?</h3>
-            <p className="text-sm text-neutral-600 mb-6">
-              This template will become visible to all homeowners in the Project Library. You can archive it at any time to remove it from the library without deleting it.
-            </p>
-            <div className="flex gap-3 justify-end">
-              <button
-                onClick={() => setShowPublishDialog(false)}
-                className="rounded-lg border border-neutral-200 px-4 py-2 text-sm text-neutral-600 hover:bg-neutral-50"
-              >Cancel</button>
-              <button
-                onClick={() => { setShowPublishDialog(false); save(true); }}
-                className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700"
-              >Publish</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Archive dialog */}
-      {showArchiveDialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
-            <h3 className="font-semibold text-lg mb-2">Archive this template?</h3>
-            <p className="text-sm text-neutral-600 mb-6">
-              Existing projects will not be affected. New users will not see this template in the library.
-            </p>
-            <div className="flex gap-3 justify-end">
-              <button
-                onClick={() => setShowArchiveDialog(false)}
-                className="rounded-lg border border-neutral-200 px-4 py-2 text-sm text-neutral-600 hover:bg-neutral-50"
-              >Cancel</button>
-              <button
-                onClick={() => { setShowArchiveDialog(false); archive(); }}
-                className="rounded-lg bg-yellow-600 px-4 py-2 text-sm text-white hover:bg-yellow-700"
-              >Archive</button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Discard dialog */}
       {showDiscardDialog && (

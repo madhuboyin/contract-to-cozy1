@@ -4209,11 +4209,8 @@ class APIClient {
     return res.data.template;
   }
 
-  async adminUpdateDiyTemplateStatus(templateId: string, status: import('@/types').DiyTemplateStatus): Promise<import('@/types').AdminDiyTemplateSummary> {
-    const res = await this.patch<{ template: import('@/types').AdminDiyTemplateSummary }>(`/api/admin/diy/templates/${templateId}/status`, { status });
-    if (!res.data?.template) throw new APIError('Failed to update template status', 500);
-    return res.data.template;
-  }
+  // Direct DIY status changes were removed (ADMIN_MODULE_FRD.md §10.6) —
+  // lifecycle moves through transitionDiyTemplate in adminContentGovernance.ts.
 
   // ─── Permit History & Unpermitted Work Tracker ──────────────────────────────
 

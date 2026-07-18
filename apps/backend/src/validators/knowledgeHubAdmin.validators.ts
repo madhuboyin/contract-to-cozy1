@@ -1,5 +1,4 @@
 import {
-  KnowledgeArticleStatus,
   KnowledgeArticleType,
   KnowledgeCtaType,
   KnowledgeSectionType,
@@ -50,7 +49,8 @@ export const knowledgeArticleUpsertSchema = z
     }),
     subtitle: z.string().trim().max(300).nullable().optional(),
     excerpt: z.string().trim().max(4000).nullable().optional(),
-    status: z.nativeEnum(KnowledgeArticleStatus),
+    // Lifecycle state is deliberately NOT accepted here (FRD §10.6: saving
+    // must not publish) — transitions go through adminContentGovernance.
     articleType: z.nativeEnum(KnowledgeArticleType),
     heroTitle: z.string().trim().max(200).nullable().optional(),
     heroDescription: z.string().trim().max(4000).nullable().optional(),
@@ -60,7 +60,6 @@ export const knowledgeArticleUpsertSchema = z
     readingMinutes: z.coerce.number().int().min(0).max(240).nullable().optional(),
     featured: z.boolean().default(false),
     sortOrder: z.coerce.number().int().min(0).max(100000).default(0),
-    publishedAt: z.string().datetime().nullable().optional(),
     categoryIds: z.array(z.string().min(1)).default([]),
     tagIds: z.array(z.string().min(1)).default([]),
     sections: z.array(knowledgeSectionInputSchema).default([]),

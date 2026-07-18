@@ -24,8 +24,12 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog';
-import { useEditorialQueues, useTransitionKnowledgeArticle } from '@/hooks/useAdminContentGovernance';
-import type { EditorialQueueItem, LifecycleAction } from '@/lib/api/adminContentGovernance';
+import {
+  useEditorialQueues,
+  useTransitionDiyTemplate,
+  useTransitionKnowledgeArticle,
+} from '@/hooks/useAdminContentGovernance';
+import type { DiyQueueItem, EditorialQueueItem, LifecycleAction } from '@/lib/api/adminContentGovernance';
 
 const ACTION_COPY: Record<string, { label: string; description: string; destructive: boolean }> = {
   APPROVE: {
@@ -66,7 +70,7 @@ function ReasonConfirmDialog({
   pending,
   onConfirm,
 }: {
-  target: { item: EditorialQueueItem; action: LifecycleAction } | null;
+  target: { item: { title: string }; action: LifecycleAction } | null;
   onOpenChange: (open: boolean) => void;
   pending: boolean;
   onConfirm: (reason: string) => void;
@@ -114,18 +118,22 @@ function ReasonConfirmDialog({
   );
 }
 
-function QueueSection({
+function QueueSection<T extends { id: string; title: string; slug: string; status: string; updatedAt: string }>({
   title,
   emptyText,
   items,
   actions,
+  sublabel,
+  itemBadge,
   onAction,
 }: {
   title: string;
   emptyText: string;
-  items: EditorialQueueItem[];
+  items: T[];
   actions: LifecycleAction[];
-  onAction: (item: EditorialQueueItem, action: LifecycleAction) => void;
+  sublabel: (item: T) => string;
+  itemBadge?: (item: T) => React.ReactNode;
+  onAction: (item: T, action: LifecycleAction) => void;
 }) {
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -138,10 +146,9 @@ function QueueSection({
           <li key={item.id} className="flex flex-wrap items-center gap-2 py-2.5">
             <div className="min-w-0 flex-1">
               <p className="truncate text-xs font-semibold text-slate-800">{item.title}</p>
-              <p className="text-[11px] text-slate-400">
-                {item.articleType} · /{item.slug} · updated {fmtDate(item.updatedAt)}
-              </p>
+              <p className="text-[11px] text-slate-400">{sublabel(item)}</p>
             </div>
+            {itemBadge?.(item)}
             <Badge variant="outline" className="text-[10px]">
               {item.status}
             </Badge>
@@ -174,7 +181,12 @@ export default function AdminContentReviewsPage() {
 
   const queuesQ = useEditorialQueues();
   const transition = useTransitionKnowledgeArticle();
-  const [target, setTarget] = useState<{ item: EditorialQueueItem; action: LifecycleAction } | null>(null);
+  const diyTransition = useTransitionDiyTemplate();
+  const [target, setTarget] = useState<
+    | { kind: 'knowledge'; item: EditorialQueueItem; action: LifecycleAction }
+    | { kind: 'diy'; item: DiyQueueItem; action: LifecycleAction }
+    | null
+  >(null);
 
   if (guard.status !== 'ready') return guard.node;
 
@@ -186,7 +198,9 @@ export default function AdminContentReviewsPage() {
         <span className="inline-flex items-center gap-1 rounded bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
           <BookCheck className="h-3 w-3" />
           {queuesQ.data
-            ? `${queuesQ.data.reviewQueue.length} in review · ${queuesQ.data.approvedQueue.length} awaiting publish`
+            ? `${queuesQ.data.reviewQueue.length + queuesQ.data.diyReviewQueue.length} in review · ${
+                queuesQ.data.approvedQueue.length + queuesQ.data.diyApprovedQueue.length
+              } awaiting publish`
             : 'Loading…'}
         </span>
       }
@@ -208,18 +222,46 @@ export default function AdminContentReviewsPage() {
       {queuesQ.data ? (
         <div className="grid gap-4 lg:grid-cols-2">
           <QueueSection
-            title="Awaiting review"
+            title="Knowledge — awaiting review"
             emptyText="No articles are waiting for a review decision."
             items={queuesQ.data.reviewQueue}
             actions={['APPROVE', 'RETURN_TO_DRAFT']}
-            onAction={(item, action) => setTarget({ item, action })}
+            sublabel={(item) => `${item.articleType} · /${item.slug} · updated ${fmtDate(item.updatedAt)}`}
+            onAction={(item, action) => setTarget({ kind: 'knowledge', item, action })}
           />
           <QueueSection
-            title="Approved — awaiting publish"
+            title="Knowledge — awaiting publish"
             emptyText="No approved articles are waiting to be published."
             items={queuesQ.data.approvedQueue}
             actions={['PUBLISH', 'ARCHIVE']}
-            onAction={(item, action) => setTarget({ item, action })}
+            sublabel={(item) => `${item.articleType} · /${item.slug} · updated ${fmtDate(item.updatedAt)}`}
+            onAction={(item, action) => setTarget({ kind: 'knowledge', item, action })}
+          />
+          <QueueSection
+            title="DIY templates — awaiting review"
+            emptyText="No DIY templates are waiting for a review decision."
+            items={queuesQ.data.diyReviewQueue}
+            actions={['APPROVE', 'RETURN_TO_DRAFT']}
+            sublabel={(item) => `/${item.slug} · updated ${fmtDate(item.updatedAt)}`}
+            itemBadge={(item) =>
+              item.safetyLevel === 'HIGH' ? (
+                <Badge className="bg-rose-50 text-[10px] text-rose-700">HIGH SAFETY</Badge>
+              ) : null
+            }
+            onAction={(item, action) => setTarget({ kind: 'diy', item, action })}
+          />
+          <QueueSection
+            title="DIY templates — awaiting publish"
+            emptyText="No approved DIY templates are waiting to be published."
+            items={queuesQ.data.diyApprovedQueue}
+            actions={['PUBLISH', 'ARCHIVE']}
+            sublabel={(item) => `/${item.slug} · updated ${fmtDate(item.updatedAt)}`}
+            itemBadge={(item) =>
+              item.safetyLevel === 'HIGH' ? (
+                <Badge className="bg-rose-50 text-[10px] text-rose-700">HIGH SAFETY · needs a different publisher</Badge>
+              ) : null
+            }
+            onAction={(item, action) => setTarget({ kind: 'diy', item, action })}
           />
         </div>
       ) : null}
@@ -227,21 +269,23 @@ export default function AdminContentReviewsPage() {
       <ReasonConfirmDialog
         target={target}
         onOpenChange={(next) => !next && setTarget(null)}
-        pending={transition.isPending}
+        pending={transition.isPending || diyTransition.isPending}
         onConfirm={(reason) => {
           if (!target) return;
-          transition.mutate(
-            { articleId: target.item.id, action: target.action, reason },
-            {
-              onSuccess: (result) => {
-                setTarget(null);
-                toast({ title: 'Lifecycle updated', description: `Article moved to ${result.status}.` });
-              },
-              onError: (err: any) => {
-                toast({ title: 'Action failed', description: err?.message, variant: 'destructive' });
-              },
+          const opts = {
+            onSuccess: (result: { status: string }) => {
+              setTarget(null);
+              toast({ title: 'Lifecycle updated', description: `Moved to ${result.status}.` });
             },
-          );
+            onError: (err: any) => {
+              toast({ title: 'Action failed', description: err?.message, variant: 'destructive' });
+            },
+          };
+          if (target.kind === 'diy') {
+            diyTransition.mutate({ templateId: target.item.id, action: target.action, reason }, opts);
+          } else {
+            transition.mutate({ articleId: target.item.id, action: target.action, reason }, opts);
+          }
         }}
       />
     </AdminConsoleShell>

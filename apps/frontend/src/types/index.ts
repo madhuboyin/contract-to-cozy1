@@ -3896,7 +3896,7 @@ export interface UpdateDiyProjectPayload {
 
 // ─── DIY Admin ───────────────────────────────────────────────────────────────
 
-export type DiyTemplateStatus = 'DRAFT' | 'ACTIVE' | 'ARCHIVED';
+export type DiyTemplateStatus = 'DRAFT' | 'REVIEW' | 'APPROVED' | 'ACTIVE' | 'ARCHIVED';
 
 export interface AdminDiyTemplateSummary {
   id: string;

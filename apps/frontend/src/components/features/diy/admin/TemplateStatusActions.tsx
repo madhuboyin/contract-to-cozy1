@@ -1,7 +1,13 @@
 'use client';
+// Row actions for the DIY templates admin list. Lifecycle changes go through
+// the capability-separated editorial transitions (ADMIN_MODULE_FRD.md §10.6)
+// — each action requires a reason and is audited. The old direct status
+// patch is gone; an action the current admin lacks the capability for fails
+// with 403 from the server.
 import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api/client';
+import { transitionDiyTemplate, LifecycleAction } from '@/lib/api/adminContentGovernance';
 import type { AdminDiyTemplateSummary, DiyTemplateStatus } from '@/types';
 
 interface Props {
@@ -10,26 +16,57 @@ interface Props {
   onDuplicate: (newId: string) => void;
 }
 
+const ACTIONS_FOR_STATUS: Record<string, { action: LifecycleAction; label: string; tone: string }[]> = {
+  DRAFT: [{ action: 'SUBMIT_FOR_REVIEW', label: 'Submit for review', tone: 'text-green-700 hover:bg-green-50' }],
+  REVIEW: [
+    { action: 'APPROVE', label: 'Approve', tone: 'text-green-700 hover:bg-green-50' },
+    { action: 'RETURN_TO_DRAFT', label: 'Return to draft', tone: 'hover:bg-neutral-50' },
+  ],
+  APPROVED: [
+    { action: 'PUBLISH', label: 'Publish', tone: 'text-green-700 hover:bg-green-50' },
+    { action: 'ARCHIVE', label: 'Archive', tone: 'text-yellow-700 hover:bg-yellow-50' },
+  ],
+  ACTIVE: [
+    { action: 'UNPUBLISH', label: 'Unpublish', tone: 'hover:bg-neutral-50' },
+    { action: 'ARCHIVE', label: 'Archive', tone: 'text-yellow-700 hover:bg-yellow-50' },
+  ],
+  ARCHIVED: [{ action: 'REVIVE_TO_DRAFT', label: 'Revive to draft', tone: 'text-green-700 hover:bg-green-50' }],
+};
+
 export default function TemplateStatusActions({ template, onStatusChange, onDuplicate }: Props) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [reasonFor, setReasonFor] = useState<{ action: LifecycleAction; label: string } | null>(null);
+  const [reason, setReason] = useState('');
+  const [error, setError] = useState('');
   const ref = useRef<HTMLDivElement>(null);
   const router = useRouter();
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+        setReasonFor(null);
+        setReason('');
+        setError('');
+      }
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  async function changeStatus(status: DiyTemplateStatus) {
-    setOpen(false);
+  async function confirmTransition() {
+    if (!reasonFor || !reason.trim()) return;
     setBusy(true);
+    setError('');
     try {
-      await api.adminUpdateDiyTemplateStatus(template.id, status);
-      onStatusChange(template.id, status);
+      const result = await transitionDiyTemplate(template.id, reasonFor.action, reason.trim());
+      onStatusChange(template.id, result.status as DiyTemplateStatus);
+      setOpen(false);
+      setReasonFor(null);
+      setReason('');
+    } catch (e: any) {
+      setError(e?.message ?? 'Action failed');
     } finally {
       setBusy(false);
     }
@@ -76,6 +113,8 @@ export default function TemplateStatusActions({ template, onStatusChange, onDupl
     }
   }
 
+  const actions = ACTIONS_FOR_STATUS[template.status] ?? [];
+
   return (
     <div ref={ref} className="relative">
       <button
@@ -89,8 +128,8 @@ export default function TemplateStatusActions({ template, onStatusChange, onDupl
         </svg>
       </button>
 
-      {open && (
-        <div className="absolute right-0 z-50 mt-1 w-44 rounded-lg border bg-white py-1 shadow-lg">
+      {open && !reasonFor && (
+        <div className="absolute right-0 z-50 mt-1 w-48 rounded-lg border bg-white py-1 shadow-lg">
           <button
             onClick={() => router.push(`/dashboard/admin/diy/templates/${template.id}/edit`)}
             className="w-full px-4 py-2 text-left text-sm hover:bg-neutral-50"
@@ -98,31 +137,50 @@ export default function TemplateStatusActions({ template, onStatusChange, onDupl
             Edit
           </button>
 
-          {template.status === 'DRAFT' && (
-            <button onClick={() => changeStatus('ACTIVE')} className="w-full px-4 py-2 text-left text-sm text-green-700 hover:bg-green-50">
-              Publish
+          {actions.map((a) => (
+            <button
+              key={a.action}
+              onClick={() => setReasonFor({ action: a.action, label: a.label })}
+              className={`w-full px-4 py-2 text-left text-sm ${a.tone}`}
+            >
+              {a.label}
             </button>
-          )}
-          {template.status === 'ACTIVE' && (
-            <>
-              <button onClick={() => changeStatus('DRAFT')} className="w-full px-4 py-2 text-left text-sm hover:bg-neutral-50">
-                Unpublish to Draft
-              </button>
-              <button onClick={() => changeStatus('ARCHIVED')} className="w-full px-4 py-2 text-left text-sm text-yellow-700 hover:bg-yellow-50">
-                Archive
-              </button>
-            </>
-          )}
-          {template.status === 'ARCHIVED' && (
-            <button onClick={() => changeStatus('ACTIVE')} className="w-full px-4 py-2 text-left text-sm text-green-700 hover:bg-green-50">
-              Restore to Active
-            </button>
-          )}
+          ))}
 
           <hr className="my-1 border-neutral-100" />
           <button onClick={duplicate} className="w-full px-4 py-2 text-left text-sm hover:bg-neutral-50">
             Duplicate
           </button>
+        </div>
+      )}
+
+      {open && reasonFor && (
+        <div className="absolute right-0 z-50 mt-1 w-64 rounded-lg border bg-white p-3 shadow-lg">
+          <p className="mb-1.5 text-sm font-medium">{reasonFor.label}</p>
+          <textarea
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            placeholder="Reason (required) — recorded in the audit log"
+            className="mb-2 w-full rounded border border-neutral-200 p-1.5 text-xs"
+            rows={3}
+          />
+          {error ? <p className="mb-2 text-xs text-red-600">{error}</p> : null}
+          <div className="flex justify-end gap-2">
+            <button
+              onClick={() => { setReasonFor(null); setReason(''); setError(''); }}
+              className="rounded px-2 py-1 text-xs hover:bg-neutral-50"
+              disabled={busy}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={confirmTransition}
+              disabled={busy || !reason.trim()}
+              className="rounded bg-neutral-900 px-2 py-1 text-xs text-white disabled:opacity-50"
+            >
+              Confirm
+            </button>
+          </div>
         </div>
       )}
     </div>

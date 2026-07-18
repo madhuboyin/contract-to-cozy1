@@ -6,6 +6,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   fetchEditorialQueues,
   LifecycleAction,
+  transitionDiyTemplate,
   transitionKnowledgeArticle,
 } from '@/lib/api/adminContentGovernance';
 
@@ -22,6 +23,18 @@ export function useTransitionKnowledgeArticle() {
   return useMutation({
     mutationFn: ({ articleId, action, reason }: { articleId: string; action: LifecycleAction; reason: string }) =>
       transitionKnowledgeArticle(articleId, action, reason),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['admin-editorial-queues'] });
+      qc.invalidateQueries({ queryKey: ['admin-work-queues'] });
+    },
+  });
+}
+
+export function useTransitionDiyTemplate() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ templateId, action, reason }: { templateId: string; action: LifecycleAction; reason: string }) =>
+      transitionDiyTemplate(templateId, action, reason),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['admin-editorial-queues'] });
       qc.invalidateQueries({ queryKey: ['admin-work-queues'] });

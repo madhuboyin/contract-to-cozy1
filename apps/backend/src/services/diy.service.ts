@@ -455,7 +455,9 @@ export class DiyService {
   // ── Admin ──────────────────────────────────────────────────────────────────────
   async adminListTemplates(params: { limit?: number; cursor?: string; status?: string; category?: string; search?: string }) {
     const { limit = 50, cursor, status, category, search } = params;
-    const statuses = status ? [status as DiyTemplateStatus] : ['DRAFT', 'ACTIVE', 'ARCHIVED'] as DiyTemplateStatus[];
+    const statuses = status
+      ? [status as DiyTemplateStatus]
+      : (['DRAFT', 'REVIEW', 'APPROVED', 'ACTIVE', 'ARCHIVED'] as DiyTemplateStatus[]);
 
     const templates = await prisma.diyProjectTemplate.findMany({
       where: {
@@ -527,9 +529,6 @@ export class DiyService {
     });
   }
 
-  async adminUpdateTemplateStatus(templateId: string, status: DiyTemplateStatus) {
-    return prisma.diyProjectTemplate.update({ where: { id: templateId }, data: { status } });
-  }
 }
 
 export const diyService = new DiyService();

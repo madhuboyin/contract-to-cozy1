@@ -22,9 +22,23 @@ export interface EditorialQueueItem {
   updatedAt: string;
 }
 
+export type DiyLifecycleStatus = 'DRAFT' | 'REVIEW' | 'APPROVED' | 'ACTIVE' | 'ARCHIVED';
+
+export interface DiyQueueItem {
+  id: string;
+  slug: string;
+  title: string;
+  status: DiyLifecycleStatus;
+  safetyLevel: 'LOW' | 'MODERATE' | 'HIGH';
+  approvedBy: string | null;
+  updatedAt: string;
+}
+
 export interface EditorialQueues {
   reviewQueue: EditorialQueueItem[];
   approvedQueue: EditorialQueueItem[];
+  diyReviewQueue: DiyQueueItem[];
+  diyApprovedQueue: DiyQueueItem[];
 }
 
 export interface TransitionResult {
@@ -55,6 +69,18 @@ export async function transitionKnowledgeArticle(
 ): Promise<TransitionResult> {
   const res = await api.post<TransitionResult>(
     `/api/admin/content/knowledge/${articleId}/${ENDPOINT_FOR_ACTION[action]}`,
+    { action, reason },
+  );
+  return res.data;
+}
+
+export async function transitionDiyTemplate(
+  templateId: string,
+  action: LifecycleAction,
+  reason: string,
+): Promise<{ previousStatus: DiyLifecycleStatus; status: DiyLifecycleStatus; action: LifecycleAction }> {
+  const res = await api.post<{ previousStatus: DiyLifecycleStatus; status: DiyLifecycleStatus; action: LifecycleAction }>(
+    `/api/admin/content/diy/${templateId}/${ENDPOINT_FOR_ACTION[action]}`,
     { action, reason },
   );
   return res.data;

@@ -23,6 +23,8 @@ const CATEGORIES: { value: DiyProjectCategory; label: string }[] = [
 const STATUS_TABS: { value: DiyTemplateStatus | ''; label: string }[] = [
   { value: '', label: 'All' },
   { value: 'DRAFT', label: 'Draft' },
+  { value: 'REVIEW', label: 'In review' },
+  { value: 'APPROVED', label: 'Approved' },
   { value: 'ACTIVE', label: 'Active' },
   { value: 'ARCHIVED', label: 'Archived' },
 ];

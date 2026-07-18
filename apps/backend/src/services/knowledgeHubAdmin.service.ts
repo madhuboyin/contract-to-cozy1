@@ -14,7 +14,6 @@ type KnowledgeArticleUpsertInput = {
   slug: string;
   subtitle?: string | null;
   excerpt?: string | null;
-  status: KnowledgeArticleStatus;
   articleType: KnowledgeArticleType;
   heroTitle?: string | null;
   heroDescription?: string | null;
@@ -24,7 +23,6 @@ type KnowledgeArticleUpsertInput = {
   readingMinutes?: number | null;
   featured: boolean;
   sortOrder: number;
-  publishedAt?: string | null;
   categoryIds: string[];
   tagIds: string[];
   sections: Array<{
@@ -200,18 +198,6 @@ function normalizeString(value?: string | null): string | null {
 
 function toIsoOrNull(value?: Date | null): string | null {
   return value ? value.toISOString() : null;
-}
-
-function resolvePublishedAt(
-  status: KnowledgeArticleStatus,
-  publishedAt: string | null | undefined,
-  fallbackPublishedAt?: Date | null
-): Date | null {
-  if (publishedAt) return new Date(publishedAt);
-  if (status === KnowledgeArticleStatus.PUBLISHED) {
-    return fallbackPublishedAt ?? new Date();
-  }
-  return null;
 }
 
 function mapAdminArticleList(article: AdminArticleListRow) {
