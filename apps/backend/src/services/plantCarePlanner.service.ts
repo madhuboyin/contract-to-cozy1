@@ -8,6 +8,7 @@ import { resolveCountyFips } from './environment/fipsResolver.service';
 import { getPropertyContext } from '../modules/propertyContext';
 import { evaluatePlantAdvisorApplicability } from './plantAdvisor/applicabilityPolicy';
 import type { PropertyContextSnapshot } from '../modules/propertyContext';
+import { evaluateFeatureContext } from '../modules/propertyContext/application/evaluateFeatureContext';
 
 export interface PlantWeatherSignals {
   heat: boolean;
@@ -210,6 +211,15 @@ export class PlantCarePlannerService {
   }
 
   private async assertOutdoorApplicable(propertyId: string, userId: string): Promise<void> {
+    const evaluation = await evaluateFeatureContext(propertyId, userId, {
+      featureKey: 'PLANT_ADVISOR',
+      operationKey: 'GENERATE_OUTDOOR_RECOMMENDATIONS',
+    });
+    if (!evaluation.canExecute) {
+      const error = new APIError(`Outdoor Plant Advisor needs more property context: ${evaluation.reasonCodes.join(', ')}`, 422, 'PLANT_ADVISOR_CONTEXT_REQUIRED');
+      (error as any).evaluation = evaluation;
+      throw error;
+    }
     const decision = evaluatePlantAdvisorApplicability(await this.getContext(propertyId, userId), 'OUTDOOR');
     if (decision.status !== 'APPLICABLE') {
       const error = new APIError(`Outdoor Plant Advisor is not available: ${decision.reasonCodes.join(', ')}`, 422, 'PLANT_ADVISOR_NOT_APPLICABLE');

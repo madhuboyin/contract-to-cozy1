@@ -231,7 +231,7 @@ for (const definition of structuredDefinitions) definitions.set(definition.captu
 const relationalDefinitions: ContextCaptureDefinition[] = [
   {
     captureKey: 'INVENTORY_ITEM_SELECT_OR_CREATE',
-    factKeys: ['inventory.items'],
+    factKeys: ['inventory.items', 'systems.installedItemTypes'],
     mode: 'RELATIONAL',
     title: 'Add an installed item or system',
     question: 'Which item or home system should this feature use?',
@@ -322,7 +322,9 @@ export function validateCaptureRegistry(): void {
     if (definition.mode === 'RELATIONAL') {
       if (definition.inputSchema.type !== 'RELATIONAL_SELECT_CREATE') problems.push(`${definition.captureKey}: relational capture requires select/create schema`);
       if (!definition.relationalAdapterKey) problems.push(`${definition.captureKey}: relational capture requires an allowlisted adapter`);
-      if (definition.canonicalOwner !== getFactDefinition(definition.factKeys[0]).canonicalOwner) problems.push(`${definition.captureKey}: canonical owner drift`);
+      for (const factKey of definition.factKeys) {
+        if (definition.canonicalOwner !== getFactDefinition(factKey).canonicalOwner) problems.push(`${definition.captureKey}: canonical owner drift for ${factKey}`);
+      }
     }
   }
   if (problems.length) throw new Error(`Invalid Property Context capture registry:\n${problems.join('\n')}`);

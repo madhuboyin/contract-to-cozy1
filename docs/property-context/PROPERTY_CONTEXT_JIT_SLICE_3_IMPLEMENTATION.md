@@ -27,7 +27,7 @@ The initial contract is intentionally narrow. Inventory and insurance have stabl
 - Internal `relationalAdapterKey` values are allowlisted and removed from evaluation responses.
 - Dynamic options are resolved by property ID on the backend.
 - `minimumItems` lets a feature distinguish an empty canonical collection from a usable collection.
-- `MAINTENANCE / SET_UP_INSTALLED_SYSTEMS` classifies the first inventory record as `REQUIRED_CALCULATION`.
+- `MAINTENANCE / SET_UP_INSTALLED_SYSTEMS` classifies the first recognized installed item/system type as `REQUIRED_CALCULATION`.
 - `COVERAGE_INTELLIGENCE / ASSESS_PROPERTY_COVERAGE` classifies the first policy as `ENHANCEMENT_ACCURACY`, so the existing empty-coverage result remains available.
 - Selection and creation run in the same transaction as the idempotency receipt and relational evidence row.
 - The capture response includes an opaque selection result: entity type, entity ID, and whether it was created.

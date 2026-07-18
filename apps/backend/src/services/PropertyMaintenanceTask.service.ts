@@ -18,6 +18,7 @@ import { resolveSeasonalTaskDueDate } from '../utils/maintenanceDueDate';
 import { syncSeasonalChecklistStatus } from './seasonalChecklistStatus.service';
 import { resolvePropertyAccess, ROLE_RANK } from './propertyAccess.service';
 import { getPropertyContext } from '../modules/propertyContext';
+import { evaluateFeatureContext } from '../modules/propertyContext/application/evaluateFeatureContext';
 import {
   evaluateMaintenanceTemplateApplicability,
   maintenanceTemplateActionKey,
@@ -158,6 +159,17 @@ import {
 
       const actionKey = template ? maintenanceTemplateActionKey(template.id) : null;
       if (template) {
+        if (/SMOKE.*DETECTOR|\b(CO|CARBON MONOXIDE).*DETECTOR/i.test(template.title)) {
+          const evaluation = await evaluateFeatureContext(propertyId, userId, {
+            featureKey: 'MAINTENANCE',
+            operationKey: 'GENERATE_SAFETY_TASKS',
+          });
+          if (!evaluation.canExecute) {
+            const error = new Error(`Maintenance template needs more property context: ${evaluation.reasonCodes.join(', ')}`);
+            (error as any).evaluation = evaluation;
+            throw error;
+          }
+        }
         const context = await getPropertyContext(propertyId, { userId }, {
           scopes: ['EXTERIOR', 'RESPONSIBILITY', 'SYSTEMS', 'SAFETY', 'MAINTENANCE'],
         });

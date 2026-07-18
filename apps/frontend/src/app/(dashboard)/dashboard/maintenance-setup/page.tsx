@@ -32,6 +32,7 @@ import {
   MobileSection,
   MobileSectionHeader,
 } from '@/components/mobile/dashboard/MobilePrimitives';
+import { PropertyContextCapturePanel } from '@/components/property-context/PropertyContextCapturePanel';
 
 type VisualTone = 'insurance' | 'payments' | 'cleaning' | 'systems' | 'outdoor' | 'safety' | 'documents' | 'neutral';
 
@@ -208,6 +209,7 @@ export default function MaintenanceSetupPage() {
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<MaintenanceTaskTemplate | null>(null);
+  const [installedSystemContextReady, setInstalledSystemContextReady] = useState(false);
 
   // --- Property and Selection State ---
   const [selectedPropertyId, setSelectedPropertyId] = useState<string | undefined>(undefined);
@@ -247,6 +249,10 @@ export default function MaintenanceSetupPage() {
     }
   }, [candidatePropertyId, properties, selectedPropertyId, setDashboardSelectedPropertyId]);
 
+  React.useEffect(() => {
+    setInstalledSystemContextReady(false);
+  }, [selectedPropertyId]);
+
   // --- End Property and Selection State ---
   
   const templates = useMemo(
@@ -254,6 +260,15 @@ export default function MaintenanceSetupPage() {
     [templatesData]
   );
   const isLoading = isLoadingProperties || isLoadingTemplates;
+  const hasUnknownSafetyTemplates = templates.some((template) => {
+    const reasons = template.applicability?.reasonCodes ?? [];
+    return template.applicability?.status === 'UNKNOWN'
+      && reasons.some((reason) => reason === 'SMOKE_DETECTOR_PRESENCE_UNKNOWN' || reason === 'CO_DETECTOR_PRESENCE_UNKNOWN');
+  });
+
+  const refreshMaintenanceContext = React.useCallback(async () => {
+    await queryClient.invalidateQueries({ queryKey: ['maintenanceTemplates', selectedPropertyId] });
+  }, [queryClient, selectedPropertyId]);
 
   const handleTemplateSelect = (template: MaintenanceTaskTemplate) => {
     setSelectedTemplate(template);
@@ -323,6 +338,20 @@ export default function MaintenanceSetupPage() {
   return (
     <DashboardShell>
       <MobilePageContainer className="space-y-4 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:max-w-7xl lg:px-6 lg:pb-10">
+        {selectedPropertyId ? <PropertyContextCapturePanel
+          propertyId={selectedPropertyId}
+          featureKey="MAINTENANCE"
+          operationKey="SET_UP_INSTALLED_SYSTEMS"
+          onReady={() => setInstalledSystemContextReady(true)}
+          onCaptured={refreshMaintenanceContext}
+        /> : null}
+        {selectedPropertyId && installedSystemContextReady && hasUnknownSafetyTemplates ? <PropertyContextCapturePanel
+          propertyId={selectedPropertyId}
+          featureKey="MAINTENANCE"
+          operationKey="GENERATE_SAFETY_TASKS"
+          onReady={refreshMaintenanceContext}
+          onCaptured={refreshMaintenanceContext}
+        /> : null}
         <div className="lg:hidden">
           <MobilePageIntro
             eyebrow="Maintenance"

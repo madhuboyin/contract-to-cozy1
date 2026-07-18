@@ -57,7 +57,7 @@ export const FEATURE_CONTEXT_REQUIREMENTS: readonly FeatureContextRequirementDef
     promptStrategy: 'MINIMUM_PATH',
     required: [
       {
-        factKey: 'inventory.items',
+        factKey: 'systems.installedItemTypes',
         classification: 'REQUIRED_CALCULATION',
         reasonCode: 'SELECT_INSTALLED_SYSTEM_FOR_MAINTENANCE',
         priority: 10,
