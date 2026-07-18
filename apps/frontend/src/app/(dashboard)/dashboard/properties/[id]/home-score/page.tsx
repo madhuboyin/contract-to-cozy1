@@ -37,6 +37,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
+import { DWELLING_TYPE_LABELS } from "@/lib/property/propertyContextForm";
 import { ScoreTrendChart } from "@/components/scores/ScoreTrendChart";
 import { api } from "@/lib/api/client";
 import {
@@ -412,7 +413,7 @@ function systemHealthIcon(key: HomeScoreSystemHealthRow["key"]) {
 
 function formatPropertyType(value?: string | null) {
   if (!value) return null;
-  return formatConstantLabel(value);
+  return DWELLING_TYPE_LABELS[value as keyof typeof DWELLING_TYPE_LABELS] ?? formatConstantLabel(value);
 }
 
 function benchmarkDeltaLabel(thisScore: number, benchmarkScore: number) {
@@ -1259,7 +1260,7 @@ export default function HomeScoreReportPage() {
               { label: "Generated", value: formatDate(meta?.generatedDate) },
               { label: "Prepared For", value: meta?.preparedFor || "Property Owner" },
               { label: "Data Coverage", value: `${meta?.dataCoveragePercentage ?? report.trustAndVerification?.dataCoveragePct ?? 0}%` },
-              { label: "Dwelling Type", value: formatPropertyType(meta?.dwellingType) || formatPropertyType(propertyQuery.data?.dwellingType) || "Not available" },
+              { label: "Home type", value: formatPropertyType(meta?.dwellingType) || formatPropertyType(propertyQuery.data?.dwellingType) || "Not available" },
               { label: "Year Built", value: meta?.yearBuilt || propertyQuery.data?.yearBuilt || "Not available" },
             ].map((item) => (
               <div key={item.label} className="border-t border-slate-200 px-6 py-3 sm:[&:nth-child(odd)]:border-r lg:[&:not(:nth-child(3n))]:border-r">

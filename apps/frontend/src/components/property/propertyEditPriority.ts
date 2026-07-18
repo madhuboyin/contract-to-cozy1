@@ -57,7 +57,7 @@ export const PROPERTY_PRIORITY_FIELDS: PropertyPriorityField[] = [
   { key: "city", label: "city", tier: "P0", impactWeight: 90, sectionId: "basics", fieldRefId: "field-city", isFilled: (v) => hasText(v.city) },
   { key: "state", label: "state", tier: "P0", impactWeight: 90, sectionId: "basics", fieldRefId: "field-state", isFilled: (v) => hasText(v.state) },
   { key: "zipCode", label: "zip code", tier: "P0", impactWeight: 90, sectionId: "basics", fieldRefId: "field-zipCode", isFilled: (v) => hasText(v.zipCode) },
-  { key: "dwellingType", label: "dwelling type", tier: "P0", impactWeight: 87, sectionId: "systems", fieldRefId: "field-dwellingType", isFilled: (v) => hasText(v.dwellingType) && v.dwellingType !== "UNKNOWN" },
+  { key: "dwellingType", label: "home type", tier: "P0", impactWeight: 87, sectionId: "systems", fieldRefId: "field-dwellingType", isFilled: (v) => hasText(v.dwellingType) && v.dwellingType !== "UNKNOWN" },
   { key: "ownershipForm", label: "ownership form", tier: "P0", impactWeight: 86, sectionId: "occupancy", fieldRefId: "field-ownershipForm", isFilled: (v) => hasText(v.ownershipForm) && v.ownershipForm !== "UNKNOWN" },
   { key: "propertyUse", label: "property use", tier: "P0", impactWeight: 85, sectionId: "occupancy", fieldRefId: "field-propertyUse", isFilled: (v) => hasText(v.propertyUse) && v.propertyUse !== "UNKNOWN" },
   { key: "occupancyStatus", label: "occupancy status", tier: "P0", impactWeight: 84, sectionId: "occupancy", fieldRefId: "field-occupancyStatus", isFilled: (v) => hasText(v.occupancyStatus) && v.occupancyStatus !== "UNKNOWN" },

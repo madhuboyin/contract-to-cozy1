@@ -2,6 +2,8 @@ import type { OutdoorSpaceType, PropertyResponsibilityInput, ResponsibleParty } 
 import fs from 'node:fs';
 import path from 'node:path';
 import {
+  DWELLING_TYPE_LABELS,
+  DWELLING_TYPE_OPTIONS,
   defaultResponsibilityParties,
   getResponsibilityPreset,
   mapResponsibilitiesToForm,
@@ -34,6 +36,13 @@ const ARCHETYPES: Archetype[] = [
 ];
 
 describe('Property Context create/edit form round trips', () => {
+  test('uses homeowner-friendly labels for every canonical home type', () => {
+    expect(Object.keys(DWELLING_TYPE_LABELS)).toEqual(expect.arrayContaining([...DWELLING_TYPE_OPTIONS]));
+    expect(DWELLING_TYPE_LABELS.DETACHED_SINGLE_FAMILY).toBe('Detached house');
+    expect(DWELLING_TYPE_LABELS.MANUFACTURED_HOME).toBe('Manufactured or mobile home');
+    expect(DWELLING_TYPE_LABELS.UNKNOWN).toBe('I’m not sure');
+  });
+
   test.each(ARCHETYPES)('$key preserves canonical responsibility and outdoor-space facts', (archetype) => {
     const formResponsibilities = mapResponsibilitiesToForm(archetype.responsibilities);
     const payloadResponsibilities = mapResponsibilitiesToPayload(formResponsibilities);

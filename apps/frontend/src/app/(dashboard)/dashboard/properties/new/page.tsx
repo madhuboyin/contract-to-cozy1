@@ -17,6 +17,8 @@ import {
 import { AddressAutocomplete } from '@/components/property/AddressAutocomplete';
 import type { OutdoorSpaceType, PropertyResponsibilityScope, ResponsibleParty } from '@/types';
 import {
+  DWELLING_TYPE_LABELS,
+  DWELLING_TYPE_OPTIONS,
   OUTDOOR_SPACE_TYPE_OPTIONS,
   RESPONSIBILITY_SCOPES,
   RESPONSIBLE_PARTY_OPTIONS,
@@ -70,7 +72,6 @@ interface PropertyFormData {
   // REMOVED: applianceAges: string; (Managed internally by majorAppliances state)
 }
 
-const DWELLING_OPTIONS = ['DETACHED_SINGLE_FAMILY', 'ATTACHED_SINGLE_FAMILY', 'TOWNHOUSE', 'CONDO_UNIT', 'APARTMENT_UNIT', 'DUPLEX', 'MULTI_FAMILY', 'MANUFACTURED_HOME', 'OTHER', 'UNKNOWN'];
 const OWNERSHIP_FORM_OPTIONS = ['FEE_SIMPLE', 'CONDOMINIUM', 'COOPERATIVE', 'LEASEHOLD', 'OTHER', 'UNKNOWN'];
 const PROPERTY_USE_OPTIONS = ['PRIMARY_RESIDENCE', 'SECOND_HOME', 'LONG_TERM_RENTAL', 'SHORT_TERM_RENTAL', 'VACANT', 'UNDER_RENOVATION', 'FOR_SALE', 'OTHER', 'UNKNOWN'];
 const OCCUPANCY_STATUS_OPTIONS = ['OWNER_OCCUPIED', 'TENANT_OCCUPIED', 'FAMILY_OCCUPIED', 'MIXED', 'VACANT', 'UNKNOWN'];
@@ -239,7 +240,7 @@ export default function NewPropertyPage() {
     if (!formData.city.trim()) return 'City is required.';
     if (!formData.state.trim() || formData.state.length !== 2) return 'State must be 2 characters (e.g., NJ).';
     if (!/^\d{5}$/.test(formData.zipCode)) return 'ZIP code must be 5 digits.';
-    if (!formData.dwellingType) return 'Dwelling type is required.';
+    if (!formData.dwellingType) return 'Home type is required.';
     if (!formData.ownershipForm) return 'Ownership form is required.';
     if (!formData.propertyUse) return 'Property use is required.';
     if (!formData.occupancyStatus) return 'Occupancy status is required.';
@@ -373,18 +374,21 @@ export default function NewPropertyPage() {
   const selectBaseClass =
     'min-h-[44px] w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-900 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)] focus:border-teal-500/40 focus:outline-none focus:ring-2 focus:ring-teal-500/20';
 
-  const SelectInput = ({ label, name, value, options, required = false, placeholder }: {
+  const SelectInput = ({ label, name, value, options, required = false, placeholder, helperText, optionLabels }: {
     label: string, 
     name: keyof PropertyFormData, 
     value: string, 
-    options: string[], 
+    options: readonly string[],
     required?: boolean,
     placeholder?: string,
+    helperText?: string,
+    optionLabels?: Record<string, string>,
   }) => (
     <div className="space-y-1.5">
       <label htmlFor={name} className="block text-sm font-medium text-slate-700">
         {label} {required && <span className="text-red-500">*</span>}
       </label>
+      {helperText ? <p className="text-xs leading-4 text-slate-500">{helperText}</p> : null}
       <select
         id={name}
         name={name}
@@ -396,7 +400,7 @@ export default function NewPropertyPage() {
         <option value="">{placeholder || `Select ${label}`}</option>
         {options.map(option => (
           <option key={option} value={option}>
-            {option.replace(/_/g, ' ')}
+            {optionLabels?.[option] ?? option.replace(/_/g, ' ')}
           </option>
         ))}
       </select>
@@ -505,12 +509,14 @@ export default function NewPropertyPage() {
         </div>
 
         <SelectInput
-          label="Dwelling Type"
+          label="Home type"
           name="dwellingType"
           value={formData.dwellingType}
-          options={DWELLING_OPTIONS}
+          options={DWELLING_TYPE_OPTIONS}
           required
-          placeholder="Select property type"
+          placeholder="Select home type"
+          helperText="What kind of home is this? Choose the closest match based on the physical building."
+          optionLabels={DWELLING_TYPE_LABELS}
         />
       </div>
 

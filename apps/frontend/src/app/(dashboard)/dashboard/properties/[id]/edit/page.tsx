@@ -34,6 +34,8 @@ import {
   type OutdoorSpaceType,
 } from "@/types"; 
 import {
+  DWELLING_TYPE_LABELS,
+  DWELLING_TYPE_OPTIONS,
   OUTDOOR_SPACE_TYPE_OPTIONS,
   RESPONSIBILITY_SCOPES,
   RESPONSIBLE_PARTY_OPTIONS,
@@ -84,7 +86,6 @@ const MAJOR_APPLIANCE_OPTIONS = [
 ];
 const MAX_PROPERTY_PHOTO_SIZE_MB = 10;
 const ALLOWED_PROPERTY_PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
-const DWELLING_OPTIONS = ['DETACHED_SINGLE_FAMILY', 'ATTACHED_SINGLE_FAMILY', 'TOWNHOUSE', 'CONDO_UNIT', 'APARTMENT_UNIT', 'DUPLEX', 'MULTI_FAMILY', 'MANUFACTURED_HOME', 'OTHER', 'UNKNOWN'] as const;
 const OWNERSHIP_FORM_OPTIONS = ['FEE_SIMPLE', 'CONDOMINIUM', 'COOPERATIVE', 'LEASEHOLD', 'OTHER', 'UNKNOWN'] as const;
 const PROPERTY_USE_OPTIONS = ['PRIMARY_RESIDENCE', 'SECOND_HOME', 'LONG_TERM_RENTAL', 'SHORT_TERM_RENTAL', 'VACANT', 'UNDER_RENOVATION', 'FOR_SALE', 'OTHER', 'UNKNOWN'] as const;
 const OCCUPANCY_STATUS_OPTIONS = ['OWNER_OCCUPIED', 'TENANT_OCCUPIED', 'FAMILY_OCCUPIED', 'MIXED', 'VACANT', 'UNKNOWN'] as const;
@@ -245,7 +246,7 @@ const propertySchema = z.object({
   state: z.string().min(2, { message: "State must be 2 characters." }),
   zipCode: z.string().min(5, { message: "Zip Code is required." }),
   
-  dwellingType: z.enum(DWELLING_OPTIONS),
+  dwellingType: z.enum(DWELLING_TYPE_OPTIONS),
   ownershipForm: z.enum(OWNERSHIP_FORM_OPTIONS),
   propertyUse: z.enum(PROPERTY_USE_OPTIONS),
   occupancyStatus: z.enum(OCCUPANCY_STATUS_OPTIONS),
@@ -1648,16 +1649,17 @@ export default function EditPropertyPage() {
                     render={({ field }) => (
                       <FormItem id="property-type" className="w-full">
                         <div className="flex items-center gap-2">
-                          <FormLabel>Dwelling type</FormLabel>
+                          <FormLabel>Home type</FormLabel>
                           {isRecommended("dwellingType") ? <FieldNudgeChip variant="recommended" /> : null}
                         </div>
+                        <p className="text-xs leading-4 text-muted-foreground">What kind of home is this? Choose the closest match based on the physical building.</p>
                         <Select onValueChange={field.onChange} value={field.value}>
                           <FormControl>
                             <SelectTrigger id="field-dwellingType" className="h-9 text-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40"><SelectValue placeholder="Select type" /></SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            {DWELLING_OPTIONS.map((type) => (
-                              <SelectItem key={type} value={type}>{formatEnumLabel(type)}</SelectItem>
+                            {DWELLING_TYPE_OPTIONS.map((type) => (
+                              <SelectItem key={type} value={type}>{DWELLING_TYPE_LABELS[type]}</SelectItem>
                             ))}
                           </SelectContent>
                         </Select>

@@ -1,9 +1,36 @@
 import type {
+  DwellingType,
   OutdoorSpaceType,
   PropertyResponsibilityInput,
   PropertyResponsibilityScope,
   ResponsibleParty,
 } from '@/types';
+
+export const DWELLING_TYPE_OPTIONS = [
+  'DETACHED_SINGLE_FAMILY',
+  'ATTACHED_SINGLE_FAMILY',
+  'TOWNHOUSE',
+  'CONDO_UNIT',
+  'APARTMENT_UNIT',
+  'DUPLEX',
+  'MULTI_FAMILY',
+  'MANUFACTURED_HOME',
+  'OTHER',
+  'UNKNOWN',
+] as const satisfies readonly DwellingType[];
+
+export const DWELLING_TYPE_LABELS: Record<DwellingType, string> = {
+  DETACHED_SINGLE_FAMILY: 'Detached house',
+  ATTACHED_SINGLE_FAMILY: 'Attached house',
+  TOWNHOUSE: 'Townhouse',
+  CONDO_UNIT: 'Condo unit',
+  APARTMENT_UNIT: 'Apartment unit',
+  DUPLEX: 'Duplex',
+  MULTI_FAMILY: 'Multi-family property',
+  MANUFACTURED_HOME: 'Manufactured or mobile home',
+  OTHER: 'Something else',
+  UNKNOWN: 'I’m not sure',
+};
 
 export const RESPONSIBILITY_SCOPES: readonly PropertyResponsibilityScope[] = [
   'ROOF',
