@@ -13,8 +13,8 @@ test('service get_quotes follows the selected service template', () => {
   const warranty = getTemplateByIssueType('get_quotes', 'SERVICE', 'warranty_purchase');
 
   assert.equal(cleaning.journeyTypeKey, 'cleaning_service_journey');
-  assert.equal(inspection.journeyTypeKey, 'general_inspection_journey');
-  assert.equal(warranty.journeyTypeKey, 'warranty_purchase_journey');
+  assert.equal(inspection.journeyTypeKey, 'inspection_quote_journey');
+  assert.equal(warranty.journeyTypeKey, 'warranty_quote_comparison_journey');
 });
 
 test('high_utility_cost routes to the energy efficiency journey', () => {
@@ -26,15 +26,15 @@ test('high_utility_cost routes to the energy efficiency journey', () => {
 test('service-specific issue variants map to their intended service journeys', () => {
   assert.equal(
     getTemplateByIssueType('compare_warranty_plans', 'SERVICE', 'warranty_purchase').journeyTypeKey,
-    'warranty_purchase_journey'
+    'warranty_quote_comparison_journey'
   );
   assert.equal(
     getTemplateByIssueType('policy_renewal', 'SERVICE', 'insurance_purchase').journeyTypeKey,
-    'insurance_purchase_journey'
+    'insurance_renewal_journey'
   );
   assert.equal(
     getTemplateByIssueType('post_repair_inspection', 'SERVICE', 'general_inspection').journeyTypeKey,
-    'general_inspection_journey'
+    'post_repair_inspection_journey'
   );
   assert.equal(
     getTemplateByIssueType('deep_clean', 'SERVICE', 'cleaning_service').journeyTypeKey,

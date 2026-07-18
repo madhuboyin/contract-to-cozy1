@@ -606,6 +606,8 @@ The database is treated as pre-launch and disposable. When a phase requires pers
 
 **Objective:** Stop further divergence and establish the contracts on which all later releases depend.
 
+**Implementation status:** Technical foundation implemented July 18, 2026. Executable contracts, typed north-star events, golden fixtures, route-disposition enforcement, feature-brief requirements, and recommendation launch gates are documented in `docs/product/phase0/`. Product, domain, trust, and legal/compliance approval remains required when a specific material recommendation is prepared for launch.
+
 #### Deliverables
 
 1. Approve the `HomeAction` contract, lifecycle, stable identity, priority vocabulary, and source adapters.

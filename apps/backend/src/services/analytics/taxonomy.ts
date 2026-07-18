@@ -16,6 +16,20 @@ export { ProductAnalyticsEventType };
 export const AnalyticsEvent = ProductAnalyticsEventType;
 export type AnalyticsEventType = ProductAnalyticsEventType;
 
+// Framework north-star lineage. These events are intentionally distinct from
+// generic feature and outcome events so a material action can be traced from
+// entry context through verified resolution without relying on eventName text.
+export const NorthStarAnalyticsEvent = {
+  ENTRY_CONTEXT_CAPTURED: ProductAnalyticsEventType.ENTRY_CONTEXT_CAPTURED,
+  ACTIVE_TRIGGER_IDENTIFIED: ProductAnalyticsEventType.ACTIVE_TRIGGER_IDENTIFIED,
+  HOME_ACTION_IDENTIFIED: ProductAnalyticsEventType.HOME_ACTION_IDENTIFIED,
+  HOME_ACTION_SURFACED: ProductAnalyticsEventType.HOME_ACTION_SURFACED,
+  HOME_ACTION_RESOLUTION_RECORDED: ProductAnalyticsEventType.HOME_ACTION_RESOLUTION_RECORDED,
+  HOME_ACTION_OUTCOME_VERIFIED: ProductAnalyticsEventType.HOME_ACTION_OUTCOME_VERIFIED,
+} as const;
+
+export type NorthStarAnalyticsEventType = typeof NorthStarAnalyticsEvent[keyof typeof NorthStarAnalyticsEvent];
+
 // ============================================================================
 // MODULE KEYS
 // Identifies which major product area emitted the event.
