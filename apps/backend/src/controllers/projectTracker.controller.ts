@@ -8,6 +8,8 @@ import {
 } from '../services/projectCompliance/context';
 import { evaluateFeatureContext } from '../modules/propertyContext/application/evaluateFeatureContext';
 import { APIError } from '../middleware/error.middleware';
+import { guidanceJourneyService } from '../services/guidanceEngine/guidanceJourney.service';
+import { logger } from '../lib/logger';
 
 // ── Projects ──────────────────────────────────────────────────────────────────
 
@@ -59,6 +61,32 @@ export async function createProject(req: Request, res: Response, next: NextFunct
       'ownerProjectExecution',
     );
     const data = await svc.createProject(req.params.propertyId, req.body);
+    if (req.body.guidanceJourneyId) {
+      try {
+        await guidanceJourneyService.recordToolCompletion({
+          propertyId: req.params.propertyId,
+          actorUserId: req.user!.userId,
+          journeyId: req.body.guidanceJourneyId,
+          inventoryItemId: req.body.inventoryItemId ?? null,
+          sourceToolKey: 'project-tracker',
+          sourceEntityType: 'PROJECT',
+          sourceEntityId: (data as any).id,
+          stepKey: 'confirm_scope_and_provider',
+          status: 'COMPLETED',
+          producedData: {
+            proofType: 'project_scope_confirmation',
+            proofId: (data as any).id,
+            projectId: (data as any).id,
+            executionPath: req.body.executionPath ?? null,
+            fulfillmentMode: req.body.fulfillmentMode ?? 'PROVIDER',
+            fundingMode: req.body.fundingMode ?? 'SELF_PAID',
+            complexity: req.body.complexity ?? 'MAJOR',
+          },
+        });
+      } catch (guidanceError) {
+        logger.warn({ guidanceError }, '[PHASE3] project handoff guidance hook failed');
+      }
+    }
     const propertyContext = await getProjectComplianceEnvelope(
       req.params.propertyId,
       req.user!.userId,

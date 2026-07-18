@@ -227,6 +227,14 @@ export async function listProjects(propertyId: string) {
       projectType: true,
       status: true,
       contractorName: true,
+      sourceType: true,
+      guidanceJourneyId: true,
+      inventoryItemId: true,
+      executionPath: true,
+      fulfillmentMode: true,
+      fundingMode: true,
+      complexity: true,
+      recommendationVersion: true,
       startDate: true,
       expectedEndDate: true,
       actualEndDate: true,
@@ -244,12 +252,47 @@ export async function createProject(propertyId: string, data: any) {
   const { milestones: initialMilestones, ...projectData } = data;
 
   const activeStatuses: ProjectRecordStatus[] = ['DRAFT', 'PLANNING', 'IN_PROGRESS', 'PAUSED', 'DISPUTED'];
-  const sourceConflict = projectData.priceFinalizationId
+  const sourceConflict = projectData.guidanceJourneyId
+    ? { guidanceJourneyId: projectData.guidanceJourneyId }
+    : projectData.priceFinalizationId
     ? { priceFinalizationId: projectData.priceFinalizationId }
     : projectData.bookingId
       ? { bookingId: projectData.bookingId }
       : null;
   const project = await withSerializableDedupe(async (tx) => {
+    const [journey, inventoryItem, priceFinalization, booking] = await Promise.all([
+      projectData.guidanceJourneyId
+        ? tx.guidanceJourney.findFirst({
+            where: { id: projectData.guidanceJourneyId, propertyId },
+            select: { id: true, inventoryItemId: true, templateVersion: true, status: true },
+          })
+        : null,
+      projectData.inventoryItemId
+        ? tx.inventoryItem.findFirst({ where: { id: projectData.inventoryItemId, propertyId }, select: { id: true } })
+        : null,
+      projectData.priceFinalizationId
+        ? tx.priceFinalization.findFirst({ where: { id: projectData.priceFinalizationId, propertyId }, select: { id: true } })
+        : null,
+      projectData.bookingId
+        ? tx.booking.findFirst({ where: { id: projectData.bookingId, propertyId }, select: { id: true } })
+        : null,
+    ]);
+    if (projectData.guidanceJourneyId && !journey) {
+      throw new APIError('Guidance journey not found for this property.', 400, 'INVALID_GUIDANCE_JOURNEY');
+    }
+    if (projectData.inventoryItemId && !inventoryItem) {
+      throw new APIError('Inventory item not found for this property.', 400, 'INVALID_INVENTORY_ITEM');
+    }
+    if (projectData.priceFinalizationId && !priceFinalization) {
+      throw new APIError('Price finalization not found for this property.', 400, 'INVALID_PRICE_FINALIZATION');
+    }
+    if (projectData.bookingId && !booking) {
+      throw new APIError('Booking not found for this property.', 400, 'INVALID_BOOKING');
+    }
+    if (journey?.inventoryItemId && projectData.inventoryItemId && journey.inventoryItemId !== projectData.inventoryItemId) {
+      throw new APIError('The project item must match the guidance journey item.', 409, 'JOURNEY_ITEM_MISMATCH');
+    }
+
     const duplicate = await tx.projectRecord.findFirst({
       where: {
         propertyId,
@@ -287,8 +330,15 @@ export async function createProject(propertyId: string, data: any) {
         contractorId: projectData.contractorId,
         description: projectData.description,
         sourceType: projectData.sourceType ?? 'MANUAL',
+        guidanceJourneyId: projectData.guidanceJourneyId,
+        inventoryItemId: projectData.inventoryItemId ?? journey?.inventoryItemId,
         priceFinalizationId: projectData.priceFinalizationId,
         bookingId: projectData.bookingId,
+        executionPath: projectData.executionPath,
+        fulfillmentMode: projectData.fulfillmentMode ?? 'PROVIDER',
+        fundingMode: projectData.fundingMode ?? 'SELF_PAID',
+        complexity: projectData.complexity ?? 'MAJOR',
+        recommendationVersion: projectData.recommendationVersion ?? journey?.templateVersion,
         contractAmountCents: projectData.contractAmountCents,
         currentContractAmountCents: projectData.contractAmountCents,
         startDate: new Date(projectData.startDate),

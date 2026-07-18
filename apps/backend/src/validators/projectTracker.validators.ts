@@ -51,15 +51,22 @@ const inventoryItemCategory = z.enum([
 export const CreateProjectSchema = z.object({
   name: z.string().min(1).max(200),
   projectType,
-  contractorName: z.string().min(1).max(200),
+  contractorName: z.string().min(1).max(200).optional(),
   contractorLicense: z.string().max(100).optional(),
   contractorPhone: z.string().max(30).optional(),
   contractorEmail: z.string().email().optional(),
   contractorId: z.string().optional(),
   description: z.string().max(2000).optional(),
-  sourceType: z.enum(['PRICE_FINALIZATION', 'BOOKING', 'MANUAL']).default('MANUAL'),
+  sourceType: z.enum(['PRICE_FINALIZATION', 'BOOKING', 'GUIDANCE', 'MANUAL']).default('MANUAL'),
+  guidanceJourneyId: z.string().optional(),
+  inventoryItemId: z.string().optional(),
   priceFinalizationId: z.string().optional(),
   bookingId: z.string().optional(),
+  executionPath: z.enum(['REPAIR', 'REPLACEMENT']).optional(),
+  fulfillmentMode: z.enum(['PROVIDER', 'DIY']).default('PROVIDER'),
+  fundingMode: z.enum(['SELF_PAID', 'COVERED', 'MIXED']).default('SELF_PAID'),
+  complexity: z.enum(['MINOR', 'MAJOR']).default('MAJOR'),
+  recommendationVersion: z.string().max(120).optional(),
   contractAmountCents: z.number().int().min(0),
   startDate: z.string().date(),
   expectedEndDate: z.string().date().optional(),
@@ -75,6 +82,21 @@ export const CreateProjectSchema = z.object({
     requiresPhotoEvidence: z.boolean().default(false),
     position: z.number().int().min(0),
   })).optional(),
+}).superRefine((value, ctx) => {
+  if (value.fulfillmentMode === 'PROVIDER' && !value.contractorName) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['contractorName'],
+      message: 'Provider-led projects require a contractor or company name.',
+    });
+  }
+  if (value.sourceType === 'GUIDANCE' && !value.guidanceJourneyId) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['guidanceJourneyId'],
+      message: 'Guidance-sourced projects require a journey link.',
+    });
+  }
 });
 
 export const UpdateProjectSchema = z.object({

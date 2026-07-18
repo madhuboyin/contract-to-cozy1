@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 import { api } from '@/lib/api/client';
 import { Button } from '@/components/ui/button';
@@ -16,10 +16,30 @@ import {
 import { PROJECT_TYPE_OPTIONS, ErrorBanner } from '../ProjectTrackerHelpers';
 import { PropertyContextCapturePanel } from '@/components/property-context/PropertyContextCapturePanel';
 
+type ProjectFormState = {
+  name: string;
+  projectType: string;
+  contractorName: string;
+  contractorPhone: string;
+  contractorLicense: string;
+  contractorEmail: string;
+  contractAmountCents: string;
+  startDate: string;
+  expectedEndDate: string;
+  executionPath: 'REPAIR' | 'REPLACEMENT';
+  fulfillmentMode: 'PROVIDER' | 'DIY';
+  fundingMode: 'SELF_PAID' | 'COVERED' | 'MIXED';
+  complexity: 'MINOR' | 'MAJOR';
+};
+
 export default function NewProjectPage() {
   const params = useParams<{ id: string }>();
   const propertyId = params.id;
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const guidanceJourneyId = searchParams.get('guidanceJourneyId');
+  const inventoryItemId = searchParams.get('itemId') ?? searchParams.get('inventoryItemId');
+  const guidedIssue = searchParams.get('issueType');
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -28,7 +48,7 @@ export default function NewProjectPage() {
   const [resumeRequested, setResumeRequested] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
 
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<ProjectFormState>({
     name: '',
     projectType: 'CUSTOM',
     contractorName: '',
@@ -38,10 +58,14 @@ export default function NewProjectPage() {
     contractAmountCents: '',
     startDate: new Date().toISOString().split('T')[0],
     expectedEndDate: '',
+    executionPath: 'REPAIR',
+    fulfillmentMode: 'PROVIDER',
+    fundingMode: 'SELF_PAID',
+    complexity: 'MAJOR',
   });
 
-  const set = (field: string, value: string) =>
-    setForm(f => ({ ...f, [field]: value }));
+  const set = (field: keyof ProjectFormState, value: string) =>
+    setForm(f => ({ ...f, [field]: value }) as ProjectFormState);
 
   const operationInput = useMemo(() => ({ projectType: form.projectType }), [form.projectType]);
 
@@ -66,7 +90,7 @@ export default function NewProjectPage() {
     e.preventDefault();
     setError(null);
     if (!form.name.trim()) { setError('Project name is required'); return; }
-    if (!form.contractorName.trim()) { setError('Contractor name is required'); return; }
+    if (form.fulfillmentMode === 'PROVIDER' && !form.contractorName.trim()) { setError('Contractor name is required for provider-led work'); return; }
     if (!form.contractAmountCents) { setError('Contract amount is required'); return; }
     const amtCents = toInt(form.contractAmountCents);
     if (!amtCents || amtCents <= 0) { setError('Enter a valid contract amount'); return; }
@@ -82,13 +106,20 @@ export default function NewProjectPage() {
       const project = await api.createProject(propertyId, {
         name: form.name.trim(),
         projectType: form.projectType,
-        contractorName: form.contractorName.trim(),
+        contractorName: form.fulfillmentMode === 'PROVIDER' ? form.contractorName.trim() : undefined,
         contractorPhone: form.contractorPhone.trim() || undefined,
         contractorLicense: form.contractorLicense.trim() || undefined,
         contractorEmail: form.contractorEmail.trim() || undefined,
         contractAmountCents: amtCents,
         startDate: form.startDate,
         expectedEndDate: form.expectedEndDate || undefined,
+        sourceType: guidanceJourneyId ? 'GUIDANCE' : 'MANUAL',
+        guidanceJourneyId: guidanceJourneyId || undefined,
+        inventoryItemId: inventoryItemId || undefined,
+        executionPath: form.executionPath,
+        fulfillmentMode: form.fulfillmentMode,
+        fundingMode: form.fundingMode,
+        complexity: form.complexity,
       });
       router.push(`/dashboard/properties/${propertyId}/projects/${project.id}`);
     } catch (e: any) {
@@ -112,6 +143,16 @@ export default function NewProjectPage() {
       </div>
 
       {error && <ErrorBanner msg={error} />}
+
+      {guidanceJourneyId ? (
+        <MobileCard className="border-indigo-200 bg-indigo-50/70">
+          <p className="text-sm font-semibold text-indigo-900">Continuing your guided home decision</p>
+          <p className="mt-1 text-xs text-indigo-800">
+            {guidedIssue ? `This project will stay linked to “${guidedIssue}”. ` : ''}
+            Confirm the execution path below before work begins.
+          </p>
+        </MobileCard>
+      ) : null}
 
       {contextInvoked ? <PropertyContextCapturePanel
         propertyId={propertyId}
@@ -150,13 +191,48 @@ export default function NewProjectPage() {
               ))}
             </select>
           </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="executionPath">Execution path</Label>
+              <select id="executionPath" value={form.executionPath} onChange={e => set('executionPath', e.target.value)} className="h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
+                <option value="REPAIR">Repair</option>
+                <option value="REPLACEMENT">Replacement</option>
+              </select>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="complexity">Complexity</Label>
+              <select id="complexity" value={form.complexity} onChange={e => set('complexity', e.target.value)} className="h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
+                <option value="MINOR">Minor work</option>
+                <option value="MAJOR">Major project</option>
+              </select>
+            </div>
+          </div>
         </MobileCard>
 
         {/* Contractor info */}
         <MobileCard className="space-y-4">
           <h2 className="text-sm font-semibold text-slate-700">Contractor</h2>
 
-          <div className="space-y-1.5">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="fulfillmentMode">Who will do the work?</Label>
+              <select id="fulfillmentMode" value={form.fulfillmentMode} onChange={e => set('fulfillmentMode', e.target.value)} className="h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
+                <option value="PROVIDER">Provider</option>
+                <option value="DIY">DIY / household</option>
+              </select>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="fundingMode">Funding</Label>
+              <select id="fundingMode" value={form.fundingMode} onChange={e => set('fundingMode', e.target.value)} className="h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
+                <option value="SELF_PAID">Self-paid</option>
+                <option value="COVERED">Covered</option>
+                <option value="MIXED">Mixed</option>
+              </select>
+            </div>
+          </div>
+
+          {form.fulfillmentMode === 'PROVIDER' ? <div className="space-y-1.5">
             <Label htmlFor="contractorName">Contractor / company name *</Label>
             <Input
               id="contractorName"
@@ -165,9 +241,9 @@ export default function NewProjectPage() {
               placeholder="ABC Roofing Co."
               className="h-11"
             />
-          </div>
+          </div> : null}
 
-          <div className="grid grid-cols-2 gap-3">
+          {form.fulfillmentMode === 'PROVIDER' ? <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label htmlFor="contractorPhone">Phone</Label>
               <Input
@@ -189,9 +265,9 @@ export default function NewProjectPage() {
                 className="h-11"
               />
             </div>
-          </div>
+          </div> : null}
 
-          <div className="space-y-1.5">
+          {form.fulfillmentMode === 'PROVIDER' ? <div className="space-y-1.5">
             <Label htmlFor="contractorEmail">Email</Label>
             <Input
               id="contractorEmail"
@@ -201,7 +277,7 @@ export default function NewProjectPage() {
               placeholder="contractor@example.com"
               className="h-11"
             />
-          </div>
+          </div> : null}
         </MobileCard>
 
         {/* Contract / schedule */}

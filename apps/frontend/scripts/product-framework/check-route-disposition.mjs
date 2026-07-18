@@ -251,7 +251,7 @@ for (const result of results) {
 }
 
 console.log(`[product-framework:routes] PASSED — ${routes.length} routes classified`);
-console.log(`- PHASE2_ROUTE_CONTRACTS: ${routeContracts.contracts.length}`);
+console.log(`- PRODUCT_FRAMEWORK_ROUTE_CONTRACTS: ${routeContracts.contracts.length}`);
 for (const disposition of ROUTE_DISPOSITIONS) {
   const count = counts.get(disposition) ?? 0;
   if (count > 0) console.log(`- ${disposition}: ${count}`);

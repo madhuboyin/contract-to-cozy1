@@ -772,6 +772,7 @@ model InventoryItem {
   coverageAnalyses          CoverageAnalysis[]
   guidanceSignals           GuidanceSignal[]
   guidanceJourneys          GuidanceJourney[]
+  projectRecords            ProjectRecord[]
   guidanceStepEvidences     GuidanceStepEvidence[]
   quoteComparisonWorkspaces QuoteComparisonWorkspace[]
   priceFinalizations        PriceFinalization[]
@@ -4172,6 +4173,7 @@ model GuidanceJourney {
   events     GuidanceJourneyEvent[]
   evidences  GuidanceStepEvidence[]
   homeEvents HomeEvent[] // FRD-FR-11/FR-03: retrospective lookback + verified resolution events
+  projectRecord ProjectRecord?
 
   @@index([propertyId, status, updatedAt(sort: Desc)])
   @@index([propertyId, executionReadiness, status])
@@ -12612,7 +12614,29 @@ enum ProjectRecordStatus {
 enum ProjectSourceType {
   PRICE_FINALIZATION
   BOOKING
+  GUIDANCE
   MANUAL
+}
+
+enum ProjectExecutionPath {
+  REPAIR
+  REPLACEMENT
+}
+
+enum ProjectFulfillmentMode {
+  PROVIDER
+  DIY
+}
+
+enum ProjectFundingMode {
+  SELF_PAID
+  COVERED
+  MIXED
+}
+
+enum ProjectComplexity {
+  MINOR
+  MAJOR
 }
 
 enum ProjectType {
@@ -12746,7 +12770,7 @@ model ProjectRecord {
 
   // Contractor info (denormalized so the record survives contractor directory changes)
   contractorId      String? // FK → ProviderProfile; null if contractor not in directory
-  contractorName    String
+  contractorName    String?
   contractorLicense String?
   contractorPhone   String?
   contractorEmail   String?
@@ -12757,7 +12781,16 @@ model ProjectRecord {
   status      ProjectRecordStatus @default(DRAFT)
   sourceType  ProjectSourceType   @default(MANUAL)
 
+  // Phase 3 major-moment context keeps the execution alternatives explicit.
+  executionPath         ProjectExecutionPath?
+  fulfillmentMode       ProjectFulfillmentMode @default(PROVIDER)
+  fundingMode           ProjectFundingMode @default(SELF_PAID)
+  complexity            ProjectComplexity @default(MAJOR)
+  recommendationVersion String?
+
   // Source linkages — typed FKs instead of polymorphic sourceId
+  guidanceJourneyId   String? @unique
+  inventoryItemId     String?
   priceFinalizationId String? // set when sourceType = PRICE_FINALIZATION
   bookingId           String? // set when sourceType = BOOKING
 
@@ -12801,6 +12834,8 @@ model ProjectRecord {
   // Relations
   property          Property           @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   contractorProfile ProviderProfile?   @relation(fields: [contractorId], references: [id], onDelete: SetNull)
+  guidanceJourney   GuidanceJourney?   @relation(fields: [guidanceJourneyId], references: [id], onDelete: SetNull)
+  inventoryItem     InventoryItem?     @relation(fields: [inventoryItemId], references: [id], onDelete: SetNull)
   priceFinalization PriceFinalization? @relation(fields: [priceFinalizationId], references: [id], onDelete: SetNull)
   bookingSource     Booking?           @relation("ProjectFromBooking", fields: [bookingId], references: [id], onDelete: SetNull)
 
@@ -12815,6 +12850,7 @@ model ProjectRecord {
   @@index([propertyId, status])
   @@index([propertyId, createdAt(sort: Desc)])
   @@index([contractorId])
+  @@index([inventoryItemId])
   @@index([priceFinalizationId])
   @@index([bookingId])
   @@map("project_records")

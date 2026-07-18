@@ -148,7 +148,7 @@ function ProjectCard({ project: p, propertyId, dimmed }: { project: ProjectRecor
             <StatusChip tone={projectStatusTone(p.status)}>{projectStatusLabel(p.status)}</StatusChip>
           </div>
           <p className="text-xs text-slate-500">
-            {PROJECT_TYPE_LABELS[p.projectType] ?? p.projectType} · {p.contractorName}
+            {PROJECT_TYPE_LABELS[p.projectType] ?? p.projectType} · {p.contractorName ?? (p.fulfillmentMode === 'DIY' ? 'DIY / household' : 'Provider not recorded')}
           </p>
           <div className="flex flex-wrap gap-3 text-xs text-slate-600">
             <span>Contract: {fmtMoney(p.currentContractAmountCents)}</span>

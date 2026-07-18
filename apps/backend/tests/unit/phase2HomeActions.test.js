@@ -126,5 +126,5 @@ test('Phase 2 route audit covers canonical CTAs and every guidance template dest
   );
   assert.match(routeAudit, /PHASE2_CANONICAL_CTA_ROUTES/);
   assert.match(routeAudit, /extractGuidanceTemplateRoutes/);
-  assert.match(routeAudit, /PHASE2_ROUTE_CONTRACTS/);
+  assert.match(routeAudit, /PRODUCT_FRAMEWORK_ROUTE_CONTRACTS/);
 });

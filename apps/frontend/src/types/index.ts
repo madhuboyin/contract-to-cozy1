@@ -4692,7 +4692,7 @@ export interface ProjectRecord {
   id: string;
   propertyId: string;
   contractorId?: string | null;
-  contractorName: string;
+  contractorName?: string | null;
   contractorLicense?: string | null;
   contractorPhone?: string | null;
   contractorEmail?: string | null;
@@ -4700,9 +4700,16 @@ export interface ProjectRecord {
   name: string;
   description?: string | null;
   status: ProjectStatus;
-  sourceType: 'PRICE_FINALIZATION' | 'BOOKING' | 'MANUAL';
+  sourceType: 'PRICE_FINALIZATION' | 'BOOKING' | 'GUIDANCE' | 'MANUAL';
+  guidanceJourneyId?: string | null;
+  inventoryItemId?: string | null;
   priceFinalizationId?: string | null;
   bookingId?: string | null;
+  executionPath?: 'REPAIR' | 'REPLACEMENT' | null;
+  fulfillmentMode: 'PROVIDER' | 'DIY';
+  fundingMode: 'SELF_PAID' | 'COVERED' | 'MIXED';
+  complexity: 'MINOR' | 'MAJOR';
+  recommendationVersion?: string | null;
   contractAmountCents: number;
   approvedChangeOrderDeltaCents: number;
   currentContractAmountCents: number;

@@ -103,7 +103,7 @@ export default function ProjectDashboardPage() {
           <StatusChip tone={projectStatusTone(p.status)}>{STATUS_LABELS[p.status] ?? p.status}</StatusChip>
         </div>
         <p className="text-sm text-slate-500">
-          {PROJECT_TYPE_LABELS[p.projectType] ?? p.projectType} · {p.contractorName}
+          {PROJECT_TYPE_LABELS[p.projectType] ?? p.projectType} · {p.contractorName ?? (p.fulfillmentMode === 'DIY' ? 'DIY / household' : 'Provider not recorded')}
         </p>
       </div>
 
@@ -206,7 +206,9 @@ export default function ProjectDashboardPage() {
         <h2 className="text-sm font-semibold text-slate-700">Project details</h2>
         <dl className="space-y-2">
           {[
-            ['Contractor', p.contractorName],
+            ['Execution', p.contractorName ?? (p.fulfillmentMode === 'DIY' ? 'DIY / household' : 'Provider not recorded')],
+            ['Path', p.executionPath ? p.executionPath.toLowerCase() : null],
+            ['Funding', p.fundingMode?.toLowerCase().replace('_', ' ')],
             ['License', p.contractorLicense],
             ['Phone', p.contractorPhone],
             ['Email', p.contractorEmail],

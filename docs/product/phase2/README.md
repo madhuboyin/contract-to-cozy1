@@ -61,7 +61,7 @@ Implemented:
 - Required verified property jurisdiction context and a professional boundary before regulated coverage actions validate.
 - Applied terminal-event and active-snooze suppression to promoted sources so completed, dismissed, or snoozed actions do not reappear.
 - Added a promoted-source diagnostic count to the shared Home feed contract.
-- Extended the route audit from page classification to 101 canonical CTA, guidance-template, and statically generated notification destination contracts.
+- Extended the route audit from page classification to canonical CTA, guidance-template, and statically generated notification destination contracts; later phases add their guidance destinations to the same living contract set.
 - Replaced dead `/inventory/coverage` guidance destinations with the property inventory coverage filter.
 - Replaced duplicate global inspection-report guidance destinations with the property-scoped inspection hub.
 - Added service-level integration coverage for all five promoted source families and lifecycle suppression.

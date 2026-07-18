@@ -287,7 +287,8 @@ async function loadProjectActions(propertyId: string, db: HomeActionSourceDb): P
     const milestone = project.milestones[0];
     const issue = project.issues[0];
     return adaptHomeActionSource('PROJECT', {
-      id: `project:${project.id}`, propertyId, lineageId: `project:${project.id}`, sourceEntityId: project.id,
+      id: `project:${project.id}`, propertyId,
+      lineageId: project.guidanceJourneyId ?? `project:${project.id}`, sourceEntityId: project.id,
       sourceVersion: project.updatedAt.toISOString(), job: 'MAJOR_MOMENT', state: project.status === 'IN_PROGRESS' ? 'IN_PROGRESS' : 'OPEN',
       priority: project.status === 'DISPUTED' || issue?.status === 'ESCALATED' ? 'NOW' : project.status === 'PAUSED' || issue ? 'SOON' : 'PLAN',
       signal: issue ? `${project.name}: ${issue.description}` : `${project.name}: ${milestone?.name ?? 'review project status'}`,
@@ -299,7 +300,8 @@ async function loadProjectActions(propertyId: string, db: HomeActionSourceDb): P
       assumptions: [], options: [], tradeoffs: [], confidence: { score: 1, label: 'HIGH', missing: [] },
       governance: lowConsequenceGovernance(),
       primaryCta: { kind: 'REVIEW', label: issue ? 'Review project issue' : 'Open project', href: `/dashboard/properties/${propertyId}/projects/${project.id}` },
-      secondaryCtas: [], feedbackControls: DEFAULT_FEEDBACK, relatedJourneyId: null,
+      secondaryCtas: [], feedbackControls: DEFAULT_FEEDBACK,
+      relatedJourneyId: project.guidanceJourneyId ?? null,
       createdAt: project.createdAt.toISOString(), lastEvaluatedAt: project.updatedAt.toISOString(),
     });
   });

@@ -4643,15 +4643,22 @@ class APIClient {
   async createProject(propertyId: string, payload: {
     name: string;
     projectType: string;
-    contractorName: string;
+    contractorName?: string;
     contractorLicense?: string;
     contractorPhone?: string;
     contractorEmail?: string;
     contractorId?: string;
     description?: string;
-    sourceType?: string;
+    sourceType?: 'PRICE_FINALIZATION' | 'BOOKING' | 'GUIDANCE' | 'MANUAL';
+    guidanceJourneyId?: string;
+    inventoryItemId?: string;
     priceFinalizationId?: string;
     bookingId?: string;
+    executionPath?: 'REPAIR' | 'REPLACEMENT';
+    fulfillmentMode?: 'PROVIDER' | 'DIY';
+    fundingMode?: 'SELF_PAID' | 'COVERED' | 'MIXED';
+    complexity?: 'MINOR' | 'MAJOR';
+    recommendationVersion?: string;
     contractAmountCents: number;
     startDate: string;
     expectedEndDate?: string;
