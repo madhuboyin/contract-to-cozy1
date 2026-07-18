@@ -51,16 +51,18 @@ async function resolvePropertyOwnerUserId(propertyId: string): Promise<string | 
 }
 
 async function resolveIncidentNotificationContext(propertyId: string, userId: string): Promise<{
+  propertyId: string;
   contextVersion: string;
   decision: FeatureDecision;
 }> {
   try {
     const context = await getProtectionContextDecisions(propertyId, userId, 'INCIDENT_NOTIFICATION');
-    return { contextVersion: context.contextVersion, decision: context.decisions.incidentNotifications };
+    return { propertyId, contextVersion: context.contextVersion, decision: context.decisions.incidentNotifications };
   } catch {
     // Safety alerts fail open when context is temporarily unavailable, but the
     // UNKNOWN decision is retained in notification metadata for auditability.
     return {
+      propertyId,
       contextVersion: 'unavailable',
       decision: {
         status: 'UNKNOWN',
@@ -308,6 +310,7 @@ export class IncidentNotificationService {
           typeKey: args.incident.typeKey,
           guidanceContext,
           propertyContext: {
+            propertyId: protectionContext.propertyId,
             contextVersion: protectionContext.contextVersion,
             decision: notificationDecision,
           },
@@ -407,6 +410,7 @@ export class IncidentNotificationService {
           linkedEntityId: args.action.entityId,
           guidanceContext,
           propertyContext: {
+            propertyId: protectionContext.propertyId,
             contextVersion: protectionContext.contextVersion,
             decision: notificationDecision,
           },

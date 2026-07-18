@@ -108,6 +108,7 @@ import {
   PropertyResponsibilityInput,
 } from '@/types';
 import type { PropertyContextEnvelope } from '@/components/property-context/PropertyContextNotice';
+import type { FeatureContextCapture, FeatureContextCaptureResult, FeatureContextEvaluation } from '@/components/property-context/featureContextTypes';
 
 // REMOVED: import { RiskReportSummary } from '@/app/(dashboard)/dashboard/types'; as it was not defined or needed.
 
@@ -1337,6 +1338,38 @@ class APIClient {
     return this.request(`/api/properties/${id}/context/${encodeURIComponent(factKey)}`, {
       method: 'PATCH',
       body: { value, sourceType: 'USER_REPORTED' },
+    });
+  }
+
+  async getPropertyContextCaptureDefinition(id: string, factKey: string): Promise<APIResponse<FeatureContextCapture>> {
+    return this.request(`/api/properties/${id}/context/capture-definitions/${encodeURIComponent(factKey)}`);
+  }
+
+  async evaluateFeatureContext(
+    propertyId: string,
+    input: { featureKey: string; operationKey: string; operationInput?: Record<string, unknown> },
+  ): Promise<APIResponse<FeatureContextEvaluation>> {
+    return this.request(`/api/properties/${propertyId}/context/feature-requirements/evaluate`, {
+      method: 'POST',
+      body: input,
+    });
+  }
+
+  async captureFeatureContext(
+    propertyId: string,
+    input: {
+      requirementId: string;
+      captureKey: string;
+      featureKey: string;
+      operationKey: string;
+      expectedContextVersion: string;
+      idempotencyKey: string;
+      answer: { value: unknown };
+    },
+  ): Promise<APIResponse<FeatureContextCaptureResult>> {
+    return this.request(`/api/properties/${propertyId}/context/captures`, {
+      method: 'POST',
+      body: input,
     });
   }
 

@@ -1508,6 +1508,7 @@ model User {
   claimsCreated          Claim[]
   claimTimelineEvents    ClaimTimelineEvent[]
   inventoryImportBatches InventoryImportBatch[]
+  propertyContextCaptures PropertyContextCaptureReceipt[]
 
   inventoryOcrSessions      InventoryOcrSession[]
   inventoryDraftItems       InventoryDraftItem[]
@@ -2148,6 +2149,7 @@ model Property {
   guidanceJourneyEvents  GuidanceJourneyEvent[]
   guidanceStepEvidences  GuidanceStepEvidence[]
   inventoryImportBatches InventoryImportBatch[]
+  propertyContextCaptures PropertyContextCaptureReceipt[]
 
   inventoryOcrSessions     InventoryOcrSession[]
   inventoryDraftItems      InventoryDraftItem[]
@@ -2358,6 +2360,33 @@ model PropertyFactEvidence {
 
   @@index([propertyId, factKey, supersededAt])
   @@map("property_fact_evidence")
+}
+
+// Idempotency and audit receipt for backend-owned just-in-time context capture.
+// Property values remain in their typed canonical owners; this stores no raw answer.
+model PropertyContextCaptureReceipt {
+  id                     String   @id @default(uuid())
+  propertyId             String
+  userId                 String
+  featureKey             String
+  operationKey           String
+  captureKey             String
+  requirementId          String
+  idempotencyKey         String
+  expectedContextVersion String
+  answerHash             String
+  updatedFactKeys        String[]
+  evidenceIds            String[]
+  result                 Json?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([propertyId, userId, idempotencyKey])
+  @@index([propertyId, createdAt])
+  @@map("property_context_capture_receipts")
 }
 
 // ============================================================================

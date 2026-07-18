@@ -77,3 +77,61 @@ export interface FeatureDecision {
   validUntil: string | null;
   correctionPaths?: string[];
 }
+
+export type FeatureContextReadiness =
+  | 'READY'
+  | 'READY_WITH_LIMITATIONS'
+  | 'NEEDS_REQUIRED_CONTEXT'
+  | 'CONFLICT_REVIEW_REQUIRED'
+  | 'NOT_APPLICABLE'
+  | 'PERMISSION_REQUIRED';
+
+export type ContextRequirementClassification =
+  | 'REQUIRED_APPLICABILITY'
+  | 'REQUIRED_SAFETY'
+  | 'REQUIRED_CALCULATION'
+  | 'ENHANCEMENT_ACCURACY';
+
+export type CaptureInputSchema =
+  | { type: 'BOOLEAN'; trueLabel: string; falseLabel: string }
+  | { type: 'SINGLE_SELECT'; options: Array<{ label: string; value: string }> }
+  | { type: 'MULTI_SELECT'; options: Array<{ label: string; value: string }>; maxItems?: number }
+  | { type: 'INTEGER'; min?: number; max?: number; unit?: string }
+  | { type: 'DECIMAL'; min?: number; max?: number; unit?: string }
+  | { type: 'SHORT_TEXT'; maxLength: number };
+
+export interface ContextCaptureDefinition {
+  captureKey: string;
+  factKeys: string[];
+  mode: 'SCALAR' | 'STRUCTURED' | 'RELATIONAL';
+  title: string;
+  question: string;
+  helpText?: string;
+  inputSchema: CaptureInputSchema;
+  allowNotSure: boolean;
+  canonicalOwner: string;
+  actionKey: string;
+  sensitivity: 'STANDARD' | 'FINANCIAL' | 'SECURITY';
+}
+
+export interface EvaluatedContextRequirement {
+  requirementId: string;
+  factKeys: string[];
+  classification: ContextRequirementClassification;
+  state: PropertyFactState;
+  reasonCode: string;
+  capture: Omit<ContextCaptureDefinition, 'canonicalOwner'>;
+}
+
+export interface FeatureContextEvaluation {
+  propertyId: string;
+  contextVersion: string;
+  featureKey: string;
+  operationKey: string;
+  policyVersion: string;
+  readiness: FeatureContextReadiness;
+  reasonCodes: string[];
+  usedFactKeys: string[];
+  requirements: EvaluatedContextRequirement[];
+  canExecute: boolean;
+}

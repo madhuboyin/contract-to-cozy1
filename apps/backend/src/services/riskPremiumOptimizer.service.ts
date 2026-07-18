@@ -522,6 +522,7 @@ export class RiskPremiumOptimizerService {
         ...dto,
         status: isContextStale ? 'STALE' as const : dto.status,
         propertyContext: {
+          propertyId,
           contextVersion: protectionContext.contextVersion,
           generatedContextVersion,
           isStale: isContextStale,
@@ -1441,6 +1442,7 @@ export class RiskPremiumOptimizerService {
             sharedSignalsUsed,
             mitigationVerification: mitigationVerification ?? null,
             propertyContext: {
+              propertyId,
               contextVersion: protectionContext.contextVersion,
             },
           },
@@ -1487,6 +1489,7 @@ export class RiskPremiumOptimizerService {
     return {
       ...mapAnalysisToDto(created),
       propertyContext: {
+        propertyId,
         contextVersion: protectionContext.contextVersion,
         generatedContextVersion: protectionContext.contextVersion,
         isStale: false,

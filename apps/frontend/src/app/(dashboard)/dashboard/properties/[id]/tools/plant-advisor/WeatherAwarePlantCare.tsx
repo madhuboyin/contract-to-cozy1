@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { PropertyContextCapturePanel } from '@/components/property-context/PropertyContextCapturePanel';
 import { createGardenZone, createHomePlant, getPlantCareOutlook, updateHomePlantCare } from './plantAdvisorApi';
 import type { GardenIrrigationType, GardenSoilDrainage, GardenSunExposure } from './types';
 
@@ -195,7 +196,10 @@ export function GardenZonesSection({ propertyId }: { propertyId: string }) {
   const [plantName, setPlantName] = React.useState('');
   const [gardenZoneId, setGardenZoneId] = React.useState('');
 
-  const refresh = () => queryClient.invalidateQueries({ queryKey: ['plant-care-outlook', propertyId] });
+  const refresh = React.useCallback(
+    () => queryClient.invalidateQueries({ queryKey: ['plant-care-outlook', propertyId] }),
+    [propertyId, queryClient],
+  );
   const zoneMutation = useMutation({
     mutationFn: () => createGardenZone(propertyId, { name: zoneName.trim(), sunExposure, soilDrainage, irrigationType, frostPocket }),
     onSuccess: async zone => {
@@ -222,6 +226,12 @@ export function GardenZonesSection({ propertyId }: { propertyId: string }) {
           <h2 id="garden-zones-title" className="text-lg font-bold">Outdoor garden zones</h2>
           <p className="mt-1 text-sm text-muted-foreground">Outdoor planning uses your private-space and landscaping-responsibility details.</p>
         </div>
+        <PropertyContextCapturePanel
+          propertyId={propertyId}
+          featureKey="PLANT_ADVISOR"
+          operationKey="GENERATE_OUTDOOR_RECOMMENDATIONS"
+          onReady={refresh}
+        />
         <Card className="border-amber-200 bg-amber-50/50">
           <CardContent className="flex items-start gap-3 p-5">
             <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" />
@@ -243,6 +253,12 @@ export function GardenZonesSection({ propertyId }: { propertyId: string }) {
 
   return (
     <section className="space-y-4" aria-labelledby="garden-zones-title">
+      <PropertyContextCapturePanel
+        propertyId={propertyId}
+        featureKey="PLANT_ADVISOR"
+        operationKey="GENERATE_OUTDOOR_RECOMMENDATIONS"
+        onReady={refresh}
+      />
       <div>
         <h2 id="garden-zones-title" className="text-lg font-bold">Outdoor garden zones</h2>
         <p className="mt-1 text-sm text-muted-foreground">

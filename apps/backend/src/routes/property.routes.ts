@@ -20,6 +20,9 @@ import {
   getProjectCompliancePropertyContext,
   getPropertyContextFactEvidence,
   patchPropertyContextFact,
+  postFeatureContextCapture,
+  postFeatureContextEvaluation,
+  getCompatibleContextCaptureDefinition,
 } from '../modules/propertyContext/api/propertyContext.controller';
 
 const router = Router();
@@ -111,6 +114,9 @@ router.get('/:id/resolution-center', authenticate, propertyController.getPropert
 router.get('/:id/context/completeness', authenticate, getPropertyContextCompleteness);
 router.get('/:id/context/decisions', authenticate, getPropertyContextDecisionMatrix);
 router.get('/:id/context/project-compliance', authenticate, getProjectCompliancePropertyContext);
+router.post('/:id/context/feature-requirements/evaluate', authenticate, postFeatureContextEvaluation);
+router.post('/:id/context/captures', authenticate, postFeatureContextCapture);
+router.get('/:id/context/capture-definitions/:factKey', authenticate, getCompatibleContextCaptureDefinition);
 router.patch('/:id/context/:factKey', authenticate, patchPropertyContextFact);
 router.get('/:id/context/:factKey/evidence', authenticate, getPropertyContextFactEvidence);
 router.get('/:id/context', authenticate, getPropertyContextSnapshot);

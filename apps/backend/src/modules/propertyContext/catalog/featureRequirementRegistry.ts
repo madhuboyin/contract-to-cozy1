@@ -1,0 +1,106 @@
+import type { ContextRequirementClassification } from '../domain/contracts';
+import { getCaptureDefinition, validateCaptureRegistry } from './captureRegistry';
+import { getFactDefinition } from './factCatalog';
+
+export interface DeclarativeCondition {
+  factKey: string;
+  operator: 'EQUALS' | 'NOT_EQUALS';
+  value: string | number | boolean;
+}
+
+export interface FactRequirementDefinition {
+  factKey: string;
+  classification: ContextRequirementClassification;
+  when?: DeclarativeCondition;
+  reasonCode: string;
+  priority: number;
+  acceptableStates: Array<'KNOWN' | 'VERIFIED' | 'FRESH'>;
+  captureKey: string;
+}
+
+export interface FeatureContextRequirementDefinition {
+  featureKey: string;
+  operationKey: string;
+  policyVersion: string;
+  required: FactRequirementDefinition[];
+  enhancements: FactRequirementDefinition[];
+  promptStrategy: 'ONE_AT_A_TIME' | 'GROUP_RELATED' | 'MINIMUM_PATH';
+  notApplicableWhen?: DeclarativeCondition;
+  notApplicableReasonCode?: string;
+}
+
+export const FEATURE_CONTEXT_REQUIREMENTS: readonly FeatureContextRequirementDefinition[] = [
+  {
+    featureKey: 'PLANT_ADVISOR',
+    operationKey: 'GENERATE_OUTDOOR_RECOMMENDATIONS',
+    policyVersion: '1.0',
+    promptStrategy: 'MINIMUM_PATH',
+    notApplicableWhen: { factKey: 'exterior.hasPrivateOutdoorSpace', operator: 'EQUALS', value: false },
+    notApplicableReasonCode: 'NO_PRIVATE_OUTDOOR_SPACE',
+    required: [
+      {
+        factKey: 'exterior.hasPrivateOutdoorSpace',
+        classification: 'REQUIRED_APPLICABILITY',
+        reasonCode: 'DETERMINE_AVAILABLE_GROWING_SPACE',
+        priority: 10,
+        acceptableStates: ['KNOWN'],
+        captureKey: 'EXTERIOR_HAS_PRIVATE_OUTDOOR_SPACE',
+      },
+      {
+        factKey: 'responsibility.landscaping',
+        classification: 'REQUIRED_APPLICABILITY',
+        when: { factKey: 'exterior.hasPrivateOutdoorSpace', operator: 'EQUALS', value: true },
+        reasonCode: 'DETERMINE_LANDSCAPING_RESPONSIBILITY',
+        priority: 20,
+        acceptableStates: ['KNOWN'],
+        captureKey: 'RESPONSIBILITY_LANDSCAPING',
+      },
+    ],
+    enhancements: [
+      {
+        factKey: 'exterior.hasIrrigation',
+        classification: 'ENHANCEMENT_ACCURACY',
+        when: { factKey: 'exterior.hasPrivateOutdoorSpace', operator: 'EQUALS', value: true },
+        reasonCode: 'IMPROVE_WATERING_GUIDANCE',
+        priority: 30,
+        acceptableStates: ['KNOWN'],
+        captureKey: 'EXTERIOR_HAS_IRRIGATION',
+      },
+    ],
+  },
+] as const;
+
+const contractByKey = new Map(
+  FEATURE_CONTEXT_REQUIREMENTS.map((contract) => [`${contract.featureKey}:${contract.operationKey}`, contract]),
+);
+
+export function getFeatureContextRequirement(featureKey: string, operationKey: string): FeatureContextRequirementDefinition {
+  const contract = contractByKey.get(`${featureKey}:${operationKey}`);
+  if (!contract) throw new Error(`Property Context feature operation is not registered: ${featureKey}/${operationKey}`);
+  return contract;
+}
+
+export function validateFeatureRequirementRegistry(): void {
+  validateCaptureRegistry();
+  const problems: string[] = [];
+  for (const contract of FEATURE_CONTEXT_REQUIREMENTS) {
+    const requirements = [...contract.required, ...contract.enhancements];
+    for (const requirement of requirements) {
+      try {
+        getFactDefinition(requirement.factKey);
+        const capture = getCaptureDefinition(requirement.captureKey);
+        if (!capture.factKeys.includes(requirement.factKey)) problems.push(`${requirement.captureKey}: fact mismatch`);
+      } catch (error) {
+        problems.push(error instanceof Error ? error.message : String(error));
+      }
+      if (requirement.when) {
+        try { getFactDefinition(requirement.when.factKey); } catch (error) {
+          problems.push(error instanceof Error ? error.message : String(error));
+        }
+      }
+    }
+  }
+  if (problems.length) throw new Error(`Invalid Property Context feature registry:\n${problems.join('\n')}`);
+}
+
+validateFeatureRequirementRegistry();

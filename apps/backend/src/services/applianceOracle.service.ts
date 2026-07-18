@@ -57,7 +57,7 @@ interface OracleReport {
     disclaimer: string;
   };
   generatedAt: Date;
-  propertyContext: { contextVersion: string; decision: FeatureDecision };
+  propertyContext: { propertyId: string; contextVersion: string; decision: FeatureDecision };
 }
 
 const APPLIANCE_LIFESPAN_DATA = {
@@ -142,6 +142,7 @@ export class ApplianceOracleService {
         },
         generatedAt: new Date(),
         propertyContext: {
+          propertyId,
           contextVersion: protectionContext.contextVersion,
           decision: protectionContext.decisions.applianceOracle,
         },
@@ -191,6 +192,7 @@ export class ApplianceOracleService {
       },
       generatedAt: new Date(),
       propertyContext: {
+        propertyId,
         contextVersion: protectionContext.contextVersion,
         decision: protectionContext.decisions.applianceOracle,
       },

@@ -39,6 +39,7 @@ export async function getProtectionContextDecisions(
     },
   );
   return {
+    propertyId,
     contextVersion: context.contextVersion,
     feature,
     scopes: context.scopes,

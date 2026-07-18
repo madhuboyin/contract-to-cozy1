@@ -97,7 +97,7 @@ export function isContextCaptureSupported(factKey: string): boolean {
   return factKey in propertyFacts || factKey in exteriorFacts || factKey in responsibilityScopes;
 }
 
-function normalizeCaptureValue(factKey: string, value: unknown): unknown {
+export function normalizeCaptureValue(factKey: string, value: unknown): unknown {
   if (factKey in propertyFacts) {
     const mapping = propertyFacts[factKey as keyof typeof propertyFacts];
     return mapping.schema.parse(value === null && 'unknown' in mapping ? mapping.unknown : value);
@@ -111,7 +111,7 @@ function normalizeCaptureValue(factKey: string, value: unknown): unknown {
   throw new Error(`Property Context fact is not supported for direct capture: ${factKey}`);
 }
 
-async function writeCanonicalFact(
+export async function writeCanonicalFact(
   tx: Prisma.TransactionClient,
   propertyId: string,
   factKey: string,
@@ -163,6 +163,7 @@ export async function capturePropertyFact(
   const value = normalizeCaptureValue(factKey, input.value);
   const observedAt = new Date();
 
+  let evidenceId = '';
   try {
     await prisma.$transaction(async (tx) => {
       await writeCanonicalFact(tx, propertyId, factKey, value);
@@ -170,7 +171,7 @@ export async function capturePropertyFact(
         where: { propertyId, factKey, supersededAt: null },
         data: { supersededAt: observedAt },
       });
-      await tx.propertyFactEvidence.create({
+      const evidence = await tx.propertyFactEvidence.create({
         data: {
           propertyId,
           factKey,
@@ -183,6 +184,7 @@ export async function capturePropertyFact(
           verifiedAt: input.sourceType === 'USER_REPORTED' ? observedAt : null,
         },
       });
+      evidenceId = evidence.id;
     });
     propertyContextCapturesTotal.inc({ scope: definition.scope, fact_key: factKey, outcome: 'success' });
   } catch (error) {
@@ -191,7 +193,7 @@ export async function capturePropertyFact(
   }
 
   const snapshot = await getPropertyContext(propertyId, { userId }, { scopes: [definition.scope] });
-  return { fact: snapshot.facts[factKey], contextVersion: snapshot.contextVersion };
+  return { fact: snapshot.facts[factKey], contextVersion: snapshot.contextVersion, evidenceIds: [evidenceId] };
 }
 
 export async function listPropertyFactEvidence(propertyId: string, userId: string, factKey: string) {

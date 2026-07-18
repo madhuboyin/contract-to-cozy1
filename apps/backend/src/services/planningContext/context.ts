@@ -113,6 +113,7 @@ export async function getPlanningContextEnvelope(
   const result = await getPlanningContextDecisions(propertyId, userId, feature);
   const decision = result.decisions[PRIMARY_DECISION_BY_FEATURE[feature]];
   return {
+    propertyId,
     contextVersion: result.contextVersion,
     decision,
     relatedDecisions: result.decisions,

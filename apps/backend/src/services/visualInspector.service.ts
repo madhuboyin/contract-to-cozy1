@@ -59,7 +59,7 @@ interface InspectionReport {
     classification: 'PROVISIONAL_VISUAL_ASSESSMENT';
     requiresConfirmation: true;
   };
-  propertyContext: { contextVersion: string; decision: FeatureDecision };
+  propertyContext: { propertyId: string; contextVersion: string; decision: FeatureDecision };
 }
 
 const ROOM_TYPES = [
@@ -158,6 +158,7 @@ export class VisualInspectorService {
         requiresConfirmation: true,
       },
       propertyContext: {
+        propertyId,
         contextVersion: protectionContext.contextVersion,
         decision: protectionContext.decisions.visualInspector,
       },

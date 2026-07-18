@@ -47,6 +47,7 @@ export async function getProjectComplianceContextDecisions(
   const context = await getPropertyContext(propertyId, { userId }, { scopes: PROJECT_COMPLIANCE_FEATURE_SCOPES[feature] });
   const decisions = evaluateProjectComplianceContext(context, work);
   return {
+    propertyId,
     contextVersion: context.contextVersion,
     feature,
     scopes: context.scopes,
@@ -80,6 +81,7 @@ export async function getProjectComplianceEnvelope(
 ) {
   const context = await getProjectComplianceContextDecisions(propertyId, userId, feature, work);
   return {
+    propertyId,
     contextVersion: context.contextVersion,
     decision: context.decisions[PRIMARY_DECISION_BY_FEATURE[feature]],
     relatedDecisions: context.decisions,

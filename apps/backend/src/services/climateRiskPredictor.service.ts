@@ -43,7 +43,7 @@ interface ClimateReport {
     disclaimer: string;
   };
   generatedAt: Date;
-  propertyContext: { contextVersion: string; decision: FeatureDecision };
+  propertyContext: { propertyId: string; contextVersion: string; decision: FeatureDecision };
 }
 
 const CLIMATE_RISK_CATEGORIES = [
@@ -149,6 +149,7 @@ export class ClimateRiskPredictorService {
       },
       generatedAt: new Date(),
       propertyContext: {
+        propertyId,
         contextVersion: protectionContext.contextVersion,
         decision: climateDecision,
       },

@@ -30,6 +30,7 @@ export async function getHub(req: Request, res: Response, next: NextFunction) {
       data: {
         ...data,
         propertyContext: {
+          propertyId: req.params.propertyId,
           contextVersion: protectionContext.contextVersion,
           decision: protectionContext.decisions.inspectionEvidence,
         },
@@ -186,6 +187,7 @@ export async function listOpenItems(req: Request, res: Response, next: NextFunct
       data: {
         ...result,
         propertyContext: {
+          propertyId: req.params.propertyId,
           contextVersion: protectionContext.contextVersion,
           decision: protectionContext.decisions.inspectionEvidence,
         },

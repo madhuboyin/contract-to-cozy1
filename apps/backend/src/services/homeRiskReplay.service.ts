@@ -429,6 +429,7 @@ function attachReplayContext(
   return {
     ...replay,
     propertyContext: {
+      propertyId: protectionContext.propertyId,
       contextVersion: protectionContext.contextVersion,
       generatedContextVersion,
       isStale: generatedContextVersion !== protectionContext.contextVersion,

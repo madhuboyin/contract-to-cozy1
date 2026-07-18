@@ -50,11 +50,14 @@ test('property forms expose canonical fields and working correction anchors', ()
   }
 });
 
-test('context notices support bounded inline capture and canonical API requests', () => {
+test('context notices render backend-owned capture definitions without full-page reloads', () => {
   const notice = read('../../../frontend/src/components/property-context/PropertyContextNotice.tsx');
   const client = read('../../../frontend/src/lib/api/client.ts');
-  assert.match(notice, /CAPTURE_QUESTIONS/);
+  assert.doesNotMatch(notice, /CAPTURE_QUESTIONS/);
+  assert.match(notice, /getPropertyContextCaptureDefinition/);
   assert.match(notice, /capturePropertyContextFact/);
+  assert.doesNotMatch(notice, /window\.location\.reload/);
+  assert.doesNotMatch(notice, /correctionPaths.*match|path\.match/);
   assert.match(client, /method: 'PATCH'/);
   assert.match(client, /encodeURIComponent\(factKey\)/);
 });

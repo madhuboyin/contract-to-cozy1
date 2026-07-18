@@ -143,6 +143,7 @@ export async function getFinancialContextEnvelope(
   const context = await getFinancialContextDecisions(propertyId, userId, feature, input);
   const decision = context.decisions[PRIMARY_DECISION_BY_FEATURE[feature]];
   return {
+    propertyId,
     contextVersion: context.contextVersion,
     decision,
     relatedDecisions: context.decisions,

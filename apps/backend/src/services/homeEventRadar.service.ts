@@ -268,6 +268,7 @@ export class HomeEventRadarService {
       interactions: unknown;
     };
     propertyContext: {
+      propertyId: string;
       contextVersion: string;
       decision: FeatureDecision;
     };
@@ -452,6 +453,7 @@ export class HomeEventRadarService {
         interactions: signalInteractions.interactions,
       },
       propertyContext: {
+        propertyId,
         contextVersion: protectionContext.contextVersion,
         decision: protectionContext.decisions.eventRadar,
       },
@@ -504,6 +506,7 @@ export class HomeEventRadarService {
     return {
       ...detail,
       propertyContext: {
+        propertyId,
         contextVersion: protectionContext.contextVersion,
         decision: protectionContext.decisions.eventRadar,
       },

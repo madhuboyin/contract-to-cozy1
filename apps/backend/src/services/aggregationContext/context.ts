@@ -46,6 +46,7 @@ export async function getAggregationContextEnvelope(
   const context = await getAggregationPropertyContext(propertyId, userId, feature);
   const relatedDecisions = evaluateAggregationContext(context);
   return {
+    propertyId,
     feature,
     contextVersion: context.contextVersion,
     scopes: context.scopes,

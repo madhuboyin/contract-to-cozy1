@@ -19,6 +19,14 @@ import { evaluateFinancialContext } from '../../../services/financialContext/app
 import { evaluatePlanningContext } from '../../../services/planningContext/applicabilityPolicy';
 import { evaluateAggregationContext } from '../../../services/aggregationContext/applicabilityPolicy';
 import { evaluateProjectComplianceContext } from '../../../services/projectCompliance/applicabilityPolicy';
+import { evaluateFeatureContext, evaluateFeatureContextInputSchema } from '../application/evaluateFeatureContext';
+import {
+  captureFeatureContext,
+  PropertyContextIdempotencyConflictError,
+  PropertyContextVersionConflictError,
+} from '../application/captureFeatureContext';
+import { getCaptureDefinitionForFact } from '../catalog/captureRegistry';
+import { getFactDefinition } from '../catalog/factCatalog';
 
 export const PHASE_ONE_CONTEXT_SCOPES: PropertyContextScope[] = [
   'CORE',
@@ -135,6 +143,56 @@ export async function getPropertyContextFactEvidence(req: AuthRequest, res: Resp
   try {
     const evidence = await listPropertyFactEvidence(req.params.id, req.user!.userId, req.params.factKey);
     return res.json({ success: true, data: { evidence } });
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('not allowlisted')) {
+      return res.status(400).json({ success: false, message: error.message });
+    }
+    return handleContextError(error, res);
+  }
+}
+
+export async function postFeatureContextEvaluation(req: AuthRequest, res: Response): Promise<Response> {
+  try {
+    const input = evaluateFeatureContextInputSchema.parse(req.body);
+    const data = await evaluateFeatureContext(req.params.id, req.user!.userId, input);
+    return res.json({ success: true, data });
+  } catch (error) {
+    if (error instanceof Error && error.name === 'ZodError') {
+      return res.status(400).json({ success: false, message: 'Invalid feature context request.' });
+    }
+    if (error instanceof Error && /not registered|Invalid Property Context/.test(error.message)) {
+      return res.status(400).json({ success: false, message: error.message });
+    }
+    return handleContextError(error, res);
+  }
+}
+
+export async function postFeatureContextCapture(req: AuthRequest, res: Response): Promise<Response> {
+  try {
+    const data = await captureFeatureContext(req.params.id, req.user!.userId, req.body);
+    return res.json({ success: true, data });
+  } catch (error) {
+    if (error instanceof PropertyContextVersionConflictError) {
+      return res.status(409).json({ success: false, message: error.message, data: { evaluation: error.evaluation } });
+    }
+    if (error instanceof PropertyContextIdempotencyConflictError) {
+      return res.status(409).json({ success: false, message: error.message });
+    }
+    if (error instanceof Error && (error.name === 'ZodError' || /not registered|no longer active/.test(error.message))) {
+      return res.status(400).json({ success: false, message: error.name === 'ZodError' ? 'Invalid context capture.' : error.message });
+    }
+    return handleContextError(error, res);
+  }
+}
+
+export async function getCompatibleContextCaptureDefinition(req: AuthRequest, res: Response): Promise<Response> {
+  try {
+    const fact = getFactDefinition(req.params.factKey);
+    await getPropertyContext(req.params.id, { userId: req.user!.userId }, { scopes: [fact.scope] });
+    const definition = getCaptureDefinitionForFact(req.params.factKey);
+    if (!definition) return res.status(404).json({ success: false, message: 'No scalar capture is registered for this fact.' });
+    const { canonicalOwner: _canonicalOwner, ...data } = definition;
+    return res.json({ success: true, data });
   } catch (error) {
     if (error instanceof Error && error.message.includes('not allowlisted')) {
       return res.status(400).json({ success: false, message: error.message });
