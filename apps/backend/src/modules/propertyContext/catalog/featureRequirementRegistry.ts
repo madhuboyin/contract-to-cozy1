@@ -39,6 +39,31 @@ export interface FeatureContextRequirementDefinition {
 
 export const FEATURE_CONTEXT_REQUIREMENTS: readonly FeatureContextRequirementDefinition[] = [
   {
+    featureKey: 'SELLER_PREP',
+    operationKey: 'OPEN_PLAN',
+    policyVersion: '1.0',
+    promptStrategy: 'MINIMUM_PATH',
+    required: [
+      {
+        factKey: 'core.propertyUse',
+        classification: 'REQUIRED_APPLICABILITY',
+        reasonCode: 'CONFIRM_PROPERTY_USE_FOR_SELLER_PLAN',
+        priority: 10,
+        acceptableStates: ['KNOWN'],
+        captureKey: 'CORE_PROPERTY_USE',
+      },
+      {
+        factKey: 'location.state',
+        classification: 'REQUIRED_CALCULATION',
+        reasonCode: 'CONFIRM_STATE_FOR_SELLER_PLAN',
+        priority: 20,
+        acceptableStates: ['KNOWN'],
+        captureKey: 'LOCATION_STATE',
+      },
+    ],
+    enhancements: [],
+  },
+  {
     featureKey: 'HOA_COMPLIANCE',
     operationKey: 'CREATE_APPROVAL_RECORD',
     policyVersion: '1.0',

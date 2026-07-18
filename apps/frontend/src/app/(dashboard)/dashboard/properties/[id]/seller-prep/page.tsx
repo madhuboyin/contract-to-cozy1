@@ -17,7 +17,7 @@ import {
   MobilePageIntro,
 } from "@/components/mobile/dashboard/MobilePrimitives";
 import HomeToolHeader from "@/components/tools/HomeToolHeader";
-import { PropertyContextNotice, type PropertyContextEnvelope } from "@/components/property-context/PropertyContextNotice";
+import { PropertyContextCapturePanel } from "@/components/property-context/PropertyContextCapturePanel";
 
 import SellerPrepOverview from "@/components/seller-prep/SellerPrepOverview";
 import { SellerPrepIntakeForm } from "@/components/seller-prep/SellerPrepIntakeForm";
@@ -41,7 +41,6 @@ interface SellerPrepOverviewData {
   completionPercent: number;
   preferences?: any;
   personalizedSummary?: string;
-  context?: PropertyContextEnvelope;
 }
 
 interface ComparableHome {
@@ -66,6 +65,7 @@ export default function SellerPrepPage() {
   const propertyId = Array.isArray(params.id) ? (params.id[0] ?? '') : (params.id ?? '');
   const [showIntakeForm, setShowIntakeForm] = useState(false);
   const [hasCheckedPreferences, setHasCheckedPreferences] = useState(false);
+  const [contextReady, setContextReady] = useState(false);
 
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["seller-prep", propertyId],
@@ -94,7 +94,7 @@ export default function SellerPrepPage() {
         report: reportRes.data as ReadinessReport,
       };
     },
-    enabled: !!propertyId,
+    enabled: !!propertyId && contextReady,
     retry: 1,
     staleTime: 5 * 60 * 1000,
   });
@@ -119,6 +119,26 @@ export default function SellerPrepPage() {
   const handleEditPreferences = () => {
     setShowIntakeForm(true);
   };
+
+  if (!contextReady) {
+    return (
+      <DashboardShell>
+        <MobilePageContainer className="space-y-4 py-6 lg:max-w-3xl lg:px-8 lg:pb-10">
+          <div>
+            <p className="text-xs text-muted-foreground">Seller Prep</p>
+            <h1 className="text-xl font-bold">Home Sale Preparation</h1>
+            <p className="text-sm text-muted-foreground">Confirm the minimum property details used to build this plan.</p>
+          </div>
+          <PropertyContextCapturePanel
+            propertyId={propertyId as string}
+            featureKey="SELLER_PREP"
+            operationKey="OPEN_PLAN"
+            onReady={() => setContextReady(true)}
+          />
+        </MobilePageContainer>
+      </DashboardShell>
+    );
+  }
 
   if (isLoading) {
     return (
@@ -177,9 +197,12 @@ export default function SellerPrepPage() {
         />
       )}
 
-      {data?.overview?.context && (
-        <PropertyContextNotice context={data.overview.context} title="Seller prep context" />
-      )}
+      <PropertyContextCapturePanel
+        propertyId={propertyId as string}
+        featureKey="SELLER_PREP"
+        operationKey="OPEN_PLAN"
+        onReady={() => setContextReady(true)}
+      />
 
       {/* Navigation & Header Section */}
       <div className="space-y-2 md:hidden">

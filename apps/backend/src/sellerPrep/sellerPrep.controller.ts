@@ -5,12 +5,29 @@ import { SellerPrepService } from './sellerPrep.service';
 import { prisma } from '../lib/prisma';
 import { generateRoiChecklist } from './engines/roiRules.engine';
 import { logger } from '../lib/logger';
+import { evaluateFeatureContext } from '../modules/propertyContext/application/evaluateFeatureContext';
 
 export class SellerPrepController {
+  private static async requirePlanContext(req: AuthRequest, res: Response): Promise<boolean> {
+    const evaluation = await evaluateFeatureContext(req.params.propertyId, req.user!.userId, {
+      featureKey: 'SELLER_PREP',
+      operationKey: 'OPEN_PLAN',
+    });
+    if (evaluation.canExecute) return true;
+    res.status(409).json({
+      success: false,
+      code: 'PROPERTY_CONTEXT_INCOMPLETE',
+      message: 'Complete the required property details before opening this seller plan.',
+      data: { evaluation },
+    });
+    return false;
+  }
+
   static async getOverview(req: AuthRequest, res: Response) {
     try {
       const { propertyId } = req.params;
       const userId = req.user!.userId;
+      if (!(await SellerPrepController.requirePlanContext(req, res))) return;
 
       const data = await SellerPrepService.getOverview(userId, propertyId);
       
@@ -98,6 +115,7 @@ export class SellerPrepController {
     try {
       const { propertyId } = req.params;
       const userId = req.user!.userId;
+      if (!(await SellerPrepController.requirePlanContext(req, res))) return;
 
       const reportData = await SellerPrepService.getSellerReadinessReport(
         userId,
@@ -137,6 +155,7 @@ export class SellerPrepController {
     try {
       const { propertyId } = req.params;
       const userId = req.user!.userId;
+      if (!(await SellerPrepController.requirePlanContext(req, res))) return;
       const { timeline, budget, propertyType, priority, condition } = req.body;
 
       // Validate required fields
