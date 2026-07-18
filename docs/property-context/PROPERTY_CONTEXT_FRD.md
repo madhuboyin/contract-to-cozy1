@@ -1002,6 +1002,11 @@ Reason: TREES_NOT_PRESENT + ASSOCIATION_RESPONSIBLE
 
 ## 15. Contextual capture requirements
 
+The detailed implementation contract for feature-triggered inline capture is
+defined in
+`docs/property-context/PROPERTY_CONTEXT_JUST_IN_TIME_CAPTURE_FRD.md`. The
+requirements below remain the platform-level invariants.
+
 1. A question appears only when its answer can change a current decision.
 2. The feature identifies the fact key, rationale, allowed answer type, and
    canonical write owner.
