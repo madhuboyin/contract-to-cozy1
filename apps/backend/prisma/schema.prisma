@@ -40,6 +40,77 @@ enum HomeownerSegment {
   EXISTING_OWNER // Standard homeowner focused on maintenance
 }
 
+enum OnboardingOwnershipState {
+  SHOPPING
+  UNDER_CONTRACT
+  RECENT_OWNER
+  ESTABLISHED_OWNER
+  PREPARING_TRANSFER
+  UNKNOWN
+}
+
+enum OnboardingPropertyOrigin {
+  EXISTING_HOME
+  NEW_CONSTRUCTION
+  UNKNOWN
+}
+
+enum OnboardingEntryPath {
+  EXISTING_OWNER_TRIGGER
+  EXISTING_HOME_PURCHASE
+  NEW_HOME_SETUP
+  MAJOR_MOMENT
+  EXPLORATION
+}
+
+enum OnboardingTriggerType {
+  REPAIR
+  REPLACEMENT
+  CONTRACTOR_QUOTE
+  MAINTENANCE_BACKLOG
+  INSURANCE_COVERAGE
+  RENEWAL_DEADLINE
+  PROJECT
+  ANTICIPATED_COST
+  INSPECTION_FINDING
+  PUNCH_LIST_WARRANTY
+  CLAIM_DAMAGE
+  SELLING_TRANSFER
+  OTHER
+  NONE_EXPLORING
+}
+
+enum OnboardingTriggerEntityType {
+  PROPERTY
+  INVENTORY_ITEM
+  HOME_SYSTEM
+  DOCUMENT
+  QUOTE
+  POLICY
+  WARRANTY
+  PROJECT
+  INCIDENT
+  FREE_TEXT
+  UNKNOWN
+}
+
+enum OnboardingTriggerSource {
+  USER_SELECTED
+  CONVERSATION
+  DOCUMENT
+  PHOTO
+  SYSTEM_SIGNAL
+  OTHER
+}
+
+enum OnboardingFirstValueType {
+  TRIGGER_GUIDANCE
+  HOME_HEALTH_BASELINE
+  PRIORITIZED_12_MONTH_PLAN
+  INSPECTION_90_DAY_PLAN
+  NEW_HOME_PROTECTION_PLAN
+}
+
 enum PreferenceRiskTolerance {
   LOW
   MEDIUM
@@ -4427,6 +4498,27 @@ model PropertyOnboarding {
 
   // derived snapshot (optional cache)
   setupScore Int @default(0)
+
+  // Phase 1 trigger-first activation context. These dimensions are
+  // intentionally orthogonal and replace segment-only product policy.
+  entryPath              OnboardingEntryPath?
+  ownershipState         OnboardingOwnershipState?
+  propertyOrigin         OnboardingPropertyOrigin?
+  activeTriggerId        String?
+  activeTriggerType      OnboardingTriggerType?
+  activeTriggerLabel     String?
+  activeTriggerDetail    String?
+  triggerEntityType      OnboardingTriggerEntityType?
+  triggerEntityId        String?
+  triggerSource          OnboardingTriggerSource?
+  triggerIdentifiedAt    DateTime?
+  firstValueType         OnboardingFirstValueType?
+  firstValueAt           DateTime?
+  firstActionResolvedAt  DateTime?
+  entryContextVersion    String?
+  entryConsentContext    String?
+  entrySourceMetadata    Json?
+  entryContextCapturedAt DateTime?
 
   // Narrative Engine (first-visit story overlay)
   narrativeRunId       String?

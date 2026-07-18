@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import type { ActivationEntryContextInput } from '@/types';
 
 const LOOKUP_COOKIE = 'ctc_onboarding_lookup';
 const MAX_AGE_SECONDS = 15 * 60;
@@ -14,7 +15,48 @@ type OnboardingLookupPayload = {
   dwellingType?: string | null;
   lastSalePrice?: number | null;
   lastSaleDate?: string | null;
+  activationContext?: ActivationEntryContextInput;
 };
+
+const ENTRY_PATHS = new Set(['EXISTING_OWNER_TRIGGER', 'EXISTING_HOME_PURCHASE', 'NEW_HOME_SETUP', 'MAJOR_MOMENT', 'EXPLORATION']);
+const OWNERSHIP_STATES = new Set(['SHOPPING', 'UNDER_CONTRACT', 'RECENT_OWNER', 'ESTABLISHED_OWNER', 'PREPARING_TRANSFER', 'UNKNOWN']);
+const PROPERTY_ORIGINS = new Set(['EXISTING_HOME', 'NEW_CONSTRUCTION', 'UNKNOWN']);
+const TRIGGER_TYPES = new Set([
+  'REPAIR', 'REPLACEMENT', 'CONTRACTOR_QUOTE', 'MAINTENANCE_BACKLOG', 'INSURANCE_COVERAGE',
+  'RENEWAL_DEADLINE', 'PROJECT', 'ANTICIPATED_COST', 'INSPECTION_FINDING', 'PUNCH_LIST_WARRANTY',
+  'CLAIM_DAMAGE', 'SELLING_TRANSFER', 'OTHER', 'NONE_EXPLORING',
+]);
+
+function sanitizeActivationContext(value: unknown): ActivationEntryContextInput | undefined {
+  if (!value || typeof value !== 'object') return undefined;
+  const source = value as Record<string, unknown>;
+  const trigger = source.activeTrigger && typeof source.activeTrigger === 'object'
+    ? source.activeTrigger as Record<string, unknown>
+    : null;
+  if (!ENTRY_PATHS.has(String(source.entryPath)) ||
+    !OWNERSHIP_STATES.has(String(source.ownershipState)) ||
+    !PROPERTY_ORIGINS.has(String(source.propertyOrigin)) ||
+    !trigger || !TRIGGER_TYPES.has(String(trigger.type))) {
+    return undefined;
+  }
+  const label = normalizeString(trigger.label);
+  if (!label) return undefined;
+  return {
+    entryPath: source.entryPath as ActivationEntryContextInput['entryPath'],
+    ownershipState: source.ownershipState as ActivationEntryContextInput['ownershipState'],
+    propertyOrigin: source.propertyOrigin as ActivationEntryContextInput['propertyOrigin'],
+    activeTrigger: {
+      type: trigger.type as ActivationEntryContextInput['activeTrigger']['type'],
+      label,
+      detail: normalizeString(trigger.detail) ?? null,
+      entityType: 'PROPERTY',
+      entityId: null,
+      source: 'USER_SELECTED',
+    },
+    consentContext: 'User submitted this trigger to receive property-specific onboarding guidance.',
+    sourceMetadata: { onboardingSurface: 'address' },
+  };
+}
 
 function normalizeString(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
@@ -41,6 +83,7 @@ function sanitizePayload(input: unknown): OnboardingLookupPayload | null {
     dwellingType: normalizeString(source.dwellingType) ?? null,
     lastSalePrice: normalizeNumber(source.lastSalePrice),
     lastSaleDate: normalizeString(source.lastSaleDate) ?? null,
+    activationContext: sanitizeActivationContext(source.activationContext),
   };
 }
 

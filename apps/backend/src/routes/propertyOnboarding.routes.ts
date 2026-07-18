@@ -13,6 +13,14 @@ import {
   skipOnboarding,
 } from '../services/propertyOnboarding.service';
 import { logger } from '../lib/logger';
+import {
+  EntryContextCaptureSchema,
+  FirstActionResolutionSchema,
+  captureEntryContext,
+  getActivationFirstValue,
+  getEntryContext,
+  recordFirstActionResolution,
+} from '../services/entryContext.service';
 
 const router = Router();
 
@@ -26,6 +34,79 @@ const completeStepBodySchema = z.object({
 
 router.use(apiRateLimiter);
 router.use(authenticate);
+
+router.get(
+  '/properties/:propertyId/onboarding/entry-context',
+  propertyAuthMiddleware,
+  async (req: CustomRequest, res) => {
+    try {
+      const userId = req.user?.userId;
+      if (!userId) return res.status(401).json({ success: false, message: 'Authentication required.' });
+      const context = await getEntryContext(req.params.propertyId, userId);
+      return res.json({ success: true, data: context });
+    } catch (error: any) {
+      logger.error({ err: error }, 'Error fetching onboarding entry context');
+      return res.status(500).json({ success: false, message: error?.message || 'Failed to fetch entry context.' });
+    }
+  }
+);
+
+router.post(
+  '/properties/:propertyId/onboarding/first-action-resolution',
+  propertyAuthMiddleware,
+  validateBody(FirstActionResolutionSchema),
+  async (req: CustomRequest, res) => {
+    try {
+      const userId = req.user?.userId;
+      if (!userId) return res.status(401).json({ success: false, message: 'Authentication required.' });
+      const resolution = await recordFirstActionResolution(req.params.propertyId, userId, req.body);
+      return res.json({ success: true, data: resolution, message: 'First action resolution recorded.' });
+    } catch (error: any) {
+      logger.error({ err: error }, 'Error recording onboarding first action resolution');
+      return res.status(500).json({
+        success: false,
+        message: error?.message || 'Failed to record first action resolution.',
+      });
+    }
+  }
+);
+
+router.put(
+  '/properties/:propertyId/onboarding/entry-context',
+  propertyAuthMiddleware,
+  validateBody(EntryContextCaptureSchema),
+  async (req: CustomRequest, res) => {
+    try {
+      const userId = req.user?.userId;
+      if (!userId) return res.status(401).json({ success: false, message: 'Authentication required.' });
+      const context = await captureEntryContext(req.params.propertyId, userId, req.body);
+      return res.json({ success: true, data: context, message: 'Activation context captured.' });
+    } catch (error: any) {
+      logger.error({ err: error }, 'Error capturing onboarding entry context');
+      return res.status(500).json({ success: false, message: error?.message || 'Failed to capture entry context.' });
+    }
+  }
+);
+
+router.get(
+  '/properties/:propertyId/onboarding/first-value',
+  propertyAuthMiddleware,
+  async (req: CustomRequest, res) => {
+    try {
+      const userId = req.user?.userId;
+      if (!userId) return res.status(401).json({ success: false, message: 'Authentication required.' });
+      const firstValue = await getActivationFirstValue(req.params.propertyId, userId);
+      return res.json({ success: true, data: firstValue });
+    } catch (error: any) {
+      logger.error({ err: error }, 'Error generating onboarding first value');
+      const missingContext = String(error?.message ?? '').includes('has not been captured');
+      return res.status(missingContext ? 409 : 500).json({
+        success: false,
+        message: error?.message || 'Failed to generate first value.',
+      });
+    }
+  }
+);
 
 router.get(
   '/properties/:propertyId/onboarding/status',

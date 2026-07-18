@@ -16,6 +16,7 @@
 import { PropertyMaintenanceTaskService } from './PropertyMaintenanceTask.service';
 import { prisma } from '../lib/prisma';
 import { resolvePropertyAccess, ROLE_RANK } from './propertyAccess.service';
+import { supportsOwnershipCare } from './entryContextPolicy';
 
 /**
  * Creates a PropertyMaintenanceTask from a seasonal checklist item.
@@ -43,6 +44,7 @@ export async function addSeasonalTaskToMaintenance(
           property: {
             include: {
               homeownerProfile: true,
+              onboarding: true,
             },
           },
         },
@@ -63,8 +65,12 @@ export async function addSeasonalTaskToMaintenance(
   }
 
   // 3. Check segment (only EXISTING_OWNER can add to maintenance)
-  const segment = seasonalItem.seasonalChecklist.property.homeownerProfile.segment;
-  if (segment !== 'EXISTING_OWNER') {
+  const property = seasonalItem.seasonalChecklist.property;
+  if (!supportsOwnershipCare({
+    entryPath: property.onboarding?.entryPath,
+    ownershipState: property.onboarding?.ownershipState,
+    legacySegment: property.homeownerProfile.segment,
+  })) {
     throw new Error('Seasonal maintenance tasks are only available for existing homeowners');
   }
 

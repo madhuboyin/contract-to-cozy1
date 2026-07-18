@@ -106,6 +106,8 @@ import {
   PropertyUse,
   OccupancyStatus,
   PropertyResponsibilityInput,
+  ActivationEntryContextInput,
+  ActivationFirstValueDTO,
 } from '@/types';
 import type { PropertyContextEnvelope } from '@/components/property-context/propertyContextTypes';
 import type { FeatureContextCaptureResult, FeatureContextEvaluation } from '@/components/property-context/featureContextTypes';
@@ -1312,6 +1314,39 @@ class APIClient {
    */
   async getPropertyDashboardBootstrap(id: string): Promise<APIResponse<PropertyDashboardBootstrap>> {
     return this.request(`/api/properties/${id}/dashboard-bootstrap`);
+  }
+
+  async getEntryContext(propertyId: string): Promise<APIResponse<unknown | null>> {
+    return this.request(`/api/properties/${propertyId}/onboarding/entry-context`);
+  }
+
+  async captureEntryContext(
+    propertyId: string,
+    input: ActivationEntryContextInput,
+  ): Promise<APIResponse<unknown>> {
+    return this.request(`/api/properties/${propertyId}/onboarding/entry-context`, {
+      method: 'PUT',
+      body: input,
+    });
+  }
+
+  async getActivationFirstValue(propertyId: string): Promise<APIResponse<ActivationFirstValueDTO>> {
+    return this.request(`/api/properties/${propertyId}/onboarding/first-value`);
+  }
+
+  async recordFirstActionResolution(
+    propertyId: string,
+    input: {
+      disposition: 'COMPLETED' | 'INTENTIONALLY_DEFERRED' | 'DELIBERATELY_DISMISSED';
+      reason: string;
+      consequenceAcknowledged: boolean;
+      nextTriggerAt?: string | null;
+    },
+  ): Promise<APIResponse<{ actionId: string; resolvedAt: string }>> {
+    return this.request(`/api/properties/${propertyId}/onboarding/first-action-resolution`, {
+      method: 'POST',
+      body: input,
+    });
   }
 
   async getPropertyContext(

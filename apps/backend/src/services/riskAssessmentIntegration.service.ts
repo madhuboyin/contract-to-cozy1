@@ -16,6 +16,7 @@ import { ServiceCategory } from '@prisma/client';
 import { PropertyMaintenanceTaskService } from './PropertyMaintenanceTask.service';
 import { prisma } from '../lib/prisma';
 import { logger } from '../lib/logger';
+import { supportsOwnershipCare } from './entryContextPolicy';
 
 /**
  * Creates maintenance tasks from risk assessment report.
@@ -52,6 +53,7 @@ export async function createTasksFromRiskAssessment(
     where: { id: propertyId },
     include: {
       homeownerProfile: true,
+      onboarding: true,
     },
   });
 
@@ -60,7 +62,11 @@ export async function createTasksFromRiskAssessment(
   }
 
   // 2. Skip HOME_BUYER segment (they don't need risk-based maintenance)
-  if (property.homeownerProfile.segment === 'HOME_BUYER') {
+  if (!supportsOwnershipCare({
+    entryPath: property.onboarding?.entryPath,
+    ownershipState: property.onboarding?.ownershipState,
+    legacySegment: property.homeownerProfile.segment,
+  })) {
     logger.info(`⏭️  Skipping risk task creation for HOME_BUYER property: ${propertyId}`);
     return {
       created: 0,

@@ -14,6 +14,7 @@ export type CtcEventName =
   | 'signup_completed'
   | 'address_lookup_started'
   | 'property_claimed'
+  | 'active_trigger_selected'
   // Activation
   | 'dashboard_first_view'
   | 'tool_opened'
@@ -21,6 +22,9 @@ export type CtcEventName =
   | 'document_uploaded'
   | 'magic_scan_started'
   | 'magic_scan_completed'
+  | 'first_value_viewed'
+  | 'first_action_started'
+  | 'first_action_resolved'
   // Outcome Density & Trust (North Star)
   | 'outcome_win_generated'
   | 'outcome_action_taken'
@@ -137,6 +141,7 @@ export interface CtcEventProperties {
   signup_completed: { timeToCompleteSeconds: number };
   address_lookup_started: { source: string };
   property_claimed: { zipCode: string; yearBuilt: number; source: 'API' | 'MANUAL' };
+  active_trigger_selected: { triggerType: string; situation: string };
   
   // Activation
   dashboard_first_view: { propertyId: string };
@@ -145,6 +150,9 @@ export interface CtcEventProperties {
   document_uploaded: { type: string; sizeBytes: number; success: boolean };
   magic_scan_started: { propertyId: string; source: string };
   magic_scan_completed: { propertyId: string; confidence: number; documentType?: string; draftId?: string };
+  first_value_viewed: { propertyId: string; actionId: string; triggerType: string };
+  first_action_started: { propertyId: string | null; actionId: string };
+  first_action_resolved: { propertyId: string; actionId: string; disposition: string };
   
   // Outcome Density & Trust
   outcome_win_generated: { type: 'SAVINGS' | 'RISK_PREVENTION' | 'TIME_SAVED'; valueUsd?: number; sourceEngine: string; propertyId: string };

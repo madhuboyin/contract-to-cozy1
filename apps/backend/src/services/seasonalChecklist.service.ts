@@ -8,6 +8,7 @@ import { prisma } from '../lib/prisma';
 import { logger } from '../lib/logger';
 import { getPropertyContext } from '../modules/propertyContext';
 import { evaluateSeasonalTemplateApplicability } from './seasonal/applicabilityPolicy';
+import { supportsOwnershipCare } from './entryContextPolicy';
 
 export class SeasonalChecklistService {
   private static async assertPropertyOwnership(propertyId: string, userId: string) {
@@ -21,6 +22,7 @@ export class SeasonalChecklistService {
       include: {
         inventoryItems: true,
         homeownerProfile: true,
+        onboarding: true,
       },
     });
 
@@ -84,7 +86,11 @@ export class SeasonalChecklistService {
 
     // Get property and climate settings
     const property = await this.assertPropertyOwnership(propertyId, userId);
-    if (property.homeownerProfile?.segment !== 'EXISTING_OWNER') {
+    if (!supportsOwnershipCare({
+      entryPath: property.onboarding?.entryPath,
+      ownershipState: property.onboarding?.ownershipState,
+      legacySegment: property.homeownerProfile?.segment,
+    })) {
       logger.info(`Skipping seasonal checklist - not an existing owner (property: ${propertyId})`);
       return null;
     }
@@ -597,9 +603,16 @@ export class SeasonalChecklistService {
     // get a linked PropertyMaintenanceTask, matching the individual add button.
     const property = await prisma.property.findUnique({
       where: { id: checklist.propertyId },
-      select: { homeownerProfile: { select: { segment: true } } },
+      select: {
+        homeownerProfile: { select: { segment: true } },
+        onboarding: { select: { entryPath: true, ownershipState: true } },
+      },
     });
-    const usesMaintenance = property?.homeownerProfile?.segment === 'EXISTING_OWNER';
+    const usesMaintenance = property ? supportsOwnershipCare({
+      entryPath: property.onboarding?.entryPath,
+      ownershipState: property.onboarding?.ownershipState,
+      legacySegment: property.homeownerProfile?.segment,
+    }) : false;
 
     const addedTasks = [];
 

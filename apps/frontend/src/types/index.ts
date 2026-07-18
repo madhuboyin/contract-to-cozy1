@@ -188,6 +188,55 @@ export enum RecurrenceFrequency {
  */
 export type HomeownerSegment = 'HOME_BUYER' | 'EXISTING_OWNER';
 
+export type ActivationEntryContextInput = {
+  entryPath: 'EXISTING_OWNER_TRIGGER' | 'EXISTING_HOME_PURCHASE' | 'NEW_HOME_SETUP' | 'MAJOR_MOMENT' | 'EXPLORATION';
+  ownershipState: 'SHOPPING' | 'UNDER_CONTRACT' | 'RECENT_OWNER' | 'ESTABLISHED_OWNER' | 'PREPARING_TRANSFER' | 'UNKNOWN';
+  propertyOrigin: 'EXISTING_HOME' | 'NEW_CONSTRUCTION' | 'UNKNOWN';
+  activeTrigger: {
+    type: 'REPAIR' | 'REPLACEMENT' | 'CONTRACTOR_QUOTE' | 'MAINTENANCE_BACKLOG' | 'INSURANCE_COVERAGE' |
+      'RENEWAL_DEADLINE' | 'PROJECT' | 'ANTICIPATED_COST' | 'INSPECTION_FINDING' |
+      'PUNCH_LIST_WARRANTY' | 'CLAIM_DAMAGE' | 'SELLING_TRANSFER' | 'OTHER' | 'NONE_EXPLORING';
+    label: string;
+    detail?: string | null;
+    entityType: 'PROPERTY' | 'INVENTORY_ITEM' | 'HOME_SYSTEM' | 'DOCUMENT' | 'QUOTE' | 'POLICY' |
+      'WARRANTY' | 'PROJECT' | 'INCIDENT' | 'FREE_TEXT' | 'UNKNOWN';
+    entityId?: string | null;
+    source: 'USER_SELECTED' | 'CONVERSATION' | 'DOCUMENT' | 'PHOTO' | 'SYSTEM_SIGNAL' | 'OTHER';
+  };
+  consentContext?: string | null;
+  sourceMetadata?: Record<string, unknown> | null;
+};
+
+export type ActivationHomeActionDTO = {
+    id: string;
+    priority: 'NOW' | 'SOON' | 'PLAN' | 'CONSIDER';
+    signal: string;
+    whyItMatters: string;
+    recommendedAction: string;
+    expectedOutcome: string;
+    timing: { rationale: string };
+    evidence: Array<{ id: string; label: string; source: string; freshness: string; confidence: number | null }>;
+    assumptions: Array<{ key: string; label: string; value: string; editable: boolean }>;
+    confidence: { score: number | null; label: 'LOW' | 'MEDIUM' | 'HIGH'; missing: string[] };
+    primaryCta: { label: string; href: string };
+    secondaryCtas: Array<{ label: string; href: string }>;
+};
+
+export type ActivationFirstValueDTO = {
+  entryContext: {
+    id: string;
+    activeTrigger: { type: string; label: string; detail: string | null };
+    firstValue: { type: string; deliveredAt: string | null };
+  };
+  action: ActivationHomeActionDTO;
+  baseline: {
+    supportedFacts: Array<{ label: string; value: string; source: string }>;
+    unknownFacts: string[];
+    confidence: 'LOW' | 'MEDIUM' | 'HIGH';
+  };
+  plan: Record<'NOW' | 'SOON' | 'PLAN' | 'CONSIDER', ActivationHomeActionDTO[]>;
+};
+
 // ============================================================================
 // NEW PROPERTY ENUMS (FIX: ADDED RUNTIME CONSTANTS)
 // ============================================================================

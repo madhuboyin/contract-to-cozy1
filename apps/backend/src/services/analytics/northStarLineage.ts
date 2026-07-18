@@ -41,6 +41,10 @@ export const NorthStarLineageEventInputSchema = z.object({
   actionWindowClosesAt: z.string().datetime().nullable().optional(),
   resolutionDisposition: z.enum(ACTION_RESOLUTION_DISPOSITIONS).nullable().optional(),
   verificationStatus: z.enum(['NOT_REQUIRED', 'PENDING', 'VERIFIED', 'FAILED']).nullable().optional(),
+  resolutionReason: z.string().trim().min(1).max(1000).nullable().optional(),
+  consequenceAcknowledged: z.boolean().optional(),
+  nextTriggerAt: z.string().datetime().nullable().optional(),
+  unresolvedSafetyRequirement: z.boolean().optional(),
 }).superRefine((value, ctx) => {
   const stage = EVENT_STAGES[value.eventType];
   const requireField = (field: keyof typeof value, atStage: number) => {

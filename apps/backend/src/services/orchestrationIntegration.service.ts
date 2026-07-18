@@ -15,6 +15,7 @@ import { HomeBuyerTaskService } from './HomeBuyerTask.service';
 import { PropertyMaintenanceTaskService } from './PropertyMaintenanceTask.service';
 import { prisma } from '../lib/prisma';
 import { logger } from '../lib/logger';
+import { resolveHomeownerOperatingMode } from './entryContextPolicy';
 
 /**
  * Routes Action Center task creation to the appropriate service
@@ -45,6 +46,7 @@ export async function createTaskFromActionCenter(data: {
     where: { id: data.propertyId },
     include: {
       homeownerProfile: true,
+      onboarding: true,
     },
   });
 
@@ -52,10 +54,14 @@ export async function createTaskFromActionCenter(data: {
     throw new Error('Property not found');
   }
 
-  const segment = property.homeownerProfile.segment;
+  const operatingMode = resolveHomeownerOperatingMode({
+    entryPath: property.onboarding?.entryPath,
+    ownershipState: property.onboarding?.ownershipState,
+    legacySegment: property.homeownerProfile.segment,
+  });
 
   // 2. Route based on segment
-  if (segment === 'HOME_BUYER') {
+  if (operatingMode === 'PURCHASE' || operatingMode === 'EXPLORATION') {
     // HOME_BUYER: Action Center tasks aren't typically used
     // Most HOME_BUYER tasks are the 8 default tasks
     // But if Action Center generates something, we can create a custom task
@@ -75,7 +81,7 @@ export async function createTaskFromActionCenter(data: {
     };
   }
 
-  if (segment === 'EXISTING_OWNER') {
+  if (operatingMode === 'OWNERSHIP') {
     // EXISTING_OWNER: Use PropertyMaintenanceTaskService (idempotent)
     logger.info('✅ EXISTING_OWNER Action Center task - Creating maintenance task');
 
@@ -118,7 +124,7 @@ export async function createTaskFromActionCenter(data: {
   }
 
   // Should never reach here — segment enum only has HOME_BUYER and EXISTING_OWNER
-  throw new Error(`Unhandled homeowner segment: ${segment}`);
+  throw new Error(`Unhandled homeowner operating mode: ${operatingMode}`);
 }
 
 /**
@@ -138,6 +144,7 @@ export async function getActionsForProperty(
     where: { id: propertyId },
     include: {
       homeownerProfile: true,
+      onboarding: true,
     },
   });
 
@@ -145,12 +152,16 @@ export async function getActionsForProperty(
     throw new Error('Property not found');
   }
 
-  const segment = property.homeownerProfile.segment;
+  const operatingMode = resolveHomeownerOperatingMode({
+    entryPath: property.onboarding?.entryPath,
+    ownershipState: property.onboarding?.ownershipState,
+    legacySegment: property.homeownerProfile.segment,
+  });
 
   let homeBuyerTasks: any[] = [];
   let maintenanceTasks: any[] = [];
 
-  if (segment === 'HOME_BUYER') {
+  if (operatingMode === 'PURCHASE' || operatingMode === 'EXPLORATION') {
     try {
       homeBuyerTasks = await HomeBuyerTaskService.getTasks(userId);
     } catch (error) {
@@ -158,7 +169,7 @@ export async function getActionsForProperty(
     }
   }
 
-  if (segment === 'EXISTING_OWNER') {
+  if (operatingMode === 'OWNERSHIP') {
     try {
       maintenanceTasks = await PropertyMaintenanceTaskService.getTasksForProperty(
         userId,

@@ -10,6 +10,21 @@ import { useToast } from '@/components/ui/use-toast';
 import { motion } from 'framer-motion';
 import { track } from '@/lib/analytics/events';
 import { ErrorBoundary } from '@/components/system/ErrorBoundary';
+import type { ActivationEntryContextInput } from '@/types';
+
+type Situation = 'own' | 'buying' | 'new-build' | 'exploring';
+type TriggerType = ActivationEntryContextInput['activeTrigger']['type'];
+
+const TRIGGER_OPTIONS: Array<{ type: TriggerType; label: string }> = [
+  { type: 'REPAIR', label: 'Something needs repair' },
+  { type: 'REPLACEMENT', label: 'Repair or replace a system' },
+  { type: 'CONTRACTOR_QUOTE', label: 'Review a contractor quote' },
+  { type: 'MAINTENANCE_BACKLOG', label: 'Catch up on maintenance' },
+  { type: 'INSURANCE_COVERAGE', label: 'Insurance or warranty question' },
+  { type: 'PROJECT', label: 'Plan a home project' },
+  { type: 'ANTICIPATED_COST', label: 'Prepare for a future cost' },
+  { type: 'NONE_EXPLORING', label: 'Just understand my home' },
+];
 
 /**
  * AddressOnboardingPage is the first "Wow" moment.
@@ -22,6 +37,9 @@ export default function AddressOnboardingPage() {
   const [address, setAddress] = useState('');
   const [zipCode, setZipCode] = useState('');
   const [loading, setLoading] = useState(false);
+  const [situation, setSituation] = useState<Situation>('own');
+  const [triggerType, setTriggerType] = useState<TriggerType | null>(null);
+  const [triggerDetail, setTriggerDetail] = useState('');
 
   // Mount tracking
   React.useEffect(() => {
@@ -35,7 +53,7 @@ export default function AddressOnboardingPage() {
 
   const handleLookup = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!address.trim()) return;
+    if (!address.trim() || !triggerType) return;
 
     setLoading(true);
     track('address_lookup_started', { source: 'onboarding_page' });
@@ -45,15 +63,46 @@ export default function AddressOnboardingPage() {
       const response = await api.lookupProperty(address, zipCode);
 
       if (response.success && response.data) {
+        const selectedTrigger = TRIGGER_OPTIONS.find((option) => option.type === triggerType);
+        const activationContext: ActivationEntryContextInput = {
+          entryPath: situation === 'buying'
+            ? 'EXISTING_HOME_PURCHASE'
+            : situation === 'new-build'
+              ? 'NEW_HOME_SETUP'
+              : situation === 'exploring'
+                ? 'EXPLORATION'
+                : 'EXISTING_OWNER_TRIGGER',
+          ownershipState: situation === 'buying' || situation === 'new-build'
+            ? 'UNDER_CONTRACT'
+            : situation === 'exploring'
+              ? 'SHOPPING'
+              : 'ESTABLISHED_OWNER',
+          propertyOrigin: situation === 'new-build'
+            ? 'NEW_CONSTRUCTION'
+            : situation === 'exploring'
+              ? 'UNKNOWN'
+              : 'EXISTING_HOME',
+          activeTrigger: {
+            type: triggerType,
+            label: selectedTrigger?.label ?? 'Home planning question',
+            detail: triggerDetail.trim() || null,
+            entityType: 'PROPERTY',
+            entityId: null,
+            source: 'USER_SELECTED',
+          },
+          consentContext: 'User submitted this trigger to receive property-specific onboarding guidance.',
+          sourceMetadata: { onboardingSurface: 'address' },
+        };
         const sessionRes = await fetch('/api/onboarding-lookup-session', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ data: response.data }),
+          body: JSON.stringify({ data: { ...response.data, activationContext } }),
         });
         if (!sessionRes.ok) {
           throw new Error('Unable to prepare onboarding session');
         }
-        router.push('/onboarding/reveal');
+        track('active_trigger_selected', { triggerType, situation });
+        router.push('/onboarding/confirm');
       } else {
         toast({
           title: "Address not found",
@@ -110,18 +159,76 @@ export default function AddressOnboardingPage() {
           {/* Hero Copy */}
           <div className="space-y-4">
             <h1 className="text-4xl sm:text-5xl font-black text-slate-900 leading-tight">
-              Claim your home’s <br />
-              <span className="text-brand-600">Digital Twin.</span>
+              Start with what your <br />
+              <span className="text-brand-600">home needs now.</span>
             </h1>
             <p className="text-lg text-slate-500 max-w-md mx-auto leading-relaxed">
-              Enter your address to instantly see your home's health score and potential savings.
+              Tell us what brought you here, then add your address. We’ll give you a useful first action without requiring an inspection report.
             </p>
           </div>
 
           {/* Search Experience */}
-          <form onSubmit={handleLookup} className="relative group">
-            <div className="absolute -inset-1 bg-gradient-to-r from-brand-600 to-teal-500 rounded-3xl blur opacity-20 group-focus-within:opacity-40 transition-opacity" />
-            <div className="relative bg-white rounded-2xl shadow-xl border border-slate-100 p-2 flex flex-col sm:flex-row gap-2">
+          <form onSubmit={handleLookup} className="space-y-5 text-left">
+            <fieldset className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm space-y-4">
+              <legend className="px-2 text-sm font-bold text-slate-900">What brought you here?</legend>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {TRIGGER_OPTIONS.map((option) => (
+                  <button
+                    key={option.type}
+                    type="button"
+                    onClick={() => setTriggerType(option.type)}
+                    aria-pressed={triggerType === option.type}
+                    className={`min-h-11 rounded-xl border px-3 py-2 text-left text-sm font-semibold transition-colors ${
+                      triggerType === option.type
+                        ? 'border-brand-600 bg-brand-50 text-brand-800'
+                        : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300'
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+              <Input
+                value={triggerDetail}
+                onChange={(event) => setTriggerDetail(event.target.value)}
+                placeholder="Optional detail — system, deadline, quote, or concern"
+                maxLength={2000}
+              />
+            </fieldset>
+
+            <fieldset className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm space-y-3">
+              <legend className="px-2 text-sm font-bold text-slate-900">Where are you in the home journey?</legend>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                {([
+                  ['own', 'I own it'],
+                  ['buying', 'Buying existing'],
+                  ['new-build', 'New build'],
+                  ['exploring', 'Exploring'],
+                ] as Array<[Situation, string]>).map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => {
+                      setSituation(value);
+                      if (value === 'exploring') setTriggerType('NONE_EXPLORING');
+                      if (value !== 'exploring' && triggerType === 'NONE_EXPLORING') setTriggerType(null);
+                    }}
+                    aria-pressed={situation === value}
+                    className={`min-h-11 rounded-xl border px-2 text-sm font-semibold ${
+                      situation === value
+                        ? 'border-brand-600 bg-brand-50 text-brand-800'
+                        : 'border-slate-200 text-slate-600'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </fieldset>
+
+            <div className="relative group">
+              <div className="absolute -inset-1 bg-gradient-to-r from-brand-600 to-teal-500 rounded-3xl blur opacity-20 group-focus-within:opacity-40 transition-opacity" />
+              <div className="relative bg-white rounded-2xl shadow-xl border border-slate-100 p-2 flex flex-col sm:flex-row gap-2">
               <div className="flex-1 relative">
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
                 <Input 
@@ -142,7 +249,7 @@ export default function AddressOnboardingPage() {
               </div>
               <Button 
                 type="submit"
-                disabled={loading || !address.trim()}
+                disabled={loading || !address.trim() || !triggerType}
                 className="h-14 px-8 rounded-xl bg-slate-900 hover:bg-black text-white font-bold text-lg group transition-all"
               >
                 {loading ? (
@@ -154,6 +261,7 @@ export default function AddressOnboardingPage() {
                   </>
                 )}
               </Button>
+              </div>
             </div>
           </form>
 
@@ -161,11 +269,11 @@ export default function AddressOnboardingPage() {
           <div className="flex flex-wrap items-center justify-center gap-6 pt-6 opacity-60">
             <div className="flex items-center gap-2 text-sm font-medium text-slate-500">
               <Zap className="h-4 w-4 text-brand-600 fill-brand-600" />
-              AI-Powered Analysis
+              Evidence-bounded guidance
             </div>
             <div className="flex items-center gap-2 text-sm font-medium text-slate-500">
               <Sparkles className="h-4 w-4 text-purple-600 fill-purple-600" />
-              Zero Manual Entry
+              Works with limited home data
             </div>
           </div>
         </motion.div>

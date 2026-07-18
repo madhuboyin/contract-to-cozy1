@@ -68,9 +68,17 @@ export default function ConfirmOnboardingPage() {
       });
 
       if (response.success) {
+        const propertyId = response.data?.id;
+        if (!propertyId || !data.activationContext) {
+          throw new Error('Trigger-first activation context is missing.');
+        }
+        const contextResponse = await api.captureEntryContext(propertyId, data.activationContext);
+        if (!contextResponse.success) {
+          throw new Error(contextResponse.message || 'Unable to save activation context.');
+        }
         setSuccess(true);
         await fetch('/api/onboarding-lookup-session', { method: 'DELETE' });
-        toast({ title: "Home Claimed!", description: "Welcome to your command center." });
+        toast({ title: "Home added", description: "Your first action is ready." });
 
         track('property_claimed', {
           zipCode: data.zipCode,
@@ -79,16 +87,16 @@ export default function ConfirmOnboardingPage() {
         });
 
         const startedAt = Number(sessionStorage.getItem('onboarding_started_at'));
-        if (response.data?.id) {
+        if (propertyId) {
           track('property_onboarded', {
-            propertyId: response.data.id,
+            propertyId,
             durationSeconds: startedAt ? Math.max(0, Math.round((Date.now() - startedAt) / 1000)) : 0,
           });
         }
         sessionStorage.removeItem('onboarding_started_at');
 
         // Brief celebration delay before redirecting to dashboard
-        setTimeout(() => router.push('/dashboard'), 2000);
+        setTimeout(() => router.push(`/onboarding/first-value?propertyId=${encodeURIComponent(propertyId)}`), 1200);
       } else {
         toast({
           title: "Setup failed",
@@ -129,7 +137,7 @@ export default function ConfirmOnboardingPage() {
             </div>
             <div className="space-y-2">
               <h1 className="text-2xl font-bold text-slate-900">Welcome Home.</h1>
-              <p className="text-slate-500">Your digital twin is active and your first maintenance insights are ready.</p>
+              <p className="text-slate-500">We saved what brought you here and prepared an evidence-bounded first action.</p>
             </div>
             <Loader2 className="h-6 w-6 animate-spin text-brand-600 mx-auto" />
           </div>
@@ -139,9 +147,9 @@ export default function ConfirmOnboardingPage() {
               <div className="w-12 h-12 bg-brand-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
                 <Building className="h-6 w-6 text-brand-600" />
               </div>
-              <h1 className="text-2xl font-bold text-slate-900">Confirm Your Home</h1>
+              <h1 className="text-2xl font-bold text-slate-900">Confirm this home</h1>
               <p className="text-slate-500">
-                We'll link this verified record to your secure account.
+                We’ll connect the address to your selected goal and show the next useful action.
               </p>
             </div>
 
@@ -158,7 +166,7 @@ export default function ConfirmOnboardingPage() {
               </div>
               <div className="flex items-center gap-3 text-left">
                 <Sparkles className="h-5 w-5 text-purple-600 shrink-0" />
-                <p className="text-sm text-slate-600">Pre-populated records & tasks</p>
+                <p className="text-sm text-slate-600">Guidance limited to the evidence we actually have</p>
               </div>
             </div>
 
@@ -171,14 +179,14 @@ export default function ConfirmOnboardingPage() {
                 <Loader2 className="h-6 w-6 animate-spin" />
               ) : (
                 <>
-                  Claim and Continue
+                  Add home and see first action
                   <ArrowRight className="ml-2 h-5 w-5" />
                 </>
               )}
             </Button>
 
             <p className="text-xs text-slate-400">
-              By claiming, you agree to our Terms of Service and Privacy Policy.
+              By continuing, you agree to our Terms of Service and Privacy Policy.
             </p>
           </div>
         )}
