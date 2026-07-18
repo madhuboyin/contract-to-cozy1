@@ -1,4 +1,4 @@
-import { ShieldCheck, Hammer, BarChart2, BookOpen, Cpu, Sparkles, UserCog, ScrollText } from 'lucide-react';
+import { ShieldCheck, Hammer, BarChart2, BookOpen, Cpu, Sparkles, UserCog, ScrollText, Star } from 'lucide-react';
 import type { NavJob } from './jobsNavigation';
 
 /**
@@ -60,6 +60,15 @@ export const ADMIN_NAV: NavJob[] = [
     href: '/dashboard/admin/users',
     icon: UserCog,
     description: 'Search accounts, revoke sessions, change account status',
+    engines: [],
+    globalHref: true,
+  },
+  {
+    key: 'admin-review-moderation',
+    name: 'Review Moderation',
+    href: '/dashboard/admin/reviews',
+    icon: Star,
+    description: 'Approve, reject, flag, or restore provider reviews',
     engines: [],
     globalHref: true,
   },

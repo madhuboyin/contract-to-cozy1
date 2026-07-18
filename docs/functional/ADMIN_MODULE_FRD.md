@@ -168,6 +168,7 @@ immutable explanation of what happened.
 | Personalization | CURRENT — PARTIAL | Catalog visibility, aggregate quality, reviewed activation, question activation, definition pause/resume, kill switch | Structured review records, semantic diffs, content authoring decision, broader operational dashboard |
 | User & Account Support (Phase 1) | CURRENT — PARTIAL | Search by name/email, support-safe summary (verification, MFA, session count, homeowner/provider profile summary), revoke sessions, governed status transitions (ACTIVE/SUSPENDED/INACTIVE) with required reason | Case linkage, communication history, deeper property/booking access via case reason, correction of identity fields, self-service parity for admins acting on their own account (deliberately blocked for now) |
 | Audit Explorer v1 (Phase 1) | CURRENT — PARTIAL | Filtered/paginated read view over `AuditLog` (actor, entity, action, request ID, date range) | Only surfaces actions written via the standardized contract; pre-existing bespoke audit paths (personalization, provider credential decisions) are not aggregated; no saved views or export |
+| Review Moderation Queue (Phase 2) | CURRENT — PARTIAL | Pending+flagged queue and per-status browse, moderation detail (review, booking context, author/provider history counts), governed APPROVE/REJECT/FLAG/RESTORE decisions with required reason, moderator attribution on the review, full audit incl. optional policy version; admins who are a party to a review cannot moderate it | Automated abuse/fraud signals, policy-reference display, case creation/escalation ("request investigation"), notifications to author/provider on decisions, bulk actions |
 
 ### 4.3 API-only and foundational capabilities
 
@@ -748,16 +749,30 @@ Every sensitive action shall support, as applicable:
 
 - Review moderation fields exist in the schema.
 - Incident logging includes safety/privacy incident foundations.
-- No unified moderation or trust-and-safety ADMIN workspace exists.
+- Review Moderation Queue is CURRENT — PARTIAL (Phase 2 slice at
+  `/dashboard/admin/reviews`): pending+flagged queue, moderation detail with
+  booking context and author/provider history counts, governed
+  approve/reject/flag/restore with required reason and moderator attribution,
+  audited under `REVIEW_MODERATE` with optional policy version. Automated
+  signals, policy-reference display, and "request investigation" (case
+  creation) remain PLANNED below.
+- No broader trust-and-safety ADMIN workspace (safety/abuse cases) exists.
 
 #### Target requirements — PLANNED
 
-- Moderation queue for pending and flagged reviews.
+- Moderation queue for pending and flagged reviews. **SHIPPED** (see current
+  state above).
 - Show review, booking context, author/provider history, automated signals, and
-  policy references without exposing unrelated private data.
+  policy references without exposing unrelated private data. **PARTIAL** —
+  booking context and history counts shipped; automated signals and policy
+  references not started.
 - Actions: approve, reject, flag/escalate, restore, and request investigation.
-- Moderation decisions require reason and moderator attribution.
-- Maintain policy version used for the decision.
+  **PARTIAL** — approve/reject/flag/restore shipped; request investigation
+  needs case management (Phase 1 open item).
+- Moderation decisions require reason and moderator attribution. **SHIPPED.**
+- Maintain policy version used for the decision. **PARTIAL** — the API accepts
+  an optional `policyVersion` recorded in the audit trail, but no policy
+  registry exists yet, so nothing enforces or suggests one.
 - Abuse/fraud signals create reviewable cases; models/signals do not directly
   ban users or providers.
 - Safety incidents support severity, containment, linked entities, evidence,
@@ -1249,14 +1264,28 @@ dashboard, search, unified entity pattern, and case management remain PLANNED
 
 ### Phase 2 — Provider, marketplace, booking, and trust operations
 
-**Status:** Provider compliance partially CURRENT; remaining PLANNED
+**Status:** Started — review moderation queue shipped; provider compliance
+partially CURRENT (pre-dates this FRD); remaining PLANNED
 
-- Expand Provider Compliance into full Provider Operations.
-- Provider directory, renewal, expiry, appeals, risk/performance context.
-- Booking operations and escalation timeline.
-- Review moderation queue.
-- Safety/abuse case types.
-- Operational notifications and work queues.
+- [ ] Expand Provider Compliance into full Provider Operations. **Not started.**
+- [ ] Provider directory, renewal, expiry, appeals, risk/performance context.
+      **Not started.**
+- [ ] Booking operations and escalation timeline. **Not started.**
+- [x] Review moderation queue. Shipped at `/dashboard/admin/reviews` under
+      `REVIEW_MODERATE`: pending+flagged queue (oldest first) plus per-status
+      browse, detail view with booking context and author/provider history
+      counts, governed APPROVE/REJECT/FLAG/RESTORE transitions with required
+      reason, moderator attribution (`moderatedAt`/`moderatedBy`), and full
+      audit including optional policy version. FLAG on an approved review
+      pulls it from public view; RESTORE returns a rejected/flagged review to
+      PENDING rather than re-publishing. Admins who authored or received a
+      review cannot moderate it. No schema changes were needed — the existing
+      `Review.status`/`moderatedAt`/`moderatedBy` fields carry the workflow,
+      and public provider-review reads already filter to APPROVED. Automated
+      signals, policy references, and "request investigation" remain open
+      (see §10.5).
+- [ ] Safety/abuse case types. **Not started.**
+- [ ] Operational notifications and work queues. **Not started.**
 
 ### Phase 3 — Payments, refunds, disputes, and privacy
 
@@ -1452,6 +1481,8 @@ For each delivered phase:
 | User & Account Support backend (Phase 1) | `apps/backend/src/services/adminUserSupport.service.ts`, `apps/backend/src/routes/adminUserSupport.routes.ts` |
 | Audit Explorer v1 UI (Phase 1) | `apps/frontend/src/app/(dashboard)/dashboard/admin/audit/page.tsx` |
 | Audit Explorer v1 backend (Phase 1) | `apps/backend/src/services/adminAuditExplorer.service.ts`, `apps/backend/src/routes/adminAuditExplorer.routes.ts` |
+| Review Moderation Queue UI (Phase 2) | `apps/frontend/src/app/(dashboard)/dashboard/admin/reviews/page.tsx` |
+| Review Moderation Queue backend (Phase 2) | `apps/backend/src/services/adminReviewModeration.service.ts`, `apps/backend/src/routes/adminReviewModeration.routes.ts` |
 | Booking domain/admin foundation | `apps/backend/src/services/booking.service.ts` |
 | Account lifecycle/deletion | `apps/backend/src/services/auth.service.ts`, `apps/backend/src/controllers/user.controller.ts`, `apps/backend/src/services/accountDeletionCascade.service.ts` |
 | Core domain and audit schema | `apps/backend/prisma/schema.prisma` |
