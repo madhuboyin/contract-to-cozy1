@@ -91,7 +91,7 @@ This audit compares the current repository against `docs/product/ContractToCozy_
 - notifications and cadence;
 - trust, safety, commercial integrity, privacy, and transfer;
 - measurement and product operations; and
-- implementation dependencies, migration order, and acceptance criteria.
+- implementation dependencies, cutover order, and acceptance criteria.
 
 ### Evidence reviewed
 
@@ -124,6 +124,19 @@ This is a source and architecture audit, not a production-behavior certification
 - that the framework's market hypotheses have been proven.
 
 Those are explicit validation workstreams in the implementation plan.
+
+### Pre-user delivery assumption
+
+As of this audit, ContractToCozy has no real users and no production user data that must be preserved. The implementation plan therefore assumes a clean pre-launch cutover:
+
+- no user-data backfill;
+- no legacy-data reconciliation;
+- no dual-read or dual-write compatibility period;
+- no preservation of synthetic development records;
+- direct Prisma schema changes when a phase requires them; and
+- no database migration scripts created as part of this plan or its implementation work. The repository owner will generate and apply database migrations separately.
+
+Development and test databases may be reset and reseeded after schema changes. Compatibility work should be retained only where it protects code integration, saved internal test fixtures, or external contracts that are independently known to exist—not for hypothetical users.
 
 ---
 
@@ -540,7 +553,7 @@ Recommended concepts:
 | Active trigger | Repair, replacement, quote, maintenance backlog, insurance, renewal, project, cost planning, other | Immediate intent and activation |
 | Trigger entity | HVAC system, roof, policy, project, document, free-text concern | Scope guidance and context capture |
 
-Add these fields to an activation/entry record associated with the property and user rather than overloading `HomeownerProfile.segment`. Retain the legacy segment temporarily for compatibility, then remove it from business-rule eligibility.
+Add these fields to an activation/entry record associated with the property and user rather than overloading `HomeownerProfile.segment`. Because there are no real users, replace segment-based business rules directly once the new context policy is implemented; do not build a legacy segment compatibility layer.
 
 ### 5.4 Major-event contract
 
@@ -584,6 +597,8 @@ Every displayed fact must offer source/freshness and an appropriate correction p
 ### Delivery assumptions
 
 The estimates assume one stable cross-functional squad with product, design, two frontend engineers, two backend/platform engineers, data/analytics support, QA automation support, and part-time domain/trust review. “Sprint” means two weeks. Estimates are ranges for sequencing, not commitments.
+
+The database is treated as pre-launch and disposable. When a phase requires persistence changes, update `apps/backend/prisma/schema.prisma`, generated client types, seeds, fixtures, and application code. Do not create Prisma or SQL migration scripts; the repository owner will perform the database migration separately.
 
 ### Phase 0 — Align contracts, evidence, and baseline
 
@@ -649,7 +664,7 @@ The estimates assume one stable cross-functional squad with product, design, two
   - `firstValueType` / `firstValueAt`;
   - `firstActionResolvedAt`; and
   - source and consent metadata.
-- Keep `HomeownerSegment` during migration, but stop using it as the only eligibility rule.
+- Remove direct `HomeownerSegment` eligibility checks as the new context policy is adopted. Delete the enum and profile field once all application references are removed; no data backfill or compatibility mapping is required.
 
 #### Experience changes
 
@@ -692,7 +707,7 @@ Build one responsive Home surface:
 4. **Home at a glance** — systems, recent changes, coverage, and record completeness.
 5. **Ask ContractToCozy** — property-grounded input with suggested questions and controlled actions.
 
-Consolidate navigation to the target shell. Preserve old routes with analytics-enabled redirects and contextual deep links.
+Consolidate navigation to the target shell. Update all internal links, notification URLs, tests, and guidance route templates in the same cutover. Temporary development redirects are optional, but long-lived user-compatibility redirects are not required before launch.
 
 #### Acceptance criteria
 
@@ -701,7 +716,7 @@ Consolidate navigation to the target shell. Preserve old routes with analytics-e
 - A source action appears once in the default experience.
 - All default actions support at least complete, defer/snooze, dismiss/not relevant, and correction where applicable.
 - Specialized tools are reachable from context but are not default navigation peers.
-- Route redirect and dead-end metrics show no regression during migration.
+- Route-contract tests confirm that every supported CTA and journey step reaches its intended destination after cutover.
 
 ### Phase 3 — Complete Major Repair / System Replacement
 
@@ -867,9 +882,9 @@ Do not launch additional major moments until the repair/replacement journey demo
 | Epic | Priority | Scope | Key dependencies | Definition of done |
 | --- | --- | --- | --- | --- |
 | PF-001 Canonical Home Action contract | P0 | Schema, DTO, adapters, identity, lifecycle | None | All default action sources map to one validated contract |
-| PF-002 Trigger and entry taxonomy | P0 | Entry path, ownership state, property origin, trigger | None | Taxonomy approved and versioned; legacy mapping defined |
+| PF-002 Trigger and entry taxonomy | P0 | Entry path, ownership state, property origin, trigger | None | Taxonomy approved and versioned; clean schema and code cutover defined |
 | PF-003 North-star lineage | P0 | Signal-to-outcome IDs and metric definitions | PF-001 | Admin query can trace eligible important actions to resolution |
-| PF-004 Route disposition | P0 | Inventory, keep/merge/hide/redirect/retire decisions | None | 100% homeowner routes classified with owner and migration |
+| PF-004 Route disposition | P0 | Inventory, keep/merge/hide/redirect/retire decisions | None | 100% homeowner routes classified with owner and cutover action |
 | PF-005 Product language alignment | P0 | README, landing, onboarding, navigation, empty states | PF-002 | Default copy matches framework language and avoids unsupported certainty |
 | PF-006 Trigger-first onboarding | P1 | Trigger capture, flexible input, low-context fallback | PF-002 | Existing owner reaches guidance without inspection requirement |
 | PF-007 Home Health Baseline | P1 | Evidence-bounded baseline with known/missing/stale | PF-006 | Baseline exposes evidence and no fabricated specificity |
@@ -897,7 +912,7 @@ Do not launch additional major moments until the repair/replacement journey demo
 
 ---
 
-## 8. Route and capability migration strategy
+## 8. Route and capability cutover strategy
 
 ### Retain and elevate
 
@@ -940,45 +955,50 @@ These should open when a recommendation, journey, record, or explicit command ma
 - duplicate global/property routes;
 - features that cannot identify an observable homeowner outcome or record learning.
 
-### Migration controls
+### Cutover controls
 
-- Preserve URLs through redirects for at least one release cycle.
-- Emit `route_redirected`, source CTA, destination, and completion telemetry.
-- Maintain a rollback flag for the new shell.
-- Do not delete a route until inbound links, notification URLs, saved links, tests, and journey templates are migrated.
+- No real-user URL preservation period is required.
+- Update inbound application links, notification URLs, tests, analytics route names, and journey templates before deleting a route.
+- Use temporary redirects only where they simplify incremental development; remove unnecessary compatibility redirects before launch.
+- Maintain a rollback flag for the new shell until internal acceptance testing is complete.
+- Do not delete a route until repository references and generated/test fixtures have been updated.
 - Update `routePath` values and add route-contract tests because guidance steps currently copy route paths at creation.
 
 ---
 
-## 9. Data and migration plan
+## 9. Schema evolution and database reset plan
+
+### Database policy
+
+There are no real users and no production user data to migrate. Schema work should optimize for the target model rather than preserve unused legacy structures.
+
+- Make required model, field, enum, relation, index, and constraint changes directly in `apps/backend/prisma/schema.prisma`.
+- Update application code, generated Prisma client types, seed data, factories, fixtures, and tests in the same implementation change.
+- Do not create files under `apps/backend/prisma/migrations/` and do not create standalone SQL migration scripts.
+- The repository owner is responsible for generating, reviewing, and applying database migrations.
+- Reset and reseed development/test databases after the owner applies the schema migration.
+- Do not implement backfill jobs, reconciliation reports, compatibility views, or dual-read/dual-write paths.
 
 ### Schema changes
 
-1. Add versioned entry/trigger context.
+1. Add versioned entry/trigger context, then remove the binary segment field and enum after code references are replaced.
 2. Add safety tier and commercial disclosure references to recommendation-producing definitions.
 3. Add stable action lineage and source references.
 4. Add typed journey-entity relationships or a generic audited link table.
 5. Add completion verification and follow-up state.
 6. Add provider ranking snapshot and commercial relationship records.
-7. Add canonical notification preference records.
+7. Replace distributed notification-preference storage with canonical notification preference records.
 
-### Backfill
+These changes are phase deliverables, not prerequisites for maintaining this planning document. No immediate Prisma schema edit is necessary merely to record the revised implementation strategy.
 
-- Map existing `HOME_BUYER` users with closing dates to ownership state; do not infer property origin.
-- Map `EXISTING_OWNER` to established/recent only when evidence supports it; otherwise mark unknown.
-- Backfill guidance and orchestration actions into action lineage without changing source records.
-- Preserve existing snooze, dismiss, completion, and suppression history.
-- Create journey links from existing scalar `guidanceJourneyId` fields where valid.
-- Mark unknown commercial relationships explicitly as “not recorded,” not “none.”
-- Do not fabricate first-value or trigger history for legacy users.
+### Clean cutover sequence
 
-### Compatibility
-
-- Dual-read legacy and canonical action APIs during dashboard migration.
-- Dual-write only where rollback requires it; prefer adapters over duplicative persistence.
-- Version contracts and templates.
-- Provide a reconciliation report for source action state versus canonical state.
-- Add idempotent repair scripts for broken journey links and stale route paths.
+1. Edit the target Prisma schema without adding a migration script.
+2. Update seeds, factories, fixtures, API contracts, services, and UI types.
+3. Remove obsolete segment, preference, relationship, and action code paths rather than retaining compatibility branches.
+4. Run Prisma validation and TypeScript checks against the updated schema.
+5. Hand the schema diff to the repository owner for migration generation and application.
+6. Reset/reseed non-production databases and run contract, domain, and end-to-end tests.
 
 ---
 
@@ -1118,7 +1138,7 @@ Maintain reviewed fixtures for:
 | --- | --- | --- |
 | Integration complexity | Canonical layer becomes another parallel system | Start with adapters and one ledger; prohibit new standalone action states |
 | Route migration | Broken saved links, notification links, and journey paths | Redirect registry, context-preservation tests, telemetry, staged rollout |
-| Schema breadth | Large migration destabilizes mature features | Add orthogonal records, backfill conservatively, dual-read during transition |
+| Schema breadth | A broad clean cutover can break many application references | Sequence schema changes by phase, update all references atomically, reset/reseed test data, and validate before owner-managed migration |
 | Recommendation inconsistency | Common UI masks different quality underneath | Tier validation, golden fixtures, evidence requirements, domain review |
 | False confidence | Public or inferred data appears verified | Evidence-derived labels only; unknown and stale are first-class states |
 | Alert fatigue | Unified feed increases volume | Ranking, caps, digest, suppression, relevance feedback, usefulness metric |
@@ -1150,7 +1170,7 @@ Maintain reviewed fixtures for:
 - Weekly action-quality review using real examples, overrides, missing context, and failures.
 - Biweekly journey review focused on blocked time and completion, not screen delivery.
 - Monthly trust review by tier, model/rule version, segment/trigger, and provider relationship.
-- Route and feature council until the migration backlog is complete.
+- Route and feature council until the consolidation backlog is complete.
 - Post-launch review at 2, 6, and 12 weeks for each material recommendation or journey.
 
 ---
@@ -1172,7 +1192,7 @@ Maintain reviewed fixtures for:
 - Deliver flexible trigger context capture and low-context fallback.
 - Implement Home Action adapters for guidance, maintenance, incidents, recalls, and personalization.
 - Launch unified Home alpha to internal/pilot users.
-- Start legacy navigation redirect testing.
+- Update and test all internal navigation, notification, and journey-template routes for the new shell.
 - Deliver evidence-bounded Home Health Baseline and first 12-month plan.
 
 ### Days 61–90: Action resolution and repair closure beta
@@ -1181,7 +1201,7 @@ Maintain reviewed fixtures for:
 - Add major-repair execution, verification, and record write-back stages.
 - Implement provider ranking/disclosure beta.
 - Launch tier validation for material financial recommendations.
-- Start weekly Home Brief and unified preference-service migration.
+- Start weekly Home Brief and cut over to the unified preference service.
 - Measure activation, first action resolution, journey progression, explanation comprehension, and noise.
 
 ### Day-90 decision
