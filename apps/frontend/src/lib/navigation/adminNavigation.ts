@@ -1,4 +1,4 @@
-import { ShieldCheck, Hammer, BarChart2, BookOpen, Cpu, Sparkles } from 'lucide-react';
+import { ShieldCheck, Hammer, BarChart2, BookOpen, Cpu, Sparkles, UserCog, ScrollText } from 'lucide-react';
 import type { NavJob } from './jobsNavigation';
 
 /**
@@ -51,6 +51,24 @@ export const ADMIN_NAV: NavJob[] = [
     href: '/dashboard/worker-jobs',
     icon: Cpu,
     description: 'Background job registry',
+    engines: [],
+    globalHref: true,
+  },
+  {
+    key: 'admin-user-support',
+    name: 'User & Account Support',
+    href: '/dashboard/admin/users',
+    icon: UserCog,
+    description: 'Search accounts, revoke sessions, change account status',
+    engines: [],
+    globalHref: true,
+  },
+  {
+    key: 'admin-audit-explorer',
+    name: 'Audit Explorer',
+    href: '/dashboard/admin/audit',
+    icon: ScrollText,
+    description: 'Trace admin actions by actor, entity, or request',
     engines: [],
     globalHref: true,
   },

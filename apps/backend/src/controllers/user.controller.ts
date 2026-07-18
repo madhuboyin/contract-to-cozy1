@@ -20,7 +20,7 @@ const updateProfileSchema = z.object({
   zipCode: z.string().length(5).optional(),
 });
 
-async function deactivateProviderFootprint(tx: Prisma.TransactionClient, userId: string) {
+export async function deactivateProviderFootprint(tx: Prisma.TransactionClient, userId: string) {
   await tx.providerProfile.updateMany({
     where: { userId },
     data: { status: 'INACTIVE' },

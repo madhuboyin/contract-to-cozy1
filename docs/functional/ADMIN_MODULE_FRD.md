@@ -150,7 +150,9 @@ immutable explanation of what happened.
 | Shared client route guard | CURRENT | `useAdminGuard` handles loading, unauthenticated, forbidden, and offline states |
 | Frontend middleware protection | CURRENT | Known ADMIN page prefixes are restricted before page execution |
 | Backend role protection | CURRENT | Existing admin APIs use ADMIN role checks |
-| MFA | CURRENT — PARTIAL | Applied to most sensitive admin route groups; not yet consistent across all admin mutations |
+| MFA | CURRENT | Applied to every ADMIN-role-gated route group found in the codebase, including the previously-missing DIY/financing/permit-source admin routes and an undocumented gap in `neighborhoodIntelligence.routes.ts` (Phase 0) |
+| ADMIN capability enforcement | CURRENT — PARTIAL | Named-capability grants (`AdminCapabilityGrant`) enforced via `requireCapability` on every existing admin route group, layered on top of the ADMIN role check; grant/revoke API live at `/api/admin/capabilities` (self-grant blocked, audited); no frontend capability-management UI yet (Phase 0) |
+| Structured admin audit contract | FOUNDATION | `adminAudit.service.ts` standardizes actor/action/entity/reason/capability/request-correlation for new admin actions (via a new `AuditLog.metadata` column); pre-existing bespoke audit paths (personalization, provider credential decisions, etc.) have not been migrated to it, and there is still no Audit Explorer UI (Phase 0) |
 | Inactivity timeout | CURRENT | 15-minute ADMIN idle timeout with warning and cross-tab behavior |
 | Admin console states | CURRENT | Shared loading, empty, error, forbidden, and offline UI components |
 
@@ -164,6 +166,8 @@ immutable explanation of what happened.
 | Knowledge Admin | CURRENT — PARTIAL | Article list, create/edit, sections, categories/tags selection, product tool/CTA linking, lifecycle field | Immutable revisions, separate submit/approve/publish actions, scheduling, preview, rollback, actor audit, taxonomy CRUD |
 | Worker Jobs | CURRENT — PARTIAL | Registry, job metadata, recent runs, queue stats, supported manual trigger | Incident correlation, retry policies, run detail/log links, approvals for dangerous jobs, scheduled-change controls |
 | Personalization | CURRENT — PARTIAL | Catalog visibility, aggregate quality, reviewed activation, question activation, definition pause/resume, kill switch | Structured review records, semantic diffs, content authoring decision, broader operational dashboard |
+| User & Account Support (Phase 1) | CURRENT — PARTIAL | Search by name/email, support-safe summary (verification, MFA, session count, homeowner/provider profile summary), revoke sessions, governed status transitions (ACTIVE/SUSPENDED/INACTIVE) with required reason | Case linkage, communication history, deeper property/booking access via case reason, correction of identity fields, self-service parity for admins acting on their own account (deliberately blocked for now) |
+| Audit Explorer v1 (Phase 1) | CURRENT — PARTIAL | Filtered/paginated read view over `AuditLog` (actor, entity, action, request ID, date range) | Only surfaces actions written via the standardized contract; pre-existing bespoke audit paths (personalization, provider credential decisions) are not aggregated; no saved views or export |
 
 ### 4.3 API-only and foundational capabilities
 
@@ -174,11 +178,10 @@ immutable explanation of what happened.
 | Permit data sources | API-ONLY | List/create/update/status/test endpoints | Add integrations UI with sanitized diagnostics and secret references |
 | Release gates | API-ONLY | Read all gates or one tool gate | Add release-readiness workspace and deployment correlation |
 | Booking administration | FOUNDATION | Booking service recognizes ADMIN visibility/edit/cancel in places | Build dedicated booking operations workflow; do not expose homeowner UI as admin tooling |
-| User suspension state | FOUNDATION | `User.status` and authentication enforcement support suspended/inactive accounts | Build governed user/account support actions and history |
 | Payments and refunds | FOUNDATION | Payment status and refund fields exist | Build payment operations, refund approval, reconciliation, and dispute workflows |
 | Review moderation | FOUNDATION | Review moderation status, moderator, and timestamp exist | Build moderation queue and actions |
 | Account deletion | FOUNDATION | User-owned account deletion cascade exists | Build privacy case intake, verification, legal hold, execution, and audit |
-| Generic audit storage | FOUNDATION | `AuditLog` supports actor, entity, before/after, request, trace, and signature fields | Standardize admin action audit contract and explorer |
+| Generic audit storage | FOUNDATION | `AuditLog` supports actor, entity, before/after, request, trace, and signature fields | Standardize admin action audit contract and explorer — **DONE (Phase 0/1):** see `adminAudit.service.ts` and the Audit Explorer v1 row in §4.2; unifying pre-existing bespoke audit paths into it is still open |
 | System settings | FOUNDATION | Generic `SystemSetting` model exists | Register allowed settings; never expose arbitrary key/value editing |
 | Catalogs and configuration | MIXED | Code catalogs, Prisma catalogs, bootstrap data, and feature-specific admin behavior coexist | Add governed catalog section with explicit source ownership |
 
@@ -187,17 +190,33 @@ immutable explanation of what happened.
 1. There is no ADMIN landing dashboard or unified work queue.
 2. There is no global entity search across users, providers, properties,
    bookings, payments, cases, and catalog entries.
-3. ADMIN is a binary application role; internal responsibilities are not
-   capability-scoped.
-4. There is no user/account support workspace.
+3. ~~ADMIN is a binary application role; internal responsibilities are not
+   capability-scoped.~~ **RESOLVED (Phase 0):** named-capability grants now
+   enforce internal responsibilities on top of the ADMIN role; see §8.2/§8.3.
+4. ~~There is no user/account support workspace.~~ **PARTIALLY RESOLVED
+   (Phase 1):** search, support-safe summary, session revocation, and
+   governed status transitions now exist at `/dashboard/admin/users`. Case
+   linkage, communication history, and deeper property/booking access via
+   case reason are still open (§10.1).
 5. There is no dedicated booking, payment, refund, dispute, or payout operations
    workspace.
 6. There is no review/content-abuse moderation queue.
 7. There is no cross-domain case-management model for assignments, notes,
    escalation, SLA, attachments, and resolution.
 8. Admin API namespaces and MFA application are inconsistent across route groups.
+   **PARTIALLY RESOLVED (Phase 0):** MFA is now applied consistently on every
+   ADMIN-role-gated route found in the codebase. Namespace convergence is
+   still open — `knowledgeHubAdmin.routes.ts` uses `/knowledge/admin/...`
+   instead of `/admin/knowledge/...`, and most admin routes are still mounted
+   via bare `app.use('/api', ...)` rather than an `/api/admin` prefix router
+   (the URL paths already resolve correctly; only the Express mounting
+   convention is inconsistent).
 9. Auditing is fragmented across generic audit logs, structured domain events,
    application logging, and personalization-specific audit events.
+   **PARTIALLY RESOLVED (Phase 0):** a standardized write-path contract
+   (`adminAudit.service.ts`) now exists for new admin actions, but existing
+   bespoke audit paths have not been migrated to it, and there is still no
+   Audit Explorer.
 10. Several operational APIs are undiscoverable from the ADMIN navigation.
 11. Content and configuration publication controls are feature-specific rather
     than platform-standard.
@@ -387,7 +406,7 @@ authorized to use; hidden navigation is not a substitute for API authorization.
 | Persona | Primary responsibilities | Target status |
 |---|---|---|
 | Platform Administrator | Admin access, security configuration, break-glass governance | PLANNED |
-| Customer Support Operator | Users, properties, cases, notifications, guided recovery | PLANNED |
+| Customer Support Operator | Users, properties, cases, notifications, guided recovery | CURRENT — PARTIAL (user/account actions only; no cases/notifications yet) |
 | Provider Operations Reviewer | Provider onboarding, credentials, services, compliance | CURRENT — PARTIAL |
 | Marketplace Operations Operator | Bookings, scheduling escalations, disputes, provider/customer coordination | PLANNED |
 | Finance Operations Operator | Payments, refunds, reconciliation, financing configuration | PLANNED |
@@ -1167,29 +1186,66 @@ Test at least:
 
 ### Phase 0 — Foundation hardening
 
-**Status:** CURRENT foundation plus PLANNED gaps
+**Status:** Mostly shipped (commit `2167d20` + a same-day MFA follow-up fix)
 
-- Preserve dedicated ADMIN shell, route guard, idle timeout, and command palette.
-- Standardize `/api/admin` route conventions.
-- Apply MFA consistently to all admin mutations, including DIY, financing, and
-  permit configuration.
-- Introduce capability enforcement and internal role bundles.
-- Standardize structured admin audit contract.
-- Add action-risk classification, idempotency conventions, and approval policy.
-- Inventory and register every current/API-only admin capability.
+- [x] Preserve dedicated ADMIN shell, route guard, idle timeout, and command
+      palette. *(pre-existing, unchanged)*
+- [ ] Standardize `/api/admin` route conventions. **Not done.** URL paths
+      already resolve to `/admin/...` for nearly every route, but the Express
+      mounting convention and `knowledgeHubAdmin.routes.ts`'s
+      `/knowledge/admin/...` ordering are still inconsistent — deferred, see
+      §4.4 gap 8.
+- [x] Apply MFA consistently to all admin mutations, including DIY, financing,
+      and permit configuration. Also caught and fixed an undocumented gap in
+      `neighborhoodIntelligence.routes.ts` found during verification.
+- [x] Introduce capability enforcement and internal role bundles. 36-capability
+      catalog + 12 persona bundles (`config/adminCapabilities.ts`), enforced via
+      `requireCapability` on every existing admin route group, plus a
+      grant/revoke API (`/api/admin/capabilities`, gated by `ADMIN_ROLE_MANAGE`,
+      self-grant blocked).
+- [x] Standardize structured admin audit contract. `adminAudit.service.ts`
+      + new `AuditLog.metadata` column. Applies to newly-written admin
+      actions only — pre-existing bespoke audit paths were not migrated.
+- [~] Add action-risk classification, idempotency conventions, and approval
+      policy. Per-capability risk level (`LOW`/`MEDIUM`/`HIGH`/`CRITICAL`)
+      shipped as a foundation; idempotency conventions and the approval
+      policy itself are **not built** — that's FR-6, tracked for Phase 1+.
+- [x] Inventory and register every current/API-only admin capability. The
+      capability catalog *is* the inventory; every current/API-only admin
+      route group now enforces one of its capabilities.
 
 ### Phase 1 — Command Center, search, and support foundation
 
-**Status:** PLANNED
+**Status:** Started — user/account support and Audit Explorer v1 shipped;
+dashboard, search, unified entity pattern, and case management remain PLANNED
 
-- ADMIN landing dashboard.
-- Global search.
-- Unified entity page pattern.
-- User/account and property support workspace.
-- Session revocation and governed account status actions.
-- Cross-domain case management, assignment, notes, SLA, and communication
-  records.
-- Audit Explorer v1.
+- [ ] ADMIN landing dashboard. **Not started.**
+- [ ] Global search. **Not started.**
+- [ ] Unified entity page pattern. **Not started** — the new User & Account
+      Support page (below) uses a bespoke layout, not a shared pattern; the
+      pattern should still be extracted once a second entity type (e.g.
+      provider) needs an equivalent page.
+- [x] User/account and property support workspace. **Property support is
+      out of scope so far** — this shipped as user/account support only:
+      search by name/email, support-safe summary (verification, MFA, active
+      session count, homeowner/provider profile summary), at
+      `/dashboard/admin/users`. No property-specific view yet.
+- [x] Session revocation and governed account status actions. Both ship as
+      part of the workspace above — `USER_SESSION_REVOKE` revokes all active
+      refresh sessions and bumps `tokenVersion`; `USER_STATUS_CHANGE` supports
+      ACTIVE/SUSPENDED/INACTIVE transitions, mirrors the existing
+      self-service deactivation transaction (including deactivating a
+      provider's footprint), and blocks an admin from targeting their own
+      account. Reactivation deliberately does not auto-restore a provider's
+      service listings.
+- [ ] Cross-domain case management, assignment, notes, SLA, and communication
+      records. **Not started.** Every governed action above requires a typed
+      reason and is fully audited, but nothing yet creates a case record or
+      links these actions to one.
+- [x] Audit Explorer v1. Filtered/paginated read view at
+      `/dashboard/admin/audit` over `AuditLog` (actor, entity type/id, action,
+      request ID, date range). Only surfaces actions written through the new
+      standardized contract — see §4.4 gap 9.
 
 ### Phase 2 — Provider, marketplace, booking, and trust operations
 
@@ -1387,6 +1443,15 @@ For each delivered phase:
 | Financing admin routes | `apps/backend/src/routes/financing.routes.ts` |
 | Permit source routes | `apps/backend/src/routes/permitTracker.routes.ts` |
 | Release gates | `apps/backend/src/routes/releaseGate.routes.ts` |
+| Capability catalog + persona bundles (Phase 0) | `apps/backend/src/config/adminCapabilities.ts` |
+| Capability grant/revoke enforcement (Phase 0) | `apps/backend/src/services/adminCapability.service.ts`, `apps/backend/src/middleware/adminCapability.middleware.ts` |
+| Capability grant/revoke API (Phase 0) | `apps/backend/src/routes/adminCapability.routes.ts`, `apps/backend/src/controllers/adminCapability.controller.ts` |
+| Standardized admin audit write path (Phase 0) | `apps/backend/src/services/adminAudit.service.ts` |
+| Admin capability bootstrap (Phase 0, run manually post-`db push`) | `apps/backend/scripts/adminCapabilityBootstrap.ts` |
+| User & Account Support UI (Phase 1) | `apps/frontend/src/app/(dashboard)/dashboard/admin/users/page.tsx` |
+| User & Account Support backend (Phase 1) | `apps/backend/src/services/adminUserSupport.service.ts`, `apps/backend/src/routes/adminUserSupport.routes.ts` |
+| Audit Explorer v1 UI (Phase 1) | `apps/frontend/src/app/(dashboard)/dashboard/admin/audit/page.tsx` |
+| Audit Explorer v1 backend (Phase 1) | `apps/backend/src/services/adminAuditExplorer.service.ts`, `apps/backend/src/routes/adminAuditExplorer.routes.ts` |
 | Booking domain/admin foundation | `apps/backend/src/services/booking.service.ts` |
 | Account lifecycle/deletion | `apps/backend/src/services/auth.service.ts`, `apps/backend/src/controllers/user.controller.ts`, `apps/backend/src/services/accountDeletionCascade.service.ts` |
 | Core domain and audit schema | `apps/backend/prisma/schema.prisma` |

@@ -34,6 +34,9 @@ const ADMIN_CONSOLE_PREFIXES = [
   '/dashboard/analytics-admin',
   '/dashboard/knowledge-admin',
   '/dashboard/worker-jobs',
+  '/dashboard/admin/personalization',
+  '/dashboard/admin/users',
+  '/dashboard/admin/audit',
 ] as const;
 const NO_STORE_PAGE_PREFIXES = [
   ...SENSITIVE_PAGE_PREFIXES,

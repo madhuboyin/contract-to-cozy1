@@ -1,7 +1,7 @@
 // apps/backend/src/neighborhoodIntelligence/neighborhoodIntelligence.routes.ts
 
 import { Router } from 'express';
-import { authenticate, requireRole } from '../middleware/auth.middleware';
+import { authenticate, requireMfa, requireRole } from '../middleware/auth.middleware';
 import { UserRole } from '../types/auth.types';
 import { propertyAuthMiddleware, requireHouseholdRole } from '../middleware/propertyAuth.middleware';
 import { apiRateLimiter } from '../middleware/rateLimiter.middleware';
@@ -125,6 +125,7 @@ router.post(
 router.post(
   '/neighborhood-intelligence/ingest',
   requireRole(UserRole.ADMIN),
+  requireMfa,
   validateBody(ingestEventBodySchema),
   ingestNeighborhoodEvent,
 );
@@ -138,6 +139,7 @@ router.post(
 router.post(
   '/neighborhood-intelligence/events/:eventId/recompute',
   requireRole(UserRole.ADMIN),
+  requireMfa,
   recomputeEventMatches,
 );
 
