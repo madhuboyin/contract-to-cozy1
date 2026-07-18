@@ -18,6 +18,7 @@
     "audit:track3:pass": "node scripts/ui-audit/run-track3-pass.mjs",
     "qa:gates": "npm run qa:priority-routes && npm run qa:shared-primitives && npm run qa:visual-drift && npm run test:visual-contract",
     "test": "jest",
+    "test:property-context:e2e": "PROPERTY_CONTEXT_ACCEPTANCE_FIXTURE=1 npm run build && playwright test --config=playwright.property-context.config.ts",
     "test:visual-contract": "jest src/__tests__/priority-route-visual-contract.test.ts",
     "test:visual-contract:update": "jest src/__tests__/priority-route-visual-contract.test.ts -u",
     "test:watch": "jest --watch",

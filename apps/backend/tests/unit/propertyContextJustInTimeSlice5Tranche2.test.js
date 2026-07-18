@@ -73,7 +73,7 @@ test('shared panel announces latency and enforces accessible mobile controls', (
   assert.match(panel, /taking a little longer than usual/);
   assert.match(panel, /aria-labelledby=\{headingId\}/);
   assert.match(panel, /aria-busy=\{saving\}/);
-  assert.match(panel, /\[&_button\]:min-h-11/);
-  assert.match(panel, /\[&_input\]:min-h-11/);
+  assert.match(panel, /\[&_button\]:min-h-\[44px\]/);
+  assert.match(panel, /\[&_input\]:min-h-\[44px\]/);
   assert.doesNotMatch(panel, /window\.location\.reload/);
 });

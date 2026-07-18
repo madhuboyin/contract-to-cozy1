@@ -7,6 +7,10 @@ const {
 
 const nextConfig = {
   reactStrictMode: true,
+  // Keep build tracing and the dev bundler inside this application when a
+  // developer machine has unrelated lockfiles in a parent directory.
+  outputFileTracingRoot: __dirname,
+  turbopack: { root: __dirname },
   // Suppress the X-Powered-By: Next.js response header — avoids advertising
   // the framework version to attackers looking for known CVEs.
   poweredByHeader: false,

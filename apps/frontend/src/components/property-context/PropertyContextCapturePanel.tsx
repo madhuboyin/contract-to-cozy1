@@ -95,7 +95,7 @@ export function PropertyContextCapturePanel({
     : null;
 
   return (
-    <section className={`rounded-2xl border p-4 [&_button]:min-h-11 [&_input]:min-h-11 ${enhancement ? 'border-sky-200 bg-sky-50' : 'border-amber-200 bg-amber-50'}`} aria-live="polite" aria-busy={saving} aria-labelledby={headingId}>
+    <section className={`rounded-2xl border p-4 [&_button]:min-h-[44px] [&_input]:min-h-[44px] ${enhancement ? 'border-sky-200 bg-sky-50' : 'border-amber-200 bg-amber-50'}`} aria-live="polite" aria-busy={saving} aria-labelledby={headingId}>
       <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">{conflicted ? 'Resolve conflicting details' : stale ? 'Confirm current details' : enhancement ? 'Improve this result' : 'Required property detail'}</p>
       <h3 id={headingId} className="mt-1 font-semibold text-slate-950">{requirement.capture.title}</h3>
       <p className="mt-1 text-sm text-slate-800">{requirement.capture.question}</p>
