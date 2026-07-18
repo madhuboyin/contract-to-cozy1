@@ -42,7 +42,7 @@ export default function Hero() {
               Sign in
             </Link>
             <Link href="/signup" className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-700">
-              Create account
+              Create free account
             </Link>
           </div>
 
@@ -75,7 +75,7 @@ export default function Hero() {
                 onClick={() => setIsMenuOpen(false)}
                 className="inline-flex min-h-[44px] w-full items-center justify-center rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white"
               >
-                Create account
+                Create free account
               </Link>
             </div>
           </div>
@@ -87,27 +87,27 @@ export default function Hero() {
         eyebrow="The operating system for homeownership"
         title={
           <>
-            Your home&apos;s permanent
-            <span className="text-brand-700"> memory.</span>
+            Own your home
+            <span className="text-brand-700"> with confidence.</span>
           </>
         }
-        subtitle="Every document, repair, and decision — connected to your home, permanently."
+        subtitle="Stay ahead of what needs attention, uncover savings, and make better home decisions—with every record, repair, and project connected in one place."
         ctaLabel="Create free account"
         ctaHref="/signup"
         secondaryCtaLabel="Explore product"
         secondaryCtaHref="#features"
         proofItems={[
           {
-            label: 'Nothing gets lost',
-            detail: 'Every record, connected.',
+            label: 'Stay informed',
+            detail: 'Know what needs attention.',
           },
           {
-            label: 'Built for decades',
-            detail: 'More useful every year.',
+            label: 'Find savings',
+            detail: 'Surface rebates and opportunities.',
           },
           {
-            label: 'Complete context',
-            detail: 'Better future decisions.',
+            label: 'Build home context',
+            detail: 'Make better future decisions.',
           },
         ]}
       />

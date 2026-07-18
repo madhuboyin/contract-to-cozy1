@@ -5,37 +5,37 @@ const STEPS = [
   {
     number: '01',
     title: 'Buy',
-    description: 'Inspection · closing · warranties',
+    description: "Inspections, closing records, warranties, and purchase decisions begin the home's history.",
     iconToken: 'building-2',
   },
   {
     number: '02',
     title: 'Move in',
-    description: 'Appliances · utilities · setup',
+    description: 'Add utilities, appliances, service providers, setup tasks, and essential property details.',
     iconToken: 'search',
   },
   {
     number: '03',
     title: 'Own',
-    description: 'Costs · systems · neighborhood',
+    description: 'Track systems, costs, insurance, warranties, savings opportunities, and neighborhood context.',
     iconToken: 'calendar',
   },
   {
     number: '04',
     title: 'Maintain',
-    description: 'Service · repair · next care',
+    description: 'Stay ahead of recurring care, repairs, service records, and replacement planning.',
     iconToken: 'wrench',
   },
   {
     number: '05',
     title: 'Improve',
-    description: 'Projects · proof · value',
+    description: 'Plan projects, preserve proof of work, track costs, and understand long-term value.',
     iconToken: 'sparkles',
   },
   {
     number: '06',
     title: 'Sell',
-    description: 'Complete history transfers',
+    description: "Prepare disclosures, repairs, improvements, and records without rebuilding the home's story.",
     iconToken: 'key',
   },
 ];

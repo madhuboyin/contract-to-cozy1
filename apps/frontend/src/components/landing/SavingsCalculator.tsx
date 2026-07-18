@@ -3,7 +3,6 @@
 'use client';
 
 import { useState } from 'react';
-import Link from 'next/link';
 import { Lock, Sparkles } from 'lucide-react';
 import { landingStyles } from './landingStyles';
 
@@ -11,22 +10,12 @@ export default function SavingsCalculator() {
   const [location, setLocation] = useState('');
   const [price, setPrice] = useState('');
   const [closingDate, setClosingDate] = useState('');
-  const [results, setResults] = useState<any>(null);
+  const [showPreview, setShowPreview] = useState(false);
 
   const calculateSavings = (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Simple calculation logic
-    const numericPrice = parseInt(price.replace(/,/g, '')) || 0;
-    const timeSaved = 15; // hours
-    const moneySaved = Math.floor(numericPrice * 0.001 + 500); // ~$500-1000 savings
-    const providerCount = 24;
-
-    setResults({
-      timeSaved,
-      moneySaved,
-      providerCount,
-    });
+    setShowPreview(true);
   };
 
   const formatNumber = (num: string) => {
@@ -44,9 +33,9 @@ export default function SavingsCalculator() {
             Free, no account needed
           </span>
           <h2 className={`mt-4 ${landingStyles.heading}`}>
-            See what your home qualifies for
+            See what your home may qualify for
           </h2>
-          <p className={`mt-3 max-w-md ${landingStyles.body}`}>Tax credits, rebates, insurance savings, and refinancing opportunities tied to your property.</p>
+          <p className={`mt-3 max-w-md ${landingStyles.body}`}>Discover tax credits, rebates, insurance savings, and refinancing opportunities connected to your property.</p>
           <div className="mt-5 flex flex-wrap gap-2">
             {['Tax credits', 'Insurance', 'Utility rebates', 'Refinancing'].map((item) => (
               <span key={item} className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700">{item}</span>
@@ -131,33 +120,11 @@ export default function SavingsCalculator() {
           </form>
 
           {/* Results */}
-          {results && (
+          {showPreview && (
             <div className="mt-6 pt-6 border-t border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4 text-center">
-                Potential opportunities for your home
-              </h3>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div className="text-center p-3 bg-gray-50 rounded-lg shadow-sm">
-                  <div className="text-2xl font-bold text-blue-600">${results.moneySaved}</div>
-                  <div className="text-xs text-gray-600 mt-1">Potential value</div>
-                </div>
-                <div className="text-center p-3 bg-gray-50 rounded-lg shadow-sm">
-                  <div className="text-2xl font-bold text-blue-600">{results.timeSaved}h</div>
-                  <div className="text-xs text-gray-600 mt-1">Research saved</div>
-                </div>
-                <div className="text-center p-3 bg-gray-50 rounded-lg shadow-sm">
-                  <div className="text-2xl font-bold text-blue-600">{results.providerCount}</div>
-                  <div className="text-xs text-gray-600 mt-1">Opportunities checked</div>
-                </div>
-              </div>
-              <div className="mt-4 text-center">
-                <Link
-                  href="/signup"
-                  className="inline-flex min-h-[44px] items-center rounded-xl bg-brand-600 px-6 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-brand-700"
-                >
-                  Save opportunities to my home →
-                </Link>
-              </div>
+              <p className="mb-2 text-xs font-semibold text-brand-700">Illustrative opportunity preview</p>
+              <h3 className="mb-2 text-lg font-semibold text-gray-900">Programs vary by property and eligibility</h3>
+              <p className="mb-0 text-sm leading-6 text-slate-600">ContractToCozy can organize relevant tax credits, utility rebates, insurance options, and refinancing programs for review. Create an account to save and track verified opportunities for your home.</p>
             </div>
           )}
         </div>

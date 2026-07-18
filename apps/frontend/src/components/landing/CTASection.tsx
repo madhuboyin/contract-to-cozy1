@@ -5,14 +5,15 @@ export default function CTASection() {
   return (
     <section className="bg-gradient-to-r from-brand-600 to-brand-700 px-4 py-12 sm:px-6 lg:px-8 lg:py-14">
       <div className="mx-auto max-w-4xl text-center">
-        <h2 className="text-3xl font-semibold tracking-tight text-white">Your home deserves a permanent memory.</h2>
+        <h2 className="text-3xl font-semibold tracking-tight text-white">Give your home the context it deserves</h2>
+        <p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-teal-50 sm:text-base">Stay ahead, find savings, and make better decisions as your home&apos;s history grows.</p>
 
         <div className="mt-7 flex flex-col justify-center gap-3 sm:flex-row">
           <Link
             href="/signup"
             className="inline-flex min-h-[46px] items-center justify-center rounded-lg bg-white px-6 py-2.5 text-sm font-semibold text-brand-700 transition hover:bg-slate-100"
           >
-            Start my home&apos;s history
+            Create free account
           </Link>
           <Link
             href="#features"
@@ -30,11 +31,11 @@ export default function CTASection() {
             </span>
             <span className="inline-flex items-center gap-2">
               <CheckCircle2 className="h-4 w-4" />
-              Built for decades
+              Built for the long term
             </span>
             <span className="inline-flex items-center gap-2">
               <CheckCircle2 className="h-4 w-4" />
-              Every year adds value
+              More useful as your home history grows
             </span>
           </div>
         </div>
