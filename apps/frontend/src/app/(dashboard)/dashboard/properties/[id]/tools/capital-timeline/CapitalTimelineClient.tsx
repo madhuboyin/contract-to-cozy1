@@ -45,7 +45,7 @@ import InventoryItemDrawer from '../../../../components/inventory/InventoryItemD
 import { getInventoryItem, listInventoryRooms } from '../../../../inventory/inventoryApi';
 import { InventoryItem, InventoryRoom } from '@/types';
 import { track } from '@/lib/analytics/events';
-import { PropertyContextNotice, type PropertyContextEnvelope } from '@/components/property-context/PropertyContextNotice';
+import { PropertyContextCapturePanel } from '@/components/property-context/PropertyContextCapturePanel';
 
 // ─── Helpers ────────────────────────────────────────────────────────
 function money(cents: number | null | undefined) {
@@ -992,7 +992,6 @@ export default function CapitalTimelineClient() {
   const [loading, setLoading] = useState(false);
   const [running, setRunning] = useState(false);
   const [data, setData] = useState<TimelineAnalysisDTO | null>(null);
-  const [propertyContext, setPropertyContext] = useState<PropertyContextEnvelope | null>(null);
   const [activeAssumptionSetId, setActiveAssumptionSetId] = useState<string | null>(requestedAssumptionSetId);
   const [error, setError] = useState<string | null>(null);
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
@@ -1035,7 +1034,6 @@ export default function CapitalTimelineClient() {
       const next = await runTimeline(propertyId, horizon, { assumptionSetId });
       if (reqId !== reqRef.current) return;
       setData(next.analysis);
-      setPropertyContext(next.propertyContext ?? null);
       if (next.assumptionSetId) setActiveAssumptionSetId(next.assumptionSetId);
       await loadOverrides();
       const highCount = (next.analysis?.items ?? []).filter(
@@ -1061,7 +1059,6 @@ export default function CapitalTimelineClient() {
       loadOverrides(); // fire in parallel, non-blocking
       if (reqId !== reqRef.current) return;
       if (latest.assumptionSetId) setActiveAssumptionSetId(latest.assumptionSetId);
-      setPropertyContext(latest.propertyContext ?? null);
 
       if (!latest.analysis || latest.analysis.status === 'STALE') {
         await doRun(horizonYears, latest.assumptionSetId ?? activeAssumptionSetId);
@@ -1132,6 +1129,13 @@ export default function CapitalTimelineClient() {
 
   // ─── Summary stats ──────────────────────────────────────────────
   const items = data?.items ?? [];
+  const contextInventoryItemId = items.find((item) => item.inventoryItemId && (
+    item.missingFactors.includes('INSTALL_DATE') || item.missingFactors.includes('CONDITION')
+  ))?.inventoryItemId ?? null;
+  const propertyContextOperationInput = React.useMemo(
+    () => contextInventoryItemId ? { inventoryItemId: contextInventoryItemId } : {},
+    [contextInventoryItemId],
+  );
   const totalMin = items.reduce((s, i) => s + (i.estimatedCostMinCents ?? 0), 0);
   const totalMax = items.reduce((s, i) => s + (i.estimatedCostMaxCents ?? 0), 0);
   const highPriorityCount = items.filter((i) => i.priority === 'HIGH').length;
@@ -1239,7 +1243,13 @@ export default function CapitalTimelineClient() {
         </div>
       )}
     >
-      <PropertyContextNotice context={propertyContext} title="Capital planning context" />
+      <PropertyContextCapturePanel
+        propertyId={propertyId}
+        featureKey="CAPITAL_TIMELINE"
+        operationKey="RUN_TIMELINE"
+        operationInput={propertyContextOperationInput}
+        onCaptured={() => doRun(horizonYears, activeAssumptionSetId)}
+      />
       {/* Loading */}
       {(loading || running) && !data && (
         <div className="flex h-48 items-center justify-center rounded-2xl border border-white/70 bg-white/65 backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/45">

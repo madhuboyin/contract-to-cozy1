@@ -67,6 +67,7 @@ function requirementState(
   if (requirement.collectionPredicate === 'SELECTED_ITEM_LIFECYCLE_INCOMPLETE') {
     if (!Array.isArray(collectionValue)) return 'UNKNOWN';
     const itemId = operationInput?.inventoryItemId;
+    if (typeof itemId !== 'string' || !itemId.trim()) return 'KNOWN';
     const item = collectionValue.find((candidate) => candidate && typeof candidate === 'object'
       && (candidate as { id?: unknown }).id === itemId) as { condition?: unknown; installedOn?: unknown; purchasedOn?: unknown } | undefined;
     if (!item) return 'UNKNOWN';

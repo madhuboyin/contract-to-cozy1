@@ -8,6 +8,7 @@ import {
   assertFinancialContextApplicable,
   getFinancialContextEnvelope,
 } from '../services/financialContext/context';
+import { evaluateFeatureContext } from '../modules/propertyContext/application/evaluateFeatureContext';
 
 type TimelineNextAction = { href: string; label: string; reason: string };
 
@@ -109,6 +110,13 @@ export async function runTimeline(req: CustomRequest, res: Response, next: NextF
       'CAPITAL_TIMELINE',
       'capitalPlanning',
     );
+    const featureContext = await evaluateFeatureContext(propertyId, userId, {
+      featureKey: 'CAPITAL_TIMELINE',
+      operationKey: 'RUN_TIMELINE',
+    });
+    if (!featureContext.canExecute) {
+      throw new APIError('Required property context is incomplete.', 409, 'PROPERTY_CONTEXT_REQUIRED', featureContext);
+    }
     const horizonYears = req.body.horizonYears ?? 10;
     const analysis = await service.runTimeline(propertyId, homeownerProfileId, horizonYears, {
       assumptionSetId:
