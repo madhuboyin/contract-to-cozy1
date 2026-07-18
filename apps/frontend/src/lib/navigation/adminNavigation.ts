@@ -12,6 +12,8 @@ import {
   CalendarClock,
   FolderKanban,
   Inbox,
+  CreditCard,
+  ShieldQuestion,
 } from 'lucide-react';
 import type { NavJob } from './jobsNavigation';
 
@@ -109,7 +111,25 @@ export const ADMIN_NAV: NavJob[] = [
     name: 'Cases',
     href: '/dashboard/admin/cases',
     icon: FolderKanban,
-    description: 'Safety, abuse, and support case management',
+    description: 'Safety, abuse, dispute, and support case management',
+    engines: [],
+    globalHref: true,
+  },
+  {
+    key: 'admin-payment-ops',
+    name: 'Payment Operations',
+    href: '/dashboard/admin/payments',
+    icon: CreditCard,
+    description: 'Payment ledger and two-person refund decisions',
+    engines: [],
+    globalHref: true,
+  },
+  {
+    key: 'admin-privacy-requests',
+    name: 'Privacy Requests',
+    href: '/dashboard/admin/privacy',
+    icon: ShieldQuestion,
+    description: 'Subject-rights request intake and tracking',
     engines: [],
     globalHref: true,
   },

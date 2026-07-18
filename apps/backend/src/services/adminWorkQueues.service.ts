@@ -27,6 +27,8 @@ export async function getWorkQueues(): Promise<{ queues: WorkQueueSummary[]; gen
     criticalOpenCases,
     disputedBookings,
     pendingProviders,
+    pendingRefundRequests,
+    openPrivacyRequests,
   ] = await Promise.all([
     prisma.providerCredential.count({ where: { status: 'PENDING_REVIEW' } }),
     prisma.providerComplianceAlert.count({ where: { status: 'NEW' } }),
@@ -35,6 +37,10 @@ export async function getWorkQueues(): Promise<{ queues: WorkQueueSummary[]; gen
     prisma.adminCase.count({ where: { status: { in: ['OPEN', 'IN_PROGRESS'] }, severity: 'CRITICAL' } }),
     prisma.booking.count({ where: { status: 'DISPUTED' } }),
     prisma.providerProfile.count({ where: { status: 'PENDING_APPROVAL' } }),
+    prisma.refundRequest.count({ where: { status: 'PENDING_APPROVAL' } }),
+    prisma.privacyRequest.count({
+      where: { status: { in: ['RECEIVED', 'VERIFYING', 'VERIFIED', 'IN_PROGRESS'] } },
+    }),
   ]);
 
   const queues: WorkQueueSummary[] = [
@@ -86,6 +92,20 @@ export async function getWorkQueues(): Promise<{ queues: WorkQueueSummary[]; gen
       href: '/dashboard/admin/bookings?status=DISPUTED',
       capability: 'BOOKING_VIEW',
       count: disputedBookings,
+    },
+    {
+      key: 'refund-requests',
+      label: 'Refund requests pending approval',
+      href: '/dashboard/admin/payments',
+      capability: 'REFUND_APPROVE',
+      count: pendingRefundRequests,
+    },
+    {
+      key: 'privacy-requests',
+      label: 'Open privacy requests',
+      href: '/dashboard/admin/privacy',
+      capability: 'PRIVACY_REQUEST_MANAGE',
+      count: openPrivacyRequests,
     },
   ];
 

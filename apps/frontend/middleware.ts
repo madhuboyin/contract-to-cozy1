@@ -42,6 +42,8 @@ const ADMIN_CONSOLE_PREFIXES = [
   '/dashboard/admin/bookings',
   '/dashboard/admin/cases',
   '/dashboard/admin/work-queues',
+  '/dashboard/admin/payments',
+  '/dashboard/admin/privacy',
 ] as const;
 const NO_STORE_PAGE_PREFIXES = [
   ...SENSITIVE_PAGE_PREFIXES,

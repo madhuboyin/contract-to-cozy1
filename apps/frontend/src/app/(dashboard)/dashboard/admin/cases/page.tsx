@@ -55,7 +55,7 @@ const STATUS_BADGE: Record<AdminCaseStatus, string> = {
   CLOSED: 'bg-slate-100 text-slate-600',
 };
 
-const CASE_TYPES: AdminCaseType[] = ['SAFETY', 'ABUSE', 'REVIEW_INVESTIGATION', 'SUPPORT'];
+const CASE_TYPES: AdminCaseType[] = ['SAFETY', 'ABUSE', 'REVIEW_INVESTIGATION', 'SUPPORT', 'DISPUTE'];
 const SEVERITIES: AdminCaseSeverity[] = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'];
 
 // Client-side mirror of the service's governed lifecycle.

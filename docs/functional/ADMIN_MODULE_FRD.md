@@ -172,7 +172,9 @@ immutable explanation of what happened.
 | Provider Operations (Phase 2) | CURRENT — PARTIAL | Directory search/filter under `PROVIDER_VIEW`, per-provider detail (credentials, open compliance alerts, listings, booking/review counts), governed marketplace-status transition under `PROVIDER_SUSPEND` (suspension deactivates listings; reinstatement does not auto-relist; self-action blocked) | Coverage zones, payments visibility, appeals-as-cases, risk scoring, affected-bookings preview on suspension, credential-queue integration |
 | Booking Operations (Phase 2) | CURRENT — PARTIAL | Read-only search (booking number, status) and merged operational timeline (recorded transitions + derived milestones + review) under `BOOKING_VIEW`; support-safe scope excludes payments and internal notes | All governed mutations (`BOOKING_OPERATE`): corrections, cancel/reopen/dispute transitions, richer search dimensions, messages/documents/payments in timeline, linked-case requirement for overrides |
 | Cases (Phase 2) | CURRENT — PARTIAL | `AdminCase`/`AdminCaseNote` under `SUPPORT_CASE_MANAGE`: SAFETY/ABUSE/REVIEW_INVESTIGATION/SUPPORT types, severity, governed lifecycle with required resolution, ADMIN-only assignment, linked entities, note trail, audited actions | SAFETY-specific workflow (containment, evidence, notification decision, post-incident review) under `SAFETY_INCIDENT_MANAGE`, SLA tracking, communication records, case links from other workspaces' actions |
-| Work Queues (Phase 2) | CURRENT — PARTIAL | Aggregate counts of actionable queues (pending credentials, new compliance alerts, providers awaiting approval, review moderation queue, open/critical cases, disputed bookings) with links, under baseline `ADMIN_DASHBOARD_VIEW` | Pushed operational notifications, per-admin assignment views, SLA/aging indicators |
+| Work Queues (Phase 2) | CURRENT — PARTIAL | Aggregate counts of actionable queues (pending credentials, new compliance alerts, providers awaiting approval, review moderation queue, open/critical cases, disputed bookings, pending refund requests, open privacy requests) with links, under baseline `ADMIN_DASHBOARD_VIEW` | Pushed operational notifications, per-admin assignment views, SLA/aging indicators |
+| Payment Operations (Phase 3) | CURRENT — PARTIAL | Local-ledger search + status summary under `PAYMENT_VIEW`; refund requests under `REFUND_REQUEST` (amount ≤ refundable remainder, one pending per payment); two-person decisions under `REFUND_APPROVE` (requester ≠ approver); fully audited | Refund execution + provider reconciliation (blocked on a payment-provider integration), amount/risk-sensitive approval thresholds, dispute evidence workflow, payout visibility |
+| Privacy Requests (Phase 3) | CURRENT — PARTIAL | Intake by subject email (snapshot survives deletion), governed lifecycle with identity-verification attribution, due dates + overdue display, legal holds blocking DELETION completion, under `PRIVACY_REQUEST_MANAGE` | Systems-searched tracking, export artifacts, deletion-execution linkage to the account-deletion cascade, final communication, sensitive export controls |
 
 ### 4.3 API-only and foundational capabilities
 
@@ -742,7 +744,17 @@ Every sensitive action shall support, as applicable:
 
 - Payment records support pending, authorized, captured, refunded, failed, and
   cancelled states with external payment identifiers and refund metadata.
-- No ADMIN payment/refund/dispute workspace is implemented.
+- Payment Operations is CURRENT — PARTIAL (Phase 3 slice at
+  `/dashboard/admin/payments`): local-ledger search (booking number /
+  payment-intent id, status) with a count+amount-by-status summary under
+  `PAYMENT_VIEW`; refund requests (`RefundRequest` model — requires
+  `prisma db push`) with amount-vs-refundable validation and a
+  one-pending-per-payment rule under `REFUND_REQUEST`; and two-person
+  decisions under `REFUND_APPROVE` (the requester can never decide their
+  own request). **Record-and-govern only: no payment-provider integration
+  exists, so an APPROVED request is terminal and no money moves.**
+- Dispute cases: the `AdminCase` DISPUTE type exists (§10.5); dispute
+  evidence deadlines/documents are PLANNED.
 
 #### Target requirements — PLANNED
 
@@ -776,9 +788,9 @@ Every sensitive action shall support, as applicable:
   `/dashboard/admin/reviews`): pending+flagged queue, moderation detail with
   booking context and author/provider history counts, governed
   approve/reject/flag/restore with required reason and moderator attribution,
-  audited under `REVIEW_MODERATE` with optional policy version. Automated
-  signals, policy-reference display, and "request investigation" (case
-  creation) remain PLANNED below.
+  audited under `REVIEW_MODERATE` with optional policy version, plus
+  "request investigation" which opens a linked REVIEW_INVESTIGATION case.
+  Automated signals and policy-reference display remain PLANNED below.
 - Case management is CURRENT — PARTIAL (Phase 2 slice at
   `/dashboard/admin/cases` under `SUPPORT_CASE_MANAGE`): `AdminCase` +
   `AdminCaseNote` models with SAFETY/ABUSE/REVIEW_INVESTIGATION/SUPPORT
@@ -968,12 +980,25 @@ Every sensitive action shall support, as applicable:
   expire.
 - Case notes must not become an uncontrolled copy of sensitive customer data.
 
-### 11.4 Privacy requests — PLANNED
+### 11.4 Privacy requests — PARTIAL (Phase 3 slice shipped)
+
+Shipped at `/dashboard/admin/privacy` under `PRIVACY_REQUEST_MANAGE`:
+`PrivacyRequest` model (requires `prisma db push`) with intake by subject
+email (snapshotted so the record survives account deletion; unmatched
+subjects allowed), ACCESS_EXPORT/CORRECTION/DELETION/RESTRICTION types,
+governed lifecycle (RECEIVED → VERIFYING → VERIFIED → IN_PROGRESS →
+COMPLETED, or REJECTED/CANCELLED; terminal states immutable), identity-
+verification attribution, 30-day default due date with overdue display,
+and legal holds that block DELETION completion. Tracking only — data
+operations stay in their authoritative flows.
 
 - Intake and verify access, correction, deletion, and restriction requests.
+  **SHIPPED** (see above).
 - Track jurisdiction/policy, identity verification, due date, legal hold,
   systems searched, export artifacts, deletion execution, exceptions, and final
-  communication.
+  communication. **PARTIAL** — jurisdiction, identity verification, due
+  date, and legal hold shipped; systems-searched tracking, export
+  artifacts, deletion-execution linkage, and final communication PLANNED.
 - Account deletion must use the authoritative cascade/service and retain legally
   required audit records.
 - An admin cannot silently delete an account outside the privacy workflow.
@@ -1345,14 +1370,32 @@ deeper target requirements per item remain PLANNED (see §10.2/§10.3/§10.5)
 
 ### Phase 3 — Payments, refunds, disputes, and privacy
 
-**Status:** PLANNED
+**Status:** Started — payment operations, refund governance, dispute case
+type, and privacy request tracking shipped as v1 slices; refund execution,
+reconciliation against the provider, and exports remain PLANNED
 
-- Payment operations and reconciliation view.
-- Refund request/approval/execution.
-- Dispute/chargeback case management.
-- Privacy request intake, verification, export, correction, deletion, legal hold,
-  and final communication.
-- Sensitive export controls.
+- [x] Payment operations and reconciliation view. **PARTIAL** — local-ledger
+      search + status summary at `/dashboard/admin/payments`
+      (`PAYMENT_VIEW`). True reconciliation is PLANNED: there is no
+      payment-provider integration to reconcile against yet.
+- [x] Refund request/approval/execution. **PARTIAL** — request
+      (`REFUND_REQUEST`) and two-person approval (`REFUND_APPROVE`,
+      requester ≠ approver, amount ≤ refundable remainder, one pending
+      request per payment) shipped via the `RefundRequest` model (requires
+      `prisma db push`). **Execution is deliberately absent** — no money
+      moves until a payment-provider integration exists; APPROVED is
+      terminal.
+- [x] Dispute/chargeback case management. **PARTIAL** — DISPUTE added to
+      `AdminCaseType`; disputes are managed as cases at
+      `/dashboard/admin/cases`. Evidence deadlines, documents, and
+      chargeback-specific workflow PLANNED.
+- [x] Privacy request intake, verification, export, correction, deletion, legal
+      hold, and final communication. **PARTIAL** — intake/verification/
+      lifecycle/legal-hold tracking shipped at `/dashboard/admin/privacy`
+      (`PRIVACY_REQUEST_MANAGE`, `PrivacyRequest` model — requires
+      `prisma db push`); export artifacts, deletion-execution linkage, and
+      final communication PLANNED (see §11.4).
+- [ ] Sensitive export controls. **Not started.**
 
 ### Phase 4 — Content, catalogs, and personalization governance
 
@@ -1547,6 +1590,10 @@ For each delivered phase:
 | Cases backend (Phase 2) | `apps/backend/src/services/adminCase.service.ts`, `apps/backend/src/routes/adminCase.routes.ts` |
 | Work Queues UI (Phase 2) | `apps/frontend/src/app/(dashboard)/dashboard/admin/work-queues/page.tsx` |
 | Work Queues backend (Phase 2) | `apps/backend/src/services/adminWorkQueues.service.ts`, `apps/backend/src/routes/adminWorkQueues.routes.ts` |
+| Payment Operations UI (Phase 3) | `apps/frontend/src/app/(dashboard)/dashboard/admin/payments/page.tsx` |
+| Payment Operations backend (Phase 3) | `apps/backend/src/services/adminPaymentOps.service.ts`, `apps/backend/src/routes/adminPaymentOps.routes.ts` |
+| Privacy Requests UI (Phase 3) | `apps/frontend/src/app/(dashboard)/dashboard/admin/privacy/page.tsx` |
+| Privacy Requests backend (Phase 3) | `apps/backend/src/services/adminPrivacyRequests.service.ts`, `apps/backend/src/routes/adminPrivacyRequests.routes.ts` |
 | Booking domain/admin foundation | `apps/backend/src/services/booking.service.ts` |
 | Account lifecycle/deletion | `apps/backend/src/services/auth.service.ts`, `apps/backend/src/controllers/user.controller.ts`, `apps/backend/src/services/accountDeletionCascade.service.ts` |
 | Core domain and audit schema | `apps/backend/prisma/schema.prisma` |

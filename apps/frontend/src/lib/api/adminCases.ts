@@ -5,7 +5,7 @@
 
 import { api } from '@/lib/api/client';
 
-export type AdminCaseType = 'SAFETY' | 'ABUSE' | 'REVIEW_INVESTIGATION' | 'SUPPORT';
+export type AdminCaseType = 'SAFETY' | 'ABUSE' | 'REVIEW_INVESTIGATION' | 'SUPPORT' | 'DISPUTE';
 export type AdminCaseSeverity = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 export type AdminCaseStatus = 'OPEN' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED';
 

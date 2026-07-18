@@ -3,7 +3,7 @@ import { z } from 'zod';
 
 export const ListCasesQuerySchema = z.object({
   query: z.object({
-    type: z.enum(['SAFETY', 'ABUSE', 'REVIEW_INVESTIGATION', 'SUPPORT']).optional(),
+    type: z.enum(['SAFETY', 'ABUSE', 'REVIEW_INVESTIGATION', 'SUPPORT', 'DISPUTE']).optional(),
     status: z.enum(['OPEN', 'IN_PROGRESS', 'RESOLVED', 'CLOSED']).optional(),
     severity: z.enum(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']).optional(),
     entityType: z.string().max(100).optional(),
@@ -14,7 +14,7 @@ export const ListCasesQuerySchema = z.object({
 });
 
 export const CreateCaseBodySchema = z.object({
-  type: z.enum(['SAFETY', 'ABUSE', 'REVIEW_INVESTIGATION', 'SUPPORT']),
+  type: z.enum(['SAFETY', 'ABUSE', 'REVIEW_INVESTIGATION', 'SUPPORT', 'DISPUTE']),
   severity: z.enum(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']),
   title: z.string().min(1).max(300),
   description: z.string().min(1).max(10000),
