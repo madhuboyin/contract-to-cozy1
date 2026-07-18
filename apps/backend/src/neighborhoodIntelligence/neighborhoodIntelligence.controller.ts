@@ -10,6 +10,7 @@ import { NeighborhoodEventType } from '@prisma/client';
 import { EventListQuery } from './neighborhoodIntelligence.validators';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
 import { getPlanningContextEnvelope } from '../services/planningContext/context';
+import { evaluateFeatureContext } from '../modules/propertyContext/application/evaluateFeatureContext';
 
 const intelligenceService = new NeighborhoodIntelligenceService();
 const queryService = new NeighborhoodRadarQueryService();
@@ -17,6 +18,21 @@ const signalService = new NeighborhoodSignalService();
 
 function getRadarContext(req: CustomRequest, propertyId: string) {
   return getPlanningContextEnvelope(propertyId, req.user!.userId, 'NEIGHBORHOOD_RADAR');
+}
+
+async function requireInteractiveRadarContext(req: CustomRequest, propertyId: string): Promise<void> {
+  const evaluation = await evaluateFeatureContext(propertyId, req.user!.userId, {
+    featureKey: 'NEIGHBORHOOD_RADAR',
+    operationKey: 'VIEW_RADAR',
+  });
+  if (!evaluation.canExecute) {
+    throw new APIError(
+      'Complete the required property location before viewing neighborhood matches.',
+      409,
+      'PROPERTY_CONTEXT_INCOMPLETE',
+      { evaluation },
+    );
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -30,6 +46,7 @@ export async function getNeighborhoodRadarSummary(
 ): Promise<void> {
   try {
     const { propertyId } = req.params;
+    await requireInteractiveRadarContext(req, propertyId);
     const [summary, context] = await Promise.all([
       queryService.getSummary(propertyId),
       getRadarContext(req, propertyId),
@@ -62,6 +79,7 @@ export async function getNeighborhoodRadarEvents(
   try {
     const { propertyId } = req.params;
     const query = req.query as EventListQuery;
+    await requireInteractiveRadarContext(req, propertyId);
 
     const [result, context] = await Promise.all([
       queryService.getEventList(propertyId, {
@@ -91,6 +109,7 @@ export async function getNeighborhoodRadarEventDetail(
 ): Promise<void> {
   try {
     const { propertyId, eventId } = req.params;
+    await requireInteractiveRadarContext(req, propertyId);
     const [detail, context] = await Promise.all([
       queryService.getEventDetail(propertyId, eventId),
       getRadarContext(req, propertyId),
@@ -112,6 +131,7 @@ export async function getNeighborhoodRadarTrends(
 ): Promise<void> {
   try {
     const { propertyId } = req.params;
+    await requireInteractiveRadarContext(req, propertyId);
     const [trends, context] = await Promise.all([
       queryService.getTrends(propertyId),
       getRadarContext(req, propertyId),

@@ -60,7 +60,7 @@ import {
   hasGuidanceContinuityContext,
 } from '@/features/guidance/utils/guidanceContinuity';
 import { ScrollFadeX } from '@/components/ui/ScrollFadeX';
-import { PropertyContextNotice } from '@/components/property-context/PropertyContextNotice';
+import { PropertyContextCapturePanel } from '@/components/property-context/PropertyContextCapturePanel';
 
 // ============================================================================
 // DISPLAY CONSTANTS
@@ -616,7 +616,6 @@ function SummaryStrip({ propertyId }: { propertyId: string }) {
 
   return (
     <div className="space-y-3">
-      <PropertyContextNotice context={summary.propertyContext} title="Neighborhood context" />
       {summary.meaningfulChangeCount > 0 ? (
       <MobileCard
         variant="hero"
@@ -734,6 +733,7 @@ export default function NeighborhoodChangeRadarClient() {
   const [filterEffect, setFilterEffect] = useState<FilterEffect>('ALL');
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [contextReady, setContextReady] = useState(false);
 
   const eventsQuery = useQuery({
     queryKey: ['neighborhood-radar-events', propertyId, filterEffect],
@@ -743,7 +743,7 @@ export default function NeighborhoodChangeRadarClient() {
         limit: 50,
       }),
     staleTime: 10 * 60 * 1000,
-    enabled: !!propertyId,
+    enabled: !!propertyId && contextReady,
   });
 
   const events = eventsQuery.data?.events ?? [];
@@ -818,8 +818,17 @@ export default function NeighborhoodChangeRadarClient() {
           />
         </div>
 
+        <div className="lg:col-span-2">
+          <PropertyContextCapturePanel
+            propertyId={propertyId}
+            featureKey="NEIGHBORHOOD_RADAR"
+            operationKey="VIEW_RADAR"
+            onReady={() => setContextReady(true)}
+          />
+        </div>
+
         {/* Left column: summary + trend. Tools rail hidden on desktop (header above replaces it). */}
-        <div className="space-y-4 lg:space-y-5">
+        {contextReady ? <div className="space-y-4 lg:space-y-5">
           <SummaryStrip propertyId={propertyId} />
 
           <div className="lg:hidden">
@@ -827,10 +836,10 @@ export default function NeighborhoodChangeRadarClient() {
           </div>
 
           <TrendStrip propertyId={propertyId} />
-        </div>
+        </div> : null}
 
         {/* Right column: event list */}
-        <div className="space-y-4 lg:col-start-2">
+        {contextReady ? <div className="space-y-4 lg:col-start-2">
           <MobileSection>
             <MobileSectionHeader
               title="Nearby Changes"
@@ -862,7 +871,7 @@ export default function NeighborhoodChangeRadarClient() {
               </div>
             )}
           </MobileSection>
-        </div>
+        </div> : null}
       </div>
 
       {/* Detail sheet */}

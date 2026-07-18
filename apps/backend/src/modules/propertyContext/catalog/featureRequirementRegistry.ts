@@ -39,6 +39,23 @@ export interface FeatureContextRequirementDefinition {
 
 export const FEATURE_CONTEXT_REQUIREMENTS: readonly FeatureContextRequirementDefinition[] = [
   {
+    featureKey: 'NEIGHBORHOOD_RADAR',
+    operationKey: 'VIEW_RADAR',
+    policyVersion: '1.0',
+    promptStrategy: 'MINIMUM_PATH',
+    required: [
+      {
+        factKey: 'location.zipCode',
+        classification: 'REQUIRED_APPLICABILITY',
+        reasonCode: 'CONFIRM_ZIP_FOR_NEIGHBORHOOD_MATCHING',
+        priority: 10,
+        acceptableStates: ['KNOWN'],
+        captureKey: 'LOCATION_ZIP_CODE',
+      },
+    ],
+    enhancements: [],
+  },
+  {
     featureKey: 'SELLER_PREP',
     operationKey: 'OPEN_PLAN',
     policyVersion: '1.0',
