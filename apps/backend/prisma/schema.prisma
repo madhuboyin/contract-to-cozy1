@@ -8290,6 +8290,80 @@ model AdminCapabilityGrant {
   @@map("admin_capability_grants")
 }
 
+// Admin trust-and-safety / support case management (ADMIN_MODULE_FRD.md
+// §10.5 + Phase 1 "cross-domain case management"). Actor references are
+// plain userId strings (same convention as AuditLog) — cases must survive
+// account deletion for compliance, so no FK relations to User.
+
+enum AdminCaseType {
+  SAFETY
+  ABUSE
+  REVIEW_INVESTIGATION
+  SUPPORT
+}
+
+enum AdminCaseSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum AdminCaseStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+model AdminCase {
+  id         String @id @default(uuid())
+  caseNumber String @unique // e.g. CASE-2026-000123, assigned by adminCase.service
+
+  type     AdminCaseType
+  severity AdminCaseSeverity
+  status   AdminCaseStatus @default(OPEN)
+
+  title       String
+  description String
+
+  // Linked entity (e.g. REVIEW/USER/PROVIDER/BOOKING + its id) — free-form
+  // strings like AuditLog.entityType so any domain object can be referenced.
+  entityType String?
+  entityId   String?
+
+  openedById   String
+  assignedToId String?
+
+  resolution String?
+  resolvedAt DateTime?
+  closedAt   DateTime?
+
+  notes AdminCaseNote[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, severity])
+  @@index([type, status])
+  @@index([entityType, entityId])
+  @@map("admin_cases")
+}
+
+model AdminCaseNote {
+  id       String @id @default(uuid())
+  caseId   String
+  authorId String
+  body     String
+
+  case AdminCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([caseId])
+  @@map("admin_case_notes")
+}
+
 // ============================================================================
 // HOME EVENT RADAR — ENUMS
 // Note: Names use "Radar" prefix to avoid collision with existing HomeEventType

@@ -9,6 +9,7 @@ import {
   listReviews,
   moderateReview,
   ModerationAction,
+  requestReviewInvestigation,
 } from '../services/adminReviewModeration.service';
 
 function isModerationError(err: unknown): err is AdminReviewModerationError {
@@ -75,5 +76,26 @@ export async function moderateReviewHandler(req: AuthRequest, res: Response): Pr
     }
     logger.error({ err }, '[ADMIN-REVIEW-MODERATION] Failed to moderate review');
     res.status(500).json({ success: false, error: { message: 'Failed to moderate review' } });
+  }
+}
+
+export async function requestInvestigationHandler(req: AuthRequest, res: Response): Promise<void> {
+  const { reviewId } = req.params;
+  const { reason, severity } = req.body as { reason: string; severity?: string };
+  const actorId = req.user!.userId;
+
+  try {
+    const created = await requestReviewInvestigation(
+      { reviewId, actorId, reason, severity: severity as any },
+      { req }
+    );
+    res.status(201).json({ success: true, data: created });
+  } catch (err: any) {
+    if (isModerationError(err) && CLIENT_ERROR_CODES.has(err.code)) {
+      res.status(statusForCode(err.code)).json({ success: false, error: { message: err.message, code: err.code } });
+      return;
+    }
+    logger.error({ err }, '[ADMIN-REVIEW-MODERATION] Failed to request investigation');
+    res.status(500).json({ success: false, error: { message: 'Failed to request investigation' } });
   }
 }

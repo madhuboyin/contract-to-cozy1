@@ -28,6 +28,7 @@ import {
   useAdminReviewQueue,
   useModerateAdminReview,
 } from '@/hooks/useAdminReviewModeration';
+import { useRequestReviewInvestigation } from '@/hooks/useAdminCases';
 import type {
   ModerationAction,
   ReviewQueueItem,
@@ -170,7 +171,9 @@ function ReviewDetailPanel({ reviewId }: { reviewId: string }) {
   const { toast } = useToast();
   const detailQ = useAdminReviewDetail(reviewId);
   const moderate = useModerateAdminReview(reviewId);
+  const investigate = useRequestReviewInvestigation(reviewId);
   const [actionDialog, setActionDialog] = useState<ModerationAction | null>(null);
+  const [investigateOpen, setInvestigateOpen] = useState(false);
 
   if (detailQ.isLoading) {
     return (
@@ -288,7 +291,33 @@ function ReviewDetailPanel({ reviewId }: { reviewId: string }) {
             {ACTION_COPY[action].label}
           </Button>
         ))}
+        <Button size="sm" variant="outline" onClick={() => setInvestigateOpen(true)}>
+          Request investigation
+        </Button>
       </div>
+
+      <ReasonConfirmDialog
+        open={investigateOpen}
+        onOpenChange={setInvestigateOpen}
+        title="Request investigation"
+        description="Opens a REVIEW_INVESTIGATION case linked to this review. The review's moderation status is not changed."
+        confirmLabel="Open investigation case"
+        pending={investigate.isPending}
+        onConfirm={(reason) => {
+          investigate.mutate(
+            { reason },
+            {
+              onSuccess: (created) => {
+                setInvestigateOpen(false);
+                toast({ title: 'Investigation requested', description: `${created.caseNumber} opened.` });
+              },
+              onError: (err: any) => {
+                toast({ title: 'Failed to request investigation', description: err?.message, variant: 'destructive' });
+              },
+            },
+          );
+        }}
+      />
 
       <ReasonConfirmDialog
         open={actionDialog !== null}

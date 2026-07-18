@@ -9,9 +9,10 @@
 // aggregates to maintain here.
 
 import { Request } from 'express';
-import { Prisma, ReviewStatus } from '@prisma/client';
+import { AdminCaseSeverity, Prisma, ReviewStatus } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { recordAdminAction } from './adminAudit.service';
+import { createCase } from './adminCase.service';
 
 export class AdminReviewModerationError extends Error {
   code: string;
@@ -237,4 +238,50 @@ export async function moderateReview(input: ModerateReviewInput, ctx: ActionCont
   });
 
   return { previousStatus: review.status, status: transition.to, action: input.action };
+}
+
+export interface RequestInvestigationInput {
+  reviewId: string;
+  actorId: string;
+  reason: string;
+  severity?: AdminCaseSeverity;
+}
+
+/**
+ * FRD §10.5's fifth moderation action, "request investigation": opens a
+ * REVIEW_INVESTIGATION case linked to the review instead of changing the
+ * review's status — the review stays wherever it is in the moderation flow
+ * while the case is worked. Authorized under REVIEW_MODERATE (the moderator
+ * asking) even though working the case afterwards needs SUPPORT_CASE_MANAGE.
+ */
+export async function requestReviewInvestigation(input: RequestInvestigationInput, ctx: ActionContext = {}) {
+  const review = await prisma.review.findUnique({
+    where: { id: input.reviewId },
+    select: { id: true, status: true, authorId: true, providerId: true, title: true },
+  });
+  if (!review) {
+    throw new AdminReviewModerationError('REVIEW_NOT_FOUND', `No review with id "${input.reviewId}".`);
+  }
+
+  if (input.actorId === review.authorId || input.actorId === review.providerId) {
+    throw new AdminReviewModerationError(
+      'SELF_MODERATION_FORBIDDEN',
+      'An administrator cannot request an investigation of a review they wrote or received.'
+    );
+  }
+
+  return createCase(
+    {
+      actorId: input.actorId,
+      type: 'REVIEW_INVESTIGATION',
+      severity: input.severity ?? 'MEDIUM',
+      title: `Investigate review "${review.title ?? review.id}" (${review.status})`,
+      description: input.reason,
+      entityType: 'REVIEW',
+      entityId: review.id,
+      capability: 'REVIEW_MODERATE',
+      auditAction: 'ADMIN_REQUEST_REVIEW_INVESTIGATION',
+    },
+    ctx
+  );
 }

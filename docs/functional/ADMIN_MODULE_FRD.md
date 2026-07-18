@@ -168,7 +168,11 @@ immutable explanation of what happened.
 | Personalization | CURRENT — PARTIAL | Catalog visibility, aggregate quality, reviewed activation, question activation, definition pause/resume, kill switch | Structured review records, semantic diffs, content authoring decision, broader operational dashboard |
 | User & Account Support (Phase 1) | CURRENT — PARTIAL | Search by name/email, support-safe summary (verification, MFA, session count, homeowner/provider profile summary), revoke sessions, governed status transitions (ACTIVE/SUSPENDED/INACTIVE) with required reason | Case linkage, communication history, deeper property/booking access via case reason, correction of identity fields, self-service parity for admins acting on their own account (deliberately blocked for now) |
 | Audit Explorer v1 (Phase 1) | CURRENT — PARTIAL | Filtered/paginated read view over `AuditLog` (actor, entity, action, request ID, date range) | Only surfaces actions written via the standardized contract; pre-existing bespoke audit paths (personalization, provider credential decisions) are not aggregated; no saved views or export |
-| Review Moderation Queue (Phase 2) | CURRENT — PARTIAL | Pending+flagged queue and per-status browse, moderation detail (review, booking context, author/provider history counts), governed APPROVE/REJECT/FLAG/RESTORE decisions with required reason, moderator attribution on the review, full audit incl. optional policy version; admins who are a party to a review cannot moderate it | Automated abuse/fraud signals, policy-reference display, case creation/escalation ("request investigation"), notifications to author/provider on decisions, bulk actions |
+| Review Moderation Queue (Phase 2) | CURRENT — PARTIAL | Pending+flagged queue and per-status browse, moderation detail (review, booking context, author/provider history counts), governed APPROVE/REJECT/FLAG/RESTORE decisions with required reason, moderator attribution on the review, full audit incl. optional policy version; admins who are a party to a review cannot moderate it; "request investigation" opens a linked REVIEW_INVESTIGATION case | Automated abuse/fraud signals, policy-reference display, notifications to author/provider on decisions, bulk actions |
+| Provider Operations (Phase 2) | CURRENT — PARTIAL | Directory search/filter under `PROVIDER_VIEW`, per-provider detail (credentials, open compliance alerts, listings, booking/review counts), governed marketplace-status transition under `PROVIDER_SUSPEND` (suspension deactivates listings; reinstatement does not auto-relist; self-action blocked) | Coverage zones, payments visibility, appeals-as-cases, risk scoring, affected-bookings preview on suspension, credential-queue integration |
+| Booking Operations (Phase 2) | CURRENT — PARTIAL | Read-only search (booking number, status) and merged operational timeline (recorded transitions + derived milestones + review) under `BOOKING_VIEW`; support-safe scope excludes payments and internal notes | All governed mutations (`BOOKING_OPERATE`): corrections, cancel/reopen/dispute transitions, richer search dimensions, messages/documents/payments in timeline, linked-case requirement for overrides |
+| Cases (Phase 2) | CURRENT — PARTIAL | `AdminCase`/`AdminCaseNote` under `SUPPORT_CASE_MANAGE`: SAFETY/ABUSE/REVIEW_INVESTIGATION/SUPPORT types, severity, governed lifecycle with required resolution, ADMIN-only assignment, linked entities, note trail, audited actions | SAFETY-specific workflow (containment, evidence, notification decision, post-incident review) under `SAFETY_INCIDENT_MANAGE`, SLA tracking, communication records, case links from other workspaces' actions |
+| Work Queues (Phase 2) | CURRENT — PARTIAL | Aggregate counts of actionable queues (pending credentials, new compliance alerts, providers awaiting approval, review moderation queue, open/critical cases, disputed bookings) with links, under baseline `ADMIN_DASHBOARD_VIEW` | Pushed operational notifications, per-admin assignment views, SLA/aging indicators |
 
 ### 4.3 API-only and foundational capabilities
 
@@ -672,12 +676,22 @@ Every sensitive action shall support, as applicable:
 - Provider Compliance queue and credential decisions are CURRENT — PARTIAL.
 - Provider and provider-credential services allow some ADMIN access.
 - Compliance evaluation can affect provider/category eligibility and status.
+- Provider Operations directory is CURRENT — PARTIAL (Phase 2 slice at
+  `/dashboard/admin/providers`): search/filter directory under
+  `PROVIDER_VIEW` (business/user name/email, status), per-provider
+  operational detail (credentials, open compliance alerts, listings,
+  booking/review counts, verification flags), and a governed
+  marketplace-status transition (ACTIVE/SUSPENDED/INACTIVE) under
+  `PROVIDER_SUSPEND` with required reason — suspension deactivates listings,
+  reinstatement does not auto-relist, self-action blocked.
 
 #### Target requirements — PLANNED
 
 - Provider directory with identity, business profile, status, services,
   categories, coverage zones, credentials, performance, bookings, reviews,
-  payments visibility, alerts, and cases.
+  payments visibility, alerts, and cases. **PARTIAL** — directory + detail
+  shipped (see current state); coverage zones, payments visibility, and case
+  linkage not started.
 - Queue credentials by risk, expiry, age, type, category, and assignment.
 - Display document integrity metadata and sanitized verification evidence.
 - Require structured reason for approve, reject, revoke, suspend, or reinstate.
@@ -696,13 +710,22 @@ Every sensitive action shall support, as applicable:
 - Booking domain has statuses, timeline, parties, property, service, pricing,
   cancellation, completion, payment, document, message, and review relations.
 - Some booking services recognize ADMIN permissions.
-- No dedicated ADMIN booking workspace exists.
+- Booking Operations workspace is CURRENT — PARTIAL (Phase 2 slice at
+  `/dashboard/admin/bookings`, read-only, under `BOOKING_VIEW`): search by
+  booking number + status filter, and a per-booking merged operational
+  timeline (recorded BookingTimeline transitions + derived milestones +
+  review). Support-safe scope: no payment amounts, no provider internal
+  notes, property shown as city/state only. All governed mutations
+  (`BOOKING_OPERATE`) remain PLANNED.
 
 #### Target requirements — PLANNED
 
 - Search by booking number, user, provider, property, date, category, and status.
+  **PARTIAL** — booking number + status shipped; other dimensions not started.
 - Display a unified booking timeline including scheduling, status, messages,
-  documents, payments, disputes, and operator actions.
+  documents, payments, disputes, and operator actions. **PARTIAL** —
+  scheduling/status/review timeline shipped; messages, documents, payments,
+  and operator actions not included yet.
 - Support approved corrections to scheduling and operational metadata.
 - Support cancel, reopen where valid, mark disputed, and resolve escalation via
   explicit state transitions.
@@ -756,7 +779,15 @@ Every sensitive action shall support, as applicable:
   audited under `REVIEW_MODERATE` with optional policy version. Automated
   signals, policy-reference display, and "request investigation" (case
   creation) remain PLANNED below.
-- No broader trust-and-safety ADMIN workspace (safety/abuse cases) exists.
+- Case management is CURRENT — PARTIAL (Phase 2 slice at
+  `/dashboard/admin/cases` under `SUPPORT_CASE_MANAGE`): `AdminCase` +
+  `AdminCaseNote` models with SAFETY/ABUSE/REVIEW_INVESTIGATION/SUPPORT
+  types, severity, governed lifecycle (resolution text required to resolve;
+  reopening clears timestamps but keeps resolution history), ADMIN-only
+  assignment, linked entity references, and audited create/status/assign
+  actions. The richer SAFETY-specific workflow (containment, evidence,
+  notification decisions, post-incident review) remains PLANNED and will
+  layer `SAFETY_INCIDENT_MANAGE` on top.
 
 #### Target requirements — PLANNED
 
@@ -767,16 +798,21 @@ Every sensitive action shall support, as applicable:
   booking context and history counts shipped; automated signals and policy
   references not started.
 - Actions: approve, reject, flag/escalate, restore, and request investigation.
-  **PARTIAL** — approve/reject/flag/restore shipped; request investigation
-  needs case management (Phase 1 open item).
+  **SHIPPED** — request investigation opens a REVIEW_INVESTIGATION case
+  linked to the review (under `REVIEW_MODERATE`) without changing the
+  review's moderation status.
 - Moderation decisions require reason and moderator attribution. **SHIPPED.**
 - Maintain policy version used for the decision. **PARTIAL** — the API accepts
   an optional `policyVersion` recorded in the audit trail, but no policy
   registry exists yet, so nothing enforces or suggests one.
 - Abuse/fraud signals create reviewable cases; models/signals do not directly
-  ban users or providers.
+  ban users or providers. **PARTIAL** — ABUSE-type cases exist and no signal
+  automation acts directly; automated signal → case creation not started.
 - Safety incidents support severity, containment, linked entities, evidence,
-  notification decision, and post-incident review.
+  notification decision, and post-incident review. **PARTIAL** — SAFETY-type
+  cases carry severity, linked entities, and a note trail; containment,
+  structured evidence, notification decisions, and post-incident review are
+  not modeled yet.
 - Legal/law-enforcement requests are FUTURE and require a separate restricted
   workflow and policy review.
 
@@ -1264,13 +1300,22 @@ dashboard, search, unified entity pattern, and case management remain PLANNED
 
 ### Phase 2 — Provider, marketplace, booking, and trust operations
 
-**Status:** Started — review moderation queue shipped; provider compliance
-partially CURRENT (pre-dates this FRD); remaining PLANNED
+**Status:** All six items have a shipped v1 slice or partial coverage;
+deeper target requirements per item remain PLANNED (see §10.2/§10.3/§10.5)
 
-- [ ] Expand Provider Compliance into full Provider Operations. **Not started.**
-- [ ] Provider directory, renewal, expiry, appeals, risk/performance context.
-      **Not started.**
-- [ ] Booking operations and escalation timeline. **Not started.**
+- [x] Expand Provider Compliance into full Provider Operations. First slice
+      shipped: provider-centric directory + operational detail at
+      `/dashboard/admin/providers` (`PROVIDER_VIEW`) with governed
+      marketplace-status transitions (`PROVIDER_SUSPEND`). The credential
+      queue remains its own workspace; deeper integration (appeals, risk
+      scoring, coverage zones) still PLANNED.
+- [x] Provider directory, renewal, expiry, appeals, risk/performance context.
+      **PARTIAL** — directory with credential expiry visibility and
+      compliance alerts shipped as part of the slice above; renewal
+      workflows, appeals-as-cases, and risk/performance scoring PLANNED.
+- [x] Booking operations and escalation timeline. Read-only v1 at
+      `/dashboard/admin/bookings` (`BOOKING_VIEW`): search + merged
+      operational timeline. Governed mutations (`BOOKING_OPERATE`) PLANNED.
 - [x] Review moderation queue. Shipped at `/dashboard/admin/reviews` under
       `REVIEW_MODERATE`: pending+flagged queue (oldest first) plus per-status
       browse, detail view with booking context and author/provider history
@@ -1284,8 +1329,19 @@ partially CURRENT (pre-dates this FRD); remaining PLANNED
       and public provider-review reads already filter to APPROVED. Automated
       signals, policy references, and "request investigation" remain open
       (see §10.5).
-- [ ] Safety/abuse case types. **Not started.**
-- [ ] Operational notifications and work queues. **Not started.**
+- [x] Safety/abuse case types. Shipped as `AdminCase`/`AdminCaseNote`
+      (`admin_cases`/`admin_case_notes` tables — **requires `prisma db push`**)
+      with SAFETY/ABUSE/REVIEW_INVESTIGATION/SUPPORT types at
+      `/dashboard/admin/cases` under `SUPPORT_CASE_MANAGE`: severity,
+      governed lifecycle (resolution required to resolve; reopen keeps
+      resolution history), ADMIN-only assignment, linked entities, note
+      trail, audited actions. Review moderation's "request investigation"
+      creates linked cases. SAFETY-specific workflow
+      (`SAFETY_INCIDENT_MANAGE`) PLANNED.
+- [x] Operational notifications and work queues. **PARTIAL** — the
+      work-queue half shipped at `/dashboard/admin/work-queues` (baseline
+      `ADMIN_DASHBOARD_VIEW`): aggregate counts of every actionable queue
+      with links, auto-refreshing. Pushed notifications PLANNED.
 
 ### Phase 3 — Payments, refunds, disputes, and privacy
 
@@ -1483,6 +1539,14 @@ For each delivered phase:
 | Audit Explorer v1 backend (Phase 1) | `apps/backend/src/services/adminAuditExplorer.service.ts`, `apps/backend/src/routes/adminAuditExplorer.routes.ts` |
 | Review Moderation Queue UI (Phase 2) | `apps/frontend/src/app/(dashboard)/dashboard/admin/reviews/page.tsx` |
 | Review Moderation Queue backend (Phase 2) | `apps/backend/src/services/adminReviewModeration.service.ts`, `apps/backend/src/routes/adminReviewModeration.routes.ts` |
+| Provider Operations UI (Phase 2) | `apps/frontend/src/app/(dashboard)/dashboard/admin/providers/page.tsx` |
+| Provider Operations backend (Phase 2) | `apps/backend/src/services/adminProviderOps.service.ts`, `apps/backend/src/routes/adminProviderOps.routes.ts` |
+| Booking Operations UI (Phase 2) | `apps/frontend/src/app/(dashboard)/dashboard/admin/bookings/page.tsx` |
+| Booking Operations backend (Phase 2) | `apps/backend/src/services/adminBookingOps.service.ts`, `apps/backend/src/routes/adminBookingOps.routes.ts` |
+| Cases UI (Phase 2) | `apps/frontend/src/app/(dashboard)/dashboard/admin/cases/page.tsx` |
+| Cases backend (Phase 2) | `apps/backend/src/services/adminCase.service.ts`, `apps/backend/src/routes/adminCase.routes.ts` |
+| Work Queues UI (Phase 2) | `apps/frontend/src/app/(dashboard)/dashboard/admin/work-queues/page.tsx` |
+| Work Queues backend (Phase 2) | `apps/backend/src/services/adminWorkQueues.service.ts`, `apps/backend/src/routes/adminWorkQueues.routes.ts` |
 | Booking domain/admin foundation | `apps/backend/src/services/booking.service.ts` |
 | Account lifecycle/deletion | `apps/backend/src/services/auth.service.ts`, `apps/backend/src/controllers/user.controller.ts`, `apps/backend/src/services/accountDeletionCascade.service.ts` |
 | Core domain and audit schema | `apps/backend/prisma/schema.prisma` |

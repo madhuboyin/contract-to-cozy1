@@ -1,4 +1,18 @@
-import { ShieldCheck, Hammer, BarChart2, BookOpen, Cpu, Sparkles, UserCog, ScrollText, Star } from 'lucide-react';
+import {
+  ShieldCheck,
+  Hammer,
+  BarChart2,
+  BookOpen,
+  Cpu,
+  Sparkles,
+  UserCog,
+  ScrollText,
+  Star,
+  Briefcase,
+  CalendarClock,
+  FolderKanban,
+  Inbox,
+} from 'lucide-react';
 import type { NavJob } from './jobsNavigation';
 
 /**
@@ -9,6 +23,15 @@ import type { NavJob } from './jobsNavigation';
  * the nav components special-case outside their generic render loop.
  */
 export const ADMIN_NAV: NavJob[] = [
+  {
+    key: 'admin-work-queues',
+    name: 'Work Queues',
+    href: '/dashboard/admin/work-queues',
+    icon: Inbox,
+    description: 'Every actionable admin queue at a glance',
+    engines: [],
+    globalHref: true,
+  },
   {
     key: 'admin-provider-compliance',
     name: 'Provider Compliance',
@@ -60,6 +83,33 @@ export const ADMIN_NAV: NavJob[] = [
     href: '/dashboard/admin/users',
     icon: UserCog,
     description: 'Search accounts, revoke sessions, change account status',
+    engines: [],
+    globalHref: true,
+  },
+  {
+    key: 'admin-provider-ops',
+    name: 'Provider Operations',
+    href: '/dashboard/admin/providers',
+    icon: Briefcase,
+    description: 'Provider directory, credentials, and marketplace actions',
+    engines: [],
+    globalHref: true,
+  },
+  {
+    key: 'admin-booking-ops',
+    name: 'Booking Operations',
+    href: '/dashboard/admin/bookings',
+    icon: CalendarClock,
+    description: 'Search bookings and trace operational timelines',
+    engines: [],
+    globalHref: true,
+  },
+  {
+    key: 'admin-cases',
+    name: 'Cases',
+    href: '/dashboard/admin/cases',
+    icon: FolderKanban,
+    description: 'Safety, abuse, and support case management',
     engines: [],
     globalHref: true,
   },

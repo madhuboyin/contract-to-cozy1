@@ -14,10 +14,12 @@ import {
   ListReviewsQuerySchema,
   ModerateReviewBodySchema,
 } from '../validators/adminReviewModeration.validators';
+import { RequestInvestigationBodySchema } from '../validators/adminCase.validators';
 import {
   getReviewDetailHandler,
   listReviewsHandler,
   moderateReviewHandler,
+  requestInvestigationHandler,
 } from '../controllers/adminReviewModeration.controller';
 
 const router = Router();
@@ -60,6 +62,22 @@ router.post(
   requireCapability('REVIEW_MODERATE'),
   validateBody(ModerateReviewBodySchema),
   moderateReviewHandler
+);
+
+/**
+ * @swagger
+ * /api/admin/reviews/{reviewId}/request-investigation:
+ *   post:
+ *     summary: Open a REVIEW_INVESTIGATION case linked to this review (does not change review status)
+ *     tags: [Admin Review Moderation]
+ *     security:
+ *       - bearerAuth: []
+ */
+router.post(
+  '/admin/reviews/:reviewId/request-investigation',
+  requireCapability('REVIEW_MODERATE'),
+  validateBody(RequestInvestigationBodySchema),
+  requestInvestigationHandler
 );
 
 export default router;
