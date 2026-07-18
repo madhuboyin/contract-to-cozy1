@@ -10,6 +10,7 @@ import {
   assertProjectComplianceApplicable,
   getProjectComplianceEnvelope,
 } from '../services/projectCompliance/context';
+import { evaluateFeatureContext } from '../modules/propertyContext/application/evaluateFeatureContext';
 
 // ── Open Data Fetch ────────────────────────────────────────────────────────────
 
@@ -68,11 +69,25 @@ export async function listPermits(req: Request, res: Response, next: NextFunctio
 
 export async function createManualPermit(req: Request, res: Response, next: NextFunction) {
   try {
+    const operationInput = { workTypes: req.body.workTypes ?? [] };
+    const evaluation = await evaluateFeatureContext(req.params.propertyId, req.user!.userId, {
+      featureKey: 'PERMITS',
+      operationKey: 'CREATE_MANUAL_PERMIT',
+      operationInput,
+    });
+    if (!evaluation.canExecute) {
+      throw new APIError(
+        'Complete the required property responsibility before adding this permit.',
+        409,
+        'PROPERTY_CONTEXT_INCOMPLETE',
+        { evaluation },
+      );
+    }
     await assertProjectComplianceApplicable(
       req.params.propertyId,
       req.user!.userId,
       'PERMIT_TRACKER',
-      { permitWorkTypes: req.body.workTypes ?? [] },
+      { permitWorkTypes: operationInput.workTypes },
       'permitTracking',
     );
     const permit = await permitTrackerService.createManualPermit(req.params.propertyId, req.body);

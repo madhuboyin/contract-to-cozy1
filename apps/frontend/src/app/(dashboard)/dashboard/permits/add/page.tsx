@@ -1,17 +1,46 @@
 'use client';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ChevronLeft } from 'lucide-react';
 import { api } from '@/lib/api/client';
-import type { CreatePermitPayload } from '@/types';
+import type { CreatePermitPayload, PermitWorkType } from '@/types';
 import AddPermitForm from '@/components/features/permits/AddPermitForm';
+import { PropertyContextCapturePanel } from '@/components/property-context/PropertyContextCapturePanel';
 
 export default function AddPermitPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const propertyId = searchParams.get('propertyId') ?? '';
+  const formRef = useRef<HTMLFormElement>(null);
+  const [workTypes, setWorkTypes] = useState<PermitWorkType[]>(['OTHER']);
+  const [contextInvoked, setContextInvoked] = useState(false);
+  const [contextReady, setContextReady] = useState(false);
+  const [resumeRequested, setResumeRequested] = useState(false);
+  const operationInput = useMemo(() => ({ workTypes }), [workTypes]);
+
+  const handleWorkTypesChange = useCallback((nextWorkTypes: PermitWorkType[]) => {
+    setWorkTypes(nextWorkTypes);
+  }, []);
+
+  useEffect(() => {
+    setContextInvoked(false);
+    setContextReady(false);
+    setResumeRequested(false);
+  }, [workTypes]);
+
+  useEffect(() => {
+    if (!contextReady || !resumeRequested) return;
+    setResumeRequested(false);
+    formRef.current?.requestSubmit();
+  }, [contextReady, resumeRequested]);
 
   async function handleSubmit(payload: CreatePermitPayload) {
+    if (!contextReady) {
+      setContextInvoked(true);
+      setResumeRequested(true);
+      return;
+    }
     await api.createManualPermit(propertyId, payload);
     router.push(`/dashboard/permits?propertyId=${propertyId}`);
   }
@@ -27,8 +56,20 @@ export default function AddPermitPage() {
 
       <h1 className="mb-6 text-xl font-bold">Add Permit</h1>
 
+      {contextInvoked ? <div className="mb-4">
+        <PropertyContextCapturePanel
+          propertyId={propertyId}
+          featureKey="PERMITS"
+          operationKey="CREATE_MANUAL_PERMIT"
+          operationInput={operationInput}
+          onReady={() => setContextReady(true)}
+        />
+      </div> : null}
+
       <AddPermitForm
+        ref={formRef}
         onSubmit={handleSubmit}
+        onWorkTypesChange={handleWorkTypesChange}
         onCancel={() => router.push(`/dashboard/permits?propertyId=${propertyId}`)}
       />
     </div>

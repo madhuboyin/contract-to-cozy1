@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { forwardRef, useEffect, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import type { CreatePermitPayload, PermitRecordCategory, PermitWorkType, PermitRecordStatus } from '@/types';
 import { CATEGORY_LABELS, WORK_TYPE_LABELS, STATUS_LABELS } from './PermitUtils';
@@ -7,6 +7,7 @@ import { CATEGORY_LABELS, WORK_TYPE_LABELS, STATUS_LABELS } from './PermitUtils'
 interface Props {
   onSubmit: (payload: CreatePermitPayload) => Promise<void>;
   onCancel: () => void;
+  onWorkTypesChange?: (workTypes: PermitWorkType[]) => void;
 }
 
 const CATEGORIES: PermitRecordCategory[] = [
@@ -28,7 +29,10 @@ const STATUSES: PermitRecordStatus[] = [
   'FINALED', 'EXPIRED', 'VOIDED', 'UNKNOWN',
 ];
 
-export default function AddPermitForm({ onSubmit, onCancel }: Props) {
+const AddPermitForm = forwardRef<HTMLFormElement, Props>(function AddPermitForm(
+  { onSubmit, onCancel, onWorkTypesChange },
+  ref,
+) {
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<{
     permitNumber: string;
@@ -57,6 +61,10 @@ export default function AddPermitForm({ onSubmit, onCancel }: Props) {
     finaledDate: '',
     notes: '',
   });
+
+  useEffect(() => {
+    onWorkTypesChange?.(form.workTypes);
+  }, [form.workTypes, onWorkTypesChange]);
 
   function toggleWorkType(wt: PermitWorkType) {
     setForm((f) => ({
@@ -96,7 +104,7 @@ export default function AddPermitForm({ onSubmit, onCancel }: Props) {
   const label = 'block text-xs font-medium text-[hsl(var(--mobile-text-secondary))] mb-1';
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form ref={ref} onSubmit={handleSubmit} className="space-y-4">
       <div>
         <label className={label}>Category *</label>
         <select
@@ -260,4 +268,8 @@ export default function AddPermitForm({ onSubmit, onCancel }: Props) {
       </div>
     </form>
   );
-}
+});
+
+AddPermitForm.displayName = 'AddPermitForm';
+
+export default AddPermitForm;

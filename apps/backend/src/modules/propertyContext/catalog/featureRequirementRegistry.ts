@@ -21,7 +21,7 @@ export interface FactRequirementDefinition {
   collectionPredicate?: 'ACTIVE_DATE_RANGE';
   operationInputWhen?: {
     key: string;
-    operator: 'EQUALS' | 'IN';
+    operator: 'EQUALS' | 'IN' | 'CONTAINS_ANY';
     value: string | number | boolean | Array<string | number | boolean>;
   };
 }
@@ -38,6 +38,55 @@ export interface FeatureContextRequirementDefinition {
 }
 
 export const FEATURE_CONTEXT_REQUIREMENTS: readonly FeatureContextRequirementDefinition[] = [
+  {
+    featureKey: 'PERMITS',
+    operationKey: 'CREATE_MANUAL_PERMIT',
+    policyVersion: '1.0',
+    promptStrategy: 'MINIMUM_PATH',
+    required: [
+      {
+        factKey: 'responsibility.roof', classification: 'REQUIRED_APPLICABILITY',
+        reasonCode: 'CONFIRM_ROOF_PERMIT_RESPONSIBILITY', priority: 10, acceptableStates: ['KNOWN'], captureKey: 'RESPONSIBILITY_ROOF',
+        operationInputWhen: { key: 'workTypes', operator: 'CONTAINS_ANY', value: ['ROOF_REPLACEMENT', 'ROOF_REPAIR', 'SOLAR'] },
+      },
+      {
+        factKey: 'responsibility.hvac', classification: 'REQUIRED_APPLICABILITY',
+        reasonCode: 'CONFIRM_HVAC_PERMIT_RESPONSIBILITY', priority: 10, acceptableStates: ['KNOWN'], captureKey: 'RESPONSIBILITY_HVAC',
+        operationInputWhen: { key: 'workTypes', operator: 'CONTAINS_ANY', value: ['HVAC_NEW', 'HVAC_REPLACEMENT'] },
+      },
+      {
+        factKey: 'responsibility.plumbing', classification: 'REQUIRED_APPLICABILITY',
+        reasonCode: 'CONFIRM_PLUMBING_PERMIT_RESPONSIBILITY', priority: 10, acceptableStates: ['KNOWN'], captureKey: 'RESPONSIBILITY_PLUMBING',
+        operationInputWhen: { key: 'workTypes', operator: 'CONTAINS_ANY', value: ['PLUMBING_NEW', 'PLUMBING_REPAIR', 'SEWER_WATER_LINE'] },
+      },
+      {
+        factKey: 'responsibility.sharedSystems', classification: 'REQUIRED_APPLICABILITY',
+        reasonCode: 'CONFIRM_SHARED_SYSTEM_PERMIT_RESPONSIBILITY', priority: 20, acceptableStates: ['KNOWN'], captureKey: 'RESPONSIBILITY_SHARED_SYSTEMS',
+        operationInputWhen: { key: 'workTypes', operator: 'CONTAINS_ANY', value: ['ELECTRICAL_PANEL', 'ELECTRICAL_WIRING', 'ROOM_ADDITION', 'GARAGE_CONVERSION', 'ADU', 'BASEMENT_FINISH', 'FIREPLACE', 'STRUCTURAL_REPAIR', 'INTERIOR_REMODEL', 'DEMOLITION'] },
+      },
+      {
+        factKey: 'responsibility.buildingExterior', classification: 'REQUIRED_APPLICABILITY',
+        reasonCode: 'CONFIRM_EXTERIOR_PERMIT_RESPONSIBILITY', priority: 20, acceptableStates: ['KNOWN'], captureKey: 'RESPONSIBILITY_BUILDING_EXTERIOR',
+        operationInputWhen: { key: 'workTypes', operator: 'CONTAINS_ANY', value: ['ROOM_ADDITION', 'ADU', 'FENCE', 'WINDOWS_DOORS', 'EXTERIOR_REMODEL'] },
+      },
+      {
+        factKey: 'responsibility.deckPatioBalcony', classification: 'REQUIRED_APPLICABILITY',
+        reasonCode: 'CONFIRM_DECK_PATIO_PERMIT_RESPONSIBILITY', priority: 10, acceptableStates: ['KNOWN'], captureKey: 'RESPONSIBILITY_DECK_PATIO_BALCONY',
+        operationInputWhen: { key: 'workTypes', operator: 'CONTAINS_ANY', value: ['DECK_PATIO'] },
+      },
+      {
+        factKey: 'responsibility.commonSafety', classification: 'REQUIRED_APPLICABILITY',
+        reasonCode: 'CONFIRM_POOL_PERMIT_RESPONSIBILITY', priority: 10, acceptableStates: ['KNOWN'], captureKey: 'RESPONSIBILITY_COMMON_SAFETY',
+        operationInputWhen: { key: 'workTypes', operator: 'CONTAINS_ANY', value: ['SWIMMING_POOL'] },
+      },
+      {
+        factKey: 'responsibility.landscaping', classification: 'REQUIRED_APPLICABILITY',
+        reasonCode: 'CONFIRM_GRADING_PERMIT_RESPONSIBILITY', priority: 10, acceptableStates: ['KNOWN'], captureKey: 'RESPONSIBILITY_LANDSCAPING',
+        operationInputWhen: { key: 'workTypes', operator: 'CONTAINS_ANY', value: ['GRADING_DRAINAGE'] },
+      },
+    ],
+    enhancements: [],
+  },
   {
     featureKey: 'PROJECTS',
     operationKey: 'CREATE_PROJECT',

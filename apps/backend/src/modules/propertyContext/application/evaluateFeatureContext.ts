@@ -39,7 +39,10 @@ function operationInputMatches(
   if (!condition) return true;
   const actual = operationInput?.[condition.key];
   if (condition.operator === 'EQUALS') return actual === condition.value;
-  return Array.isArray(condition.value) && condition.value.includes(actual as never);
+  if (!Array.isArray(condition.value)) return false;
+  const expected = condition.value;
+  if (condition.operator === 'IN') return expected.includes(actual as never);
+  return Array.isArray(actual) && actual.some((value) => expected.includes(value as never));
 }
 
 function requirementState(requirement: FactRequirementDefinition, fact?: PropertyFact): PropertyFact['state'] {
