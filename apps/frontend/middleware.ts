@@ -45,6 +45,8 @@ const ADMIN_CONSOLE_PREFIXES = [
   '/dashboard/admin/payments',
   '/dashboard/admin/privacy',
   '/dashboard/admin/content-reviews',
+  '/dashboard/admin/shared-data',
+  '/dashboard/admin/release-gates',
 ] as const;
 const NO_STORE_PAGE_PREFIXES = [
   ...SENSITIVE_PAGE_PREFIXES,

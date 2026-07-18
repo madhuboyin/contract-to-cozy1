@@ -176,6 +176,8 @@ immutable explanation of what happened.
 | Payment Operations (Phase 3) | CURRENT — PARTIAL | Local-ledger search + status summary under `PAYMENT_VIEW`; refund requests under `REFUND_REQUEST` (amount ≤ refundable remainder, one pending per payment); two-person decisions under `REFUND_APPROVE` (requester ≠ approver); fully audited | Refund execution + provider reconciliation (blocked on a payment-provider integration), amount/risk-sensitive approval thresholds, dispute evidence workflow, payout visibility |
 | Privacy Requests (Phase 3) | CURRENT — PARTIAL | Intake by subject email (snapshot survives deletion), governed lifecycle with identity-verification attribution, due dates + overdue display, legal holds blocking DELETION completion, under `PRIVACY_REQUEST_MANAGE` | Systems-searched tracking, export artifacts, deletion-execution linkage to the account-deletion cascade, final communication, sensitive export controls |
 | Pending Reviews (Phase 4) | CURRENT — PARTIAL | Knowledge editorial queues (REVIEW + APPROVED) with capability-separated transitions (`CONTENT_AUTHOR`/`CONTENT_REVIEW`/`CONTENT_PUBLISH`), required reasons, full audit; article upsert can no longer change lifecycle state | Immutable revisions, scheduling/Scheduled Releases, preview, rollback, DIY safety-tier queue, taxonomy management |
+| Shared Data Health (Phase 5) | CURRENT — PARTIAL | UI over the existing shared-data API: readiness/fallback-risk/signal diagnostics, consistency issues, dry-run-default backfill trigger (`SHARED_DATA_OPERATE`) | Per-property drill-down, backfill run history, scheduled consistency checks with alerting |
+| Release Gates (Phase 5) | CURRENT — PARTIAL | Read-only UI over the existing release-gate API: per-tool PASS/FAIL, cohort/rollout, incident counts, blocking issues (`RELEASE_GATE_VIEW`) | Gate change actions (cohort/rollout edits) with approval, gate history, incident links |
 
 ### 4.3 API-only and foundational capabilities
 
@@ -1440,14 +1442,24 @@ personalization records remain PLANNED
 
 ### Phase 5 — Platform operations and analytics expansion
 
-**Status:** Worker Jobs and product analytics partially CURRENT; API-only foundations exist
+**Status:** Started — Shared Data Health and Release Gate UIs shipped over
+the existing API-only foundations; worker expansion, analytics expansion,
+and permit/integration UI remain PLANNED
 
-- Shared Data Health UI.
-- Permit/integration management UI.
-- Release Gate UI.
-- Worker run detail, incident correlation, governed bulk triggers.
-- Marketplace, support, finance, content, catalog, and operations analytics.
-- Saved views, controlled exports, and alerts.
+- [x] Shared Data Health UI. Shipped at `/dashboard/admin/shared-data`
+      (`SHARED_DATA_OPERATE`, existing API): readiness/fallback-risk/signal
+      stat tiles from the diagnostics endpoint, consistency-issue list, and
+      a governed backfill trigger that defaults to a dry run.
+- [ ] Permit/integration management UI. **Not started.**
+- [x] Release Gate UI. Shipped at `/dashboard/admin/release-gates`
+      (`RELEASE_GATE_VIEW`, existing API): per-tool PASS/FAIL, rollout
+      cohort/percentage, active-incident counts, blocking issues, cohort
+      summary chips, re-check-all. Read-only — gate rules stay server-side.
+- [ ] Worker run detail, incident correlation, governed bulk triggers.
+      **Not started.**
+- [ ] Marketplace, support, finance, content, catalog, and operations
+      analytics. **Not started.**
+- [ ] Saved views, controlled exports, and alerts. **Not started.**
 
 ### Phase 6 — Advanced governance and automation
 
@@ -1625,6 +1637,8 @@ For each delivered phase:
 | Privacy Requests backend (Phase 3) | `apps/backend/src/services/adminPrivacyRequests.service.ts`, `apps/backend/src/routes/adminPrivacyRequests.routes.ts` |
 | Pending Reviews UI (Phase 4) | `apps/frontend/src/app/(dashboard)/dashboard/admin/content-reviews/page.tsx` |
 | Pending Reviews backend (Phase 4) | `apps/backend/src/services/adminContentGovernance.service.ts`, `apps/backend/src/routes/adminContentGovernance.routes.ts` |
+| Shared Data Health UI (Phase 5) | `apps/frontend/src/app/(dashboard)/dashboard/admin/shared-data/page.tsx` (backend pre-existing: `adminSharedData.routes.ts`) |
+| Release Gates UI (Phase 5) | `apps/frontend/src/app/(dashboard)/dashboard/admin/release-gates/page.tsx` (backend pre-existing: `releaseGate.routes.ts`) |
 | Booking domain/admin foundation | `apps/backend/src/services/booking.service.ts` |
 | Account lifecycle/deletion | `apps/backend/src/services/auth.service.ts`, `apps/backend/src/controllers/user.controller.ts`, `apps/backend/src/services/accountDeletionCascade.service.ts` |
 | Core domain and audit schema | `apps/backend/prisma/schema.prisma` |

@@ -15,6 +15,8 @@ import {
   CreditCard,
   ShieldQuestion,
   BookCheck,
+  Database,
+  ShieldEllipsis,
 } from 'lucide-react';
 import type { NavJob } from './jobsNavigation';
 
@@ -77,6 +79,24 @@ export const ADMIN_NAV: NavJob[] = [
     href: '/dashboard/knowledge-admin',
     icon: BookOpen,
     description: 'Manage Knowledge Hub articles',
+    engines: [],
+    globalHref: true,
+  },
+  {
+    key: 'admin-shared-data',
+    name: 'Shared Data Health',
+    href: '/dashboard/admin/shared-data',
+    icon: Database,
+    description: 'Readiness, consistency, and signal health diagnostics',
+    engines: [],
+    globalHref: true,
+  },
+  {
+    key: 'admin-release-gates',
+    name: 'Release Gates',
+    href: '/dashboard/admin/release-gates',
+    icon: ShieldEllipsis,
+    description: 'Per-tool release gate and rollout status',
     engines: [],
     globalHref: true,
   },
