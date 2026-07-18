@@ -6,6 +6,8 @@ import {
   assertProjectComplianceDecisionsApplicable,
   getProjectComplianceEnvelope,
 } from '../services/projectCompliance/context';
+import { evaluateFeatureContext } from '../modules/propertyContext/application/evaluateFeatureContext';
+import { APIError } from '../middleware/error.middleware';
 
 export async function getAssociation(req: Request, res: Response, next: NextFunction) {
   try {
@@ -57,19 +59,40 @@ export async function listApprovalRecords(req: Request, res: Response, next: Nex
 
 export async function createApprovalRecord(req: Request, res: Response, next: NextFunction) {
   try {
+    const work = { hoaWorkTypes: [req.body.workType] };
     await assertProjectComplianceDecisionsApplicable(
       req.params.propertyId,
       req.user!.userId,
       'HOA_COMPLIANCE',
-      { hoaWorkTypes: [req.body.workType] },
-      ['hoaCompliance', 'ownerProjectExecution'],
+      work,
+      ['hoaCompliance'],
+    );
+    const evaluation = await evaluateFeatureContext(req.params.propertyId, req.user!.userId, {
+      featureKey: 'HOA_COMPLIANCE',
+      operationKey: 'CREATE_APPROVAL_RECORD',
+      operationInput: { workType: req.body.workType },
+    });
+    if (!evaluation.canExecute) {
+      throw new APIError(
+        'Complete the required property responsibility before tracking this HOA approval.',
+        409,
+        'PROPERTY_CONTEXT_INCOMPLETE',
+        { evaluation },
+      );
+    }
+    await assertProjectComplianceDecisionsApplicable(
+      req.params.propertyId,
+      req.user!.userId,
+      'HOA_COMPLIANCE',
+      work,
+      ['ownerProjectExecution'],
     );
     const record = await hoaComplianceService.createApprovalRecord(req.params.propertyId, req.body);
     const propertyContext = await getProjectComplianceEnvelope(
       req.params.propertyId,
       req.user!.userId,
       'HOA_COMPLIANCE',
-      { hoaWorkTypes: [req.body.workType] },
+      work,
     );
 
     analyticsEmitter.track({

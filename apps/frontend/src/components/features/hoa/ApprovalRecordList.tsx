@@ -1,10 +1,12 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { CheckCircle2, XCircle, Clock, Plus, Trash2 } from 'lucide-react';
 import type { HoaApprovalRecord, HoaApprovalStatus, HoaWorkType, CreateHoaApprovalRecordPayload, UpdateHoaApprovalRecordPayload } from '@/types';
 import { APPROVAL_STATUS_LABELS, APPROVAL_STATUS_COLOR, WORK_TYPE_LABELS, formatDate } from './HoaUtils';
+import { PropertyContextCapturePanel } from '@/components/property-context/PropertyContextCapturePanel';
 
 interface Props {
+  propertyId: string;
   records: HoaApprovalRecord[];
   onUpdate: (recordId: string, patch: UpdateHoaApprovalRecordPayload) => Promise<void>;
   onAdd: (payload: CreateHoaApprovalRecordPayload) => Promise<void>;
@@ -20,12 +22,29 @@ function StatusIcon({ status }: { status: HoaApprovalStatus }) {
   return <div className="h-5 w-5 rounded-full border-2 border-neutral-300" />;
 }
 
-export default function ApprovalRecordList({ records, onUpdate, onAdd, onDelete }: Props) {
+export default function ApprovalRecordList({ propertyId, records, onUpdate, onAdd, onDelete }: Props) {
   const [adding, setAdding] = useState(false);
   const [newWorkType, setNewWorkType] = useState<HoaWorkType>('FENCE');
   const [newDescription, setNewDescription] = useState('');
   const [saving, setSaving] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [contextInvoked, setContextInvoked] = useState(false);
+  const [contextReady, setContextReady] = useState(false);
+  const [resumeRequested, setResumeRequested] = useState(false);
+  const addFormRef = useRef<HTMLFormElement>(null);
+  const operationInput = useMemo(() => ({ workType: newWorkType }), [newWorkType]);
+
+  useEffect(() => {
+    setContextInvoked(false);
+    setContextReady(false);
+    setResumeRequested(false);
+  }, [newWorkType]);
+
+  useEffect(() => {
+    if (!contextReady || !resumeRequested) return;
+    setResumeRequested(false);
+    addFormRef.current?.requestSubmit();
+  }, [contextReady, resumeRequested]);
 
   async function handleStatusChange(record: HoaApprovalRecord, status: HoaApprovalStatus) {
     setSaving(record.id);
@@ -41,12 +60,20 @@ export default function ApprovalRecordList({ records, onUpdate, onAdd, onDelete 
     }
   }
 
-  async function handleAdd() {
+  async function handleAdd(event: React.FormEvent) {
+    event.preventDefault();
+    if (!contextReady) {
+      setContextInvoked(true);
+      setResumeRequested(true);
+      return;
+    }
     setSaving('new');
     try {
       await onAdd({ workType: newWorkType, description: newDescription.trim() || undefined });
       setNewDescription('');
       setAdding(false);
+      setContextInvoked(false);
+      setContextReady(false);
     } finally {
       setSaving(null);
     }
@@ -132,7 +159,7 @@ export default function ApprovalRecordList({ records, onUpdate, onAdd, onDelete 
       ))}
 
       {adding ? (
-        <div className="space-y-2 pt-1">
+        <form ref={addFormRef} onSubmit={handleAdd} className="space-y-2 pt-1">
           <select
             value={newWorkType}
             onChange={(e) => setNewWorkType(e.target.value as HoaWorkType)}
@@ -149,17 +176,24 @@ export default function ApprovalRecordList({ records, onUpdate, onAdd, onDelete 
             placeholder="What are you planning to do? (optional)"
             className="w-full rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--mobile-brand-strong))]/30"
           />
+          {contextInvoked ? <PropertyContextCapturePanel
+            propertyId={propertyId}
+            featureKey="HOA_COMPLIANCE"
+            operationKey="CREATE_APPROVAL_RECORD"
+            operationInput={operationInput}
+            onReady={() => setContextReady(true)}
+          /> : null}
           <div className="flex items-center gap-2">
             <button
-              onClick={handleAdd}
+              type="submit"
               disabled={saving === 'new'}
               className="rounded-xl bg-[hsl(var(--mobile-brand-strong))] px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"
             >
               Add
             </button>
-            <button onClick={() => setAdding(false)} className="text-xs text-neutral-500">Cancel</button>
+            <button type="button" onClick={() => setAdding(false)} className="text-xs text-neutral-500">Cancel</button>
           </div>
-        </div>
+        </form>
       ) : (
         <button
           onClick={() => setAdding(true)}

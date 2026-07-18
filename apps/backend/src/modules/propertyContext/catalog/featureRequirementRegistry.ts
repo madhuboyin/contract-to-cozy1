@@ -39,6 +39,50 @@ export interface FeatureContextRequirementDefinition {
 
 export const FEATURE_CONTEXT_REQUIREMENTS: readonly FeatureContextRequirementDefinition[] = [
   {
+    featureKey: 'HOA_COMPLIANCE',
+    operationKey: 'CREATE_APPROVAL_RECORD',
+    policyVersion: '1.0',
+    promptStrategy: 'MINIMUM_PATH',
+    required: [
+      {
+        factKey: 'responsibility.buildingExterior', classification: 'REQUIRED_APPLICABILITY',
+        reasonCode: 'CONFIRM_EXTERIOR_HOA_RESPONSIBILITY', priority: 10, acceptableStates: ['KNOWN'], captureKey: 'RESPONSIBILITY_BUILDING_EXTERIOR',
+        operationInputWhen: { key: 'workType', operator: 'IN', value: ['EXTERIOR_PAINT', 'FENCE', 'ROOM_ADDITION', 'WINDOWS_DOORS', 'SHED_OUTBUILDING', 'SATELLITE_ANTENNA'] },
+      },
+      {
+        factKey: 'responsibility.roof', classification: 'REQUIRED_APPLICABILITY',
+        reasonCode: 'CONFIRM_ROOF_HOA_RESPONSIBILITY', priority: 10, acceptableStates: ['KNOWN'], captureKey: 'RESPONSIBILITY_ROOF',
+        operationInputWhen: { key: 'workType', operator: 'IN', value: ['ROOFING', 'SOLAR'] },
+      },
+      {
+        factKey: 'responsibility.sharedSystems', classification: 'REQUIRED_APPLICABILITY',
+        reasonCode: 'CONFIRM_SHARED_SYSTEM_HOA_RESPONSIBILITY', priority: 20, acceptableStates: ['KNOWN'], captureKey: 'RESPONSIBILITY_SHARED_SYSTEMS',
+        operationInputWhen: { key: 'workType', operator: 'IN', value: ['ROOM_ADDITION'] },
+      },
+      {
+        factKey: 'responsibility.deckPatioBalcony', classification: 'REQUIRED_APPLICABILITY',
+        reasonCode: 'CONFIRM_DECK_PATIO_HOA_RESPONSIBILITY', priority: 10, acceptableStates: ['KNOWN'], captureKey: 'RESPONSIBILITY_DECK_PATIO_BALCONY',
+        operationInputWhen: { key: 'workType', operator: 'IN', value: ['DECK_PATIO'] },
+      },
+      {
+        factKey: 'responsibility.landscaping', classification: 'REQUIRED_APPLICABILITY',
+        reasonCode: 'CONFIRM_LANDSCAPING_HOA_RESPONSIBILITY', priority: 10, acceptableStates: ['KNOWN'], captureKey: 'RESPONSIBILITY_LANDSCAPING',
+        operationInputWhen: { key: 'workType', operator: 'IN', value: ['LANDSCAPING'] },
+      },
+      {
+        factKey: 'responsibility.drivewayWalkways', classification: 'REQUIRED_APPLICABILITY',
+        reasonCode: 'CONFIRM_DRIVEWAY_HOA_RESPONSIBILITY', priority: 10, acceptableStates: ['KNOWN'], captureKey: 'RESPONSIBILITY_DRIVEWAY_WALKWAYS',
+        operationInputWhen: { key: 'workType', operator: 'IN', value: ['DRIVEWAY'] },
+      },
+      {
+        factKey: 'responsibility.commonSafety', classification: 'REQUIRED_APPLICABILITY',
+        reasonCode: 'CONFIRM_POOL_HOA_RESPONSIBILITY', priority: 10, acceptableStates: ['KNOWN'], captureKey: 'RESPONSIBILITY_COMMON_SAFETY',
+        operationInputWhen: { key: 'workType', operator: 'IN', value: ['POOL'] },
+      },
+    ],
+    enhancements: [],
+  },
+  {
     featureKey: 'PERMITS',
     operationKey: 'CREATE_MANUAL_PERMIT',
     policyVersion: '1.0',

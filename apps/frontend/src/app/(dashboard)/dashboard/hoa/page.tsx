@@ -128,6 +128,7 @@ export default function HoaCompliancePage() {
               </p>
             ) : null}
             <ApprovalRecordList
+              propertyId={propertyId}
               records={records}
               onUpdate={handleUpdateRecord}
               onAdd={handleAddRecord}
