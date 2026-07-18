@@ -2,8 +2,13 @@
 //
 // React Query hooks for the Admin Booking Operations workspace.
 
-import { useQuery } from '@tanstack/react-query';
-import { BookingStatus, fetchAdminBookingDetail, fetchAdminBookings } from '@/lib/api/adminBookingOps';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  BookingStatus,
+  fetchAdminBookingDetail,
+  fetchAdminBookings,
+  openBookingDisputeCase,
+} from '@/lib/api/adminBookingOps';
 
 export function useAdminBookingSearch(q: string, status: BookingStatus | undefined, page = 1) {
   return useQuery({
@@ -19,5 +24,16 @@ export function useAdminBookingDetail(bookingId: string | null) {
     queryFn: () => fetchAdminBookingDetail(bookingId as string),
     enabled: !!bookingId,
     staleTime: 5_000,
+  });
+}
+
+export function useOpenBookingDisputeCase(bookingId: string | null) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (reason: string) => openBookingDisputeCase(bookingId as string, reason),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['admin-case-list'] });
+      qc.invalidateQueries({ queryKey: ['admin-work-queues'] });
+    },
   });
 }

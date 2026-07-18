@@ -14,6 +14,16 @@ import { AdminConsoleShell, AdminRouteState } from '@/components/ops/AdminConsol
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Textarea } from '@/components/ui/textarea';
+import { useToast } from '@/components/ui/use-toast';
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog';
 import {
   Select,
   SelectContent,
@@ -21,7 +31,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { useAdminBookingDetail, useAdminBookingSearch } from '@/hooks/useAdminBookingOps';
+import {
+  useAdminBookingDetail,
+  useAdminBookingSearch,
+  useOpenBookingDisputeCase,
+} from '@/hooks/useAdminBookingOps';
 import type { BookingStatus } from '@/lib/api/adminBookingOps';
 
 const STATUS_BADGE: Record<string, string> = {
@@ -50,7 +64,11 @@ function fmtDate(value: string | null): string {
 }
 
 function BookingDetailPanel({ bookingId }: { bookingId: string }) {
+  const { toast } = useToast();
   const detailQ = useAdminBookingDetail(bookingId);
+  const openDispute = useOpenBookingDisputeCase(bookingId);
+  const [disputeOpen, setDisputeOpen] = useState(false);
+  const [disputeReason, setDisputeReason] = useState('');
 
   if (detailQ.isLoading) {
     return (
@@ -119,6 +137,60 @@ function BookingDetailPanel({ bookingId }: { bookingId: string }) {
           Review on file: {b.review.rating}★ ({b.review.status}), submitted {fmtDate(b.review.createdAt)}
         </p>
       ) : null}
+
+      <div className="border-t border-slate-100 pt-3">
+        <Button size="sm" variant="outline" onClick={() => setDisputeOpen(true)}>
+          Open dispute case
+        </Button>
+      </div>
+
+      <Dialog
+        open={disputeOpen}
+        onOpenChange={(next) => {
+          if (!next) setDisputeReason('');
+          setDisputeOpen(next);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Open a dispute case for {b.bookingNumber}</DialogTitle>
+            <DialogDescription>
+              Creates a DISPUTE case linked to this booking (one open dispute case per booking). The booking&apos;s
+              status is not changed.
+            </DialogDescription>
+          </DialogHeader>
+          <Textarea
+            value={disputeReason}
+            onChange={(e) => setDisputeReason(e.target.value)}
+            placeholder="What is disputed? (required) — recorded as the case description"
+            className="min-h-[80px]"
+          />
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => setDisputeOpen(false)} disabled={openDispute.isPending}>
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              disabled={openDispute.isPending || !disputeReason.trim()}
+              onClick={() =>
+                openDispute.mutate(disputeReason.trim(), {
+                  onSuccess: (created) => {
+                    setDisputeOpen(false);
+                    setDisputeReason('');
+                    toast({ title: 'Dispute case opened', description: `${created.caseNumber} created.` });
+                  },
+                  onError: (err: any) => {
+                    toast({ title: 'Failed to open dispute case', description: err?.message, variant: 'destructive' });
+                  },
+                })
+              }
+            >
+              {openDispute.isPending ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : null}
+              Open dispute case
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

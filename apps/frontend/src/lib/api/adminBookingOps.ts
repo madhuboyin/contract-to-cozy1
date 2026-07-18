@@ -78,3 +78,14 @@ export async function fetchAdminBookingDetail(bookingId: string): Promise<Bookin
   const res = await api.get<BookingDetail>(`/api/admin/bookings/${bookingId}`);
   return res.data;
 }
+
+export async function openBookingDisputeCase(
+  bookingId: string,
+  reason: string,
+): Promise<{ id: string; caseNumber: string }> {
+  const res = await api.post<{ id: string; caseNumber: string }>(
+    `/api/admin/bookings/${bookingId}/dispute-case`,
+    { reason },
+  );
+  return res.data;
+}

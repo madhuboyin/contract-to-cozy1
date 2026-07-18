@@ -10,6 +10,7 @@ import {
   getPaymentDetail,
   listPayments,
   listRefundRequests,
+  withdrawRefundRequest,
 } from '../services/adminPaymentOps.service';
 
 function isPaymentOpsError(err: unknown): err is AdminPaymentOpsError {
@@ -24,6 +25,7 @@ const CLIENT_ERROR_CODES = new Set([
   'REQUEST_NOT_FOUND',
   'REQUEST_NOT_PENDING',
   'SELF_APPROVAL_FORBIDDEN',
+  'NOT_REQUESTER',
 ]);
 
 function statusForCode(code: string): number {
@@ -92,6 +94,21 @@ export async function listRefundRequestsHandler(req: AuthRequest, res: Response)
   } catch (err: any) {
     logger.error({ err }, '[ADMIN-PAYMENT-OPS] Failed to list refund requests');
     res.status(500).json({ success: false, error: { message: 'Failed to list refund requests' } });
+  }
+}
+
+export async function withdrawRefundRequestHandler(req: AuthRequest, res: Response): Promise<void> {
+  const { reason } = req.body;
+  try {
+    const result = await withdrawRefundRequest(
+      { requestId: req.params.requestId, actorId: req.user!.userId, reason },
+      { req }
+    );
+    res.json({ success: true, data: result });
+  } catch (err: any) {
+    if (handleClientError(err, res)) return;
+    logger.error({ err }, '[ADMIN-PAYMENT-OPS] Failed to withdraw refund request');
+    res.status(500).json({ success: false, error: { message: 'Failed to withdraw refund request' } });
   }
 }
 

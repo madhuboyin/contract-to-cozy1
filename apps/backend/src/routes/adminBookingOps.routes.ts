@@ -8,11 +8,13 @@ import { Router } from 'express';
 import { UserRole } from '../types/auth.types';
 import { authenticate, requireMfa, requireRole } from '../middleware/auth.middleware';
 import { requireCapability } from '../middleware/adminCapability.middleware';
-import { validate } from '../middleware/validate.middleware';
+import { validate, validateBody } from '../middleware/validate.middleware';
 import { ListBookingsQuerySchema } from '../validators/adminBookingOps.validators';
+import { RequestInvestigationBodySchema } from '../validators/adminCase.validators';
 import {
   getBookingDetailHandler,
   listBookingsHandler,
+  openDisputeCaseHandler,
 } from '../controllers/adminBookingOps.controller';
 
 const router = Router();
@@ -40,5 +42,21 @@ router.get('/admin/bookings', requireCapability('BOOKING_VIEW'), validate(ListBo
  *       - bearerAuth: []
  */
 router.get('/admin/bookings/:bookingId', requireCapability('BOOKING_VIEW'), getBookingDetailHandler);
+
+/**
+ * @swagger
+ * /api/admin/bookings/{bookingId}/dispute-case:
+ *   post:
+ *     summary: Open a DISPUTE case linked to this booking (one open dispute case per booking)
+ *     tags: [Admin Booking Operations]
+ *     security:
+ *       - bearerAuth: []
+ */
+router.post(
+  '/admin/bookings/:bookingId/dispute-case',
+  requireCapability('DISPUTE_MANAGE'),
+  validateBody(RequestInvestigationBodySchema),
+  openDisputeCaseHandler
+);
 
 export default router;

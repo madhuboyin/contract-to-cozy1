@@ -272,6 +272,46 @@ test('decideRefundRequest enforces the two-person rule and pending-only decision
   );
 });
 
+test('withdrawRefundRequest is requester-only, pending-only, and frees the pending slot', async () => {
+  const { paymentOpsService, state } = createHarness();
+  const created = await paymentOpsService.createRefundRequest({
+    paymentId: 'pay-1',
+    actorId: 'admin-1',
+    amount: 100,
+    reason: 'opened in error',
+  });
+
+  await assert.rejects(
+    () => paymentOpsService.withdrawRefundRequest({ requestId: created.id, actorId: 'admin-2', reason: 'x' }),
+    (err) => err.code === 'NOT_REQUESTER'
+  );
+
+  const withdrawn = await paymentOpsService.withdrawRefundRequest({
+    requestId: created.id,
+    actorId: 'admin-1',
+    reason: 'wrong amount entered',
+  });
+  assert.equal(withdrawn.status, 'CANCELLED');
+
+  const audit = state.auditLogs.at(-1);
+  assert.equal(audit.action, 'ADMIN_WITHDRAW_REFUND_REQUEST');
+  assert.equal(audit.metadata.capability, 'REFUND_REQUEST');
+
+  await assert.rejects(
+    () => paymentOpsService.withdrawRefundRequest({ requestId: created.id, actorId: 'admin-1', reason: 'again' }),
+    (err) => err.code === 'REQUEST_NOT_PENDING'
+  );
+
+  // The pending slot is freed — a new request on the same payment succeeds.
+  const second = await paymentOpsService.createRefundRequest({
+    paymentId: 'pay-1',
+    actorId: 'admin-1',
+    amount: 50,
+    reason: 'corrected amount',
+  });
+  assert.equal(second.status, 'PENDING_APPROVAL');
+});
+
 test('listRefundRequests defaults to pending approval with payment context', async () => {
   const { paymentOpsService } = createHarness();
   await paymentOpsService.createRefundRequest({ paymentId: 'pay-1', actorId: 'admin-1', amount: 25, reason: 'partial' });

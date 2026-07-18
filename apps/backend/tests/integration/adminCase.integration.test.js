@@ -15,6 +15,9 @@ function createHarness(overrides = {}) {
     reviews: [
       { id: 'rev-1', status: 'FLAGGED', authorId: 'user-1', providerId: 'provider-1', title: 'Suspicious review' },
     ],
+    bookings: [
+      { id: 'b-1', bookingNumber: 'B-2026-000001', status: 'DISPUTED' },
+    ],
     auditLogs: [],
     ...overrides,
   };
@@ -104,6 +107,12 @@ function createHarness(overrides = {}) {
         return r ? { ...r } : null;
       },
     },
+    booking: {
+      findUnique: async ({ where }) => {
+        const b = state.bookings.find((x) => x.id === where.id);
+        return b ? { ...b } : null;
+      },
+    },
     auditLog: {
       create: async ({ data }) => {
         const record = { id: `audit-${state.auditLogs.length + 1}`, createdAt: new Date(), ...data };
@@ -128,14 +137,16 @@ function createHarness(overrides = {}) {
     '../../src/services/adminAudit.service.ts',
     '../../src/services/adminCase.service.ts',
     '../../src/services/adminReviewModeration.service.ts',
+    '../../src/services/adminBookingOps.service.ts',
   ]) {
     delete require.cache[require.resolve(relativePath)];
   }
 
   const caseService = require('../../src/services/adminCase.service.ts');
   const moderationService = require('../../src/services/adminReviewModeration.service.ts');
+  const bookingOpsService = require('../../src/services/adminBookingOps.service.ts');
 
-  return { state, caseService, moderationService };
+  return { state, caseService, moderationService, bookingOpsService };
 }
 
 test('createCase assigns a case number, opens as OPEN, and audits with case metadata', async () => {
@@ -228,6 +239,35 @@ test('addCaseNote appends to the trail and shows author names in detail', async 
   await assert.rejects(
     () => caseService.addCaseNote({ caseId: 'nope', actorId: 'admin-1', body: 'x' }),
     (err) => err.code === 'CASE_NOT_FOUND'
+  );
+});
+
+test('openDisputeCase creates a linked DISPUTE case under DISPUTE_MANAGE and blocks a second open one', async () => {
+  const { bookingOpsService, state } = createHarness();
+
+  await assert.rejects(
+    () => bookingOpsService.openDisputeCase({ bookingId: 'missing', actorId: 'admin-1', reason: 'x' }),
+    (err) => err.code === 'BOOKING_NOT_FOUND'
+  );
+
+  const created = await bookingOpsService.openDisputeCase({
+    bookingId: 'b-1',
+    actorId: 'admin-1',
+    reason: 'Homeowner claims work was not completed.',
+  });
+  assert.equal(created.type, 'DISPUTE');
+  assert.equal(created.severity, 'HIGH');
+  assert.equal(created.entityType, 'BOOKING');
+  assert.equal(created.entityId, 'b-1');
+  assert.match(created.title, /B-2026-000001 \(DISPUTED\)/);
+
+  const audit = state.auditLogs.at(-1);
+  assert.equal(audit.action, 'ADMIN_OPEN_BOOKING_DISPUTE_CASE');
+  assert.equal(audit.metadata.capability, 'DISPUTE_MANAGE');
+
+  await assert.rejects(
+    () => bookingOpsService.openDisputeCase({ bookingId: 'b-1', actorId: 'admin-2', reason: 'duplicate' }),
+    (err) => err.code === 'DISPUTE_CASE_ALREADY_OPEN'
   );
 });
 

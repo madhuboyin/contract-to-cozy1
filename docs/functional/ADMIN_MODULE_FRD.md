@@ -1408,12 +1408,17 @@ reconciliation against the provider, and exports remain PLANNED
       (`REFUND_REQUEST`) and two-person approval (`REFUND_APPROVE`,
       requester ≠ approver, amount ≤ refundable remainder, one pending
       request per payment) shipped via the `RefundRequest` model (requires
-      `prisma db push`). **Execution is deliberately absent** — no money
+      `prisma db push`). Requesters can withdraw their own pending request
+      (→ CANCELLED, frees the pending slot; anyone else must REJECT under
+      `REFUND_APPROVE`). **Execution is deliberately absent** — no money
       moves until a payment-provider integration exists; APPROVED is
       terminal.
 - [x] Dispute/chargeback case management. **PARTIAL** — DISPUTE added to
       `AdminCaseType`; disputes are managed as cases at
-      `/dashboard/admin/cases`. Evidence deadlines, documents, and
+      `/dashboard/admin/cases`, and Booking Operations can open a linked
+      DISPUTE case directly from a booking (`DISPUTE_MANAGE`, any booking
+      status since chargebacks arrive on completed bookings, one open
+      dispute case per booking). Evidence deadlines, documents, and
       chargeback-specific workflow PLANNED.
 - [x] Privacy request intake, verification, export, correction, deletion, legal
       hold, and final communication. **PARTIAL** — intake/verification/

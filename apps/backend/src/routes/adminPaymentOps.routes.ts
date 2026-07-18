@@ -23,6 +23,7 @@ import {
   getPaymentDetailHandler,
   listPaymentsHandler,
   listRefundRequestsHandler,
+  withdrawRefundRequestHandler,
 } from '../controllers/adminPaymentOps.controller';
 
 const router = Router();
@@ -82,6 +83,22 @@ router.get(
   requireCapability('PAYMENT_VIEW'),
   validate(ListRefundRequestsQuerySchema),
   listRefundRequestsHandler
+);
+
+/**
+ * @swagger
+ * /api/admin/refund-requests/{requestId}/withdraw:
+ *   post:
+ *     summary: Withdraw a pending refund request (requester only; frees the pending slot)
+ *     tags: [Admin Payment Operations]
+ *     security:
+ *       - bearerAuth: []
+ */
+router.post(
+  '/admin/refund-requests/:requestId/withdraw',
+  requireCapability('REFUND_REQUEST'),
+  validateBody(DecideRefundRequestBodySchema.pick({ reason: true })),
+  withdrawRefundRequestHandler
 );
 
 /**

@@ -8,8 +8,10 @@
 // no provider internalNotes, property location is city/state only.
 // Governed mutations (BOOKING_OPERATE) are deliberately not in this slice.
 
-import { Prisma } from '@prisma/client';
+import { AdminCaseSeverity, Prisma } from '@prisma/client';
+import { Request } from 'express';
 import { prisma } from '../lib/prisma';
+import { createCase } from './adminCase.service';
 
 export class AdminBookingOpsError extends Error {
   code: string;
@@ -162,4 +164,61 @@ export async function getBookingDetail(bookingId: string) {
 
   const { timeline, ...rest } = booking;
   return { ...rest, events };
+}
+
+export interface OpenDisputeCaseInput {
+  bookingId: string;
+  actorId: string;
+  reason: string;
+  severity?: AdminCaseSeverity;
+}
+
+/**
+ * Bridges a booking into case management (FRD §10.4: disputes/chargebacks
+ * as cases): opens a DISPUTE AdminCase linked to the booking, authorized
+ * under DISPUTE_MANAGE at the route layer. Allowed for any booking status —
+ * chargebacks routinely arrive on COMPLETED bookings — but one booking can
+ * only have one open dispute case at a time.
+ */
+export async function openDisputeCase(
+  input: OpenDisputeCaseInput,
+  ctx: { req?: Pick<Request, 'ip' | 'headers'> | null } = {}
+) {
+  const booking = await prisma.booking.findUnique({
+    where: { id: input.bookingId },
+    select: { id: true, bookingNumber: true, status: true },
+  });
+  if (!booking) {
+    throw new AdminBookingOpsError('BOOKING_NOT_FOUND', `No booking with id "${input.bookingId}".`);
+  }
+
+  const openExisting = await prisma.adminCase.count({
+    where: {
+      type: 'DISPUTE',
+      entityType: 'BOOKING',
+      entityId: input.bookingId,
+      status: { in: ['OPEN', 'IN_PROGRESS'] },
+    },
+  });
+  if (openExisting > 0) {
+    throw new AdminBookingOpsError(
+      'DISPUTE_CASE_ALREADY_OPEN',
+      `Booking ${booking.bookingNumber} already has an open dispute case.`
+    );
+  }
+
+  return createCase(
+    {
+      actorId: input.actorId,
+      type: 'DISPUTE',
+      severity: input.severity ?? 'HIGH',
+      title: `Dispute on booking ${booking.bookingNumber} (${booking.status})`,
+      description: input.reason,
+      entityType: 'BOOKING',
+      entityId: booking.id,
+      capability: 'DISPUTE_MANAGE',
+      auditAction: 'ADMIN_OPEN_BOOKING_DISPUTE_CASE',
+    },
+    ctx
+  );
 }

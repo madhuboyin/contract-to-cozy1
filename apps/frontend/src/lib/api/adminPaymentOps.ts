@@ -116,6 +116,17 @@ export async function fetchAdminRefundRequests(
   return res.data;
 }
 
+export async function withdrawAdminRefundRequest(
+  requestId: string,
+  reason: string,
+): Promise<{ previousStatus: RefundRequestStatus; status: RefundRequestStatus }> {
+  const res = await api.post<{ previousStatus: RefundRequestStatus; status: RefundRequestStatus }>(
+    `/api/admin/refund-requests/${requestId}/withdraw`,
+    { reason },
+  );
+  return res.data;
+}
+
 export async function decideAdminRefundRequest(
   requestId: string,
   decision: 'APPROVE' | 'REJECT',

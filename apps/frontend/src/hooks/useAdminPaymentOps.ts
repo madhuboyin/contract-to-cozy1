@@ -11,6 +11,7 @@ import {
   fetchAdminRefundRequests,
   PaymentStatus,
   RefundRequestStatus,
+  withdrawAdminRefundRequest,
 } from '@/lib/api/adminPaymentOps';
 
 export function useAdminPaymentSearch(q: string, status: PaymentStatus | undefined, page = 1) {
@@ -46,6 +47,18 @@ export function useCreateAdminRefundRequest(paymentId: string | null) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['admin-payment-detail', paymentId] });
       qc.invalidateQueries({ queryKey: ['admin-refund-queue'] });
+    },
+  });
+}
+
+export function useWithdrawAdminRefundRequest() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ requestId, reason }: { requestId: string; reason: string }) =>
+      withdrawAdminRefundRequest(requestId, reason),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['admin-refund-queue'] });
+      qc.invalidateQueries({ queryKey: ['admin-payment-detail'] });
     },
   });
 }

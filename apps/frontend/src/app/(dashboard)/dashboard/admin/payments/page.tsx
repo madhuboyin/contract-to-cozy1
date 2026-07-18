@@ -38,6 +38,7 @@ import {
   useAdminRefundQueue,
   useCreateAdminRefundRequest,
   useDecideAdminRefundRequest,
+  useWithdrawAdminRefundRequest,
 } from '@/hooks/useAdminPaymentOps';
 import type { PaymentStatus, RefundQueueRow } from '@/lib/api/adminPaymentOps';
 
@@ -202,6 +203,60 @@ function DecideDialog({
   );
 }
 
+// ─── Generic reason-gated dialog ───────────────────────────────────────────────
+
+function ReasonOnlyDialog({
+  open,
+  onOpenChange,
+  title,
+  description,
+  confirmLabel,
+  pending,
+  onConfirm,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  title: string;
+  description: string;
+  confirmLabel: string;
+  pending: boolean;
+  onConfirm: (reason: string) => void;
+}) {
+  const [reason, setReason] = useState('');
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) setReason('');
+        onOpenChange(next);
+      }}
+    >
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription>{description}</DialogDescription>
+        </DialogHeader>
+        <Textarea
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          placeholder="Reason (required) — this is recorded in the audit log"
+          className="min-h-[80px]"
+        />
+        <DialogFooter>
+          <Button variant="outline" size="sm" onClick={() => onOpenChange(false)} disabled={pending}>
+            Cancel
+          </Button>
+          <Button size="sm" disabled={pending || !reason.trim()} onClick={() => onConfirm(reason.trim())}>
+            {pending ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : null}
+            {confirmLabel}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ─── Payment detail panel ──────────────────────────────────────────────────────
 
 function PaymentDetailPanel({ paymentId }: { paymentId: string }) {
@@ -339,6 +394,8 @@ export default function AdminPaymentOpsPage() {
   const searchQ = useAdminPaymentSearch(searchTerm, statusFilter);
   const refundQueueQ = useAdminRefundQueue();
   const decide = useDecideAdminRefundRequest();
+  const withdraw = useWithdrawAdminRefundRequest();
+  const [withdrawTarget, setWithdrawTarget] = useState<RefundQueueRow | null>(null);
 
   if (guard.status !== 'ready') return guard.node;
 
@@ -374,6 +431,9 @@ export default function AdminPaymentOpsPage() {
                   </Button>
                   <Button size="sm" variant="outline" className="h-7 text-[11px]" onClick={() => setDecideTarget({ request: r, decision: 'REJECT' })}>
                     Reject
+                  </Button>
+                  <Button size="sm" variant="ghost" className="h-7 text-[11px]" onClick={() => setWithdrawTarget(r)}>
+                    Withdraw
                   </Button>
                 </span>
               </li>
@@ -477,6 +537,30 @@ export default function AdminPaymentOpsPage() {
           )}
         </div>
       </div>
+
+      <ReasonOnlyDialog
+        open={withdrawTarget !== null}
+        onOpenChange={(next) => !next && setWithdrawTarget(null)}
+        title={`Withdraw refund request of ${withdrawTarget ? fmtAmount(withdrawTarget.amount, withdrawTarget.payment.currency) : ''}`}
+        description="Only the administrator who opened the request can withdraw it. Withdrawing frees the payment for a new request."
+        confirmLabel="Withdraw request"
+        pending={withdraw.isPending}
+        onConfirm={(reason) => {
+          if (!withdrawTarget) return;
+          withdraw.mutate(
+            { requestId: withdrawTarget.id, reason },
+            {
+              onSuccess: () => {
+                setWithdrawTarget(null);
+                toast({ title: 'Request withdrawn' });
+              },
+              onError: (err: any) => {
+                toast({ title: 'Failed to withdraw', description: err?.message, variant: 'destructive' });
+              },
+            },
+          );
+        }}
+      />
 
       <DecideDialog
         target={decideTarget}

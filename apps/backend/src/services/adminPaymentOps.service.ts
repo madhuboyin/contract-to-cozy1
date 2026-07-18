@@ -261,6 +261,64 @@ export async function listRefundRequests(input: ListRefundRequestsInput = {}) {
   return { requests, total, page, limit };
 }
 
+export interface WithdrawRefundRequestInput {
+  requestId: string;
+  actorId: string;
+  reason: string;
+}
+
+/**
+ * Requester-only withdrawal of a pending request (status → CANCELLED).
+ * Anyone else who wants a pending request gone must REJECT it under
+ * REFUND_APPROVE — withdrawal is deliberately not a second rejection path.
+ * Cancelling frees the one-pending-request-per-payment slot.
+ */
+export async function withdrawRefundRequest(input: WithdrawRefundRequestInput, ctx: ActionContext = {}) {
+  const request = await prisma.refundRequest.findUnique({
+    where: { id: input.requestId },
+    select: { id: true, status: true, requestedById: true, paymentId: true, amount: true },
+  });
+  if (!request) {
+    throw new AdminPaymentOpsError('REQUEST_NOT_FOUND', `No refund request with id "${input.requestId}".`);
+  }
+
+  if (request.status !== 'PENDING_APPROVAL') {
+    throw new AdminPaymentOpsError('REQUEST_NOT_PENDING', `This refund request is already ${request.status}.`);
+  }
+
+  if (request.requestedById !== input.actorId) {
+    throw new AdminPaymentOpsError(
+      'NOT_REQUESTER',
+      'Only the administrator who opened a refund request can withdraw it.'
+    );
+  }
+
+  await prisma.refundRequest.update({
+    where: { id: input.requestId },
+    data: {
+      status: 'CANCELLED',
+      decidedById: input.actorId,
+      decidedAt: new Date(),
+      decisionReason: input.reason,
+    },
+  });
+
+  await recordAdminAction({
+    actorId: input.actorId,
+    action: 'ADMIN_WITHDRAW_REFUND_REQUEST',
+    entityType: 'REFUND_REQUEST',
+    entityId: input.requestId,
+    capability: 'REFUND_REQUEST',
+    reason: input.reason,
+    oldValues: { status: request.status } as Prisma.InputJsonValue,
+    newValues: { status: 'CANCELLED' } as Prisma.InputJsonValue,
+    relatedRefs: { paymentId: request.paymentId, amount: request.amount.toString() },
+    req: ctx.req,
+  });
+
+  return { previousStatus: request.status, status: 'CANCELLED' as const };
+}
+
 export interface DecideRefundRequestInput {
   requestId: string;
   actorId: string;
