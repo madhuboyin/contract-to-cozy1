@@ -175,6 +175,7 @@ immutable explanation of what happened.
 | Work Queues (Phase 2) | CURRENT — PARTIAL | Aggregate counts of actionable queues (pending credentials, new compliance alerts, providers awaiting approval, review moderation queue, open/critical cases, disputed bookings, pending refund requests, open privacy requests) with links, under baseline `ADMIN_DASHBOARD_VIEW` | Pushed operational notifications, per-admin assignment views, SLA/aging indicators |
 | Payment Operations (Phase 3) | CURRENT — PARTIAL | Local-ledger search + status summary under `PAYMENT_VIEW`; refund requests under `REFUND_REQUEST` (amount ≤ refundable remainder, one pending per payment); two-person decisions under `REFUND_APPROVE` (requester ≠ approver); fully audited | Refund execution + provider reconciliation (blocked on a payment-provider integration), amount/risk-sensitive approval thresholds, dispute evidence workflow, payout visibility |
 | Privacy Requests (Phase 3) | CURRENT — PARTIAL | Intake by subject email (snapshot survives deletion), governed lifecycle with identity-verification attribution, due dates + overdue display, legal holds blocking DELETION completion, under `PRIVACY_REQUEST_MANAGE` | Systems-searched tracking, export artifacts, deletion-execution linkage to the account-deletion cascade, final communication, sensitive export controls |
+| Pending Reviews (Phase 4) | CURRENT — PARTIAL | Knowledge editorial queues (REVIEW + APPROVED) with capability-separated transitions (`CONTENT_AUTHOR`/`CONTENT_REVIEW`/`CONTENT_PUBLISH`), required reasons, full audit; article upsert can no longer change lifecycle state | Immutable revisions, scheduling/Scheduled Releases, preview, rollback, DIY safety-tier queue, taxonomy management |
 
 ### 4.3 API-only and foundational capabilities
 
@@ -835,11 +836,24 @@ Every sensitive action shall support, as applicable:
 - Knowledge article authoring is CURRENT — PARTIAL.
 - DIY template authoring is CURRENT — PARTIAL.
 - Knowledge taxonomy is selectable but not administrable.
+- Knowledge editorial lifecycle governance is CURRENT — PARTIAL (Phase 4
+  slice): `KnowledgeArticleStatus` gained APPROVED; lifecycle transitions
+  moved to capability-separated endpoints (CONTENT_AUTHOR submits/revives,
+  CONTENT_REVIEW approves/returns, CONTENT_PUBLISH
+  publishes/unpublishes/archives), each requiring a reason and fully
+  audited; the article upsert can no longer change status or publishedAt;
+  a Pending Reviews workspace at `/dashboard/admin/content-reviews` shows
+  the review and awaiting-publish queues. **Requires `prisma db push`**
+  (enum value). Note: the Knowledge Admin editor's status dropdown is now
+  inert — lifecycle changes go through Pending Reviews.
 
 #### Target requirements — PLANNED
 
 - Standard lifecycle: Draft → Review → Approved → Scheduled/Published → Archived.
-- Saving content must not directly publish it.
+  **PARTIAL** — Draft → Review → Approved → Published → Archived shipped
+  for knowledge articles (scheduling PLANNED; DIY templates PLANNED).
+- Saving content must not directly publish it. **SHIPPED** for knowledge
+  articles — create forces DRAFT; update preserves status/publishedAt.
 - Published revisions are immutable; corrections create new revisions.
 - Support semantic diff, preview, comments, assignments, scheduling, unpublish,
   archive, and rollback.
@@ -1399,15 +1413,30 @@ reconciliation against the provider, and exports remain PLANNED
 
 ### Phase 4 — Content, catalogs, and personalization governance
 
-**Status:** Knowledge, DIY, and personalization partially CURRENT; remaining PLANNED
+**Status:** Started — knowledge editorial workflow + Pending Reviews
+workspace shipped; revisions, scheduling, DIY, catalogs, and
+personalization records remain PLANNED
 
-- Immutable content revisions and standard editorial workflow.
-- Knowledge scheduling, preview, unpublish, and rollback.
-- DIY safety-tier review and publication.
-- Property Context catalog section.
-- Operational reference catalog management.
-- Personalization review records and semantic diffs.
-- Pending Reviews and Scheduled Releases workspace.
+- [x] Immutable content revisions and standard editorial workflow.
+      **PARTIAL** — the capability-separated editorial workflow shipped for
+      knowledge articles (DRAFT → REVIEW → APPROVED → PUBLISHED → ARCHIVED
+      with author/reviewer/publisher separation, required reasons, full
+      audit; saving can no longer change lifecycle state; APPROVED added to
+      the enum — **requires `prisma db push`**). Immutable revisions
+      PLANNED — edits still mutate the article in place.
+- [ ] Knowledge scheduling, preview, unpublish, and rollback. **PARTIAL** —
+      unpublish shipped (PUBLISHED → APPROVED, immediate public removal);
+      scheduling, preview, and rollback PLANNED.
+- [ ] DIY safety-tier review and publication. **Not started.**
+- [ ] Property Context catalog section. **Not started** (deliberately
+      deferred — the property context area is under active concurrent
+      development).
+- [ ] Operational reference catalog management. **Not started.**
+- [ ] Personalization review records and semantic diffs. **Not started.**
+- [x] Pending Reviews and Scheduled Releases workspace. **PARTIAL** —
+      Pending Reviews shipped at `/dashboard/admin/content-reviews` (review
+      + awaiting-publish queues, also surfaced in Work Queues); Scheduled
+      Releases PLANNED with scheduling.
 
 ### Phase 5 — Platform operations and analytics expansion
 
@@ -1594,6 +1623,8 @@ For each delivered phase:
 | Payment Operations backend (Phase 3) | `apps/backend/src/services/adminPaymentOps.service.ts`, `apps/backend/src/routes/adminPaymentOps.routes.ts` |
 | Privacy Requests UI (Phase 3) | `apps/frontend/src/app/(dashboard)/dashboard/admin/privacy/page.tsx` |
 | Privacy Requests backend (Phase 3) | `apps/backend/src/services/adminPrivacyRequests.service.ts`, `apps/backend/src/routes/adminPrivacyRequests.routes.ts` |
+| Pending Reviews UI (Phase 4) | `apps/frontend/src/app/(dashboard)/dashboard/admin/content-reviews/page.tsx` |
+| Pending Reviews backend (Phase 4) | `apps/backend/src/services/adminContentGovernance.service.ts`, `apps/backend/src/routes/adminContentGovernance.routes.ts` |
 | Booking domain/admin foundation | `apps/backend/src/services/booking.service.ts` |
 | Account lifecycle/deletion | `apps/backend/src/services/auth.service.ts`, `apps/backend/src/controllers/user.controller.ts`, `apps/backend/src/services/accountDeletionCascade.service.ts` |
 | Core domain and audit schema | `apps/backend/prisma/schema.prisma` |

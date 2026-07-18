@@ -14,6 +14,7 @@ import {
   Inbox,
   CreditCard,
   ShieldQuestion,
+  BookCheck,
 } from 'lucide-react';
 import type { NavJob } from './jobsNavigation';
 
@@ -58,6 +59,15 @@ export const ADMIN_NAV: NavJob[] = [
     href: '/dashboard/analytics-admin',
     icon: BarChart2,
     description: 'Product analytics dashboard',
+    engines: [],
+    globalHref: true,
+  },
+  {
+    key: 'admin-content-reviews',
+    name: 'Pending Reviews',
+    href: '/dashboard/admin/content-reviews',
+    icon: BookCheck,
+    description: 'Editorial queues: review decisions and publication',
     engines: [],
     globalHref: true,
   },

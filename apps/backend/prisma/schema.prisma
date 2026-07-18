@@ -4817,6 +4817,7 @@ enum DeliveryStatus {
 enum KnowledgeArticleStatus {
   DRAFT
   REVIEW
+  APPROVED
   PUBLISHED
   ARCHIVED
 }

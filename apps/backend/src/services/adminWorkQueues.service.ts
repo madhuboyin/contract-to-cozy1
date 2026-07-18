@@ -29,6 +29,8 @@ export async function getWorkQueues(): Promise<{ queues: WorkQueueSummary[]; gen
     pendingProviders,
     pendingRefundRequests,
     openPrivacyRequests,
+    articlesInReview,
+    articlesAwaitingPublish,
   ] = await Promise.all([
     prisma.providerCredential.count({ where: { status: 'PENDING_REVIEW' } }),
     prisma.providerComplianceAlert.count({ where: { status: 'NEW' } }),
@@ -41,6 +43,8 @@ export async function getWorkQueues(): Promise<{ queues: WorkQueueSummary[]; gen
     prisma.privacyRequest.count({
       where: { status: { in: ['RECEIVED', 'VERIFYING', 'VERIFIED', 'IN_PROGRESS'] } },
     }),
+    prisma.knowledgeArticle.count({ where: { status: 'REVIEW' } }),
+    prisma.knowledgeArticle.count({ where: { status: 'APPROVED' } }),
   ]);
 
   const queues: WorkQueueSummary[] = [
@@ -106,6 +110,20 @@ export async function getWorkQueues(): Promise<{ queues: WorkQueueSummary[]; gen
       href: '/dashboard/admin/privacy',
       capability: 'PRIVACY_REQUEST_MANAGE',
       count: openPrivacyRequests,
+    },
+    {
+      key: 'content-review',
+      label: 'Knowledge articles awaiting review',
+      href: '/dashboard/admin/content-reviews',
+      capability: 'CONTENT_REVIEW',
+      count: articlesInReview,
+    },
+    {
+      key: 'content-publish',
+      label: 'Approved articles awaiting publish',
+      href: '/dashboard/admin/content-reviews',
+      capability: 'CONTENT_PUBLISH',
+      count: articlesAwaitingPublish,
     },
   ];
 

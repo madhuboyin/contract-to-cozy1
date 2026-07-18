@@ -536,7 +536,11 @@ export const knowledgeHubAdminService = {
           slug: input.slug.trim(),
           subtitle: normalizeString(input.subtitle),
           excerpt: normalizeString(input.excerpt),
-          status: input.status,
+          // FRD §10.6: "Saving content must not directly publish it." New
+          // articles always start as DRAFT; lifecycle moves only through
+          // the capability-separated transitions in
+          // adminContentGovernance.service.ts.
+          status: KnowledgeArticleStatus.DRAFT,
           articleType: input.articleType,
           heroTitle: normalizeString(input.heroTitle),
           heroDescription: normalizeString(input.heroDescription),
@@ -546,7 +550,7 @@ export const knowledgeHubAdminService = {
           readingMinutes: input.readingMinutes ?? null,
           featured: input.featured,
           sortOrder: input.sortOrder,
-          publishedAt: resolvePublishedAt(input.status, input.publishedAt),
+          publishedAt: null,
         },
         select: { id: true },
       });
@@ -565,6 +569,7 @@ export const knowledgeHubAdminService = {
       select: {
         id: true,
         publishedAt: true,
+        status: true,
       },
     });
 
@@ -583,7 +588,11 @@ export const knowledgeHubAdminService = {
           slug: input.slug.trim(),
           subtitle: normalizeString(input.subtitle),
           excerpt: normalizeString(input.excerpt),
-          status: input.status,
+          // FRD §10.6: saving must not change lifecycle state. Status and
+          // publishedAt are preserved as-is; transitions happen only via
+          // adminContentGovernance.service.ts under the separated
+          // CONTENT_AUTHOR/CONTENT_REVIEW/CONTENT_PUBLISH capabilities.
+          status: existingArticle.status,
           articleType: input.articleType,
           heroTitle: normalizeString(input.heroTitle),
           heroDescription: normalizeString(input.heroDescription),
@@ -593,7 +602,7 @@ export const knowledgeHubAdminService = {
           readingMinutes: input.readingMinutes ?? null,
           featured: input.featured,
           sortOrder: input.sortOrder,
-          publishedAt: resolvePublishedAt(input.status, input.publishedAt, existingArticle.publishedAt),
+          publishedAt: existingArticle.publishedAt,
         },
       });
 
