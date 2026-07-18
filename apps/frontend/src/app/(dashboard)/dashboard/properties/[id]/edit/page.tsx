@@ -1652,7 +1652,6 @@ export default function EditPropertyPage() {
                           <FormLabel>Home type</FormLabel>
                           {isRecommended("dwellingType") ? <FieldNudgeChip variant="recommended" /> : null}
                         </div>
-                        <p className="text-xs leading-4 text-muted-foreground">What kind of home is this? Choose the closest match based on the physical building.</p>
                         <Select onValueChange={field.onChange} value={field.value}>
                           <FormControl>
                             <SelectTrigger id="field-dwellingType" className="h-9 text-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40"><SelectValue placeholder="Select type" /></SelectTrigger>
@@ -2019,14 +2018,14 @@ export default function EditPropertyPage() {
 
               <div className="space-y-5">
                 <section className="rounded-2xl border border-black/10 bg-slate-50/60 p-4 dark:border-white/10 dark:bg-slate-900/30 sm:p-5">
-                  <div className="mb-4 flex items-center gap-3">
-                    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-100 text-xs font-bold text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300">1</span>
-                    <div>
-                      <h3 className="font-semibold text-foreground">About the home</h3>
-                      <p className="text-xs text-muted-foreground">Just the basics.</p>
+                  <div className="grid gap-4 md:grid-cols-[minmax(240px,1.25fr)_minmax(140px,0.75fr)_minmax(140px,0.75fr)] md:items-end">
+                    <div className="flex items-center gap-3 md:self-center">
+                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-xs font-bold text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300">1</span>
+                      <div>
+                        <h3 className="font-semibold text-foreground">About the home</h3>
+                        <p className="text-xs text-muted-foreground">Just the basics.</p>
+                      </div>
                     </div>
-                  </div>
-                  <div className="occupancy-row grid max-w-sm grid-cols-2 gap-4">
                     <FormField
                       control={form.control}
                       name="bedrooms"

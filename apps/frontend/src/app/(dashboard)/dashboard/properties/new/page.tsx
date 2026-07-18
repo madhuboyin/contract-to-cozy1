@@ -374,21 +374,19 @@ export default function NewPropertyPage() {
   const selectBaseClass =
     'min-h-[44px] w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-900 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)] focus:border-teal-500/40 focus:outline-none focus:ring-2 focus:ring-teal-500/20';
 
-  const SelectInput = ({ label, name, value, options, required = false, placeholder, helperText, optionLabels }: {
+  const SelectInput = ({ label, name, value, options, required = false, placeholder, optionLabels }: {
     label: string, 
     name: keyof PropertyFormData, 
     value: string, 
     options: readonly string[],
     required?: boolean,
     placeholder?: string,
-    helperText?: string,
     optionLabels?: Record<string, string>,
   }) => (
     <div className="space-y-1.5">
       <label htmlFor={name} className="block text-sm font-medium text-slate-700">
         {label} {required && <span className="text-red-500">*</span>}
       </label>
-      {helperText ? <p className="text-xs leading-4 text-slate-500">{helperText}</p> : null}
       <select
         id={name}
         name={name}
@@ -515,7 +513,6 @@ export default function NewPropertyPage() {
           options={DWELLING_TYPE_OPTIONS}
           required
           placeholder="Select home type"
-          helperText="What kind of home is this? Choose the closest match based on the physical building."
           optionLabels={DWELLING_TYPE_LABELS}
         />
       </div>
