@@ -8367,6 +8367,71 @@ model AdminCaseNote {
   @@map("admin_case_notes")
 }
 
+// Periodic access certification (ADMIN_MODULE_FRD.md §17 Phase 6). A
+// campaign snapshots every active AdminCapabilityGrant into PENDING
+// decisions; each is attested KEEP or REVOKE by a different admin than the
+// grant holder, and REVOKE executes through the standard capability-revoke
+// path. Actor references are plain userId strings (AuditLog convention).
+
+enum AccessCertificationCampaignStatus {
+  OPEN
+  COMPLETED
+  CANCELLED
+}
+
+enum AccessCertificationDecisionState {
+  PENDING
+  KEEP
+  REVOKE
+}
+
+model AccessCertificationCampaign {
+  id   String @id @default(uuid())
+  name String
+
+  status AccessCertificationCampaignStatus @default(OPEN)
+
+  openedById  String
+  dueAt       DateTime?
+  completedAt DateTime?
+  cancelledAt DateTime?
+
+  decisions AccessCertificationDecision[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@map("access_certification_campaigns")
+}
+
+model AccessCertificationDecision {
+  id         String @id @default(uuid())
+  campaignId String
+
+  // Snapshot of the grant under review at campaign-open time. grantId is a
+  // plain reference — the grant may be revoked outside the campaign while
+  // the campaign is open.
+  grantId    String
+  holderId   String
+  capability String
+  bundleName String?
+
+  state AccessCertificationDecisionState @default(PENDING)
+
+  decidedById String?
+  decidedAt   DateTime?
+  reason      String?
+
+  campaign AccessCertificationCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([campaignId, grantId])
+  @@index([campaignId, state])
+  @@map("access_certification_decisions")
+}
+
 // Admin refund request/approval workflow (ADMIN_MODULE_FRD.md §10.4,
 // Phase 3). Record-and-govern only: no payment-provider integration exists
 // yet, so an APPROVED request is terminal until refund execution ships —

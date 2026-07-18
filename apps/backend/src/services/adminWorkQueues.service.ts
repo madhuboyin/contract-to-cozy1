@@ -31,6 +31,7 @@ export async function getWorkQueues(): Promise<{ queues: WorkQueueSummary[]; gen
     openPrivacyRequests,
     articlesInReview,
     articlesAwaitingPublish,
+    pendingCertificationDecisions,
   ] = await Promise.all([
     prisma.providerCredential.count({ where: { status: 'PENDING_REVIEW' } }),
     prisma.providerComplianceAlert.count({ where: { status: 'NEW' } }),
@@ -45,6 +46,9 @@ export async function getWorkQueues(): Promise<{ queues: WorkQueueSummary[]; gen
     }),
     prisma.knowledgeArticle.count({ where: { status: 'REVIEW' } }),
     prisma.knowledgeArticle.count({ where: { status: 'APPROVED' } }),
+    prisma.accessCertificationDecision.count({
+      where: { state: 'PENDING', campaign: { status: 'OPEN' } },
+    }),
   ]);
 
   const queues: WorkQueueSummary[] = [
@@ -124,6 +128,13 @@ export async function getWorkQueues(): Promise<{ queues: WorkQueueSummary[]; gen
       href: '/dashboard/admin/content-reviews',
       capability: 'CONTENT_PUBLISH',
       count: articlesAwaitingPublish,
+    },
+    {
+      key: 'access-certification',
+      label: 'Access certification decisions pending',
+      href: '/dashboard/admin/access-certification',
+      capability: 'ADMIN_ROLE_MANAGE',
+      count: pendingCertificationDecisions,
     },
   ];
 

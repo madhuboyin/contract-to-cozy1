@@ -178,6 +178,7 @@ immutable explanation of what happened.
 | Pending Reviews (Phase 4) | CURRENT — PARTIAL | Knowledge editorial queues (REVIEW + APPROVED) with capability-separated transitions (`CONTENT_AUTHOR`/`CONTENT_REVIEW`/`CONTENT_PUBLISH`), required reasons, full audit; article upsert can no longer change lifecycle state | Immutable revisions, scheduling/Scheduled Releases, preview, rollback, DIY safety-tier queue, taxonomy management |
 | Shared Data Health (Phase 5) | CURRENT — PARTIAL | UI over the existing shared-data API: readiness/fallback-risk/signal diagnostics, consistency issues, dry-run-default backfill trigger (`SHARED_DATA_OPERATE`) | Per-property drill-down, backfill run history, scheduled consistency checks with alerting |
 | Release Gates (Phase 5) | CURRENT — PARTIAL | Read-only UI over the existing release-gate API: per-tool PASS/FAIL, cohort/rollout, incident counts, blocking issues (`RELEASE_GATE_VIEW`) | Gate change actions (cohort/rollout edits) with approval, gate history, incident links |
+| Access Certification (Phase 6) | CURRENT — PARTIAL | Campaign snapshots of all active capability grants, KEEP/REVOKE attestation with self-attestation blocked, REVOKE executing the standard revoke path, single-open-campaign rule, completion gated on full attestation (`ADMIN_ROLE_MANAGE`) | Scheduled/recurring campaigns, scoped campaigns (per persona/capability), reminder notifications, certification evidence export |
 
 ### 4.3 API-only and foundational capabilities
 
@@ -1463,15 +1464,24 @@ and permit/integration UI remain PLANNED
 
 ### Phase 6 — Advanced governance and automation
 
-**Status:** FUTURE
+**Status:** Started — access certification shipped; remaining items FUTURE
 
-- Read-only support-assisted user context.
-- Hardware-backed privileged authentication.
-- Periodic access certification workflow.
-- Advanced fraud/abuse triage assistance.
-- Scheduled operational reports.
-- Policy-driven workload routing and SLA prediction.
-- Restricted auditor and legal-request workspaces.
+- [ ] Read-only support-assisted user context. **Not started.**
+- [ ] Hardware-backed privileged authentication. **Not started.**
+- [x] Periodic access certification workflow. Shipped at
+      `/dashboard/admin/access-certification` under `ADMIN_ROLE_MANAGE`
+      (`AccessCertificationCampaign`/`AccessCertificationDecision` models —
+      **requires `prisma db push`**): a campaign snapshots every active
+      `AdminCapabilityGrant` into pending decisions; each is attested
+      KEEP/REVOKE with a required reason by an admin who is not the grant
+      holder (self-attestation blocked); REVOKE executes through the
+      standard `revokeCapability()` path so both the attestation and the
+      revoke are audited; one campaign open at a time; completion requires
+      every decision attested; pending decisions surface in Work Queues.
+- [ ] Advanced fraud/abuse triage assistance. **Not started.**
+- [ ] Scheduled operational reports. **Not started.**
+- [ ] Policy-driven workload routing and SLA prediction. **Not started.**
+- [ ] Restricted auditor and legal-request workspaces. **Not started.**
 
 ---
 
@@ -1639,6 +1649,8 @@ For each delivered phase:
 | Pending Reviews backend (Phase 4) | `apps/backend/src/services/adminContentGovernance.service.ts`, `apps/backend/src/routes/adminContentGovernance.routes.ts` |
 | Shared Data Health UI (Phase 5) | `apps/frontend/src/app/(dashboard)/dashboard/admin/shared-data/page.tsx` (backend pre-existing: `adminSharedData.routes.ts`) |
 | Release Gates UI (Phase 5) | `apps/frontend/src/app/(dashboard)/dashboard/admin/release-gates/page.tsx` (backend pre-existing: `releaseGate.routes.ts`) |
+| Access Certification UI (Phase 6) | `apps/frontend/src/app/(dashboard)/dashboard/admin/access-certification/page.tsx` |
+| Access Certification backend (Phase 6) | `apps/backend/src/services/adminAccessCertification.service.ts`, `apps/backend/src/routes/adminAccessCertification.routes.ts` |
 | Booking domain/admin foundation | `apps/backend/src/services/booking.service.ts` |
 | Account lifecycle/deletion | `apps/backend/src/services/auth.service.ts`, `apps/backend/src/controllers/user.controller.ts`, `apps/backend/src/services/accountDeletionCascade.service.ts` |
 | Core domain and audit schema | `apps/backend/prisma/schema.prisma` |

@@ -47,6 +47,7 @@ const ADMIN_CONSOLE_PREFIXES = [
   '/dashboard/admin/content-reviews',
   '/dashboard/admin/shared-data',
   '/dashboard/admin/release-gates',
+  '/dashboard/admin/access-certification',
 ] as const;
 const NO_STORE_PAGE_PREFIXES = [
   ...SENSITIVE_PAGE_PREFIXES,

@@ -17,6 +17,7 @@ import {
   BookCheck,
   Database,
   ShieldEllipsis,
+  KeyRound,
 } from 'lucide-react';
 import type { NavJob } from './jobsNavigation';
 
@@ -169,6 +170,15 @@ export const ADMIN_NAV: NavJob[] = [
     href: '/dashboard/admin/reviews',
     icon: Star,
     description: 'Approve, reject, flag, or restore provider reviews',
+    engines: [],
+    globalHref: true,
+  },
+  {
+    key: 'admin-access-certification',
+    name: 'Access Certification',
+    href: '/dashboard/admin/access-certification',
+    icon: KeyRound,
+    description: 'Periodic review of admin capability grants',
     engines: [],
     globalHref: true,
   },
