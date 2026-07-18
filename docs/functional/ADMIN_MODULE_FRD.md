@@ -1376,8 +1376,9 @@ deeper target requirements per item remain PLANNED (see §10.2/§10.3/§10.5)
       PENDING rather than re-publishing. Admins who authored or received a
       review cannot moderate it. No schema changes were needed — the existing
       `Review.status`/`moderatedAt`/`moderatedBy` fields carry the workflow,
-      and public provider-review reads already filter to APPROVED. Automated
-      signals, policy references, and "request investigation" remain open
+      and public provider-review reads already filter to APPROVED.
+      "Request investigation" shipped later the same day with the case
+      slice below; automated signals and policy references remain open
       (see §10.5).
 - [x] Safety/abuse case types. Shipped as `AdminCase`/`AdminCaseNote`
       (`admin_cases`/`admin_case_notes` tables — **requires `prisma db push`**)
