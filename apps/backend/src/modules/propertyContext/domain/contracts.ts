@@ -121,7 +121,7 @@ export interface RelationalCaptureOption {
   description?: string;
 }
 
-export interface RelationalCaptureInputSchema {
+export interface RelationalSelectCreateInputSchema {
   type: 'RELATIONAL_SELECT_CREATE';
   entityType: 'INVENTORY_ITEM' | 'INSURANCE_POLICY' | 'WARRANTY';
   selectLabel: string;
@@ -129,6 +129,17 @@ export interface RelationalCaptureInputSchema {
   options: RelationalCaptureOption[];
   createFields: StructuredCaptureField[];
 }
+
+export interface RelationalUpdateInputSchema {
+  type: 'RELATIONAL_UPDATE';
+  entityType: 'INVENTORY_ITEM';
+  entityId: string;
+  updateLabel: string;
+  fields: StructuredCaptureField[];
+  currentValues: Record<string, unknown>;
+}
+
+export type RelationalCaptureInputSchema = RelationalSelectCreateInputSchema | RelationalUpdateInputSchema;
 
 export type CaptureInputSchema = ScalarCaptureInputSchema | {
   type: 'GROUP';
@@ -150,7 +161,9 @@ export interface ContextCaptureDefinition {
   /** Backend-only mapping. It is removed from evaluator/API responses. */
   answerBindings?: Record<string, string>;
   /** Backend-only allowlisted relational command. */
-  relationalAdapterKey?: 'INVENTORY_ITEM' | 'INSURANCE_POLICY' | 'WARRANTY';
+  relationalAdapterKey?: 'INVENTORY_ITEM' | 'INVENTORY_ITEM_LIFECYCLE' | 'INSURANCE_POLICY' | 'WARRANTY';
+  /** Backend-only operation-input key that scopes a relational update to an explicit entity. */
+  relationalEntityInputKey?: string;
 }
 
 export interface EvaluatedContextRequirement {
@@ -159,7 +172,7 @@ export interface EvaluatedContextRequirement {
   classification: ContextRequirementClassification;
   state: PropertyFactState;
   reasonCode: string;
-  capture: Omit<ContextCaptureDefinition, 'canonicalOwner' | 'answerBindings' | 'relationalAdapterKey'>;
+  capture: Omit<ContextCaptureDefinition, 'canonicalOwner' | 'answerBindings' | 'relationalAdapterKey' | 'relationalEntityInputKey'>;
   currentAnswer?: unknown;
 }
 

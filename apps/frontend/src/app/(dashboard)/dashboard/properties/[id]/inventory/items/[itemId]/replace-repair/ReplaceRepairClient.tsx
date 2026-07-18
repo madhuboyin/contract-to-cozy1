@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { AlertCircle, ArrowLeft, Loader2, Wrench, Search, Lock, ArrowRight } from 'lucide-react';
@@ -30,7 +30,7 @@ import { useJourney } from '@/features/guidance/hooks/useJourney';
 import { mapGuidanceJourneyToActionModel } from '@/features/guidance/utils/guidanceMappers';
 
 import { navigateBackWithDashboardFallback } from '@/lib/navigation/backNavigation';
-import { PropertyContextNotice, type PropertyContextEnvelope } from '@/components/property-context/PropertyContextNotice';
+import { PropertyContextCapturePanel } from '@/components/property-context/PropertyContextCapturePanel';
 const CATEGORY_LIFESPAN_YEARS: Record<string, number> = {
   APPLIANCE: 12,
   HVAC: 15,
@@ -155,7 +155,6 @@ export default function ReplaceRepairClient() {
 
   const [item, setItem] = useState<InventoryItem | null>(null);
   const [analysis, setAnalysis] = useState<ReplaceRepairAnalysisDTO | null>(null);
-  const [propertyContext, setPropertyContext] = useState<PropertyContextEnvelope | null>(null);
   const [hasAnalysis, setHasAnalysis] = useState(false);
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
@@ -190,7 +189,6 @@ export default function ReplaceRepairClient() {
       }
 
       if (analysisResult.status === 'fulfilled') {
-        setPropertyContext(analysisResult.value.propertyContext ?? null);
         if (analysisResult.value.exists) {
           setHasAnalysis(true);
           setAnalysis(analysisResult.value.analysis);
@@ -223,6 +221,8 @@ export default function ReplaceRepairClient() {
       usageIntensity: inputs.usageIntensity,
     };
   }, [inputs]);
+
+  const propertyContextOperationInput = useMemo(() => ({ inventoryItemId: itemId }), [itemId]);
 
   const guidanceContext = useMemo(
     () => ({
@@ -325,21 +325,34 @@ export default function ReplaceRepairClient() {
       ? 'Before booking, check whether this cost fits your budget. If it feels too high, compare lower-cost options or negotiate the price first.'
       : null);
 
-  const runAnalysis = async () => {
+  const runAnalysis = useCallback(async () => {
     if (!propertyId || !itemId) return;
     setRunning(true);
     setError(null);
     try {
       const next = await runReplaceRepairAnalysis(propertyId, itemId, overrides, guidanceContext);
       setAnalysis(next);
-      setPropertyContext(next.propertyContext ?? null);
       setHasAnalysis(true);
     } catch (err: any) {
       setError(err?.message || 'Failed to run replace or repair analysis.');
     } finally {
       setRunning(false);
     }
-  };
+  }, [guidanceContext, itemId, overrides, propertyId]);
+
+  const handlePropertyContextCaptured = useCallback(async () => {
+    if (!propertyId || !itemId) return;
+    const [itemResult] = await Promise.allSettled([
+      getInventoryItem(propertyId, itemId),
+      runAnalysis(),
+    ]);
+    if (itemResult.status === 'fulfilled') {
+      setItem(itemResult.value);
+      setInputs((current) => mergeInputs(current, buildPrefillInputs(itemResult.value)));
+    } else {
+      setError('The analysis was refreshed, but the updated item details could not be displayed.');
+    }
+  }, [itemId, propertyId, runAnalysis]);
 
   const statusTone = useMemo<'good' | 'elevated' | 'danger' | 'info'>(() => {
     if (!analysis) return 'info';
@@ -371,7 +384,13 @@ export default function ReplaceRepairClient() {
       }
       summary={
         <div className="space-y-4">
-          <PropertyContextNotice context={propertyContext} title="Repair or replace context" />
+          <PropertyContextCapturePanel
+            propertyId={propertyId}
+            featureKey="REPAIR_REPLACE"
+            operationKey="RUN_ANALYSIS"
+            operationInput={propertyContextOperationInput}
+            onCaptured={handlePropertyContextCaptured}
+          />
           <ResultHeroCard
             title={item?.name || 'Inventory Item'}
             value={analysis ? verdictLabel(analysis.verdict) : 'No analysis'}

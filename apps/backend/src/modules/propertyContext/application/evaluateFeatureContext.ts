@@ -45,7 +45,11 @@ function operationInputMatches(
   return Array.isArray(actual) && actual.some((value) => expected.includes(value as never));
 }
 
-function requirementState(requirement: FactRequirementDefinition, fact?: PropertyFact): PropertyFact['state'] {
+function requirementState(
+  requirement: FactRequirementDefinition,
+  fact: PropertyFact | undefined,
+  operationInput?: Record<string, unknown>,
+): PropertyFact['state'] {
   if (!fact) return 'UNKNOWN';
   if (fact.state !== 'KNOWN') return fact.state;
   let collectionValue = fact.value;
@@ -59,6 +63,16 @@ function requirementState(requirement: FactRequirementDefinition, fact?: Propert
       const expiry = new Date(expiryDate).getTime();
       return Number.isFinite(start) && Number.isFinite(expiry) && start <= now && expiry >= now;
     });
+  }
+  if (requirement.collectionPredicate === 'SELECTED_ITEM_LIFECYCLE_INCOMPLETE') {
+    if (!Array.isArray(collectionValue)) return 'UNKNOWN';
+    const itemId = operationInput?.inventoryItemId;
+    const item = collectionValue.find((candidate) => candidate && typeof candidate === 'object'
+      && (candidate as { id?: unknown }).id === itemId) as { condition?: unknown; installedOn?: unknown; purchasedOn?: unknown } | undefined;
+    if (!item) return 'UNKNOWN';
+    const hasCondition = typeof item.condition === 'string' && item.condition !== 'UNKNOWN';
+    const hasLifecycleDate = typeof item.installedOn === 'string' || typeof item.purchasedOn === 'string';
+    return hasCondition && hasLifecycleDate ? 'KNOWN' : 'UNKNOWN';
   }
   if (requirement.minimumItems !== undefined && (!Array.isArray(collectionValue) || collectionValue.length < requirement.minimumItems)) return 'UNKNOWN';
   if (requirement.acceptableStates.includes('VERIFIED') && !fact.verified) return 'UNKNOWN';
@@ -74,17 +88,18 @@ async function evaluateRequirement(
 ): Promise<EvaluatedContextRequirement | null> {
   if (!conditionMatches(requirement.when, context)) return null;
   if (!operationInputMatches(requirement.operationInputWhen, operationInput)) return null;
-  const state = requirementState(requirement, context.facts[requirement.factKey]);
+  const state = requirementState(requirement, context.facts[requirement.factKey], operationInput);
   if (state === 'KNOWN') return null;
   const definition = getCaptureDefinition(requirement.captureKey);
   const {
     canonicalOwner: _canonicalOwner,
     answerBindings: _answerBindings,
     relationalAdapterKey: _relationalAdapterKey,
+    relationalEntityInputKey: _relationalEntityInputKey,
     ...publicDefinition
   } = definition;
   const capture = definition.mode === 'RELATIONAL'
-    ? { ...publicDefinition, inputSchema: await resolveRelationalCaptureSchema(context.propertyId, definition) }
+    ? { ...publicDefinition, inputSchema: await resolveRelationalCaptureSchema(context.propertyId, definition, operationInput) }
     : publicDefinition;
   const requirementId = createHash('sha256')
     .update(`${contractKey}:${requirement.factKey}:${requirement.captureKey}:${JSON.stringify(inputForRequirementId(operationInput))}`)

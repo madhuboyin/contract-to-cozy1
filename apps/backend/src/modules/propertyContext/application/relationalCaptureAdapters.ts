@@ -1,6 +1,10 @@
 import { InventoryItemCategory, InventoryItemCondition, Prisma, WarrantyCategory } from '@prisma/client';
 import { prisma } from '../../../lib/prisma';
-import type { ContextCaptureDefinition, RelationalCaptureInputSchema } from '../domain/contracts';
+import type {
+  ContextCaptureDefinition,
+  RelationalCaptureInputSchema,
+  RelationalSelectCreateInputSchema,
+} from '../domain/contracts';
 
 type RelationalAdapterKey = NonNullable<ContextCaptureDefinition['relationalAdapterKey']>;
 
@@ -37,11 +41,36 @@ function parseDateOnly(values: Record<string, unknown>, key: string): Date {
 export async function resolveRelationalCaptureSchema(
   propertyId: string,
   definition: ContextCaptureDefinition,
+  operationInput?: Record<string, unknown>,
 ): Promise<RelationalCaptureInputSchema> {
-  if (definition.mode !== 'RELATIONAL' || definition.inputSchema.type !== 'RELATIONAL_SELECT_CREATE' || !definition.relationalAdapterKey) {
+  if (definition.mode !== 'RELATIONAL' || !definition.relationalAdapterKey) {
     throw new Error('Capture is not backed by a relational adapter.');
   }
-  let options: RelationalCaptureInputSchema['options'];
+  if (definition.inputSchema.type === 'RELATIONAL_UPDATE') {
+    const inputKey = definition.relationalEntityInputKey;
+    const entityId = inputKey ? operationInput?.[inputKey] : undefined;
+    if (definition.relationalAdapterKey !== 'INVENTORY_ITEM_LIFECYCLE' || typeof entityId !== 'string' || !entityId.trim()) {
+      throw new Error('Relational update is missing its scoped inventory item.');
+    }
+    const item = await prisma.inventoryItem.findFirst({
+      where: { id: entityId, propertyId },
+      select: { id: true, condition: true, installedOn: true, purchasedOn: true },
+    });
+    if (!item) throw new Error('The selected inventory item does not belong to this property.');
+    return {
+      ...definition.inputSchema,
+      entityId: item.id,
+      currentValues: {
+        condition: item.condition,
+        installedOn: item.installedOn?.toISOString().slice(0, 10) ?? '',
+        purchasedOn: item.purchasedOn?.toISOString().slice(0, 10) ?? '',
+      },
+    };
+  }
+  if (definition.inputSchema.type !== 'RELATIONAL_SELECT_CREATE') {
+    throw new Error('Relational select/create capture has an invalid input schema.');
+  }
+  let options: RelationalSelectCreateInputSchema['options'];
   if (definition.relationalAdapterKey === 'INVENTORY_ITEM') {
     options = (await prisma.inventoryItem.findMany({
       where: { propertyId },
@@ -70,6 +99,44 @@ export async function resolveRelationalCaptureSchema(
     }));
   }
   return { ...definition.inputSchema, options };
+}
+
+function parseOptionalDateOnly(values: Record<string, unknown>, key: string): Date | null {
+  const value = values[key];
+  if (value === undefined || value === null || value === '') return null;
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) throw new Error(`${key} must use YYYY-MM-DD.`);
+  const date = new Date(`${value}T00:00:00.000Z`);
+  if (Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== value) throw new Error(`${key} is not a valid date.`);
+  const today = new Date();
+  today.setUTCHours(23, 59, 59, 999);
+  if (date > today) throw new Error(`${key} cannot be in the future.`);
+  return date;
+}
+
+async function updateInventoryItemLifecycle(
+  tx: Prisma.TransactionClient,
+  propertyId: string,
+  entityId: unknown,
+  values: Record<string, unknown>,
+): Promise<RelationalCaptureSelection> {
+  if (typeof entityId !== 'string' || !entityId.trim()) throw new Error('Inventory item identity is required.');
+  const condition = values.condition;
+  if (typeof condition !== 'string' || !Object.values(InventoryItemCondition).includes(condition as InventoryItemCondition)) {
+    throw new Error('Select a registered inventory condition.');
+  }
+  const item = await tx.inventoryItem.findFirst({ where: { id: entityId, propertyId }, select: { id: true } });
+  if (!item) throw new Error('The selected inventory item does not belong to this property.');
+  await tx.inventoryItem.update({
+    where: { id: item.id },
+    data: {
+      condition: condition as InventoryItemCondition,
+      installedOn: parseOptionalDateOnly(values, 'installedOn'),
+      purchasedOn: parseOptionalDateOnly(values, 'purchasedOn'),
+      sourceType: 'MANUAL',
+      verificationSource: 'PROPERTY_CONTEXT_INLINE',
+    },
+  });
+  return { entityType: 'INVENTORY_ITEM', entityId: item.id, created: false };
 }
 
 async function selectExisting(
@@ -216,8 +283,18 @@ export async function executeRelationalCapture(
   propertyId: string,
   definition: ContextCaptureDefinition,
   answer: Record<string, unknown>,
+  operationInput?: Record<string, unknown>,
 ): Promise<RelationalCaptureSelection> {
   if (definition.mode !== 'RELATIONAL' || !definition.relationalAdapterKey) throw new Error('Relational capture adapter is not registered.');
+  if (definition.inputSchema.type === 'RELATIONAL_UPDATE') {
+    const scopedEntityId = definition.relationalEntityInputKey
+      ? operationInput?.[definition.relationalEntityInputKey]
+      : undefined;
+    if (answer.mode !== 'UPDATE' || answer.entityId !== scopedEntityId || !answer.values || typeof answer.values !== 'object' || Array.isArray(answer.values)) {
+      throw new Error('Update the item selected for this operation.');
+    }
+    return updateInventoryItemLifecycle(tx, propertyId, answer.entityId, answer.values as Record<string, unknown>);
+  }
   if (answer.mode === 'SELECT') return selectExisting(tx, propertyId, definition.relationalAdapterKey, answer.entityId);
   if (answer.mode !== 'CREATE' || !answer.values || typeof answer.values !== 'object' || Array.isArray(answer.values)) {
     throw new Error('Choose an existing record or add a new one.');

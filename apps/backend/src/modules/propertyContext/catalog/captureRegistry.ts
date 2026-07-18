@@ -230,6 +230,32 @@ for (const definition of structuredDefinitions) definitions.set(definition.captu
 
 const relationalDefinitions: ContextCaptureDefinition[] = [
   {
+    captureKey: 'INVENTORY_ITEM_LIFECYCLE_UPDATE',
+    factKeys: ['inventory.items'],
+    mode: 'RELATIONAL',
+    title: 'Improve this item’s lifecycle estimate',
+    question: 'Confirm the condition and approximate install or purchase date for this item.',
+    helpText: 'These details improve age, failure-risk, and confidence estimates without changing your scenario overrides.',
+    inputSchema: {
+      type: 'RELATIONAL_UPDATE',
+      entityType: 'INVENTORY_ITEM',
+      entityId: '',
+      updateLabel: 'Save item details',
+      currentValues: {},
+      fields: [
+        { key: 'condition', label: 'Current condition', required: true, inputSchema: enumSchema(['NEW', 'GOOD', 'FAIR', 'POOR', 'UNKNOWN']) },
+        { key: 'installedOn', label: 'Installed date', helpText: 'Optional. Use YYYY-MM-DD.', required: false, inputSchema: { type: 'SHORT_TEXT', maxLength: 10 } },
+        { key: 'purchasedOn', label: 'Purchase date', helpText: 'Optional. Use YYYY-MM-DD.', required: false, inputSchema: { type: 'SHORT_TEXT', maxLength: 10 } },
+      ],
+    },
+    allowNotSure: false,
+    canonicalOwner: 'InventoryItem',
+    actionKey: 'UPDATE_INVENTORY_ITEM_LIFECYCLE',
+    sensitivity: 'STANDARD',
+    relationalAdapterKey: 'INVENTORY_ITEM_LIFECYCLE',
+    relationalEntityInputKey: 'inventoryItemId',
+  },
+  {
     captureKey: 'INVENTORY_ITEM_SELECT_OR_CREATE',
     factKeys: ['inventory.items', 'systems.installedItemTypes'],
     mode: 'RELATIONAL',
@@ -347,8 +373,9 @@ export function validateCaptureRegistry(): void {
       for (const factKey of definition.factKeys) if (!boundFacts.has(factKey)) problems.push(`${definition.captureKey}: missing answer binding for ${factKey}`);
     }
     if (definition.mode === 'RELATIONAL') {
-      if (definition.inputSchema.type !== 'RELATIONAL_SELECT_CREATE') problems.push(`${definition.captureKey}: relational capture requires select/create schema`);
+      if (definition.inputSchema.type !== 'RELATIONAL_SELECT_CREATE' && definition.inputSchema.type !== 'RELATIONAL_UPDATE') problems.push(`${definition.captureKey}: relational capture requires a relational schema`);
       if (!definition.relationalAdapterKey) problems.push(`${definition.captureKey}: relational capture requires an allowlisted adapter`);
+      if (definition.inputSchema.type === 'RELATIONAL_UPDATE' && !definition.relationalEntityInputKey) problems.push(`${definition.captureKey}: relational update requires an operation-input entity key`);
       for (const factKey of definition.factKeys) {
         if (definition.canonicalOwner !== getFactDefinition(factKey).canonicalOwner) problems.push(`${definition.captureKey}: canonical owner drift for ${factKey}`);
       }

@@ -8,6 +8,7 @@ import {
   assertFinancialContextApplicable,
   getFinancialContextEnvelope,
 } from '../services/financialContext/context';
+import { evaluateFeatureContext } from '../modules/propertyContext/application/evaluateFeatureContext';
 
 const service = new ReplaceRepairService();
 
@@ -69,6 +70,14 @@ export async function runReplaceRepairAnalysis(req: CustomRequest, res: Response
       'repairReplace',
       { inventoryItemId: itemId },
     );
+    const featureContext = await evaluateFeatureContext(propertyId, userId, {
+      featureKey: 'REPAIR_REPLACE',
+      operationKey: 'RUN_ANALYSIS',
+      operationInput: { inventoryItemId: itemId },
+    });
+    if (!featureContext.canExecute) {
+      throw new APIError('Required property context is incomplete.', 409, 'PROPERTY_CONTEXT_REQUIRED', featureContext);
+    }
     const analysis = await service.runItemAnalysis(
       propertyId,
       itemId,

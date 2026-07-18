@@ -18,7 +18,7 @@ export interface FactRequirementDefinition {
   captureKey: string;
   /** Collection facts below this size are treated as missing for this operation. */
   minimumItems?: number;
-  collectionPredicate?: 'ACTIVE_DATE_RANGE';
+  collectionPredicate?: 'ACTIVE_DATE_RANGE' | 'SELECTED_ITEM_LIFECYCLE_INCOMPLETE';
   operationInputWhen?: {
     key: string;
     operator: 'EQUALS' | 'IN' | 'CONTAINS_ANY';
@@ -38,6 +38,24 @@ export interface FeatureContextRequirementDefinition {
 }
 
 export const FEATURE_CONTEXT_REQUIREMENTS: readonly FeatureContextRequirementDefinition[] = [
+  {
+    featureKey: 'REPAIR_REPLACE',
+    operationKey: 'RUN_ANALYSIS',
+    policyVersion: '1.0',
+    promptStrategy: 'MINIMUM_PATH',
+    required: [],
+    enhancements: [
+      {
+        factKey: 'inventory.items',
+        classification: 'ENHANCEMENT_ACCURACY',
+        reasonCode: 'CONFIRM_SELECTED_ITEM_LIFECYCLE',
+        priority: 10,
+        acceptableStates: ['KNOWN'],
+        captureKey: 'INVENTORY_ITEM_LIFECYCLE_UPDATE',
+        collectionPredicate: 'SELECTED_ITEM_LIFECYCLE_INCOMPLETE',
+      },
+    ],
+  },
   {
     featureKey: 'NEIGHBORHOOD_RADAR',
     operationKey: 'VIEW_RADAR',

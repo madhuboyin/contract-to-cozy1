@@ -88,7 +88,7 @@ export function normalizeAnswers(
 ): Array<{ factKey: string; value: unknown }> {
   if (definition.mode === 'SCALAR') {
     if (!Object.prototype.hasOwnProperty.call(answer, 'value')) throw new Error('Scalar capture requires an answer value.');
-    if (definition.inputSchema.type === 'GROUP' || definition.inputSchema.type === 'RELATIONAL_SELECT_CREATE') {
+    if (definition.inputSchema.type === 'GROUP' || definition.inputSchema.type === 'RELATIONAL_SELECT_CREATE' || definition.inputSchema.type === 'RELATIONAL_UPDATE') {
       throw new Error('Scalar capture has an invalid input schema.');
     }
     validateInputValue(definition.inputSchema, answer.value, definition.allowNotSure);
@@ -157,7 +157,7 @@ export async function captureFeatureContext(propertyId: string, userId: string, 
   let answers: Array<{ factKey: string; value: unknown }> = [];
   try {
     if (definition.mode !== 'RELATIONAL') answers = normalizeAnswers(definition, input.answer);
-    else if (definition.inputSchema.type !== 'RELATIONAL_SELECT_CREATE' || !definition.relationalAdapterKey) {
+    else if ((definition.inputSchema.type !== 'RELATIONAL_SELECT_CREATE' && definition.inputSchema.type !== 'RELATIONAL_UPDATE') || !definition.relationalAdapterKey) {
       throw new Error('Relational capture is not backed by an allowlisted domain command.');
     }
   } catch (error) {
@@ -190,7 +190,7 @@ export async function captureFeatureContext(propertyId: string, userId: string, 
       captureId = receipt.id;
       if (definition.mode === 'RELATIONAL') {
         try {
-          selection = await executeRelationalCapture(tx, propertyId, definition, input.answer);
+          selection = await executeRelationalCapture(tx, propertyId, definition, input.answer, input.operationInput);
         } catch (error) {
           throw new PropertyContextCaptureValidationError(error instanceof Error ? error.message : 'Invalid relational capture answer.');
         }

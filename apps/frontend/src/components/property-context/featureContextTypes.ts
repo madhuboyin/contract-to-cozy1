@@ -32,6 +32,13 @@ export type CaptureInputSchema = ScalarCaptureInputSchema | {
   createLabel: string;
   options: Array<{ id: string; label: string; description?: string }>;
   createFields: StructuredCaptureField[];
+} | {
+  type: 'RELATIONAL_UPDATE';
+  entityType: 'INVENTORY_ITEM';
+  entityId: string;
+  updateLabel: string;
+  fields: StructuredCaptureField[];
+  currentValues: Record<string, unknown>;
 };
 
 export interface FeatureContextCapture {
