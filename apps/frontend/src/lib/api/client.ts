@@ -4659,6 +4659,16 @@ class APIClient {
     fundingMode?: 'SELF_PAID' | 'COVERED' | 'MIXED';
     complexity?: 'MINOR' | 'MAJOR';
     recommendationVersion?: string;
+    providerRankingRationale?: string;
+    commercialDisclosure?: {
+      involvesCommercialAction: boolean;
+      relationshipType: 'NONE' | 'SPONSORED' | 'REFERRAL_FEE' | 'COMMISSION' | 'OWNED' | 'AFFILIATE' | 'OTHER';
+      compensationMayOccur: boolean;
+      rankingInfluenced: boolean;
+      summary: string;
+      selectionCriteria: string[];
+      nonCommercialAlternatives: string[];
+    };
     contractAmountCents: number;
     startDate: string;
     expectedEndDate?: string;
@@ -4674,6 +4684,33 @@ class APIClient {
   async getProject(propertyId: string, projectId: string): Promise<import('@/types').ProjectRecord> {
     const res = await this.get<import('@/types').ProjectRecord>(`/api/properties/${propertyId}/projects/${projectId}`);
     if (!res.data) throw new APIError('Project not found', 404);
+    return res.data;
+  }
+
+  async completeMinorWork(propertyId: string, payload: {
+    guidanceJourneyId: string;
+    inventoryItemId: string;
+    title: string;
+    executionPath: 'REPAIR' | 'REPLACEMENT';
+    fulfillmentMode: 'PROVIDER' | 'DIY';
+    providerName?: string;
+    providerRankingRationale?: string;
+    commercialDisclosure?: {
+      involvesCommercialAction: boolean;
+      relationshipType: 'NONE' | 'SPONSORED' | 'REFERRAL_FEE' | 'COMMISSION' | 'OWNED' | 'AFFILIATE' | 'OTHER';
+      compensationMayOccur: boolean;
+      rankingInfluenced: boolean;
+      summary: string;
+      selectionCriteria: string[];
+      nonCommercialAlternatives: string[];
+    };
+    actualEndDate?: string;
+    actualCostCents: number;
+    notes?: string;
+    proofDocuments?: Array<{ proofKey: string; type: 'INVOICE' | 'PERMIT' | 'PHOTO' | 'OTHER'; name: string; fileUrl: string; fileSize?: number; mimeType?: string; kind?: 'PHOTO' | 'RECEIPT' | 'INVOICE' | 'PDF' | 'BEFORE' | 'AFTER' | 'OTHER' }>;
+  }): Promise<{ homeEventId: string }> {
+    const res = await this.post<{ homeEventId: string }>(`/api/properties/${propertyId}/projects/minor-completion`, payload);
+    if (!res.data) throw new APIError('Failed to record minor work', 500);
     return res.data;
   }
 
@@ -4847,13 +4884,30 @@ class APIClient {
 
   async confirmProjectCompletion(propertyId: string, projectId: string, payload: {
     actualEndDate?: string;
-    contractorRatingQuality: number;
-    contractorRatingTimeline: number;
-    contractorRatingComms: number;
-    contractorRatingBudget: number;
+    outcomeStatus: 'VERIFIED_SUCCESS' | 'INCOMPLETE' | 'FAILED' | 'DISPUTED' | 'DELAYED' | 'UNSAFE';
+    commissioningResult: 'PASSED' | 'FAILED' | 'NOT_REQUIRED' | 'UNRESOLVED';
+    functionalVerificationResult: 'PASSED' | 'FAILED' | 'NOT_REQUIRED' | 'UNRESOLVED';
+    safetyCheckResult: 'PASSED' | 'FAILED' | 'NOT_REQUIRED' | 'UNRESOLVED';
+    inspectionResult: 'PASSED' | 'FAILED' | 'NOT_REQUIRED' | 'UNRESOLVED';
+    unresolvedExceptions: Array<{ type: 'QUALITY' | 'SAFETY' | 'SCOPE' | 'PERMIT' | 'FUNCTIONAL' | 'OTHER'; summary: string; blocksClosure: boolean }>;
+    actualCostCents?: number;
+    providerOutcome: 'SUCCESS' | 'PARTIAL' | 'FAILED' | 'NOT_APPLICABLE';
+    recommendationOverridden?: boolean;
+    modelNumber?: string;
+    serialNumber?: string;
+    proofDocuments?: Array<{ proofKey: string; type: 'INVOICE' | 'PERMIT' | 'PHOTO' | 'OTHER'; name: string; fileUrl: string; fileSize?: number; mimeType?: string; kind?: 'PHOTO' | 'RECEIPT' | 'INVOICE' | 'PDF' | 'BEFORE' | 'AFTER' | 'OTHER' }>;
+    contractorRatingQuality?: number;
+    contractorRatingTimeline?: number;
+    contractorRatingComms?: number;
+    contractorRatingBudget?: number;
     contractorReviewText?: string;
     warrantyPeriodMonths?: number;
     warrantyDocumentKey?: string;
+    completionRecordKey?: string;
+    nextMaintenanceDate?: string;
+    nextInspectionDate?: string;
+    replacementHorizonDate?: string;
+    followUpDate?: string;
   }): Promise<{ project: import('@/types').ProjectRecord }> {
     const res = await this.post<{ project: import('@/types').ProjectRecord }>(`/api/properties/${propertyId}/projects/${projectId}/completion/confirm`, payload);
     if (!res.data) throw new APIError('Failed to confirm completion', 500);

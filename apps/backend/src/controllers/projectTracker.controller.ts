@@ -342,11 +342,78 @@ export async function getCompletionChecklist(req: Request, res: Response, next: 
   } catch (err) { next(err); }
 }
 
+export async function completeMinorWork(req: Request, res: Response, next: NextFunction) {
+  try {
+    const data = await svc.completeMinorWork(req.params.propertyId, req.user!.userId, req.body);
+    const closureSteps = [
+      'confirm_scope_and_provider', 'track_work', 'verify_outcome', 'capture_proof', 'update_home_record', 'set_future_care',
+    ] as const;
+    for (const stepKey of closureSteps) {
+      await guidanceJourneyService.recordToolCompletion({
+        propertyId: req.params.propertyId,
+        actorUserId: req.user!.userId,
+        journeyId: data.guidanceJourneyId,
+        inventoryItemId: data.inventoryItemId,
+        sourceToolKey: 'project-completion',
+        sourceEntityType: 'HOME_EVENT',
+        sourceEntityId: data.homeEventId,
+        stepKey,
+        status: 'COMPLETED',
+        producedData: { proofType: `minor_work_${stepKey}`, proofId: data.homeEventId, minorWork: true },
+      });
+    }
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.ACTION_COMPLETED,
+      userId: req.user?.userId,
+      propertyId: req.params.propertyId,
+      moduleKey: AnalyticsModule.PROJECT_MGMT,
+      featureKey: AnalyticsFeature.PROJECT_TRACKER,
+      metadataJson: { actionType: 'complete_minor_work', journeyId: data.guidanceJourneyId, actualCostCents: req.body.actualCostCents },
+    });
+    res.json({ success: true, data });
+  } catch (err) { next(err); }
+}
+
 export async function confirmCompletion(req: Request, res: Response, next: NextFunction) {
   try {
     const data = await svc.confirmCompletion(
       req.params.projectId, req.params.propertyId, req.user!.userId, req.body,
     );
+
+    const completedProject = (data as any).project;
+    if (completedProject?.guidanceJourneyId && req.body.outcomeStatus === 'VERIFIED_SUCCESS') {
+      const closureSteps = [
+        ['track_work', 'project_execution_record', req.params.projectId],
+        ['verify_outcome', 'project_verified_outcome', (data as any).homeEventId],
+        ['capture_proof', 'project_completion_proof', (data as any).documentIds?.[0] ?? (data as any).homeEventId],
+        ['update_home_record', 'living_home_record_writeback', (data as any).homeEventId],
+        ['set_future_care', 'future_care_plan', (data as any).futureCareTaskIds?.[0] ?? (data as any).homeEventId],
+      ] as const;
+      try {
+        for (const [stepKey, proofType, proofId] of closureSteps) {
+          await guidanceJourneyService.recordToolCompletion({
+            propertyId: req.params.propertyId,
+            actorUserId: req.user!.userId,
+            journeyId: completedProject.guidanceJourneyId,
+            inventoryItemId: completedProject.inventoryItemId ?? null,
+            sourceToolKey: 'project-completion',
+            sourceEntityType: 'PROJECT',
+            sourceEntityId: req.params.projectId,
+            stepKey,
+            status: 'COMPLETED',
+            producedData: {
+              proofType,
+              proofId,
+              projectId: req.params.projectId,
+              outcomeStatus: req.body.outcomeStatus,
+              writeBackAppliedAt: completedProject.writeBackAppliedAt,
+            },
+          });
+        }
+      } catch (guidanceError) {
+        logger.warn({ guidanceError }, '[PHASE3] verified closure guidance hook failed');
+      }
+    }
 
     analyticsEmitter.track({
       eventType: AnalyticsEvent.ACTION_COMPLETED,
@@ -354,7 +421,23 @@ export async function confirmCompletion(req: Request, res: Response, next: NextF
       propertyId: req.params.propertyId,
       moduleKey: AnalyticsModule.PROJECT_MGMT,
       featureKey: AnalyticsFeature.PROJECT_TRACKER,
-      metadataJson: { actionType: 'confirm_completion', projectId: req.params.projectId },
+      metadataJson: {
+        actionType: 'confirm_completion',
+        projectId: req.params.projectId,
+        journeyId: completedProject?.guidanceJourneyId ?? null,
+        outcomeStatus: req.body.outcomeStatus,
+        providerOutcome: req.body.providerOutcome,
+        priceVarianceCents: req.body.actualCostCents === undefined
+          ? null
+          : req.body.actualCostCents - (completedProject?.currentContractAmountCents ?? 0),
+        recommendationOverridden: req.body.recommendationOverridden,
+        blockedDays: completedProject?.createdAt && completedProject?.verifiedAt
+          ? Math.max(0, Math.round((new Date(completedProject.verifiedAt).getTime() - new Date(completedProject.createdAt).getTime()) / 86_400_000))
+          : null,
+        writeBackCount: (data as any).writeBacks?.length ?? 0,
+        followUpTaskCount: (data as any).futureCareTaskIds?.length ?? 0,
+        idempotentReplay: (data as any).idempotentReplay ?? false,
+      },
     });
 
     res.json({ success: true, data });

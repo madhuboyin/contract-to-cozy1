@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, CheckCircle2, XCircle } from 'lucide-react';
 import { api } from '@/lib/api/client';
-import type { ProjectCompletionChecklist } from '@/types';
+import type { ProjectCompletionChecklist, ProjectRecord } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -41,6 +41,7 @@ export default function CompletionPage() {
   const router = useRouter();
 
   const [checklist, setChecklist] = useState<ProjectCompletionChecklist | null>(null);
+  const [project, setProject] = useState<ProjectRecord | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
@@ -52,14 +53,43 @@ export default function CompletionPage() {
     ratingTimeline: '',
     ratingComms: '',
     ratingBudget: '',
+    outcomeStatus: 'VERIFIED_SUCCESS',
+    commissioningResult: 'PASSED',
+    functionalVerificationResult: 'PASSED',
+    safetyCheckResult: 'PASSED',
+    inspectionResult: 'NOT_REQUIRED',
+    actualCost: '',
+    providerOutcome: 'SUCCESS',
+    modelNumber: '',
+    serialNumber: '',
+    invoiceUrl: '',
+    warrantyUrl: '',
+    completionRecordUrl: '',
+    beforePhotoUrl: '',
+    afterPhotoUrl: '',
+    exceptionSummary: '',
+    nextMaintenanceDate: '',
+    nextInspectionDate: '',
+    replacementHorizonDate: '',
+    followUpDate: '',
+    recommendationOverridden: false,
   });
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const data = await api.getProjectCompletionChecklist(propertyId, projectId);
-      setChecklist(data);
+      const [checklistData, projectData] = await Promise.all([
+        api.getProjectCompletionChecklist(propertyId, projectId),
+        api.getProject(propertyId, projectId),
+      ]);
+      setChecklist(checklistData);
+      setProject(projectData);
+      setForm(current => ({
+        ...current,
+        actualCost: current.actualCost || String((projectData.currentContractAmountCents ?? 0) / 100),
+        providerOutcome: projectData.fulfillmentMode === 'DIY' ? 'NOT_APPLICABLE' : current.providerOutcome,
+      }));
     } catch (e: any) {
       setError(e?.message ?? 'Failed to load checklist');
     } finally {
@@ -70,22 +100,49 @@ export default function CompletionPage() {
   useEffect(() => { load(); }, [load]);
 
   const allPassed = checklist?.allPassed ?? false;
-  const ratingsComplete = form.ratingQuality && form.ratingTimeline && form.ratingComms && form.ratingBudget;
+  const verifiedSuccess = form.outcomeStatus === 'VERIFIED_SUCCESS';
+  const ratingsComplete = project?.fulfillmentMode === 'DIY' || (form.ratingQuality && form.ratingTimeline && form.ratingComms && form.ratingBudget);
 
   async function confirm(e: React.FormEvent) {
     e.preventDefault();
-    if (!ratingsComplete) { setError('All four contractor ratings are required'); return; }
+    if (verifiedSuccess && !ratingsComplete) { setError('All four provider ratings are required'); return; }
+    if (verifiedSuccess && (!form.actualCost || Number(form.actualCost) < 0)) { setError('Final actual cost is required for verified closure'); return; }
     setConfirming(true);
     setError(null);
     try {
+      const proofDocuments = [
+        form.invoiceUrl ? { proofKey: 'invoice', type: 'INVOICE' as const, name: 'Final invoice', fileUrl: form.invoiceUrl, kind: 'INVOICE' as const } : null,
+        form.warrantyUrl ? { proofKey: 'warranty', type: 'OTHER' as const, name: 'Warranty', fileUrl: form.warrantyUrl, kind: 'PDF' as const } : null,
+        form.completionRecordUrl ? { proofKey: 'completion-record', type: 'OTHER' as const, name: 'Completion record', fileUrl: form.completionRecordUrl, kind: 'PDF' as const } : null,
+        form.beforePhotoUrl ? { proofKey: 'before-photo', type: 'PHOTO' as const, name: 'Before photo', fileUrl: form.beforePhotoUrl, kind: 'BEFORE' as const } : null,
+        form.afterPhotoUrl ? { proofKey: 'after-photo', type: 'PHOTO' as const, name: 'After photo', fileUrl: form.afterPhotoUrl, kind: 'AFTER' as const } : null,
+      ].filter(Boolean) as NonNullable<Parameters<typeof api.confirmProjectCompletion>[2]['proofDocuments']>;
       await api.confirmProjectCompletion(propertyId, projectId, {
         actualEndDate: form.actualEndDate || undefined,
-        contractorRatingQuality: parseInt(form.ratingQuality),
-        contractorRatingTimeline: parseInt(form.ratingTimeline),
-        contractorRatingComms: parseInt(form.ratingComms),
-        contractorRatingBudget: parseInt(form.ratingBudget),
+        outcomeStatus: form.outcomeStatus as 'VERIFIED_SUCCESS' | 'INCOMPLETE' | 'FAILED' | 'DISPUTED' | 'DELAYED' | 'UNSAFE',
+        commissioningResult: form.commissioningResult as 'PASSED' | 'FAILED' | 'NOT_REQUIRED' | 'UNRESOLVED',
+        functionalVerificationResult: form.functionalVerificationResult as 'PASSED' | 'FAILED' | 'NOT_REQUIRED' | 'UNRESOLVED',
+        safetyCheckResult: form.safetyCheckResult as 'PASSED' | 'FAILED' | 'NOT_REQUIRED' | 'UNRESOLVED',
+        inspectionResult: form.inspectionResult as 'PASSED' | 'FAILED' | 'NOT_REQUIRED' | 'UNRESOLVED',
+        unresolvedExceptions: form.exceptionSummary.trim() ? [{ type: form.outcomeStatus === 'UNSAFE' ? 'SAFETY' : 'OTHER', summary: form.exceptionSummary.trim(), blocksClosure: true }] : [],
+        actualCostCents: form.actualCost ? Math.round(Number(form.actualCost) * 100) : undefined,
+        providerOutcome: form.providerOutcome as 'SUCCESS' | 'PARTIAL' | 'FAILED' | 'NOT_APPLICABLE',
+        recommendationOverridden: form.recommendationOverridden,
+        modelNumber: form.modelNumber.trim() || undefined,
+        serialNumber: form.serialNumber.trim() || undefined,
+        proofDocuments,
+        contractorRatingQuality: form.ratingQuality ? parseInt(form.ratingQuality) : undefined,
+        contractorRatingTimeline: form.ratingTimeline ? parseInt(form.ratingTimeline) : undefined,
+        contractorRatingComms: form.ratingComms ? parseInt(form.ratingComms) : undefined,
+        contractorRatingBudget: form.ratingBudget ? parseInt(form.ratingBudget) : undefined,
         contractorReviewText: form.contractorReviewText.trim() || undefined,
         warrantyPeriodMonths: form.warrantyPeriodMonths ? parseInt(form.warrantyPeriodMonths) : undefined,
+        warrantyDocumentKey: form.warrantyUrl || undefined,
+        completionRecordKey: form.completionRecordUrl || undefined,
+        nextMaintenanceDate: form.nextMaintenanceDate || undefined,
+        nextInspectionDate: form.nextInspectionDate || undefined,
+        replacementHorizonDate: form.replacementHorizonDate || undefined,
+        followUpDate: form.followUpDate || undefined,
       });
       router.push(`/dashboard/properties/${propertyId}/projects/${projectId}`);
     } catch (e: any) {
@@ -106,7 +163,7 @@ export default function CompletionPage() {
       <div className="space-y-1">
         <h1 className="text-2xl font-bold text-slate-900">Confirm Completion</h1>
         <p className="text-sm text-slate-500">
-          All checks must pass before closing the project. Completion writes audit records and finalizes project history.
+          Verify the outcome, capture proof, update the Living Home Record, and schedule future care in one closure.
         </p>
       </div>
 
@@ -139,7 +196,7 @@ export default function CompletionPage() {
             ))}
           </div>
 
-          {!allPassed && (
+          {!allPassed && verifiedSuccess && (
             <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
               Resolve all failing checks before confirming completion.
             </div>
@@ -151,6 +208,35 @@ export default function CompletionPage() {
       <form onSubmit={confirm} className="space-y-4">
         <MobileCard className="space-y-4">
           <h2 className="text-sm font-semibold text-slate-700">Completion details</h2>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="outcomeStatus">Outcome</Label>
+            <select id="outcomeStatus" value={form.outcomeStatus} onChange={e => setForm(f => ({ ...f, outcomeStatus: e.target.value }))} className="h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
+              <option value="VERIFIED_SUCCESS">Verified success</option>
+              <option value="INCOMPLETE">Incomplete</option>
+              <option value="FAILED">Failed</option>
+              <option value="DISPUTED">Disputed</option>
+              <option value="DELAYED">Delayed</option>
+              <option value="UNSAFE">Unsafe</option>
+            </select>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            {[['commissioningResult', 'Commissioning'], ['functionalVerificationResult', 'Functional test'], ['safetyCheckResult', 'Safety check'], ['inspectionResult', 'Inspection']].map(([field, label]) => (
+              <div key={field} className="space-y-1.5">
+                <Label htmlFor={field}>{label}</Label>
+                <select id={field} value={form[field as keyof typeof form] as string} onChange={e => setForm(f => ({ ...f, [field]: e.target.value }))} className="h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
+                  <option value="PASSED">Passed</option><option value="FAILED">Failed</option><option value="NOT_REQUIRED">Not required</option><option value="UNRESOLVED">Unresolved</option>
+                </select>
+              </div>
+            ))}
+          </div>
+
+          <div className="space-y-1.5"><Label htmlFor="actualCost">Final actual cost ($)</Label><Input id="actualCost" type="number" min="0" step="0.01" value={form.actualCost} onChange={e => setForm(f => ({ ...f, actualCost: e.target.value }))} /></div>
+          <div className="space-y-1.5"><Label htmlFor="providerOutcome">Provider result</Label><select id="providerOutcome" value={form.providerOutcome} onChange={e => setForm(f => ({ ...f, providerOutcome: e.target.value }))} className="h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"><option value="SUCCESS">Success</option><option value="PARTIAL">Partial</option><option value="FAILED">Failed</option><option value="NOT_APPLICABLE">Not applicable</option></select></div>
+          <div className="grid grid-cols-2 gap-3"><div className="space-y-1.5"><Label htmlFor="modelNumber">Model number</Label><Input id="modelNumber" value={form.modelNumber} onChange={e => setForm(f => ({ ...f, modelNumber: e.target.value }))} /></div><div className="space-y-1.5"><Label htmlFor="serialNumber">Serial number</Label><Input id="serialNumber" value={form.serialNumber} onChange={e => setForm(f => ({ ...f, serialNumber: e.target.value }))} /></div></div>
+          <div className="space-y-1.5"><Label htmlFor="exceptionSummary">Unresolved exception</Label><Textarea id="exceptionSummary" value={form.exceptionSummary} onChange={e => setForm(f => ({ ...f, exceptionSummary: e.target.value }))} rows={2} placeholder="Required when work is incomplete, failed, disputed, delayed, or unsafe." /></div>
+          <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.recommendationOverridden} onChange={e => setForm(f => ({ ...f, recommendationOverridden: e.target.checked }))} /> The final choice overrode the recommendation</label>
 
           <div className="space-y-1.5">
             <Label htmlFor="actualEnd">Actual completion date</Label>
@@ -177,9 +263,21 @@ export default function CompletionPage() {
           </div>
         </MobileCard>
 
+        <MobileCard className="space-y-3">
+          <h2 className="text-sm font-semibold text-slate-700">Proof and home record</h2>
+          {[['invoiceUrl', 'Invoice URL'], ['warrantyUrl', 'Warranty URL'], ['completionRecordUrl', 'Completion record URL'], ['beforePhotoUrl', 'Before photo URL'], ['afterPhotoUrl', 'After photo URL']].map(([field, label]) => <div key={field} className="space-y-1.5"><Label htmlFor={field}>{label}</Label><Input id={field} value={form[field as keyof typeof form] as string} onChange={e => setForm(f => ({ ...f, [field]: e.target.value }))} placeholder="Storage key or URL" /></div>)}
+        </MobileCard>
+
+        <MobileCard className="space-y-3">
+          <h2 className="text-sm font-semibold text-slate-700">Future care</h2>
+          <div className="grid grid-cols-2 gap-3">
+            {[['nextMaintenanceDate', 'Next maintenance'], ['nextInspectionDate', 'Next inspection'], ['replacementHorizonDate', 'Replacement horizon'], ['followUpDate', 'Outcome follow-up']].map(([field, label]) => <div key={field} className="space-y-1.5"><Label htmlFor={field}>{label}</Label><Input id={field} type="date" value={form[field as keyof typeof form] as string} onChange={e => setForm(f => ({ ...f, [field]: e.target.value }))} /></div>)}
+          </div>
+        </MobileCard>
+
         {/* Contractor ratings */}
         <MobileCard className="space-y-3">
-          <h2 className="text-sm font-semibold text-slate-700">Contractor ratings (required)</h2>
+          <h2 className="text-sm font-semibold text-slate-700">Provider ratings {project?.fulfillmentMode === 'PROVIDER' && verifiedSuccess ? '(required)' : '(optional)'}</h2>
           <div className="grid grid-cols-2 gap-3">
             <RatingInput id="rQuality" label="Quality of work" value={form.ratingQuality} onChange={v => setForm(f => ({ ...f, ratingQuality: v }))} />
             <RatingInput id="rTimeline" label="Timeline" value={form.ratingTimeline} onChange={v => setForm(f => ({ ...f, ratingTimeline: v }))} />
@@ -203,14 +301,15 @@ export default function CompletionPage() {
           <ul className="text-xs text-slate-600 space-y-0.5 list-disc list-inside">
             <li>Project status set to COMPLETED</li>
             <li>Inspection findings linked to this project marked resolved</li>
-            <li>Write-back audit records created for property history</li>
+            <li>HomeEvent, expense, proof, inventory, warranty, and material records updated transactionally</li>
+            <li>Maintenance, inspection, warranty, replacement, and follow-up actions scheduled</li>
             <li>Contractor ratings saved to project record</li>
           </ul>
         </div>
 
         <Button
           type="submit"
-          disabled={confirming || !allPassed || loading || !ratingsComplete}
+          disabled={confirming || loading || (verifiedSuccess && (!allPassed || !ratingsComplete))}
           className="w-full min-h-[48px] text-base"
         >
           {confirming ? 'Confirming…' : 'Confirm completion'}

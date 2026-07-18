@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { CommercialDisclosureSchema } from '../productFramework/recommendationGovernance.contract';
 
 // ── Shared enums ──────────────────────────────────────────────────────────────
 
@@ -67,6 +68,8 @@ export const CreateProjectSchema = z.object({
   fundingMode: z.enum(['SELF_PAID', 'COVERED', 'MIXED']).default('SELF_PAID'),
   complexity: z.enum(['MINOR', 'MAJOR']).default('MAJOR'),
   recommendationVersion: z.string().max(120).optional(),
+  providerRankingRationale: z.string().min(1).max(1000).optional(),
+  commercialDisclosure: CommercialDisclosureSchema.optional(),
   contractAmountCents: z.number().int().min(0),
   startDate: z.string().date(),
   expectedEndDate: z.string().date().optional(),
@@ -96,6 +99,27 @@ export const CreateProjectSchema = z.object({
       path: ['guidanceJourneyId'],
       message: 'Guidance-sourced projects require a journey link.',
     });
+  }
+  if (value.sourceType === 'GUIDANCE' && value.fulfillmentMode === 'PROVIDER') {
+    if (!value.providerRankingRationale) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['providerRankingRationale'],
+        message: 'Guided provider selection requires a homeowner-fit ranking rationale.',
+      });
+    }
+    if (
+      !value.commercialDisclosure?.involvesCommercialAction ||
+      value.commercialDisclosure.relationshipType === 'NOT_RECORDED' ||
+      value.commercialDisclosure.selectionCriteria.length === 0 ||
+      value.commercialDisclosure.nonCommercialAlternatives.length === 0
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['commercialDisclosure'],
+        message: 'Guided provider selection requires a commercial disclosure and non-commercial alternatives.',
+      });
+    }
   }
 });
 
@@ -245,14 +269,101 @@ export const ResolveIssueSchema = z.object({
 
 // ── Completion ────────────────────────────────────────────────────────────────
 
+const verificationResult = z.enum(['PASSED', 'FAILED', 'NOT_REQUIRED', 'UNRESOLVED']);
+const projectOutcomeStatus = z.enum(['VERIFIED_SUCCESS', 'INCOMPLETE', 'FAILED', 'DISPUTED', 'DELAYED', 'UNSAFE']);
+
 export const ConfirmCompletionSchema = z.object({
   actualEndDate: z.string().date().optional(),
-  contractorRatingQuality: z.number().int().min(1).max(5),
-  contractorRatingTimeline: z.number().int().min(1).max(5),
-  contractorRatingComms: z.number().int().min(1).max(5),
-  contractorRatingBudget: z.number().int().min(1).max(5),
+  outcomeStatus: projectOutcomeStatus.default('VERIFIED_SUCCESS'),
+  commissioningResult: verificationResult,
+  functionalVerificationResult: verificationResult,
+  safetyCheckResult: verificationResult,
+  inspectionResult: verificationResult,
+  unresolvedExceptions: z.array(z.object({
+    type: z.enum(['QUALITY', 'SAFETY', 'SCOPE', 'PERMIT', 'FUNCTIONAL', 'OTHER']),
+    summary: z.string().min(1).max(1000),
+    blocksClosure: z.boolean().default(true),
+  })).default([]),
+  actualCostCents: z.number().int().min(0).optional(),
+  providerOutcome: z.enum(['SUCCESS', 'PARTIAL', 'FAILED', 'NOT_APPLICABLE']),
+  recommendationOverridden: z.boolean().default(false),
+  modelNumber: z.string().max(200).optional(),
+  serialNumber: z.string().max(200).optional(),
+  proofDocuments: z.array(z.object({
+    proofKey: z.string().min(1).max(300),
+    type: z.enum(['INVOICE', 'PERMIT', 'PHOTO', 'OTHER']),
+    name: z.string().min(1).max(240),
+    fileUrl: z.string().min(1).max(2000),
+    fileSize: z.number().int().min(0).default(0),
+    mimeType: z.string().min(1).max(120).default('application/octet-stream'),
+    kind: z.enum(['PHOTO', 'RECEIPT', 'INVOICE', 'PDF', 'BEFORE', 'AFTER', 'OTHER']).default('OTHER'),
+  })).max(50).default([]),
+  contractorRatingQuality: z.number().int().min(1).max(5).optional(),
+  contractorRatingTimeline: z.number().int().min(1).max(5).optional(),
+  contractorRatingComms: z.number().int().min(1).max(5).optional(),
+  contractorRatingBudget: z.number().int().min(1).max(5).optional(),
   contractorReviewText: z.string().max(2000).optional(),
   warrantyPeriodMonths: z.number().int().min(0).optional(),
   warrantyDocumentKey: z.string().optional(),
   completionRecordKey: z.string().optional(),
+  nextMaintenanceDate: z.string().date().optional(),
+  nextInspectionDate: z.string().date().optional(),
+  replacementHorizonDate: z.string().date().optional(),
+  followUpDate: z.string().date().optional(),
+}).superRefine((value, ctx) => {
+  if (value.outcomeStatus !== 'VERIFIED_SUCCESS') return;
+  if (value.functionalVerificationResult !== 'PASSED') {
+    ctx.addIssue({ code: 'custom', path: ['functionalVerificationResult'], message: 'Verified closure requires a passed functional check.' });
+  }
+  for (const key of ['commissioningResult', 'safetyCheckResult', 'inspectionResult'] as const) {
+    if (!['PASSED', 'NOT_REQUIRED'].includes(value[key])) {
+      ctx.addIssue({ code: 'custom', path: [key], message: 'Verified closure requires PASSED or NOT_REQUIRED.' });
+    }
+  }
+  if (value.unresolvedExceptions.some((exception) => exception.blocksClosure)) {
+    ctx.addIssue({ code: 'custom', path: ['unresolvedExceptions'], message: 'Blocking exceptions prevent verified closure.' });
+  }
+  if (value.actualCostCents === undefined) {
+    ctx.addIssue({ code: 'custom', path: ['actualCostCents'], message: 'Verified closure requires the final actual cost.' });
+  }
+});
+
+export const CompleteMinorWorkSchema = z.object({
+  guidanceJourneyId: z.string().min(1),
+  inventoryItemId: z.string().min(1),
+  title: z.string().min(1).max(200),
+  executionPath: z.enum(['REPAIR', 'REPLACEMENT']),
+  fulfillmentMode: z.enum(['PROVIDER', 'DIY']),
+  providerName: z.string().min(1).max(200).optional(),
+  providerRankingRationale: z.string().min(1).max(1000).optional(),
+  commercialDisclosure: CommercialDisclosureSchema.optional(),
+  actualEndDate: z.string().date().optional(),
+  actualCostCents: z.number().int().min(0),
+  notes: z.string().max(2000).optional(),
+  modelNumber: z.string().max(200).optional(),
+  serialNumber: z.string().max(200).optional(),
+  proofDocuments: z.array(z.object({
+    proofKey: z.string().min(1).max(300),
+    type: z.enum(['INVOICE', 'PERMIT', 'PHOTO', 'OTHER']),
+    name: z.string().min(1).max(240),
+    fileUrl: z.string().min(1).max(2000),
+    fileSize: z.number().int().min(0).default(0),
+    mimeType: z.string().min(1).max(120).default('application/octet-stream'),
+    kind: z.enum(['PHOTO', 'RECEIPT', 'INVOICE', 'PDF', 'BEFORE', 'AFTER', 'OTHER']).default('OTHER'),
+  })).max(20).default([]),
+  nextMaintenanceDate: z.string().date().optional(),
+  followUpDate: z.string().date().optional(),
+}).superRefine((value, ctx) => {
+  if (value.fulfillmentMode === 'PROVIDER' && !value.providerName) {
+    ctx.addIssue({ code: 'custom', path: ['providerName'], message: 'Provider-led minor work requires the provider name.' });
+  }
+  if (value.fulfillmentMode === 'PROVIDER' && (
+    !value.providerRankingRationale ||
+    !value.commercialDisclosure?.involvesCommercialAction ||
+    value.commercialDisclosure.relationshipType === 'NOT_RECORDED' ||
+    value.commercialDisclosure.selectionCriteria.length === 0 ||
+    value.commercialDisclosure.nonCommercialAlternatives.length === 0
+  )) {
+    ctx.addIssue({ code: 'custom', path: ['commercialDisclosure'], message: 'Provider-led minor work requires provider-fit rationale and commercial disclosure.' });
+  }
 });

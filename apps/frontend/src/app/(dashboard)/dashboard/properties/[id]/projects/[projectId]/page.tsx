@@ -109,6 +109,17 @@ export default function ProjectDashboardPage() {
 
       <ProjectNav propertyId={propertyId} projectId={projectId} />
 
+      {p.outcomeStatus && (
+        <div className={`rounded-xl border p-3 ${p.outcomeStatus === 'VERIFIED_SUCCESS' ? 'border-emerald-200 bg-emerald-50 text-emerald-900' : 'border-amber-200 bg-amber-50 text-amber-900'}`}>
+          <p className="text-sm font-semibold">Outcome: {p.outcomeStatus.toLowerCase().replace(/_/g, ' ')}</p>
+          <p className="mt-1 text-xs">
+            Functional check: {p.functionalVerificationResult?.toLowerCase().replace(/_/g, ' ') ?? 'not recorded'}
+            {p.actualCostCents != null ? ` · Final cost ${fmtMoney(p.actualCostCents)}` : ''}
+            {p.followUpDueAt ? ` · Follow-up ${fmtDate(p.followUpDueAt)}` : ''}
+          </p>
+        </div>
+      )}
+
       {/* Blocking issue banner */}
       {blockingIssues.length > 0 && (
         <div className="flex items-start gap-2.5 rounded-xl border border-rose-200 bg-rose-50 p-3">

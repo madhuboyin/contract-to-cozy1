@@ -235,6 +235,12 @@ export async function listProjects(propertyId: string) {
       fundingMode: true,
       complexity: true,
       recommendationVersion: true,
+      outcomeStatus: true,
+      functionalVerificationResult: true,
+      actualCostCents: true,
+      providerOutcome: true,
+      verifiedAt: true,
+      followUpDueAt: true,
       startDate: true,
       expectedEndDate: true,
       actualEndDate: true,
@@ -260,7 +266,7 @@ export async function createProject(propertyId: string, data: any) {
       ? { bookingId: projectData.bookingId }
       : null;
   const project = await withSerializableDedupe(async (tx) => {
-    const [journey, inventoryItem, priceFinalization, booking] = await Promise.all([
+    const [journey, inventoryItem, priceFinalization, booking, provider] = await Promise.all([
       projectData.guidanceJourneyId
         ? tx.guidanceJourney.findFirst({
             where: { id: projectData.guidanceJourneyId, propertyId },
@@ -275,6 +281,20 @@ export async function createProject(propertyId: string, data: any) {
         : null,
       projectData.bookingId
         ? tx.booking.findFirst({ where: { id: projectData.bookingId, propertyId }, select: { id: true } })
+        : null,
+      projectData.contractorId
+        ? tx.providerProfile.findUnique({
+            where: { id: projectData.contractorId },
+            select: {
+              id: true,
+              status: true,
+              licenseVerified: true,
+              insuranceVerified: true,
+              categoryEligibility: projectData.serviceCategory
+                ? { where: { serviceCategory: projectData.serviceCategory }, select: { isEligible: true, missingCredentialTypes: true } }
+                : undefined,
+            },
+          })
         : null,
     ]);
     if (projectData.guidanceJourneyId && !journey) {
@@ -291,6 +311,23 @@ export async function createProject(propertyId: string, data: any) {
     }
     if (journey?.inventoryItemId && projectData.inventoryItemId && journey.inventoryItemId !== projectData.inventoryItemId) {
       throw new APIError('The project item must match the guidance journey item.', 409, 'JOURNEY_ITEM_MISMATCH');
+    }
+    if (projectData.contractorId && !provider) {
+      throw new APIError('Selected provider was not found.', 400, 'INVALID_PROVIDER');
+    }
+    const eligibility = provider?.categoryEligibility?.[0];
+    if (projectData.sourceType === 'GUIDANCE' && provider && (
+      provider.status !== 'ACTIVE' ||
+      !provider.licenseVerified ||
+      !provider.insuranceVerified ||
+      (projectData.serviceCategory && !eligibility?.isEligible)
+    )) {
+      throw new APIError(
+        'The selected provider does not have current credentials for this project category.',
+        409,
+        'PROVIDER_CREDENTIALS_INCOMPLETE',
+        { missingCredentialTypes: eligibility?.missingCredentialTypes ?? [] },
+      );
     }
 
     const duplicate = await tx.projectRecord.findFirst({
@@ -339,6 +376,20 @@ export async function createProject(propertyId: string, data: any) {
         fundingMode: projectData.fundingMode ?? 'SELF_PAID',
         complexity: projectData.complexity ?? 'MAJOR',
         recommendationVersion: projectData.recommendationVersion ?? journey?.templateVersion,
+        providerRankingRationale: projectData.providerRankingRationale,
+        commercialDisclosure: projectData.commercialDisclosure,
+        credentialCheck: projectData.contractorId ? {
+          checkedAt: new Date().toISOString(),
+          providerStatus: provider?.status,
+          licenseVerified: provider?.licenseVerified,
+          insuranceVerified: provider?.insuranceVerified,
+          categoryEligible: eligibility?.isEligible ?? null,
+          missingCredentialTypes: eligibility?.missingCredentialTypes ?? [],
+        } : {
+          checkedAt: new Date().toISOString(),
+          userSuppliedProvider: true,
+          status: 'NOT_PLATFORM_VERIFIED',
+        },
         contractAmountCents: projectData.contractAmountCents,
         currentContractAmountCents: projectData.contractAmountCents,
         startDate: new Date(projectData.startDate),
@@ -975,54 +1026,450 @@ export async function getCompletionChecklist(projectId: string, propertyId: stri
   return { checks, allPassed };
 }
 
-export async function confirmCompletion(projectId: string, propertyId: string, userId: string, data: any) {
-  const { checks, allPassed } = await getCompletionChecklist(projectId, propertyId);
-  if (!allPassed) {
-    const failed = checks.filter(c => !c.passed).map(c => c.label);
-    throw new APIError(
-      `Cannot complete project — unresolved items: ${failed.join('; ')}`,
-      400, 'CHECKLIST_INCOMPLETE',
-    );
-  }
+export async function completeMinorWork(propertyId: string, userId: string, data: any) {
+  const occurredAt = data.actualEndDate ? new Date(data.actualEndDate) : new Date();
+  return prisma.$transaction(async (tx) => {
+    const [journey, item] = await Promise.all([
+      tx.guidanceJourney.findFirst({ where: { id: data.guidanceJourneyId, propertyId }, select: { id: true, inventoryItemId: true } }),
+      tx.inventoryItem.findFirst({ where: { id: data.inventoryItemId, propertyId }, select: { id: true } }),
+    ]);
+    if (!journey) throw new APIError('Guidance journey not found for this property.', 404, 'GUIDANCE_JOURNEY_NOT_FOUND');
+    if (!item || (journey.inventoryItemId && journey.inventoryItemId !== item.id)) {
+      throw new APIError('Inventory item does not match the guidance journey.', 409, 'JOURNEY_ITEM_MISMATCH');
+    }
 
+    const event = await tx.homeEvent.upsert({
+      where: { propertyId_idempotencyKey: { propertyId, idempotencyKey: `minor-work:${journey.id}` } },
+      create: {
+        propertyId,
+        createdById: userId,
+        inventoryItemId: item.id,
+        guidanceJourneyId: journey.id,
+        type: 'VERIFIED_RESOLUTION',
+        subtype: 'MINOR_WORK_VERIFIED',
+        occurredAt,
+        title: data.title,
+        summary: data.notes,
+        amount: new Prisma.Decimal(data.actualCostCents).div(100),
+        sourceBadge: 'VERIFIED',
+        idempotencyKey: `minor-work:${journey.id}`,
+        groupKey: `journey:${journey.id}`,
+        meta: {
+          executionPath: data.executionPath,
+          fulfillmentMode: data.fulfillmentMode,
+          providerName: data.providerName ?? null,
+          providerRankingRationale: data.providerRankingRationale ?? null,
+          commercialDisclosure: data.commercialDisclosure ?? null,
+          modelNumber: data.modelNumber ?? null,
+          serialNumber: data.serialNumber ?? null,
+        },
+      },
+      update: {
+        occurredAt,
+        title: data.title,
+        summary: data.notes,
+        amount: new Prisma.Decimal(data.actualCostCents).div(100),
+        sourceBadge: 'VERIFIED',
+      },
+    });
+
+    const documentIds: string[] = [];
+    for (const proof of data.proofDocuments) {
+      const document = await tx.document.upsert({
+        where: { projectProofKey: `minor:${journey.id}:${proof.proofKey}` },
+        create: {
+          propertyId,
+          projectProofKey: `minor:${journey.id}:${proof.proofKey}`,
+          inventoryItemId: item.id,
+          uploadedBy: userId,
+          type: proof.type,
+          name: proof.name,
+          fileUrl: proof.fileUrl,
+          fileSize: proof.fileSize,
+          mimeType: proof.mimeType,
+          verificationStatus: 'VERIFIED',
+          verifiedAt: new Date(),
+          verifiedByUserId: userId,
+          metadata: { journeyId: journey.id, proofKind: proof.kind, minorWork: true },
+        },
+        update: { fileUrl: proof.fileUrl, fileSize: proof.fileSize, mimeType: proof.mimeType, verificationStatus: 'VERIFIED', verifiedAt: new Date(), verifiedByUserId: userId },
+      });
+      documentIds.push(document.id);
+      await tx.homeEventDocument.upsert({
+        where: { eventId_documentId: { eventId: event.id, documentId: document.id } },
+        create: { eventId: event.id, documentId: document.id, kind: proof.kind, caption: proof.name },
+        update: { kind: proof.kind, caption: proof.name },
+      });
+    }
+
+    await tx.inventoryItem.update({
+      where: { id: item.id },
+      data: {
+        condition: data.executionPath === 'REPLACEMENT' ? 'NEW' : 'GOOD',
+        installedOn: data.executionPath === 'REPLACEMENT' ? occurredAt : undefined,
+        lastServicedOn: occurredAt,
+        modelNumber: data.modelNumber,
+        model: data.modelNumber,
+        serialNumber: data.serialNumber,
+        serialNo: data.serialNumber,
+        replacementCostCents: data.actualCostCents,
+        isVerified: true,
+        verificationSource: 'MINOR_WORK_COMPLETION',
+      },
+    });
+
+    const taskIds: string[] = [];
+    for (const care of [
+      data.nextMaintenanceDate ? { key: 'maintenance', title: `Maintain ${data.title}`, date: data.nextMaintenanceDate } : null,
+      data.followUpDate ? { key: 'follow-up', title: `Check outcome of ${data.title}`, date: data.followUpDate } : null,
+    ].filter(Boolean) as Array<{ key: string; title: string; date: string }>) {
+      const actionKey = `minor-work:${journey.id}:${care.key}`;
+      const task = await tx.propertyMaintenanceTask.upsert({
+        where: { propertyId_actionKey: { propertyId, actionKey } },
+        create: { propertyId, inventoryItemId: item.id, source: 'PROJECT_COMPLETION', actionKey, title: care.title, priority: 'MEDIUM', nextDueDate: new Date(care.date) },
+        update: { title: care.title, nextDueDate: new Date(care.date), status: 'PENDING' },
+      });
+      taskIds.push(task.id);
+    }
+
+    return { homeEventId: event.id, documentIds, futureCareTaskIds: taskIds, guidanceJourneyId: journey.id, inventoryItemId: item.id };
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+}
+
+export async function confirmCompletion(projectId: string, propertyId: string, userId: string, data: any) {
   const actualEndDate = data.actualEndDate ? new Date(data.actualEndDate) : new Date();
   const warrantyExpiresAt = data.warrantyPeriodMonths
     ? new Date(actualEndDate.getTime() + data.warrantyPeriodMonths * 30 * 24 * 60 * 60 * 1000)
     : undefined;
+  const verifiedSuccess = data.outcomeStatus === 'VERIFIED_SUCCESS';
 
-  const project = await prisma.projectRecord.update({
-    where: { id: projectId },
-    data: {
-      status: 'COMPLETED',
-      actualEndDate,
-      contractorRatingQuality: data.contractorRatingQuality,
-      contractorRatingTimeline: data.contractorRatingTimeline,
-      contractorRatingComms: data.contractorRatingComms,
-      contractorRatingBudget: data.contractorRatingBudget,
-      contractorReviewText: data.contractorReviewText,
-      warrantyPeriodMonths: data.warrantyPeriodMonths,
-      warrantyExpiresAt,
-      warrantyDocumentKey: data.warrantyDocumentKey,
-      completionRecordKey: data.completionRecordKey,
-      writeBackAppliedAt: new Date(),
-    },
-  });
+  if (verifiedSuccess) {
+    const { checks, allPassed } = await getCompletionChecklist(projectId, propertyId);
+    if (!allPassed) {
+      const failed = checks.filter(c => !c.passed).map(c => c.label);
+      throw new APIError(
+        `Cannot complete project — unresolved items: ${failed.join('; ')}`,
+        400, 'CHECKLIST_INCOMPLETE',
+      );
+    }
+  }
 
-  // Stub write-back audit entries — real integration happens per-system
-  await prisma.projectWriteBack.createMany({
-    data: [
-      { projectId, targetSystem: 'HOME_TIMELINE', action: 'CREATED', payload: { projectName: project.name }, appliedByUserId: userId },
-      { projectId, targetSystem: 'HOME_EVENTS', action: 'CREATED', payload: { projectName: project.name }, appliedByUserId: userId },
-      { projectId, targetSystem: 'MATERIAL_SPECS', action: 'LINKED', payload: { note: 'material delivery entries transferred' }, appliedByUserId: userId },
-      { projectId, targetSystem: 'VAULT', action: 'LINKED', payload: { note: 'completion record added to disclosure vault' }, appliedByUserId: userId },
-    ],
-  });
+  const outcomeStatusToProjectStatus: Record<string, ProjectRecordStatus> = {
+    VERIFIED_SUCCESS: 'COMPLETED',
+    DISPUTED: 'DISPUTED',
+    INCOMPLETE: 'PAUSED',
+    FAILED: 'PAUSED',
+    DELAYED: 'PAUSED',
+    UNSAFE: 'PAUSED',
+  };
 
-  // Mark any linked inspection findings as resolved
-  await prisma.inspectionFinding.updateMany({
-    where: { resolvedByProjectId: projectId, status: { not: 'RESOLVED' } },
-    data: { status: 'RESOLVED', resolvedAt: new Date(), resolutionNotes: `Resolved by project: ${project.name}` },
-  });
+  return prisma.$transaction(async (tx) => {
+    const existing = await tx.projectRecord.findFirst({
+      where: { id: projectId, propertyId },
+      include: {
+        property: { select: { homeownerProfileId: true } },
+        progressLogs: { where: { materialType: { not: null } } },
+      },
+    });
+    if (!existing) throw new APIError('Project not found', 404, 'NOT_FOUND');
 
-  return { project, writeBacks: await prisma.projectWriteBack.findMany({ where: { projectId } }) };
+    if (verifiedSuccess && existing.fulfillmentMode === 'PROVIDER') {
+      const ratings = [
+        data.contractorRatingQuality,
+        data.contractorRatingTimeline,
+        data.contractorRatingComms,
+        data.contractorRatingBudget,
+      ];
+      if (ratings.some((rating) => rating === undefined)) {
+        throw new APIError('Provider-led verified closure requires all four provider ratings.', 400, 'PROVIDER_RATINGS_REQUIRED');
+      }
+    }
+
+    if (verifiedSuccess && existing.writeBackAppliedAt && existing.outcomeStatus === 'VERIFIED_SUCCESS') {
+      return {
+        project: existing,
+        writeBacks: await tx.projectWriteBack.findMany({ where: { projectId } }),
+        idempotentReplay: true,
+      };
+    }
+
+    const completionEvidence = {
+      commissioningResult: data.commissioningResult,
+      functionalVerificationResult: data.functionalVerificationResult,
+      safetyCheckResult: data.safetyCheckResult,
+      inspectionResult: data.inspectionResult,
+      unresolvedExceptions: data.unresolvedExceptions,
+      proofKeys: data.proofDocuments.map((proof: any) => proof.proofKey),
+      modelNumber: data.modelNumber ?? null,
+      serialNumber: data.serialNumber ?? null,
+      workDate: actualEndDate.toISOString(),
+    };
+    const project = await tx.projectRecord.update({
+      where: { id: projectId },
+      data: {
+        status: outcomeStatusToProjectStatus[data.outcomeStatus],
+        actualEndDate: verifiedSuccess ? actualEndDate : undefined,
+        outcomeStatus: data.outcomeStatus,
+        commissioningResult: data.commissioningResult,
+        functionalVerificationResult: data.functionalVerificationResult,
+        safetyCheckResult: data.safetyCheckResult,
+        inspectionResult: data.inspectionResult,
+        unresolvedExceptions: data.unresolvedExceptions,
+        completionEvidence,
+        actualCostCents: data.actualCostCents,
+        providerOutcome: data.providerOutcome,
+        recommendationOverridden: data.recommendationOverridden,
+        verifiedAt: verifiedSuccess ? new Date() : null,
+        followUpDueAt: data.followUpDate ? new Date(data.followUpDate) : undefined,
+        contractorRatingQuality: data.contractorRatingQuality,
+        contractorRatingTimeline: data.contractorRatingTimeline,
+        contractorRatingComms: data.contractorRatingComms,
+        contractorRatingBudget: data.contractorRatingBudget,
+        contractorReviewText: data.contractorReviewText,
+        warrantyPeriodMonths: data.warrantyPeriodMonths,
+        warrantyExpiresAt,
+        warrantyDocumentKey: data.warrantyDocumentKey,
+        completionRecordKey: data.completionRecordKey,
+      },
+    });
+
+    const event = await tx.homeEvent.upsert({
+      where: { propertyId_idempotencyKey: { propertyId, idempotencyKey: `project:${projectId}:outcome` } },
+      create: {
+        propertyId,
+        projectId,
+        createdById: userId,
+        inventoryItemId: existing.inventoryItemId,
+        guidanceJourneyId: existing.guidanceJourneyId,
+        type: verifiedSuccess ? 'VERIFIED_RESOLUTION' : 'NOTE',
+        subtype: `PROJECT_${data.outcomeStatus}`,
+        importance: ['FAILED', 'UNSAFE', 'DISPUTED'].includes(data.outcomeStatus) ? 'HIGH' : 'NORMAL',
+        occurredAt: actualEndDate,
+        title: verifiedSuccess ? `${existing.name} verified complete` : `${existing.name}: ${String(data.outcomeStatus).toLowerCase().replace(/_/g, ' ')}`,
+        summary: data.unresolvedExceptions.map((exception: any) => exception.summary).join('; ') || data.contractorReviewText,
+        amount: data.actualCostCents === undefined ? undefined : new Prisma.Decimal(data.actualCostCents).div(100),
+        sourceBadge: verifiedSuccess ? 'VERIFIED' : 'USER_REPORTED',
+        idempotencyKey: `project:${projectId}:outcome`,
+        groupKey: `project:${projectId}`,
+        meta: { projectId, outcomeStatus: data.outcomeStatus, providerOutcome: data.providerOutcome, completionEvidence },
+      },
+      update: {
+        type: verifiedSuccess ? 'VERIFIED_RESOLUTION' : 'NOTE',
+        subtype: `PROJECT_${data.outcomeStatus}`,
+        occurredAt: actualEndDate,
+        sourceBadge: verifiedSuccess ? 'VERIFIED' : 'USER_REPORTED',
+        amount: data.actualCostCents === undefined ? undefined : new Prisma.Decimal(data.actualCostCents).div(100),
+        meta: { projectId, outcomeStatus: data.outcomeStatus, providerOutcome: data.providerOutcome, completionEvidence },
+      },
+    });
+
+    const proofDocuments = [...data.proofDocuments];
+    if (data.warrantyDocumentKey && !proofDocuments.some((proof: any) => proof.proofKey === 'warranty')) {
+      proofDocuments.push({ proofKey: 'warranty', type: 'OTHER', name: 'Project warranty', fileUrl: data.warrantyDocumentKey, fileSize: 0, mimeType: 'application/octet-stream', kind: 'PDF' });
+    }
+    if (data.completionRecordKey && !proofDocuments.some((proof: any) => proof.proofKey === 'completion-record')) {
+      proofDocuments.push({ proofKey: 'completion-record', type: 'OTHER', name: 'Project completion record', fileUrl: data.completionRecordKey, fileSize: 0, mimeType: 'application/octet-stream', kind: 'PDF' });
+    }
+    const documentIds: string[] = [];
+    for (const proof of proofDocuments) {
+      const document = await tx.document.upsert({
+        where: { projectProofKey: `${projectId}:${proof.proofKey}` },
+        create: {
+          propertyId,
+          projectId,
+          projectProofKey: `${projectId}:${proof.proofKey}`,
+          inventoryItemId: existing.inventoryItemId,
+          uploadedBy: userId,
+          type: proof.type,
+          name: proof.name,
+          fileUrl: proof.fileUrl,
+          fileSize: proof.fileSize,
+          mimeType: proof.mimeType,
+          verificationStatus: verifiedSuccess ? 'VERIFIED' : 'UNVERIFIED',
+          verifiedAt: verifiedSuccess ? new Date() : undefined,
+          verifiedByUserId: verifiedSuccess ? userId : undefined,
+          metadata: { projectId, proofKind: proof.kind, outcomeStatus: data.outcomeStatus },
+        },
+        update: {
+          fileUrl: proof.fileUrl,
+          fileSize: proof.fileSize,
+          mimeType: proof.mimeType,
+          verificationStatus: verifiedSuccess ? 'VERIFIED' : 'UNVERIFIED',
+          verifiedAt: verifiedSuccess ? new Date() : null,
+          verifiedByUserId: verifiedSuccess ? userId : null,
+          metadata: { projectId, proofKind: proof.kind, outcomeStatus: data.outcomeStatus },
+        },
+      });
+      documentIds.push(document.id);
+      await tx.homeEventDocument.upsert({
+        where: { eventId_documentId: { eventId: event.id, documentId: document.id } },
+        create: { eventId: event.id, documentId: document.id, kind: proof.kind, caption: proof.name },
+        update: { kind: proof.kind, caption: proof.name },
+      });
+    }
+
+    let expenseId: string | null = null;
+    let warrantyId: string | null = null;
+    const materialSpecIds: string[] = [];
+    const futureCareTaskIds: string[] = [];
+
+    if (verifiedSuccess) {
+      const expense = await tx.expense.upsert({
+        where: { projectId },
+        create: {
+          homeownerProfileId: existing.property.homeownerProfileId,
+          propertyId,
+          projectId,
+          bookingId: existing.bookingId,
+          description: existing.name,
+          category: 'REPAIR_SERVICE',
+          amount: new Prisma.Decimal(data.actualCostCents).div(100),
+          transactionDate: actualEndDate,
+        },
+        update: {
+          amount: new Prisma.Decimal(data.actualCostCents).div(100),
+          transactionDate: actualEndDate,
+          description: existing.name,
+        },
+      });
+      expenseId = expense.id;
+      await tx.homeEvent.update({ where: { id: event.id }, data: { expenseId: expense.id } });
+
+      if (data.warrantyPeriodMonths && warrantyExpiresAt) {
+        const warranty = await tx.warranty.upsert({
+          where: { projectId },
+          create: {
+            homeownerProfileId: existing.property.homeownerProfileId,
+            propertyId,
+            inventoryItemId: existing.inventoryItemId,
+            projectId,
+            category: 'OTHER',
+            providerName: existing.contractorName ?? 'Manufacturer or installer',
+            coverageDetails: `Warranty captured at completion of ${existing.name}`,
+            startDate: actualEndDate,
+            expiryDate: warrantyExpiresAt,
+          },
+          update: { startDate: actualEndDate, expiryDate: warrantyExpiresAt, providerName: existing.contractorName ?? 'Manufacturer or installer' },
+        });
+        warrantyId = warranty.id;
+        await tx.document.updateMany({ where: { id: { in: documentIds }, projectProofKey: `${projectId}:warranty` }, data: { warrantyId: warranty.id } });
+      }
+
+      if (existing.inventoryItemId) {
+        await tx.inventoryItem.update({
+          where: { id: existing.inventoryItemId },
+          data: {
+            condition: existing.executionPath === 'REPLACEMENT' ? 'NEW' : 'GOOD',
+            installedOn: existing.executionPath === 'REPLACEMENT' ? actualEndDate : undefined,
+            lastServicedOn: actualEndDate,
+            modelNumber: data.modelNumber,
+            model: data.modelNumber,
+            serialNumber: data.serialNumber,
+            serialNo: data.serialNumber,
+            replacementCostCents: data.actualCostCents,
+            warrantyId: warrantyId ?? undefined,
+            isVerified: true,
+            verificationSource: 'PROJECT_COMPLETION',
+          },
+        });
+      }
+
+      const materialCategories = new Set(['PAINT', 'TILE', 'FLOORING', 'GROUT', 'COUNTERTOP', 'CABINET', 'HARDWARE', 'TRIM_MOLDING', 'WALLPAPER', 'ROOFING', 'SIDING', 'WINDOW', 'DOOR', 'INSULATION']);
+      for (const log of existing.progressLogs) {
+        const category = materialCategories.has(String(log.materialType).toUpperCase()) ? String(log.materialType).toUpperCase() : 'OTHER';
+        const spec = await tx.materialSpec.upsert({
+          where: { sourceProgressLogId: log.id },
+          create: {
+            propertyId,
+            roomId: log.roomId,
+            projectId,
+            sourceProgressLogId: log.id,
+            linkedInventoryItemId: existing.inventoryItemId,
+            scopeLevel: log.roomId ? 'ROOM' : 'PROPERTY',
+            category: category as any,
+            label: log.materialType ?? 'Project material',
+            manufacturer: log.materialBrand,
+            productName: log.materialModel,
+            colorCode: log.materialColor,
+            supplier: log.materialSupplier,
+            quantityPurchased: log.materialQuantity,
+            purchaseDate: actualEndDate,
+          },
+          update: {
+            manufacturer: log.materialBrand,
+            productName: log.materialModel,
+            colorCode: log.materialColor,
+            supplier: log.materialSupplier,
+            quantityPurchased: log.materialQuantity,
+          },
+        });
+        materialSpecIds.push(spec.id);
+      }
+
+      const futureCare = [
+        data.nextMaintenanceDate ? { key: 'maintenance', title: `Maintain ${existing.name}`, date: data.nextMaintenanceDate, priority: 'MEDIUM' } : null,
+        data.nextInspectionDate ? { key: 'inspection', title: `Inspect ${existing.name}`, date: data.nextInspectionDate, priority: 'HIGH' } : null,
+        warrantyExpiresAt ? { key: 'warranty', title: `Review warranty for ${existing.name}`, date: warrantyExpiresAt.toISOString(), priority: 'HIGH' } : null,
+        data.replacementHorizonDate ? { key: 'replacement', title: `Plan replacement for ${existing.name}`, date: data.replacementHorizonDate, priority: 'MEDIUM' } : null,
+        data.followUpDate ? { key: 'follow-up', title: `Check outcome of ${existing.name}`, date: data.followUpDate, priority: 'HIGH' } : null,
+      ].filter(Boolean) as Array<{ key: string; title: string; date: string; priority: string }>;
+      for (const care of futureCare) {
+        const actionKey = `project:${projectId}:${care.key}`;
+        const task = await tx.propertyMaintenanceTask.upsert({
+          where: { propertyId_actionKey: { propertyId, actionKey } },
+          create: {
+            propertyId,
+            title: care.title,
+            description: `Created from verified completion of ${existing.name}.`,
+            source: 'PROJECT_COMPLETION',
+            actionKey,
+            priority: care.priority as any,
+            inventoryItemId: existing.inventoryItemId,
+            serviceCategory: existing.serviceCategory,
+            nextDueDate: new Date(care.date),
+          },
+          update: { title: care.title, nextDueDate: new Date(care.date), status: 'PENDING' },
+        });
+        futureCareTaskIds.push(task.id);
+      }
+
+      await tx.inspectionFinding.updateMany({
+        where: { resolvedByProjectId: projectId, status: { not: 'RESOLVED' } },
+        data: { status: 'RESOLVED', resolvedAt: new Date(), resolutionNotes: `Resolved by verified project: ${project.name}` },
+      });
+      await tx.projectRecord.update({ where: { id: projectId }, data: { writeBackAppliedAt: new Date() } });
+    }
+
+    const writeBackRows = [
+      { targetSystem: 'HOME_EVENTS', targetRecordId: event.id, action: verifiedSuccess ? 'CREATED' : 'UPDATED', payload: { outcomeStatus: data.outcomeStatus } },
+      ...(documentIds.length ? [{ targetSystem: 'DOCUMENTS', targetRecordId: documentIds[0], action: 'LINKED', payload: { documentIds } }] : []),
+      ...(expenseId ? [{ targetSystem: 'EXPENSES', targetRecordId: expenseId, action: 'CREATED', payload: { actualCostCents: data.actualCostCents } }] : []),
+      ...(warrantyId ? [{ targetSystem: 'WARRANTIES', targetRecordId: warrantyId, action: 'CREATED', payload: { warrantyExpiresAt } }] : []),
+      ...(existing.inventoryItemId && verifiedSuccess ? [{ targetSystem: 'INVENTORY', targetRecordId: existing.inventoryItemId, action: 'UPDATED', payload: { modelNumber: data.modelNumber, serialNumber: data.serialNumber } }] : []),
+      ...(materialSpecIds.length ? [{ targetSystem: 'MATERIAL_SPECS', targetRecordId: materialSpecIds[0], action: 'CREATED', payload: { materialSpecIds } }] : []),
+      ...(futureCareTaskIds.length ? [{ targetSystem: 'FUTURE_CARE', targetRecordId: futureCareTaskIds[0], action: 'CREATED', payload: { taskIds: futureCareTaskIds } }] : []),
+    ];
+    for (const row of writeBackRows) {
+      const prior = await tx.projectWriteBack.findFirst({
+        where: { projectId, targetSystem: row.targetSystem as any, targetRecordId: row.targetRecordId },
+      });
+      if (!prior) {
+        await tx.projectWriteBack.create({
+          data: { projectId, targetSystem: row.targetSystem as any, targetRecordId: row.targetRecordId, action: row.action as any, payload: row.payload as any, appliedByUserId: userId },
+        });
+      }
+    }
+
+    return {
+      project: await tx.projectRecord.findUniqueOrThrow({ where: { id: projectId } }),
+      writeBacks: await tx.projectWriteBack.findMany({ where: { projectId } }),
+      homeEventId: event.id,
+      documentIds,
+      expenseId,
+      warrantyId,
+      materialSpecIds,
+      futureCareTaskIds,
+      idempotentReplay: false,
+    };
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 }

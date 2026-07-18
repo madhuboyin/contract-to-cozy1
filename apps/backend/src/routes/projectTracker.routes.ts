@@ -36,6 +36,7 @@ import {
   resolveIssue,
   getCompletionChecklist,
   confirmCompletion,
+  completeMinorWork,
 } from '../controllers/projectTracker.controller';
 
 import {
@@ -54,6 +55,7 @@ import {
   UpdateIssueSchema,
   ResolveIssueSchema,
   ConfirmCompletionSchema,
+  CompleteMinorWorkSchema,
 } from '../validators/projectTracker.validators';
 
 const router = Router();
@@ -71,6 +73,12 @@ router.post(
   propertyAuthMiddleware,
   validateBody(CreateProjectSchema),
   createProject,
+);
+router.post(
+  '/properties/:propertyId/projects/minor-completion',
+  propertyAuthMiddleware,
+  validateBody(CompleteMinorWorkSchema),
+  completeMinorWork,
 );
 router.get('/properties/:propertyId/projects/:projectId', propertyAuthMiddleware, getProject);
 router.patch(

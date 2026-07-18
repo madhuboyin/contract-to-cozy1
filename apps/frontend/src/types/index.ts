@@ -4710,6 +4710,9 @@ export interface ProjectRecord {
   fundingMode: 'SELF_PAID' | 'COVERED' | 'MIXED';
   complexity: 'MINOR' | 'MAJOR';
   recommendationVersion?: string | null;
+  providerRankingRationale?: string | null;
+  commercialDisclosure?: Record<string, unknown> | null;
+  credentialCheck?: Record<string, unknown> | null;
   contractAmountCents: number;
   approvedChangeOrderDeltaCents: number;
   currentContractAmountCents: number;
@@ -4724,6 +4727,18 @@ export interface ProjectRecord {
   warrantyDocumentKey?: string | null;
   warrantyPeriodMonths?: number | null;
   warrantyExpiresAt?: string | null;
+  outcomeStatus?: 'VERIFIED_SUCCESS' | 'INCOMPLETE' | 'FAILED' | 'DISPUTED' | 'DELAYED' | 'UNSAFE' | null;
+  commissioningResult?: 'PASSED' | 'FAILED' | 'NOT_REQUIRED' | 'UNRESOLVED' | null;
+  functionalVerificationResult?: 'PASSED' | 'FAILED' | 'NOT_REQUIRED' | 'UNRESOLVED' | null;
+  safetyCheckResult?: 'PASSED' | 'FAILED' | 'NOT_REQUIRED' | 'UNRESOLVED' | null;
+  inspectionResult?: 'PASSED' | 'FAILED' | 'NOT_REQUIRED' | 'UNRESOLVED' | null;
+  unresolvedExceptions?: unknown[] | null;
+  completionEvidence?: Record<string, unknown> | null;
+  actualCostCents?: number | null;
+  providerOutcome?: string | null;
+  recommendationOverridden?: boolean;
+  verifiedAt?: string | null;
+  followUpDueAt?: string | null;
   contractorRatingQuality?: number | null;
   contractorRatingTimeline?: number | null;
   contractorRatingComms?: number | null;

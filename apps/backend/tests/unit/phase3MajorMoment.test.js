@@ -5,7 +5,7 @@ const path = require('node:path');
 
 require('ts-node/register');
 
-const { CreateProjectSchema } = require('../../src/validators/projectTracker.validators.ts');
+const { CreateProjectSchema, ConfirmCompletionSchema, CompleteMinorWorkSchema } = require('../../src/validators/projectTracker.validators.ts');
 const { getTemplateByJourneyTypeKey } = require('../../src/services/guidanceEngine/guidanceTemplateRegistry.ts');
 
 const read = (relative) => fs.readFileSync(path.resolve(__dirname, relative), 'utf8');
@@ -22,6 +22,16 @@ function projectFixture(overrides = {}) {
     fulfillmentMode: 'PROVIDER',
     fundingMode: 'MIXED',
     complexity: 'MAJOR',
+    providerRankingRationale: 'Best scope fit with verified credentials and a competitive schedule.',
+    commercialDisclosure: {
+      involvesCommercialAction: true,
+      relationshipType: 'NONE',
+      compensationMayOccur: false,
+      rankingInfluenced: false,
+      summary: 'No commercial relationship influences this selection.',
+      selectionCriteria: ['Scope fit', 'Credentials'],
+      nonCommercialAlternatives: ['Use a provider found independently'],
+    },
     contractAmountCents: 150000,
     startDate: '2026-08-01',
     ...overrides,
@@ -41,6 +51,72 @@ test('asset lifecycle journey continues through all six Phase 3 execution and cl
     'set_future_care',
   ]);
   assert.ok(template.steps.slice(8).every((step) => step.isRequired));
+});
+
+test('verified closure requires durable verification while exception outcomes remain explicit and reopenable', () => {
+  const verified = {
+    outcomeStatus: 'VERIFIED_SUCCESS',
+    commissioningResult: 'PASSED',
+    functionalVerificationResult: 'PASSED',
+    safetyCheckResult: 'PASSED',
+    inspectionResult: 'NOT_REQUIRED',
+    unresolvedExceptions: [],
+    actualCostCents: 142500,
+    providerOutcome: 'SUCCESS',
+  };
+  assert.equal(ConfirmCompletionSchema.safeParse(verified).success, true);
+  assert.equal(ConfirmCompletionSchema.safeParse({ ...verified, functionalVerificationResult: 'FAILED' }).success, false);
+  assert.equal(ConfirmCompletionSchema.safeParse({
+    ...verified,
+    outcomeStatus: 'UNSAFE',
+    functionalVerificationResult: 'UNRESOLVED',
+    safetyCheckResult: 'FAILED',
+    actualCostCents: undefined,
+    unresolvedExceptions: [{ type: 'SAFETY', summary: 'Gas leak remains unresolved', blocksClosure: true }],
+    providerOutcome: 'FAILED',
+  }).success, true);
+});
+
+test('guided provider selection enforces ranking rationale, disclosure, and a non-commercial alternative', () => {
+  assert.equal(CreateProjectSchema.safeParse(projectFixture({ providerRankingRationale: undefined })).success, false);
+  assert.equal(CreateProjectSchema.safeParse(projectFixture({ commercialDisclosure: undefined })).success, false);
+  assert.equal(CreateProjectSchema.safeParse(projectFixture({
+    commercialDisclosure: { ...projectFixture().commercialDisclosure, nonCommercialAlternatives: [] },
+  })).success, false);
+});
+
+test('minor work can close the journey without creating a ProjectRecord', () => {
+  const payload = {
+    guidanceJourneyId: 'journey-1', inventoryItemId: 'item-1', title: 'Replace faucet cartridge',
+    executionPath: 'REPAIR', fulfillmentMode: 'DIY', actualCostCents: 3500,
+  };
+  assert.equal(CompleteMinorWorkSchema.safeParse(payload).success, true);
+  const service = read('../../src/services/projectTracker.service.ts');
+  const route = read('../../src/routes/projectTracker.routes.ts');
+  assert.match(service, /export async function completeMinorWork/);
+  assert.match(service, /minor-work:\$\{journey\.id\}/);
+  assert.match(route, /projects\/minor-completion/);
+});
+
+test('verified project closure transactionally writes proof, home history, expense, inventory, warranty, materials, and future care', () => {
+  const service = read('../../src/services/projectTracker.service.ts');
+  assert.match(service, /prisma\.\$transaction\(async \(tx\)/);
+  for (const model of ['homeEvent.upsert', 'document.upsert', 'expense.upsert', 'warranty.upsert', 'inventoryItem.update', 'materialSpec.upsert', 'propertyMaintenanceTask.upsert']) {
+    assert.match(service, new RegExp(model.replace('.', '\\.')));
+  }
+  assert.match(service, /writeBackAppliedAt && existing\.outcomeStatus === 'VERIFIED_SUCCESS'/);
+  assert.match(service, /TransactionIsolationLevel\.Serializable/);
+  assert.doesNotMatch(service, /Stub write-back audit entries/);
+});
+
+test('verified closure advances stages 10 through 14 and emits outcome measurement context', () => {
+  const controller = read('../../src/controllers/projectTracker.controller.ts');
+  for (const step of ['track_work', 'verify_outcome', 'capture_proof', 'update_home_record', 'set_future_care']) {
+    assert.match(controller, new RegExp(step));
+  }
+  for (const metric of ['priceVarianceCents', 'recommendationOverridden', 'providerOutcome', 'blockedDays', 'followUpTaskCount']) {
+    assert.match(controller, new RegExp(metric));
+  }
 });
 
 test('guided project contract keeps execution alternatives orthogonal and requires provider identity only for provider work', () => {

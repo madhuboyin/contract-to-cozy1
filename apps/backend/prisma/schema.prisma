@@ -392,6 +392,7 @@ enum MaintenanceTaskSource {
   WARRANTY_RENEWAL
   TEMPLATE
   RECALL_ALERT
+  PROJECT_COMPLETION
 }
 
 enum MaintenanceTaskPriority {
@@ -701,10 +702,10 @@ model InventoryItem {
   insurancePolicyId String?
 
   // Core fields
-  name      String
-  assetType String?
-  category  InventoryItemCategory  @default(OTHER)
-  condition InventoryItemCondition @default(UNKNOWN)
+  name             String
+  assetType        String?
+  category         InventoryItemCategory  @default(OTHER)
+  condition        InventoryItemCondition @default(UNKNOWN)
   efficiencyRating String?
 
   // Identity fields
@@ -1570,21 +1571,21 @@ model User {
   lastLoginAt DateTime?
 
   // Relations
-  homeownerProfile       HomeownerProfile?
-  providerProfile        ProviderProfile?
-  bookings               Booking[]              @relation("BookingHomeowner")
-  providerBookings       Booking[]              @relation("BookingProvider")
-  reviews                Review[]               @relation("ReviewAuthor")
-  receivedReviews        Review[]               @relation("ReviewProvider")
-  messages               Message[]
-  notifications          Notification[]
-  favorites              Favorite[]
-  refreshTokenSessions   RefreshTokenSession[]
-  mfaRecoveryCodes       MfaRecoveryCode[]
-  homeReportExports      HomeReportExport[]
-  claimsCreated          Claim[]
-  claimTimelineEvents    ClaimTimelineEvent[]
-  inventoryImportBatches InventoryImportBatch[]
+  homeownerProfile        HomeownerProfile?
+  providerProfile         ProviderProfile?
+  bookings                Booking[]                       @relation("BookingHomeowner")
+  providerBookings        Booking[]                       @relation("BookingProvider")
+  reviews                 Review[]                        @relation("ReviewAuthor")
+  receivedReviews         Review[]                        @relation("ReviewProvider")
+  messages                Message[]
+  notifications           Notification[]
+  favorites               Favorite[]
+  refreshTokenSessions    RefreshTokenSession[]
+  mfaRecoveryCodes        MfaRecoveryCode[]
+  homeReportExports       HomeReportExport[]
+  claimsCreated           Claim[]
+  claimTimelineEvents     ClaimTimelineEvent[]
+  inventoryImportBatches  InventoryImportBatch[]
   propertyContextCaptures PropertyContextCaptureReceipt[]
 
   inventoryOcrSessions      InventoryOcrSession[]
@@ -2214,15 +2215,15 @@ model Property {
   insuranceQuoteRequests InsuranceQuoteRequest[]
   homeReportExports      HomeReportExport[]
 
-  claims                 Claim[]
-  claimTimelineEvents    ClaimTimelineEvent[]
-  recallMatches          RecallMatch[]
-  incidents              Incident[]
-  guidanceSignals        GuidanceSignal[]
-  guidanceJourneys       GuidanceJourney[]
-  guidanceJourneyEvents  GuidanceJourneyEvent[]
-  guidanceStepEvidences  GuidanceStepEvidence[]
-  inventoryImportBatches InventoryImportBatch[]
+  claims                  Claim[]
+  claimTimelineEvents     ClaimTimelineEvent[]
+  recallMatches           RecallMatch[]
+  incidents               Incident[]
+  guidanceSignals         GuidanceSignal[]
+  guidanceJourneys        GuidanceJourney[]
+  guidanceJourneyEvents   GuidanceJourneyEvent[]
+  guidanceStepEvidences   GuidanceStepEvidence[]
+  inventoryImportBatches  InventoryImportBatch[]
   propertyContextCaptures PropertyContextCaptureReceipt[]
 
   inventoryOcrSessions     InventoryOcrSession[]
@@ -2419,7 +2420,7 @@ model PropertyResponsibility {
 // Evidence describes why a typed canonical field is trusted. It is not a
 // generic value store; factKey is allowlisted by the application catalog.
 model PropertyFactEvidence {
-  id               String                 @id @default(uuid())
+  id               String                       @id @default(uuid())
   propertyId       String
   factKey          String
   sourceType       PropertyFactSourceType
@@ -2431,7 +2432,7 @@ model PropertyFactEvidence {
   validUntil       DateTime?
   verifiedAt       DateTime?
   supersededAt     DateTime?
-  property         Property               @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  property         Property                     @relation(fields: [propertyId], references: [id], onDelete: Cascade)
 
   @@index([propertyId, factKey, supersededAt])
   @@map("property_fact_evidence")
@@ -2895,10 +2896,10 @@ model Payment {
   failureReason String?
 
   // Refund
-  refundedAmount Decimal?  @db.Decimal(10, 2)
+  refundedAmount Decimal?        @db.Decimal(10, 2)
   refundedAt     DateTime?
   // Relations
-  booking        Booking   @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  booking        Booking         @relation(fields: [bookingId], references: [id], onDelete: Cascade)
   refundRequests RefundRequest[]
 
   createdAt DateTime @default(now())
@@ -2920,6 +2921,8 @@ model Document {
   warrantyId           String? // NEW: Link to a Warranty record
   policyId             String? // NEW: Link to an InsurancePolicy record
   providerCredentialId String? // NEW: Link to a ProviderCredential record
+  projectId            String? // Phase 3: durable project proof linkage
+  projectProofKey      String? @unique
 
   uploadedBy String // userId
 
@@ -2952,6 +2955,7 @@ model Document {
   warranty                   Warranty?                   @relation(fields: [warrantyId], references: [id], onDelete: Cascade)
   insurancePolicy            InsurancePolicy?            @relation(fields: [policyId], references: [id], onDelete: Cascade)
   providerCredential         ProviderCredential?         @relation(fields: [providerCredentialId], references: [id], onDelete: Cascade)
+  project                    ProjectRecord?              @relation(fields: [projectId], references: [id], onDelete: SetNull)
   inventoryItemId            String? // NEW: Link to an InventoryItem record
   inventoryItem              InventoryItem?              @relation(fields: [inventoryItemId], references: [id], onDelete: SetNull)
   homeReportExports          HomeReportExport[]
@@ -2983,6 +2987,7 @@ model Document {
   @@index([policyId]) // NEW INDEX
   @@index([providerCredentialId]) // NEW INDEX
   @@index([inventoryItemId]) // NEW INDEX
+  @@index([projectId])
   @@map("documents")
 }
 
@@ -3052,6 +3057,7 @@ model Warranty {
   category           WarrantyCategory @default(HOME_WARRANTY_PLAN)
   propertyId         String? // Link to a specific property (e.g., HVAC unit warranty is for the main home)
   inventoryItemId    String? // NEW: Direct link to InventoryItem
+  projectId          String?          @unique
   // Policy Details
   providerName       String
   policyNumber       String?
@@ -3067,6 +3073,7 @@ model Warranty {
   property         Property?        @relation(fields: [propertyId], references: [id], onDelete: SetNull)
   documents        Document[]
   inventoryItem    InventoryItem?   @relation("WarrantyToInventoryItem", fields: [inventoryItemId], references: [id], onDelete: SetNull)
+  project          ProjectRecord?   @relation(fields: [projectId], references: [id], onDelete: SetNull)
 
   // PHASE 1: NEW RELATION
   maintenanceTasks    PropertyMaintenanceTask[]
@@ -3143,6 +3150,7 @@ model Expense {
   homeownerProfileId String
   propertyId         String? // Link to a specific property
   bookingId          String? // Optional link to a platform booking (e.g., a top-up payment)
+  projectId          String? @unique
 
   // Expense Details
   description     String
@@ -3154,6 +3162,7 @@ model Expense {
   homeownerProfile HomeownerProfile @relation(fields: [homeownerProfileId], references: [id], onDelete: Cascade)
   property         Property?        @relation(fields: [propertyId], references: [id], onDelete: SetNull)
   booking          Booking?         @relation(fields: [bookingId], references: [id])
+  project          ProjectRecord?   @relation(fields: [projectId], references: [id], onDelete: SetNull)
   homeEvents       HomeEvent[]
 
   // Home Reserve / Sinking Fund Planner — withdrawal reconciled against this expense
@@ -3223,13 +3232,13 @@ model CityFeatureFlag {
 }
 
 model SellerPrepPlan {
-  id          String   @id @default(uuid())
-  userId      String
-  propertyId  String
-  preferences Json? // ADD THIS LINE
+  id             String   @id @default(uuid())
+  userId         String
+  propertyId     String
+  preferences    Json? // ADD THIS LINE
   // Property Context version at generation; used to reconcile stale plans.
   contextVersion String?
-  createdAt   DateTime @default(now())
+  createdAt      DateTime @default(now())
 
   items      SellerPrepPlanItem[]
   interviews AgentInterview[]
@@ -4169,10 +4178,10 @@ model GuidanceJourney {
   parentJourney GuidanceJourney?  @relation("GuidanceJourneyBranch", fields: [parentJourneyId], references: [id], onDelete: SetNull)
   childJourneys GuidanceJourney[] @relation("GuidanceJourneyBranch")
 
-  steps      GuidanceJourneyStep[]
-  events     GuidanceJourneyEvent[]
-  evidences  GuidanceStepEvidence[]
-  homeEvents HomeEvent[] // FRD-FR-11/FR-03: retrospective lookback + verified resolution events
+  steps         GuidanceJourneyStep[]
+  events        GuidanceJourneyEvent[]
+  evidences     GuidanceStepEvidence[]
+  homeEvents    HomeEvent[] // FRD-FR-11/FR-03: retrospective lookback + verified resolution events
   projectRecord ProjectRecord?
 
   @@index([propertyId, status, updatedAt(sort: Desc)])
@@ -4694,6 +4703,7 @@ model HomeEvent {
   inventoryItemId String?
   claimId         String?
   expenseId       String?
+  projectId       String? @unique
 
   type       HomeEventType
   subtype    String?
@@ -4745,6 +4755,7 @@ model HomeEvent {
   inventoryItem   InventoryItem?    @relation(fields: [inventoryItemId], references: [id], onDelete: SetNull)
   claim           Claim?            @relation(fields: [claimId], references: [id], onDelete: SetNull)
   expense         Expense?          @relation(fields: [expenseId], references: [id], onDelete: SetNull)
+  project         ProjectRecord?    @relation(fields: [projectId], references: [id], onDelete: SetNull)
   provenance      SignalProvenance? @relation("HomeEventProvenance", fields: [provenanceId], references: [id], onDelete: SetNull)
   guidanceJourney GuidanceJourney?  @relation(fields: [guidanceJourneyId], references: [id], onDelete: SetNull)
 
@@ -6215,8 +6226,8 @@ model HomeReserveFund {
   recommendedMonthlyContributionCents Int @default(0)
   currentShortfallCents               Int @default(0)
 
-  lastRecalculatedAt DateTime?
-  sourceAnalysisId   String?
+  lastRecalculatedAt     DateTime?
+  sourceAnalysisId       String?
   propertyContextVersion String?
 
   isActive Boolean @default(true)
@@ -8419,7 +8430,7 @@ model AdminCase {
 
   type     AdminCaseType
   severity AdminCaseSeverity
-  status   AdminCaseStatus @default(OPEN)
+  status   AdminCaseStatus   @default(OPEN)
 
   title       String
   description String
@@ -8601,7 +8612,7 @@ model PrivacyRequest {
 
   jurisdiction String?
   dueAt        DateTime?
-  legalHold    Boolean @default(false)
+  legalHold    Boolean   @default(false)
 
   identityVerifiedAt DateTime?
   identityVerifiedBy String?
@@ -9268,10 +9279,10 @@ model PropertyHiddenAssetMatch {
   estimatedValueMin Decimal?                   @db.Decimal(12, 2)
   estimatedValueMax Decimal?                   @db.Decimal(12, 2)
 
-  status           PropertyHiddenAssetMatchStatus @default(DETECTED)
-  matchedRuleCount Int?
-  totalRuleCount   Int?
-  matchReasons     Json? // array of human-readable match signals for display
+  status                 PropertyHiddenAssetMatchStatus @default(DETECTED)
+  matchedRuleCount       Int?
+  totalRuleCount         Int?
+  matchReasons           Json? // array of human-readable match signals for display
   propertyContextVersion String?
 
   lastEvaluatedAt DateTime  @default(now())
@@ -9304,10 +9315,10 @@ model PropertyHiddenAssetScanRun {
   status    PropertyHiddenAssetScanRunStatus @default(PENDING)
   startedAt DateTime                         @default(now())
 
-  completedAt       DateTime?
-  programsEvaluated Int?
-  matchesFound      Int?
-  notes             String?
+  completedAt            DateTime?
+  programsEvaluated      Int?
+  matchesFound           Int?
+  notes                  String?
   propertyContextVersion String?
 
   createdAt DateTime @default(now())
@@ -9748,7 +9759,7 @@ model NeighborhoodImpact {
 
   createdAt DateTime @default(now())
 
-  event        NeighborhoodEvent          @relation(fields: [eventId], references: [id])
+  event        NeighborhoodEvent         @relation(fields: [eventId], references: [id])
   propertyLink PropertyNeighborhoodEvent @relation(fields: [propertyNeighborhoodEventId], references: [id], onDelete: Cascade)
 
   @@index([eventId])
@@ -9773,7 +9784,7 @@ model DemographicImpact {
 
   createdAt DateTime @default(now())
 
-  event        NeighborhoodEvent          @relation(fields: [eventId], references: [id])
+  event        NeighborhoodEvent         @relation(fields: [eventId], references: [id])
   propertyLink PropertyNeighborhoodEvent @relation(fields: [propertyNeighborhoodEventId], references: [id], onDelete: Cascade)
 
   @@index([eventId])
@@ -11214,20 +11225,25 @@ model MaterialSpec {
   isActive          Boolean   @default(true)
 
   linkedInventoryItemId String?
+  projectId             String?
+  sourceProgressLogId   String? @unique
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  property      Property            @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-  room          InventoryRoom?      @relation(fields: [roomId], references: [id], onDelete: SetNull)
-  inventoryItem InventoryItem?      @relation(fields: [linkedInventoryItemId], references: [id], onDelete: SetNull)
-  photos        MaterialSpecPhoto[]
+  property          Property            @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  room              InventoryRoom?      @relation(fields: [roomId], references: [id], onDelete: SetNull)
+  inventoryItem     InventoryItem?      @relation(fields: [linkedInventoryItemId], references: [id], onDelete: SetNull)
+  project           ProjectRecord?      @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  sourceProgressLog ProjectProgressLog? @relation(fields: [sourceProgressLogId], references: [id], onDelete: SetNull)
+  photos            MaterialSpecPhoto[]
 
   @@index([propertyId])
   @@index([roomId])
   @@index([category])
   @@index([propertyId, category])
   @@index([isActive])
+  @@index([projectId])
   @@map("material_specs")
 }
 
@@ -12639,6 +12655,22 @@ enum ProjectComplexity {
   MAJOR
 }
 
+enum ProjectOutcomeStatus {
+  VERIFIED_SUCCESS
+  INCOMPLETE
+  FAILED
+  DISPUTED
+  DELAYED
+  UNSAFE
+}
+
+enum ProjectVerificationResult {
+  PASSED
+  FAILED
+  NOT_REQUIRED
+  UNRESOLVED
+}
+
 enum ProjectType {
   ROOF_REPLACEMENT
   HVAC_REPLACEMENT
@@ -12749,6 +12781,11 @@ enum ProjectWriteBackTarget {
   PERMIT_TRACKER
   VAULT
   INSPECTION_FINDINGS
+  INVENTORY
+  DOCUMENTS
+  EXPENSES
+  WARRANTIES
+  FUTURE_CARE
 }
 
 enum ProjectWriteBackAction {
@@ -12784,9 +12821,14 @@ model ProjectRecord {
   // Phase 3 major-moment context keeps the execution alternatives explicit.
   executionPath         ProjectExecutionPath?
   fulfillmentMode       ProjectFulfillmentMode @default(PROVIDER)
-  fundingMode           ProjectFundingMode @default(SELF_PAID)
-  complexity            ProjectComplexity @default(MAJOR)
+  fundingMode           ProjectFundingMode     @default(SELF_PAID)
+  complexity            ProjectComplexity      @default(MAJOR)
   recommendationVersion String?
+
+  // Provider-selection integrity captured before a guided commercial handoff.
+  providerRankingRationale String?
+  commercialDisclosure     Json?
+  credentialCheck          Json?
 
   // Source linkages — typed FKs instead of polymorphic sourceId
   guidanceJourneyId   String? @unique
@@ -12818,6 +12860,20 @@ model ProjectRecord {
   warrantyPeriodMonths Int?
   warrantyExpiresAt    DateTime?
 
+  // Durable verification and outcome state for the major-moment closure.
+  outcomeStatus                ProjectOutcomeStatus?
+  commissioningResult          ProjectVerificationResult?
+  functionalVerificationResult ProjectVerificationResult?
+  safetyCheckResult            ProjectVerificationResult?
+  inspectionResult             ProjectVerificationResult?
+  unresolvedExceptions         Json?
+  completionEvidence           Json?
+  actualCostCents              Int?
+  providerOutcome              String?
+  recommendationOverridden     Boolean                    @default(false)
+  verifiedAt                   DateTime?
+  followUpDueAt                DateTime?
+
   // Contractor ratings — entered during completion workflow; posted to directory on confirmation
   contractorRatingQuality  Int? // 1–5
   contractorRatingTimeline Int? // 1–5
@@ -12839,13 +12895,18 @@ model ProjectRecord {
   priceFinalization PriceFinalization? @relation(fields: [priceFinalizationId], references: [id], onDelete: SetNull)
   bookingSource     Booking?           @relation("ProjectFromBooking", fields: [bookingId], references: [id], onDelete: SetNull)
 
-  milestones         ProjectMilestone[]
-  payments           ProjectPayment[]
-  changeOrders       ProjectChangeOrder[]
-  progressLogs       ProjectProgressLog[]
-  issues             ProjectIssue[]
-  writeBacks         ProjectWriteBack[]
-  inspectionFindings InspectionFinding[]  @relation("InspectionFindingResolvedByProject")
+  milestones          ProjectMilestone[]
+  payments            ProjectPayment[]
+  changeOrders        ProjectChangeOrder[]
+  progressLogs        ProjectProgressLog[]
+  issues              ProjectIssue[]
+  writeBacks          ProjectWriteBack[]
+  inspectionFindings  InspectionFinding[]  @relation("InspectionFindingResolvedByProject")
+  documents           Document[]
+  expense             Expense?
+  warranty            Warranty?
+  completionHomeEvent HomeEvent?
+  materialSpecs       MaterialSpec[]
 
   @@index([propertyId, status])
   @@index([propertyId, createdAt(sort: Desc)])
@@ -12995,10 +13056,11 @@ model ProjectProgressLog {
   createdAt DateTime @default(now())
 
   // Relations
-  project   ProjectRecord     @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  milestone ProjectMilestone? @relation(fields: [milestoneId], references: [id], onDelete: SetNull)
-  room      InventoryRoom?    @relation(fields: [roomId], references: [id], onDelete: SetNull)
-  loggedBy  User              @relation("ProjectProgressLoggedBy", fields: [loggedByUserId], references: [id], onDelete: Cascade)
+  project      ProjectRecord     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  milestone    ProjectMilestone? @relation(fields: [milestoneId], references: [id], onDelete: SetNull)
+  room         InventoryRoom?    @relation(fields: [roomId], references: [id], onDelete: SetNull)
+  loggedBy     User              @relation("ProjectProgressLoggedBy", fields: [loggedByUserId], references: [id], onDelete: Cascade)
+  materialSpec MaterialSpec?
 
   @@index([projectId, entryDate(sort: Desc)])
   @@index([milestoneId])

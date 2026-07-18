@@ -1,6 +1,6 @@
 # Product Framework Phase 3 — Complete Major Repair / System Replacement
 
-Status: Increment 1 implemented; execution verification, proof write-back, future care, commercial integrity, and outcome analytics remain in progress
+Status: Increments 1–2 implemented; provider-review enrichment and database-backed acceptance remain
 
 Contract version: `phase3-v1`
 
@@ -29,29 +29,34 @@ Implemented:
 
 ## Database policy
 
-Increment 1 changes the Prisma schema but does not include a migration script. The repository owner must apply the schema changes to the target database and may reset/reseed development data because there are no real users or migration requirements.
+Phase 3 changes the Prisma schema but does not include a migration script. The repository owner must apply the schema changes to the target database and may reset/reseed development data because there are no real users or migration requirements.
+
+## Increment 2 — Verified closure and Living Home Record write-back
+
+Implemented:
+
+- Replaced placeholder completion audits with one serializable, idempotent transaction.
+- Added explicit verified-success, incomplete, failed, disputed, delayed, and unsafe outcome states.
+- Required commissioning, functional, safety, and inspection results and prevented blocking exceptions from being labeled verified closure.
+- Made provider ratings conditional on provider-led verified work; DIY closure no longer requires synthetic ratings.
+- Added durable proof documents and before/after, invoice, warranty, permit, and completion-record classifications.
+- Created or updated the linked HomeEvent, expense, inventory identity/service history, warranty, material specifications, and inspection-finding state.
+- Added maintenance, inspection, warranty, replacement-horizon, and outcome follow-up tasks using stable action keys.
+- Advanced stages 10–14 from durable closure evidence and returned the journey to its updated Home context.
+- Added a lightweight minor-work endpoint and UI path that completes the journey without creating a `ProjectRecord`.
+- Captured provider-fit rationale, commercial relationship disclosure, selection criteria, and non-commercial alternatives before guided provider work.
+- Rechecked platform-provider status, license, insurance, and category eligibility when guided project execution begins.
+- Emitted price variance, elapsed/blocked days, recommendation override, provider result, write-back volume, and follow-up-plan measurements.
 
 ## Remaining Phase 3 implementation
 
-### Execution and closure
+### Remaining completion work
 
-- Resolve a guidance-linked project directly from stages 10–14 and advance each stage from durable project evidence.
-- Add adaptive minor-work execution that does not require a `ProjectRecord`.
-- Capture commissioning, functional verification, safety checks, inspection results, and unresolved exceptions.
-- Capture invoice, warranty, model/serial, permits, photos, actual cost, work date, and provider outcome.
-
-### Transactional write-back
-
-- Replace placeholder project write-back audit rows with idempotent transactional writes to HomeEvent, inventory history, documents, expenses, warranties, and material specifications.
-- Reset maintenance and create inspection, warranty, replacement-horizon, and follow-up actions.
-- Preserve before/after evidence and explicit failed, disputed, delayed, incomplete, and unsafe outcome states.
-
-### Provider and measurement completion
-
-- Add provider ranking rationale, category/jurisdiction credential presentation, commercial relationship disclosure, and non-commercial alternatives at selection time.
-- Join provider review to scope, journey, timeliness, cost variance, and verified outcome.
-- Add completion, blocked-time, price-variance, override, provider-result, and follow-up-health analytics.
-- Add database-backed trigger-to-verified-closure acceptance coverage after the schema is applied.
+- Surface category/jurisdiction credential detail from the provider directory, rather than only enforcing its eligibility result at project creation.
+- Join the public provider review aggregate to scope, journey, timeliness, cost variance, and verified outcome while retaining the project-level review evidence now captured.
+- Add follow-up health measurement when the scheduled outcome check is completed.
+- Add database-backed trigger-to-verified-closure acceptance coverage after the owner applies the schema.
+- Replace proof URL/key entry with the shared uploader when that component supports multi-kind completion evidence.
 
 ## Validation
 

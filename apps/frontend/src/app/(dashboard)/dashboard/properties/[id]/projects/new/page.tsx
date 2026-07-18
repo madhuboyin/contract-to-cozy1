@@ -30,6 +30,10 @@ type ProjectFormState = {
   fulfillmentMode: 'PROVIDER' | 'DIY';
   fundingMode: 'SELF_PAID' | 'COVERED' | 'MIXED';
   complexity: 'MINOR' | 'MAJOR';
+  providerRankingRationale: string;
+  commercialRelationshipType: 'NONE' | 'SPONSORED' | 'REFERRAL_FEE' | 'COMMISSION' | 'OWNED' | 'AFFILIATE' | 'OTHER';
+  commercialDisclosureSummary: string;
+  nonCommercialAlternative: string;
 };
 
 export default function NewProjectPage() {
@@ -62,6 +66,10 @@ export default function NewProjectPage() {
     fulfillmentMode: 'PROVIDER',
     fundingMode: 'SELF_PAID',
     complexity: 'MAJOR',
+    providerRankingRationale: '',
+    commercialRelationshipType: 'NONE',
+    commercialDisclosureSummary: 'ContractToCozy does not influence this provider selection for compensation.',
+    nonCommercialAlternative: 'Use a provider you find independently or complete the work yourself when appropriate.',
   });
 
   const set = (field: keyof ProjectFormState, value: string) =>
@@ -91,6 +99,7 @@ export default function NewProjectPage() {
     setError(null);
     if (!form.name.trim()) { setError('Project name is required'); return; }
     if (form.fulfillmentMode === 'PROVIDER' && !form.contractorName.trim()) { setError('Contractor name is required for provider-led work'); return; }
+    if (guidanceJourneyId && form.fulfillmentMode === 'PROVIDER' && !form.providerRankingRationale.trim()) { setError('Explain why this provider fits the project'); return; }
     if (!form.contractAmountCents) { setError('Contract amount is required'); return; }
     const amtCents = toInt(form.contractAmountCents);
     if (!amtCents || amtCents <= 0) { setError('Enter a valid contract amount'); return; }
@@ -103,6 +112,31 @@ export default function NewProjectPage() {
 
     setSaving(true);
     try {
+      const commercialDisclosure = guidanceJourneyId && form.fulfillmentMode === 'PROVIDER' ? {
+        involvesCommercialAction: true,
+        relationshipType: form.commercialRelationshipType,
+        compensationMayOccur: form.commercialRelationshipType !== 'NONE',
+        rankingInfluenced: ['SPONSORED', 'COMMISSION', 'OWNED', 'AFFILIATE'].includes(form.commercialRelationshipType),
+        summary: form.commercialDisclosureSummary.trim(),
+        selectionCriteria: ['Homeowner-stated fit', 'Project scope', 'Credentials relevant to the category and jurisdiction'],
+        nonCommercialAlternatives: [form.nonCommercialAlternative.trim()],
+      } : undefined;
+      if (guidanceJourneyId && inventoryItemId && form.complexity === 'MINOR') {
+        await api.completeMinorWork(propertyId, {
+          guidanceJourneyId,
+          inventoryItemId,
+          title: form.name.trim(),
+          executionPath: form.executionPath,
+          fulfillmentMode: form.fulfillmentMode,
+          providerName: form.fulfillmentMode === 'PROVIDER' ? form.contractorName.trim() : undefined,
+          providerRankingRationale: form.providerRankingRationale.trim() || undefined,
+          commercialDisclosure,
+          actualEndDate: form.startDate,
+          actualCostCents: amtCents,
+        });
+        router.push(`/dashboard/properties/${propertyId}/projects`);
+        return;
+      }
       const project = await api.createProject(propertyId, {
         name: form.name.trim(),
         projectType: form.projectType,
@@ -120,6 +154,8 @@ export default function NewProjectPage() {
         fulfillmentMode: form.fulfillmentMode,
         fundingMode: form.fundingMode,
         complexity: form.complexity,
+        providerRankingRationale: form.providerRankingRationale.trim() || undefined,
+        commercialDisclosure,
       });
       router.push(`/dashboard/properties/${propertyId}/projects/${project.id}`);
     } catch (e: any) {
@@ -151,6 +187,13 @@ export default function NewProjectPage() {
             {guidedIssue ? `This project will stay linked to “${guidedIssue}”. ` : ''}
             Confirm the execution path below before work begins.
           </p>
+        </MobileCard>
+      ) : null}
+
+      {guidanceJourneyId && inventoryItemId && form.complexity === 'MINOR' ? (
+        <MobileCard className="border-emerald-200 bg-emerald-50 text-emerald-900">
+          <p className="text-sm font-semibold">Lightweight minor-work closure</p>
+          <p className="mt-1 text-xs">Submitting records the verified work directly in the Living Home Record and advances future care without creating a full project tracker.</p>
         </MobileCard>
       ) : null}
 
@@ -242,6 +285,39 @@ export default function NewProjectPage() {
               className="h-11"
             />
           </div> : null}
+
+          {guidanceJourneyId && form.fulfillmentMode === 'PROVIDER' ? (
+            <div className="space-y-4 rounded-lg border border-indigo-200 bg-indigo-50 p-3">
+              <div>
+                <p className="text-sm font-semibold text-indigo-950">Provider fit and commercial disclosure</p>
+                <p className="mt-1 text-xs text-indigo-800">Review this before confirming the provider. Platform-listed providers are credential-checked again when the project is created.</p>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="providerRankingRationale">Why this provider fits *</Label>
+                <Textarea id="providerRankingRationale" value={form.providerRankingRationale} onChange={e => set('providerRankingRationale', e.target.value)} rows={3} placeholder="Explain scope fit, availability, credentials, price, and tradeoffs." />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="commercialRelationshipType">ContractToCozy relationship</Label>
+                <select id="commercialRelationshipType" value={form.commercialRelationshipType} onChange={e => set('commercialRelationshipType', e.target.value)} className="h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
+                  <option value="NONE">No commercial relationship</option>
+                  <option value="SPONSORED">Sponsored</option>
+                  <option value="REFERRAL_FEE">Referral fee</option>
+                  <option value="COMMISSION">Commission</option>
+                  <option value="AFFILIATE">Affiliate</option>
+                  <option value="OWNED">Owned provider</option>
+                  <option value="OTHER">Other</option>
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="commercialDisclosureSummary">Disclosure</Label>
+                <Textarea id="commercialDisclosureSummary" value={form.commercialDisclosureSummary} onChange={e => set('commercialDisclosureSummary', e.target.value)} rows={2} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="nonCommercialAlternative">Non-commercial alternative</Label>
+                <Textarea id="nonCommercialAlternative" value={form.nonCommercialAlternative} onChange={e => set('nonCommercialAlternative', e.target.value)} rows={2} />
+              </div>
+            </div>
+          ) : null}
 
           {form.fulfillmentMode === 'PROVIDER' ? <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
