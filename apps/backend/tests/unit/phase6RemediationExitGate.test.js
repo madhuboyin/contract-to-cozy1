@@ -279,5 +279,5 @@ test('twin read API attaches the projection staleness envelope end to end', () =
   assert.ok(twinDto.slice(0, 900).includes('contextVersion: string | null'));
 
   const client = read('../../../frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/home-digital-twin/HomeDigitalTwinClient.tsx');
-  assert.ok(client.includes('PropertyContextNotice'));
+  assert.ok(client.includes('PropertyContextStatusNotice'));
 });

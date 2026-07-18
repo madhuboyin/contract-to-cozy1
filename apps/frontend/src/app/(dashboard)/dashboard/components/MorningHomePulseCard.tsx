@@ -41,7 +41,7 @@ import { track } from '@/lib/analytics/events';
 import type { CtcTool } from '@/lib/analytics/events';
 import { api } from '@/lib/api/client';
 import { listPropertyRecalls } from '../properties/[id]/recalls/recallsApi';
-import { PropertyContextNotice } from '@/components/property-context/PropertyContextNotice';
+import { PropertyContextStatusNotice } from '@/components/property-context/PropertyContextStatusNotice';
 
 const LottieBadge = dynamic(() => import('@/components/ui/LottieBadge'), { ssr: false });
 
@@ -409,7 +409,7 @@ export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCar
 
   return (
     <div className="space-y-3">
-      <PropertyContextNotice context={snapshot.propertyContext} title="Today context" readOnly />
+      <PropertyContextStatusNotice context={snapshot.propertyContext} title="Today context" />
       <section className="relative overflow-hidden rounded-2xl border border-gray-200 bg-white p-5 shadow-lg ring-1 ring-black/[0.04]">
       <div className="pointer-events-none absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-teal-400 via-teal-500 to-emerald-400" />
 

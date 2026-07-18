@@ -110,6 +110,6 @@ test('ownership-cost interfaces surface Property Context reconciliation notices'
     '../../../frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/cost-volatility/CostVolatilityClient.tsx',
     '../../../frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/cost-explainer/CostExplainerClient.tsx',
   ]) {
-    assert.match(read(source), /PropertyContextNotice/, source);
+    assert.match(read(source), /PropertyContextCapturePanel/, source);
   }
 });

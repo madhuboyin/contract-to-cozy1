@@ -37,7 +37,8 @@ import {
   resolveGuidanceForOrchestrationAction,
 } from '@/components/orchestration/guidanceActionLinking';
 import { track } from '@/lib/analytics/events';
-import { PropertyContextNotice, type PropertyContextEnvelope } from '@/components/property-context/PropertyContextNotice';
+import { PropertyContextStatusNotice } from '@/components/property-context/PropertyContextStatusNotice';
+import type { PropertyContextEnvelope } from '@/components/property-context/propertyContextTypes';
 
 function orchestrationPriorityLabel(action: OrchestratedActionDTO): string {
   if (action.overdue) return 'URGENT';
@@ -433,7 +434,7 @@ export function ActionsClient() {
           title="What needs attention"
           subtitle="Everything your home needs right now."
         />
-        <PropertyContextNotice context={aggregationContext} title="Action Center context" readOnly />
+        <PropertyContextStatusNotice context={aggregationContext} title="Action Center context" />
         <MobileKpiStrip className="sm:grid-cols-4">
           <MobileKpiTile
             label="Active"

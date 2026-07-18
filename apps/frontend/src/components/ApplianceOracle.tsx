@@ -25,7 +25,8 @@ import {
   ScenarioInputCard,
   StatusChip,
 } from '@/components/mobile/dashboard/MobilePrimitives';
-import { PropertyContextNotice, type PropertyContextEnvelope } from '@/components/property-context/PropertyContextNotice';
+import { PropertyContextStatusNotice } from '@/components/property-context/PropertyContextStatusNotice';
+import type { PropertyContextEnvelope } from '@/components/property-context/propertyContextTypes';
 
 interface ApplianceRecommendation {
   brand: string;
@@ -153,7 +154,7 @@ export default function ApplianceOracle({ propertyId }: ApplianceOracleProps) {
   if (report.predictions.length === 0) {
     return (
       <div className="space-y-4">
-        <PropertyContextNotice context={report.propertyContext} title="Appliance applicability" readOnly />
+        <PropertyContextStatusNotice context={report.propertyContext} title="Appliance applicability" />
         <ScenarioInputCard
           title="No Appliance Data"
           subtitle="Add appliance details to unlock AI replacement predictions."
@@ -177,7 +178,7 @@ export default function ApplianceOracle({ propertyId }: ApplianceOracleProps) {
         summary="Failure-risk forecasting and replacement guidance across tracked appliances."
       />
 
-      <PropertyContextNotice context={report.propertyContext} title="Appliance applicability" readOnly />
+      <PropertyContextStatusNotice context={report.propertyContext} title="Appliance applicability" />
 
       <ReadOnlySummaryBlock
         title="Portfolio Snapshot"

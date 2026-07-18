@@ -34,7 +34,7 @@ import {
   MobileFilterSurface,
   StatusChip,
 } from '@/components/mobile/dashboard/MobilePrimitives';
-import { PropertyContextNotice } from '@/components/property-context/PropertyContextNotice';
+import { PropertyContextStatusNotice } from '@/components/property-context/PropertyContextStatusNotice';
 import { MOBILE_CARD_RADIUS, MOBILE_TYPE_TOKENS } from '@/components/mobile/dashboard/mobileDesignTokens';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -323,7 +323,7 @@ function SummaryCard({
 
   return (
     <MobileCard className="space-y-4">
-      <PropertyContextNotice context={replay.propertyContext} title="Replay property context" readOnly />
+      <PropertyContextStatusNotice context={replay.propertyContext} title="Replay property context" />
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="mb-0 text-[11px] font-medium tracking-normal text-[hsl(var(--mobile-text-muted))]">

@@ -164,7 +164,7 @@ test('remaining Phase 7 API, UI, and worker consumers use shared contracts', () 
   const gazetteWorker = read('../../../workers/src/jobs/gazetteGeneration.job.ts');
   assert.ok(gazetteWorker.includes('getAggregationContextBatch'));
   const knowledgeUi = read('../../../frontend/src/components/knowledge/KnowledgeTargetingNotice.tsx');
-  assert.ok(knowledgeUi.includes('PropertyContextNotice'));
+  assert.ok(knowledgeUi.includes('PropertyContextStatusNotice'));
   const gazetteUi = read('../../../frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/home-gazette/HomeGazetteClient.tsx');
   assert.ok(gazetteUi.includes('Gazette context'));
 });

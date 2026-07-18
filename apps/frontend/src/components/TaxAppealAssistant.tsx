@@ -23,7 +23,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { api } from '@/lib/api/client';
-import type { PropertyContextEnvelope } from '@/components/property-context/PropertyContextNotice';
+import type { PropertyContextEnvelope } from '@/components/property-context/propertyContextTypes';
 import { PropertyContextCapturePanel } from '@/components/property-context/PropertyContextCapturePanel';
 import {
   ReadOnlySummaryBlock,

@@ -1,5 +1,5 @@
 import { api } from './client';
-import type { PropertyContextEnvelope } from '@/components/property-context/PropertyContextNotice';
+import type { PropertyContextEnvelope } from '@/components/property-context/propertyContextTypes';
 
 export type DoNothingRiskTolerance = 'LOW' | 'MEDIUM' | 'HIGH';
 export type DoNothingDeductibleStrategy = 'KEEP_HIGH' | 'RAISE' | 'LOWER' | 'UNCHANGED';

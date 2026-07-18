@@ -19,7 +19,7 @@ import {
   ScenarioInputCard,
   StatusChip,
 } from '@/components/mobile/dashboard/MobilePrimitives';
-import { PropertyContextNotice } from '@/components/property-context/PropertyContextNotice';
+import { PropertyContextStatusNotice } from '@/components/property-context/PropertyContextStatusNotice';
 
 type RiskPremiumOptimizerPanelProps = {
   propertyId: string;
@@ -326,7 +326,7 @@ export default function RiskPremiumOptimizerPanel({ propertyId }: RiskPremiumOpt
 
       {analysis && (
         <>
-          <PropertyContextNotice context={analysis.propertyContext} title="Optimizer applicability" readOnly />
+          <PropertyContextStatusNotice context={analysis.propertyContext} title="Optimizer applicability" />
           {(analysis.status === 'STALE' || rerunRecommended) && (
             <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
               Inputs changed or plan progress was updated. Re-run the optimizer for a fresh estimate.

@@ -2,10 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api/client';
-import {
-  PropertyContextNotice,
-  type PropertyContextEnvelope,
-} from '@/components/property-context/PropertyContextNotice';
+import { PropertyContextStatusNotice } from '@/components/property-context/PropertyContextStatusNotice';
+import type { PropertyContextEnvelope } from '@/components/property-context/propertyContextTypes';
 
 export function KnowledgeTargetingNotice({ propertyId }: { propertyId?: string | null }) {
   const [context, setContext] = useState<PropertyContextEnvelope | null>(null);
@@ -24,5 +22,5 @@ export function KnowledgeTargetingNotice({ propertyId }: { propertyId?: string |
     return () => { active = false; };
   }, [propertyId]);
 
-  return <PropertyContextNotice context={context} title="Knowledge targeting context" readOnly />;
+  return <PropertyContextStatusNotice context={context} title="Knowledge targeting context" />;
 }

@@ -51,7 +51,7 @@ test('evaluation and capture contracts enforce explicit property, version, idemp
 test('shared frontend panel uses returned schemas and re-evaluates without a page reload', () => {
   const panel = read('../../../frontend/src/components/property-context/PropertyContextCapturePanel.tsx');
   const hook = read('../../../frontend/src/components/property-context/useFeatureContextCapture.ts');
-  const notice = read('../../../frontend/src/components/property-context/PropertyContextNotice.tsx');
+  const status = read('../../../frontend/src/components/property-context/PropertyContextStatusNotice.tsx');
   const plantAdvisor = read('../../../frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/plant-advisor/WeatherAwarePlantCare.tsx');
   assert.match(panel, /schema\.type === 'BOOLEAN'/);
   assert.match(panel, /schema\.type === 'SINGLE_SELECT'/);
@@ -63,5 +63,5 @@ test('shared frontend panel uses returned schemas and re-evaluates without a pag
   assert.match(hook, /onReady/);
   assert.match(plantAdvisor, /PropertyContextCapturePanel/);
   assert.match(plantAdvisor, /GENERATE_OUTDOOR_RECOMMENDATIONS/);
-  assert.doesNotMatch(`${panel}\n${hook}\n${notice}`, /window\.location\.reload/);
+  assert.doesNotMatch(`${panel}\n${hook}\n${status}`, /window\.location\.reload/);
 });

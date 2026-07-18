@@ -24,7 +24,8 @@ import CompareTemplate from '../../components/route-templates/CompareTemplate';
 import { pricingLoopTrust } from '@/lib/trust/trustPresets';
 import { buildGuidanceOverviewHref } from '@/lib/navigation/guidanceOverviewHref';
 import { track } from '@/lib/analytics/events';
-import { PropertyContextNotice, type PropertyContextEnvelope } from '@/components/property-context/PropertyContextNotice';
+import { PropertyContextStatusNotice } from '@/components/property-context/PropertyContextStatusNotice';
+import type { PropertyContextEnvelope } from '@/components/property-context/propertyContextTypes';
 
 type SearchParamSource = { get(name: string): string | null };
 
@@ -462,7 +463,7 @@ export default function QuoteComparisonWorkspaceClient() {
       }
       summary={
         <div className="space-y-3">
-          <PropertyContextNotice context={propertyContext} title="Quote comparison context" readOnly />
+          <PropertyContextStatusNotice context={propertyContext} title="Quote comparison context" />
           <ResultHeroCard
             eyebrow="Compare"
             title="Quote Decision Snapshot"

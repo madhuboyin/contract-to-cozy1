@@ -933,7 +933,7 @@ export interface InsuranceProtectionGapSummary {
 }
 
 export interface HomeEquitySummary {
-  propertyContext?: import('@/components/property-context/PropertyContextNotice').PropertyContextEnvelope;
+  propertyContext?: import('@/components/property-context/propertyContextTypes').PropertyContextEnvelope;
   calculationContext?: { mode: 'CANONICAL'; overrideFields: string[] };
   propertyId: string;
   isEquityVerified: boolean;
@@ -1694,7 +1694,7 @@ export interface OracleReport {
   estimatedTotalCost: number;
   predictions: ApplianceFailurePrediction[];
   generatedAt: string; // ISO Date string
-  propertyContext?: import('@/components/property-context/PropertyContextNotice').PropertyContextEnvelope;
+  propertyContext?: import('@/components/property-context/propertyContextTypes').PropertyContextEnvelope;
 }
 
 // ============================================================================
@@ -1778,7 +1778,7 @@ export interface HiddenAssetMatchListDTO {
   matches: HiddenAssetMatchDTO[];
   summary: HiddenAssetMatchSummaryDTO;
   propertyContextVersion: string | null;
-  propertyContext?: import('@/components/property-context/PropertyContextNotice').PropertyContextEnvelope;
+  propertyContext?: import('@/components/property-context/propertyContextTypes').PropertyContextEnvelope;
 }
 
 export interface HiddenAssetProgramDetailDTO {
@@ -1812,7 +1812,7 @@ export interface HiddenAssetRefreshResultDTO {
   durationMs: number;
   matches: HiddenAssetMatchDTO[];
   propertyContextVersion: string;
-  propertyContext?: import('@/components/property-context/PropertyContextNotice').PropertyContextEnvelope;
+  propertyContext?: import('@/components/property-context/propertyContextTypes').PropertyContextEnvelope;
 }
 
 
@@ -2051,7 +2051,7 @@ export interface OrchestrationHandoffDTO {
 export interface OrchestrationSummaryDTO {
   propertyId: string;
   pendingActionCount: number;
-  aggregationContext?: import('@/components/property-context/PropertyContextNotice').PropertyContextEnvelope | null;
+  aggregationContext?: import('@/components/property-context/propertyContextTypes').PropertyContextEnvelope | null;
 
   derivedFrom: {
     riskAssessment: boolean;
@@ -2170,7 +2170,7 @@ export type SignalSourceBadgeDTO = {
  */
 export interface CommunityEventsResponse {
   events: CommunityEvent[];
-  context?: import('@/components/property-context/PropertyContextNotice').PropertyContextEnvelope;
+  context?: import('@/components/property-context/propertyContextTypes').PropertyContextEnvelope;
 }
 
 /**
@@ -2803,7 +2803,7 @@ export interface HomeDigitalTwinDTO {
   /** Property Context version the projection was computed from. */
   contextVersion: string | null;
   /** Current-context decision envelope attached by the twin read API. */
-  context?: import('@/components/property-context/PropertyContextNotice').PropertyContextEnvelope | null;
+  context?: import('@/components/property-context/propertyContextTypes').PropertyContextEnvelope | null;
   components: HomeTwinComponentDTO[];
   dataQuality: HomeTwinDataQualityDTO[];
   recentScenarios: HomeTwinScenarioDTO[];
@@ -2928,7 +2928,7 @@ export interface NeighborhoodEventCard {
 }
 
 export interface NeighborhoodRadarSummaryDTO {
-  propertyContext?: import('@/components/property-context/PropertyContextNotice').PropertyContextEnvelope;
+  propertyContext?: import('@/components/property-context/propertyContextTypes').PropertyContextEnvelope;
   propertyId: string;
   meaningfulChangeCount: number;
   topHeadline: string | null;
@@ -3506,7 +3506,7 @@ export type FinancingEntryPoint =
   | 'GUIDANCE_STEP';
 
 export interface PropertyFinancingProfile {
-  propertyContext?: import('@/components/property-context/PropertyContextNotice').PropertyContextEnvelope;
+  propertyContext?: import('@/components/property-context/propertyContextTypes').PropertyContextEnvelope;
   id: string;
   propertyId: string;
   purchasePriceCents?: number;
@@ -3526,7 +3526,7 @@ export interface PropertyFinancingProfile {
 }
 
 export interface EquityPosition {
-  propertyContext?: import('@/components/property-context/PropertyContextNotice').PropertyContextEnvelope;
+  propertyContext?: import('@/components/property-context/propertyContextTypes').PropertyContextEnvelope;
   propertyContextVersion?: string | null;
   id: string;
   propertyId: string;
@@ -3584,7 +3584,7 @@ export interface PayCashResult {
 }
 
 export interface FinancingResultSet {
-  propertyContext?: import('@/components/property-context/PropertyContextNotice').PropertyContextEnvelope;
+  propertyContext?: import('@/components/property-context/propertyContextTypes').PropertyContextEnvelope;
   calculationContext?: { mode: 'SCENARIO'; overrideFields: string[] };
   projectCostCents: number;
   helocEligible: boolean;
@@ -3599,7 +3599,7 @@ export interface FinancingResultSet {
 }
 
 export interface FinancingScenarioSummary {
-  propertyContext?: import('@/components/property-context/PropertyContextNotice').PropertyContextEnvelope;
+  propertyContext?: import('@/components/property-context/propertyContextTypes').PropertyContextEnvelope;
   propertyContextVersion?: string | null;
   id: string;
   title: string;

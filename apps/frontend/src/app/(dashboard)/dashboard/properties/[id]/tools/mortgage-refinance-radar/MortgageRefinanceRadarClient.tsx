@@ -15,7 +15,7 @@ import {
   Info,
 } from 'lucide-react';
 import HomeToolsRail from '../../components/HomeToolsRail';
-import { PropertyContextNotice } from '@/components/property-context/PropertyContextNotice';
+import { PropertyContextStatusNotice } from '@/components/property-context/PropertyContextStatusNotice';
 import {
   evaluateRadar,
   getRadarStatus,
@@ -987,7 +987,7 @@ export default function MortgageRefinanceRadarClient() {
       ) : undefined}
     >
 
-      <PropertyContextNotice context={data?.propertyContext} title="Refinance context" readOnly />
+      <PropertyContextStatusNotice context={data?.propertyContext} title="Refinance context" />
 
       {/* Loading */}
       {loading && !data && (

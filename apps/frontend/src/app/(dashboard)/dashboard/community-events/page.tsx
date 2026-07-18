@@ -17,7 +17,7 @@ import {
   MobileToolWorkspace,
   StatusChip,
 } from '@/components/mobile/dashboard/MobilePrimitives';
-import { PropertyContextNotice } from '@/components/property-context/PropertyContextNotice';
+import { PropertyContextStatusNotice } from '@/components/property-context/PropertyContextStatusNotice';
 
 type CommunityTab = 'events' | 'trash' | 'alerts';
 
@@ -147,10 +147,9 @@ export default function CommunityPage() {
       intro={<MobilePageIntro title="Community" subtitle="Local events, city services, and municipal alerts." />}
       summary={
         <div className="space-y-3">
-          <PropertyContextNotice
+          <PropertyContextStatusNotice
             context={eventsQuery.data?.success ? eventsQuery.data.data.context : undefined}
             title="Community context"
-            readOnly
           />
           <MobileCard variant="compact" className="flex items-center justify-between gap-3">
             <div>

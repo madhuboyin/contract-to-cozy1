@@ -2,7 +2,11 @@ import { createHash } from 'node:crypto';
 import { Prisma, PropertyFactSourceType } from '@prisma/client';
 import { z } from 'zod';
 import { prisma } from '../../../lib/prisma';
-import { propertyContextCapturesTotal } from '../../../lib/metrics';
+import {
+  propertyContextCapturesTotal,
+  propertyContextFeatureCaptureDurationSeconds,
+  propertyContextFeatureCapturesTotal,
+} from '../../../lib/metrics';
 import { resolvePropertyAccess, ROLE_RANK } from '../../../services/propertyAccess.service';
 import { getCaptureDefinition } from '../catalog/captureRegistry';
 import { getFeatureContextRequirement } from '../catalog/featureRequirementRegistry';
@@ -121,7 +125,7 @@ export function normalizeAnswers(
   return normalized.filter((entry, index, entries) => entries.findIndex(({ factKey }) => factKey === entry.factKey) === index);
 }
 
-export async function captureFeatureContext(propertyId: string, userId: string, rawInput: unknown) {
+async function captureFeatureContextInternal(propertyId: string, userId: string, rawInput: unknown) {
   const input = captureFeatureContextInputSchema.parse(rawInput);
   const answerHash = stableHash({
     featureKey: input.featureKey,
@@ -268,4 +272,36 @@ export async function captureFeatureContext(propertyId: string, userId: string, 
     data: { result: result as unknown as Prisma.InputJsonValue },
   });
   return result;
+}
+
+function captureOutcome(error: unknown): string {
+  if (error instanceof PropertyContextVersionConflictError) return 'VERSION_CONFLICT';
+  if (error instanceof PropertyContextIdempotencyConflictError) return 'IDEMPOTENCY_CONFLICT';
+  if (error instanceof PropertyContextCaptureValidationError) return 'VALIDATION_ERROR';
+  if (error instanceof PropertyContextAccessDeniedError) return 'ACCESS_DENIED';
+  return 'ERROR';
+}
+
+export async function captureFeatureContext(propertyId: string, userId: string, rawInput: unknown) {
+  // As with evaluation metrics, only validated registry-shaped identifiers are
+  // used as labels.
+  const input = captureFeatureContextInputSchema.parse(rawInput);
+  getFeatureContextRequirement(input.featureKey, input.operationKey);
+  getCaptureDefinition(input.captureKey);
+  const labels = {
+    feature_key: input.featureKey,
+    operation_key: input.operationKey,
+    capture_key: input.captureKey,
+  };
+  const stopTimer = propertyContextFeatureCaptureDurationSeconds.startTimer(labels);
+  try {
+    const result = await captureFeatureContextInternal(propertyId, userId, input);
+    propertyContextFeatureCapturesTotal.inc({ ...labels, outcome: 'SUCCESS' });
+    return result;
+  } catch (error) {
+    propertyContextFeatureCapturesTotal.inc({ ...labels, outcome: captureOutcome(error) });
+    throw error;
+  } finally {
+    stopTimer();
+  }
 }

@@ -1,6 +1,6 @@
 // apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/cost-explainer/costExplainerApi.ts
 import { api } from '@/lib/api/client';
-import type { PropertyContextEnvelope } from '@/components/property-context/PropertyContextNotice';
+import type { PropertyContextEnvelope } from '@/components/property-context/propertyContextTypes';
 
 export type CostExplainerDTO = {
   propertyContext?: PropertyContextEnvelope;

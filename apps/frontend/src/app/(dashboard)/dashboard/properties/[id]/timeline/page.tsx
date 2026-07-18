@@ -21,7 +21,8 @@ import {
 } from '@/components/mobile/dashboard/MobilePrimitives';
 import HomeToolHeader from '@/components/tools/HomeToolHeader';
 import { resolveDashboardBackHref } from '@/lib/navigation/backNavigation';
-import { PropertyContextNotice, type PropertyContextEnvelope } from '@/components/property-context/PropertyContextNotice';
+import { PropertyContextStatusNotice } from '@/components/property-context/PropertyContextStatusNotice';
+import type { PropertyContextEnvelope } from '@/components/property-context/propertyContextTypes';
 
 type Mode = 'LIST' | 'VISUAL';
 
@@ -553,7 +554,7 @@ export default function Page() {
             backLabel="Back to property"
             showBackLink
           />
-          <PropertyContextNotice context={timelineContext} title="Timeline context" readOnly />
+          <PropertyContextStatusNotice context={timelineContext} title="Timeline context" />
           <ResultHeroCard
             eyebrow="Property History"
             title={mode === 'VISUAL' ? 'Visual Timeline' : 'Event Timeline'}

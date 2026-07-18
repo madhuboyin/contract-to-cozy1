@@ -8,7 +8,7 @@ import { CheckCircle2, Info, LineChart, Sparkles } from 'lucide-react';
 import { api } from '@/lib/api/client';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
-import { PropertyContextNotice } from '@/components/property-context/PropertyContextNotice';
+import { PropertyContextStatusNotice } from '@/components/property-context/PropertyContextStatusNotice';
 
 interface EquityOverviewCardProps {
   propertyId: string | undefined;
@@ -161,7 +161,7 @@ export function EquityOverviewCard({ propertyId, healthScore }: EquityOverviewCa
 
   return (
     <div className="w-full space-y-3 rounded-xl border border-emerald-200 bg-gradient-to-r from-emerald-50 to-teal-50 px-5 py-4 shadow-sm">
-      <PropertyContextNotice context={data.propertyContext} title="Value tracking context" readOnly />
+      <PropertyContextStatusNotice context={data.propertyContext} title="Value tracking context" />
       <div className="flex items-start gap-3">
         <div className="rounded-lg bg-emerald-100 p-2 shrink-0">
           <LineChart className="h-5 w-5 text-emerald-700" />

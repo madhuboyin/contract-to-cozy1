@@ -1,6 +1,6 @@
 // apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/true-cost/trueCostApi.ts
 import { api } from '@/lib/api/client';
-import type { PropertyContextEnvelope } from '@/components/property-context/PropertyContextNotice';
+import type { PropertyContextEnvelope } from '@/components/property-context/propertyContextTypes';
 
 export type TrueCostOwnershipDTO = {
   propertyContext?: PropertyContextEnvelope;

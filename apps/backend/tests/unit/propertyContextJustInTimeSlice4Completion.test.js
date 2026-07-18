@@ -60,18 +60,17 @@ test('maintenance template capture covers presence and responsibility and is rec
   assert.doesNotMatch(page, /window\.location\.reload/);
 });
 
-test('aggregate notices have an enforceable read-only mode', () => {
-  const notice = read('../../../frontend/src/components/property-context/PropertyContextNotice.tsx');
-  assert.match(notice, /readOnly = false/);
-  assert.match(notice, /if \(readOnly \|\| !propertyId \|\| !captureFactKey\)/);
-  assert.match(notice, /!readOnly && definition && captureFactKey/);
+test('aggregate notices use the explanation-only status renderer', () => {
+  const notice = read('../../../frontend/src/components/property-context/PropertyContextStatusNotice.tsx');
+  assert.doesNotMatch(notice, /captureFeatureContext|capturePropertyContext|<button|<input/);
+  assert.match(notice, /correctionPaths/);
   for (const file of [
     '../../../frontend/src/app/(dashboard)/dashboard/actions/ActionsClient.tsx',
     '../../../frontend/src/app/(dashboard)/dashboard/components/MorningHomePulseCard.tsx',
     '../../../frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/guidance-overview/GuidanceOverviewClient.tsx',
     '../../../frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/home-gazette/HomeGazetteClient.tsx',
     '../../../frontend/src/components/knowledge/KnowledgeTargetingNotice.tsx',
-  ]) assert.match(read(file), /<PropertyContextNotice[\s\S]{0,400}readOnly/);
+  ]) assert.match(read(file), /<PropertyContextStatusNotice/);
 });
 
 test('environment and energy retain their explicit evidence-owned capture paths', () => {

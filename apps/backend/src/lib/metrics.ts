@@ -84,3 +84,33 @@ export const propertyContextCapturesTotal = new Counter({
   labelNames: ['scope', 'fact_key', 'outcome'] as const,
   registers: [register],
 });
+
+export const propertyContextFeatureEvaluationsTotal = new Counter({
+  name: 'property_context_feature_evaluations_total',
+  help: 'Feature requirement evaluations by registered operation and readiness outcome',
+  labelNames: ['feature_key', 'operation_key', 'outcome'] as const,
+  registers: [register],
+});
+
+export const propertyContextFeatureEvaluationDurationSeconds = new Histogram({
+  name: 'property_context_feature_evaluation_duration_seconds',
+  help: 'Feature requirement evaluation latency by registered operation',
+  labelNames: ['feature_key', 'operation_key'] as const,
+  buckets: [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5],
+  registers: [register],
+});
+
+export const propertyContextFeatureCapturesTotal = new Counter({
+  name: 'property_context_feature_captures_total',
+  help: 'Feature-scoped capture attempts by registered operation, capture schema, and outcome',
+  labelNames: ['feature_key', 'operation_key', 'capture_key', 'outcome'] as const,
+  registers: [register],
+});
+
+export const propertyContextFeatureCaptureDurationSeconds = new Histogram({
+  name: 'property_context_feature_capture_duration_seconds',
+  help: 'Feature-scoped capture latency by registered operation and capture schema',
+  labelNames: ['feature_key', 'operation_key', 'capture_key'] as const,
+  buckets: [0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5],
+  registers: [register],
+});

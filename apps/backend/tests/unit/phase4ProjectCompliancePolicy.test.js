@@ -245,7 +245,7 @@ test('Phase 4 entry points consume the shared context boundary and quote UI expl
   }
   assert.match(
     read('../../../frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/quote-comparison/QuoteComparisonWorkspaceClient.tsx'),
-    /PropertyContextNotice/,
+    /PropertyContextStatusNotice/,
   );
 });
 

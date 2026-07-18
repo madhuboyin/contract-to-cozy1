@@ -88,5 +88,5 @@ test('generation, notification, and UI paths enforce the completion boundary', (
   assert.match(read('../../src/services/homeRiskReplay.service.ts'), /attachReplayContext/);
   assert.match(read('../../src/services/incidents/integrations/incidentNotification.service.ts'), /incidentNotifications/);
   assert.match(read('../../../workers/src/recalls/recallFollowups.service.ts'), /inspectionFindings/);
-  assert.match(read('../../../frontend/src/components/property-context/PropertyContextNotice.tsx'), /correctionPaths/);
+  assert.match(read('../../../frontend/src/components/property-context/PropertyContextStatusNotice.tsx'), /correctionPaths/);
 });

@@ -5,7 +5,7 @@ import { DollarSign, TrendingUp, Calendar, PieChart, Lightbulb, Loader2, Chevron
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { api } from '@/lib/api/client';
-import type { PropertyContextEnvelope } from '@/components/property-context/PropertyContextNotice';
+import type { PropertyContextEnvelope } from '@/components/property-context/propertyContextTypes';
 import { PropertyContextCapturePanel } from '@/components/property-context/PropertyContextCapturePanel';
 import {
   ActionPriorityRow,

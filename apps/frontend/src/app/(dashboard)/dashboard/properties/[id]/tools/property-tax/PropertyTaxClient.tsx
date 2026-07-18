@@ -278,7 +278,7 @@ export default function PropertyTaxClient() {
         currentToolId="property-tax"
       />
 
-      <PropertyContextCapturePanel propertyId={propertyId} featureKey="PROPERTY_TAX" operationKey="VIEW_ESTIMATE" onCaptured={() => getAndSet(years)} />
+      <PropertyContextCapturePanel propertyId={propertyId} featureKey="PROPERTY_TAX" operationKey="VIEW_ESTIMATE" onCaptured={() => getAndSet(trendYears)} />
 
       {/* Controls */}
       <div className="rounded-2xl border border-white/70 bg-gradient-to-br from-white/80 via-slate-50/72 to-teal-50/45 p-4 shadow-[0_16px_30px_-24px_rgba(15,23,42,0.55)] backdrop-blur-xl dark:border-slate-700/70 dark:from-slate-900/55 dark:via-slate-900/48 dark:to-slate-900/38">

@@ -1,6 +1,10 @@
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { resolvePropertyAccess, ROLE_RANK } from '../../../services/propertyAccess.service';
+import {
+  propertyContextFeatureEvaluationDurationSeconds,
+  propertyContextFeatureEvaluationsTotal,
+} from '../../../lib/metrics';
 import { getCaptureDefinition } from '../catalog/captureRegistry';
 import { getFactDefinition } from '../catalog/factCatalog';
 import {
@@ -134,7 +138,7 @@ function inputForRequirementId(operationInput: Record<string, unknown> | undefin
   return Object.fromEntries(Object.entries(operationInput ?? {}).sort(([left], [right]) => left.localeCompare(right)));
 }
 
-export async function evaluateFeatureContext(
+async function evaluateFeatureContextInternal(
   propertyId: string,
   userId: string,
   rawInput: EvaluateFeatureContextInput,
@@ -192,4 +196,27 @@ export async function evaluateFeatureContext(
     })) : requirements,
     canExecute: readiness === 'READY' || readiness === 'READY_WITH_LIMITATIONS',
   };
+}
+
+export async function evaluateFeatureContext(
+  propertyId: string,
+  userId: string,
+  rawInput: EvaluateFeatureContextInput,
+): Promise<FeatureContextEvaluation> {
+  // Parse before attaching labels so arbitrary invalid input can never create
+  // unbounded metric cardinality.
+  const input = evaluateFeatureContextInputSchema.parse(rawInput);
+  getFeatureContextRequirement(input.featureKey, input.operationKey);
+  const labels = { feature_key: input.featureKey, operation_key: input.operationKey };
+  const stopTimer = propertyContextFeatureEvaluationDurationSeconds.startTimer(labels);
+  try {
+    const evaluation = await evaluateFeatureContextInternal(propertyId, userId, input);
+    propertyContextFeatureEvaluationsTotal.inc({ ...labels, outcome: evaluation.readiness });
+    return evaluation;
+  } catch (error) {
+    propertyContextFeatureEvaluationsTotal.inc({ ...labels, outcome: 'ERROR' });
+    throw error;
+  } finally {
+    stopTimer();
+  }
 }

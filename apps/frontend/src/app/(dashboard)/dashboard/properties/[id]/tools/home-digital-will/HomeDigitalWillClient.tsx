@@ -29,7 +29,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { PropertyContextNotice } from '@/components/property-context/PropertyContextNotice';
+import { PropertyContextStatusNotice } from '@/components/property-context/PropertyContextStatusNotice';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -2591,7 +2591,7 @@ export default function HomeDigitalWillClient() {
         <HomeToolHeader toolId="home-digital-will" propertyId={propertyId} />
 
         {willContext && (
-          <PropertyContextNotice context={willContext} title="Continuity context" readOnly />
+          <PropertyContextStatusNotice context={willContext} title="Continuity context" />
         )}
 
         {/* Header: always on desktop, hidden on mobile during section detail or contacts panel */}

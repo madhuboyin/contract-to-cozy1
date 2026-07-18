@@ -42,7 +42,8 @@ import {
   buildExecutionGuardMessage,
 } from '@/features/guidance/utils/executionGuardMessaging';
 import { extractGuidanceContinuityContext, hasGuidanceContinuityContext } from '@/features/guidance/utils/guidanceContinuity';
-import { PropertyContextNotice, type PropertyContextEnvelope } from '@/components/property-context/PropertyContextNotice';
+import { PropertyContextStatusNotice } from '@/components/property-context/PropertyContextStatusNotice';
+import type { PropertyContextEnvelope } from '@/components/property-context/propertyContextTypes';
 
 const DEFAULT_RADIUS = 25;
 
@@ -674,7 +675,7 @@ export default function ProvidersPage() {
       }}
       summary={
         <div className="space-y-3">
-          <PropertyContextNotice context={propertyContext} title="Provider and booking context" readOnly />
+          <PropertyContextStatusNotice context={propertyContext} title="Provider and booking context" />
           <MobileKpiStrip className="sm:grid-cols-3">
             <MobileKpiTile
               label="Matches"

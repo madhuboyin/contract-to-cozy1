@@ -50,16 +50,16 @@ test('property forms expose canonical fields and working correction anchors', ()
   }
 });
 
-test('context notices render backend-owned capture definitions without full-page reloads', () => {
-  const notice = read('../../../frontend/src/components/property-context/PropertyContextNotice.tsx');
+test('feature panels own capture while aggregate status remains noninteractive', () => {
+  const status = read('../../../frontend/src/components/property-context/PropertyContextStatusNotice.tsx');
+  const panel = read('../../../frontend/src/components/property-context/PropertyContextCapturePanel.tsx');
   const client = read('../../../frontend/src/lib/api/client.ts');
-  assert.doesNotMatch(notice, /CAPTURE_QUESTIONS/);
-  assert.match(notice, /getPropertyContextCaptureDefinition/);
-  assert.match(notice, /capturePropertyContextFact/);
-  assert.doesNotMatch(notice, /window\.location\.reload/);
-  assert.doesNotMatch(notice, /correctionPaths.*match|path\.match/);
-  assert.match(client, /method: 'PATCH'/);
-  assert.match(client, /encodeURIComponent\(factKey\)/);
+  assert.doesNotMatch(status, /captureFeatureContext|<button|<input/);
+  assert.match(status, /correctionPaths/);
+  assert.match(panel, /requirement\.capture\.inputSchema/);
+  assert.doesNotMatch(`${status}\n${panel}`, /window\.location\.reload/);
+  assert.match(client, /context\/captures/);
+  assert.doesNotMatch(client, /capturePropertyContextFact|getPropertyContextCaptureDefinition/);
 });
 
 test('household size is captured only through the consented optional profile', () => {

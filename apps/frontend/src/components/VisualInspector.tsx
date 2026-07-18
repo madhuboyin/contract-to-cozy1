@@ -26,7 +26,8 @@ import {
   ScenarioInputCard,
   StatusChip,
 } from '@/components/mobile/dashboard/MobilePrimitives';
-import { PropertyContextNotice, type PropertyContextEnvelope } from '@/components/property-context/PropertyContextNotice';
+import { PropertyContextStatusNotice } from '@/components/property-context/PropertyContextStatusNotice';
+import type { PropertyContextEnvelope } from '@/components/property-context/propertyContextTypes';
 
 interface DetectedIssue {
   title: string;
@@ -210,7 +211,7 @@ export default function VisualInspector({ propertyId }: VisualInspectorProps) {
           </div>
         ) : null}
 
-        <PropertyContextNotice context={report.propertyContext} title="Visual inspection context" readOnly />
+        <PropertyContextStatusNotice context={report.propertyContext} title="Visual inspection context" />
 
         <ReadOnlySummaryBlock
           title="Inspection Snapshot"

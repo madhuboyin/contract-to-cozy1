@@ -31,7 +31,7 @@ import {
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
-import { PropertyContextNotice } from '@/components/property-context/PropertyContextNotice';
+import { PropertyContextStatusNotice } from '@/components/property-context/PropertyContextStatusNotice';
 import { Button } from '@/components/ui/button';
 import {
   Sheet,
@@ -1163,7 +1163,7 @@ export default function HomeDigitalTwinClient() {
 
       {/* Projection context status */}
       {twin?.context && (
-        <PropertyContextNotice context={twin.context} title="Digital twin context" readOnly />
+        <PropertyContextStatusNotice context={twin.context} title="Digital twin context" />
       )}
 
       {/* Content states */}

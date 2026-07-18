@@ -51,7 +51,7 @@ import {
 } from '@/components/mobile/dashboard/MobilePrimitives';
 import { useGuidance } from '@/features/guidance/hooks/useGuidance';
 import { useJourney } from '@/features/guidance/hooks/useJourney';
-import { PropertyContextNotice } from '@/components/property-context/PropertyContextNotice';
+import { PropertyContextStatusNotice } from '@/components/property-context/PropertyContextStatusNotice';
 import { mapGuidanceJourneyToActionModel, type GuidanceActionModel } from '@/features/guidance/utils/guidanceMappers';
 import { formatIssueDomain, formatIssueTypeLabel, resolveGuidanceStepHref } from '@/features/guidance/utils/guidanceDisplay';
 import { listInventoryItems } from '@/app/(dashboard)/dashboard/inventory/inventoryApi';
@@ -1756,13 +1756,12 @@ export default function GuidanceOverviewClient() {
         </Link>
       </Button>
 
-      <PropertyContextNotice
+      <PropertyContextStatusNotice
         context={guidance.protectionContext ? {
           contextVersion: guidance.protectionContext.contextVersion,
           decision: guidance.protectionContext.decisions.guidanceState,
         } : null}
         title="Guidance reconciliation context"
-        readOnly
       />
 
       <GuidedJourneyTemplate

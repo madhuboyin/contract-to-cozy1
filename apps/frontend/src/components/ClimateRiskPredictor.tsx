@@ -23,7 +23,8 @@ import {
   ScenarioInputCard,
   StatusChip,
 } from '@/components/mobile/dashboard/MobilePrimitives';
-import { PropertyContextNotice, type PropertyContextEnvelope } from '@/components/property-context/PropertyContextNotice';
+import { PropertyContextStatusNotice } from '@/components/property-context/PropertyContextStatusNotice';
+import type { PropertyContextEnvelope } from '@/components/property-context/propertyContextTypes';
 
 interface ClimateRisk {
   category: string;
@@ -167,7 +168,7 @@ export default function ClimateRiskPredictor({ propertyId }: ClimateRiskPredicto
         summary={`${report.location.city}, ${report.location.state} climate risk posture and mitigation priorities.`}
       />
 
-      <PropertyContextNotice context={report.propertyContext} title="Climate applicability" readOnly />
+      <PropertyContextStatusNotice context={report.propertyContext} title="Climate applicability" />
 
       <ReadOnlySummaryBlock
         title="Location Snapshot"

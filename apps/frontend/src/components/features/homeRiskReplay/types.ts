@@ -1,4 +1,4 @@
-import type { PropertyContextEnvelope } from '@/components/property-context/PropertyContextNotice';
+import type { PropertyContextEnvelope } from '@/components/property-context/propertyContextTypes';
 
 export type HomeRiskReplayWindowType = 'since_built' | 'last_5_years' | 'custom_range';
 

@@ -1,5 +1,5 @@
 import { api } from './client';
-import type { PropertyContextEnvelope } from '@/components/property-context/PropertyContextNotice';
+import type { PropertyContextEnvelope } from '@/components/property-context/propertyContextTypes';
 
 export interface PersonalizationRecommendation {
   id: string;

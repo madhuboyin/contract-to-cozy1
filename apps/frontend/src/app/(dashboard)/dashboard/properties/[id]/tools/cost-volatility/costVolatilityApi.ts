@@ -1,6 +1,6 @@
 // apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/cost-volatility/costVolatilityApi.ts
 import { api } from '@/lib/api/client';
-import type { PropertyContextEnvelope } from '@/components/property-context/PropertyContextNotice';
+import type { PropertyContextEnvelope } from '@/components/property-context/propertyContextTypes';
 
 export type CostVolatilityDTO = {
   propertyContext?: PropertyContextEnvelope;
