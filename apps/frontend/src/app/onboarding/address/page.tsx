@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Home, Search, Sparkles, ArrowRight, Zap, Loader2 } from 'lucide-react';
+import { Home, Search, Sparkles, ArrowRight, Zap, Loader2, PenLine } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { api } from '@/lib/api/client';
@@ -35,8 +35,11 @@ export default function AddressOnboardingPage() {
   const router = useRouter();
   const { toast } = useToast();
   const [address, setAddress] = useState('');
+  const [city, setCity] = useState('');
+  const [state, setState] = useState('');
   const [zipCode, setZipCode] = useState('');
   const [loading, setLoading] = useState(false);
+  const [manualMode, setManualMode] = useState(false);
   const [situation, setSituation] = useState<Situation>('own');
   const [triggerType, setTriggerType] = useState<TriggerType | null>(null);
   const [triggerDetail, setTriggerDetail] = useState('');
@@ -51,20 +54,9 @@ export default function AddressOnboardingPage() {
     }
   }, []);
 
-  const handleLookup = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!address.trim() || !triggerType) return;
-
-    setLoading(true);
-    track('address_lookup_started', { source: 'onboarding_page' });
-
-    try {
-      // Trigger the Magic Lookup
-      const response = await api.lookupProperty(address, zipCode);
-
-      if (response.success && response.data) {
-        const selectedTrigger = TRIGGER_OPTIONS.find((option) => option.type === triggerType);
-        const activationContext: ActivationEntryContextInput = {
+  const buildActivationContext = (): ActivationEntryContextInput => {
+    const selectedTrigger = TRIGGER_OPTIONS.find((option) => option.type === triggerType);
+    return {
           entryPath: situation === 'buying'
             ? 'EXISTING_HOME_PURCHASE'
             : situation === 'new-build'
@@ -83,7 +75,7 @@ export default function AddressOnboardingPage() {
               ? 'UNKNOWN'
               : 'EXISTING_HOME',
           activeTrigger: {
-            type: triggerType,
+            type: triggerType!,
             label: selectedTrigger?.label ?? 'Home planning question',
             detail: triggerDetail.trim() || null,
             entityType: 'PROPERTY',
@@ -92,31 +84,68 @@ export default function AddressOnboardingPage() {
           },
           consentContext: 'User submitted this trigger to receive property-specific onboarding guidance.',
           sourceMetadata: { onboardingSurface: 'address' },
-        };
-        const sessionRes = await fetch('/api/onboarding-lookup-session', {
+    };
+  };
+
+  const prepareConfirmation = async (propertyData: Record<string, unknown>, source: 'LOOKUP' | 'MANUAL') => {
+    const activationContext = buildActivationContext();
+    const sessionRes = await fetch('/api/onboarding-lookup-session', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ data: { ...response.data, activationContext } }),
+      body: JSON.stringify({ data: { ...propertyData, activationContext, addressSource: source } }),
         });
-        if (!sessionRes.ok) {
-          throw new Error('Unable to prepare onboarding session');
-        }
-        track('active_trigger_selected', { triggerType, situation });
-        router.push('/onboarding/confirm');
-      } else {
+    if (!sessionRes.ok) throw new Error('Unable to prepare onboarding session');
+    track('active_trigger_selected', { triggerType: triggerType!, situation });
+    router.push('/onboarding/confirm');
+  };
+
+  const handleLookup = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!address.trim() || !triggerType) return;
+
+    if (manualMode) {
+      if (!city.trim() || !/^[A-Za-z]{2}$/.test(state.trim()) || !/^\d{5}$/.test(zipCode.trim())) {
         toast({
-          title: "Address not found",
-          description: "We couldn't find public records for this address. You can still add it manually.",
-          variant: "destructive"
+          title: 'Complete the address',
+          description: 'Enter a city, two-letter state, and five-digit ZIP code.',
+          variant: 'destructive',
         });
-        // Optionally redirect to manual add
+        return;
       }
+      setLoading(true);
+      try {
+        await prepareConfirmation({
+          address: address.trim(),
+          city: city.trim(),
+          state: state.trim().toUpperCase(),
+          zipCode: zipCode.trim(),
+          yearBuilt: null,
+          propertySize: null,
+          dwellingType: null,
+        }, 'MANUAL');
+        track('address_entered_manually', { source: 'onboarding_page' });
+      } catch (error) {
+        console.error('Manual address error:', error);
+        toast({ title: 'Unable to continue', description: 'Please try again.', variant: 'destructive' });
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
+    setLoading(true);
+    track('address_lookup_started', { source: 'onboarding_page' });
+
+    try {
+      const response = await api.lookupProperty(address, zipCode);
+      if (!response.success || !response.data) throw new Error('No usable public record');
+      await prepareConfirmation(response.data, 'LOOKUP');
     } catch (error) {
       console.error('Lookup error:', error);
+      setManualMode(true);
       toast({
-        title: "Connection error",
-        description: "Something went wrong while searching. Please try again.",
-        variant: "destructive"
+        title: 'Public record unavailable',
+        description: 'No problem—complete the address manually. Unknown home facts will stay unknown.',
       });
     } finally {
       setLoading(false);
@@ -256,13 +285,46 @@ export default function AddressOnboardingPage() {
                   <Loader2 className="h-6 w-6 animate-spin" />
                 ) : (
                   <>
-                    Find My Home
+                    {manualMode ? 'Continue without public records' : 'Find My Home'}
                     <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />
                   </>
                 )}
               </Button>
               </div>
             </div>
+
+            {manualMode && (
+              <div className="rounded-2xl border border-brand-200 bg-brand-50 p-5">
+                <div className="mb-4 flex items-start gap-3">
+                  <PenLine className="mt-0.5 h-5 w-5 shrink-0 text-brand-700" />
+                  <div>
+                    <p className="font-bold text-brand-950">Add the address manually</p>
+                    <p className="text-sm text-brand-800">Public records are optional. We will preserve missing property facts as unknown.</p>
+                  </div>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-[1fr_96px_120px]">
+                  <Input value={city} onChange={(event) => setCity(event.target.value)} placeholder="City" />
+                  <Input
+                    value={state}
+                    onChange={(event) => setState(event.target.value.replace(/[^A-Za-z]/g, '').slice(0, 2))}
+                    placeholder="State"
+                    aria-label="Two-letter state"
+                  />
+                  <Input
+                    value={zipCode}
+                    onChange={(event) => setZipCode(event.target.value.replace(/\D/g, '').slice(0, 5))}
+                    placeholder="ZIP"
+                  />
+                </div>
+                <button
+                  type="button"
+                  className="mt-4 text-sm font-semibold text-brand-800 underline underline-offset-4"
+                  onClick={() => setManualMode(false)}
+                >
+                  Try public-record lookup again
+                </button>
+              </div>
+            )}
           </form>
 
           {/* Trust Signals */}

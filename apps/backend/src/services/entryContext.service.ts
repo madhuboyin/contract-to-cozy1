@@ -215,7 +215,14 @@ type TriggerGuidanceCopy = {
 };
 
 function triggerGuidanceCopy(type: EntryContextCaptureInput['activeTrigger']['type']): TriggerGuidanceCopy {
-  const guidancePath = (propertyId: string) => `/dashboard/properties/${propertyId}/guidance`;
+  const guidancePath = (propertyId: string) => `/dashboard/properties/${propertyId}/tools/guidance-overview`;
+  const repairPath = (propertyId: string) => `/dashboard/properties/${propertyId}/fix`;
+  const maintenancePath = (propertyId: string) => `/dashboard/maintenance?propertyId=${propertyId}`;
+  const quotePath = (propertyId: string) => `/dashboard/quote-comparison?propertyId=${propertyId}`;
+  const capitalPath = (propertyId: string) => `/dashboard/properties/${propertyId}/tools/capital-timeline`;
+  const inspectionPath = (propertyId: string) => `/dashboard/properties/${propertyId}/inspection-hub`;
+  const claimsPath = (propertyId: string) => `/dashboard/properties/${propertyId}/claims`;
+  const sellerPath = (propertyId: string) => `/dashboard/properties/${propertyId}/seller-prep`;
   const projectPath = (propertyId: string) => `/dashboard/properties/${propertyId}/projects`;
   const protectionPath = (propertyId: string) => `/dashboard/properties/${propertyId}/protect`;
   const mapping: Partial<Record<typeof type, TriggerGuidanceCopy>> = {
@@ -224,21 +231,21 @@ function triggerGuidanceCopy(type: EntryContextCaptureInput['activeTrigger']['ty
       recommendation: 'Record the symptoms, affected system, and any immediate safety concerns before choosing a repair path.',
       outcome: 'Reach the next diagnostic step without inventing system condition or repair cost.',
       timing: 'Review now if the problem is active; escalate immediately if there is danger or active damage.',
-      href: guidancePath,
+      href: repairPath,
     },
     REPLACEMENT: {
       why: 'Replacement decisions can create material cost and lifecycle consequences.',
       recommendation: 'Confirm condition, age, repair history, and scope before comparing repair and replacement options.',
       outcome: 'Compare realistic options using explicit assumptions instead of a generic replacement estimate.',
       timing: 'Confirm the decision inputs before requesting or accepting final pricing.',
-      href: guidancePath,
+      href: repairPath,
     },
     CONTRACTOR_QUOTE: {
       why: 'Scope exclusions and unclear assumptions can make quotes look comparable when they are not.',
       recommendation: 'Upload or review the quote, then confirm scope, exclusions, credentials, and alternatives.',
       outcome: 'Enter provider selection with a comparable, evidence-backed scope.',
       timing: 'Review before accepting, paying a deposit, or allowing work to begin.',
-      href: guidancePath,
+      href: quotePath,
     },
     INSURANCE_COVERAGE: {
       why: 'Coverage decisions depend on current policy language, property facts, and jurisdiction.',
@@ -260,6 +267,48 @@ function triggerGuidanceCopy(type: EntryContextCaptureInput['activeTrigger']['ty
       outcome: 'Begin planning with a bounded scope and explicit unknowns.',
       timing: 'Confirm scope before quotes, permits, purchasing, or scheduling.',
       href: projectPath,
+    },
+    MAINTENANCE_BACKLOG: {
+      why: 'A bounded maintenance list makes it easier to separate overdue care from optional improvements.',
+      recommendation: 'Review current maintenance items and confirm the first task that is both relevant and supported by known home facts.',
+      outcome: 'Start a manageable care sequence without treating generic schedules as property-specific evidence.',
+      timing: 'Review now, then schedule only tasks whose applicability is confirmed.',
+      href: maintenancePath,
+    },
+    ANTICIPATED_COST: {
+      why: 'Future home costs are easier to manage when timing and uncertainty remain visible.',
+      recommendation: 'Open the capital timeline and add the system, expected window, and evidence behind the anticipated cost.',
+      outcome: 'Create a planning range without presenting an unsupported price forecast.',
+      timing: 'Add the known cost trigger before committing savings or financing decisions.',
+      href: capitalPath,
+    },
+    INSPECTION_FINDING: {
+      why: 'Inspection findings are most useful when the original evidence and unresolved status stay connected.',
+      recommendation: 'Open the inspection workspace and confirm the finding, severity, and current resolution status.',
+      outcome: 'Turn the supported finding into a traceable next action.',
+      timing: 'Review within the inspection or contingency window when one exists.',
+      href: inspectionPath,
+    },
+    PUNCH_LIST_WARRANTY: {
+      why: 'Warranty and punch-list issues can lose leverage when evidence or deadlines are scattered.',
+      recommendation: 'Create or open the project record and capture the issue, responsible party, evidence, and deadline.',
+      outcome: 'Track the issue through documented resolution before the available window closes.',
+      timing: 'Record the issue before the builder, contractor, or warranty deadline.',
+      href: projectPath,
+    },
+    CLAIM_DAMAGE: {
+      why: 'Damage decisions depend on preserving evidence, limiting further loss, and tracking claim deadlines.',
+      recommendation: 'Open the claims workspace and document the incident, immediate mitigation, and available evidence.',
+      outcome: 'Preserve a bounded incident record without making a coverage determination.',
+      timing: 'Address active danger or damage immediately, then document the claim context promptly.',
+      href: claimsPath,
+    },
+    SELLING_TRANSFER: {
+      why: 'A transfer is smoother when open work, documents, and property facts are reviewed before listing or handoff.',
+      recommendation: 'Open seller preparation and identify the first record or unresolved item that affects the transfer.',
+      outcome: 'Prepare a clearer handoff without inventing property condition or market value.',
+      timing: 'Begin before listing, disclosure, or handoff deadlines.',
+      href: sellerPath,
     },
   };
   return mapping[type] ?? {

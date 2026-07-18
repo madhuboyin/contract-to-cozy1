@@ -60,7 +60,7 @@ export default function ConfirmOnboardingPage() {
         zipCode: data.zipCode,
         yearBuilt: data.yearBuilt,
         propertySize: data.propertySize,
-        dwellingType: data.dwellingType,
+        dwellingType: data.dwellingType || undefined,
         isPrimary: true,
         // Pre-populate other fields found during lookup
         purchasePriceCents: data.lastSalePrice,
@@ -83,7 +83,7 @@ export default function ConfirmOnboardingPage() {
         track('property_claimed', {
           zipCode: data.zipCode,
           yearBuilt: data.yearBuilt || 0,
-          source: 'API'
+          source: data.addressSource === 'MANUAL' ? 'MANUAL' : 'API'
         });
 
         const startedAt = Number(sessionStorage.getItem('onboarding_started_at'));
@@ -157,6 +157,9 @@ export default function ConfirmOnboardingPage() {
               <p className="text-xs font-bold text-slate-400 tracking-normal mb-1">Property Address</p>
               <p className="font-bold text-slate-900">{data.address}</p>
               <p className="text-sm text-slate-600">{data.city}, {data.state} {data.zipCode}</p>
+              {data.addressSource === 'MANUAL' && (
+                <p className="mt-2 text-xs font-medium text-brand-700">Entered manually · public property facts will remain unknown</p>
+              )}
             </div>
 
             <div className="space-y-4">

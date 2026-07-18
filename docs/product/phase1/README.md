@@ -1,6 +1,6 @@
 # Product Framework Phase 1 — Trigger-First Activation
 
-Status: Increment 1 implemented
+Status: Increment 2 in progress
 
 Contract version: `phase1-v1`
 
@@ -22,6 +22,10 @@ The onboarding path now begins with the homeowner's active situation instead of 
 - Added a context-first operating-mode policy and adopted it in orchestration, risk-task, and seasonal-care paths. `HomeownerSegment` remains a fallback only when entry context is absent.
 - Replaced the acquisition copy and trigger-first form in the active onboarding path.
 - Added a dedicated first-value screen.
+- Added a manual-address continuation path so unavailable public records no longer block activation.
+- Redirected the obsolete speculative reveal route into the evidence-bounded confirmation flow.
+- Replaced the missing generic guidance destination with existing specialized workspaces for repair, replacement, quote, maintenance, coverage, project, anticipated-cost, inspection, warranty, claim, and transfer triggers.
+- Rendered the canonical correction/add-context action on the first-value screen.
 
 ## Database policy
 
@@ -43,9 +47,8 @@ npm -C apps/frontend run qa:product-framework:routes
 
 ## Remaining Phase 1 scope
 
-- Add manual address creation when public lookup returns no usable record.
 - Add document, quote, invoice, photo, conversation, and free-text trigger ingestion beyond the initial selection/detail capture.
-- Route each trigger to the strongest existing specialized adapter rather than the general guidance destination.
+- Deepen specialized adapter integration so trigger evidence is preloaded into the destination workflow instead of routing by destination alone.
 - Expand the deterministic baseline and 12-month plan beyond the first supported action while preserving evidence thresholds.
 - Replace remaining direct segment checks across non-activation modules, then remove `HomeownerSegment` and its profile field.
 - Add API integration tests against an owner-applied Phase 1 database schema.

@@ -644,7 +644,7 @@ The database is treated as pre-launch and disposable. When a phase requires pers
 
 **Objective:** Prove the updated launch wedge without requiring an inspection report.
 
-**Implementation status:** Increment 1 implemented July 18, 2026. Trigger selection, orthogonal entry-context persistence, authenticated context and first-value APIs, canonical evidence-bounded first action, resolution lineage, initial operating-mode policy adoption, and the trigger-first onboarding/first-value UI are documented in `docs/product/phase1/README.md`. Manual lookup fallback, multi-modal trigger ingestion, specialized adapter routing, broader plan generation, remaining segment removal, launch approvals, and pilot reporting remain.
+**Implementation status:** Increment 2 started July 18, 2026. Trigger selection, orthogonal entry-context persistence, authenticated context and first-value APIs, canonical evidence-bounded first action, resolution lineage, initial operating-mode policy adoption, trigger-first onboarding/first-value UI, manual lookup fallback, safe reveal retirement, correction controls, and specialized destination routing are documented in `docs/product/phase1/README.md`. Multi-modal trigger ingestion, deeper adapter evidence handoff, broader plan generation, remaining segment removal, launch approvals, and pilot reporting remain.
 
 #### Target flow
 

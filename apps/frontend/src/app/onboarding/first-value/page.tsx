@@ -131,6 +131,20 @@ export default function OnboardingFirstValuePage() {
           >
             {action.primaryCta.label}<ArrowRight className="ml-2 h-4 w-4" />
           </Button>
+          {action.secondaryCtas.length > 0 && (
+            <div className="mt-3 flex flex-wrap justify-center gap-2">
+              {action.secondaryCtas.map((cta) => (
+                <Button
+                  key={`${cta.label}:${cta.href}`}
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => router.push(cta.href)}
+                >
+                  {cta.label}
+                </Button>
+              ))}
+            </div>
+          )}
         </section>
 
         <div className="grid gap-5 md:grid-cols-2">

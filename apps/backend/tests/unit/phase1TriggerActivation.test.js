@@ -111,12 +111,35 @@ test('trigger-first UI asks the situation before address and renders evidence-bo
     path.resolve(__dirname, '../../../frontend/src/app/onboarding/first-value/page.tsx'),
     'utf8',
   );
+  const revealPage = fs.readFileSync(
+    path.resolve(__dirname, '../../../frontend/src/app/onboarding/reveal/page.tsx'),
+    'utf8',
+  );
   assert.match(addressPage, /What brought you here\?/);
   assert.match(addressPage, /activeTrigger/);
+  assert.match(addressPage, /Continue without public records/);
+  assert.match(addressPage, /Unknown home facts will stay unknown/);
   assert.match(confirmPage, /captureEntryContext/);
   assert.match(firstValuePage, /Evidence used/);
   assert.match(firstValuePage, /Still unknown/);
   assert.match(firstValuePage, /Already handled/);
   assert.match(firstValuePage, /Remind me later/);
   assert.match(firstValuePage, /Not relevant/);
+  assert.match(firstValuePage, /secondaryCtas\.map/);
+  assert.match(revealPage, /redirect\('\/onboarding\/confirm'\)/);
+  assert.doesNotMatch(revealPage, /Annual Savings|Maintenance Risks|tax appeal window/);
+});
+
+test('first-value triggers link only to existing specialized route families', () => {
+  const service = fs.readFileSync(
+    path.resolve(__dirname, '../../src/services/entryContext.service.ts'),
+    'utf8',
+  );
+  assert.doesNotMatch(service, /`\/dashboard\/properties\/\$\{propertyId\}\/guidance`/);
+  for (const route of [
+    '/tools/guidance-overview', '/fix', '/dashboard/maintenance', '/dashboard/quote-comparison',
+    '/tools/capital-timeline', '/inspection-hub', '/claims', '/seller-prep', '/projects', '/protect',
+  ]) {
+    assert.ok(service.includes(route), `Expected specialized Phase 1 route ${route}`);
+  }
 });

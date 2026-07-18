@@ -6,6 +6,7 @@ const MAX_AGE_SECONDS = 15 * 60;
 
 type OnboardingLookupPayload = {
   address: string;
+  addressSource?: 'LOOKUP' | 'MANUAL';
   city?: string;
   state?: string;
   zipCode?: string;
@@ -71,12 +72,20 @@ function sanitizePayload(input: unknown): OnboardingLookupPayload | null {
   const source = input as Record<string, unknown>;
   const address = normalizeString(source.address);
   if (!address) return null;
+  const addressSource = source.addressSource === 'MANUAL' ? 'MANUAL' : 'LOOKUP';
+  const city = normalizeString(source.city);
+  const state = normalizeString(source.state)?.toUpperCase();
+  const zipCode = normalizeString(source.zipCode);
+  if (addressSource === 'MANUAL' && (!city || !state?.match(/^[A-Z]{2}$/) || !zipCode?.match(/^\d{5}$/))) {
+    return null;
+  }
 
   return {
     address,
-    city: normalizeString(source.city),
-    state: normalizeString(source.state),
-    zipCode: normalizeString(source.zipCode),
+    addressSource,
+    city,
+    state,
+    zipCode,
     yearBuilt: normalizeNumber(source.yearBuilt),
     propertySize: normalizeNumber(source.propertySize),
     estimatedValue: normalizeNumber(source.estimatedValue),

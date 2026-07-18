@@ -13,6 +13,7 @@ export type CtcEventName =
   | 'signup_started'
   | 'signup_completed'
   | 'address_lookup_started'
+  | 'address_entered_manually'
   | 'property_claimed'
   | 'active_trigger_selected'
   // Activation
@@ -140,6 +141,7 @@ export interface CtcEventProperties {
   signup_started: { method: string };
   signup_completed: { timeToCompleteSeconds: number };
   address_lookup_started: { source: string };
+  address_entered_manually: { source: string };
   property_claimed: { zipCode: string; yearBuilt: number; source: 'API' | 'MANUAL' };
   active_trigger_selected: { triggerType: string; situation: string };
   
