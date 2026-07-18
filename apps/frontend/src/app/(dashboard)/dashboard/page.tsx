@@ -32,7 +32,6 @@ import { HomeBuyerDashboard } from './components/HomeBuyerDashboard';
 import { ExistingOwnerDashboard } from './components/ExistingOwnerDashboard';
 import { SeasonalBanner } from '@/components/seasonal/SeasonalBanner';
 import { SeasonalWidget } from '@/components/seasonal/SeasonalWidget';
-import { useHomeownerSegment } from '@/lib/hooks/useHomeownerSegment';
 import AhaHero from './components/AhaHero';
 import { RoomsSnapshotSection } from './components/RoomsSnapshotSection';
 import { LocalUpdatesCarousel } from '@/components/localUpdates/LocalUpdatesCarousel';
@@ -673,13 +672,12 @@ export default function DashboardPage() {
     error: null,
   });
   const lastKnownPropertiesRef = React.useRef<ScoredProperty[]>([]);
+  const [isPurchaseMode, setIsPurchaseMode] = useState(false);
   
   const { selectedPropertyId, setSelectedPropertyId } = usePropertyContext();
   const { celebration, celebrate, dismiss } = useCelebration(
     `dashboard-aha-${user?.id ?? 'anon'}-${selectedPropertyId ?? 'none'}`
   );
-  const { data: homeownerSegment } = useHomeownerSegment();
-  const isHomeBuyer = (homeownerSegment ?? user?.segment ?? null) === 'HOME_BUYER';
   const properties = data.properties;
   const effectiveSelectedPropertyId =
     selectedPropertyId && properties.some((property) => property.id === selectedPropertyId)
@@ -794,10 +792,24 @@ export default function DashboardPage() {
         ? selectedPropertyId
         : scoredProperties[0]?.id;
 
+      let purchaseMode = false;
+      if (propId) {
+        try {
+          const contextResponse = await api.getEntryContext(propId);
+          const context = contextResponse.success && contextResponse.data && typeof contextResponse.data === 'object'
+            ? contextResponse.data as { entryPath?: string; ownershipState?: string }
+            : null;
+          purchaseMode = context?.entryPath === 'EXISTING_HOME_PURCHASE' || context?.ownershipState === 'UNDER_CONTRACT';
+        } catch {
+          purchaseMode = false;
+        }
+      }
+      setIsPurchaseMode(purchaseMode);
+
       const [bookingsRes, checklistRes, warrantiesRes, policiesRes, incidentsRes, inventoryRes] = await Promise.all([
         api.listBookings({ limit: 50, sortBy: 'createdAt', sortOrder: 'desc' })
           .catch(() => ({ success: false, data: { bookings: [] } })),
-        isHomeBuyer
+        purchaseMode
           ? api.getHomeBuyerChecklist()
               .then(res => (res.success && res.data ? { success: true, data: res.data } : { success: false, data: null }))
               .catch(() => ({ success: false, data: null }))
@@ -861,7 +873,7 @@ export default function DashboardPage() {
     } finally {
       setRedirectChecked(true);
     }
-  }, [isHomeBuyer, user, selectedPropertyId]);
+  }, [user, selectedPropertyId]);
   
   const hasTrackedFirstView = React.useRef(false);
   useEffect(() => {
@@ -1338,7 +1350,7 @@ export default function DashboardPage() {
     <>
       {/* Mobile view — CSS hidden on md+ so no layout flash */}
       <div className="md:hidden">
-        {isHomeBuyer ? (
+        {isPurchaseMode ? (
           <MobileHomeBuyerDashboard
             userFirstName={safeFirstName}
             properties={properties}

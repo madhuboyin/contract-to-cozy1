@@ -12,7 +12,6 @@ import {
   formatDaysRemaining,
 } from '@/lib/utils/seasonHelpers';
 import { SeasonalChecklistModal } from './SeasonalChecklistModal';
-import { useHomeownerSegment } from '@/lib/hooks/useHomeownerSegment';
 import { calculateSeasonalProgress } from '@/lib/utils/seasonalProgress';
 import humanizeActionType from '@/lib/utils/humanize';
 import { useCelebration } from '@/hooks/useCelebration';
@@ -28,7 +27,6 @@ interface SeasonalWidgetProps {
 
 export function SeasonalWidget({ propertyId }: SeasonalWidgetProps) {
   // ── ALL HOOKS FIRST (React rules: hooks must not be called after conditional returns) ──
-  const { data: segment } = useHomeownerSegment();
   const [showModal, setShowModal] = useState(false);
   const [selectedChecklistId, setSelectedChecklistId] = useState<string | null>(null);
   const { data: climateInfo } = useClimateInfo(propertyId);
@@ -68,7 +66,6 @@ export function SeasonalWidget({ propertyId }: SeasonalWidgetProps) {
   }, [isComplete, celebrate]);
 
   // ── EARLY RETURNS (safe — all hooks already called above) ─────────────
-  if (segment !== 'EXISTING_OWNER') return null;
   if (!climateInfo?.data || !checklistsData?.data?.checklists) return null;
   if (!currentChecklist || !progress) return null;
 

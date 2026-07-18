@@ -3,7 +3,6 @@ export type HomeownerOperatingMode = 'PURCHASE' | 'OWNERSHIP' | 'EXPLORATION';
 export type EntryContextPolicyInput = {
   entryPath?: string | null;
   ownershipState?: string | null;
-  legacySegment?: string | null;
 };
 
 export function resolveHomeownerOperatingMode(input: EntryContextPolicyInput): HomeownerOperatingMode {
@@ -17,7 +16,7 @@ export function resolveHomeownerOperatingMode(input: EntryContextPolicyInput): H
     input.entryPath === 'NEW_HOME_SETUP' ||
     input.entryPath === 'MAJOR_MOMENT') return 'OWNERSHIP';
 
-  return input.legacySegment === 'HOME_BUYER' ? 'PURCHASE' : 'OWNERSHIP';
+  return 'OWNERSHIP';
 }
 
 export function supportsOwnershipCare(input: EntryContextPolicyInput): boolean {

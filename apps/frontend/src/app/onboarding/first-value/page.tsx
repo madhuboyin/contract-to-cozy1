@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { AlertCircle, ArrowRight, CheckCircle2, Clock3, FileCheck2, Loader2, RefreshCw, ShieldCheck } from 'lucide-react';
+import { AlertCircle, ArrowRight, CheckCircle2, Clock3, FileCheck2, FileUp, Loader2, RefreshCw, ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { api } from '@/lib/api/client';
 import type { ActivationFirstValueDTO } from '@/types';
 import { track } from '@/lib/analytics/events';
@@ -15,6 +16,11 @@ export default function OnboardingFirstValuePage() {
   const [data, setData] = useState<ActivationFirstValueDTO | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [resolving, setResolving] = useState<string | null>(null);
+  const [evidenceKind, setEvidenceKind] = useState<'FREE_TEXT' | 'CONVERSATION' | 'DOCUMENT' | 'QUOTE' | 'INVOICE' | 'PHOTO' | 'EMAIL_PDF'>('FREE_TEXT');
+  const [evidenceDetail, setEvidenceDetail] = useState('');
+  const [evidenceFile, setEvidenceFile] = useState<File | null>(null);
+  const [addingEvidence, setAddingEvidence] = useState(false);
+  const [feedback, setFeedback] = useState<'USEFUL_NEW' | 'USEFUL_KNOWN' | 'NOT_USEFUL' | null>(null);
 
   useEffect(() => {
     if (!propertyId) {
@@ -65,6 +71,65 @@ export default function OnboardingFirstValuePage() {
       setError(cause instanceof Error ? cause.message : 'Unable to record this choice.');
     } finally {
       setResolving(null);
+    }
+  };
+
+  const addEvidence = async () => {
+    if (!propertyId || !data) return;
+    const requiresFile = !['FREE_TEXT', 'CONVERSATION'].includes(evidenceKind);
+    if ((!evidenceDetail.trim() && !evidenceFile) || (requiresFile && !evidenceFile)) {
+      setError(requiresFile ? 'Select a file to attach this evidence.' : 'Add a short evidence note.');
+      return;
+    }
+    setAddingEvidence(true);
+    setError(null);
+    try {
+      let documentId: string | null = null;
+      if (evidenceFile) {
+        const documentType = evidenceKind === 'QUOTE'
+          ? 'ESTIMATE'
+          : evidenceKind === 'INVOICE'
+            ? 'INVOICE'
+            : evidenceKind === 'PHOTO'
+              ? 'PHOTO'
+              : 'OTHER';
+        const uploaded = await api.uploadDocument(evidenceFile, {
+          type: documentType,
+          name: evidenceFile.name,
+          description: evidenceDetail.trim() || `Activation ${evidenceKind.toLowerCase()} evidence`,
+          propertyId,
+        });
+        if (!uploaded.success || !uploaded.data?.id) throw new Error(uploaded.message || 'Evidence upload failed.');
+        documentId = uploaded.data.id;
+      }
+      const attached = await api.addActivationTriggerEvidence(propertyId, {
+        kind: evidenceKind,
+        label: evidenceFile?.name || (evidenceKind === 'CONVERSATION' ? 'Conversation context' : 'Homeowner context'),
+        detail: evidenceDetail.trim() || null,
+        documentId,
+        observedAt: new Date().toISOString(),
+        consentContext: 'Homeowner explicitly attached this evidence to the active onboarding trigger.',
+      });
+      if (!attached.success) throw new Error(attached.message || 'Unable to attach evidence.');
+      const refreshed = await api.getActivationFirstValue(propertyId);
+      if (refreshed.success && refreshed.data) setData(refreshed.data);
+      setEvidenceDetail('');
+      setEvidenceFile(null);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Unable to attach evidence.');
+    } finally {
+      setAddingEvidence(false);
+    }
+  };
+
+  const submitFeedback = async (value: 'USEFUL_NEW' | 'USEFUL_KNOWN' | 'NOT_USEFUL') => {
+    if (!propertyId) return;
+    try {
+      const response = await api.recordFirstValueFeedback(propertyId, value);
+      if (!response.success) throw new Error(response.message || 'Unable to record feedback.');
+      setFeedback(value);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Unable to record feedback.');
     }
   };
 
@@ -177,6 +242,76 @@ export default function OnboardingFirstValuePage() {
           </section>
         </div>
 
+        <section className="rounded-2xl border border-slate-200 bg-white p-5">
+          <h2 className="flex items-center gap-2 font-bold text-slate-900">
+            <FileUp className="h-5 w-5 text-brand-600" /> Add evidence that changes this decision
+          </h2>
+          <p className="mt-1 text-sm text-slate-600">Attach a quote, invoice, photo, document, email/PDF, conversation note, or free text. Uploaded evidence stays linked to this home and trigger.</p>
+          <div className="mt-4 grid gap-3 sm:grid-cols-[180px_1fr]">
+            <select
+              value={evidenceKind}
+              onChange={(event) => {
+                setEvidenceKind(event.target.value as typeof evidenceKind);
+                setEvidenceFile(null);
+              }}
+              className="h-10 rounded-md border border-slate-200 bg-white px-3 text-sm"
+              aria-label="Evidence type"
+            >
+              <option value="FREE_TEXT">Free text</option>
+              <option value="CONVERSATION">Conversation note</option>
+              <option value="DOCUMENT">Document</option>
+              <option value="QUOTE">Contractor quote</option>
+              <option value="INVOICE">Invoice</option>
+              <option value="PHOTO">Photo</option>
+              <option value="EMAIL_PDF">Email or PDF</option>
+            </select>
+            <Input
+              value={evidenceDetail}
+              onChange={(event) => setEvidenceDetail(event.target.value)}
+              placeholder="What should ContractToCozy know from this evidence?"
+              maxLength={4000}
+            />
+          </div>
+          {!['FREE_TEXT', 'CONVERSATION'].includes(evidenceKind) && (
+            <Input
+              className="mt-3"
+              type="file"
+              accept={evidenceKind === 'PHOTO' ? 'image/*' : '.pdf,.doc,.docx,.txt,image/*'}
+              onChange={(event) => setEvidenceFile(event.target.files?.[0] ?? null)}
+            />
+          )}
+          <Button className="mt-4" variant="outline" disabled={addingEvidence} onClick={addEvidence}>
+            {addingEvidence ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileUp className="mr-2 h-4 w-4" />}
+            Add evidence
+          </Button>
+        </section>
+
+        {(['NOW', 'SOON', 'PLAN', 'CONSIDER'] as const).some((bucket) => data.plan[bucket].length > 0) && (
+          <section className="rounded-2xl border border-slate-200 bg-white p-5">
+            <h2 className="font-bold text-slate-900">Evidence-bounded 12-month plan</h2>
+            <p className="mt-1 text-sm text-slate-600">Only actions supported by current evidence are included. Empty buckets are intentional.</p>
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              {(['NOW', 'SOON', 'PLAN', 'CONSIDER'] as const).map((bucket) => (
+                <div key={bucket} className="rounded-xl bg-slate-50 p-4">
+                  <p className="text-xs font-bold text-slate-500">{bucket}</p>
+                  {data.plan[bucket].length === 0 ? (
+                    <p className="mt-2 text-sm text-slate-500">No supported action yet.</p>
+                  ) : data.plan[bucket].map((planAction) => (
+                    <button
+                      key={planAction.id}
+                      type="button"
+                      className="mt-2 block text-left text-sm font-semibold text-slate-800 hover:text-brand-700"
+                      onClick={() => router.push(planAction.primaryCta.href)}
+                    >
+                      {planAction.signal}
+                    </button>
+                  ))}
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
         {action.assumptions.length > 0 && (
           <section className="rounded-2xl border border-slate-200 bg-white p-5">
             <h2 className="font-bold text-slate-900">Assumptions to confirm</h2>
@@ -203,6 +338,22 @@ export default function OnboardingFirstValuePage() {
             <Button variant="ghost" disabled={Boolean(resolving)} onClick={() => resolve('DELIBERATELY_DISMISSED')}>
               Not relevant
             </Button>
+          </div>
+        </section>
+
+        <section className="rounded-2xl border border-slate-200 bg-white p-5 text-center">
+          <h2 className="font-bold text-slate-900">Was this first recommendation useful?</h2>
+          <p className="mt-1 text-sm text-slate-600">This measures whether activation produced useful or new guidance—not just whether the screen loaded.</p>
+          <div className="mt-4 flex flex-wrap justify-center gap-2">
+            {([
+              ['USEFUL_NEW', 'Useful and new'],
+              ['USEFUL_KNOWN', 'Useful reminder'],
+              ['NOT_USEFUL', 'Not useful'],
+            ] as const).map(([value, label]) => (
+              <Button key={value} variant={feedback === value ? 'default' : 'outline'} onClick={() => submitFeedback(value)}>
+                {label}
+              </Button>
+            ))}
           </div>
         </section>
       </div>

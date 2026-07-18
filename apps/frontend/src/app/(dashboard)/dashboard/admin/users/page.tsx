@@ -195,7 +195,7 @@ function UserSummaryPanel({ userId }: { userId: string }) {
         <div className="rounded-xl border border-slate-200 p-3 text-[12px]">
           <p className="font-semibold text-slate-600">Homeowner profile</p>
           <p className="text-slate-500">
-            Segment: {user.homeownerProfile.segment} · {user.homeownerProfile.propertyCount}{' '}
+            {user.homeownerProfile.propertyCount}{' '}
             propert{user.homeownerProfile.propertyCount === 1 ? 'y' : 'ies'}
           </p>
         </div>

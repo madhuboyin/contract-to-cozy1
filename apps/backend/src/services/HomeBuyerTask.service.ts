@@ -1,11 +1,10 @@
 // apps/backend/src/services/HomeBuyerTask.service.ts
 import { HomeBuyerTask, HomeBuyerTaskStatus, RecurrenceFrequency, ServiceCategory } from '@prisma/client';
 import { prisma } from '../lib/prisma';
-import { evaluateHomeBuyerSegment } from './planningContext/applicabilityPolicy';
 
 /**
- * Service for managing HOME_BUYER tasks.
- * Handles the 8 default tasks and user-created tasks for home buyers.
+ * Service for managing purchase-journey tasks. Eligibility is selected by
+ * property entry context at orchestration boundaries, not a user segment.
  */
 export class HomeBuyerTaskService {
   /**
@@ -31,18 +30,12 @@ export class HomeBuyerTaskService {
       throw new Error('Homeowner profile not found for this user.');
     }
 
-    // 2. Apply the same authoritative segment rule used by Property Context.
-    const workflowDecision = evaluateHomeBuyerSegment(profile.segment);
-    if (workflowDecision.status !== 'APPLICABLE') {
-      throw new Error('This feature is only available for home buyers.');
-    }
-
-    // 3. Return existing checklist if found
+    // 2. Return existing checklist if found
     if (profile.homeBuyerChecklist) {
       return profile.homeBuyerChecklist;
     }
 
-    // 4. Create new checklist with 8 default tasks
+    // 3. Create new checklist with 8 default tasks
     return await this.createChecklistWithDefaults(profile.id);
   }
 

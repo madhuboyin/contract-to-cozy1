@@ -46,7 +46,6 @@ export interface UserResponse {
   status: UserStatus;
   mfaEnabled?: boolean;
   createdAt?: string;
-  segment?: string;
 }
 
 // Login response
@@ -84,7 +83,6 @@ export interface RegisterResponse {
     status: UserStatus;
     mfaEnabled?: boolean;
     createdAt?: string;
-    segment?: string;
   };
   emailVerificationToken?: string; // For development/testing
 }

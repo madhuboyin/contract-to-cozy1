@@ -43,7 +43,6 @@ export async function addSeasonalTaskToMaintenance(
         include: {
           property: {
             include: {
-              homeownerProfile: true,
               onboarding: true,
             },
           },
@@ -64,12 +63,11 @@ export async function addSeasonalTaskToMaintenance(
     throw new Error('User does not have access to this seasonal item');
   }
 
-  // 3. Check segment (only EXISTING_OWNER can add to maintenance)
+  // 3. Check property-scoped ownership-care applicability.
   const property = seasonalItem.seasonalChecklist.property;
   if (!supportsOwnershipCare({
     entryPath: property.onboarding?.entryPath,
     ownershipState: property.onboarding?.ownershipState,
-    legacySegment: property.homeownerProfile.segment,
   })) {
     throw new Error('Seasonal maintenance tasks are only available for existing homeowners');
   }

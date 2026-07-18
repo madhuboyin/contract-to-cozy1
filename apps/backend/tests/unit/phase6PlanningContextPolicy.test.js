@@ -67,13 +67,19 @@ test('sale readiness requires open work and coverage context sources', () => {
   assert.equal(missing.saleReadiness.status, 'UNKNOWN');
 });
 
-test('home buyer workflow follows the product segment without physical inference', () => {
-  const buyer = evaluatePlanningContext(snapshot({ 'product.homeownerSegment': 'HOME_BUYER' }));
+test('purchase workflow follows orthogonal entry context without physical inference', () => {
+  const buyer = evaluatePlanningContext(snapshot({
+    'product.entryPath': 'EXISTING_HOME_PURCHASE',
+    'product.ownershipState': 'UNDER_CONTRACT',
+  }));
   assert.equal(buyer.homeBuyerWorkflow.status, 'APPLICABLE');
 
-  const owner = evaluatePlanningContext(snapshot({ 'product.homeownerSegment': 'EXISTING_OWNER' }));
+  const owner = evaluatePlanningContext(snapshot({
+    'product.entryPath': 'EXISTING_OWNER_TRIGGER',
+    'product.ownershipState': 'ESTABLISHED_OWNER',
+  }));
   assert.equal(owner.homeBuyerWorkflow.status, 'NOT_APPLICABLE');
-  assert.ok(owner.homeBuyerWorkflow.reasonCodes.includes('SEGMENT_NOT_HOME_BUYER'));
+  assert.ok(owner.homeBuyerWorkflow.reasonCodes.includes('PURCHASE_CONTEXT_NOT_ACTIVE'));
 
   const unknown = evaluatePlanningContext(snapshot({}));
   assert.equal(unknown.homeBuyerWorkflow.status, 'UNKNOWN');

@@ -46,7 +46,6 @@ export class AuthService {
     status: string;
     mfaEnabled?: boolean;
     createdAt: Date;
-    homeownerProfile?: { segment: string } | null;
   }): UserResponse {
     return {
       id: user.id,
@@ -58,7 +57,6 @@ export class AuthService {
       status: user.status as any,
       mfaEnabled: user.mfaEnabled,
       createdAt: user.createdAt.toISOString(),
-      segment: user.homeownerProfile?.segment || 'EXISTING_OWNER',
     };
   }
 
@@ -225,8 +223,6 @@ export class AuthService {
       },
     });
 
-    const segment = data.segment || 'EXISTING_OWNER';
-
     // Auto-create role-specific profile
     try {
       if (user.role === 'HOMEOWNER') {
@@ -234,7 +230,6 @@ export class AuthService {
           data: {
             userId: user.id,
             spentAmount: 0,
-            segment: segment, // Use the variable
           },
         });
         logger.info(`✅ Created homeowner profile for user ${user.id}`);
@@ -302,7 +297,6 @@ export class AuthService {
         status: user.status as any,
         mfaEnabled: user.mfaEnabled,
         createdAt: user.createdAt.toISOString(),
-        segment: segment, // <-- segment included in the response
       },
       ...(process.env.NODE_ENV === 'development' ? { emailVerificationToken } : {}),
     };
@@ -312,10 +306,9 @@ export class AuthService {
    * Login user
    */
   async login(data: LoginInput): Promise<({ accessToken: string; refreshToken: string; user: UserResponse }) | MfaChallengeResponse> {
-    // Find user by email AND include the profile segment + MFA state
+    // Find user by email and include MFA state.
     const user = await prisma.user.findUnique({
       where: { email: data.email },
-      include: { homeownerProfile: { select: { segment: true } } },
     });
     // Note: Prisma includes all scalar fields on the User model by default
     // so tokenVersion is available via user.tokenVersion below.
@@ -625,11 +618,6 @@ export class AuthService {
         avatar: true,
         bio: true,
         createdAt: true,
-        homeownerProfile: { // <-- FIX 3: Select the profile
-          select: {
-            segment: true,
-          },
-        },
       },
     });
 
@@ -638,11 +626,7 @@ export class AuthService {
     }
 
     // --- Flatten the response ---
-    const { homeownerProfile, ...userData } = user;
-    return {
-      ...userData,
-      segment: homeownerProfile?.segment || 'EXISTING_OWNER', // <-- FIX 4: Flatten the segment
-    };
+    return user;
   }
   /**
    * Get current user (for /api/auth/me endpoint)

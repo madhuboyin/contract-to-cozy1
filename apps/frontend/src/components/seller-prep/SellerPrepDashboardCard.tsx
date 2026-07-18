@@ -15,7 +15,6 @@ interface Property {
 
 interface SellerPrepDashboardCardProps {
   properties: Property[];
-  userSegment?: 'HOME_BUYER' | 'EXISTING_OWNER';
 }
 
 /**
@@ -23,11 +22,10 @@ interface SellerPrepDashboardCardProps {
  * Shows list of properties user can assess for sale readiness
  * 
  * Usage in main dashboard:
- * <SellerPrepDashboardCard properties={userProperties} userSegment={segment} />
+ * <SellerPrepDashboardCard properties={userProperties} />
  */
 export function SellerPrepDashboardCard({ 
-  properties, 
-  userSegment 
+  properties,
 }: SellerPrepDashboardCardProps) {
   const [selectedPropertyId, setSelectedPropertyId] = useState<string | null>(
     properties.length === 1 ? properties[0].id : null
@@ -37,14 +35,12 @@ export function SellerPrepDashboardCard({
     return null; // Don't show if user has no properties
   }
 
-  const isHomeBuyer = userSegment === 'HOME_BUYER';
-
   return (
     <Card className="border-green-200">
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center gap-2 text-lg">
           <TrendingUp className="h-5 w-5 text-green-600" />
-          {isHomeBuyer ? 'Planning to Sell?' : 'Preparing to Sell?'}
+          Preparing to Sell?
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">

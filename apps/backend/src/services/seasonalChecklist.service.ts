@@ -89,7 +89,6 @@ export class SeasonalChecklistService {
     if (!supportsOwnershipCare({
       entryPath: property.onboarding?.entryPath,
       ownershipState: property.onboarding?.ownershipState,
-      legacySegment: property.homeownerProfile?.segment,
     })) {
       logger.info(`Skipping seasonal checklist - not an existing owner (property: ${propertyId})`);
       return null;
@@ -604,14 +603,12 @@ export class SeasonalChecklistService {
     const property = await prisma.property.findUnique({
       where: { id: checklist.propertyId },
       select: {
-        homeownerProfile: { select: { segment: true } },
         onboarding: { select: { entryPath: true, ownershipState: true } },
       },
     });
     const usesMaintenance = property ? supportsOwnershipCare({
       entryPath: property.onboarding?.entryPath,
       ownershipState: property.onboarding?.ownershipState,
-      legacySegment: property.homeownerProfile?.segment,
     }) : false;
 
     const addedTasks = [];

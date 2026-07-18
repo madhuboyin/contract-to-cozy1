@@ -14,8 +14,8 @@ const router = Router();
  * @swagger
  * /api/service-categories:
  *   get:
- *     summary: Get available service categories for the current user's segment
- *     description: Returns categories available for HOME_BUYER or EXISTING_OWNER segment
+ *     summary: Get active service categories
+ *     description: Returns categories without permanent user-segment gating
  *     tags: [Service Categories]
  *     security:
  *       - bearerAuth: []
@@ -69,26 +69,13 @@ router.get(
         });
       }
 
-      // Get user's segment
-      logger.info('[SERVICE-CATEGORIES] Fetching homeowner profile...');
-      const homeownerProfile = await prisma.homeownerProfile.findUnique({
-        where: { userId },
-        select: { segment: true },
-      });
-      logger.info({ homeownerProfile }, '[SERVICE-CATEGORIES] Profile');
-
-      const segment = homeownerProfile?.segment || 'EXISTING_OWNER';
-      const isHomeBuyer = segment === 'HOME_BUYER';
-      logger.info({ segment, isHomeBuyer }, '[SERVICE-CATEGORIES] Segment');
-
-      // Fetch categories based on segment
+      // Fetch active categories. Journey relevance is decided from property
+      // entry context at the consuming workflow.
       logger.info('[SERVICE-CATEGORIES] Fetching categories...');
       const categories = await prisma.serviceCategoryConfig.findMany({
         where: {
           isActive: true,
-          ...(isHomeBuyer
-            ? { availableForHomeBuyer: true }
-            : { availableForExistingOwner: true }),
+          OR: [{ availableForHomeBuyer: true }, { availableForExistingOwner: true }],
         },
         orderBy: { sortOrder: 'asc' },
       });
@@ -98,7 +85,6 @@ router.get(
       res.status(200).json({
         success: true,
         data: {
-          segment,
           categories: categories.map((cat) => ({
             category: cat.category,
             displayName: cat.displayName,

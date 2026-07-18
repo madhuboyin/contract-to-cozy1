@@ -115,6 +115,29 @@ export interface AdminTopToolsResponse {
   tools: TopToolRow[];
 }
 
+export interface AdminPhase1PilotMetric {
+  numerator: number;
+  denominator: number;
+  rate: number;
+  target: number | null;
+  definition: string;
+}
+
+export interface AdminPhase1PilotResponse {
+  metricVersion: string;
+  period: { from: string; to: string };
+  eligibility: {
+    definition: string;
+    eligibleHomes: number;
+  };
+  metrics: {
+    minimumSetupCompletion: AdminPhase1PilotMetric;
+    usefulNewRecommendationIdentification: AdminPhase1PilotMetric;
+    usefulRecommendationAny: AdminPhase1PilotMetric;
+    actionResolutionWithin30Days: AdminPhase1PilotMetric;
+  };
+}
+
 // ============================================================================
 // API FUNCTIONS
 // ============================================================================
@@ -193,6 +216,16 @@ export async function fetchAdminAnalyticsTopTools(
   const response = await api.get<AdminTopToolsResponse>(
     '/api/admin/analytics/top-tools',
     { params },
+  );
+  return response.data;
+}
+
+export async function fetchAdminAnalyticsPhase1Pilot(
+  filters: AdminAnalyticsFilters,
+): Promise<AdminPhase1PilotResponse> {
+  const response = await api.get<AdminPhase1PilotResponse>(
+    '/api/admin/analytics/phase1-pilot',
+    { params: buildParams(filters) },
   );
   return response.data;
 }

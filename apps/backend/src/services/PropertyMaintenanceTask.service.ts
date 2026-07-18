@@ -27,7 +27,7 @@ import {
 
   /**
    * Service for managing property maintenance tasks.
-   * Handles tasks for EXISTING_OWNER segment from multiple sources:
+   * Handles property-scoped tasks from multiple sources:
    * - USER_CREATED: User-defined tasks
    * - ACTION_CENTER: Risk assessment recommendations
    * - SEASONAL: Seasonal maintenance tasks
@@ -817,25 +817,17 @@ import {
 
       const property = await prisma.property.findUnique({
         where: { id: propertyId },
-        include: {
-          homeownerProfile: true,
-        },
+        select: { id: true },
       });
 
       if (!property) {
         throw new Error('Property not found.');
       }
 
-      // Verify user is EXISTING_OWNER segment
-      if (property.homeownerProfile.segment !== 'EXISTING_OWNER') {
-        throw new Error(
-          'Property maintenance tasks are only available for existing homeowners.'
-        );
-      }
     }
   
     /**
-     * Validates that a serviceCategory is available for EXISTING_OWNER segment.
+     * Validates that a service category is enabled for property care.
      */
     private static async validateServiceCategory(
       category: ServiceCategory

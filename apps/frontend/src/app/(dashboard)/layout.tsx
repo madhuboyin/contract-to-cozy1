@@ -42,6 +42,7 @@ import { BottomNav } from '@/components/mobile/BottomNav';
 import { PullToRefresh } from '@/components/mobile/PullToRefresh';
 import DashboardCommandPalette from '@/components/navigation/DashboardCommandPalette';
 import DashboardBreadcrumbs from '@/components/navigation/DashboardBreadcrumbs';
+import { ActivationHandoffBanner } from '@/components/onboarding/ActivationHandoffBanner';
 import { AppShell } from '@/components/layout/AppShell';
 import { CtcTopCommandBar } from '@/components/layout/CtcTopCommandBar';
 import { FeedbackWidget } from '@/components/feedback/FeedbackWidget';
@@ -591,8 +592,6 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
     const fetchPropertyCount = async () => {
       if (!user) { setShowBanner(false); return; }
       if (user.role === 'ADMIN') { setShowBanner(false); return; }
-      if (user.segment !== 'EXISTING_OWNER') { setShowBanner(false); return; }
-
       try {
         const response = await api.getProperties();
         if (response.success) {
@@ -767,6 +766,7 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
                 key={refreshKey}
               >
                 <DashboardBreadcrumbs />
+                <ActivationHandoffBanner />
                 {children}
               </div>
             </PullToRefresh>

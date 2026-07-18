@@ -34,7 +34,7 @@ export interface UserSummary {
   tosVersion: string | null;
   createdAt: string;
   activeSessionCount: number;
-  homeownerProfile: { segment: string; propertyCount: number } | null;
+  homeownerProfile: { propertyCount: number } | null;
   providerProfile: {
     businessName: string;
     businessType: string | null;

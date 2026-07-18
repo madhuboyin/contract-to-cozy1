@@ -21,6 +21,7 @@ import {
   getTrendsHandler,
   getFeatureAdoptionHandler,
   getFunnelHandler,
+  getPhase1PilotHandler,
   getCohortsHandler,
   getTopToolsHandler,
 } from '../controllers/adminAnalytics.controller';
@@ -150,6 +151,12 @@ router.get(
   '/admin/analytics/funnel',
   validate(FunnelQuerySchema),
   getFunnelHandler,
+);
+
+router.get(
+  '/admin/analytics/phase1-pilot',
+  validate(OverviewQuerySchema),
+  getPhase1PilotHandler,
 );
 
 /**

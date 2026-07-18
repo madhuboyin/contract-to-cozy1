@@ -2,15 +2,13 @@
 'use client';
 
 import { useState, useEffect, Suspense, useCallback } from 'react';
-import { useSearchParams, useRouter } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import MovingConcierge from '@/components/MovingConcierge';
 import { Truck, Loader2 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
-import { Button } from '@/components/ui/button';
 import { api } from '@/lib/api/client';
 import { useDashboardPropertySelection } from '@/lib/property/useDashboardPropertySelection';
-import { useAuth } from '@/lib/auth/AuthContext';
 import {
   BottomSafeAreaGuard,
   EmptyStateCard,
@@ -20,8 +18,6 @@ import {
 
 function MovingConciergeContent() {
   const searchParams = useSearchParams();
-  const router = useRouter();
-  const { userSegment } = useAuth();
   const propertyIdFromUrl = searchParams.get('propertyId');
   
   const [properties, setProperties] = useState<any[]>([]);
@@ -53,24 +49,6 @@ function MovingConciergeContent() {
     return (
       <div className="flex items-center justify-center py-12">
         <Loader2 className="w-8 h-8 animate-spin text-green-600" />
-      </div>
-    );
-  }
-
-  // Check if user is HOME_BUYER
-  if (userSegment && userSegment !== 'HOME_BUYER') {
-    return (
-      <div className="mx-auto max-w-4xl space-y-4 p-4 sm:p-6">
-        <EmptyStateCard
-          title="Moving Concierge not available"
-          description="This feature is for home buyers in a closing journey. Explore your other property management tools instead."
-          action={
-            <Button onClick={() => router.push('/dashboard')}>
-              Return to Dashboard
-            </Button>
-          }
-        />
-        <BottomSafeAreaGuard />
       </div>
     );
   }

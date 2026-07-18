@@ -59,34 +59,17 @@ export class ProviderService {
     const { page, limit, radius, sortBy, sortOrder } = query;
     const skip = (page - 1) * limit;
 
-    // --- SEGMENT-BASED PERMISSION CHECK ---
-    
-    // 1. Get user segment
-    let userSegment: string = 'EXISTING_OWNER'; // Default segment
-    if (userId) {
-      const homeownerProfile = await prisma.homeownerProfile.findUnique({
-        where: { userId },
-        select: { segment: true },
-      });
-      if (homeownerProfile) {
-        userSegment = homeownerProfile.segment;
-      }
-    }
-    const isHomeBuyer = userSegment === 'HOME_BUYER';
-
-    // 2. Get a list of ALL categories allowed for this segment
+    // Provider discovery is not gated by a permanent user segment. Contextual
+    // journeys decide which category to request.
     const allowedCategories = await prisma.serviceCategoryConfig.findMany({
       where: {
         isActive: true,
-        ...(isHomeBuyer
-          ? { availableForHomeBuyer: true }
-          : { availableForExistingOwner: true }),
+        OR: [{ availableForHomeBuyer: true }, { availableForExistingOwner: true }],
       },
       select: { category: true },
     });
     const allowedCategoryNames = allowedCategories.map((c) => c.category as ServiceCategory);
 
-    // 3. Permission Check:
     if (query.category && !allowedCategoryNames.includes(query.category)) {
       // --- FIX START ---
       // Instead of an early exit, we allow the search to proceed for an explicitly
@@ -94,11 +77,11 @@ export class ProviderService {
       // This solves the deep linking bug for new categories like INSPECTION.
       // If we did not find the category in the allowed list, we will log a warning
       // but proceed to execute the search, trusting the frontend query.
-      logger.warn(`[ProviderService] Requested category ${query.category} not found in allowed categories for segment ${userSegment}. Proceeding with search.`);
+      logger.warn(`[ProviderService] Requested category ${query.category} is not enabled in service-category configuration. Proceeding with explicit search.`);
     }
     // --- FIX END ---
 
-    // --- Filter logic (now with segment-awareness) ---
+    // --- Filter logic ---
     const filters: Prisma.ProviderProfileWhereInput[] = [
         // --- FIX: Change filter from { status: { not: 'INACTIVE' } } to { status: 'ACTIVE' } ---
         { status: 'ACTIVE' } 
@@ -125,8 +108,7 @@ export class ProviderService {
         ],
       });
     } else {
-      // Case 2: No category requested. Show all providers that match
-      // ANY of the allowed categories for the user's segment.
+      // Case 2: No category requested. Show providers matching any active category.
       if (allowedCategoryNames.length > 0) {
         filters.push({
           OR: [
@@ -148,7 +130,7 @@ export class ProviderService {
           ],
         });
       } else {
-        // User's segment has no allowed categories, return nothing.
+        // No categories are enabled, return nothing.
         return {
           providers: [],
           pagination: { page, limit, total: 0, totalPages: 0 },

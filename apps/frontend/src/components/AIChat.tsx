@@ -14,19 +14,11 @@ import { usePropertyContext } from '@/lib/property/PropertyContext';
 // --- FEATURE FLAG CHECK ---
 const isChatEnabled = process.env.NEXT_PUBLIC_GEMINI_CHAT_ENABLED === 'true';
 
-// Helper to determine the personalized welcome message based on user segment
 function getWelcomeMessage(user: User | null): string {
     if (!user) {
         return "Hi! I'm Cozy. I see you're exploring. How can I help you today?";
     }
-    const segment = user.segment;
-    if (segment === 'HOME_BUYER') {
-        return "Hi! I'm Cozy. I see you're closing on a home. How can I help you with your checklist today?";
-    }
-    if (segment === 'EXISTING_OWNER') {
-        return "Hi! I'm Cozy. I see you're managing your home. Ask me about maintenance, warranties, or expenses!";
-    }
-    return "Hi! I'm Cozy. How can I help you today?";
+    return "Hi! I'm Cozy. Ask me about the home, an active decision, maintenance, coverage, or a major project.";
 }
 
 interface ChatMessage {
@@ -53,7 +45,7 @@ const AIChatInner: React.FC = () => {
   const tooltipTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const launcherRef = useRef<HTMLDivElement>(null);
   
-  // Memoize welcome message so it only changes when user.segment changes
+  // Memoize the welcome message for the signed-in user.
   const welcomeMessage = useMemo(() => getWelcomeMessage(user), [user]);
   const welcomeInitRef = useRef(false);
 

@@ -11,7 +11,7 @@ const {
 } = require('../../src/services/vault.service.ts');
 const { requireHouseholdRole } = require('../../src/middleware/propertyAuth.middleware.ts');
 const {
-  evaluateHomeBuyerSegment,
+  evaluatePurchaseEntryContext,
   evaluateNeighborhoodLocation,
 } = require('../../src/services/planningContext/applicabilityPolicy.ts');
 
@@ -186,13 +186,13 @@ test('local updates controller loads canonical facts and applies the targeting d
 });
 
 test('remaining planning surfaces reuse their authoritative policies', () => {
-  assert.equal(evaluateHomeBuyerSegment('HOME_BUYER').status, 'APPLICABLE');
-  assert.equal(evaluateHomeBuyerSegment('EXISTING_OWNER').status, 'NOT_APPLICABLE');
+  assert.equal(evaluatePurchaseEntryContext('EXISTING_HOME_PURCHASE', 'UNDER_CONTRACT').status, 'APPLICABLE');
+  assert.equal(evaluatePurchaseEntryContext('EXISTING_OWNER_TRIGGER', 'ESTABLISHED_OWNER').status, 'NOT_APPLICABLE');
   assert.equal(evaluateNeighborhoodLocation('78701', true).status, 'APPLICABLE');
   assert.equal(evaluateNeighborhoodLocation(null, false).status, 'UNKNOWN');
 
   const buyer = read('../../src/services/HomeBuyerTask.service.ts');
-  assert.ok(buyer.includes('evaluateHomeBuyerSegment'));
+  assert.doesNotMatch(buyer, /HomeownerSegment|profile\.segment/);
 
   const timeline = read('../../src/controllers/homeEvents.controller.ts');
   assert.ok(timeline.includes("'TIMELINE'"));

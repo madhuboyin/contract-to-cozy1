@@ -1,17 +1,17 @@
 // apps/backend/src/services/checklist.service.ts
 
 /**
- * @deprecated This service is being phased out in favor of segment-specific services.
+ * @deprecated This user-level checklist is being phased out in favor of property-context services.
  * 
  * Migration Guide:
  * ================
  * 
- * For HOME_BUYER segment:
+ * For purchase journeys:
  * - Use HomeBuyerTaskService instead
  * - 8 default tasks automatically created
  * - Simple task management focused on home buying process
  * 
- * For EXISTING_OWNER segment:
+ * For ownership care:
  * - Use PropertyMaintenanceTaskService instead
  * - Advanced maintenance tracking with multiple sources
  * - Risk assessment integration
@@ -119,36 +119,22 @@ export class ChecklistService {
   }
 
   /**
-   * Create a new checklist for a user based on their segment.
-   * @deprecated Use segment-specific services
+   * Create an empty legacy checklist. Property-context services populate the
+   * applicable purchase or ownership actions.
    */
   static async createChecklist(userId: string): Promise<Checklist & { items: ChecklistItem[] } | null> {
     logger.warn('⚠️  DEPRECATED: ChecklistService.createChecklist()');
     
     const homeownerProfile = await prisma.homeownerProfile.findUnique({
       where: { userId },
-      select: { id: true, segment: true },
+      select: { id: true },
     });
 
     if (!homeownerProfile) {
       throw new Error('Homeowner profile not found for this user.');
     }
 
-    const segment = homeownerProfile.segment;
-    let itemsToCreate: ChecklistItemTemplate[] = [];
-
-    if (segment === 'HOME_BUYER') {
-      itemsToCreate = [
-        { title: 'Schedule a Home Inspection', description: 'Hire a certified inspector.', serviceCategory: ServiceCategory.INSPECTION, sortOrder: 1 },
-        { title: 'Secure Financing', description: 'Finalize your mortgage.', serviceCategory: null, sortOrder: 2 },
-        { title: 'Get a Home Appraisal', description: 'Ensure property value.', serviceCategory: null, sortOrder: 3 },
-        { title: 'Obtain Homeowners Insurance', description: 'Get quotes and secure coverage.', serviceCategory: ServiceCategory.INSURANCE, sortOrder: 4 },
-        { title: 'Conduct Final Walk-Through', description: 'Verify repairs completed.', serviceCategory: null, sortOrder: 5 },
-        { title: 'Review Closing Documents', description: 'Carefully review paperwork.', serviceCategory: ServiceCategory.ATTORNEY, sortOrder: 6 },
-        { title: 'Schedule Move-In Services', description: 'Book movers and cleaners.', serviceCategory: ServiceCategory.MOVING, sortOrder: 7 },
-        { title: 'Change Locks', description: 'Ensure home security.', serviceCategory: ServiceCategory.LOCKSMITH, sortOrder: 8 },
-      ];
-    }
+    const itemsToCreate: ChecklistItemTemplate[] = [];
 
     const checklist = await prisma.checklist.create({
       data: {

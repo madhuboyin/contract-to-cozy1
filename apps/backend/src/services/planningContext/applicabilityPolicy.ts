@@ -1,13 +1,16 @@
 import type { FeatureDecision, PropertyContextSnapshot } from '../../modules/propertyContext';
 import { PropertyContextDecisionBuilder } from '../propertyContextDecision';
 
-export function evaluateHomeBuyerSegment(segment: string | null | undefined) {
-  if (!segment) {
-    return { status: 'UNKNOWN' as const, reasonCode: 'HOMEOWNER_SEGMENT_UNKNOWN' };
+export function evaluatePurchaseEntryContext(
+  entryPath: string | null | undefined,
+  ownershipState: string | null | undefined,
+) {
+  if (!entryPath && !ownershipState) {
+    return { status: 'UNKNOWN' as const, reasonCode: 'ENTRY_CONTEXT_UNKNOWN' };
   }
-  return segment === 'HOME_BUYER'
-    ? { status: 'APPLICABLE' as const, reasonCode: 'HOME_BUYER_SEGMENT_ACTIVE' }
-    : { status: 'NOT_APPLICABLE' as const, reasonCode: 'SEGMENT_NOT_HOME_BUYER' };
+  return entryPath === 'EXISTING_HOME_PURCHASE' || ownershipState === 'UNDER_CONTRACT'
+    ? { status: 'APPLICABLE' as const, reasonCode: 'PURCHASE_CONTEXT_ACTIVE' }
+    : { status: 'NOT_APPLICABLE' as const, reasonCode: 'PURCHASE_CONTEXT_NOT_ACTIVE' };
 }
 
 export function evaluateNeighborhoodLocation(
@@ -78,11 +81,12 @@ export function evaluatePlanningContext(context: PropertyContextSnapshot) {
   );
 
   const buyerFacts = new PropertyContextDecisionBuilder(context);
-  const segment = buyerFacts.read<string>('product.homeownerSegment');
-  const homeBuyerSegment = evaluateHomeBuyerSegment(segment);
-  const homeBuyerWorkflow = homeBuyerSegment.status === 'UNKNOWN'
-    ? buyerFacts.unknown(homeBuyerSegment.reasonCode)
-    : buyerFacts.decision(homeBuyerSegment.status, [homeBuyerSegment.reasonCode]);
+  const entryPath = buyerFacts.read<string>('product.entryPath');
+  const ownershipState = buyerFacts.read<string>('product.ownershipState');
+  const purchaseContext = evaluatePurchaseEntryContext(entryPath, ownershipState);
+  const homeBuyerWorkflow = purchaseContext.status === 'UNKNOWN'
+    ? buyerFacts.unknown(purchaseContext.reasonCode)
+    : buyerFacts.decision(purchaseContext.status, [purchaseContext.reasonCode]);
 
   const movingPlanning = requiresFacts(
     context,

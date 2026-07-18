@@ -38,11 +38,6 @@ export async function sendSeasonalNotifications() {
       where: {
         status: 'PENDING',
         notificationSentAt: null,
-        property: {
-          homeownerProfile: {
-            segment: 'EXISTING_OWNER',
-          },
-        },
       },
       include: {
         property: {

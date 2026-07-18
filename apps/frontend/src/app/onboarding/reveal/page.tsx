@@ -7,4 +7,5 @@ import { redirect } from 'next/navigation';
  */
 export default function RevealOnboardingPage() {
   redirect('/onboarding/confirm');
+  return null;
 }

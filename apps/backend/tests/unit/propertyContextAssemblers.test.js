@@ -36,8 +36,10 @@ const prismaMock = {
         };
       }
       return {
-        homeownerProfile: { segment: 'EXISTING_OWNER' },
-        onboarding: { status: 'IN_PROGRESS', currentStep: 3, setupScore: 60 },
+        onboarding: {
+          status: 'IN_PROGRESS', currentStep: 3, setupScore: 60,
+          entryPath: 'EXISTING_OWNER_TRIGGER', ownershipState: 'ESTABLISHED_OWNER', propertyOrigin: 'EXISTING_HOME',
+        },
       };
     },
   },
@@ -146,7 +148,9 @@ test('PRODUCT_CONTEXT keeps permissions and product state separate from physical
     NOW,
     { userId: 'user-1' },
   ));
-  assert.equal(facts['product.homeownerSegment'].value, 'EXISTING_OWNER');
+  assert.equal(facts['product.entryPath'].value, 'EXISTING_OWNER_TRIGGER');
+  assert.equal(facts['product.ownershipState'].value, 'ESTABLISHED_OWNER');
+  assert.equal(facts['product.propertyOrigin'].value, 'EXISTING_HOME');
   assert.equal(facts['product.canViewFacts'].value, true);
   assert.equal(facts['product.canCorrectFacts'].value, true);
   assert.ok(calls.some(([name]) => name === 'member'));

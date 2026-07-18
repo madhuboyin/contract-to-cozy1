@@ -8,7 +8,6 @@ import Link from "next/link";
 
 interface SellerPrepCTAProps {
   propertyId: string;
-  userSegment?: 'HOME_BUYER' | 'EXISTING_OWNER';
 }
 
 /**
@@ -16,12 +15,9 @@ interface SellerPrepCTAProps {
  * Shows on property detail pages for users preparing to sell
  * 
  * Usage:
- * <SellerPrepCTA propertyId={propertyId} userSegment={segment} />
+ * <SellerPrepCTA propertyId={propertyId} />
  */
-export function SellerPrepCTA({ propertyId, userSegment }: SellerPrepCTAProps) {
-  // Feature should be available to all users, but message can vary
-  const isHomeBuyer = userSegment === 'HOME_BUYER';
-
+export function SellerPrepCTA({ propertyId }: SellerPrepCTAProps) {
   return (
     <Card className="border-green-200 bg-green-50">
       <CardContent className="p-6">
@@ -30,14 +26,11 @@ export function SellerPrepCTA({ propertyId, userSegment }: SellerPrepCTAProps) {
             <div className="flex items-center gap-2 mb-2">
               <TrendingUp className="h-5 w-5 text-green-600" />
               <h3 className="font-semibold text-green-900">
-                {isHomeBuyer ? 'Planning to Sell Soon?' : 'Preparing to Sell?'}
+                Preparing to Sell?
               </h3>
             </div>
             <p className="text-sm text-green-800 mb-3">
-              {isHomeBuyer 
-                ? 'Get ROI-focused recommendations to maximize your resale value when the time comes.'
-                : 'Discover which improvements will add the most value to your home sale.'
-              }
+              Discover which improvements may add value to your home sale using the available property evidence.
             </p>
             <ul className="text-xs text-green-700 space-y-1 mb-4">
               <li>• ROI-ranked repair checklist</li>

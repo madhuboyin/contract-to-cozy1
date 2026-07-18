@@ -51,24 +51,16 @@ interface ServiceFilterProps {
   onFilterChange: (filters: { zipCode: string; category: string | undefined }) => void;
   defaultCategory?: string;
   defaultZipCode?: string;
-  isHomeBuyer: boolean;
   isSearching: boolean;
   lockZipToProperty?: boolean;
 }
 
 const ServiceFilter = React.memo(
-  ({ onFilterChange, defaultCategory, defaultZipCode, isHomeBuyer, isSearching, lockZipToProperty }: ServiceFilterProps) => {
+  ({ onFilterChange, defaultCategory, defaultZipCode, isSearching, lockZipToProperty }: ServiceFilterProps) => {
     const [zipCode, setZipCode] = useState(defaultZipCode || '');
     const [selectedCategory, setSelectedCategory] = useState<string>(defaultCategory || 'ALL');
 
-    const displayCategories = useMemo(() => {
-      if (isHomeBuyer) {
-        return PROVIDER_SEARCH_CATEGORY_OPTIONS.filter((category) =>
-          ['INSPECTION', 'HANDYMAN', 'CLEANING'].includes(category.value)
-        );
-      }
-      return PROVIDER_SEARCH_CATEGORY_OPTIONS;
-    }, [isHomeBuyer]);
+    const displayCategories = useMemo(() => PROVIDER_SEARCH_CATEGORY_OPTIONS, []);
 
     const handleSearch = useCallback(
       (e?: React.FormEvent) => {
@@ -113,7 +105,7 @@ const ServiceFilter = React.memo(
                 aria-label="Service category"
               >
                 <option value="ALL">
-                  {isHomeBuyer ? 'Inspection (recommended)' : 'All categories'}
+                  All categories
                 </option>
                 {displayCategories.map((category) => (
                   <option key={category.value} value={category.value}>
@@ -442,7 +434,6 @@ export default function ProvidersPage() {
   const [contextItemName, setContextItemName] = useState<string | null>(null);
   const [propertyZipCode, setPropertyZipCode] = useState<string>('');
   const [propertyContext, setPropertyContext] = useState<PropertyContextEnvelope | null>(null);
-  const isHomeBuyer = user?.segment === 'HOME_BUYER';
   const initialZipCode = '';
   const initialCategory = defaultCategory || '';
   const hasInitialFetchedRef = useRef(false);
@@ -490,9 +481,7 @@ export default function ProvidersPage() {
     async (currentFilters: typeof filters) => {
       if (dataLoading) return;
 
-      if (!currentFilters.zipCode && !currentFilters.category) {
-        if (!isHomeBuyer) return;
-      }
+      if (!currentFilters.zipCode && !currentFilters.category) return;
 
       setDataLoading(true);
       setError(null);
@@ -529,7 +518,7 @@ export default function ProvidersPage() {
         setDataLoading(false);
       }
     },
-    [dataLoading, isHomeBuyer, targetPropertyId]
+    [dataLoading, targetPropertyId]
   );
 
   const handleFilterChange = useCallback(
@@ -697,7 +686,6 @@ export default function ProvidersPage() {
           onFilterChange={handleFilterChange}
           defaultCategory={defaultCategory}
           defaultZipCode={propertyZipCode}
-          isHomeBuyer={isHomeBuyer}
           isSearching={dataLoading}
           lockZipToProperty={Boolean(targetPropertyId)}
         />

@@ -41,11 +41,10 @@ export async function createTaskFromActionCenter(data: {
   source: 'HOME_BUYER' | 'EXISTING_OWNER';
   deduped: boolean;
 }> {
-  // 1. Get property with homeowner profile to determine segment
+  // 1. Get property-scoped entry context.
   const property = await prisma.property.findUnique({
     where: { id: data.propertyId },
     include: {
-      homeownerProfile: true,
       onboarding: true,
     },
   });
@@ -57,10 +56,9 @@ export async function createTaskFromActionCenter(data: {
   const operatingMode = resolveHomeownerOperatingMode({
     entryPath: property.onboarding?.entryPath,
     ownershipState: property.onboarding?.ownershipState,
-    legacySegment: property.homeownerProfile.segment,
   });
 
-  // 2. Route based on segment
+  // 2. Route based on the current property operating mode.
   if (operatingMode === 'PURCHASE' || operatingMode === 'EXPLORATION') {
     // HOME_BUYER: Action Center tasks aren't typically used
     // Most HOME_BUYER tasks are the 8 default tasks
@@ -139,11 +137,10 @@ export async function getActionsForProperty(
   homeBuyerTasks: any[];
   maintenanceTasks: any[];
 }> {
-  // Get property and segment
+  // Get property entry context.
   const property = await prisma.property.findUnique({
     where: { id: propertyId },
     include: {
-      homeownerProfile: true,
       onboarding: true,
     },
   });
@@ -155,7 +152,6 @@ export async function getActionsForProperty(
   const operatingMode = resolveHomeownerOperatingMode({
     entryPath: property.onboarding?.entryPath,
     ownershipState: property.onboarding?.ownershipState,
-    legacySegment: property.homeownerProfile.segment,
   });
 
   let homeBuyerTasks: any[] = [];

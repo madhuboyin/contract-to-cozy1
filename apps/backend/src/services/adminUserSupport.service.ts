@@ -103,7 +103,6 @@ export async function getUserSummary(userId: string) {
       createdAt: true,
       homeownerProfile: {
         select: {
-          segment: true,
           properties: { select: { id: true } },
         },
       },
@@ -136,7 +135,7 @@ export async function getUserSummary(userId: string) {
     ...rest,
     activeSessionCount,
     homeownerProfile: homeownerProfile
-      ? { segment: homeownerProfile.segment, propertyCount: homeownerProfile.properties.length }
+      ? { propertyCount: homeownerProfile.properties.length }
       : null,
     providerProfile: providerProfile ?? null,
   };

@@ -38,7 +38,7 @@ const PLANNING_FEATURE_FACT_KEYS: Record<PlanningContextFeature, string[]> = {
     'inspection.openFindings', 'compliance.activePermits', 'compliance.openUnpermittedFlags',
     'projects.activeProjects', 'coverage.insurancePolicies',
   ],
-  HOME_BUYER: ['product.homeownerSegment', 'core.activationStatus'],
+  HOME_BUYER: ['product.entryPath', 'product.ownershipState', 'core.activationStatus'],
   MOVING_PLAN: ['core.propertyUse', 'core.occupancyStatus', 'location.state', 'location.zipCode', 'location.city'],
   NEIGHBORHOOD_RADAR: ['location.zipCode', 'location.geocoded', 'core.propertyUse', 'events.activeRadarMatches'],
   LOCAL_UPDATES: ['location.city', 'location.state', 'location.zipCode', 'core.dwellingType'],

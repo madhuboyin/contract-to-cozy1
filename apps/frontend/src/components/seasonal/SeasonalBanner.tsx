@@ -6,7 +6,6 @@ import { X, Calendar } from 'lucide-react';
 import { useSeasonalChecklists, useClimateInfo } from '@/lib/hooks/useSeasonalChecklists';
 import { getSeasonIcon, getSeasonColors, formatDaysRemaining } from '@/lib/utils/seasonHelpers';
 import { SeasonalChecklistModal } from './SeasonalChecklistModal';
-import { useHomeownerSegment } from '@/lib/hooks/useHomeownerSegment';
 
 interface SeasonalBannerProps {
   propertyId: string;
@@ -111,11 +110,5 @@ function ExistingOwnerSeasonalBanner({ propertyId }: SeasonalBannerProps) {
 }
 
 export function SeasonalBanner({ propertyId }: SeasonalBannerProps) {
-  const { data: segment } = useHomeownerSegment();
-
-  if (segment !== 'EXISTING_OWNER') {
-    return null;
-  }
-
   return <ExistingOwnerSeasonalBanner propertyId={propertyId} />;
 }

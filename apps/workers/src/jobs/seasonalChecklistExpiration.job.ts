@@ -141,7 +141,6 @@ async function logSeasonalCompletionAnalytics(
         completionPercentage,
         status: checklist.status,
         propertyId: checklist.propertyId,
-        homeownerSegment: checklist.property?.homeownerProfile?.segment,
         daysActive: Math.floor(
           (new Date().getTime() - new Date(checklist.generatedAt).getTime()) /
             (1000 * 60 * 60 * 24)

@@ -187,18 +187,11 @@ export class MovingConciergeService {
         id: propertyId,
         homeownerProfile: { userId }
       },
-      include: {
-        homeownerProfile: true
-      }
+      select: { id: true }
     });
 
     if (!property) {
       throw new Error('Property not found');
-    }
-
-    // Verify user is HOME_BUYER
-    if (property.homeownerProfile.segment !== 'HOME_BUYER') {
-      throw new Error('Moving Concierge is only available for home buyers');
     }
 
     // Evaluate the authoritative moving-planning decision before generating.

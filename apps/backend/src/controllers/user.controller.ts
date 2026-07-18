@@ -46,7 +46,6 @@ export const getProfile = async (req: AuthRequest, res: Response) => {
         homeownerProfile: {
           select: {
             id: true,
-            segment: true,
           },
         },
       },

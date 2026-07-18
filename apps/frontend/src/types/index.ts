@@ -183,11 +183,6 @@ export enum RecurrenceFrequency {
   ANNUALLY = 'ANNUALLY',
 }
 
-/**
- * Homeowner Segment
- */
-export type HomeownerSegment = 'HOME_BUYER' | 'EXISTING_OWNER';
-
 export type ActivationEntryContextInput = {
   entryPath: 'EXISTING_OWNER_TRIGGER' | 'EXISTING_HOME_PURCHASE' | 'NEW_HOME_SETUP' | 'MAJOR_MOMENT' | 'EXPLORATION';
   ownershipState: 'SHOPPING' | 'UNDER_CONTRACT' | 'RECENT_OWNER' | 'ESTABLISHED_OWNER' | 'PREPARING_TRANSFER' | 'UNKNOWN';
@@ -235,6 +230,15 @@ export type ActivationFirstValueDTO = {
     confidence: 'LOW' | 'MEDIUM' | 'HIGH';
   };
   plan: Record<'NOW' | 'SOON' | 'PLAN' | 'CONSIDER', ActivationHomeActionDTO[]>;
+};
+
+export type ActivationTriggerEvidenceInput = {
+  kind: 'FREE_TEXT' | 'CONVERSATION' | 'DOCUMENT' | 'QUOTE' | 'INVOICE' | 'PHOTO' | 'EMAIL_PDF';
+  label: string;
+  detail?: string | null;
+  documentId?: string | null;
+  observedAt?: string | null;
+  consentContext: string;
 };
 
 // ============================================================================
@@ -1054,7 +1058,6 @@ export interface UpdateChecklistItemInput {
 export interface HomeownerProfile {
   id: string;
   userId: string;
-  segment: HomeownerSegment; // 'HOME_BUYER' | 'EXISTING_OWNER'
 
   // Purchase Information 
   closingDate: string | null; // ISO Date string
@@ -1092,11 +1095,9 @@ export interface User {
   mfaEnabled?: boolean;
   // FIX: Add missing creation date property to resolve the build error in profile/page.tsx
   createdAt: string; 
-  segment?: HomeownerSegment; 
   homeownerProfile?: { 
     // Now just link to the main type since it's defined separately
     id: string;
-    segment: HomeownerSegment;
   } | null;
 }
 
@@ -1130,7 +1131,7 @@ export interface MfaRecoveryCodesResponse {
 export interface RegisterResponse {
   success: true;
   message: string;
-  user: Pick<User, 'id' | 'email' | 'firstName' | 'lastName' | 'role' | 'emailVerified' | 'status' | 'mfaEnabled' | 'segment'>;
+  user: Pick<User, 'id' | 'email' | 'firstName' | 'lastName' | 'role' | 'emailVerified' | 'status' | 'mfaEnabled'>;
   emailVerificationToken?: string;
 }
 
@@ -1593,14 +1594,12 @@ export interface LoginInput {
   password: string;
 }
 
-// FIX: Update RegisterInput to include the optional segment property
 export interface RegisterInput {
   email: string;
   password: string;
   firstName: string;
   lastName: string;
   role: UserRole;
-  segment?: HomeownerSegment;
   acceptedTerms: boolean;
 }
 

@@ -2,7 +2,7 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { User, LoginInput, RegisterInput, LoginResponse, RegisterResponse, HomeownerSegment, MfaChallengeResponse } from '@/types';
+import { User, LoginInput, RegisterInput, LoginResponse, RegisterResponse, MfaChallengeResponse } from '@/types';
 import { api } from '@/lib/api/client';
 import { useRouter } from 'next/navigation';
 
@@ -20,7 +20,6 @@ interface AuthContextType {
   isHomeowner: boolean;
   isProvider: boolean;
   isAdmin: boolean;
-  userSegment: HomeownerSegment | undefined;
   // FIX 1: Add refreshUser to the context type
   refreshUser: () => Promise<void>; 
 }
@@ -64,7 +63,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const isHomeowner = user?.role === 'HOMEOWNER';
   const isProvider = user?.role === 'PROVIDER';
   const isAdmin = user?.role === 'ADMIN';
-  const userSegment = user?.segment;
 
   // --- Authentication Handlers ---
   
@@ -169,7 +167,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     isHomeowner,
     isProvider,
     isAdmin,
-    userSegment,
     // FIX 4: Add refreshUser to the context value
     refreshUser,
   };

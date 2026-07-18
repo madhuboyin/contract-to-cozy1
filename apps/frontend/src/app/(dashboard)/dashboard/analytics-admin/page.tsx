@@ -39,6 +39,7 @@ import {
   useAdminAnalyticsFunnel,
   useAdminAnalyticsCohorts,
   useAdminAnalyticsTopTools,
+  useAdminAnalyticsPhase1Pilot,
 } from '@/hooks/useAdminAnalytics';
 import AdminAnalyticsLineChart from '@/components/admin-analytics/AdminAnalyticsLineChart';
 import {
@@ -150,6 +151,83 @@ function OverviewCard({
       <p className="mt-2 text-2xl font-semibold tracking-tight text-slate-950">{value}</p>
       {sub && <p className="mt-1 text-xs text-slate-400">{sub}</p>}
     </div>
+  );
+}
+
+function Phase1PilotSection({
+  filters,
+  enabled,
+}: {
+  filters: AdminAnalyticsFilters;
+  enabled: boolean;
+}) {
+  const pilotQ = useAdminAnalyticsPhase1Pilot(filters, enabled);
+
+  if (pilotQ.isLoading) return <OverviewCardsSkeleton />;
+  if (pilotQ.isError) {
+    return (
+      <ErrorBanner message="Phase 1 pilot metrics are unavailable for this period." />
+    );
+  }
+  if (!pilotQ.data) return null;
+
+  const { eligibility, metrics, metricVersion } = pilotQ.data;
+  const rows = [
+    { label: 'Minimum setup completed', metric: metrics.minimumSetupCompletion },
+    { label: 'Useful + new recommendation', metric: metrics.usefulNewRecommendationIdentification },
+    { label: 'First action resolved in 30 days', metric: metrics.actionResolutionWithin30Days },
+  ];
+
+  return (
+    <Section
+      title="Phase 1 Pilot Scorecard"
+      description="Exact pilot denominators and framework targets for trigger-first activation."
+      icon={Sparkles}
+    >
+      <div className="mb-4 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+        <Badge variant="outline" className="rounded-full">{metricVersion}</Badge>
+        <span className="font-semibold text-slate-700">{num(eligibility.eligibleHomes)} eligible homes</span>
+        <span>{eligibility.definition}</span>
+      </div>
+      {eligibility.eligibleHomes === 0 ? (
+        <AdminRouteState
+          state="empty"
+          title="No Phase 1 pilot homes in this window"
+          description="A home becomes eligible when its trigger-first entry context is captured."
+        />
+      ) : (
+        <div className="grid gap-4 md:grid-cols-3">
+          {rows.map(({ label, metric }) => {
+            const metTarget = metric.target != null && metric.rate >= metric.target;
+            return (
+              <div key={label} className="rounded-2xl border border-slate-200 p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <p className="text-sm font-semibold text-slate-800">{label}</p>
+                  {metric.target != null && (
+                    <Badge
+                      variant="outline"
+                      className={metTarget
+                        ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                        : 'border-amber-200 bg-amber-50 text-amber-700'}
+                    >
+                      {metTarget ? 'Target met' : `Target ${pct(metric.target)}`}
+                    </Badge>
+                  )}
+                </div>
+                <p className="mt-3 text-2xl font-semibold text-slate-950">{pct(metric.rate)}</p>
+                <p className="text-xs text-slate-500">
+                  {num(metric.numerator)} of {num(metric.denominator)} eligible homes
+                </p>
+                <p className="mt-3 text-xs leading-5 text-slate-500">{metric.definition}</p>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      <p className="mt-4 text-xs text-slate-500">
+        Useful in any form: {pct(metrics.usefulRecommendationAny.rate)} ({num(metrics.usefulRecommendationAny.numerator)} of {num(metrics.usefulRecommendationAny.denominator)}). This supplemental measure has no launch target.
+      </p>
+    </Section>
   );
 }
 
@@ -1194,6 +1272,13 @@ export default function AnalyticsAdminPage() {
             description="Adjust date range or module filter to load analytics data."
           />
         )}
+
+        {/* ── Phase 1 Pilot ── */}
+        <Phase1PilotSection
+          filters={filters}
+          enabled={isAdmin}
+          key={`phase1-pilot-${refreshKey}`}
+        />
 
         {/* ── Trends ── */}
         <TrendsSection filters={filters} enabled={isAdmin} key={`trends-${refreshKey}`} />

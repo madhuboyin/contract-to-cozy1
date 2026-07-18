@@ -113,7 +113,7 @@ export function buildSeasonalPropertyContext(property: any, now: Date = new Date
  * Runs daily at 2am
  * 
  * FIXED LOGIC:
- * - Find all EXISTING_OWNER properties with autoGenerateChecklists=true
+ * - Find all properties with autoGenerateChecklists=true
  * - Calculate days until next season starts
  * - Generate checklist when days <= notification offset (not exact match)
  * - Skip if checklist already exists for that season/year
@@ -124,20 +124,16 @@ export async function generateSeasonalChecklists() {
   try {
     const today = new Date();
 
-    // Get all properties for EXISTING_OWNER homeowners
+    // Get all properties. Applicability is evaluated from property context by
+    // the checklist service rather than a permanent user segment.
     const properties = await prisma.property.findMany({
-      where: {
-        homeownerProfile: {
-          segment: 'EXISTING_OWNER', // Only existing owners
-        },
-      },
       include: {
         homeownerProfile: true,
         inventoryItems: true,
       },
     });
 
-    logger.info(`[SEASONAL] Found ${properties.length} EXISTING_OWNER properties to check`);
+    logger.info(`[SEASONAL] Found ${properties.length} properties to check`);
 
     let generated = 0;
     let skipped = 0;

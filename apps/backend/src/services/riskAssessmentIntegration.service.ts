@@ -48,11 +48,10 @@ export async function createTasksFromRiskAssessment(
   skipped: number;
   tasks: any[];
 }> {
-  // 1. Get property with homeowner profile to check segment
+  // 1. Get property entry context.
   const property = await prisma.property.findUnique({
     where: { id: propertyId },
     include: {
-      homeownerProfile: true,
       onboarding: true,
     },
   });
@@ -61,13 +60,12 @@ export async function createTasksFromRiskAssessment(
     throw new Error('Property not found');
   }
 
-  // 2. Skip HOME_BUYER segment (they don't need risk-based maintenance)
+  // 2. Apply property-scoped operating context.
   if (!supportsOwnershipCare({
     entryPath: property.onboarding?.entryPath,
     ownershipState: property.onboarding?.ownershipState,
-    legacySegment: property.homeownerProfile.segment,
   })) {
-    logger.info(`⏭️  Skipping risk task creation for HOME_BUYER property: ${propertyId}`);
+    logger.info(`⏭️  Skipping risk task creation outside ownership-care mode: ${propertyId}`);
     return {
       created: 0,
       skipped: recommendations.length,

@@ -10,6 +10,7 @@ import {
   fetchAdminAnalyticsFunnel,
   fetchAdminAnalyticsCohorts,
   fetchAdminAnalyticsTopTools,
+  fetchAdminAnalyticsPhase1Pilot,
 } from '@/lib/api/adminAnalytics';
 import type { AdminAnalyticsFilters } from '@/lib/api/adminAnalytics';
 
@@ -70,6 +71,18 @@ export function useAdminAnalyticsTopTools(
   return useQuery({
     queryKey: ['admin-analytics-top-tools', filters.from, filters.to, filters.topN ?? 10],
     queryFn: () => fetchAdminAnalyticsTopTools(filters),
+    staleTime: STALE,
+    enabled,
+  });
+}
+
+export function useAdminAnalyticsPhase1Pilot(
+  filters: AdminAnalyticsFilters,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: ['admin-analytics-phase1-pilot', filters.from, filters.to],
+    queryFn: () => fetchAdminAnalyticsPhase1Pilot(filters),
     staleTime: STALE,
     enabled,
   });

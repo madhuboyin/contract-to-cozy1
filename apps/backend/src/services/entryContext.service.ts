@@ -12,6 +12,7 @@ import {
   adaptHomeActionSource,
   parseHomeownerEntryContext,
   type HomeAction,
+  type HomeActionSourceKind,
   type HomeownerEntryContext,
 } from '../productFramework';
 import { emitNorthStarLineageEvent } from './analytics';
@@ -59,6 +60,45 @@ export const EntryContextCaptureSchema = z.object({
 });
 
 export type EntryContextCaptureInput = z.infer<typeof EntryContextCaptureSchema>;
+
+const TRIGGER_EVIDENCE_KINDS = [
+  'FREE_TEXT', 'CONVERSATION', 'DOCUMENT', 'QUOTE', 'INVOICE', 'PHOTO', 'EMAIL_PDF',
+] as const;
+
+export const TriggerEvidenceInputSchema = z.object({
+  kind: z.enum(TRIGGER_EVIDENCE_KINDS),
+  label: z.string().trim().min(1).max(240),
+  detail: z.string().trim().min(1).max(4000).nullable().optional(),
+  documentId: z.string().uuid().nullable().optional(),
+  observedAt: z.string().datetime().nullable().optional(),
+  consentContext: z.string().trim().min(1).max(300),
+}).superRefine((value, ctx) => {
+  if (['DOCUMENT', 'QUOTE', 'INVOICE', 'PHOTO', 'EMAIL_PDF'].includes(value.kind) && !value.documentId) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['documentId'],
+      message: `${value.kind} evidence requires an uploaded document.`,
+    });
+  }
+});
+
+export const FirstValueFeedbackSchema = z.object({
+  feedback: z.enum(['USEFUL_NEW', 'USEFUL_KNOWN', 'NOT_USEFUL']),
+});
+
+export type TriggerEvidenceInput = z.infer<typeof TriggerEvidenceInputSchema>;
+type StoredTriggerEvidence = TriggerEvidenceInput & { id: string; capturedAt: string };
+
+function parseStoredTriggerEvidence(value: Prisma.JsonValue | null | undefined): StoredTriggerEvidence[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) return [];
+    const candidate = item as Record<string, unknown>;
+    const parsed = TriggerEvidenceInputSchema.safeParse(candidate);
+    if (!parsed.success || typeof candidate.id !== 'string' || typeof candidate.capturedAt !== 'string') return [];
+    return [{ ...parsed.data, id: candidate.id, capturedAt: candidate.capturedAt }];
+  });
+}
 
 const MATERIAL_TRIGGERS = new Set<EntryContextCaptureInput['activeTrigger']['type']>([
   'REPLACEMENT',
@@ -168,10 +208,13 @@ export async function captureEntryContext(
       triggerEntityType: input.activeTrigger.entityType,
       triggerEntityId: input.activeTrigger.entityId ?? null,
       triggerSource: input.activeTrigger.source,
+      triggerEvidenceJson: [] as Prisma.InputJsonValue,
       triggerIdentifiedAt: now,
       firstValueType: deriveFirstValueType(input),
       firstValueAt: null,
       firstActionResolvedAt: null,
+      firstValueFeedback: null,
+      firstValueFeedbackAt: null,
       entryContextVersion: 'phase1-v1',
       entryConsentContext: input.consentContext ?? null,
       entrySourceMetadata: input.sourceMetadata
@@ -204,6 +247,57 @@ export async function captureEntryContext(
   const context = mapEntryContext(onboarding);
   if (!context) throw new Error('Entry context could not be materialized after capture.');
   return context;
+}
+
+export async function addTriggerEvidence(
+  propertyId: string,
+  userId: string,
+  rawInput: unknown,
+): Promise<StoredTriggerEvidence[]> {
+  await assertPropertyAccess(propertyId, userId);
+  const input = TriggerEvidenceInputSchema.parse(rawInput);
+  const onboarding = await prisma.propertyOnboarding.findUnique({ where: { propertyId } });
+  if (!onboarding?.activeTriggerId) throw new Error('Entry context has not been captured.');
+
+  if (input.documentId) {
+    const document = await prisma.document.findFirst({
+      where: { id: input.documentId, propertyId, uploadedBy: userId },
+      select: { id: true },
+    });
+    if (!document) throw new Error('Uploaded evidence was not found for this property.');
+  }
+
+  const evidence = parseStoredTriggerEvidence(onboarding.triggerEvidenceJson);
+  const capturedAt = new Date().toISOString();
+  const next: StoredTriggerEvidence[] = [
+    ...evidence,
+    { ...input, id: randomUUID(), capturedAt },
+  ].slice(-20);
+  await prisma.propertyOnboarding.update({
+    where: { propertyId },
+    data: {
+      triggerEvidenceJson: next as Prisma.InputJsonValue,
+      activeTriggerDetail: onboarding.activeTriggerDetail ?? input.detail ?? input.label,
+    },
+  });
+  return next;
+}
+
+export async function recordFirstValueFeedback(
+  propertyId: string,
+  userId: string,
+  rawInput: unknown,
+) {
+  await assertPropertyAccess(propertyId, userId);
+  const input = FirstValueFeedbackSchema.parse(rawInput);
+  const onboarding = await prisma.propertyOnboarding.findUnique({ where: { propertyId } });
+  if (!onboarding?.firstValueAt) throw new Error('First value has not been delivered.');
+  const firstValueFeedbackAt = new Date();
+  await prisma.propertyOnboarding.update({
+    where: { propertyId },
+    data: { firstValueFeedback: input.feedback, firstValueFeedbackAt },
+  });
+  return { feedback: input.feedback, recordedAt: firstValueFeedbackAt.toISOString() };
 }
 
 type TriggerGuidanceCopy = {
@@ -320,6 +414,20 @@ function triggerGuidanceCopy(type: EntryContextCaptureInput['activeTrigger']['ty
   };
 }
 
+function sourceAdapterForTrigger(type: EntryContextCaptureInput['activeTrigger']['type']): HomeActionSourceKind {
+  if (type === 'MAINTENANCE_BACKLOG') return 'MAINTENANCE';
+  if (type === 'INSURANCE_COVERAGE' || type === 'RENEWAL_DEADLINE') return 'COVERAGE';
+  if (type === 'CLAIM_DAMAGE') return 'INCIDENT';
+  if (['CONTRACTOR_QUOTE', 'PROJECT', 'INSPECTION_FINDING', 'PUNCH_LIST_WARRANTY'].includes(type)) return 'PROJECT';
+  if (type === 'ANTICIPATED_COST' || type === 'NONE_EXPLORING') return 'SYSTEM';
+  return 'GUIDANCE';
+}
+
+function appendActivationHandoff(href: string, triggerId: string, triggerType: string): string {
+  const separator = href.includes('?') ? '&' : '?';
+  return `${href}${separator}activationTriggerId=${encodeURIComponent(triggerId)}&activationTriggerType=${encodeURIComponent(triggerType)}`;
+}
+
 export type ActivationFirstValue = {
   entryContext: HomeownerEntryContext;
   action: HomeAction;
@@ -347,18 +455,30 @@ export async function getActivationFirstValue(
   const copy = triggerGuidanceCopy(entryContext.activeTrigger.type);
   const now = new Date();
   const actionId = `activation:${onboarding.activeTriggerId}`;
+  const storedEvidence = parseStoredTriggerEvidence(onboarding.triggerEvidenceJson);
+  const evidenceDetailPresent = storedEvidence.some((item) => Boolean(item.detail));
   const missing = [
     !property.yearBuilt ? 'Year built' : null,
     !property.propertySize ? 'Property size' : null,
     !entryContext.activeTrigger.entityId && entryContext.activeTrigger.entityType !== 'PROPERTY'
       ? 'Specific affected item or record'
       : null,
-    !entryContext.activeTrigger.detail ? 'Trigger details' : null,
+    !entryContext.activeTrigger.detail && !evidenceDetailPresent ? 'Trigger details' : null,
   ].filter((value): value is string => Boolean(value));
   const confidenceLabel = missing.length >= 3 ? 'LOW' : missing.length > 0 ? 'MEDIUM' : 'HIGH';
   const confidenceScore = confidenceLabel === 'HIGH' ? 0.85 : confidenceLabel === 'MEDIUM' ? 0.65 : 0.4;
 
-  const action = adaptHomeActionSource('GUIDANCE', {
+  const triggerEvidence = storedEvidence.map((item) => ({
+    id: item.id,
+    type: item.documentId ? 'DOCUMENT' as const : 'USER_INPUT' as const,
+    label: item.label,
+    source: `Activation evidence (${item.kind.toLowerCase().replace('_', ' ')})`,
+    observedAt: item.observedAt ?? item.capturedAt,
+    freshness: 'CURRENT' as const,
+    confidence: item.documentId ? 0.8 : 1,
+  }));
+
+  const action = adaptHomeActionSource(sourceAdapterForTrigger(entryContext.activeTrigger.type), {
     id: actionId,
     propertyId,
     lineageId: onboarding.activeTriggerId,
@@ -387,7 +507,7 @@ export async function getActivationFirstValue(
       observedAt: onboarding.triggerIdentifiedAt.toISOString(),
       freshness: 'CURRENT',
       confidence: 1,
-    }],
+    }, ...triggerEvidence],
     assumptions: material ? [{
       key: 'scope_complete',
       label: 'Current scope',
@@ -425,7 +545,11 @@ export async function getActivationFirstValue(
       reviewedBy: [],
       policyVersion: 'phase1-v1',
     },
-    primaryCta: { kind: 'REVIEW', label: 'Continue with this action', href: copy.href(propertyId) },
+    primaryCta: {
+      kind: 'REVIEW',
+      label: 'Continue with this action',
+      href: appendActivationHandoff(copy.href(propertyId), onboarding.activeTriggerId, entryContext.activeTrigger.type),
+    },
     secondaryCtas: [{
       kind: 'CORRECT_FACT',
       label: 'Correct or add context',
@@ -468,7 +592,66 @@ export async function getActivationFirstValue(
     property.yearBuilt ? { label: 'Year built', value: String(property.yearBuilt), source: 'Property record' } : null,
     property.propertySize ? { label: 'Property size', value: `${property.propertySize} sq ft`, source: 'Property record' } : null,
     property.dwellingType ? { label: 'Dwelling type', value: property.dwellingType, source: 'Property record' } : null,
+    ...storedEvidence.map((item) => ({
+      label: item.label,
+      value: item.detail ?? `${item.kind.replace('_', ' ').toLowerCase()} attached`,
+      source: item.documentId ? 'Homeowner document' : 'Homeowner input',
+    })),
   ].filter((value): value is { label: string; value: string; source: string } => Boolean(value));
+
+  const contextAction = missing.length > 0 ? adaptHomeActionSource('SYSTEM', {
+    id: `activation-context:${onboarding.activeTriggerId}`,
+    propertyId,
+    lineageId: onboarding.activeTriggerId,
+    sourceEntityId: onboarding.id,
+    sourceVersion: 'phase1-v2',
+    job: 'STAY_AHEAD',
+    state: 'OPEN',
+    priority: 'PLAN',
+    signal: 'Complete only the home facts that improve this decision',
+    whyItMatters: `The current action still has ${missing.length} explicit unknown${missing.length === 1 ? '' : 's'}.`,
+    recommendedAction: `Review and correct: ${missing.join(', ')}. Skip anything that does not change the active decision.`,
+    expectedOutcome: 'Improve future guidance confidence without creating an unnecessary setup burden.',
+    timing: {
+      dueAt: null,
+      windowStart: now.toISOString(),
+      windowEnd: new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+      rationale: 'Complete within the next 12 months, or sooner if one of these facts changes the active decision.',
+    },
+    evidence: action.evidence,
+    assumptions: [],
+    options: [],
+    tradeoffs: [],
+    confidence: { score: 1, label: 'HIGH', missing: [] },
+    governance: {
+      safetyTier: 'LOW_CONSEQUENCE',
+      professionalBoundary: null,
+      jurisdictionCheck: { status: 'NOT_REQUIRED', jurisdiction: null, checkedAt: null, source: null },
+      conservativeFallback: null,
+      emergencyEscalation: null,
+      commercialDisclosure: {
+        involvesCommercialAction: false,
+        relationshipType: 'NONE',
+        compensationMayOccur: false,
+        rankingInfluenced: false,
+        summary: 'This context action contains no provider, product, financing, or purchase ranking.',
+        selectionCriteria: [],
+        nonCommercialAlternatives: [],
+      },
+      reviewedBy: [],
+      policyVersion: 'phase1-v2',
+    },
+    primaryCta: {
+      kind: 'CORRECT_FACT',
+      label: 'Review missing context',
+      href: `/dashboard/properties/${propertyId}/onboarding`,
+    },
+    secondaryCtas: [],
+    feedbackControls: ['COMPLETE', 'DEFER', 'DISMISS', 'NOT_RELEVANT', 'CORRECT_FACT'],
+    relatedJourneyId: null,
+    createdAt: now.toISOString(),
+    lastEvaluatedAt: now.toISOString(),
+  }) : null;
 
   return {
     entryContext: {
@@ -480,7 +663,7 @@ export async function getActivationFirstValue(
     plan: {
       NOW: action.priority === 'NOW' ? [action] : [],
       SOON: action.priority === 'SOON' ? [action] : [],
-      PLAN: [],
+      PLAN: contextAction ? [contextAction] : [],
       CONSIDER: [],
     },
   };

@@ -103,7 +103,9 @@ export const PROPERTY_FACT_CATALOG = [
   { key: 'product.onboardingStatus', scope: 'PRODUCT_CONTEXT', canonicalOwner: 'PropertyOnboarding.status', correctionPath: '/dashboard/properties/:propertyId/onboarding', writable: false },
   { key: 'product.onboardingStep', scope: 'PRODUCT_CONTEXT', canonicalOwner: 'PropertyOnboarding.currentStep', correctionPath: '/dashboard/properties/:propertyId/onboarding', writable: false },
   { key: 'product.setupScore', scope: 'PRODUCT_CONTEXT', canonicalOwner: 'PropertyOnboarding.setupScore', correctionPath: '/dashboard/properties/:propertyId/onboarding', writable: false },
-  { key: 'product.homeownerSegment', scope: 'PRODUCT_CONTEXT', canonicalOwner: 'HomeownerProfile.segment', correctionPath: '/dashboard/profile', writable: false },
+  { key: 'product.entryPath', scope: 'PRODUCT_CONTEXT', canonicalOwner: 'PropertyOnboarding.entryPath', correctionPath: '/dashboard/properties/:propertyId/onboarding', writable: false },
+  { key: 'product.ownershipState', scope: 'PRODUCT_CONTEXT', canonicalOwner: 'PropertyOnboarding.ownershipState', correctionPath: '/dashboard/properties/:propertyId/onboarding', writable: false },
+  { key: 'product.propertyOrigin', scope: 'PRODUCT_CONTEXT', canonicalOwner: 'PropertyOnboarding.propertyOrigin', correctionPath: '/dashboard/properties/:propertyId/onboarding', writable: false },
   { key: 'product.canViewFacts', scope: 'PRODUCT_CONTEXT', canonicalOwner: 'HouseholdMember.role', correctionPath: null, writable: false },
   { key: 'product.canCorrectFacts', scope: 'PRODUCT_CONTEXT', canonicalOwner: 'HouseholdMember.role', correctionPath: null, writable: false },
 ] as const satisfies readonly PropertyFactDefinition[];

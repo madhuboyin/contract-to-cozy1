@@ -10,11 +10,10 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useAuth } from '@/lib/auth/AuthContext';
-import { APIError, HomeownerSegment } from '@/types';
+import { APIError } from '@/types';
 
-type FieldName = 'email' | 'password' | 'confirmPassword' | 'firstName' | 'lastName' | 'segment' | 'acceptedTerms';
+type FieldName = 'email' | 'password' | 'confirmPassword' | 'firstName' | 'lastName' | 'acceptedTerms';
 
 type FieldErrors = Partial<Record<FieldName, string>>;
 
@@ -24,7 +23,6 @@ interface SignupFormData {
   confirmPassword: string;
   firstName: string;
   lastName: string;
-  segment: HomeownerSegment;
   acceptedTerms: boolean;
 }
 
@@ -45,7 +43,6 @@ export default function SignupPage() {
     confirmPassword: '',
     firstName: '',
     lastName: '',
-    segment: 'EXISTING_OWNER',
     acceptedTerms: false,
   });
 
@@ -74,7 +71,6 @@ export default function SignupPage() {
     if (formData.password && formData.confirmPassword && formData.password !== formData.confirmPassword) {
       nextErrors.confirmPassword = 'Passwords do not match.';
     }
-    if (!formData.segment) nextErrors.segment = 'Select the option that best matches your situation.';
     if (!formData.acceptedTerms) {
       nextErrors.acceptedTerms = 'You must agree to the Terms of Service and Privacy Policy to continue.';
     }
@@ -102,7 +98,6 @@ export default function SignupPage() {
         firstName: formData.firstName,
         lastName: formData.lastName,
         role: 'HOMEOWNER',
-        segment: formData.segment,
         acceptedTerms: formData.acceptedTerms,
       });
 
@@ -255,46 +250,6 @@ export default function SignupPage() {
             ) : null}
           </div>
         </div>
-
-        <fieldset>
-          <Label className="text-sm">What best describes you?</Label>
-          <RadioGroup
-            value={formData.segment}
-            onValueChange={(value) => setField('segment', value as HomeownerSegment)}
-            className="mt-2 grid grid-cols-1 gap-2"
-          >
-            <label
-              htmlFor="segment-home-buyer"
-              className={`flex cursor-pointer items-start gap-3 rounded-xl border p-3 transition-colors ${
-                formData.segment === 'HOME_BUYER'
-                  ? 'border-brand-500 bg-brand-50'
-                  : 'border-slate-200 hover:border-slate-300'
-              }`}
-            >
-              <RadioGroupItem id="segment-home-buyer" value="HOME_BUYER" className="mt-0.5" />
-              <span>
-                <span className="block text-sm font-medium text-slate-900">I am buying a home</span>
-                <span className="block text-xs text-slate-600">Get guidance for due diligence, risk checks, and first-year planning.</span>
-              </span>
-            </label>
-
-            <label
-              htmlFor="segment-existing-owner"
-              className={`flex cursor-pointer items-start gap-3 rounded-xl border p-3 transition-colors ${
-                formData.segment === 'EXISTING_OWNER'
-                  ? 'border-brand-500 bg-brand-50'
-                  : 'border-slate-200 hover:border-slate-300'
-              }`}
-            >
-              <RadioGroupItem id="segment-existing-owner" value="EXISTING_OWNER" className="mt-0.5" />
-              <span>
-                <span className="block text-sm font-medium text-slate-900">I already own my home</span>
-                <span className="block text-xs text-slate-600">Track maintenance, reduce risk, and find savings opportunities.</span>
-              </span>
-            </label>
-          </RadioGroup>
-          {fieldErrors.segment ? <p className="mt-1.5 text-xs text-rose-700">{fieldErrors.segment}</p> : null}
-        </fieldset>
 
         <div>
           <label htmlFor="acceptedTerms" className="flex cursor-pointer items-start gap-2.5">

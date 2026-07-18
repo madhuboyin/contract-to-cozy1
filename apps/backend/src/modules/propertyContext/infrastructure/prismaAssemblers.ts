@@ -704,8 +704,16 @@ export const productContextAssembler: PropertyContextAssembler = {
       prisma.property.findUnique({
         where: { id: propertyId },
         select: {
-          homeownerProfile: { select: { segment: true } },
-          onboarding: { select: { status: true, currentStep: true, setupScore: true } },
+          onboarding: {
+            select: {
+              status: true,
+              currentStep: true,
+              setupScore: true,
+              entryPath: true,
+              ownershipState: true,
+              propertyOrigin: true,
+            },
+          },
         },
       }),
       actor ? prisma.householdMember.findUnique({
@@ -718,7 +726,9 @@ export const productContextAssembler: PropertyContextAssembler = {
       'product.onboardingStatus': property.onboarding?.status,
       'product.onboardingStep': property.onboarding?.currentStep,
       'product.setupScore': property.onboarding?.setupScore,
-      'product.homeownerSegment': property.homeownerProfile.segment,
+      'product.entryPath': property.onboarding?.entryPath,
+      'product.ownershipState': property.onboarding?.ownershipState,
+      'product.propertyOrigin': property.onboarding?.propertyOrigin,
       'product.canViewFacts': true,
       'product.canCorrectFacts': member?.role === 'OWNER' || member?.role === 'CONTRIBUTOR',
     };

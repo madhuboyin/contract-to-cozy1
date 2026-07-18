@@ -108,6 +108,7 @@ import {
   PropertyResponsibilityInput,
   ActivationEntryContextInput,
   ActivationFirstValueDTO,
+  ActivationTriggerEvidenceInput,
 } from '@/types';
 import type { PropertyContextEnvelope } from '@/components/property-context/propertyContextTypes';
 import type { FeatureContextCaptureResult, FeatureContextEvaluation } from '@/components/property-context/featureContextTypes';
@@ -1334,6 +1335,26 @@ class APIClient {
     return this.request(`/api/properties/${propertyId}/onboarding/first-value`);
   }
 
+  async addActivationTriggerEvidence(
+    propertyId: string,
+    input: ActivationTriggerEvidenceInput,
+  ): Promise<APIResponse<Array<ActivationTriggerEvidenceInput & { id: string; capturedAt: string }>>> {
+    return this.request(`/api/properties/${propertyId}/onboarding/trigger-evidence`, {
+      method: 'POST',
+      body: input,
+    });
+  }
+
+  async recordFirstValueFeedback(
+    propertyId: string,
+    feedback: 'USEFUL_NEW' | 'USEFUL_KNOWN' | 'NOT_USEFUL',
+  ): Promise<APIResponse<{ feedback: string; recordedAt: string }>> {
+    return this.request(`/api/properties/${propertyId}/onboarding/first-value-feedback`, {
+      method: 'POST',
+      body: { feedback },
+    });
+  }
+
   async recordFirstActionResolution(
     propertyId: string,
     input: {
@@ -1634,7 +1655,6 @@ class APIClient {
    */
   async getServiceCategories() {
     return this.request<{
-      segment: string;
       categories: Array<{
         category: string;
         displayName: string;
@@ -2700,7 +2720,7 @@ class APIClient {
   /**
    * Get user profile with homeowner profile information
    */
-  async getUserProfile(): Promise<APIResponse<User & { homeownerProfile?: { id: string; segment: string } | null }>> {
+  async getUserProfile(): Promise<APIResponse<User & { homeownerProfile?: { id: string } | null }>> {
     return this.request('/api/users/profile', {
       method: 'GET',
     });
@@ -2718,7 +2738,7 @@ class APIClient {
     city?: string;
     state?: string;
     zipCode?: string;
-  }): Promise<APIResponse<User & { homeownerProfile?: { id: string; segment: string } | null }>> {
+  }): Promise<APIResponse<User & { homeownerProfile?: { id: string } | null }>> {
     return this.request('/api/users/profile', {
       method: 'PUT',
       body: payload,

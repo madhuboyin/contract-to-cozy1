@@ -68,7 +68,9 @@ function snapshot(archetype) {
     'compliance.activePermits': [],
     'compliance.openUnpermittedFlags': [],
     'projects.activeProjects': [],
-    'product.homeownerSegment': archetype.homeBuyer ? 'HOME_BUYER' : 'EXISTING_OWNER',
+    'product.entryPath': archetype.homeBuyer ? 'EXISTING_HOME_PURCHASE' : 'EXISTING_OWNER_TRIGGER',
+    'product.ownershipState': archetype.homeBuyer ? 'UNDER_CONTRACT' : 'ESTABLISHED_OWNER',
+    'product.propertyOrigin': 'EXISTING_HOME',
   };
   const facts = Object.fromEntries(Object.entries(values).map(([key, value]) => [
     key,

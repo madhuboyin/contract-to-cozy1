@@ -15,10 +15,14 @@ import {
 import { logger } from '../lib/logger';
 import {
   EntryContextCaptureSchema,
+  FirstValueFeedbackSchema,
   FirstActionResolutionSchema,
+  TriggerEvidenceInputSchema,
+  addTriggerEvidence,
   captureEntryContext,
   getActivationFirstValue,
   getEntryContext,
+  recordFirstValueFeedback,
   recordFirstActionResolution,
 } from '../services/entryContext.service';
 
@@ -47,6 +51,40 @@ router.get(
     } catch (error: any) {
       logger.error({ err: error }, 'Error fetching onboarding entry context');
       return res.status(500).json({ success: false, message: error?.message || 'Failed to fetch entry context.' });
+    }
+  }
+);
+
+router.post(
+  '/properties/:propertyId/onboarding/trigger-evidence',
+  propertyAuthMiddleware,
+  validateBody(TriggerEvidenceInputSchema),
+  async (req: CustomRequest, res) => {
+    try {
+      const userId = req.user?.userId;
+      if (!userId) return res.status(401).json({ success: false, message: 'Authentication required.' });
+      const evidence = await addTriggerEvidence(req.params.propertyId, userId, req.body);
+      return res.status(201).json({ success: true, data: evidence, message: 'Trigger evidence added.' });
+    } catch (error: any) {
+      logger.error({ err: error }, 'Error adding onboarding trigger evidence');
+      return res.status(500).json({ success: false, message: error?.message || 'Failed to add trigger evidence.' });
+    }
+  }
+);
+
+router.post(
+  '/properties/:propertyId/onboarding/first-value-feedback',
+  propertyAuthMiddleware,
+  validateBody(FirstValueFeedbackSchema),
+  async (req: CustomRequest, res) => {
+    try {
+      const userId = req.user?.userId;
+      if (!userId) return res.status(401).json({ success: false, message: 'Authentication required.' });
+      const feedback = await recordFirstValueFeedback(req.params.propertyId, userId, req.body);
+      return res.json({ success: true, data: feedback, message: 'First-value feedback recorded.' });
+    } catch (error: any) {
+      logger.error({ err: error }, 'Error recording first-value feedback');
+      return res.status(500).json({ success: false, message: error?.message || 'Failed to record feedback.' });
     }
   }
 );
