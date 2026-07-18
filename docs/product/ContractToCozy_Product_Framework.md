@@ -51,7 +51,8 @@ ContractToCozy should evolve from a platform containing homeowner tools into a t
 | **Element** | **Framework decision** |
 | --- | --- |
 | Vision | Every homeowner has a trusted guide that understands their home and helps protect it, improve it, and navigate important transitions. |
-| Launch wedge | Recommended: recent homebuyers in the first 24 months of ownership, activated through inspection and transaction information. |
+| Primary audience | Existing homeowners managing accumulated home complexity, especially when an active maintenance, repair, quote, project, insurance, or planning trigger creates immediate intent. |
+| Acquisition paths | Recent buyers of existing homes enter through inspection-led ownership planning; buyers of brand-new homes enter selectively through warranty, punch-list, and setup workflows. |
 | Recurring engine | A personalized attention feed that identifies risks, deadlines, maintenance, savings, and unfinished work. |
 | Differentiator | Decision intelligence grounded in the home’s systems, history, documents, local context, and homeowner preferences. |
 | Major-event strategy | Build one reusable event engine; launch one or two journeys deeply rather than many shallow workflows. |
@@ -64,7 +65,7 @@ ContractToCozy should evolve from a platform containing homeowner tools into a t
 - The dashboard begins with what needs attention—not a catalog of features.
 - Storage capabilities become inputs to action, recommendations, and continuity.
 - The three jobs govern strategy and prioritization, but do not become rigid silos.
-- The go-to-market wedge is narrow even though the platform vision remains broad.
+- The go-to-market wedge is defined by homeowner need and trigger—not tenure alone—even though the platform vision remains broad.
 - Trust, explainability, and commercial integrity are designed into the recommendation system.
 
 ## Part I — Strategic foundation
@@ -119,37 +120,58 @@ ContractToCozy should define itself as a home intelligence and action platform. 
 
 > **DEFENSIBILITY** — The moat is the combination of longitudinal property context, recommendation quality, workflow completion data, and earned homeowner trust—not any single utility.
 
-### 4. Initial customer and market wedge
+### 4. Customer strategy and market wedge
 
-> **RECOMMENDED LAUNCH WEDGE** — Recent homebuyers, especially first-time and early-tenure owners, within the first 24 months after purchase.
+> **RECOMMENDED LAUNCH WEDGE** — Existing homeowners managing accumulated home complexity, qualified by an immediate trigger such as aging systems, recurring maintenance, a repair or replacement decision, contractor quotes, deferred projects, insurance concerns, or anticipated major costs.
 
-This segment encounters concentrated uncertainty, has a natural onboarding moment, possesses information-rich transaction artifacts, and immediately needs an ownership plan.
+The strategy must distinguish homeowner tenure from property condition. A recent buyer may own a brand-new home with little history, while a long-tenure owner may possess years of repairs, invoices, provider experience, deferred work, and unresolved decisions. ContractToCozy should prioritize the presence of meaningful responsibility and intent rather than assuming that a purchase date predicts product value.
 
 #### Why this wedge is attractive
 
-- High motivation: the homeowner is confronting unfamiliar systems, costs, and responsibilities.
-- Strong data bootstrap: inspection reports, disclosures, closing documents, warranties, and initial projects can seed the Living Home Record.
-- Natural conversion path: a buyer or move-in workflow can transition into ongoing maintenance and decision support.
-- High learning velocity: early ownership produces many observable decisions and completed actions.
-- Partner distribution potential: agents, inspectors, lenders, insurers, title/closing services, and employers.
+- Recognized pain: existing homeowners have already experienced missed maintenance, surprise costs, uncertain providers, or difficult repair decisions.
+- Rich context: invoices, warranties, insurance documents, past repairs, project history, and household preferences can immediately improve recommendations.
+- Immediate actionability: an active trigger creates a clear reason to set up the property and act on guidance now.
+- Recurring value: today’s issue naturally connects to ongoing maintenance, future costs, warranties, projects, and provider continuity.
+- Strong learning loop: completed repairs, quotes, decisions, and outcomes improve the Living Home Record and future guidance.
+- Direct resonance: the value proposition reflects problems homeowners already understand rather than asking them to anticipate future pain.
 
-#### Primary persona
+#### Primary persona: established homeowner with an active trigger
 
 | **Dimension** | **Working definition** |
 | --- | --- |
-| Situation | Purchased a primary residence within the last 24 months. |
-| Mindset | Wants to be responsible but lacks confidence, time, or a reliable operating system. |
-| Pain | Unclear priorities, scattered documents, unfamiliar systems, surprise costs, and uncertain providers. |
-| Desired outcome | A clear plan for what matters now, what can wait, what it may cost, and how to complete it. |
-| Activation event | Upload or connect the inspection report and confirm a small set of property facts. |
-| First-value moment | Receive a credible, personalized 90-day ownership plan within minutes. |
+| Situation | Owns and manages a home with accumulated maintenance, repairs, documents, providers, projects, or aging systems. |
+| Trigger | A current or upcoming repair, replacement, quote, maintenance backlog, insurance question, project, renewal, or cost concern. |
+| Mindset | Wants to stay responsible and make good decisions but lacks a reliable, property-specific operating system. |
+| Pain | Fragmented history, unclear priorities, repeated research, surprise costs, uncertain timing, and difficulty evaluating options or providers. |
+| Available context | Service records, invoices, warranties, emails, photos, quotes, insurance documents, prior inspections, and homeowner memory. |
+| Desired outcome | Understand what matters now, what can wait, what it may cost, and the best path to completion. |
+| Activation event | Describe the current concern and confirm the property; optionally import the most relevant document or prior work record. |
+| First-value moment | Receive immediate guidance for the active trigger plus a credible Home Health Baseline and prioritized 12-month action plan. |
+
+#### Additional acquisition paths
+
+| **Segment** | **Immediate need** | **Available context** | **Initial value proposition** |
+| --- | --- | --- | --- |
+| Existing owner with aging systems | Prioritize maintenance, replacements, and future costs | Medium to high but fragmented | Home Health Baseline and prioritized 12-month plan |
+| Existing owner facing a decision | Resolve a repair, quote, project, provider, or insurance question | High and situational | Property-specific recommendation and action plan |
+| Recent buyer of an existing home | Understand what the newly acquired home needs first | Inspection, disclosures, warranties, and transaction documents | Inspection-led 90-day ownership plan |
+| Buyer of a brand-new home | Manage setup, punch lists, registrations, and builder warranties | Low historical context but strong warranty documentation | New-home setup and warranty-protection journey |
+| Owner entering a major event | Coordinate a renovation, claim, repair, or sale | High intent and increasing context | Guided event plan with milestones and dependencies |
+
+Recent buyers of existing homes remain an important acquisition channel because inspection and transaction documents can quickly seed the Living Home Record. They are not, however, the sole or default definition of the customer.
+
+Brand-new-home buyers should be addressed selectively through a dedicated workflow for punch lists, walkthrough findings, system registration, builder follow-ups, warranty deadlines, one-year inspections, and seasonal setup. Without this tailored proposition, their limited property history makes them a weaker initial wedge.
+
+The platform should serve established owners and recent buyers through one shared home-intelligence system but distinct onboarding and first-value experiences. The common narrative is: **Whether you have owned your home for ten days or ten years, ContractToCozy helps you understand what matters, decide what to do, and follow through.**
 
 #### Validation criteria
 
-- At least 60% of activated users complete the minimum property setup.
-- At least 50% identify one recommended action as new and useful.
-- At least 30% complete or intentionally dismiss one action in the first 30 days.
-- Partner acquisition produces lower-friction activation than cold direct-to-consumer acquisition.
+- At least 60% of activated users complete the minimum property and trigger setup.
+- At least 50% identify one recommendation as new, relevant, and useful.
+- At least 30% complete, intentionally defer, or deliberately dismiss one action in the first 30 days.
+- Existing owners with an active trigger reach first value with or without uploading a formal inspection report.
+- Inspection-led onboarding for recent buyers of existing homes produces a credible 90-day plan and converts into the recurring attention loop.
+- Segment-level testing demonstrates which triggers, acquisition channels, and first-value outputs produce the strongest activation, trust, retention, and willingness to pay.
 
 *These are initial hypothesis thresholds, not final targets; calibrate them after baseline research and pilot data.*
 
@@ -159,10 +181,11 @@ The wedge determines where ContractToCozy starts, not where it ends. Expansion s
 
 | **Stage** | **Customer situation** | **Expansion logic** |
 | --- | --- | --- |
-| 1. Establish | Recent buyer / new owner | Create the property record, initial plan, and recurring attention loop. |
-| 2. Deepen | Established homeowner | Support maintenance, repair decisions, quotes, projects, renewals, and savings. |
-| 3. Orchestrate | Owner entering a major event | Guide renovation, damage recovery, sale preparation, or landlord transition. |
-| 4. Transfer | Ownership or occupancy changes | Preserve and selectively transfer the home’s history and active obligations. |
+| 1. Establish | Existing owner with an active trigger | Resolve the immediate concern, create the Home Health Baseline, and begin the recurring attention loop. |
+| 2. Acquire | Recent buyer of an existing home | Convert inspection and transaction information into a 90-day plan and durable property record. |
+| 3. Specialize | Buyer of a brand-new home | Protect warranty rights, manage punch lists, register systems, and establish maintenance from day one. |
+| 4. Orchestrate | Owner entering a major event | Guide major repair, renovation, damage recovery, sale preparation, or landlord transition. |
+| 5. Transfer | Ownership or occupancy changes | Preserve and selectively transfer the home’s history and active obligations. |
 
 ## Part II — Customer jobs
 
@@ -253,6 +276,7 @@ A major moment is not one decision. It is a stateful journey involving tasks, do
 #### Candidate journeys
 
 - Buying and moving in
+- Major repair or system replacement
 - Major renovation
 - Storm damage and insurance claim
 - Emergency repair and recovery
@@ -275,7 +299,13 @@ A major moment is not one decision. It is a stateful journey involving tasks, do
 
 #### Initial event selection
 
-Recommended first journey: Buying and Moving In, because it aligns directly with the launch wedge and creates the initial property intelligence foundation. Recommended second journey for validation: Preparing to Sell, because it reuses property history and has clear milestones and economic value.
+Recommended first journey: Major Repair or System Replacement. It aligns with the primary existing-homeowner audience and connects the complete product loop: recognize the issue, evaluate repair versus replacement, compare quotes, select a provider, coordinate the work, record the outcome, and establish future maintenance or warranty obligations.
+
+Recommended acquisition journey: Buying and Moving Into an Existing Home. It converts inspection and transaction context into an ownership plan and then transitions the homeowner into the ongoing Stay Ahead experience.
+
+Recommended specialized journey for later validation: New-Home Setup and Warranty Protection. It should address punch lists, walkthrough findings, registrations, builder follow-ups, warranty deadlines, and one-year inspection preparation rather than pretending a brand-new home has a rich maintenance history.
+
+Preparing to Sell remains a strong subsequent event because it reuses accumulated property history and has clear milestones, economic value, and opportunities for document and provider coordination.
 
 > **SCOPE DISCIPLINE** — Build the reusable event engine once, but do not launch every candidate event. A journey should be deep enough to create confidence and completion, not merely provide a checklist.
 
@@ -382,12 +412,22 @@ The experience should feel situation-first and action-oriented. The three jobs g
 
 #### Recommended onboarding flow
 
-1. Establish intent: confirm whether the user just bought, already owns, is planning a project, or is responding to an event.
-1. Identify the property: address and occupancy establish an initial baseline.
-1. Import the highest-value artifact: inspection report for the launch wedge; otherwise use a relevant document or short guided setup.
-1. Confirm only the facts required to avoid misleading guidance.
-1. Generate an immediate personalized output: the first 90-day ownership plan and top three attention items.
-1. Invite progressive enrichment tied to concrete benefits, such as warranty alerts or quote evaluation.
+1. Establish the trigger: ask what is happening now—maintenance accumulation, repair, replacement, quote, project, insurance issue, recent purchase, or another major event.
+1. Identify the property: address, occupancy, approximate home age, and ownership context establish an initial baseline.
+1. Route to the appropriate entry path: existing owner, recent buyer of an existing home, buyer of a brand-new home, or owner entering a major event.
+1. Collect the minimum useful context: confirm key systems and import the document most relevant to the trigger, such as an invoice, quote, warranty, inspection report, insurance document, or project record.
+1. Confirm only the facts required to avoid misleading guidance and clearly identify what remains unknown.
+1. Generate an immediate personalized output appropriate to the entry path.
+1. Invite progressive enrichment tied to concrete benefits, such as better replacement timing, warranty alerts, quote evaluation, provider continuity, or a more complete action plan.
+
+#### Entry-path first-value experiences
+
+| **Entry path** | **First-value experience** |
+| --- | --- |
+| Existing owner with an active trigger | Immediate guidance for the current concern plus a Home Health Baseline and prioritized 12-month plan |
+| Recent buyer of an existing home | Inspection-led 90-day ownership plan separating urgent, near-term, and future actions |
+| Buyer of a brand-new home | Punch-list, registration, builder-warranty, seasonal setup, and one-year inspection plan |
+| Owner entering a major event | Adaptive event plan with the next step, milestones, dependencies, required documents, and decisions |
 
 #### Progressive context ladder
 
@@ -401,7 +441,7 @@ The experience should feel situation-first and action-oriented. The three jobs g
 
 #### First-value standard
 
-Within one session, a new user should receive something credible and actionable that could not be produced from a generic home-maintenance checklist alone.
+Within one session, a new user should receive something credible and actionable that could not be produced from a generic home-maintenance checklist alone. The product must not require an inspection report to create value for an existing homeowner; conversational context, address-level data, system facts, and any relevant service record should be sufficient to begin.
 
 ### 16. Dashboard and navigation
 
@@ -554,12 +594,13 @@ Score each criterion from 1 to 5, multiply by its weight, and require a named ow
 
 | **Phase** | **Objective** | **Core deliverables** | **Exit evidence** |
 | --- | --- | --- | --- |
-| 0. Validate | Prove problem, wedge, and first-value proposition | Research; concierge pilot; inspection ingestion prototype; recommendation tests | Users trust and act on personalized priorities |
-| 1. Establish | Create the Living Home Record and first ownership plan | Address baseline; inspection import; fact confirmation; 90-day plan; attention feed | Activation and first-action completion meet thresholds |
+| 0. Validate | Prove the trigger-based customer strategy and first-value propositions | Research with existing owners and recent buyers; concierge Home Health Baseline; trigger-specific recommendation tests; document-ingestion prototypes | The strongest triggers and entry paths produce trusted, acted-upon guidance |
+| 1. Establish | Resolve an immediate concern and create the Living Home Record | Address baseline; guided system history; flexible document import; active-trigger guidance; Home Health Baseline; 12-month plan; attention feed | Existing owners reach first value without requiring an inspection report, and first-action completion meets thresholds |
 | 2. Engage | Build the recurring Stay Ahead loop | Maintenance; deadlines; weekly brief; feedback; home timeline; notifications | Sustained useful return without alert fatigue |
 | 3. Differentiate | Deliver high-quality decision intelligence | Repair/replace; quote evaluation; project priority; evidence and confidence model | Recommendations improve confidence and lead to recorded outcomes |
-| 4. Orchestrate | Guide one major event deeply | Buying/move-in journey; event engine; documents; tasks; dependencies; providers | Meaningful milestone completion and event-to-recurring conversion |
-| 5. Expand | Add adjacent segments and journeys | Seller Prep validation; partner distribution; selective marketplace and transfer | Reuse lowers cost and preserves recommendation trust |
+| 4. Orchestrate | Guide one existing-owner event deeply | Major repair or system replacement journey; event engine; documents; tasks; decisions; dependencies; quotes; providers | Meaningful milestone completion, recorded outcomes, and transition into recurring care |
+| 5. Expand | Add acquisition and specialized entry journeys | Existing-home buying/move-in; inspection-led 90-day plan; new-home warranty/setup validation; Seller Prep; partner distribution | Each entry journey converts into the shared Living Home Record and recurring value loop |
+| 6. Extend | Add adjacent events and governed services | Claims, renovations, landlord transition, selective marketplace, and property-history transfer | Reuse lowers cost while outcome quality and recommendation trust remain strong |
 
 #### Not-now list
 
@@ -577,7 +618,7 @@ Because ‘important,’ ‘early,’ and ‘successfully’ require operational
 
 | **Metric family** | **Example measures** |
 | --- | --- |
-| Activation | Property identified; first high-value artifact imported; critical facts confirmed; first plan viewed |
+| Activation | Trigger identified; property confirmed; minimum useful context established; first recommendation or plan viewed |
 | Stay Ahead | High-priority actions surfaced early; completion before due date; alert usefulness; noise/dismissal rate |
 | Decide | Decision confidence improvement; recommendation usefulness; option selected; outcome recorded; override reasons |
 | Major Moments | Milestones completed on time; blocked-time reduction; journey completion; transition into ongoing ownership |
@@ -618,7 +659,7 @@ The three jobs should shape planning, ownership, discovery, design review, launc
 | **Risk** | **Failure mode** | **Mitigation** |
 | --- | --- | --- |
 | Vision breadth | Too many journeys and utilities dilute quality | Use the wedge, roadmap phases, and not-now list |
-| Cold start | Users abandon before the product knows enough | Import artifacts; show value early; progressive enrichment |
+| Cold start | Users abandon before the product knows enough | Begin with the active trigger; accept conversational context or flexible records; show value early; enrich progressively |
 | Weak data | Confident guidance rests on stale or inferred facts | Provenance, confidence, confirmation, conservative fallback |
 | Alert fatigue | Users ignore important messages | Priority model, digests, controls, and relevance feedback |
 | AI overreach | Fluent output exceeds evidence or authority | Grounding, tiered controls, boundaries, and auditability |
@@ -631,16 +672,20 @@ The three jobs should shape planning, ownership, discovery, design review, launc
 
 | **Decision** | **Current recommendation** | **Evidence needed** |
 | --- | --- | --- |
-| Initial segment | Recent buyers / first 24 months | Problem intensity, acquisition economics, activation, retention |
-| First artifact | Inspection report | Availability, extraction quality, user trust, predictive value |
-| First-value output | Personalized 90-day plan | Comprehension, novelty, action completion |
+| Primary audience | Existing homeowners managing accumulated complexity with an active trigger | Trigger frequency, problem intensity, activation, retention, willingness to pay |
+| Qualification signal | Current or upcoming maintenance, repair, replacement, quote, project, insurance, renewal, or cost concern | Which triggers create the strongest urgency, data availability, and successful outcomes |
+| Existing-owner context | Current concern plus address, key system facts, and the most relevant available record | Minimum context required for credible guidance without an inspection report |
+| Existing-owner first value | Immediate trigger guidance plus a Home Health Baseline and prioritized 12-month plan | Comprehension, novelty, trust, action completion, and time to value |
+| Recent-buyer acquisition path | Buyers of existing homes using inspection and transaction information | Channel economics, extraction quality, plan usefulness, recurring-loop conversion |
+| New-construction path | Selective new-home setup and warranty-protection journey | Demand for punch-list, registration, builder follow-up, warranty, and one-year inspection support |
 | First decision tool | Repair/replace or quote evaluation | Demand frequency, data sufficiency, willingness to pay |
-| First major event | Buying and Moving In | Journey completion and recurring-loop conversion |
-| Second event candidate | Preparing to Sell | Reuse, partner channel, monetization, customer urgency |
+| First major event | Major Repair or System Replacement | Journey completion, quote/provider coordination, recorded outcome, recurring-care conversion |
+| Acquisition event | Buying and Moving Into an Existing Home | Inspection-to-plan completion and recurring-loop conversion |
+| Subsequent event candidate | Preparing to Sell | Reuse, partner channel, monetization, customer urgency |
 | Business model | Subscription plus carefully governed outcome-based services | Trust impact, unit economics, disclosure comprehension |
 | North-star definition | Early identification and successful completion | Reliable event taxonomy, importance and completion criteria |
 
-> **LEADERSHIP REQUIREMENT** — Resolve the launch wedge, first-value experience, initial decision module, first event, and monetization guardrails before scaling surface area.
+> **LEADERSHIP REQUIREMENT** — Resolve the trigger qualification model, existing-owner first-value experience, recent-buyer acquisition economics, initial decision module, first major event, and monetization guardrails before scaling surface area.
 
 ## Appendix A — Feature definition test
 
