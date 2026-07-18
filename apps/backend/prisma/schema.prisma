@@ -174,6 +174,11 @@ enum PropertyFactSourceType {
   SYSTEM_DERIVED
 }
 
+enum PropertyFactObservationState {
+  KNOWN
+  UNKNOWN
+}
+
 enum HeatingType {
   HVAC
   FURNACE
@@ -2349,6 +2354,7 @@ model PropertyFactEvidence {
   propertyId       String
   factKey          String
   sourceType       PropertyFactSourceType
+  observationState PropertyFactObservationState @default(KNOWN)
   sourceEntityType String?
   sourceEntityId   String?
   confidence       Float?

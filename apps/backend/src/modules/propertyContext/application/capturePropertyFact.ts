@@ -161,21 +161,25 @@ export async function capturePropertyFact(
 
   const input = capturePropertyFactInputSchema.parse(rawInput);
   const value = normalizeCaptureValue(factKey, input.value);
+  const unknownAnswer = value === null || value === 'UNKNOWN';
   const observedAt = new Date();
 
   let evidenceId = '';
   try {
     await prisma.$transaction(async (tx) => {
-      await writeCanonicalFact(tx, propertyId, factKey, value);
-      await tx.propertyFactEvidence.updateMany({
-        where: { propertyId, factKey, supersededAt: null },
-        data: { supersededAt: observedAt },
-      });
+      if (!unknownAnswer) {
+        await writeCanonicalFact(tx, propertyId, factKey, value);
+        await tx.propertyFactEvidence.updateMany({
+          where: { propertyId, factKey, supersededAt: null },
+          data: { supersededAt: observedAt },
+        });
+      }
       const evidence = await tx.propertyFactEvidence.create({
         data: {
           propertyId,
           factKey,
           sourceType: input.sourceType,
+          observationState: unknownAnswer ? 'UNKNOWN' : 'KNOWN',
           sourceEntityType: 'PROPERTY_CONTEXT_CAPTURE',
           sourceEntityId: userId,
           confidence: input.confidence ?? (input.sourceType === 'USER_REPORTED' ? 0.9 : null),

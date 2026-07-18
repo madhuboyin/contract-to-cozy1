@@ -1364,7 +1364,7 @@ class APIClient {
       operationKey: string;
       expectedContextVersion: string;
       idempotencyKey: string;
-      answer: { value: unknown };
+      answer: Record<string, unknown>;
     },
   ): Promise<APIResponse<FeatureContextCaptureResult>> {
     return this.request(`/api/properties/${propertyId}/context/captures`, {

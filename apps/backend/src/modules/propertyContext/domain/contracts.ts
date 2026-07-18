@@ -92,13 +92,33 @@ export type ContextRequirementClassification =
   | 'REQUIRED_CALCULATION'
   | 'ENHANCEMENT_ACCURACY';
 
-export type CaptureInputSchema =
+export type ScalarCaptureInputSchema =
   | { type: 'BOOLEAN'; trueLabel: string; falseLabel: string }
   | { type: 'SINGLE_SELECT'; options: Array<{ label: string; value: string }> }
   | { type: 'MULTI_SELECT'; options: Array<{ label: string; value: string }>; maxItems?: number }
   | { type: 'INTEGER'; min?: number; max?: number; unit?: string }
   | { type: 'DECIMAL'; min?: number; max?: number; unit?: string }
   | { type: 'SHORT_TEXT'; maxLength: number };
+
+export interface CaptureFieldCondition {
+  fieldKey: string;
+  operator: 'EQUALS' | 'NOT_EQUALS';
+  value: string | number | boolean;
+}
+
+export interface StructuredCaptureField {
+  key: string;
+  label: string;
+  helpText?: string;
+  required: boolean;
+  inputSchema: ScalarCaptureInputSchema;
+  when?: CaptureFieldCondition;
+}
+
+export type CaptureInputSchema = ScalarCaptureInputSchema | {
+  type: 'GROUP';
+  fields: StructuredCaptureField[];
+};
 
 export interface ContextCaptureDefinition {
   captureKey: string;
@@ -112,6 +132,8 @@ export interface ContextCaptureDefinition {
   canonicalOwner: string;
   actionKey: string;
   sensitivity: 'STANDARD' | 'FINANCIAL' | 'SECURITY';
+  /** Backend-only mapping. It is removed from evaluator/API responses. */
+  answerBindings?: Record<string, string>;
 }
 
 export interface EvaluatedContextRequirement {
@@ -120,7 +142,8 @@ export interface EvaluatedContextRequirement {
   classification: ContextRequirementClassification;
   state: PropertyFactState;
   reasonCode: string;
-  capture: Omit<ContextCaptureDefinition, 'canonicalOwner'>;
+  capture: Omit<ContextCaptureDefinition, 'canonicalOwner' | 'answerBindings'>;
+  currentAnswer?: unknown;
 }
 
 export interface FeatureContextEvaluation {

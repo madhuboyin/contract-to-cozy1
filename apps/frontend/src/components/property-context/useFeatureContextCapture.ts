@@ -21,6 +21,7 @@ export function useFeatureContextCapture({
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [suppressedRequirementId, setSuppressedRequirementId] = useState<string | null>(null);
   const readyVersion = useRef<string | null>(null);
 
   const evaluate = useCallback(async () => {
@@ -60,10 +61,21 @@ export function useFeatureContextCapture({
         operationKey,
         expectedContextVersion: evaluation.contextVersion,
         idempotencyKey: crypto.randomUUID(),
-        answer: { value },
+        answer: requirement.capture.mode === 'STRUCTURED'
+          ? value as Record<string, unknown>
+          : { value },
       });
       if (!response.success) throw new Error(response.message || 'Could not save this detail.');
       setEvaluation(response.data.evaluation);
+      const containsUnknown = value === null || value === 'UNKNOWN' || (
+        value !== null && typeof value === 'object' && Object.values(value as Record<string, unknown>)
+          .some((entry) => entry === null || entry === 'UNKNOWN')
+      );
+      setSuppressedRequirementId(
+        containsUnknown && response.data.evaluation.requirements[0]?.requirementId === requirement.requirementId
+          ? requirement.requirementId
+          : null,
+      );
       window.dispatchEvent(new CustomEvent('property-context:updated', {
         detail: { propertyId, contextVersion: response.data.contextVersion, updatedFactKeys: response.data.updatedFactKeys },
       }));
@@ -74,5 +86,5 @@ export function useFeatureContextCapture({
     }
   }, [evaluation, featureKey, operationKey, propertyId]);
 
-  return { evaluation, loading, saving, error, capture, reevaluate: evaluate };
+  return { evaluation, loading, saving, error, capture, reevaluate: evaluate, suppressedRequirementId };
 }

@@ -7,6 +7,7 @@ export interface FactEvidenceMetadata {
   confidence: number | null;
   observedAt: Date;
   validUntil: Date | null;
+  observationState?: 'KNOWN' | 'UNKNOWN';
 }
 
 export function createPropertyFact<T>(
@@ -16,7 +17,7 @@ export function createPropertyFact<T>(
   now: Date = new Date(),
 ): PropertyFact<T> {
   const definition = getFactDefinition(key);
-  const normalizedValue = value === undefined ? null : value;
+  const normalizedValue = evidence?.observationState === 'UNKNOWN' || value === undefined ? null : value;
   const stale = evidence?.validUntil ? evidence.validUntil.getTime() <= now.getTime() : false;
 
   return {

@@ -22,6 +22,7 @@ import { evaluateProjectComplianceContext } from '../../../services/projectCompl
 import { evaluateFeatureContext, evaluateFeatureContextInputSchema } from '../application/evaluateFeatureContext';
 import {
   captureFeatureContext,
+  PropertyContextCaptureValidationError,
   PropertyContextIdempotencyConflictError,
   PropertyContextVersionConflictError,
 } from '../application/captureFeatureContext';
@@ -177,6 +178,9 @@ export async function postFeatureContextCapture(req: AuthRequest, res: Response)
     }
     if (error instanceof PropertyContextIdempotencyConflictError) {
       return res.status(409).json({ success: false, message: error.message });
+    }
+    if (error instanceof PropertyContextCaptureValidationError) {
+      return res.status(400).json({ success: false, message: error.message });
     }
     if (error instanceof Error && (error.name === 'ZodError' || /not registered|no longer active/.test(error.message))) {
       return res.status(400).json({ success: false, message: error.name === 'ZodError' ? 'Invalid context capture.' : error.message });

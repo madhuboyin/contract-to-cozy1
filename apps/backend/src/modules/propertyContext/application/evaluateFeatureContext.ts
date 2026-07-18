@@ -48,18 +48,24 @@ function evaluateRequirement(
   const state = requirementState(requirement, context.facts[requirement.factKey]);
   if (state === 'KNOWN') return null;
   const definition = getCaptureDefinition(requirement.captureKey);
-  const { canonicalOwner: _canonicalOwner, ...capture } = definition;
+  const { canonicalOwner: _canonicalOwner, answerBindings: _answerBindings, ...capture } = definition;
   const requirementId = createHash('sha256')
     .update(`${contractKey}:${requirement.factKey}:${requirement.captureKey}`)
     .digest('hex')
     .slice(0, 24);
   return {
     requirementId,
-    factKeys: [requirement.factKey],
+    factKeys: definition.factKeys,
     classification: requirement.classification,
     state,
     reasonCode: requirement.reasonCode,
     capture,
+    currentAnswer: definition.mode === 'STRUCTURED'
+      ? Object.fromEntries(Object.entries(definition.answerBindings ?? {}).map(([answerKey, factKey]) => [
+        answerKey,
+        context.facts[factKey]?.value ?? null,
+      ]))
+      : { value: context.facts[requirement.factKey]?.value ?? null },
   };
 }
 

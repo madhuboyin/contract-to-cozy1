@@ -11,7 +11,7 @@ import {
   RoofType,
   WaterHeaterType,
 } from '@prisma/client';
-import type { CaptureInputSchema, ContextCaptureDefinition } from '../domain/contracts';
+import type { CaptureInputSchema, ContextCaptureDefinition, ScalarCaptureInputSchema } from '../domain/contracts';
 import { getFactDefinition, PROPERTY_FACT_CATALOG } from './factCatalog';
 import { isContextCaptureSupported } from '../application/capturePropertyFact';
 
@@ -22,14 +22,14 @@ const humanize = (value: string) => value
   .replace(/[._]/g, ' ')
   .replace(/\b\w/g, (character) => character.toUpperCase());
 
-const enumSchema = (values: readonly string[]): CaptureInputSchema => ({
+const enumSchema = (values: readonly string[]): ScalarCaptureInputSchema => ({
   type: 'SINGLE_SELECT',
   options: values.map((value) => ({ label: humanize(value.toLowerCase()), value })),
 });
 
-const booleanSchema: CaptureInputSchema = { type: 'BOOLEAN', trueLabel: 'Yes', falseLabel: 'No' };
-const nonNegativeInteger = (unit?: string): CaptureInputSchema => ({ type: 'INTEGER', min: 0, unit });
-const nonNegativeDecimal = (unit?: string): CaptureInputSchema => ({ type: 'DECIMAL', min: 0, unit });
+const booleanSchema: ScalarCaptureInputSchema = { type: 'BOOLEAN', trueLabel: 'Yes', falseLabel: 'No' };
+const nonNegativeInteger = (unit?: string): ScalarCaptureInputSchema => ({ type: 'INTEGER', min: 0, unit });
+const nonNegativeDecimal = (unit?: string): ScalarCaptureInputSchema => ({ type: 'DECIMAL', min: 0, unit });
 
 const inputSchemas: Record<string, CaptureInputSchema> = {
   'core.dwellingType': enumSchema(Object.values(DwellingType)),
@@ -113,6 +113,121 @@ for (const [factKey, inputSchema] of Object.entries(inputSchemas)) {
   });
 }
 
+const structuredDefinitions: ContextCaptureDefinition[] = [
+  {
+    captureKey: 'OUTDOOR_SPACE_PROFILE',
+    factKeys: ['exterior.hasPrivateOutdoorSpace', 'exterior.outdoorSpaceTypes', 'responsibility.landscaping'],
+    mode: 'STRUCTURED',
+    title: 'Outdoor space details',
+    question: 'Tell us about the outdoor space this home is responsible for.',
+    helpText: 'Follow-up details appear only when private outdoor space is present.',
+    inputSchema: {
+      type: 'GROUP',
+      fields: [
+        { key: 'hasPrivateOutdoorSpace', label: 'Private outdoor space', required: true, inputSchema: booleanSchema },
+        {
+          key: 'outdoorSpaceTypes',
+          label: 'Outdoor space types',
+          required: true,
+          inputSchema: inputSchemas['exterior.outdoorSpaceTypes'] as ScalarCaptureInputSchema,
+          when: { fieldKey: 'hasPrivateOutdoorSpace', operator: 'EQUALS', value: true },
+        },
+        {
+          key: 'landscapingResponsibility',
+          label: 'Who handles landscaping?',
+          required: true,
+          inputSchema: enumSchema(Object.values(ResponsibleParty)),
+          when: { fieldKey: 'hasPrivateOutdoorSpace', operator: 'EQUALS', value: true },
+        },
+      ],
+    },
+    allowNotSure: true,
+    canonicalOwner: 'PropertyExteriorProfile + PropertyResponsibility',
+    actionKey: 'CAPTURE_OUTDOOR_SPACE_PROFILE',
+    sensitivity: 'STANDARD',
+    answerBindings: {
+      hasPrivateOutdoorSpace: 'exterior.hasPrivateOutdoorSpace',
+      outdoorSpaceTypes: 'exterior.outdoorSpaceTypes',
+      landscapingResponsibility: 'responsibility.landscaping',
+    },
+  },
+  {
+    captureKey: 'HVAC_SYSTEM_PROFILE',
+    factKeys: ['systems.heatingType', 'systems.coolingType', 'responsibility.hvac'],
+    mode: 'STRUCTURED',
+    title: 'Heating and cooling details',
+    question: 'Which heating and cooling systems serve this home?',
+    helpText: 'Choose “Unknown” when a system type is present but not yet identified.',
+    inputSchema: {
+      type: 'GROUP',
+      fields: [
+        { key: 'heatingType', label: 'Main heating system', required: true, inputSchema: inputSchemas['systems.heatingType'] as ScalarCaptureInputSchema },
+        { key: 'coolingType', label: 'Main cooling system', required: true, inputSchema: inputSchemas['systems.coolingType'] as ScalarCaptureInputSchema },
+        { key: 'hvacResponsibility', label: 'Who handles HVAC?', required: true, inputSchema: enumSchema(Object.values(ResponsibleParty)) },
+      ],
+    },
+    allowNotSure: true,
+    canonicalOwner: 'Property + PropertyResponsibility',
+    actionKey: 'CAPTURE_HVAC_SYSTEM_PROFILE',
+    sensitivity: 'STANDARD',
+    answerBindings: {
+      heatingType: 'systems.heatingType',
+      coolingType: 'systems.coolingType',
+      hvacResponsibility: 'responsibility.hvac',
+    },
+  },
+  {
+    captureKey: 'SAFETY_DETECTOR_PROFILE',
+    factKeys: ['safety.hasSmokeDetectors', 'safety.hasCoDetectors', 'responsibility.commonSafety'],
+    mode: 'STRUCTURED',
+    title: 'Home safety devices',
+    question: 'Confirm the home’s detector coverage and responsibility.',
+    inputSchema: {
+      type: 'GROUP',
+      fields: [
+        { key: 'hasSmokeDetectors', label: 'Smoke detectors installed', required: true, inputSchema: booleanSchema },
+        { key: 'hasCoDetectors', label: 'Carbon-monoxide detectors installed', required: true, inputSchema: booleanSchema },
+        { key: 'commonSafetyResponsibility', label: 'Who handles common safety devices?', required: true, inputSchema: enumSchema(Object.values(ResponsibleParty)) },
+      ],
+    },
+    allowNotSure: true,
+    canonicalOwner: 'Property + PropertyResponsibility',
+    actionKey: 'CAPTURE_SAFETY_DETECTOR_PROFILE',
+    sensitivity: 'SECURITY',
+    answerBindings: {
+      hasSmokeDetectors: 'safety.hasSmokeDetectors',
+      hasCoDetectors: 'safety.hasCoDetectors',
+      commonSafetyResponsibility: 'responsibility.commonSafety',
+    },
+  },
+  {
+    captureKey: 'ROOF_STRUCTURE_PROFILE',
+    factKeys: ['structure.roofType', 'structure.roofReplacementYear', 'responsibility.roof'],
+    mode: 'STRUCTURED',
+    title: 'Roof details',
+    question: 'Confirm the roof type, replacement year, and responsibility.',
+    inputSchema: {
+      type: 'GROUP',
+      fields: [
+        { key: 'roofType', label: 'Roof type', required: true, inputSchema: inputSchemas['structure.roofType'] as ScalarCaptureInputSchema },
+        { key: 'roofReplacementYear', label: 'Approximate replacement year', required: false, inputSchema: inputSchemas['structure.roofReplacementYear'] as ScalarCaptureInputSchema },
+        { key: 'roofResponsibility', label: 'Who handles the roof?', required: true, inputSchema: enumSchema(Object.values(ResponsibleParty)) },
+      ],
+    },
+    allowNotSure: true,
+    canonicalOwner: 'Property + PropertyResponsibility',
+    actionKey: 'CAPTURE_ROOF_STRUCTURE_PROFILE',
+    sensitivity: 'STANDARD',
+    answerBindings: {
+      roofType: 'structure.roofType',
+      roofReplacementYear: 'structure.roofReplacementYear',
+      roofResponsibility: 'responsibility.roof',
+    },
+  },
+];
+
+for (const definition of structuredDefinitions) definitions.set(definition.captureKey, definition);
+
 export const CONTEXT_CAPTURE_DEFINITIONS = [...definitions.values()];
 
 export function getCaptureDefinition(captureKey: string): ContextCaptureDefinition {
@@ -122,7 +237,8 @@ export function getCaptureDefinition(captureKey: string): ContextCaptureDefiniti
 }
 
 export function getCaptureDefinitionForFact(factKey: string): ContextCaptureDefinition | undefined {
-  return CONTEXT_CAPTURE_DEFINITIONS.find((definition) => definition.factKeys.includes(factKey));
+  return CONTEXT_CAPTURE_DEFINITIONS.find((definition) => definition.mode === 'SCALAR' && definition.factKeys.includes(factKey))
+    ?? CONTEXT_CAPTURE_DEFINITIONS.find((definition) => definition.factKeys.includes(factKey));
 }
 
 export function validateCaptureRegistry(): void {
@@ -135,7 +251,12 @@ export function validateCaptureRegistry(): void {
     for (const factKey of definition.factKeys) {
       const fact = getFactDefinition(factKey);
       if (!fact.writable) problems.push(`${definition.captureKey}: fact is not writable`);
-      if (fact.canonicalOwner !== definition.canonicalOwner) problems.push(`${definition.captureKey}: canonical owner drift`);
+      if (definition.mode === 'SCALAR' && fact.canonicalOwner !== definition.canonicalOwner) problems.push(`${definition.captureKey}: canonical owner drift`);
+    }
+    if (definition.mode === 'STRUCTURED') {
+      if (definition.inputSchema.type !== 'GROUP') problems.push(`${definition.captureKey}: structured capture requires group schema`);
+      const boundFacts = new Set(Object.values(definition.answerBindings ?? {}));
+      for (const factKey of definition.factKeys) if (!boundFacts.has(factKey)) problems.push(`${definition.captureKey}: missing answer binding for ${factKey}`);
     }
   }
   if (problems.length) throw new Error(`Invalid Property Context capture registry:\n${problems.join('\n')}`);

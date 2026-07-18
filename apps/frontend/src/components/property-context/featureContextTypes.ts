@@ -6,12 +6,24 @@ export type FeatureContextReadiness =
   | 'NOT_APPLICABLE'
   | 'PERMISSION_REQUIRED';
 
-export type CaptureInputSchema =
+export type ScalarCaptureInputSchema =
   | { type: 'BOOLEAN'; trueLabel: string; falseLabel: string }
   | { type: 'SINGLE_SELECT'; options: Array<{ label: string; value: string }> }
   | { type: 'MULTI_SELECT'; options: Array<{ label: string; value: string }>; maxItems?: number }
   | { type: 'INTEGER' | 'DECIMAL'; min?: number; max?: number; unit?: string }
   | { type: 'SHORT_TEXT'; maxLength: number };
+
+export type CaptureInputSchema = ScalarCaptureInputSchema | {
+  type: 'GROUP';
+  fields: Array<{
+    key: string;
+    label: string;
+    helpText?: string;
+    required: boolean;
+    inputSchema: ScalarCaptureInputSchema;
+    when?: { fieldKey: string; operator: 'EQUALS' | 'NOT_EQUALS'; value: string | number | boolean };
+  }>;
+};
 
 export interface FeatureContextCapture {
   captureKey: string;
@@ -42,6 +54,7 @@ export interface FeatureContextEvaluation {
     state: 'KNOWN' | 'UNKNOWN' | 'CONFLICTED' | 'STALE';
     reasonCode: string;
     capture: FeatureContextCapture;
+    currentAnswer?: unknown;
   }>;
   canExecute: boolean;
 }

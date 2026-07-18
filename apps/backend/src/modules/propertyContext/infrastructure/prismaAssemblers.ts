@@ -21,6 +21,8 @@ const sourcePriority: Record<PropertyFactSourceType, number> = {
 function selectEvidence(rows: PropertyFactEvidence[]): Map<string, FactEvidenceMetadata> {
   const active = rows.filter((row) => row.supersededAt === null);
   active.sort((a, b) => {
+    const knownDifference = Number(b.observationState === 'KNOWN') - Number(a.observationState === 'KNOWN');
+    if (knownDifference !== 0) return knownDifference;
     const verifiedDifference = Number(Boolean(b.verifiedAt)) - Number(Boolean(a.verifiedAt));
     if (verifiedDifference !== 0) return verifiedDifference;
     const sourceDifference = sourcePriority[b.sourceType] - sourcePriority[a.sourceType];
@@ -37,6 +39,7 @@ function selectEvidence(rows: PropertyFactEvidence[]): Map<string, FactEvidenceM
       confidence: row.confidence,
       observedAt: row.observedAt,
       validUntil: row.validUntil,
+      observationState: row.observationState,
     });
   }
   return selected;
@@ -256,15 +259,18 @@ function normalizeInstalledItemType(item: { category: string; name: string; tags
 export const systemsAssembler: PropertyContextAssembler = {
   scope: 'SYSTEMS',
   async assemble(propertyId, now) {
-    const property = await prisma.property.findUnique({
-      where: { id: propertyId },
-      select: {
-        heatingType: true,
-        coolingType: true,
-        waterHeaterType: true,
-        inventoryItems: { select: { category: true, name: true, tags: true } },
-      },
-    });
+    const [property, evidence] = await Promise.all([
+      prisma.property.findUnique({
+        where: { id: propertyId },
+        select: {
+          heatingType: true,
+          coolingType: true,
+          waterHeaterType: true,
+          inventoryItems: { select: { category: true, name: true, tags: true } },
+        },
+      }),
+      loadEvidence(propertyId, 'SYSTEMS'),
+    ]);
     if (!property) return [];
     const installedItemTypes = [...new Set(property.inventoryItems.flatMap(normalizeInstalledItemType))].sort();
     const hasCoolingFromProfile = property.coolingType && property.coolingType !== 'UNKNOWN' ? true : null;
@@ -277,7 +283,7 @@ export const systemsAssembler: PropertyContextAssembler = {
       'systems.installedItemTypes': installedItemTypes,
     };
     return Object.entries(values).map(([key, value]) =>
-      withPropertyId(createPropertyFact(key, value, undefined, now), propertyId),
+      withPropertyId(createPropertyFact(key, value, evidence.get(key), now), propertyId),
     );
   },
 };
@@ -285,16 +291,19 @@ export const systemsAssembler: PropertyContextAssembler = {
 export const safetyAssembler: PropertyContextAssembler = {
   scope: 'SAFETY',
   async assemble(propertyId, now) {
-    const property = await prisma.property.findUnique({
-      where: { id: propertyId },
-      select: {
-        hasSmokeDetectors: true,
-        hasCoDetectors: true,
-        hasSecuritySystem: true,
-        hasFireExtinguisher: true,
-        hasSumpPumpBackup: true,
-      },
-    });
+    const [property, evidence] = await Promise.all([
+      prisma.property.findUnique({
+        where: { id: propertyId },
+        select: {
+          hasSmokeDetectors: true,
+          hasCoDetectors: true,
+          hasSecuritySystem: true,
+          hasFireExtinguisher: true,
+          hasSumpPumpBackup: true,
+        },
+      }),
+      loadEvidence(propertyId, 'SAFETY'),
+    ]);
     if (!property) return [];
     const values: Record<string, unknown> = {
       'safety.hasSmokeDetectors': property.hasSmokeDetectors,
@@ -304,7 +313,7 @@ export const safetyAssembler: PropertyContextAssembler = {
       'safety.hasSumpPumpBackup': property.hasSumpPumpBackup,
     };
     return Object.entries(values).map(([key, value]) =>
-      withPropertyId(createPropertyFact(key, value, undefined, now), propertyId),
+      withPropertyId(createPropertyFact(key, value, evidence.get(key), now), propertyId),
     );
   },
 };
