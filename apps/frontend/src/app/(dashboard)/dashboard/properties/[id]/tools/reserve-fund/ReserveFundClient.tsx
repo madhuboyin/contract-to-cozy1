@@ -2,7 +2,6 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import {
   PiggyBank,
@@ -49,7 +48,8 @@ import InventoryItemDrawer from '../../../../components/inventory/InventoryItemD
 import { getInventoryItem, listInventoryRooms } from '../../../../inventory/inventoryApi';
 import { InventoryItem, InventoryRoom } from '@/types';
 import { track } from '@/lib/analytics/events';
-import { PropertyContextNotice, type PropertyContextEnvelope } from '@/components/property-context/PropertyContextNotice';
+import { PropertyContextCapturePanel } from '@/components/property-context/PropertyContextCapturePanel';
+import { runTimeline } from '../capital-timeline/capitalTimelineApi';
 
 // ─── Helpers ────────────────────────────────────────────────────────
 function money(cents: number | null | undefined) {
@@ -251,7 +251,6 @@ export default function ReserveFundClient() {
   const backHref = `/dashboard/properties/${propertyId}`;
 
   const [fund, setFund] = useState<ReserveFundDTO | null>(null);
-  const [propertyContext, setPropertyContext] = useState<PropertyContextEnvelope | null>(null);
   const [lineItems, setLineItems] = useState<ReserveFundLineItemDTO[]>([]);
   const [contributions, setContributions] = useState<ReserveFundContributionDTO[]>([]);
   const [suggestions, setSuggestions] = useState<ReconciliationSuggestionDTO[]>([]);
@@ -321,7 +320,6 @@ export default function ReserveFundClient() {
         listReconciliationSuggestions(propertyId),
       ]);
       setFund(fundResult.fund);
-      setPropertyContext(fundResult.propertyContext ?? null);
       setLineItems(lineItemsResult);
       setContributions(contributionsResult.items);
       setSuggestions(suggestionsResult);
@@ -346,7 +344,6 @@ export default function ReserveFundClient() {
     try {
       const updated = await updateFund(propertyId, { posture });
       setFund(updated.fund);
-      setPropertyContext(updated.propertyContext ?? null);
       const refreshedLineItems = await listLineItems(propertyId);
       setLineItems(refreshedLineItems);
     } catch (e: unknown) {
@@ -362,11 +359,24 @@ export default function ReserveFundClient() {
     try {
       const updated = await recalculateFund(propertyId);
       setFund(updated.fund);
-      setPropertyContext(updated.propertyContext ?? null);
       const refreshedLineItems = await listLineItems(propertyId);
       setLineItems(refreshedLineItems);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to recalculate');
+    } finally {
+      setRecalculating(false);
+    }
+  }
+
+  async function handleBuildPlan() {
+    if (!propertyId) return;
+    setRecalculating(true);
+    setError(null);
+    try {
+      await runTimeline(propertyId, fund?.horizonYears ?? 10, { synchronizeReserveFund: true });
+      await load();
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to build the reserve plan');
     } finally {
       setRecalculating(false);
     }
@@ -391,7 +401,6 @@ export default function ReserveFundClient() {
         listContributions(propertyId, { limit: 20 }),
       ]);
       setFund(updatedFund.fund);
-      setPropertyContext(updatedFund.propertyContext ?? null);
       setContributions(updatedContributions.items);
       track('action_completed', { tool: 'reserve-fund', actionType: 'log_contribution', propertyId });
     } catch (e: unknown) {
@@ -410,7 +419,6 @@ export default function ReserveFundClient() {
         listContributions(propertyId, { limit: 20 }),
       ]);
       setFund(updatedFund.fund);
-      setPropertyContext(updatedFund.propertyContext ?? null);
       setContributions(updatedContributions.items);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to remove entry');
@@ -449,6 +457,16 @@ export default function ReserveFundClient() {
   // "no data" state instead of the reassuring green "$0/mo · You're covered"
   // cards, which would otherwise look identical to a genuinely funded property.
   const hasTimelineData = activeLineItems.length > 0;
+  const contextInventoryItemId = activeLineItems.find(({ timelineItem }) => {
+    const item = timelineItem.inventoryItem;
+    return timelineItem.inventoryItemId && item && (
+      item.condition === 'UNKNOWN' || (!item.installedOn && !item.purchasedOn)
+    );
+  })?.timelineItem.inventoryItemId ?? null;
+  const propertyContextOperationInput = React.useMemo(
+    () => contextInventoryItemId ? { inventoryItemId: contextInventoryItemId } : {},
+    [contextInventoryItemId],
+  );
 
   const targetTotalCents = activeLineItems.reduce((sum, li) => sum + li.targetCostCents, 0);
   const progressPct =
@@ -490,7 +508,13 @@ export default function ReserveFundClient() {
         </div>
       )}
     >
-      <PropertyContextNotice context={propertyContext} title="Reserve planning context" />
+      <PropertyContextCapturePanel
+        propertyId={propertyId}
+        featureKey="RESERVE_FUND"
+        operationKey="RECALCULATE"
+        operationInput={propertyContextOperationInput}
+        onCaptured={handleBuildPlan}
+      />
       {loading && !fund && (
         <div className="flex h-48 items-center justify-center rounded-2xl border border-white/70 bg-white/65 backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/45">
           <div className="h-10 w-10 animate-spin rounded-full border-b-2 border-slate-900 dark:border-slate-100" />
@@ -595,16 +619,14 @@ export default function ReserveFundClient() {
               )}
             </div>
             {!hasTimelineData && (
-              <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">
-                These figures are blank, not zero — run{' '}
-                <Link
-                  href={`/dashboard/properties/${propertyId}/tools/capital-timeline`}
-                  className="font-medium text-teal-700 underline dark:text-teal-400"
-                >
-                  Capital Timeline
-                </Link>{' '}
-                below to generate a real target.
-              </p>
+              <div className="mt-3 flex flex-wrap items-center gap-3">
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  These figures are blank, not zero. Build the timeline here to generate a real target.
+                </p>
+                <Button type="button" size="sm" onClick={handleBuildPlan} disabled={recalculating}>
+                  Build reserve plan
+                </Button>
+              </div>
             )}
             {hasTimelineData && (
               <>
@@ -706,15 +728,11 @@ export default function ReserveFundClient() {
                   Nothing to save for yet
                 </h3>
                 <p className="text-sm text-slate-600 dark:text-slate-300">
-                  Run your{' '}
-                  <Link
-                    href={`/dashboard/properties/${propertyId}/tools/capital-timeline`}
-                    className="font-medium text-teal-700 underline dark:text-teal-400"
-                  >
-                    Capital Timeline
-                  </Link>{' '}
-                  to generate a reserve fund target.
+                  Build from your current inventory and planning assumptions without leaving this page.
                 </p>
+                <Button type="button" className="mt-4" onClick={handleBuildPlan} disabled={recalculating}>
+                  {recalculating ? 'Building plan…' : 'Build reserve plan'}
+                </Button>
               </div>
             ) : (
               <div className="space-y-2">

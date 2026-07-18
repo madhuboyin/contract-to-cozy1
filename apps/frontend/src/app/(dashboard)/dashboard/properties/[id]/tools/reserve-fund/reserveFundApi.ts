@@ -35,7 +35,12 @@ export type TimelineItemSummary = {
   estimatedCostMinCents: number | null;
   estimatedCostMaxCents: number | null;
   why: string;
-  inventoryItem?: { name: string } | null;
+  inventoryItem?: {
+    name: string;
+    condition: string;
+    installedOn: string | null;
+    purchasedOn: string | null;
+  } | null;
 };
 
 export type ReserveFundLineItemDTO = {

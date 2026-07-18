@@ -39,6 +39,34 @@ export interface FeatureContextRequirementDefinition {
 
 export const FEATURE_CONTEXT_REQUIREMENTS: readonly FeatureContextRequirementDefinition[] = [
   {
+    featureKey: 'RESERVE_FUND',
+    operationKey: 'RECALCULATE',
+    policyVersion: '1.0',
+    promptStrategy: 'MINIMUM_PATH',
+    required: [
+      {
+        factKey: 'inventory.items',
+        classification: 'REQUIRED_CALCULATION',
+        reasonCode: 'ADD_CAPITAL_ITEM_FOR_RESERVE_PLAN',
+        priority: 10,
+        acceptableStates: ['KNOWN'],
+        captureKey: 'INVENTORY_ITEM_SELECT_OR_CREATE',
+        minimumItems: 1,
+      },
+    ],
+    enhancements: [
+      {
+        factKey: 'inventory.items',
+        classification: 'ENHANCEMENT_ACCURACY',
+        reasonCode: 'CONFIRM_RESERVE_ITEM_LIFECYCLE',
+        priority: 20,
+        acceptableStates: ['KNOWN'],
+        captureKey: 'INVENTORY_ITEM_LIFECYCLE_UPDATE',
+        collectionPredicate: 'SELECTED_ITEM_LIFECYCLE_INCOMPLETE',
+      },
+    ],
+  },
+  {
     featureKey: 'CAPITAL_TIMELINE',
     operationKey: 'RUN_TIMELINE',
     policyVersion: '1.0',

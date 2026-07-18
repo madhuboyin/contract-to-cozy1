@@ -127,6 +127,7 @@ export async function runTimeline(req: CustomRequest, res: Response, next: NextF
           : undefined,
       createdByUserId: userId ?? null,
       propertyContextVersion: currentContext.contextVersion,
+      awaitReserveFundSync: req.body?.synchronizeReserveFund === true,
     });
     const snapshot =
       analysis.inputsSnapshot &&

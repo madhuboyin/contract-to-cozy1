@@ -228,6 +228,7 @@ export class HomeCapitalTimelineService {
       financialAssumptions?: FinancialAssumptionInput;
       createdByUserId?: string | null;
       propertyContextVersion?: string | null;
+      awaitReserveFundSync?: boolean;
     }
   ) {
     // 1. Fetch inputs (Phase-3: also fetch property state for climate adjustments)
@@ -623,24 +624,26 @@ export class HomeCapitalTimelineService {
       }
     }
 
-    // Fire-and-forget: keep the Reserve Fund Planner's target in sync with this
-    // fresh timeline. See docs/functional/HOME_RESERVE_FUND_PLANNER_FRD.md —
-    // this is the "event-driven" trigger; recalculateReserveFunds.job.ts is
-    // only the safety net for cases this call is ever missed.
+    // Keep the Reserve Fund Planner's target in sync with this fresh timeline.
+    // Normal timeline runs retain the fire-and-forget behavior; the inline
+    // Reserve Fund flow can await synchronization before refreshing its UI.
     if (contextAllowsEffects) {
       const reserveContext = options?.createdByUserId
         ? await getFinancialContextDecisions(propertyId, options.createdByUserId, 'RESERVE_FUND')
         : null;
-      homeReserveFundCalculationService
-        .recalculate(
-          propertyId,
-          'TIMELINE_REFRESH',
-          reserveContext?.contextVersion ?? null,
-          options?.createdByUserId ?? null,
-        )
-        .catch((err) =>
+      const reserveSync = homeReserveFundCalculationService.recalculate(
+        propertyId,
+        'TIMELINE_REFRESH',
+        reserveContext?.contextVersion ?? null,
+        options?.createdByUserId ?? null,
+      );
+      if (options?.awaitReserveFundSync) {
+        await reserveSync;
+      } else {
+        reserveSync.catch((err) =>
           logger.warn({ err, propertyId }, '[HomeCapitalTimeline] reserve fund recalculation failed')
         );
+      }
     }
 
     return enriched;

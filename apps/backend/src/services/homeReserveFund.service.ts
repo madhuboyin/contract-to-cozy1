@@ -89,7 +89,16 @@ export class HomeReserveFundService {
       },
       include: {
         timelineItem: {
-          include: { inventoryItem: { select: { name: true } } },
+          include: {
+            inventoryItem: {
+              select: {
+                name: true,
+                condition: true,
+                installedOn: true,
+                purchasedOn: true,
+              },
+            },
+          },
         },
       },
       orderBy: { timelineItem: { windowStart: 'asc' } },

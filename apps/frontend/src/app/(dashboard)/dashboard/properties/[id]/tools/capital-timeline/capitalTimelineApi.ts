@@ -73,11 +73,12 @@ export async function getLatestTimeline(propertyId: string): Promise<TimelineAna
 export async function runTimeline(
   propertyId: string,
   horizonYears: number = 10,
-  options?: { assumptionSetId?: string | null }
+  options?: { assumptionSetId?: string | null; synchronizeReserveFund?: boolean }
 ): Promise<TimelineAnalysisResult> {
   const res = await api.post(`/api/properties/${propertyId}/capital-timeline/run`, {
     horizonYears,
     ...(options?.assumptionSetId ? { assumptionSetId: options.assumptionSetId } : {}),
+    ...(options?.synchronizeReserveFund ? { synchronizeReserveFund: true } : {}),
   });
   return {
     analysis: (res.data?.analysis as TimelineAnalysisDTO | null) ?? null,

@@ -9,11 +9,23 @@ import {
   assertFinancialContextApplicable,
   getFinancialContextEnvelope,
 } from '../services/financialContext/context';
+import { evaluateFeatureContext } from '../modules/propertyContext/application/evaluateFeatureContext';
 
 function requireUserId(req: CustomRequest): string {
   const userId = req.user?.userId;
   if (!userId) throw new APIError('Authentication required.', 401, 'AUTH_REQUIRED');
   return userId;
+}
+
+async function requireInteractiveReserveContext(propertyId: string, userId: string) {
+  const evaluation = await evaluateFeatureContext(propertyId, userId, {
+    featureKey: 'RESERVE_FUND',
+    operationKey: 'RECALCULATE',
+  });
+  if (!evaluation.canExecute) {
+    throw new APIError('Required property context is incomplete.', 409, 'PROPERTY_CONTEXT_REQUIRED', evaluation);
+  }
+  return evaluation;
 }
 
 export async function getFund(req: CustomRequest, res: Response, next: NextFunction) {
@@ -53,6 +65,7 @@ export async function updateFund(req: CustomRequest, res: Response, next: NextFu
       'RESERVE_FUND',
       'reservePlanning',
     );
+    if (req.body.posture !== undefined) await requireInteractiveReserveContext(propertyId, userId);
     let fund;
     if (req.body.posture !== undefined) {
       fund = await homeReserveFundService.updatePosture(
@@ -87,6 +100,7 @@ export async function recalculateFund(req: CustomRequest, res: Response, next: N
       'RESERVE_FUND',
       'reservePlanning',
     );
+    await requireInteractiveReserveContext(propertyId, userId);
     const fund = await homeReserveFundService.recalculate(
       propertyId,
       currentContext.contextVersion,
