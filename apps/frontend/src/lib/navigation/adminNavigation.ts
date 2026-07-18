@@ -18,6 +18,7 @@ import {
   Database,
   ShieldEllipsis,
   KeyRound,
+  LayoutDashboard,
 } from 'lucide-react';
 import type { NavJob } from './jobsNavigation';
 
@@ -29,6 +30,15 @@ import type { NavJob } from './jobsNavigation';
  * the nav components special-case outside their generic render loop.
  */
 export const ADMIN_NAV: NavJob[] = [
+  {
+    key: 'admin-home',
+    name: 'Admin Console',
+    href: '/dashboard/admin',
+    icon: LayoutDashboard,
+    description: 'Global search, work queues, and all workspaces',
+    engines: [],
+    globalHref: true,
+  },
   {
     key: 'admin-work-queues',
     name: 'Work Queues',

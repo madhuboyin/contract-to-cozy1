@@ -179,6 +179,7 @@ immutable explanation of what happened.
 | Shared Data Health (Phase 5) | CURRENT — PARTIAL | UI over the existing shared-data API: readiness/fallback-risk/signal diagnostics, consistency issues, dry-run-default backfill trigger (`SHARED_DATA_OPERATE`) | Per-property drill-down, backfill run history, scheduled consistency checks with alerting |
 | Release Gates (Phase 5) | CURRENT — PARTIAL | Read-only UI over the existing release-gate API: per-tool PASS/FAIL, cohort/rollout, incident counts, blocking issues (`RELEASE_GATE_VIEW`) | Gate change actions (cohort/rollout edits) with approval, gate history, incident links |
 | Access Certification (Phase 6) | CURRENT — PARTIAL | Campaign snapshots of all active capability grants, KEEP/REVOKE attestation with self-attestation blocked, REVOKE executing the standard revoke path, single-open-campaign rule, completion gated on full attestation (`ADMIN_ROLE_MANAGE`) | Scheduled/recurring campaigns, scoped campaigns (per persona/capability), reminder notifications, certification evidence export |
+| Admin Console landing + global search (Phase 1) | CURRENT — PARTIAL | Landing at `/dashboard/admin` with capability-aware global search (users/providers/bookings/cases/privacy — each domain searched only if the actor holds its view capability), work-waiting tiles, workspace grid | Result deep-links to a specific entity (needs unified entity pattern), recent-activity feed, per-admin assigned-work view |
 
 ### 4.3 API-only and foundational capabilities
 
@@ -1309,11 +1310,18 @@ Test at least:
 
 ### Phase 1 — Command Center, search, and support foundation
 
-**Status:** Started — user/account support and Audit Explorer v1 shipped;
-dashboard, search, unified entity pattern, and case management remain PLANNED
+**Status:** Mostly shipped — user/account support, Audit Explorer v1,
+landing dashboard, global search, and the case foundation (via Phase 2)
+exist; unified entity pattern and deeper case features remain PLANNED
 
-- [ ] ADMIN landing dashboard. **Not started.**
-- [ ] Global search. **Not started.**
+- [x] ADMIN landing dashboard. Shipped at `/dashboard/admin` (baseline
+      `ADMIN_DASHBOARD_VIEW`): global search box, "work waiting" tiles from
+      the Work Queues API, and a grid of all admin workspaces.
+- [x] Global search. Shipped at `GET /api/admin/search` + the landing
+      page: one query fans out across users, providers, bookings, cases,
+      and privacy requests — but each domain is searched only if the actor
+      holds that domain's view capability, so results can never leak a
+      domain the actor couldn't open.
 - [ ] Unified entity page pattern. **Not started** — the new User & Account
       Support page (below) uses a bespoke layout, not a shared pattern; the
       pattern should still be extracted once a second entity type (e.g.
@@ -1651,6 +1659,8 @@ For each delivered phase:
 | Release Gates UI (Phase 5) | `apps/frontend/src/app/(dashboard)/dashboard/admin/release-gates/page.tsx` (backend pre-existing: `releaseGate.routes.ts`) |
 | Access Certification UI (Phase 6) | `apps/frontend/src/app/(dashboard)/dashboard/admin/access-certification/page.tsx` |
 | Access Certification backend (Phase 6) | `apps/backend/src/services/adminAccessCertification.service.ts`, `apps/backend/src/routes/adminAccessCertification.routes.ts` |
+| Admin Console landing UI (Phase 1) | `apps/frontend/src/app/(dashboard)/dashboard/admin/page.tsx` |
+| Global search backend (Phase 1) | `apps/backend/src/services/adminSearch.service.ts`, `apps/backend/src/routes/adminSearch.routes.ts` |
 | Booking domain/admin foundation | `apps/backend/src/services/booking.service.ts` |
 | Account lifecycle/deletion | `apps/backend/src/services/auth.service.ts`, `apps/backend/src/controllers/user.controller.ts`, `apps/backend/src/services/accountDeletionCascade.service.ts` |
 | Core domain and audit schema | `apps/backend/prisma/schema.prisma` |

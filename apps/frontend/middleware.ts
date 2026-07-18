@@ -29,6 +29,7 @@ const SENSITIVE_PAGE_PREFIXES = [
   '/vault',
 ] as const;
 const ADMIN_CONSOLE_PREFIXES = [
+  '/dashboard/admin',
   '/dashboard/admin/provider-compliance',
   '/dashboard/admin/diy/templates',
   '/dashboard/analytics-admin',
