@@ -7,7 +7,23 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm, SubmitHandler, useFieldArray, useFormContext } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { Loader2, Save, X, Home as HomeIcon, AlertCircle, Trash2, Plus, ChevronDown } from "lucide-react";
+import {
+  AlertCircle,
+  Building2,
+  Check,
+  ChevronDown,
+  Home as HomeIcon,
+  KeyRound,
+  Leaf,
+  Loader2,
+  Plus,
+  Save,
+  Sparkles,
+  Trash2,
+  UsersRound,
+  Wrench,
+  X,
+} from "lucide-react";
 
 import {
   HeatingTypes,
@@ -22,6 +38,7 @@ import {
   RESPONSIBILITY_SCOPES,
   RESPONSIBLE_PARTY_OPTIONS,
   defaultResponsibilityParties,
+  getResponsibilityPreset,
   mapResponsibilitiesToForm,
   mapResponsibilitiesToPayload,
   normalizeOutdoorSpaceTypes,
@@ -71,6 +88,43 @@ const DWELLING_OPTIONS = ['DETACHED_SINGLE_FAMILY', 'ATTACHED_SINGLE_FAMILY', 'T
 const OWNERSHIP_FORM_OPTIONS = ['FEE_SIMPLE', 'CONDOMINIUM', 'COOPERATIVE', 'LEASEHOLD', 'OTHER', 'UNKNOWN'] as const;
 const PROPERTY_USE_OPTIONS = ['PRIMARY_RESIDENCE', 'SECOND_HOME', 'LONG_TERM_RENTAL', 'SHORT_TERM_RENTAL', 'VACANT', 'UNDER_RENOVATION', 'FOR_SALE', 'OTHER', 'UNKNOWN'] as const;
 const OCCUPANCY_STATUS_OPTIONS = ['OWNER_OCCUPIED', 'TENANT_OCCUPIED', 'FAMILY_OCCUPIED', 'MIXED', 'VACANT', 'UNKNOWN'] as const;
+
+const OWNERSHIP_FORM_LABELS: Record<(typeof OWNERSHIP_FORM_OPTIONS)[number], string> = {
+  FEE_SIMPLE: 'I own the home and land',
+  CONDOMINIUM: 'Condo — I own my unit',
+  COOPERATIVE: 'Co-op — I own shares in the building',
+  LEASEHOLD: 'Leasehold — the land is leased',
+  OTHER: 'Something else',
+  UNKNOWN: 'I’m not sure',
+};
+
+const PROPERTY_USE_LABELS: Record<(typeof PROPERTY_USE_OPTIONS)[number], string> = {
+  PRIMARY_RESIDENCE: 'My primary home',
+  SECOND_HOME: 'A second home',
+  LONG_TERM_RENTAL: 'A long-term rental',
+  SHORT_TERM_RENTAL: 'A short-term rental',
+  VACANT: 'Currently unused',
+  UNDER_RENOVATION: 'Under renovation',
+  FOR_SALE: 'For sale',
+  OTHER: 'Something else',
+  UNKNOWN: 'I’m not sure',
+};
+
+const OCCUPANCY_STATUS_LABELS: Record<(typeof OCCUPANCY_STATUS_OPTIONS)[number], string> = {
+  OWNER_OCCUPIED: 'I live here',
+  TENANT_OCCUPIED: 'Tenants live here',
+  FAMILY_OCCUPIED: 'Family members live here',
+  MIXED: 'A mix of people',
+  VACANT: 'No one right now',
+  UNKNOWN: 'I’m not sure',
+};
+
+const RESPONSIBILITY_PRESETS = [
+  { value: 'OWNER', label: 'I handle most maintenance', description: 'Use this for a home you primarily maintain yourself.', icon: HomeIcon },
+  { value: 'ASSOCIATION', label: 'My association handles most', description: 'Common for condos, co-ops, and HOA-managed homes.', icon: Building2 },
+  { value: 'LANDLORD', label: 'My landlord handles most', description: 'Best when a landlord arranges repairs and upkeep.', icon: KeyRound },
+  { value: 'SHARED', label: 'Responsibilities are shared', description: 'Use this when maintenance is usually coordinated together.', icon: UsersRound },
+] as const;
 
 const APPLIANCE_DISPLAY_LABELS: Record<string, string> = {
   DISHWASHER: 'Dishwasher',
@@ -981,6 +1035,11 @@ export default function EditPropertyPage() {
   const saveBarCopy = getSaveBarCopy(confidenceScore);
   const startSectionId = startField?.sectionId ?? null;
   const [correctionAnchor, setCorrectionAnchor] = React.useState('');
+  const responsibilityPreset = React.useMemo(
+    () => getResponsibilityPreset(watchResponsibilities),
+    [watchResponsibilities],
+  );
+  const [responsibilityDetailsExpanded, setResponsibilityDetailsExpanded] = React.useState(false);
   const applianceCount = Array.isArray(watchAppliances) ? watchAppliances.length : 0;
   const [appliancesExpanded, setAppliancesExpanded] = React.useState(false);
   const [highlightHomeValue, setHighlightHomeValue] = React.useState(false);
@@ -994,6 +1053,12 @@ export default function EditPropertyPage() {
     }, 150);
     return () => window.clearTimeout(timeout);
   }, []);
+
+  React.useEffect(() => {
+    if (responsibilityPreset === 'CUSTOM' || correctionAnchor === 'responsibility') {
+      setResponsibilityDetailsExpanded(true);
+    }
+  }, [responsibilityPreset, correctionAnchor]);
 
   React.useEffect(() => {
     if (startSectionId === "appliances") {
@@ -1937,139 +2002,287 @@ export default function EditPropertyPage() {
 
             <PropertyEditSection
               id="occupancy"
-              title="Occupancy"
-              helperText="Helps personalize your home plan."
+              title="Home setup"
+              helperText="A few quick details help us recommend only the care that applies to you."
               defaultExpandedDesktop={true}
               defaultExpandedMobile={false}
               forceExpandOnMobile={startSectionId === "occupancy" || ['occupancy', 'exterior', 'responsibility'].includes(correctionAnchor)}
               headerChip={startSectionId === "occupancy" ? <FieldNudgeChip variant="start" /> : undefined}
-              className="occupancy-section-card"
-              headerClassName="p-4 pb-2.5 sm:px-5 sm:pb-2.5 sm:pt-4"
-              contentClassName="p-4 pt-0 sm:px-5 sm:pb-4 sm:pt-0"
+              className="occupancy-section-card overflow-hidden"
             >
-              <div className="occupancy-row flex flex-wrap items-end gap-5">
-                <FormField
-                  control={form.control}
-                  name="bedrooms"
-                  render={({ field }) => (
-                    <FormItem className="occupancy-numeric-field w-[80px] max-w-[80px]">
-                      <FormLabel className="mb-1 block text-xs text-gray-500 dark:text-slate-400">Bedrooms</FormLabel>
-                      <FormControl><Input id="field-bedrooms" className="h-10 w-full px-3 text-center text-[15px] font-medium focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40" placeholder="3" type="number" {...field} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value === "" ? null : parseInt(e.target.value, 10))} /></FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="bathrooms"
-                  render={({ field }) => (
-                    <FormItem className="occupancy-numeric-field w-[80px] max-w-[80px]">
-                      <FormLabel className="mb-1 block text-xs text-gray-500 dark:text-slate-400">Bathrooms</FormLabel>
-                      <FormControl><Input id="field-bathrooms" className="h-10 w-full px-3 text-center text-[15px] font-medium focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40" placeholder="2.5" type="number" step="0.5" {...field} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value === "" ? null : Number(e.target.value))} /></FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-              <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-                {([
-                  ['ownershipForm', 'Ownership form', OWNERSHIP_FORM_OPTIONS],
-                  ['propertyUse', 'Property use', PROPERTY_USE_OPTIONS],
-                  ['occupancyStatus', 'Occupancy status', OCCUPANCY_STATUS_OPTIONS],
-                ] as const).map(([name, fieldLabel, options]) => (
-                  <FormField
-                    key={name}
-                    control={form.control}
-                    name={name}
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>{fieldLabel}</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value}>
-                          <FormControl><SelectTrigger id={`field-${name}`}><SelectValue /></SelectTrigger></FormControl>
-                          <SelectContent>{options.map((option) => <SelectItem key={option} value={option}>{formatEnumLabel(option)}</SelectItem>)}</SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                ))}
+              <div className="mb-5 flex items-start gap-3 rounded-xl border border-emerald-200/70 bg-emerald-50/70 px-4 py-3 text-sm text-emerald-900 dark:border-emerald-800/50 dark:bg-emerald-950/30 dark:text-emerald-100">
+                <Sparkles className="mt-0.5 h-4 w-4 shrink-0" />
+                <p><span className="font-medium">No paperwork needed.</span> Choose what you know now—you can change any answer later.</p>
               </div>
 
-              <div id="responsibility" className="mt-5 border-t border-black/10 pt-4 dark:border-white/10">
-                <p className="mb-3 text-sm text-muted-foreground">Set responsibility separately so association-, landlord-, shared-, and owner-managed work stays accurate.</p>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  {RESPONSIBILITY_SCOPES.map((scope) => (
+              <div className="space-y-5">
+                <section className="rounded-2xl border border-black/10 bg-slate-50/60 p-4 dark:border-white/10 dark:bg-slate-900/30 sm:p-5">
+                  <div className="mb-4 flex items-center gap-3">
+                    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-100 text-xs font-bold text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300">1</span>
+                    <div>
+                      <h3 className="font-semibold text-foreground">About the home</h3>
+                      <p className="text-xs text-muted-foreground">Just the basics.</p>
+                    </div>
+                  </div>
+                  <div className="occupancy-row grid max-w-sm grid-cols-2 gap-4">
                     <FormField
-                      key={scope}
                       control={form.control}
-                      name={`responsibilities.${scope}` as const}
+                      name="bedrooms"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>{formatEnumLabel(scope)}</FormLabel>
+                          <FormLabel>Bedrooms</FormLabel>
+                          <FormControl><Input id="field-bedrooms" className="h-11 bg-white text-center text-base font-semibold dark:bg-slate-950/50" placeholder="3" type="number" {...field} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value === "" ? null : parseInt(e.target.value, 10))} /></FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="bathrooms"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Bathrooms</FormLabel>
+                          <FormControl><Input id="field-bathrooms" className="h-11 bg-white text-center text-base font-semibold dark:bg-slate-950/50" placeholder="2.5" type="number" step="0.5" {...field} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value === "" ? null : Number(e.target.value))} /></FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                </section>
+
+                <section className="rounded-2xl border border-black/10 p-4 dark:border-white/10 sm:p-5">
+                  <div className="mb-4 flex items-center gap-3">
+                    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-100 text-xs font-bold text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300">2</span>
+                    <div>
+                      <h3 className="font-semibold text-foreground">How the home fits your life</h3>
+                      <p className="text-xs text-muted-foreground">This keeps your plan relevant to the people living here.</p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
+                    <FormField
+                      control={form.control}
+                      name="ownershipForm"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>How is this home owned?</FormLabel>
+                          <p className="min-h-8 text-xs leading-4 text-muted-foreground">Helps identify association or landlord involvement.</p>
                           <Select onValueChange={field.onChange} value={field.value}>
-                            <FormControl><SelectTrigger id={`field-responsibility-${scope}`}><SelectValue /></SelectTrigger></FormControl>
-                            <SelectContent>{RESPONSIBLE_PARTY_OPTIONS.map((option) => <SelectItem key={option} value={option}>{formatEnumLabel(option)}</SelectItem>)}</SelectContent>
+                            <FormControl><SelectTrigger id="field-ownershipForm" className="h-11 bg-white dark:bg-slate-950/50"><SelectValue /></SelectTrigger></FormControl>
+                            <SelectContent>{OWNERSHIP_FORM_OPTIONS.map((option) => <SelectItem key={option} value={option}>{OWNERSHIP_FORM_LABELS[option]}</SelectItem>)}</SelectContent>
                           </Select>
                           <FormMessage />
                         </FormItem>
                       )}
                     />
-                  ))}
-                </div>
-              </div>
+                    <FormField
+                      control={form.control}
+                      name="propertyUse"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>How do you use this home?</FormLabel>
+                          <p className="min-h-8 text-xs leading-4 text-muted-foreground">For example, your main home or a rental.</p>
+                          <Select onValueChange={field.onChange} value={field.value}>
+                            <FormControl><SelectTrigger id="field-propertyUse" className="h-11 bg-white dark:bg-slate-950/50"><SelectValue /></SelectTrigger></FormControl>
+                            <SelectContent>{PROPERTY_USE_OPTIONS.map((option) => <SelectItem key={option} value={option}>{PROPERTY_USE_LABELS[option]}</SelectItem>)}</SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="occupancyStatus"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Who lives here now?</FormLabel>
+                          <p className="min-h-8 text-xs leading-4 text-muted-foreground">Choose the closest match today.</p>
+                          <Select onValueChange={field.onChange} value={field.value}>
+                            <FormControl><SelectTrigger id="field-occupancyStatus" className="h-11 bg-white dark:bg-slate-950/50"><SelectValue /></SelectTrigger></FormControl>
+                            <SelectContent>{OCCUPANCY_STATUS_OPTIONS.map((option) => <SelectItem key={option} value={option}>{OCCUPANCY_STATUS_LABELS[option]}</SelectItem>)}</SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                </section>
 
-              <div id="exterior" className="mt-5 grid grid-cols-1 gap-3 border-t border-black/10 pt-4 dark:border-white/10 sm:grid-cols-2">
-                {([
-                  ['hasPrivateOutdoorSpace', 'Private outdoor space'],
-                  ['hasLawn', 'Lawn'],
-                  ['hasTreesOrShrubs', 'Trees or shrubs'],
-                  ['hasDriveway', 'Driveway'],
-                ] as const).map(([name, fieldLabel]) => (
+                <section id="responsibility" className="rounded-2xl border border-black/10 p-4 dark:border-white/10 sm:p-5">
+                  <div className="mb-4 flex items-center gap-3">
+                    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-100 text-xs font-bold text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300">3</span>
+                    <div>
+                      <h3 className="font-semibold text-foreground">Who takes care of what?</h3>
+                      <p className="text-xs text-muted-foreground">Pick the closest match. You can customize exceptions if needed.</p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                    {RESPONSIBILITY_PRESETS.map((preset) => {
+                      const selected = responsibilityPreset === preset.value;
+                      const PresetIcon = preset.icon;
+                      return (
+                        <button
+                          key={preset.value}
+                          type="button"
+                          aria-pressed={selected}
+                          onClick={() => {
+                            form.setValue('responsibilities', defaultResponsibilityParties(preset.value), { shouldDirty: true, shouldTouch: true });
+                            setResponsibilityDetailsExpanded(false);
+                          }}
+                          className={cn(
+                            "group flex min-h-[88px] items-start gap-3 rounded-xl border p-4 text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40",
+                            selected
+                              ? "border-emerald-500 bg-emerald-50 shadow-sm dark:bg-emerald-950/30"
+                              : "border-black/10 bg-white hover:border-emerald-300 hover:bg-emerald-50/40 dark:border-white/10 dark:bg-slate-950/40 dark:hover:border-emerald-700",
+                          )}
+                        >
+                          <span className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-lg", selected ? "bg-emerald-600 text-white" : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300")}>
+                            <PresetIcon className="h-4 w-4" />
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="flex items-center justify-between gap-2 font-medium text-foreground">
+                              {preset.label}
+                              {selected && <Check className="h-4 w-4 shrink-0 text-emerald-600" />}
+                            </span>
+                            <span className="mt-1 block text-xs leading-4 text-muted-foreground">{preset.description}</span>
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-black/10 pt-4 dark:border-white/10">
+                    <p className="text-xs text-muted-foreground">
+                      {responsibilityPreset === 'UNKNOWN' ? 'Not sure? Choose a general match or set each area separately.' : 'Have a few exceptions? Set responsibility area by area.'}
+                    </p>
+                    <Button type="button" variant="outline" size="sm" onClick={() => setResponsibilityDetailsExpanded((expanded) => !expanded)} aria-expanded={responsibilityDetailsExpanded}>
+                      <Wrench className="mr-2 h-4 w-4" />
+                      {responsibilityDetailsExpanded ? 'Hide custom details' : 'Customize responsibilities'}
+                      <ChevronDown className={cn("ml-2 h-4 w-4 transition-transform", responsibilityDetailsExpanded && "rotate-180")} />
+                    </Button>
+                  </div>
+                  {responsibilityDetailsExpanded && (
+                    <div className="mt-4 grid grid-cols-1 gap-3 rounded-xl bg-slate-50 p-4 dark:bg-slate-900/50 sm:grid-cols-2 lg:grid-cols-3">
+                      {RESPONSIBILITY_SCOPES.map((scope) => (
+                        <FormField
+                          key={scope}
+                          control={form.control}
+                          name={`responsibilities.${scope}` as const}
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="text-xs">{formatEnumLabel(scope)}</FormLabel>
+                              <Select onValueChange={field.onChange} value={field.value}>
+                                <FormControl><SelectTrigger id={`field-responsibility-${scope}`} className="bg-white dark:bg-slate-950/50"><SelectValue /></SelectTrigger></FormControl>
+                                <SelectContent>{RESPONSIBLE_PARTY_OPTIONS.map((option) => <SelectItem key={option} value={option}>{option === 'UNKNOWN' ? 'Not sure' : formatEnumLabel(option)}</SelectItem>)}</SelectContent>
+                              </Select>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </section>
+
+                <section id="exterior" className="rounded-2xl border border-black/10 p-4 dark:border-white/10 sm:p-5">
+                  <div className="mb-4 flex items-center gap-3">
+                    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-100 text-xs font-bold text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300">4</span>
+                    <div>
+                      <h3 className="font-semibold text-foreground">Outdoor features</h3>
+                      <p className="text-xs text-muted-foreground">We’ll only suggest outdoor care that applies to your home.</p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    {([
+                      ['hasPrivateOutdoorSpace', 'Private outdoor space', 'Yard, patio, balcony, deck, or garden'],
+                      ['hasLawn', 'Lawn', 'Any grass you help maintain'],
+                      ['hasTreesOrShrubs', 'Trees or shrubs', 'On areas you use or maintain'],
+                      ['hasDriveway', 'Driveway', 'Private or shared vehicle access'],
+                    ] as const).map(([name, fieldLabel, description]) => (
+                      <FormField
+                        key={name}
+                        control={form.control}
+                        name={name}
+                        render={({ field }) => (
+                          <FormItem className="rounded-xl border border-black/10 bg-white p-4 dark:border-white/10 dark:bg-slate-950/40">
+                            <div className="flex items-start gap-3">
+                              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300"><Leaf className="h-4 w-4" /></span>
+                              <div className="min-w-0 flex-1">
+                                <FormLabel className="font-medium">{fieldLabel}</FormLabel>
+                                <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>
+                              </div>
+                            </div>
+                            <div className="mt-3 grid grid-cols-3 gap-2" role="group" aria-label={fieldLabel}>
+                              {([
+                                { label: 'Yes', value: true },
+                                { label: 'No', value: false },
+                                { label: 'Not sure', value: null },
+                              ] as const).map((choice) => {
+                                const selected = field.value === choice.value;
+                                return (
+                                  <button
+                                    key={choice.label}
+                                    type="button"
+                                    aria-pressed={selected}
+                                    onClick={() => field.onChange(choice.value)}
+                                    className={cn(
+                                      "rounded-lg border px-2 py-2 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40",
+                                      selected
+                                        ? "border-emerald-500 bg-emerald-600 text-white"
+                                        : "border-black/10 bg-slate-50 text-slate-600 hover:bg-slate-100 dark:border-white/10 dark:bg-slate-900 dark:text-slate-300",
+                                    )}
+                                  >
+                                    {choice.label}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    ))}
+                  </div>
+                </section>
+
+                {form.watch('hasPrivateOutdoorSpace') === true && (
                   <FormField
-                    key={name}
                     control={form.control}
-                    name={name}
+                    name="outdoorSpaceTypes"
                     render={({ field }) => (
-                      <FormItem className="flex items-center gap-3 rounded-lg border border-black/10 p-3 dark:border-white/10">
-                        <FormControl><Checkbox checked={field.value === true} onCheckedChange={(checked) => field.onChange(checked === true)} /></FormControl>
-                        <FormLabel className="!mt-0 cursor-pointer">{fieldLabel}</FormLabel>
+                      <FormItem className="rounded-2xl border border-emerald-200 bg-emerald-50/50 p-4 dark:border-emerald-800/50 dark:bg-emerald-950/20 sm:p-5">
+                        <FormLabel>What kind of outdoor space do you have?</FormLabel>
+                        <p className="text-xs text-muted-foreground">Select all that apply.</p>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {OUTDOOR_SPACE_TYPE_OPTIONS.map((type) => {
+                            const checked = field.value?.includes(type) ?? false;
+                            return (
+                              <button
+                                key={type}
+                                type="button"
+                                aria-pressed={checked}
+                                onClick={() => field.onChange(
+                                  checked
+                                    ? (field.value ?? []).filter((value) => value !== type)
+                                    : Array.from(new Set([...(field.value ?? []), type])),
+                                )}
+                                className={cn(
+                                  "inline-flex items-center rounded-full border px-3 py-2 text-sm font-medium transition-colors",
+                                  checked
+                                    ? "border-emerald-500 bg-emerald-600 text-white"
+                                    : "border-black/10 bg-white text-foreground hover:border-emerald-300 dark:border-white/10 dark:bg-slate-950/50",
+                                )}
+                              >
+                                {checked && <Check className="mr-1.5 h-3.5 w-3.5" />}
+                                {formatEnumLabel(type)}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        <FormMessage />
                       </FormItem>
                     )}
                   />
-                ))}
+                )}
               </div>
-              {form.watch('hasPrivateOutdoorSpace') === true && (
-                <FormField
-                  control={form.control}
-                  name="outdoorSpaceTypes"
-                  render={({ field }) => (
-                    <FormItem className="mt-3">
-                      <FormLabel>Outdoor space types</FormLabel>
-                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                        {OUTDOOR_SPACE_TYPE_OPTIONS.map((type) => {
-                          const checked = field.value?.includes(type) ?? false;
-                          return (
-                            <FormItem key={type} className="flex items-center gap-3 rounded-lg border border-black/10 p-3 dark:border-white/10">
-                              <FormControl>
-                                <Checkbox
-                                  checked={checked}
-                                  onCheckedChange={(next) => field.onChange(
-                                    next === true
-                                      ? Array.from(new Set([...(field.value ?? []), type]))
-                                      : (field.value ?? []).filter((value) => value !== type),
-                                  )}
-                                />
-                              </FormControl>
-                              <FormLabel className="!mt-0 cursor-pointer">{formatEnumLabel(type)}</FormLabel>
-                            </FormItem>
-                          );
-                        })}
-                      </div>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              )}
             </PropertyEditSection>
 
             <PropertyEditSection

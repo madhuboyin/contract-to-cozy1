@@ -2,6 +2,8 @@ import type { OutdoorSpaceType, PropertyResponsibilityInput, ResponsibleParty } 
 import fs from 'node:fs';
 import path from 'node:path';
 import {
+  defaultResponsibilityParties,
+  getResponsibilityPreset,
   mapResponsibilitiesToForm,
   mapResponsibilitiesToPayload,
   normalizeOutdoorSpaceTypes,
@@ -60,6 +62,16 @@ describe('Property Context create/edit form round trips', () => {
 
   test('disabling private outdoor space clears persisted types', () => {
     expect(normalizeOutdoorSpaceTypes(false, ['BALCONY', 'PATIO'])).toEqual([]);
+  });
+
+  test('recognizes a single maintenance preset without flattening custom responsibilities', () => {
+    expect(getResponsibilityPreset(defaultResponsibilityParties('OWNER'))).toBe('OWNER');
+    expect(getResponsibilityPreset(defaultResponsibilityParties('ASSOCIATION'))).toBe('ASSOCIATION');
+    expect(getResponsibilityPreset(defaultResponsibilityParties('UNKNOWN'))).toBe('UNKNOWN');
+
+    const custom = defaultResponsibilityParties('OWNER');
+    custom.ROOF = 'ASSOCIATION';
+    expect(getResponsibilityPreset(custom)).toBe('CUSTOM');
   });
 
   test('supported create and edit pages use the canonical round-trip mappers', () => {

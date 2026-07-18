@@ -39,9 +39,20 @@ export const OUTDOOR_SPACE_TYPE_OPTIONS: readonly OutdoorSpaceType[] = [
 ];
 
 export type ResponsibilityParties = Record<PropertyResponsibilityScope, ResponsibleParty>;
+export type ResponsibilityPreset = Exclude<ResponsibleParty, 'UNKNOWN'> | 'CUSTOM' | 'UNKNOWN';
 
 export function defaultResponsibilityParties(party: ResponsibleParty = 'OWNER'): ResponsibilityParties {
   return Object.fromEntries(RESPONSIBILITY_SCOPES.map((scope) => [scope, party])) as ResponsibilityParties;
+}
+
+export function getResponsibilityPreset(
+  responsibilities: ResponsibilityParties | null | undefined,
+): ResponsibilityPreset {
+  const parties = RESPONSIBILITY_SCOPES.map((scope) => responsibilities?.[scope] ?? 'UNKNOWN');
+  const first = parties[0];
+  if (parties.every((party) => party === 'UNKNOWN')) return 'UNKNOWN';
+  if (first !== 'UNKNOWN' && parties.every((party) => party === first)) return first;
+  return 'CUSTOM';
 }
 
 export function mapResponsibilitiesToForm(
