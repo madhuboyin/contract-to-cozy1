@@ -36,7 +36,27 @@ export interface FeatureContextRequirementDefinition {
   promptStrategy: 'ONE_AT_A_TIME' | 'GROUP_RELATED' | 'MINIMUM_PATH';
   notApplicableWhen?: DeclarativeCondition;
   notApplicableReasonCode?: string;
+  adoption: {
+    surfaceDisposition: 'INLINE_PANEL' | 'RESERVED_NO_INVOKER';
+    executionDisposition: 'SHARED_GATE' | 'DOMAIN_POLICY' | 'CAPTURE_ONLY' | 'NOT_INVOKED';
+    owner: string;
+  };
 }
+
+const adopted = (
+  owner: string,
+  executionDisposition: FeatureContextRequirementDefinition['adoption']['executionDisposition'],
+): FeatureContextRequirementDefinition['adoption'] => ({
+  surfaceDisposition: 'INLINE_PANEL',
+  executionDisposition,
+  owner,
+});
+
+const reserved = (owner: string): FeatureContextRequirementDefinition['adoption'] => ({
+  surfaceDisposition: 'RESERVED_NO_INVOKER',
+  executionDisposition: 'NOT_INVOKED',
+  owner,
+});
 
 const FINANCIAL_ACCURACY_FACTS = {
   propertyUse: ['core.propertyUse', 'CORE_PROPERTY_USE'],
@@ -63,6 +83,7 @@ function financialAccuracyContract(
     policyVersion: '1.0',
     promptStrategy: 'MINIMUM_PATH',
     required: [],
+    adoption: adopted('Phase 5 financial tool', 'DOMAIN_POLICY'),
     enhancements: facts.map((fact, index) => {
       const [factKey, captureKey] = FINANCIAL_ACCURACY_FACTS[fact];
       return {
@@ -94,6 +115,7 @@ export const FEATURE_CONTEXT_REQUIREMENTS: readonly FeatureContextRequirementDef
   {
     featureKey: 'RESERVE_FUND',
     operationKey: 'RECALCULATE',
+    adoption: adopted('Reserve Fund', 'SHARED_GATE'),
     policyVersion: '1.0',
     promptStrategy: 'MINIMUM_PATH',
     required: [
@@ -122,6 +144,7 @@ export const FEATURE_CONTEXT_REQUIREMENTS: readonly FeatureContextRequirementDef
   {
     featureKey: 'CAPITAL_TIMELINE',
     operationKey: 'RUN_TIMELINE',
+    adoption: adopted('Capital Timeline', 'SHARED_GATE'),
     policyVersion: '1.0',
     promptStrategy: 'MINIMUM_PATH',
     required: [],
@@ -149,6 +172,7 @@ export const FEATURE_CONTEXT_REQUIREMENTS: readonly FeatureContextRequirementDef
   {
     featureKey: 'REPAIR_REPLACE',
     operationKey: 'RUN_ANALYSIS',
+    adoption: adopted('Repair vs. Replace', 'SHARED_GATE'),
     policyVersion: '1.0',
     promptStrategy: 'MINIMUM_PATH',
     required: [],
@@ -167,6 +191,7 @@ export const FEATURE_CONTEXT_REQUIREMENTS: readonly FeatureContextRequirementDef
   {
     featureKey: 'NEIGHBORHOOD_RADAR',
     operationKey: 'VIEW_RADAR',
+    adoption: adopted('Neighborhood Radar', 'SHARED_GATE'),
     policyVersion: '1.0',
     promptStrategy: 'MINIMUM_PATH',
     required: [
@@ -184,6 +209,7 @@ export const FEATURE_CONTEXT_REQUIREMENTS: readonly FeatureContextRequirementDef
   {
     featureKey: 'SELLER_PREP',
     operationKey: 'OPEN_PLAN',
+    adoption: adopted('Seller Prep', 'SHARED_GATE'),
     policyVersion: '1.0',
     promptStrategy: 'MINIMUM_PATH',
     required: [
@@ -209,6 +235,7 @@ export const FEATURE_CONTEXT_REQUIREMENTS: readonly FeatureContextRequirementDef
   {
     featureKey: 'HOA_COMPLIANCE',
     operationKey: 'CREATE_APPROVAL_RECORD',
+    adoption: adopted('HOA Compliance', 'SHARED_GATE'),
     policyVersion: '1.0',
     promptStrategy: 'MINIMUM_PATH',
     required: [
@@ -253,6 +280,7 @@ export const FEATURE_CONTEXT_REQUIREMENTS: readonly FeatureContextRequirementDef
   {
     featureKey: 'PERMITS',
     operationKey: 'CREATE_MANUAL_PERMIT',
+    adoption: adopted('Permit Tracker', 'SHARED_GATE'),
     policyVersion: '1.0',
     promptStrategy: 'MINIMUM_PATH',
     required: [
@@ -302,6 +330,7 @@ export const FEATURE_CONTEXT_REQUIREMENTS: readonly FeatureContextRequirementDef
   {
     featureKey: 'PROJECTS',
     operationKey: 'CREATE_PROJECT',
+    adoption: adopted('Project Tracker', 'SHARED_GATE'),
     policyVersion: '1.0',
     promptStrategy: 'MINIMUM_PATH',
     required: [
@@ -346,6 +375,7 @@ export const FEATURE_CONTEXT_REQUIREMENTS: readonly FeatureContextRequirementDef
   {
     featureKey: 'CLAIMS',
     operationKey: 'FILE_INSURANCE_CLAIM',
+    adoption: adopted('Insurance Claims', 'SHARED_GATE'),
     policyVersion: '1.0',
     promptStrategy: 'MINIMUM_PATH',
     required: [
@@ -365,6 +395,7 @@ export const FEATURE_CONTEXT_REQUIREMENTS: readonly FeatureContextRequirementDef
   {
     featureKey: 'CLAIMS',
     operationKey: 'FILE_WARRANTY_CLAIM',
+    adoption: adopted('Warranty Claims', 'SHARED_GATE'),
     policyVersion: '1.0',
     promptStrategy: 'MINIMUM_PATH',
     required: [
@@ -384,6 +415,7 @@ export const FEATURE_CONTEXT_REQUIREMENTS: readonly FeatureContextRequirementDef
   {
     featureKey: 'COVERAGE_INTELLIGENCE',
     operationKey: 'ASSESS_PROPERTY_COVERAGE',
+    adoption: adopted('Coverage Intelligence', 'DOMAIN_POLICY'),
     policyVersion: '1.0',
     promptStrategy: 'MINIMUM_PATH',
     required: [],
@@ -403,6 +435,7 @@ export const FEATURE_CONTEXT_REQUIREMENTS: readonly FeatureContextRequirementDef
   {
     featureKey: 'MAINTENANCE',
     operationKey: 'SET_UP_INSTALLED_SYSTEMS',
+    adoption: adopted('Maintenance Setup', 'CAPTURE_ONLY'),
     policyVersion: '1.0',
     promptStrategy: 'MINIMUM_PATH',
     required: [
@@ -421,6 +454,7 @@ export const FEATURE_CONTEXT_REQUIREMENTS: readonly FeatureContextRequirementDef
   {
     featureKey: 'PLANT_ADVISOR',
     operationKey: 'GENERATE_OUTDOOR_RECOMMENDATIONS',
+    adoption: adopted('Plant Advisor', 'SHARED_GATE'),
     policyVersion: '1.0',
     promptStrategy: 'MINIMUM_PATH',
     notApplicableWhen: { factKey: 'exterior.hasPrivateOutdoorSpace', operator: 'EQUALS', value: false },
@@ -459,6 +493,7 @@ export const FEATURE_CONTEXT_REQUIREMENTS: readonly FeatureContextRequirementDef
   {
     featureKey: 'MAINTENANCE',
     operationKey: 'GENERATE_SAFETY_TASKS',
+    adoption: adopted('Maintenance Safety', 'SHARED_GATE'),
     policyVersion: '1.0',
     promptStrategy: 'GROUP_RELATED',
     required: [
@@ -484,6 +519,7 @@ export const FEATURE_CONTEXT_REQUIREMENTS: readonly FeatureContextRequirementDef
   {
     featureKey: 'MAINTENANCE',
     operationKey: 'PREPARE_TEMPLATE',
+    adoption: adopted('Maintenance Templates', 'SHARED_GATE'),
     policyVersion: '1.0',
     promptStrategy: 'MINIMUM_PATH',
     required: [
@@ -505,6 +541,7 @@ export const FEATURE_CONTEXT_REQUIREMENTS: readonly FeatureContextRequirementDef
   {
     featureKey: 'ENERGY',
     operationKey: 'GENERATE_HVAC_RECOMMENDATIONS',
+    adoption: reserved('Future HVAC recommendation generator'),
     policyVersion: '1.0',
     promptStrategy: 'GROUP_RELATED',
     required: [
@@ -530,6 +567,7 @@ export const FEATURE_CONTEXT_REQUIREMENTS: readonly FeatureContextRequirementDef
   {
     featureKey: 'PROTECTION',
     operationKey: 'ASSESS_ROOF_RISK',
+    adoption: reserved('Future roof-risk assessment operation'),
     policyVersion: '1.0',
     promptStrategy: 'GROUP_RELATED',
     required: [
@@ -568,6 +606,13 @@ export function validateFeatureRequirementRegistry(): void {
   validateCaptureRegistry();
   const problems: string[] = [];
   for (const contract of FEATURE_CONTEXT_REQUIREMENTS) {
+    const reservedSurface = contract.adoption.surfaceDisposition === 'RESERVED_NO_INVOKER';
+    const notInvoked = contract.adoption.executionDisposition === 'NOT_INVOKED';
+    if (reservedSurface !== notInvoked) problems.push(`${contract.featureKey}/${contract.operationKey}: reserved adoption mismatch`);
+    if (!contract.adoption.owner.trim()) problems.push(`${contract.featureKey}/${contract.operationKey}: adoption owner is required`);
+    if (contract.required.length > 0 && contract.adoption.executionDisposition === 'DOMAIN_POLICY') {
+      problems.push(`${contract.featureKey}/${contract.operationKey}: required context cannot rely on a nonblocking domain policy`);
+    }
     const requirements = [...contract.required, ...contract.enhancements];
     for (const requirement of requirements) {
       try {

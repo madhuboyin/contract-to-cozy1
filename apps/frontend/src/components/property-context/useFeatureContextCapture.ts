@@ -21,29 +21,54 @@ export function useFeatureContextCapture({
 }) {
   const [evaluation, setEvaluation] = useState<FeatureContextEvaluation | null>(null);
   const [loading, setLoading] = useState(true);
+  const [slow, setSlow] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [suppressedRequirementId, setSuppressedRequirementId] = useState<string | null>(null);
   const readyVersion = useRef<string | null>(null);
+  const evaluationRequest = useRef(0);
+  const activeIdentity = useRef('');
   const operationInputIdentity = JSON.stringify(operationInput ?? {});
+  const contextIdentity = `${propertyId}:${featureKey}:${operationKey}:${operationInputIdentity}`;
+  activeIdentity.current = contextIdentity;
+  const operationInputRef = useRef(operationInput);
+  operationInputRef.current = operationInput;
 
   const evaluate = useCallback(async () => {
+    const requestId = ++evaluationRequest.current;
     setLoading(true);
+    setEvaluation(null);
     setError(null);
     try {
-      const response = await api.evaluateFeatureContext(propertyId, { featureKey, operationKey, operationInput });
+      const response = await api.evaluateFeatureContext(propertyId, { featureKey, operationKey, operationInput: operationInputRef.current });
       if (!response.success) throw new Error(response.message || 'Could not check property details.');
+      if (requestId !== evaluationRequest.current) return null;
       setEvaluation(response.data);
       return response.data;
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Could not check property details.');
+      if (requestId === evaluationRequest.current) setError(caught instanceof Error ? caught.message : 'Could not check property details.');
       return null;
     } finally {
-      setLoading(false);
+      if (requestId === evaluationRequest.current) setLoading(false);
     }
-  }, [featureKey, operationInput, operationKey, propertyId]);
+  }, [featureKey, operationInputIdentity, operationKey, propertyId]);
 
   useEffect(() => { void evaluate(); }, [evaluate]);
+
+  useEffect(() => {
+    setSaving(false);
+    setSuppressedRequirementId(null);
+    readyVersion.current = null;
+  }, [contextIdentity]);
+
+  useEffect(() => {
+    if (!loading) {
+      setSlow(false);
+      return;
+    }
+    const timer = window.setTimeout(() => setSlow(true), 750);
+    return () => window.clearTimeout(timer);
+  }, [loading]);
 
   useEffect(() => {
     const readyKey = evaluation
@@ -51,7 +76,9 @@ export function useFeatureContextCapture({
       : null;
     if (!evaluation?.canExecute || !readyKey || readyVersion.current === readyKey) return;
     readyVersion.current = readyKey;
-    void onReady?.(evaluation);
+    void Promise.resolve(onReady?.(evaluation)).catch(() => {
+      setError('Property details are ready, but this feature could not resume. Try again.');
+    });
   }, [evaluation, onReady, operationInputIdentity]);
 
   const capture = useCallback(async (value: unknown) => {
@@ -59,6 +86,7 @@ export function useFeatureContextCapture({
     if (!evaluation || !requirement || requirement.capture.actionKey === 'PERMISSION_REQUIRED') return;
     setSaving(true);
     setError(null);
+    const captureIdentity = activeIdentity.current;
     try {
       const response = await api.captureFeatureContext(propertyId, {
         requirementId: requirement.requirementId,
@@ -73,8 +101,8 @@ export function useFeatureContextCapture({
           : { value },
       });
       if (!response.success) throw new Error(response.message || 'Could not save this detail.');
+      if (captureIdentity !== activeIdentity.current) return;
       setEvaluation(response.data.evaluation);
-      void onCaptured?.(response.data);
       const containsUnknown = value === null || value === 'UNKNOWN' || (
         value !== null && typeof value === 'object' && Object.values(value as Record<string, unknown>)
           .some((entry) => entry === null || entry === 'UNKNOWN')
@@ -87,12 +115,17 @@ export function useFeatureContextCapture({
       window.dispatchEvent(new CustomEvent('property-context:updated', {
         detail: { propertyId, contextVersion: response.data.contextVersion, updatedFactKeys: response.data.updatedFactKeys },
       }));
+      try {
+        await onCaptured?.(response.data);
+      } catch {
+        setError('The detail was saved, but this result could not refresh. Retry the context check.');
+      }
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Could not save this detail.');
+      if (captureIdentity === activeIdentity.current) setError(caught instanceof Error ? caught.message : 'Could not save this detail.');
     } finally {
-      setSaving(false);
+      if (captureIdentity === activeIdentity.current) setSaving(false);
     }
   }, [evaluation, featureKey, onCaptured, operationInput, operationKey, propertyId]);
 
-  return { evaluation, loading, saving, error, capture, reevaluate: evaluate, suppressedRequirementId };
+  return { evaluation, loading, slow, saving, error, capture, reevaluate: evaluate, suppressedRequirementId };
 }

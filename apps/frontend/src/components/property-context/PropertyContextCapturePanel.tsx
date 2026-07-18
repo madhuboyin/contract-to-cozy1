@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import type { FeatureContextCaptureResult, FeatureContextEvaluation, ScalarCaptureInputSchema } from './featureContextTypes';
 import { useFeatureContextCapture } from './useFeatureContextCapture';
 
@@ -19,7 +19,7 @@ export function PropertyContextCapturePanel({
   onReady?: (evaluation: FeatureContextEvaluation) => void | Promise<void>;
   onCaptured?: (result: FeatureContextCaptureResult) => void | Promise<void>;
 }) {
-  const { evaluation, loading, saving, error, capture, reevaluate, suppressedRequirementId } = useFeatureContextCapture({
+  const { evaluation, loading, slow, saving, error, capture, reevaluate, suppressedRequirementId } = useFeatureContextCapture({
     propertyId,
     featureKey,
     operationKey,
@@ -33,6 +33,7 @@ export function PropertyContextCapturePanel({
   const [relationalMode, setRelationalMode] = useState<'SELECT' | 'CREATE'>('SELECT');
   const [selectedEntityId, setSelectedEntityId] = useState('');
   const [dismissedVersion, setDismissedVersion] = useState<string | null>(null);
+  const headingId = useId();
   const activeRequirement = evaluation?.requirements[0];
 
   useEffect(() => {
@@ -52,7 +53,10 @@ export function PropertyContextCapturePanel({
     setSelectedEntityId('');
   }, [activeRequirement?.requirementId]);
 
-  if (loading && !evaluation) return <p className="text-sm text-slate-600" role="status">Checking property details…</p>;
+  if (loading && !evaluation) return <div className="space-y-1 text-sm text-slate-600" role="status" aria-live="polite">
+    <p>Checking property details…</p>
+    {slow ? <p className="text-xs">This is taking a little longer than usual. You can keep your current inputs here.</p> : null}
+  </div>;
   if (!evaluation) return error ? <button type="button" onClick={() => void reevaluate()} className="text-sm font-medium underline">Retry property context check</button> : null;
   if (evaluation.readiness === 'READY' || evaluation.readiness === 'NOT_APPLICABLE') return null;
   if (evaluation.readiness === 'READY_WITH_LIMITATIONS' && dismissedVersion === evaluation.contextVersion) return null;
@@ -91,9 +95,9 @@ export function PropertyContextCapturePanel({
     : null;
 
   return (
-    <section className={`rounded-2xl border p-4 ${enhancement ? 'border-sky-200 bg-sky-50' : 'border-amber-200 bg-amber-50'}`} aria-live="polite">
+    <section className={`rounded-2xl border p-4 [&_button]:min-h-11 [&_input]:min-h-11 ${enhancement ? 'border-sky-200 bg-sky-50' : 'border-amber-200 bg-amber-50'}`} aria-live="polite" aria-busy={saving} aria-labelledby={headingId}>
       <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">{conflicted ? 'Resolve conflicting details' : stale ? 'Confirm current details' : enhancement ? 'Improve this result' : 'Required property detail'}</p>
-      <h3 className="mt-1 font-semibold text-slate-950">{requirement.capture.title}</h3>
+      <h3 id={headingId} className="mt-1 font-semibold text-slate-950">{requirement.capture.title}</h3>
       <p className="mt-1 text-sm text-slate-800">{requirement.capture.question}</p>
       {requirement.capture.helpText ? <p className="mt-1 text-xs text-slate-600">{requirement.capture.helpText}</p> : null}
       {stale ? <p className="mt-2 text-xs text-slate-700">Previously recorded answers are prefilled. Confirm them or update anything that changed.</p> : null}
