@@ -121,4 +121,5 @@ import {
   export interface UpdateMaintenanceTaskStatusRequest {
     status: MaintenanceTaskStatus;
     actualCost?: number;
+    outcomeHealth?: 'CONFIRMED_HEALTHY' | 'NEEDS_ATTENTION' | 'FAILED';
   }

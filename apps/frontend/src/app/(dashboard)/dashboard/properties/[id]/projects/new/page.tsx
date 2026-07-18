@@ -44,6 +44,9 @@ export default function NewProjectPage() {
   const guidanceJourneyId = searchParams.get('guidanceJourneyId');
   const inventoryItemId = searchParams.get('itemId') ?? searchParams.get('inventoryItemId');
   const guidedIssue = searchParams.get('issueType');
+  const providerId = searchParams.get('providerId');
+  const serviceCategory = searchParams.get('category') ?? searchParams.get('serviceCategory');
+  const [providerReadiness, setProviderReadiness] = useState<Awaited<ReturnType<typeof api.getProjectProviderReadiness>> | null>(null);
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -82,6 +85,13 @@ export default function NewProjectPage() {
     setContextReady(false);
     setResumeRequested(false);
   }, [form.projectType]);
+
+  useEffect(() => {
+    if (!providerId || !serviceCategory) return;
+    api.getProjectProviderReadiness(propertyId, providerId, serviceCategory)
+      .then(setProviderReadiness)
+      .catch(() => setProviderReadiness(null));
+  }, [propertyId, providerId, serviceCategory]);
 
   useEffect(() => {
     if (!contextReady || !resumeRequested) return;
@@ -144,6 +154,7 @@ export default function NewProjectPage() {
         contractorPhone: form.contractorPhone.trim() || undefined,
         contractorLicense: form.contractorLicense.trim() || undefined,
         contractorEmail: form.contractorEmail.trim() || undefined,
+        contractorId: providerId || undefined,
         contractAmountCents: amtCents,
         startDate: form.startDate,
         expectedEndDate: form.expectedEndDate || undefined,
@@ -154,6 +165,7 @@ export default function NewProjectPage() {
         fulfillmentMode: form.fulfillmentMode,
         fundingMode: form.fundingMode,
         complexity: form.complexity,
+        serviceCategory: serviceCategory || undefined,
         providerRankingRationale: form.providerRankingRationale.trim() || undefined,
         commercialDisclosure,
       });
@@ -316,6 +328,21 @@ export default function NewProjectPage() {
                 <Label htmlFor="nonCommercialAlternative">Non-commercial alternative</Label>
                 <Textarea id="nonCommercialAlternative" value={form.nonCommercialAlternative} onChange={e => set('nonCommercialAlternative', e.target.value)} rows={2} />
               </div>
+            </div>
+          ) : null}
+
+          {providerReadiness && form.fulfillmentMode === 'PROVIDER' ? (
+            <div className={`rounded-lg border p-3 ${providerReadiness.jurisdictionStatus === 'VERIFIED' ? 'border-emerald-200 bg-emerald-50' : 'border-amber-200 bg-amber-50'}`}>
+              <p className="text-sm font-semibold">{providerReadiness.provider.businessName} · {providerReadiness.jurisdiction} readiness</p>
+              <p className="mt-1 text-xs">Category eligibility: {providerReadiness.jurisdictionStatus.toLowerCase()}</p>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {providerReadiness.credentials.map(credential => (
+                  <span key={`${credential.type}-${credential.expiryDate}`} className="rounded-full bg-white px-2 py-1 text-xs ring-1 ring-black/10">
+                    {credential.type.toLowerCase().replace(/_/g, ' ')}{credential.expiryDate ? ` · expires ${new Date(credential.expiryDate).toLocaleDateString()}` : ''}
+                  </span>
+                ))}
+              </div>
+              {providerReadiness.missingCredentialTypes.length ? <p className="mt-2 text-xs font-medium text-amber-900">Missing: {providerReadiness.missingCredentialTypes.join(', ').toLowerCase().replace(/_/g, ' ')}</p> : null}
             </div>
           ) : null}
 

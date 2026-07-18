@@ -4739,6 +4739,8 @@ export interface ProjectRecord {
   recommendationOverridden?: boolean;
   verifiedAt?: string | null;
   followUpDueAt?: string | null;
+  followUpHealth?: 'CONFIRMED_HEALTHY' | 'NEEDS_ATTENTION' | 'FAILED' | null;
+  followUpCompletedAt?: string | null;
   contractorRatingQuality?: number | null;
   contractorRatingTimeline?: number | null;
   contractorRatingComms?: number | null;

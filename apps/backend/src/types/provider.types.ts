@@ -168,6 +168,12 @@ export interface ProviderReview {
   communicationRating: number | null;
   valueRating: number | null;
   professionalismRating: number | null;
+  scopeSummary: string | null;
+  outcomeStatus: string | null;
+  verifiedOutcome: boolean;
+  timelinessVarianceDays: number | null;
+  priceVarianceCents: number | null;
+  journeyLinked: boolean;
   response: string | null;
   respondedAt: Date | null;
   createdAt: Date;

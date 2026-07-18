@@ -2043,8 +2043,9 @@ model PropertyMaintenanceTask {
   lastCompletedDate DateTime?
 
   // Cost tracking
-  estimatedCost Decimal? @db.Decimal(10, 2)
-  actualCost    Decimal? @db.Decimal(10, 2)
+  estimatedCost      Decimal? @db.Decimal(10, 2)
+  actualCost         Decimal? @db.Decimal(10, 2)
+  completionMetadata Json?
 
   // Seasonal integration
   isSeasonal              Boolean                @default(false)
@@ -4178,11 +4179,12 @@ model GuidanceJourney {
   parentJourney GuidanceJourney?  @relation("GuidanceJourneyBranch", fields: [parentJourneyId], references: [id], onDelete: SetNull)
   childJourneys GuidanceJourney[] @relation("GuidanceJourneyBranch")
 
-  steps         GuidanceJourneyStep[]
-  events        GuidanceJourneyEvent[]
-  evidences     GuidanceStepEvidence[]
-  homeEvents    HomeEvent[] // FRD-FR-11/FR-03: retrospective lookback + verified resolution events
-  projectRecord ProjectRecord?
+  steps           GuidanceJourneyStep[]
+  events          GuidanceJourneyEvent[]
+  evidences       GuidanceStepEvidence[]
+  homeEvents      HomeEvent[] // FRD-FR-11/FR-03: retrospective lookback + verified resolution events
+  projectRecord   ProjectRecord?
+  providerReviews Review[]
 
   @@index([propertyId, status, updatedAt(sort: Desc)])
   @@index([propertyId, executionReadiness, status])
@@ -4803,10 +4805,12 @@ model HomeEventDocument {
 // ============================================================================
 
 model Review {
-  id         String @id @default(uuid())
-  bookingId  String @unique
-  authorId   String
-  providerId String
+  id                String  @id @default(uuid())
+  bookingId         String  @unique
+  authorId          String
+  providerId        String
+  projectId         String? @unique
+  guidanceJourneyId String?
 
   // Rating (1-5)
   rating Int
@@ -4816,22 +4820,29 @@ model Review {
   content String
 
   // Review Categories (1-5 each)
-  qualityRating         Int?
-  communicationRating   Int?
-  valueRating           Int?
-  professionalismRating Int?
+  qualityRating          Int?
+  communicationRating    Int?
+  valueRating            Int?
+  professionalismRating  Int?
+  scopeSummary           String?
+  outcomeStatus          ProjectOutcomeStatus?
+  verifiedOutcome        Boolean               @default(false)
+  timelinessVarianceDays Int?
+  priceVarianceCents     Int?
   // Moderation
-  status                ReviewStatus @default(PENDING)
-  moderatedAt           DateTime?
-  moderatedBy           String? // admin userId
+  status                 ReviewStatus          @default(PENDING)
+  moderatedAt            DateTime?
+  moderatedBy            String? // admin userId
 
   // Provider Response
-  response    String?
-  respondedAt DateTime?
+  response        String?
+  respondedAt     DateTime?
   // Relations
-  booking     Booking   @relation(fields: [bookingId], references: [id], onDelete: Cascade)
-  author      User      @relation("ReviewAuthor", fields: [authorId], references: [id])
-  provider    User      @relation("ReviewProvider", fields: [providerId], references: [id])
+  booking         Booking          @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  author          User             @relation("ReviewAuthor", fields: [authorId], references: [id])
+  provider        User             @relation("ReviewProvider", fields: [providerId], references: [id])
+  project         ProjectRecord?   @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  guidanceJourney GuidanceJourney? @relation(fields: [guidanceJourneyId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -4839,6 +4850,7 @@ model Review {
   @@index([providerId])
   @@index([rating])
   @@index([status])
+  @@index([guidanceJourneyId])
   @@map("reviews")
 }
 
@@ -12671,6 +12683,12 @@ enum ProjectVerificationResult {
   UNRESOLVED
 }
 
+enum ProjectFollowUpHealth {
+  CONFIRMED_HEALTHY
+  NEEDS_ATTENTION
+  FAILED
+}
+
 enum ProjectType {
   ROOF_REPLACEMENT
   HVAC_REPLACEMENT
@@ -12786,6 +12804,7 @@ enum ProjectWriteBackTarget {
   EXPENSES
   WARRANTIES
   FUTURE_CARE
+  PROVIDER_REVIEWS
 }
 
 enum ProjectWriteBackAction {
@@ -12873,6 +12892,8 @@ model ProjectRecord {
   recommendationOverridden     Boolean                    @default(false)
   verifiedAt                   DateTime?
   followUpDueAt                DateTime?
+  followUpHealth               ProjectFollowUpHealth?
+  followUpCompletedAt          DateTime?
 
   // Contractor ratings — entered during completion workflow; posted to directory on confirmation
   contractorRatingQuality  Int? // 1–5
@@ -12907,6 +12928,7 @@ model ProjectRecord {
   warranty            Warranty?
   completionHomeEvent HomeEvent?
   materialSpecs       MaterialSpec[]
+  providerReview      Review?
 
   @@index([propertyId, status])
   @@index([propertyId, createdAt(sort: Desc)])

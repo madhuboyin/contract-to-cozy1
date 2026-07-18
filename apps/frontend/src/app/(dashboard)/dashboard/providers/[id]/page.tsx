@@ -90,6 +90,7 @@ export default function ProviderDetailPage() {
   const [provider, setProvider] = useState<CompleteProvider | null>(null);
   const [services, setServices] = useState<Service[]>([]);
   const [verifiedCategories, setVerifiedCategories] = useState<string[]>([]);
+  const [reviews, setReviews] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
   const isExecutionBlocked = hasGuardScopeContext && Boolean(bookingGuardQuery.data?.blocked);
@@ -204,10 +205,11 @@ export default function ProviderDetailPage() {
 
   const loadData = async () => {
     try {
-      const [providerRes, servicesRes, verificationSummary] = await Promise.all([
+      const [providerRes, servicesRes, verificationSummary, reviewsRes] = await Promise.all([
         api.getProvider(providerId),
         api.getProviderServices(providerId),
         api.getProviderVerificationSummary(providerId).catch(() => null),
+        api.getProviderReviews(providerId, { page: 1, limit: 5 }).catch(() => null),
       ]);
 
       if (providerRes.success) {
@@ -223,6 +225,7 @@ export default function ProviderDetailPage() {
       if (verificationSummary) {
         setVerifiedCategories(verificationSummary.verifiedCategories);
       }
+      if (reviewsRes?.success && 'data' in reviewsRes && reviewsRes.data?.reviews) setReviews(reviewsRes.data.reviews);
     } catch (loadError) {
       console.error('Failed to load provider data:', loadError);
       setError('Failed to load provider data.');
@@ -564,6 +567,28 @@ export default function ProviderDetailPage() {
               />
             ))
           )}
+        </div>
+      </ScenarioInputCard>
+
+      <ScenarioInputCard title={`Verified outcome reviews (${reviews.length})`} subtitle="Approved reviews include linked scope, schedule, cost, and verified-result context when available.">
+        <div className="space-y-3">
+          {reviews.length === 0 ? <p className="text-sm text-[hsl(var(--mobile-text-secondary))]">No approved outcome reviews yet.</p> : reviews.map((review) => (
+            <div key={review.id} className="rounded-xl border border-[hsl(var(--mobile-border-subtle))] p-3">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-sm font-semibold">{review.title || `${review.rating} star review`}</p>
+                {review.verifiedOutcome ? <StatusChip tone="good">Verified outcome</StatusChip> : null}
+              </div>
+              <p className="mt-1 text-sm text-[hsl(var(--mobile-text-secondary))]">{review.content}</p>
+              {review.scopeSummary ? <p className="mt-2 text-xs">Scope: {review.scopeSummary}</p> : null}
+              {review.verifiedOutcome ? (
+                <p className="mt-1 text-xs text-[hsl(var(--mobile-text-secondary))]">
+                  Result: {formatEnumLabel(review.outcomeStatus || 'VERIFIED_SUCCESS')}
+                  {review.timelinessVarianceDays != null ? ` · Schedule variance ${review.timelinessVarianceDays} day(s)` : ''}
+                  {review.priceVarianceCents != null ? ` · Price variance $${(review.priceVarianceCents / 100).toFixed(2)}` : ''}
+                </p>
+              ) : null}
+            </div>
+          ))}
         </div>
       </ScenarioInputCard>
       <BottomSafeAreaReserve size="chatAware" />

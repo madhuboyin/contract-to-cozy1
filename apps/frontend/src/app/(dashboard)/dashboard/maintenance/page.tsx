@@ -413,15 +413,16 @@ export default function MaintenancePage() {
   );
 
   const completeMutation = useMutation({
-    mutationFn: async (task: PropertyMaintenanceTask) => {
+    mutationFn: async ({ task, outcomeHealth }: { task: PropertyMaintenanceTask; outcomeHealth?: 'CONFIRMED_HEALTHY' | 'NEEDS_ATTENTION' | 'FAILED' }) => {
       const response = await api.updateMaintenanceTaskStatus(task.id, {
         status: 'COMPLETED',
         actualCost: task.estimatedCost || undefined,
+        outcomeHealth,
       });
       if (!response.success) throw new Error('Failed to mark as complete.');
       return response.data;
     },
-    onSuccess: (updated: any, task) => {
+    onSuccess: (updated: any, { task }) => {
       track('task_completed', {
         priority: normalizeTaskPriority(task.priority),
         category: String(task.serviceCategory || 'MAINTENANCE'),
@@ -477,7 +478,7 @@ export default function MaintenancePage() {
     },
   });
 
-  const pendingTaskId = completeMutation.isPending ? completeMutation.variables?.id ?? null : null;
+  const pendingTaskId = completeMutation.isPending ? completeMutation.variables?.task.id ?? null : null;
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
@@ -575,7 +576,7 @@ export default function MaintenancePage() {
                   highlightTaskId={taskIdFromUrl}
                   pendingTaskId={pendingTaskId}
                   onOpenTask={openDrawer}
-                  onCompleteTask={(task) => completeMutation.mutate(task)}
+                  onCompleteTask={(task) => completeMutation.mutate({ task })}
                 />
               )}
             </MobileSection>
@@ -636,7 +637,7 @@ export default function MaintenancePage() {
         open={drawerOpen}
         onOpenChange={(open) => (open ? setDrawerOpen(true) : closeDrawer())}
         onSave={(id, data) => updateMutation.mutate({ id, data })}
-        onComplete={(task) => completeMutation.mutate(task)}
+        onComplete={(task, outcomeHealth) => completeMutation.mutate({ task, outcomeHealth })}
         onReopen={(task) => reopenMutation.mutate(task)}
         onDelete={(id) => deleteMutation.mutate(id)}
         isSaving={updateMutation.isPending}

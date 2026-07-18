@@ -62,7 +62,7 @@ export type TaskDrawerProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSave: (id: string, data: UpdateMaintenanceTaskInput) => void;
-  onComplete: (task: PropertyMaintenanceTask) => void;
+  onComplete: (task: PropertyMaintenanceTask, outcomeHealth?: 'CONFIRMED_HEALTHY' | 'NEEDS_ATTENTION' | 'FAILED') => void;
   onReopen: (task: PropertyMaintenanceTask) => void;
   onDelete: (id: string) => void;
   isSaving?: boolean;
@@ -103,6 +103,7 @@ export function TaskDrawer({
   const [frequency, setFrequency] = React.useState<string>(UNSET);
   const [dueDate, setDueDate] = React.useState('');
   const [validationError, setValidationError] = React.useState<string | null>(null);
+  const [outcomeHealth, setOutcomeHealth] = React.useState<'CONFIRMED_HEALTHY' | 'NEEDS_ATTENTION' | 'FAILED'>('CONFIRMED_HEALTHY');
 
   React.useEffect(() => {
     if (!task) return;
@@ -114,6 +115,7 @@ export function TaskDrawer({
     setFrequency(task.frequency ?? UNSET);
     setDueDate(toDateInputValue(task.nextDueDate));
     setValidationError(null);
+    setOutcomeHealth('CONFIRMED_HEALTHY');
   }, [task]);
 
   if (!task) return null;
@@ -124,6 +126,7 @@ export function TaskDrawer({
   const canDelete = task.source !== 'ACTION_CENTER';
   const sourceBadge = getTaskSourceBadge(task);
   const busy = isSaving || isDeleting || isCompleting;
+  const isProjectFollowUp = Boolean(task.actionKey?.match(/^project:[^:]+:follow-up$/));
 
   const handleSave = () => {
     if (!title.trim()) {
@@ -194,6 +197,21 @@ export function TaskDrawer({
               onChange={(event) => setTitle(event.target.value)}
             />
           </div>
+
+          {isProjectFollowUp && !readOnly ? (
+            <div className="space-y-1.5 rounded-lg border border-indigo-200 bg-indigo-50 p-3">
+              <Label>How is the completed work performing?</Label>
+              <Select value={outcomeHealth} onValueChange={(value) => setOutcomeHealth(value as typeof outcomeHealth)}>
+                <SelectTrigger aria-label="Outcome health"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="CONFIRMED_HEALTHY">Working as expected</SelectItem>
+                  <SelectItem value="NEEDS_ATTENTION">Needs attention</SelectItem>
+                  <SelectItem value="FAILED">Failed again</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-indigo-800">A concern creates a high-priority remediation action and updates the verified outcome measurement.</p>
+            </div>
+          ) : null}
 
           <div className="space-y-1.5">
             <Label htmlFor="task-drawer-notes">Notes</Label>
@@ -316,7 +334,7 @@ export function TaskDrawer({
               <Button
                 variant="outline"
                 disabled={busy}
-                onClick={() => onComplete(task)}
+                onClick={() => onComplete(task, isProjectFollowUp ? outcomeHealth : undefined)}
                 className="w-full sm:w-auto"
               >
                 {isCompleting ? (

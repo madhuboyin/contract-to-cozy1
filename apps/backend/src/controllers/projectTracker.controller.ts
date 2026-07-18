@@ -33,6 +33,19 @@ export async function listProjects(req: Request, res: Response, next: NextFuncti
   } catch (err) { next(err); }
 }
 
+export async function getProviderExecutionReadiness(req: Request, res: Response, next: NextFunction) {
+  try {
+    const serviceCategory = String(req.query.serviceCategory ?? '').trim();
+    if (!serviceCategory) throw new APIError('serviceCategory is required.', 400, 'SERVICE_CATEGORY_REQUIRED');
+    const data = await svc.getProviderExecutionReadiness(
+      req.params.propertyId,
+      req.params.providerId,
+      serviceCategory,
+    );
+    res.json({ success: true, data });
+  } catch (err) { next(err); }
+}
+
 export async function createProject(req: Request, res: Response, next: NextFunction) {
   try {
     const work = {

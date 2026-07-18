@@ -3384,7 +3384,7 @@ class APIClient {
    */
   async updateMaintenanceTaskStatus(
     taskId: string,
-    data: { status: MaintenanceTaskStatus; actualCost?: number }
+    data: { status: MaintenanceTaskStatus; actualCost?: number; outcomeHealth?: 'CONFIRMED_HEALTHY' | 'NEEDS_ATTENTION' | 'FAILED' }
   ): Promise<APIResponse<PropertyMaintenanceTask>> {
     return this.request<PropertyMaintenanceTask>(
       `/api/maintenance-tasks/${taskId}/status`,
@@ -4673,6 +4673,7 @@ class APIClient {
     startDate: string;
     expectedEndDate?: string;
     homeSystemsAffected?: string[];
+    serviceCategory?: string;
     contractDocumentKey?: string;
     milestones?: Array<{ name: string; position: number; milestoneType?: string; scheduledDate?: string; requiresPhotoEvidence?: boolean }>;
   }): Promise<import('@/types').ProjectRecord> {
@@ -4684,6 +4685,22 @@ class APIClient {
   async getProject(propertyId: string, projectId: string): Promise<import('@/types').ProjectRecord> {
     const res = await this.get<import('@/types').ProjectRecord>(`/api/properties/${propertyId}/projects/${projectId}`);
     if (!res.data) throw new APIError('Project not found', 404);
+    return res.data;
+  }
+
+  async getProjectProviderReadiness(propertyId: string, providerId: string, serviceCategory: string): Promise<{
+    provider: { id: string; businessName: string; status: string };
+    serviceCategory: string;
+    jurisdiction: string;
+    jurisdictionStatus: 'VERIFIED' | 'INCOMPLETE';
+    checkedAt: string;
+    missingCredentialTypes: string[];
+    requirements: Array<{ credentialType: string; stateCode: string | null; isRequired: boolean }>;
+    credentials: Array<{ type: string; serviceCategories: string[]; issueDate: string | null; expiryDate: string | null; verifiedAt: string | null; verificationSource: string }>;
+  }> {
+    const params = new URLSearchParams({ serviceCategory });
+    const res = await this.get<any>(`/api/properties/${propertyId}/projects/provider-readiness/${providerId}?${params}`);
+    if (!res.data) throw new APIError('Failed to load provider readiness', 500);
     return res.data;
   }
 
@@ -4707,7 +4724,7 @@ class APIClient {
     actualEndDate?: string;
     actualCostCents: number;
     notes?: string;
-    proofDocuments?: Array<{ proofKey: string; type: 'INVOICE' | 'PERMIT' | 'PHOTO' | 'OTHER'; name: string; fileUrl: string; fileSize?: number; mimeType?: string; kind?: 'PHOTO' | 'RECEIPT' | 'INVOICE' | 'PDF' | 'BEFORE' | 'AFTER' | 'OTHER' }>;
+    proofDocuments?: Array<{ proofKey: string; documentId?: string; type: 'INVOICE' | 'PERMIT' | 'PHOTO' | 'OTHER'; name: string; fileUrl?: string; fileSize?: number; mimeType?: string; kind?: 'PHOTO' | 'RECEIPT' | 'INVOICE' | 'PDF' | 'BEFORE' | 'AFTER' | 'OTHER' }>;
   }): Promise<{ homeEventId: string }> {
     const res = await this.post<{ homeEventId: string }>(`/api/properties/${propertyId}/projects/minor-completion`, payload);
     if (!res.data) throw new APIError('Failed to record minor work', 500);
@@ -4895,7 +4912,7 @@ class APIClient {
     recommendationOverridden?: boolean;
     modelNumber?: string;
     serialNumber?: string;
-    proofDocuments?: Array<{ proofKey: string; type: 'INVOICE' | 'PERMIT' | 'PHOTO' | 'OTHER'; name: string; fileUrl: string; fileSize?: number; mimeType?: string; kind?: 'PHOTO' | 'RECEIPT' | 'INVOICE' | 'PDF' | 'BEFORE' | 'AFTER' | 'OTHER' }>;
+    proofDocuments?: Array<{ proofKey: string; documentId?: string; type: 'INVOICE' | 'PERMIT' | 'PHOTO' | 'OTHER'; name: string; fileUrl?: string; fileSize?: number; mimeType?: string; kind?: 'PHOTO' | 'RECEIPT' | 'INVOICE' | 'PDF' | 'BEFORE' | 'AFTER' | 'OTHER' }>;
     contractorRatingQuality?: number;
     contractorRatingTimeline?: number;
     contractorRatingComms?: number;

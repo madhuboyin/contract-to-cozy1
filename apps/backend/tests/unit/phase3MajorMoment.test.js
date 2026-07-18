@@ -119,6 +119,63 @@ test('verified closure advances stages 10 through 14 and emits outcome measureme
   }
 });
 
+test('provider execution readiness presents category and jurisdiction credentials before guided selection', () => {
+  const service = read('../../src/services/projectTracker.service.ts');
+  const route = read('../../src/routes/projectTracker.routes.ts');
+  const page = read('../../../frontend/src/app/(dashboard)/dashboard/properties/[id]/projects/new/page.tsx');
+  assert.match(service, /getProviderExecutionReadiness/);
+  assert.match(service, /providerCredentialRequirement\.findMany/);
+  assert.match(service, /jurisdictionStatus/);
+  assert.match(route, /provider-readiness\/\:providerId/);
+  assert.match(page, /providerReadiness\.credentials/);
+  assert.match(page, /missingCredentialTypes/);
+});
+
+test('completion links shared uploaded documents instead of requiring proof URLs', () => {
+  const validator = read('../../src/validators/projectTracker.validators.ts');
+  const service = read('../../src/services/projectTracker.service.ts');
+  const uploader = read('../../../frontend/src/components/projects/ProjectProofUploader.tsx');
+  const completionPage = read('../../../frontend/src/app/(dashboard)/dashboard/properties/[id]/projects/[projectId]/completion/page.tsx');
+  assert.match(validator, /documentId: z\.string\(\)\.optional/);
+  assert.match(service, /INVALID_PROOF_DOCUMENT/);
+  assert.match(service, /projectProofKey: `\$\{projectId\}:\$\{proof\.proofKey\}`/);
+  assert.match(uploader, /api\.uploadDocument/);
+  assert.match(completionPage, /ProjectProofUploader/);
+  assert.doesNotMatch(completionPage, /Invoice URL/);
+});
+
+test('provider review is joined to project scope, journey, schedule, cost, and verified outcome', () => {
+  const schema = read('../../prisma/schema.prisma');
+  const service = read('../../src/services/projectTracker.service.ts');
+  const providerService = read('../../src/services/provider.service.ts');
+  for (const field of ['projectId', 'guidanceJourneyId', 'scopeSummary', 'verifiedOutcome', 'timelinessVarianceDays', 'priceVarianceCents']) {
+    assert.match(schema, new RegExp(field));
+    assert.match(service, new RegExp(field));
+  }
+  assert.match(service, /tx\.review\.upsert/);
+  assert.match(providerService, /journeyLinked/);
+});
+
+test('future-care completion records follow-up health and reopens attention when needed', () => {
+  const maintenance = read('../../src/services/PropertyMaintenanceTask.service.ts');
+  const drawer = read('../../../frontend/src/app/(dashboard)/dashboard/maintenance/components/TaskDrawer.tsx');
+  assert.match(maintenance, /project_follow_up_health_recorded/);
+  assert.match(maintenance, /followUpCompletedAt/);
+  assert.match(maintenance, /follow-up-remediation/);
+  assert.match(drawer, /How is the completed work performing/);
+  assert.match(drawer, /NEEDS_ATTENTION/);
+  assert.match(drawer, /FAILED/);
+});
+
+test('database-backed acceptance is gated on the owner-applied schema and remains migration-free', () => {
+  const acceptance = read('../integration/phase3VerifiedClosure.db.test.js');
+  assert.match(acceptance, /PHASE3_ACCEPTANCE_DATABASE_URL/);
+  assert.match(acceptance, /Verified closure has missing HomeEvent or expense write-back/);
+  assert.match(acceptance, /Project proof idempotency keys are duplicated/);
+  const migrationRoot = path.resolve(__dirname, '../../prisma/migrations');
+  assert.deepEqual(fs.readdirSync(migrationRoot).filter((entry) => /phase.?3/i.test(entry)), []);
+});
+
 test('guided project contract keeps execution alternatives orthogonal and requires provider identity only for provider work', () => {
   assert.equal(CreateProjectSchema.safeParse(projectFixture()).success, true);
   assert.equal(CreateProjectSchema.safeParse(projectFixture({ contractorName: undefined })).success, false);

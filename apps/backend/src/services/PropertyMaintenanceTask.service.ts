@@ -512,7 +512,8 @@ import {
       userId: string,
       taskId: string,
       status: MaintenanceTaskStatus,
-      actualCost?: number
+      actualCost?: number,
+      outcomeHealth?: 'CONFIRMED_HEALTHY' | 'NEEDS_ATTENTION' | 'FAILED',
     ): Promise<PropertyMaintenanceTask> {
       // Verify access (CONTRIBUTOR+ required to mutate tasks)
       await this.getTask(userId, taskId, 'CONTRIBUTOR');
@@ -539,6 +540,16 @@ import {
         if (actualCost !== undefined) {
           updateData.actualCost = actualCost;
         }
+
+        const projectFollowUpMatch = task.actionKey?.match(/^project:([^:]+):follow-up$/);
+        if (projectFollowUpMatch) {
+          updateData.completionMetadata = {
+            kind: 'PROJECT_OUTCOME_FOLLOW_UP',
+            projectId: projectFollowUpMatch[1],
+            outcomeHealth: outcomeHealth ?? 'CONFIRMED_HEALTHY',
+            recordedByUserId: userId,
+          };
+        }
     
         // If recurring, calculate next due date
         if (task.isRecurring && task.frequency) {
@@ -550,6 +561,58 @@ import {
         where: { id: taskId },
         data: updateData,
       });
+
+      const projectFollowUpMatch = task.actionKey?.match(/^project:([^:]+):follow-up$/);
+      if (!wasCompleted && isNowCompleted && projectFollowUpMatch) {
+        const projectId = projectFollowUpMatch[1];
+        const health = outcomeHealth ?? 'CONFIRMED_HEALTHY';
+        const project = await prisma.projectRecord.findFirst({
+          where: { id: projectId, propertyId: task.propertyId },
+          select: { id: true, name: true, guidanceJourneyId: true, verifiedAt: true },
+        });
+        if (project) {
+          await prisma.projectRecord.update({
+            where: { id: project.id },
+            data: { followUpHealth: health, followUpCompletedAt: new Date() },
+          });
+          if (health !== 'CONFIRMED_HEALTHY') {
+            const actionKey = `project:${project.id}:follow-up-remediation`;
+            await prisma.propertyMaintenanceTask.upsert({
+              where: { propertyId_actionKey: { propertyId: task.propertyId, actionKey } },
+              create: {
+                propertyId: task.propertyId,
+                inventoryItemId: task.inventoryItemId,
+                source: 'PROJECT_COMPLETION',
+                actionKey,
+                title: `Review follow-up concern for ${project.name}`,
+                description: `The scheduled outcome follow-up was recorded as ${health.toLowerCase().replace(/_/g, ' ')}.`,
+                priority: health === 'FAILED' ? 'URGENT' : 'HIGH',
+                status: 'PENDING',
+              },
+              update: {
+                status: 'PENDING',
+                priority: health === 'FAILED' ? 'URGENT' : 'HIGH',
+                description: `The scheduled outcome follow-up was recorded as ${health.toLowerCase().replace(/_/g, ' ')}.`,
+              },
+            });
+          }
+          analyticsEmitter.track({
+            eventType: AnalyticsEvent.ACTION_COMPLETED,
+            propertyId: task.propertyId,
+            moduleKey: AnalyticsModule.PROJECT_MGMT,
+            featureKey: AnalyticsFeature.PROJECT_TRACKER,
+            metadataJson: {
+              actionType: 'project_follow_up_health_recorded',
+              projectId: project.id,
+              journeyId: project.guidanceJourneyId,
+              followUpHealth: health,
+              daysSinceVerified: project.verifiedAt
+                ? Math.max(0, Math.round((Date.now() - project.verifiedAt.getTime()) / 86_400_000))
+                : null,
+            },
+          });
+        }
+      }
 
       // Analytics: maintenance item completed (only on first completion transition)
       if (!wasCompleted && isNowCompleted) {

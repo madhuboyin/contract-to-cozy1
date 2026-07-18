@@ -116,6 +116,7 @@ export default function ProjectDashboardPage() {
             Functional check: {p.functionalVerificationResult?.toLowerCase().replace(/_/g, ' ') ?? 'not recorded'}
             {p.actualCostCents != null ? ` · Final cost ${fmtMoney(p.actualCostCents)}` : ''}
             {p.followUpDueAt ? ` · Follow-up ${fmtDate(p.followUpDueAt)}` : ''}
+            {p.followUpHealth ? ` · Health ${p.followUpHealth.toLowerCase().replace(/_/g, ' ')}` : ''}
           </p>
         </div>
       )}

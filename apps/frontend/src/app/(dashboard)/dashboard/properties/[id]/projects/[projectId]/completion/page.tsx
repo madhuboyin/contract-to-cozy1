@@ -15,6 +15,7 @@ import {
   MobilePageContainer,
 } from '@/components/mobile/dashboard/MobilePrimitives';
 import { Spinner, ErrorBanner } from '../../ProjectTrackerHelpers';
+import { ProjectProofUploader, type ProjectProof } from '@/components/projects/ProjectProofUploader';
 
 function RatingInput({ id, label, value, onChange }: {
   id: string; label: string; value: string; onChange: (v: string) => void;
@@ -45,6 +46,7 @@ export default function CompletionPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
+  const [proofDocuments, setProofDocuments] = useState<ProjectProof[]>([]);
   const [form, setForm] = useState({
     actualEndDate: new Date().toISOString().split('T')[0],
     warrantyPeriodMonths: '',
@@ -62,11 +64,6 @@ export default function CompletionPage() {
     providerOutcome: 'SUCCESS',
     modelNumber: '',
     serialNumber: '',
-    invoiceUrl: '',
-    warrantyUrl: '',
-    completionRecordUrl: '',
-    beforePhotoUrl: '',
-    afterPhotoUrl: '',
     exceptionSummary: '',
     nextMaintenanceDate: '',
     nextInspectionDate: '',
@@ -110,13 +107,6 @@ export default function CompletionPage() {
     setConfirming(true);
     setError(null);
     try {
-      const proofDocuments = [
-        form.invoiceUrl ? { proofKey: 'invoice', type: 'INVOICE' as const, name: 'Final invoice', fileUrl: form.invoiceUrl, kind: 'INVOICE' as const } : null,
-        form.warrantyUrl ? { proofKey: 'warranty', type: 'OTHER' as const, name: 'Warranty', fileUrl: form.warrantyUrl, kind: 'PDF' as const } : null,
-        form.completionRecordUrl ? { proofKey: 'completion-record', type: 'OTHER' as const, name: 'Completion record', fileUrl: form.completionRecordUrl, kind: 'PDF' as const } : null,
-        form.beforePhotoUrl ? { proofKey: 'before-photo', type: 'PHOTO' as const, name: 'Before photo', fileUrl: form.beforePhotoUrl, kind: 'BEFORE' as const } : null,
-        form.afterPhotoUrl ? { proofKey: 'after-photo', type: 'PHOTO' as const, name: 'After photo', fileUrl: form.afterPhotoUrl, kind: 'AFTER' as const } : null,
-      ].filter(Boolean) as NonNullable<Parameters<typeof api.confirmProjectCompletion>[2]['proofDocuments']>;
       await api.confirmProjectCompletion(propertyId, projectId, {
         actualEndDate: form.actualEndDate || undefined,
         outcomeStatus: form.outcomeStatus as 'VERIFIED_SUCCESS' | 'INCOMPLETE' | 'FAILED' | 'DISPUTED' | 'DELAYED' | 'UNSAFE',
@@ -137,8 +127,6 @@ export default function CompletionPage() {
         contractorRatingBudget: form.ratingBudget ? parseInt(form.ratingBudget) : undefined,
         contractorReviewText: form.contractorReviewText.trim() || undefined,
         warrantyPeriodMonths: form.warrantyPeriodMonths ? parseInt(form.warrantyPeriodMonths) : undefined,
-        warrantyDocumentKey: form.warrantyUrl || undefined,
-        completionRecordKey: form.completionRecordUrl || undefined,
         nextMaintenanceDate: form.nextMaintenanceDate || undefined,
         nextInspectionDate: form.nextInspectionDate || undefined,
         replacementHorizonDate: form.replacementHorizonDate || undefined,
@@ -265,7 +253,8 @@ export default function CompletionPage() {
 
         <MobileCard className="space-y-3">
           <h2 className="text-sm font-semibold text-slate-700">Proof and home record</h2>
-          {[['invoiceUrl', 'Invoice URL'], ['warrantyUrl', 'Warranty URL'], ['completionRecordUrl', 'Completion record URL'], ['beforePhotoUrl', 'Before photo URL'], ['afterPhotoUrl', 'After photo URL']].map(([field, label]) => <div key={field} className="space-y-1.5"><Label htmlFor={field}>{label}</Label><Input id={field} value={form[field as keyof typeof form] as string} onChange={e => setForm(f => ({ ...f, [field]: e.target.value }))} placeholder="Storage key or URL" /></div>)}
+          <p className="text-xs text-slate-500">Upload invoice, warranty, permit, before/after photos, or a completion record. Files use the shared document vault and are linked transactionally at closure.</p>
+          <ProjectProofUploader propertyId={propertyId} value={proofDocuments} onChange={setProofDocuments} />
         </MobileCard>
 
         <MobileCard className="space-y-3">

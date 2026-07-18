@@ -414,7 +414,7 @@ const handleUpdateTaskStatus = async (
     }
 
     const { taskId } = req.params;
-    const { status, actualCost }: UpdateMaintenanceTaskStatusRequest = req.body;
+    const { status, actualCost, outcomeHealth }: UpdateMaintenanceTaskStatusRequest = req.body;
 
     if (!status) {
       return res.status(400).json({
@@ -427,7 +427,8 @@ const handleUpdateTaskStatus = async (
       req.user.userId,
       taskId,
       status,
-      actualCost
+      actualCost,
+      outcomeHealth,
     );
     await markCoverageAnalysisStale(task.propertyId);
     await markItemCoverageAnalysesStale(task.propertyId);

@@ -1,6 +1,6 @@
 # Product Framework Phase 3 — Complete Major Repair / System Replacement
 
-Status: Increments 1–2 implemented; provider-review enrichment and database-backed acceptance remain
+Status: Increments 1–3 implemented; code-complete pending owner-applied database acceptance execution
 
 Contract version: `phase3-v1`
 
@@ -48,15 +48,28 @@ Implemented:
 - Rechecked platform-provider status, license, insurance, and category eligibility when guided project execution begins.
 - Emitted price variance, elapsed/blocked days, recommendation override, provider result, write-back volume, and follow-up-plan measurements.
 
+## Increment 3 — Provider outcomes, proof upload, and follow-up health
+
+Implemented:
+
+- Added a property-scoped execution-readiness endpoint that presents service-category eligibility, jurisdiction requirements, approved credential types, verification dates, expiry dates, and missing requirements without exposing credential numbers or private documents.
+- Presented readiness details before a guided platform-provider project is created and retained server-side eligibility enforcement.
+- Linked moderated provider reviews to booking, project, guidance journey, scope, timeliness variance, price variance, and verified outcome.
+- Exposed verified-outcome context on approved public provider reviews.
+- Replaced manual completion proof URL fields with a reusable multi-kind uploader backed by the shared document vault.
+- Linked existing uploaded documents into the completion transaction using property-scoped validation and stable proof keys.
+- Added follow-up health states for healthy, needs-attention, and failed outcomes.
+- Added follow-up health capture to the maintenance task drawer, project history, and analytics.
+- Created an urgent/high-priority remediation action when a follow-up reports a concern or failure.
+- Added a read-only database acceptance test that validates owner-applied Phase 3 columns, verified closure write-back integrity, and proof-key uniqueness.
+
 ## Remaining Phase 3 implementation
 
-### Remaining completion work
+### Remaining operational acceptance
 
-- Surface category/jurisdiction credential detail from the provider directory, rather than only enforcing its eligibility result at project creation.
-- Join the public provider review aggregate to scope, journey, timeliness, cost variance, and verified outcome while retaining the project-level review evidence now captured.
-- Add follow-up health measurement when the scheduled outcome check is completed.
-- Add database-backed trigger-to-verified-closure acceptance coverage after the owner applies the schema.
-- Replace proof URL/key entry with the shared uploader when that component supports multi-kind completion evidence.
+- Apply the updated Prisma schema to the target database using the owner's reset/sync workflow.
+- Run the gated database acceptance test against that database. The test is intentionally skipped when `PHASE3_ACCEPTANCE_DATABASE_URL` is absent.
+- Exercise one real storage upload and one end-to-end trigger-to-follow-up flow in the deployed environment after schema application.
 
 ## Validation
 
@@ -66,4 +79,5 @@ npm -C apps/backend run build
 npx tsc --noEmit -p apps/frontend/tsconfig.json
 node --test apps/backend/tests/unit/phase3MajorMoment.test.js
 npm -C apps/frontend run qa:product-framework:routes
+PHASE3_ACCEPTANCE_DATABASE_URL=postgresql://... node --test apps/backend/tests/integration/phase3VerifiedClosure.db.test.js
 ```

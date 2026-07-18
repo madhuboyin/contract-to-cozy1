@@ -37,6 +37,7 @@ import {
   getCompletionChecklist,
   confirmCompletion,
   completeMinorWork,
+  getProviderExecutionReadiness,
 } from '../controllers/projectTracker.controller';
 
 import {
@@ -79,6 +80,11 @@ router.post(
   propertyAuthMiddleware,
   validateBody(CompleteMinorWorkSchema),
   completeMinorWork,
+);
+router.get(
+  '/properties/:propertyId/projects/provider-readiness/:providerId',
+  propertyAuthMiddleware,
+  getProviderExecutionReadiness,
 );
 router.get('/properties/:propertyId/projects/:projectId', propertyAuthMiddleware, getProject);
 router.patch(

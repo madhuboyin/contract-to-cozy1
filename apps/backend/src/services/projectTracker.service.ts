@@ -8,6 +8,7 @@ import {
   ProjectIssueSeverity,
   ProjectPaymentTriggerType,
   InventoryItemCategory,
+  ServiceCategory,
 } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { APIError } from '../middleware/error.middleware';
@@ -213,6 +214,65 @@ export function getMilestoneTemplate(projectType: string) {
     { name: 'Work begins', position: 0, requiresPhotoEvidence: false },
     { name: 'Work complete', position: 1, requiresPhotoEvidence: true },
   ];
+}
+
+export async function getProviderExecutionReadiness(
+  propertyId: string,
+  providerId: string,
+  serviceCategory: string,
+) {
+  if (!Object.values(ServiceCategory).includes(serviceCategory as ServiceCategory)) {
+    throw new APIError('Unsupported service category.', 400, 'INVALID_SERVICE_CATEGORY');
+  }
+  const property = await prisma.property.findUnique({ where: { id: propertyId }, select: { state: true } });
+  if (!property) throw new APIError('Property not found', 404, 'PROPERTY_NOT_FOUND');
+  const [provider, eligibility, requirements, credentials] = await Promise.all([
+    prisma.providerProfile.findUnique({ where: { id: providerId }, select: { id: true, businessName: true, status: true } }),
+    prisma.providerCategoryEligibility.findUnique({
+      where: { providerProfileId_serviceCategory: { providerProfileId: providerId, serviceCategory: serviceCategory as any } },
+      select: { isEligible: true, missingCredentialTypes: true, computedAt: true },
+    }),
+    prisma.providerCredentialRequirement.findMany({
+      where: {
+        serviceCategory: serviceCategory as any,
+        isActive: true,
+        OR: [{ stateCode: null }, { stateCode: property.state }],
+      },
+      select: { credentialType: true, stateCode: true, isRequired: true },
+    }),
+    prisma.providerCredential.findMany({
+      where: { providerProfileId: providerId, status: 'APPROVED', serviceCategories: { has: serviceCategory as any } },
+      select: { type: true, serviceCategories: true, issueDate: true, expiryDate: true, reviewedAt: true },
+      orderBy: { expiryDate: 'asc' },
+    }),
+  ]);
+  if (!provider) throw new APIError('Provider not found', 404, 'PROVIDER_NOT_FOUND');
+
+  const approvedTypes = new Set(credentials.map((credential) => credential.type));
+  const missingRequired = requirements
+    .filter((requirement) => requirement.isRequired && !approvedTypes.has(requirement.credentialType))
+    .map((requirement) => requirement.credentialType);
+  const jurisdictionStatus = provider.status === 'ACTIVE' && eligibility?.isEligible && missingRequired.length === 0
+    ? 'VERIFIED'
+    : 'INCOMPLETE';
+
+  return {
+    provider: { id: provider.id, businessName: provider.businessName, status: provider.status },
+    serviceCategory,
+    jurisdiction: property.state,
+    jurisdictionStatus,
+    checkedAt: eligibility?.computedAt ?? new Date(),
+    missingCredentialTypes: Array.from(new Set([...(eligibility?.missingCredentialTypes ?? []), ...missingRequired])),
+    requirements,
+    credentials: credentials.map((credential) => ({
+      type: credential.type,
+      serviceCategories: credential.serviceCategories,
+      issueDate: credential.issueDate,
+      expiryDate: credential.expiryDate,
+      verifiedAt: credential.reviewedAt,
+      verificationSource: 'ContractToCozy credential review',
+    })),
+  };
 }
 
 // ── Project CRUD ──────────────────────────────────────────────────────────────
@@ -1075,7 +1135,23 @@ export async function completeMinorWork(propertyId: string, userId: string, data
 
     const documentIds: string[] = [];
     for (const proof of data.proofDocuments) {
-      const document = await tx.document.upsert({
+      const uploadedDocument = proof.documentId
+        ? await tx.document.findFirst({ where: { id: proof.documentId, propertyId } })
+        : null;
+      if (proof.documentId && !uploadedDocument) {
+        throw new APIError('Uploaded proof document was not found for this property.', 409, 'INVALID_PROOF_DOCUMENT');
+      }
+      const document = uploadedDocument ? await tx.document.update({
+        where: { id: uploadedDocument.id },
+        data: {
+          projectProofKey: `minor:${journey.id}:${proof.proofKey}`,
+          inventoryItemId: item.id,
+          verificationStatus: 'VERIFIED',
+          verifiedAt: new Date(),
+          verifiedByUserId: userId,
+          metadata: { journeyId: journey.id, proofKind: proof.kind, minorWork: true },
+        },
+      }) : await tx.document.upsert({
         where: { projectProofKey: `minor:${journey.id}:${proof.proofKey}` },
         create: {
           propertyId,
@@ -1084,7 +1160,7 @@ export async function completeMinorWork(propertyId: string, userId: string, data
           uploadedBy: userId,
           type: proof.type,
           name: proof.name,
-          fileUrl: proof.fileUrl,
+          fileUrl: proof.fileUrl!,
           fileSize: proof.fileSize,
           mimeType: proof.mimeType,
           verificationStatus: 'VERIFIED',
@@ -1092,7 +1168,7 @@ export async function completeMinorWork(propertyId: string, userId: string, data
           verifiedByUserId: userId,
           metadata: { journeyId: journey.id, proofKind: proof.kind, minorWork: true },
         },
-        update: { fileUrl: proof.fileUrl, fileSize: proof.fileSize, mimeType: proof.mimeType, verificationStatus: 'VERIFIED', verifiedAt: new Date(), verifiedByUserId: userId },
+        update: { fileUrl: proof.fileUrl!, fileSize: proof.fileSize, mimeType: proof.mimeType, verificationStatus: 'VERIFIED', verifiedAt: new Date(), verifiedByUserId: userId },
       });
       documentIds.push(document.id);
       await tx.homeEventDocument.upsert({
@@ -1168,6 +1244,7 @@ export async function confirmCompletion(projectId: string, propertyId: string, u
       where: { id: projectId, propertyId },
       include: {
         property: { select: { homeownerProfileId: true } },
+        contractorProfile: { select: { userId: true } },
         progressLogs: { where: { materialType: { not: null } } },
       },
     });
@@ -1272,7 +1349,24 @@ export async function confirmCompletion(projectId: string, propertyId: string, u
     }
     const documentIds: string[] = [];
     for (const proof of proofDocuments) {
-      const document = await tx.document.upsert({
+      const uploadedDocument = proof.documentId
+        ? await tx.document.findFirst({ where: { id: proof.documentId, propertyId } })
+        : null;
+      if (proof.documentId && !uploadedDocument) {
+        throw new APIError('Uploaded proof document was not found for this property.', 409, 'INVALID_PROOF_DOCUMENT');
+      }
+      const document = uploadedDocument ? await tx.document.update({
+        where: { id: uploadedDocument.id },
+        data: {
+          projectId,
+          projectProofKey: `${projectId}:${proof.proofKey}`,
+          inventoryItemId: existing.inventoryItemId,
+          verificationStatus: verifiedSuccess ? 'VERIFIED' : 'UNVERIFIED',
+          verifiedAt: verifiedSuccess ? new Date() : null,
+          verifiedByUserId: verifiedSuccess ? userId : null,
+          metadata: { projectId, proofKind: proof.kind, outcomeStatus: data.outcomeStatus },
+        },
+      }) : await tx.document.upsert({
         where: { projectProofKey: `${projectId}:${proof.proofKey}` },
         create: {
           propertyId,
@@ -1282,7 +1376,7 @@ export async function confirmCompletion(projectId: string, propertyId: string, u
           uploadedBy: userId,
           type: proof.type,
           name: proof.name,
-          fileUrl: proof.fileUrl,
+          fileUrl: proof.fileUrl!,
           fileSize: proof.fileSize,
           mimeType: proof.mimeType,
           verificationStatus: verifiedSuccess ? 'VERIFIED' : 'UNVERIFIED',
@@ -1291,7 +1385,7 @@ export async function confirmCompletion(projectId: string, propertyId: string, u
           metadata: { projectId, proofKind: proof.kind, outcomeStatus: data.outcomeStatus },
         },
         update: {
-          fileUrl: proof.fileUrl,
+          fileUrl: proof.fileUrl!,
           fileSize: proof.fileSize,
           mimeType: proof.mimeType,
           verificationStatus: verifiedSuccess ? 'VERIFIED' : 'UNVERIFIED',
@@ -1312,6 +1406,7 @@ export async function confirmCompletion(projectId: string, propertyId: string, u
     let warrantyId: string | null = null;
     const materialSpecIds: string[] = [];
     const futureCareTaskIds: string[] = [];
+    let providerReviewId: string | null = null;
 
     if (verifiedSuccess) {
       const expense = await tx.expense.upsert({
@@ -1433,6 +1528,52 @@ export async function confirmCompletion(projectId: string, propertyId: string, u
         futureCareTaskIds.push(task.id);
       }
 
+      if (existing.bookingId && existing.contractorProfile?.userId) {
+        const ratingValues = [
+          data.contractorRatingQuality,
+          data.contractorRatingTimeline,
+          data.contractorRatingComms,
+          data.contractorRatingBudget,
+        ].filter((rating): rating is number => typeof rating === 'number');
+        const rating = Math.round(ratingValues.reduce((sum, value) => sum + value, 0) / ratingValues.length);
+        const timelinessVarianceDays = existing.expectedEndDate
+          ? Math.round((actualEndDate.getTime() - existing.expectedEndDate.getTime()) / 86_400_000)
+          : null;
+        const review = await tx.review.upsert({
+          where: { bookingId: existing.bookingId },
+          create: {
+            bookingId: existing.bookingId,
+            projectId,
+            guidanceJourneyId: existing.guidanceJourneyId,
+            authorId: userId,
+            providerId: existing.contractorProfile.userId,
+            rating,
+            title: `${existing.name} verified outcome`,
+            content: data.contractorReviewText?.trim() || `Verified completion recorded for ${existing.name}.`,
+            qualityRating: data.contractorRatingQuality,
+            communicationRating: data.contractorRatingComms,
+            valueRating: data.contractorRatingBudget,
+            professionalismRating: data.contractorRatingTimeline,
+            scopeSummary: existing.description ?? existing.name,
+            outcomeStatus: data.outcomeStatus,
+            verifiedOutcome: true,
+            timelinessVarianceDays,
+            priceVarianceCents: data.actualCostCents - existing.currentContractAmountCents,
+            status: 'PENDING',
+          },
+          update: {
+            projectId,
+            guidanceJourneyId: existing.guidanceJourneyId,
+            scopeSummary: existing.description ?? existing.name,
+            outcomeStatus: data.outcomeStatus,
+            verifiedOutcome: true,
+            timelinessVarianceDays,
+            priceVarianceCents: data.actualCostCents - existing.currentContractAmountCents,
+          },
+        });
+        providerReviewId = review.id;
+      }
+
       await tx.inspectionFinding.updateMany({
         where: { resolvedByProjectId: projectId, status: { not: 'RESOLVED' } },
         data: { status: 'RESOLVED', resolvedAt: new Date(), resolutionNotes: `Resolved by verified project: ${project.name}` },
@@ -1448,6 +1589,7 @@ export async function confirmCompletion(projectId: string, propertyId: string, u
       ...(existing.inventoryItemId && verifiedSuccess ? [{ targetSystem: 'INVENTORY', targetRecordId: existing.inventoryItemId, action: 'UPDATED', payload: { modelNumber: data.modelNumber, serialNumber: data.serialNumber } }] : []),
       ...(materialSpecIds.length ? [{ targetSystem: 'MATERIAL_SPECS', targetRecordId: materialSpecIds[0], action: 'CREATED', payload: { materialSpecIds } }] : []),
       ...(futureCareTaskIds.length ? [{ targetSystem: 'FUTURE_CARE', targetRecordId: futureCareTaskIds[0], action: 'CREATED', payload: { taskIds: futureCareTaskIds } }] : []),
+      ...(providerReviewId ? [{ targetSystem: 'PROVIDER_REVIEWS', targetRecordId: providerReviewId, action: 'CREATED', payload: { verifiedOutcome: true, journeyId: existing.guidanceJourneyId } }] : []),
     ];
     for (const row of writeBackRows) {
       const prior = await tx.projectWriteBack.findFirst({
@@ -1469,6 +1611,7 @@ export async function confirmCompletion(projectId: string, propertyId: string, u
       warrantyId,
       materialSpecIds,
       futureCareTaskIds,
+      providerReviewId,
       idempotentReplay: false,
     };
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
