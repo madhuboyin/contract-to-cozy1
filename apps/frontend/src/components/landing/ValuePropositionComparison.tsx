@@ -18,13 +18,13 @@ export default function ValuePropositionComparison() {
     },
     {
       title: 'Finding savings',
-      cozy: 'Relevant rebates, tax credits, insurance savings, and homeowner programs can surface from property context.',
+      cozy: 'Relevant rebates, tax credits, insurance savings, and homeowner programs can surface from property details.',
       without: 'Opportunities are often discovered too late or missed entirely.',
     },
     {
       title: 'Making a repair or project decision',
       cozy: "Use the home's age, prior work, costs, and records to make a more informed decision.",
-      without: 'Make decisions with incomplete information and limited context.',
+      without: 'Make decisions with incomplete information and missing details.',
     },
     {
       title: 'Preparing to sell',
@@ -51,7 +51,7 @@ export default function ValuePropositionComparison() {
                 <h3 className="text-sm font-semibold text-gray-900">{point.title}</h3>
               </div>
               <div className="px-4 py-3 border-b border-gray-100">
-                <p className="text-[11px] font-semibold tracking-wide text-blue-600 uppercase mb-1">With Contract to Cozy</p>
+                <p className="text-[11px] font-semibold tracking-wide text-blue-600 uppercase mb-1">With ContractToCozy</p>
                 <div className="flex items-start gap-2">
                   <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />
                   <p className="text-sm text-gray-700 leading-snug">{point.cozy}</p>
@@ -71,7 +71,7 @@ export default function ValuePropositionComparison() {
         {/* Desktop: 3-column table (>= md) */}
         <div className="mt-7 hidden overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_18px_42px_-32px_rgba(15,23,42,0.55)] md:block">
           <table className="w-full table-fixed text-left">
-            <thead className="bg-slate-50 text-xs font-semibold text-slate-600"><tr><th scope="col" className="border-r border-slate-200 px-5 py-3">The experience</th><th scope="col" className="border-r border-slate-200 px-5 py-3 text-brand-700">With Contract to Cozy</th><th scope="col" className="px-5 py-3">Without it</th></tr></thead>
+            <thead className="bg-slate-50 text-xs font-semibold text-slate-600"><tr><th scope="col" className="border-r border-slate-200 px-5 py-3">The experience</th><th scope="col" className="border-r border-slate-200 px-5 py-3 text-brand-700">With ContractToCozy</th><th scope="col" className="px-5 py-3">Without it</th></tr></thead>
             <tbody>
           {comparisonPoints.map((point) => (
             <tr key={point.title} className="border-t border-slate-200 bg-white align-top transition-colors hover:bg-slate-50/60">

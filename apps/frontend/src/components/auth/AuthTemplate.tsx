@@ -44,7 +44,7 @@ export default function AuthTemplate({ title, subtitle, activeRoute, children, f
             className={`no-brand-style inline-flex items-center gap-2 text-slate-900 transition-opacity hover:opacity-90 ${CTC_INTERACTION_RULES_V1.focusRing}`}
           >
             <BrandIcon className="h-6 w-6 text-brand-primary" />
-            <span className="text-base font-semibold">Contract to Cozy</span>
+            <span className="text-base font-semibold">ContractToCozy</span>
           </Link>
 
           <div className="flex items-center gap-4 text-sm">
@@ -72,7 +72,7 @@ export default function AuthTemplate({ title, subtitle, activeRoute, children, f
               Run your home with less stress and more confidence.
             </h1>
             <p className="mt-3 text-sm text-slate-600">
-              Contract to Cozy helps homeowners reduce surprises with clear guidance for maintenance,
+              ContractToCozy helps homeowners reduce surprises with clear guidance for maintenance,
               protection, and financial decisions.
             </p>
 

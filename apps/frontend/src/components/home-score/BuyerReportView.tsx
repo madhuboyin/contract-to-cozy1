@@ -138,7 +138,7 @@ export default function BuyerReportView({
               </Link>
             </Button>
           ) : (
-            <span className="text-sm font-semibold text-slate-800">Contract to Cozy</span>
+            <span className="text-sm font-semibold text-slate-800">ContractToCozy</span>
           )}
 
           {isPreview ? (
@@ -206,7 +206,7 @@ export default function BuyerReportView({
             <div className="mt-4 flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
               <BadgeCheck className="h-4 w-4 shrink-0" />
               <span>
-                Verified by Contract to Cozy · {trust?.dataCoveragePct ?? 0}% data coverage ·{' '}
+                Verified by ContractToCozy · {trust?.dataCoveragePct ?? 0}% data coverage ·{' '}
                 {formatConstant(trust?.confidenceLevel ?? report.confidence)} confidence
               </span>
             </div>
@@ -361,7 +361,7 @@ export default function BuyerReportView({
           </div>
         ) : (
           <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-5 text-center">
-            <p className="text-base font-semibold text-slate-900">Track your new home with Contract to Cozy</p>
+            <p className="text-base font-semibold text-slate-900">Track your new home with ContractToCozy</p>
             <p className="mt-1 text-sm text-slate-600">
               Get your own Home Report, maintenance reminders, warranty tracking, and more — free for homeowners.
             </p>

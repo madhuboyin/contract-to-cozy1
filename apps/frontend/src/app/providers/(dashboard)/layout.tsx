@@ -79,7 +79,7 @@ export default function ProviderDashboardLayout({
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
               <Link href="/providers/dashboard" className="text-base font-semibold text-slate-900 hover:text-brand-primary active:opacity-70">
-                Contract to Cozy
+                ContractToCozy
               </Link>
               <div className="mt-0.5 flex items-center gap-1.5">
                 <p className="text-[11px] font-medium tracking-normal text-slate-500">Provider Ops</p>

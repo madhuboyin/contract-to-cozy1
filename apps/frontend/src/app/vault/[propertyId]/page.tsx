@@ -9,8 +9,8 @@ interface Props {
 }
 
 export const metadata: Metadata = {
-  title: "Seller's Vault — Contract to Cozy",
-  description: 'Verified proof-of-care report for a Contract to Cozy managed property.',
+  title: "Seller's Vault — ContractToCozy",
+  description: 'Verified proof-of-care report for a ContractToCozy managed property.',
 };
 
 export default async function VaultPage({ params }: Props) {

@@ -25,7 +25,7 @@ export default function Hero() {
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6 lg:px-8">
           <Link href="/" className="no-brand-style inline-flex items-center gap-2 text-slate-900">
             <BrandIcon className="h-6 w-6 text-brand-primary" />
-            <span className="text-base font-semibold">Contract to Cozy</span>
+            <span className="text-base font-semibold">ContractToCozy</span>
           </Link>
 
           <div className="hidden items-center gap-6 md:flex">
@@ -84,7 +84,6 @@ export default function Hero() {
 
       <div className="pt-16">
       <MarketingHeroTemplate
-        eyebrow="The operating system for homeownership"
         title={
           <>
             Own your home
@@ -106,7 +105,7 @@ export default function Hero() {
             detail: 'Surface rebates and opportunities.',
           },
           {
-            label: 'Build home context',
+            label: 'Build home history',
             detail: 'Make better future decisions.',
           },
         ]}

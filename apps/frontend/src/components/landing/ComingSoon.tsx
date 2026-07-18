@@ -37,7 +37,7 @@ export default function ComingSoon() {
             <BrandIcon className="h-14 w-14" />
           </div>
           <h1 className="text-5xl md:text-6xl font-bold text-white mb-4">
-            Contract to Cozy
+            ContractToCozy
           </h1>
           <div className="w-24 h-1 bg-white/30 mx-auto rounded-full"></div>
         </div>
@@ -105,7 +105,7 @@ export default function ComingSoon() {
 
         {/* Footer */}
         <div className="mt-8 text-white/60 text-sm">
-          <p>© 2025 Contract to Cozy. All rights reserved.</p>
+          <p>© 2025 ContractToCozy. All rights reserved.</p>
         </div>
       </div>
     </div>

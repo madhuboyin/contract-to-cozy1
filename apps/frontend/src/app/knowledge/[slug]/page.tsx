@@ -31,7 +31,7 @@ export async function generateMetadata({ params }: KnowledgeArticlePageProps): P
 
   if (!article) {
     return {
-      title: 'Knowledge Article Not Found | Contract to Cozy',
+      title: 'Knowledge Article Not Found | ContractToCozy',
       alternates: {
         canonical: `/knowledge/${slug}`,
       },
@@ -39,7 +39,7 @@ export async function generateMetadata({ params }: KnowledgeArticlePageProps): P
   }
 
   return {
-    title: article.seoTitle || `${article.title} | Contract to Cozy`,
+    title: article.seoTitle || `${article.title} | ContractToCozy`,
     description: article.seoDescription || article.excerpt || undefined,
     alternates: {
       canonical: buildKnowledgeArticleHref(slug),

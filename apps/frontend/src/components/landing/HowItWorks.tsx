@@ -17,13 +17,13 @@ const STEPS = [
   {
     number: '03',
     title: 'Own',
-    description: 'Track systems, costs, insurance, warranties, savings opportunities, and neighborhood context.',
+    description: 'Track systems, costs, insurance, warranties, savings opportunities, and local details.',
     iconToken: 'calendar',
   },
   {
     number: '04',
     title: 'Maintain',
-    description: 'Stay ahead of recurring care, repairs, service records, and replacement planning.',
+    description: 'Stay ahead of regular upkeep, repairs, service records, and replacement planning.',
     iconToken: 'wrench',
   },
   {
@@ -35,7 +35,7 @@ const STEPS = [
   {
     number: '06',
     title: 'Sell',
-    description: "Prepare disclosures, repairs, improvements, and records without rebuilding the home's story.",
+    description: "Prepare required seller forms about the home's condition, along with repairs, improvements, and records.",
     iconToken: 'key',
   },
 ];

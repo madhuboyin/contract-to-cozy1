@@ -1,15 +1,15 @@
 import LegalPageLayout from '@/components/legal/LegalPageLayout';
 
 export const metadata = {
-  title: 'Privacy Policy — Contract to Cozy',
+  title: 'Privacy Policy — ContractToCozy',
 };
 
 export default function PrivacyPage() {
   return (
     <LegalPageLayout title="Privacy Policy" lastUpdated="July 9, 2026" noticeVariant="template">
       <p>
-        This Privacy Policy explains how [Contract to Cozy Legal Entity Name]
-        (&quot;Contract to Cozy,&quot; &quot;we,&quot; &quot;us,&quot; or &quot;our&quot;)
+        This Privacy Policy explains how [ContractToCozy Legal Entity Name]
+        (&quot;ContractToCozy,&quot; &quot;we,&quot; &quot;us,&quot; or &quot;our&quot;)
         collects, uses, shares, and protects information when you use our website, dashboard, and
         related applications (the &quot;Service&quot;). It applies to homeowners and service
         providers who create an account.
@@ -82,7 +82,7 @@ export default function PrivacyPage() {
         </li>
         <li>
           <strong>For legal reasons,</strong> if required by law, subpoena, or to protect the
-          rights, safety, or property of Contract to Cozy, our users, or the public; and
+          rights, safety, or property of ContractToCozy, our users, or the public; and
         </li>
         <li>
           <strong>In a business transfer,</strong> such as a merger, acquisition, or asset sale, in

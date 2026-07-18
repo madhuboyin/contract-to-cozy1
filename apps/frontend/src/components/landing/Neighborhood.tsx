@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { Check, MapPin } from 'lucide-react';
 import { landingStyles } from './landingStyles';
 
-const BENEFITS = ['Help in context', 'Local knowledge', 'History preserved'];
+const BENEFITS = ['Help informed by history', 'Local knowledge', 'History preserved'];
 
 export default function Neighborhood() {
   return (
@@ -30,7 +30,7 @@ export default function Neighborhood() {
                 <p className="mb-1 text-xs font-semibold text-brand-700">EXAMPLE PROVIDER RELATIONSHIP</p>
                 <h3 className="mb-2 text-xl font-semibold text-slate-900">Home inspection service</h3>
               </div>
-              <span className="w-fit rounded-full border border-brand-100 bg-brand-50 px-3 py-1 text-xs font-semibold text-brand-800">Home context ready</span>
+              <span className="w-fit rounded-full border border-brand-100 bg-brand-50 px-3 py-1 text-xs font-semibold text-brand-800">Home history ready</span>
             </div>
 
             <div className="flex items-center gap-2 rounded-xl border border-brand-200 bg-brand-50 p-3 text-brand-900">

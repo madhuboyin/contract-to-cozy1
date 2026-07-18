@@ -48,7 +48,7 @@ export default function ProviderAuthTemplate({
             className={`no-brand-style inline-flex items-center gap-2 text-slate-900 transition-opacity hover:opacity-90 ${CTC_INTERACTION_RULES_V1.focusRing}`}
           >
             <BriefcaseBusiness className="h-6 w-6 text-brand-primary" />
-            <span className="text-base font-semibold">Contract to Cozy</span>
+            <span className="text-base font-semibold">ContractToCozy</span>
           </Link>
 
           <div className="flex items-center gap-4 text-sm">

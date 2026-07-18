@@ -18,6 +18,8 @@ describe('homepage narrative', () => {
     render(<Home />);
 
     expect(screen.getByRole('heading', { level: 1, name: /Own your home with confidence/i })).toBeInTheDocument();
+    expect(screen.getAllByRole('link', { name: 'ContractToCozy' }).length).toBeGreaterThanOrEqual(2);
+    expect(screen.queryByText('The operating system for homeownership')).not.toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Stay Ahead' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Save Money' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Make Better Decisions' })).toBeInTheDocument();
@@ -43,7 +45,7 @@ describe('homepage narrative', () => {
     render(<Home />);
 
     expect(screen.getByRole('table')).toBeInTheDocument();
-    expect(screen.getByRole('columnheader', { name: 'With Contract to Cozy' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'With ContractToCozy' })).toBeInTheDocument();
     expect(screen.getByRole('rowheader', { name: 'Finding savings' })).toBeInTheDocument();
   });
 });

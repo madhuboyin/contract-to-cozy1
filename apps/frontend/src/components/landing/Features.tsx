@@ -22,7 +22,7 @@ const CAPABILITIES = [
   {
     iconToken: 'sparkles',
     title: 'Make Better Decisions',
-    description: "Use your home's history and context to make more informed choices about repairs, projects, improvements, buying, and selling.",
+    description: "Use your home's history and details to make more informed choices about repairs, projects, improvements, buying, and selling.",
     examples: ['Repair versus replace', 'Prioritize improvements', 'Prepare to sell'],
     cta: 'Explore home guidance',
     href: '/signup',

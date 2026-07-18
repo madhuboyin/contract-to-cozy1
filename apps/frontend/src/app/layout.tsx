@@ -31,9 +31,9 @@ const fraunces = Fraunces({
 });
 
 export const metadata: Metadata = {
-  title: 'Contract to Cozy - Home Service Marketplace',
+  title: 'ContractToCozy - Homeowner Intelligence',
   description: 'Your complete property management companion',
-  applicationName: 'Contract to Cozy',
+  applicationName: 'ContractToCozy',
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'https://contracttocozy.com'),
   referrer: 'strict-origin-when-cross-origin',
   robots: {
@@ -51,13 +51,13 @@ export const metadata: Metadata = {
   },
   openGraph: {
     type: 'website',
-    title: 'Contract to Cozy',
+    title: 'ContractToCozy',
     description: 'Your complete property management companion',
-    siteName: 'Contract to Cozy',
+    siteName: 'ContractToCozy',
   },
   twitter: {
     card: 'summary',
-    title: 'Contract to Cozy',
+    title: 'ContractToCozy',
     description: 'Your complete property management companion',
   },
   icons: {

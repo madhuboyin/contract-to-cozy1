@@ -84,7 +84,7 @@ export default function OfflinePage() {
 
         {/* App info */}
         <p className="text-xs text-gray-500 mt-6">
-          Contract to Cozy • Your property management companion
+          ContractToCozy • Your property management companion
         </p>
       </div>
     </div>

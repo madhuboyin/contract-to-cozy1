@@ -154,7 +154,7 @@ function toNumber(value: unknown): number {
 }
 
 /**
- * API Client for Contract to Cozy Backend
+ * API Client for ContractToCozy Backend
  * Uses a class structure for token refresh logic and state management.
  */
 class APIClient {

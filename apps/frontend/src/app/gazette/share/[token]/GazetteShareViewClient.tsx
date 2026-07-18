@@ -171,7 +171,7 @@ export default function GazetteShareViewClient() {
             <Button asChild variant="outline">
               <Link href="/">
                 <ExternalLink className="mr-2 h-4 w-4" />
-                Visit Contract to Cozy
+                Visit ContractToCozy
               </Link>
             </Button>
           )}
@@ -201,7 +201,7 @@ export default function GazetteShareViewClient() {
             href="/"
             className="text-xs font-medium text-slate-500 hover:text-slate-700"
           >
-            Contract to Cozy
+            ContractToCozy
           </Link>
         </div>
       </header>

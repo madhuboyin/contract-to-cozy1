@@ -11,7 +11,7 @@ import { getPublishedKnowledgeArticles } from '@/lib/knowledge/api';
 import { BottomNav } from '@/components/mobile/BottomNav';
 
 export const metadata: Metadata = {
-  title: 'Knowledge Hub | Contract to Cozy',
+  title: 'Knowledge Hub | ContractToCozy',
   description:
     'Explore practical guidance on maintenance, property value, insurance, climate exposure, and homeowner risk inside Contract-to-Cozy.',
   alternates: {

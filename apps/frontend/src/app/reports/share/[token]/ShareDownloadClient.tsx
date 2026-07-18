@@ -65,7 +65,7 @@ export default function ShareDownloadClient() {
           description={error}
           action={(
             <Button asChild variant="outline">
-              <Link href="/">Go to Contract to Cozy</Link>
+              <Link href="/">Go to ContractToCozy</Link>
             </Button>
           )}
         />

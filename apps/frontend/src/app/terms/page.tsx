@@ -1,7 +1,7 @@
 import LegalPageLayout from '@/components/legal/LegalPageLayout';
 
 export const metadata = {
-  title: 'Terms of Service — Contract to Cozy',
+  title: 'Terms of Service — ContractToCozy',
 };
 
 export default function TermsPage() {
@@ -10,7 +10,7 @@ export default function TermsPage() {
       <p>
         These Terms of Service (&quot;Terms&quot;) govern your access to and use of Contract to
         Cozy, including our website, dashboard, and related mobile and offline-capable
-        applications (collectively, the &quot;Service&quot;), operated by [Contract to Cozy Legal
+        applications (collectively, the &quot;Service&quot;), operated by [ContractToCozy Legal
         Entity Name], a [Governing State] [company / LLC / corporation] (&quot;Contract to
         Cozy,&quot; &quot;we,&quot; &quot;us,&quot; or &quot;our&quot;). By creating an account or
         otherwise using the Service, you agree to be bound by these Terms and our{' '}
@@ -29,17 +29,17 @@ export default function TermsPage() {
 
       <h2>2. Description of the Service</h2>
       <p>
-        Contract to Cozy is a homeowner intelligence platform. It provides maintenance tracking,
+        ContractToCozy is a homeowner intelligence platform. It provides maintenance tracking,
         risk and coverage guidance, financial-planning tools, and a marketplace connecting
         homeowners with independent third-party service providers (&quot;Providers&quot;).
-        Contract to Cozy is currently operating in a limited pilot phase; features, availability,
+        ContractToCozy is currently operating in a limited pilot phase; features, availability,
         and pricing may change without the notice period that would apply to a generally available
         product.
       </p>
 
       <h2>3. Not a Contractor, Insurer, or Advisor</h2>
       <p>
-        Contract to Cozy is a software platform, not a licensed contractor, home inspector,
+        ContractToCozy is a software platform, not a licensed contractor, home inspector,
         insurance agent, financial advisor, or law firm. Providers listed or booked through the
         Service are independent third parties, not our employees or agents, and we do not
         guarantee the quality, safety, licensing, insurance, or legality of any Provider&apos;s
@@ -60,7 +60,7 @@ export default function TermsPage() {
       <h2>5. Your Content</h2>
       <p>
         You retain ownership of the property information, documents, photos, and other content you
-        submit to the Service (&quot;Your Content&quot;). You grant Contract to Cozy a
+        submit to the Service (&quot;Your Content&quot;). You grant ContractToCozy a
         non-exclusive, worldwide, royalty-free license to host, process, and display Your Content
         solely as necessary to operate and improve the Service, including sending it to AI
         providers as described in our <a href="/privacy">Privacy Policy</a>. You represent that you
@@ -123,7 +123,7 @@ export default function TermsPage() {
 
       <h2>11. Indemnification</h2>
       <p>
-        You agree to indemnify and hold Contract to Cozy harmless from any claims, damages, or
+        You agree to indemnify and hold ContractToCozy harmless from any claims, damages, or
         expenses (including reasonable attorneys&apos; fees) arising from your violation of these
         Terms, your use of the Service, or your interactions with a Provider.
       </p>

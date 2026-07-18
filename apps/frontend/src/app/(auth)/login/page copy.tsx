@@ -97,7 +97,7 @@ export default function LoginPage() {
             {/* Logo - Links to Home */}
             <Link href="/" className="flex items-center space-x-2 hover:opacity-80 transition-opacity">
               <span className="text-2xl">🏠</span>
-              <span className="text-lg font-semibold text-gray-900">Contract to Cozy</span>
+              <span className="text-lg font-semibold text-gray-900">ContractToCozy</span>
             </Link>
 
             {/* Right side navigation */}

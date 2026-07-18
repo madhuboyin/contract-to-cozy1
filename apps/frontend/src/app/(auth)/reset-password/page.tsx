@@ -200,7 +200,7 @@ export default function ResetPasswordPage() {
           <div className="flex justify-between items-center h-16">
             <Link href="/" className="flex items-center space-x-2 hover:opacity-80 transition-opacity">
               <span className="text-2xl">🏠</span>
-              <span className="text-lg font-semibold text-gray-900">Contract to Cozy</span>
+              <span className="text-lg font-semibold text-gray-900">ContractToCozy</span>
             </Link>
             <div className="flex items-center space-x-4">
               <Link

@@ -28,7 +28,7 @@ export default function LegalPageLayout({
         <div className="mx-auto flex max-w-3xl items-center px-4 py-4 sm:px-6">
           <Link href="/" className="flex items-center gap-2 text-lg font-bold text-slate-900">
             <BrandIcon className="h-5 w-5" />
-            <span>Contract to Cozy</span>
+            <span>ContractToCozy</span>
           </Link>
         </div>
       </header>

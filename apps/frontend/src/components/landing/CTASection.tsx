@@ -5,7 +5,7 @@ export default function CTASection() {
   return (
     <section className="bg-gradient-to-r from-brand-600 to-brand-700 px-4 py-12 sm:px-6 lg:px-8 lg:py-14">
       <div className="mx-auto max-w-4xl text-center">
-        <h2 className="text-3xl font-semibold tracking-tight text-white">Give your home the context it deserves</h2>
+        <h2 className="text-3xl font-semibold tracking-tight text-white">Give your home the history it deserves</h2>
         <p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-teal-50 sm:text-base">Stay ahead, find savings, and make better decisions as your home&apos;s history grows.</p>
 
         <div className="mt-7 flex flex-col justify-center gap-3 sm:flex-row">

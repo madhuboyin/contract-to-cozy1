@@ -100,7 +100,7 @@ export function InstallPrompt() {
         
         <div className="flex-1 pr-6">
           <h3 className="font-bold text-gray-900 mb-1 text-lg">
-            Install Contract to Cozy
+            Install ContractToCozy
           </h3>
           <p className="text-sm text-gray-600 mb-4">
             {isIOSDevice 

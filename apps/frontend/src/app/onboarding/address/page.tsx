@@ -103,7 +103,7 @@ export default function AddressOnboardingPage() {
               <Home className="h-8 w-8 text-white" />
             </div>
             <h2 className="text-sm font-bold tracking-normal text-brand-600">
-              Contract to Cozy
+              ContractToCozy
             </h2>
           </div>
 

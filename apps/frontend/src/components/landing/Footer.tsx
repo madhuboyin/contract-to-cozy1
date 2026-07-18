@@ -52,11 +52,8 @@ export default function Footer() {
           <div className="col-span-2 md:col-span-4 lg:col-span-1 mb-8 lg:mb-0">
             <Link href="/" className="flex items-center space-x-2 text-xl font-bold text-white mb-4">
               <BrandIcon className="h-6 w-6" />
-              <span>Contract to Cozy</span>
+              <span>ContractToCozy</span>
             </Link>
-            <p className="text-gray-400 text-sm leading-relaxed max-w-xs">
-              The operating system for homeownership.
-            </p>
             {/* Social Links */}
             <div className="flex space-x-4 mt-6">
               <a
@@ -165,7 +162,7 @@ export default function Footer() {
         <div className="border-t border-gray-800 pt-8">
           <div className="flex flex-col md:flex-row justify-between items-center space-y-4 md:space-y-0">
             <p className="text-gray-400 text-sm">
-              © {currentYear} Contract to Cozy. All rights reserved.
+              © {currentYear} ContractToCozy. All rights reserved.
             </p>
             <div className="flex flex-wrap justify-center gap-6">
               {footerLinks.legal.map((link) => (

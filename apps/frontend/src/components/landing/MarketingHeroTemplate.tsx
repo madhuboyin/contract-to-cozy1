@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
-import { ArrowRight, ShieldCheck } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 import { ReactNode } from 'react';
 import { CTC_INTERACTION_RULES_V1 } from '@/lib/design-system/tokenGovernance';
 import ProofRow, { ProofRowItem } from '@/components/system/ProofRow';
@@ -30,16 +30,17 @@ export default function MarketingHeroTemplate({
   secondaryCtaHref,
   proofItems,
   screenshotSrc = '/contract-to-cozy-dashboard.png',
-  screenshotAlt = 'Contract to Cozy dashboard preview',
+  screenshotAlt = 'ContractToCozy dashboard preview',
 }: MarketingHeroTemplateProps) {
   return (
     <section className="relative overflow-hidden border-b border-slate-200/70 bg-[radial-gradient(circle_at_top_right,rgba(20,184,166,0.14),transparent_45%),linear-gradient(175deg,#f8fafc,#ecfeff_52%,#ffffff)] px-4 pb-14 pt-10 sm:px-6 sm:pb-16 sm:pt-12 lg:px-8 lg:pb-20">
       <div className="mx-auto grid w-full max-w-6xl items-center gap-10 lg:grid-cols-[1.02fr_1fr] lg:gap-12">
         <div>
-          <div className="inline-flex items-center gap-2 rounded-full border border-brand-100 bg-brand-50/80 px-3 py-1 text-xs font-semibold tracking-normal text-brand-700">
-            <ShieldCheck className="h-3.5 w-3.5" />
-            {eyebrow || 'Homeowner Intelligence'}
-          </div>
+          {eyebrow ? (
+            <div className="inline-flex items-center gap-2 rounded-full border border-brand-100 bg-brand-50/80 px-3 py-1 text-xs font-semibold tracking-normal text-brand-700">
+              {eyebrow}
+            </div>
+          ) : null}
 
           <h1 className="mt-4 text-balance text-4xl font-semibold leading-tight tracking-tight text-slate-950 sm:text-5xl lg:text-[3.35rem]">
             {title}
@@ -71,7 +72,7 @@ export default function MarketingHeroTemplate({
               <span className="h-2.5 w-2.5 rounded-full bg-rose-300" />
               <span className="h-2.5 w-2.5 rounded-full bg-amber-300" />
               <span className="h-2.5 w-2.5 rounded-full bg-emerald-300" />
-              <p className="ml-2 mb-0 text-[11px] font-medium text-slate-500">Contract to Cozy Preview</p>
+              <p className="ml-2 mb-0 text-[11px] font-medium text-slate-500">ContractToCozy Preview</p>
             </div>
             <div className="relative aspect-[16/10] bg-slate-100">
               <Image
