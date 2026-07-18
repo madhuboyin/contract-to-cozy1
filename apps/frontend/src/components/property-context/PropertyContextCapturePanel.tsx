@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import type { FeatureContextEvaluation, ScalarCaptureInputSchema } from './featureContextTypes';
+import type { FeatureContextCaptureResult, FeatureContextEvaluation, ScalarCaptureInputSchema } from './featureContextTypes';
 import { useFeatureContextCapture } from './useFeatureContextCapture';
 
 export function PropertyContextCapturePanel({
@@ -10,12 +10,14 @@ export function PropertyContextCapturePanel({
   operationKey,
   operationInput,
   onReady,
+  onCaptured,
 }: {
   propertyId: string;
   featureKey: string;
   operationKey: string;
   operationInput?: Record<string, unknown>;
   onReady?: (evaluation: FeatureContextEvaluation) => void | Promise<void>;
+  onCaptured?: (result: FeatureContextCaptureResult) => void | Promise<void>;
 }) {
   const { evaluation, loading, saving, error, capture, reevaluate, suppressedRequirementId } = useFeatureContextCapture({
     propertyId,
@@ -23,10 +25,13 @@ export function PropertyContextCapturePanel({
     operationKey,
     operationInput,
     onReady,
+    onCaptured,
   });
   const [draft, setDraft] = useState<string>('');
   const [selected, setSelected] = useState<string[]>([]);
   const [groupDraft, setGroupDraft] = useState<Record<string, unknown>>({});
+  const [relationalMode, setRelationalMode] = useState<'SELECT' | 'CREATE'>('SELECT');
+  const [selectedEntityId, setSelectedEntityId] = useState('');
   const [dismissedVersion, setDismissedVersion] = useState<string | null>(null);
   const activeRequirement = evaluation?.requirements[0];
 
@@ -40,6 +45,9 @@ export function PropertyContextCapturePanel({
       : undefined;
     setDraft(typeof scalarValue === 'string' || typeof scalarValue === 'number' ? String(scalarValue) : '');
     setSelected(Array.isArray(scalarValue) ? scalarValue.filter((value): value is string => typeof value === 'string') : []);
+    const relationalSchema = activeRequirement?.capture.inputSchema;
+    setRelationalMode(relationalSchema?.type === 'RELATIONAL_SELECT_CREATE' && relationalSchema.options.length ? 'SELECT' : 'CREATE');
+    setSelectedEntityId('');
   }, [activeRequirement?.requirementId]);
 
   if (loading && !evaluation) return <p className="text-sm text-slate-600" role="status">Checking property details…</p>;
@@ -122,6 +130,23 @@ export function PropertyContextCapturePanel({
             />)}
             <button type="submit" disabled={saving || schema.fields.filter(fieldIsActive).some((field) => field.required && !Object.prototype.hasOwnProperty.call(groupDraft, field.key))} className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white">{stale || conflicted ? 'Confirm and continue' : 'Save and continue'}</button>
           </form> : null}
+          {schema.type === 'RELATIONAL_SELECT_CREATE' ? <div className="w-full space-y-4">
+            {schema.options.length ? <div className="flex gap-2" role="tablist" aria-label="Choose or add a record">
+              <button type="button" role="tab" aria-selected={relationalMode === 'SELECT'} onClick={() => setRelationalMode('SELECT')} className={`rounded-lg border px-3 py-2 text-sm font-medium ${relationalMode === 'SELECT' ? 'border-slate-900 bg-slate-900 text-white' : 'bg-white'}`}>{schema.selectLabel}</button>
+              <button type="button" role="tab" aria-selected={relationalMode === 'CREATE'} onClick={() => setRelationalMode('CREATE')} className={`rounded-lg border px-3 py-2 text-sm font-medium ${relationalMode === 'CREATE' ? 'border-slate-900 bg-slate-900 text-white' : 'bg-white'}`}>{schema.createLabel}</button>
+            </div> : null}
+            {relationalMode === 'SELECT' && schema.options.length ? <form className="space-y-3" onSubmit={(event) => { event.preventDefault(); if (selectedEntityId) void capture({ mode: 'SELECT', entityId: selectedEntityId }); }}>
+              <div className="grid gap-2">{schema.options.map((option) => <button key={option.id} type="button" aria-pressed={selectedEntityId === option.id} onClick={() => setSelectedEntityId(option.id)} className={`rounded-xl border p-3 text-left ${selectedEntityId === option.id ? 'border-slate-900 bg-white ring-1 ring-slate-900' : 'border-slate-200 bg-white/80'}`}>
+                <span className="block text-sm font-medium text-slate-900">{option.label}</span>
+                {option.description ? <span className="block text-xs text-slate-600">{option.description}</span> : null}
+              </button>)}</div>
+              <button type="submit" disabled={saving || !selectedEntityId} className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white">Use selected record</button>
+            </form> : null}
+            {relationalMode === 'CREATE' ? <form className="space-y-4" onSubmit={(event) => { event.preventDefault(); void capture({ mode: 'CREATE', values: groupDraft }); }}>
+              {schema.createFields.map((field) => <StructuredFieldControl key={field.key} field={field} value={groupDraft[field.key]} disabled={saving} onChange={(value) => setGroupDraft((current) => ({ ...current, [field.key]: value }))} />)}
+              <button type="submit" disabled={saving || schema.createFields.some((field) => field.required && !Object.prototype.hasOwnProperty.call(groupDraft, field.key))} className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white">Add and continue</button>
+            </form> : null}
+          </div> : null}
           {requirement.capture.allowNotSure ? <button type="button" disabled={saving} onClick={() => void capture(schema.type === 'GROUP' ? notSureGroupAnswer() : null)} className="rounded-lg px-3 py-2 text-sm font-medium underline">Not sure</button> : null}
           {enhancement ? <button type="button" disabled={saving} onClick={() => setDismissedVersion(evaluation.contextVersion)} className="rounded-lg px-3 py-2 text-sm font-medium underline">Skip for now</button> : null}
         </div>

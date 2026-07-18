@@ -11,6 +11,7 @@ import { normalizeCaptureValue, writeCanonicalFact } from './capturePropertyFact
 import { evaluateFeatureContext } from './evaluateFeatureContext';
 import { PropertyContextAccessDeniedError } from './getPropertyContext';
 import type { ScalarCaptureInputSchema } from '../domain/contracts';
+import { executeRelationalCapture, type RelationalCaptureSelection } from './relationalCaptureAdapters';
 
 export const captureFeatureContextInputSchema = z.object({
   requirementId: z.string().trim().min(1).max(100),
@@ -86,7 +87,9 @@ export function normalizeAnswers(
 ): Array<{ factKey: string; value: unknown }> {
   if (definition.mode === 'SCALAR') {
     if (!Object.prototype.hasOwnProperty.call(answer, 'value')) throw new Error('Scalar capture requires an answer value.');
-    if (definition.inputSchema.type === 'GROUP') throw new Error('Scalar capture has an invalid group schema.');
+    if (definition.inputSchema.type === 'GROUP' || definition.inputSchema.type === 'RELATIONAL_SELECT_CREATE') {
+      throw new Error('Scalar capture has an invalid input schema.');
+    }
     validateInputValue(definition.inputSchema, answer.value, definition.allowNotSure);
     return [{ factKey: definition.factKeys[0], value: normalizeCaptureValue(definition.factKeys[0], answer.value) }];
   }
@@ -149,17 +152,21 @@ export async function captureFeatureContext(propertyId: string, userId: string, 
   const access = await resolvePropertyAccess(userId, propertyId);
   if (!access || ROLE_RANK[access.role] < ROLE_RANK.CONTRIBUTOR) throw new PropertyContextAccessDeniedError();
 
-  let answers: Array<{ factKey: string; value: unknown }>;
+  let answers: Array<{ factKey: string; value: unknown }> = [];
   try {
-    answers = normalizeAnswers(definition, input.answer);
+    if (definition.mode !== 'RELATIONAL') answers = normalizeAnswers(definition, input.answer);
+    else if (definition.inputSchema.type !== 'RELATIONAL_SELECT_CREATE' || !definition.relationalAdapterKey) {
+      throw new Error('Relational capture is not backed by an allowlisted domain command.');
+    }
   } catch (error) {
     throw new PropertyContextCaptureValidationError(error instanceof Error ? error.message : 'Invalid context capture answer.');
   }
-  if (!answers.length) throw new PropertyContextCaptureValidationError('Capture did not contain an applicable answer.');
-  const factDefinitions = answers.map(({ factKey }) => getFactDefinition(factKey));
-  const updatedFactKeys = answers.map(({ factKey }) => factKey);
+  if (definition.mode !== 'RELATIONAL' && !answers.length) throw new PropertyContextCaptureValidationError('Capture did not contain an applicable answer.');
+  const factDefinitions = (definition.mode === 'RELATIONAL' ? definition.factKeys : answers.map(({ factKey }) => factKey)).map(getFactDefinition);
+  const updatedFactKeys = definition.mode === 'RELATIONAL' ? definition.factKeys : answers.map(({ factKey }) => factKey);
   const observedAt = new Date();
   let captureId = '';
+  let selection: RelationalCaptureSelection | undefined;
   const evidenceIds: string[] = [];
   try {
     await prisma.$transaction(async (tx) => {
@@ -179,6 +186,27 @@ export async function captureFeatureContext(propertyId: string, userId: string, 
         },
       });
       captureId = receipt.id;
+      if (definition.mode === 'RELATIONAL') {
+        try {
+          selection = await executeRelationalCapture(tx, propertyId, definition, input.answer);
+        } catch (error) {
+          throw new PropertyContextCaptureValidationError(error instanceof Error ? error.message : 'Invalid relational capture answer.');
+        }
+        const evidence = await tx.propertyFactEvidence.create({
+          data: {
+            propertyId,
+            factKey: definition.factKeys[0],
+            sourceType: PropertyFactSourceType.USER_REPORTED,
+            observationState: 'KNOWN',
+            sourceEntityType: `PROPERTY_CONTEXT_${selection.entityType}_${selection.created ? 'CREATED' : 'SELECTED'}`,
+            sourceEntityId: selection.entityId,
+            confidence: selection.created ? 0.9 : 1,
+            observedAt,
+            verifiedAt: observedAt,
+          },
+        });
+        evidenceIds.push(evidence.id);
+      }
       for (const { factKey, value } of answers) {
         const unknownAnswer = isUnknownAnswer(value);
         if (!unknownAnswer) await writeCanonicalFact(tx, propertyId, factKey, value);
@@ -230,6 +258,7 @@ export async function captureFeatureContext(propertyId: string, userId: string, 
     contextVersion: nextEvaluation.contextVersion,
     updatedFactKeys,
     evidenceIds,
+    ...(selection ? { selection } : {}),
     evaluation: nextEvaluation,
   };
   await prisma.propertyContextCaptureReceipt.update({

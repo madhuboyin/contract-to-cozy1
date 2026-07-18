@@ -12,6 +12,7 @@ import { coverageLoopTrust } from '@/lib/trust/trustPresets';
 import ToolWorkspaceTemplate from '../../components/route-templates/ToolWorkspaceTemplate';
 import CoverageOptionsClient from '../coverage-options/CoverageOptionsClient';
 import { buildGuidanceOverviewHref } from '@/lib/navigation/guidanceOverviewHref';
+import { PropertyContextCapturePanel } from '@/components/property-context/PropertyContextCapturePanel';
 
 type CoverageTab = 'coverage' | 'options';
 
@@ -151,6 +152,11 @@ export default function CoverageIntelligenceToolClient() {
       {activeTab === 'coverage' && (
         <>
           <CoverageIntelligencePanel propertyId={propertyId} />
+          <PropertyContextCapturePanel
+            propertyId={propertyId}
+            featureKey="COVERAGE_INTELLIGENCE"
+            operationKey="ASSESS_PROPERTY_COVERAGE"
+          />
           <Link
             href={`/dashboard/properties/${propertyId}/tools/insurance-trend?from=coverage-intelligence`}
             className="flex items-center justify-between gap-3 rounded-xl border border-teal-200 bg-teal-50/60 px-4 py-3 text-sm hover:bg-teal-50 transition-colors"

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '@/lib/api/client';
-import type { FeatureContextEvaluation } from './featureContextTypes';
+import type { FeatureContextCaptureResult, FeatureContextEvaluation } from './featureContextTypes';
 
 export function useFeatureContextCapture({
   propertyId,
@@ -10,12 +10,14 @@ export function useFeatureContextCapture({
   operationKey,
   operationInput,
   onReady,
+  onCaptured,
 }: {
   propertyId: string;
   featureKey: string;
   operationKey: string;
   operationInput?: Record<string, unknown>;
   onReady?: (evaluation: FeatureContextEvaluation) => void | Promise<void>;
+  onCaptured?: (result: FeatureContextCaptureResult) => void | Promise<void>;
 }) {
   const [evaluation, setEvaluation] = useState<FeatureContextEvaluation | null>(null);
   const [loading, setLoading] = useState(true);
@@ -61,12 +63,13 @@ export function useFeatureContextCapture({
         operationKey,
         expectedContextVersion: evaluation.contextVersion,
         idempotencyKey: crypto.randomUUID(),
-        answer: requirement.capture.mode === 'STRUCTURED'
+        answer: requirement.capture.mode === 'STRUCTURED' || requirement.capture.mode === 'RELATIONAL'
           ? value as Record<string, unknown>
           : { value },
       });
       if (!response.success) throw new Error(response.message || 'Could not save this detail.');
       setEvaluation(response.data.evaluation);
+      void onCaptured?.(response.data);
       const containsUnknown = value === null || value === 'UNKNOWN' || (
         value !== null && typeof value === 'object' && Object.values(value as Record<string, unknown>)
           .some((entry) => entry === null || entry === 'UNKNOWN')
@@ -84,7 +87,7 @@ export function useFeatureContextCapture({
     } finally {
       setSaving(false);
     }
-  }, [evaluation, featureKey, operationKey, propertyId]);
+  }, [evaluation, featureKey, onCaptured, operationKey, propertyId]);
 
   return { evaluation, loading, saving, error, capture, reevaluate: evaluate, suppressedRequirementId };
 }

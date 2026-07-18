@@ -115,10 +115,25 @@ export interface StructuredCaptureField {
   when?: CaptureFieldCondition;
 }
 
+export interface RelationalCaptureOption {
+  id: string;
+  label: string;
+  description?: string;
+}
+
+export interface RelationalCaptureInputSchema {
+  type: 'RELATIONAL_SELECT_CREATE';
+  entityType: 'INVENTORY_ITEM' | 'INSURANCE_POLICY';
+  selectLabel: string;
+  createLabel: string;
+  options: RelationalCaptureOption[];
+  createFields: StructuredCaptureField[];
+}
+
 export type CaptureInputSchema = ScalarCaptureInputSchema | {
   type: 'GROUP';
   fields: StructuredCaptureField[];
-};
+} | RelationalCaptureInputSchema;
 
 export interface ContextCaptureDefinition {
   captureKey: string;
@@ -134,6 +149,8 @@ export interface ContextCaptureDefinition {
   sensitivity: 'STANDARD' | 'FINANCIAL' | 'SECURITY';
   /** Backend-only mapping. It is removed from evaluator/API responses. */
   answerBindings?: Record<string, string>;
+  /** Backend-only allowlisted relational command. */
+  relationalAdapterKey?: 'INVENTORY_ITEM' | 'INSURANCE_POLICY';
 }
 
 export interface EvaluatedContextRequirement {
@@ -142,7 +159,7 @@ export interface EvaluatedContextRequirement {
   classification: ContextRequirementClassification;
   state: PropertyFactState;
   reasonCode: string;
-  capture: Omit<ContextCaptureDefinition, 'canonicalOwner' | 'answerBindings'>;
+  capture: Omit<ContextCaptureDefinition, 'canonicalOwner' | 'answerBindings' | 'relationalAdapterKey'>;
   currentAnswer?: unknown;
 }
 

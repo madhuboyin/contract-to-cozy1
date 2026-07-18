@@ -228,6 +228,67 @@ const structuredDefinitions: ContextCaptureDefinition[] = [
 
 for (const definition of structuredDefinitions) definitions.set(definition.captureKey, definition);
 
+const relationalDefinitions: ContextCaptureDefinition[] = [
+  {
+    captureKey: 'INVENTORY_ITEM_SELECT_OR_CREATE',
+    factKeys: ['inventory.items'],
+    mode: 'RELATIONAL',
+    title: 'Add an installed item or system',
+    question: 'Which item or home system should this feature use?',
+    helpText: 'Select an existing record or add only the details needed to continue.',
+    inputSchema: {
+      type: 'RELATIONAL_SELECT_CREATE',
+      entityType: 'INVENTORY_ITEM',
+      selectLabel: 'Select an existing item',
+      createLabel: 'Add an item',
+      options: [],
+      createFields: [
+        { key: 'name', label: 'Item or system name', required: true, inputSchema: { type: 'SHORT_TEXT', maxLength: 120 } },
+        { key: 'category', label: 'Category', required: true, inputSchema: enumSchema(['APPLIANCE', 'HVAC', 'PLUMBING', 'ELECTRICAL', 'ROOF_EXTERIOR', 'SAFETY', 'SMART_HOME', 'OTHER']) },
+        { key: 'condition', label: 'Current condition', required: true, inputSchema: enumSchema(['NEW', 'GOOD', 'FAIR', 'POOR', 'UNKNOWN']) },
+      ],
+    },
+    allowNotSure: false,
+    canonicalOwner: 'InventoryItem',
+    actionKey: 'SELECT_OR_CREATE_INVENTORY_ITEM',
+    sensitivity: 'STANDARD',
+    relationalAdapterKey: 'INVENTORY_ITEM',
+  },
+  {
+    captureKey: 'INSURANCE_POLICY_SELECT_OR_CREATE',
+    factKeys: ['coverage.insurancePolicies'],
+    mode: 'RELATIONAL',
+    title: 'Add an insurance policy',
+    question: 'Which property policy should Coverage Intelligence use?',
+    helpText: 'Add the minimum policy details needed for a coverage assessment. You can complete the full record later.',
+    inputSchema: {
+      type: 'RELATIONAL_SELECT_CREATE',
+      entityType: 'INSURANCE_POLICY',
+      selectLabel: 'Select an existing policy',
+      createLabel: 'Add a policy',
+      options: [],
+      createFields: [
+        { key: 'carrierName', label: 'Insurance carrier', required: true, inputSchema: { type: 'SHORT_TEXT', maxLength: 120 } },
+        { key: 'policyNumber', label: 'Policy number', required: true, inputSchema: { type: 'SHORT_TEXT', maxLength: 120 } },
+        { key: 'coverageType', label: 'Coverage type', required: true, inputSchema: { type: 'SINGLE_SELECT', options: [
+          { label: 'Homeowner', value: 'HOMEOWNER' }, { label: 'Landlord', value: 'LANDLORD' },
+          { label: 'Flood', value: 'FLOOD' }, { label: 'Other', value: 'OTHER' },
+        ] } },
+        { key: 'premiumAmount', label: 'Annual premium', required: true, inputSchema: { type: 'DECIMAL', min: 0, unit: 'USD' } },
+        { key: 'startDate', label: 'Policy start date', helpText: 'Use YYYY-MM-DD.', required: true, inputSchema: { type: 'SHORT_TEXT', maxLength: 10 } },
+        { key: 'expiryDate', label: 'Policy expiry date', helpText: 'Use YYYY-MM-DD.', required: true, inputSchema: { type: 'SHORT_TEXT', maxLength: 10 } },
+      ],
+    },
+    allowNotSure: false,
+    canonicalOwner: 'InsurancePolicy',
+    actionKey: 'SELECT_OR_CREATE_INSURANCE_POLICY',
+    sensitivity: 'FINANCIAL',
+    relationalAdapterKey: 'INSURANCE_POLICY',
+  },
+];
+
+for (const definition of relationalDefinitions) definitions.set(definition.captureKey, definition);
+
 export const CONTEXT_CAPTURE_DEFINITIONS = [...definitions.values()];
 
 export function getCaptureDefinition(captureKey: string): ContextCaptureDefinition {
@@ -250,13 +311,18 @@ export function validateCaptureRegistry(): void {
   for (const definition of CONTEXT_CAPTURE_DEFINITIONS) {
     for (const factKey of definition.factKeys) {
       const fact = getFactDefinition(factKey);
-      if (!fact.writable) problems.push(`${definition.captureKey}: fact is not writable`);
+      if (definition.mode !== 'RELATIONAL' && !fact.writable) problems.push(`${definition.captureKey}: fact is not writable`);
       if (definition.mode === 'SCALAR' && fact.canonicalOwner !== definition.canonicalOwner) problems.push(`${definition.captureKey}: canonical owner drift`);
     }
     if (definition.mode === 'STRUCTURED') {
       if (definition.inputSchema.type !== 'GROUP') problems.push(`${definition.captureKey}: structured capture requires group schema`);
       const boundFacts = new Set(Object.values(definition.answerBindings ?? {}));
       for (const factKey of definition.factKeys) if (!boundFacts.has(factKey)) problems.push(`${definition.captureKey}: missing answer binding for ${factKey}`);
+    }
+    if (definition.mode === 'RELATIONAL') {
+      if (definition.inputSchema.type !== 'RELATIONAL_SELECT_CREATE') problems.push(`${definition.captureKey}: relational capture requires select/create schema`);
+      if (!definition.relationalAdapterKey) problems.push(`${definition.captureKey}: relational capture requires an allowlisted adapter`);
+      if (definition.canonicalOwner !== getFactDefinition(definition.factKeys[0]).canonicalOwner) problems.push(`${definition.captureKey}: canonical owner drift`);
     }
   }
   if (problems.length) throw new Error(`Invalid Property Context capture registry:\n${problems.join('\n')}`);

@@ -16,6 +16,8 @@ export interface FactRequirementDefinition {
   priority: number;
   acceptableStates: Array<'KNOWN' | 'VERIFIED' | 'FRESH'>;
   captureKey: string;
+  /** Collection facts below this size are treated as missing for this operation. */
+  minimumItems?: number;
 }
 
 export interface FeatureContextRequirementDefinition {
@@ -30,6 +32,42 @@ export interface FeatureContextRequirementDefinition {
 }
 
 export const FEATURE_CONTEXT_REQUIREMENTS: readonly FeatureContextRequirementDefinition[] = [
+  {
+    featureKey: 'COVERAGE_INTELLIGENCE',
+    operationKey: 'ASSESS_PROPERTY_COVERAGE',
+    policyVersion: '1.0',
+    promptStrategy: 'MINIMUM_PATH',
+    required: [],
+    enhancements: [
+      {
+        factKey: 'coverage.insurancePolicies',
+        classification: 'ENHANCEMENT_ACCURACY',
+        reasonCode: 'ADD_POLICY_FOR_COVERAGE_SPECIFIC_ASSESSMENT',
+        priority: 10,
+        acceptableStates: ['KNOWN'],
+        captureKey: 'INSURANCE_POLICY_SELECT_OR_CREATE',
+        minimumItems: 1,
+      },
+    ],
+  },
+  {
+    featureKey: 'MAINTENANCE',
+    operationKey: 'SET_UP_INSTALLED_SYSTEMS',
+    policyVersion: '1.0',
+    promptStrategy: 'MINIMUM_PATH',
+    required: [
+      {
+        factKey: 'inventory.items',
+        classification: 'REQUIRED_CALCULATION',
+        reasonCode: 'SELECT_INSTALLED_SYSTEM_FOR_MAINTENANCE',
+        priority: 10,
+        acceptableStates: ['KNOWN'],
+        captureKey: 'INVENTORY_ITEM_SELECT_OR_CREATE',
+        minimumItems: 1,
+      },
+    ],
+    enhancements: [],
+  },
   {
     featureKey: 'PLANT_ADVISOR',
     operationKey: 'GENERATE_OUTDOOR_RECOMMENDATIONS',

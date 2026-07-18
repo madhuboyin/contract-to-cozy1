@@ -13,16 +13,25 @@ export type ScalarCaptureInputSchema =
   | { type: 'INTEGER' | 'DECIMAL'; min?: number; max?: number; unit?: string }
   | { type: 'SHORT_TEXT'; maxLength: number };
 
+export type StructuredCaptureField = {
+  key: string;
+  label: string;
+  helpText?: string;
+  required: boolean;
+  inputSchema: ScalarCaptureInputSchema;
+  when?: { fieldKey: string; operator: 'EQUALS' | 'NOT_EQUALS'; value: string | number | boolean };
+};
+
 export type CaptureInputSchema = ScalarCaptureInputSchema | {
   type: 'GROUP';
-  fields: Array<{
-    key: string;
-    label: string;
-    helpText?: string;
-    required: boolean;
-    inputSchema: ScalarCaptureInputSchema;
-    when?: { fieldKey: string; operator: 'EQUALS' | 'NOT_EQUALS'; value: string | number | boolean };
-  }>;
+  fields: StructuredCaptureField[];
+} | {
+  type: 'RELATIONAL_SELECT_CREATE';
+  entityType: 'INVENTORY_ITEM' | 'INSURANCE_POLICY';
+  selectLabel: string;
+  createLabel: string;
+  options: Array<{ id: string; label: string; description?: string }>;
+  createFields: StructuredCaptureField[];
 };
 
 export interface FeatureContextCapture {
@@ -64,5 +73,6 @@ export interface FeatureContextCaptureResult {
   contextVersion: string;
   updatedFactKeys: string[];
   evidenceIds: string[];
+  selection?: { entityType: 'INVENTORY_ITEM' | 'INSURANCE_POLICY'; entityId: string; created: boolean };
   evaluation: FeatureContextEvaluation;
 }

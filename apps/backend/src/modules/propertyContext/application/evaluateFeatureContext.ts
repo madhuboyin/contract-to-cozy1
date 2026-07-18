@@ -15,6 +15,7 @@ import type {
   PropertyFact,
 } from '../domain/contracts';
 import { getPropertyContext } from './getPropertyContext';
+import { resolveRelationalCaptureSchema } from './relationalCaptureAdapters';
 
 export const evaluateFeatureContextInputSchema = z.object({
   featureKey: z.string().trim().min(1).max(100).transform((value) => value.toUpperCase()),
@@ -34,21 +35,30 @@ function conditionMatches(condition: DeclarativeCondition | undefined, context: 
 function requirementState(requirement: FactRequirementDefinition, fact?: PropertyFact): PropertyFact['state'] {
   if (!fact) return 'UNKNOWN';
   if (fact.state !== 'KNOWN') return fact.state;
+  if (requirement.minimumItems !== undefined && (!Array.isArray(fact.value) || fact.value.length < requirement.minimumItems)) return 'UNKNOWN';
   if (requirement.acceptableStates.includes('VERIFIED') && !fact.verified) return 'UNKNOWN';
   if (requirement.acceptableStates.includes('FRESH') && fact.validUntil && new Date(fact.validUntil) <= new Date()) return 'STALE';
   return 'KNOWN';
 }
 
-function evaluateRequirement(
+async function evaluateRequirement(
   contractKey: string,
   requirement: FactRequirementDefinition,
   context: PropertyContextSnapshot,
-): EvaluatedContextRequirement | null {
+): Promise<EvaluatedContextRequirement | null> {
   if (!conditionMatches(requirement.when, context)) return null;
   const state = requirementState(requirement, context.facts[requirement.factKey]);
   if (state === 'KNOWN') return null;
   const definition = getCaptureDefinition(requirement.captureKey);
-  const { canonicalOwner: _canonicalOwner, answerBindings: _answerBindings, ...capture } = definition;
+  const {
+    canonicalOwner: _canonicalOwner,
+    answerBindings: _answerBindings,
+    relationalAdapterKey: _relationalAdapterKey,
+    ...publicDefinition
+  } = definition;
+  const capture = definition.mode === 'RELATIONAL'
+    ? { ...publicDefinition, inputSchema: await resolveRelationalCaptureSchema(context.propertyId, definition) }
+    : publicDefinition;
   const requirementId = createHash('sha256')
     .update(`${contractKey}:${requirement.factKey}:${requirement.captureKey}`)
     .digest('hex')
@@ -65,7 +75,9 @@ function evaluateRequirement(
         answerKey,
         context.facts[factKey]?.value ?? null,
       ]))
-      : { value: context.facts[requirement.factKey]?.value ?? null },
+      : definition.mode === 'RELATIONAL'
+        ? null
+        : { value: context.facts[requirement.factKey]?.value ?? null },
   };
 }
 
@@ -86,13 +98,13 @@ export async function evaluateFeatureContext(
     getPropertyContext(propertyId, { userId }, { scopes }),
   ]);
   const contractKey = `${contract.featureKey}:${contract.operationKey}:${contract.policyVersion}`;
-  const required = contract.required
+  const required = (await Promise.all(contract.required
     .sort((left, right) => left.priority - right.priority)
-    .map((requirement) => evaluateRequirement(contractKey, requirement, context))
+    .map((requirement) => evaluateRequirement(contractKey, requirement, context))))
     .filter((value): value is EvaluatedContextRequirement => Boolean(value));
-  const enhancements = contract.enhancements
+  const enhancements = (await Promise.all(contract.enhancements
     .sort((left, right) => left.priority - right.priority)
-    .map((requirement) => evaluateRequirement(contractKey, requirement, context))
+    .map((requirement) => evaluateRequirement(contractKey, requirement, context))))
     .filter((value): value is EvaluatedContextRequirement => Boolean(value));
   const canWrite = Boolean(access && ROLE_RANK[access.role] >= ROLE_RANK.CONTRIBUTOR);
   const notApplicable = Boolean(contract.notApplicableWhen && conditionMatches(contract.notApplicableWhen, context));
