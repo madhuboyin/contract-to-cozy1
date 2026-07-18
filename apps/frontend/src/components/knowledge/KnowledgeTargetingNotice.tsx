@@ -24,5 +24,5 @@ export function KnowledgeTargetingNotice({ propertyId }: { propertyId?: string |
     return () => { active = false; };
   }, [propertyId]);
 
-  return <PropertyContextNotice context={context} title="Knowledge targeting context" />;
+  return <PropertyContextNotice context={context} title="Knowledge targeting context" readOnly />;
 }

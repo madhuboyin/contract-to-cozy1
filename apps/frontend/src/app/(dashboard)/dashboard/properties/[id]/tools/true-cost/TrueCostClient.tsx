@@ -9,7 +9,7 @@ import { track } from '@/lib/analytics/events';
 import { Button } from '@/components/ui/button';
 import ToolWorkspaceTemplate from '../../components/route-templates/ToolWorkspaceTemplate';
 import HomeToolHeader from '@/components/tools/HomeToolHeader';
-import { PropertyContextNotice } from '@/components/property-context/PropertyContextNotice';
+import { PropertyContextCapturePanel } from '@/components/property-context/PropertyContextCapturePanel';
 
 // Use the upgraded chart you already shipped (legend + tooltip)
 import MultiLineChart from '../cost-growth/MultiLineChart';
@@ -158,7 +158,7 @@ export default function TrueCostClient() {
         currentToolId="true-cost"
       />
 
-      <PropertyContextNotice context={data?.propertyContext} title="Ownership cost context" />
+      <PropertyContextCapturePanel propertyId={propertyId} featureKey="TRUE_COST" operationKey="VIEW_ANALYSIS" onCaptured={() => load(years)} />
 
       {error && (
         <div className="flex items-start gap-3 rounded-2xl border border-red-200/70 bg-red-50/85 p-3 backdrop-blur">

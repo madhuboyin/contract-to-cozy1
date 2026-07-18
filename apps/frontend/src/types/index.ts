@@ -1588,6 +1588,7 @@ export interface MaintenanceTaskTemplate {
   serviceCategory: ServiceCategory | null;
   defaultFrequency: RecurrenceFrequency;
   sortOrder: number;
+  contextInput?: Record<string, unknown>;
   applicability?: PropertyContextFeatureDecision;
 }
 

@@ -22,6 +22,7 @@ import { evaluateFeatureContext } from '../modules/propertyContext/application/e
 import {
   evaluateMaintenanceTemplateApplicability,
   maintenanceTemplateActionKey,
+  maintenanceTemplateContextInput,
 } from './maintenance/applicabilityPolicy';
 
   /**
@@ -159,6 +160,16 @@ import {
 
       const actionKey = template ? maintenanceTemplateActionKey(template.id) : null;
       if (template) {
+        const templateEvaluation = await evaluateFeatureContext(propertyId, userId, {
+          featureKey: 'MAINTENANCE',
+          operationKey: 'PREPARE_TEMPLATE',
+          operationInput: maintenanceTemplateContextInput(template),
+        });
+        if (!templateEvaluation.canExecute) {
+          const error = new Error(`Maintenance template needs more property context: ${templateEvaluation.reasonCodes.join(', ')}`);
+          (error as any).evaluation = templateEvaluation;
+          throw error;
+        }
         if (/SMOKE.*DETECTOR|\b(CO|CARBON MONOXIDE).*DETECTOR/i.test(template.title)) {
           const evaluation = await evaluateFeatureContext(propertyId, userId, {
             featureKey: 'MAINTENANCE',

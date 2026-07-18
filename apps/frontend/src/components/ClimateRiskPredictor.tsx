@@ -167,7 +167,7 @@ export default function ClimateRiskPredictor({ propertyId }: ClimateRiskPredicto
         summary={`${report.location.city}, ${report.location.state} climate risk posture and mitigation priorities.`}
       />
 
-      <PropertyContextNotice context={report.propertyContext} title="Climate applicability" />
+      <PropertyContextNotice context={report.propertyContext} title="Climate applicability" readOnly />
 
       <ReadOnlySummaryBlock
         title="Location Snapshot"

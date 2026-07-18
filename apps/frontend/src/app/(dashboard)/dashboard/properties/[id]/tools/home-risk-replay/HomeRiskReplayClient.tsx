@@ -323,7 +323,7 @@ function SummaryCard({
 
   return (
     <MobileCard className="space-y-4">
-      <PropertyContextNotice context={replay.propertyContext} title="Replay property context" />
+      <PropertyContextNotice context={replay.propertyContext} title="Replay property context" readOnly />
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="mb-0 text-[11px] font-medium tracking-normal text-[hsl(var(--mobile-text-muted))]">

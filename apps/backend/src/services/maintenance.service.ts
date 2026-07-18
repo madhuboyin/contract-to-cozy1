@@ -2,7 +2,7 @@
 
 import { prisma } from '../lib/prisma';
 import { getPropertyContext } from '../modules/propertyContext';
-import { evaluateMaintenanceTemplateApplicability } from './maintenance/applicabilityPolicy';
+import { evaluateMaintenanceTemplateApplicability, maintenanceTemplateContextInput } from './maintenance/applicabilityPolicy';
 
 
 export class MaintenanceService {
@@ -28,6 +28,7 @@ export class MaintenanceService {
     });
     return templates.map((template) => ({
       ...template,
+      contextInput: maintenanceTemplateContextInput(template),
       applicability: evaluateMaintenanceTemplateApplicability(context, template),
     }));
   }

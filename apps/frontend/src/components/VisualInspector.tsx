@@ -210,7 +210,7 @@ export default function VisualInspector({ propertyId }: VisualInspectorProps) {
           </div>
         ) : null}
 
-        <PropertyContextNotice context={report.propertyContext} title="Visual inspection context" />
+        <PropertyContextNotice context={report.propertyContext} title="Visual inspection context" readOnly />
 
         <ReadOnlySummaryBlock
           title="Inspection Snapshot"

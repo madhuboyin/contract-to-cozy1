@@ -462,7 +462,7 @@ export default function QuoteComparisonWorkspaceClient() {
       }
       summary={
         <div className="space-y-3">
-          <PropertyContextNotice context={propertyContext} title="Quote comparison context" />
+          <PropertyContextNotice context={propertyContext} title="Quote comparison context" readOnly />
           <ResultHeroCard
             eyebrow="Compare"
             title="Quote Decision Snapshot"

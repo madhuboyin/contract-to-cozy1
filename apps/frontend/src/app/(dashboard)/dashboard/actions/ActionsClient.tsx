@@ -433,7 +433,7 @@ export function ActionsClient() {
           title="What needs attention"
           subtitle="Everything your home needs right now."
         />
-        <PropertyContextNotice context={aggregationContext} title="Action Center context" />
+        <PropertyContextNotice context={aggregationContext} title="Action Center context" readOnly />
         <MobileKpiStrip className="sm:grid-cols-4">
           <MobileKpiTile
             label="Active"

@@ -170,7 +170,7 @@ export default function PersonalizationPage() {
         <MobileSectionHeader title="Personalized home guidance" subtitle="Explainable suggestions based on your home" />
       </MobileSection>
 
-      <PropertyContextNotice context={personalization?.propertyContext} title="Guidance context" />
+      <PropertyContextNotice context={personalization?.propertyContext} title="Guidance context" readOnly />
 
       {personalizationQuery.isLoading ? (
         <SummaryCard title="Loading guidance" subtitle="Checking this home's current signals"><div /></SummaryCard>

@@ -75,6 +75,12 @@ function requirementState(
     const hasLifecycleDate = typeof item.installedOn === 'string' || typeof item.purchasedOn === 'string';
     return hasCondition && hasLifecycleDate ? 'KNOWN' : 'UNKNOWN';
   }
+  if (requirement.collectionPredicate === 'INCLUDES_OPERATION_INPUT_VALUE') {
+    const inputKey = requirement.collectionOperationInputKey;
+    const expected = inputKey ? operationInput?.[inputKey] : undefined;
+    if (expected === undefined || expected === null || expected === '') return 'KNOWN';
+    if (!Array.isArray(collectionValue) || !collectionValue.includes(expected)) return 'UNKNOWN';
+  }
   if (requirement.minimumItems !== undefined && (!Array.isArray(collectionValue) || collectionValue.length < requirement.minimumItems)) return 'UNKNOWN';
   if (requirement.acceptableStates.includes('VERIFIED') && !fact.verified) return 'UNKNOWN';
   if (requirement.acceptableStates.includes('FRESH') && fact.validUntil && new Date(fact.validUntil) <= new Date()) return 'STALE';

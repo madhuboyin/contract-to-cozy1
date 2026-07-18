@@ -85,6 +85,7 @@ export default function FinancingToolClient() {
       <PropertyContextNotice
         context={profile?.propertyContext ?? equity?.propertyContext ?? scenarios[0]?.propertyContext}
         title="Financing context"
+        readOnly
       />
       {loading ? (
         <div className="flex items-center justify-center py-16">

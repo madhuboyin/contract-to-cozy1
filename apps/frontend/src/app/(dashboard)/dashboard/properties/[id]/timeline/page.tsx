@@ -553,7 +553,7 @@ export default function Page() {
             backLabel="Back to property"
             showBackLink
           />
-          <PropertyContextNotice context={timelineContext} title="Timeline context" />
+          <PropertyContextNotice context={timelineContext} title="Timeline context" readOnly />
           <ResultHeroCard
             eyebrow="Property History"
             title={mode === 'VISUAL' ? 'Visual Timeline' : 'Event Timeline'}

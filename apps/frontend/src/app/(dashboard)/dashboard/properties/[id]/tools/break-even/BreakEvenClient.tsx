@@ -10,7 +10,7 @@ import HomeToolsRail from '../../components/HomeToolsRail';
 import ToolWorkspaceTemplate from '../../components/route-templates/ToolWorkspaceTemplate';
 import { Button } from '@/components/ui/button';
 import HomeToolHeader from '@/components/tools/HomeToolHeader';
-import { PropertyContextNotice } from '@/components/property-context/PropertyContextNotice';
+import { PropertyContextCapturePanel } from '@/components/property-context/PropertyContextCapturePanel';
 
 import MultiLineChart from '../insurance-trend/MultiLineChart';
 import { getBreakEven, BreakEvenDTO } from './breakEvenApi';
@@ -207,7 +207,7 @@ export default function BreakEvenClient() {
         currentToolId="break-even"
       />
 
-      <PropertyContextNotice context={data?.propertyContext} title="Break-even context" />
+      <PropertyContextCapturePanel propertyId={propertyId} featureKey="BREAK_EVEN" operationKey="VIEW_ANALYSIS" onCaptured={() => load(years)} />
 
       {error && (
         <div className="flex items-start gap-3 rounded-xl border border-red-100 bg-red-50 p-3">

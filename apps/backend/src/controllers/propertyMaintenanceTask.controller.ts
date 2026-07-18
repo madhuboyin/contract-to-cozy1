@@ -316,6 +316,20 @@ const handleCreateFromTemplates = async (
       data: result.tasks,
     });
   } catch (error) {
+    if (error instanceof Error && error.message.includes('needs more property context')) {
+      return res.status(422).json({
+        success: false,
+        message: error.message,
+        data: { evaluation: (error as any).evaluation },
+      });
+    }
+    if (error instanceof Error && error.message.includes('not available')) {
+      return res.status(400).json({
+        success: false,
+        message: error.message,
+        data: { decision: (error as any).decision },
+      });
+    }
     if (error instanceof Error && error.message.includes('not found')) {
       return res.status(404).json({
         success: false,

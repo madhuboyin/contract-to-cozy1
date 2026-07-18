@@ -5,7 +5,8 @@ import { DollarSign, TrendingUp, Calendar, PieChart, Lightbulb, Loader2, Chevron
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { api } from '@/lib/api/client';
-import { PropertyContextNotice, type PropertyContextEnvelope } from '@/components/property-context/PropertyContextNotice';
+import type { PropertyContextEnvelope } from '@/components/property-context/PropertyContextNotice';
+import { PropertyContextCapturePanel } from '@/components/property-context/PropertyContextCapturePanel';
 import {
   ActionPriorityRow,
   ReadOnlySummaryBlock,
@@ -203,7 +204,7 @@ export default function BudgetForecaster({ propertyId }: BudgetForecasterProps) 
 
   return (
     <div className="space-y-6">
-      <PropertyContextNotice context={forecast.propertyContext} title="Maintenance budget context" />
+      <PropertyContextCapturePanel propertyId={propertyId} featureKey="BUDGET_PLANNER" operationKey="VIEW_FORECAST" onCaptured={loadForecast} />
       <ResultHeroCard
         title="Annual Maintenance Budget"
         value={`$${forecast.totalAnnualCost.toLocaleString()}`}

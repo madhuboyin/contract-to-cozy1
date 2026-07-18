@@ -70,6 +70,25 @@ export function maintenanceTemplateActionKey(templateId: string): string {
   return `MAINTENANCE_TEMPLATE:${templateId}`;
 }
 
+export function maintenanceTemplateContextInput(template: MaintenanceTemplatePolicyInput): Record<string, unknown> {
+  const title = template.title.toUpperCase();
+  const requiredInstalledItemType = /GUTTER/.test(title) ? 'GUTTER'
+    : /DRYER/.test(title) ? 'DRYER'
+      : /DISHWASHER/.test(title) ? 'DISHWASHER'
+        : /REFRIGERATOR|FRIDGE/.test(title) ? 'REFRIGERATOR'
+          : /CHIMNEY|FIREPLACE/.test(title) ? 'CHIMNEY'
+            : undefined;
+  const presenceKind = /LAWN/.test(title) ? 'LAWN'
+    : /TREE|SHRUB/.test(title) ? 'TREES_OR_SHRUBS'
+      : /IRRIGATION|SPRINKLER/.test(title) ? 'IRRIGATION'
+        : undefined;
+  return {
+    category: template.serviceCategory,
+    ...(requiredInstalledItemType ? { requiredInstalledItemType } : {}),
+    ...(presenceKind ? { presenceKind } : {}),
+  };
+}
+
 function evaluateDedupe(
   facts: DecisionFacts,
   template: MaintenanceTemplatePolicyInput,

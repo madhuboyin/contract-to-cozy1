@@ -674,7 +674,7 @@ export default function ProvidersPage() {
       }}
       summary={
         <div className="space-y-3">
-          <PropertyContextNotice context={propertyContext} title="Provider and booking context" />
+          <PropertyContextNotice context={propertyContext} title="Provider and booking context" readOnly />
           <MobileKpiStrip className="sm:grid-cols-3">
             <MobileKpiTile
               label="Matches"

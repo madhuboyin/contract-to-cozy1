@@ -926,7 +926,7 @@ export default function HomeGazetteClient() {
         subtitle="Your weekly home intelligence briefing — risks, maintenance, finances, and more."
        className="lg:hidden"/>
 
-      <PropertyContextNotice context={currentEdition?.propertyContext} title="Gazette context" />
+      <PropertyContextNotice context={currentEdition?.propertyContext} title="Gazette context" readOnly />
 
       {/* Filter surface: tool rail + tabs + actions */}
       <MobileFilterSurface className="lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none lg:rounded-none">

@@ -265,6 +265,8 @@ export default function MaintenanceSetupPage() {
     return template.applicability?.status === 'UNKNOWN'
       && reasons.some((reason) => reason === 'SMOKE_DETECTOR_PRESENCE_UNKNOWN' || reason === 'CO_DETECTOR_PRESENCE_UNKNOWN');
   });
+  const unknownTemplate = templates.find((template) => template.applicability?.status === 'UNKNOWN'
+    && !(template.applicability.reasonCodes ?? []).some((reason) => reason === 'SMOKE_DETECTOR_PRESENCE_UNKNOWN' || reason === 'CO_DETECTOR_PRESENCE_UNKNOWN'));
 
   const refreshMaintenanceContext = React.useCallback(async () => {
     await queryClient.invalidateQueries({ queryKey: ['maintenanceTemplates', selectedPropertyId] });
@@ -349,6 +351,15 @@ export default function MaintenanceSetupPage() {
           propertyId={selectedPropertyId}
           featureKey="MAINTENANCE"
           operationKey="GENERATE_SAFETY_TASKS"
+          onReady={refreshMaintenanceContext}
+          onCaptured={refreshMaintenanceContext}
+        /> : null}
+        {selectedPropertyId && installedSystemContextReady && unknownTemplate?.contextInput ? <PropertyContextCapturePanel
+          key={unknownTemplate.id}
+          propertyId={selectedPropertyId}
+          featureKey="MAINTENANCE"
+          operationKey="PREPARE_TEMPLATE"
+          operationInput={unknownTemplate.contextInput}
           onReady={refreshMaintenanceContext}
           onCaptured={refreshMaintenanceContext}
         /> : null}

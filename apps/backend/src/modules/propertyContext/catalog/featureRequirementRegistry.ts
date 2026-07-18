@@ -18,7 +18,8 @@ export interface FactRequirementDefinition {
   captureKey: string;
   /** Collection facts below this size are treated as missing for this operation. */
   minimumItems?: number;
-  collectionPredicate?: 'ACTIVE_DATE_RANGE' | 'SELECTED_ITEM_LIFECYCLE_INCOMPLETE';
+  collectionPredicate?: 'ACTIVE_DATE_RANGE' | 'SELECTED_ITEM_LIFECYCLE_INCOMPLETE' | 'INCLUDES_OPERATION_INPUT_VALUE';
+  collectionOperationInputKey?: string;
   operationInputWhen?: {
     key: string;
     operator: 'EQUALS' | 'IN' | 'CONTAINS_ANY';
@@ -37,7 +38,59 @@ export interface FeatureContextRequirementDefinition {
   notApplicableReasonCode?: string;
 }
 
+const FINANCIAL_ACCURACY_FACTS = {
+  propertyUse: ['core.propertyUse', 'CORE_PROPERTY_USE'],
+  occupancy: ['core.occupancyStatus', 'CORE_OCCUPANCY_STATUS'],
+  dwelling: ['core.dwellingType', 'CORE_DWELLING_TYPE'],
+  yearBuilt: ['core.yearBuilt', 'CORE_YEAR_BUILT'],
+  size: ['core.propertySizeSqFt', 'CORE_PROPERTY_SIZE_SQ_FT'],
+  state: ['location.state', 'LOCATION_STATE'],
+  zip: ['location.zipCode', 'LOCATION_ZIP_CODE'],
+  inventory: ['inventory.items', 'INVENTORY_ITEM_SELECT_OR_CREATE'],
+  installedSystems: ['systems.installedItemTypes', 'INVENTORY_ITEM_SELECT_OR_CREATE'],
+} as const;
+
+type FinancialAccuracyFact = keyof typeof FINANCIAL_ACCURACY_FACTS;
+
+function financialAccuracyContract(
+  featureKey: string,
+  operationKey: string,
+  facts: FinancialAccuracyFact[],
+): FeatureContextRequirementDefinition {
+  return {
+    featureKey,
+    operationKey,
+    policyVersion: '1.0',
+    promptStrategy: 'MINIMUM_PATH',
+    required: [],
+    enhancements: facts.map((fact, index) => {
+      const [factKey, captureKey] = FINANCIAL_ACCURACY_FACTS[fact];
+      return {
+        factKey,
+        classification: 'ENHANCEMENT_ACCURACY',
+        reasonCode: `IMPROVE_${featureKey}_${fact.toUpperCase()}_ACCURACY`,
+        priority: (index + 1) * 10,
+        acceptableStates: ['KNOWN'],
+        captureKey,
+        ...(fact === 'inventory' || fact === 'installedSystems' ? { minimumItems: 1 } : {}),
+      };
+    }),
+  };
+}
+
 export const FEATURE_CONTEXT_REQUIREMENTS: readonly FeatureContextRequirementDefinition[] = [
+  financialAccuracyContract('DO_NOTHING', 'RUN_SIMULATION', ['propertyUse', 'occupancy', 'inventory']),
+  financialAccuracyContract('HOME_SAVINGS', 'RUN_ANALYSIS', ['propertyUse', 'occupancy', 'state', 'zip', 'installedSystems']),
+  financialAccuracyContract('BUDGET_PLANNER', 'VIEW_FORECAST', ['propertyUse', 'occupancy', 'dwelling', 'yearBuilt', 'state', 'zip', 'inventory']),
+  financialAccuracyContract('TRUE_COST', 'VIEW_ANALYSIS', ['propertyUse', 'occupancy', 'dwelling', 'state', 'zip']),
+  financialAccuracyContract('COST_GROWTH', 'VIEW_ANALYSIS', ['propertyUse', 'occupancy', 'dwelling', 'state', 'zip']),
+  financialAccuracyContract('COST_VOLATILITY', 'VIEW_ANALYSIS', ['propertyUse', 'occupancy', 'state', 'zip']),
+  financialAccuracyContract('COST_EXPLAINER', 'VIEW_ANALYSIS', ['propertyUse', 'occupancy', 'dwelling', 'state', 'zip']),
+  financialAccuracyContract('BREAK_EVEN', 'VIEW_ANALYSIS', ['propertyUse', 'occupancy', 'dwelling', 'state', 'zip']),
+  financialAccuracyContract('SELL_HOLD_RENT', 'VIEW_ANALYSIS', ['propertyUse', 'occupancy', 'state', 'zip']),
+  financialAccuracyContract('PROPERTY_TAX', 'VIEW_ESTIMATE', ['dwelling', 'size', 'state', 'zip']),
+  financialAccuracyContract('TAX_APPEAL', 'RUN_ANALYSIS', ['propertyUse', 'occupancy', 'dwelling', 'size', 'state', 'zip']),
+  financialAccuracyContract('HIDDEN_ASSETS', 'VIEW_MATCHES', ['propertyUse', 'occupancy', 'dwelling', 'state', 'zip', 'installedSystems']),
   {
     featureKey: 'RESERVE_FUND',
     operationKey: 'RECALCULATE',
@@ -425,6 +478,27 @@ export const FEATURE_CONTEXT_REQUIREMENTS: readonly FeatureContextRequirementDef
         acceptableStates: ['FRESH'],
         captureKey: 'SAFETY_DETECTOR_PROFILE',
       },
+    ],
+    enhancements: [],
+  },
+  {
+    featureKey: 'MAINTENANCE',
+    operationKey: 'PREPARE_TEMPLATE',
+    policyVersion: '1.0',
+    promptStrategy: 'MINIMUM_PATH',
+    required: [
+      { factKey: 'systems.heatingType', classification: 'REQUIRED_APPLICABILITY', reasonCode: 'CONFIRM_HVAC_CONFIGURATION', priority: 10, acceptableStates: ['KNOWN'], captureKey: 'HVAC_SYSTEM_PROFILE', operationInputWhen: { key: 'category', operator: 'EQUALS', value: 'HVAC' } },
+      { factKey: 'systems.waterHeaterType', classification: 'REQUIRED_APPLICABILITY', reasonCode: 'CONFIRM_WATER_HEATER_CONFIGURATION', priority: 10, acceptableStates: ['KNOWN'], captureKey: 'SYSTEMS_WATER_HEATER_TYPE', operationInputWhen: { key: 'category', operator: 'EQUALS', value: 'WATER_HEATER' } },
+      { factKey: 'systems.installedItemTypes', classification: 'REQUIRED_APPLICABILITY', reasonCode: 'CONFIRM_INSTALLED_EQUIPMENT', priority: 10, acceptableStates: ['KNOWN'], captureKey: 'INVENTORY_ITEM_SELECT_OR_CREATE', collectionPredicate: 'INCLUDES_OPERATION_INPUT_VALUE', collectionOperationInputKey: 'requiredInstalledItemType' },
+      { factKey: 'exterior.hasLawn', classification: 'REQUIRED_APPLICABILITY', reasonCode: 'CONFIRM_LAWN_PRESENCE', priority: 10, acceptableStates: ['KNOWN'], captureKey: 'EXTERIOR_HAS_LAWN', operationInputWhen: { key: 'presenceKind', operator: 'EQUALS', value: 'LAWN' } },
+      { factKey: 'exterior.hasTreesOrShrubs', classification: 'REQUIRED_APPLICABILITY', reasonCode: 'CONFIRM_TREE_SHRUB_PRESENCE', priority: 10, acceptableStates: ['KNOWN'], captureKey: 'EXTERIOR_HAS_TREES_OR_SHRUBS', operationInputWhen: { key: 'presenceKind', operator: 'EQUALS', value: 'TREES_OR_SHRUBS' } },
+      { factKey: 'exterior.hasIrrigation', classification: 'REQUIRED_APPLICABILITY', reasonCode: 'CONFIRM_IRRIGATION_PRESENCE', priority: 10, acceptableStates: ['KNOWN'], captureKey: 'EXTERIOR_HAS_IRRIGATION', operationInputWhen: { key: 'presenceKind', operator: 'EQUALS', value: 'IRRIGATION' } },
+      { factKey: 'responsibility.hvac', classification: 'REQUIRED_APPLICABILITY', reasonCode: 'CONFIRM_HVAC_MAINTENANCE_RESPONSIBILITY', priority: 20, acceptableStates: ['KNOWN'], captureKey: 'RESPONSIBILITY_HVAC', operationInputWhen: { key: 'category', operator: 'EQUALS', value: 'HVAC' } },
+      { factKey: 'responsibility.plumbing', classification: 'REQUIRED_APPLICABILITY', reasonCode: 'CONFIRM_PLUMBING_MAINTENANCE_RESPONSIBILITY', priority: 20, acceptableStates: ['KNOWN'], captureKey: 'RESPONSIBILITY_PLUMBING', operationInputWhen: { key: 'category', operator: 'IN', value: ['PLUMBING', 'WATER_HEATER'] } },
+      { factKey: 'responsibility.roof', classification: 'REQUIRED_APPLICABILITY', reasonCode: 'CONFIRM_ROOF_MAINTENANCE_RESPONSIBILITY', priority: 20, acceptableStates: ['KNOWN'], captureKey: 'RESPONSIBILITY_ROOF', operationInputWhen: { key: 'category', operator: 'IN', value: ['ROOFING', 'GUTTERS'] } },
+      { factKey: 'responsibility.landscaping', classification: 'REQUIRED_APPLICABILITY', reasonCode: 'CONFIRM_LANDSCAPING_MAINTENANCE_RESPONSIBILITY', priority: 20, acceptableStates: ['KNOWN'], captureKey: 'RESPONSIBILITY_LANDSCAPING', operationInputWhen: { key: 'category', operator: 'IN', value: ['LANDSCAPING', 'LANDSCAPING_DRAINAGE'] } },
+      { factKey: 'responsibility.pestControl', classification: 'REQUIRED_APPLICABILITY', reasonCode: 'CONFIRM_PEST_CONTROL_RESPONSIBILITY', priority: 20, acceptableStates: ['KNOWN'], captureKey: 'RESPONSIBILITY_PEST_CONTROL', operationInputWhen: { key: 'category', operator: 'EQUALS', value: 'PEST_CONTROL' } },
+      { factKey: 'responsibility.commonSafety', classification: 'REQUIRED_APPLICABILITY', reasonCode: 'CONFIRM_COMMON_SAFETY_RESPONSIBILITY', priority: 20, acceptableStates: ['KNOWN'], captureKey: 'RESPONSIBILITY_COMMON_SAFETY', operationInputWhen: { key: 'category', operator: 'EQUALS', value: 'SECURITY_SAFETY' } },
     ],
     enhancements: [],
   },

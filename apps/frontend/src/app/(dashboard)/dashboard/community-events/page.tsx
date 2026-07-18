@@ -150,6 +150,7 @@ export default function CommunityPage() {
           <PropertyContextNotice
             context={eventsQuery.data?.success ? eventsQuery.data.data.context : undefined}
             title="Community context"
+            readOnly
           />
           <MobileCard variant="compact" className="flex items-center justify-between gap-3">
             <div>

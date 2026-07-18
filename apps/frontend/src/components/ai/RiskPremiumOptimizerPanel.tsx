@@ -326,7 +326,7 @@ export default function RiskPremiumOptimizerPanel({ propertyId }: RiskPremiumOpt
 
       {analysis && (
         <>
-          <PropertyContextNotice context={analysis.propertyContext} title="Optimizer applicability" />
+          <PropertyContextNotice context={analysis.propertyContext} title="Optimizer applicability" readOnly />
           {(analysis.status === 'STALE' || rerunRecommended) && (
             <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
               Inputs changed or plan progress was updated. Re-run the optimizer for a fresh estimate.

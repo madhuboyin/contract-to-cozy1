@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertCircle, CheckCircle2, Loader2, PiggyBank, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { PropertyContextNotice } from '@/components/property-context/PropertyContextNotice';
+import { PropertyContextCapturePanel } from '@/components/property-context/PropertyContextCapturePanel';
 import { track } from '@/lib/analytics/events';
 import {
   getHomeSavingsCategory,
@@ -341,7 +341,7 @@ export default function HomeSavingsCheckPanel({ propertyId, autoRun }: HomeSavin
 
   return (
     <div className="space-y-4">
-      <PropertyContextNotice context={summary?.propertyContext} title="Savings comparison context" />
+      <PropertyContextCapturePanel propertyId={propertyId} featureKey="HOME_SAVINGS" operationKey="RUN_ANALYSIS" onCaptured={loadSummary} />
       {error && (
         <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 flex items-start gap-2">
           <AlertCircle className="h-4 w-4 mt-0.5" />

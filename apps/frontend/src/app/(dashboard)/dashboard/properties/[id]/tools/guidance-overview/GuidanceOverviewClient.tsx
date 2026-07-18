@@ -1762,6 +1762,7 @@ export default function GuidanceOverviewClient() {
           decision: guidance.protectionContext.decisions.guidanceState,
         } : null}
         title="Guidance reconciliation context"
+        readOnly
       />
 
       <GuidedJourneyTemplate

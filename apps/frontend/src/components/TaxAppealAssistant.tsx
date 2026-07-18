@@ -23,7 +23,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { api } from '@/lib/api/client';
-import { PropertyContextNotice, type PropertyContextEnvelope } from '@/components/property-context/PropertyContextNotice';
+import type { PropertyContextEnvelope } from '@/components/property-context/PropertyContextNotice';
+import { PropertyContextCapturePanel } from '@/components/property-context/PropertyContextCapturePanel';
 import {
   ReadOnlySummaryBlock,
   ResultHeroCard,
@@ -201,7 +202,7 @@ export default function TaxAppealAssistant({ propertyId }: TaxAppealAssistantPro
 
     return (
       <div className="space-y-6">
-        <PropertyContextNotice context={report.propertyContext} title="Tax appeal context" />
+        <PropertyContextCapturePanel propertyId={propertyId} featureKey="TAX_APPEAL" operationKey="RUN_ANALYSIS" onCaptured={handleAnalyze} />
         <ResultHeroCard
           title="Appeal Analysis Complete"
           value={appealOpportunity.appealProbability}

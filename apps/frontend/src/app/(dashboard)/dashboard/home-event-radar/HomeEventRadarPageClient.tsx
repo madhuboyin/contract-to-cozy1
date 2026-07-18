@@ -557,7 +557,7 @@ export default function HomeEventRadarPageClient({ propertyId: propertyIdOverrid
             monitoringAddress={propertyAddress || undefined}
           />
 
-          <PropertyContextNotice context={feedQuery.data?.propertyContext} title="Event matching context" />
+          <PropertyContextNotice context={feedQuery.data?.propertyContext} title="Event matching context" readOnly />
 
           <MobileSection className="space-y-3 lg:space-y-4">
             <div className="lg:hidden">

@@ -153,7 +153,7 @@ export default function ApplianceOracle({ propertyId }: ApplianceOracleProps) {
   if (report.predictions.length === 0) {
     return (
       <div className="space-y-4">
-        <PropertyContextNotice context={report.propertyContext} title="Appliance applicability" />
+        <PropertyContextNotice context={report.propertyContext} title="Appliance applicability" readOnly />
         <ScenarioInputCard
           title="No Appliance Data"
           subtitle="Add appliance details to unlock AI replacement predictions."
@@ -177,7 +177,7 @@ export default function ApplianceOracle({ propertyId }: ApplianceOracleProps) {
         summary="Failure-risk forecasting and replacement guidance across tracked appliances."
       />
 
-      <PropertyContextNotice context={report.propertyContext} title="Appliance applicability" />
+      <PropertyContextNotice context={report.propertyContext} title="Appliance applicability" readOnly />
 
       <ReadOnlySummaryBlock
         title="Portfolio Snapshot"

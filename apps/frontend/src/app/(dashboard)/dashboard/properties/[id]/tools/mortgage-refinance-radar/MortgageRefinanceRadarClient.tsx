@@ -987,7 +987,7 @@ export default function MortgageRefinanceRadarClient() {
       ) : undefined}
     >
 
-      <PropertyContextNotice context={data?.propertyContext} title="Refinance context" />
+      <PropertyContextNotice context={data?.propertyContext} title="Refinance context" readOnly />
 
       {/* Loading */}
       {loading && !data && (

@@ -1163,7 +1163,7 @@ export default function HomeDigitalTwinClient() {
 
       {/* Projection context status */}
       {twin?.context && (
-        <PropertyContextNotice context={twin.context} title="Digital twin context" />
+        <PropertyContextNotice context={twin.context} title="Digital twin context" readOnly />
       )}
 
       {/* Content states */}

@@ -37,11 +37,14 @@ export function PropertyContextNotice({
   context,
   propertyId: explicitPropertyId,
   title = 'Property context',
+  readOnly = false,
   onContextChanged,
 }: {
   context?: PropertyContextEnvelope | null;
   propertyId?: string;
   title?: string;
+  /** Aggregate and report surfaces may explain context but must route capture to an invoking feature. */
+  readOnly?: boolean;
   onContextChanged?: (contextVersion: string, factKey: string) => void | Promise<void>;
 }) {
   const router = useRouter();
@@ -59,12 +62,12 @@ export function PropertyContextNotice({
     setDefinition(null);
     setDraft('');
     setSelected([]);
-    if (!propertyId || !captureFactKey) return () => { active = false; };
+    if (readOnly || !propertyId || !captureFactKey) return () => { active = false; };
     void api.getPropertyContextCaptureDefinition(propertyId, captureFactKey)
       .then((response) => { if (active && response.success) setDefinition(response.data); })
       .catch(() => { /* Unsupported legacy facts remain correction-only. */ });
     return () => { active = false; };
-  }, [captureFactKey, propertyId]);
+  }, [captureFactKey, propertyId, readOnly]);
 
   if (!context) return null;
   const needsAttention = context.isStale || context.decision.status !== 'APPLICABLE';
@@ -97,7 +100,7 @@ export function PropertyContextNotice({
       <p className="font-semibold">{context.isStale ? `${title} changed` : title}</p>
       <p className="mt-1">{context.isStale ? 'This result was generated from an older property context. Refresh or rerun it before acting.' : context.decision.reasonCodes.map(label).join(' · ')}</p>
       {(context.decision.missingFactKeys.length > 0 || context.decision.conflictedFactKeys.length > 0) ? <p className="mt-1 text-xs opacity-80">{[...context.decision.missingFactKeys, ...context.decision.conflictedFactKeys].map(label).join(' · ')}</p> : null}
-      {definition && captureFactKey ? <div className="mt-3 rounded-xl border border-amber-200/80 bg-white/70 p-3" aria-live="polite">
+      {!readOnly && definition && captureFactKey ? <div className="mt-3 rounded-xl border border-amber-200/80 bg-white/70 p-3" aria-live="polite">
         <p className="font-medium">{definition.question}</p>
         {definition.helpText ? <p className="mt-1 text-xs opacity-80">{definition.helpText}</p> : null}
         <div className="mt-2 flex flex-wrap gap-2">

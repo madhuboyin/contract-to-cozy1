@@ -161,7 +161,7 @@ export function EquityOverviewCard({ propertyId, healthScore }: EquityOverviewCa
 
   return (
     <div className="w-full space-y-3 rounded-xl border border-emerald-200 bg-gradient-to-r from-emerald-50 to-teal-50 px-5 py-4 shadow-sm">
-      <PropertyContextNotice context={data.propertyContext} title="Value tracking context" />
+      <PropertyContextNotice context={data.propertyContext} title="Value tracking context" readOnly />
       <div className="flex items-start gap-3">
         <div className="rounded-lg bg-emerald-100 p-2 shrink-0">
           <LineChart className="h-5 w-5 text-emerald-700" />

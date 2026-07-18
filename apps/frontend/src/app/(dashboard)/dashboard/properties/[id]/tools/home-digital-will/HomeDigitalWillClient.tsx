@@ -2591,7 +2591,7 @@ export default function HomeDigitalWillClient() {
         <HomeToolHeader toolId="home-digital-will" propertyId={propertyId} />
 
         {willContext && (
-          <PropertyContextNotice context={willContext} title="Continuity context" />
+          <PropertyContextNotice context={willContext} title="Continuity context" readOnly />
         )}
 
         {/* Header: always on desktop, hidden on mobile during section detail or contacts panel */}
