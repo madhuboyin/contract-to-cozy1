@@ -1,6 +1,6 @@
 # Product Framework Phase 2 — Unified Home and Action System
 
-Status: Increment 1 implemented; unified Home surface and navigation cutover remain in progress
+Status: Increments 1–2 implemented; source promotion and final link/integration hardening remain in progress
 
 Contract version: `phase2-v1`
 
@@ -32,27 +32,33 @@ Implemented:
 
 ## Database policy
 
-Increment 1 does not require a Prisma schema change or migration script. It reuses existing orchestration event, snooze, completion, onboarding, and analytics storage.
+Increment 1 did not require a schema change. Increment 2 extends `ProductAnalyticsEventType` with opened, acted, and superseded action-lineage events. No migration script was created. The repository owner must apply the enum change to the database.
+
+## Increment 2 — Unified Home and navigation cutover
+
+Implemented:
+
+- Added `GET /api/properties/:propertyId/home` as the shared desktop/mobile Home contract.
+- Added one responsive Home surface with What needs attention, Decisions to make, Active major moment, Home at a glance, and Ask ContractToCozy.
+- Limited default attention to five ranked actions while preserving a link to the complete plan.
+- Connected complete, seven-day defer/snooze, not-relevant, correction, and primary-action controls to the canonical command API.
+- Added property-grounded Ask suggestions and a dedicated `/dashboard/ask` surface.
+- Added active project/guidance stage, blocker, and next-milestone projection.
+- Added Home Record completeness, systems, verification, coverage-gap, open-work, and recent-change summaries.
+- Replaced separate desktop/mobile dashboard presentation with the same responsive component hierarchy.
+- Consolidated desktop and mobile homeowner navigation to Home, Plan & Projects, Home Record, Ask, and Profile & Settings.
+- Reclassified the full action plan under Plan & Projects and kept specialized tools contextual.
+- Added stable shown, opened, acted, resolved, superseded, and verified action-lineage taxonomy and interaction capture.
 
 ## Remaining Phase 2 implementation
 
-### Unified Home contract and surface
-
-- Build one backend Home response containing ranked attention, active decisions, active major moment, home-at-a-glance context, and grounded Ask prompts.
-- Replace the current desktop/mobile dashboard divergence with one responsive component hierarchy.
-- Limit the default attention surface while preserving access to the complete action plan.
-- Render canonical lifecycle controls and priority explanations directly on Home action cards.
-
 ### Navigation and route cutover
 
-- Consolidate homeowner navigation to Home, Plan & Projects, Home Record, Ask, and Profile & Settings.
-- Move specialized tools behind contextual actions, journeys, Home Record objects, Ask, and command search.
 - Update internal links, notification URLs, analytics route names, tests, and guidance template paths before redirecting duplicate routes.
 - Extend route-contract checks to every canonical CTA and journey step.
 
 ### Action-system completion
 
-- Add explicit opened, acted, superseded, and verified event semantics alongside existing shown/resolved lineage.
 - Expand adapters beyond the currently active trigger-first, maintenance, and risk sources as each source is promoted into the default feed.
 - Add database-backed integration coverage after the repository owner applies any later Phase 2 schema changes.
 
@@ -71,4 +77,5 @@ Increment 1 does not require a Prisma schema change or migration script. It reus
 npm -C apps/backend run build
 node --test apps/backend/tests/unit/phase2HomeActions.test.js
 npx tsc --noEmit -p apps/frontend/tsconfig.json
+npm -C apps/frontend run qa:product-framework:routes
 ```

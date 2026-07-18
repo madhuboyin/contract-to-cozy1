@@ -272,7 +272,9 @@ const AIChatInner: React.FC = () => {
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
-    const handleOpenRequest = () => {
+    const handleOpenRequest = (event: Event) => {
+      const question = (event as CustomEvent<{ question?: string }>).detail?.question;
+      if (question) setInput(question);
       openChat();
     };
 

@@ -7,8 +7,11 @@ import { logger } from '../lib/logger';
 import { CustomRequest } from '../types';
 import {
   HomeActionCommandSchema,
+  HomeActionInteractionSchema,
   executeHomeActionCommand,
   getHomeActionFeed,
+  getUnifiedHome,
+  recordHomeActionOpened,
 } from '../services/homeActions.service';
 
 const router = Router();
@@ -28,6 +31,22 @@ router.get(
     } catch (error: any) {
       logger.error({ err: error }, 'Failed to load canonical home actions');
       return res.status(500).json({ success: false, message: error?.message || 'Failed to load home actions.' });
+    }
+  },
+);
+
+router.get(
+  '/properties/:propertyId/home',
+  propertyAuthMiddleware,
+  async (req: CustomRequest, res) => {
+    try {
+      const userId = req.user?.userId;
+      if (!userId) return res.status(401).json({ success: false, message: 'Authentication required.' });
+      const data = await getUnifiedHome(req.params.propertyId, userId);
+      return res.json({ success: true, data });
+    } catch (error: any) {
+      logger.error({ err: error }, 'Failed to load unified Home');
+      return res.status(500).json({ success: false, message: error?.message || 'Failed to load Home.' });
     }
   },
 );
@@ -53,6 +72,24 @@ router.post(
       const message = error?.message || 'Failed to update home action.';
       const status = /not found|no longer actionable/i.test(message) ? 404 : 400;
       return res.status(status).json({ success: false, message });
+    }
+  },
+);
+
+router.post(
+  '/properties/:propertyId/home-actions/:actionId/interactions',
+  propertyAuthMiddleware,
+  validateBody(HomeActionInteractionSchema),
+  async (req: CustomRequest, res) => {
+    try {
+      const userId = req.user?.userId;
+      if (!userId) return res.status(401).json({ success: false, message: 'Authentication required.' });
+      const data = await recordHomeActionOpened(req.params.propertyId, req.params.actionId, userId);
+      return res.json({ success: true, data });
+    } catch (error: any) {
+      const message = error?.message || 'Failed to record action interaction.';
+      return res.status(/not found|no longer actionable/i.test(message) ? 404 : 400)
+        .json({ success: false, message });
     }
   },
 );

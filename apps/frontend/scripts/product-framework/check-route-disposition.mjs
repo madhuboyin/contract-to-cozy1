@@ -61,7 +61,7 @@ export const ROUTE_DISPOSITION_RULES = [
     id: 'home-primary',
     disposition: 'KEEP_PRIMARY',
     rationale: 'The authenticated dashboard becomes the canonical Home destination.',
-    matches: exact(['/dashboard']),
+    matches: exact(['/dashboard', '/dashboard/ask']),
   },
   {
     id: 'settings-merge',
@@ -95,7 +95,7 @@ export const ROUTE_DISPOSITION_RULES = [
     id: 'plan-and-projects',
     disposition: 'MERGE_PLAN_PROJECTS',
     rationale: 'Stateful journeys, bookings, projects, claims, and major moments converge in Plan & Projects.',
-    matches: matches(/^\/dashboard\/(bookings|resolution-center|moving-concierge)(?:\/|$)|^\/dashboard\/properties\/\[id\]\/(projects|claims|guidance|seller-prep)(?:\/|$)/),
+    matches: matches(/^\/dashboard\/(actions|bookings|resolution-center|moving-concierge)(?:\/|$)|^\/dashboard\/properties\/\[id\]\/(projects|claims|guidance|seller-prep)(?:\/|$)/),
   },
   {
     id: 'home-record',
@@ -109,7 +109,7 @@ export const ROUTE_DISPOSITION_RULES = [
     rationale: 'Attention, recurring care, risk, and overview surfaces become sections or actions on Home.',
     matches: (route) =>
       route !== '/dashboard/seasonal/settings' &&
-      (/^\/dashboard\/(actions|checklist|climate|daily-snapshot|maintenance-setup|protect|save|seasonal|risk-radar)(?:\/|$)/.test(route) ||
+      (/^\/dashboard\/(checklist|climate|daily-snapshot|maintenance-setup|protect|save|seasonal|risk-radar)(?:\/|$)/.test(route) ||
         /^\/dashboard\/properties\/\[id\]\/(fix|focus|incidents|protect|recalls|risk-assessment|save|status-board|onboarding)(?:\/|$)/.test(route)),
   },
   {

@@ -1,5 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 
 require('ts-node/register');
 
@@ -67,10 +69,52 @@ test('canonical lifecycle commands require safe deferment and dismissal inputs',
 
 test('Phase 2 home-action routes are property-scoped and mutation requires contributor access', () => {
   const feed = routeFor('/properties/:propertyId/home-actions', 'get');
+  const home = routeFor('/properties/:propertyId/home', 'get');
   const command = routeFor('/properties/:propertyId/home-actions/:actionId/commands', 'post');
+  const interaction = routeFor('/properties/:propertyId/home-actions/:actionId/interactions', 'post');
   assert.ok(feed);
+  assert.ok(home);
   assert.ok(command);
+  assert.ok(interaction);
   assert.ok(feed.stack.some((layer) => layer.handle === propertyAuthMiddleware));
+  assert.ok(home.stack.some((layer) => layer.handle === propertyAuthMiddleware));
   assert.ok(command.stack.some((layer) => layer.handle === propertyAuthMiddleware));
+  assert.ok(interaction.stack.some((layer) => layer.handle === propertyAuthMiddleware));
   assert.ok(command.stack.length > feed.stack.length);
+});
+
+test('unified Home uses one five-section responsive surface and five homeowner destinations', () => {
+  const homeSurface = fs.readFileSync(
+    path.resolve(__dirname, '../../../frontend/src/components/home/UnifiedHomeSurface.tsx'),
+    'utf8',
+  );
+  const dashboard = fs.readFileSync(
+    path.resolve(__dirname, '../../../frontend/src/app/(dashboard)/dashboard/page.tsx'),
+    'utf8',
+  );
+  const navigation = fs.readFileSync(
+    path.resolve(__dirname, '../../../frontend/src/lib/navigation/jobsNavigation.ts'),
+    'utf8',
+  );
+  for (const heading of [
+    'What needs attention', 'Decisions to make', 'Active major moment',
+    'Home at a glance', 'Ask ContractToCozy',
+  ]) assert.match(homeSurface, new RegExp(heading));
+  assert.match(dashboard, /return <UnifiedHomeSurface propertyId=/);
+  for (const label of ['Home', 'Plan & Projects', 'Home Record', 'Ask', 'Profile & Settings']) {
+    assert.match(navigation, new RegExp(`name: '${label.replace('&', '\\&')}'`));
+  }
+  assert.equal((navigation.match(/name: '/g) || []).length, 5);
+});
+
+test('Phase 2 declares stable shown, opened, acted, resolved, superseded, and verified lineage', () => {
+  const schema = fs.readFileSync(path.resolve(__dirname, '../../prisma/schema.prisma'), 'utf8');
+  const service = fs.readFileSync(path.resolve(__dirname, '../../src/services/homeActions.service.ts'), 'utf8');
+  for (const event of [
+    'HOME_ACTION_SURFACED', 'HOME_ACTION_OPENED', 'HOME_ACTION_ACTED',
+    'HOME_ACTION_RESOLUTION_RECORDED', 'HOME_ACTION_SUPERSEDED', 'HOME_ACTION_OUTCOME_VERIFIED',
+  ]) assert.match(schema, new RegExp(`\\b${event}\\b`));
+  assert.match(service, /eventType: 'HOME_ACTION_OPENED'/);
+  assert.match(service, /eventType: 'HOME_ACTION_ACTED'/);
+  assert.match(service, /eventType: 'HOME_ACTION_SUPERSEDED'/);
 });

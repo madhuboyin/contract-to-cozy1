@@ -288,6 +288,57 @@ export type HomeActionFeedDTO = {
   };
 };
 
+export type UnifiedHomeDTO = {
+  contractVersion: 'phase2-home-v1';
+  property: {
+    id: string;
+    name: string;
+    address: string;
+    dwellingType: string;
+    updatedAt: string;
+  };
+  attention: {
+    actions: RankedHomeActionDTO[];
+    totalCount: number;
+    planHref: string;
+  };
+  decisions: RankedHomeActionDTO[];
+  activeMajorMoment: null | {
+    kind: 'PROJECT' | 'GUIDANCE_JOURNEY';
+    id: string;
+    title: string;
+    stage: string;
+    blocker: string | null;
+    nextMilestone: string;
+    href: string;
+  };
+  glance: {
+    recordCompleteness: number;
+    knownPropertyFacts: number;
+    trackedSystems: number;
+    verifiedSystems: number;
+    documentCount: number;
+    verifiedDocumentCount: number;
+    coverageGapCount: number;
+    openWorkCount: number;
+    recentChanges: Array<{
+      id: string;
+      title: string;
+      summary: string | null;
+      type: string;
+      importance: string;
+      occurredAt: string;
+    }>;
+    recordHref: string;
+  };
+  ask: {
+    grounding: { propertyId: string; actionIds: string[]; latestHomeEventIds: string[] };
+    suggestedQuestions: string[];
+  };
+  diagnostics: HomeActionFeedDTO['diagnostics'];
+  generatedAt: string;
+};
+
 // ============================================================================
 // NEW PROPERTY ENUMS (FIX: ADDED RUNTIME CONSTANTS)
 // ============================================================================

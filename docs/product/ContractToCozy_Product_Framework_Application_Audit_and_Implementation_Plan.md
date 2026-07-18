@@ -692,7 +692,7 @@ The database is treated as pre-launch and disposable. When a phase requires pers
 
 **Objective:** Make the application feel like one calm operating system rather than a tool catalog.
 
-**Implementation status:** Started July 18, 2026. Increment 1 implements the canonical property-scoped action feed, deterministic ranking and cross-source deduplication, safe lifecycle commands, dismissal suppression, household authorization, frontend DTO/client support, and contract tests. The unified Home response/surface, five-destination navigation cutover, remaining source promotion, full lineage semantics, and route-contract cutover remain in progress. See `docs/product/phase2/README.md`.
+**Implementation status:** Started July 18, 2026. Increments 1–2 implement the canonical property-scoped action feed, deterministic ranking and cross-source deduplication, safe lifecycle commands, dismissal suppression, household authorization, a shared responsive five-section Home contract/surface, five-destination homeowner navigation, grounded Ask, full action-lineage semantics, frontend client support, and contract tests. Remaining source promotion, internal-link/notification/guidance-template hardening, exhaustive CTA route contracts, and database-backed integration tests remain in progress. See `docs/product/phase2/README.md`.
 
 #### Backend
 

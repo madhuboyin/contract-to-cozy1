@@ -15,8 +15,11 @@ const EVENT_STAGES = {
   ACTIVE_TRIGGER_IDENTIFIED: 2,
   HOME_ACTION_IDENTIFIED: 3,
   HOME_ACTION_SURFACED: 4,
-  HOME_ACTION_RESOLUTION_RECORDED: 5,
-  HOME_ACTION_OUTCOME_VERIFIED: 6,
+  HOME_ACTION_OPENED: 5,
+  HOME_ACTION_ACTED: 6,
+  HOME_ACTION_SUPERSEDED: 7,
+  HOME_ACTION_RESOLUTION_RECORDED: 7,
+  HOME_ACTION_OUTCOME_VERIFIED: 8,
 } as const;
 
 const EVENT_TYPES = Object.keys(EVENT_STAGES) as [keyof typeof EVENT_STAGES, ...(keyof typeof EVENT_STAGES)[]];
@@ -46,23 +49,28 @@ export const NorthStarLineageEventInputSchema = z.object({
   nextTriggerAt: z.string().datetime().nullable().optional(),
   unresolvedSafetyRequirement: z.boolean().optional(),
 }).superRefine((value, ctx) => {
-  const stage = EVENT_STAGES[value.eventType];
-  const requireField = (field: keyof typeof value, atStage: number) => {
-    if (stage >= atStage && value[field] == null) {
+  const requireField = (field: keyof typeof value) => {
+    if (value[field] == null) {
       ctx.addIssue({
         code: 'custom',
         path: [field],
-        message: `${String(field)} is required at lineage stage ${stage}.`,
+        message: `${String(field)} is required for ${value.eventType}.`,
       });
     }
   };
-  requireField('triggerId', 2);
-  requireField('actionId', 3);
-  requireField('recommendationVersion', 3);
-  requireField('resolutionDisposition', 5);
-  requireField('verificationId', 6);
-  requireField('outcomeId', 6);
-  requireField('verificationStatus', 6);
+  if (value.eventType !== 'ENTRY_CONTEXT_CAPTURED') requireField('triggerId');
+  if (!['ENTRY_CONTEXT_CAPTURED', 'ACTIVE_TRIGGER_IDENTIFIED'].includes(value.eventType)) {
+    requireField('actionId');
+    requireField('recommendationVersion');
+  }
+  if (value.eventType === 'HOME_ACTION_RESOLUTION_RECORDED' || value.eventType === 'HOME_ACTION_OUTCOME_VERIFIED') {
+    requireField('resolutionDisposition');
+  }
+  if (value.eventType === 'HOME_ACTION_OUTCOME_VERIFIED') {
+    requireField('verificationId');
+    requireField('outcomeId');
+    requireField('verificationStatus');
+  }
 });
 
 export type NorthStarLineageEventInput = z.input<typeof NorthStarLineageEventInputSchema>;

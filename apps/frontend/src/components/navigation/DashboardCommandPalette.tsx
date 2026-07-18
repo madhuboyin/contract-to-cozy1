@@ -143,35 +143,17 @@ export default function DashboardCommandPalette({ propertyId }: DashboardCommand
     }
 
     const navItems: CommandItem[] = [
-      { id: 'nav-dashboard', label: 'Dashboard', href: '/dashboard', group: 'Navigation' },
-      {
-        id: 'nav-resolution-center',
-        label: 'Resolution Center',
-        href: resolutionCenterHref,
-        group: 'Navigation',
-      },
-      { id: 'nav-my-home', label: 'My Home', href: '/dashboard/properties', group: 'Navigation' },
-      { id: 'nav-protect', label: 'Protect', href: protectionHref, group: 'Navigation' },
-      { id: 'nav-save', label: 'Save', href: saveHref, group: 'Navigation' },
-      { id: 'nav-vault', label: 'Vault', href: vaultHref, group: 'Navigation' },
-      { id: 'nav-home-lab', label: 'Home Lab', href: homeLabHref, group: 'Navigation' },
-      { id: 'nav-rooms', label: 'Rooms', href: propertyRoomsHref, group: 'Navigation' },
-      { id: 'nav-services', label: 'Find Services', href: '/dashboard/providers', group: 'Navigation' },
-      { id: 'nav-inventory', label: 'Inventory', href: inventoryHref, group: 'Navigation' },
-      {
-        id: 'nav-knowledge',
-        label: 'Knowledge Hub',
-        href: resolvedPropertyId ? `/knowledge?propertyId=${encodeURIComponent(resolvedPropertyId)}` : '/knowledge',
-        group: 'Navigation',
-      },
-      { id: 'nav-home-admin', label: 'Home Admin', href: '/dashboard/warranties', group: 'Navigation' },
-      { id: 'nav-community', label: 'Community Events', href: '/dashboard/community-events', group: 'Navigation' },
+      { id: 'nav-home', label: 'Home', href: '/dashboard', group: 'Navigation' },
+      { id: 'nav-plan-projects', label: 'Plan & Projects', href: '/dashboard/actions', group: 'Navigation' },
+      { id: 'nav-home-record', label: 'Home Record', href: '/dashboard/properties', group: 'Navigation' },
+      { id: 'nav-ask', label: 'Ask', href: '/dashboard/ask', group: 'Navigation' },
+      { id: 'nav-settings', label: 'Profile & Settings', href: '/dashboard/profile', group: 'Navigation' },
     ];
 
     const recent: CommandItem[] = recentActions.map((action, index) => ({
       id: `recent-${action.id}-${index}`,
       label: action.label,
-      href: `/dashboard/resolution-center${resolvedPropertyId ? `?propertyId=${encodeURIComponent(resolvedPropertyId)}` : ''}`,
+      href: `/dashboard/actions${resolvedPropertyId ? `?propertyId=${encodeURIComponent(resolvedPropertyId)}` : ''}`,
       group: 'Recent Actions',
     }));
 
@@ -184,6 +166,13 @@ export default function DashboardCommandPalette({ propertyId }: DashboardCommand
       },
       { id: 'quick-book-pro', label: 'Book a Pro', href: '/dashboard/providers', group: 'Quick Shortcuts' },
       { id: 'quick-risk-report', label: 'View risk report', href: riskReportHref, group: 'Quick Shortcuts' },
+      { id: 'quick-rooms', label: 'Open rooms', href: propertyRoomsHref, group: 'Quick Shortcuts' },
+      { id: 'quick-inventory', label: 'Open inventory', href: inventoryHref, group: 'Quick Shortcuts' },
+      { id: 'quick-resolution-center', label: 'Open resolution center', href: resolutionCenterHref, group: 'Quick Shortcuts' },
+      { id: 'quick-protection', label: 'Review protection', href: protectionHref, group: 'Quick Shortcuts' },
+      { id: 'quick-savings', label: 'Review savings', href: saveHref, group: 'Quick Shortcuts' },
+      { id: 'quick-vault', label: 'Open vault', href: vaultHref, group: 'Quick Shortcuts' },
+      { id: 'quick-home-lab', label: 'Open Home Lab', href: homeLabHref, group: 'Quick Shortcuts' },
     ];
 
     return [...navItems, ...recent, ...quick];

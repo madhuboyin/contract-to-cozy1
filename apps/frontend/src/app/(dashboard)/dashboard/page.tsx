@@ -81,6 +81,7 @@ import { listInventoryItems } from './inventory/inventoryApi';
 import { getStatusBoard, StatusBoardItemDTO } from './properties/[id]/status-board/statusBoardApi';
 import { IncidentDTO } from '@/types/incidents.types';
 import { calculateStalenessStatus } from '@/lib/incidents/stalenessConfig';
+import { UnifiedHomeSurface } from '@/components/home/UnifiedHomeSurface';
 
 const PROPERTY_SETUP_SKIPPED_KEY = 'propertySetupSkipped'; 
 const DASHBOARD_AHA_SEEN_PREFIX = 'dashboardAhaSeen';
@@ -1346,53 +1347,9 @@ export default function DashboardPage() {
     </div>
   );
 
-  return (
-    <>
-      {/* Mobile view — CSS hidden on md+ so no layout flash */}
-      <div className="md:hidden">
-        {isPurchaseMode ? (
-          <MobileHomeBuyerDashboard
-            userFirstName={safeFirstName}
-            properties={properties}
-            selectedPropertyId={effectiveSelectedPropertyId}
-            onPropertyChange={setSelectedPropertyId}
-            bookings={data.bookings}
-            checklistItems={(data.checklist?.tasks ?? []) as any}
-            localUpdates={localUpdates}
-          />
-        ) : (
-          <MobileDashboardHome
-            userFirstName={safeFirstName}
-            properties={properties}
-            selectedPropertyId={effectiveSelectedPropertyId}
-            onPropertyChange={setSelectedPropertyId}
-            localUpdates={localUpdates}
-          />
-        )}
-      </div>
+  if (!effectiveSelectedPropertyId) {
+    return <DashboardRouteState state="empty" title="Add your first home" description="Add an address to begin building your Home record and action plan." />;
+  }
 
-      {/* Desktop view — CSS hidden below md */}
-      <div className="hidden md:block max-w-7xl mx-auto px-4 md:px-6 w-full">
-        <CommandCenterTemplate
-          primaryAction={primaryActionHero}
-          confidenceLabel="Verified"
-          freshnessLabel="Updated today"
-          sourceLabel="Home analysis"
-          secondaryModules={
-            <RoomsSnapshotSection propertyId={effectiveSelectedPropertyId} />
-          }
-        />
-      </div>
-
-      <div className="mx-auto w-full max-w-7xl px-4 md:px-6">
-        <PersonalizedReadOnlySuggestions
-          propertyId={effectiveSelectedPropertyId}
-          module="DASHBOARD"
-          title="Suggested for your home"
-        />
-      </div>
-
-      <MilestoneCelebration type={celebration.type} isOpen={celebration.isOpen} onClose={dismiss} />
-    </>
-  );
+  return <UnifiedHomeSurface propertyId={effectiveSelectedPropertyId} />;
 }

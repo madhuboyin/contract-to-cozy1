@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import type { HomeAction } from '../productFramework';
+import { prisma } from '../lib/prisma';
 import { emitHomeActionsSurfaced, emitNorthStarLineageEvent } from './analytics';
 import {
   getActivationFirstValue,
@@ -41,6 +42,10 @@ export const HomeActionCommandSchema = z.object({
       message: `${value.command} requires consequence acknowledgement.`,
     });
   }
+});
+
+export const HomeActionInteractionSchema = z.object({
+  interaction: z.literal('OPENED'),
 });
 
 export type HomeActionCommandInput = z.infer<typeof HomeActionCommandSchema>;
@@ -165,6 +170,22 @@ export async function getHomeActionFeed(propertyId: string, userId: string) {
 
   const actions = rankAndDeduplicateHomeActions(candidates);
   emitHomeActionsSurfaced({ propertyId, userId, actions, source: 'phase2_home_actions' });
+  for (const action of actions) {
+    for (const supersededActionId of action.deduplication.mergedActionIds) {
+      emitNorthStarLineageEvent({
+        eventType: 'HOME_ACTION_SUPERSEDED',
+        propertyId,
+        userId,
+        source: 'phase2_home_action_deduplication',
+        entryId: `home:${propertyId}`,
+        triggerId: `trigger:home-action:${action.lineageId}`,
+        signalId: action.lineageId,
+        actionId: supersededActionId,
+        recommendationVersion: action.source.version ?? 'phase2-v1',
+        resolutionReason: `Superseded by canonical action ${action.id}.`,
+      });
+    }
+  }
 
   return {
     contractVersion: 'phase2-v1',
@@ -184,6 +205,196 @@ export async function getHomeActionFeed(propertyId: string, userId: string) {
       suppressedCount: orchestration.suppressedActions.length,
       snoozedCount: orchestration.snoozedActions.length,
     },
+  };
+}
+
+export async function recordHomeActionOpened(propertyId: string, actionId: string, userId: string) {
+  const feed = await getHomeActionFeed(propertyId, userId);
+  const action = feed.actions.find((candidate) => candidate.id === actionId);
+  if (!action) throw new Error('Home action was not found or is no longer actionable.');
+  emitNorthStarLineageEvent({
+    eventType: 'HOME_ACTION_OPENED',
+    propertyId,
+    userId,
+    source: 'phase2_home',
+    entryId: `home:${propertyId}`,
+    triggerId: `trigger:home-action:${action.lineageId}`,
+    signalId: action.lineageId,
+    actionId: action.id,
+    recommendationVersion: action.source.version ?? 'phase2-v1',
+    journeyId: action.relatedJourneyId,
+  });
+  return { actionId, interaction: 'OPENED' as const, recordedAt: new Date().toISOString() };
+}
+
+export async function getUnifiedHome(propertyId: string, userId: string) {
+  const feed = await getHomeActionFeed(propertyId, userId);
+  const [property, inventory, documentCount, verifiedDocumentCount, recentEvents, activeProject, activeJourney] =
+    await Promise.all([
+      prisma.property.findUnique({
+        where: { id: propertyId },
+        select: {
+          id: true,
+          name: true,
+          address: true,
+          city: true,
+          state: true,
+          zipCode: true,
+          dwellingType: true,
+          yearBuilt: true,
+          propertySize: true,
+          bedrooms: true,
+          bathrooms: true,
+          heatingType: true,
+          coolingType: true,
+          roofType: true,
+          updatedAt: true,
+        },
+      }),
+      prisma.inventoryItem.findMany({
+        where: { propertyId },
+        select: {
+          id: true,
+          name: true,
+          category: true,
+          isVerified: true,
+          warrantyId: true,
+          insurancePolicyId: true,
+          coverageNotRequired: true,
+          updatedAt: true,
+        },
+      }),
+      prisma.document.count({ where: { propertyId } }),
+      prisma.document.count({ where: { propertyId, verificationStatus: 'VERIFIED' } }),
+      prisma.homeEvent.findMany({
+        where: { propertyId },
+        orderBy: { occurredAt: 'desc' },
+        take: 3,
+        select: { id: true, title: true, summary: true, type: true, importance: true, occurredAt: true },
+      }),
+      prisma.projectRecord.findFirst({
+        where: { propertyId, status: { in: ['PLANNING', 'IN_PROGRESS', 'PAUSED', 'DISPUTED'] } },
+        orderBy: { updatedAt: 'desc' },
+        include: {
+          milestones: {
+            where: { status: { not: 'COMPLETE' } },
+            orderBy: { position: 'asc' },
+            take: 1,
+          },
+          issues: {
+            where: { status: { in: ['OPEN', 'ACKNOWLEDGED', 'ESCALATED'] } },
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+          },
+        },
+      }),
+      prisma.guidanceJourney.findFirst({
+        where: { propertyId, status: 'ACTIVE' },
+        orderBy: { updatedAt: 'desc' },
+        include: {
+          steps: {
+            where: { status: { in: ['PENDING', 'IN_PROGRESS', 'BLOCKED'] } },
+            orderBy: { stepOrder: 'asc' },
+            take: 1,
+          },
+        },
+      }),
+    ]);
+
+  if (!property) throw new Error('Property not found or access denied.');
+
+  const knownPropertyFacts = [
+    property.yearBuilt,
+    property.propertySize,
+    property.bedrooms,
+    property.bathrooms,
+    property.heatingType,
+    property.coolingType,
+    property.roofType,
+  ].filter((value) => value != null).length;
+  const recordSignals = knownPropertyFacts + (inventory.length > 0 ? 1 : 0) + (documentCount > 0 ? 1 : 0);
+  const recordCompleteness = Math.round((recordSignals / 9) * 100);
+  const coverageGapCount = inventory.filter((item) =>
+    !item.coverageNotRequired && !item.warrantyId && !item.insurancePolicyId).length;
+
+  const decisions = feed.actions
+    .filter((action) => action.job === 'DECIDE' ||
+      ['MATERIAL_FINANCIAL', 'REGULATED_COVERAGE'].includes(action.governance.safetyTier))
+    .slice(0, 3);
+
+  const projectMilestone = activeProject?.milestones[0] ?? null;
+  const projectIssue = activeProject?.issues[0] ?? null;
+  const journeyStep = activeJourney?.steps[0] ?? null;
+  const activeMajorMoment = activeProject
+    ? {
+        kind: 'PROJECT' as const,
+        id: activeProject.id,
+        title: activeProject.name,
+        stage: activeProject.status,
+        blocker: projectIssue?.description ?? null,
+        nextMilestone: projectMilestone?.name ?? 'Review project status',
+        href: `/dashboard/properties/${propertyId}/projects/${activeProject.id}`,
+      }
+    : activeJourney
+      ? {
+          kind: 'GUIDANCE_JOURNEY' as const,
+          id: activeJourney.id,
+          title: activeJourney.issueType ?? activeJourney.journeyTypeKey ?? 'Active home decision',
+          stage: activeJourney.decisionStage,
+          blocker: journeyStep?.status === 'BLOCKED' ? journeyStep.description ?? journeyStep.label : null,
+          nextMilestone: journeyStep?.label ?? 'Continue the current decision',
+          href: `/dashboard/properties/${propertyId}/tools/guidance-overview?journeyId=${encodeURIComponent(activeJourney.id)}`,
+        }
+      : null;
+
+  const suggestedQuestions = [
+    feed.actions[0] ? `Why is “${feed.actions[0].recommendedAction}” my top priority?` : null,
+    coverageGapCount > 0 ? `Which ${coverageGapCount} home item${coverageGapCount === 1 ? '' : 's'} lack coverage?` : null,
+    recordCompleteness < 80 ? 'Which missing home fact would improve my guidance most?' : null,
+    'What should I plan for over the next 12 months?',
+  ].filter((value): value is string => Boolean(value)).slice(0, 3);
+
+  return {
+    contractVersion: 'phase2-home-v1',
+    property: {
+      id: property.id,
+      name: property.name ?? property.address,
+      address: `${property.address}, ${property.city}, ${property.state} ${property.zipCode}`,
+      dwellingType: property.dwellingType,
+      updatedAt: property.updatedAt.toISOString(),
+    },
+    attention: {
+      actions: feed.actions.slice(0, 5),
+      totalCount: feed.actions.length,
+      planHref: `/dashboard/actions?propertyId=${encodeURIComponent(propertyId)}`,
+    },
+    decisions,
+    activeMajorMoment,
+    glance: {
+      recordCompleteness,
+      knownPropertyFacts,
+      trackedSystems: inventory.length,
+      verifiedSystems: inventory.filter((item) => item.isVerified).length,
+      documentCount,
+      verifiedDocumentCount,
+      coverageGapCount,
+      openWorkCount: feed.actions.length + (activeProject ? 1 : 0),
+      recentChanges: recentEvents.map((event) => ({
+        ...event,
+        occurredAt: event.occurredAt.toISOString(),
+      })),
+      recordHref: `/dashboard/properties/${propertyId}`,
+    },
+    ask: {
+      grounding: {
+        propertyId,
+        actionIds: feed.actions.slice(0, 5).map((action) => action.id),
+        latestHomeEventIds: recentEvents.map((event) => event.id),
+      },
+      suggestedQuestions,
+    },
+    diagnostics: feed.diagnostics,
+    generatedAt: new Date().toISOString(),
   };
 }
 
@@ -220,6 +431,20 @@ export async function executeHomeActionCommand(
     ['DEFER', 'DISMISS', 'NOT_RELEVANT'].includes(input.command)) {
     throw new Error('Safety and emergency actions cannot be deferred or dismissed from the default action feed.');
   }
+
+  emitNorthStarLineageEvent({
+    eventType: 'HOME_ACTION_ACTED',
+    propertyId,
+    userId,
+    source: 'phase2_home_action_command',
+    entryId: `home:${propertyId}`,
+    triggerId: `trigger:home-action:${action.lineageId}`,
+    signalId: action.lineageId,
+    actionId: action.id,
+    recommendationVersion: action.source.version ?? 'phase2-v1',
+    journeyId: action.relatedJourneyId,
+    resolutionReason: input.command,
+  });
 
   if (input.command === 'CORRECT_FACT') {
     const correction = [action.primaryCta, ...action.secondaryCtas]

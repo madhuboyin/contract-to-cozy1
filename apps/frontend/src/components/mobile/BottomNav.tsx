@@ -1,372 +1,50 @@
 'use client';
 
-import React from 'react';
-import { PRIMARY_JOBS } from '@/lib/navigation/jobsNavigation';
-import { ADMIN_NAV } from '@/lib/navigation/adminNavigation';
-import {
-  Building,
-  Camera,
-  Ellipsis,
-  BookOpen,
-  Globe,
-  Settings,
-  LogOut,
-} from 'lucide-react';
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
-import { cn } from '@/lib/utils';
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
-import { Input } from '@/components/ui/input';
-import { usePropertyContext } from '@/lib/property/PropertyContext';
+import { usePathname } from 'next/navigation';
+import { ADMIN_NAV } from '@/lib/navigation/adminNavigation';
+import { PRIMARY_JOBS } from '@/lib/navigation/jobsNavigation';
 import { useAuth } from '@/lib/auth/AuthContext';
-import { buildPropertyAwareDashboardHref } from '@/lib/routes/dashboardPropertyAwareHref';
-import { PropertySwitcherSheet } from '@/components/navigation/PropertySwitcherSheet';
-
-const PROPERTY_ID_IN_PATH = /\/dashboard\/properties\/([^/]+)/;
-
-function getPropertyIdFromPathname(pathname: string): string | undefined {
-  const match = pathname.match(PROPERTY_ID_IN_PATH);
-  return match?.[1];
-}
-
-function buildPropertyAwareHref(
-  propertyId: string | undefined,
-  hrefSuffix: string,
-  navTarget: string
-): string {
-  if (propertyId) return `/dashboard/properties/${propertyId}/${hrefSuffix}`;
-  return `/dashboard/properties?navTarget=${encodeURIComponent(navTarget)}`;
-}
-
-// Primary bar: Today | Vault | [Camera FAB] | Fix | More
-const PRIMARY_BAR_KEYS = ['today', 'vault'] as const;
-const SECONDARY_BAR_KEYS = ['fix'] as const;
-
-// Admin nav's equivalent slot assignment (no camera FAB, no property scoping)
-const ADMIN_PRIMARY_BAR_KEYS = ['admin-provider-compliance', 'admin-analytics'] as const;
-const ADMIN_SECONDARY_BAR_KEYS = ['admin-worker-jobs'] as const;
-const ADMIN_MORE_JOB_KEYS = ['admin-diy-templates', 'admin-knowledge', 'admin-personalization'] as const;
+import { cn } from '@/lib/utils';
 
 export function BottomNav() {
   const pathname = usePathname();
-  const router = useRouter();
-  const { logout, user } = useAuth();
-  const { selectedPropertyId } = usePropertyContext();
-  const [moreOpen, setMoreOpen] = React.useState(false);
-  const [query, setQuery] = React.useState('');
-  const [propertySwitcherOpen, setPropertySwitcherOpen] = React.useState(false);
-  const resolvedPropertyId = selectedPropertyId || getPropertyIdFromPathname(pathname || '');
-  const isAdminNav = user?.role === 'ADMIN';
-  const showCameraFab = React.useMemo(() => {
-    if (isAdminNav) return false;
-    const currentPath = pathname || '';
-
-    return [
-      /^\/dashboard$/,
-      /^\/dashboard\/properties$/,
-      /^\/dashboard\/protect(?:\/.*)?$/,
-      /^\/dashboard\/vault(?:\/.*)?$/,
-      /^\/dashboard\/save(?:\/.*)?$/,
-      /^\/dashboard\/fix(?:\/.*)?$/,
-      /^\/dashboard\/seasonal(?:\/.*)?$/,
-      /^\/dashboard\/community-events(?:\/.*)?$/,
-    ].some((pattern) => pattern.test(currentPath));
-  }, [pathname, isAdminNav]);
-
-  const handleLogout = React.useCallback(async () => {
-    setMoreOpen(false);
-    await logout();
-  }, [logout]);
-
-  const handleCameraCapture = React.useCallback(() => {
-    const href = buildPropertyAwareDashboardHref(resolvedPropertyId, '/dashboard/visual-inspector');
-    router.push(href);
-  }, [resolvedPropertyId, router]);
-
-  // Left two items (Today, Vault — or, for admins, Provider Compliance, Analytics)
-  const leftItems = isAdminNav
-    ? ADMIN_NAV.filter((j) => (ADMIN_PRIMARY_BAR_KEYS as readonly string[]).includes(j.key)).map((job) => ({
-        href: job.href,
-        icon: job.icon,
-        label: job.name,
-        match: (path: string) => path.startsWith(job.href),
-      }))
-    : PRIMARY_JOBS.filter((j) => (PRIMARY_BAR_KEYS as readonly string[]).includes(j.key)).map((job) => ({
-        href:
-          job.href === '/dashboard' || job.href === '/dashboard/properties'
-            ? job.href
-            : buildPropertyAwareHref(resolvedPropertyId, job.href.replace('/dashboard/', ''), job.key),
-        icon: job.icon,
-        label: job.name,
-        match: (path: string) => {
-          if (job.href === '/dashboard') return path === '/dashboard';
-          return path.startsWith(job.href) || job.engines.some((e) => path.includes(e));
-        },
-      }));
-
-  // Right item before More (Fix — or, for admins, Worker Jobs)
-  const rightItems = isAdminNav
-    ? ADMIN_NAV.filter((j) => (ADMIN_SECONDARY_BAR_KEYS as readonly string[]).includes(j.key)).map((job) => ({
-        href: job.href,
-        icon: job.icon,
-        label: job.name,
-        match: (path: string) => path.startsWith(job.href),
-      }))
-    : PRIMARY_JOBS.filter((j) => (SECONDARY_BAR_KEYS as readonly string[]).includes(j.key)).map((job) => ({
-        href: buildPropertyAwareDashboardHref(resolvedPropertyId, job.href),
-        icon: job.icon,
-        label: job.name,
-        match: (path: string) => path.startsWith(job.href) || job.engines.some((e) => path.includes(e)),
-      }));
-
-  // More drawer: remaining jobs (+ secondary links for homeowner nav only)
-  const moreJobKeys = ['my-home', 'protect', 'save', 'personalization', 'home-lab'];
-  const moreJobs = isAdminNav
-    ? ADMIN_NAV.filter((j) => (ADMIN_MORE_JOB_KEYS as readonly string[]).includes(j.key)).map((job) => ({
-        label: job.name,
-        href: job.href,
-        icon: job.icon,
-        isActive: (path: string) => path.startsWith(job.href),
-      }))
-    : PRIMARY_JOBS.filter((j) => moreJobKeys.includes(j.key)).map((job) => ({
-        label: job.name,
-        href:
-          job.href === '/dashboard/properties'
-            ? job.href
-            : buildPropertyAwareDashboardHref(resolvedPropertyId, job.href),
-        icon: job.icon,
-        isActive: (path: string) => path.startsWith(job.href) || job.engines.some((e) => path.includes(e)),
-      }));
-
-  const moreStaticLinks = isAdminNav
-    ? []
-    : [
-        {
-          label: 'Knowledge',
-          href: resolvedPropertyId ? `/knowledge?propertyId=${encodeURIComponent(resolvedPropertyId)}` : '/knowledge',
-          icon: BookOpen,
-          isActive: (path: string) => path.startsWith('/knowledge'),
-        },
-        {
-          label: 'Community',
-          href: '/dashboard/community-events',
-          icon: Globe,
-          isActive: (path: string) => path.startsWith('/dashboard/community-events'),
-        },
-      ];
-
-  type MoreItem = {
-    label: string;
-    href: string;
-    icon: React.ElementType;
-    isActive: (path: string) => boolean;
-  };
-
-  const moreSections: { group: string; items: MoreItem[] }[] = [
-    { group: 'More sections', items: moreJobs },
-    { group: 'Resources', items: moreStaticLinks },
-  ];
-
-  const normalizedQuery = query.trim().toLowerCase();
-  const filteredSections = moreSections
-    .map((s) => ({
-      ...s,
-      items: normalizedQuery
-        ? s.items.filter((i) => i.label.toLowerCase().includes(normalizedQuery))
-        : s.items,
-    }))
-    .filter((s) => s.items.length > 0);
-
-  const moreActive = moreSections.some((s) => s.items.some((i) => i.isActive(pathname || '')));
-
-  React.useEffect(() => { setMoreOpen(false); setQuery(''); }, [pathname]);
-  React.useEffect(() => { if (!moreOpen) setQuery(''); }, [moreOpen]);
+  const { user } = useAuth();
+  const items = user?.role === 'ADMIN' ? ADMIN_NAV.slice(0, 5) : PRIMARY_JOBS;
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-gray-100/80 bg-white/97 backdrop-blur-xl pb-[env(safe-area-inset-bottom)] shadow-[0_-1px_0_rgba(0,0,0,0.04),0_-4px_16px_rgba(15,23,42,0.06)] lg:hidden">
-      <div className="relative flex h-[60px] items-end">
-        {/* Left two items */}
-        <div className="flex flex-1">
-          {leftItems.map((item) => {
-            const Icon = item.icon;
-            const isActive = item.match(pathname || '');
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={cn(
-                  'flex flex-1 min-h-[44px] flex-col items-center justify-center gap-0.5 pb-1 text-xs transition-colors duration-150 active:opacity-60',
-                  isActive ? 'text-brand-600' : 'text-gray-400'
-                )}
-              >
-                <div className={cn(
-                  'flex h-6 w-6 items-center justify-center rounded-full transition-all duration-150',
-                  isActive && 'bg-brand-50'
-                )}>
-                  <Icon className={cn('h-[22px] w-[22px]', isActive ? 'text-brand-600' : 'text-gray-400')} />
-                </div>
-                <span className={cn('font-medium', isActive && 'font-semibold text-brand-600')}>{item.label}</span>
-              </Link>
-            );
-          })}
-        </div>
-
-        {/* Center camera FAB — raised above nav bar */}
-        <div className="flex w-16 items-end justify-center pb-1.5">
-          {showCameraFab ? (
-            <button
-              type="button"
-              onClick={handleCameraCapture}
-              className="flex h-14 w-14 -translate-y-2.5 touch-manipulation items-center justify-center rounded-full bg-brand-600 shadow-[0_4px_16px_rgba(20,184,166,0.35),0_2px_6px_rgba(15,23,42,0.12)] transition-transform active:scale-95"
-              aria-label="Capture photo"
-            >
-              <Camera className="h-[22px] w-[22px] text-white" />
-            </button>
-          ) : (
-            <div aria-hidden="true" className="h-14 w-14" />
-          )}
-        </div>
-
-        {/* Right item + More */}
-        <div className="flex flex-1">
-          {rightItems.map((item) => {
-            const Icon = item.icon;
-            const isActive = item.match(pathname || '');
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={cn(
-                  'flex flex-1 min-h-[44px] flex-col items-center justify-center gap-0.5 pb-1 text-xs transition-colors duration-150 active:opacity-60',
-                  isActive ? 'text-brand-600' : 'text-gray-400'
-                )}
-              >
-                <div className={cn(
-                  'flex h-6 w-6 items-center justify-center rounded-full transition-all duration-150',
-                  isActive && 'bg-brand-50'
-                )}>
-                  <Icon className={cn('h-[22px] w-[22px]', isActive ? 'text-brand-600' : 'text-gray-400')} />
-                </div>
-                <span className={cn('font-medium', isActive && 'font-semibold text-brand-600')}>{item.label}</span>
-              </Link>
-            );
-          })}
-
-          {/* More drawer */}
-          <Sheet
-            open={moreOpen}
-            onOpenChange={(open) => { setMoreOpen(open); if (!open) setQuery(''); }}
-          >
-            <SheetTrigger asChild>
-              <button
-                type="button"
-                aria-label="More navigation options"
-                className={cn(
-                  'flex flex-1 min-h-[44px] flex-col items-center justify-center gap-0.5 pb-1 text-xs transition-colors duration-150 active:opacity-60',
-                  moreActive ? 'text-brand-600' : 'text-gray-400'
-                )}
-              >
-                <div className={cn(
-                  'flex h-6 w-6 items-center justify-center rounded-full transition-all duration-150',
-                  moreActive && 'bg-brand-50'
-                )}>
-                  <Ellipsis className={cn('h-[22px] w-[22px]', moreActive ? 'text-brand-600' : 'text-gray-400')} />
-                </div>
-                <span className={cn('font-medium', moreActive && 'font-semibold text-brand-600')}>More</span>
-              </button>
-            </SheetTrigger>
-
-            <SheetContent side="bottom" className="flex h-auto max-h-[80dvh] flex-col rounded-t-2xl">
-              <SheetHeader>
-                <SheetTitle>More</SheetTitle>
-              </SheetHeader>
-
-              {/* Property switcher (homeowner nav only — admin isn't property-scoped) */}
-              {!isAdminNav && (
-                <button
-                  type="button"
-                  onClick={() => { setMoreOpen(false); setPropertySwitcherOpen(true); }}
-                  className="mt-3 flex w-full items-center justify-between gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-left hover:bg-white active:bg-slate-100 transition-colors"
-                >
-                  <div className="flex items-center gap-2 min-w-0">
-                    <Building className="h-4 w-4 shrink-0 text-slate-500" />
-                    <span className="text-xs font-semibold text-slate-700 truncate">
-                      {resolvedPropertyId ? 'Switch property' : 'Select a property'}
-                    </span>
-                  </div>
-                  <Settings className="h-3.5 w-3.5 shrink-0 text-slate-400" />
-                </button>
+    <nav
+      aria-label="Primary navigation"
+      className="fixed inset-x-0 bottom-0 z-50 border-t border-slate-200 bg-white/95 pb-[env(safe-area-inset-bottom)] shadow-[0_-8px_30px_rgba(15,23,42,0.08)] backdrop-blur lg:hidden"
+    >
+      <div className="mx-auto grid h-16 max-w-xl grid-cols-5 px-1">
+        {items.map((item) => {
+          const active = item.href === '/dashboard'
+            ? pathname === '/dashboard'
+            : pathname?.startsWith(item.href) || item.engines?.some((engine) => pathname?.includes(engine));
+          const Icon = item.icon;
+          const shortLabel = item.key === 'plan-projects'
+            ? 'Plan'
+            : item.key === 'home-record'
+              ? 'Record'
+              : item.key === 'settings'
+                ? 'Settings'
+                : item.name;
+          return (
+            <Link
+              key={item.key}
+              href={item.href}
+              className={cn(
+                'flex min-w-0 flex-col items-center justify-center gap-1 rounded-xl px-1 text-[10px] font-semibold transition-colors',
+                active ? 'text-teal-700' : 'text-slate-500 hover:text-slate-800',
               )}
-
-              <div className="mt-3">
-                <Input
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Search sections..."
-                  className="h-10"
-                />
-              </div>
-
-              <div className="mt-4 min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain pb-4">
-                {filteredSections.map((section) => (
-                  <div key={section.group}>
-                    <p className="mb-2 text-[11px] font-semibold tracking-normal text-gray-400">
-                      {section.group}
-                    </p>
-                    <div className="space-y-1.5">
-                      {section.items.map((item) => {
-                        const Icon = item.icon;
-                        const active = item.isActive(pathname || '');
-                        return (
-                          <Link
-                            key={item.label}
-                            href={item.href}
-                            onClick={() => setMoreOpen(false)}
-                            className={cn(
-                              'flex min-h-[48px] items-center gap-3 rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-teal-50 hover:text-brand-700 active:bg-teal-100 transition-colors',
-                              active && 'border-brand-200 bg-teal-50 text-brand-700'
-                            )}
-                          >
-                            <Icon className="h-5 w-5 flex-shrink-0" />
-                            {item.label}
-                          </Link>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ))}
-                {!filteredSections.length && (
-                  <p className="text-sm text-gray-400">No results.</p>
-                )}
-              </div>
-
-              <div className="border-t border-gray-100 pt-3 space-y-1">
-                <Link
-                  href="/dashboard/profile"
-                  onClick={() => setMoreOpen(false)}
-                  className="flex min-h-[44px] items-center gap-2 rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 active:bg-gray-100"
-                >
-                  <Settings className="h-4 w-4" />
-                  Profile
-                </Link>
-                <button
-                  type="button"
-                  onClick={handleLogout}
-                  className="flex min-h-[44px] w-full items-center gap-2 rounded-xl border border-red-200 px-4 py-2.5 text-left text-sm font-semibold text-red-600 hover:bg-red-50 active:bg-red-100"
-                >
-                  <LogOut className="h-4 w-4" />
-                  Sign out
-                </button>
-              </div>
-            </SheetContent>
-          </Sheet>
-        </div>
+            >
+              <Icon className="h-5 w-5" />
+              <span className="max-w-full truncate">{shortLabel}</span>
+            </Link>
+          );
+        })}
       </div>
-
-      <PropertySwitcherSheet
-        open={propertySwitcherOpen}
-        onOpenChange={setPropertySwitcherOpen}
-      />
     </nav>
   );
 }

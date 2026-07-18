@@ -111,6 +111,7 @@ import {
   ActivationTriggerEvidenceInput,
   HomeActionCommand,
   HomeActionFeedDTO,
+  UnifiedHomeDTO,
 } from '@/types';
 import type { PropertyContextEnvelope } from '@/components/property-context/propertyContextTypes';
 import type { FeatureContextCaptureResult, FeatureContextEvaluation } from '@/components/property-context/featureContextTypes';
@@ -2793,6 +2794,14 @@ class APIClient {
     throw new APIError('Failed to load home actions', 'HOME_ACTIONS_ERROR');
   }
 
+  async getUnifiedHome(propertyId: string): Promise<UnifiedHomeDTO> {
+    const response = await this.request<UnifiedHomeDTO>(
+      `/api/properties/${propertyId}/home`,
+    );
+    if (response.success && response.data) return response.data;
+    throw new APIError('Failed to load Home', 'UNIFIED_HOME_ERROR');
+  }
+
   async executeHomeActionCommand(
     propertyId: string,
     actionId: string,
@@ -2814,6 +2823,13 @@ class APIClient {
       method: 'POST',
       body: JSON.stringify(input),
     });
+  }
+
+  async recordHomeActionOpened(propertyId: string, actionId: string) {
+    return this.request<{ actionId: string; interaction: 'OPENED'; recordedAt: string }>(
+      `/api/properties/${propertyId}/home-actions/${encodeURIComponent(actionId)}/interactions`,
+      { method: 'POST', body: JSON.stringify({ interaction: 'OPENED' }) },
+    );
   }
 
   /**
