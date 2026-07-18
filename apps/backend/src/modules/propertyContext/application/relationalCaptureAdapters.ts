@@ -1,4 +1,4 @@
-import { InventoryItemCategory, InventoryItemCondition, Prisma } from '@prisma/client';
+import { InventoryItemCategory, InventoryItemCondition, Prisma, WarrantyCategory } from '@prisma/client';
 import { prisma } from '../../../lib/prisma';
 import type { ContextCaptureDefinition, RelationalCaptureInputSchema } from '../domain/contracts';
 
@@ -19,6 +19,13 @@ function requiredText(values: Record<string, unknown>, key: string): string {
   return compact(value);
 }
 
+function optionalText(values: Record<string, unknown>, key: string): string | null {
+  const value = values[key];
+  if (value === undefined || value === null || value === '') return null;
+  if (typeof value !== 'string') throw new Error(`${key} must be text.`);
+  return compact(value) || null;
+}
+
 function parseDateOnly(values: Record<string, unknown>, key: string): Date {
   const value = requiredText(values, key);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) throw new Error(`${key} must use YYYY-MM-DD.`);
@@ -34,14 +41,16 @@ export async function resolveRelationalCaptureSchema(
   if (definition.mode !== 'RELATIONAL' || definition.inputSchema.type !== 'RELATIONAL_SELECT_CREATE' || !definition.relationalAdapterKey) {
     throw new Error('Capture is not backed by a relational adapter.');
   }
-  const options = definition.relationalAdapterKey === 'INVENTORY_ITEM'
-    ? (await prisma.inventoryItem.findMany({
+  let options: RelationalCaptureInputSchema['options'];
+  if (definition.relationalAdapterKey === 'INVENTORY_ITEM') {
+    options = (await prisma.inventoryItem.findMany({
       where: { propertyId },
       select: { id: true, name: true, category: true, condition: true },
       orderBy: [{ name: 'asc' }, { createdAt: 'asc' }],
-    })).map((item) => ({ id: item.id, label: item.name, description: `${item.category} · ${item.condition}` }))
-    : (await prisma.insurancePolicy.findMany({
-      where: { propertyId },
+    })).map((item) => ({ id: item.id, label: item.name, description: `${item.category} · ${item.condition}` }));
+  } else if (definition.relationalAdapterKey === 'INSURANCE_POLICY') {
+    options = (await prisma.insurancePolicy.findMany({
+      where: { propertyId, startDate: { lte: new Date() }, expiryDate: { gte: new Date() } },
       select: { id: true, carrierName: true, policyNumber: true, coverageType: true },
       orderBy: [{ expiryDate: 'desc' }, { createdAt: 'asc' }],
     })).map((policy) => ({
@@ -49,6 +58,17 @@ export async function resolveRelationalCaptureSchema(
       label: `${policy.carrierName} · ${policy.policyNumber}`,
       description: policy.coverageType ?? 'Property policy',
     }));
+  } else {
+    options = (await prisma.warranty.findMany({
+      where: { propertyId, startDate: { lte: new Date() }, expiryDate: { gte: new Date() } },
+      select: { id: true, providerName: true, policyNumber: true, category: true },
+      orderBy: [{ expiryDate: 'desc' }, { createdAt: 'asc' }],
+    })).map((warranty) => ({
+      id: warranty.id,
+      label: warranty.policyNumber ? `${warranty.providerName} · ${warranty.policyNumber}` : warranty.providerName,
+      description: warranty.category,
+    }));
+  }
   return { ...definition.inputSchema, options };
 }
 
@@ -64,9 +84,14 @@ async function selectExisting(
     if (!item) throw new Error('The selected inventory item does not belong to this property.');
     return { entityType: 'INVENTORY_ITEM', entityId: item.id, created: false };
   }
-  const policy = await tx.insurancePolicy.findFirst({ where: { id: entityId, propertyId }, select: { id: true } });
-  if (!policy) throw new Error('The selected insurance policy does not belong to this property.');
-  return { entityType: 'INSURANCE_POLICY', entityId: policy.id, created: false };
+  if (adapterKey === 'INSURANCE_POLICY') {
+    const policy = await tx.insurancePolicy.findFirst({ where: { id: entityId, propertyId }, select: { id: true } });
+    if (!policy) throw new Error('The selected insurance policy does not belong to this property.');
+    return { entityType: 'INSURANCE_POLICY', entityId: policy.id, created: false };
+  }
+  const warranty = await tx.warranty.findFirst({ where: { id: entityId, propertyId }, select: { id: true } });
+  if (!warranty) throw new Error('The selected warranty does not belong to this property.');
+  return { entityType: 'WARRANTY', entityId: warranty.id, created: false };
 }
 
 async function createInventoryItem(
@@ -145,6 +170,47 @@ async function createInsurancePolicy(
   return { entityType: 'INSURANCE_POLICY', entityId: policy.id, created: true };
 }
 
+async function createWarranty(
+  tx: Prisma.TransactionClient,
+  propertyId: string,
+  values: Record<string, unknown>,
+): Promise<RelationalCaptureSelection> {
+  const providerName = requiredText(values, 'providerName');
+  const policyNumber = optionalText(values, 'policyNumber');
+  const category = values.category;
+  if (typeof category !== 'string' || !Object.values(WarrantyCategory).includes(category as WarrantyCategory)) {
+    throw new Error('Select a registered warranty category.');
+  }
+  const startDate = parseDateOnly(values, 'startDate');
+  const expiryDate = parseDateOnly(values, 'expiryDate');
+  if (expiryDate <= startDate) throw new Error('Warranty expiry date must be after the start date.');
+  const property = await tx.property.findUnique({ where: { id: propertyId }, select: { homeownerProfileId: true } });
+  if (!property) throw new Error('Property not found.');
+  const candidates = await tx.warranty.findMany({
+    where: { propertyId, category: category as WarrantyCategory },
+    select: { id: true, providerName: true, policyNumber: true, startDate: true, expiryDate: true },
+  });
+  const duplicate = candidates.find((warranty) => {
+    if (normalized(warranty.providerName) !== normalized(providerName)) return false;
+    if (policyNumber && warranty.policyNumber) return normalized(warranty.policyNumber) === normalized(policyNumber);
+    return warranty.startDate.getTime() === startDate.getTime() && warranty.expiryDate.getTime() === expiryDate.getTime();
+  });
+  if (duplicate) throw new Error('A matching warranty already exists. Select it instead of adding a duplicate.');
+  const warranty = await tx.warranty.create({
+    data: {
+      homeownerProfileId: property.homeownerProfileId,
+      propertyId,
+      providerName,
+      policyNumber,
+      category: category as WarrantyCategory,
+      startDate,
+      expiryDate,
+    },
+    select: { id: true },
+  });
+  return { entityType: 'WARRANTY', entityId: warranty.id, created: true };
+}
+
 export async function executeRelationalCapture(
   tx: Prisma.TransactionClient,
   propertyId: string,
@@ -157,7 +223,7 @@ export async function executeRelationalCapture(
     throw new Error('Choose an existing record or add a new one.');
   }
   const values = answer.values as Record<string, unknown>;
-  return definition.relationalAdapterKey === 'INVENTORY_ITEM'
-    ? createInventoryItem(tx, propertyId, values)
-    : createInsurancePolicy(tx, propertyId, values);
+  if (definition.relationalAdapterKey === 'INVENTORY_ITEM') return createInventoryItem(tx, propertyId, values);
+  if (definition.relationalAdapterKey === 'INSURANCE_POLICY') return createInsurancePolicy(tx, propertyId, values);
+  return createWarranty(tx, propertyId, values);
 }

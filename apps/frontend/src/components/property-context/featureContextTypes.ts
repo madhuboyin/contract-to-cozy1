@@ -27,7 +27,7 @@ export type CaptureInputSchema = ScalarCaptureInputSchema | {
   fields: StructuredCaptureField[];
 } | {
   type: 'RELATIONAL_SELECT_CREATE';
-  entityType: 'INVENTORY_ITEM' | 'INSURANCE_POLICY';
+  entityType: 'INVENTORY_ITEM' | 'INSURANCE_POLICY' | 'WARRANTY';
   selectLabel: string;
   createLabel: string;
   options: Array<{ id: string; label: string; description?: string }>;
@@ -73,6 +73,6 @@ export interface FeatureContextCaptureResult {
   contextVersion: string;
   updatedFactKeys: string[];
   evidenceIds: string[];
-  selection?: { entityType: 'INVENTORY_ITEM' | 'INSURANCE_POLICY'; entityId: string; created: boolean };
+  selection?: { entityType: 'INVENTORY_ITEM' | 'INSURANCE_POLICY' | 'WARRANTY'; entityId: string; created: boolean };
   evaluation: FeatureContextEvaluation;
 }

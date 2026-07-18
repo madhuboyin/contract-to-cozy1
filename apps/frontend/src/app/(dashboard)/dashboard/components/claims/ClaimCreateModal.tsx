@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import type { ClaimDTO, ClaimSourceType, ClaimType } from '@/types/claims.types';
 import { createClaim } from '@/app/(dashboard)/dashboard/properties/[id]/claims/claimsApi';
 import {
@@ -8,6 +8,8 @@ import {
   listPropertyWarranties,
 } from '@/app/(dashboard)/dashboard/inventory/inventoryApi';
 import { toast } from '@/components/ui/use-toast';
+import { PropertyContextCapturePanel } from '@/components/property-context/PropertyContextCapturePanel';
+import type { FeatureContextCaptureResult } from '@/components/property-context/featureContextTypes';
 
 const TYPE_OPTIONS: ClaimType[] = [
   'WATER_DAMAGE',
@@ -45,23 +47,32 @@ export default function ClaimCreateModal({
   const [warranties, setWarranties] = useState<Array<{ id: string; providerName: string; policyNumber?: string | null }>>([]);
   const [busy, setBusy] = useState(false);
 
+  const refreshCoverage = useCallback(async () => {
+    const [allPolicies, allWarranties] = await Promise.all([
+      listPropertyInsurancePolicies(propertyId),
+      listPropertyWarranties(propertyId),
+    ]);
+    setPolicies(allPolicies.filter((item: any) => item.applicability?.status === 'APPLICABLE'));
+    setWarranties(allWarranties.filter((item: any) => item.applicability?.status === 'APPLICABLE'));
+  }, [propertyId]);
+
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
-    Promise.all([listPropertyInsurancePolicies(propertyId), listPropertyWarranties(propertyId)])
-      .then(([allPolicies, allWarranties]) => {
-        if (cancelled) return;
-        setPolicies(allPolicies.filter((item: any) => item.applicability?.status === 'APPLICABLE'));
-        setWarranties(allWarranties.filter((item: any) => item.applicability?.status === 'APPLICABLE'));
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setPolicies([]);
-          setWarranties([]);
-        }
-      });
+    void refreshCoverage().catch(() => {
+      if (!cancelled) {
+        setPolicies([]);
+        setWarranties([]);
+      }
+    });
     return () => { cancelled = true; };
-  }, [open, propertyId]);
+  }, [open, refreshCoverage]);
+
+  const handleCoverageCaptured = useCallback(async (result: FeatureContextCaptureResult) => {
+    if (result.selection?.entityType === 'INSURANCE_POLICY') setInsurancePolicyId(result.selection.entityId);
+    if (result.selection?.entityType === 'WARRANTY') setWarrantyId(result.selection.entityId);
+    await refreshCoverage();
+  }, [refreshCoverage]);
 
   if (!open) return null;
 
@@ -137,7 +148,7 @@ export default function ClaimCreateModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-lg rounded-2xl bg-white p-5 shadow-xl">
+      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-5 shadow-xl">
         <div className="flex items-start justify-between gap-3">
           <div>
             <div className="text-lg font-semibold text-gray-900">Create claim</div>
@@ -250,6 +261,19 @@ export default function ClaimCreateModal({
               </div>
             )}
           </div>
+
+          {sourceType === 'INSURANCE' ? <PropertyContextCapturePanel
+            propertyId={propertyId}
+            featureKey="CLAIMS"
+            operationKey="FILE_INSURANCE_CLAIM"
+            onCaptured={handleCoverageCaptured}
+          /> : null}
+          {sourceType === 'HOME_WARRANTY' || sourceType === 'MANUFACTURER_WARRANTY' ? <PropertyContextCapturePanel
+            propertyId={propertyId}
+            featureKey="CLAIMS"
+            operationKey="FILE_WARRANTY_CLAIM"
+            onCaptured={handleCoverageCaptured}
+          /> : null}
 
           <div className="grid gap-3 md:grid-cols-2">
             <div>

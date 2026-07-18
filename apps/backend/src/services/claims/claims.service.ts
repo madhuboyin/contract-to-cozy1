@@ -16,6 +16,7 @@ import { markRiskPremiumOptimizerStale } from '../riskPremiumOptimizer.service';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../analytics';
 import { markDoNothingRunsStale } from '../doNothingSimulator.service';
 import { ClaimStatus } from '../../types/claims.types';
+import { evaluateFeatureContext } from '../../modules/propertyContext/application/evaluateFeatureContext';
 
 import { ClaimDocumentType, ClaimTimelineEventType} from '@prisma/client';
 import { HomeEventsAutoGen } from '../homeEvents/homeEvents.autogen';
@@ -351,6 +352,22 @@ async function assertClaimCoverage(propertyId: string, input: ClaimCoverageInput
   }
 }
 
+async function assertSharedClaimCoverage(propertyId: string, userId: string, input: ClaimCoverageInput) {
+  const requiredKind = requiredCoverageKind(input.sourceType);
+  if (!requiredKind) return;
+  const evaluation = await evaluateFeatureContext(propertyId, userId, {
+    featureKey: 'CLAIMS',
+    operationKey: requiredKind === 'INSURANCE' ? 'FILE_INSURANCE_CLAIM' : 'FILE_WARRANTY_CLAIM',
+  });
+  if (!evaluation.canExecute) {
+    throw Object.assign(new Error('Add an active coverage record before starting this claim path.'), {
+      statusCode: 422,
+      code: 'CLAIM_CONTEXT_REQUIRED',
+      details: { evaluation },
+    });
+  }
+}
+
 async function recomputeChecklistCompletionPct(claimId: string) {
   const items = await prisma.claimChecklistItem.findMany({
     where: { claimId },
@@ -517,6 +534,7 @@ export class ClaimsService {
     mustHave(input.title, 'title is required');
     mustHave(input.type, 'type is required');
 
+    await assertSharedClaimCoverage(propertyId, userId, input);
     await assertClaimCoverage(propertyId, input);
 
     if (input.insurancePolicyId || input.warrantyId) {

@@ -123,7 +123,7 @@ export interface RelationalCaptureOption {
 
 export interface RelationalCaptureInputSchema {
   type: 'RELATIONAL_SELECT_CREATE';
-  entityType: 'INVENTORY_ITEM' | 'INSURANCE_POLICY';
+  entityType: 'INVENTORY_ITEM' | 'INSURANCE_POLICY' | 'WARRANTY';
   selectLabel: string;
   createLabel: string;
   options: RelationalCaptureOption[];
@@ -150,7 +150,7 @@ export interface ContextCaptureDefinition {
   /** Backend-only mapping. It is removed from evaluator/API responses. */
   answerBindings?: Record<string, string>;
   /** Backend-only allowlisted relational command. */
-  relationalAdapterKey?: 'INVENTORY_ITEM' | 'INSURANCE_POLICY';
+  relationalAdapterKey?: 'INVENTORY_ITEM' | 'INSURANCE_POLICY' | 'WARRANTY';
 }
 
 export interface EvaluatedContextRequirement {

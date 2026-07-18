@@ -18,6 +18,7 @@ export interface FactRequirementDefinition {
   captureKey: string;
   /** Collection facts below this size are treated as missing for this operation. */
   minimumItems?: number;
+  collectionPredicate?: 'ACTIVE_DATE_RANGE';
 }
 
 export interface FeatureContextRequirementDefinition {
@@ -33,6 +34,44 @@ export interface FeatureContextRequirementDefinition {
 
 export const FEATURE_CONTEXT_REQUIREMENTS: readonly FeatureContextRequirementDefinition[] = [
   {
+    featureKey: 'CLAIMS',
+    operationKey: 'FILE_INSURANCE_CLAIM',
+    policyVersion: '1.0',
+    promptStrategy: 'MINIMUM_PATH',
+    required: [
+      {
+        factKey: 'coverage.insurancePolicies',
+        classification: 'REQUIRED_APPLICABILITY',
+        reasonCode: 'SELECT_ACTIVE_INSURANCE_POLICY',
+        priority: 1,
+        acceptableStates: ['KNOWN'],
+        captureKey: 'INSURANCE_POLICY_SELECT_OR_CREATE',
+        minimumItems: 1,
+        collectionPredicate: 'ACTIVE_DATE_RANGE',
+      },
+    ],
+    enhancements: [],
+  },
+  {
+    featureKey: 'CLAIMS',
+    operationKey: 'FILE_WARRANTY_CLAIM',
+    policyVersion: '1.0',
+    promptStrategy: 'MINIMUM_PATH',
+    required: [
+      {
+        factKey: 'coverage.warranties',
+        classification: 'REQUIRED_APPLICABILITY',
+        reasonCode: 'SELECT_ACTIVE_WARRANTY',
+        priority: 1,
+        acceptableStates: ['KNOWN'],
+        captureKey: 'WARRANTY_SELECT_OR_CREATE',
+        minimumItems: 1,
+        collectionPredicate: 'ACTIVE_DATE_RANGE',
+      },
+    ],
+    enhancements: [],
+  },
+  {
     featureKey: 'COVERAGE_INTELLIGENCE',
     operationKey: 'ASSESS_PROPERTY_COVERAGE',
     policyVersion: '1.0',
@@ -47,6 +86,7 @@ export const FEATURE_CONTEXT_REQUIREMENTS: readonly FeatureContextRequirementDef
         acceptableStates: ['KNOWN'],
         captureKey: 'INSURANCE_POLICY_SELECT_OR_CREATE',
         minimumItems: 1,
+        collectionPredicate: 'ACTIVE_DATE_RANGE',
       },
     ],
   },

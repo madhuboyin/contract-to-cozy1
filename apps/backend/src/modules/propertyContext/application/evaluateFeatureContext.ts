@@ -35,7 +35,19 @@ function conditionMatches(condition: DeclarativeCondition | undefined, context: 
 function requirementState(requirement: FactRequirementDefinition, fact?: PropertyFact): PropertyFact['state'] {
   if (!fact) return 'UNKNOWN';
   if (fact.state !== 'KNOWN') return fact.state;
-  if (requirement.minimumItems !== undefined && (!Array.isArray(fact.value) || fact.value.length < requirement.minimumItems)) return 'UNKNOWN';
+  let collectionValue = fact.value;
+  if (requirement.collectionPredicate === 'ACTIVE_DATE_RANGE' && Array.isArray(collectionValue)) {
+    const now = Date.now();
+    collectionValue = collectionValue.filter((item) => {
+      if (!item || typeof item !== 'object') return false;
+      const { startDate, expiryDate } = item as { startDate?: unknown; expiryDate?: unknown };
+      if (typeof startDate !== 'string' || typeof expiryDate !== 'string') return false;
+      const start = new Date(startDate).getTime();
+      const expiry = new Date(expiryDate).getTime();
+      return Number.isFinite(start) && Number.isFinite(expiry) && start <= now && expiry >= now;
+    });
+  }
+  if (requirement.minimumItems !== undefined && (!Array.isArray(collectionValue) || collectionValue.length < requirement.minimumItems)) return 'UNKNOWN';
   if (requirement.acceptableStates.includes('VERIFIED') && !fact.verified) return 'UNKNOWN';
   if (requirement.acceptableStates.includes('FRESH') && fact.validUntil && new Date(fact.validUntil) <= new Date()) return 'STALE';
   return 'KNOWN';
