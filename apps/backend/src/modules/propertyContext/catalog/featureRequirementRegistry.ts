@@ -19,6 +19,11 @@ export interface FactRequirementDefinition {
   /** Collection facts below this size are treated as missing for this operation. */
   minimumItems?: number;
   collectionPredicate?: 'ACTIVE_DATE_RANGE';
+  operationInputWhen?: {
+    key: string;
+    operator: 'EQUALS' | 'IN';
+    value: string | number | boolean | Array<string | number | boolean>;
+  };
 }
 
 export interface FeatureContextRequirementDefinition {
@@ -33,6 +38,50 @@ export interface FeatureContextRequirementDefinition {
 }
 
 export const FEATURE_CONTEXT_REQUIREMENTS: readonly FeatureContextRequirementDefinition[] = [
+  {
+    featureKey: 'PROJECTS',
+    operationKey: 'CREATE_PROJECT',
+    policyVersion: '1.0',
+    promptStrategy: 'MINIMUM_PATH',
+    required: [
+      {
+        factKey: 'responsibility.roof', classification: 'REQUIRED_APPLICABILITY',
+        reasonCode: 'CONFIRM_ROOF_WORK_RESPONSIBILITY', priority: 10, acceptableStates: ['KNOWN'], captureKey: 'RESPONSIBILITY_ROOF',
+        operationInputWhen: { key: 'projectType', operator: 'IN', value: ['ROOF_REPLACEMENT', 'SOLAR_INSTALLATION'] },
+      },
+      {
+        factKey: 'responsibility.hvac', classification: 'REQUIRED_APPLICABILITY',
+        reasonCode: 'CONFIRM_HVAC_WORK_RESPONSIBILITY', priority: 10, acceptableStates: ['KNOWN'], captureKey: 'RESPONSIBILITY_HVAC',
+        operationInputWhen: { key: 'projectType', operator: 'IN', value: ['HVAC_REPLACEMENT', 'HVAC_REPAIR'] },
+      },
+      {
+        factKey: 'responsibility.plumbing', classification: 'REQUIRED_APPLICABILITY',
+        reasonCode: 'CONFIRM_PLUMBING_WORK_RESPONSIBILITY', priority: 10, acceptableStates: ['KNOWN'], captureKey: 'RESPONSIBILITY_PLUMBING',
+        operationInputWhen: { key: 'projectType', operator: 'IN', value: ['KITCHEN_REMODEL', 'BATHROOM_REMODEL', 'PLUMBING_REPIPING', 'WATER_HEATER', 'SEWER_LINE'] },
+      },
+      {
+        factKey: 'responsibility.sharedSystems', classification: 'REQUIRED_APPLICABILITY',
+        reasonCode: 'CONFIRM_SHARED_SYSTEM_WORK_RESPONSIBILITY', priority: 20, acceptableStates: ['KNOWN'], captureKey: 'RESPONSIBILITY_SHARED_SYSTEMS',
+        operationInputWhen: { key: 'projectType', operator: 'IN', value: ['KITCHEN_REMODEL', 'BATHROOM_REMODEL', 'ELECTRICAL_PANEL', 'FOUNDATION_WORK', 'FLOORING', 'PAINTING_INTERIOR', 'ADDITION', 'GENERAL_REPAIR'] },
+      },
+      {
+        factKey: 'responsibility.buildingExterior', classification: 'REQUIRED_APPLICABILITY',
+        reasonCode: 'CONFIRM_EXTERIOR_WORK_RESPONSIBILITY', priority: 20, acceptableStates: ['KNOWN'], captureKey: 'RESPONSIBILITY_BUILDING_EXTERIOR',
+        operationInputWhen: { key: 'projectType', operator: 'IN', value: ['WINDOW_REPLACEMENT', 'PAINTING_EXTERIOR', 'ADDITION'] },
+      },
+      {
+        factKey: 'responsibility.deckPatioBalcony', classification: 'REQUIRED_APPLICABILITY',
+        reasonCode: 'CONFIRM_DECK_PATIO_WORK_RESPONSIBILITY', priority: 10, acceptableStates: ['KNOWN'], captureKey: 'RESPONSIBILITY_DECK_PATIO_BALCONY',
+        operationInputWhen: { key: 'projectType', operator: 'EQUALS', value: 'DECK_PATIO' },
+      },
+      {
+        factKey: 'responsibility.landscaping', classification: 'REQUIRED_APPLICABILITY',
+        reasonCode: 'CONFIRM_LANDSCAPING_WORK_RESPONSIBILITY', priority: 10, acceptableStates: ['KNOWN'], captureKey: 'RESPONSIBILITY_LANDSCAPING',
+        operationInputWhen: { key: 'projectType', operator: 'EQUALS', value: 'LANDSCAPING_MAJOR' },
+      },
+    ],
+    enhancements: [],
+  },
   {
     featureKey: 'CLAIMS',
     operationKey: 'FILE_INSURANCE_CLAIM',

@@ -1362,6 +1362,7 @@ class APIClient {
       captureKey: string;
       featureKey: string;
       operationKey: string;
+      operationInput?: Record<string, unknown>;
       expectedContextVersion: string;
       idempotencyKey: string;
       answer: Record<string, unknown>;

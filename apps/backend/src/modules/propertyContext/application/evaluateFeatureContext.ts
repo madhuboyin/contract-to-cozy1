@@ -32,6 +32,16 @@ function conditionMatches(condition: DeclarativeCondition | undefined, context: 
   return condition.operator === 'EQUALS' ? fact.value === condition.value : fact.value !== condition.value;
 }
 
+function operationInputMatches(
+  condition: FactRequirementDefinition['operationInputWhen'],
+  operationInput: Record<string, unknown> | undefined,
+): boolean {
+  if (!condition) return true;
+  const actual = operationInput?.[condition.key];
+  if (condition.operator === 'EQUALS') return actual === condition.value;
+  return Array.isArray(condition.value) && condition.value.includes(actual as never);
+}
+
 function requirementState(requirement: FactRequirementDefinition, fact?: PropertyFact): PropertyFact['state'] {
   if (!fact) return 'UNKNOWN';
   if (fact.state !== 'KNOWN') return fact.state;
@@ -57,8 +67,10 @@ async function evaluateRequirement(
   contractKey: string,
   requirement: FactRequirementDefinition,
   context: PropertyContextSnapshot,
+  operationInput?: Record<string, unknown>,
 ): Promise<EvaluatedContextRequirement | null> {
   if (!conditionMatches(requirement.when, context)) return null;
+  if (!operationInputMatches(requirement.operationInputWhen, operationInput)) return null;
   const state = requirementState(requirement, context.facts[requirement.factKey]);
   if (state === 'KNOWN') return null;
   const definition = getCaptureDefinition(requirement.captureKey);
@@ -72,7 +84,7 @@ async function evaluateRequirement(
     ? { ...publicDefinition, inputSchema: await resolveRelationalCaptureSchema(context.propertyId, definition) }
     : publicDefinition;
   const requirementId = createHash('sha256')
-    .update(`${contractKey}:${requirement.factKey}:${requirement.captureKey}`)
+    .update(`${contractKey}:${requirement.factKey}:${requirement.captureKey}:${JSON.stringify(inputForRequirementId(operationInput))}`)
     .digest('hex')
     .slice(0, 24);
   return {
@@ -91,6 +103,10 @@ async function evaluateRequirement(
         ? null
         : { value: context.facts[requirement.factKey]?.value ?? null },
   };
+}
+
+function inputForRequirementId(operationInput: Record<string, unknown> | undefined): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(operationInput ?? {}).sort(([left], [right]) => left.localeCompare(right)));
 }
 
 export async function evaluateFeatureContext(
@@ -112,11 +128,11 @@ export async function evaluateFeatureContext(
   const contractKey = `${contract.featureKey}:${contract.operationKey}:${contract.policyVersion}`;
   const required = (await Promise.all(contract.required
     .sort((left, right) => left.priority - right.priority)
-    .map((requirement) => evaluateRequirement(contractKey, requirement, context))))
+    .map((requirement) => evaluateRequirement(contractKey, requirement, context, input.operationInput))))
     .filter((value): value is EvaluatedContextRequirement => Boolean(value));
   const enhancements = (await Promise.all(contract.enhancements
     .sort((left, right) => left.priority - right.priority)
-    .map((requirement) => evaluateRequirement(contractKey, requirement, context))))
+    .map((requirement) => evaluateRequirement(contractKey, requirement, context, input.operationInput))))
     .filter((value): value is EvaluatedContextRequirement => Boolean(value));
   const canWrite = Boolean(access && ROLE_RANK[access.role] >= ROLE_RANK.CONTRIBUTOR);
   const notApplicable = Boolean(contract.notApplicableWhen && conditionMatches(contract.notApplicableWhen, context));

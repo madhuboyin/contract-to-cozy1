@@ -6,6 +6,8 @@ import {
   assertProjectComplianceApplicable,
   getProjectComplianceEnvelope,
 } from '../services/projectCompliance/context';
+import { evaluateFeatureContext } from '../modules/propertyContext/application/evaluateFeatureContext';
+import { APIError } from '../middleware/error.middleware';
 
 // ── Projects ──────────────────────────────────────────────────────────────────
 
@@ -36,6 +38,19 @@ export async function createProject(req: Request, res: Response, next: NextFunct
       serviceCategory: req.body.serviceCategory,
       homeSystemsAffected: req.body.homeSystemsAffected ?? [],
     };
+    const evaluation = await evaluateFeatureContext(req.params.propertyId, req.user!.userId, {
+      featureKey: 'PROJECTS',
+      operationKey: 'CREATE_PROJECT',
+      operationInput: work,
+    });
+    if (!evaluation.canExecute) {
+      throw new APIError(
+        'Complete the required property responsibility before creating this project.',
+        409,
+        'PROPERTY_CONTEXT_INCOMPLETE',
+        { evaluation },
+      );
+    }
     await assertProjectComplianceApplicable(
       req.params.propertyId,
       req.user!.userId,

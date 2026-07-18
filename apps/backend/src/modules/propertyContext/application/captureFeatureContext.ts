@@ -18,6 +18,7 @@ export const captureFeatureContextInputSchema = z.object({
   captureKey: z.string().trim().min(1).max(100).transform((value) => value.toUpperCase()),
   featureKey: z.string().trim().min(1).max(100).transform((value) => value.toUpperCase()),
   operationKey: z.string().trim().min(1).max(100).transform((value) => value.toUpperCase()),
+  operationInput: z.record(z.string(), z.unknown()).optional(),
   expectedContextVersion: z.string().trim().min(1).max(128),
   idempotencyKey: z.string().trim().min(8).max(128),
   answer: z.record(z.string(), z.unknown()),
@@ -128,6 +129,7 @@ export async function captureFeatureContext(propertyId: string, userId: string, 
     requirementId: input.requirementId,
     captureKey: input.captureKey,
     expectedContextVersion: input.expectedContextVersion,
+    operationInput: input.operationInput,
     answer: input.answer,
   });
   const previous = await prisma.propertyContextCaptureReceipt.findUnique({

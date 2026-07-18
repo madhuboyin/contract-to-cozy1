@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
@@ -14,6 +14,7 @@ import {
   MobilePageContainer,
 } from '@/components/mobile/dashboard/MobilePrimitives';
 import { PROJECT_TYPE_OPTIONS, ErrorBanner } from '../ProjectTrackerHelpers';
+import { PropertyContextCapturePanel } from '@/components/property-context/PropertyContextCapturePanel';
 
 export default function NewProjectPage() {
   const params = useParams<{ id: string }>();
@@ -22,6 +23,10 @@ export default function NewProjectPage() {
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [contextInvoked, setContextInvoked] = useState(false);
+  const [contextReady, setContextReady] = useState(false);
+  const [resumeRequested, setResumeRequested] = useState(false);
+  const formRef = useRef<HTMLFormElement>(null);
 
   const [form, setForm] = useState({
     name: '',
@@ -38,6 +43,20 @@ export default function NewProjectPage() {
   const set = (field: string, value: string) =>
     setForm(f => ({ ...f, [field]: value }));
 
+  const operationInput = useMemo(() => ({ projectType: form.projectType }), [form.projectType]);
+
+  useEffect(() => {
+    setContextInvoked(false);
+    setContextReady(false);
+    setResumeRequested(false);
+  }, [form.projectType]);
+
+  useEffect(() => {
+    if (!contextReady || !resumeRequested) return;
+    setResumeRequested(false);
+    formRef.current?.requestSubmit();
+  }, [contextReady, resumeRequested]);
+
   const toInt = (s: string) => {
     const v = parseFloat(s.replace(/[^0-9.]/g, ''));
     return isNaN(v) ? undefined : Math.round(v * 100);
@@ -52,6 +71,11 @@ export default function NewProjectPage() {
     const amtCents = toInt(form.contractAmountCents);
     if (!amtCents || amtCents <= 0) { setError('Enter a valid contract amount'); return; }
     if (!form.startDate) { setError('Start date is required'); return; }
+    if (!contextReady) {
+      setContextInvoked(true);
+      setResumeRequested(true);
+      return;
+    }
 
     setSaving(true);
     try {
@@ -89,7 +113,15 @@ export default function NewProjectPage() {
 
       {error && <ErrorBanner msg={error} />}
 
-      <form onSubmit={handleSubmit} className="space-y-5">
+      {contextInvoked ? <PropertyContextCapturePanel
+        propertyId={propertyId}
+        featureKey="PROJECTS"
+        operationKey="CREATE_PROJECT"
+        operationInput={operationInput}
+        onReady={() => setContextReady(true)}
+      /> : null}
+
+      <form ref={formRef} onSubmit={handleSubmit} className="space-y-5">
         {/* Project basics */}
         <MobileCard className="space-y-4">
           <h2 className="text-sm font-semibold text-slate-700">Project basics</h2>

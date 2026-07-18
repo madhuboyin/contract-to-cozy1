@@ -25,6 +25,7 @@ export function useFeatureContextCapture({
   const [error, setError] = useState<string | null>(null);
   const [suppressedRequirementId, setSuppressedRequirementId] = useState<string | null>(null);
   const readyVersion = useRef<string | null>(null);
+  const operationInputIdentity = JSON.stringify(operationInput ?? {});
 
   const evaluate = useCallback(async () => {
     setLoading(true);
@@ -45,10 +46,13 @@ export function useFeatureContextCapture({
   useEffect(() => { void evaluate(); }, [evaluate]);
 
   useEffect(() => {
-    if (!evaluation?.canExecute || readyVersion.current === evaluation.contextVersion) return;
-    readyVersion.current = evaluation.contextVersion;
+    const readyKey = evaluation
+      ? `${evaluation.featureKey}:${evaluation.operationKey}:${evaluation.policyVersion}:${evaluation.contextVersion}:${operationInputIdentity}`
+      : null;
+    if (!evaluation?.canExecute || !readyKey || readyVersion.current === readyKey) return;
+    readyVersion.current = readyKey;
     void onReady?.(evaluation);
-  }, [evaluation, onReady]);
+  }, [evaluation, onReady, operationInputIdentity]);
 
   const capture = useCallback(async (value: unknown) => {
     const requirement = evaluation?.requirements[0];
@@ -61,6 +65,7 @@ export function useFeatureContextCapture({
         captureKey: requirement.capture.captureKey,
         featureKey,
         operationKey,
+        operationInput,
         expectedContextVersion: evaluation.contextVersion,
         idempotencyKey: crypto.randomUUID(),
         answer: requirement.capture.mode === 'STRUCTURED' || requirement.capture.mode === 'RELATIONAL'
@@ -87,7 +92,7 @@ export function useFeatureContextCapture({
     } finally {
       setSaving(false);
     }
-  }, [evaluation, featureKey, onCaptured, operationKey, propertyId]);
+  }, [evaluation, featureKey, onCaptured, operationInput, operationKey, propertyId]);
 
   return { evaluation, loading, saving, error, capture, reevaluate: evaluate, suppressedRequirementId };
 }
