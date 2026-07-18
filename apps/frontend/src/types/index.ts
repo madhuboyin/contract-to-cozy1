@@ -285,6 +285,7 @@ export type HomeActionFeedDTO = {
     duplicateCount: number;
     suppressedCount: number;
     snoozedCount: number;
+    promotedCount: number;
   };
 };
 

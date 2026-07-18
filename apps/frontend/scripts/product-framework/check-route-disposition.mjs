@@ -7,6 +7,22 @@ import { fileURLToPath } from 'node:url';
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const frontendRoot = path.resolve(scriptDir, '../..');
 const appRoot = path.join(frontendRoot, 'src/app');
+const backendRoot = path.resolve(frontendRoot, '../backend');
+const guidanceTemplateRegistry = path.join(backendRoot, 'src/services/guidanceEngine/guidanceTemplateRegistry.ts');
+
+const PHASE2_CANONICAL_CTA_ROUTES = [
+  '/dashboard',
+  '/dashboard/actions',
+  '/dashboard/properties/[id]',
+  '/dashboard/ask',
+  '/dashboard/profile',
+  '/dashboard/properties/[id]/tools/guidance-overview',
+  '/dashboard/properties/[id]/projects/[projectId]',
+  '/dashboard/properties/[id]/incidents/[incidentId]',
+  '/dashboard/properties/[id]/recalls',
+  '/dashboard/properties/[id]/tools/coverage-intelligence',
+  '/dashboard/properties/[id]/inventory',
+];
 
 export const ROUTE_DISPOSITIONS = [
   'KEEP_PRIMARY',
@@ -163,14 +179,68 @@ export function auditRouteDisposition() {
   return { routes, results, invalid };
 }
 
+function normalizeContractRoute(routePath) {
+  return routePath
+    .split('?')[0]
+    .replace(/\$\{[^}]+\}/g, '[id]')
+    .replace(/:propertyId/g, '[id]')
+    .replace(/:itemId/g, '[itemId]')
+    .replace(/:([A-Za-z][A-Za-z0-9_]*)/g, '[$1]');
+}
+
+function extractGuidanceTemplateRoutes() {
+  const source = fs.readFileSync(guidanceTemplateRegistry, 'utf8');
+  return [...source.matchAll(/routePath:\s*'([^']+)'/g)].map((match) => match[1]);
+}
+
+function walkTypeScript(directory) {
+  const files = [];
+  for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+    const absolute = path.join(directory, entry.name);
+    if (entry.isDirectory()) files.push(...walkTypeScript(absolute));
+    if (entry.isFile() && /\.tsx?$/.test(entry.name)) files.push(absolute);
+  }
+  return files;
+}
+
+function extractNotificationRoutes() {
+  const routes = [];
+  for (const file of walkTypeScript(path.join(backendRoot, 'src'))) {
+    const source = fs.readFileSync(file, 'utf8');
+    for (const match of source.matchAll(/actionUrl:\s*([`'"])(\/dashboard[^`'"]+)\1/g)) {
+      routes.push({ route: match[2], file: path.relative(backendRoot, file) });
+    }
+  }
+  return routes;
+}
+
+function auditPhase2RouteContracts(routes) {
+  const knownRoutes = new Set(routes);
+  const contracts = [
+    ...PHASE2_CANONICAL_CTA_ROUTES.map((route) => ({ source: 'Phase 2 canonical CTA', route })),
+    ...extractGuidanceTemplateRoutes().map((route) => ({ source: 'Guidance template', route })),
+    ...extractNotificationRoutes().map(({ route, file }) => ({ source: `Notification URL (${file})`, route })),
+  ];
+  const invalid = [];
+  for (const contract of contracts) {
+    const normalized = normalizeContractRoute(contract.route);
+    if (!knownRoutes.has(normalized)) invalid.push({ ...contract, normalized });
+  }
+  return { contracts, invalid };
+}
+
 const { routes, results, invalid } = auditRouteDisposition();
-if (invalid.length > 0) {
+const routeContracts = auditPhase2RouteContracts(routes);
+if (invalid.length > 0 || routeContracts.invalid.length > 0) {
   console.error('[product-framework:routes] FAILED');
   for (const result of invalid) {
     const issue = result.matched.length === 0
       ? 'unclassified'
       : `matched multiple rules: ${result.matched.map((rule) => rule.id).join(', ')}`;
     console.error(`- ${result.route}: ${issue}`);
+  }
+  for (const contract of routeContracts.invalid) {
+    console.error(`- ${contract.source} target ${contract.route}: no page matches ${contract.normalized}`);
   }
   process.exit(1);
 }
@@ -181,6 +251,7 @@ for (const result of results) {
 }
 
 console.log(`[product-framework:routes] PASSED — ${routes.length} routes classified`);
+console.log(`- PHASE2_ROUTE_CONTRACTS: ${routeContracts.contracts.length}`);
 for (const disposition of ROUTE_DISPOSITIONS) {
   const count = counts.get(disposition) ?? 0;
   if (count > 0) console.log(`- ${disposition}: ${count}`);

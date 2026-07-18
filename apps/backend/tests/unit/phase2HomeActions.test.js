@@ -118,3 +118,13 @@ test('Phase 2 declares stable shown, opened, acted, resolved, superseded, and ve
   assert.match(service, /eventType: 'HOME_ACTION_ACTED'/);
   assert.match(service, /eventType: 'HOME_ACTION_SUPERSEDED'/);
 });
+
+test('Phase 2 route audit covers canonical CTAs and every guidance template destination', () => {
+  const routeAudit = fs.readFileSync(
+    path.resolve(__dirname, '../../../frontend/scripts/product-framework/check-route-disposition.mjs'),
+    'utf8',
+  );
+  assert.match(routeAudit, /PHASE2_CANONICAL_CTA_ROUTES/);
+  assert.match(routeAudit, /extractGuidanceTemplateRoutes/);
+  assert.match(routeAudit, /PHASE2_ROUTE_CONTRACTS/);
+});

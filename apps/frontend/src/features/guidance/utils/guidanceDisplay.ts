@@ -35,7 +35,7 @@ const FALLBACK_TOOL_ROUTE: Record<string, string> = {
   'inspection-report': '/dashboard/inspection-report?propertyId=:propertyId',
   booking: '/dashboard/providers?propertyId=:propertyId',
   recalls: '/dashboard/properties/:propertyId/recalls',
-  documents: '/dashboard/properties/:propertyId/inventory/coverage',
+  documents: '/dashboard/properties/:propertyId/inventory?filter=missing-coverage',
   'home-event-radar': '/dashboard/properties/:propertyId/tools/home-event-radar',
   incidents: '/dashboard/properties/:propertyId?tab=incidents',
   'do-nothing-simulator': '/dashboard/properties/:propertyId/tools/do-nothing',

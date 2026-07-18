@@ -1,6 +1,6 @@
 # Product Framework Phase 2 — Unified Home and Action System
 
-Status: Increments 1–2 implemented; source promotion and final link/integration hardening remain in progress
+Status: Increments 1–3 implemented; database-backed runtime integration remains pending owner schema application
 
 Contract version: `phase2-v1`
 
@@ -50,17 +50,33 @@ Implemented:
 - Reclassified the full action plan under Plan & Projects and kept specialized tools contextual.
 - Added stable shown, opened, acted, resolved, superseded, and verified action-lineage taxonomy and interaction capture.
 
+## Increment 3 — Source promotion and route-contract hardening
+
+Implemented:
+
+- Promoted active guidance journeys, incidents, recall matches, material coverage analyses, and projects into the canonical property action feed.
+- Kept maintenance and system/risk actions on the existing orchestration adapter and activation actions on the entry-context adapter, so all currently actionable production source families now converge in one feed.
+- Added source-specific evidence, confidence, timing, consequence, CTA, correction, and governance mapping.
+- Preserved conservative escalation and restricted lifecycle controls for critical incidents and recalls.
+- Required verified property jurisdiction context and a professional boundary before regulated coverage actions validate.
+- Applied terminal-event and active-snooze suppression to promoted sources so completed, dismissed, or snoozed actions do not reappear.
+- Added a promoted-source diagnostic count to the shared Home feed contract.
+- Extended the route audit from page classification to 101 canonical CTA, guidance-template, and statically generated notification destination contracts.
+- Replaced dead `/inventory/coverage` guidance destinations with the property inventory coverage filter.
+- Replaced duplicate global inspection-report guidance destinations with the property-scoped inspection hub.
+- Added service-level integration coverage for all five promoted source families and lifecycle suppression.
+
 ## Remaining Phase 2 implementation
 
-### Navigation and route cutover
+### Database-backed runtime acceptance
 
-- Update internal links, notification URLs, analytics route names, tests, and guidance template paths before redirecting duplicate routes.
-- Extend route-contract checks to every canonical CTA and journey step.
+- Apply the Phase 2 `ProductAnalyticsEventType` enum change to the target database. No migration script is included by design.
+- Run authenticated database-backed acceptance against a property containing guidance, incident, recall, coverage, project, maintenance, and activation records.
+- Confirm notification deep links produced by live jobs against the route-contract audit before duplicate-route redirects are enabled.
 
-### Action-system completion
+### Future source eligibility
 
-- Expand adapters beyond the currently active trigger-first, maintenance, and risk sources as each source is promoted into the default feed.
-- Add database-backed integration coverage after the repository owner applies any later Phase 2 schema changes.
+- `PERSONALIZATION` retains a canonical adapter but is not loaded into the default feed until recommendations have explicit review status, evidence, and governance eligibility. This is an intentional safety gate rather than unfinished wiring.
 
 ## Increment 1 acceptance evidence
 
@@ -76,6 +92,7 @@ Implemented:
 ```bash
 npm -C apps/backend run build
 node --test apps/backend/tests/unit/phase2HomeActions.test.js
+node --test apps/backend/tests/unit/phase2SourcePromotion.test.js
 npx tsc --noEmit -p apps/frontend/tsconfig.json
 npm -C apps/frontend run qa:product-framework:routes
 ```

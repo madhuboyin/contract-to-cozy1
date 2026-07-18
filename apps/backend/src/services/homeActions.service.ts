@@ -11,6 +11,7 @@ import {
 import { getOrchestrationSummary } from './orchestration.service';
 import { recordOrchestrationEvent } from './orchestrationEvent.service';
 import { snoozeAction } from './orchestrationSnooze.service';
+import { getPromotedHomeActions } from './homeActionSourcePromotion.service';
 
 export const HOME_ACTION_COMMANDS = [
   'COMPLETE',
@@ -159,7 +160,8 @@ export function rankAndDeduplicateHomeActions(actions: HomeAction[]): RankedHome
 
 export async function getHomeActionFeed(propertyId: string, userId: string) {
   const orchestration = await getOrchestrationSummary(propertyId, userId);
-  const candidates: HomeAction[] = [...orchestration.homeActions];
+  const promoted = await getPromotedHomeActions(propertyId);
+  const candidates: HomeAction[] = [...orchestration.homeActions, ...promoted.actions];
   const entryContext = await getEntryContext(propertyId, userId);
 
   if (entryContext && !entryContext.firstValue.firstActionResolvedAt) {
@@ -202,8 +204,9 @@ export async function getHomeActionFeed(propertyId: string, userId: string) {
       candidateCount: candidates.length,
       surfacedCount: actions.length,
       duplicateCount: candidates.length - actions.length,
-      suppressedCount: orchestration.suppressedActions.length,
-      snoozedCount: orchestration.snoozedActions.length,
+      suppressedCount: orchestration.suppressedActions.length + promoted.diagnostics.suppressedCount,
+      snoozedCount: orchestration.snoozedActions.length + promoted.diagnostics.snoozedCount,
+      promotedCount: promoted.actions.length,
     },
   };
 }
