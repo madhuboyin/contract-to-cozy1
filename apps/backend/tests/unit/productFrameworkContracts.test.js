@@ -10,8 +10,16 @@ const {
   HomeownerEntryContextSchema,
   RecommendationGovernanceSchema,
   evaluateNorthStarAction,
+  aggregateNorthStarMetric,
+  NORTH_STAR_METRIC_DEFINITION,
+  adaptHomeActionSource,
+  HOME_ACTION_SOURCE_ADAPTERS,
+  evaluateRecommendationLaunchReadiness,
 } = require('../../src/productFramework/index.ts');
+const { buildNorthStarAnalyticsEvent } = require('../../src/services/analytics/northStarLineage.ts');
+const { aggregateNorthStarEvents } = require('../../src/services/analytics/northStarMetric.service.ts');
 const { goldenTestHomes, NOW, NEXT_MONTH } = require('../fixtures/productFramework/goldenTestHomes.js');
+const { SOURCE_KINDS, sourceAdapterFixtures } = require('../fixtures/productFramework/sourceAdapterFixtures.js');
 
 test('all seven framework golden homes satisfy entry and action contracts', () => {
   assert.equal(goldenTestHomes.length, 7);
@@ -89,6 +97,7 @@ test('north-star evaluation counts verified completion identified inside the act
     },
     importantReasons: ['MATERIAL_FINANCIAL_CONSEQUENCE'],
     identifiedAt: NOW,
+    surfacedAt: NOW,
     actionWindowClosesAt: NEXT_MONTH,
     resolution: {
       disposition: 'COMPLETED', resolvedAt: NEXT_MONTH, reason: 'Work verified complete',
@@ -98,11 +107,120 @@ test('north-star evaluation counts verified completion identified inside the act
   });
   assert.deepEqual(evaluation, {
     important: true,
+    eligibleForDenominator: true,
     identifiedEarly: true,
     successfullyResolved: true,
     eligibleForNumerator: true,
     reasons: [],
   });
+});
+
+test('every declared production action source has a validating canonical adapter fixture', () => {
+  assert.deepEqual(Object.keys(HOME_ACTION_SOURCE_ADAPTERS).sort(), [...SOURCE_KINDS].sort());
+  for (const fixture of sourceAdapterFixtures) {
+    const action = adaptHomeActionSource(fixture.sourceKind, fixture.input);
+    assert.equal(action.source.kind, fixture.sourceKind);
+    assert.equal(action.source.version, 'phase0-v1');
+    assert.doesNotThrow(() => HomeActionSchema.parse(action));
+  }
+});
+
+test('north-star metric declares owners and aggregates an explicit eligible denominator', () => {
+  const eligibleSuccess = {
+    lineage: {
+      entryId: 'entry-success', triggerId: 'trigger-success', signalId: null, actionId: 'action-success',
+      recommendationVersion: 'v1', journeyId: null, decisionId: null,
+      executionId: 'execution-success', verificationId: 'verification-success', outcomeId: 'outcome-success',
+    },
+    importantReasons: ['REVIEWED_DOMAIN_RULE'],
+    identifiedAt: NOW,
+    surfacedAt: NOW,
+    actionWindowClosesAt: NEXT_MONTH,
+    resolution: {
+      disposition: 'COMPLETED', resolvedAt: NEXT_MONTH, reason: 'Verified',
+      consequenceAcknowledged: true, nextTriggerAt: null, unresolvedSafetyRequirement: false,
+      verificationStatus: 'VERIFIED',
+    },
+  };
+  const excluded = structuredClone(eligibleSuccess);
+  excluded.lineage.actionId = 'action-excluded';
+  excluded.eligibility = { status: 'INELIGIBLE', reason: 'Synthetic QA record' };
+  const surfacedLate = structuredClone(eligibleSuccess);
+  surfacedLate.lineage.actionId = 'action-surfaced-late';
+  surfacedLate.surfacedAt = '2026-09-18T12:00:00.000Z';
+
+  assert.equal(NORTH_STAR_METRIC_DEFINITION.dataOwner, 'Product Analytics');
+  assert.equal(NORTH_STAR_METRIC_DEFINITION.businessOwner, 'Homeowner Product');
+  assert.deepEqual(aggregateNorthStarMetric([eligibleSuccess, excluded, surfacedLate]), {
+    metricId: NORTH_STAR_METRIC_DEFINITION.id,
+    numerator: 1,
+    denominator: 2,
+    percentage: 50,
+    excluded: 1,
+  });
+});
+
+test('typed runtime lineage enforces stage requirements and produces analytics metadata', () => {
+  const base = {
+    propertyId: '11111111-1111-4111-8111-111111111111',
+    userId: '22222222-2222-4222-8222-222222222222',
+    source: 'contract_test',
+    entryId: 'entry-1',
+    triggerId: 'trigger-1',
+    actionId: 'action-1',
+    recommendationVersion: 'phase0-v1',
+  };
+  const event = buildNorthStarAnalyticsEvent({ ...base, eventType: 'HOME_ACTION_SURFACED' });
+  assert.equal(event.eventType, 'HOME_ACTION_SURFACED');
+  assert.equal(event.metadataJson.lineageStage, 4);
+  assert.equal(event.metadataJson.actionId, 'action-1');
+  assert.throws(
+    () => buildNorthStarAnalyticsEvent({ ...base, eventType: 'HOME_ACTION_OUTCOME_VERIFIED' }),
+    /verificationId|outcomeId|verificationStatus/,
+  );
+});
+
+test('event-backed north-star reporting joins identified, surfaced, and verified lineage', () => {
+  const propertyId = '11111111-1111-4111-8111-111111111111';
+  const metadata = {
+    actionId: 'action-1',
+    recommendationVersion: 'phase0-v1',
+    importantReasons: ['MATERIAL_FINANCIAL_CONSEQUENCE'],
+    actionWindowClosesAt: NEXT_MONTH,
+  };
+  const rows = [
+    { eventType: 'HOME_ACTION_IDENTIFIED', propertyId, occurredAt: new Date(NOW), metadataJson: metadata },
+    { eventType: 'HOME_ACTION_SURFACED', propertyId, occurredAt: new Date(NOW), metadataJson: metadata },
+    {
+      eventType: 'HOME_ACTION_OUTCOME_VERIFIED', propertyId, occurredAt: new Date(NEXT_MONTH),
+      metadataJson: { ...metadata, verificationStatus: 'VERIFIED' },
+    },
+  ];
+  const report = aggregateNorthStarEvents(
+    rows,
+    new Date('2026-07-01T00:00:00.000Z'),
+    new Date('2026-09-01T00:00:00.000Z'),
+  );
+  assert.equal(report.numerator, 1);
+  assert.equal(report.denominator, 1);
+  assert.equal(report.percentage, 100);
+  assert.equal(report.dataOwner, 'Product Analytics');
+});
+
+test('launch gate requires tier-specific and commercial approvals for the active policy version', () => {
+  const governance = structuredClone(goldenTestHomes.find((item) => item.id === 'contractor-quote').action.governance);
+  const blocked = evaluateRecommendationLaunchReadiness(governance, []);
+  assert.equal(blocked.ready, false);
+  assert.deepEqual(blocked.missingRoles, ['PRODUCT', 'DOMAIN', 'TRUST', 'COMMERCIAL_INTEGRITY']);
+
+  const approvals = blocked.requiredRoles.map((role) => ({
+    role,
+    reviewerId: `reviewer-${role.toLowerCase()}`,
+    approvedAt: NOW,
+    policyVersion: governance.policyVersion,
+    notes: null,
+  }));
+  assert.equal(evaluateRecommendationLaunchReadiness(governance, approvals).ready, true);
 });
 
 test('unsafe deferment does not count as a successful resolution', () => {
@@ -114,6 +232,7 @@ test('unsafe deferment does not count as a successful resolution', () => {
     },
     importantReasons: ['SAFETY_OR_ACTIVE_DAMAGE'],
     identifiedAt: NOW,
+    surfacedAt: NOW,
     actionWindowClosesAt: NEXT_MONTH,
     resolution: {
       disposition: 'INTENTIONALLY_DEFERRED', resolvedAt: NOW, reason: 'Wait until later',

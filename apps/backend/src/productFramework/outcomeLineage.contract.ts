@@ -25,6 +25,18 @@ export const ACTION_RESOLUTION_DISPOSITIONS = [
   'SAFE_ESCALATION',
 ] as const;
 
+export const NORTH_STAR_METRIC_DEFINITION = {
+  id: 'important-home-actions-identified-early-and-resolved',
+  version: 'phase0-v1',
+  name: 'Important home actions identified early and completed successfully',
+  dataOwner: 'Product Analytics',
+  businessOwner: 'Homeowner Product',
+  reviewCadence: 'MONTHLY',
+  numerator: 'Eligible important actions identified by the action-window close and successfully resolved.',
+  denominator: 'All important actions eligible for measurement in the reporting cohort.',
+  timing: 'The cohort is set by identifiedAt; surfacedAt must be on or before actionWindowClosesAt, and verified resolution is credited by the reporting as-of cutoff.',
+} as const;
+
 export const OutcomeLineageSchema = z.object({
   entryId: z.string().trim().min(1).max(160),
   triggerId: z.string().trim().min(1).max(160),
@@ -41,7 +53,12 @@ export const OutcomeLineageSchema = z.object({
 export const NorthStarActionRecordSchema = z.object({
   lineage: OutcomeLineageSchema,
   importantReasons: z.array(z.enum(IMPORTANT_ACTION_REASONS)).min(1),
+  eligibility: z.object({
+    status: z.enum(['ELIGIBLE', 'INELIGIBLE']),
+    reason: z.string().trim().min(1).max(500).nullable(),
+  }).default({ status: 'ELIGIBLE', reason: null }),
   identifiedAt: z.string().datetime(),
+  surfacedAt: z.string().datetime(),
   actionWindowClosesAt: z.string().datetime().nullable(),
   resolution: z.object({
     disposition: z.enum(ACTION_RESOLUTION_DISPOSITIONS),
@@ -59,6 +76,7 @@ export type NorthStarActionRecord = z.infer<typeof NorthStarActionRecordSchema>;
 
 export type NorthStarEvaluation = {
   important: boolean;
+  eligibleForDenominator: boolean;
   identifiedEarly: boolean;
   successfullyResolved: boolean;
   eligibleForNumerator: boolean;
@@ -69,8 +87,9 @@ export function evaluateNorthStarAction(input: unknown): NorthStarEvaluation {
   const record = NorthStarActionRecordSchema.parse(input);
   const reasons: string[] = [];
   const important = record.importantReasons.length > 0;
+  const eligibleForDenominator = important && record.eligibility.status === 'ELIGIBLE';
   const identifiedEarly = record.actionWindowClosesAt == null ||
-    new Date(record.identifiedAt).getTime() <= new Date(record.actionWindowClosesAt).getTime();
+    new Date(record.surfacedAt).getTime() <= new Date(record.actionWindowClosesAt).getTime();
 
   if (!identifiedEarly) reasons.push('ACTION_IDENTIFIED_AFTER_WINDOW_CLOSED');
 
@@ -99,9 +118,31 @@ export function evaluateNorthStarAction(input: unknown): NorthStarEvaluation {
 
   return {
     important,
+    eligibleForDenominator,
     identifiedEarly,
     successfullyResolved,
-    eligibleForNumerator: important && identifiedEarly && successfullyResolved,
+    eligibleForNumerator: eligibleForDenominator && identifiedEarly && successfullyResolved,
     reasons,
+  };
+}
+
+export type NorthStarMetricAggregate = {
+  metricId: typeof NORTH_STAR_METRIC_DEFINITION.id;
+  numerator: number;
+  denominator: number;
+  percentage: number | null;
+  excluded: number;
+};
+
+export function aggregateNorthStarMetric(inputs: unknown[]): NorthStarMetricAggregate {
+  const evaluations = inputs.map(evaluateNorthStarAction);
+  const numerator = evaluations.filter((item) => item.eligibleForNumerator).length;
+  const denominator = evaluations.filter((item) => item.eligibleForDenominator).length;
+  return {
+    metricId: NORTH_STAR_METRIC_DEFINITION.id,
+    numerator,
+    denominator,
+    percentage: denominator === 0 ? null : Number(((numerator / denominator) * 100).toFixed(2)),
+    excluded: evaluations.length - denominator,
   };
 }

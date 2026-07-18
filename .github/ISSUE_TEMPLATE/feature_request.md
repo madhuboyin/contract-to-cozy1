@@ -42,6 +42,13 @@ assignees: ''
 ## Success and guardrail metrics
 <!-- Outcome, completion, usefulness, trust, failure, complaint, reversal, and noise measures. -->
 
+- Business owner:
+- Data owner:
+- North-star eligibility and action window:
+
+## Required approvals
+<!-- Product is always required. Add Domain, Trust, Legal/Compliance, and Commercial Integrity according to the Phase 0 launch gate. -->
+
 ## Proposed Solution
 <!-- Your proposed solution -->
 

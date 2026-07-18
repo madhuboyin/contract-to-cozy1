@@ -19,6 +19,8 @@
 - [ ] Recommendation safety tier and required escalation/professional boundaries are covered
 - [ ] Commercial relationships, ranking influence, and non-commercial alternatives are disclosed
 - [ ] Signal-to-action-to-outcome analytics lineage is covered
+- [ ] Required policy-version-specific approval records are attached, or this change cannot launch a recommendation
+- [ ] North-star eligibility and action-window behavior are declared where applicable
 - [ ] Existing surfaces were reused, merged, or removed before adding a destination
 - [ ] Not applicable — explain below
 

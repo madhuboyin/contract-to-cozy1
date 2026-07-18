@@ -21,6 +21,7 @@ require.cache[controllerModulePath] = {
       addToMaintenance: () => {},
       removeFromMaintenance: () => {},
       dismissTask: () => {},
+      restoreTask: () => {},
       snoozeTask: () => {},
     },
   },

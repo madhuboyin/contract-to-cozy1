@@ -2,6 +2,8 @@
 
 No material homeowner recommendation should launch until every applicable gate passes.
 
+The executable gate is `evaluateRecommendationLaunchReadiness` in `apps/backend/src/productFramework/recommendationLaunchGate.ts`. Approval records are policy-version-specific and must identify the reviewer, role, timestamp, and optional notes.
+
 ## Outcome and action
 
 - [ ] A named homeowner outcome and accountable owner exist.
@@ -25,6 +27,16 @@ No material homeowner recommendation should launch until every applicable gate p
 - [ ] Regulated/coverage guidance includes a verified jurisdiction check and professional boundary.
 - [ ] Safety/emergency guidance includes conservative fallback and immediate escalation.
 - [ ] Domain review is recorded where required.
+
+Required approval roles:
+
+| Tier or condition | Required roles |
+| --- | --- |
+| Low consequence | `PRODUCT` |
+| Material financial | `PRODUCT`, `DOMAIN`, `TRUST` |
+| Regulated / coverage | `PRODUCT`, `DOMAIN`, `TRUST`, `LEGAL_COMPLIANCE` |
+| Safety / emergency | `PRODUCT`, `DOMAIN`, `TRUST`, `LEGAL_COMPLIANCE` |
+| Any commercial action | Add `COMMERCIAL_INTEGRITY` |
 
 ## Commercial integrity
 

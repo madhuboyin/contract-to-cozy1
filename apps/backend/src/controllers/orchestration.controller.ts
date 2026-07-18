@@ -25,7 +25,13 @@ import { createCompletion } from '../services/orchestrationCompletion.service';
 import { PropertyMaintenanceTaskService } from '../services/PropertyMaintenanceTask.service';
 import { completionCreateSchema } from '../validators/orchestrationCompletion.validator';
 import { logger } from '../lib/logger';
-import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
+import {
+  analyticsEmitter,
+  AnalyticsEvent,
+  AnalyticsModule,
+  AnalyticsFeature,
+  emitNorthStarLineageEvent,
+} from '../services/analytics';
 
 /**
  * GET /api/orchestration/:propertyId/summary
@@ -83,6 +89,20 @@ export async function markOrchestrationActionCompleted(
       userId,
     });
   }
+
+  emitNorthStarLineageEvent({
+    eventType: 'HOME_ACTION_RESOLUTION_RECORDED',
+    propertyId: routePropertyId,
+    userId,
+    source: 'orchestration_completion',
+    entryId: `legacy-entry:${routePropertyId}`,
+    triggerId: `trigger:orchestration:${actionKey}`,
+    actionId: actionKey,
+    recommendationVersion: 'phase0-v1',
+    executionId: event.id,
+    resolutionDisposition: 'COMPLETED',
+    verificationStatus: completion ? 'PENDING' : null,
+  });
 
   // Sync completion to linked PropertyMaintenanceTask (triggers seasonal checklist sync)
   try {

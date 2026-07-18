@@ -112,7 +112,10 @@ function friendlySignalSummary(signalKey: string): string | null {
 
 export function timelineEntryFromSignal(signal: SignalDTO): TimelineProjectionEntry {
   const payload = toRecord(signal.valueJson);
-  const summary = friendlySignalSummary(signal.signalKey);
+  const baseSummary = friendlySignalSummary(signal.signalKey);
+  const summary = signal.isStale || signal.freshnessState === 'STALE'
+    ? `${baseSummary ?? 'This signal'} This signal is stale and should be refreshed before it informs a decision.`
+    : baseSummary;
 
   return {
     id: `signal:${signal.id}`,

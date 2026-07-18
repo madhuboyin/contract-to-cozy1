@@ -11,6 +11,8 @@ require.cache[controllerModulePath] = {
   exports: {
     listProperties: () => {},
     lookupProperty: () => {},
+    autocompleteAddresses: () => {},
+    getAddressDetails: () => {},
     getPropertyResolutions: () => {},
     getPropertyResolutionCenter: () => {},
     createProperty: () => {},

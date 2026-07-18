@@ -46,3 +46,16 @@ export { ProductAnalyticsService } from './service';
 
 // Emitter — fire-and-forget helpers for use in product feature modules
 export { analyticsEmitter, emitProductEvent } from './emitter';
+
+// Framework north-star lineage — typed lifecycle events and safe runtime emission
+export {
+  NorthStarLineageEventInputSchema,
+  buildNorthStarAnalyticsEvent,
+  trackNorthStarLineageEvent,
+  emitNorthStarLineageEvent,
+  emitHomeActionsSurfaced,
+} from './northStarLineage';
+export type { NorthStarLineageEventInput } from './northStarLineage';
+
+export { aggregateNorthStarEvents, getNorthStarMetricReport } from './northStarMetric.service';
+export type { NorthStarMetricReport } from './northStarMetric.service';

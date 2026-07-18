@@ -1,6 +1,6 @@
 # Product Framework Phase 0 — Contract and Governance Foundation
 
-Status: Implemented
+Status: Technical exit criteria complete; owner-managed database application and human policy approvals remain operational release gates
 
 Contract version: `phase0-v1`
 
@@ -17,13 +17,24 @@ This phase does not implement the Phase 1 onboarding experience, unified Home AP
 | Phase 0 commitment | Implementation |
 | --- | --- |
 | Canonical Home Action contract | `apps/backend/src/productFramework/homeAction.contract.ts` |
+| Source adapter registry | `apps/backend/src/productFramework/homeActionSourceAdapters.ts`, with a validating fixture for every declared source kind |
 | Entry path, ownership state, property origin, and trigger taxonomy | `apps/backend/src/productFramework/entryContext.contract.ts` |
 | Recommendation safety tiers and commercial disclosure | `apps/backend/src/productFramework/recommendationGovernance.contract.ts` |
-| North-star definition and signal-to-outcome lineage | `apps/backend/src/productFramework/outcomeLineage.contract.ts` and typed Prisma analytics events |
+| North-star definition and signal-to-outcome lineage | `apps/backend/src/productFramework/outcomeLineage.contract.ts`, typed runtime producers in `apps/backend/src/services/analytics/northStarLineage.ts`, and event-backed aggregation in `northStarMetric.service.ts` |
 | Route disposition | `apps/frontend/scripts/product-framework/check-route-disposition.mjs` and [route-disposition.md](./route-disposition.md) |
 | Golden test homes | `apps/backend/tests/fixtures/productFramework/goldenTestHomes.js` |
 | Contract validation | `apps/backend/tests/unit/productFrameworkContracts.test.js` |
-| Feature and launch governance | [feature-brief-template.md](./feature-brief-template.md), [recommendation-launch-gate.md](./recommendation-launch-gate.md), and GitHub templates |
+| Feature and launch governance | Executable role-based launch gate, [feature-brief-template.md](./feature-brief-template.md), [recommendation-launch-gate.md](./recommendation-launch-gate.md), [approval-register.md](./approval-register.md), and GitHub templates |
+
+## Exit-criteria evidence
+
+| Exit criterion | Status and evidence |
+| --- | --- |
+| Contract fixtures pass for every declared action source | Complete. Eight source adapters and fixtures cover Guidance, Maintenance, Incident, Recall, Coverage, Personalization, Project, and System. |
+| Every homeowner route has a disposition | Complete. The executable route audit fails on an unclassified or ambiguous `page.tsx`. |
+| Metric defines numerator, denominator, eligibility, timing, and owners | Complete. The contract and event-backed report name Product Analytics as data owner and Homeowner Product as business owner. |
+| Safety-tier review is enforced | Technically complete. Launch readiness fails when required approval records are missing or from another policy version. Human approvals remain intentionally pending in the approval register. |
+| New feature governance is mandatory | Complete as a repository process gate through the feature brief, recommendation launch gate, issue template, and pull-request checklist. |
 
 ## Approved product contracts
 
@@ -120,6 +131,10 @@ The corresponding typed analytics events are:
 5. `HOME_ACTION_RESOLUTION_RECORDED`
 6. `HOME_ACTION_OUTCOME_VERIFIED`
 
+Orchestration now adapts its risk and checklist results into canonical `HomeAction` records. Important actions emit deduplicated entry, trigger, identified, and surfaced events. Completion emits a resolution event. Verification remains a distinct event and is never inferred merely from clicking complete.
+
+The metric denominator is every important action explicitly eligible for measurement in the identified-action cohort. The numerator is the subset surfaced by the action-window close and subsequently verified as resolved. Synthetic QA, administrative, or otherwise excluded records must carry `metricEligibility: INELIGIBLE` in event metadata.
+
 ## Pre-user database policy
 
 The Prisma event enum was updated because typed north-star events are a Phase 0 contract requirement. No migration script was created.
@@ -142,8 +157,8 @@ npx tsc --noEmit -p apps/frontend/tsconfig.json
 ## Phase 1 prerequisites now unblocked
 
 - persist the approved entry context;
-- adapt existing action sources into the Home Action contract;
-- emit the new lineage events;
+- replace orchestration's explicit legacy entry identity with persisted entry context;
+- adopt the approved source adapters on Phase 1 and Phase 2 surfaces as those surfaces cut over;
 - build trigger-first onboarding;
 - deliver evidence-bounded first value; and
 - begin the unified Home read model.

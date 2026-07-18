@@ -40,9 +40,10 @@ import {
 // PHASE 2.3 INTEGRATION
 import { createTaskFromActionCenter } from './orchestrationIntegration.service';
 import { logger } from '../lib/logger';
-import { analyticsEmitter, AnalyticsModule } from './analytics';
+import { analyticsEmitter, AnalyticsModule, emitHomeActionsSurfaced } from './analytics';
 import { getAggregationContextEnvelope } from './aggregationContext/context';
 import { aggregationLifecycleIdentity } from './aggregationContext/lifecycle';
+import { adaptHomeActionSource, type HomeAction } from '../productFramework';
 
 
 type DerivedFrom = {
@@ -235,6 +236,7 @@ export type OrchestrationSummary = {
   derivedFrom: DerivedFrom;
 
   actions: OrchestratedAction[];
+  homeActions: HomeAction[];
   suppressedActions: OrchestratedAction[];
   snoozedActions: OrchestratedAction[];
 
@@ -304,6 +306,102 @@ export type OrchestrationSummary = {
   } | null;
   aggregationContext?: Awaited<ReturnType<typeof getAggregationContextEnvelope>> | null;
 };
+
+export function adaptOrchestratedActionToHomeAction(
+  action: OrchestratedAction,
+  evaluatedAt = new Date(),
+): HomeAction {
+  const critical = normalizeUpper(action.riskLevel) === 'CRITICAL';
+  const sourceKind = action.source === 'CHECKLIST' ? 'MAINTENANCE' : 'SYSTEM';
+  const dueAt = action.nextDueDate?.toISOString() ?? null;
+  const observedAt = action.createdAt?.toISOString() ?? evaluatedAt.toISOString();
+  const confidenceScore = action.confidence?.score ?? null;
+
+  return adaptHomeActionSource(sourceKind, {
+    id: action.actionKey,
+    propertyId: action.propertyId,
+    lineageId: action.actionKey,
+    sourceEntityId: action.checklistItemId ?? action.orchestrationActionId ?? action.id,
+    sourceVersion: 'phase0-v1',
+    job: critical ? 'MAJOR_MOMENT' : undefined,
+    state: action.snooze ? 'SNOOZED' : 'OPEN',
+    priority: critical || action.overdue ? 'NOW' : action.priority >= 70 ? 'SOON' : 'PLAN',
+    signal: action.description ?? action.title,
+    whyItMatters: critical
+      ? 'The current risk assessment marks this condition critical and requiring prompt review.'
+      : 'This open home action is supported by current maintenance or risk context.',
+    recommendedAction: action.cta?.label ?? `Review ${action.title}`,
+    expectedOutcome: critical
+      ? 'Escalate the condition safely and confirm the appropriate professional response.'
+      : 'Resolve or deliberately schedule the action with its supporting context preserved.',
+    timing: {
+      dueAt,
+      windowStart: observedAt,
+      windowEnd: dueAt,
+      rationale: action.overdue
+        ? 'The recorded action window has passed.'
+        : dueAt
+          ? 'The current source record provides this due date.'
+          : 'No reliable due date is available; review the source evidence before scheduling.',
+    },
+    evidence: [{
+      id: `orchestration:${action.actionKey}`,
+      type: 'SYSTEM_DERIVATION',
+      label: action.title,
+      source: action.source === 'CHECKLIST' ? 'Seasonal or maintenance checklist' : 'Risk assessment',
+      observedAt,
+      freshness: action.confidence?.level === 'LOW' ? 'UNKNOWN' : 'CURRENT',
+      confidence: confidenceScore,
+    }],
+    assumptions: [],
+    options: [],
+    tradeoffs: [],
+    confidence: {
+      score: confidenceScore,
+      label: action.confidence?.level ?? 'MEDIUM',
+      missing: action.cta?.reason === 'MISSING_DATA' ? ['Source context requested by the action'] : [],
+    },
+    governance: {
+      safetyTier: critical ? 'SAFETY_EMERGENCY' : 'LOW_CONSEQUENCE',
+      professionalBoundary: critical
+        ? 'This action is a conservative escalation prompt, not a diagnosis or emergency determination.'
+        : null,
+      jurisdictionCheck: {
+        status: 'NOT_REQUIRED',
+        jurisdiction: null,
+        checkedAt: null,
+        source: null,
+      },
+      conservativeFallback: critical
+        ? 'Avoid the affected system or area until a qualified professional confirms it is safe.'
+        : null,
+      emergencyEscalation: critical
+        ? 'If there is immediate danger, active damage, fire, gas, or electrical risk, leave the area and contact emergency services or the appropriate utility.'
+        : null,
+      commercialDisclosure: {
+        involvesCommercialAction: false,
+        relationshipType: 'NONE',
+        compensationMayOccur: false,
+        rankingInfluenced: false,
+        summary: 'No provider or purchase ranking is presented by this action.',
+        selectionCriteria: [],
+        nonCommercialAlternatives: [],
+      },
+      reviewedBy: [],
+      policyVersion: 'phase0-v1',
+    },
+    primaryCta: {
+      kind: critical ? 'ESCALATE' : 'REVIEW',
+      label: action.cta?.label ?? (critical ? 'Review safety escalation' : 'Review action'),
+      href: `/dashboard/actions?propertyId=${encodeURIComponent(action.propertyId)}`,
+    },
+    secondaryCtas: [],
+    feedbackControls: ['COMPLETE', 'DEFER', 'SNOOZE', 'DISMISS', 'ALREADY_DONE', 'NOT_RELEVANT', 'CORRECT_FACT'],
+    relatedJourneyId: null,
+    createdAt: observedAt,
+    lastEvaluatedAt: evaluatedAt.toISOString(),
+  });
+}
 
 export interface CompletionCreateInput {
   completedAt: string;
@@ -2346,11 +2444,20 @@ export async function getOrchestrationSummary(propertyId: string, userId?: strin
     logger.warn({ err: error }, '[ORCHESTRATION] shared context enrichment failed');
   }
 
+  const homeActions = actions.map((action) => adaptOrchestratedActionToHomeAction(action));
+  emitHomeActionsSurfaced({
+    propertyId,
+    userId,
+    actions: homeActions,
+    source: 'orchestration_summary',
+  });
+
   return {
     propertyId,
     pendingActionCount: actions.length,
     derivedFrom,
     actions,
+    homeActions,
     suppressedActions,
     snoozedActions,
     counts: {
