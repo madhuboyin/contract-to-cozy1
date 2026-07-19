@@ -1,6 +1,7 @@
 import { prisma } from '../../lib/prisma';
 import { APIError } from '../../middleware/error.middleware';
 import { NewHomePilotAdmissionInputSchema } from '../../productFramework/newHomeSetup.contract';
+import { APP_CONFIG } from '../../config/appConfig';
 import { resolveDateRange } from './schemas';
 
 const rate = (numerator: number, denominator: number) => denominator ? numerator / denominator : 0;
@@ -108,6 +109,7 @@ export async function getPhase6PilotMetrics(fromRaw?: Date, toRaw?: Date) {
 
   return {
     metricVersion: 'phase6-v2',
+    humanPolicyApprovalEnforced: APP_CONFIG.enforceHumanPolicyApprovals,
     period: { from: range.from.toISOString(), to: range.to.toISOString() },
     cohort: {
       assessed: assessments.length,

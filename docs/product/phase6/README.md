@@ -25,7 +25,7 @@ This increment establishes:
 
 ## Gate behavior
 
-The pilot is qualified only when demand and engagement are each at least moderate and the property has either usable documents or meaningful builder follow-up pain. Qualification does not start a plan. An administrator with `SYSTEM_SETTINGS_MANAGE` must admit the property, optionally assign a cohort, and record reasons. Rejection and later reassessment remain durable and auditable.
+The pilot is qualified only when demand and engagement are each at least moderate and the property has either usable documents or meaningful builder follow-up pain. In internal beta, qualified properties can start a plan without operator admission so testing is not blocked. When `ENFORCE_HUMAN_POLICY_APPROVALS=true`, an administrator with `SYSTEM_SETTINGS_MANAGE` must admit the property, assign a cohort, and record reasons. Rejection and later reassessment remain durable and auditable.
 
 The assessment is not a claim that the journey has proven channel economics. It captures the required inputs for later cohort analysis. Expansion remains blocked until pilot outcomes and the Phase 3 repair/replacement gate demonstrate acceptable completion, blocker time, comprehension, verified write-back, provider quality, and recurring-care conversion.
 
@@ -60,6 +60,7 @@ This increment closes the Phase 6 audit gaps:
 - the expansion decision evaluates all six framework criteria and enforces configurable minimum sample floors;
 - verified project closure records recommendation comprehension, provider-quality visibility, verified write-back, recurring-care conversion, and live blocker duration from durable records;
 - operator admission, rejection reasons, reviewer identity, review time, and cohort assignment are stored separately from automated qualification;
+- operator admission is advisory in internal beta and becomes a hard gate before real-user launch;
 - warranty notice deadlines are processed by the worker every day and are no longer dependent on a homeowner opening the overview page;
 - a failed notification is retried because `notifiedAt` is recorded only after successful delivery;
 - the new-home workflow exposes builder-response history, promised dates, verified closure, inspection candidates, bundle status, and report linkage;

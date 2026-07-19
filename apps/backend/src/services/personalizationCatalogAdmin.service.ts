@@ -1,4 +1,5 @@
 import { prisma } from '../lib/prisma';
+import { APP_CONFIG, humanPolicyGateAllows } from '../config/appConfig';
 import { recordPersonalizationAuditEvent } from './personalizationAudit.service';
 import { findPersonalizationDefinition, PERSONALIZATION_DEFINITIONS } from '../modules/personalization/catalog/personalizationDefinitions';
 import {
@@ -25,15 +26,18 @@ function launchReadinessForDefinition(definition: any) {
     definition.safetyTier !== catalogDefinition.safetyTier ||
     definition.governancePolicyVersion !== catalogDefinition.governance.policyVersion
   ) {
+    const humanPolicyApprovalEnforced = APP_CONFIG.enforceHumanPolicyApprovals;
     return {
       ready: false,
+      activationAllowed: false,
+      humanPolicyApprovalEnforced,
       requiredRoles: [],
       approvedRoles: [],
       missingRoles: [],
       reasons: ['CATALOG_GOVERNANCE_MISMATCH'],
     };
   }
-  return evaluateRecommendationLaunchReadiness(
+  const readiness = evaluateRecommendationLaunchReadiness(
     catalogDefinition.governance,
     (definition.governanceReviews ?? [])
       .filter((review: any) => review.decision === 'APPROVED')
@@ -45,6 +49,12 @@ function launchReadinessForDefinition(definition: any) {
         notes: review.notes ?? null,
       })),
   );
+  const humanPolicyApprovalEnforced = APP_CONFIG.enforceHumanPolicyApprovals;
+  return {
+    ...readiness,
+    humanPolicyApprovalEnforced,
+    activationAllowed: humanPolicyGateAllows(readiness.ready, humanPolicyApprovalEnforced),
+  };
 }
 
 export async function listPersonalizationCatalog() {
@@ -183,7 +193,7 @@ export async function activatePersonalizationDefinitionBundle(params: {
   }
   const catalogDefinition = findPersonalizationDefinition(params.code)!;
   const readiness = launchReadinessForDefinition({ ...definition, code: params.code });
-  if (!readiness?.ready) {
+  if (!readiness?.activationAllowed) {
     throw new PersonalizationCatalogActivationError('GOVERNANCE_NOT_READY', {
       safetyTier: catalogDefinition.safetyTier,
       ...readiness,
@@ -246,9 +256,16 @@ export async function activatePersonalizationDefinitionBundle(params: {
       locale: params.locale,
       safetyTier: catalogDefinition.safetyTier,
       governancePolicyVersion: catalogDefinition.governance.policyVersion,
+      humanPolicyApprovalEnforced: readiness.humanPolicyApprovalEnforced,
+      missingApprovalRoles: readiness.missingRoles,
     },
   });
-  return { code: params.code, status: 'ACTIVE', activatedAt };
+  return {
+    code: params.code,
+    status: 'ACTIVE',
+    activatedAt,
+    governanceMode: readiness.ready ? 'APPROVED' : 'BETA_ADVISORY',
+  };
 }
 
 export async function activatePersonalizationQuestion(params: {

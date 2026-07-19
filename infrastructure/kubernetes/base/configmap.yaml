@@ -60,6 +60,9 @@ data:
   ENABLE_CHAT: "true"
   # Pilot-only authentication switch. Set to "false" before general availability.
   DISABLE_EMAIL_VERIFICATION: "true"
+  # Beta governance switch. Set to "true" before admitting any real users.
+  # Technical safety and evidence validation remain enforced in both modes.
+  ENFORCE_HUMAN_POLICY_APPROVALS: "false"
   
   # Rate Limiting
   RATE_LIMIT_WINDOW_MS: "60000"

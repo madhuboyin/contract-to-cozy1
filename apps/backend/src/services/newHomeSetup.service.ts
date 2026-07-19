@@ -20,6 +20,7 @@ import {
 } from '../productFramework/newHomeSetup.contract';
 import { resolvePropertyAccess, ROLE_RANK } from './propertyAccess.service';
 import { processNewHomeWarrantyDeadlines } from './newHomeWarrantyDeadline.service';
+import { APP_CONFIG, humanPolicyGateAllows } from '../config/appConfig';
 
 const DAY_MS = 86_400_000;
 
@@ -165,6 +166,7 @@ export class NewHomeSetupService {
       prisma.inspectionReport.findMany({ where: { propertyId, status: { not: 'ARCHIVED' } }, select: { id: true, reportType: true, inspectionDate: true, status: true }, orderBy: { inspectionDate: 'desc' } }),
     ]);
     return {
+      humanPolicyApprovalEnforced: APP_CONFIG.enforceHumanPolicyApprovals,
       assessment,
       plan,
       evidence: {
@@ -187,9 +189,13 @@ export class NewHomeSetupService {
   static async getOrCreatePlan(userId: string, propertyId: string) {
     await this.assertContext(userId, propertyId);
     const assessment = await prisma.newHomePilotAssessment.findUnique({ where: { propertyId } });
-    if (!assessment || assessment.decision !== 'ELIGIBLE' || assessment.admissionDecision !== 'ADMITTED') {
+    const admissionRequired = APP_CONFIG.enforceHumanPolicyApprovals;
+    if (!assessment || assessment.decision !== 'ELIGIBLE'
+      || !humanPolicyGateAllows(assessment.admissionDecision === 'ADMITTED', admissionRequired)) {
       throw new APIError(
-        'Complete the new-home pilot assessment and receive operator admission into a controlled cohort before creating a plan.',
+        admissionRequired
+          ? 'Complete the new-home pilot assessment and receive operator admission into a controlled cohort before creating a plan.'
+          : 'Complete the new-home pilot assessment and meet the automated qualification criteria before creating a plan.',
         409,
         'NEW_HOME_PILOT_GATE_REQUIRED',
       );

@@ -20,6 +20,8 @@ export interface PersonalizationCatalogDefinition {
   }>;
   launchReadiness: {
     ready: boolean;
+    activationAllowed: boolean;
+    humanPolicyApprovalEnforced: boolean;
     requiredRoles: RecommendationReviewRole[];
     approvedRoles: RecommendationReviewRole[];
     missingRoles: RecommendationReviewRole[];

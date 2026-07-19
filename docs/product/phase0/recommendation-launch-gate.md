@@ -2,6 +2,8 @@
 
 No material homeowner recommendation should launch until every applicable gate passes.
 
+During the no-real-user internal beta, missing human approval records are advisory and auditable rather than blocking. Set `ENFORCE_HUMAN_POLICY_APPROVALS=true` before real-user launch. This mode changes only human-attestation enforcement; every technical requirement in this checklist remains mandatory.
+
 The executable gate is `evaluateRecommendationLaunchReadiness` in `apps/backend/src/productFramework/recommendationLaunchGate.ts`. Approval records are policy-version-specific and must identify the reviewer, role, timestamp, and optional notes.
 
 ## Outcome and action

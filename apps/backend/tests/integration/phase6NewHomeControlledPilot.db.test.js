@@ -7,6 +7,7 @@ require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
 const databaseUrl = process.env.PHASE6_ACCEPTANCE_DATABASE_URL;
 if (databaseUrl) process.env.DATABASE_URL = databaseUrl;
 process.env.GEMINI_API_KEY ||= 'phase6-acceptance-placeholder';
+process.env.ENFORCE_HUMAN_POLICY_APPROVALS = 'true';
 
 test('owner-applied database contains the completed Phase 6 schema', { skip: !databaseUrl }, async () => {
   const { PrismaClient } = require('@prisma/client');

@@ -54,7 +54,8 @@ test('service enforces new-construction context and the selective pilot gate', (
   assert.match(service, /entryPath === 'NEW_HOME_SETUP'/);
   assert.match(service, /propertyOrigin === 'NEW_CONSTRUCTION'/);
   assert.match(service, /assessment\.decision !== 'ELIGIBLE'/);
-  assert.match(service, /assessment\.admissionDecision !== 'ADMITTED'/);
+  assert.match(service, /humanPolicyGateAllows\(assessment\.admissionDecision === 'ADMITTED'/);
+  assert.match(service, /APP_CONFIG\.enforceHumanPolicyApprovals/);
   assert.match(service, /LOW_DEMAND_SIGNAL/);
   assert.match(service, /LOW_ENGAGEMENT_INTENT/);
 });

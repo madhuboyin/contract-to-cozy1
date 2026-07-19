@@ -8,6 +8,8 @@ Phase 5 converts inspection and transaction context into a durable, property-sco
 
 Status: implemented in code; the updated Prisma schema must be applied by the operator. No database migration script is included.
 
+Human policy attestations do not gate Phase 5 testing. Schema application, evidence lineage, acceptance testing, and pilot measurement remain unchanged in both governance modes; see [governance modes](../governance-modes.md).
+
 This increment establishes:
 
 - one buyer-acquisition checklist per property instead of per homeowner profile;

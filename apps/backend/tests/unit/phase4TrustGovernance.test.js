@@ -45,7 +45,7 @@ test('Prisma persists typed trust tiers and role decisions without a Phase 4 mig
   assert.deepEqual(fs.readdirSync(migrationRoot).filter((entry) => /phase.?4|trust.?governance/i.test(entry)), []);
 });
 
-test('admin trust queue blocks activation and exposes auditable role decisions', () => {
+test('admin trust queue supports beta advisory activation and enforced launch decisions', () => {
   const service = read('../../src/services/personalizationCatalogAdmin.service.ts');
   const controller = read('../../src/controllers/adminPersonalization.controller.ts');
   const routes = read('../../src/routes/adminPersonalization.routes.ts');
@@ -59,6 +59,7 @@ test('admin trust queue blocks activation and exposes auditable role decisions',
   assert.match(routes, /governance-reviews/);
   assert.match(adminPage, /Trust review/);
   assert.match(adminPage, /REVIEW REQUIRED/);
+  assert.match(adminPage, /BETA ADVISORY/);
   assert.match(adminPage, /Reject/);
 });
 

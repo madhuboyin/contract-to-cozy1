@@ -1,6 +1,6 @@
 # Product Framework Phase 1 — Trigger-First Activation
 
-Status: Code implementation complete; owner-applied database and launch approvals pending
+Status: Code implementation complete; human launch approvals deferred during internal beta and enforced before real-user launch
 
 Contract version: `phase1-v1`
 
@@ -56,5 +56,5 @@ npm -C apps/frontend run qa:product-framework:routes
 ## Remaining Phase 1 scope
 
 - Add API integration tests against an owner-applied Phase 1 database schema.
-- Complete product/domain/trust/legal approval before enabling material first-value recommendations for a launch cohort.
+- Internal testing is not blocked by missing human attestations. Complete product/domain/trust/legal approval before enabling material first-value recommendations for real users by setting `ENFORCE_HUMAN_POLICY_APPROVALS=true`; see [governance modes](../governance-modes.md).
 - Run a real pilot and evaluate the 60% setup, 50% useful/new recommendation, and 30% 30-day resolution targets. There are currently no real users, so the reporting contract is implemented but target attainment cannot yet be measured.

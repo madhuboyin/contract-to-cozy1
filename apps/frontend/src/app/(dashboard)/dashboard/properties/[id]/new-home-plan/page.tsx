@@ -125,7 +125,8 @@ export default function NewHomePlanPage() {
   if (overviewQuery.isLoading) return <DashboardShell><div className="flex min-h-[50vh] items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div></DashboardShell>;
   if (overviewQuery.isError || !overviewQuery.data) return <DashboardShell><Card><CardContent className="p-6">{overviewQuery.error instanceof Error ? overviewQuery.error.message : 'Unable to load this plan.'}</CardContent></Card></DashboardShell>;
 
-  const { assessment, plan, evidence } = overviewQuery.data;
+  const { assessment, plan, evidence, humanPolicyApprovalEnforced } = overviewQuery.data;
+  const operatorAdmissionSatisfied = !humanPolicyApprovalEnforced || assessment?.admissionDecision === 'ADMITTED';
   return (
     <DashboardShell>
       <div className="mx-auto max-w-6xl space-y-6 p-4 md:p-8">
@@ -133,7 +134,7 @@ export default function NewHomePlanPage() {
           <Button asChild variant="ghost" className="mb-2 px-0"><Link href={`/dashboard/properties/${propertyId}`}>← Property</Link></Button>
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div><h1 className="text-3xl font-bold">New-home setup and warranty protection</h1><p className="mt-1 max-w-3xl text-muted-foreground">Protect builder rights, capture early evidence, register systems, and establish maintenance without inventing property history.</p></div>
-            <Badge variant={assessment?.admissionDecision === 'ADMITTED' ? 'default' : 'outline'}>{assessment ? `${assessment.decision.replace(/_/g, ' ')} · ${assessment.admissionDecision.replace(/_/g, ' ')}` : 'PILOT GATE PENDING'}</Badge>
+            <Badge variant={operatorAdmissionSatisfied && assessment?.decision === 'ELIGIBLE' ? 'default' : 'outline'}>{assessment ? `${assessment.decision.replace(/_/g, ' ')} · ${humanPolicyApprovalEnforced ? assessment.admissionDecision.replace(/_/g, ' ') : 'BETA ACCESS'}` : 'PILOT GATE PENDING'}</Badge>
           </div>
         </div>
 
@@ -144,7 +145,7 @@ export default function NewHomePlanPage() {
           <Card><CardContent className="p-4"><Home className="mb-2 h-5 w-5" /><p className="text-2xl font-semibold">{evidence.inspections}</p><p className="text-sm text-muted-foreground">Inspection records</p></CardContent></Card>
         </div>
 
-        {!assessment || assessment.decision !== 'ELIGIBLE' || assessment.admissionDecision === 'REJECTED' ? (
+        {!assessment || assessment.decision !== 'ELIGIBLE' || (humanPolicyApprovalEnforced && assessment.admissionDecision === 'REJECTED') ? (
           <Card>
             <CardHeader><CardTitle>Selective pilot gate</CardTitle></CardHeader>
             <CardContent>
@@ -161,10 +162,10 @@ export default function NewHomePlanPage() {
               {assessment?.decisionReasons.length ? <p className="mt-4 text-sm text-amber-700">On hold: {assessment.decisionReasons.map((reason) => reason.toLowerCase().replace(/_/g, ' ')).join('; ')}.</p> : null}
             </CardContent>
           </Card>
-        ) : assessment.admissionDecision !== 'ADMITTED' ? (
+        ) : !operatorAdmissionSatisfied ? (
           <Card className="border-blue-200 bg-blue-50/60"><CardHeader><CardTitle>Qualified · awaiting controlled-cohort admission</CardTitle></CardHeader><CardContent><p className="text-sm text-muted-foreground">Your demand and evidence signals qualify for consideration. A pilot operator must assign this property to a named cohort before the specialized plan can start; qualification never self-enrolls a home.</p></CardContent></Card>
         ) : !plan ? (
-          <Card><CardHeader><CardTitle>Pilot gate passed</CardTitle></CardHeader><CardContent><p className="mb-4 text-sm text-muted-foreground">Start the property-scoped plan with builder, household, evidence, and deadline responsibilities.</p><Button onClick={() => startMutation.mutate()} disabled={startMutation.isPending}>Start new-home plan</Button></CardContent></Card>
+          <Card><CardHeader><CardTitle>{humanPolicyApprovalEnforced ? 'Pilot gate passed' : 'Beta testing access enabled'}</CardTitle></CardHeader><CardContent><p className="mb-4 text-sm text-muted-foreground">{humanPolicyApprovalEnforced ? 'Start the property-scoped plan with builder, household, evidence, and deadline responsibilities.' : 'Automated qualification passed. Operator admission is advisory until human policy enforcement is enabled before real-user launch.'}</p><Button onClick={() => startMutation.mutate()} disabled={startMutation.isPending}>Start new-home plan</Button></CardContent></Card>
         ) : (
           <>
             <Card>

@@ -1,5 +1,6 @@
 export const APP_CONFIG_KEYS = {
   disableEmailVerification: 'DISABLE_EMAIL_VERIFICATION',
+  enforceHumanPolicyApprovals: 'ENFORCE_HUMAN_POLICY_APPROVALS',
 } as const;
 
 /**
@@ -13,8 +14,27 @@ export function isEmailVerificationDisabled(): boolean {
   return process.env[APP_CONFIG_KEYS.disableEmailVerification] === 'true';
 }
 
+/**
+ * Human policy attestations are advisory while the product has no real users.
+ * Set the exact string "true" before admitting real users. Technical safety,
+ * evidence, jurisdiction, disclosure, and verification schemas are unaffected.
+ */
+export function areHumanPolicyApprovalsEnforced(): boolean {
+  return process.env[APP_CONFIG_KEYS.enforceHumanPolicyApprovals] === 'true';
+}
+
+export function humanPolicyGateAllows(
+  approvalSatisfied: boolean,
+  enforcementEnabled = areHumanPolicyApprovalsEnforced(),
+): boolean {
+  return approvalSatisfied || !enforcementEnabled;
+}
+
 export const APP_CONFIG = {
   get disableEmailVerification(): boolean {
     return isEmailVerificationDisabled();
+  },
+  get enforceHumanPolicyApprovals(): boolean {
+    return areHumanPolicyApprovalsEnforced();
   },
 } as const;

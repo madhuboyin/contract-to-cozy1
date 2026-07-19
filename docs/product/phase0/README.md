@@ -1,6 +1,6 @@
 # Product Framework Phase 0 — Contract and Governance Foundation
 
-Status: Technical exit criteria complete; owner-managed database application and human policy approvals remain operational release gates
+Status: Technical exit criteria complete; human policy approvals are explicitly deferred during internal beta and become enforced before real-user launch
 
 Contract version: `phase0-v1`
 
@@ -33,7 +33,7 @@ This phase does not implement the Phase 1 onboarding experience, unified Home AP
 | Contract fixtures pass for every declared action source | Complete. Eight source adapters and fixtures cover Guidance, Maintenance, Incident, Recall, Coverage, Personalization, Project, and System. |
 | Every homeowner route has a disposition | Complete. The executable route audit fails on an unclassified or ambiguous `page.tsx`. |
 | Metric defines numerator, denominator, eligibility, timing, and owners | Complete. The contract and event-backed report name Product Analytics as data owner and Homeowner Product as business owner. |
-| Safety-tier review is enforced | Technically complete. Launch readiness fails when required approval records are missing or from another policy version. Human approvals remain intentionally pending in the approval register. |
+| Safety-tier review is enforced | Technically complete. Missing approvals remain visible and audited in beta; launch readiness becomes blocking when `ENFORCE_HUMAN_POLICY_APPROVALS=true`. Human approvals are deferred rather than falsely recorded while there are no real users. |
 | New feature governance is mandatory | Complete as a repository process gate through the feature brief, recommendation launch gate, issue template, and pull-request checklist. |
 
 ## Approved product contracts
@@ -143,6 +143,10 @@ The Prisma event enum was updated because typed north-star events are a Phase 0 
 - The repository owner generates and applies the database migration.
 - Development and test databases may be reset and reseeded afterward.
 - Later schema changes should use clean cutovers rather than dual-read, dual-write, reconciliation, or compatibility layers.
+
+## Internal-beta governance
+
+Human attestations do not block testing while `ENFORCE_HUMAN_POLICY_APPROVALS` is not the exact string `true`. Technical safety and evidence contracts always remain active. See [governance modes](../governance-modes.md) for the Phase 0–6 audit and required real-user launch cutover.
 
 ## Phase 0 validation commands
 

@@ -2,6 +2,8 @@
 
 Status: Implementation-complete through Increment 7; owner-applied database acceptance and pilot validation pending
 
+Missing human review attestations are visible but non-blocking during the no-real-user internal beta. Set `ENFORCE_HUMAN_POLICY_APPROVALS=true` before real-user launch to restore hard tier-specific activation gates. Technical trust contracts and incident controls remain enforced in both modes; see [governance modes](../governance-modes.md).
+
 Contract version: `phase4-v1`
 
 Date started: July 18, 2026
@@ -21,7 +23,7 @@ Implemented:
 - Made review decisions idempotent per definition, role, and policy version while retaining each change in the append-only personalization audit ledger.
 - Blocked catalog activation until the exact tier-required roles approve the current policy version.
 - Blocked activation when persisted trust metadata disagrees with the code-owned reviewed catalog.
-- Added an MFA-protected admin trust queue with readiness, required roles, approvals, rejections, and activation gating.
+- Added an MFA-protected admin trust queue with readiness, required roles, approvals, rejections, beta advisory activation, and enforceable pre-launch activation gating.
 - Added safety tier and governance boundaries to generated personalization responses and homeowner recommendation surfaces.
 - Updated the idempotent pgAdmin bootstrap to synchronize definition trust metadata while leaving rules and content in `DRAFT`.
 - Added focused Phase 4 contract coverage.

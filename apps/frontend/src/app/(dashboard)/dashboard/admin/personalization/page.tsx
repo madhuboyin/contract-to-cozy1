@@ -317,7 +317,11 @@ export default function PersonalizationAdminPage() {
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="text-sm font-medium">Trust review</span>
                           <Badge variant={definition.launchReadiness.ready ? 'default' : 'secondary'}>
-                            {definition.launchReadiness.ready ? 'READY' : 'REVIEW REQUIRED'}
+                            {definition.launchReadiness.ready
+                              ? 'POLICY APPROVED'
+                              : definition.launchReadiness.humanPolicyApprovalEnforced
+                                ? 'REVIEW REQUIRED'
+                                : 'BETA ADVISORY'}
                           </Badge>
                         </div>
                         <div className="flex flex-wrap gap-2">
@@ -356,7 +360,11 @@ export default function PersonalizationAdminPage() {
                           })}
                         </div>
                         {!definition.launchReadiness.ready ? (
-                          <p className="text-xs text-slate-600">Activation remains blocked until every tier-required role approves the current governance policy.</p>
+                          <p className="text-xs text-slate-600">
+                            {definition.launchReadiness.humanPolicyApprovalEnforced
+                              ? 'Activation remains blocked until every tier-required role approves the current governance policy.'
+                              : 'Human approvals are advisory in beta. Technical safety, evidence, disclosure, and escalation validation remains enforced.'}
+                          </p>
                         ) : null}
                       </div>
                     ) : null}
@@ -371,7 +379,7 @@ export default function PersonalizationAdminPage() {
                       {hasBundle && !bundleActive ? (
                         <Button
                           type="button"
-                          disabled={!ready || !definition.launchReadiness?.ready || activateDefinition.isPending}
+                          disabled={!ready || !definition.launchReadiness?.activationAllowed || activateDefinition.isPending}
                           onClick={() => {
                             const warning = definition.safetyClass === 'SAFETY_SENSITIVE'
                               ? `Activate safety-sensitive rule and content for ${definition.code}? Confirm that you reviewed both versions.`

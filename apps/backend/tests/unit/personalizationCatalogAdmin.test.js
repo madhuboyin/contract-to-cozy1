@@ -6,6 +6,7 @@ require('ts-node/register');
 function loadService({
   catalogDefinitions = [],
   governanceReviews = ['PRODUCT', 'DOMAIN', 'TRUST', 'LEGAL_COMPLIANCE'],
+  enforceHumanPolicyApprovals = true,
 } = {}) {
   const writes = [];
   const audits = [];
@@ -79,6 +80,16 @@ function loadService({
     loaded: true,
     exports: { recordPersonalizationAuditEvent: async (event) => audits.push(event) },
   };
+  const appConfigPath = require.resolve('../../src/config/appConfig.ts');
+  require.cache[appConfigPath] = {
+    id: appConfigPath,
+    filename: appConfigPath,
+    loaded: true,
+    exports: {
+      APP_CONFIG: { enforceHumanPolicyApprovals },
+      humanPolicyGateAllows: (satisfied, enforced) => satisfied || !enforced,
+    },
+  };
   const servicePath = require.resolve('../../src/services/personalizationCatalogAdmin.service.ts');
   delete require.cache[servicePath];
   return { ...require(servicePath), writes, audits, reads };
@@ -107,6 +118,8 @@ test('tier-reviewed rule/content bundle activates transactionally', async () => 
     locale: 'en-US',
     safetyTier: 'SAFETY_EMERGENCY',
     governancePolicyVersion: 'phase4-v1',
+    humanPolicyApprovalEnforced: true,
+    missingApprovalRoles: [],
   });
 });
 
@@ -134,13 +147,27 @@ test('blocks activation of definitions without implemented application behavior'
   assert.equal(planOnly.writes.length, 0);
 });
 
-test('blocks activation until all safety-tier review roles approve the current policy', async () => {
+test('enforced launch mode blocks activation until all safety-tier review roles approve the current policy', async () => {
   const pending = loadService({ governanceReviews: ['PRODUCT', 'DOMAIN'] });
   await assert.rejects(
     () => pending.activatePersonalizationDefinitionBundle(activation),
     (error) => error.code === 'GOVERNANCE_NOT_READY' && error.details.missingRoles.includes('TRUST'),
   );
   assert.equal(pending.writes.length, 0);
+});
+
+test('beta mode activates without human attestations while preserving advisory readiness', async () => {
+  const beta = loadService({
+    governanceReviews: [],
+    enforceHumanPolicyApprovals: false,
+  });
+  const result = await beta.activatePersonalizationDefinitionBundle(activation);
+  assert.equal(result.status, 'ACTIVE');
+  assert.equal(result.governanceMode, 'BETA_ADVISORY');
+  assert.deepEqual(beta.audits[0].metadata.missingApprovalRoles, [
+    'PRODUCT', 'DOMAIN', 'TRUST', 'LEGAL_COMPLIANCE',
+  ]);
+  assert.equal(beta.audits[0].metadata.humanPolicyApprovalEnforced, false);
 });
 
 test('activates a selected profile question version and retires an older active version', async () => {

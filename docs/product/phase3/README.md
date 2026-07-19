@@ -2,6 +2,8 @@
 
 Status: Increments 1–3 and the operational acceptance harness are implemented; target-environment execution remains gated by explicit credentials
 
+Human policy attestations do not gate Phase 3 testing. Database credentials, object-storage opt-in, provider compliance, durable proof, and verified closure remain mandatory in both governance modes; see [governance modes](../governance-modes.md).
+
 Contract version: `phase3-v1`
 
 Date started: July 18, 2026

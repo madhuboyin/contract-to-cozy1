@@ -2568,6 +2568,7 @@ export interface NewHomeSetupPlan {
 }
 
 export interface NewHomeSetupOverview {
+  humanPolicyApprovalEnforced: boolean;
   assessment: NewHomePilotAssessment | null;
   plan: NewHomeSetupPlan | null;
   evidence: {

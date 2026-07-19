@@ -140,6 +140,7 @@ export interface AdminPhase1PilotResponse {
 
 export interface AdminPhase6PilotResponse {
   metricVersion: string;
+  humanPolicyApprovalEnforced: boolean;
   period: { from: string; to: string };
   cohort: { assessed: number; eligible: number; admitted: number; activatedPlans: number; qualificationRate: number; admissionRate: number; activationRate: number; averageAcquisitionCents: number };
   admissionQueue: Array<{

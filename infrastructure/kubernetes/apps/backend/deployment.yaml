@@ -45,6 +45,11 @@ spec:
                 configMapKeyRef:
                   name: app-config
                   key: DISABLE_EMAIL_VERIFICATION
+            - name: ENFORCE_HUMAN_POLICY_APPROVALS
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: ENFORCE_HUMAN_POLICY_APPROVALS
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:

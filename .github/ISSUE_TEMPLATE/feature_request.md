@@ -47,7 +47,7 @@ assignees: ''
 - North-star eligibility and action window:
 
 ## Required approvals
-<!-- Product is always required. Add Domain, Trust, Legal/Compliance, and Commercial Integrity according to the Phase 0 launch gate. -->
+<!-- For real-user launch, Product is always required. Add Domain, Trust, Legal/Compliance, and Commercial Integrity according to the Phase 0 launch gate. During internal beta, list missing roles as deferred rather than manufacturing approvals. -->
 
 ## Proposed Solution
 <!-- Your proposed solution -->

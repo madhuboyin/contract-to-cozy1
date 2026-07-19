@@ -76,7 +76,7 @@ Implemented:
 
 ### Future source eligibility
 
-- `PERSONALIZATION` retains a canonical adapter but is not loaded into the default feed until recommendations have explicit review status, evidence, and governance eligibility. This is an intentional safety gate rather than unfinished wiring.
+- `PERSONALIZATION` retains a canonical adapter and requires an active definition plus evidence and governance metadata. Missing human attestations are advisory during internal beta and blocking when `ENFORCE_HUMAN_POLICY_APPROVALS=true`; technical safety validation is never bypassed. See [governance modes](../governance-modes.md).
 
 ## Increment 1 acceptance evidence
 
