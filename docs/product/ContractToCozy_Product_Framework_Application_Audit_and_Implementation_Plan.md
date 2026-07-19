@@ -859,6 +859,8 @@ Steps 9–14 must adapt to repair versus replacement, DIY versus provider, cover
 
 **Objective:** Serve low-history brand-new homes with a proposition based on rights, setup, and early evidence rather than invented history.
 
+**Implementation status:** Increment 1 implemented July 19, 2026. The code now includes a selective pilot-assessment gate, property-scoped new-home setup plan, explicit builder/homeowner responsibility, evidence-backed task completion, lifecycle and warranty anchors, evidence-readiness aggregation, authenticated APIs, and a focused dashboard surface. The remaining Phase 6 increments cover detailed punch-list collaboration, warranty extraction and deadline promotion, registration and commissioning workflows, inspection bundles, recurring-loop handoff, and admin expansion-gate metrics. The updated Prisma schema must be applied by the repository owner; no migration script is included. See `docs/product/phase6/README.md`.
+
 #### Journey scope
 
 - walkthrough and punch-list capture;

@@ -674,6 +674,7 @@ export default function DashboardPage() {
   });
   const lastKnownPropertiesRef = React.useRef<ScoredProperty[]>([]);
   const [isPurchaseMode, setIsPurchaseMode] = useState(false);
+  const [isNewHomeMode, setIsNewHomeMode] = useState(false);
   
   const { selectedPropertyId, setSelectedPropertyId } = usePropertyContext();
   const { celebration, celebrate, dismiss } = useCelebration(
@@ -794,19 +795,24 @@ export default function DashboardPage() {
         : scoredProperties[0]?.id;
 
       let purchaseMode = false;
+      let newHomeMode = false;
       if (propId) {
         try {
           const contextResponse = await api.getEntryContext(propId);
           const context = contextResponse.success && contextResponse.data && typeof contextResponse.data === 'object'
-            ? contextResponse.data as { entryPath?: string; ownershipState?: string }
+            ? contextResponse.data as { entryPath?: string; ownershipState?: string; propertyOrigin?: string }
             : null;
-          purchaseMode = ['SHOPPING', 'UNDER_CONTRACT', 'RECENT_OWNER'].includes(context?.ownershipState ?? '')
-            || (context?.entryPath === 'EXISTING_HOME_PURCHASE' && context?.ownershipState !== 'ESTABLISHED_OWNER');
+          newHomeMode = context?.entryPath === 'NEW_HOME_SETUP' && context?.propertyOrigin === 'NEW_CONSTRUCTION';
+          purchaseMode = !newHomeMode && (context?.entryPath === 'EXISTING_HOME_PURCHASE'
+            || (['SHOPPING', 'UNDER_CONTRACT', 'RECENT_OWNER'].includes(context?.ownershipState ?? '')
+              && context?.propertyOrigin !== 'NEW_CONSTRUCTION'));
         } catch {
           purchaseMode = false;
+          newHomeMode = false;
         }
       }
       setIsPurchaseMode(purchaseMode);
+      setIsNewHomeMode(newHomeMode);
 
       const [bookingsRes, checklistRes, warrantiesRes, policiesRes, incidentsRes, inventoryRes] = await Promise.all([
         api.listBookings({ limit: 50, sortBy: 'createdAt', sortOrder: 'desc' })
@@ -936,6 +942,19 @@ export default function DashboardPage() {
         impactLabel: 'Active home risk',
         etaLabel: 'ETA 2 min',
         ...buildIncidentActionMeta(highSeverityIncident.title, potentialSavings),
+      };
+    }
+
+    if (isNewHomeMode && effectiveSelectedPropertyId) {
+      return {
+        badgeLabel: 'New-home protection plan',
+        title: 'Protect builder rights and establish your home record from day one.',
+        subtitle: 'Track walkthrough evidence, punch-list ownership, warranty deadlines, system registration, and first-year inspections.',
+        ctaLabel: 'Open new-home plan',
+        href: `/dashboard/properties/${effectiveSelectedPropertyId}/new-home-plan`,
+        impactLabel: 'Warranty and evidence continuity',
+        etaLabel: 'ETA 3 min',
+        ...buildDefaultActionMeta(0),
       };
     }
 

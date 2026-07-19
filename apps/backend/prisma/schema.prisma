@@ -413,6 +413,43 @@ enum BuyerFindingDisposition {
   DISMISSED
 }
 
+enum NewHomePilotDecision {
+  PENDING
+  ELIGIBLE
+  HOLD
+}
+
+enum NewHomeDocumentAvailability {
+  NONE
+  SOME
+  COMPLETE
+}
+
+enum NewHomePlanPhase {
+  WALKTHROUGH
+  FIRST_30_DAYS
+  DAYS_31_TO_90
+  FIRST_YEAR
+  RECURRING_HOME
+}
+
+enum NewHomeResponsibility {
+  BUILDER
+  HOMEOWNER
+  SHARED
+  UNKNOWN
+}
+
+enum NewHomeTaskSourceType {
+  SYSTEM
+  USER
+  WALKTHROUGH
+  DOCUMENT
+  WARRANTY
+  INVENTORY
+  HOME_ACTION
+}
+
 enum MaintenanceTaskStatus {
   PENDING
   IN_PROGRESS
@@ -2073,6 +2110,85 @@ model HomeBuyerTask {
   @@map("home_buyer_tasks")
 }
 
+model NewHomePilotAssessment {
+  id         String   @id @default(uuid())
+  propertyId String   @unique
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  demandScore               Int
+  documentAvailability      NewHomeDocumentAvailability
+  builderFollowupPainScore  Int
+  engagementIntentScore     Int
+  channelSource             String?
+  estimatedAcquisitionCents Int?
+  decision                  NewHomePilotDecision        @default(PENDING)
+  decisionReasons           String[]                    @default([])
+  notes                     String?
+  assessedByUserId          String
+  assessedAt                DateTime                    @default(now())
+  createdAt                 DateTime                    @default(now())
+  updatedAt                 DateTime                    @updatedAt
+
+  @@index([decision, assessedAt])
+  @@map("new_home_pilot_assessments")
+}
+
+model NewHomeSetupPlan {
+  id         String   @id @default(uuid())
+  propertyId String   @unique
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  status                    BuyerJourneyStatus @default(ACTIVE)
+  planStartDate             DateTime           @default(now())
+  targetMoveInDate          DateTime?
+  ownershipStartedAt        DateTime?
+  builderWarrantyEndsAt     DateTime?
+  oneYearInspectionDueAt    DateTime?
+  transitionedToRecurringAt DateTime?
+
+  tasks NewHomeSetupTask[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("new_home_setup_plans")
+}
+
+model NewHomeSetupTask {
+  id     String           @id @default(uuid())
+  planId String
+  plan   NewHomeSetupPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  actionKey              String
+  title                  String
+  description            String?
+  status                 HomeBuyerTaskStatus   @default(PENDING)
+  phase                  NewHomePlanPhase
+  priority               BuyerPlanPriority
+  responsibility         NewHomeResponsibility @default(UNKNOWN)
+  dueAt                  DateTime?
+  anchorOffsetDays       Int?
+  assignedToUserId       String?
+  completionEvidenceJson Json?
+  completedAt            DateTime?
+
+  sourceType       NewHomeTaskSourceType @default(SYSTEM)
+  sourceEntityType String?
+  sourceEntityId   String?
+  homeActionKey    String?
+  sortOrder        Int                   @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([planId, actionKey])
+  @@index([planId, phase, priority])
+  @@index([status])
+  @@index([assignedToUserId])
+  @@index([sourceEntityType, sourceEntityId])
+  @@map("new_home_setup_tasks")
+}
+
 // ============================================================================
 // PHASE 1: NEW MODELS - PROPERTY MAINTENANCE SYSTEM
 // ============================================================================
@@ -2254,14 +2370,16 @@ model Property {
   reserveFund HomeReserveFund?
 
   // NEW RELATIONS
-  warranties         Warranty[]
-  insurancePolicies  InsurancePolicy[]
-  expenses           Expense[]
-  checklistItems     ChecklistItem[]
-  maintenanceTasks   PropertyMaintenanceTask[]
-  homeBuyerChecklist HomeBuyerChecklist?
-  documents          Document[]                @relation("PropertyDocuments")
-  coverPhoto         Document?                 @relation("PropertyCoverPhoto", fields: [coverPhotoDocumentId], references: [id], onDelete: SetNull)
+  warranties             Warranty[]
+  insurancePolicies      InsurancePolicy[]
+  expenses               Expense[]
+  checklistItems         ChecklistItem[]
+  maintenanceTasks       PropertyMaintenanceTask[]
+  homeBuyerChecklist     HomeBuyerChecklist?
+  newHomePilotAssessment NewHomePilotAssessment?
+  newHomeSetupPlan       NewHomeSetupPlan?
+  documents              Document[]                @relation("PropertyDocuments")
+  coverPhoto             Document?                 @relation("PropertyCoverPhoto", fields: [coverPhotoDocumentId], references: [id], onDelete: SetNull)
 
   // NEW RELATION FOR RISK ASSESSMENT (Phase 1): ***FIX APPLIED: Added @relation(name: "PropertyRiskReport")***
   riskReport RiskAssessmentReport? @relation(name: "PropertyRiskReport")

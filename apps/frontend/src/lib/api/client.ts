@@ -74,6 +74,11 @@ import {
   BuyerEvidenceReview,
   BuyerFindingDisposition,
   BuyerAcceptanceStatus,
+  NewHomeDocumentAvailability,
+  NewHomePilotAssessment,
+  NewHomeSetupOverview,
+  NewHomeSetupPlan,
+  NewHomeSetupTask,
   HomeBuyerTaskStatus,
   CreateHomeBuyerTaskInput,
   UpdateHomeBuyerTaskInput,
@@ -3207,6 +3212,49 @@ class APIClient {
       `/api/home-buyer-tasks/properties/${propertyId}/acceptance-status`,
       { method: 'GET' },
     );
+  }
+
+  async getNewHomeSetupOverview(propertyId: string): Promise<APIResponse<NewHomeSetupOverview>> {
+    return this.request(`/api/new-home-setup/properties/${propertyId}/overview`);
+  }
+
+  async assessNewHomePilot(propertyId: string, input: {
+    demandScore: number;
+    documentAvailability: NewHomeDocumentAvailability;
+    builderFollowupPainScore: number;
+    engagementIntentScore: number;
+    channelSource?: string | null;
+    estimatedAcquisitionCents?: number | null;
+    notes?: string | null;
+  }): Promise<APIResponse<NewHomePilotAssessment>> {
+    return this.request(`/api/new-home-setup/properties/${propertyId}/pilot-assessment`, {
+      method: 'PUT', body: JSON.stringify(input),
+    });
+  }
+
+  async getNewHomeSetupPlan(propertyId: string): Promise<APIResponse<NewHomeSetupPlan>> {
+    return this.request(`/api/new-home-setup/properties/${propertyId}/plan`);
+  }
+
+  async updateNewHomeLifecycle(propertyId: string, input: {
+    targetMoveInDate?: string | null;
+    ownershipStartedAt?: string | null;
+    builderWarrantyEndsAt?: string | null;
+    oneYearInspectionDueAt?: string | null;
+  }): Promise<APIResponse<NewHomeSetupPlan>> {
+    return this.request(`/api/new-home-setup/properties/${propertyId}/lifecycle`, {
+      method: 'PATCH', body: JSON.stringify(input),
+    });
+  }
+
+  async updateNewHomeTask(propertyId: string, taskId: string, input: {
+    status: HomeBuyerTaskStatus;
+    assignedToUserId?: string | null;
+    completionEvidence?: Record<string, unknown> | null;
+  }): Promise<APIResponse<NewHomeSetupTask>> {
+    return this.request(`/api/new-home-setup/properties/${propertyId}/tasks/${taskId}`, {
+      method: 'PATCH', body: JSON.stringify(input),
+    });
   }
 
   /**

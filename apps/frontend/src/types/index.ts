@@ -2512,6 +2512,66 @@ export interface BuyerAcceptanceStatus {
   acceptanceReady: boolean;
 }
 
+export type NewHomePilotDecision = 'PENDING' | 'ELIGIBLE' | 'HOLD';
+export type NewHomeDocumentAvailability = 'NONE' | 'SOME' | 'COMPLETE';
+export type NewHomePlanPhase = 'WALKTHROUGH' | 'FIRST_30_DAYS' | 'DAYS_31_TO_90' | 'FIRST_YEAR' | 'RECURRING_HOME';
+export type NewHomeResponsibility = 'BUILDER' | 'HOMEOWNER' | 'SHARED' | 'UNKNOWN';
+
+export interface NewHomePilotAssessment {
+  id: string;
+  propertyId: string;
+  demandScore: number;
+  documentAvailability: NewHomeDocumentAvailability;
+  builderFollowupPainScore: number;
+  engagementIntentScore: number;
+  channelSource: string | null;
+  estimatedAcquisitionCents: number | null;
+  decision: NewHomePilotDecision;
+  decisionReasons: string[];
+  notes: string | null;
+  assessedAt: string;
+}
+
+export interface NewHomeSetupTask {
+  id: string;
+  planId: string;
+  actionKey: string;
+  title: string;
+  description: string | null;
+  status: HomeBuyerTaskStatus;
+  phase: NewHomePlanPhase;
+  priority: BuyerPlanPriority;
+  responsibility: NewHomeResponsibility;
+  dueAt: string | null;
+  assignedToUserId: string | null;
+  completionEvidenceJson: Record<string, unknown> | null;
+  completedAt: string | null;
+}
+
+export interface NewHomeSetupPlan {
+  id: string;
+  propertyId: string;
+  status: 'ACTIVE' | 'HANDED_OFF' | 'ARCHIVED';
+  planStartDate: string;
+  targetMoveInDate: string | null;
+  ownershipStartedAt: string | null;
+  builderWarrantyEndsAt: string | null;
+  oneYearInspectionDueAt: string | null;
+  transitionedToRecurringAt: string | null;
+  tasks: NewHomeSetupTask[];
+}
+
+export interface NewHomeSetupOverview {
+  assessment: NewHomePilotAssessment | null;
+  plan: NewHomeSetupPlan | null;
+  evidence: {
+    documents: { total: number; verified: number };
+    warranties: number;
+    inventory: { total: number; modelAndSerialCaptured: number };
+    inspections: number;
+  };
+}
+
 // -----------------------------------------------------------------------------
 // PROPERTY MAINTENANCE TASK TYPES
 // -----------------------------------------------------------------------------
