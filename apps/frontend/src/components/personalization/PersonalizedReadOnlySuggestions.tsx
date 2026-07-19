@@ -43,6 +43,13 @@ export function PersonalizedReadOnlySuggestions({
                   {item.governance.professionalBoundary}
                 </p>
               ) : null}
+              {item.recommendationResponse.status !== 'AVAILABLE' ? (
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700" role="status">
+                  <p className="font-semibold">Recommendation withheld</p>
+                  <p className="mt-1">{item.recommendationResponse.message}</p>
+                  <p className="mt-1">{item.recommendationResponse.safeNextAction}</p>
+                </div>
+              ) : null}
               <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-2">
                 <Sparkles className="h-4 w-4" aria-hidden="true" />

@@ -74,6 +74,13 @@ export function PersonalizedMaintenanceSuggestions({ propertyId }: { propertyId?
                     {item.governance.professionalBoundary}
                   </p>
                 ) : null}
+                {item.recommendationResponse.status !== 'AVAILABLE' ? (
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700" role="status">
+                    <p className="font-semibold">Recommendation withheld</p>
+                    <p className="mt-1">{item.recommendationResponse.message}</p>
+                    <p className="mt-1">{item.recommendationResponse.safeNextAction}</p>
+                  </div>
+                ) : null}
                 {action ? (
                   <Button
                     type="button"

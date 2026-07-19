@@ -160,6 +160,9 @@ export async function convertPersonalizationRecommendationToTask(req: CustomRequ
   if (result.status === 'ACTION_NOT_SUPPORTED') {
     return res.status(409).json({ success: false, error: { code: result.status, message: 'This recommendation cannot become a maintenance task.' } });
   }
+  if (result.status === 'RECOMMENDATION_NOT_ACTIONABLE') {
+    return res.status(409).json({ success: false, error: { code: result.status, message: result.recommendationResponse.message }, data: { recommendationResponse: result.recommendationResponse } });
+  }
   if (result.status === 'PERSONALIZATION_PAUSED') {
     return res.status(503).json({ success: false, error: { code: result.status, message: 'Personalization is temporarily paused.' } });
   }

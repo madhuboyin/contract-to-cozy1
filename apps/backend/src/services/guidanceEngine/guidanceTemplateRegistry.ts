@@ -1,6 +1,7 @@
-import { GuidanceJourneyTemplate, GuidanceStepSkipPolicy } from './guidanceTypes';
+import { GuidanceJourneyTemplate, GuidanceJourneyTemplateDefinition, GuidanceStepSkipPolicy } from './guidanceTypes';
+import { applyGuidanceGovernance } from './guidanceGovernance.catalog';
 
-const templates: GuidanceJourneyTemplate[] = [
+const templateDefinitions: GuidanceJourneyTemplateDefinition[] = [
   // ── Asset Lifecycle ─────────────────────────────────────────────────────────
   {
     journeyTypeKey: 'asset_lifecycle_resolution',
@@ -1884,6 +1885,8 @@ const templates: GuidanceJourneyTemplate[] = [
   },
 ];
 
+const templates: GuidanceJourneyTemplate[] = templateDefinitions.map(applyGuidanceGovernance);
+
 const templateByFamily = new Map<string, GuidanceJourneyTemplate>();
 for (const template of templates) {
   for (const family of template.signalIntentFamilies) {
@@ -1891,7 +1894,7 @@ for (const template of templates) {
   }
 }
 
-export const DEFAULT_TEMPLATE: GuidanceJourneyTemplate = {
+const defaultTemplateDefinition: GuidanceJourneyTemplateDefinition = {
   journeyTypeKey: 'generic_guidance_resolution',
   journeyKey: 'journey_generic_guidance_resolution',
   version: '1.1.0',
@@ -1915,6 +1918,8 @@ export const DEFAULT_TEMPLATE: GuidanceJourneyTemplate = {
     },
   ],
 };
+
+export const DEFAULT_TEMPLATE: GuidanceJourneyTemplate = applyGuidanceGovernance(defaultTemplateDefinition);
 
 // Global fallback: maps toolKey → canonical stepKey when no journey context is available.
 // P1-2: 'recalls' fixed from 'recall_resolution' to 'safety_alert' (canonical first step).

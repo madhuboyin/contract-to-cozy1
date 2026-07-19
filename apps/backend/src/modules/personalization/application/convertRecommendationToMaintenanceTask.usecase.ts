@@ -3,8 +3,10 @@ import { buildMaintenanceTaskFromRecommendation } from '../adapters/recommendati
 import { loadActiveRecommendationForAction } from '../infrastructure/personalizationRepository';
 import { recordRecommendationFeedback } from './recordRecommendationFeedback.usecase';
 import { materializeRecommendationsForProperty } from './materializeRecommendations.usecase';
+import { buildRecommendationResponseContract, resolveRecommendationResponseStatus } from '../../../productFramework/recommendationResponse.contract';
+import { findPersonalizationDefinition } from '../catalog/personalizationDefinitions';
 
-export type ConvertRecommendationStatus = 'CREATED' | 'EXISTING' | 'RECOMMENDATION_NOT_FOUND' | 'ACTION_NOT_SUPPORTED' | 'PERSONALIZATION_PAUSED';
+export type ConvertRecommendationStatus = 'CREATED' | 'EXISTING' | 'RECOMMENDATION_NOT_FOUND' | 'ACTION_NOT_SUPPORTED' | 'RECOMMENDATION_NOT_ACTIONABLE' | 'PERSONALIZATION_PAUSED';
 
 export async function convertRecommendationToMaintenanceTask(params: {
   recommendationId: string;
@@ -26,7 +28,18 @@ export async function convertRecommendationToMaintenanceTask(params: {
   if (!recommendation) return { status: 'RECOMMENDATION_NOT_FOUND' as const };
 
   const taskInput = buildMaintenanceTaskFromRecommendation(recommendation);
-  if (!taskInput) return { status: 'ACTION_NOT_SUPPORTED' as const };
+  const catalogDefinition = findPersonalizationDefinition(recommendation.definition.code);
+  if (!taskInput || !catalogDefinition) return { status: 'ACTION_NOT_SUPPORTED' as const };
+
+  const responseStatus = resolveRecommendationResponseStatus({ confidence: recommendation.confidence });
+  const responseContract = buildRecommendationResponseContract({
+    status: responseStatus,
+    safetyTier: catalogDefinition.governance.safetyTier,
+    reasonCode: responseStatus === 'AVAILABLE' ? 'PERSONALIZATION_AVAILABLE' : `PERSONALIZATION_${responseStatus}`,
+  });
+  if (!responseContract.materialActionAllowed) {
+    return { status: 'RECOMMENDATION_NOT_ACTIONABLE' as const, recommendationResponse: responseContract };
+  }
 
   const result = await PropertyMaintenanceTaskService.createFromActionCenter(
     params.userId,

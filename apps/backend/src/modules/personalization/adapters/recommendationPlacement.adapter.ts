@@ -2,6 +2,11 @@ import {
   findPersonalizationDefinition,
   PersonalizationModule,
 } from '../catalog/personalizationDefinitions';
+import {
+  buildRecommendationResponseContract,
+  resolveRecommendationResponseStatus,
+  type RecommendationResponseContract,
+} from '../../../productFramework/recommendationResponse.contract';
 
 interface StoredRecommendation {
   id: string;
@@ -41,6 +46,7 @@ export interface ModuleRecommendationDTO {
     emergencyEscalation: string | null;
     policyVersion: string;
   };
+  recommendationResponse: RecommendationResponseContract;
   actions: Array<{
     type: 'CONVERT_TO_TASK' | 'OPEN_MAINTENANCE';
     label: string;
@@ -61,6 +67,12 @@ export function mapRecommendationToModule(
   const priority = recommendation.priorityBand === 'HIGH' || recommendation.priorityBand === 'LOW'
     ? recommendation.priorityBand
     : 'MEDIUM';
+  const responseStatus = resolveRecommendationResponseStatus({ confidence: recommendation.confidence });
+  const recommendationResponse = buildRecommendationResponseContract({
+    status: responseStatus,
+    safetyTier: definition.governance.safetyTier,
+    reasonCode: responseStatus === 'AVAILABLE' ? 'PERSONALIZATION_AVAILABLE' : `PERSONALIZATION_${responseStatus}`,
+  });
 
   return {
     id: recommendation.id,
@@ -79,8 +91,9 @@ export function mapRecommendationToModule(
       emergencyEscalation: definition.governance.emergencyEscalation,
       policyVersion: definition.governance.policyVersion,
     },
+    recommendationResponse,
     actions: module === 'MAINTENANCE'
-      ? [{ type: 'CONVERT_TO_TASK', label: 'Add to maintenance', enabled: canAct }]
+      ? [{ type: 'CONVERT_TO_TASK', label: 'Add to maintenance', enabled: canAct && recommendationResponse.materialActionAllowed }]
       : [{ type: 'OPEN_MAINTENANCE', label: 'Review in Maintenance', enabled: true }],
     expiresAt: recommendation.expiresAt?.toISOString() ?? null,
   };

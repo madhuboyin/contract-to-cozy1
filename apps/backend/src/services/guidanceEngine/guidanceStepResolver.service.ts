@@ -12,6 +12,8 @@ import { guidanceValidationService } from './guidanceValidation.service';
 import { getStepSkipPolicy } from './guidanceTemplateRegistry';
 import { runJourneyCompletionHooks } from './guidanceCompletionHooks.service';
 import { logger } from '../../lib/logger';
+import type { RecommendationGovernance } from '../../productFramework/recommendationGovernance.contract';
+import { resolveGuidanceStepGovernance } from './guidanceGovernance.catalog';
 
 const VALID_STEP_TRANSITIONS: Record<GuidanceStepStatus, GuidanceStepStatus[]> = {
   PENDING: ['IN_PROGRESS', 'COMPLETED', 'SKIPPED', 'BLOCKED'],
@@ -87,6 +89,7 @@ export class GuidanceStepResolverService {
     propertyId: string;
     journeyId: string;
     templateSteps: GuidanceStepTemplate[];
+    templateGovernance: RecommendationGovernance;
     actorUserId?: string | null;
     signalId?: string | null;
   }) {
@@ -104,6 +107,7 @@ export class GuidanceStepResolverService {
 
     for (const step of params.templateSteps) {
       const existingStep = existingByKey.get(step.stepKey);
+      const governance = resolveGuidanceStepGovernance(params.templateGovernance, step);
 
       if (!existingStep) {
         await guidanceJourneyStep.create({
@@ -122,6 +126,12 @@ export class GuidanceStepResolverService {
             routePath: step.routePath ?? null,
             requiredContextKeys: step.requiredContextKeys ?? [],
             missingContextKeys: [],
+            safetyTier: governance.safetyTier,
+            governancePolicyVersion: governance.policyVersion,
+            professionalBoundary: governance.professionalBoundary,
+            conservativeFallback: governance.conservativeFallback,
+            emergencyEscalation: governance.emergencyEscalation,
+            governanceJson: governance,
           },
         });
         continue;
@@ -140,6 +150,12 @@ export class GuidanceStepResolverService {
           toolKey: step.toolKey ?? null,
           routePath: step.routePath ?? null,
           requiredContextKeys: step.requiredContextKeys ?? [],
+          safetyTier: governance.safetyTier,
+          governancePolicyVersion: governance.policyVersion,
+          professionalBoundary: governance.professionalBoundary,
+          conservativeFallback: governance.conservativeFallback,
+          emergencyEscalation: governance.emergencyEscalation,
+          governanceJson: governance,
         },
       });
     }

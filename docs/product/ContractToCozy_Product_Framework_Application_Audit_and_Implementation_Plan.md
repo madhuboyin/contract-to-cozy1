@@ -775,7 +775,7 @@ Steps 9–14 must adapt to repair versus replacement, DIY versus provider, cover
 
 **Objective:** Make recurring engagement useful, explainable, and governable.
 
-**Implementation status:** Increment 1 started July 18, 2026. Recommendation definitions now persist typed trust tiers and policy versions; the reviewed personalization catalog carries schema-validated professional boundaries and safety fallbacks; MFA-protected role attestations form an auditable review queue; and activation is blocked until tier-required approvals match the current policy. Generated personalization responses expose the trust boundary to homeowner surfaces. Notification policy, Grounded Ask, guidance-step tiers, failure contracts, incident operations, and quality reporting remain pending. No migration script is included. See `docs/product/phase4/README.md`.
+**Implementation status:** Increments 1–2 implemented July 18, 2026. Recommendation definitions persist typed trust tiers and policy versions; the reviewed personalization catalog carries schema-validated professional boundaries and safety fallbacks; MFA-protected role attestations form an auditable review queue; and activation is blocked until tier-required approvals match the current policy. All guidance templates are explicitly classified, their exact governance snapshots persist on hydrated journey steps, and canonical guidance/personalization producers share safe low-confidence, unavailable-data, and upstream-failure contracts that withhold degraded material actions. Remaining producer coverage, recommendation-incident operations and quality reporting, notification policy, and the remaining Grounded Ask scope are pending. No migration script is included. See `docs/product/phase4/README.md`.
 
 #### Trust tiers
 

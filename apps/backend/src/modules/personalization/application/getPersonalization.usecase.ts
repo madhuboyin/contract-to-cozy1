@@ -11,6 +11,10 @@ import type { PersonalizationCapabilities } from '../domain/capabilityPolicy';
 import { loadExplicitRankingPreferences } from '../infrastructure/profileRankingRepository';
 import { rankRecommendationsForOwner } from '../domain/profileRanking';
 import { findPersonalizationDefinition } from '../catalog/personalizationDefinitions';
+import {
+  buildRecommendationResponseContract,
+  resolveRecommendationResponseStatus,
+} from '../../../productFramework/recommendationResponse.contract';
 
 export async function getPersonalization(
   propertyId: string,
@@ -30,6 +34,11 @@ export async function getPersonalization(
       rankingContext: { profileApplied: false, reasons: [] },
       nextQuestion: null,
       capabilities,
+      recommendationResponse: buildRecommendationResponseContract({
+        status: 'UPSTREAM_FAILURE',
+        safetyTier: 'LOW_CONSEQUENCE',
+        reasonCode: 'PERSONALIZATION_PAUSED',
+      }),
     };
   }
   const [storedRecommendations, nextQuestion, preferences] = await Promise.all([
@@ -44,6 +53,7 @@ export async function getPersonalization(
   const ranked = rankRecommendationsForOwner(storedRecommendations, preferences);
   const recommendations = ranked.slice(0, 3).map(({ item: recommendation, score, priorityBand, rankingReasons }) => {
     const catalogDefinition = findPersonalizationDefinition(recommendation.definition.code);
+    const responseStatus = resolveRecommendationResponseStatus({ confidence: recommendation.confidence });
     return {
       ...recommendation,
       score,
@@ -61,6 +71,11 @@ export async function getPersonalization(
         emergencyEscalation: catalogDefinition.governance.emergencyEscalation,
         policyVersion: catalogDefinition.governance.policyVersion,
       } : null,
+      recommendationResponse: buildRecommendationResponseContract({
+        status: responseStatus,
+        safetyTier: catalogDefinition?.governance.safetyTier ?? 'LOW_CONSEQUENCE',
+        reasonCode: responseStatus === 'AVAILABLE' ? 'PERSONALIZATION_AVAILABLE' : `PERSONALIZATION_${responseStatus}`,
+      }),
     };
   });
   return {
@@ -74,6 +89,11 @@ export async function getPersonalization(
     },
     nextQuestion: nextQuestion.question,
     capabilities,
+    recommendationResponse: buildRecommendationResponseContract({
+      status: 'AVAILABLE',
+      safetyTier: 'LOW_CONSEQUENCE',
+      reasonCode: 'PERSONALIZATION_SERVICE_AVAILABLE',
+    }),
   };
 }
 

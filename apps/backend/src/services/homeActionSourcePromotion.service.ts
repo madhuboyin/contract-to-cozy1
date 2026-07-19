@@ -1,6 +1,8 @@
 import type { HomeAction } from '../productFramework';
 import { adaptHomeActionSource } from '../productFramework';
 import { prisma } from '../lib/prisma';
+import { RecommendationGovernanceSchema } from '../productFramework/recommendationGovernance.contract';
+import { buildRecommendationResponseContract, resolveRecommendationResponseStatus } from '../productFramework/recommendationResponse.contract';
 
 const DEFAULT_FEEDBACK: HomeAction['feedbackControls'] = [
   'COMPLETE', 'DEFER', 'SNOOZE', 'DISMISS', 'ALREADY_DONE', 'NOT_RELEVANT', 'CORRECT_FACT',
@@ -28,6 +30,51 @@ function lowConsequenceGovernance(policyVersion = 'phase2-v1'): HomeAction['gove
     },
     reviewedBy: [],
     policyVersion,
+  };
+}
+
+function guidanceGovernance(step: any, policyVersion: string): HomeAction['governance'] {
+  const parsed = RecommendationGovernanceSchema.safeParse(step?.governanceJson);
+  return parsed.success ? parsed.data : lowConsequenceGovernance(policyVersion);
+}
+
+function guidanceDecisionContract(governance: HomeAction['governance']) {
+  const material = governance.safetyTier === 'MATERIAL_FINANCIAL' || governance.safetyTier === 'REGULATED_COVERAGE';
+  if (!material) return { assumptions: [], options: [], tradeoffs: [] };
+  return {
+    assumptions: [{
+      key: 'home_record_currency',
+      label: 'Home record is current',
+      value: 'The recommendation uses the property facts and evidence currently stored in ContractToCozy.',
+      source: 'PROPERTY_FACT' as const,
+      editable: true,
+    }],
+    options: [
+      {
+        id: 'continue_evidence_review',
+        label: 'Continue evidence review',
+        summary: 'Use the guided journey to verify facts, documents, pricing, and scope before committing.',
+        recommended: true,
+      },
+      {
+        id: 'verify_with_professional',
+        label: 'Verify independently',
+        summary: 'Pause the journey and confirm the condition, contract, or local requirement with a qualified professional.',
+        recommended: false,
+      },
+    ],
+    tradeoffs: [
+      {
+        optionId: 'continue_evidence_review',
+        dimension: 'EFFORT' as const,
+        summary: 'Keeps the decision context together but still depends on the completeness of the home record.',
+      },
+      {
+        optionId: 'verify_with_professional',
+        dimension: 'COST' as const,
+        summary: 'May add time or professional cost while reducing uncertainty for a material decision.',
+      },
+    ],
   };
 }
 
@@ -80,6 +127,18 @@ async function loadGuidanceActions(propertyId: string, db: HomeActionSourceDb): 
     const confidence = journey.primarySignal?.confidenceScore == null
       ? null
       : Number(journey.primarySignal.confidenceScore);
+    const governance = guidanceGovernance(step, journey.templateVersion ?? 'phase4-v1');
+    const responseStatus = resolveRecommendationResponseStatus({
+      confidence,
+      missingFacts: journey.missingContextKeys,
+    });
+    const recommendationResponse = buildRecommendationResponseContract({
+      status: responseStatus,
+      safetyTier: governance.safetyTier,
+      missingFacts: journey.missingContextKeys,
+      reasonCode: responseStatus === 'AVAILABLE' ? 'GUIDANCE_AVAILABLE' : `GUIDANCE_${responseStatus}`,
+    });
+    const decisionContract = guidanceDecisionContract(governance);
     const title = journey.issueType ?? journey.journeyTypeKey ?? 'Active home decision';
     const href = resolveGuidanceHref({
       propertyId,
@@ -98,7 +157,9 @@ async function loadGuidanceActions(propertyId: string, db: HomeActionSourceDb): 
         : journey.primarySignal?.severity === 'HIGH' || step?.status === 'BLOCKED' ? 'SOON' : 'PLAN',
       signal: `${title}: ${step?.label ?? 'continue the active decision'}`,
       whyItMatters: step?.description ?? 'This active journey preserves the evidence and decisions needed for the next home outcome.',
-      recommendedAction: step?.label ?? 'Continue this home decision',
+      recommendedAction: recommendationResponse.materialActionAllowed
+        ? step?.label ?? 'Continue this home decision'
+        : recommendationResponse.safeNextAction,
       expectedOutcome: 'Advance the active journey without losing its property, evidence, or decision context.',
       timing: {
         dueAt: null,
@@ -115,15 +176,30 @@ async function loadGuidanceActions(propertyId: string, db: HomeActionSourceDb): 
         freshness: 'CURRENT',
         confidence,
       }],
-      assumptions: [], options: [], tradeoffs: [],
+      ...decisionContract,
       confidence: { score: confidence, label: confidenceLabel(confidence), missing: journey.missingContextKeys },
-      governance: lowConsequenceGovernance(journey.templateVersion ?? 'phase2-v1'),
-      primaryCta: { kind: 'REVIEW', label: step?.label ?? 'Continue journey', href },
-      secondaryCtas: [{
-        kind: 'CORRECT_FACT',
-        label: 'Correct home context',
-        href: `/dashboard/properties/${propertyId}/onboarding`,
-      }],
+      governance,
+      primaryCta: {
+        kind: 'REVIEW',
+        label: recommendationResponse.materialActionAllowed ? step?.label ?? 'Continue journey' : 'Review missing information',
+        href: recommendationResponse.materialActionAllowed
+          ? href
+          : `/dashboard/properties/${propertyId}/tools/guidance-overview?journeyId=${encodeURIComponent(journey.id)}`,
+      },
+      secondaryCtas: [
+        {
+          kind: 'CORRECT_FACT',
+          label: 'Correct home context',
+          href: `/dashboard/properties/${propertyId}/onboarding`,
+        },
+        ...(governance.safetyTier === 'SAFETY_EMERGENCY'
+          ? [{
+              kind: 'ESCALATE' as const,
+              label: 'Review emergency options',
+              href: `/dashboard/properties/${propertyId}/incidents`,
+            }]
+          : []),
+      ],
       feedbackControls: DEFAULT_FEEDBACK,
       relatedJourneyId: journey.id,
       createdAt: journey.createdAt.toISOString(),

@@ -106,7 +106,8 @@ export async function loadActiveRecommendationForAction(
     where: { id: recommendationId, propertyId, status: 'ACTIVE' },
     select: {
       id: true,
-      definition: { select: { code: true } },
+      confidence: true,
+      definition: { select: { code: true, safetyTier: true } },
       explanations: {
         orderBy: { version: 'desc' },
         take: 1,

@@ -1047,6 +1047,7 @@ export class GuidanceJourneyService {
       propertyId: params.propertyId,
       journeyId: journey.id,
       templateSteps: template.steps,
+      templateGovernance: template.governance,
       actorUserId: params.actorUserId ?? null,
       signalId: params.signal.id,
     });
@@ -1868,6 +1869,7 @@ export class GuidanceJourneyService {
       propertyId: args.propertyId,
       journeyId: journey.id,
       templateSteps: template.steps,
+      templateGovernance: template.governance,
       actorUserId: args.actorUserId ?? null,
       signalId: null,
     });
@@ -2297,6 +2299,7 @@ export class GuidanceJourneyService {
       propertyId,
       journeyId,
       templateSteps: newTemplate.steps,
+      templateGovernance: newTemplate.governance,
       actorUserId,
       signalId: null,
     });

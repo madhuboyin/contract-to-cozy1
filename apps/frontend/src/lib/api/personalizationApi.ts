@@ -1,6 +1,17 @@
 import { api } from './client';
 import type { PropertyContextEnvelope } from '@/components/property-context/propertyContextTypes';
 
+export interface RecommendationResponseContract {
+  status: 'AVAILABLE' | 'LOW_CONFIDENCE' | 'DATA_UNAVAILABLE' | 'UPSTREAM_FAILURE';
+  safetyTier: 'LOW_CONSEQUENCE' | 'MATERIAL_FINANCIAL' | 'REGULATED_COVERAGE' | 'SAFETY_EMERGENCY';
+  reasonCode: string;
+  message: string;
+  safeNextAction: string;
+  missingFacts: string[];
+  retryable: boolean;
+  materialActionAllowed: boolean;
+}
+
 export interface PersonalizationRecommendation {
   id: string;
   status: string;
@@ -23,6 +34,7 @@ export interface PersonalizationRecommendation {
     emergencyEscalation: string | null;
     policyVersion: string;
   } | null;
+  recommendationResponse: RecommendationResponseContract;
   explanations: Array<{
     headline: string;
     reasonCodes: Array<{ code: string; templateKey: string; params?: { message?: string; factSummary?: string } }>;
@@ -33,6 +45,7 @@ export interface PersonalizationRecommendation {
 export interface PersonalizationResponse {
   propertyContext?: PropertyContextEnvelope;
   available: boolean;
+  recommendationResponse: RecommendationResponseContract;
   profileEnabled: boolean;
   consentedAt?: string | null;
   recommendations: PersonalizationRecommendation[];
@@ -155,6 +168,7 @@ export interface ModuleRecommendation {
     emergencyEscalation: string | null;
     policyVersion: string;
   };
+  recommendationResponse: RecommendationResponseContract;
   actions: Array<{ type: 'CONVERT_TO_TASK' | 'OPEN_MAINTENANCE'; label: string; enabled: boolean }>;
   expiresAt: string | null;
 }

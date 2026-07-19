@@ -1,5 +1,6 @@
 import { APIError } from '../../middleware/error.middleware';
 import { prisma } from '../../lib/prisma';
+import type { RecommendationGovernance } from '../../productFramework/recommendationGovernance.contract';
 
 export const GUIDANCE_ISSUE_DOMAINS = [
   'SAFETY',
@@ -169,9 +170,10 @@ export type GuidanceStepTemplate = {
   routePath?: string;
   requiredContextKeys?: string[];
   skipPolicy?: GuidanceStepSkipPolicy;
+  governance?: RecommendationGovernance;
 };
 
-export type GuidanceJourneyTemplate = {
+export type GuidanceJourneyTemplateDefinition = {
   journeyTypeKey: string;
   journeyKey: string;
   // S6-40: version string in semver format, e.g. "1.0.0". Stored as
@@ -183,6 +185,10 @@ export type GuidanceJourneyTemplate = {
   defaultReadiness: GuidanceExecutionReadiness;
   canonicalFirstStepKey: string;
   steps: GuidanceStepTemplate[];
+};
+
+export type GuidanceJourneyTemplate = GuidanceJourneyTemplateDefinition & {
+  governance: RecommendationGovernance;
 };
 
 export type GuidanceToolCompletionInput = {

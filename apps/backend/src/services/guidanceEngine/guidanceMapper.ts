@@ -1,4 +1,8 @@
 import { decimalToNumber } from './guidanceTypes';
+import {
+  buildRecommendationResponseContract,
+  resolveRecommendationResponseStatus,
+} from '../../productFramework/recommendationResponse.contract';
 
 function asIso(value: Date | string | null | undefined): string | null {
   if (!value) return null;
@@ -53,6 +57,13 @@ export function mapGuidanceStep(step: any) {
     displayLabel: step.displayLabel ?? null,
     requiredContextKeys: step.requiredContextKeys ?? [],
     missingContextKeys: step.missingContextKeys ?? [],
+    governance: step.governanceJson ?? {
+      safetyTier: step.safetyTier ?? 'LOW_CONSEQUENCE',
+      professionalBoundary: step.professionalBoundary ?? null,
+      conservativeFallback: step.conservativeFallback ?? null,
+      emergencyEscalation: step.emergencyEscalation ?? null,
+      policyVersion: step.governancePolicyVersion ?? 'phase4-v1',
+    },
     blockedReasonCode: step.blockedReasonCode ?? null,
     blockedReason: step.blockedReason ?? null,
     skippedReasonCode: step.skippedReasonCode ?? null,
@@ -75,6 +86,13 @@ export function mapGuidanceJourney(journey: any) {
   const steps = allSteps.filter((step: any) => step.skippedReasonCode !== 'TEMPLATE_REMOVED');
   const completedCount = steps.filter((step: any) => step.status === 'COMPLETED').length;
   const totalCount = steps.length;
+  const confidence = decimalToNumber(journey.primarySignal?.confidenceScore);
+  const safetyTier = steps.find((step: any) => step.status === 'PENDING' || step.status === 'IN_PROGRESS')
+    ?.governance?.safetyTier ?? steps[0]?.governance?.safetyTier ?? 'LOW_CONSEQUENCE';
+  const responseStatus = resolveRecommendationResponseStatus({
+    confidence,
+    missingFacts: journey.missingContextKeys ?? [],
+  });
 
   return {
     id: journey.id,
@@ -119,6 +137,12 @@ export function mapGuidanceJourney(journey: any) {
     priorityGroup: journey.priorityGroup ?? null,
     confidenceScore: decimalToNumber(journey.confidenceScore),
     confidenceLabel: journey.confidenceLabel ?? null,
+    recommendationResponse: buildRecommendationResponseContract({
+      status: responseStatus,
+      safetyTier,
+      missingFacts: journey.missingContextKeys ?? [],
+      reasonCode: responseStatus === 'AVAILABLE' ? 'GUIDANCE_AVAILABLE' : `GUIDANCE_${responseStatus}`,
+    }),
     financialImpactScore:
       typeof journey.financialImpactScore === 'number' ? journey.financialImpactScore : null,
     fundingGapFlag: Boolean(journey.fundingGapFlag),

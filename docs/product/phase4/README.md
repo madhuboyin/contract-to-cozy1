@@ -1,6 +1,6 @@
 # Product Framework Phase 4 — Trust, Cadence, Grounded Ask, and Recurring Care
 
-Status: Increment 1 implementation started
+Status: Increments 1–2 implemented
 
 Contract version: `phase4-v1`
 
@@ -28,16 +28,29 @@ Implemented:
 
 ## Database policy
 
-Phase 4 Increment 1 changes the Prisma schema but does not include a migration script. There are no real users or data-migration requirements. The repository owner applies the updated schema and reruns the canonical personalization bootstrap as appropriate.
+Phase 4 Increments 1–2 change the Prisma schema but do not include a migration script. There are no real users or data-migration requirements. The repository owner applies the updated schema and reruns the canonical personalization bootstrap as appropriate.
+
+## Increment 2 — Guidance trust tiers and safe failure contracts
+
+Implemented:
+
+- Added an exhaustive, code-owned safety-tier classification for all 25 guidance templates plus the generic fallback template.
+- Validated every guidance template against the canonical Phase 4 recommendation-governance schema.
+- Persisted the exact reviewed governance snapshot, tier, policy version, professional boundary, conservative fallback, and emergency escalation on each hydrated journey step.
+- Re-hydration synchronizes current template governance onto existing steps after the repository owner applies the schema.
+- Replaced the canonical guidance Home Action adapter's hard-coded `LOW_CONSEQUENCE` classification with the persisted step boundary.
+- Added the required assumptions, options, and tradeoffs to material guidance actions and an escalation path to safety/emergency actions.
+- Added one shared `AVAILABLE`, `LOW_CONFIDENCE`, `DATA_UNAVAILABLE`, and `UPSTREAM_FAILURE` response contract.
+- Withheld material actions whenever a response is degraded and supplied explicit safe copy, missing-fact context, retryability, and a safe next action.
+- Applied the failure contract to guidance API responses, personalization APIs, module placements, homeowner surfaces, and the server-side recommendation-to-maintenance mutation.
+- Added focused contract coverage and no migration script.
 
 ## Remaining Phase 4 increments
 
 ### Trust completion
 
-- Add safety tiers to guidance templates and persisted journey steps.
-- Add safe low-confidence, unavailable-data, and upstream-failure response contracts across recommendation producers.
 - Add recommendation incident intake, triage, resolution, and calibration/reversal/complaint/override reporting.
-- Extend tier validation beyond the initial reviewed personalization catalog to every material recommendation producer.
+- Extend tier validation and the safe failure contract beyond reviewed personalization and canonical guidance to every remaining material recommendation producer.
 
 ### Canonical notification policy
 
@@ -60,4 +73,5 @@ npm -C apps/backend run build
 npx tsc --noEmit -p apps/frontend/tsconfig.json
 node --test apps/backend/tests/unit/phase4TrustGovernance.test.js
 node --test apps/backend/tests/unit/personalizationCatalogAdmin.test.js
+node --test apps/backend/tests/unit/phase4GuidanceTrustContracts.test.js
 ```

@@ -13,7 +13,8 @@ function loadUseCase({ recommendation = undefined, deduped = false } = {}) {
   const feedbackCalls = [];
   const stored = recommendation === undefined ? {
     id: 'rec-1',
-    definition: { code: 'hvac_filter_replacement_check_proof' },
+    confidence: 0.9,
+    definition: { code: 'hvac_filter_replacement_check_proof', safetyTier: 'LOW_CONSEQUENCE' },
     explanations: [{ headline: 'Check HVAC filter', reasonCodes: [] }],
   } : recommendation;
 
@@ -74,4 +75,20 @@ test('rejects missing and unsupported recommendations without creating a task', 
   });
   assert.equal((await unsupported.convertRecommendationToMaintenanceTask(params)).status, 'ACTION_NOT_SUPPORTED');
   assert.equal(unsupported.taskCalls.length, 0);
+});
+
+test('withholds conversion when recommendation confidence is missing', async () => {
+  const degraded = loadUseCase({
+    recommendation: {
+      id: 'rec-3',
+      confidence: null,
+      definition: { code: 'hvac_filter_replacement_check_proof', safetyTier: 'LOW_CONSEQUENCE' },
+      explanations: [{ headline: 'Check HVAC filter', reasonCodes: [] }],
+    },
+  });
+  const result = await degraded.convertRecommendationToMaintenanceTask(params);
+  assert.equal(result.status, 'RECOMMENDATION_NOT_ACTIONABLE');
+  assert.equal(result.recommendationResponse.status, 'DATA_UNAVAILABLE');
+  assert.equal(result.recommendationResponse.materialActionAllowed, false);
+  assert.equal(degraded.taskCalls.length, 0);
 });

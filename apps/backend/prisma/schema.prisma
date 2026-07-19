@@ -4235,6 +4235,16 @@ model GuidanceJourneyStep {
   requiredContextKeys String[] @default([])
   missingContextKeys  String[] @default([])
 
+  // Phase 4: trust boundary copied from the reviewed guidance template during
+  // hydration. Persisting the snapshot makes the policy used by the journey
+  // explicit and keeps API/Home Action consumers on the same classification.
+  safetyTier              RecommendationSafetyTier @default(LOW_CONSEQUENCE)
+  governancePolicyVersion String                   @default("phase4-v1")
+  professionalBoundary    String?                  @db.Text
+  conservativeFallback    String?                  @db.Text
+  emergencyEscalation     String?                  @db.Text
+  governanceJson          Json?
+
   // TODO: blockedReasonCode and skippedReasonCode are candidates for enums
   // once the full set of reason codes is stabilised across all journey types.
   blockedReasonCode String?
@@ -4265,6 +4275,7 @@ model GuidanceJourneyStep {
   @@index([journeyId, decisionStage, status])
   @@index([journeyId, executionReadiness])
   @@index([journeyId, toolKey]) // P4-14: supports GuidanceBookingGuardService step filtering by toolKey
+  @@index([safetyTier, status, updatedAt(sort: Desc)])
   @@index([toolKey, status])
   @@index([toolKey])
   @@map("guidance_journey_steps")
