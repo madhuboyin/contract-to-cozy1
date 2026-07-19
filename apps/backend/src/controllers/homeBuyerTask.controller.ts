@@ -448,6 +448,7 @@ const handleDispositionFinding = async (req: AuthRequest, res: Response, next: N
         disposition: input.disposition,
         taskId: result.taskId,
         guidanceJourneyId: result.guidanceJourneyId,
+        repairJourneyId: result.repairJourneyId,
       },
     });
     return res.json({ success: true, data: result });

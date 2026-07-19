@@ -12763,6 +12763,7 @@ model InspectionFinding {
   buyerDispositionByUserId String?
   buyerTaskId              String?
   buyerGuidanceJourneyId   String?
+  buyerRepairJourneyId     String?
   buyerMaintenanceTaskId   String?
 
   // Links set during write-back on confirmation
@@ -12793,6 +12794,7 @@ model InspectionFinding {
   @@index([propertyId, buyerDisposition])
   @@index([buyerTaskId])
   @@index([buyerGuidanceJourneyId])
+  @@index([buyerRepairJourneyId])
   @@index([propertyId, homeSystem])
   @@index([permitFlagId])
   @@index([inventoryItemId])

@@ -38,8 +38,8 @@ Status: implemented in code.
 The completion increment adds:
 
 1. Explicit inspection-finding dispositions: verified fact, pre-close negotiation, post-close action, or dismissed.
-2. Idempotent creation of property-plan tasks from actionable findings with durable finding, task, guidance-journey, and Home Action lineage.
-3. A dedicated inspection follow-up guidance journey for every actionable safety or major finding. These journeys enter the canonical Home Action feed through the existing guidance promotion adapter.
+2. Idempotent creation of property-plan tasks from actionable findings with durable finding, task, inspection-review journey, canonical repair journey, and Home Action lineage.
+3. Every actionable safety or major finding keeps its inspection-review lineage and branches into the canonical `asset_lifecycle_resolution` major repair/replacement journey. The property-plan task references that repair journey, which enters the canonical Home Action feed through the existing guidance promotion adapter.
 4. A combined inspection and transaction-document review surface, including property document verification.
 5. Editable target-close and ownership-start anchors with automatic due-date recalculation.
 6. Household task assignment and proof-bearing task completion.
@@ -52,7 +52,7 @@ The completion increment adds:
 
 - Inspection findings become verified facts, actions, decisions, or dismissed items with lineage: complete.
 - The 90-day plan has priorities, owners, timing, completion state, and completion evidence: complete.
-- Material findings branch into inspection repair guidance and canonical Home Actions: complete.
+- Material findings branch into the canonical major repair/replacement journey and Home Actions while retaining inspection-review lineage: complete.
 - On day 91, unresolved work transitions idempotently into the standard recurring Home loop: complete.
 
 Phase 5 implementation is code-complete. Deployment verification and pilot metric evaluation remain operational release activities, not missing application implementation.

@@ -3186,7 +3186,7 @@ class APIClient {
     notes?: string | null;
     assignedToUserId?: string | null;
     dueAt?: string | null;
-  }): Promise<APIResponse<{ finding: unknown; taskId: string | null; guidanceJourneyId: string | null }>> {
+  }): Promise<APIResponse<{ finding: unknown; taskId: string | null; guidanceJourneyId: string | null; repairJourneyId: string | null }>> {
     return this.request(`/api/home-buyer-tasks/properties/${propertyId}/findings/${findingId}/disposition`, {
       method: 'POST', body: JSON.stringify(input),
     });

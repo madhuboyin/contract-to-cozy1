@@ -14,7 +14,7 @@ export async function getPhase5PilotMetrics(fromRaw?: Date, toRaw?: Date) {
       property: {
         select: {
           inspectionFindings: {
-            select: { severity: true, buyerDisposition: true, buyerGuidanceJourneyId: true },
+            select: { severity: true, buyerDisposition: true, buyerRepairJourneyId: true },
           },
           documents: { select: { verificationStatus: true } },
         },
@@ -28,7 +28,7 @@ export async function getPhase5PilotMetrics(fromRaw?: Date, toRaw?: Date) {
   const actionableMaterial = plans.flatMap((plan) => plan.property.inspectionFindings).filter((finding) =>
     ['SAFETY', 'MAJOR'].includes(finding.severity)
     && ['PRE_CLOSE_NEGOTIATION', 'POST_CLOSE_ACTION'].includes(finding.buyerDisposition));
-  const materialBranched = actionableMaterial.filter((finding) => Boolean(finding.buyerGuidanceJourneyId)).length;
+  const materialBranched = actionableMaterial.filter((finding) => Boolean(finding.buyerRepairJourneyId)).length;
   const homesWithAllTasksAssigned = plans.filter((plan) =>
     plan.tasks.length > 0 && plan.tasks.every((task) => Boolean(task.assignedToUserId))).length;
   const totalTasks = plans.flatMap((plan) => plan.tasks);

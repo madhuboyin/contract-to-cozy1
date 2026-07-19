@@ -127,6 +127,7 @@ export class BuyerAcquisitionService {
               buyerDispositionAt: true,
               buyerTaskId: true,
               buyerGuidanceJourneyId: true,
+              buyerRepairJourneyId: true,
             },
           },
         },
@@ -196,6 +197,7 @@ export class BuyerAcquisitionService {
 
     let taskId: string | null = finding.buyerTaskId;
     let journeyId: string | null = finding.buyerGuidanceJourneyId;
+    let repairJourneyId: string | null = finding.buyerRepairJourneyId;
     const createsTask = input.disposition === 'PRE_CLOSE_NEGOTIATION' || input.disposition === 'POST_CLOSE_ACTION';
     if (createsTask) {
       const phase = input.disposition === 'PRE_CLOSE_NEGOTIATION' ? 'PRE_CLOSE' : 'FIRST_30_DAYS';
@@ -247,9 +249,38 @@ export class BuyerAcquisitionService {
           actorUserId: userId,
         });
         journeyId = result.journey.id;
+        const repairResult = await guidanceJourneyService.ingestSignal({
+          propertyId,
+          inventoryItemId: finding.inventoryItemId,
+          signalIntentFamily: 'maintenance_failure_risk',
+          issueDomain: 'ASSET_LIFECYCLE',
+          severity: guidanceSeverity(finding.severity),
+          severityScore: finding.severity === 'SAFETY' ? 100 : 80,
+          confidenceScore: finding.extractionConfidence === 'HIGH' ? 0.9 : finding.extractionConfidence === 'MEDIUM' ? 0.7 : 0.5,
+          sourceType: 'INSPECTION',
+          sourceFeatureKey: 'buyer_acquisition_plan',
+          sourceToolKey: 'buyer-plan',
+          sourceEntityType: 'INSPECTION_FINDING',
+          sourceEntityId: finding.id,
+          dedupeKey: `${propertyId}:maintenance_failure_risk:INSPECTION_FINDING:${finding.id}`,
+          duplicateGroupKey: `${propertyId}:major-repair:inspection-finding:${finding.id}`,
+          missingContextKeys: finding.inventoryItemId ? [] : ['inventory_item_link'],
+          payloadJson: {
+            findingId: finding.id,
+            reportId: finding.report.id,
+            homeSystem: finding.homeSystem,
+            severity: finding.severity,
+            description: finding.inspectorDescription,
+            buyerDisposition: input.disposition,
+            branchSourceJourneyId: journeyId,
+            observedAt: finding.report.inspectionDate.toISOString(),
+          },
+          actorUserId: userId,
+        });
+        repairJourneyId = repairResult.journey.id;
         await prisma.homeBuyerTask.update({
           where: { id: taskId },
-          data: { guidanceJourneyId: journeyId, sourceType: 'INSPECTION_FINDING' },
+          data: { guidanceJourneyId: repairJourneyId, sourceType: 'INSPECTION_FINDING' },
         });
       }
     }
@@ -262,17 +293,19 @@ export class BuyerAcquisitionService {
         data: { status: 'NOT_NEEDED', completedAt: null },
       });
     }
-    if (!createsTask && finding.buyerGuidanceJourneyId) {
-      const priorJourney = await prisma.guidanceJourney.update({
-        where: { id: finding.buyerGuidanceJourneyId },
-        data: { status: 'DISMISSED', completedAt: new Date() },
-        select: { primarySignalId: true },
-      }).catch(() => null);
-      if (priorJourney?.primarySignalId) {
-        await prisma.guidanceSignal.update({
-          where: { id: priorJourney.primarySignalId },
-          data: { status: 'ARCHIVED', archivedAt: new Date() },
+    if (!createsTask) {
+      for (const priorJourneyId of [finding.buyerGuidanceJourneyId, finding.buyerRepairJourneyId].filter(Boolean) as string[]) {
+        const priorJourney = await prisma.guidanceJourney.update({
+          where: { id: priorJourneyId },
+          data: { status: 'DISMISSED', completedAt: new Date() },
+          select: { primarySignalId: true },
         }).catch(() => null);
+        if (priorJourney?.primarySignalId) {
+          await prisma.guidanceSignal.update({
+            where: { id: priorJourney.primarySignalId },
+            data: { status: 'ARCHIVED', archivedAt: new Date() },
+          }).catch(() => null);
+        }
       }
     }
     const updated = await prisma.$transaction(async (tx) => {
@@ -285,6 +318,7 @@ export class BuyerAcquisitionService {
           buyerDispositionByUserId: userId,
           buyerTaskId: taskId,
           buyerGuidanceJourneyId: journeyId,
+          buyerRepairJourneyId: repairJourneyId,
           status: dismissed ? 'DISMISSED' : verifiedFact ? 'ACCEPTED_AS_IS' : 'OPEN',
           resolutionMethod: dismissed ? 'DISMISSED' : null,
           resolutionNotes: dismissed ? input.notes ?? 'Dismissed during buyer review' : null,
@@ -300,7 +334,7 @@ export class BuyerAcquisitionService {
       });
       return row;
     });
-    return { finding: updated, taskId, guidanceJourneyId: journeyId };
+    return { finding: updated, taskId, guidanceJourneyId: journeyId, repairJourneyId };
   }
 
   static async ensureRecurringHandoff(userId: string, propertyId: string, now = new Date()) {
@@ -378,7 +412,7 @@ export class BuyerAcquisitionService {
       prisma.inspectionFinding.count({ where: { propertyId, report: { status: 'CONFIRMED' } } }),
       prisma.inspectionFinding.count({ where: { propertyId, buyerDisposition: { not: 'PENDING_REVIEW' } } }),
       prisma.inspectionFinding.count({ where: { propertyId, severity: { in: ['SAFETY', 'MAJOR'] }, buyerDisposition: { in: ['PRE_CLOSE_NEGOTIATION', 'POST_CLOSE_ACTION'] } } }),
-      prisma.inspectionFinding.count({ where: { propertyId, severity: { in: ['SAFETY', 'MAJOR'] }, buyerDisposition: { in: ['PRE_CLOSE_NEGOTIATION', 'POST_CLOSE_ACTION'] }, buyerGuidanceJourneyId: { not: null } } }),
+      prisma.inspectionFinding.count({ where: { propertyId, severity: { in: ['SAFETY', 'MAJOR'] }, buyerDisposition: { in: ['PRE_CLOSE_NEGOTIATION', 'POST_CLOSE_ACTION'] }, buyerRepairJourneyId: { not: null } } }),
       prisma.document.count({ where: { propertyId, verificationStatus: 'VERIFIED' } }),
       prisma.document.count({ where: { propertyId } }),
     ]);

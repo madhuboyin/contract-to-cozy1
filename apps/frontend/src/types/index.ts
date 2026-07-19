@@ -2477,6 +2477,7 @@ export interface BuyerEvidenceFinding {
   buyerDispositionAt: string | null;
   buyerTaskId: string | null;
   buyerGuidanceJourneyId: string | null;
+  buyerRepairJourneyId: string | null;
 }
 
 export interface BuyerEvidenceReview {

@@ -25,13 +25,17 @@ test('lifecycle anchors are validated and finding dispositions are explicit', ()
   assert.equal(BuyerDocumentVerificationInputSchema.safeParse({ status: 'UNVERIFIED' }).success, false);
 });
 
-test('inspection promotion creates idempotent task and per-finding guidance lineage', () => {
+test('inspection promotion creates idempotent task and canonical repair lineage', () => {
   const service = read('../../src/services/buyerAcquisition.service.ts');
   assert.match(service, /buyer:inspection-finding:\$\{finding\.id\}/);
   assert.match(service, /checklistId_actionKey/);
   assert.match(service, /sourceEntityType: 'INSPECTION_FINDING'/);
   assert.match(service, /duplicateGroupKey: `\$\{propertyId\}:inspection-finding:\$\{finding\.id\}`/);
   assert.match(service, /buyerGuidanceJourneyId: journeyId/);
+  assert.match(service, /signalIntentFamily: 'maintenance_failure_risk'/);
+  assert.match(service, /duplicateGroupKey: `\$\{propertyId\}:major-repair:inspection-finding:\$\{finding\.id\}`/);
+  assert.match(service, /buyerRepairJourneyId: repairJourneyId/);
+  assert.match(service, /guidanceJourneyId: repairJourneyId/);
 });
 
 test('day-91 handoff is idempotent and runs from the recurring Home feed boundary', () => {
@@ -62,6 +66,7 @@ test('Phase 5 API and UI cover evidence, lifecycle, household assignment, and ac
 test('schema stores disposition, evidence, lifecycle, and handoff lineage without a migration script', () => {
   const schema = read('../../prisma/schema.prisma');
   assert.match(schema, /buyerDisposition\s+BuyerFindingDisposition/);
+  assert.match(schema, /buyerRepairJourneyId\s+String\?/);
   assert.match(schema, /completionEvidenceJson\s+Json\?/);
   assert.match(schema, /anchorOffsetDays\s+Int\?/);
   assert.match(schema, /handedOffMaintenanceTaskId\s+String\?/);
