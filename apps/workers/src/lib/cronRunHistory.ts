@@ -16,7 +16,7 @@ const HISTORY_KEY_PREFIX = 'cron-run-history:';
 const MAX_HISTORY_PER_JOB = 5;
 
 export interface CronRunRecord {
-  status: 'completed' | 'failed';
+  status: 'completed' | 'failed' | 'skipped';
   finishedAt: number; // epoch ms
   durationMs: number;
   failReason?: string;

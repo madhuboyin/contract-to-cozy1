@@ -2427,6 +2427,13 @@ model PropertyMaintenanceTask {
   nextDueDate       DateTime?
   lastCompletedDate DateTime?
 
+  // WKR-001: idempotency stamp for the maintenance-reminders worker job.
+  // Records which nextDueDate a reminder notification has already been sent
+  // for, so a completed-then-rescheduled recurring task is reminded again
+  // for its *new* due date without any other code path having to know to
+  // reset a plain boolean/timestamp flag.
+  remindedForDueDate DateTime?
+
   // Cost tracking
   estimatedCost      Decimal? @db.Decimal(10, 2)
   actualCost         Decimal? @db.Decimal(10, 2)

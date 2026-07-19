@@ -7,11 +7,25 @@ import { Router } from 'express';
 import { UserRole } from '../types/auth.types';
 import { authenticate, requireMfa, requireRole } from '../middleware/auth.middleware';
 import { requireCapability } from '../middleware/adminCapability.middleware';
-import { getWorkerJobsHandler, triggerJobHandler } from '../controllers/adminWorkerJobs.controller';
+import { getWorkerJobsHandler, triggerJobHandler, getWorkerGovernanceHandler } from '../controllers/adminWorkerJobs.controller';
 
 const router = Router();
 
 router.use('/admin/worker-jobs', authenticate, requireMfa, requireRole(UserRole.ADMIN));
+
+/**
+ * @swagger
+ * /api/admin/worker-jobs/governance:
+ *   get:
+ *     summary: Worker execution-policy flag state (WORKER_AUTOMATION_ENABLED, etc), ENFORCE_HUMAN_POLICY_APPROVALS, and runner/poller effective-enabled status
+ *     tags: [Admin Worker Jobs]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Effective worker governance flags and runner status
+ */
+router.get('/admin/worker-jobs/governance', requireCapability('WORKER_JOB_VIEW'), getWorkerGovernanceHandler);
 
 /**
  * @swagger

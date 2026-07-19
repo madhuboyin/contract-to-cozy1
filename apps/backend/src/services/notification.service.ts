@@ -26,6 +26,17 @@ type CreateNotificationInput = {
   category?: NotificationCategory;
   urgency?: NotificationUrgency;
   requiredChannels?: NotificationChannel[];
+  /**
+   * Worker execution-policy hook (WKR-002/WORKER_OUTBOUND_NOTIFICATIONS_ENABLED).
+   * Defaults to true — every existing caller (interactive backend requests,
+   * booking/claim flows, etc.) is unaffected. Worker-originated cron/sweep
+   * jobs pass `areWorkerOutboundNotificationsEnabled()` here so the
+   * Notification + in-app delivery row (and lifecycle/dedup bookkeeping)
+   * are still created for dry-run inspection, but the actual email/push/SMS
+   * channel transport is suppressed while the flag is off — the pending
+   * delivery rows remain and are simply never enqueued.
+   */
+  transportEnabled?: boolean;
 };
 
 type NotificationSignalSource = {
@@ -166,9 +177,11 @@ export class NotificationService {
     /**
      * 5️⃣ Enqueue ONLY immediate (important) async deliveries
      *
-     * IN_APP never goes to a queue
+     * IN_APP never goes to a queue. transportEnabled=false (worker execution
+     * policy) leaves the PENDING delivery rows in place for dry-run
+     * inspection but never enqueues them to a channel transport.
      */
-    if (isImportant) {
+    if (isImportant && input.transportEnabled !== false) {
       for (const delivery of notification.deliveries) {
         const channelPolicy = channels.find((candidate) => candidate.channel === delivery.channel);
         if (!channelPolicy?.deliverImmediately) continue;

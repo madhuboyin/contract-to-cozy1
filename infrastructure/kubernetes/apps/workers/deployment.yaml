@@ -22,6 +22,46 @@ spec:
                 configMapKeyRef:
                   name: app-config
                   key: NODE_ENV
+            # WKR-005: propagate the same beta governance flag to workers
+            # that the backend already reads — shared services imported by
+            # the worker (NotificationService, etc.) must see the same mode.
+            - name: ENFORCE_HUMAN_POLICY_APPROVALS
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: ENFORCE_HUMAN_POLICY_APPROVALS
+            # Worker execution policy (WKR-004) — see
+            # apps/backend/src/config/workerExecutionPolicy.ts.
+            - name: WORKER_AUTOMATION_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: WORKER_AUTOMATION_ENABLED
+            - name: WORKER_OUTBOUND_NOTIFICATIONS_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: WORKER_OUTBOUND_NOTIFICATIONS_ENABLED
+            - name: WORKER_EXTERNAL_INGEST_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: WORKER_EXTERNAL_INGEST_ENABLED
+            - name: WORKER_MUTATING_SWEEPS_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: WORKER_MUTATING_SWEEPS_ENABLED
+            - name: WORKER_MANUAL_TRIGGERS_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: WORKER_MANUAL_TRIGGERS_ENABLED
+            - name: ENFORCE_WORKER_MANUAL_TRIGGER_APPROVALS
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: ENFORCE_WORKER_MANUAL_TRIGGER_APPROVALS
             - name: FRED_API_KEY
               valueFrom:
                 secretKeyRef:

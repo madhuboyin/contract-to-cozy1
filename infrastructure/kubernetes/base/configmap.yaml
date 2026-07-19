@@ -63,7 +63,18 @@ data:
   # Beta governance switch. Set to "true" before admitting any real users.
   # Technical safety and evidence validation remain enforced in both modes.
   ENFORCE_HUMAN_POLICY_APPROVALS: "false"
-  
+
+  # Worker execution policy (apps/backend/src/config/workerExecutionPolicy.ts).
+  # Beta defaults per the worker module audit — flip a flag to "true" only
+  # after reviewing that job group for this single shared environment.
+  # Per-job overrides: WORKER_JOB_<NORMALIZED_KEY>_ENABLED=true|false.
+  WORKER_AUTOMATION_ENABLED: "true"
+  WORKER_OUTBOUND_NOTIFICATIONS_ENABLED: "false"
+  WORKER_EXTERNAL_INGEST_ENABLED: "false"
+  WORKER_MUTATING_SWEEPS_ENABLED: "false"
+  WORKER_MANUAL_TRIGGERS_ENABLED: "true"
+  ENFORCE_WORKER_MANUAL_TRIGGER_APPROVALS: "false"
+
   # Rate Limiting
   RATE_LIMIT_WINDOW_MS: "60000"
   RATE_LIMIT_MAX_REQUESTS: "100"

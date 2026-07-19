@@ -8,7 +8,18 @@ const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const frontendRoot = path.resolve(scriptDir, '../..');
 const appRoot = path.join(frontendRoot, 'src/app');
 const backendRoot = path.resolve(frontendRoot, '../backend');
+const workersRoot = path.resolve(frontendRoot, '../workers');
 const guidanceTemplateRegistry = path.join(backendRoot, 'src/services/guidanceEngine/guidanceTemplateRegistry.ts');
+
+// WKR-003: worker-generated notification actionUrl values (neighborhood,
+// permit, reserve fund, seasonal, warranty, recall follow-ups, ...) were
+// previously outside this audit entirely — only apps/backend/src was
+// scanned, so a worker-side deep link could break without failing the
+// route contract. Both source roots are scanned with the same rule below.
+const NOTIFICATION_SOURCE_ROOTS = [
+  { root: path.join(backendRoot, 'src'), prefix: '' },
+  { root: path.join(workersRoot, 'src'), prefix: 'workers: ' },
+];
 
 const PHASE2_CANONICAL_CTA_ROUTES = [
   '/dashboard',
@@ -205,10 +216,12 @@ function walkTypeScript(directory) {
 
 function extractNotificationRoutes() {
   const routes = [];
-  for (const file of walkTypeScript(path.join(backendRoot, 'src'))) {
-    const source = fs.readFileSync(file, 'utf8');
-    for (const match of source.matchAll(/actionUrl:\s*([`'"])(\/dashboard[^`'"]+)\1/g)) {
-      routes.push({ route: match[2], file: path.relative(backendRoot, file) });
+  for (const { root, prefix } of NOTIFICATION_SOURCE_ROOTS) {
+    for (const file of walkTypeScript(root)) {
+      const source = fs.readFileSync(file, 'utf8');
+      for (const match of source.matchAll(/actionUrl:\s*([`'"])(\/dashboard[^`'"]+)\1/g)) {
+        routes.push({ route: match[2], file: `${prefix}${path.relative(root, file)}` });
+      }
     }
   }
   return routes;

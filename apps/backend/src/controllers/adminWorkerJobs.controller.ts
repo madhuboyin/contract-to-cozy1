@@ -1,7 +1,7 @@
 // apps/backend/src/controllers/adminWorkerJobs.controller.ts
 
 import { Request, Response } from 'express';
-import { listWorkerJobs, triggerJob } from '../services/adminWorkerJobs.service';
+import { listWorkerJobs, triggerJob, getWorkerGovernanceStatus } from '../services/adminWorkerJobs.service';
 import { logger, auditLog } from '../lib/logger';
 import { AuthRequest } from '../types/auth.types';
 
@@ -12,6 +12,15 @@ export async function getWorkerJobsHandler(req: Request, res: Response): Promise
   } catch (err: any) {
     logger.error({ err: err }, '[ADMIN-JOBS] Failed to list worker jobs');
     res.status(500).json({ success: false, error: { message: 'Failed to load worker jobs' } });
+  }
+}
+
+export async function getWorkerGovernanceHandler(req: Request, res: Response): Promise<void> {
+  try {
+    res.json({ success: true, data: getWorkerGovernanceStatus() });
+  } catch (err: any) {
+    logger.error({ err: err }, '[ADMIN-JOBS] Failed to load worker governance status');
+    res.status(500).json({ success: false, error: { message: 'Failed to load worker governance status' } });
   }
 }
 

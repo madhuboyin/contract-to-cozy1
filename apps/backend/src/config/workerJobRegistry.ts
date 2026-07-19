@@ -7,10 +7,17 @@
 //   2. Add the handler to CRON_HANDLERS in apps/workers/src/worker.ts
 //   3. If it's a new category, add it to the JobCategory union type here
 //      AND to CATEGORY_ORDER in apps/frontend/.../worker-jobs/page.tsx
+//   4. Add a WorkerExecutionPolicy block (impact/customerJob/etc) — see
+//      apps/backend/src/config/workerExecutionPolicy.ts. The scheduler,
+//      manual cron-trigger queue, and runners all gate on this via
+//      evaluateWorkerExecution(), so a job with no policy metadata will not
+//      run in beta.
 //
 // The worker reads cron expressions from this registry at startup.
 // A handler with no registry entry will log a warning at startup.
 // A registry entry with no handler will also log a warning and not run.
+
+import type { WorkerExecutionPolicy } from './workerExecutionPolicy';
 
 export type JobCategory =
   | 'PROPERTY_INTELLIGENCE'
@@ -24,7 +31,7 @@ export type JobCategory =
   | 'HOME_INTELLIGENCE'
   | 'DIY_TEMPLATES';
 
-export interface JobRegistryEntry {
+export interface JobRegistryEntry extends WorkerExecutionPolicy {
   key: string;
   name: string;
   description: string;
@@ -51,6 +58,12 @@ export const JOB_REGISTRY: JobRegistryEntry[] = [
     type: 'bullmq',
     queueName: 'property-intelligence-queue',
     triggerSupported: false,
+    impact: 'HOMEOWNER_STATE',
+    customerJob: 'STAY_AHEAD',
+    defaultEnabledInBeta: true,
+    supportsDryRun: false,
+    supportsPropertyScope: true,
+    humanApprovalClass: 'NONE',
   },
 
   // ── Recalls (BullMQ repeatable) ───────────────────────────────────────────
@@ -66,6 +79,13 @@ export const JOB_REGISTRY: JobRegistryEntry[] = [
     queueName: 'recall-jobs-queue',
     jobName: 'recall.ingest',
     triggerSupported: true,
+    impact: 'INTERNAL_WRITE',
+    customerJob: 'STAY_AHEAD',
+    defaultEnabledInBeta: true,
+    supportsDryRun: false,
+    supportsPropertyScope: false,
+    externalProvider: 'CPSC',
+    humanApprovalClass: 'NONE',
   },
   {
     key: 'recall-match',
@@ -79,6 +99,12 @@ export const JOB_REGISTRY: JobRegistryEntry[] = [
     queueName: 'recall-jobs-queue',
     jobName: 'recall.match',
     triggerSupported: true,
+    impact: 'HOMEOWNER_STATE',
+    customerJob: 'STAY_AHEAD',
+    defaultEnabledInBeta: true,
+    supportsDryRun: false,
+    supportsPropertyScope: false,
+    humanApprovalClass: 'NONE',
   },
 
   // ── Notifications (BullMQ, event-driven) ──────────────────────────────────
@@ -92,28 +118,46 @@ export const JOB_REGISTRY: JobRegistryEntry[] = [
     type: 'bullmq',
     queueName: 'email-notification-queue',
     triggerSupported: false,
+    impact: 'OUTBOUND',
+    customerJob: 'PLATFORM_OPERATIONS',
+    defaultEnabledInBeta: true,
+    supportsDryRun: false,
+    supportsPropertyScope: false,
+    humanApprovalClass: 'NONE',
   },
   {
     key: 'push-notification',
     name: 'Push Notification',
-    description: 'Sends queued push notifications to mobile devices.',
+    description: 'Sends queued push notifications to mobile devices. No push provider is implemented yet — inactive until WORKER_JOB_PUSH_NOTIFICATION_ENABLED=true and a provider is configured.',
     category: 'NOTIFICATIONS',
     schedule: 'On-demand (event-driven)',
     cronExpression: '',
     type: 'bullmq',
     queueName: 'push-notification-queue',
     triggerSupported: false,
+    impact: 'OUTBOUND',
+    customerJob: 'PLATFORM_OPERATIONS',
+    defaultEnabledInBeta: false,
+    supportsDryRun: false,
+    supportsPropertyScope: false,
+    humanApprovalClass: 'NONE',
   },
   {
     key: 'sms-notification',
     name: 'SMS Notification',
-    description: 'Sends queued SMS messages for high-priority alerts.',
+    description: 'Sends queued SMS messages for high-priority alerts. No SMS provider is implemented yet — inactive until WORKER_JOB_SMS_NOTIFICATION_ENABLED=true and a provider is configured.',
     category: 'NOTIFICATIONS',
     schedule: 'On-demand (event-driven)',
     cronExpression: '',
     type: 'bullmq',
     queueName: 'sms-notification-queue',
     triggerSupported: false,
+    impact: 'OUTBOUND',
+    customerJob: 'PLATFORM_OPERATIONS',
+    defaultEnabledInBeta: false,
+    supportsDryRun: false,
+    supportsPropertyScope: false,
+    humanApprovalClass: 'NONE',
   },
   {
     key: 'daily-email-digest',
@@ -124,6 +168,12 @@ export const JOB_REGISTRY: JobRegistryEntry[] = [
     cronExpression: '0 8 * * *',
     type: 'cron',
     triggerSupported: false,
+    impact: 'OUTBOUND',
+    customerJob: 'STAY_AHEAD',
+    defaultEnabledInBeta: true,
+    supportsDryRun: false,
+    supportsPropertyScope: false,
+    humanApprovalClass: 'NONE',
   },
   {
     key: 'weekly-home-brief-digest',
@@ -134,6 +184,12 @@ export const JOB_REGISTRY: JobRegistryEntry[] = [
     cronExpression: '0 8 * * 1',
     type: 'cron',
     triggerSupported: false,
+    impact: 'OUTBOUND',
+    customerJob: 'STAY_AHEAD',
+    defaultEnabledInBeta: true,
+    supportsDryRun: false,
+    supportsPropertyScope: false,
+    humanApprovalClass: 'NONE',
   },
   {
     key: 'weekly-retention-report',
@@ -144,6 +200,12 @@ export const JOB_REGISTRY: JobRegistryEntry[] = [
     cronExpression: '0 8 * * 1',
     type: 'cron',
     triggerSupported: false,
+    impact: 'OUTBOUND',
+    customerJob: 'PLATFORM_OPERATIONS',
+    defaultEnabledInBeta: true,
+    supportsDryRun: false,
+    supportsPropertyScope: false,
+    humanApprovalClass: 'NONE',
   },
 
   // ── Maintenance (cron) ────────────────────────────────────────────────────
@@ -151,7 +213,7 @@ export const JOB_REGISTRY: JobRegistryEntry[] = [
     key: 'maintenance-reminders',
     name: 'Maintenance Reminders',
     description:
-      'Sends maintenance reminder notifications to homeowners with upcoming or overdue tasks.',
+      'Sends maintenance reminder notifications to homeowners with upcoming or overdue canonical PropertyMaintenanceTask records via NotificationService (governed by preferences, cadence, and quiet hours).',
     category: 'MAINTENANCE',
     schedule: 'Daily at 9:00 AM EST',
     cronExpression: '0 9 * * *',
@@ -159,6 +221,12 @@ export const JOB_REGISTRY: JobRegistryEntry[] = [
     queueName: 'cron-trigger-queue',
     jobName: 'maintenance-reminders',
     triggerSupported: true,
+    impact: 'HOMEOWNER_STATE',
+    customerJob: 'STAY_AHEAD',
+    defaultEnabledInBeta: true,
+    supportsDryRun: false,
+    supportsPropertyScope: true,
+    humanApprovalClass: 'HIGH_IMPACT_MANUAL',
   },
   {
     key: 'new-home-warranty-deadlines',
@@ -171,6 +239,12 @@ export const JOB_REGISTRY: JobRegistryEntry[] = [
     queueName: 'cron-trigger-queue',
     jobName: 'new-home-warranty-deadlines',
     triggerSupported: true,
+    impact: 'HOMEOWNER_STATE',
+    customerJob: 'MAJOR_MOMENT',
+    defaultEnabledInBeta: true,
+    supportsDryRun: false,
+    supportsPropertyScope: true,
+    humanApprovalClass: 'NONE',
   },
   {
     key: 'seasonal-checklist-generation',
@@ -184,6 +258,13 @@ export const JOB_REGISTRY: JobRegistryEntry[] = [
     queueName: 'cron-trigger-queue',
     jobName: 'seasonal-checklist-generation',
     triggerSupported: true,
+    impact: 'HOMEOWNER_STATE',
+    customerJob: 'STAY_AHEAD',
+    defaultEnabledInBeta: true,
+    supportsDryRun: false,
+    supportsPropertyScope: true,
+    broadSweep: true,
+    humanApprovalClass: 'NONE',
   },
   {
     key: 'seasonal-checklist-expiration',
@@ -196,12 +277,18 @@ export const JOB_REGISTRY: JobRegistryEntry[] = [
     queueName: 'cron-trigger-queue',
     jobName: 'seasonal-checklist-expiration',
     triggerSupported: true,
+    impact: 'HOMEOWNER_STATE',
+    customerJob: 'STAY_AHEAD',
+    defaultEnabledInBeta: true,
+    supportsDryRun: false,
+    supportsPropertyScope: true,
+    humanApprovalClass: 'NONE',
   },
   {
     key: 'seasonal-notifications',
     name: 'Seasonal Notifications',
     description:
-      'Notifies homeowners of new seasonal checklists and upcoming seasonal tasks.',
+      'Notifies homeowners of new seasonal checklists and upcoming seasonal tasks via NotificationService (governed by preferences, cadence, and quiet hours; outbound send gated by WORKER_OUTBOUND_NOTIFICATIONS_ENABLED).',
     category: 'MAINTENANCE',
     schedule: 'Daily at 9:00 AM EST',
     cronExpression: '0 9 * * *',
@@ -209,6 +296,12 @@ export const JOB_REGISTRY: JobRegistryEntry[] = [
     queueName: 'cron-trigger-queue',
     jobName: 'seasonal-notifications',
     triggerSupported: true,
+    impact: 'HOMEOWNER_STATE',
+    customerJob: 'STAY_AHEAD',
+    defaultEnabledInBeta: true,
+    supportsDryRun: false,
+    supportsPropertyScope: true,
+    humanApprovalClass: 'HIGH_IMPACT_MANUAL',
   },
   {
     key: 'inventory-draft-cleanup',
@@ -222,6 +315,13 @@ export const JOB_REGISTRY: JobRegistryEntry[] = [
     queueName: 'cron-trigger-queue',
     jobName: 'inventory-draft-cleanup',
     triggerSupported: true,
+    impact: 'DESTRUCTIVE',
+    customerJob: 'PLATFORM_OPERATIONS',
+    defaultEnabledInBeta: true,
+    supportsDryRun: false,
+    supportsPropertyScope: false,
+    broadSweep: true,
+    humanApprovalClass: 'HIGH_IMPACT_MANUAL',
   },
 
   // ── Risk & Safety (cron) ──────────────────────────────────────────────────
@@ -235,6 +335,12 @@ export const JOB_REGISTRY: JobRegistryEntry[] = [
     cronExpression: '0 8 * * *',
     type: 'cron',
     triggerSupported: false,
+    impact: 'HOMEOWNER_STATE',
+    customerJob: 'STAY_AHEAD',
+    defaultEnabledInBeta: true,
+    supportsDryRun: false,
+    supportsPropertyScope: true,
+    humanApprovalClass: 'NONE',
   },
   {
     key: 'freeze-risk-incidents',
@@ -246,6 +352,13 @@ export const JOB_REGISTRY: JobRegistryEntry[] = [
     cronExpression: '0 9 * * *',
     type: 'cron',
     triggerSupported: false,
+    impact: 'HOMEOWNER_STATE',
+    customerJob: 'STAY_AHEAD',
+    defaultEnabledInBeta: true,
+    supportsDryRun: false,
+    supportsPropertyScope: true,
+    externalProvider: 'NOAA/NWS (forecast)',
+    humanApprovalClass: 'NONE',
   },
   {
     key: 'severe-weather-alerts',
@@ -257,6 +370,13 @@ export const JOB_REGISTRY: JobRegistryEntry[] = [
     cronExpression: '*/15 * * * *',
     type: 'cron',
     triggerSupported: false,
+    impact: 'HOMEOWNER_STATE',
+    customerJob: 'STAY_AHEAD',
+    defaultEnabledInBeta: true,
+    supportsDryRun: false,
+    supportsPropertyScope: true,
+    externalProvider: 'NOAA/NWS',
+    humanApprovalClass: 'NONE',
   },
   {
     key: 'weekly-score-snapshots',
@@ -268,6 +388,12 @@ export const JOB_REGISTRY: JobRegistryEntry[] = [
     cronExpression: '0 4 * * 1',
     type: 'cron',
     triggerSupported: false,
+    impact: 'HOMEOWNER_STATE',
+    customerJob: 'STAY_AHEAD',
+    defaultEnabledInBeta: true,
+    supportsDryRun: false,
+    supportsPropertyScope: true,
+    humanApprovalClass: 'NONE',
   },
   {
     key: 'hidden-asset-refresh',
@@ -279,6 +405,13 @@ export const JOB_REGISTRY: JobRegistryEntry[] = [
     cronExpression: '0 3 * * 0',
     type: 'cron',
     triggerSupported: false,
+    impact: 'HOMEOWNER_STATE',
+    customerJob: 'DECIDE',
+    defaultEnabledInBeta: true,
+    supportsDryRun: false,
+    supportsPropertyScope: true,
+    broadSweep: true,
+    humanApprovalClass: 'NONE',
   },
   {
     key: 'provider-credential-expire',
@@ -290,6 +423,12 @@ export const JOB_REGISTRY: JobRegistryEntry[] = [
     cronExpression: '0 6 * * *',
     type: 'cron',
     triggerSupported: false,
+    impact: 'INTERNAL_WRITE',
+    customerJob: 'PLATFORM_OPERATIONS',
+    defaultEnabledInBeta: true,
+    supportsDryRun: false,
+    supportsPropertyScope: false,
+    humanApprovalClass: 'NONE',
   },
   {
     key: 'provider-credential-lapse',
@@ -301,6 +440,12 @@ export const JOB_REGISTRY: JobRegistryEntry[] = [
     cronExpression: '0 7 * * *',
     type: 'cron',
     triggerSupported: false,
+    impact: 'HOMEOWNER_STATE',
+    customerJob: 'STAY_AHEAD',
+    defaultEnabledInBeta: true,
+    supportsDryRun: false,
+    supportsPropertyScope: true,
+    humanApprovalClass: 'NONE',
   },
   {
     key: 'provider-missing-credential-sweep',
@@ -312,6 +457,13 @@ export const JOB_REGISTRY: JobRegistryEntry[] = [
     cronExpression: '0 6 * * 0',
     type: 'cron',
     triggerSupported: false,
+    impact: 'INTERNAL_WRITE',
+    customerJob: 'PLATFORM_OPERATIONS',
+    defaultEnabledInBeta: true,
+    supportsDryRun: false,
+    supportsPropertyScope: false,
+    broadSweep: true,
+    humanApprovalClass: 'NONE',
   },
 
   // ── Neighborhood (cron) ───────────────────────────────────────────────────
@@ -325,6 +477,13 @@ export const JOB_REGISTRY: JobRegistryEntry[] = [
     cronExpression: '0 5 * * 0',
     type: 'cron',
     triggerSupported: false,
+    impact: 'INTERNAL_WRITE',
+    customerJob: 'STAY_AHEAD',
+    defaultEnabledInBeta: true,
+    supportsDryRun: false,
+    supportsPropertyScope: true,
+    externalProvider: 'Neighborhood intelligence sources',
+    humanApprovalClass: 'NONE',
   },
   {
     key: 'neighborhood-change-notifications',
@@ -336,6 +495,12 @@ export const JOB_REGISTRY: JobRegistryEntry[] = [
     cronExpression: '0 6 * * *',
     type: 'cron',
     triggerSupported: false,
+    impact: 'HOMEOWNER_STATE',
+    customerJob: 'STAY_AHEAD',
+    defaultEnabledInBeta: true,
+    supportsDryRun: false,
+    supportsPropertyScope: true,
+    humanApprovalClass: 'NONE',
   },
 
   // ── Financial Market (cron) ───────────────────────────────────────────────
@@ -354,6 +519,13 @@ export const JOB_REGISTRY: JobRegistryEntry[] = [
     queueName: 'cron-trigger-queue',
     jobName: 'mortgage-rate-ingest',
     triggerSupported: true,
+    impact: 'INTERNAL_WRITE',
+    customerJob: 'DECIDE',
+    defaultEnabledInBeta: true,
+    supportsDryRun: false,
+    supportsPropertyScope: false,
+    externalProvider: 'FRED (St. Louis Fed)',
+    humanApprovalClass: 'NONE',
   },
   // ── Home Event Radar (cron) ───────────────────────────────────────────────
   {
@@ -372,6 +544,13 @@ export const JOB_REGISTRY: JobRegistryEntry[] = [
     queueName: 'cron-trigger-queue',
     jobName: 'tax-assessment-ingest',
     triggerSupported: true,
+    impact: 'HOMEOWNER_STATE',
+    customerJob: 'DECIDE',
+    defaultEnabledInBeta: true,
+    supportsDryRun: false,
+    supportsPropertyScope: true,
+    externalProvider: 'County Socrata open-data portals',
+    humanApprovalClass: 'NONE',
   },
   {
     key: 'reserve-fund-recalculation',
@@ -386,6 +565,13 @@ export const JOB_REGISTRY: JobRegistryEntry[] = [
     cronExpression: '0 4 1 * *',
     type: 'cron',
     triggerSupported: false,
+    impact: 'INTERNAL_WRITE',
+    customerJob: 'DECIDE',
+    defaultEnabledInBeta: true,
+    supportsDryRun: false,
+    supportsPropertyScope: true,
+    broadSweep: true,
+    humanApprovalClass: 'NONE',
   },
   {
     key: 'reserve-fund-reconciliation',
@@ -400,6 +586,12 @@ export const JOB_REGISTRY: JobRegistryEntry[] = [
     cronExpression: '0 5 * * 0',
     type: 'cron',
     triggerSupported: false,
+    impact: 'HOMEOWNER_STATE',
+    customerJob: 'DECIDE',
+    defaultEnabledInBeta: true,
+    supportsDryRun: false,
+    supportsPropertyScope: true,
+    humanApprovalClass: 'NONE',
   },
   {
     key: 'reserve-fund-balance-reminder',
@@ -413,6 +605,12 @@ export const JOB_REGISTRY: JobRegistryEntry[] = [
     cronExpression: '0 9 1 * *',
     type: 'cron',
     triggerSupported: false,
+    impact: 'HOMEOWNER_STATE',
+    customerJob: 'DECIDE',
+    defaultEnabledInBeta: true,
+    supportsDryRun: false,
+    supportsPropertyScope: true,
+    humanApprovalClass: 'NONE',
   },
 
   // ── Home Intelligence (cron) ──────────────────────────────────────────────
@@ -431,12 +629,20 @@ export const JOB_REGISTRY: JobRegistryEntry[] = [
     queueName: 'cron-trigger-queue',
     jobName: 'home-gazette-generation',
     triggerSupported: true,
+    impact: 'HOMEOWNER_STATE',
+    customerJob: 'STAY_AHEAD',
+    defaultEnabledInBeta: true,
+    supportsDryRun: false,
+    supportsPropertyScope: true,
+    broadSweep: true,
+    humanApprovalClass: 'NONE',
   },
   {
     key: 'shared-data-backfill',
     name: 'Shared Data Backfill',
     description:
-      'Backfills shared CtC data primitives (PreferenceProfile, AssumptionSet, and Signal) for existing properties. Idempotent and safe to rerun.',
+      'Backfills shared CtC data primitives (PreferenceProfile, AssumptionSet, and Signal) for existing properties. Idempotent and safe to rerun. ' +
+      'Disabled by default in beta — the single-environment operating model assumes no real-user migration/backfill requirement (WKR-011).',
     category: 'HOME_INTELLIGENCE',
     schedule: 'Daily at 2:20 AM EST',
     cronExpression: '20 2 * * *',
@@ -444,6 +650,13 @@ export const JOB_REGISTRY: JobRegistryEntry[] = [
     queueName: 'cron-trigger-queue',
     jobName: 'shared-data-backfill',
     triggerSupported: true,
+    impact: 'INTERNAL_WRITE',
+    customerJob: 'PLATFORM_OPERATIONS',
+    defaultEnabledInBeta: false,
+    supportsDryRun: false,
+    supportsPropertyScope: true,
+    broadSweep: true,
+    humanApprovalClass: 'HIGH_IMPACT_MANUAL',
   },
   {
     key: 'shared-data-consistency-audit',
@@ -457,6 +670,12 @@ export const JOB_REGISTRY: JobRegistryEntry[] = [
     queueName: 'cron-trigger-queue',
     jobName: 'shared-data-consistency-audit',
     triggerSupported: true,
+    impact: 'READ_ONLY',
+    customerJob: 'PLATFORM_OPERATIONS',
+    defaultEnabledInBeta: true,
+    supportsDryRun: true,
+    supportsPropertyScope: false,
+    humanApprovalClass: 'NONE',
   },
   {
     key: 'shared-signal-refresh',
@@ -470,6 +689,12 @@ export const JOB_REGISTRY: JobRegistryEntry[] = [
     queueName: 'cron-trigger-queue',
     jobName: 'shared-signal-refresh',
     triggerSupported: true,
+    impact: 'INTERNAL_WRITE',
+    customerJob: 'STAY_AHEAD',
+    defaultEnabledInBeta: true,
+    supportsDryRun: false,
+    supportsPropertyScope: true,
+    humanApprovalClass: 'NONE',
   },
   {
     key: 'shared-signal-health-audit',
@@ -483,6 +708,12 @@ export const JOB_REGISTRY: JobRegistryEntry[] = [
     queueName: 'cron-trigger-queue',
     jobName: 'shared-signal-health-audit',
     triggerSupported: true,
+    impact: 'READ_ONLY',
+    customerJob: 'PLATFORM_OPERATIONS',
+    defaultEnabledInBeta: true,
+    supportsDryRun: true,
+    supportsPropertyScope: false,
+    humanApprovalClass: 'NONE',
   },
   // ── Guidance Engine (cron) ────────────────────────────────────────────────
   {
@@ -495,6 +726,12 @@ export const JOB_REGISTRY: JobRegistryEntry[] = [
     cronExpression: '30 1 * * *',
     type: 'cron',
     triggerSupported: false,
+    impact: 'HOMEOWNER_STATE',
+    customerJob: 'STAY_AHEAD',
+    defaultEnabledInBeta: true,
+    supportsDryRun: false,
+    supportsPropertyScope: true,
+    humanApprovalClass: 'NONE',
   },
 
   // ── Home Care (cron) ──────────────────────────────────────────────────────
@@ -508,6 +745,13 @@ export const JOB_REGISTRY: JobRegistryEntry[] = [
     cronExpression: '30 3 * * 6',
     type: 'cron',
     triggerSupported: false,
+    impact: 'HOMEOWNER_STATE',
+    customerJob: 'STAY_AHEAD',
+    defaultEnabledInBeta: true,
+    supportsDryRun: false,
+    supportsPropertyScope: true,
+    broadSweep: true,
+    humanApprovalClass: 'NONE',
   },
 
   // ── Permit Tracker (cron + BullMQ) ────────────────────────────────────────
@@ -523,6 +767,12 @@ export const JOB_REGISTRY: JobRegistryEntry[] = [
     queueName: 'cron-trigger-queue',
     jobName: 'permit-inspection-reminders',
     triggerSupported: true,
+    impact: 'HOMEOWNER_STATE',
+    customerJob: 'STAY_AHEAD',
+    defaultEnabledInBeta: true,
+    supportsDryRun: false,
+    supportsPropertyScope: true,
+    humanApprovalClass: 'NONE',
   },
   {
     key: 'permit-fetch',
@@ -536,6 +786,13 @@ export const JOB_REGISTRY: JobRegistryEntry[] = [
     queueName: 'permit-fetch-queue',
     jobName: 'fetch-permit-history',
     triggerSupported: false,
+    impact: 'HOMEOWNER_STATE',
+    customerJob: 'MAJOR_MOMENT',
+    defaultEnabledInBeta: true,
+    supportsDryRun: false,
+    supportsPropertyScope: true,
+    externalProvider: 'Municipal permit-records provider',
+    humanApprovalClass: 'NONE',
   },
   {
     key: 'detect-unpermitted-work',
@@ -549,6 +806,12 @@ export const JOB_REGISTRY: JobRegistryEntry[] = [
     queueName: 'detect-unpermitted-work-queue',
     jobName: 'detect-unpermitted-work',
     triggerSupported: false,
+    impact: 'HOMEOWNER_STATE',
+    customerJob: 'MAJOR_MOMENT',
+    defaultEnabledInBeta: true,
+    supportsDryRun: false,
+    supportsPropertyScope: true,
+    humanApprovalClass: 'NONE',
   },
   {
     key: 'generate-permit-disclosure',
@@ -562,6 +825,12 @@ export const JOB_REGISTRY: JobRegistryEntry[] = [
     queueName: 'generate-permit-disclosure-queue',
     jobName: 'generate-permit-disclosure',
     triggerSupported: false,
+    impact: 'HOMEOWNER_STATE',
+    customerJob: 'MAJOR_MOMENT',
+    defaultEnabledInBeta: true,
+    supportsDryRun: false,
+    supportsPropertyScope: true,
+    humanApprovalClass: 'NONE',
   },
 
   // ── DIY Templates (BullMQ, event-driven) ──────────────────────────────────
@@ -577,5 +846,96 @@ export const JOB_REGISTRY: JobRegistryEntry[] = [
     queueName: 'diy-ai-guide-queue',
     jobName: 'GENERATE_DIY_AI_GUIDE',
     triggerSupported: false,
+    impact: 'HOMEOWNER_STATE',
+    customerJob: 'MAJOR_MOMENT',
+    defaultEnabledInBeta: true,
+    supportsDryRun: false,
+    supportsPropertyScope: true,
+    externalProvider: 'Gemini',
+    humanApprovalClass: 'NONE',
+  },
+];
+
+// ─── Runner / poller registry ──────────────────────────────────────────────
+//
+// Long-running pollers under apps/workers/src/runners/ don't have a cron
+// expression or BullMQ queue and were previously invisible to both the
+// execution-policy gate and the admin Worker Jobs dashboard (WKR-004 /
+// audit Section 4.2). Each one is evaluated once at worker startup via
+// evaluateWorkerExecution(key, 'poller', policy) before its loop starts.
+
+export interface RunnerRegistryEntry extends WorkerExecutionPolicy {
+  key: string;
+  name: string;
+  description: string;
+}
+
+export const RUNNER_REGISTRY: RunnerRegistryEntry[] = [
+  {
+    key: 'home-report-export-poller',
+    name: 'Home Report Export Poller',
+    description: 'Claims and processes pending Home Report export jobs.',
+    impact: 'HOMEOWNER_STATE',
+    customerJob: 'PLATFORM_OPERATIONS',
+    defaultEnabledInBeta: true,
+    supportsDryRun: false,
+    supportsPropertyScope: true,
+    humanApprovalClass: 'NONE',
+  },
+  {
+    key: 'material-spec-export-poller',
+    name: 'Material Spec Export Poller',
+    description: 'Claims and processes pending material-spec export jobs.',
+    impact: 'HOMEOWNER_STATE',
+    customerJob: 'PLATFORM_OPERATIONS',
+    defaultEnabledInBeta: true,
+    supportsDryRun: false,
+    supportsPropertyScope: true,
+    humanApprovalClass: 'NONE',
+  },
+  {
+    key: 'report-export-cleanup',
+    name: 'Report Export Cleanup',
+    description: 'Expires and deletes exported reports past their retention window.',
+    impact: 'DESTRUCTIVE',
+    customerJob: 'PLATFORM_OPERATIONS',
+    defaultEnabledInBeta: true,
+    supportsDryRun: false,
+    supportsPropertyScope: false,
+    broadSweep: true,
+    humanApprovalClass: 'NONE',
+  },
+  {
+    key: 'high-priority-email-enqueue-poller',
+    name: 'High-priority Email Enqueue Poller',
+    description: 'Enqueues pending high-priority (immediate-delivery) email notifications.',
+    impact: 'OUTBOUND',
+    customerJob: 'PLATFORM_OPERATIONS',
+    defaultEnabledInBeta: true,
+    supportsDryRun: false,
+    supportsPropertyScope: false,
+    humanApprovalClass: 'NONE',
+  },
+  {
+    key: 'domain-events-poller',
+    name: 'Domain Events Poller',
+    description: 'Processes pending/failed DomainEvent records (claims follow-ups and related cross-cutting effects).',
+    impact: 'HOMEOWNER_STATE',
+    customerJob: 'PLATFORM_OPERATIONS',
+    defaultEnabledInBeta: true,
+    supportsDryRun: false,
+    supportsPropertyScope: true,
+    humanApprovalClass: 'NONE',
+  },
+  {
+    key: 'claim-follow-up-due-poller',
+    name: 'Claim Follow-up Due Poller',
+    description: 'Emits idempotent claim follow-up due events.',
+    impact: 'HOMEOWNER_STATE',
+    customerJob: 'STAY_AHEAD',
+    defaultEnabledInBeta: true,
+    supportsDryRun: false,
+    supportsPropertyScope: true,
+    humanApprovalClass: 'NONE',
   },
 ];

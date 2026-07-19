@@ -18,7 +18,7 @@ import {
 import { useAdminGuard } from '@/hooks/useAdminGuard';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
-import { useWorkerJobs, useTriggerWorkerJob } from '@/hooks/useAdminWorkerJobs';
+import { useWorkerJobs, useTriggerWorkerJob, useWorkerGovernance } from '@/hooks/useAdminWorkerJobs';
 import type { WorkerJobDetail, JobCategory, RecentRun } from '@/lib/api/adminWorkerJobs';
 import { AdminConsoleShell, AdminRouteState } from '@/components/ops/AdminConsoleShell';
 
@@ -183,6 +183,16 @@ function JobCard({
             {job.name}
           </h3>
 
+          {/* Disabled-by-policy chip */}
+          {!job.effectiveEnabled && (
+            <span
+              className="shrink-0 rounded bg-slate-800 px-1.5 py-0.5 text-[11px] font-semibold text-white"
+              title={job.disabledReason}
+            >
+              Disabled
+            </span>
+          )}
+
           {/* Type chip */}
           <span
             className={`shrink-0 rounded px-1.5 py-0.5 text-[11px] font-semibold ${
@@ -221,6 +231,11 @@ function JobCard({
         <p className="mt-1.5 line-clamp-2 text-[11px] leading-[1.55] text-slate-500">
           {job.description}
         </p>
+        {!job.effectiveEnabled && job.disabledReason && (
+          <p className="mt-1 text-[11px] font-medium text-slate-500">
+            Disabled: {job.disabledReason}
+          </p>
+        )}
 
         {/* ── Row 3: last run + counts ── */}
         <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px]">
@@ -403,6 +418,7 @@ export default function WorkerJobsPage() {
   const { toast } = useToast();
 
   const jobsQ = useWorkerJobs(guard.isAdmin);
+  const governanceQ = useWorkerGovernance(guard.isAdmin);
   const trigger = useTriggerWorkerJob();
 
   const [triggeringKey, setTriggeringKey] = useState<string | null>(null);
@@ -545,9 +561,48 @@ export default function WorkerJobsPage() {
         </div>
       )}
 
+      {/* Governance flags summary (WKR-004/WKR-005) */}
+      {governanceQ.data && (
+        <div className="mt-8 rounded-xl border border-slate-200/80 bg-slate-50 p-3">
+          <p className="mb-1.5 text-[11px] font-semibold text-slate-500">Worker execution policy</p>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span
+              className={`rounded px-1.5 py-0.5 text-[11px] font-semibold ${
+                governanceQ.data.enforceHumanPolicyApprovals
+                  ? 'bg-emerald-100 text-emerald-700'
+                  : 'bg-amber-100 text-amber-700'
+              }`}
+            >
+              ENFORCE_HUMAN_POLICY_APPROVALS={String(governanceQ.data.enforceHumanPolicyApprovals)}
+            </span>
+            {governanceQ.data.flags.map((f) => (
+              <span
+                key={f.key}
+                className={`rounded px-1.5 py-0.5 text-[11px] font-medium ${
+                  f.malformed
+                    ? 'bg-rose-100 text-rose-700'
+                    : f.value
+                    ? 'bg-blue-50 text-blue-700'
+                    : 'bg-slate-200 text-slate-600'
+                }`}
+                title={f.malformed ? `Malformed raw value "${f.rawValue}" — using default` : undefined}
+              >
+                {f.key}={String(f.value)}
+                {f.malformed ? ' ⚠' : ''}
+              </span>
+            ))}
+          </div>
+          {governanceQ.data.runners.some((r) => !r.effectiveEnabled) && (
+            <p className="mt-1.5 text-[11px] text-slate-500">
+              Runners disabled: {governanceQ.data.runners.filter((r) => !r.effectiveEnabled).map((r) => r.name).join(', ')}
+            </p>
+          )}
+        </div>
+      )}
+
       {/* Footer note */}
       {!jobsQ.isLoading && !jobsQ.isError && jobs.length > 0 && (
-        <p className="mt-8 text-[11px] text-slate-400 text-center">
+        <p className="mt-4 text-[11px] text-slate-400 text-center">
           Cron jobs run on schedule via node-cron. Queue stats and run history available for BullMQ-backed jobs only. Run Job available for recall jobs only.
         </p>
       )}

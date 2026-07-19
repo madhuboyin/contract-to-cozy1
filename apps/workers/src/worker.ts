@@ -1,6 +1,5 @@
 // apps/workers/src/worker.ts
 import {
-  ChecklistItemStatus,
   Property,
   PropertyType,
   Prisma
@@ -64,7 +63,13 @@ import { providerCredentialExpireJob } from './jobs/providerCredentialExpire.job
 import { providerCredentialLapseJob } from './jobs/providerCredentialLapse.job';
 import { providerMissingCredentialSweepJob } from './jobs/providerMissingCredentialSweep.job';
 import { runNewHomeWarrantyDeadlineJob } from './jobs/newHomeWarrantyDeadline.job';
-import { JOB_REGISTRY } from '../../backend/src/config/workerJobRegistry';
+import { processMaintenanceReminders } from '../../backend/src/services/maintenanceReminder.service';
+import { JOB_REGISTRY, RUNNER_REGISTRY } from '../../backend/src/config/workerJobRegistry';
+import {
+  evaluateWorkerExecution,
+  collectWorkerFlagDiagnostics,
+} from '../../backend/src/config/workerExecutionPolicy';
+import { areHumanPolicyApprovalsEnforced } from '../../backend/src/config/appConfig';
 import { prisma } from './lib/prisma';
 import { HiddenAssetService } from '../../backend/src/services/hiddenAssets.service';
 import RiskAssessmentService from '../../backend/src/services/RiskAssessment.service';
@@ -430,74 +435,22 @@ async function captureWeeklyScoreSnapshotsJob() {
 }
 
 /**
- * Send maintenance reminders (existing cron job)
+ * Send maintenance reminders (WKR-001 fix).
+ *
+ * The previous implementation read legacy ChecklistItem rows, built email
+ * text, and only logged that a reminder was "sent" — it never created a
+ * notification, queued a delivery, or called the email transport, and
+ * swallowed errors so the scheduler recorded a false-successful run. This
+ * now delegates to the canonical PropertyMaintenanceTask-based service,
+ * which creates governed NotificationService.create() notifications and
+ * rejects on fatal errors instead of swallowing them.
  */
 async function sendMaintenanceReminders() {
-  logger.info(`[${new Date().toISOString()}] Running maintenance reminder job...`);
-  
-  try {
-    const today = new Date();
-    const sevenDaysFromNow = new Date();
-    sevenDaysFromNow.setDate(today.getDate() + 7);
-
-    const upcomingTasks = await prisma.checklistItem.findMany({
-      where: {
-        status: ChecklistItemStatus.PENDING,
-        nextDueDate: {
-          gte: today,
-          lte: sevenDaysFromNow,
-        },
-      },
-      include: {
-        checklist: {
-          include: {
-            homeownerProfile: {
-              include: {
-                user: true,
-              },
-            },
-          },
-        },
-      },
-    });
-
-    logger.info(`   Found ${upcomingTasks.length} upcoming tasks to remind about.`);
-
-    await Promise.all(
-      upcomingTasks.map(async (task) => {
-        const user = task.checklist.homeownerProfile.user;
-        const dueDate = new Date(task.nextDueDate!).toLocaleDateString('en-US', {
-          month: 'long',
-          day: 'numeric',
-        });
-
-        const subject = `Upcoming Maintenance Reminder: ${task.title}`;
-        const body = `
-          Hi ${user.firstName},
-
-          This is a friendly reminder that your recurring maintenance task "${task.title}" is due soon.
-          
-          Due Date: ${dueDate}
-
-          Log in to your Contract to Cozy dashboard to manage this task or find a provider.
-
-          Thanks,
-          The Contract to Cozy Team
-        `;
-
-        try {
-          // Email service integration would go here
-          logger.info(`   -> Sent reminder for "${task.title}" to ${user.email}`);
-        } catch (emailError) {
-          logger.error({ err: emailError }, `Failed to send email for task ${task.id}`);
-        }
-      })
-    );
-
-    logger.info('✅ All maintenance reminders sent. Job complete.');
-  } catch (error) {
-    logger.error({ err: error }, '❌ Error running maintenance reminder job');
-  }
+  const result = await processMaintenanceReminders();
+  logger.info(
+    { ...result },
+    `[maintenance-reminders] examined=${result.examined} notified=${result.notified} skipped=${result.skipped}`,
+  );
 }
 
 /**
@@ -739,10 +692,12 @@ const CRON_LEASE_TTL_MS = Number(process.env.CRON_LEASE_TTL_MS) || 10 * 60 * 100
 
 function scheduleCronJobs(): void {
   const cronEntries = JOB_REGISTRY.filter((j) => j.type === 'cron' && j.cronExpression);
+  const missingHandlerKeys: string[] = [];
 
   for (const entry of cronEntries) {
     const handler = CRON_HANDLERS[entry.key];
     if (!handler) {
+      missingHandlerKeys.push(entry.key);
       logger.warn(
         `[REGISTRY] ⚠️  No handler for registry job "${entry.key}" — ` +
         `job will not run. Add it to CRON_HANDLERS in worker.ts`,
@@ -753,6 +708,17 @@ function scheduleCronJobs(): void {
     cron.schedule(
       cronExpr,
       async () => {
+        const decision = evaluateWorkerExecution(entry.key, 'scheduled', entry);
+        if (!decision.allowed) {
+          logger.info(`[${entry.key}] Skipped tick — ${decision.reason}`);
+          void recordCronRun(entry.key, {
+            status: 'skipped',
+            finishedAt: Date.now(),
+            durationMs: 0,
+            failReason: decision.reason,
+          });
+          return;
+        }
         const gotLease = await acquireCronLease(entry.key, CRON_LEASE_TTL_MS);
         if (!gotLease) {
           logger.debug(`[${entry.key}] Skipped tick — lease held by another replica`);
@@ -797,6 +763,17 @@ function scheduleCronJobs(): void {
         `add it to JOB_REGISTRY in workerJobRegistry.ts`,
       );
     }
+  }
+
+  // WKR-006: a registry entry with no handler means the admin UI and
+  // operators believe a job is scheduled when it silently never runs.
+  // That's tolerable in local dev (a handler may be mid-refactor) but must
+  // not reach production undetected.
+  if (process.env.NODE_ENV === 'production' && missingHandlerKeys.length > 0) {
+    throw new Error(
+      `Refusing to start in production: ${missingHandlerKeys.length} registry job(s) have no ` +
+        `CRON_HANDLERS entry: ${missingHandlerKeys.join(', ')}`,
+    );
   }
 
   logger.info(`[REGISTRY] ${cronEntries.length} cron jobs scheduled from registry`);
@@ -918,38 +895,52 @@ function startWorker() {
   });
 
   // ===============================
-  // PUSH NOTIFICATIONS
+  // PUSH NOTIFICATIONS (WKR-010: no delivery provider is implemented yet —
+  // the consumer does not start unless explicitly enabled per-job, so a
+  // misdirected delivery sits harmlessly in the queue instead of being
+  // claimed and marked failed/skipped for a channel nobody can deliver on.)
   // ===============================
-  const pushWorker = new Worker(
-    'push-notification-queue',
-    async (job) => {
-      if (job.name === 'SEND_PUSH_NOTIFICATION') {
-        await sendPushNotificationJob(job.data.notificationDeliveryId);
-      }
-    },
-    { connection: redisConnection }
-  );
-  logger.info(`[WORKER] Push Notification Worker started for queue: push-notification-queue`);
-  pushWorker.on('failed', (job, err) => {
-    logger.error({ err }, `[PUSH-WORKER] delivery ${job?.data?.notificationDeliveryId} failed`);
-    void alertOnJobFailure('push-notification-queue', job, err);
-  });
+  const pushPolicy = JOB_REGISTRY.find((j) => j.key === 'push-notification');
+  if (pushPolicy && evaluateWorkerExecution('push-notification', 'poller', pushPolicy).allowed) {
+    const pushWorker = new Worker(
+      'push-notification-queue',
+      async (job) => {
+        if (job.name === 'SEND_PUSH_NOTIFICATION') {
+          await sendPushNotificationJob(job.data.notificationDeliveryId);
+        }
+      },
+      { connection: redisConnection }
+    );
+    logger.info(`[WORKER] Push Notification Worker started for queue: push-notification-queue`);
+    pushWorker.on('failed', (job, err) => {
+      logger.error({ err }, `[PUSH-WORKER] delivery ${job?.data?.notificationDeliveryId} failed`);
+      void alertOnJobFailure('push-notification-queue', job, err);
+    });
+  } else {
+    logger.info('[WORKER] Push Notification Worker not started — disabled (no delivery provider implemented; set WORKER_JOB_PUSH_NOTIFICATION_ENABLED=true once one exists)');
+  }
+
   // ===============================
-  // SMS NOTIFICATIONS
+  // SMS NOTIFICATIONS (same rationale as push, above)
   // ===============================
-  const smsWorker = new Worker(
-    'sms-notification-queue',
-    async (job) => {
-      if (job.name === 'SEND_SMS_NOTIFICATION') {
-        await sendSmsNotificationJob(job.data.notificationDeliveryId);
-      }
-    },
-    { connection: redisConnection }
-  );
-  smsWorker.on('failed', (job, err) => {
-    logger.error({ err }, `[SMS-WORKER] delivery ${job?.data?.notificationDeliveryId} failed`);
-    void alertOnJobFailure('sms-notification-queue', job, err);
-  });
+  const smsPolicy = JOB_REGISTRY.find((j) => j.key === 'sms-notification');
+  if (smsPolicy && evaluateWorkerExecution('sms-notification', 'poller', smsPolicy).allowed) {
+    const smsWorker = new Worker(
+      'sms-notification-queue',
+      async (job) => {
+        if (job.name === 'SEND_SMS_NOTIFICATION') {
+          await sendSmsNotificationJob(job.data.notificationDeliveryId);
+        }
+      },
+      { connection: redisConnection }
+    );
+    smsWorker.on('failed', (job, err) => {
+      logger.error({ err }, `[SMS-WORKER] delivery ${job?.data?.notificationDeliveryId} failed`);
+      void alertOnJobFailure('sms-notification-queue', job, err);
+    });
+  } else {
+    logger.info('[WORKER] SMS Notification Worker not started — disabled (no delivery provider implemented; set WORKER_JOB_SMS_NOTIFICATION_ENABLED=true once one exists)');
+  }
   logger.info(`[WORKER] Property Intelligence Worker started for queue: ${QUEUE_NAME}`);
 
 }
@@ -961,25 +952,56 @@ function restartAfterDelay(name: string, fn: () => Promise<void>, delayMs = 30_0
   });
 }
 
-restartAfterDelay('Report export poller', runHomeReportExportPoller);
-restartAfterDelay('Report export cleanup', runReportExportCleanup);
-restartAfterDelay('Material spec export poller', runMaterialSpecExportPoller);
+/**
+ * Runner/poller startup gate (WKR-004 §4.2 — these loops previously had no
+ * enablement check at all). Evaluated once at boot; a runner disabled today
+ * requires a worker restart to pick up a later flag flip, same as the cron
+ * scheduler's registry-driven jobs.
+ */
+function runnerAllowed(key: string): boolean {
+  const runner = RUNNER_REGISTRY.find((r) => r.key === key);
+  if (!runner) {
+    logger.warn(`[RUNNER-REGISTRY] ⚠️  No RUNNER_REGISTRY entry for "${key}" — refusing to start (fail closed)`);
+    return false;
+  }
+  const decision = evaluateWorkerExecution(key, 'poller', runner);
+  if (!decision.allowed) {
+    logger.info(`[${key}] Runner not started — ${decision.reason}`);
+  }
+  return decision.allowed;
+}
 
-startHighPriorityEmailEnqueuePoller({
-  intervalMs: 10_000,
-  batchSize: 50,
-  redisConnection,
-});
+if (runnerAllowed('home-report-export-poller')) {
+  restartAfterDelay('Report export poller', runHomeReportExportPoller);
+}
+if (runnerAllowed('report-export-cleanup')) {
+  restartAfterDelay('Report export cleanup', runReportExportCleanup);
+}
+if (runnerAllowed('material-spec-export-poller')) {
+  restartAfterDelay('Material spec export poller', runMaterialSpecExportPoller);
+}
 
-startDomainEventsPoller({
-  intervalMs: 30_000,
-  batchSize: 25,
-});
+if (runnerAllowed('high-priority-email-enqueue-poller')) {
+  startHighPriorityEmailEnqueuePoller({
+    intervalMs: 10_000,
+    batchSize: 50,
+    redisConnection,
+  });
+}
 
-startClaimFollowUpDuePoller({
-  intervalMs: 60_000,
-  batchSize: 50,
-});
+if (runnerAllowed('domain-events-poller')) {
+  startDomainEventsPoller({
+    intervalMs: 30_000,
+    batchSize: 25,
+  });
+}
+
+if (runnerAllowed('claim-follow-up-due-poller')) {
+  startClaimFollowUpDuePoller({
+    intervalMs: 60_000,
+    batchSize: 50,
+  });
+}
 
 // =============================================================================
 // RECALL JOBS: Worker and Queue setup
@@ -995,12 +1017,31 @@ const recallQueue = new Queue(RECALL_QUEUE_NAME, {
   }
 });
 
+const RECALL_JOB_POLICY: Record<string, string> = {
+  [RECALL_INGEST_JOB]: 'recall-ingest',
+  [RECALL_MATCH_JOB]: 'recall-match',
+};
+
 const recallWorker = new Worker(
   RECALL_QUEUE_NAME,
   async (job) => {
     // BullMQ workers need a "heartbeat" for long-running jobs.
     // If recallIngestJob or recallMatchJob takes > 30s, the lock expires.
-    
+    //
+    // Both the repeatable schedule set up below and an admin manual trigger
+    // land on this same queue/job name with no way to distinguish trigger
+    // type from inside the processor, so this is evaluated as 'scheduled'
+    // (the primary path) rather than attempting to special-case manual runs.
+    const registryKey = RECALL_JOB_POLICY[job.name];
+    const policy = registryKey ? JOB_REGISTRY.find((j) => j.key === registryKey) : undefined;
+    if (registryKey && policy) {
+      const decision = evaluateWorkerExecution(registryKey, 'scheduled', policy);
+      if (!decision.allowed) {
+        logger.info(`[${registryKey}] Skipped — ${decision.reason}`);
+        return;
+      }
+    }
+
     if (job.name === RECALL_INGEST_JOB) {
       await recallIngestJob();
     } else if (job.name === RECALL_MATCH_JOB) {
@@ -1259,6 +1300,17 @@ const cronTriggerWorker = new Worker(
     if (!handler) {
       throw new Error(`[CRON-TRIGGER] No handler registered for job: ${job.name}`);
     }
+    // Defense in depth: adminWorkerJobs.service.ts#triggerJob() already
+    // rejects a disallowed manual trigger before it's queued, but a job
+    // already sitting in the queue when flags change (deploy, restart)
+    // must not silently run once picked up.
+    const registryEntry = JOB_REGISTRY.find((j) => j.key === job.name);
+    if (registryEntry) {
+      const decision = evaluateWorkerExecution(job.name, 'manual', registryEntry);
+      if (!decision.allowed) {
+        throw new Error(`[CRON-TRIGGER] Manual trigger for "${job.name}" blocked — ${decision.reason}`);
+      }
+    }
     logger.info(`[CRON-TRIGGER] Running manually triggered job: ${job.name}`);
     await handler();
   },
@@ -1292,6 +1344,25 @@ cronTriggerWorker.on('failed', (job, err) => {
   logger.error(`[CRON-TRIGGER] Job ${job?.id} (${job?.name}) failed:`, err);
   void alertOnJobFailure('cron-trigger-queue', job, err);
 });
+
+// =============================================================================
+// STARTUP DIAGNOSTICS — WKR-004/WKR-005: make the effective worker execution
+// policy visible in logs at boot, and flag malformed flag values (anything
+// other than the exact strings "true"/"false") instead of silently falling
+// back to the beta default.
+// =============================================================================
+(function logWorkerGovernanceDiagnostics() {
+  const diagnostics = collectWorkerFlagDiagnostics();
+  for (const d of diagnostics) {
+    const line = `[GOVERNANCE] ${d.key}=${d.resolved}${d.rawValue === undefined ? ' (default)' : ''}`;
+    if (d.malformed) {
+      logger.warn(`${line} — malformed raw value "${d.rawValue}" ignored, using default`);
+    } else {
+      logger.info(line);
+    }
+  }
+  logger.info(`[GOVERNANCE] ENFORCE_HUMAN_POLICY_APPROVALS=${areHumanPolicyApprovalsEnforced()}`);
+})();
 
 // Start cron jobs from registry, then start BullMQ worker
 initCronRunHistory(redisConnection);

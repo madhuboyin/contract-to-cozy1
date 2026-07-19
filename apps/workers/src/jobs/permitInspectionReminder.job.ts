@@ -68,7 +68,7 @@ export async function permitInspectionReminderJob(): Promise<void> {
         type: 'MAINTENANCE_REMINDER',
         title: `Inspection Reminder: ${milestone.stageName}`,
         message: `Your ${milestone.stageName} inspection for ${permitLabel} at ${propertyLabel} is scheduled for ${scheduledDate}. Make sure your contractor is ready.`,
-        actionUrl: `/dashboard/properties/${milestone.propertyId}/permits`,
+        actionUrl: `/dashboard/properties/${milestone.propertyId}/tools/permits`,
         entityType: 'PermitInspectionMilestone',
         entityId: milestone.id,
         metadata: { propertyId: milestone.propertyId },

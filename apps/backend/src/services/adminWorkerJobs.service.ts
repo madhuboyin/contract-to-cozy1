@@ -6,8 +6,10 @@
 import { Queue } from 'bullmq';
 import Redis from 'ioredis';
 import { connection } from './JobQueue.service';
-import { JOB_REGISTRY } from '../config/workerJobRegistry';
+import { JOB_REGISTRY, RUNNER_REGISTRY } from '../config/workerJobRegistry';
 import { DEFAULT_JOB_RETENTION } from '../config/queueDefaults';
+import { evaluateWorkerExecution, collectWorkerFlagDiagnostics } from '../config/workerExecutionPolicy';
+import { areHumanPolicyApprovalsEnforced } from '../config/appConfig';
 import { logger } from '../lib/logger';
 
 // Re-export types so routes/controllers don't need two import paths
@@ -25,7 +27,7 @@ export interface QueueStats {
 export interface RecentRun {
   id: string;
   jobName: string;
-  status: 'completed' | 'failed';
+  status: 'completed' | 'failed' | 'skipped';
   finishedAt: number | null;
   durationMs: number | null;
   failReason?: string;
@@ -44,6 +46,10 @@ export interface WorkerJobDetail {
   triggerSupported: boolean;
   queueStats?: QueueStats;
   recentRuns: RecentRun[];
+  /** Whether the worker execution policy currently allows this job to run on its normal (scheduled/poller) trigger. */
+  effectiveEnabled: boolean;
+  /** Why effectiveEnabled is false — omitted when true. */
+  disabledReason?: string;
 }
 
 // ─── Cron run history (for jobs with no BullMQ queue) ─────────────────────────
@@ -61,7 +67,7 @@ cronHistoryRedis.on('error', (err) => {
 });
 
 interface StoredCronRun {
-  status: 'completed' | 'failed';
+  status: 'completed' | 'failed' | 'skipped';
   finishedAt: number;
   durationMs: number;
   failReason?: string;
@@ -189,24 +195,58 @@ async function getRecentRuns(queueName: string, jobName: string | undefined, lim
     .slice(0, limit);
 }
 
+function effectiveExecutionState(job: { key: string } & Parameters<typeof evaluateWorkerExecution>[2]): {
+  effectiveEnabled: boolean;
+  disabledReason?: string;
+} {
+  const decision = evaluateWorkerExecution(job.key, 'scheduled', job);
+  return decision.allowed ? { effectiveEnabled: true } : { effectiveEnabled: false, disabledReason: decision.reason };
+}
+
 export async function listWorkerJobs(): Promise<WorkerJobDetail[]> {
   return Promise.all(
     JOB_REGISTRY.map(async (job) => {
+      const state = effectiveExecutionState(job);
       if (!job.queueName) {
         const recentRuns = await getCronRunHistory(job.key);
-        return { ...job, recentRuns };
+        return { ...job, ...state, recentRuns };
       }
       try {
         const [queueStats, recentRuns] = await Promise.all([
           getQueueStats(job.queueName, job.jobName),
           getRecentRuns(job.queueName, job.jobName),
         ]);
-        return { ...job, queueStats, recentRuns };
+        return { ...job, ...state, queueStats, recentRuns };
       } catch {
-        return { ...job, recentRuns: [] };
+        return { ...job, ...state, recentRuns: [] };
       }
     }),
   );
+}
+
+export interface WorkerGovernanceStatus {
+  enforceHumanPolicyApprovals: boolean;
+  flags: Array<{ key: string; value: boolean; rawValue: string | undefined; malformed: boolean }>;
+  runners: Array<{ key: string; name: string; effectiveEnabled: boolean; disabledReason?: string }>;
+}
+
+export function getWorkerGovernanceStatus(): WorkerGovernanceStatus {
+  const flags = collectWorkerFlagDiagnostics().map((d) => ({
+    key: d.key,
+    value: d.resolved,
+    rawValue: d.rawValue,
+    malformed: d.malformed,
+  }));
+  const runners = RUNNER_REGISTRY.map((runner) => {
+    const decision = evaluateWorkerExecution(runner.key, 'poller', runner);
+    return {
+      key: runner.key,
+      name: runner.name,
+      effectiveEnabled: decision.allowed,
+      disabledReason: decision.allowed ? undefined : decision.reason,
+    };
+  });
+  return { enforceHumanPolicyApprovals: areHumanPolicyApprovalsEnforced(), flags, runners };
 }
 
 export async function triggerJob(jobKey: string): Promise<{ queued: boolean; jobId?: string }> {
@@ -214,6 +254,14 @@ export async function triggerJob(jobKey: string): Promise<{ queued: boolean; job
   if (!entry) throw new Error(`Unknown job key: ${jobKey}`);
   if (!entry.triggerSupported) throw new Error(`Manual trigger not supported for job: ${jobKey}`);
   if (!entry.queueName || !entry.jobName) throw new Error(`Missing queue config for job: ${jobKey}`);
+
+  // Manual triggers must produce the same policy decision the scheduler
+  // would (WKR-004/WKR-007) — reject here instead of queueing a job the
+  // worker-side cron-trigger-queue processor would just throw on anyway.
+  const decision = evaluateWorkerExecution(jobKey, 'manual', entry);
+  if (!decision.allowed) {
+    throw new Error(`Manual trigger not supported for job: ${jobKey} (${decision.reason})`);
+  }
 
   const q = getQueue(entry.queueName);
   const job = await q.add(

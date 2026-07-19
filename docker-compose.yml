@@ -114,6 +114,15 @@ services:
       REDIS_PORT: 6379
       REDIS_PASSWORD: ${REDIS_PASSWORD}
       JWT_SECRET: ${JWT_SECRET}
+      ENFORCE_HUMAN_POLICY_APPROVALS: ${ENFORCE_HUMAN_POLICY_APPROVALS:-false}
+      # Worker execution policy (see apps/backend/src/config/workerExecutionPolicy.ts).
+      # Beta defaults — flip to "true" once a job group has been reviewed for this environment.
+      WORKER_AUTOMATION_ENABLED: ${WORKER_AUTOMATION_ENABLED:-true}
+      WORKER_OUTBOUND_NOTIFICATIONS_ENABLED: ${WORKER_OUTBOUND_NOTIFICATIONS_ENABLED:-false}
+      WORKER_EXTERNAL_INGEST_ENABLED: ${WORKER_EXTERNAL_INGEST_ENABLED:-false}
+      WORKER_MUTATING_SWEEPS_ENABLED: ${WORKER_MUTATING_SWEEPS_ENABLED:-false}
+      WORKER_MANUAL_TRIGGERS_ENABLED: ${WORKER_MANUAL_TRIGGERS_ENABLED:-true}
+      ENFORCE_WORKER_MANUAL_TRIGGER_APPROVALS: ${ENFORCE_WORKER_MANUAL_TRIGGER_APPROVALS:-false}
     depends_on:
       postgres:
         condition: service_healthy

@@ -28,7 +28,7 @@ export interface QueueStats {
 export interface RecentRun {
   id: string;
   jobName: string;
-  status: 'completed' | 'failed';
+  status: 'completed' | 'failed' | 'skipped';
   finishedAt: number | null;
   durationMs: number | null;
   failReason?: string;
@@ -47,12 +47,27 @@ export interface WorkerJobDetail {
   triggerSupported: boolean;
   queueStats?: QueueStats;
   recentRuns: RecentRun[];
+  /** Whether the worker execution policy currently allows this job to run on its normal trigger. */
+  effectiveEnabled: boolean;
+  /** Why effectiveEnabled is false — omitted when true. */
+  disabledReason?: string;
+}
+
+export interface WorkerGovernanceStatus {
+  enforceHumanPolicyApprovals: boolean;
+  flags: Array<{ key: string; value: boolean; rawValue: string | undefined; malformed: boolean }>;
+  runners: Array<{ key: string; name: string; effectiveEnabled: boolean; disabledReason?: string }>;
 }
 
 // ─── API functions ────────────────────────────────────────────────────────────
 
 export async function fetchWorkerJobs(): Promise<WorkerJobDetail[]> {
   const res = await api.get<WorkerJobDetail[]>('/api/admin/worker-jobs');
+  return res.data;
+}
+
+export async function fetchWorkerGovernance(): Promise<WorkerGovernanceStatus> {
+  const res = await api.get<WorkerGovernanceStatus>('/api/admin/worker-jobs/governance');
   return res.data;
 }
 
