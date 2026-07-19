@@ -118,12 +118,13 @@ export async function enableOptionalPersonalizationProfile(propertyId: string) {
 export async function sendRecommendationFeedback(
   propertyId: string,
   recommendationId: string,
-  type: 'DISMISSED' | 'NOT_RELEVANT',
+  type: 'DISMISSED' | 'NOT_RELEVANT' | 'COMPLAINT' | 'RECOMMENDATION_OVERRIDDEN' | 'RECOMMENDATION_REVERSED' | 'PROFILE_CORRECTED',
   reasonCode?: 'ALREADY_DONE' | 'TOO_EXPENSIVE' | 'NOT_APPLICABLE' | 'BAD_TIMING' | 'WRONG_PROFILE' | 'OTHER',
+  comment?: string,
 ) {
   return (await api.post(
     `/api/properties/${propertyId}/personalization/recommendations/${recommendationId}/feedback`,
-    { eventId: crypto.randomUUID(), type, explicit: true, reasonCode },
+    { eventId: crypto.randomUUID(), type, explicit: true, reasonCode, comment },
   )).data;
 }
 

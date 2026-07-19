@@ -13333,6 +13333,45 @@ enum RecommendationReviewDecision {
   REJECTED
 }
 
+enum RecommendationIncidentType {
+  COMPLAINT
+  REVERSAL
+  OVERRIDE
+  CALIBRATION
+  INCORRECT_CONTENT
+  SAFETY_HARM
+  COMMERCIAL_INTEGRITY
+  UPSTREAM_FAILURE
+  OTHER
+}
+
+enum RecommendationIncidentSeverity {
+  LOW
+  MODERATE
+  HIGH
+  CRITICAL
+}
+
+enum RecommendationIncidentStatus {
+  OPEN
+  TRIAGED
+  INVESTIGATING
+  MITIGATED
+  RESOLVED
+  CLOSED
+}
+
+enum RecommendationIncidentResolution {
+  CORRECTED
+  RULE_PAUSED
+  CONTENT_REVISED
+  FALSE_POSITIVE
+  USER_EDUCATION
+  ESCALATED
+  NO_CHANGE
+  OTHER
+}
+
 model RecommendationDefinition {
   id                      String                   @id @default(uuid())
   code                    String                   @unique
@@ -13361,6 +13400,7 @@ model RecommendationDefinition {
   recommendations PersonalizedRecommendation[]
   suppressions    RecommendationSuppression[]
   governanceReviews RecommendationGovernanceReview[]
+  incidents         RecommendationIncident[]
 
   @@index([status, effectiveFrom, effectiveTo])
   @@index([category, status])
@@ -13650,6 +13690,7 @@ model PersonalizedRecommendation {
   evaluationRun  PersonalizationEvaluationRun? @relation(fields: [evaluationRunId], references: [id], onDelete: SetNull)
   explanations   RecommendationExplanation[]
   feedbackEvents RecommendationFeedback[]
+  incidents      RecommendationIncident[]
 
   @@unique([propertyId, definitionId])
   @@index([propertyId, status])
@@ -13694,9 +13735,55 @@ model RecommendationFeedback {
   createdAt DateTime @default(now())
 
   recommendation PersonalizedRecommendation @relation(fields: [recommendationId], references: [id], onDelete: Cascade)
+  incident       RecommendationIncident?
 
   @@index([recommendationId, type])
   @@map("personalization_recommendation_feedback")
+}
+
+// Phase 4 trust-operations record for a complaint, reversal, override,
+// calibration problem, unsafe recommendation, or other recommendation issue.
+// Lifecycle transitions are additionally written to PersonalizationAuditEvent.
+model RecommendationIncident {
+  id               String @id @default(uuid())
+  definitionId     String
+  recommendationId String?
+  sourceFeedbackId String? @unique
+
+  type       RecommendationIncidentType
+  severity   RecommendationIncidentSeverity
+  status     RecommendationIncidentStatus @default(OPEN)
+  safetyTier RecommendationSafetyTier
+  policyVersion String
+
+  summary     String
+  details     String? @db.Text
+  reportedByUserId String?
+  assignedToUserId String?
+
+  triagedAt         DateTime?
+  targetResolutionAt DateTime?
+  mitigatedAt       DateTime?
+  resolvedAt        DateTime?
+  closedAt          DateTime?
+
+  resolutionCode    RecommendationIncidentResolution?
+  resolutionSummary String? @db.Text
+  rootCause         String? @db.Text
+  correctiveAction  String? @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  definition     RecommendationDefinition      @relation(fields: [definitionId], references: [id], onDelete: Cascade)
+  recommendation PersonalizedRecommendation?   @relation(fields: [recommendationId], references: [id], onDelete: SetNull)
+  sourceFeedback RecommendationFeedback?        @relation(fields: [sourceFeedbackId], references: [id], onDelete: SetNull)
+
+  @@index([status, severity, createdAt(sort: Desc)])
+  @@index([definitionId, status, createdAt(sort: Desc)])
+  @@index([safetyTier, status, createdAt(sort: Desc)])
+  @@index([assignedToUserId, status])
+  @@map("personalization_recommendation_incidents")
 }
 
 // Property/definition-scoped suppression written by explicit negative

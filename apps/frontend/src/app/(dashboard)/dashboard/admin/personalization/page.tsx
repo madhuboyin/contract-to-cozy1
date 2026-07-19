@@ -10,11 +10,16 @@ import { useToast } from '@/components/ui/use-toast';
 import {
   activatePersonalizationDefinition,
   activatePersonalizationQuestion,
+  createRecommendationIncident,
   getPersonalizationAdminCatalog,
   getPersonalizationQuality,
+  getRecommendationIncidents,
   pausePersonalizationDefinition,
   recordPersonalizationGovernanceReview,
   resumePersonalizationDefinition,
+  transitionRecommendationIncident,
+  type RecommendationIncident,
+  type RecommendationIncidentStatus,
   type RecommendationReviewRole,
 } from '@/lib/api/personalizationAdminApi';
 
@@ -35,7 +40,18 @@ export default function PersonalizationAdminPage() {
     queryFn: () => getPersonalizationQuality(30),
     enabled: guard.isAdmin,
   });
-  const refresh = () => queryClient.invalidateQueries({ queryKey: ['personalization-admin-catalog'] });
+  const incidents = useQuery({
+    queryKey: ['recommendation-incidents'],
+    queryFn: getRecommendationIncidents,
+    enabled: guard.isAdmin,
+  });
+  const refresh = async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['personalization-admin-catalog'] }),
+      queryClient.invalidateQueries({ queryKey: ['personalization-quality'] }),
+      queryClient.invalidateQueries({ queryKey: ['recommendation-incidents'] }),
+    ]);
+  };
   const activateDefinition = useMutation({
     mutationFn: ({
       code,
@@ -87,6 +103,71 @@ export default function PersonalizationAdminPage() {
     },
     onError: (error: Error) => toast({ title: 'Review failed', description: error.message, variant: 'destructive' }),
   });
+  const openIncident = useMutation({
+    mutationFn: ({ definitionCode, summary, details }: { definitionCode: string; summary: string; details?: string }) =>
+      createRecommendationIncident({ definitionCode, type: 'INCORRECT_CONTENT', summary, details }),
+    onSuccess: async (result) => {
+      await refresh();
+      toast({
+        title: 'Incident opened',
+        description: result.definitionPaused
+          ? 'The definition was automatically paused for immediate mitigation.'
+          : 'The incident is available in the trust operations queue.',
+      });
+    },
+    onError: (error: Error) => toast({ title: 'Incident intake failed', description: error.message, variant: 'destructive' }),
+  });
+  const transitionIncident = useMutation({
+    mutationFn: ({ incidentId, status, note, resolution }: {
+      incidentId: string;
+      status: RecommendationIncidentStatus;
+      note: string;
+      resolution?: { summary: string; rootCause: string; correctiveAction: string };
+    }) => transitionRecommendationIncident(incidentId, {
+      status,
+      note,
+      ...(resolution ? {
+        resolutionCode: 'CORRECTED',
+        resolutionSummary: resolution.summary,
+        rootCause: resolution.rootCause,
+        correctiveAction: resolution.correctiveAction,
+      } : {}),
+    }),
+    onSuccess: async () => {
+      await refresh();
+      toast({ title: 'Incident updated', description: 'The audited incident lifecycle was advanced.' });
+    },
+    onError: (error: Error) => toast({ title: 'Incident update failed', description: error.message, variant: 'destructive' }),
+  });
+
+  const advanceIncident = (incident: RecommendationIncident) => {
+    const nextByStatus: Partial<Record<RecommendationIncidentStatus, RecommendationIncidentStatus>> = {
+      OPEN: 'TRIAGED',
+      TRIAGED: 'INVESTIGATING',
+      INVESTIGATING: 'RESOLVED',
+      MITIGATED: 'RESOLVED',
+      RESOLVED: 'CLOSED',
+    };
+    const status = nextByStatus[incident.status];
+    if (!status) return;
+    const note = window.prompt(`Operational note for ${incident.status} → ${status}:`);
+    if (!note?.trim()) return;
+    if (status !== 'RESOLVED') {
+      transitionIncident.mutate({ incidentId: incident.id, status, note: note.trim() });
+      return;
+    }
+    const summary = window.prompt('Resolution summary:');
+    const rootCause = window.prompt('Root cause:');
+    const correctiveAction = window.prompt('Corrective action:');
+    if (summary?.trim() && rootCause?.trim() && correctiveAction?.trim()) {
+      transitionIncident.mutate({
+        incidentId: incident.id,
+        status,
+        note: note.trim(),
+        resolution: { summary: summary.trim(), rootCause: rootCause.trim(), correctiveAction: correctiveAction.trim() },
+      });
+    }
+  };
 
   if (guard.status !== 'ready') return guard.node;
   if (catalog.isLoading) {
@@ -119,12 +200,13 @@ export default function PersonalizationAdminPage() {
               <p className="text-sm text-rose-700">Personalization quality is unavailable. Catalog operations are unaffected.</p>
             ) : (
               <div className="space-y-4">
-                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
                   <div className="rounded-xl border p-4"><p className="text-xs font-medium uppercase tracking-wide text-slate-500">Homes with default guidance</p><p className="mt-1 text-2xl font-semibold">{quality.data.propertiesWithDefaultGuidance}</p></div>
                   <div className="rounded-xl border p-4"><p className="text-xs font-medium uppercase tracking-wide text-slate-500">Optional profiles enabled</p><p className="mt-1 text-2xl font-semibold">{quality.data.optionalProfilesEnabled}</p></div>
                   <div className="rounded-xl border p-4"><p className="text-xs font-medium uppercase tracking-wide text-slate-500">Recommendations</p><p className="mt-1 text-2xl font-semibold">{quality.data.recommendations.total}</p></div>
                   <div className="rounded-xl border p-4"><p className="text-xs font-medium uppercase tracking-wide text-slate-500">Accepted</p><p className="mt-1 text-2xl font-semibold">{quality.data.feedback.accepted}</p></div>
                   <div className="rounded-xl border p-4"><p className="text-xs font-medium uppercase tracking-wide text-slate-500">Negative</p><p className="mt-1 text-2xl font-semibold">{quality.data.feedback.negative}</p></div>
+                  <div className="rounded-xl border p-4"><p className="text-xs font-medium uppercase tracking-wide text-slate-500">Open incidents</p><p className="mt-1 text-2xl font-semibold">{quality.data.incidents.open}</p><p className="text-xs text-slate-500">{quality.data.incidents.critical} critical</p></div>
                 </div>
                 <p className="text-sm text-slate-600">
                   {quality.data.sample.decisionEvents} decision events collected; {quality.data.sample.minimumRequired} required before aggregate results are reviewable. This threshold permits manual review only, never automatic weight changes.
@@ -134,8 +216,59 @@ export default function PersonalizationAdminPage() {
                     {quality.data.feedback.reasons.map((reason) => <Badge key={reason.reasonCode} variant="outline">{reason.reasonCode.replaceAll('_', ' ')} · {reason.count}</Badge>)}
                   </div>
                 ) : null}
+                <div className="flex flex-wrap gap-2" aria-label="Recommendation correction and incident signals">
+                  <Badge variant="outline">Complaints · {quality.data.feedback.complaints}</Badge>
+                  <Badge variant="outline">Overrides · {quality.data.feedback.overrides}</Badge>
+                  <Badge variant="outline">Reversals · {quality.data.feedback.reversals}</Badge>
+                  <Badge variant="outline">Profile corrections · {quality.data.feedback.corrections}</Badge>
+                  <Badge variant="outline">Resolved incidents · {quality.data.incidents.resolved}</Badge>
+                  <Badge variant="outline">Median resolution · {quality.data.incidents.medianResolutionHours == null ? '—' : `${quality.data.incidents.medianResolutionHours}h`}</Badge>
+                </div>
+                <div className="grid gap-2 md:grid-cols-4" aria-label="Confidence calibration by band">
+                  {quality.data.calibration.map((band) => (
+                    <div key={band.band} className="rounded-xl border bg-slate-50 p-3 text-sm">
+                      <p className="font-medium">{band.band} confidence</p>
+                      <p className="text-xs text-slate-600">{band.samples} samples · observed positive {band.observedPositiveRate == null ? '—' : `${Math.round(band.observedPositiveRate * 100)}%`} · gap {band.calibrationGap == null ? '—' : `${Math.round(band.calibrationGap * 100)} pts`}</p>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
+          </CardContent>
+        </Card>
+        <Card className="rounded-2xl">
+          <CardHeader>
+            <div className="flex flex-wrap items-center gap-2">
+              <CardTitle>Recommendation incident queue</CardTitle>
+              <Badge variant="outline">{incidents.data?.filter((incident) => !['RESOLVED', 'CLOSED'].includes(incident.status)).length ?? 0} open</Badge>
+            </div>
+            <CardDescription>Complaints, reversals, overrides, and operator reports enter an audited lifecycle. Critical and safety incidents pause the affected definition automatically.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {incidents.isLoading ? <p className="text-sm text-slate-600">Loading recommendation incidents…</p> : null}
+            {incidents.isError ? <p className="text-sm text-rose-700">The incident queue is unavailable.</p> : null}
+            {incidents.data?.length === 0 ? <p className="rounded-xl border bg-slate-50 p-4 text-sm text-slate-600">No recommendation incidents have been reported.</p> : null}
+            {incidents.data?.map((incident) => (
+              <div key={incident.id} className="flex flex-col justify-between gap-3 rounded-xl border p-4 lg:flex-row lg:items-start">
+                <div className="space-y-2">
+                  <div className="flex flex-wrap gap-2">
+                    <Badge variant={incident.severity === 'CRITICAL' ? 'destructive' : 'outline'}>{incident.severity}</Badge>
+                    <Badge>{incident.status}</Badge>
+                    <Badge variant="outline">{incident.type.replaceAll('_', ' ')}</Badge>
+                    <Badge variant="outline">{incident.definition.code}</Badge>
+                    {incident.definition.pausedAt ? <Badge variant="destructive">DEFINITION PAUSED</Badge> : null}
+                  </div>
+                  <p className="font-medium">{incident.summary}</p>
+                  {incident.details ? <p className="text-sm text-slate-600">{incident.details}</p> : null}
+                  <p className="text-xs text-slate-500">Opened {new Date(incident.createdAt).toLocaleString()} · {incident.safetyTier.replaceAll('_', ' ')} · policy {incident.policyVersion}</p>
+                </div>
+                {!['CLOSED'].includes(incident.status) ? (
+                  <Button type="button" variant="outline" disabled={transitionIncident.isPending} onClick={() => advanceIncident(incident)}>
+                    {incident.status === 'OPEN' ? 'Triage' : incident.status === 'TRIAGED' ? 'Investigate' : incident.status === 'RESOLVED' ? 'Close' : 'Resolve'}
+                  </Button>
+                ) : null}
+              </div>
+            ))}
           </CardContent>
         </Card>
         <section className="space-y-3" aria-labelledby="recommendation-catalog-heading">
@@ -266,6 +399,19 @@ export default function PersonalizationAdminPage() {
                           {definition.pausedAt ? 'Resume' : 'Pause'}
                         </Button>
                       ) : null}
+                      <Button
+                        type="button"
+                        variant="outline"
+                        disabled={openIncident.isPending}
+                        onClick={() => {
+                          const summary = window.prompt(`Summarize the recommendation issue for ${definition.code}:`);
+                          if (!summary?.trim()) return;
+                          const details = window.prompt('Add investigation details (optional):');
+                          openIncident.mutate({ definitionCode: definition.code, summary: summary.trim(), details: details?.trim() || undefined });
+                        }}
+                      >
+                        Report incident
+                      </Button>
                     </div>
                   </CardContent>
                 </Card>

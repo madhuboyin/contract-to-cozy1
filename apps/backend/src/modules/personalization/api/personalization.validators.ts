@@ -6,11 +6,21 @@ export const OptionalProfileEnableSchema = z.object({
 
 export const RecommendationFeedbackSchema = z.object({
   eventId: z.string().uuid(),
-  type: z.enum(['VIEWED', 'EXPANDED', 'SAVED', 'DISMISSED', 'SNOOZED', 'NOT_RELEVANT']),
+  type: z.enum([
+    'VIEWED', 'EXPANDED', 'SAVED', 'DISMISSED', 'SNOOZED', 'NOT_RELEVANT',
+    'COMPLAINT', 'RECOMMENDATION_OVERRIDDEN', 'RECOMMENDATION_REVERSED', 'PROFILE_CORRECTED',
+  ]),
   explicit: z.boolean(),
   reasonCode: z.enum(['ALREADY_DONE', 'TOO_EXPENSIVE', 'NOT_APPLICABLE', 'BAD_TIMING', 'WRONG_PROFILE', 'OTHER']).nullable().optional(),
   comment: z.string().trim().max(500).nullable().optional(),
-}).strict();
+}).strict().superRefine((value, ctx) => {
+  if (value.type === 'COMPLAINT' && !value.comment) {
+    ctx.addIssue({ code: 'custom', path: ['comment'], message: 'A complaint requires a comment.' });
+  }
+  if (['COMPLAINT', 'RECOMMENDATION_OVERRIDDEN', 'RECOMMENDATION_REVERSED', 'PROFILE_CORRECTED'].includes(value.type) && !value.explicit) {
+    ctx.addIssue({ code: 'custom', path: ['explicit'], message: 'Incident-producing feedback must be explicit.' });
+  }
+});
 
 export const ProfileAnswerSchema = z.object({
   idempotencyKey: z.string().uuid(),

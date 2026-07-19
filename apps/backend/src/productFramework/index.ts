@@ -4,4 +4,5 @@ export * from './homeActionSourceAdapters';
 export * from './outcomeLineage.contract';
 export * from './recommendationGovernance.contract';
 export * from './recommendationResponse.contract';
+export * from './recommendationIncident.contract';
 export * from './recommendationLaunchGate';

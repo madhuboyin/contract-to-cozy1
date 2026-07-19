@@ -7,6 +7,7 @@ function createPrismaMock({ recommendation = { id: 'rec-1', propertyId: 'prop-1'
   const feedbackRows = [];
   const suppressions = [];
   const recommendationUpdates = [];
+  const incidents = [];
   let recommendationRow = { ...recommendation, status: 'ACTIVE' };
 
   const prismaMock = {
@@ -18,7 +19,11 @@ function createPrismaMock({ recommendation = { id: 'rec-1', propertyId: 'prop-1'
       },
     },
     personalizedRecommendation: {
-      findUnique: async ({ where }) => (where.id === recommendationRow.id ? recommendationRow : null),
+      findUnique: async ({ where }) => (where.id === recommendationRow.id ? {
+        ...recommendationRow,
+        definition: { code: 'dryer_vent_cleaning', safetyTier: 'LOW_CONSEQUENCE', governancePolicyVersion: 'phase4-v1' },
+      } : null),
+      findFirst: async ({ where }) => (where.id === recommendationRow.id && where.definitionId === recommendationRow.definitionId ? { id: recommendationRow.id } : null),
       updateMany: async ({ where, data }) => {
         recommendationUpdates.push({ where, data });
         if (recommendationRow.id === where.id && recommendationRow.status === where.status) {
@@ -42,9 +47,28 @@ function createPrismaMock({ recommendation = { id: 'rec-1', propertyId: 'prop-1'
         return record;
       },
     },
+    recommendationDefinition: {
+      findUnique: async ({ where }) => (where.id === recommendationRow.definitionId ? {
+        id: recommendationRow.definitionId,
+        code: 'dryer_vent_cleaning',
+        safetyTier: 'LOW_CONSEQUENCE',
+        governancePolicyVersion: 'phase4-v1',
+        pausedAt: null,
+      } : null),
+      update: async () => ({}),
+    },
+    recommendationIncident: {
+      findUnique: async ({ where }) => incidents.find((row) => row.sourceFeedbackId === where.sourceFeedbackId) || null,
+      create: async ({ data }) => {
+        const row = { id: `incident-${incidents.length + 1}`, ...data, definition: { code: 'dryer_vent_cleaning' } };
+        incidents.push(row);
+        return row;
+      },
+    },
+    personalizationAuditEvent: { create: async () => ({}) },
   };
 
-  return { prismaMock, feedbackRows, suppressions, recommendationUpdates, getRecommendationRow: () => recommendationRow };
+  return { prismaMock, feedbackRows, suppressions, recommendationUpdates, incidents, getRecommendationRow: () => recommendationRow };
 }
 
 function installPrismaMock(prismaMock) {
@@ -62,6 +86,8 @@ function loadUseCase() {
     '../../src/modules/personalization/infrastructure/feedbackRepository.ts',
     '../../src/modules/personalization/infrastructure/suppressionRepository.ts',
     '../../src/modules/personalization/infrastructure/recommendationRepository.ts',
+    '../../src/services/personalizationAudit.service.ts',
+    '../../src/services/recommendationIncident.service.ts',
     '../../src/modules/personalization/application/recordRecommendationFeedback.usecase.ts',
   ].map((p) => require.resolve(p));
   for (const p of paths) delete require.cache[p];
@@ -157,4 +183,25 @@ test('returns RECOMMENDATION_NOT_FOUND when the recommendation does not exist', 
   });
 
   assert.equal(result.status, 'RECOMMENDATION_NOT_FOUND');
+});
+
+test('explicit complaint opens one idempotently linked recommendation incident', async () => {
+  const { prismaMock, incidents } = createPrismaMock();
+  installPrismaMock(prismaMock);
+  const { recordRecommendationFeedback } = loadUseCase();
+
+  const result = await recordRecommendationFeedback({
+    recommendationId: 'rec-1',
+    eventId: 'evt-complaint',
+    type: 'COMPLAINT',
+    explicit: true,
+    comment: 'The recommended interval conflicts with the appliance manual.',
+    reportedByUserId: 'user-1',
+  });
+
+  assert.equal(result.status, 'RECORDED');
+  assert.equal(result.incidentOpened, true);
+  assert.equal(incidents.length, 1);
+  assert.equal(incidents[0].type, 'COMPLAINT');
+  assert.equal(incidents[0].sourceFeedbackId, 'fb-1');
 });

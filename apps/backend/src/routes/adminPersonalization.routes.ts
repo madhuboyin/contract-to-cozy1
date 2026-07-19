@@ -18,6 +18,9 @@ import {
   activateDefinitionBundleHandler,
   activateQuestionHandler,
   recordGovernanceReviewHandler,
+  listRecommendationIncidentsHandler,
+  intakeRecommendationIncidentHandler,
+  transitionRecommendationIncidentHandler,
 } from '../controllers/adminPersonalization.controller';
 
 const router = Router();
@@ -82,6 +85,9 @@ router.post('/admin/personalization/definitions/:code/pause', pauseDefinitionHan
 router.post('/admin/personalization/definitions/:code/resume', resumeDefinitionHandler);
 router.get('/admin/personalization/catalog', getCatalogHandler);
 router.get('/admin/personalization/quality', getPersonalizationQualityHandler);
+router.get('/admin/personalization/incidents', listRecommendationIncidentsHandler);
+router.post('/admin/personalization/incidents', intakeRecommendationIncidentHandler);
+router.post('/admin/personalization/incidents/:incidentId/transitions', transitionRecommendationIncidentHandler);
 router.post('/admin/personalization/definitions/:code/activate', activateDefinitionBundleHandler);
 router.post('/admin/personalization/definitions/:code/governance-reviews', recordGovernanceReviewHandler);
 router.post('/admin/personalization/questions/:code/activate', activateQuestionHandler);

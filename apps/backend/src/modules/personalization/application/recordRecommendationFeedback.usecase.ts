@@ -12,6 +12,8 @@ import {
 import { createOrExtendSuppression } from '../infrastructure/suppressionRepository';
 import { markRecommendationDismissed } from '../infrastructure/recommendationRepository';
 import { decideSuppressionForFeedback } from '../domain/feedbackPolicy';
+import { intakeRecommendationIncident } from '../../../services/recommendationIncident.service';
+import type { RecommendationIncidentType } from '../../../productFramework/recommendationIncident.contract';
 
 export type RecordFeedbackStatus = 'RECORDED' | 'DUPLICATE' | 'RECOMMENDATION_NOT_FOUND';
 
@@ -22,12 +24,21 @@ export interface RecordRecommendationFeedbackParams {
   explicit: boolean;
   reasonCode?: string | null;
   comment?: string | null;
+  reportedByUserId?: string | null;
 }
 
 export interface RecordRecommendationFeedbackResult {
   status: RecordFeedbackStatus;
   suppressed: boolean;
+  incidentOpened?: boolean;
 }
+
+const INCIDENT_TYPE_BY_FEEDBACK: Partial<Record<string, RecommendationIncidentType>> = {
+  COMPLAINT: 'COMPLAINT',
+  RECOMMENDATION_OVERRIDDEN: 'OVERRIDE',
+  RECOMMENDATION_REVERSED: 'REVERSAL',
+  PROFILE_CORRECTED: 'CALIBRATION',
+};
 
 export async function recordRecommendationFeedback(
   params: RecordRecommendationFeedbackParams,
@@ -44,7 +55,7 @@ export async function recordRecommendationFeedback(
     return { status: 'RECOMMENDATION_NOT_FOUND', suppressed: false };
   }
 
-  await createFeedback({
+  const feedback = await createFeedback({
     recommendationId: params.recommendationId,
     eventId: params.eventId,
     type: params.type,
@@ -53,9 +64,24 @@ export async function recordRecommendationFeedback(
     comment: params.comment,
   });
 
+  const incidentType = INCIDENT_TYPE_BY_FEEDBACK[params.type];
+  let incidentOpened = false;
+  if (incidentType) {
+    const intake = await intakeRecommendationIncident({
+      definitionId: context.definitionId,
+      recommendationId: params.recommendationId,
+      sourceFeedbackId: feedback.id,
+      type: incidentType,
+      summary: `${params.type.split('_').join(' ')} reported for ${context.definitionCode}`,
+      details: params.comment ?? params.reasonCode ?? null,
+      reportedByUserId: params.reportedByUserId ?? null,
+    });
+    incidentOpened = intake.created;
+  }
+
   const directive = decideSuppressionForFeedback(params.type, params.explicit);
   if (!directive) {
-    return { status: 'RECORDED', suppressed: false };
+    return { status: 'RECORDED', suppressed: false, ...(incidentOpened ? { incidentOpened: true } : {}) };
   }
 
   await createOrExtendSuppression({
@@ -66,5 +92,5 @@ export async function recordRecommendationFeedback(
   });
   await markRecommendationDismissed(params.recommendationId);
 
-  return { status: 'RECORDED', suppressed: true };
+  return { status: 'RECORDED', suppressed: true, ...(incidentOpened ? { incidentOpened: true } : {}) };
 }

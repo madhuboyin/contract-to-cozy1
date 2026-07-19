@@ -1,6 +1,6 @@
 # Product Framework Phase 4 — Trust, Cadence, Grounded Ask, and Recurring Care
 
-Status: Increments 1–2 implemented
+Status: Increments 1–3 implemented
 
 Contract version: `phase4-v1`
 
@@ -28,7 +28,7 @@ Implemented:
 
 ## Database policy
 
-Phase 4 Increments 1–2 change the Prisma schema but do not include a migration script. There are no real users or data-migration requirements. The repository owner applies the updated schema and reruns the canonical personalization bootstrap as appropriate.
+Phase 4 Increments 1–3 change the Prisma schema but do not include a migration script. There are no real users or data-migration requirements. The repository owner applies the updated schema and reruns the canonical personalization bootstrap as appropriate.
 
 ## Increment 2 — Guidance trust tiers and safe failure contracts
 
@@ -45,11 +45,25 @@ Implemented:
 - Applied the failure contract to guidance API responses, personalization APIs, module placements, homeowner surfaces, and the server-side recommendation-to-maintenance mutation.
 - Added focused contract coverage and no migration script.
 
+## Increment 3 — Recommendation incident operations and quality reporting
+
+Implemented:
+
+- Added a recommendation-specific incident record linked to the definition, generated recommendation, and originating feedback event without conflating it with property-damage incidents.
+- Added typed complaint, reversal, override, calibration, incorrect-content, safety, commercial-integrity, upstream-failure, and operator-reported incident classes.
+- Added an audited `OPEN → TRIAGED → INVESTIGATING/MITIGATED → RESOLVED → CLOSED` lifecycle with controlled reopen paths.
+- Required a resolution code, summary, root cause, and corrective action before resolution.
+- Automatically paused the affected definition for critical, safety-harm, or safety-tier incidents; resolution remains blocked until active high-risk definitions are mitigated.
+- Converted explicit homeowner complaints, recommendation reversals, overrides, and profile corrections into idempotently linked incident intake.
+- Added a homeowner “Report a problem” path and an MFA-protected operator queue for manual intake, triage, investigation, resolution, and closure.
+- Extended the aggregate quality snapshot with complaint, override, reversal, correction, confidence-calibration, incident-volume, criticality, resolution-rate, and median-resolution-time signals.
+- Kept online tuning disabled; quality signals support manual governance review only.
+- Added focused lifecycle, integration, UI contract, and quality-report tests with no migration script.
+
 ## Remaining Phase 4 increments
 
 ### Trust completion
 
-- Add recommendation incident intake, triage, resolution, and calibration/reversal/complaint/override reporting.
 - Extend tier validation and the safe failure contract beyond reviewed personalization and canonical guidance to every remaining material recommendation producer.
 
 ### Canonical notification policy
@@ -74,4 +88,7 @@ npx tsc --noEmit -p apps/frontend/tsconfig.json
 node --test apps/backend/tests/unit/phase4TrustGovernance.test.js
 node --test apps/backend/tests/unit/personalizationCatalogAdmin.test.js
 node --test apps/backend/tests/unit/phase4GuidanceTrustContracts.test.js
+node --test apps/backend/tests/unit/phase4RecommendationIncidents.test.js
+node --test apps/backend/tests/unit/personalizationRecordRecommendationFeedback.test.js
+node --test apps/backend/tests/unit/personalizationQuality.test.js
 ```

@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Lightbulb, Network, RefreshCw, RotateCcw, ThumbsDown } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Lightbulb, Network, RefreshCw, RotateCcw, ThumbsDown } from 'lucide-react';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
 import {
   answerProfileQuestion,
@@ -136,8 +136,12 @@ export default function PersonalizationPage() {
   const optIn = useMutation({ mutationFn: () => enableOptionalPersonalizationProfile(propertyId!), onSuccess: refresh });
   const reset = useMutation({ mutationFn: () => resetOptionalPersonalizationProfile(propertyId!), onSuccess: refresh });
   const feedback = useMutation({
-    mutationFn: ({ recommendationId, type, reasonCode }: { recommendationId: string; type: 'DISMISSED' | 'NOT_RELEVANT'; reasonCode: PersonalizationFeedbackReason }) =>
-      sendRecommendationFeedback(propertyId!, recommendationId, type, reasonCode),
+    mutationFn: ({ recommendationId, type, reasonCode, comment }: {
+      recommendationId: string;
+      type: 'DISMISSED' | 'NOT_RELEVANT' | 'COMPLAINT';
+      reasonCode?: PersonalizationFeedbackReason;
+      comment?: string;
+    }) => sendRecommendationFeedback(propertyId!, recommendationId, type, reasonCode, comment),
     onSuccess: async () => {
       setFeedbackFor(null);
       await refresh();
@@ -271,9 +275,22 @@ export default function PersonalizationPage() {
                             </div>
                           </div>
                         ) : (
-                          <button type="button" disabled={feedback.isPending} onClick={() => setFeedbackFor(recommendation.id)} className="inline-flex min-h-[44px] items-center gap-2 rounded-xl border px-4 py-2 text-sm font-semibold disabled:opacity-60">
-                            <ThumbsDown className="h-4 w-4" /> Not relevant
-                          </button>
+                          <div className="flex flex-wrap gap-2">
+                            <button type="button" disabled={feedback.isPending} onClick={() => setFeedbackFor(recommendation.id)} className="inline-flex min-h-[44px] items-center gap-2 rounded-xl border px-4 py-2 text-sm font-semibold disabled:opacity-60">
+                              <ThumbsDown className="h-4 w-4" /> Not relevant
+                            </button>
+                            <button
+                              type="button"
+                              disabled={feedback.isPending}
+                              onClick={() => {
+                                const comment = window.prompt('What appears incorrect, unsafe, or misleading about this suggestion?');
+                                if (comment?.trim()) feedback.mutate({ recommendationId: recommendation.id, type: 'COMPLAINT', reasonCode: 'OTHER', comment: comment.trim() });
+                              }}
+                              className="inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-amber-300 px-4 py-2 text-sm font-semibold text-amber-900 disabled:opacity-60"
+                            >
+                              <AlertTriangle className="h-4 w-4" /> Report a problem
+                            </button>
+                          </div>
                         )
                       ) : null}
                     </div>

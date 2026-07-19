@@ -8,6 +8,8 @@ function loadService({
   feedbackRows = [],
   answerRows = [],
   optionalProfilesEnabled = 0,
+  calibrationRows = [],
+  incidentRows = [],
   onRecommendationQuery,
 } = {}) {
   const prismaPath = require.resolve('../../src/lib/prisma.ts');
@@ -23,7 +25,9 @@ function loadService({
             onRecommendationQuery?.(query);
             return recommendationRows;
           },
+          findMany: async () => calibrationRows,
         },
+        recommendationIncident: { findMany: async () => incidentRows },
         recommendationFeedback: { groupBy: async () => feedbackRows },
         profileAnswer: { groupBy: async () => answerRows },
         recommendationDefinition: {
@@ -113,5 +117,43 @@ test('counts all property-owned recommendations as default-guidance reach', asyn
   assert.equal(result.propertiesWithDefaultGuidance, 2);
   assert.deepEqual(recommendationQuery.where, {
     lastEvaluatedAt: { gte: new Date('2026-06-13T12:00:00.000Z') },
+  });
+});
+
+test('reports complaints, reversals, overrides, calibration, and incident resolution outcomes', async () => {
+  const createdAt = new Date('2026-07-10T00:00:00.000Z');
+  const { getPersonalizationQuality } = loadService({
+    feedbackRows: [
+      counted({ type: 'COMPLAINT', explicit: true, reasonCode: 'OTHER' }, 2),
+      counted({ type: 'RECOMMENDATION_OVERRIDDEN', explicit: true, reasonCode: null }, 1),
+      counted({ type: 'RECOMMENDATION_REVERSED', explicit: true, reasonCode: null }, 1),
+      counted({ type: 'PROFILE_CORRECTED', explicit: true, reasonCode: 'WRONG_PROFILE' }, 3),
+    ],
+    calibrationRows: [
+      { confidence: 0.9, feedbackEvents: [{ type: 'ACCEPTED' }] },
+      { confidence: 0.8, feedbackEvents: [{ type: 'COMPLAINT' }] },
+      { confidence: 0.4, feedbackEvents: [{ type: 'COMPLETED' }] },
+    ],
+    incidentRows: [
+      { status: 'OPEN', type: 'COMPLAINT', severity: 'HIGH', createdAt, resolvedAt: null },
+      { status: 'RESOLVED', type: 'REVERSAL', severity: 'CRITICAL', createdAt, resolvedAt: new Date('2026-07-10T12:00:00.000Z') },
+    ],
+  });
+  const result = await getPersonalizationQuality(30, new Date('2026-07-13T12:00:00.000Z'));
+  assert.equal(result.feedback.complaints, 2);
+  assert.equal(result.feedback.overrides, 1);
+  assert.equal(result.feedback.reversals, 1);
+  assert.equal(result.feedback.corrections, 3);
+  assert.equal(result.incidents.total, 2);
+  assert.equal(result.incidents.open, 1);
+  assert.equal(result.incidents.resolutionRate, 0.5);
+  assert.equal(result.incidents.medianResolutionHours, 12);
+  assert.deepEqual(result.calibration.find((band) => band.band === 'HIGH'), {
+    band: 'HIGH',
+    samples: 2,
+    positiveOutcomes: 1,
+    observedPositiveRate: 0.5,
+    averageConfidence: 0.85,
+    calibrationGap: 0.35,
   });
 });

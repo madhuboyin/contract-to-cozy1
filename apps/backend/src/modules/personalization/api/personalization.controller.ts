@@ -72,7 +72,7 @@ export async function submitRecommendationFeedback(req: CustomRequest, res: Resp
   if (!(await recommendationBelongsToProperty(recommendationId, context.propertyId))) {
     return res.status(404).json({ success: false, error: { code: 'RECOMMENDATION_NOT_FOUND', message: 'Recommendation not found.' } });
   }
-  const result = await recordRecommendationFeedback({ recommendationId, ...req.body });
+  const result = await recordRecommendationFeedback({ recommendationId, reportedByUserId: context.userId, ...req.body });
   return res.status(result.status === 'RECORDED' ? 201 : 200).json({ success: true, data: result });
 }
 

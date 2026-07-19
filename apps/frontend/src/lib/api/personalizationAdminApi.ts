@@ -74,6 +74,28 @@ export interface PersonalizationQualityResponse {
     acceptanceRate: number | null;
     negativeRate: number | null;
     reasons: Array<{ reasonCode: string; count: number }>;
+    complaints: number;
+    overrides: number;
+    reversals: number;
+    corrections: number;
+  };
+  calibration: Array<{
+    band: 'LOW' | 'MEDIUM' | 'HIGH' | 'UNKNOWN';
+    samples: number;
+    positiveOutcomes: number;
+    observedPositiveRate: number | null;
+    averageConfidence: number | null;
+    calibrationGap: number | null;
+  }>;
+  incidents: {
+    total: number;
+    open: number;
+    resolved: number;
+    critical: number;
+    resolutionRate: number | null;
+    medianResolutionHours: number | null;
+    byStatus: Array<{ status: string; count: number }>;
+    byType: Array<{ type: string; count: number }>;
   };
   profileAnswers: Array<{ action: string; count: number }>;
   sample: {
@@ -84,6 +106,43 @@ export interface PersonalizationQualityResponse {
   };
 }
 
+export type RecommendationIncidentStatus = 'OPEN' | 'TRIAGED' | 'INVESTIGATING' | 'MITIGATED' | 'RESOLVED' | 'CLOSED';
+export type RecommendationIncidentSeverity = 'LOW' | 'MODERATE' | 'HIGH' | 'CRITICAL';
+export type RecommendationIncidentType = 'COMPLAINT' | 'REVERSAL' | 'OVERRIDE' | 'CALIBRATION' | 'INCORRECT_CONTENT' | 'SAFETY_HARM' | 'COMMERCIAL_INTEGRITY' | 'UPSTREAM_FAILURE' | 'OTHER';
+export type RecommendationIncidentResolution = 'CORRECTED' | 'RULE_PAUSED' | 'CONTENT_REVISED' | 'FALSE_POSITIVE' | 'USER_EDUCATION' | 'ESCALATED' | 'NO_CHANGE' | 'OTHER';
+
+export interface RecommendationIncident {
+  id: string;
+  definitionId: string;
+  recommendationId: string | null;
+  sourceFeedbackId: string | null;
+  type: RecommendationIncidentType;
+  severity: RecommendationIncidentSeverity;
+  status: RecommendationIncidentStatus;
+  safetyTier: PersonalizationCatalogDefinition['safetyTier'];
+  policyVersion: string;
+  summary: string;
+  details: string | null;
+  assignedToUserId: string | null;
+  targetResolutionAt: string | null;
+  createdAt: string;
+  triagedAt: string | null;
+  mitigatedAt: string | null;
+  resolvedAt: string | null;
+  closedAt: string | null;
+  resolutionCode: RecommendationIncidentResolution | null;
+  resolutionSummary: string | null;
+  rootCause: string | null;
+  correctiveAction: string | null;
+  definition: {
+    code: string;
+    status: string;
+    pausedAt: string | null;
+    pauseReason: string | null;
+  };
+  recommendation: { id: string; propertyId: string; confidence: number | null; status: string } | null;
+}
+
 export async function getPersonalizationAdminCatalog() {
   return (await api.get<PersonalizationCatalogResponse>('/api/admin/personalization/catalog')).data;
 }
@@ -92,6 +151,42 @@ export async function getPersonalizationQuality(windowDays = 30) {
   return (await api.get<PersonalizationQualityResponse>('/api/admin/personalization/quality', {
     params: { windowDays },
   })).data;
+}
+
+export async function getRecommendationIncidents() {
+  return (await api.get<RecommendationIncident[]>('/api/admin/personalization/incidents')).data;
+}
+
+export async function createRecommendationIncident(payload: {
+  definitionCode: string;
+  recommendationId?: string | null;
+  type: RecommendationIncidentType;
+  severity?: RecommendationIncidentSeverity;
+  summary: string;
+  details?: string | null;
+}) {
+  return (await api.post<{ incident: RecommendationIncident; created: boolean; definitionPaused: boolean }>(
+    '/api/admin/personalization/incidents',
+    payload,
+  )).data;
+}
+
+export async function transitionRecommendationIncident(
+  incidentId: string,
+  payload: {
+    status: RecommendationIncidentStatus;
+    severity?: RecommendationIncidentSeverity;
+    note: string;
+    resolutionCode?: RecommendationIncidentResolution | null;
+    resolutionSummary?: string | null;
+    rootCause?: string | null;
+    correctiveAction?: string | null;
+  },
+) {
+  return (await api.post<RecommendationIncident>(
+    `/api/admin/personalization/incidents/${incidentId}/transitions`,
+    payload,
+  )).data;
 }
 
 export async function activatePersonalizationDefinition(
