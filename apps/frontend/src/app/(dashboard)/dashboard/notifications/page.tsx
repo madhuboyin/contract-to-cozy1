@@ -3,7 +3,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Circle, RotateCcw } from 'lucide-react';
+import { BellOff, Circle, RotateCcw, ThumbsDown, ThumbsUp } from 'lucide-react';
 import { useNotifications } from '@/lib/notifications/NotificationContext';
 import { api } from '@/lib/api/client';
 import { Notification } from '@/lib/notifications/NotificationContext';
@@ -84,10 +84,42 @@ function renderSignalBadge(n: Notification) {
 
 export default function NotificationsPage() {
   const { notifications, markRead, markAllRead, refresh } = useNotifications();
+  const [cadence, setCadence] = React.useState('WEEKLY_BRIEF');
+  const [quietStart, setQuietStart] = React.useState('21:00');
+  const [quietEnd, setQuietEnd] = React.useState('07:00');
+  const [savingPreference, setSavingPreference] = React.useState(false);
 
   React.useEffect(() => {
     void refresh();
+    void api.listNotificationPreferences().then((result) => {
+      if (!result.success) return;
+      const preference = result.data.find((item: any) => item.scopeKey === 'GLOBAL' && item.category === 'ALL' && item.channel === 'EMAIL');
+      if (preference) {
+        setCadence(preference.cadence);
+        setQuietStart(preference.quietStart ?? '21:00');
+        setQuietEnd(preference.quietEnd ?? '07:00');
+      }
+    }).catch(() => undefined);
   }, [refresh]);
+
+  const savePreference = async () => {
+    setSavingPreference(true);
+    try {
+      await api.updateNotificationPreference({
+        category: 'ALL', channel: 'EMAIL', enabled: cadence !== 'MUTED', cadence,
+        quietStart, quietEnd, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+      });
+    } finally {
+      setSavingPreference(false);
+    }
+  };
+
+  const recordOutcome = async (event: React.MouseEvent, id: string, type: 'USEFUL' | 'NOT_USEFUL' | 'MUTE_TYPE' | 'NOT_RELEVANT' | 'ALREADY_HANDLED') => {
+    event.preventDefault();
+    event.stopPropagation();
+    await api.recordNotificationOutcome(id, type);
+    await refresh();
+  };
 
   const sortedNotifications = [...notifications].sort((a, b) => {
     if (a.isRead === b.isRead) {
@@ -135,6 +167,18 @@ export default function NotificationsPage() {
         </MobileKpiStrip>
       }
     >
+      <MobileCard className="space-y-3">
+        <div>
+          <p className="font-semibold text-slate-900">Notification preferences</p>
+          <p className="text-sm text-slate-600">Routine updates are bundled into your Home Brief. Urgent safety, active damage, material deadlines, and workflow changes can still arrive immediately.</p>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-4 sm:items-end">
+          <label className="text-xs font-medium text-slate-600">Email cadence<select value={cadence} onChange={(event) => setCadence(event.target.value)} className="mt-1 min-h-[40px] w-full rounded-lg border bg-white px-2 text-sm"><option value="WEEKLY_BRIEF">Weekly Home Brief</option><option value="DAILY_DIGEST">Daily digest</option><option value="IMMEDIATE">Immediate</option><option value="MUTED">Muted</option></select></label>
+          <label className="text-xs font-medium text-slate-600">Quiet hours start<input type="time" value={quietStart} onChange={(event) => setQuietStart(event.target.value)} className="mt-1 min-h-[40px] w-full rounded-lg border bg-white px-2 text-sm" /></label>
+          <label className="text-xs font-medium text-slate-600">Quiet hours end<input type="time" value={quietEnd} onChange={(event) => setQuietEnd(event.target.value)} className="mt-1 min-h-[40px] w-full rounded-lg border bg-white px-2 text-sm" /></label>
+          <button type="button" disabled={savingPreference} onClick={savePreference} className="min-h-[40px] rounded-lg bg-brand-primary px-3 text-sm font-semibold text-white disabled:opacity-60">{savingPreference ? 'Saving…' : 'Save preferences'}</button>
+        </div>
+      </MobileCard>
       {notifications.length === 0 ? (
         <EmptyStateCard title="No notifications yet" description="You will see intelligence, booking, and account alerts here." />
       ) : (
@@ -188,6 +232,10 @@ export default function NotificationsPage() {
                           Reset
                         </button>
                       ) : null}
+                      <button type="button" onClick={(event) => recordOutcome(event, notification.id, 'USEFUL')} className="inline-flex min-h-[32px] items-center gap-1 px-2 text-[11px] text-slate-500"><ThumbsUp className="h-3 w-3" /> Useful</button>
+                      <button type="button" onClick={(event) => recordOutcome(event, notification.id, 'NOT_RELEVANT')} className="inline-flex min-h-[32px] items-center gap-1 px-2 text-[11px] text-slate-500"><ThumbsDown className="h-3 w-3" /> Not relevant</button>
+                      <button type="button" onClick={(event) => recordOutcome(event, notification.id, 'ALREADY_HANDLED')} className="min-h-[32px] px-2 text-[11px] text-slate-500">Already handled</button>
+                      <button type="button" onClick={(event) => recordOutcome(event, notification.id, 'MUTE_TYPE')} className="inline-flex min-h-[32px] items-center gap-1 px-2 text-[11px] text-slate-500"><BellOff className="h-3 w-3" /> Mute type</button>
                     </>
                   }
                 />

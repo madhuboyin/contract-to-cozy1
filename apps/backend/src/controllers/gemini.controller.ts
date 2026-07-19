@@ -1,10 +1,17 @@
 // apps/backend/src/controllers/gemini.controller.ts
 
 import { Response, NextFunction } from 'express';
-import { geminiService } from '../services/gemini.service';
 import { AuthRequest } from '../types/auth.types';
 import { APIError } from '../middleware/error.middleware';
 import { getAggregationContextEnvelope } from '../services/aggregationContext/context';
+import { z } from 'zod';
+import { GroundedAskProposalInputSchema } from '../productFramework/groundedAsk.contract';
+import {
+  answerGroundedAsk,
+  confirmGroundedAskProposal,
+  createGroundedAskProposal,
+  rejectGroundedAskProposal,
+} from '../services/groundedAsk.service';
 
 class GeminiController {
   
@@ -35,7 +42,7 @@ class GeminiController {
 
       // Pass userId, sessionId, message, and propertyId to the service
       const [response, propertyContext] = await Promise.all([
-        geminiService.sendMessageToChat(userId, sessionId, message, propertyId),
+        answerGroundedAsk({ userId, sessionId, message, propertyId }),
         propertyId
           ? getAggregationContextEnvelope(propertyId, userId, 'SEARCH_ASSISTANT')
           : Promise.resolve(undefined),
@@ -43,7 +50,7 @@ class GeminiController {
 
       res.status(200).json({
         success: true,
-        data: { text: response, propertyContext },
+        data: { ...response, propertyContext },
       });
     } catch (error) {
       if (error instanceof APIError) {
@@ -52,6 +59,41 @@ class GeminiController {
       }
       next(error);
     }
+  };
+
+  public createProposal = async (req: AuthRequest, res: Response, next: NextFunction) => {
+    try {
+      const userId = req.user?.userId;
+      if (!userId) return res.status(401).json({ success: false, message: 'Unauthorized' });
+      const parsed = GroundedAskProposalInputSchema.safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ success: false, error: { message: 'Invalid Ask proposal', details: parsed.error.issues } });
+      const proposal = await createGroundedAskProposal(userId, parsed.data);
+      return res.status(201).json({ success: true, data: { ...proposal, requiresConfirmation: true } });
+    } catch (error) { next(error); }
+  };
+
+  public confirmProposal = async (req: AuthRequest, res: Response, next: NextFunction) => {
+    try {
+      const userId = req.user?.userId;
+      const id = z.string().uuid().safeParse(req.params.id);
+      if (!userId) return res.status(401).json({ success: false, message: 'Unauthorized' });
+      if (!id.success) return res.status(400).json({ success: false, error: { message: 'Invalid proposal id' } });
+      const artifact = await confirmGroundedAskProposal(userId, id.data);
+      if (!artifact) return res.status(404).json({ success: false, error: { message: 'Proposal not found' } });
+      return res.json({ success: true, data: artifact });
+    } catch (error) { next(error); }
+  };
+
+  public rejectProposal = async (req: AuthRequest, res: Response, next: NextFunction) => {
+    try {
+      const userId = req.user?.userId;
+      const id = z.string().uuid().safeParse(req.params.id);
+      if (!userId) return res.status(401).json({ success: false, message: 'Unauthorized' });
+      if (!id.success) return res.status(400).json({ success: false, error: { message: 'Invalid proposal id' } });
+      const result = await rejectGroundedAskProposal(userId, id.data);
+      if (result.count === 0) return res.status(404).json({ success: false, error: { message: 'Pending proposal not found' } });
+      return res.json({ success: true, data: { rejected: true } });
+    } catch (error) { next(error); }
   };
 }
 

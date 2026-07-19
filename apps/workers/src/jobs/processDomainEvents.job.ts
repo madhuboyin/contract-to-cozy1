@@ -1,4 +1,5 @@
 import { prisma } from '../lib/prisma';
+import { NotificationService } from '../../../backend/src/services/notification.service';
 
 type DomainEventStatus = 'PENDING' | 'PROCESSING' | 'PROCESSED' | 'FAILED';
 type DomainEventType = 'CLAIM_SUBMITTED' | 'CLAIM_CLOSED' | 'FOLLOW_UP_DUE';
@@ -77,29 +78,22 @@ async function ensureNotificationForDomainEvent(args: {
 
   if (existing) return existing;
 
-  const notification = await prisma.notification.create({
-    data: {
+  const notification = await NotificationService.create({
       userId,
       type: domainEventType,
       title,
       message,
-      actionUrl: actionUrl ?? null,
+      actionUrl: actionUrl ?? undefined,
       entityType: 'CLAIM',
       entityId: claimId,
+      category: 'WORKFLOW',
+      urgency: 'MATERIAL',
       metadata: {
         ...(metadata ?? {}),
         domainEventId,
         propertyId: propertyId ?? undefined,
         claimId,
       },
-      deliveries: {
-        create: deliveries.map((ch) => ({
-          channel: ch as any, // NotificationChannel enum
-          status: 'PENDING',
-        })),
-      },
-    },
-    select: { id: true },
   });
 
   return notification;

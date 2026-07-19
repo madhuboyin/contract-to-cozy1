@@ -1,4 +1,4 @@
-import { DeliveryStatus, NotificationChannel, ProviderStatus } from '@prisma/client';
+import { NotificationChannel, ProviderStatus } from '@prisma/client';
 import { hashPassword, comparePassword } from '../utils/password.util';
 import {
   JWTPayload,
@@ -28,6 +28,7 @@ import {
 } from '../utils/refresh-session.util';
 
 import { prisma } from '../lib/prisma';
+import { NotificationService } from './notification.service';
 
 // Bumped whenever the Terms of Service / Privacy Policy content materially
 // changes, so we can tell which version a given user's tosAcceptedAt covers.
@@ -94,27 +95,20 @@ export class AuthService {
   }, verificationToken: string): Promise<void> {
     const verifyLink = this.buildEmailVerificationLink(verificationToken);
 
-    await prisma.notification.create({
-      data: {
+    await NotificationService.create({
         userId: user.id,
         type: 'EMAIL_VERIFICATION_REQUIRED',
         title: 'Verify your Contract to Cozy email',
         message: 'Use the secure link to verify your email address and finish activating your account.',
         actionUrl: verifyLink,
+        category: 'ACCOUNT',
+        urgency: 'CRITICAL',
+        requiredChannels: [NotificationChannel.EMAIL],
         metadata: {
           priority: 'HIGH',
           category: 'AUTH',
           template: 'EMAIL_VERIFICATION',
         },
-        deliveries: {
-          create: [
-            {
-              channel: NotificationChannel.EMAIL,
-              status: DeliveryStatus.PENDING,
-            },
-          ],
-        },
-      },
     });
   }
 
@@ -165,28 +159,21 @@ export class AuthService {
   }, resetToken: string): Promise<void> {
     const resetLink = this.buildPasswordResetLink(resetToken);
 
-    await prisma.notification.create({
-      data: {
+    await NotificationService.create({
         userId: user.id,
         type: 'PASSWORD_RESET_REQUESTED',
         title: 'Reset your Contract to Cozy password',
         message:
           'Use the secure link to set a new password. If you did not request this, you can ignore this email.',
         actionUrl: resetLink,
+        category: 'ACCOUNT',
+        urgency: 'CRITICAL',
+        requiredChannels: [NotificationChannel.EMAIL],
         metadata: {
           priority: 'HIGH',
           category: 'AUTH',
           template: 'PASSWORD_RESET',
         },
-        deliveries: {
-          create: [
-            {
-              channel: NotificationChannel.EMAIL,
-              status: DeliveryStatus.PENDING,
-            },
-          ],
-        },
-      },
     });
   }
 

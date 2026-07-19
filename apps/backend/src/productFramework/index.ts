@@ -5,4 +5,6 @@ export * from './outcomeLineage.contract';
 export * from './recommendationGovernance.contract';
 export * from './recommendationResponse.contract';
 export * from './recommendationIncident.contract';
+export * from './notificationPolicy.contract';
+export * from './groundedAsk.contract';
 export * from './recommendationLaunchGate';

@@ -12,7 +12,7 @@ import { Worker, Queue } from 'bullmq';
 
 import { calculateFinancialEfficiency } from '../../backend/src/utils/FinancialCalculator.util';
 import { calculateHealthScore } from './utils/propertyScore.util';
-import { sendEmailNotificationJob, runDailyEmailDigest } from './jobs/sendEmailNotification.job';
+import { sendEmailNotificationJob, runDailyEmailDigest, runWeeklyHomeBriefDigest } from './jobs/sendEmailNotification.job';
 import { sendFeedbackNotificationJob } from './jobs/sendFeedbackNotification.job';
 import { sendPushNotificationJob } from './jobs/sendPushNotification.job';
 import { sendSmsNotificationJob } from './jobs/sendSmsNotification.job';
@@ -681,6 +681,7 @@ async function processHiddenAssetScan(jobData: PropertyIntelligenceJobPayload) {
 const CRON_HANDLERS: Record<string, () => Promise<void>> = {
   'maintenance-reminders':           async () => { await sendMaintenanceReminders(); },
   'daily-email-digest':              async () => { await runDailyEmailDigest(); },
+  'weekly-home-brief-digest':        async () => { await runWeeklyHomeBriefDigest(); },
   'seasonal-checklist-expiration':   async () => { await expireSeasonalChecklists(); },
   'seasonal-checklist-generation':   async () => { await generateSeasonalChecklists(); },
   'seasonal-notifications':          async () => { await sendSeasonalNotifications(); },

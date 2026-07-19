@@ -5,6 +5,14 @@ import { NotificationService } from '../services/notification.service';
 import { prisma } from '../lib/prisma';
 import { emailNotificationQueue } from '../services/JobQueue.service';
 import { NotificationChannel, DeliveryStatus,SignalSourceType, SignalTriggerType } from '@prisma/client';
+import { z } from 'zod';
+import { NotificationOutcomeSchema, NotificationPreferenceInputSchema } from '../productFramework/notificationPolicy.contract';
+import {
+  getNotificationQuality,
+  listNotificationPreferences,
+  recordNotificationOutcome,
+  upsertNotificationPreference,
+} from '../services/notificationPreference.service';
 
 type SignalSourceBadge = {
   sourceType: SignalSourceType;
@@ -129,6 +137,36 @@ function inferSignalSourceFromNotification(n: any): SignalSourceBadge {
 }
 
 export class NotificationController {
+  static async listPreferences(req: AuthRequest, res: Response) {
+    const userId = req.user?.userId;
+    if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+    return res.json({ success: true, data: await listNotificationPreferences(userId) });
+  }
+
+  static async updatePreference(req: AuthRequest, res: Response) {
+    const userId = req.user?.userId;
+    if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+    const parsed = NotificationPreferenceInputSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ success: false, error: { message: 'Invalid notification preference', details: parsed.error.issues } });
+    return res.json({ success: true, data: await upsertNotificationPreference(userId, parsed.data) });
+  }
+
+  static async recordOutcome(req: AuthRequest, res: Response) {
+    const userId = req.user?.userId;
+    if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+    const notificationId = z.string().uuid().safeParse(req.params.id);
+    const outcome = NotificationOutcomeSchema.safeParse(req.body?.type);
+    if (!notificationId.success || !outcome.success) return res.status(400).json({ success: false, error: { message: 'Invalid notification outcome' } });
+    const result = await recordNotificationOutcome(userId, notificationId.data, outcome.data);
+    if (!result) return res.status(404).json({ success: false, error: { message: 'Notification not found' } });
+    return res.json({ success: true, data: result });
+  }
+
+  static async quality(req: AuthRequest, res: Response) {
+    const userId = req.user?.userId;
+    if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+    return res.json({ success: true, data: await getNotificationQuality(userId) });
+  }
   /**
    * ============================================================
    * LIST NOTIFICATIONS (In-App)

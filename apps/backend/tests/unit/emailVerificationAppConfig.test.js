@@ -99,6 +99,15 @@ function createHarness(users = []) {
   installModule('../../src/lib/metrics.ts', {
     securityTokenReuseTotal: { inc: () => {} },
   });
+  installModule('../../src/services/notification.service.ts', {
+    NotificationService: {
+      create: async (data) => {
+        const notification = { ...data, deliveries: (data.requiredChannels ?? []).map((channel) => ({ channel, status: 'PENDING' })) };
+        state.notifications.push(notification);
+        return notification;
+      },
+    },
+  });
 
   const servicePath = require.resolve('../../src/services/auth.service.ts');
   delete require.cache[servicePath];

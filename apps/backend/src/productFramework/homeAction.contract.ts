@@ -3,6 +3,7 @@ import {
   RecommendationGovernanceSchema,
   type RecommendationSafetyTier,
 } from './recommendationGovernance.contract';
+import { RecommendationResponseContractSchema } from './recommendationResponse.contract';
 
 export const HOME_ACTION_SOURCE_KINDS = [
   'GUIDANCE',
@@ -117,6 +118,7 @@ export const HomeActionSchema = z.object({
     label: z.enum(['LOW', 'MEDIUM', 'HIGH']),
     missing: z.array(z.string().trim().min(1).max(240)).max(30),
   }),
+  recommendationResponse: RecommendationResponseContractSchema,
   governance: RecommendationGovernanceSchema,
   primaryCta: ActionLinkSchema,
   secondaryCtas: z.array(ActionLinkSchema).max(10),
@@ -170,6 +172,17 @@ export const HomeActionSchema = z.object({
       code: 'custom',
       path: ['governance', 'commercialDisclosure', 'involvesCommercialAction'],
       message: 'Provider, purchase, and financing CTAs require a commercial disclosure.',
+    });
+  }
+
+  const materialCtaKinds = new Set(['START', 'SCHEDULE', 'COMPARE', 'SELECT_PROVIDER', 'PURCHASE', 'FINANCE']);
+  const hasMaterialCta = [value.primaryCta, ...value.secondaryCtas]
+    .some((cta) => materialCtaKinds.has(cta.kind));
+  if (!value.recommendationResponse.materialActionAllowed && hasMaterialCta) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['primaryCta'],
+      message: 'Degraded recommendations may expose only review, evidence, correction, or escalation actions.',
     });
   }
 });

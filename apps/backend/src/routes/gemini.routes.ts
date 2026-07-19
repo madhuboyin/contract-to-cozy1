@@ -63,5 +63,8 @@ const router = Router();
  *         description: Property data does not exist
  */
 router.post('/chat', authenticate, geminiRateLimiter, geminiController.sendMessageToChat);
+router.post('/proposals', authenticate, geminiRateLimiter, geminiController.createProposal);
+router.post('/proposals/:id/confirm', authenticate, geminiRateLimiter, geminiController.confirmProposal);
+router.post('/proposals/:id/reject', authenticate, geminiRateLimiter, geminiController.rejectProposal);
 
 export default router;

@@ -8,6 +8,9 @@ import {
   smsNotificationQueue,
 } from './JobQueue.service';
 import { getAggregationContextEnvelope } from './aggregationContext/context';
+import { resolveNotificationPolicy } from './notificationPreference.service';
+import type { NotificationCategory, NotificationUrgency } from '../productFramework/notificationPolicy.contract';
+import { logger } from '../lib/logger';
 
 type CreateNotificationInput = {
   userId: string;
@@ -17,8 +20,12 @@ type CreateNotificationInput = {
   actionUrl?: string;
   entityType?: string;
   entityId?: string;
+  recallMatchId?: string;
   metadata?: Record<string, any>;
   signalSource?: NotificationSignalSource;
+  category?: NotificationCategory;
+  urgency?: NotificationUrgency;
+  requiredChannels?: NotificationChannel[];
 };
 
 type NotificationSignalSource = {
@@ -95,16 +102,21 @@ export class NotificationService {
       | null;
 
     const emailEnabled = preferences?.emailEnabled !== false;
-
-    /**
-     * 2️⃣ Decide importance / priority
-     */
-    const isImportant = IMPORTANT_TYPES.has(input.type);
+    const policy = await resolveNotificationPolicy({
+      userId: input.userId,
+      propertyId,
+      type: input.type,
+      category: input.category,
+      urgency: input.urgency ?? (IMPORTANT_TYPES.has(input.type) ? 'MATERIAL' : undefined),
+      legacyEmailEnabled: emailEnabled,
+    });
+    const isImportant = policy.urgency !== 'ROUTINE';
 
     const mergedMetadata = {
       ...input.metadata,
       priority: isImportant ? 'HIGH' : 'LOW',
       signalSource: input.signalSource ?? input.metadata?.signalSource ?? undefined,
+      notificationPolicy: policy,
     };
 
     /**
@@ -113,12 +125,11 @@ export class NotificationService {
      * 🔒 IN_APP is ALWAYS created
      *     (cannot be disabled; UI depends on it)
      */
-    const channels: NotificationChannel[] = [
-      NotificationChannel.IN_APP,
-    ];
-
-    if (emailEnabled) {
-      channels.push(NotificationChannel.EMAIL);
+    const channels = policy.channels.filter((candidate) => candidate.enabled);
+    for (const requiredChannel of input.requiredChannels ?? []) {
+      if (!channels.some((candidate) => candidate.channel === requiredChannel)) {
+        channels.push({ channel: requiredChannel, enabled: true, cadence: 'IMMEDIATE', deliverImmediately: true, quietHoursApplied: false });
+      }
     }
 
     // Future extensibility
@@ -137,12 +148,13 @@ export class NotificationService {
         actionUrl: input.actionUrl,
         entityType: input.entityType,
         entityId: input.entityId,
+        recallMatchId: input.recallMatchId,
         metadata: mergedMetadata,
         deliveries: {
-          create: channels.map((channel) => ({
-            channel,
+          create: channels.map((candidate) => ({
+            channel: candidate.channel as NotificationChannel,
             status:
-              channel === NotificationChannel.IN_APP
+              candidate.channel === NotificationChannel.IN_APP
                 ? DeliveryStatus.SENT
                 : DeliveryStatus.PENDING,
           })),
@@ -158,7 +170,10 @@ export class NotificationService {
      */
     if (isImportant) {
       for (const delivery of notification.deliveries) {
-        switch (delivery.channel) {
+        const channelPolicy = channels.find((candidate) => candidate.channel === delivery.channel);
+        if (!channelPolicy?.deliverImmediately) continue;
+        try {
+          switch (delivery.channel) {
           case NotificationChannel.EMAIL:
             await emailNotificationQueue.add(
               'SEND_EMAIL_NOTIFICATION',
@@ -169,6 +184,10 @@ export class NotificationService {
                 removeOnFail: false,
               }
             );
+            await prisma.notificationDelivery.update({
+              where: { id: delivery.id },
+              data: { enqueuedAt: new Date() },
+            });
             break;
 
           case NotificationChannel.PUSH:
@@ -188,6 +207,9 @@ export class NotificationService {
           case NotificationChannel.IN_APP:
             // No-op — already delivered
             break;
+          }
+        } catch (error) {
+          logger.warn({ err: error, notificationId: notification.id, deliveryId: delivery.id }, '[NOTIFICATION] Immediate enqueue failed; pending delivery remains eligible for retry.');
         }
       }
     }

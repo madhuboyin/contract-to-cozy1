@@ -3,13 +3,19 @@ import {
   parseHomeAction,
   type HomeAction,
 } from './homeAction.contract';
+import {
+  buildRecommendationResponseContract,
+  resolveRecommendationResponseStatus,
+  type RecommendationResponseContract,
+} from './recommendationResponse.contract';
 
 export type HomeActionSourceKind = typeof HOME_ACTION_SOURCE_KINDS[number];
 
-export type HomeActionSourceInput = Omit<HomeAction, 'source' | 'job'> & {
+export type HomeActionSourceInput = Omit<HomeAction, 'source' | 'job' | 'recommendationResponse'> & {
   sourceEntityId: string;
   sourceVersion: string | null;
   job?: HomeAction['job'];
+  recommendationResponse?: RecommendationResponseContract;
 };
 
 type SourceAdapterDefinition = {
@@ -48,9 +54,36 @@ function createAdapter(kind: HomeActionSourceKind): SourceAdapterDefinition {
     defaultJob,
     description: SOURCE_DESCRIPTIONS[kind],
     adapt(input) {
-      const { sourceEntityId, sourceVersion, job, ...action } = input;
-      return parseHomeAction({
+      const { sourceEntityId, sourceVersion, job, recommendationResponse: suppliedResponse, ...action } = input;
+      const recommendationResponse = suppliedResponse ?? buildRecommendationResponseContract({
+        status: resolveRecommendationResponseStatus({
+          confidence: action.confidence.score,
+          missingFacts: action.confidence.missing,
+        }),
+        safetyTier: action.governance.safetyTier,
+        missingFacts: action.confidence.missing,
+      });
+      const materialKinds = new Set<HomeAction['primaryCta']['kind']>([
+        'START', 'SCHEDULE', 'COMPARE', 'SELECT_PROVIDER', 'PURCHASE', 'FINANCE',
+      ]);
+      const mustWithhold = !recommendationResponse.materialActionAllowed && (
+        action.governance.safetyTier !== 'LOW_CONSEQUENCE' ||
+        [action.primaryCta, ...action.secondaryCtas].some((cta) => materialKinds.has(cta.kind))
+      );
+      const correction = action.secondaryCtas.find((cta) => cta.kind === 'CORRECT_FACT');
+      const normalizedAction = mustWithhold ? {
         ...action,
+        recommendedAction: recommendationResponse.safeNextAction,
+        primaryCta: correction ?? {
+          kind: 'REVIEW' as const,
+          label: 'Review missing information',
+          href: action.primaryCta.href,
+        },
+        secondaryCtas: action.secondaryCtas.filter((cta) => !materialKinds.has(cta.kind)),
+      } : action;
+      return parseHomeAction({
+        ...normalizedAction,
+        recommendationResponse,
         source: {
           kind,
           entityId: sourceEntityId,

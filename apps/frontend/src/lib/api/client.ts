@@ -145,7 +145,16 @@ interface SendMessageToChatPayload {
 }
 
 interface ChatResponse {
-  text: string; // The backend returns the model's text in the 'text' field
+  text: string;
+  groundingMode: 'PROPERTY' | 'GENERAL';
+  knownFacts: Array<{ key: string; label: string; value: unknown; source: string | null; observedAt: string | null }>;
+  assumptions: string[];
+  missingFacts: string[];
+  evidence: Array<{ factKey: string; label: string; source: string | null; observedAt: string | null; confidence: number | null }>;
+  confidence: { score: number | null; label: 'LOW' | 'MEDIUM' | 'HIGH'; rationale: string };
+  safetyBoundary: string;
+  nextAction: string;
+  proposals: Array<{ id: string; kind: string; summary: string; requiresConfirmation: true }>;
   propertyContext?: PropertyContextEnvelope;
 }
 
@@ -903,6 +912,19 @@ class APIClient {
       method: 'POST',
       body: payload,
     });
+  }
+  async createGroundedAskProposal(payload: {
+    sessionId: string; propertyId?: string | null; kind: string; summary: string;
+    payload: Record<string, unknown>;
+    evidence: Array<{ factKey: string; source: string | null; observedAt: string | null }>;
+  }): Promise<APIResponse<{ id: string; requiresConfirmation: true }>> {
+    return this.request('/api/gemini/proposals', { method: 'POST', body: payload });
+  }
+  async confirmGroundedAskProposal(id: string): Promise<APIResponse<{ id: string; artifactType: string }>> {
+    return this.request(`/api/gemini/proposals/${id}/confirm`, { method: 'POST' });
+  }
+  async rejectGroundedAskProposal(id: string): Promise<APIResponse<{ rejected: true }>> {
+    return this.request(`/api/gemini/proposals/${id}/reject`, { method: 'POST' });
   }
   // ==========================================================================
   // PROVIDER ENDPOINTS 
@@ -3062,6 +3084,28 @@ class APIClient {
     return this.request<void>(`/api/notifications/${notificationId}/unread`, {
       method: 'PATCH',
     });
+  }
+
+  async listNotificationPreferences(): Promise<APIResponse<any[]>> {
+    return this.request<any[]>('/api/notifications/preferences');
+  }
+
+  async updateNotificationPreference(input: {
+    propertyId?: string | null;
+    memberUserId?: string | null;
+    category: string;
+    channel: string;
+    enabled: boolean;
+    cadence: string;
+    quietStart?: string | null;
+    quietEnd?: string | null;
+    timezone: string;
+  }): Promise<APIResponse<any>> {
+    return this.request('/api/notifications/preferences', { method: 'PUT', body: input });
+  }
+
+  async recordNotificationOutcome(notificationId: string, type: 'OPENED' | 'USEFUL' | 'NOT_USEFUL' | 'MUTE_TYPE' | 'NOT_RELEVANT' | 'ALREADY_HANDLED') {
+    return this.request(`/api/notifications/${notificationId}/outcomes`, { method: 'POST', body: { type } });
   }
 
   

@@ -115,6 +115,16 @@ function action(overrides) {
       label: overrides.confidenceLabel ?? 'HIGH',
       missing: overrides.missing ?? [],
     },
+    recommendationResponse: {
+      status: 'AVAILABLE',
+      safetyTier: overrides.safetyTier ?? 'LOW_CONSEQUENCE',
+      reasonCode: 'GOLDEN_FIXTURE_AVAILABLE',
+      message: 'This fixture recommendation is supported by its test evidence.',
+      safeNextAction: 'Review the evidence and governance boundary before acting.',
+      missingFacts: [],
+      retryable: false,
+      materialActionAllowed: true,
+    },
     governance: governance({
       safetyTier: overrides.safetyTier,
       professionalBoundary: material

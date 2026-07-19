@@ -1,8 +1,9 @@
 // apps/backend/src/services/incidents/integrations/incidentNotification.service.ts
 import { prisma } from '../../../lib/prisma';
-import { DeliveryStatus, IncidentSeverity, NotificationChannel, Prisma } from '@prisma/client';
+import { IncidentSeverity } from '@prisma/client';
 import { getProtectionContextDecisions } from '../../protection/context';
 import type { FeatureDecision } from '../../../modules/propertyContext';
+import { NotificationService } from '../../notification.service';
 
 type GuidanceContextBadge = {
   guidanceJourneyId?: string | null;
@@ -293,8 +294,7 @@ export class IncidentNotificationService {
     const title = sev === IncidentSeverity.CRITICAL ? `⚠️ ${args.incident.title}` : args.incident.title;
     const weather = buildWeatherMetadata(args.incident.typeKey, asRecord(args.incident.details));
 
-    const notification = await prisma.notification.create({
-      data: {
+    await NotificationService.create({
         userId: recipientUserId,
         type,
         title,
@@ -302,6 +302,8 @@ export class IncidentNotificationService {
         actionUrl,
         entityType: 'Incident',
         entityId: args.incident.id,
+        category: sev === IncidentSeverity.CRITICAL ? 'SAFETY' : 'ACTIVE_DAMAGE',
+        urgency: sev === IncidentSeverity.CRITICAL ? 'CRITICAL' : 'URGENT',
         metadata: {
           dedupeKey,
           severity: sev,
@@ -321,38 +323,9 @@ export class IncidentNotificationService {
           // digest and go out via the immediate-send path instead — see
           // highPriorityEmailEnqueue.poller.ts + sendEmailNotification.job.ts.
           ...(sev === IncidentSeverity.CRITICAL ? { priority: 'HIGH' } : {}),
-        } as unknown as Prisma.InputJsonValue,
-      },
+        },
     });
 
-    const deliveries: any[] = [];
-
-    if (shouldSendInApp(sev)) {
-      deliveries.push({
-        notificationId: notification.id,
-        channel: NotificationChannel.IN_APP,
-        status: DeliveryStatus.SENT,
-      });
-    }
-
-    if (shouldSendEmail(sev)) {
-      deliveries.push({
-        notificationId: notification.id,
-        channel: NotificationChannel.EMAIL,
-        status: DeliveryStatus.PENDING,
-        // Deliberately NOT setting enqueuedAt here — highPriorityEmailEnqueue.poller.ts
-        // only selects deliveries where enqueuedAt IS NULL. Setting it at creation
-        // (as this used to) made every fresh delivery permanently invisible to that
-        // poller, silently defeating the immediate-send path for every CRITICAL
-        // incident app-wide — confirmed live, enqueuedAt matched createdAt to the
-        // millisecond. Only the once-daily digest (which ignores enqueuedAt) was
-        // ever actually delivering these.
-      });
-    }
-
-    if (deliveries.length) {
-      await prisma.notificationDelivery.createMany({ data: deliveries });
-    }
   }
 
   static async notifyAfterActionExecuted(args: {
@@ -392,8 +365,7 @@ export class IncidentNotificationService {
       guidanceContext
     );
 
-    const notification = await prisma.notification.create({
-      data: {
+    await NotificationService.create({
         userId: recipientUserId,
         type,
         title: 'Action created',
@@ -401,6 +373,8 @@ export class IncidentNotificationService {
         actionUrl,
         entityType: 'Incident',
         entityId: args.incident.id,
+        category: 'WORKFLOW',
+        urgency: args.severity === IncidentSeverity.CRITICAL ? 'CRITICAL' : 'MATERIAL',
         metadata: {
           dedupeKey,
           severity: args.severity,
@@ -414,33 +388,8 @@ export class IncidentNotificationService {
             contextVersion: protectionContext.contextVersion,
             decision: notificationDecision,
           },
-        } as unknown as Prisma.InputJsonValue,
-      },
+        },
     });
 
-    // For “action created”, we keep email only for CRITICAL
-    const deliveries: any[] = [
-      {
-        notificationId: notification.id,
-        channel: NotificationChannel.IN_APP,
-        status: DeliveryStatus.SENT,
-      },
-    ];
-
-    if (args.severity === IncidentSeverity.CRITICAL) {
-      // Same enqueuedAt fix as notifyIncidentActivated above — leave it null so
-      // the poller can actually find this row. Note this delivery's metadata
-      // doesn't set priority: 'HIGH' (unlike notifyIncidentActivated's), so
-      // even with this fix it still only goes out via the daily digest, not
-      // the immediate path — flagging that as a separate, pre-existing
-      // inconsistency for a product decision, not fixing it here.
-      deliveries.push({
-        notificationId: notification.id,
-        channel: NotificationChannel.EMAIL,
-        status: DeliveryStatus.PENDING,
-      });
-    }
-
-    await prisma.notificationDelivery.createMany({ data: deliveries });
   }
 }

@@ -1,6 +1,6 @@
 # Product Framework Phase 4 — Trust, Cadence, Grounded Ask, and Recurring Care
 
-Status: Increments 1–3 implemented
+Status: Code-complete through Increment 6; owner-applied database acceptance pending
 
 Contract version: `phase4-v1`
 
@@ -28,7 +28,7 @@ Implemented:
 
 ## Database policy
 
-Phase 4 Increments 1–3 change the Prisma schema but do not include a migration script. There are no real users or data-migration requirements. The repository owner applies the updated schema and reruns the canonical personalization bootstrap as appropriate.
+Phase 4 Increments 1–6 change the Prisma schema but do not include a migration script. There are no real users or data-migration requirements. The repository owner applies the updated schema and reruns the canonical personalization bootstrap as appropriate.
 
 ## Increment 2 — Guidance trust tiers and safe failure contracts
 
@@ -60,24 +60,47 @@ Implemented:
 - Kept online tuning disabled; quality signals support manual governance review only.
 - Added focused lifecycle, integration, UI contract, and quality-report tests with no migration script.
 
-## Remaining Phase 4 increments
+## Increment 4 — Producer-wide trust enforcement
 
-### Trust completion
+Implemented:
 
-- Extend tier validation and the safe failure contract beyond reviewed personalization and canonical guidance to every remaining material recommendation producer.
+- Added the recommendation response contract to every canonical Home Action regardless of source.
+- Centralized response-status derivation in the source adapter for Guidance, Maintenance, Incident, Recall, Coverage, Personalization, Project, and System producers.
+- Withheld Start, Schedule, Compare, Provider, Purchase, and Finance CTAs whenever confidence or required facts are degraded.
+- Preserved review, evidence, fact-correction, and conservative safety-escalation actions while withholding unsupported material changes.
+- Kept commercial-disclosure, professional-boundary, jurisdiction, options, assumptions, tradeoff, and emergency-escalation validation in the same schema gate.
 
-### Canonical notification policy
+## Increment 5 — Canonical notification policy
 
-- Consolidate category, urgency, channel, cadence, quiet hours, digest, property, and member scope behind one preference service.
-- Route low-priority recurring items to the weekly Home Brief and reserve immediate delivery for material urgency.
-- Add mute-type, not-relevant, and already-handled controls plus usefulness/noise outcome metrics.
+Implemented:
 
-### Grounded Ask
+- Added canonical persisted preferences for category, channel, cadence, quiet hours, timezone, property scope, and member scope.
+- Routed every backend and worker notification producer through `NotificationService.create`; direct notification writes remain only inside that service.
+- Reserved immediate routing for safety, active damage, material deadlines, and workflow changes while defaulting routine delivery to the weekly Home Brief.
+- Added a weekly Home Brief digest worker and prevented the daily digest from consuming weekly-policy deliveries.
+- Preserved mandatory transactional account email delivery without letting general preference muting break verification or password reset.
+- Added one homeowner settings surface for email cadence and quiet hours.
+- Added Useful, Not relevant, Already handled, and Mute type controls with idempotent outcome records and a 30-day quality endpoint.
 
-- Require a property or explicitly label general answers.
-- Return Living Home Record evidence, known facts, assumptions, missing facts, confidence, safety boundaries, and a next action.
-- Permit only schema-validated proposals and require confirmation before material state changes.
-- Persist confirmed facts, decisions, actions, or notes rather than raw chat by default.
+## Increment 6 — Grounded Ask
+
+Implemented:
+
+- Explicitly labels each answer as property-grounded or general.
+- Returns bounded Living Home Record evidence, known facts, assumptions, missing facts, confidence, a professional/safety boundary, and a safe next action alongside answer text.
+- Added schema-validated Add Fact, Correct Fact, Create Task, Start Journey, Compare Options, Upload Evidence, and Add Note proposal types.
+- Requires an authenticated confirmation endpoint before a proposal can create or persist a material artifact.
+- Makes Create Task confirmation transactional and idempotent through a proposal-derived action key.
+- Persists confirmed proposal artifacts and linked task identity while continuing not to persist raw chat by default.
+- Added a homeowner “Propose a task” interaction that creates a pending proposal, asks for confirmation, and records either confirmation or rejection.
+
+## Remaining Phase 4 execution
+
+No planned Phase 4 code increment remains. Because there are no real users, completion is code-complete rather than outcome-validated. The repository owner must:
+
+- apply the current Prisma schema to the target database without a repository migration script;
+- run authenticated database-backed acceptance for notification preference resolution, digest separation, notification outcomes, grounded answers, and proposal confirmation;
+- collect pilot evidence for notification noise/usefulness, recommendation calibration, incident resolution, and Ask trust before changing thresholds or enabling automated tuning.
 
 ## Validation
 
@@ -91,4 +114,6 @@ node --test apps/backend/tests/unit/phase4GuidanceTrustContracts.test.js
 node --test apps/backend/tests/unit/phase4RecommendationIncidents.test.js
 node --test apps/backend/tests/unit/personalizationRecordRecommendationFeedback.test.js
 node --test apps/backend/tests/unit/personalizationQuality.test.js
+node --test apps/backend/tests/unit/phase4RemainingCompletion.test.js
+npx tsc --noEmit -p apps/workers/tsconfig.json
 ```

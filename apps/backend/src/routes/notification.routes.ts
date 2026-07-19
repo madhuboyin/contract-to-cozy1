@@ -6,6 +6,10 @@ import { authenticate } from '../middleware/auth.middleware';
 
 const router = Router();
 
+router.get('/preferences', authenticate, NotificationController.listPreferences);
+router.put('/preferences', authenticate, NotificationController.updatePreference);
+router.get('/quality', authenticate, NotificationController.quality);
+
 /**
  * ============================================================
  * IN-APP NOTIFICATIONS (User-facing)
@@ -20,6 +24,8 @@ router.get('/unread-count', authenticate, NotificationController.unreadCount);
 
 // Mark all notifications as read
 router.post('/read-all', authenticate, NotificationController.markAllAsRead);
+
+router.post('/:id/outcomes', authenticate, NotificationController.recordOutcome);
 
 // Mark single notification as read (Changed from .post to .patch to match frontend)
 router.patch('/:id/read', authenticate, NotificationController.markAsRead);

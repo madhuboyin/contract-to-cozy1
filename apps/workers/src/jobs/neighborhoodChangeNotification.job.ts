@@ -14,6 +14,7 @@
 //   - Respects per-user notification preferences (emailEnabled)
 
 import { prisma } from '../lib/prisma';
+import { NotificationService } from '../../../backend/src/services/notification.service';
 import { guidanceJourneyService } from '../../../backend/src/services/guidanceEngine/guidanceJourney.service';
 import { NEIGHBORHOOD_IMPACT_RULES } from '../../../backend/src/neighborhoodIntelligence/impactRules';
 import { haversineDistanceMiles, isValidLatLng } from '../../../backend/src/neighborhoodIntelligence/geoUtils';
@@ -225,16 +226,7 @@ export async function neighborhoodChangeNotificationJob(): Promise<void> {
         link.impactScore ?? 0,
       );
 
-      // Create IN_APP notification (always) + EMAIL delivery if enabled
-      const preferences = link.property?.homeownerProfile
-        ?.notificationPreferences as { emailEnabled?: boolean } | null;
-      const emailEnabled = preferences?.emailEnabled !== false;
-
-      const deliveries: string[] = ['IN_APP'];
-      if (emailEnabled) deliveries.push('EMAIL');
-
-      await (prisma as any).notification.create({
-        data: {
+      await NotificationService.create({
           userId,
           type: 'NEIGHBORHOOD_CHANGE_DETECTED',
           title: notificationTitle,
@@ -242,19 +234,15 @@ export async function neighborhoodChangeNotificationJob(): Promise<void> {
           actionUrl,
           entityType: 'PROPERTY',
           entityId: propertyId,
+          category: 'GENERAL',
+          urgency: 'ROUTINE',
           metadata: {
+            propertyId,
             neighborhoodEventId: eventId,
             propertyNeighborhoodEventId: linkId,
             impactScore: link.impactScore ?? 0,
             eventType: link.event?.eventType ?? null,
           },
-          deliveries: {
-            create: deliveries.map((ch) => ({
-              channel: ch as any,
-              status: 'PENDING',
-            })),
-          },
-        },
       });
 
       try {

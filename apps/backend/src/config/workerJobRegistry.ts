@@ -126,6 +126,16 @@ export const JOB_REGISTRY: JobRegistryEntry[] = [
     triggerSupported: false,
   },
   {
+    key: 'weekly-home-brief-digest',
+    name: 'Weekly Home Brief Digest',
+    description: 'Bundles routine notifications into the homeowner weekly Home Brief.',
+    category: 'NOTIFICATIONS',
+    schedule: 'Mondays at 8:00 AM EST',
+    cronExpression: '0 8 * * 1',
+    type: 'cron',
+    triggerSupported: false,
+  },
+  {
     key: 'weekly-retention-report',
     name: 'Weekly Retention Report',
     description: 'Emails a weekly activation/retention/engagement summary (ProductAnalyticsEvent) to RETENTION_REPORT_EMAIL.',

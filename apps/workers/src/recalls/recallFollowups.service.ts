@@ -1,5 +1,6 @@
 // apps/workers/src/recalls/recallFollowups.service.ts
 import { prisma } from '../lib/prisma';
+import { NotificationService } from '../../../backend/src/services/notification.service';
 
 const NOTIF_TYPE_RECALL = 'RECALL_ALERT';
 const NOTIF_ENTITY_TYPE = 'RECALL_MATCH';
@@ -116,8 +117,7 @@ async function ensureRecallNotification(params: {
 
   const actionUrl = buildActionUrl(params.propertyId, params.matchId, guidanceContext);
 
-  await prisma.notification.create({
-    data: {
+  await NotificationService.create({
       userId: params.userId,
       type: NOTIF_TYPE_RECALL,
       title,
@@ -126,6 +126,8 @@ async function ensureRecallNotification(params: {
       entityType: NOTIF_ENTITY_TYPE,
       entityId: params.matchId,
       recallMatchId: params.matchId,
+      category: 'RECALL',
+      urgency: params.severity === 'CRITICAL' ? 'CRITICAL' : 'MATERIAL',
       metadata: {
         propertyId: params.propertyId,
         recallTitle: params.recallTitle,
@@ -134,7 +136,6 @@ async function ensureRecallNotification(params: {
         recallUrl: params.recallUrl || null,
         guidanceContext,
       },
-    },
   });
 
   return { created: true as const };

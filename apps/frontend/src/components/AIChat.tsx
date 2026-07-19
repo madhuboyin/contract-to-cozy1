@@ -24,6 +24,14 @@ function getWelcomeMessage(user: User | null): string {
 interface ChatMessage {
     role: 'user' | 'model';
     text: string;
+    grounding?: {
+      mode: 'PROPERTY' | 'GENERAL';
+      evidence: Array<{ factKey: string; label: string; source: string | null; observedAt: string | null }>;
+      missingFacts: string[];
+      confidence: { label: 'LOW' | 'MEDIUM' | 'HIGH'; rationale: string };
+      safetyBoundary: string;
+      nextAction: string;
+    };
 }
 
 const AIChatInner: React.FC = () => {
@@ -214,7 +222,18 @@ const AIChatInner: React.FC = () => {
              throw new Error("Invalid response format from AI service.");
         }
         
-        setMessages(prev => [...prev, { role: 'model', text: modelResponseText }]);
+        setMessages(prev => [...prev, {
+          role: 'model',
+          text: modelResponseText,
+          grounding: {
+            mode: response.data.groundingMode,
+            evidence: response.data.evidence.map(({ factKey, label, source, observedAt }) => ({ factKey, label, source, observedAt })),
+            missingFacts: response.data.missingFacts,
+            confidence: response.data.confidence,
+            safetyBoundary: response.data.safetyBoundary,
+            nextAction: response.data.nextAction,
+          },
+        }]);
 
     } catch (error: any) {
         console.error("AI chat error:", error);
@@ -237,6 +256,27 @@ const AIChatInner: React.FC = () => {
     }
     // [MODIFICATION] Added selectedPropertyId to dependencies
   }, [input, loading, sessionId, selectedPropertyId]);
+
+  const proposeTask = async (message: ChatMessage) => {
+    if (!selectedPropertyId || !message.grounding) return;
+    const title = window.prompt('Task title to create from this answer:');
+    if (!title?.trim()) return;
+    const proposal = await api.createGroundedAskProposal({
+      sessionId,
+      propertyId: selectedPropertyId,
+      kind: 'CREATE_TASK',
+      summary: `Create maintenance task: ${title.trim()}`,
+      payload: { title: title.trim(), description: `Confirmed from a Grounded Ask answer: ${message.text.slice(0, 300)}`, priority: 'MEDIUM' },
+      evidence: message.grounding.evidence.map(({ factKey, source, observedAt }) => ({ factKey, source, observedAt })),
+    });
+    if (!proposal.success || !proposal.data) return;
+    if (window.confirm(`Create the task “${title.trim()}” for this property?`)) {
+      await api.confirmGroundedAskProposal(proposal.data.id);
+      setMessages((previous) => [...previous, { role: 'model', text: `Created the confirmed task “${title.trim()}”. The action is linked to this Ask proposal for auditability.` }]);
+    } else {
+      await api.rejectGroundedAskProposal(proposal.data.id);
+    }
+  };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
@@ -367,7 +407,18 @@ const AIChatInner: React.FC = () => {
                       ? 'bg-stone-800 text-white rounded-tr-none'
                       : 'bg-white text-stone-800 shadow-sm border border-stone-100 rounded-tl-none'
                   )}>
-                    {msg.text}
+                    <div>{msg.text}</div>
+                    {msg.grounding ? (
+                      <div className="mt-3 space-y-2 border-t border-stone-200 pt-2 text-xs whitespace-normal">
+                        <div className="flex flex-wrap gap-1"><span className="rounded-full bg-stone-100 px-2 py-1 font-semibold">{msg.grounding.mode === 'PROPERTY' ? 'Grounded in this home' : 'General answer'}</span><span className="rounded-full bg-stone-100 px-2 py-1">{msg.grounding.confidence.label} confidence</span></div>
+                        <p>{msg.grounding.confidence.rationale}</p>
+                        {msg.grounding.evidence.length > 0 ? <p><strong>Evidence:</strong> {msg.grounding.evidence.slice(0, 5).map((item) => item.label).join(', ')}</p> : null}
+                        {msg.grounding.missingFacts.length > 0 ? <p><strong>Missing:</strong> {msg.grounding.missingFacts.slice(0, 5).join(', ')}</p> : null}
+                        <p><strong>Boundary:</strong> {msg.grounding.safetyBoundary}</p>
+                        <p><strong>Next:</strong> {msg.grounding.nextAction}</p>
+                        {msg.grounding.mode === 'PROPERTY' ? <button type="button" onClick={() => void proposeTask(msg)} className="rounded-lg border border-stone-300 px-2 py-1 font-semibold">Propose a task</button> : null}
+                      </div>
+                    ) : null}
                   </div>
                 </div>
               ))}

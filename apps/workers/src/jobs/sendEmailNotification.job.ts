@@ -190,6 +190,14 @@ Manage notifications in your dashboard.
 }
 
 export async function runDailyEmailDigest() {
+  return runPreferenceDigest('DAILY_DIGEST');
+}
+
+export async function runWeeklyHomeBriefDigest() {
+  return runPreferenceDigest('WEEKLY_BRIEF');
+}
+
+async function runPreferenceDigest(cadence: 'DAILY_DIGEST' | 'WEEKLY_BRIEF') {
   // 1️⃣ Find users with pending EMAIL deliveries
   const users = await prisma.notificationDelivery.findMany({
     where: {
@@ -198,14 +206,21 @@ export async function runDailyEmailDigest() {
     },
     select: {
       notification: {
-        select: { userId: true },
+        select: { userId: true, metadata: true },
       },
     },
   });
 
-
   const userIds = [
-    ...new Set(users.map((u) => u.notification.userId)),
+    ...new Set(users
+      .filter((row) => {
+        const policyCadence = (row.notification.metadata as any)?.notificationPolicy?.channels
+          ?.find((channel: any) => channel.channel === 'EMAIL')?.cadence;
+        return cadence === 'DAILY_DIGEST'
+          ? policyCadence == null || policyCadence === 'DAILY_DIGEST'
+          : policyCadence === 'WEEKLY_BRIEF';
+      })
+      .map((u) => u.notification.userId)),
   ];
 
   logger.info(`[DIGEST] Users with pending notifications: ${userIds.length}`);
@@ -213,14 +228,14 @@ export async function runDailyEmailDigest() {
   // 2️⃣ Send one email per user
   for (const userId of userIds) {
     try {
-      await sendUserDigest(userId);
+      await sendUserDigest(userId, cadence);
     } catch (err) {
       logger.error({ err }, `[DIGEST] Failed for user=${userId}`);
     }
   }
 }
 
-async function sendUserDigest(userId: string) {
+async function sendUserDigest(userId: string, cadence: 'DAILY_DIGEST' | 'WEEKLY_BRIEF') {
   const pendingDeliveries = await prisma.notificationDelivery.findMany({
     where: {
       channel: NotificationChannel.EMAIL,
@@ -235,7 +250,14 @@ async function sendUserDigest(userId: string) {
     },
     take: 20,
   });
-  const deliveries = await filterDeliveriesByAggregationPolicy(pendingDeliveries);
+  const cadenceDeliveries = pendingDeliveries.filter((delivery) => {
+    const policyCadence = (delivery.notification.metadata as any)?.notificationPolicy?.channels
+      ?.find((channel: any) => channel.channel === 'EMAIL')?.cadence;
+    return cadence === 'DAILY_DIGEST'
+      ? policyCadence == null || policyCadence === 'DAILY_DIGEST'
+      : policyCadence === 'WEEKLY_BRIEF';
+  });
+  const deliveries = await filterDeliveriesByAggregationPolicy(cadenceDeliveries);
 
   if (deliveries.length === 0) return;
 
@@ -244,7 +266,9 @@ async function sendUserDigest(userId: string) {
 
   const notifications = deliveries.map(d => d.notification);
 
-  const subject = `Your daily updates from Contract to Cozy`;
+  const subject = cadence === 'WEEKLY_BRIEF'
+    ? 'Your weekly Home Brief from Contract to Cozy'
+    : 'Your daily updates from Contract to Cozy';
 
   const html = buildDigestHtml(
     user.firstName || 'there',

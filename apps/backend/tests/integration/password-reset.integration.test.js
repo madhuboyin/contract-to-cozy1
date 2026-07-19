@@ -124,6 +124,26 @@ function createHarness(stateOverrides = {}) {
     },
   };
 
+  const notificationServicePath = require.resolve('../../src/services/notification.service.ts');
+  require.cache[notificationServicePath] = {
+    id: notificationServicePath,
+    filename: notificationServicePath,
+    loaded: true,
+    exports: {
+      NotificationService: {
+        create: async (data) => {
+          const notification = {
+            id: `notif-${state.notifications.length + 1}`,
+            ...data,
+            deliveries: (data.requiredChannels ?? []).map((channel) => ({ channel, status: 'PENDING' })),
+          };
+          state.notifications.push(notification);
+          return notification;
+        },
+      },
+    },
+  };
+
   const servicePath = require.resolve('../../src/services/auth.service.ts');
   delete require.cache[servicePath];
   const { AuthService } = require('../../src/services/auth.service.ts');

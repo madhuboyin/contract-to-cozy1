@@ -1571,22 +1571,24 @@ model User {
   lastLoginAt DateTime?
 
   // Relations
-  homeownerProfile        HomeownerProfile?
-  providerProfile         ProviderProfile?
-  bookings                Booking[]                       @relation("BookingHomeowner")
-  providerBookings        Booking[]                       @relation("BookingProvider")
-  reviews                 Review[]                        @relation("ReviewAuthor")
-  receivedReviews         Review[]                        @relation("ReviewProvider")
-  messages                Message[]
-  notifications           Notification[]
-  favorites               Favorite[]
-  refreshTokenSessions    RefreshTokenSession[]
-  mfaRecoveryCodes        MfaRecoveryCode[]
-  homeReportExports       HomeReportExport[]
-  claimsCreated           Claim[]
-  claimTimelineEvents     ClaimTimelineEvent[]
-  inventoryImportBatches  InventoryImportBatch[]
-  propertyContextCaptures PropertyContextCaptureReceipt[]
+  homeownerProfile                 HomeownerProfile?
+  providerProfile                  ProviderProfile?
+  bookings                         Booking[]                       @relation("BookingHomeowner")
+  providerBookings                 Booking[]                       @relation("BookingProvider")
+  reviews                          Review[]                        @relation("ReviewAuthor")
+  receivedReviews                  Review[]                        @relation("ReviewProvider")
+  messages                         Message[]
+  notifications                    Notification[]
+  canonicalNotificationPreferences NotificationPreference[]
+  notificationOutcomes             NotificationOutcome[]
+  favorites                        Favorite[]
+  refreshTokenSessions             RefreshTokenSession[]
+  mfaRecoveryCodes                 MfaRecoveryCode[]
+  homeReportExports                HomeReportExport[]
+  claimsCreated                    Claim[]
+  claimTimelineEvents              ClaimTimelineEvent[]
+  inventoryImportBatches           InventoryImportBatch[]
+  propertyContextCaptures          PropertyContextCaptureReceipt[]
 
   inventoryOcrSessions      InventoryOcrSession[]
   inventoryDraftItems       InventoryDraftItem[]
@@ -1628,8 +1630,10 @@ model User {
 
   // Optional personalization profile aggregate. Distinct from
   // HouseholdMember below, which is the property-collaborator ACL.
-  personalizationHouseholds Household[]
+  personalizationHouseholds       Household[]
   recommendationGovernanceReviews RecommendationGovernanceReview[]
+  groundedAskProposals            GroundedAskProposal[]
+  groundedAskArtifacts            GroundedAskArtifact[]
 
   // Household Collaboration
   householdMemberships           HouseholdMember[]
@@ -4892,6 +4896,7 @@ model Notification {
 
   deliveries     NotificationDelivery[]
   dailySnapshots PropertyDailySnapshot[]
+  outcomes       NotificationOutcome[]
 
   recallMatchId String?
   recallMatch   RecallMatch? @relation(fields: [recallMatchId], references: [id], onDelete: SetNull)
@@ -4937,6 +4942,118 @@ enum DeliveryStatus {
   SENT
   FAILED
   SKIPPED
+}
+
+enum NotificationCadence {
+  IMMEDIATE
+  DAILY_DIGEST
+  WEEKLY_BRIEF
+  MUTED
+}
+
+enum NotificationOutcomeType {
+  OPENED
+  USEFUL
+  NOT_USEFUL
+  MUTE_TYPE
+  NOT_RELEVANT
+  ALREADY_HANDLED
+}
+
+model NotificationPreference {
+  id           String              @id @default(uuid())
+  userId       String
+  scopeKey     String              @default("GLOBAL")
+  propertyId   String?
+  memberUserId String?
+  category     String
+  channel      NotificationChannel
+  enabled      Boolean             @default(true)
+  cadence      NotificationCadence @default(WEEKLY_BRIEF)
+  quietStart   String?
+  quietEnd     String?
+  timezone     String              @default("UTC")
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, scopeKey, category, channel])
+  @@index([userId, propertyId, category])
+  @@map("notification_preferences")
+}
+
+model NotificationOutcome {
+  id             String                  @id @default(uuid())
+  notificationId String
+  userId         String
+  type           NotificationOutcomeType
+  category       String
+  propertyId     String?
+  createdAt      DateTime                @default(now())
+
+  notification Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([notificationId, userId, type])
+  @@index([userId, category, createdAt])
+  @@map("notification_outcomes")
+}
+
+enum GroundedAskProposalKind {
+  ADD_FACT
+  CORRECT_FACT
+  CREATE_TASK
+  START_JOURNEY
+  COMPARE_OPTIONS
+  UPLOAD_EVIDENCE
+  ADD_NOTE
+}
+
+enum GroundedAskProposalStatus {
+  PENDING
+  CONFIRMED
+  REJECTED
+  EXPIRED
+}
+
+model GroundedAskProposal {
+  id           String                    @id @default(uuid())
+  userId       String
+  propertyId   String?
+  sessionId    String
+  kind         GroundedAskProposalKind
+  status       GroundedAskProposalStatus @default(PENDING)
+  summary      String
+  payloadJson  Json
+  evidenceJson Json
+  confirmedAt  DateTime?
+  rejectedAt   DateTime?
+  createdAt    DateTime                  @default(now())
+  updatedAt    DateTime                  @updatedAt
+
+  user     User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  artifact GroundedAskArtifact?
+
+  @@index([userId, sessionId, createdAt])
+  @@index([propertyId, status])
+  @@map("grounded_ask_proposals")
+}
+
+model GroundedAskArtifact {
+  id           String   @id @default(uuid())
+  proposalId   String   @unique
+  userId       String
+  propertyId   String?
+  artifactType String
+  artifactJson Json
+  createdAt    DateTime @default(now())
+
+  proposal GroundedAskProposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  user     User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId, artifactType, createdAt])
+  @@map("grounded_ask_artifacts")
 }
 
 // ============================================================================
@@ -13378,7 +13495,7 @@ model RecommendationDefinition {
   category                String
   safetyClass             String                   @default("ROUTINE") // ROUTINE | SAFETY_SENSITIVE
   safetyTier              RecommendationSafetyTier @default(LOW_CONSEQUENCE)
-  governancePolicyVersion String @default("phase4-v1")
+  governancePolicyVersion String                   @default("phase4-v1")
   status                  String                   @default("DRAFT") // DRAFT | ACTIVE | PAUSED | RETIRED
   effectiveFrom           DateTime?
   effectiveTo             DateTime?
@@ -13394,11 +13511,11 @@ model RecommendationDefinition {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  rules           RecommendationRule[]
-  contentVersions RecommendationContentVersion[]
-  evaluationRuns  PersonalizationEvaluationRun[]
-  recommendations PersonalizedRecommendation[]
-  suppressions    RecommendationSuppression[]
+  rules             RecommendationRule[]
+  contentVersions   RecommendationContentVersion[]
+  evaluationRuns    PersonalizationEvaluationRun[]
+  recommendations   PersonalizedRecommendation[]
+  suppressions      RecommendationSuppression[]
   governanceReviews RecommendationGovernanceReview[]
   incidents         RecommendationIncident[]
 
@@ -13411,15 +13528,15 @@ model RecommendationDefinition {
 // current decision exists per role and policy version; every replacement is
 // still recorded in the append-only PersonalizationAuditEvent ledger.
 model RecommendationGovernanceReview {
-  id             String @id @default(uuid())
+  id             String                       @id @default(uuid())
   definitionId   String
   role           RecommendationReviewRole
   policyVersion  String
   decision       RecommendationReviewDecision
   reviewerUserId String
-  notes          String? @db.Text
-  reviewedAt     DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  notes          String?                      @db.Text
+  reviewedAt     DateTime                     @default(now())
+  updatedAt      DateTime                     @updatedAt
 
   definition RecommendationDefinition @relation(fields: [definitionId], references: [id], onDelete: Cascade)
   reviewer   User                     @relation(fields: [reviewerUserId], references: [id], onDelete: Restrict)
@@ -13745,39 +13862,39 @@ model RecommendationFeedback {
 // calibration problem, unsafe recommendation, or other recommendation issue.
 // Lifecycle transitions are additionally written to PersonalizationAuditEvent.
 model RecommendationIncident {
-  id               String @id @default(uuid())
+  id               String  @id @default(uuid())
   definitionId     String
   recommendationId String?
   sourceFeedbackId String? @unique
 
-  type       RecommendationIncidentType
-  severity   RecommendationIncidentSeverity
-  status     RecommendationIncidentStatus @default(OPEN)
-  safetyTier RecommendationSafetyTier
+  type          RecommendationIncidentType
+  severity      RecommendationIncidentSeverity
+  status        RecommendationIncidentStatus   @default(OPEN)
+  safetyTier    RecommendationSafetyTier
   policyVersion String
 
-  summary     String
-  details     String? @db.Text
+  summary          String
+  details          String? @db.Text
   reportedByUserId String?
   assignedToUserId String?
 
-  triagedAt         DateTime?
+  triagedAt          DateTime?
   targetResolutionAt DateTime?
-  mitigatedAt       DateTime?
-  resolvedAt        DateTime?
-  closedAt          DateTime?
+  mitigatedAt        DateTime?
+  resolvedAt         DateTime?
+  closedAt           DateTime?
 
   resolutionCode    RecommendationIncidentResolution?
-  resolutionSummary String? @db.Text
-  rootCause         String? @db.Text
-  correctiveAction  String? @db.Text
+  resolutionSummary String?                           @db.Text
+  rootCause         String?                           @db.Text
+  correctiveAction  String?                           @db.Text
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  definition     RecommendationDefinition      @relation(fields: [definitionId], references: [id], onDelete: Cascade)
-  recommendation PersonalizedRecommendation?   @relation(fields: [recommendationId], references: [id], onDelete: SetNull)
-  sourceFeedback RecommendationFeedback?        @relation(fields: [sourceFeedbackId], references: [id], onDelete: SetNull)
+  definition     RecommendationDefinition    @relation(fields: [definitionId], references: [id], onDelete: Cascade)
+  recommendation PersonalizedRecommendation? @relation(fields: [recommendationId], references: [id], onDelete: SetNull)
+  sourceFeedback RecommendationFeedback?     @relation(fields: [sourceFeedbackId], references: [id], onDelete: SetNull)
 
   @@index([status, severity, createdAt(sort: Desc)])
   @@index([definitionId, status, createdAt(sort: Desc)])
