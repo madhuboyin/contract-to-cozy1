@@ -230,11 +230,16 @@ export async function transitionRecommendationIncidentHandler(req: AuthRequest, 
     return;
   }
   try {
+    const targetResolutionAt: Date | null | undefined = body.data.targetResolutionAt === undefined
+      ? undefined
+      : body.data.targetResolutionAt === null
+        ? null
+        : new Date(body.data.targetResolutionAt);
     const data = await transitionRecommendationIncident({
       incidentId: incidentId.data,
       actorUserId: req.user!.userId,
       ...body.data,
-      targetResolutionAt: body.data.targetResolutionAt ? new Date(body.data.targetResolutionAt) : body.data.targetResolutionAt,
+      targetResolutionAt,
     });
     res.json({ success: true, data });
   } catch (err) {
