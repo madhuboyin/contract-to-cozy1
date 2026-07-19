@@ -14,7 +14,12 @@ export class NotificationService {
     actionUrl?: string;
     entityType?: string;
     entityId?: string;
+    recallMatchId?: string;
     metadata?: Record<string, any>;
+    signalSource?: Record<string, any>;
+    category?: string;
+    urgency?: string;
+    requiredChannels?: string[];
   }): Promise<void> {
     // In the workers build, skip email/push/SMS queuing. The in-app notification
     // will be created by the backend the next time the user's session is loaded.

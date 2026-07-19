@@ -81,7 +81,8 @@ RUN mkdir -p src/shared/backend/utils \
              src/shared/backend/refinanceRadar/types \
              src/shared/backend/services/permitAdapters \
              src/shared/backend/services/taxAssessorAdapters
-RUN mkdir -p src/shared/backend/services/coverage
+RUN mkdir -p src/shared/backend/services/coverage \
+             src/shared/backend/productFramework
 COPY apps/backend/src/services/coverage/contextPolicy.ts src/shared/backend/services/coverage/
 
 COPY apps/backend/src/utils/riskCalculator.util.ts apps/backend/src/utils/FinancialCalculator.util.ts src/shared/backend/utils/
@@ -134,6 +135,7 @@ COPY apps/backend/src/services/PropertyMaintenanceTask.service.ts \
      apps/backend/src/services/seasonalChecklistStatus.service.ts \
      apps/backend/src/services/riskAssessmentIntegration.service.ts \
      apps/backend/src/services/RiskAssessment.service.ts \
+     apps/backend/src/services/entryContextPolicy.ts \
      src/shared/backend/services/
 COPY apps/backend/src/utils/maintenanceDueDate.ts \
      apps/backend/src/utils/seasonalProgress.ts \
@@ -171,8 +173,14 @@ COPY apps/backend/src/services/planningContext/applicabilityPolicy.ts \
 COPY apps/backend/src/modules/propertyContext/index.ts src/shared/backend/modules/propertyContext/
 COPY apps/backend/src/modules/propertyContext/application/getPropertyContext.ts \
      apps/backend/src/modules/propertyContext/application/getContextCompleteness.ts \
+     apps/backend/src/modules/propertyContext/application/evaluateFeatureContext.ts \
+     apps/backend/src/modules/propertyContext/application/capturePropertyFact.ts \
+     apps/backend/src/modules/propertyContext/application/relationalCaptureAdapters.ts \
      src/shared/backend/modules/propertyContext/application/
-COPY apps/backend/src/modules/propertyContext/catalog/factCatalog.ts src/shared/backend/modules/propertyContext/catalog/
+COPY apps/backend/src/modules/propertyContext/catalog/factCatalog.ts \
+     apps/backend/src/modules/propertyContext/catalog/captureRegistry.ts \
+     apps/backend/src/modules/propertyContext/catalog/featureRequirementRegistry.ts \
+     src/shared/backend/modules/propertyContext/catalog/
 COPY apps/backend/src/modules/propertyContext/domain/contracts.ts \
      apps/backend/src/modules/propertyContext/domain/facts.ts \
      src/shared/backend/modules/propertyContext/domain/
@@ -196,8 +204,10 @@ COPY apps/backend/src/services/analytics/index.ts \
      apps/backend/src/services/analytics/service.ts \
      apps/backend/src/services/analytics/repository.ts \
      apps/backend/src/services/analytics/taxonomy.ts \
+     apps/backend/src/services/analytics/northStarLineage.ts \
+     apps/backend/src/services/analytics/northStarMetric.service.ts \
      src/shared/backend/services/analytics/
-# Replace zod-dependent schemas.ts with a typed pass-through stub (zod is not a workers dependency)
+# Replace analytics validation schemas with the worker's typed pass-through stub.
 COPY apps/workers/stubs/analytics-schemas.ts src/shared/backend/services/analytics/schemas.ts
 # Stub: emitter.ts dynamically imports ../property.service (not copied into workers) to
 # run its activation side effect — see stub file comment for why this is a safe no-op here
@@ -255,7 +265,14 @@ COPY apps/backend/src/services/guidanceEngine/guidanceTypes.ts \
      apps/backend/src/services/guidanceEngine/guidanceMapper.ts \
      apps/backend/src/services/guidanceEngine/guidanceBookingGuard.service.ts \
      apps/backend/src/services/guidanceEngine/guidanceJourney.service.ts \
+     apps/backend/src/services/guidanceEngine/guidanceGovernance.catalog.ts \
      src/shared/backend/services/guidanceEngine/
+# Product-framework contracts used by guidance governance and analytics lineage.
+COPY apps/backend/src/productFramework/recommendationGovernance.contract.ts \
+     apps/backend/src/productFramework/recommendationResponse.contract.ts \
+     apps/backend/src/productFramework/homeAction.contract.ts \
+     apps/backend/src/productFramework/outcomeLineage.contract.ts \
+     src/shared/backend/productFramework/
 # Copy DIY AI guide service and current Property Context policy used by the worker.
 COPY apps/backend/src/services/diyAiGuide.service.ts src/shared/backend/services/
 COPY apps/backend/src/services/diy/applicabilityPolicy.ts src/shared/backend/services/diy/
@@ -326,6 +343,12 @@ RUN sed -i 's/\.\.\/\.\.\/backend\/src\/utils\/riskCalculator\.util/\.\/shared\/
     sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/neighborhoodIntelligence\/impactRules/\.\.\/shared\/backend\/neighborhoodIntelligence\/impactRules/g' src/jobs/neighborhoodChangeNotification.job.ts && \
     sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/neighborhoodIntelligence\/geoUtils/\.\.\/shared\/backend\/neighborhoodIntelligence\/geoUtils/g' src/jobs/neighborhoodChangeNotification.job.ts && \
     sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/planningContext\/context/\.\.\/shared\/backend\/services\/planningContext\/context/g' src/jobs/neighborhoodChangeNotification.job.ts
+
+# Route all worker notification callers through the worker-safe service stub.
+RUN sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/notification\.service/\.\.\/shared\/backend\/services\/notification\.service/g' \
+    src/jobs/neighborhoodChangeNotification.job.ts \
+    src/jobs/processDomainEvents.job.ts \
+    src/recalls/recallFollowups.service.ts
 
 RUN sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/aggregationContext\/batch/\.\.\/shared\/backend\/services\/aggregationContext\/batch/g' \
     src/jobs/gazetteGeneration.job.ts src/services/aggregationDeliveryPolicy.ts
