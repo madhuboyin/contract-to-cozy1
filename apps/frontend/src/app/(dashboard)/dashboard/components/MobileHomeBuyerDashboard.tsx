@@ -122,12 +122,14 @@ export default function MobileHomeBuyerDashboard({
   );
 
   const buyerStatsQuery = useQuery({
-    queryKey: ['mobile-home-buyer-task-stats'],
+    queryKey: ['mobile-home-buyer-task-stats', propertyId],
     queryFn: async () => {
-      const response = await api.getHomeBuyerTaskStats();
+      if (!propertyId) return null;
+      const response = await api.getHomeBuyerTaskStats(propertyId);
       if (!response.success) return null;
       return response.data;
     },
+    enabled: !!propertyId,
     staleTime: 3 * 60 * 1000,
   });
 

@@ -65,10 +65,15 @@ export async function createTaskFromActionCenter(data: {
     // But if Action Center generates something, we can create a custom task
     logger.info('⚠️  HOME_BUYER Action Center task - Creating custom task');
     
-    const task = await HomeBuyerTaskService.createTask(data.userId, {
+    const task = await HomeBuyerTaskService.createTask(data.userId, data.propertyId, {
       title: data.title,
       description: data.description,
       serviceCategory: data.serviceCategory as any,
+      actionKey: data.actionKey,
+      sourceType: 'HOME_ACTION',
+      sourceEntityType: 'ORCHESTRATED_ACTION',
+      sourceEntityId: data.actionKey,
+      homeActionKey: data.actionKey,
     });
 
     return {
@@ -159,7 +164,8 @@ export async function getActionsForProperty(
 
   if (operatingMode === 'PURCHASE' || operatingMode === 'EXPLORATION') {
     try {
-      homeBuyerTasks = await HomeBuyerTaskService.getTasks(userId);
+      homeBuyerTasks = (await HomeBuyerTaskService.getTasks(userId, propertyId))
+        .map((task) => ({ ...task, propertyId }));
     } catch (error) {
       logger.error({ err: error }, 'Error fetching HomeBuyerTasks');
     }
@@ -193,7 +199,7 @@ export function convertToOrchestratedAction(task: any, source: 'HOME_BUYER' | 'M
       id: `hb:${task.id}`,
       actionKey: `HOME_BUYER:${task.id}`,
       source: 'CHECKLIST',
-      propertyId: task.checklist?.homeownerProfile?.properties?.[0]?.id || 'unknown',
+      propertyId: task.checklist?.propertyId || task.propertyId || 'unknown',
       title: task.title,
       description: task.description,
       status: task.status,

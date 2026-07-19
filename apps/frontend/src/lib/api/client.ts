@@ -70,6 +70,7 @@ import {
   HomeBuyerChecklist,
   HomeBuyerTask,
   HomeBuyerTaskStats,
+  BuyerImportReadiness,
   HomeBuyerTaskStatus,
   CreateHomeBuyerTaskInput,
   UpdateHomeBuyerTaskInput,
@@ -3114,8 +3115,8 @@ class APIClient {
    * 
    * @returns Checklist with default tasks (auto-created on first access)
    */
-  async getHomeBuyerChecklist(): Promise<APIResponse<HomeBuyerChecklist>> {
-    return this.request<HomeBuyerChecklist>('/api/home-buyer-tasks/checklist', {
+  async getHomeBuyerChecklist(propertyId: string): Promise<APIResponse<HomeBuyerChecklist>> {
+    return this.request<HomeBuyerChecklist>(`/api/home-buyer-tasks/properties/${propertyId}/checklist`, {
       method: 'GET',
     });
   }
@@ -3125,8 +3126,8 @@ class APIClient {
    * 
    * @returns Array of tasks
    */
-  async getHomeBuyerTasks(): Promise<APIResponse<HomeBuyerTask[]>> {
-    return this.request<HomeBuyerTask[]>('/api/home-buyer-tasks/tasks', {
+  async getHomeBuyerTasks(propertyId: string): Promise<APIResponse<HomeBuyerTask[]>> {
+    return this.request<HomeBuyerTask[]>(`/api/home-buyer-tasks/properties/${propertyId}/tasks`, {
       method: 'GET',
     });
   }
@@ -3137,8 +3138,8 @@ class APIClient {
    * @param taskId - Task ID
    * @returns Single task
    */
-  async getHomeBuyerTask(taskId: string): Promise<APIResponse<HomeBuyerTask>> {
-    return this.request<HomeBuyerTask>(`/api/home-buyer-tasks/tasks/${taskId}`, {
+  async getHomeBuyerTask(propertyId: string, taskId: string): Promise<APIResponse<HomeBuyerTask>> {
+    return this.request<HomeBuyerTask>(`/api/home-buyer-tasks/properties/${propertyId}/tasks/${taskId}`, {
       method: 'GET',
     });
   }
@@ -3148,10 +3149,17 @@ class APIClient {
    * 
    * @returns Task statistics
    */
-  async getHomeBuyerTaskStats(): Promise<APIResponse<HomeBuyerTaskStats>> {
-    return this.request<HomeBuyerTaskStats>('/api/home-buyer-tasks/stats', {
+  async getHomeBuyerTaskStats(propertyId: string): Promise<APIResponse<HomeBuyerTaskStats>> {
+    return this.request<HomeBuyerTaskStats>(`/api/home-buyer-tasks/properties/${propertyId}/stats`, {
       method: 'GET',
     });
+  }
+
+  async getBuyerImportReadiness(propertyId: string): Promise<APIResponse<BuyerImportReadiness>> {
+    return this.request<BuyerImportReadiness>(
+      `/api/home-buyer-tasks/properties/${propertyId}/import-readiness`,
+      { method: 'GET' },
+    );
   }
 
   /**
@@ -3161,9 +3169,10 @@ class APIClient {
    * @returns Created task
    */
   async createHomeBuyerTask(
+    propertyId: string,
     data: CreateHomeBuyerTaskInput
   ): Promise<APIResponse<HomeBuyerTask>> {
-    return this.request<HomeBuyerTask>('/api/home-buyer-tasks/tasks', {
+    return this.request<HomeBuyerTask>(`/api/home-buyer-tasks/properties/${propertyId}/tasks`, {
       method: 'POST',
       body: JSON.stringify(data),
     });
@@ -3177,10 +3186,11 @@ class APIClient {
    * @returns Updated task
    */
   async updateHomeBuyerTask(
+    propertyId: string,
     taskId: string,
     data: UpdateHomeBuyerTaskInput
   ): Promise<APIResponse<HomeBuyerTask>> {
-    return this.request<HomeBuyerTask>(`/api/home-buyer-tasks/tasks/${taskId}`, {
+    return this.request<HomeBuyerTask>(`/api/home-buyer-tasks/properties/${propertyId}/tasks/${taskId}`, {
       method: 'PATCH',
       body: JSON.stringify(data),
     });
@@ -3194,10 +3204,11 @@ class APIClient {
    * @returns Updated task
    */
   async updateHomeBuyerTaskStatus(
+    propertyId: string,
     taskId: string,
     status: HomeBuyerTaskStatus
   ): Promise<APIResponse<HomeBuyerTask>> {
-    return this.request<HomeBuyerTask>(`/api/home-buyer-tasks/tasks/${taskId}/status`, {
+    return this.request<HomeBuyerTask>(`/api/home-buyer-tasks/properties/${propertyId}/tasks/${taskId}/status`, {
       method: 'PATCH',
       body: JSON.stringify({ status }),
     });
@@ -3208,8 +3219,8 @@ class APIClient {
    * 
    * @param taskId - Task ID
    */
-  async deleteHomeBuyerTask(taskId: string): Promise<APIResponse<void>> {
-    return this.request<void>(`/api/home-buyer-tasks/tasks/${taskId}`, {
+  async deleteHomeBuyerTask(propertyId: string, taskId: string): Promise<APIResponse<void>> {
+    return this.request<void>(`/api/home-buyer-tasks/properties/${propertyId}/tasks/${taskId}`, {
       method: 'DELETE',
     });
   }
@@ -3222,11 +3233,12 @@ class APIClient {
    * @returns Link confirmation
    */
   async linkHomeBuyerTaskBooking(
+    propertyId: string,
     taskId: string,
     bookingId: string
   ): Promise<APIResponse<LinkBookingResponse>> {
     return this.request<LinkBookingResponse>(
-      `/api/home-buyer-tasks/tasks/${taskId}/link-booking`,
+      `/api/home-buyer-tasks/properties/${propertyId}/tasks/${taskId}/link-booking`,
       {
         method: 'POST',
         body: JSON.stringify({ bookingId }),

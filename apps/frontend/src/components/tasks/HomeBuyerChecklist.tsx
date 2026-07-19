@@ -26,6 +26,7 @@ import {
 import { useConfirmDestructiveAction } from '@/components/system/ConfirmDestructiveActionDialog';
 
 interface HomeBuyerChecklistProps {
+  propertyId: string;
   onCreateTask?: () => void;
   onEditTask?: (task: HomeBuyerTask) => void;
 }
@@ -74,6 +75,7 @@ const DEFAULT_TASK_TITLES = [
 ];
 
 export function HomeBuyerChecklist({
+  propertyId,
   onCreateTask,
   onEditTask,
 }: HomeBuyerChecklistProps) {
@@ -88,9 +90,9 @@ export function HomeBuyerChecklist({
     isError,
     error,
   } = useQuery({
-    queryKey: ['home-buyer-checklist'],
+    queryKey: ['home-buyer-checklist', propertyId],
     queryFn: async () => {
-      const response = await api.getHomeBuyerChecklist();
+      const response = await api.getHomeBuyerChecklist(propertyId);
       if (!response.success) {
         throw new Error(response.message || 'Failed to load home buyer checklist');
       }
@@ -100,9 +102,9 @@ export function HomeBuyerChecklist({
 
   // Fetch statistics
   const { data: statsData } = useQuery({
-    queryKey: ['home-buyer-stats'],
+    queryKey: ['home-buyer-stats', propertyId],
     queryFn: async () => {
-      const response = await api.getHomeBuyerTaskStats();
+      const response = await api.getHomeBuyerTaskStats(propertyId);
       if (!response.success) {
         throw new Error(response.message || 'Failed to load home buyer task statistics');
       }
@@ -119,14 +121,14 @@ export function HomeBuyerChecklist({
       taskId: string;
       status: HomeBuyerTaskStatus;
     }) => {
-      return await api.updateHomeBuyerTaskStatus(taskId, status);
+      return await api.updateHomeBuyerTaskStatus(propertyId, taskId, status);
     },
     onMutate: async ({ taskId, status }) => {
-      await queryClient.cancelQueries({ queryKey: ['home-buyer-checklist'] });
+      await queryClient.cancelQueries({ queryKey: ['home-buyer-checklist', propertyId] });
       
-      const previousData = queryClient.getQueryData(['home-buyer-checklist']);
+      const previousData = queryClient.getQueryData(['home-buyer-checklist', propertyId]);
       
-      queryClient.setQueryData(['home-buyer-checklist'], (old: any) => {
+      queryClient.setQueryData(['home-buyer-checklist', propertyId], (old: any) => {
         if (!old) return old;
         return {
           ...old,
@@ -140,7 +142,7 @@ export function HomeBuyerChecklist({
     },
     onError: (err, vars, context) => {
       if (context?.previousData) {
-        queryClient.setQueryData(['home-buyer-checklist'], context.previousData);
+        queryClient.setQueryData(['home-buyer-checklist', propertyId], context.previousData);
       }
       toast({
         title: 'Failed to update status',
@@ -161,7 +163,7 @@ export function HomeBuyerChecklist({
   // Delete mutation (custom tasks only)
   const deleteMutation = useMutation({
     mutationFn: async (taskId: string) => {
-      return await api.deleteHomeBuyerTask(taskId);
+      return await api.deleteHomeBuyerTask(propertyId, taskId);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['home-buyer-checklist'] });

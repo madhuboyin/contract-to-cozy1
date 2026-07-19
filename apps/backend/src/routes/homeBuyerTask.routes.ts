@@ -9,57 +9,58 @@ const router = Router();
 router.use(authenticate);
 
 /**
- * GET /api/home-buyer-tasks/checklist
- * Get or create home buyer checklist (with 8 default tasks)
+ * GET /api/home-buyer-tasks/properties/:propertyId/checklist
+ * Get or create a property-scoped 90-day ownership plan
  */
-router.get('/checklist', homeBuyerTaskController.handleGetChecklist);
+router.get('/properties/:propertyId/checklist', homeBuyerTaskController.handleGetChecklist);
 
 /**
  * GET /api/home-buyer-tasks/tasks
- * Get all tasks for the user
+ * Get all tasks for the property plan
  */
-router.get('/tasks', homeBuyerTaskController.handleGetTasks);
+router.get('/properties/:propertyId/tasks', homeBuyerTaskController.handleGetTasks);
 
 /**
  * GET /api/home-buyer-tasks/stats
  * Get task statistics
  */
-router.get('/stats', homeBuyerTaskController.handleGetStats);
+router.get('/properties/:propertyId/stats', homeBuyerTaskController.handleGetStats);
+router.get('/properties/:propertyId/import-readiness', homeBuyerTaskController.handleGetImportReadiness);
 
 /**
  * GET /api/home-buyer-tasks/tasks/:taskId
  * Get a single task
  */
-router.get('/tasks/:taskId', homeBuyerTaskController.handleGetTask);
+router.get('/properties/:propertyId/tasks/:taskId', homeBuyerTaskController.handleGetTask);
 
 /**
  * POST /api/home-buyer-tasks/tasks
- * Create a custom task
+ * Create a custom property-plan task
  */
-router.post('/tasks', homeBuyerTaskController.handleCreateTask);
+router.post('/properties/:propertyId/tasks', homeBuyerTaskController.handleCreateTask);
 
 /**
  * PATCH /api/home-buyer-tasks/tasks/:taskId
  * Update task details
  */
-router.patch('/tasks/:taskId', homeBuyerTaskController.handleUpdateTask);
+router.patch('/properties/:propertyId/tasks/:taskId', homeBuyerTaskController.handleUpdateTask);
 
 /**
  * PATCH /api/home-buyer-tasks/tasks/:taskId/status
  * Update task status
  */
-router.patch('/tasks/:taskId/status', homeBuyerTaskController.handleUpdateTaskStatus);
+router.patch('/properties/:propertyId/tasks/:taskId/status', homeBuyerTaskController.handleUpdateTaskStatus);
 
 /**
  * DELETE /api/home-buyer-tasks/tasks/:taskId
  * Delete a task
  */
-router.delete('/tasks/:taskId', homeBuyerTaskController.handleDeleteTask);
+router.delete('/properties/:propertyId/tasks/:taskId', homeBuyerTaskController.handleDeleteTask);
 
 /**
  * POST /api/home-buyer-tasks/tasks/:taskId/link-booking
  * Link task to a booking
  */
-router.post('/tasks/:taskId/link-booking', homeBuyerTaskController.handleLinkToBooking);
+router.post('/properties/:propertyId/tasks/:taskId/link-booking', homeBuyerTaskController.handleLinkToBooking);
 
 export default router;

@@ -800,7 +800,8 @@ export default function DashboardPage() {
           const context = contextResponse.success && contextResponse.data && typeof contextResponse.data === 'object'
             ? contextResponse.data as { entryPath?: string; ownershipState?: string }
             : null;
-          purchaseMode = context?.entryPath === 'EXISTING_HOME_PURCHASE' || context?.ownershipState === 'UNDER_CONTRACT';
+          purchaseMode = ['SHOPPING', 'UNDER_CONTRACT', 'RECENT_OWNER'].includes(context?.ownershipState ?? '')
+            || (context?.entryPath === 'EXISTING_HOME_PURCHASE' && context?.ownershipState !== 'ESTABLISHED_OWNER');
         } catch {
           purchaseMode = false;
         }
@@ -811,7 +812,7 @@ export default function DashboardPage() {
         api.listBookings({ limit: 50, sortBy: 'createdAt', sortOrder: 'desc' })
           .catch(() => ({ success: false, data: { bookings: [] } })),
         purchaseMode
-          ? api.getHomeBuyerChecklist()
+          ? api.getHomeBuyerChecklist(propId!)
               .then(res => (res.success && res.data ? { success: true, data: res.data } : { success: false, data: null }))
               .catch(() => ({ success: false, data: null }))
           : Promise.resolve({ success: false as const, data: null }),
@@ -935,6 +936,19 @@ export default function DashboardPage() {
         impactLabel: 'Active home risk',
         etaLabel: 'ETA 2 min',
         ...buildIncidentActionMeta(highSeverityIncident.title, potentialSavings),
+      };
+    }
+
+    if (isPurchaseMode && effectiveSelectedPropertyId) {
+      return {
+        badgeLabel: '90-day ownership plan',
+        title: 'Turn purchase evidence into a calm first 90 days.',
+        subtitle: 'Review inspection findings, closing documents, safety work, utilities, and household responsibilities in one property plan.',
+        ctaLabel: 'Open ownership plan',
+        href: `/dashboard/properties/${effectiveSelectedPropertyId}/buyer-plan`,
+        impactLabel: 'Purchase-to-ownership continuity',
+        etaLabel: 'ETA 3 min',
+        ...buildDefaultActionMeta(0),
       };
     }
 

@@ -11,8 +11,8 @@ import {
 import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
 
 /**
- * GET /api/home-buyer-tasks/checklist
- * Gets the user's home buyer checklist (creates with 8 default tasks if doesn't exist)
+ * GET /api/home-buyer-tasks/properties/:propertyId/checklist
+ * Gets the property's acquisition and 90-day ownership plan
  */
 const handleGetChecklist = async (
   req: AuthRequest,
@@ -24,11 +24,13 @@ const handleGetChecklist = async (
       return res.status(401).json({ message: 'Authentication required.' });
     }
 
-    const checklist = await HomeBuyerTaskService.getOrCreateChecklist(req.user.userId);
+    const { propertyId } = req.params;
+    const checklist = await HomeBuyerTaskService.getOrCreateChecklist(req.user.userId, propertyId);
 
     analyticsEmitter.track({
       eventType: AnalyticsEvent.TOOL_USED,
       userId: req.user.userId,
+      propertyId,
       moduleKey: AnalyticsModule.HOME_BUYER,
       featureKey: AnalyticsFeature.HOME_BUYER_TASK,
       metadataJson: {},
@@ -51,7 +53,7 @@ const handleGetChecklist = async (
 
 /**
  * GET /api/home-buyer-tasks/tasks
- * Gets all tasks for the user
+ * Gets all tasks for the property plan
  */
 const handleGetTasks = async (
   req: AuthRequest,
@@ -63,7 +65,7 @@ const handleGetTasks = async (
       return res.status(401).json({ message: 'Authentication required.' });
     }
 
-    const tasks = await HomeBuyerTaskService.getTasks(req.user.userId);
+    const tasks = await HomeBuyerTaskService.getTasks(req.user.userId, req.params.propertyId);
 
     return res.status(200).json({
       success: true,
@@ -89,7 +91,7 @@ const handleGetTask = async (
     }
 
     const { taskId } = req.params;
-    const task = await HomeBuyerTaskService.getTask(req.user.userId, taskId);
+    const task = await HomeBuyerTaskService.getTask(req.user.userId, req.params.propertyId, taskId);
 
     return res.status(200).json({
       success: true,
@@ -129,11 +131,12 @@ const handleCreateTask = async (
       });
     }
 
-    const task = await HomeBuyerTaskService.createTask(req.user.userId, data);
+    const task = await HomeBuyerTaskService.createTask(req.user.userId, req.params.propertyId, data);
 
     analyticsEmitter.track({
       eventType: AnalyticsEvent.ACTION_COMPLETED,
       userId: req.user.userId,
+      propertyId: req.params.propertyId,
       moduleKey: AnalyticsModule.HOME_BUYER,
       featureKey: AnalyticsFeature.HOME_BUYER_TASK,
       metadataJson: { actionType: 'create_task' },
@@ -173,6 +176,7 @@ const handleUpdateTask = async (
 
     const task = await HomeBuyerTaskService.updateTask(
       req.user.userId,
+      req.params.propertyId,
       taskId,
       data
     );
@@ -224,6 +228,7 @@ const handleUpdateTaskStatus = async (
 
     const task = await HomeBuyerTaskService.updateTaskStatus(
       req.user.userId,
+      req.params.propertyId,
       taskId,
       status
     );
@@ -231,6 +236,7 @@ const handleUpdateTaskStatus = async (
     analyticsEmitter.track({
       eventType: AnalyticsEvent.ACTION_COMPLETED,
       userId: req.user.userId,
+      propertyId: req.params.propertyId,
       moduleKey: AnalyticsModule.HOME_BUYER,
       featureKey: AnalyticsFeature.HOME_BUYER_TASK,
       metadataJson: { actionType: 'update_task_status', status },
@@ -266,7 +272,7 @@ const handleDeleteTask = async (
     }
 
     const { taskId } = req.params;
-    await HomeBuyerTaskService.deleteTask(req.user.userId, taskId);
+    await HomeBuyerTaskService.deleteTask(req.user.userId, req.params.propertyId, taskId);
 
     return res.status(204).send();
   } catch (error) {
@@ -306,6 +312,7 @@ const handleLinkToBooking = async (
 
     const task = await HomeBuyerTaskService.linkToBooking(
       req.user.userId,
+      req.params.propertyId,
       taskId,
       bookingId
     );
@@ -313,6 +320,7 @@ const handleLinkToBooking = async (
     analyticsEmitter.track({
       eventType: AnalyticsEvent.ACTION_COMPLETED,
       userId: req.user.userId,
+      propertyId: req.params.propertyId,
       moduleKey: AnalyticsModule.HOME_BUYER,
       featureKey: AnalyticsFeature.HOME_BUYER_TASK,
       metadataJson: { actionType: 'link_to_booking' },
@@ -347,12 +355,23 @@ const handleGetStats = async (
       return res.status(401).json({ message: 'Authentication required.' });
     }
 
-    const stats = await HomeBuyerTaskService.getTaskStats(req.user.userId);
+    const stats = await HomeBuyerTaskService.getTaskStats(req.user.userId, req.params.propertyId);
 
     return res.status(200).json({
       success: true,
       data: stats,
     });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/** GET /api/home-buyer-tasks/properties/:propertyId/import-readiness */
+const handleGetImportReadiness = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    if (!req.user) return res.status(401).json({ message: 'Authentication required.' });
+    const readiness = await HomeBuyerTaskService.getImportReadiness(req.user.userId, req.params.propertyId);
+    return res.status(200).json({ success: true, data: readiness });
   } catch (error) {
     next(error);
   }
@@ -368,4 +387,5 @@ export const homeBuyerTaskController = {
   handleDeleteTask,
   handleLinkToBooking,
   handleGetStats,
+  handleGetImportReadiness,
 };

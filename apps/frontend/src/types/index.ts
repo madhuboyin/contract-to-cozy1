@@ -2354,6 +2354,10 @@ export type HomeBuyerTaskStatus =
   | 'COMPLETED'
   | 'NOT_NEEDED';
 
+export type BuyerPlanPhase = 'PRE_CLOSE' | 'FIRST_30_DAYS' | 'DAYS_31_TO_90' | 'RECURRING_HOME';
+export type BuyerPlanPriority = 'NOW' | 'SOON' | 'PLAN' | 'CONSIDER';
+export type BuyerTaskSourceType = 'SYSTEM' | 'USER' | 'INSPECTION_FINDING' | 'DOCUMENT' | 'GUIDANCE_JOURNEY' | 'HOME_ACTION';
+
 export type HomeBuyerTaskServiceCategory =
   | 'INSPECTION'
   | 'MOVING'
@@ -2376,6 +2380,16 @@ export interface HomeBuyerTask {
   title: string;
   description: string | null;
   status: HomeBuyerTaskStatus;
+  actionKey: string;
+  phase: BuyerPlanPhase;
+  priority: BuyerPlanPriority;
+  dueAt: string | null;
+  assignedToUserId: string | null;
+  sourceType: BuyerTaskSourceType;
+  sourceEntityType: string | null;
+  sourceEntityId: string | null;
+  guidanceJourneyId: string | null;
+  homeActionKey: string | null;
   serviceCategory: HomeBuyerTaskServiceCategory | null;
   frequency: HomeBuyerTaskFrequency | null;
   estimatedCostCents: number | null;
@@ -2388,7 +2402,12 @@ export interface HomeBuyerTask {
 
 export interface HomeBuyerChecklist {
   id: string;
-  homeownerProfileId: string;
+  propertyId: string;
+  status: 'ACTIVE' | 'HANDED_OFF' | 'ARCHIVED';
+  planStartDate: string;
+  targetCloseDate: string | null;
+  ownershipStartedAt: string | null;
+  transitionedToRecurringAt: string | null;
   tasks: HomeBuyerTask[];
   createdAt: Date;
   updatedAt: Date;
@@ -2407,6 +2426,10 @@ export interface CreateHomeBuyerTaskInput {
   title: string;
   description?: string | null;
   serviceCategory?: HomeBuyerTaskServiceCategory | null;
+  actionKey?: string;
+  phase?: BuyerPlanPhase;
+  priority?: BuyerPlanPriority;
+  dueAt?: string | null;
 }
 
 export interface UpdateHomeBuyerTaskInput {
@@ -2414,6 +2437,16 @@ export interface UpdateHomeBuyerTaskInput {
   description?: string | null;
   serviceCategory?: HomeBuyerTaskServiceCategory | null;
   sortOrder?: number;
+  phase?: BuyerPlanPhase;
+  priority?: BuyerPlanPriority;
+  dueAt?: string | null;
+}
+
+export interface BuyerImportReadiness {
+  propertyId: string;
+  inspectionReports: { total: number; reviewPending: number; confirmed: number; openMaterialFindings: number };
+  documents: { total: number; verified: number; unverified: number };
+  nextRecommendedStep: 'IMPORT_INSPECTION' | 'REVIEW_EXTRACTION' | 'VERIFY_MATERIAL_FINDINGS' | 'VERIFY_DOCUMENTS' | 'BUILD_90_DAY_PLAN';
 }
 
 // -----------------------------------------------------------------------------

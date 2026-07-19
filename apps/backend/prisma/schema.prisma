@@ -376,6 +376,35 @@ enum HomeBuyerTaskStatus {
   NOT_NEEDED
 }
 
+enum BuyerJourneyStatus {
+  ACTIVE
+  HANDED_OFF
+  ARCHIVED
+}
+
+enum BuyerPlanPhase {
+  PRE_CLOSE
+  FIRST_30_DAYS
+  DAYS_31_TO_90
+  RECURRING_HOME
+}
+
+enum BuyerPlanPriority {
+  NOW
+  SOON
+  PLAN
+  CONSIDER
+}
+
+enum BuyerTaskSourceType {
+  SYSTEM
+  USER
+  INSPECTION_FINDING
+  DOCUMENT
+  GUIDANCE_JOURNEY
+  HOME_ACTION
+}
+
 enum MaintenanceTaskStatus {
   PENDING
   IN_PROGRESS
@@ -1838,9 +1867,6 @@ model HomeownerProfile {
   properties Property[]
   checklist  Checklist?
 
-  // PHASE 1: NEW RELATION
-  homeBuyerChecklist HomeBuyerChecklist?
-
   // NEW RELATIONS
   warranties                      Warranty[]
   insurancePolicies               InsurancePolicy[]
@@ -1958,9 +1984,15 @@ model ChecklistItem {
 model HomeBuyerChecklist {
   id String @id @default(uuid())
 
-  // User-scoped (NOT property-scoped)
-  homeownerProfileId String           @unique
-  homeownerProfile   HomeownerProfile @relation(fields: [homeownerProfileId], references: [id], onDelete: Cascade)
+  // Phase 5: the acquisition journey belongs to one property, not one user.
+  propertyId String   @unique
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  status                    BuyerJourneyStatus @default(ACTIVE)
+  planStartDate             DateTime           @default(now())
+  targetCloseDate           DateTime?
+  ownershipStartedAt        DateTime?
+  transitionedToRecurringAt DateTime?
 
   // Relations
   tasks HomeBuyerTask[]
@@ -1980,6 +2012,12 @@ model HomeBuyerTask {
   description String?
   status      HomeBuyerTaskStatus @default(PENDING)
 
+  // Canonical 90-day ownership-plan placement and stable idempotency key.
+  actionKey String
+  phase     BuyerPlanPhase    @default(FIRST_30_DAYS)
+  priority  BuyerPlanPriority @default(PLAN)
+  dueAt     DateTime?
+
   // Service integration
   serviceCategory ServiceCategory?
 
@@ -1998,6 +2036,13 @@ model HomeBuyerTask {
   assignedToUserId String?
   assignedTo       User?   @relation("HomeBuyerTaskAssignee", fields: [assignedToUserId], references: [id])
 
+  // Durable lineage back to imported evidence or a canonical journey/action.
+  sourceType        BuyerTaskSourceType @default(USER)
+  sourceEntityType  String?
+  sourceEntityId    String?
+  guidanceJourneyId String?
+  homeActionKey     String?
+
   // Display
   sortOrder Int @default(0)
 
@@ -2007,9 +2052,11 @@ model HomeBuyerTask {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@index([checklistId])
+  @@unique([checklistId, actionKey])
+  @@index([checklistId, phase, priority])
   @@index([status])
   @@index([assignedToUserId])
+  @@index([sourceEntityType, sourceEntityId])
   @@map("home_buyer_tasks")
 }
 
@@ -2194,13 +2241,14 @@ model Property {
   reserveFund HomeReserveFund?
 
   // NEW RELATIONS
-  warranties        Warranty[]
-  insurancePolicies InsurancePolicy[]
-  expenses          Expense[]
-  checklistItems    ChecklistItem[]
-  maintenanceTasks  PropertyMaintenanceTask[]
-  documents         Document[]                @relation("PropertyDocuments")
-  coverPhoto        Document?                 @relation("PropertyCoverPhoto", fields: [coverPhotoDocumentId], references: [id], onDelete: SetNull)
+  warranties         Warranty[]
+  insurancePolicies  InsurancePolicy[]
+  expenses           Expense[]
+  checklistItems     ChecklistItem[]
+  maintenanceTasks   PropertyMaintenanceTask[]
+  homeBuyerChecklist HomeBuyerChecklist?
+  documents          Document[]                @relation("PropertyDocuments")
+  coverPhoto         Document?                 @relation("PropertyCoverPhoto", fields: [coverPhotoDocumentId], references: [id], onDelete: SetNull)
 
   // NEW RELATION FOR RISK ASSESSMENT (Phase 1): ***FIX APPLIED: Added @relation(name: "PropertyRiskReport")***
   riskReport RiskAssessmentReport? @relation(name: "PropertyRiskReport")

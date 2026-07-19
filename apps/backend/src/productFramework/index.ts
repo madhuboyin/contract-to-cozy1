@@ -8,3 +8,4 @@ export * from './recommendationIncident.contract';
 export * from './notificationPolicy.contract';
 export * from './groundedAsk.contract';
 export * from './recommendationLaunchGate';
+export * from './buyerAcquisition.contract';

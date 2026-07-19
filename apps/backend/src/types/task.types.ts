@@ -8,6 +8,9 @@ import {
     RiskLevel,
     ServiceCategory,
     RecurrenceFrequency,
+    BuyerPlanPhase,
+    BuyerPlanPriority,
+    BuyerTaskSourceType,
   } from '@prisma/client';
   
   /**
@@ -17,6 +20,16 @@ import {
     title: string;
     description?: string;
     serviceCategory?: ServiceCategory;
+    actionKey?: string;
+    phase?: BuyerPlanPhase;
+    priority?: BuyerPlanPriority;
+    dueAt?: string | null;
+    assignedToUserId?: string | null;
+    sourceType?: BuyerTaskSourceType;
+    sourceEntityType?: string | null;
+    sourceEntityId?: string | null;
+    guidanceJourneyId?: string | null;
+    homeActionKey?: string | null;
   }
   
   /**
@@ -29,6 +42,10 @@ import {
     serviceCategory?: ServiceCategory | null;
     frequency?: RecurrenceFrequency | null;
     estimatedCostCents?: number | null;
+    phase?: BuyerPlanPhase;
+    priority?: BuyerPlanPriority;
+    dueAt?: string | null;
+    assignedToUserId?: string | null;
   }
   
   /**

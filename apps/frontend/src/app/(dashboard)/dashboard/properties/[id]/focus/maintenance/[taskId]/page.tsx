@@ -49,8 +49,8 @@ export default function MaintenanceFocusPage() {
   const taskId = (Array.isArray(params.taskId) ? params.taskId[0] : params.taskId) as string;
 
   const { data: checklistRes, isLoading } = useQuery({
-    queryKey: ["homebuyer-checklist"],
-    queryFn: () => api.getHomeBuyerChecklist(),
+    queryKey: ["homebuyer-checklist", propertyId],
+    queryFn: () => api.getHomeBuyerChecklist(propertyId),
     enabled: !!propertyId,
   });
 

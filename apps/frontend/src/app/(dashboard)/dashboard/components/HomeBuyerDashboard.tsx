@@ -46,7 +46,9 @@ export const HomeBuyerDashboard = ({
     const fetchStats = async () => {
       try {
         setStatsError(null);
-        const response = await api.getHomeBuyerTaskStats();
+        const propertyId = properties[0]?.id;
+        if (!propertyId) return;
+        const response = await api.getHomeBuyerTaskStats(propertyId);
         if (response.success) {
           setStats(response.data);
         }
@@ -57,7 +59,7 @@ export const HomeBuyerDashboard = ({
     };
 
     fetchStats();
-  }, []);
+  }, [properties]);
 
   const primaryPropertyId = (properties && properties.length > 0) ? properties[0].id : undefined;
 
