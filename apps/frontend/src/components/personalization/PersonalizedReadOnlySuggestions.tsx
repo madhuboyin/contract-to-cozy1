@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { Sparkles } from 'lucide-react';
+import { AlertTriangle, Sparkles } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { MobileSection, MobileSectionHeader, StatusChip, SummaryCard } from '@/components/mobile/dashboard/MobilePrimitives';
 import {
@@ -36,10 +36,18 @@ export function PersonalizedReadOnlySuggestions({
       <div className="grid gap-3 lg:grid-cols-3">
         {items.map((item) => (
           <SummaryCard key={item.id} title={item.title} subtitle={item.summary}>
-            <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="space-y-3">
+              {item.governance.professionalBoundary ? (
+                <p className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-950">
+                  <AlertTriangle className="mr-1 inline h-3.5 w-3.5" aria-hidden="true" />
+                  {item.governance.professionalBoundary}
+                </p>
+              ) : null}
+              <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-2">
                 <Sparkles className="h-4 w-4" aria-hidden="true" />
                 <StatusChip tone={item.priority === 'HIGH' ? 'elevated' : 'info'}>{item.priority}</StatusChip>
+                <StatusChip tone={item.governance.safetyTier === 'SAFETY_EMERGENCY' ? 'elevated' : 'info'}>{item.governance.safetyTier.replaceAll('_', ' ')}</StatusChip>
               </div>
               <Link
                 href={`/dashboard/maintenance?propertyId=${encodeURIComponent(propertyId!)}`}
@@ -47,6 +55,7 @@ export function PersonalizedReadOnlySuggestions({
               >
                 Review in Maintenance
               </Link>
+              </div>
             </div>
           </SummaryCard>
         ))}

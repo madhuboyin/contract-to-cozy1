@@ -63,7 +63,7 @@ export async function listActivePersonalizationRecommendations(propertyId: strin
       priorityBand: true,
       confidence: true,
       firstEligibleAt: true,
-      definition: { select: { code: true, category: true } },
+      definition: { select: { code: true, category: true, safetyTier: true, governancePolicyVersion: true } },
       explanations: {
         orderBy: { version: 'desc' },
         take: 1,
@@ -88,7 +88,7 @@ export async function listActiveRecommendationsForModule(
       priorityBand: true,
       confidence: true,
       expiresAt: true,
-      definition: { select: { code: true, category: true } },
+      definition: { select: { code: true, category: true, safetyTier: true, governancePolicyVersion: true } },
       explanations: {
         orderBy: { version: 'desc' },
         take: 1,

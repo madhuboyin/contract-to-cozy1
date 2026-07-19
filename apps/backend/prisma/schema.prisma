@@ -1629,6 +1629,7 @@ model User {
   // Optional personalization profile aggregate. Distinct from
   // HouseholdMember below, which is the property-collaborator ACL.
   personalizationHouseholds Household[]
+  recommendationGovernanceReviews RecommendationGovernanceReview[]
 
   // Household Collaboration
   householdMemberships           HouseholdMember[]
@@ -13301,14 +13302,36 @@ model ProviderServiceZone {
 
 // Stable identity for one reviewed catalog recommendation. Seeded rows start
 // DRAFT/inactive; activation requires an MFA-authenticated admin review.
+enum RecommendationSafetyTier {
+  LOW_CONSEQUENCE
+  MATERIAL_FINANCIAL
+  REGULATED_COVERAGE
+  SAFETY_EMERGENCY
+}
+
+enum RecommendationReviewRole {
+  PRODUCT
+  DOMAIN
+  TRUST
+  LEGAL_COMPLIANCE
+  COMMERCIAL_INTEGRITY
+}
+
+enum RecommendationReviewDecision {
+  APPROVED
+  REJECTED
+}
+
 model RecommendationDefinition {
-  id            String    @id @default(uuid())
-  code          String    @unique
-  category      String
-  safetyClass   String    @default("ROUTINE") // ROUTINE | SAFETY_SENSITIVE
-  status        String    @default("DRAFT") // DRAFT | ACTIVE | PAUSED | RETIRED
-  effectiveFrom DateTime?
-  effectiveTo   DateTime?
+  id                      String                   @id @default(uuid())
+  code                    String                   @unique
+  category                String
+  safetyClass             String                   @default("ROUTINE") // ROUTINE | SAFETY_SENSITIVE
+  safetyTier              RecommendationSafetyTier @default(LOW_CONSEQUENCE)
+  governancePolicyVersion String @default("phase4-v1")
+  status                  String                   @default("DRAFT") // DRAFT | ACTIVE | PAUSED | RETIRED
+  effectiveFrom           DateTime?
+  effectiveTo             DateTime?
 
   // Per-definition emergency pause — complements the system-wide switch in
   // personalizationKillSwitch.service.ts. See
@@ -13326,10 +13349,34 @@ model RecommendationDefinition {
   evaluationRuns  PersonalizationEvaluationRun[]
   recommendations PersonalizedRecommendation[]
   suppressions    RecommendationSuppression[]
+  governanceReviews RecommendationGovernanceReview[]
 
   @@index([status, effectiveFrom, effectiveTo])
   @@index([category, status])
   @@map("personalization_recommendation_definitions")
+}
+
+// Tier-specific review attestation for a recommendation definition. One
+// current decision exists per role and policy version; every replacement is
+// still recorded in the append-only PersonalizationAuditEvent ledger.
+model RecommendationGovernanceReview {
+  id             String @id @default(uuid())
+  definitionId   String
+  role           RecommendationReviewRole
+  policyVersion  String
+  decision       RecommendationReviewDecision
+  reviewerUserId String
+  notes          String? @db.Text
+  reviewedAt     DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  definition RecommendationDefinition @relation(fields: [definitionId], references: [id], onDelete: Cascade)
+  reviewer   User                     @relation(fields: [reviewerUserId], references: [id], onDelete: Restrict)
+
+  @@unique([definitionId, role, policyVersion])
+  @@index([decision, reviewedAt])
+  @@index([reviewerUserId, reviewedAt])
+  @@map("personalization_recommendation_governance_reviews")
 }
 
 // One immutable, validated-AST version of a definition's eligibility logic.

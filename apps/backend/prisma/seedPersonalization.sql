@@ -5,25 +5,29 @@
 -- rows identified by stable definition code, rule/content version, and
 -- question code/version.
 --
--- Existing rows are deliberately left unchanged. New rows start DRAFT, so
--- rerunning this file cannot overwrite reviewed content or activate anything.
+-- Existing rule/content rows are deliberately left unchanged. Phase 4 trust
+-- metadata is synchronized by definition code, but rerunning this file cannot
+-- overwrite reviewed content or activate anything.
 
 BEGIN;
 
-WITH personalization_definitions(code, category, safety_class) AS (
+WITH personalization_definitions(code, category, safety_class, safety_tier, governance_policy_version) AS (
   VALUES
-    ('hvac_filter_replacement_check_proof', 'low_cost_prevention', 'ROUTINE'),
-    ('smoke_co_detector_battery_check',      'low_cost_prevention', 'SAFETY_SENSITIVE'),
-    ('dryer_vent_cleaning_reminder',         'low_cost_prevention', 'SAFETY_SENSITIVE'),
-    ('smoke_detector_installation_review',   'safety_risk_reduction', 'SAFETY_SENSITIVE'),
-    ('aging_roof_condition_review',          'aging_system_planning', 'ROUTINE')
+    ('hvac_filter_replacement_check_proof', 'low_cost_prevention', 'ROUTINE', 'LOW_CONSEQUENCE', 'phase4-v1'),
+    ('smoke_co_detector_battery_check',      'low_cost_prevention', 'SAFETY_SENSITIVE', 'SAFETY_EMERGENCY', 'phase4-v1'),
+    ('dryer_vent_cleaning_reminder',         'low_cost_prevention', 'SAFETY_SENSITIVE', 'SAFETY_EMERGENCY', 'phase4-v1'),
+    ('smoke_detector_installation_review',   'safety_risk_reduction', 'SAFETY_SENSITIVE', 'SAFETY_EMERGENCY', 'phase4-v1'),
+    ('aging_roof_condition_review',          'aging_system_planning', 'ROUTINE', 'MATERIAL_FINANCIAL', 'phase4-v1')
 )
 INSERT INTO personalization_recommendation_definitions
-  (id, code, category, "safetyClass", status, "createdAt", "updatedAt")
+  (id, code, category, "safetyClass", "safetyTier", "governancePolicyVersion", status, "createdAt", "updatedAt")
 SELECT
-  gen_random_uuid(), code, category, safety_class, 'DRAFT', now(), now()
+  gen_random_uuid(), code, category, safety_class, safety_tier::"RecommendationSafetyTier", governance_policy_version, 'DRAFT', now(), now()
 FROM personalization_definitions
-ON CONFLICT (code) DO NOTHING;
+ON CONFLICT (code) DO UPDATE SET
+  "safetyTier" = EXCLUDED."safetyTier",
+  "governancePolicyVersion" = EXCLUDED."governancePolicyVersion",
+  "updatedAt" = now();
 
 WITH personalization_rules(code, rule_ast) AS (
   VALUES

@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { CheckCircle2, Sparkles } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Sparkles } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
@@ -66,7 +66,14 @@ export function PersonalizedMaintenanceSuggestions({ propertyId }: { propertyId?
                 <div className="flex items-center gap-2">
                   <Sparkles className="h-4 w-4" aria-hidden="true" />
                   <StatusChip tone={item.priority === 'HIGH' ? 'elevated' : 'info'}>{item.priority}</StatusChip>
+                  <StatusChip tone={item.governance.safetyTier === 'SAFETY_EMERGENCY' ? 'elevated' : 'info'}>{item.governance.safetyTier.replaceAll('_', ' ')}</StatusChip>
                 </div>
+                {item.governance.professionalBoundary ? (
+                  <p className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-950">
+                    <AlertTriangle className="mr-1 inline h-3.5 w-3.5" aria-hidden="true" />
+                    {item.governance.professionalBoundary}
+                  </p>
+                ) : null}
                 {action ? (
                   <Button
                     type="button"

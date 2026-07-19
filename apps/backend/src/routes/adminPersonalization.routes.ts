@@ -17,6 +17,7 @@ import {
   getPersonalizationQualityHandler,
   activateDefinitionBundleHandler,
   activateQuestionHandler,
+  recordGovernanceReviewHandler,
 } from '../controllers/adminPersonalization.controller';
 
 const router = Router();
@@ -82,6 +83,7 @@ router.post('/admin/personalization/definitions/:code/resume', resumeDefinitionH
 router.get('/admin/personalization/catalog', getCatalogHandler);
 router.get('/admin/personalization/quality', getPersonalizationQualityHandler);
 router.post('/admin/personalization/definitions/:code/activate', activateDefinitionBundleHandler);
+router.post('/admin/personalization/definitions/:code/governance-reviews', recordGovernanceReviewHandler);
 router.post('/admin/personalization/questions/:code/activate', activateQuestionHandler);
 
 export default router;

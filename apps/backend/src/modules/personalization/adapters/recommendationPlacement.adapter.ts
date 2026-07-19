@@ -10,7 +10,7 @@ interface StoredRecommendation {
   priorityBand: string | null;
   confidence: number | null;
   expiresAt: Date | null;
-  definition: { code: string; category: string };
+  definition: { code: string; category: string; safetyTier: string; governancePolicyVersion: string };
   explanations: Array<{ headline: string; reasonCodes: unknown }>;
 }
 
@@ -34,6 +34,13 @@ export interface ModuleRecommendationDTO {
   score: number;
   priority: 'HIGH' | 'MEDIUM' | 'LOW';
   confidence: number | null;
+  governance: {
+    safetyTier: string;
+    professionalBoundary: string | null;
+    conservativeFallback: string | null;
+    emergencyEscalation: string | null;
+    policyVersion: string;
+  };
   actions: Array<{
     type: 'CONVERT_TO_TASK' | 'OPEN_MAINTENANCE';
     label: string;
@@ -65,6 +72,13 @@ export function mapRecommendationToModule(
     score: recommendation.score ?? definition.defaultScore,
     priority,
     confidence: recommendation.confidence,
+    governance: {
+      safetyTier: definition.governance.safetyTier,
+      professionalBoundary: definition.governance.professionalBoundary,
+      conservativeFallback: definition.governance.conservativeFallback,
+      emergencyEscalation: definition.governance.emergencyEscalation,
+      policyVersion: definition.governance.policyVersion,
+    },
     actions: module === 'MAINTENANCE'
       ? [{ type: 'CONVERT_TO_TASK', label: 'Add to maintenance', enabled: canAct }]
       : [{ type: 'OPEN_MAINTENANCE', label: 'Review in Maintenance', enabled: true }],

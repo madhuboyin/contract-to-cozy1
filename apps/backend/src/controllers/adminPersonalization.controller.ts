@@ -17,7 +17,9 @@ import {
   activatePersonalizationQuestion,
   listPersonalizationCatalog,
   PersonalizationCatalogActivationError,
+  recordRecommendationGovernanceReview,
 } from '../services/personalizationCatalogAdmin.service';
+import { RECOMMENDATION_REVIEW_ROLES } from '../productFramework/recommendationLaunchGate';
 import { getPersonalizationQuality } from '../services/personalizationQuality.service';
 
 const pauseSchema = z.object({
@@ -30,6 +32,11 @@ const activateBundleSchema = z.object({
   locale: z.string().regex(/^[a-z]{2}-[A-Z]{2}$/).default('en-US'),
 }).strict();
 const activateQuestionSchema = z.object({ version: z.number().int().positive() }).strict();
+const governanceReviewSchema = z.object({
+  role: z.enum(RECOMMENDATION_REVIEW_ROLES),
+  decision: z.enum(['APPROVED', 'REJECTED']),
+  notes: z.string().trim().min(1).max(2000).nullable().optional(),
+}).strict();
 const qualityQuerySchema = z.object({
   windowDays: z.coerce.number().int().min(1).max(365).default(30),
 });
@@ -159,14 +166,53 @@ export async function activateDefinitionBundleHandler(req: AuthRequest, res: Res
     res.json({ success: true, data });
   } catch (err) {
     if (err instanceof PersonalizationCatalogActivationError) {
-      res.status(404).json({
+      res.status(err.code === 'GOVERNANCE_NOT_READY' ? 409 : 404).json({
         success: false,
-        error: { code: err.code, message: 'Definition, rule, or content version not found' },
+        error: {
+          code: err.code,
+          message: err.code === 'GOVERNANCE_NOT_READY'
+            ? 'Tier-specific governance review is incomplete'
+            : 'Definition, rule, or content version not found',
+          details: err.details,
+        },
       });
       return;
     }
     logger.error({ err, definitionCode: code.data }, '[ADMIN-PERSONALIZATION] Failed to activate bundle');
     res.status(500).json({ success: false, error: { message: 'Failed to activate personalization bundle' } });
+  }
+}
+
+export async function recordGovernanceReviewHandler(req: AuthRequest, res: Response): Promise<void> {
+  const code = definitionCodeSchema.safeParse(req.params.code);
+  const body = governanceReviewSchema.safeParse(req.body);
+  if (!code.success || !body.success) {
+    res.status(400).json({ success: false, error: { message: 'Valid definition code, review role, and decision are required' } });
+    return;
+  }
+  try {
+    const data = await recordRecommendationGovernanceReview({
+      code: code.data,
+      reviewerUserId: req.user!.userId,
+      ...body.data,
+    });
+    res.json({ success: true, data });
+  } catch (err) {
+    if (err instanceof PersonalizationCatalogActivationError) {
+      res.status(err.code === 'GOVERNANCE_NOT_READY' ? 409 : 404).json({
+        success: false,
+        error: {
+          code: err.code,
+          message: err.code === 'GOVERNANCE_NOT_READY'
+            ? 'Definition trust metadata does not match the reviewed catalog contract'
+            : 'Definition not found',
+          details: err.details,
+        },
+      });
+      return;
+    }
+    logger.error({ err, definitionCode: code.data }, '[ADMIN-PERSONALIZATION] Failed to record governance review');
+    res.status(500).json({ success: false, error: { message: 'Failed to record governance review' } });
   }
 }
 

@@ -5,6 +5,7 @@ require('ts-node/register');
 
 function loadService({
   catalogDefinitions = [],
+  governanceReviews = ['PRODUCT', 'DOMAIN', 'TRUST', 'LEGAL_COMPLIANCE'],
 } = {}) {
   const writes = [];
   const audits = [];
@@ -41,7 +42,27 @@ function loadService({
               ? catalogDefinitions.filter((definition) => includedCodes.includes(definition.code))
               : catalogDefinitions;
           },
-          findUnique: async () => ({ id: 'def-1', rules: [{ id: 'rule-1' }], contentVersions: [{ id: 'content-1' }] }),
+          findUnique: async () => ({
+            id: 'def-1',
+            safetyTier: 'SAFETY_EMERGENCY',
+            governancePolicyVersion: 'phase4-v1',
+            rules: [{ id: 'rule-1' }],
+            contentVersions: [{ id: 'content-1' }],
+            governanceReviews: governanceReviews.map((role) => ({
+              role,
+              decision: 'APPROVED',
+              reviewerUserId: `reviewer-${role.toLowerCase()}`,
+              policyVersion: 'phase4-v1',
+              notes: null,
+              reviewedAt: new Date('2026-07-18T12:00:00.000Z'),
+            })),
+          }),
+        },
+        recommendationGovernanceReview: {
+          upsert: async (args) => {
+            writes.push(['governanceReview.upsert', args]);
+            return { id: 'review-1', ...args.create };
+          },
         },
         profileQuestion: {
           findUnique: async () => ({ id: 'question-1' }),
@@ -71,7 +92,7 @@ const activation = {
   reviewerUserId: 'reviewer-1',
 };
 
-test('one MFA reviewer activates a reviewed rule/content bundle transactionally', async () => {
+test('tier-reviewed rule/content bundle activates transactionally', async () => {
   const { activatePersonalizationDefinitionBundle, writes, audits } = loadService();
   const result = await activatePersonalizationDefinitionBundle(activation);
   assert.equal(result.status, 'ACTIVE');
@@ -80,7 +101,28 @@ test('one MFA reviewer activates a reviewed rule/content bundle transactionally'
   ]);
   assert.equal(writes[1][1].data.authoredBy, null);
   assert.equal(writes[1][1].data.reviewedBy, 'reviewer-1');
-  assert.deepEqual(audits[0].metadata, { ruleVersion: 1, contentVersion: 1, locale: 'en-US' });
+  assert.deepEqual(audits[0].metadata, {
+    ruleVersion: 1,
+    contentVersion: 1,
+    locale: 'en-US',
+    safetyTier: 'SAFETY_EMERGENCY',
+    governancePolicyVersion: 'phase4-v1',
+  });
+});
+
+test('records a role-specific governance decision and immutable audit event', async () => {
+  const { recordRecommendationGovernanceReview, writes, audits } = loadService();
+  const review = await recordRecommendationGovernanceReview({
+    code: 'smoke_co_detector_battery_check',
+    role: 'TRUST',
+    decision: 'APPROVED',
+    reviewerUserId: 'admin-trust',
+    notes: 'Conservative fallback and escalation reviewed.',
+  });
+  assert.equal(review.decision, 'APPROVED');
+  assert.equal(writes[0][0], 'governanceReview.upsert');
+  assert.equal(audits[0].action, 'PERSONALIZATION_GOVERNANCE_APPROVED');
+  assert.deepEqual(audits[0].metadata, { role: 'TRUST', policyVersion: 'phase4-v1', safetyTier: 'SAFETY_EMERGENCY' });
 });
 
 test('blocks activation of definitions without implemented application behavior', async () => {
@@ -90,6 +132,15 @@ test('blocks activation of definitions without implemented application behavior'
     (error) => error.code === 'NOT_FOUND',
   );
   assert.equal(planOnly.writes.length, 0);
+});
+
+test('blocks activation until all safety-tier review roles approve the current policy', async () => {
+  const pending = loadService({ governanceReviews: ['PRODUCT', 'DOMAIN'] });
+  await assert.rejects(
+    () => pending.activatePersonalizationDefinitionBundle(activation),
+    (error) => error.code === 'GOVERNANCE_NOT_READY' && error.details.missingRoles.includes('TRUST'),
+  );
+  assert.equal(pending.writes.length, 0);
 });
 
 test('activates a selected profile question version and retires an older active version', async () => {

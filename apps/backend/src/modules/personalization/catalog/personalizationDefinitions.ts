@@ -1,3 +1,5 @@
+import type { RecommendationGovernance, RecommendationSafetyTier } from '../../../productFramework/recommendationGovernance.contract';
+
 export type PersonalizationModule = 'DASHBOARD' | 'MAINTENANCE' | 'HEALTH';
 
 export interface PersonalizationDefinition {
@@ -9,6 +11,8 @@ export interface PersonalizationDefinition {
   reasonTemplateKey: string;
   defaultScore: number;
   safetyClass: 'ROUTINE' | 'SAFETY_SENSITIVE';
+  safetyTier: RecommendationSafetyTier;
+  governance: RecommendationGovernance;
   profileRanking?: {
     agingInPlaceBoost?: number;
     budgetSensitiveBoost?: number;
@@ -17,6 +21,44 @@ export interface PersonalizationDefinition {
   maintenanceTask: {
     assetType: string;
     priority: 'HIGH' | 'MEDIUM' | 'LOW';
+  };
+}
+
+const noCommercialAction: RecommendationGovernance['commercialDisclosure'] = {
+  involvesCommercialAction: false,
+  relationshipType: 'NONE',
+  compensationMayOccur: false,
+  rankingInfluenced: false,
+  summary: 'This recommendation does not rank a provider, product, financing option, or compensated offer.',
+  selectionCriteria: [],
+  nonCommercialAlternatives: [],
+};
+
+function routineGovernance(safetyTier: 'LOW_CONSEQUENCE' | 'MATERIAL_FINANCIAL'): RecommendationGovernance {
+  return {
+    safetyTier,
+    professionalBoundary: safetyTier === 'MATERIAL_FINANCIAL'
+      ? 'This planning prompt is not a quote, inspection, engineering opinion, or financial advice; verify scope and cost with a qualified professional.'
+      : null,
+    jurisdictionCheck: { status: 'NOT_REQUIRED', jurisdiction: null, checkedAt: null, source: null },
+    conservativeFallback: null,
+    emergencyEscalation: null,
+    commercialDisclosure: noCommercialAction,
+    reviewedBy: [],
+    policyVersion: 'phase4-v1',
+  };
+}
+
+function safetyGovernance(): RecommendationGovernance {
+  return {
+    safetyTier: 'SAFETY_EMERGENCY',
+    professionalBoundary: 'This is preventive guidance, not a safety diagnosis. Follow manufacturer instructions and use a qualified professional when the condition or required work is uncertain.',
+    jurisdictionCheck: { status: 'NOT_REQUIRED', jurisdiction: null, checkedAt: null, source: null },
+    conservativeFallback: 'Do not perform work that requires unsafe access, energized equipment, combustion-system changes, or activity beyond your experience.',
+    emergencyEscalation: 'If there is smoke, fire, a gas odor, active sparking, immediate danger, or symptoms of carbon-monoxide exposure, leave the area and contact emergency services or the appropriate utility from a safe location.',
+    commercialDisclosure: noCommercialAction,
+    reviewedBy: [],
+    policyVersion: 'phase4-v1',
   };
 }
 
@@ -30,6 +72,8 @@ export const PERSONALIZATION_DEFINITIONS: readonly PersonalizationDefinition[] =
     reasonTemplateKey: 'hvac_filter_overdue_reason',
     defaultScore: 60,
     safetyClass: 'ROUTINE',
+    safetyTier: 'LOW_CONSEQUENCE',
+    governance: routineGovernance('LOW_CONSEQUENCE'),
     profileRanking: { budgetSensitiveBoost: 6 },
     modules: ['DASHBOARD', 'MAINTENANCE', 'HEALTH'],
     maintenanceTask: { assetType: 'HVAC', priority: 'MEDIUM' },
@@ -43,6 +87,8 @@ export const PERSONALIZATION_DEFINITIONS: readonly PersonalizationDefinition[] =
     reasonTemplateKey: 'smoke_co_battery_check_due_reason',
     defaultScore: 75,
     safetyClass: 'SAFETY_SENSITIVE',
+    safetyTier: 'SAFETY_EMERGENCY',
+    governance: safetyGovernance(),
     modules: ['DASHBOARD', 'MAINTENANCE', 'HEALTH'],
     maintenanceTask: { assetType: 'SMOKE_CO_DETECTOR', priority: 'HIGH' },
   },
@@ -55,6 +101,8 @@ export const PERSONALIZATION_DEFINITIONS: readonly PersonalizationDefinition[] =
     reasonTemplateKey: 'dryer_vent_cleaning_due_reason',
     defaultScore: 70,
     safetyClass: 'SAFETY_SENSITIVE',
+    safetyTier: 'SAFETY_EMERGENCY',
+    governance: safetyGovernance(),
     modules: ['DASHBOARD', 'MAINTENANCE', 'HEALTH'],
     maintenanceTask: { assetType: 'DRYER', priority: 'HIGH' },
   },
@@ -67,6 +115,8 @@ export const PERSONALIZATION_DEFINITIONS: readonly PersonalizationDefinition[] =
     reasonTemplateKey: 'smoke_detectors_not_confirmed_reason',
     defaultScore: 90,
     safetyClass: 'SAFETY_SENSITIVE',
+    safetyTier: 'SAFETY_EMERGENCY',
+    governance: safetyGovernance(),
     modules: ['DASHBOARD', 'MAINTENANCE', 'HEALTH'],
     maintenanceTask: { assetType: 'SMOKE_DETECTOR', priority: 'HIGH' },
   },
@@ -79,6 +129,8 @@ export const PERSONALIZATION_DEFINITIONS: readonly PersonalizationDefinition[] =
     reasonTemplateKey: 'roof_age_review_due_reason',
     defaultScore: 64,
     safetyClass: 'ROUTINE',
+    safetyTier: 'MATERIAL_FINANCIAL',
+    governance: routineGovernance('MATERIAL_FINANCIAL'),
     profileRanking: { agingInPlaceBoost: 5 },
     modules: ['DASHBOARD', 'MAINTENANCE', 'HEALTH'],
     maintenanceTask: { assetType: 'ROOF', priority: 'MEDIUM' },

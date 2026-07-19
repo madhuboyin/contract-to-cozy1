@@ -13,7 +13,9 @@ import {
   getPersonalizationAdminCatalog,
   getPersonalizationQuality,
   pausePersonalizationDefinition,
+  recordPersonalizationGovernanceReview,
   resumePersonalizationDefinition,
+  type RecommendationReviewRole,
 } from '@/lib/api/personalizationAdminApi';
 
 export default function PersonalizationAdminPage() {
@@ -66,6 +68,24 @@ export default function PersonalizationAdminPage() {
       : pausePersonalizationDefinition(code, 'Paused from personalization catalog admin'),
     onSuccess: refresh,
     onError: (error: Error) => toast({ title: 'Lifecycle update failed', description: error.message, variant: 'destructive' }),
+  });
+  const reviewGovernance = useMutation({
+    mutationFn: ({
+      code,
+      role,
+      decision,
+      notes,
+    }: {
+      code: string;
+      role: RecommendationReviewRole;
+      decision: 'APPROVED' | 'REJECTED';
+      notes?: string | null;
+    }) => recordPersonalizationGovernanceReview(code, { role, decision, notes }),
+    onSuccess: async () => {
+      await refresh();
+      toast({ title: 'Governance review recorded', description: 'Launch readiness has been recalculated for the current policy version.' });
+    },
+    onError: (error: Error) => toast({ title: 'Review failed', description: error.message, variant: 'destructive' }),
   });
 
   if (guard.status !== 'ready') return guard.node;
@@ -146,6 +166,8 @@ export default function PersonalizationAdminPage() {
                     <div className="flex flex-wrap items-center gap-2">
                       <Badge>{definition.status}</Badge>
                       <Badge variant="outline">{definition.safetyClass}</Badge>
+                      <Badge variant="outline">{definition.safetyTier.replaceAll('_', ' ')}</Badge>
+                      <Badge variant="outline">{definition.governancePolicyVersion}</Badge>
                       {!hasBundle ? <Badge variant="destructive">INCOMPLETE</Badge> : null}
                       {hasBundle && !bundleActive ? <Badge variant="secondary">READY FOR REVIEW</Badge> : null}
                       {bundleActive ? <Badge variant="secondary">ACTIVE BUNDLE</Badge> : null}
@@ -157,6 +179,55 @@ export default function PersonalizationAdminPage() {
                   <CardContent className="space-y-3">
                     <p className="text-sm text-slate-600">Rule v{rule?.version ?? '—'} · {rule?.status ?? 'missing'} · Content v{content?.version ?? '—'} · {content?.status ?? 'missing'}</p>
 
+                    {definition.launchReadiness ? (
+                      <div className="space-y-2 rounded-xl border bg-slate-50 p-3">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-sm font-medium">Trust review</span>
+                          <Badge variant={definition.launchReadiness.ready ? 'default' : 'secondary'}>
+                            {definition.launchReadiness.ready ? 'READY' : 'REVIEW REQUIRED'}
+                          </Badge>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {definition.launchReadiness.requiredRoles.map((role) => {
+                            const approved = definition.launchReadiness!.approvedRoles.includes(role);
+                            const rejected = definition.governanceReviews.some((review) => review.role === role && review.decision === 'REJECTED' && review.policyVersion === definition.governancePolicyVersion);
+                            return (
+                              <div key={role} className="flex items-center gap-1 rounded-lg border bg-white px-2 py-1">
+                                <Badge variant={approved ? 'default' : rejected ? 'destructive' : 'outline'}>{role.replaceAll('_', ' ')}</Badge>
+                                {!approved ? (
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="ghost"
+                                    disabled={reviewGovernance.isPending}
+                                    onClick={() => reviewGovernance.mutate({ code: definition.code, role, decision: 'APPROVED', notes: 'Reviewed from the Phase 4 trust queue.' })}
+                                  >
+                                    Approve
+                                  </Button>
+                                ) : (
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="ghost"
+                                    disabled={reviewGovernance.isPending}
+                                    onClick={() => {
+                                      const notes = window.prompt('Reason for rejecting this approval?');
+                                      if (notes?.trim()) reviewGovernance.mutate({ code: definition.code, role, decision: 'REJECTED', notes: notes.trim() });
+                                    }}
+                                  >
+                                    Reject
+                                  </Button>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                        {!definition.launchReadiness.ready ? (
+                          <p className="text-xs text-slate-600">Activation remains blocked until every tier-required role approves the current governance policy.</p>
+                        ) : null}
+                      </div>
+                    ) : null}
+
                     {!hasBundle ? (
                       <p className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
                         This implemented definition is missing its rule or en-US content. Run the canonical catalog bootstrap before review.
@@ -167,7 +238,7 @@ export default function PersonalizationAdminPage() {
                       {hasBundle && !bundleActive ? (
                         <Button
                           type="button"
-                          disabled={!ready || activateDefinition.isPending}
+                          disabled={!ready || !definition.launchReadiness?.ready || activateDefinition.isPending}
                           onClick={() => {
                             const warning = definition.safetyClass === 'SAFETY_SENSITIVE'
                               ? `Activate safety-sensitive rule and content for ${definition.code}? Confirm that you reviewed both versions.`

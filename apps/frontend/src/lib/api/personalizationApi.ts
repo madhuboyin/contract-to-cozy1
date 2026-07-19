@@ -9,7 +9,20 @@ export interface PersonalizationRecommendation {
   confidence: number | null;
   firstEligibleAt: string;
   rankingReasons: string[];
-  definition: { code: string; category: string; targetModule: string };
+  definition: {
+    code: string;
+    category: string;
+    targetModule: string;
+    safetyTier: 'LOW_CONSEQUENCE' | 'MATERIAL_FINANCIAL' | 'REGULATED_COVERAGE' | 'SAFETY_EMERGENCY';
+    governancePolicyVersion: string;
+  };
+  governance: {
+    safetyTier: 'LOW_CONSEQUENCE' | 'MATERIAL_FINANCIAL' | 'REGULATED_COVERAGE' | 'SAFETY_EMERGENCY';
+    professionalBoundary: string | null;
+    conservativeFallback: string | null;
+    emergencyEscalation: string | null;
+    policyVersion: string;
+  } | null;
   explanations: Array<{
     headline: string;
     reasonCodes: Array<{ code: string; templateKey: string; params?: { message?: string; factSummary?: string } }>;
@@ -135,6 +148,13 @@ export interface ModuleRecommendation {
   score: number;
   priority: 'HIGH' | 'MEDIUM' | 'LOW';
   confidence: number | null;
+  governance: {
+    safetyTier: 'LOW_CONSEQUENCE' | 'MATERIAL_FINANCIAL' | 'REGULATED_COVERAGE' | 'SAFETY_EMERGENCY';
+    professionalBoundary: string | null;
+    conservativeFallback: string | null;
+    emergencyEscalation: string | null;
+    policyVersion: string;
+  };
   actions: Array<{ type: 'CONVERT_TO_TASK' | 'OPEN_MAINTENANCE'; label: string; enabled: boolean }>;
   expiresAt: string | null;
 }

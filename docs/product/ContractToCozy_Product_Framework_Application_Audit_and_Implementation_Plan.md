@@ -775,6 +775,8 @@ Steps 9–14 must adapt to repair versus replacement, DIY versus provider, cover
 
 **Objective:** Make recurring engagement useful, explainable, and governable.
 
+**Implementation status:** Increment 1 started July 18, 2026. Recommendation definitions now persist typed trust tiers and policy versions; the reviewed personalization catalog carries schema-validated professional boundaries and safety fallbacks; MFA-protected role attestations form an auditable review queue; and activation is blocked until tier-required approvals match the current policy. Generated personalization responses expose the trust boundary to homeowner surfaces. Notification policy, Grounded Ask, guidance-step tiers, failure contracts, incident operations, and quality reporting remain pending. No migration script is included. See `docs/product/phase4/README.md`.
+
 #### Trust tiers
 
 - Add `safetyTier` to recommendation definitions, guidance templates/steps, and generated actions.

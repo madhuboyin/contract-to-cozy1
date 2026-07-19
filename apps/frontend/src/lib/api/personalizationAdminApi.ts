@@ -5,9 +5,26 @@ export interface PersonalizationCatalogDefinition {
   code: string;
   category: string;
   safetyClass: string;
+  safetyTier: 'LOW_CONSEQUENCE' | 'MATERIAL_FINANCIAL' | 'REGULATED_COVERAGE' | 'SAFETY_EMERGENCY';
+  governancePolicyVersion: string;
   status: string;
   pausedAt: string | null;
   pauseReason: string | null;
+  governanceReviews: Array<{
+    role: RecommendationReviewRole;
+    decision: 'APPROVED' | 'REJECTED';
+    reviewerUserId: string;
+    policyVersion: string;
+    notes: string | null;
+    reviewedAt: string;
+  }>;
+  launchReadiness: {
+    ready: boolean;
+    requiredRoles: RecommendationReviewRole[];
+    approvedRoles: RecommendationReviewRole[];
+    missingRoles: RecommendationReviewRole[];
+    reasons: string[];
+  } | null;
   rules: Array<{
     version: number;
     status: string;
@@ -22,6 +39,8 @@ export interface PersonalizationCatalogDefinition {
     updatedAt: string;
   }>;
 }
+
+export type RecommendationReviewRole = 'PRODUCT' | 'DOMAIN' | 'TRUST' | 'LEGAL_COMPLIANCE' | 'COMMERCIAL_INTEGRITY';
 
 export interface PersonalizationCatalogQuestion {
   code: string;
@@ -84,6 +103,13 @@ export async function activatePersonalizationDefinition(
 
 export async function activatePersonalizationQuestion(code: string, version: number) {
   return (await api.post(`/api/admin/personalization/questions/${code}/activate`, { version })).data;
+}
+
+export async function recordPersonalizationGovernanceReview(
+  code: string,
+  payload: { role: RecommendationReviewRole; decision: 'APPROVED' | 'REJECTED'; notes?: string | null },
+) {
+  return (await api.post(`/api/admin/personalization/definitions/${code}/governance-reviews`, payload)).data;
 }
 
 export async function pausePersonalizationDefinition(code: string, reason: string) {

@@ -10,6 +10,7 @@ import { getNextEligibleQuestionForHousehold } from './getNextEligibleQuestionFo
 import type { PersonalizationCapabilities } from '../domain/capabilityPolicy';
 import { loadExplicitRankingPreferences } from '../infrastructure/profileRankingRepository';
 import { rankRecommendationsForOwner } from '../domain/profileRanking';
+import { findPersonalizationDefinition } from '../catalog/personalizationDefinitions';
 
 export async function getPersonalization(
   propertyId: string,
@@ -41,17 +42,27 @@ export async function getPersonalization(
       : Promise.resolve({ agingInPlace: null, budgetSensitive: null }),
   ]);
   const ranked = rankRecommendationsForOwner(storedRecommendations, preferences);
-  const recommendations = ranked.slice(0, 3).map(({ item: recommendation, score, priorityBand, rankingReasons }) => ({
-    ...recommendation,
-    score,
-    priorityBand,
-    rankingReasons,
-    explanations: recommendation.explanations.map((explanation) => ({
-      ...explanation,
-      evidenceJson: capabilities.canViewSensitiveEvidence ? explanation.evidenceJson : null,
-    })),
-    definition: { ...recommendation.definition, targetModule: 'Maintenance' },
-  }));
+  const recommendations = ranked.slice(0, 3).map(({ item: recommendation, score, priorityBand, rankingReasons }) => {
+    const catalogDefinition = findPersonalizationDefinition(recommendation.definition.code);
+    return {
+      ...recommendation,
+      score,
+      priorityBand,
+      rankingReasons,
+      explanations: recommendation.explanations.map((explanation) => ({
+        ...explanation,
+        evidenceJson: capabilities.canViewSensitiveEvidence ? explanation.evidenceJson : null,
+      })),
+      definition: { ...recommendation.definition, targetModule: 'Maintenance' },
+      governance: catalogDefinition ? {
+        safetyTier: catalogDefinition.governance.safetyTier,
+        professionalBoundary: catalogDefinition.governance.professionalBoundary,
+        conservativeFallback: catalogDefinition.governance.conservativeFallback,
+        emergencyEscalation: catalogDefinition.governance.emergencyEscalation,
+        policyVersion: catalogDefinition.governance.policyVersion,
+      } : null,
+    };
+  });
   return {
     available: true,
     profileEnabled: Boolean(household?.consentVersion),
