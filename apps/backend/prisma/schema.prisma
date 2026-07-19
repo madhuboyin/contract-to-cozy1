@@ -419,6 +419,12 @@ enum NewHomePilotDecision {
   HOLD
 }
 
+enum NewHomePilotAdmissionDecision {
+  PENDING
+  ADMITTED
+  REJECTED
+}
+
 enum NewHomeDocumentAvailability {
   NONE
   SOME
@@ -2177,13 +2183,19 @@ model NewHomePilotAssessment {
   estimatedAcquisitionCents Int?
   decision                  NewHomePilotDecision        @default(PENDING)
   decisionReasons           String[]                    @default([])
+  admissionDecision         NewHomePilotAdmissionDecision @default(PENDING)
+  admissionReasons          String[]                       @default([])
+  cohortKey                 String?
+  reviewedByUserId          String?
+  reviewedAt                DateTime?
   notes                     String?
   assessedByUserId          String
   assessedAt                DateTime                    @default(now())
   createdAt                 DateTime                    @default(now())
   updatedAt                 DateTime                    @updatedAt
 
-  @@index([decision, assessedAt])
+  @@index([decision, admissionDecision, assessedAt])
+  @@index([cohortKey, admissionDecision])
   @@map("new_home_pilot_assessments")
 }
 
@@ -13406,6 +13418,8 @@ model ProjectRecord {
   actualCostCents              Int?
   providerOutcome              String?
   recommendationOverridden     Boolean                    @default(false)
+  recommendationComprehensionConfirmed   Boolean          @default(false)
+  recommendationComprehensionConfirmedAt DateTime?
   verifiedAt                   DateTime?
   followUpDueAt                DateTime?
   followUpHealth               ProjectFollowUpHealth?

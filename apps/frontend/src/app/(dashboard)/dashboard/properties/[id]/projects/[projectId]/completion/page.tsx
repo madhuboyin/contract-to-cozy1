@@ -70,6 +70,7 @@ export default function CompletionPage() {
     replacementHorizonDate: '',
     followUpDate: '',
     recommendationOverridden: false,
+    recommendationComprehensionConfirmed: false,
   });
 
   const load = useCallback(async () => {
@@ -104,6 +105,7 @@ export default function CompletionPage() {
     e.preventDefault();
     if (verifiedSuccess && !ratingsComplete) { setError('All four provider ratings are required'); return; }
     if (verifiedSuccess && (!form.actualCost || Number(form.actualCost) < 0)) { setError('Final actual cost is required for verified closure'); return; }
+    if (verifiedSuccess && !form.recommendationComprehensionConfirmed) { setError('Confirm that you understood the recommendation, alternatives, and tradeoffs'); return; }
     setConfirming(true);
     setError(null);
     try {
@@ -118,6 +120,7 @@ export default function CompletionPage() {
         actualCostCents: form.actualCost ? Math.round(Number(form.actualCost) * 100) : undefined,
         providerOutcome: form.providerOutcome as 'SUCCESS' | 'PARTIAL' | 'FAILED' | 'NOT_APPLICABLE',
         recommendationOverridden: form.recommendationOverridden,
+        recommendationComprehensionConfirmed: form.recommendationComprehensionConfirmed,
         modelNumber: form.modelNumber.trim() || undefined,
         serialNumber: form.serialNumber.trim() || undefined,
         proofDocuments,
@@ -225,6 +228,7 @@ export default function CompletionPage() {
           <div className="grid grid-cols-2 gap-3"><div className="space-y-1.5"><Label htmlFor="modelNumber">Model number</Label><Input id="modelNumber" value={form.modelNumber} onChange={e => setForm(f => ({ ...f, modelNumber: e.target.value }))} /></div><div className="space-y-1.5"><Label htmlFor="serialNumber">Serial number</Label><Input id="serialNumber" value={form.serialNumber} onChange={e => setForm(f => ({ ...f, serialNumber: e.target.value }))} /></div></div>
           <div className="space-y-1.5"><Label htmlFor="exceptionSummary">Unresolved exception</Label><Textarea id="exceptionSummary" value={form.exceptionSummary} onChange={e => setForm(f => ({ ...f, exceptionSummary: e.target.value }))} rows={2} placeholder="Required when work is incomplete, failed, disputed, delayed, or unsafe." /></div>
           <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.recommendationOverridden} onChange={e => setForm(f => ({ ...f, recommendationOverridden: e.target.checked }))} /> The final choice overrode the recommendation</label>
+          <label className="flex items-start gap-2 text-sm"><input className="mt-1" type="checkbox" checked={form.recommendationComprehensionConfirmed} onChange={e => setForm(f => ({ ...f, recommendationComprehensionConfirmed: e.target.checked }))} /> I understood the recommendation, alternatives, material tradeoffs, and why this path was selected.</label>
 
           <div className="space-y-1.5">
             <Label htmlFor="actualEnd">Actual completion date</Label>

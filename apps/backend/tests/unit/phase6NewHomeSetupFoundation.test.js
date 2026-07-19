@@ -45,6 +45,8 @@ test('schema creates a property-scoped pilot, plan, and responsibility-bearing t
   assert.match(schema, /model NewHomeSetupTask/);
   assert.match(schema, /responsibility\s+NewHomeResponsibility/);
   assert.match(schema, /@@unique\(\[planId, actionKey\]\)/);
+  assert.match(schema, /admissionDecision\s+NewHomePilotAdmissionDecision/);
+  assert.match(schema, /reviewedByUserId\s+String\?/);
 });
 
 test('service enforces new-construction context and the selective pilot gate', () => {
@@ -52,6 +54,7 @@ test('service enforces new-construction context and the selective pilot gate', (
   assert.match(service, /entryPath === 'NEW_HOME_SETUP'/);
   assert.match(service, /propertyOrigin === 'NEW_CONSTRUCTION'/);
   assert.match(service, /assessment\.decision !== 'ELIGIBLE'/);
+  assert.match(service, /assessment\.admissionDecision !== 'ADMITTED'/);
   assert.match(service, /LOW_DEMAND_SIGNAL/);
   assert.match(service, /LOW_ENGAGEMENT_INTENT/);
 });
@@ -85,12 +88,13 @@ test('completion increment implements detailed rights, evidence, inspection, and
   const routes = read('../../src/routes/newHomeSetup.routes.ts');
   const homeFeed = read('../../src/services/homeActions.service.ts');
   const metrics = read('../../src/services/adminAnalytics/phase6PilotService.ts');
+  const warrantyProcessor = read('../../src/services/newHomeWarrantyDeadline.service.ts');
   for (const model of ['NewHomePunchListItem', 'NewHomeBuilderResponse', 'NewHomeWarrantyRight', 'NewHomeSystemRegistration', 'NewHomeEvidenceRecord', 'NewHomeInspectionBundle']) {
     assert.match(read('../../prisma/schema.prisma'), new RegExp(`model ${model}`));
   }
   assert.match(service, /BUILDER_RESPONSE_AND_USER_VERIFICATION/);
   assert.match(service, /sourceCitation/);
-  assert.match(service, /NEW_HOME_WARRANTY_DEADLINE/);
+  assert.match(warrantyProcessor, /NEW_HOME_WARRANTY_DEADLINE/);
   assert.match(service, /verificationSource: input\.status === 'CONFIRMED' \? 'NEW_HOME_REGISTRATION'/);
   assert.match(service, /new-home-first-year-handoff/);
   assert.match(service, /homeEvent\.create/);
@@ -98,5 +102,32 @@ test('completion increment implements detailed rights, evidence, inspection, and
   assert.match(routes, /acceptance-status/);
   assert.match(homeFeed, /NewHomeSetupService\.ensureRecurringHandoff/);
   assert.match(metrics, /INSUFFICIENT_EVIDENCE/);
-  assert.match(metrics, /phase6-v1/);
+  assert.match(metrics, /phase6-v2/);
+  for (const criterion of ['milestoneCompletion', 'unresolvedBlockerHoursPerJourney', 'recommendationComprehension', 'verifiedOutcomeWriteBack', 'providerQualityVisibility', 'recurringCareConversion']) {
+    assert.match(metrics, new RegExp(criterion));
+  }
+});
+
+test('controlled expansion is operator admitted, monitored out of band, and database accepted', () => {
+  const adminRoutes = read('../../src/routes/adminAnalytics.routes.ts');
+  const warrantyProcessor = read('../../src/services/newHomeWarrantyDeadline.service.ts');
+  const worker = read('../../../workers/src/worker.ts');
+  const workerNotification = read('../../../workers/stubs/notification-service.ts');
+  const adminPage = read('../../../frontend/src/app/(dashboard)/dashboard/analytics-admin/page.tsx');
+  const newHomePage = read('../../../frontend/src/app/(dashboard)/dashboard/properties/[id]/new-home-plan/page.tsx');
+  const routePolicy = read('../../../frontend/scripts/product-framework/check-route-disposition.mjs');
+  const packageJson = JSON.parse(read('../../package.json'));
+
+  assert.match(adminRoutes, /phase6-pilot\/properties\/:propertyId\/admission/);
+  assert.match(adminRoutes, /SYSTEM_SETTINGS_MANAGE/);
+  assert.match(warrantyProcessor, /noticeDeadlineAt/);
+  assert.match(warrantyProcessor, /await NotificationService\.create[\s\S]+notifiedAt = now/);
+  assert.match(worker, /new-home-warranty-deadlines/);
+  assert.match(workerNotification, /prisma\.notification\.create/);
+  assert.match(workerNotification, /channel: 'IN_APP'/);
+  assert.match(adminPage, /Phase 6 controlled pilot and expansion gate/);
+  assert.match(newHomePage, /Builder response history|item\.responses/);
+  assert.match(newHomePage, /Inspection preparation bundles/);
+  assert.match(routePolicy, /new-home-plan/);
+  assert.equal(packageJson.scripts['acceptance:phase6'], 'node --test tests/integration/phase6NewHomeControlledPilot.db.test.js');
 });

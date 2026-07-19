@@ -326,6 +326,7 @@ test('Phase 3 pilot runs trigger through verified closure, replay, and follow-up
       serialNumber: `SERIAL-${runId}`,
       providerOutcome: 'COMPLETED_AS_AGREED',
       recommendationOverridden: false,
+      recommendationComprehensionConfirmed: true,
       contractorRatingQuality: 5,
       contractorRatingTimeline: 4,
       contractorRatingComms: 5,
@@ -457,6 +458,7 @@ test('Phase 3 pilot runs trigger through verified closure, replay, and follow-up
       }],
       providerOutcome: 'NOT_APPLICABLE',
       recommendationOverridden: false,
+      recommendationComprehensionConfirmed: false,
       contractorReviewText: 'Work stopped because the condition was unsafe.',
     });
     assert.equal(exceptionClosure.idempotentReplay, false);

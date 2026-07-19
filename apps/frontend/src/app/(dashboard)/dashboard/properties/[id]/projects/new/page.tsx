@@ -34,6 +34,7 @@ type ProjectFormState = {
   commercialRelationshipType: 'NONE' | 'SPONSORED' | 'REFERRAL_FEE' | 'COMMISSION' | 'OWNED' | 'AFFILIATE' | 'OTHER';
   commercialDisclosureSummary: string;
   nonCommercialAlternative: string;
+  recommendationComprehensionConfirmed: boolean;
 };
 
 export default function NewProjectPage() {
@@ -73,6 +74,7 @@ export default function NewProjectPage() {
     commercialRelationshipType: 'NONE',
     commercialDisclosureSummary: 'ContractToCozy does not influence this provider selection for compensation.',
     nonCommercialAlternative: 'Use a provider you find independently or complete the work yourself when appropriate.',
+    recommendationComprehensionConfirmed: false,
   });
 
   const set = (field: keyof ProjectFormState, value: string) =>
@@ -114,6 +116,7 @@ export default function NewProjectPage() {
     const amtCents = toInt(form.contractAmountCents);
     if (!amtCents || amtCents <= 0) { setError('Enter a valid contract amount'); return; }
     if (!form.startDate) { setError('Start date is required'); return; }
+    if (guidanceJourneyId && inventoryItemId && form.complexity === 'MINOR' && !form.recommendationComprehensionConfirmed) { setError('Confirm that you understood the recommendation, alternatives, and tradeoffs'); return; }
     if (!contextReady) {
       setContextInvoked(true);
       setResumeRequested(true);
@@ -143,6 +146,7 @@ export default function NewProjectPage() {
           commercialDisclosure,
           actualEndDate: form.startDate,
           actualCostCents: amtCents,
+          recommendationComprehensionConfirmed: true,
         });
         router.push(`/dashboard/properties/${propertyId}/projects`);
         return;
@@ -206,6 +210,7 @@ export default function NewProjectPage() {
         <MobileCard className="border-emerald-200 bg-emerald-50 text-emerald-900">
           <p className="text-sm font-semibold">Lightweight minor-work closure</p>
           <p className="mt-1 text-xs">Submitting records the verified work directly in the Living Home Record and advances future care without creating a full project tracker.</p>
+          <label className="mt-3 flex items-start gap-2 text-xs"><input className="mt-0.5" type="checkbox" checked={form.recommendationComprehensionConfirmed} onChange={event => setForm(current => ({ ...current, recommendationComprehensionConfirmed: event.target.checked }))} /> I understood the recommendation, alternatives, material tradeoffs, and why this path was selected.</label>
         </MobileCard>
       ) : null}
 

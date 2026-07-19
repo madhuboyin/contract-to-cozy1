@@ -19,6 +19,7 @@
     "smoke:health-score-ui": "node scripts/healthScoreUiSmokeCheck.js",
     "acceptance:phase8": "node scripts/phase8-runtime-acceptance.js",
     "acceptance:phase3": "node --test tests/integration/phase3VerifiedClosure.db.test.js",
+    "acceptance:phase6": "node --test tests/integration/phase6NewHomeControlledPilot.db.test.js",
     "lint:ssrf": "node scripts/check-ssrf-guards.js",
     "report:weekly": "ts-node scripts/weekly-retention-report.ts",
     "backfill:property-activation": "ts-node scripts/backfill-property-activation.ts",

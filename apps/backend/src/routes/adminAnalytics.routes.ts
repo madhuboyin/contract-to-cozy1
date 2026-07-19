@@ -24,6 +24,7 @@ import {
   getPhase1PilotHandler,
   getPhase5PilotHandler,
   getPhase6PilotHandler,
+  decidePhase6PilotAdmissionHandler,
   getCohortsHandler,
   getTopToolsHandler,
 } from '../controllers/adminAnalytics.controller';
@@ -168,6 +169,11 @@ router.get(
 );
 
 router.get('/admin/analytics/phase6-pilot', validate(OverviewQuerySchema), getPhase6PilotHandler);
+router.post(
+  '/admin/analytics/phase6-pilot/properties/:propertyId/admission',
+  requireCapability('SYSTEM_SETTINGS_MANAGE'),
+  decidePhase6PilotAdmissionHandler,
+);
 
 /**
  * @swagger

@@ -111,7 +111,7 @@ export const ROUTE_DISPOSITION_RULES = [
     id: 'plan-and-projects',
     disposition: 'MERGE_PLAN_PROJECTS',
     rationale: 'Stateful journeys, bookings, projects, claims, and major moments converge in Plan & Projects.',
-    matches: matches(/^\/dashboard\/(actions|bookings|resolution-center|moving-concierge)(?:\/|$)|^\/dashboard\/properties\/\[id\]\/(projects|claims|guidance|seller-prep)(?:\/|$)/),
+    matches: matches(/^\/dashboard\/(actions|bookings|resolution-center|moving-concierge)(?:\/|$)|^\/dashboard\/properties\/\[id\]\/(projects|claims|guidance|seller-prep|buyer-plan|new-home-plan)(?:\/|$)/),
   },
   {
     id: 'home-record',

@@ -138,6 +138,35 @@ export interface AdminPhase1PilotResponse {
   };
 }
 
+export interface AdminPhase6PilotResponse {
+  metricVersion: string;
+  period: { from: string; to: string };
+  cohort: { assessed: number; eligible: number; admitted: number; activatedPlans: number; qualificationRate: number; admissionRate: number; activationRate: number; averageAcquisitionCents: number };
+  admissionQueue: Array<{
+    propertyId: string;
+    qualificationDecision: 'PENDING' | 'ELIGIBLE' | 'HOLD';
+    qualificationReasons: string[];
+    admissionDecision: 'PENDING' | 'ADMITTED' | 'REJECTED';
+    admissionReasons: string[];
+    cohortKey: string | null;
+    assessedAt: string;
+    reviewedAt: string | null;
+    channelSource: string | null;
+    estimatedAcquisitionCents: number | null;
+  }>;
+  expansionGate: {
+    status: 'READY' | 'BLOCKED' | 'INSUFFICIENT_EVIDENCE';
+    expansionReady: boolean;
+    milestoneCompletion: { value: number; threshold: number; denominator: number };
+    unresolvedBlockerHoursPerJourney: { value: number; thresholdMaximum: number; denominator: number };
+    recommendationComprehension: { value: number; threshold: number; denominator: number };
+    verifiedOutcomeWriteBack: { value: number; threshold: number; denominator: number };
+    providerQualityVisibility: { value: number; threshold: number; denominator: number };
+    recurringCareConversion: { value: number; threshold: number; denominator: number };
+    sampleSize: { completedJourneys: number; minimumCompletedJourneys: number; providerJourneys: number; minimumProviderJourneys: number };
+  };
+}
+
 // ============================================================================
 // API FUNCTIONS
 // ============================================================================
@@ -227,5 +256,15 @@ export async function fetchAdminAnalyticsPhase1Pilot(
     '/api/admin/analytics/phase1-pilot',
     { params: buildParams(filters) },
   );
+  return response.data;
+}
+
+export async function fetchAdminAnalyticsPhase6Pilot(filters: AdminAnalyticsFilters): Promise<AdminPhase6PilotResponse> {
+  const response = await api.get<AdminPhase6PilotResponse>('/api/admin/analytics/phase6-pilot', { params: buildParams(filters) });
+  return response.data;
+}
+
+export async function decideAdminPhase6PilotAdmission(propertyId: string, input: { decision: 'ADMITTED' | 'REJECTED'; cohortKey?: string | null; reasons?: string[] }) {
+  const response = await api.post(`/api/admin/analytics/phase6-pilot/properties/${propertyId}/admission`, input);
   return response.data;
 }

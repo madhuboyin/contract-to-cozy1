@@ -63,6 +63,7 @@ test('verified closure requires durable verification while exception outcomes re
     unresolvedExceptions: [],
     actualCostCents: 142500,
     providerOutcome: 'SUCCESS',
+    recommendationComprehensionConfirmed: true,
   };
   assert.equal(ConfirmCompletionSchema.safeParse(verified).success, true);
   assert.equal(ConfirmCompletionSchema.safeParse({ ...verified, functionalVerificationResult: 'FAILED' }).success, false);
@@ -89,6 +90,7 @@ test('minor work can close the journey without creating a ProjectRecord', () => 
   const payload = {
     guidanceJourneyId: 'journey-1', inventoryItemId: 'item-1', title: 'Replace faucet cartridge',
     executionPath: 'REPAIR', fulfillmentMode: 'DIY', actualCostCents: 3500,
+    recommendationComprehensionConfirmed: true,
   };
   assert.equal(CompleteMinorWorkSchema.safeParse(payload).success, true);
   const service = read('../../src/services/projectTracker.service.ts');

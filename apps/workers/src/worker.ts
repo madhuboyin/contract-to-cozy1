@@ -63,6 +63,7 @@ import { reserveFundBalanceReminderJob } from './jobs/reserveFundBalanceReminder
 import { providerCredentialExpireJob } from './jobs/providerCredentialExpire.job';
 import { providerCredentialLapseJob } from './jobs/providerCredentialLapse.job';
 import { providerMissingCredentialSweepJob } from './jobs/providerMissingCredentialSweep.job';
+import { runNewHomeWarrantyDeadlineJob } from './jobs/newHomeWarrantyDeadline.job';
 import { JOB_REGISTRY } from '../../backend/src/config/workerJobRegistry';
 import { prisma } from './lib/prisma';
 import { HiddenAssetService } from '../../backend/src/services/hiddenAssets.service';
@@ -682,6 +683,7 @@ const CRON_HANDLERS: Record<string, () => Promise<void>> = {
   'maintenance-reminders':           async () => { await sendMaintenanceReminders(); },
   'daily-email-digest':              async () => { await runDailyEmailDigest(); },
   'weekly-home-brief-digest':        async () => { await runWeeklyHomeBriefDigest(); },
+  'new-home-warranty-deadlines':     async () => { await runNewHomeWarrantyDeadlineJob(); },
   'seasonal-checklist-expiration':   async () => { await expireSeasonalChecklists(); },
   'seasonal-checklist-generation':   async () => { await generateSeasonalChecklists(); },
   'seasonal-notifications':          async () => { await sendSeasonalNotifications(); },

@@ -1120,6 +1120,7 @@ export async function completeMinorWork(propertyId: string, userId: string, data
           providerName: data.providerName ?? null,
           providerRankingRationale: data.providerRankingRationale ?? null,
           commercialDisclosure: data.commercialDisclosure ?? null,
+          recommendationComprehensionConfirmed: data.recommendationComprehensionConfirmed,
           modelNumber: data.modelNumber ?? null,
           serialNumber: data.serialNumber ?? null,
         },
@@ -1130,6 +1131,16 @@ export async function completeMinorWork(propertyId: string, userId: string, data
         summary: data.notes,
         amount: new Prisma.Decimal(data.actualCostCents).div(100),
         sourceBadge: 'VERIFIED',
+        meta: {
+          executionPath: data.executionPath,
+          fulfillmentMode: data.fulfillmentMode,
+          providerName: data.providerName ?? null,
+          providerRankingRationale: data.providerRankingRationale ?? null,
+          commercialDisclosure: data.commercialDisclosure ?? null,
+          recommendationComprehensionConfirmed: data.recommendationComprehensionConfirmed,
+          modelNumber: data.modelNumber ?? null,
+          serialNumber: data.serialNumber ?? null,
+        },
       },
     });
 
@@ -1207,6 +1218,24 @@ export async function completeMinorWork(propertyId: string, userId: string, data
       });
       taskIds.push(task.id);
     }
+
+    await tx.homeEvent.update({
+      where: { id: event.id },
+      data: {
+        meta: {
+          executionPath: data.executionPath,
+          fulfillmentMode: data.fulfillmentMode,
+          providerName: data.providerName ?? null,
+          providerRankingRationale: data.providerRankingRationale ?? null,
+          commercialDisclosure: data.commercialDisclosure ?? null,
+          recommendationComprehensionConfirmed: data.recommendationComprehensionConfirmed,
+          recurringCareConverted: taskIds.length > 0,
+          futureCareTaskCount: taskIds.length,
+          modelNumber: data.modelNumber ?? null,
+          serialNumber: data.serialNumber ?? null,
+        },
+      },
+    });
 
     return { homeEventId: event.id, documentIds, futureCareTaskIds: taskIds, guidanceJourneyId: journey.id, inventoryItemId: item.id };
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
@@ -1296,6 +1325,8 @@ export async function confirmCompletion(projectId: string, propertyId: string, u
         actualCostCents: data.actualCostCents,
         providerOutcome: data.providerOutcome,
         recommendationOverridden: data.recommendationOverridden,
+        recommendationComprehensionConfirmed: data.recommendationComprehensionConfirmed,
+        recommendationComprehensionConfirmedAt: data.recommendationComprehensionConfirmed ? new Date() : null,
         verifiedAt: verifiedSuccess ? new Date() : null,
         followUpDueAt: data.followUpDate ? new Date(data.followUpDate) : undefined,
         contractorRatingQuality: data.contractorRatingQuality,

@@ -298,6 +298,7 @@ COPY apps/backend/src/services/taxAssessmentFetch.service.ts src/shared/backend/
 # and the lapse adapter are needed here; providerCredential.service.ts (CRUD,
 # submission) is only used by backend routes/controllers, not worker jobs.
 COPY apps/backend/src/services/providerCompliance.service.ts src/shared/backend/services/
+COPY apps/backend/src/services/newHomeWarrantyDeadline.service.ts src/shared/backend/services/
 COPY apps/backend/src/services/incidents/integrations/providerCredentialLapse.adapter.ts src/shared/backend/services/incidents/integrations/
 # Stubs: replace backend-only deps with workers-safe equivalents
 COPY apps/workers/stubs/error-middleware.ts src/shared/backend/middleware/error.middleware.ts
@@ -349,6 +350,9 @@ RUN sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/notification\.service/\.
     src/jobs/neighborhoodChangeNotification.job.ts \
     src/jobs/processDomainEvents.job.ts \
     src/recalls/recallFollowups.service.ts
+
+RUN sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/newHomeWarrantyDeadline\.service/\.\.\/shared\/backend\/services\/newHomeWarrantyDeadline.service/g' \
+    src/jobs/newHomeWarrantyDeadline.job.ts
 
 RUN sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/aggregationContext\/batch/\.\.\/shared\/backend\/services\/aggregationContext\/batch/g' \
     src/jobs/gazetteGeneration.job.ts src/services/aggregationDeliveryPolicy.ts

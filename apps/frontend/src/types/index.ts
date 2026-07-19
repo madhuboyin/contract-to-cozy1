@@ -2513,6 +2513,7 @@ export interface BuyerAcceptanceStatus {
 }
 
 export type NewHomePilotDecision = 'PENDING' | 'ELIGIBLE' | 'HOLD';
+export type NewHomePilotAdmissionDecision = 'PENDING' | 'ADMITTED' | 'REJECTED';
 export type NewHomeDocumentAvailability = 'NONE' | 'SOME' | 'COMPLETE';
 export type NewHomePlanPhase = 'WALKTHROUGH' | 'FIRST_30_DAYS' | 'DAYS_31_TO_90' | 'FIRST_YEAR' | 'RECURRING_HOME';
 export type NewHomeResponsibility = 'BUILDER' | 'HOMEOWNER' | 'SHARED' | 'UNKNOWN';
@@ -2528,6 +2529,11 @@ export interface NewHomePilotAssessment {
   estimatedAcquisitionCents: number | null;
   decision: NewHomePilotDecision;
   decisionReasons: string[];
+  admissionDecision: NewHomePilotAdmissionDecision;
+  admissionReasons: string[];
+  cohortKey: string | null;
+  reviewedByUserId: string | null;
+  reviewedAt: string | null;
   notes: string | null;
   assessedAt: string;
 }
@@ -2570,13 +2576,14 @@ export interface NewHomeSetupOverview {
     inventory: { total: number; modelAndSerialCaptured: number };
     inspections: number;
   };
-  punchList: Array<{ id: string; title: string; description: string | null; location: string | null; priority: BuyerPlanPriority; status: 'OPEN' | 'ACKNOWLEDGED' | 'SCHEDULED' | 'RESOLVED' | 'DISPUTED' | 'CLOSED'; promisedBy: string | null; builderContact: string | null; responses: Array<{ id: string; responseType: string; message: string | null; createdAt: string }> }>;
+  punchList: Array<{ id: string; title: string; description: string | null; location: string | null; priority: BuyerPlanPriority; status: 'OPEN' | 'ACKNOWLEDGED' | 'SCHEDULED' | 'RESOLVED' | 'DISPUTED' | 'CLOSED'; promisedBy: string | null; builderContact: string | null; responses: Array<{ id: string; responseType: 'COMMENT' | 'ACKNOWLEDGED' | 'SCHEDULED' | 'REJECTED' | 'RESOLVED'; message: string | null; promisedBy: string | null; createdAt: string }> }>;
   warrantyRights: Array<{ id: string; coverageTitle: string; coverageSummary: string; sourceCitation: string; expiresAt: string; noticeDeadlineAt: string | null; status: 'DRAFT' | 'VERIFIED' | 'NOTICE_DUE' | 'CLAIMED' | 'EXPIRED'; deadlineTaskId: string | null }>;
   registrations: Array<{ id: string; inventoryItemId: string; manufacturer: string; modelNumber: string; serialNumber: string; status: 'NOT_STARTED' | 'SUBMITTED' | 'CONFIRMED' | 'NOT_REQUIRED' }>;
   evidenceRecords: Array<{ id: string; evidenceType: string; label: string; sourceCitation: string | null; verifiedAt: string | null }>;
   inspectionBundles: Array<{ id: string; milestone: 'DAY_30' | 'DAY_90' | 'ONE_YEAR'; status: 'PREPARING' | 'READY' | 'COMPLETED'; dueAt: string; checklistJson: string[]; inspectionReportId: string | null }>;
   inventoryCandidates: Array<{ id: string; name: string; manufacturer: string | null; modelNumber: string | null; serialNumber: string | null }>;
   documentCandidates: Array<{ id: string; name: string; type: string; verificationStatus: string }>;
+  inspectionCandidates: Array<{ id: string; reportType: string; inspectionDate: string; status: string }>;
 }
 
 // -----------------------------------------------------------------------------
@@ -4900,6 +4907,8 @@ export interface ProjectRecord {
   actualCostCents?: number | null;
   providerOutcome?: string | null;
   recommendationOverridden?: boolean;
+  recommendationComprehensionConfirmed?: boolean;
+  recommendationComprehensionConfirmedAt?: string | null;
   verifiedAt?: string | null;
   followUpDueAt?: string | null;
   followUpHealth?: 'CONFIRMED_HEALTHY' | 'NEEDS_ATTENTION' | 'FAILED' | null;

@@ -4918,6 +4918,7 @@ class APIClient {
     };
     actualEndDate?: string;
     actualCostCents: number;
+    recommendationComprehensionConfirmed: true;
     notes?: string;
     proofDocuments?: Array<{ proofKey: string; documentId?: string; type: 'INVOICE' | 'PERMIT' | 'PHOTO' | 'OTHER'; name: string; fileUrl?: string; fileSize?: number; mimeType?: string; kind?: 'PHOTO' | 'RECEIPT' | 'INVOICE' | 'PDF' | 'BEFORE' | 'AFTER' | 'OTHER' }>;
   }): Promise<{ homeEventId: string }> {
@@ -5105,6 +5106,7 @@ class APIClient {
     actualCostCents?: number;
     providerOutcome: 'SUCCESS' | 'PARTIAL' | 'FAILED' | 'NOT_APPLICABLE';
     recommendationOverridden?: boolean;
+    recommendationComprehensionConfirmed: boolean;
     modelNumber?: string;
     serialNumber?: string;
     proofDocuments?: Array<{ proofKey: string; documentId?: string; type: 'INVOICE' | 'PERMIT' | 'PHOTO' | 'OTHER'; name: string; fileUrl?: string; fileSize?: number; mimeType?: string; kind?: 'PHOTO' | 'RECEIPT' | 'INVOICE' | 'PDF' | 'BEFORE' | 'AFTER' | 'OTHER' }>;

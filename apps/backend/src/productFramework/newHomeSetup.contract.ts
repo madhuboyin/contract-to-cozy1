@@ -20,6 +20,27 @@ export const NewHomePilotAssessmentInputSchema = z.object({
   notes: z.string().trim().max(2_000).nullable().optional(),
 });
 
+export const NewHomePilotAdmissionInputSchema = z.object({
+  decision: z.enum(['ADMITTED', 'REJECTED']),
+  cohortKey: z.string().trim().min(1).max(120).nullable().optional(),
+  reasons: z.array(z.string().trim().min(1).max(240)).max(20).default([]),
+}).superRefine((value, context) => {
+  if (value.decision === 'ADMITTED' && !value.cohortKey) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['cohortKey'],
+      message: 'An admitted property must be assigned to a controlled pilot cohort.',
+    });
+  }
+  if (value.decision === 'REJECTED' && value.reasons.length === 0) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['reasons'],
+      message: 'A rejected admission requires at least one reason.',
+    });
+  }
+});
+
 export const NewHomeLifecycleInputSchema = z.object({
   targetMoveInDate: z.string().datetime().nullable().optional(),
   ownershipStartedAt: z.string().datetime().nullable().optional(),
@@ -58,6 +79,10 @@ export const NewHomeBuilderResponseInputSchema = z.object({
   message: z.string().trim().max(2_000).nullable().optional(),
   promisedBy: z.string().datetime().nullable().optional(),
   verifyClosure: z.boolean().default(false),
+}).superRefine((value, context) => {
+  if (value.verifyClosure && value.responseType !== 'RESOLVED') {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ['verifyClosure'], message: 'Only a resolved builder response can be homeowner-verified.' });
+  }
 });
 
 export const NewHomeWarrantyRightInputSchema = z.object({

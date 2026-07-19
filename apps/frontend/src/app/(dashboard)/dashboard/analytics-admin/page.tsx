@@ -40,6 +40,7 @@ import {
   useAdminAnalyticsCohorts,
   useAdminAnalyticsTopTools,
   useAdminAnalyticsPhase1Pilot,
+  useAdminAnalyticsPhase6Pilot,
 } from '@/hooks/useAdminAnalytics';
 import AdminAnalyticsLineChart from '@/components/admin-analytics/AdminAnalyticsLineChart';
 import {
@@ -47,7 +48,7 @@ import {
   ChartSkeleton,
   TableSkeleton,
 } from '@/components/admin-analytics/AdminAnalyticsSkeleton';
-import type { AdminAnalyticsFilters } from '@/lib/api/adminAnalytics';
+import { decideAdminPhase6PilotAdmission, type AdminAnalyticsFilters } from '@/lib/api/adminAnalytics';
 import { AdminConsoleShell, AdminRouteState } from '@/components/ops/AdminConsoleShell';
 import { ScrollFadeX } from '@/components/ui/ScrollFadeX';
 
@@ -229,6 +230,40 @@ function Phase1PilotSection({
       </p>
     </Section>
   );
+}
+
+function Phase6PilotSection({ filters, enabled }: { filters: AdminAnalyticsFilters; enabled: boolean }) {
+  const pilotQ = useAdminAnalyticsPhase6Pilot(filters, enabled);
+  const [busyPropertyId, setBusyPropertyId] = useState<string | null>(null);
+
+  async function decide(propertyId: string, decision: 'ADMITTED' | 'REJECTED') {
+    const cohortKey = decision === 'ADMITTED' ? window.prompt('Controlled cohort key')?.trim() : null;
+    if (decision === 'ADMITTED' && !cohortKey) return;
+    const reason = decision === 'REJECTED' ? window.prompt('Admission rejection reason')?.trim() : '';
+    if (decision === 'REJECTED' && !reason) return;
+    setBusyPropertyId(propertyId);
+    try {
+      await decideAdminPhase6PilotAdmission(propertyId, { decision, cohortKey, reasons: reason ? [reason] : [] });
+      await pilotQ.refetch();
+    } finally { setBusyPropertyId(null); }
+  }
+
+  if (pilotQ.isLoading) return <OverviewCardsSkeleton />;
+  if (pilotQ.isError || !pilotQ.data) return <ErrorBanner message="Phase 6 pilot controls are unavailable." />;
+  const gate = pilotQ.data.expansionGate;
+  const criteria = [
+    ['Milestone completion', gate.milestoneCompletion.value, gate.milestoneCompletion.threshold],
+    ['Recommendation comprehension', gate.recommendationComprehension.value, gate.recommendationComprehension.threshold],
+    ['Verified outcome write-back', gate.verifiedOutcomeWriteBack.value, gate.verifiedOutcomeWriteBack.threshold],
+    ['Provider quality visibility', gate.providerQualityVisibility.value, gate.providerQualityVisibility.threshold],
+    ['Recurring-care conversion', gate.recurringCareConversion.value, gate.recurringCareConversion.threshold],
+  ] as const;
+  return <Section title="Phase 6 controlled pilot and expansion gate" description="Operator admission and all six evidence requirements must pass before expansion." icon={Layers}>
+    <div className="mb-4 grid gap-3 sm:grid-cols-4"><OverviewCard label="Qualified" value={pilotQ.data.cohort.eligible} /><OverviewCard label="Admitted" value={pilotQ.data.cohort.admitted} /><OverviewCard label="Activated" value={pilotQ.data.cohort.activatedPlans} /><OverviewCard label="Expansion" value={gate.status.replace(/_/g, ' ')} /></div>
+    <div className="mb-5 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{criteria.map(([label, value, threshold]) => <div key={label} className="rounded-xl border p-3 text-sm"><p className="font-medium">{label}</p><p className="text-slate-500">{pct(value)} · target {pct(threshold)}</p></div>)}<div className="rounded-xl border p-3 text-sm"><p className="font-medium">Unresolved blocker time</p><p className="text-slate-500">{dec(gate.unresolvedBlockerHoursPerJourney.value)} hours/journey · max {gate.unresolvedBlockerHoursPerJourney.thresholdMaximum}</p></div></div>
+    <p className="mb-3 text-xs text-slate-500">Evidence floor: {gate.sampleSize.completedJourneys}/{gate.sampleSize.minimumCompletedJourneys} completed journeys and {gate.sampleSize.providerJourneys}/{gate.sampleSize.minimumProviderJourneys} provider journeys.</p>
+    <div className="space-y-2">{pilotQ.data.admissionQueue.map(item => <div key={item.propertyId} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border p-3"><div><p className="font-mono text-xs">{item.propertyId}</p><p className="text-xs text-slate-500">{item.qualificationDecision} · {item.admissionDecision}{item.cohortKey ? ` · ${item.cohortKey}` : ''}</p></div>{item.qualificationDecision === 'ELIGIBLE' && item.admissionDecision !== 'ADMITTED' && <div className="flex gap-2"><Button size="sm" disabled={busyPropertyId === item.propertyId} onClick={() => void decide(item.propertyId, 'ADMITTED')}>Admit</Button><Button size="sm" variant="outline" disabled={busyPropertyId === item.propertyId} onClick={() => void decide(item.propertyId, 'REJECTED')}>Reject</Button></div>}</div>)}</div>
+  </Section>;
 }
 
 // ============================================================================
@@ -1279,6 +1314,8 @@ export default function AnalyticsAdminPage() {
           enabled={isAdmin}
           key={`phase1-pilot-${refreshKey}`}
         />
+
+        <Phase6PilotSection filters={filters} enabled={isAdmin} key={`phase6-pilot-${refreshKey}`} />
 
         {/* ── Trends ── */}
         <TrendsSection filters={filters} enabled={isAdmin} key={`trends-${refreshKey}`} />

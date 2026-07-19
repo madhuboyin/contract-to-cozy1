@@ -287,6 +287,7 @@ export const ConfirmCompletionSchema = z.object({
   actualCostCents: z.number().int().min(0).optional(),
   providerOutcome: z.enum(['SUCCESS', 'PARTIAL', 'FAILED', 'NOT_APPLICABLE']),
   recommendationOverridden: z.boolean().default(false),
+  recommendationComprehensionConfirmed: z.boolean().default(false),
   modelNumber: z.string().max(200).optional(),
   serialNumber: z.string().max(200).optional(),
   proofDocuments: z.array(z.object({
@@ -313,6 +314,9 @@ export const ConfirmCompletionSchema = z.object({
   followUpDate: z.string().date().optional(),
 }).superRefine((value, ctx) => {
   if (value.outcomeStatus !== 'VERIFIED_SUCCESS') return;
+  if (!value.recommendationComprehensionConfirmed) {
+    ctx.addIssue({ code: 'custom', path: ['recommendationComprehensionConfirmed'], message: 'Confirm that the recommendation, alternatives, and material tradeoffs were understood.' });
+  }
   if (value.functionalVerificationResult !== 'PASSED') {
     ctx.addIssue({ code: 'custom', path: ['functionalVerificationResult'], message: 'Verified closure requires a passed functional check.' });
   }
@@ -340,6 +344,7 @@ export const CompleteMinorWorkSchema = z.object({
   commercialDisclosure: CommercialDisclosureSchema.optional(),
   actualEndDate: z.string().date().optional(),
   actualCostCents: z.number().int().min(0),
+  recommendationComprehensionConfirmed: z.literal(true),
   notes: z.string().max(2000).optional(),
   modelNumber: z.string().max(200).optional(),
   serialNumber: z.string().max(200).optional(),

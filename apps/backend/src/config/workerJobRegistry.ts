@@ -161,6 +161,18 @@ export const JOB_REGISTRY: JobRegistryEntry[] = [
     triggerSupported: true,
   },
   {
+    key: 'new-home-warranty-deadlines',
+    name: 'New-home Warranty Deadlines',
+    description: 'Promotes verified builder and manufacturer warranty notice deadlines into canonical tasks and governed notifications.',
+    category: 'MAINTENANCE',
+    schedule: 'Daily at 8:30 AM EST',
+    cronExpression: '30 8 * * *',
+    type: 'cron',
+    queueName: 'cron-trigger-queue',
+    jobName: 'new-home-warranty-deadlines',
+    triggerSupported: true,
+  },
+  {
     key: 'seasonal-checklist-generation',
     name: 'Seasonal Checklist Generation',
     description:

@@ -19,7 +19,7 @@ import {
   NewHomeEvidenceInput,
 } from '../productFramework/newHomeSetup.contract';
 import { resolvePropertyAccess, ROLE_RANK } from './propertyAccess.service';
-import { NotificationService } from './notification.service';
+import { processNewHomeWarrantyDeadlines } from './newHomeWarrantyDeadline.service';
 
 const DAY_MS = 86_400_000;
 
@@ -122,6 +122,11 @@ export class NewHomeSetupService {
         ...input,
         decision: qualification.decision,
         decisionReasons: qualification.reasons,
+        admissionDecision: 'PENDING',
+        admissionReasons: [],
+        cohortKey: null,
+        reviewedByUserId: null,
+        reviewedAt: null,
         assessedByUserId: userId,
         assessedAt: new Date(),
       },
@@ -130,8 +135,7 @@ export class NewHomeSetupService {
 
   static async getOverview(userId: string, propertyId: string) {
     await this.assertContext(userId, propertyId, 'VIEWER');
-    await this.promoteWarrantyDeadlines(propertyId).catch(() => null);
-    const [assessment, plan, documentTotal, verifiedDocuments, warranties, inventory, identifiedInventory, inspections, punchList, warrantyRights, registrations, evidenceRecords, inspectionBundles, inventoryCandidates, documentCandidates] = await Promise.all([
+    const [assessment, plan, documentTotal, verifiedDocuments, warranties, inventory, identifiedInventory, inspections, punchList, warrantyRights, registrations, evidenceRecords, inspectionBundles, inventoryCandidates, documentCandidates, inspectionCandidates] = await Promise.all([
       prisma.newHomePilotAssessment.findUnique({ where: { propertyId } }),
       prisma.newHomeSetupPlan.findUnique({
         where: { propertyId },
@@ -158,6 +162,7 @@ export class NewHomeSetupService {
       prisma.newHomeInspectionBundle.findMany({ where: { propertyId }, orderBy: { dueAt: 'asc' } }),
       prisma.inventoryItem.findMany({ where: { propertyId }, select: { id: true, name: true, manufacturer: true, modelNumber: true, serialNumber: true }, orderBy: { name: 'asc' } }),
       prisma.document.findMany({ where: { propertyId }, select: { id: true, name: true, type: true, verificationStatus: true }, orderBy: { createdAt: 'desc' } }),
+      prisma.inspectionReport.findMany({ where: { propertyId, status: { not: 'ARCHIVED' } }, select: { id: true, reportType: true, inspectionDate: true, status: true }, orderBy: { inspectionDate: 'desc' } }),
     ]);
     return {
       assessment,
@@ -175,15 +180,16 @@ export class NewHomeSetupService {
       inspectionBundles,
       inventoryCandidates,
       documentCandidates,
+      inspectionCandidates,
     };
   }
 
   static async getOrCreatePlan(userId: string, propertyId: string) {
     await this.assertContext(userId, propertyId);
     const assessment = await prisma.newHomePilotAssessment.findUnique({ where: { propertyId } });
-    if (!assessment || assessment.decision !== 'ELIGIBLE') {
+    if (!assessment || assessment.decision !== 'ELIGIBLE' || assessment.admissionDecision !== 'ADMITTED') {
       throw new APIError(
-        'Complete the new-home pilot assessment and meet the selective pilot gate before creating a plan.',
+        'Complete the new-home pilot assessment and receive operator admission into a controlled cohort before creating a plan.',
         409,
         'NEW_HOME_PILOT_GATE_REQUIRED',
       );
@@ -414,23 +420,7 @@ export class NewHomeSetupService {
   }
 
   static async promoteWarrantyDeadlines(propertyId: string, now = new Date()) {
-    const rights = await prisma.newHomeWarrantyRight.findMany({
-      where: { propertyId, status: { in: ['VERIFIED', 'NOTICE_DUE'] }, expiresAt: { gte: now, lte: new Date(now.getTime() + 90 * DAY_MS) } },
-    });
-    const property = await prisma.property.findUnique({ where: { id: propertyId }, select: { homeownerProfile: { select: { userId: true } } } });
-    for (const right of rights) {
-      const dueAt = right.noticeDeadlineAt ?? right.expiresAt;
-      const task = await prisma.propertyMaintenanceTask.upsert({
-        where: { propertyId_actionKey: { propertyId, actionKey: `new-home:warranty-deadline:${right.id}` } },
-        create: { propertyId, title: `Protect warranty right: ${right.coverageTitle}`, description: `${right.coverageSummary}\nNotice: ${right.noticeMethod ?? 'Review source terms'}\nSource: ${right.sourceCitation}`, source: 'WARRANTY_RENEWAL', actionKey: `new-home:warranty-deadline:${right.id}`, priority: dueAt.getTime() - now.getTime() <= 30 * DAY_MS ? 'URGENT' : 'HIGH', nextDueDate: dueAt, assetType: 'NEW_HOME_WARRANTY_RIGHT', category: 'WARRANTY' },
-        update: { nextDueDate: dueAt },
-      });
-      if (!right.notifiedAt && property?.homeownerProfile.userId) {
-        await NotificationService.create({ userId: property.homeownerProfile.userId, type: 'NEW_HOME_WARRANTY_DEADLINE', title: `Warranty deadline: ${right.coverageTitle}`, message: `Review notice requirements before ${dueAt.toLocaleDateString()}.`, actionUrl: `/dashboard/properties/${propertyId}/new-home-plan`, entityType: 'NEW_HOME_WARRANTY_RIGHT', entityId: right.id, category: 'MATERIAL_DEADLINE', urgency: 'MATERIAL', metadata: { propertyId, actionKey: task.actionKey, sourceCitation: right.sourceCitation } });
-      }
-      await prisma.newHomeWarrantyRight.update({ where: { id: right.id }, data: { status: 'NOTICE_DUE', deadlineTaskId: task.id, notifiedAt: right.notifiedAt ?? new Date() } });
-    }
-    return { promoted: rights.length };
+    return processNewHomeWarrantyDeadlines({ propertyId, now });
   }
 
   static async upsertRegistration(userId: string, propertyId: string, input: NewHomeRegistrationInput) {
