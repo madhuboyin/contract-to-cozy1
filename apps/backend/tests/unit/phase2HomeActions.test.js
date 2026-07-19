@@ -11,6 +11,7 @@ const {
   rankAndDeduplicateHomeActions,
   scoreHomeAction,
 } = require('../../src/services/homeActions.service.ts');
+const { adaptOrchestratedActionToHomeAction } = require('../../src/services/orchestration.service.ts');
 const router = require('../../src/routes/homeActions.routes.ts').default;
 const { propertyAuthMiddleware } = require('../../src/middleware/propertyAuth.middleware.ts');
 
@@ -51,6 +52,42 @@ test('canonical feed surfaces one winner for duplicate cross-source signals and 
   assert.equal(result[0].id, 'higher');
   assert.deepEqual(result[0].deduplication.mergedActionIds, ['lower']);
   assert.deepEqual(result.map((item) => item.ranking.rank), [1, 2]);
+});
+
+test('orchestration percentages are normalized for Home Action evidence and confidence', () => {
+  const baseAction = {
+    id: 'checklist-action',
+    actionKey: 'maintenance:filter',
+    source: 'CHECKLIST',
+    propertyId: 'property-1',
+    title: 'Replace the HVAC filter',
+    description: 'The recurring filter task is due.',
+    checklistItemId: 'checklist-item-1',
+    status: 'PENDING',
+    nextDueDate: new Date('2026-08-01T12:00:00.000Z'),
+    isRecurring: true,
+    serviceCategory: null,
+    coverage: { hasCoverage: false, type: 'NONE', expiresOn: null },
+    confidence: { score: 80, level: 'HIGH', explanation: ['Task is due'] },
+    cta: { show: true, label: 'Review task', reason: 'ACTION_REQUIRED' },
+    suppression: { suppressed: false, reasons: [] },
+    signalSources: [],
+    primarySignalSource: null,
+    priority: 75,
+    overdue: false,
+    createdAt: new Date('2026-07-01T12:00:00.000Z'),
+  };
+
+  const percentage = adaptOrchestratedActionToHomeAction(baseAction);
+  assert.equal(percentage.evidence[0].confidence, 0.8);
+  assert.equal(percentage.confidence.score, 0.8);
+
+  const ratio = adaptOrchestratedActionToHomeAction({
+    ...baseAction,
+    confidence: { ...baseAction.confidence, score: 0.82 },
+  });
+  assert.equal(ratio.evidence[0].confidence, 0.82);
+  assert.equal(ratio.confidence.score, 0.82);
 });
 
 test('canonical lifecycle commands require safe deferment and dismissal inputs', () => {

@@ -43,7 +43,11 @@ import { logger } from '../lib/logger';
 import { analyticsEmitter, AnalyticsModule, emitHomeActionsSurfaced } from './analytics';
 import { getAggregationContextEnvelope } from './aggregationContext/context';
 import { aggregationLifecycleIdentity } from './aggregationContext/lifecycle';
-import { adaptHomeActionSource, type HomeAction } from '../productFramework';
+import {
+  adaptHomeActionSource,
+  normalizeHomeActionConfidenceScore,
+  type HomeAction,
+} from '../productFramework';
 
 
 type DerivedFrom = {
@@ -316,7 +320,7 @@ export function adaptOrchestratedActionToHomeAction(
   const sourceKind = action.source === 'CHECKLIST' ? 'MAINTENANCE' : 'SYSTEM';
   const dueAt = action.nextDueDate?.toISOString() ?? null;
   const observedAt = action.createdAt?.toISOString() ?? evaluatedAt.toISOString();
-  const confidenceScore = action.confidence?.score ?? null;
+  const confidenceScore = normalizeHomeActionConfidenceScore(action.confidence?.score);
 
   return adaptHomeActionSource(sourceKind, {
     id: action.actionKey,

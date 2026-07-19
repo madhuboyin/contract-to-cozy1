@@ -189,6 +189,19 @@ export const HomeActionSchema = z.object({
 
 export type HomeAction = z.infer<typeof HomeActionSchema>;
 
+/**
+ * Canonical Home Action confidence is a 0..1 ratio. Some legacy orchestration
+ * producers still expose a 0..100 percentage, so normalize only at their
+ * adapter boundary while preserving already-canonical ratios.
+ */
+export function normalizeHomeActionConfidenceScore(value: unknown): number | null {
+  if (value == null) return null;
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return null;
+  const ratio = numeric > 1 ? numeric / 100 : numeric;
+  return Math.max(0, Math.min(1, ratio));
+}
+
 export function parseHomeAction(input: unknown): HomeAction {
   return HomeActionSchema.parse(input);
 }
