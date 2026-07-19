@@ -11,9 +11,6 @@ import { cn } from '@/lib/utils';
 // [NEW IMPORT]
 import { usePropertyContext } from '@/lib/property/PropertyContext'; 
 
-// --- FEATURE FLAG CHECK ---
-const isChatEnabled = process.env.NEXT_PUBLIC_GEMINI_CHAT_ENABLED === 'true';
-
 function getWelcomeMessage(user: User | null): string {
     if (!user) {
         return "Hi! I'm Cozy. I see you're exploring. How can I help you today?";
@@ -598,10 +595,9 @@ const AIChatInner: React.FC = () => {
   );
 };
 
-export const AIChat: React.FC = () => {
-  if (!isChatEnabled) {
-    return null;
-  }
-
-  return <AIChatInner />;
-};
+// Always mount the client shell so dashboard Ask controls have a live event
+// target. The backend's runtime GEMINI_CHAT_ENABLED flag remains authoritative
+// and returns 403 when AI responses are disabled. Using a NEXT_PUBLIC build-time
+// flag here previously removed the listener from production bundles while the
+// dashboard continued to render clickable Ask controls.
+export const AIChat: React.FC = () => <AIChatInner />;

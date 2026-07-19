@@ -129,7 +129,7 @@ make deploy-pi        # Deploy to Raspberry Pi k3s cluster
 - **Validation:** Zod v4 schemas in `backend/src/utils/validators.ts`, applied as Express middleware via `validateBody(schema)`
 - **Error handling:** Centralized `errorHandler` middleware (must be last in Express chain)
 - **Rate limiting:** Separate limiters for auth, general API, OCR, and premium features
-- **Feature flags:** Environment-variable controlled (`NEXT_PUBLIC_FEATURE_*`, `NEXT_PUBLIC_GEMINI_CHAT_ENABLED`)
+- **Feature flags:** Environment-variable controlled (`NEXT_PUBLIC_FEATURE_*` for build-time UI flags; backend `GEMINI_CHAT_ENABLED` is the runtime authority for AI chat)
 - **AI integration:** Google Generative AI (Gemini) used for chat, appliance analysis, visual inspection, room insights, energy auditing
 - **Offline-first:** Frontend uses IndexedDB + service workers for offline capability; hooks like `useOnline` and `useGeolocation` integrate with PWA caching
 
