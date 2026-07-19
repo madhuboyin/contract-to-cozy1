@@ -1,6 +1,6 @@
 # Product Framework Phase 3 — Complete Major Repair / System Replacement
 
-Status: Increments 1–3 implemented; code-complete pending owner-applied database acceptance execution
+Status: Increments 1–3 and the operational acceptance harness are implemented; target-environment execution remains gated by explicit credentials
 
 Contract version: `phase3-v1`
 
@@ -61,15 +61,30 @@ Implemented:
 - Added follow-up health states for healthy, needs-attention, and failed outcomes.
 - Added follow-up health capture to the maintenance task drawer, project history, and analytics.
 - Created an urgent/high-priority remediation action when a follow-up reports a concern or failure.
-- Added a read-only database acceptance test that validates owner-applied Phase 3 columns, verified closure write-back integrity, and proof-key uniqueness.
+- Added a database acceptance test that validates owner-applied Phase 3 columns, verified closure write-back integrity, and proof-key uniqueness.
+
+## Operational acceptance harness
+
+Implemented:
+
+- Added an opt-in, self-cleaning database pilot gated by `PHASE3_ACCEPTANCE_DATABASE_URL`; it never falls back to the ordinary development database URL.
+- Creates isolated acceptance-only homeowner, property, inventory, provider, eligibility, service, booking, signal, journey, and project records.
+- Exercises the full 14-step asset-lifecycle journey from trigger through provider execution and verified closure.
+- Verifies HomeEvent, expense, warranty, inventory, material-spec, proof-document, provider-review, future-care, and audit write-backs against the real database.
+- Replays the same closure payload and proves that no write-back counts increase.
+- Verifies that an unsafe exception remains paused, high-importance, unverified, and free of success-only expense/write-back state.
+- Completes the scheduled follow-up as needs-attention and verifies project health plus remediation-task creation.
+- Removes the exact acceptance records after success or failure; no migration or seed script is created.
+- Added an independent, opt-in real object-storage smoke gated by `PHASE3_ACCEPTANCE_STORAGE=true`; it uploads, verifies, and deletes a uniquely named proof object.
+- Added `npm -C apps/backend run acceptance:phase3` as the canonical command.
 
 ## Remaining Phase 3 implementation
 
-### Remaining operational acceptance
+### Remaining target-environment execution
 
-- Apply the updated Prisma schema to the target database using the owner's reset/sync workflow.
-- Run the gated database acceptance test against that database. The test is intentionally skipped when `PHASE3_ACCEPTANCE_DATABASE_URL` is absent.
-- Exercise one real storage upload and one end-to-end trigger-to-follow-up flow in the deployed environment after schema application.
+- Point `PHASE3_ACCEPTANCE_DATABASE_URL` at the database where the updated schema was applied, then run the acceptance command. The test intentionally skips database mutation when this dedicated variable is absent.
+- Set the deployed storage credentials and `PHASE3_ACCEPTANCE_STORAGE=true` to exercise the real proof-object lifecycle. The storage smoke intentionally skips otherwise.
+- The repository's current local `.env` database at `127.0.0.1:5433` is not treated as the acceptance target unless explicitly supplied through `PHASE3_ACCEPTANCE_DATABASE_URL`.
 
 ## Validation
 
@@ -79,5 +94,6 @@ npm -C apps/backend run build
 npx tsc --noEmit -p apps/frontend/tsconfig.json
 node --test apps/backend/tests/unit/phase3MajorMoment.test.js
 npm -C apps/frontend run qa:product-framework:routes
-PHASE3_ACCEPTANCE_DATABASE_URL=postgresql://... node --test apps/backend/tests/integration/phase3VerifiedClosure.db.test.js
+PHASE3_ACCEPTANCE_DATABASE_URL=postgresql://... npm -C apps/backend run acceptance:phase3
+PHASE3_ACCEPTANCE_STORAGE=true S3_BUCKET=... S3_ACCESS_KEY_ID=... S3_SECRET_ACCESS_KEY=... npm -C apps/backend run acceptance:phase3
 ```

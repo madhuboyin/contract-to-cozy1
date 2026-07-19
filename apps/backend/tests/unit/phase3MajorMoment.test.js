@@ -172,6 +172,13 @@ test('database-backed acceptance is gated on the owner-applied schema and remain
   assert.match(acceptance, /PHASE3_ACCEPTANCE_DATABASE_URL/);
   assert.match(acceptance, /Verified closure has missing HomeEvent or expense write-back/);
   assert.match(acceptance, /Project proof idempotency keys are duplicated/);
+  assert.match(acceptance, /guidanceJourneyService\.ingestSignal/);
+  assert.match(acceptance, /projectTracker\.confirmCompletion/);
+  assert.match(acceptance, /idempotent replay must not duplicate write-backs/);
+  assert.match(acceptance, /outcomeStatus: 'UNSAFE'/);
+  assert.match(acceptance, /PHASE3_ACCEPTANCE_STORAGE/);
+  assert.match(acceptance, /PutObjectCommand/);
+  assert.doesNotMatch(acceptance, /PHASE3_ACCEPTANCE_DATABASE_URL \|\| process\.env\.DATABASE_URL/);
   const migrationRoot = path.resolve(__dirname, '../../prisma/migrations');
   assert.deepEqual(fs.readdirSync(migrationRoot).filter((entry) => /phase.?3/i.test(entry)), []);
 });
