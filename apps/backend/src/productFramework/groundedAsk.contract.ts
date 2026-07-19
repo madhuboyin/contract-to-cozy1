@@ -24,6 +24,35 @@ export const GroundedAskProposalInputSchema = z.object({
   if ((value.kind === 'ADD_FACT' || value.kind === 'CORRECT_FACT') && (typeof value.payload.factKey !== 'string' || !('value' in value.payload))) {
     ctx.addIssue({ code: 'custom', path: ['payload'], message: 'Fact proposals require factKey and value.' });
   }
+  if (value.kind === 'START_JOURNEY') {
+    if (value.payload.scopeCategory !== 'ITEM' && value.payload.scopeCategory !== 'SERVICE') {
+      ctx.addIssue({ code: 'custom', path: ['payload', 'scopeCategory'], message: 'Journey proposals require an ITEM or SERVICE scope.' });
+    }
+    for (const key of ['scopeId', 'issueType'] as const) {
+      if (typeof value.payload[key] !== 'string' || !value.payload[key].trim()) {
+        ctx.addIssue({ code: 'custom', path: ['payload', key], message: `Journey proposals require ${key}.` });
+      }
+    }
+    for (const key of ['inventoryItemId'] as const) {
+      if (value.payload[key] !== undefined && !z.string().uuid().safeParse(value.payload[key]).success) {
+        ctx.addIssue({ code: 'custom', path: ['payload', key], message: `${key} must be a UUID.` });
+      }
+    }
+  }
+  if (value.kind === 'COMPARE_OPTIONS') {
+    if (typeof value.payload.scopeSummary !== 'string' || value.payload.scopeSummary.trim().length < 3) {
+      ctx.addIssue({ code: 'custom', path: ['payload', 'scopeSummary'], message: 'Comparison proposals require a scope summary.' });
+    }
+    if (value.payload.inventoryItemId !== undefined && !z.string().uuid().safeParse(value.payload.inventoryItemId).success) {
+      ctx.addIssue({ code: 'custom', path: ['payload', 'inventoryItemId'], message: 'inventoryItemId must be a UUID.' });
+    }
+  }
+  if (value.kind === 'UPLOAD_EVIDENCE' && !z.string().uuid().safeParse(value.payload.documentId).success) {
+    ctx.addIssue({ code: 'custom', path: ['payload', 'documentId'], message: 'Evidence proposals require an uploaded documentId.' });
+  }
+  if (value.kind === 'ADD_NOTE' && (typeof value.payload.note !== 'string' || value.payload.note.trim().length < 3)) {
+    ctx.addIssue({ code: 'custom', path: ['payload', 'note'], message: 'Note proposals require note text.' });
+  }
 });
 
 export const GroundedAskResponseSchema = z.object({

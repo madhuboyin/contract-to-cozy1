@@ -19,7 +19,10 @@ dotenv.config();
 /**
  * A simple in-memory map to hold active chat sessions.
  */
-const chatSessions = new Map<string, Chat>();
+type ChatSessionEntry = { chat: Chat; lastUsedAt: number };
+const chatSessions = new Map<string, ChatSessionEntry>();
+const CHAT_SESSION_TTL_MS = 30 * 60 * 1000;
+const MAX_CHAT_SESSIONS = 500;
 
 const DEFAULT_AI_TIMEOUT_MS = Number(process.env.AI_TIMEOUT_MS || 10_000);
 const GEMINI_CHAT_TIMEOUT_MS = Number(process.env.GEMINI_CHAT_TIMEOUT_MS || DEFAULT_AI_TIMEOUT_MS);
@@ -46,9 +49,15 @@ class GeminiService {
   /**
    * Retrieves or creates a new chat session, optionally injecting property context.
    */
-  private getOrCreateChat(sessionId: string, propertyContext?: string): Chat { 
-    if (chatSessions.has(sessionId)) {
-      return chatSessions.get(sessionId)!;
+  private getOrCreateChat(sessionKey: string, propertyContext?: string): Chat {
+    const now = Date.now();
+    for (const [key, entry] of chatSessions) {
+      if (now - entry.lastUsedAt > CHAT_SESSION_TTL_MS) chatSessions.delete(key);
+    }
+    const existing = chatSessions.get(sessionKey);
+    if (existing) {
+      existing.lastUsedAt = now;
+      return existing.chat;
     }
 
     // CRITICAL FIX: Explicitly define the inverse scoring mechanism.
@@ -68,8 +77,12 @@ class GeminiService {
       }
     });
 
-    chatSessions.set(sessionId, chat);
-    logger.info(`New chat session created for: ${sessionId}. Personalized: ${!!propertyContext}`);
+    if (chatSessions.size >= MAX_CHAT_SESSIONS) {
+      const oldest = [...chatSessions.entries()].sort((left, right) => left[1].lastUsedAt - right[1].lastUsedAt)[0]?.[0];
+      if (oldest) chatSessions.delete(oldest);
+    }
+    chatSessions.set(sessionKey, { chat, lastUsedAt: now });
+    logger.info({ personalized: Boolean(propertyContext) }, 'New bounded chat session created');
     return chat;
   }
 
@@ -84,6 +97,7 @@ class GeminiService {
   ): Promise<string> {
     
     let propertyContext: string | undefined;
+    let contextVersion = 'GENERAL';
 
     if (propertyId) {
         const context = await getAggregationPropertyContext(propertyId, userId, 'SEARCH_ASSISTANT');
@@ -98,18 +112,21 @@ class GeminiService {
             missingFacts.push(key);
           }
         }
+        contextVersion = context.contextVersion;
         propertyContext = JSON.stringify({
           contextVersion: context.contextVersion,
           boundedFacts,
           usedFacts,
           missingFacts,
-          instruction: 'Use only these facts. Treat missing facts as unknown and do not infer optional household details.',
+          instruction: 'Use only these facts. Treat missing facts as unknown and do not infer optional household details. Cite every property-specific factual statement with [fact:FACT_KEY] using an exact key from usedFacts.',
         });
     }
 
     try {
-      // Pass the generated property context to the session creator
-      const chat = this.getOrCreateChat(sessionId, propertyContext);
+      // Property and context version are part of the key so changing the selected
+      // property, user, or Living Home Record snapshot can never reuse stale context.
+      const sessionKey = `${userId}:${sessionId}:${propertyId ?? 'GENERAL'}:${contextVersion}`;
+      const chat = this.getOrCreateChat(sessionKey, propertyContext);
 
       const response = await geminiChatCircuit.execute(async () =>
         withTimeout(

@@ -44,6 +44,11 @@ test('canonical notification policy supports scope, cadence, quiet hours, and ur
     category: 'ALL', channel: 'EMAIL', enabled: true, cadence: 'WEEKLY_BRIEF',
     quietStart: '21:00', quietEnd: '07:00', timezone: 'America/New_York',
   }).success, true);
+  for (const unsupportedChannel of ['PUSH', 'SMS', 'WHATSAPP', 'IN_APP']) {
+    assert.equal(NotificationPreferenceInputSchema.safeParse({
+      category: 'ALL', channel: unsupportedChannel, enabled: true, cadence: 'IMMEDIATE', timezone: 'UTC',
+    }).success, false, `${unsupportedChannel} must not be configurable during the pilot`);
+  }
 });
 
 test('all notification producers use the canonical service and homeowner controls are exposed', () => {
@@ -61,6 +66,8 @@ test('all notification producers use the canonical service and homeowner control
   }
   const page = source('../../../frontend/src/app/(dashboard)/dashboard/notifications/page.tsx');
   assert.match(page, /Weekly Home Brief/);
+  assert.match(page, /PREFERENCE_CATEGORIES/);
+  assert.match(page, /email is the only configurable external channel/i);
   assert.match(page, /Quiet hours start/);
   assert.match(page, /Mute type/);
   assert.match(page, /Already handled/);
@@ -83,8 +90,47 @@ test('Grounded Ask validates proposals and requires property context for materia
   assert.match(service, /knownFacts/);
   assert.match(service, /missingFacts/);
   assert.match(service, /groundedAskArtifact\.create/);
+  assert.match(service, /capturePropertyFact/);
+  assert.match(service, /createUserInitiatedJourney/);
+  assert.match(service, /quoteComparisonWorkspace\.create/);
+  assert.match(service, /tx\.document\.findFirst/);
+  assert.match(service, /proposal\.kind === 'ADD_NOTE'/);
+  assert.match(service, /ROLE_RANK\[access\.role\] < ROLE_RANK\.CONTRIBUTOR/);
   assert.match(chat, /Grounded in this home/);
   assert.match(chat, /window\.confirm/);
+  for (const action of ['Create task', 'Add missing fact', 'Correct fact', 'Start guided plan', 'Compare options', 'Attach evidence', 'Save note']) {
+    assert.match(chat, new RegExp(action));
+  }
+});
+
+test('Grounded Ask isolates model sessions by user, property, and context version', () => {
+  const gemini = source('../../src/services/gemini.service.ts');
+  const chat = source('../../../frontend/src/components/AIChat.tsx');
+  assert.match(gemini, /userId.*sessionId.*propertyId.*contextVersion/);
+  assert.match(gemini, /CHAT_SESSION_TTL_MS/);
+  assert.match(gemini, /\[fact:FACT_KEY\]/);
+  assert.match(chat, /previousPropertyIdRef/);
+  assert.match(chat, /setSessionId\(createChatSessionId\(\)\)/);
+});
+
+test('every Grounded Ask proposal kind has a validated execution payload', () => {
+  const propertyId = '11111111-1111-4111-8111-111111111111';
+  const documentId = '22222222-2222-4222-8222-222222222222';
+  const common = { sessionId: 'session-1', propertyId, summary: 'Confirmed proposal', evidence: [] };
+  const validPayloads = {
+    ADD_FACT: { factKey: 'core.yearBuilt', value: 2004 },
+    CORRECT_FACT: { factKey: 'core.yearBuilt', value: 2005 },
+    CREATE_TASK: { title: 'Inspect the roof' },
+    START_JOURNEY: { scopeCategory: 'SERVICE', scopeId: 'general_inspection', issueType: 'general_inspection', serviceKey: 'general_inspection' },
+    COMPARE_OPTIONS: { scopeSummary: 'Compare roof repair quotes' },
+    UPLOAD_EVIDENCE: { documentId },
+    ADD_NOTE: { note: 'The homeowner wants to revisit this next month.' },
+  };
+  for (const [kind, payload] of Object.entries(validPayloads)) {
+    assert.equal(GroundedAskProposalInputSchema.safeParse({ ...common, kind, payload }).success, true, kind);
+  }
+  assert.equal(GroundedAskProposalInputSchema.safeParse({ ...common, kind: 'UPLOAD_EVIDENCE', payload: {} }).success, false);
+  assert.equal(GroundedAskProposalInputSchema.safeParse({ ...common, kind: 'START_JOURNEY', payload: { scopeCategory: 'OTHER' } }).success, false);
 });
 
 test('remaining Phase 4 schema is greenfield and introduces no migration script', () => {

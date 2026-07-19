@@ -7,6 +7,10 @@ export const NOTIFICATION_CATEGORIES = [
 export const NOTIFICATION_URGENCIES = ['ROUTINE', 'MATERIAL', 'URGENT', 'CRITICAL'] as const;
 export const NOTIFICATION_CADENCES = ['IMMEDIATE', 'DAILY_DIGEST', 'WEEKLY_BRIEF', 'MUTED'] as const;
 export const NOTIFICATION_OUTCOMES = ['OPENED', 'USEFUL', 'NOT_USEFUL', 'MUTE_TYPE', 'NOT_RELEVANT', 'ALREADY_HANDLED'] as const;
+// Pilot policy: in-app delivery is mandatory and email is the only externally
+// configurable channel. Push/SMS/WhatsApp remain database capabilities until
+// a real provider and end-to-end delivery acceptance exist.
+export const PILOT_CONFIGURABLE_NOTIFICATION_CHANNELS = ['EMAIL'] as const;
 
 export const NotificationCategorySchema = z.enum(NOTIFICATION_CATEGORIES);
 export const NotificationUrgencySchema = z.enum(NOTIFICATION_URGENCIES);
@@ -22,7 +26,7 @@ export const NotificationPreferenceInputSchema = z.object({
   propertyId: z.string().uuid().nullable().optional(),
   memberUserId: z.string().uuid().nullable().optional(),
   category: NotificationCategorySchema,
-  channel: z.enum(['IN_APP', 'EMAIL', 'PUSH', 'SMS', 'WHATSAPP']),
+  channel: z.enum(PILOT_CONFIGURABLE_NOTIFICATION_CHANNELS),
   enabled: z.boolean(),
   cadence: NotificationCadenceSchema,
   quietStart: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).nullable().optional(),

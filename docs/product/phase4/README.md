@@ -1,6 +1,6 @@
 # Product Framework Phase 4 — Trust, Cadence, Grounded Ask, and Recurring Care
 
-Status: Code-complete through Increment 6; owner-applied database acceptance pending
+Status: Implementation-complete through Increment 7; owner-applied database acceptance and pilot validation pending
 
 Contract version: `phase4-v1`
 
@@ -94,12 +94,26 @@ Implemented:
 - Persists confirmed proposal artifacts and linked task identity while continuing not to persist raw chat by default.
 - Added a homeowner “Propose a task” interaction that creates a pending proposal, asks for confirmation, and records either confirmation or rejection.
 
+## Increment 7 — Pilot completion hardening
+
+Implemented:
+
+- Isolated every AI chat by user, client session, selected property, and Living Home Record context version; changing properties now starts a new visible conversation and stale property context cannot be reused.
+- Added bounded chat-session expiry and capacity controls.
+- Required exact Living Home Record fact citations for property-specific model statements and limited returned evidence/confidence to cited or question-relevant facts.
+- Added validated execution handlers for every Grounded Ask proposal kind: canonical fact capture/correction, idempotent task creation, user-initiated guidance journeys, quote-comparison workspaces, verified uploaded-document evidence, and durable notes.
+- Exposed all seven proposal kinds from the homeowner Ask surface through one confirmation interaction.
+- Kept every material execution confirmation-gated and linked it to one durable Ask artifact.
+- Restricted the pilot preference API and policy resolver to the actually supported In-App and Email delivery paths so Push, SMS, and WhatsApp cannot create misleading pending deliveries.
+- Added category-specific Email cadence and quiet-hour controls while explaining that In-App continuity alerts remain enabled.
+- Added a gated database-backed Phase 4 acceptance harness covering owner-applied schema presence, scoped preference resolution, digest routing state, notification outcomes, confirmed Ask actions, fact capture, comparison workspaces, and idempotent replay.
+
 ## Remaining Phase 4 execution
 
-No planned Phase 4 code increment remains. Because there are no real users, completion is code-complete rather than outcome-validated. The repository owner must:
+No planned Phase 4 code increment remains. Because there are no real users, completion is implementation-complete rather than outcome-validated. The repository owner must:
 
 - apply the current Prisma schema to the target database without a repository migration script;
-- run authenticated database-backed acceptance for notification preference resolution, digest separation, notification outcomes, grounded answers, and proposal confirmation;
+- run the gated database-backed acceptance harness against an isolated target database, then complete authenticated HTTP/browser acceptance for grounded answers and homeowner controls;
 - collect pilot evidence for notification noise/usefulness, recommendation calibration, incident resolution, and Ask trust before changing thresholds or enabling automated tuning.
 
 ## Validation
@@ -115,5 +129,6 @@ node --test apps/backend/tests/unit/phase4RecommendationIncidents.test.js
 node --test apps/backend/tests/unit/personalizationRecordRecommendationFeedback.test.js
 node --test apps/backend/tests/unit/personalizationQuality.test.js
 node --test apps/backend/tests/unit/phase4RemainingCompletion.test.js
+PHASE4_ACCEPTANCE_DATABASE_URL='postgresql://...' node --test apps/backend/tests/integration/phase4TrustCadenceGroundedAsk.db.test.js
 npx tsc --noEmit -p apps/workers/tsconfig.json
 ```

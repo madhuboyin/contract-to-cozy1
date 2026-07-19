@@ -9,6 +9,7 @@ import {
 } from '../productFramework/notificationPolicy.contract';
 
 const IMMEDIATE_CATEGORIES = new Set<NotificationCategory>(['SAFETY', 'ACTIVE_DAMAGE', 'MATERIAL_DEADLINE', 'WORKFLOW']);
+const PILOT_DELIVERY_CHANNELS = new Set<keyof typeof NotificationChannel>(['IN_APP', 'EMAIL']);
 
 export function inferNotificationCategory(type: string): NotificationCategory {
   const normalized = type.toUpperCase();
@@ -89,10 +90,11 @@ export async function resolveNotificationPolicy(input: {
   const channels = [...new Set([...channelDefaults, ...configuredChannels])].map((channel) => {
     const preference = preferences.find((candidate) => candidate.channel === channel);
     const critical = urgency === 'CRITICAL';
-    const enabled = critical && channel === 'IN_APP' ? true : preference?.enabled ?? channelDefaults.includes(channel);
+    const supported = PILOT_DELIVERY_CHANNELS.has(channel);
+    const enabled = supported && (critical && channel === 'IN_APP' ? true : preference?.enabled ?? channelDefaults.includes(channel));
     const cadence = (preference?.cadence ?? defaultCadence) as Cadence;
     const quiet = preference ? isQuietNow(preference, input.now ?? new Date()) : false;
-    return { channel, enabled: enabled && cadence !== 'MUTED', cadence, deliverImmediately: cadence === 'IMMEDIATE' && (!quiet || critical), quietHoursApplied: quiet && !critical };
+    return { channel, enabled: enabled && cadence !== 'MUTED', cadence, deliverImmediately: supported && cadence === 'IMMEDIATE' && (!quiet || critical), quietHoursApplied: quiet && !critical };
   });
   return { category, urgency, scopeKey: notificationScopeKey(input), channels };
 }

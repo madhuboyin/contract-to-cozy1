@@ -30,6 +30,19 @@ const SOURCE_BADGE_META: Record<string, { label: string }> = {
   EXTERNAL: { label: 'External' },
 };
 
+const PREFERENCE_CATEGORIES = [
+  { value: 'ALL', label: 'All routine email' },
+  { value: 'SAFETY', label: 'Safety' },
+  { value: 'ACTIVE_DAMAGE', label: 'Active damage' },
+  { value: 'MATERIAL_DEADLINE', label: 'Material deadlines' },
+  { value: 'WORKFLOW', label: 'Workflow changes' },
+  { value: 'MAINTENANCE', label: 'Maintenance' },
+  { value: 'COVERAGE', label: 'Coverage' },
+  { value: 'PROJECT', label: 'Projects' },
+  { value: 'RECALL', label: 'Recalls' },
+  { value: 'GENERAL', label: 'General updates' },
+] as const;
+
 function appendGuidanceContext(
   actionUrl: string,
   guidanceContext?: {
@@ -84,6 +97,7 @@ function renderSignalBadge(n: Notification) {
 
 export default function NotificationsPage() {
   const { notifications, markRead, markAllRead, refresh } = useNotifications();
+  const [selectedCategory, setSelectedCategory] = React.useState('ALL');
   const [cadence, setCadence] = React.useState('WEEKLY_BRIEF');
   const [quietStart, setQuietStart] = React.useState('21:00');
   const [quietEnd, setQuietEnd] = React.useState('07:00');
@@ -93,20 +107,26 @@ export default function NotificationsPage() {
     void refresh();
     void api.listNotificationPreferences().then((result) => {
       if (!result.success) return;
-      const preference = result.data.find((item: any) => item.scopeKey === 'GLOBAL' && item.category === 'ALL' && item.channel === 'EMAIL');
-      if (preference) {
-        setCadence(preference.cadence);
-        setQuietStart(preference.quietStart ?? '21:00');
-        setQuietEnd(preference.quietEnd ?? '07:00');
+      const preference = result.data.find((item: any) => item.scopeKey === 'GLOBAL' && item.category === selectedCategory && item.channel === 'EMAIL');
+      const fallback = result.data.find((item: any) => item.scopeKey === 'GLOBAL' && item.category === 'ALL' && item.channel === 'EMAIL');
+      const resolved = preference ?? fallback;
+      if (resolved) {
+        setCadence(resolved.cadence);
+        setQuietStart(resolved.quietStart ?? '21:00');
+        setQuietEnd(resolved.quietEnd ?? '07:00');
+      } else {
+        setCadence('WEEKLY_BRIEF');
+        setQuietStart('21:00');
+        setQuietEnd('07:00');
       }
     }).catch(() => undefined);
-  }, [refresh]);
+  }, [refresh, selectedCategory]);
 
   const savePreference = async () => {
     setSavingPreference(true);
     try {
       await api.updateNotificationPreference({
-        category: 'ALL', channel: 'EMAIL', enabled: cadence !== 'MUTED', cadence,
+        category: selectedCategory, channel: 'EMAIL', enabled: cadence !== 'MUTED', cadence,
         quietStart, quietEnd, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
       });
     } finally {
@@ -172,7 +192,11 @@ export default function NotificationsPage() {
           <p className="font-semibold text-slate-900">Notification preferences</p>
           <p className="text-sm text-slate-600">Routine updates are bundled into your Home Brief. Urgent safety, active damage, material deadlines, and workflow changes can still arrive immediately.</p>
         </div>
-        <div className="grid gap-3 sm:grid-cols-4 sm:items-end">
+        <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+          In-app alerts remain enabled for safety and product continuity. During the pilot, email is the only configurable external channel.
+        </div>
+        <div className="grid gap-3 sm:grid-cols-5 sm:items-end">
+          <label className="text-xs font-medium text-slate-600">Category<select value={selectedCategory} onChange={(event) => setSelectedCategory(event.target.value)} className="mt-1 min-h-[40px] w-full rounded-lg border bg-white px-2 text-sm">{PREFERENCE_CATEGORIES.map((category) => <option key={category.value} value={category.value}>{category.label}</option>)}</select></label>
           <label className="text-xs font-medium text-slate-600">Email cadence<select value={cadence} onChange={(event) => setCadence(event.target.value)} className="mt-1 min-h-[40px] w-full rounded-lg border bg-white px-2 text-sm"><option value="WEEKLY_BRIEF">Weekly Home Brief</option><option value="DAILY_DIGEST">Daily digest</option><option value="IMMEDIATE">Immediate</option><option value="MUTED">Muted</option></select></label>
           <label className="text-xs font-medium text-slate-600">Quiet hours start<input type="time" value={quietStart} onChange={(event) => setQuietStart(event.target.value)} className="mt-1 min-h-[40px] w-full rounded-lg border bg-white px-2 text-sm" /></label>
           <label className="text-xs font-medium text-slate-600">Quiet hours end<input type="time" value={quietEnd} onChange={(event) => setQuietEnd(event.target.value)} className="mt-1 min-h-[40px] w-full rounded-lg border bg-white px-2 text-sm" /></label>

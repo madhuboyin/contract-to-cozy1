@@ -21,6 +21,10 @@ function getWelcomeMessage(user: User | null): string {
     return "Hi! I'm Cozy. Ask me about the home, an active decision, maintenance, coverage, or a major project.";
 }
 
+function createChatSessionId(): string {
+  return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
 interface ChatMessage {
     role: 'user' | 'model';
     text: string;
@@ -34,13 +38,29 @@ interface ChatMessage {
     };
 }
 
+type AskProposalKind = 'ADD_FACT' | 'CORRECT_FACT' | 'CREATE_TASK' | 'START_JOURNEY' | 'COMPARE_OPTIONS' | 'UPLOAD_EVIDENCE' | 'ADD_NOTE';
+
+function parsePromptValue(value: string): unknown {
+  const trimmed = value.trim();
+  if (/^-?\d+(\.\d+)?$/.test(trimmed)) return Number(trimmed);
+  if (trimmed.toLowerCase() === 'true') return true;
+  if (trimmed.toLowerCase() === 'false') return false;
+  if (trimmed.toLowerCase() === 'unknown' || trimmed.toLowerCase() === 'not sure') return null;
+  return trimmed;
+}
+
+function slugifyAskValue(value: string): string {
+  return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+}
+
 const AIChatInner: React.FC = () => {
   const { user } = useAuth();
   const pathname = usePathname();
   // [MODIFICATION] Get selectedPropertyId from context
   const { selectedPropertyId } = usePropertyContext();
   
-  const [sessionId] = useState(() => Date.now().toString());
+  const [sessionId, setSessionId] = useState(createChatSessionId);
+  const previousPropertyIdRef = useRef<string | null | undefined>(selectedPropertyId);
 
   const [isOpen, setIsOpen] = useState(false);
   const [showPulse, setShowPulse] = useState(false);
@@ -65,6 +85,18 @@ const AIChatInner: React.FC = () => {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isOpen]);
+
+  useEffect(() => {
+    if (previousPropertyIdRef.current === selectedPropertyId) return;
+    previousPropertyIdRef.current = selectedPropertyId;
+    setSessionId(createChatSessionId());
+    setMessages([{
+      role: 'model',
+      text: selectedPropertyId
+        ? 'The selected home changed, so I started a new grounded conversation with that home’s record.'
+        : 'No home is selected now, so I started a new general-guidance conversation.',
+    }]);
+  }, [selectedPropertyId]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -257,25 +289,118 @@ const AIChatInner: React.FC = () => {
     // [MODIFICATION] Added selectedPropertyId to dependencies
   }, [input, loading, sessionId, selectedPropertyId]);
 
+  const confirmProposal = async (message: ChatMessage, input: {
+    kind: AskProposalKind;
+    summary: string;
+    payload: Record<string, unknown>;
+    propertyId?: string | null;
+    confirmation: string;
+    completion: string;
+  }) => {
+    if (!message.grounding) return;
+    const proposal = await api.createGroundedAskProposal({
+      sessionId,
+      propertyId: input.propertyId,
+      kind: input.kind,
+      summary: input.summary,
+      payload: input.payload,
+      evidence: message.grounding.evidence.map(({ factKey, source, observedAt }) => ({ factKey, source, observedAt })),
+    });
+    if (!proposal.success || !proposal.data) return;
+    if (window.confirm(input.confirmation)) {
+      const confirmed = await api.confirmGroundedAskProposal(proposal.data.id);
+      if (confirmed.success) setMessages((previous) => [...previous, { role: 'model', text: input.completion }]);
+    } else {
+      await api.rejectGroundedAskProposal(proposal.data.id);
+    }
+  };
+
   const proposeTask = async (message: ChatMessage) => {
     if (!selectedPropertyId || !message.grounding) return;
     const title = window.prompt('Task title to create from this answer:');
     if (!title?.trim()) return;
-    const proposal = await api.createGroundedAskProposal({
-      sessionId,
-      propertyId: selectedPropertyId,
+    await confirmProposal(message, {
       kind: 'CREATE_TASK',
       summary: `Create maintenance task: ${title.trim()}`,
       payload: { title: title.trim(), description: `Confirmed from a Grounded Ask answer: ${message.text.slice(0, 300)}`, priority: 'MEDIUM' },
-      evidence: message.grounding.evidence.map(({ factKey, source, observedAt }) => ({ factKey, source, observedAt })),
+      propertyId: selectedPropertyId,
+      confirmation: `Create the task “${title.trim()}” for this property?`,
+      completion: `Created the confirmed task “${title.trim()}”. The action is linked to this Ask proposal for auditability.`,
     });
-    if (!proposal.success || !proposal.data) return;
-    if (window.confirm(`Create the task “${title.trim()}” for this property?`)) {
-      await api.confirmGroundedAskProposal(proposal.data.id);
-      setMessages((previous) => [...previous, { role: 'model', text: `Created the confirmed task “${title.trim()}”. The action is linked to this Ask proposal for auditability.` }]);
-    } else {
-      await api.rejectGroundedAskProposal(proposal.data.id);
+  };
+
+  const proposeFact = async (message: ChatMessage, kind: 'ADD_FACT' | 'CORRECT_FACT') => {
+    if (!selectedPropertyId || !message.grounding) return;
+    const suggestedKey = kind === 'ADD_FACT' ? message.grounding.missingFacts[0] : message.grounding.evidence[0]?.factKey;
+    const factKey = window.prompt('Living Home Record fact key:', suggestedKey ?? '');
+    if (!factKey?.trim()) return;
+    const rawValue = window.prompt(`Value for ${factKey.trim()}:`);
+    if (rawValue === null || !rawValue.trim()) return;
+    await confirmProposal(message, {
+      kind,
+      summary: `${kind === 'ADD_FACT' ? 'Add' : 'Correct'} ${factKey.trim()}`,
+      payload: { factKey: factKey.trim(), value: parsePromptValue(rawValue) },
+      propertyId: selectedPropertyId,
+      confirmation: `${kind === 'ADD_FACT' ? 'Add' : 'Correct'} this home fact?`,
+      completion: `The confirmed ${factKey.trim()} update was written through the Living Home Record capture policy.`,
+    });
+  };
+
+  const proposeJourney = async (message: ChatMessage) => {
+    if (!selectedPropertyId) return;
+    const label = window.prompt('What decision or project should the plan address?');
+    if (!label?.trim()) return;
+    const serviceKey = slugifyAskValue(label);
+    await confirmProposal(message, {
+      kind: 'START_JOURNEY', summary: `Start plan: ${label.trim()}`,
+      payload: { scopeCategory: 'SERVICE', scopeId: serviceKey, issueType: serviceKey, serviceKey },
+      propertyId: selectedPropertyId,
+      confirmation: `Start a guided plan for “${label.trim()}”?`,
+      completion: `Started the confirmed guided plan for “${label.trim()}”.`,
+    });
+  };
+
+  const proposeComparison = async (message: ChatMessage) => {
+    if (!selectedPropertyId) return;
+    const scopeSummary = window.prompt('What options or quotes should be compared?');
+    if (!scopeSummary?.trim()) return;
+    await confirmProposal(message, {
+      kind: 'COMPARE_OPTIONS', summary: `Compare options: ${scopeSummary.trim()}`,
+      payload: { scopeSummary: scopeSummary.trim() }, propertyId: selectedPropertyId,
+      confirmation: `Create a comparison workspace for “${scopeSummary.trim()}”?`,
+      completion: `Created the confirmed comparison workspace for “${scopeSummary.trim()}”.`,
+    });
+  };
+
+  const proposeEvidence = async (message: ChatMessage) => {
+    if (!selectedPropertyId) return;
+    const response = await api.listDocuments(selectedPropertyId);
+    if (!response.success) return;
+    const documents = response.data.documents;
+    if (!documents.length) {
+      setMessages((previous) => [...previous, { role: 'model', text: 'Upload the document to this home first, then return here to attach it as evidence.' }]);
+      return;
     }
+    const choices = documents.slice(0, 10).map((document, index) => `${index + 1}. ${document.name}`).join('\n');
+    const selection = Number(window.prompt(`Choose an uploaded document:\n${choices}`));
+    const document = Number.isInteger(selection) ? documents[selection - 1] : undefined;
+    if (!document) return;
+    await confirmProposal(message, {
+      kind: 'UPLOAD_EVIDENCE', summary: `Attach evidence: ${document.name}`,
+      payload: { documentId: document.id }, propertyId: selectedPropertyId,
+      confirmation: `Attach “${document.name}” as evidence for this answer?`,
+      completion: `Attached the confirmed document “${document.name}” as auditable evidence.`,
+    });
+  };
+
+  const proposeNote = async (message: ChatMessage) => {
+    const note = window.prompt('Note to keep from this answer:');
+    if (!note?.trim()) return;
+    await confirmProposal(message, {
+      kind: 'ADD_NOTE', summary: 'Keep a note from Grounded Ask', payload: { note: note.trim() },
+      propertyId: selectedPropertyId ?? null,
+      confirmation: 'Save this note?', completion: 'Saved the confirmed note with its Ask evidence and audit link.',
+    });
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -416,7 +541,18 @@ const AIChatInner: React.FC = () => {
                         {msg.grounding.missingFacts.length > 0 ? <p><strong>Missing:</strong> {msg.grounding.missingFacts.slice(0, 5).join(', ')}</p> : null}
                         <p><strong>Boundary:</strong> {msg.grounding.safetyBoundary}</p>
                         <p><strong>Next:</strong> {msg.grounding.nextAction}</p>
-                        {msg.grounding.mode === 'PROPERTY' ? <button type="button" onClick={() => void proposeTask(msg)} className="rounded-lg border border-stone-300 px-2 py-1 font-semibold">Propose a task</button> : null}
+                        <details className="rounded-lg border border-stone-200 p-2">
+                          <summary className="cursor-pointer font-semibold">Propose an action</summary>
+                          <div className="mt-2 flex flex-wrap gap-1.5">
+                            {msg.grounding.mode === 'PROPERTY' ? <button type="button" onClick={() => void proposeTask(msg)} className="rounded-lg border border-stone-300 px-2 py-1 font-semibold">Create task</button> : null}
+                            {msg.grounding.mode === 'PROPERTY' && msg.grounding.missingFacts.length ? <button type="button" onClick={() => void proposeFact(msg, 'ADD_FACT')} className="rounded-lg border border-stone-300 px-2 py-1 font-semibold">Add missing fact</button> : null}
+                            {msg.grounding.mode === 'PROPERTY' && msg.grounding.evidence.length ? <button type="button" onClick={() => void proposeFact(msg, 'CORRECT_FACT')} className="rounded-lg border border-stone-300 px-2 py-1 font-semibold">Correct fact</button> : null}
+                            {msg.grounding.mode === 'PROPERTY' ? <button type="button" onClick={() => void proposeJourney(msg)} className="rounded-lg border border-stone-300 px-2 py-1 font-semibold">Start guided plan</button> : null}
+                            {msg.grounding.mode === 'PROPERTY' ? <button type="button" onClick={() => void proposeComparison(msg)} className="rounded-lg border border-stone-300 px-2 py-1 font-semibold">Compare options</button> : null}
+                            {msg.grounding.mode === 'PROPERTY' ? <button type="button" onClick={() => void proposeEvidence(msg)} className="rounded-lg border border-stone-300 px-2 py-1 font-semibold">Attach evidence</button> : null}
+                            <button type="button" onClick={() => void proposeNote(msg)} className="rounded-lg border border-stone-300 px-2 py-1 font-semibold">Save note</button>
+                          </div>
+                        </details>
                       </div>
                     ) : null}
                   </div>
