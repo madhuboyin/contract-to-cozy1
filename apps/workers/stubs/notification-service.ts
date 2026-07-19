@@ -22,6 +22,11 @@ export class NotificationService {
     category?: string;
     urgency?: string;
     requiredChannels?: string[];
+    // Accepted for type parity with the real notification.service.ts
+    // (WKR-002 — apps/backend/src/config/workerExecutionPolicy.ts) but
+    // unused here: this stub never enqueues a channel transport in the
+    // first place, only persists the canonical in-app notification.
+    transportEnabled?: boolean;
   }) {
     const existing = input.entityType && input.entityId
       ? await prisma.notification.findFirst({

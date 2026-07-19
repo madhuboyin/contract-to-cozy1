@@ -86,7 +86,11 @@ RUN mkdir -p src/shared/backend/services/coverage \
 COPY apps/backend/src/services/coverage/contextPolicy.ts src/shared/backend/services/coverage/
 
 COPY apps/backend/src/utils/riskCalculator.util.ts apps/backend/src/utils/FinancialCalculator.util.ts src/shared/backend/utils/
-COPY apps/backend/src/config/risk-constants.ts apps/backend/src/config/workerJobRegistry.ts apps/backend/src/config/queueDefaults.ts src/shared/backend/config/
+COPY apps/backend/src/config/risk-constants.ts apps/backend/src/config/workerJobRegistry.ts apps/backend/src/config/queueDefaults.ts apps/backend/src/config/workerExecutionPolicy.ts apps/backend/src/config/appConfig.ts src/shared/backend/config/
+# Maintenance reminders (WKR-001) — a plain relative-import sibling of the
+# already-copied notification.service/prisma/workerExecutionPolicy shared
+# tree, so it needs a COPY only, no sed rewrite.
+COPY apps/backend/src/services/maintenanceReminder.service.ts src/shared/backend/services/
 COPY apps/backend/src/services/homeEventRadarMatcher.service.ts \
      apps/backend/src/services/eventSignalProjection.service.ts \
      apps/backend/src/services/sharedDataObservability.service.ts \
@@ -332,6 +336,10 @@ RUN sed -i 's/\.\.\/\.\.\/backend\/src\/utils\/riskCalculator\.util/\.\/shared\/
     sed -i 's/\.\.\/\.\.\/backend\/src\/config\/workerJobRegistry/\.\/shared\/backend\/config\/workerJobRegistry/g' src/worker.ts && \
     sed -i 's/\.\.\/\.\.\/backend\/src\/config\/queueDefaults/\.\/shared\/backend\/config\/queueDefaults/g' src/worker.ts && \
     sed -i 's/\.\.\/\.\.\/backend\/src\/config\/queueDefaults/\.\/shared\/backend\/config\/queueDefaults/g' src/runners/highPriorityEmailEnqueue.poller.ts && \
+    sed -i 's/\.\.\/\.\.\/backend\/src\/services\/maintenanceReminder\.service/\.\/shared\/backend\/services\/maintenanceReminder\.service/g' src/worker.ts && \
+    sed -i 's/\.\.\/\.\.\/backend\/src\/config\/workerExecutionPolicy/\.\/shared\/backend\/config\/workerExecutionPolicy/g' src/worker.ts && \
+    sed -i 's/\.\.\/\.\.\/backend\/src\/config\/appConfig/\.\/shared\/backend\/config\/appConfig/g' src/worker.ts && \
+    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/config\/workerExecutionPolicy/\.\.\/shared\/backend\/config\/workerExecutionPolicy/g' src/jobs/seasonalNotification.job.ts && \
     sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/hiddenAssets\.service/\.\.\/shared\/backend\/services\/hiddenAssets\.service/g' src/jobs/hiddenAssetRefresh.job.ts && \
     sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/neighborhoodIntelligence\/neighborhoodPropertyMatchService/\.\.\/shared\/backend\/neighborhoodIntelligence\/neighborhoodPropertyMatchService/g' src/jobs/refreshNeighborhoodEvents.job.ts && \
     sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/neighborhoodIntelligence\/neighborhoodPropertyMatchService/\.\.\/shared\/backend\/neighborhoodIntelligence\/neighborhoodPropertyMatchService/g' src/jobs/ingestNeighborhoodDummyEvents.job.ts && \
@@ -349,7 +357,8 @@ RUN sed -i 's/\.\.\/\.\.\/backend\/src\/utils\/riskCalculator\.util/\.\/shared\/
 RUN sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/notification\.service/\.\.\/shared\/backend\/services\/notification\.service/g' \
     src/jobs/neighborhoodChangeNotification.job.ts \
     src/jobs/processDomainEvents.job.ts \
-    src/recalls/recallFollowups.service.ts
+    src/recalls/recallFollowups.service.ts \
+    src/jobs/seasonalNotification.job.ts
 
 RUN sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/newHomeWarrantyDeadline\.service/\.\.\/shared\/backend\/services\/newHomeWarrantyDeadline.service/g' \
     src/jobs/newHomeWarrantyDeadline.job.ts
