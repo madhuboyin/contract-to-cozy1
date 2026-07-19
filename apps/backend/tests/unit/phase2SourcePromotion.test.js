@@ -7,13 +7,13 @@ const { getPromotedHomeActions } = require('../../src/services/homeActionSourceP
 const NOW = new Date('2026-07-18T12:00:00.000Z');
 const LATER = new Date('2026-08-18T12:00:00.000Z');
 
-function stubSources({ terminalActionKey = null, snoozedActionKey = null } = {}) {
+function stubSources({ terminalActionKey = null, snoozedActionKey = null, guidanceConfidence = 0.85 } = {}) {
   return {
     guidanceJourney: { findMany: async () => [{
     id: 'journey-1', propertyId: 'property-1', inventoryItemId: 'item-1', primarySignalId: 'signal-1',
     journeyTypeKey: 'asset_lifecycle_resolution', issueType: 'Repair or replace HVAC', templateVersion: '2.1.0',
     status: 'ACTIVE', startedAt: NOW, createdAt: NOW, updatedAt: NOW, missingContextKeys: [],
-    primarySignal: { id: 'signal-1', severity: 'HIGH', confidenceScore: 0.85, lastObservedAt: NOW },
+    primarySignal: { id: 'signal-1', severity: 'HIGH', confidenceScore: guidanceConfidence, lastObservedAt: NOW },
     steps: [{ label: 'Compare repair and replacement', description: 'Review durable options.', status: 'PENDING', routePath: '/dashboard/properties/:propertyId/inventory/items/:itemId/replace-repair' }],
     }] },
     incident: { findMany: async () => [{
@@ -55,6 +55,15 @@ test('promotes guidance, incident, recall, coverage, and project records into va
   assert.equal(actions.find((action) => action.source.kind === 'GUIDANCE').relatedJourneyId, 'journey-1');
   assert.equal(actions.find((action) => action.source.kind === 'INCIDENT').primaryCta.kind, 'ESCALATE');
   assert.equal(actions.find((action) => action.source.kind === 'COVERAGE').governance.jurisdictionCheck.status, 'VERIFIED');
+});
+
+test('normalizes legacy guidance percentages before trust evaluation and Home Action validation', async () => {
+  const result = await getPromotedHomeActions('property-1', stubSources({ guidanceConfidence: 40 }));
+  const guidance = result.actions.find((action) => action.source.kind === 'GUIDANCE');
+  assert.equal(guidance.evidence[0].confidence, 0.4);
+  assert.equal(guidance.confidence.score, 0.4);
+  assert.equal(guidance.confidence.label, 'LOW');
+  assert.equal(guidance.recommendationResponse.status, 'LOW_CONFIDENCE');
 });
 
 test('honors terminal and active-snooze lifecycle suppression for promoted sources', async () => {

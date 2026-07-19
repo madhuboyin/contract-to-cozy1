@@ -1,5 +1,6 @@
 import {
   HOME_ACTION_SOURCE_KINDS,
+  normalizeHomeActionConfidenceScore,
   parseHomeAction,
   type HomeAction,
 } from './homeAction.contract';
@@ -55,32 +56,43 @@ function createAdapter(kind: HomeActionSourceKind): SourceAdapterDefinition {
     description: SOURCE_DESCRIPTIONS[kind],
     adapt(input) {
       const { sourceEntityId, sourceVersion, job, recommendationResponse: suppliedResponse, ...action } = input;
+      const contractAction = {
+        ...action,
+        evidence: action.evidence.map((evidence) => ({
+          ...evidence,
+          confidence: normalizeHomeActionConfidenceScore(evidence.confidence),
+        })),
+        confidence: {
+          ...action.confidence,
+          score: normalizeHomeActionConfidenceScore(action.confidence.score),
+        },
+      };
       const recommendationResponse = suppliedResponse ?? buildRecommendationResponseContract({
         status: resolveRecommendationResponseStatus({
-          confidence: action.confidence.score,
-          missingFacts: action.confidence.missing,
+          confidence: contractAction.confidence.score,
+          missingFacts: contractAction.confidence.missing,
         }),
-        safetyTier: action.governance.safetyTier,
-        missingFacts: action.confidence.missing,
+        safetyTier: contractAction.governance.safetyTier,
+        missingFacts: contractAction.confidence.missing,
       });
       const materialKinds = new Set<HomeAction['primaryCta']['kind']>([
         'START', 'SCHEDULE', 'COMPARE', 'SELECT_PROVIDER', 'PURCHASE', 'FINANCE',
       ]);
       const mustWithhold = !recommendationResponse.materialActionAllowed && (
-        action.governance.safetyTier !== 'LOW_CONSEQUENCE' ||
-        [action.primaryCta, ...action.secondaryCtas].some((cta) => materialKinds.has(cta.kind))
+        contractAction.governance.safetyTier !== 'LOW_CONSEQUENCE' ||
+        [contractAction.primaryCta, ...contractAction.secondaryCtas].some((cta) => materialKinds.has(cta.kind))
       );
-      const correction = action.secondaryCtas.find((cta) => cta.kind === 'CORRECT_FACT');
+      const correction = contractAction.secondaryCtas.find((cta) => cta.kind === 'CORRECT_FACT');
       const normalizedAction = mustWithhold ? {
-        ...action,
+        ...contractAction,
         recommendedAction: recommendationResponse.safeNextAction,
         primaryCta: correction ?? {
           kind: 'REVIEW' as const,
           label: 'Review missing information',
-          href: action.primaryCta.href,
+          href: contractAction.primaryCta.href,
         },
-        secondaryCtas: action.secondaryCtas.filter((cta) => !materialKinds.has(cta.kind)),
-      } : action;
+        secondaryCtas: contractAction.secondaryCtas.filter((cta) => !materialKinds.has(cta.kind)),
+      } : contractAction;
       return parseHomeAction({
         ...normalizedAction,
         recommendationResponse,

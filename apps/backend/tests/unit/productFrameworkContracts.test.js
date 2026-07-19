@@ -125,6 +125,17 @@ test('every declared production action source has a validating canonical adapter
   }
 });
 
+test('canonical adapters normalize legacy percentage confidence from every producer', () => {
+  const fixture = structuredClone(sourceAdapterFixtures[0]);
+  fixture.input.evidence[0].confidence = 80;
+  fixture.input.confidence.score = 80;
+
+  const action = adaptHomeActionSource(fixture.sourceKind, fixture.input);
+  assert.equal(action.evidence[0].confidence, 0.8);
+  assert.equal(action.confidence.score, 0.8);
+  assert.doesNotThrow(() => HomeActionSchema.parse(action));
+});
+
 test('north-star metric declares owners and aggregates an explicit eligible denominator', () => {
   const eligibleSuccess = {
     lineage: {

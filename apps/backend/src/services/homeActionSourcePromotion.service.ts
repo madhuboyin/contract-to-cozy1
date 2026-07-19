@@ -1,5 +1,8 @@
-import type { HomeAction } from '../productFramework';
-import { adaptHomeActionSource } from '../productFramework';
+import {
+  adaptHomeActionSource,
+  normalizeHomeActionConfidenceScore,
+  type HomeAction,
+} from '../productFramework';
 import { prisma } from '../lib/prisma';
 import { RecommendationGovernanceSchema } from '../productFramework/recommendationGovernance.contract';
 import { buildRecommendationResponseContract, resolveRecommendationResponseStatus } from '../productFramework/recommendationResponse.contract';
@@ -124,9 +127,7 @@ async function loadGuidanceActions(propertyId: string, db: HomeActionSourceDb): 
 
   return journeys.map((journey) => {
     const step = journey.steps[0];
-    const confidence = journey.primarySignal?.confidenceScore == null
-      ? null
-      : Number(journey.primarySignal.confidenceScore);
+    const confidence = normalizeHomeActionConfidenceScore(journey.primarySignal?.confidenceScore);
     const governance = guidanceGovernance(step, journey.templateVersion ?? 'phase4-v1');
     const responseStatus = resolveRecommendationResponseStatus({
       confidence,
