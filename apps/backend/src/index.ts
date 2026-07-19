@@ -166,6 +166,7 @@ import { logger, auditLog } from './lib/logger';
 import { register } from './lib/metrics';
 import { metricsMiddleware } from './middleware/metrics.middleware';
 import { requestIdMiddleware } from './middleware/requestId.middleware';
+import { APP_CONFIG_KEYS, isEmailVerificationDisabled } from './config/appConfig';
 dotenv.config();
 
 const app = express();
@@ -621,6 +622,12 @@ app.listen(PORT, () => {
   logger.info(`🔗 API URL: http://localhost:${PORT}`);
   logger.info(`✅ Health check: http://localhost:${PORT}/api/health`);
   logger.info(`📚 API Docs: http://localhost:${PORT}/api/docs`);
+  if (isEmailVerificationDisabled()) {
+    logger.warn(
+      { configKey: APP_CONFIG_KEYS.disableEmailVerification },
+      'PILOT MODE: email verification is disabled; new and successfully authenticated pending accounts are auto-verified'
+    );
+  }
   logger.info(`\n📋 Available routes:`);
   logger.info(`   - POST /api/auth/register`);
   logger.info(`   - POST /api/auth/login`);

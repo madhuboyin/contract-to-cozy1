@@ -110,3 +110,84 @@ test('requireMfa blocks admin users without MFA challenge completion', () => {
   assert.equal(res.payload?.error?.code, 'MFA_REQUIRED');
 });
 
+test('authenticate honors the pilot email-verification app config and presents effective active state', async () => {
+  const originalFlag = process.env.DISABLE_EMAIL_VERIFICATION;
+  process.env.DISABLE_EMAIL_VERIFICATION = 'true';
+  try {
+    jwtUtilMock.verifyAccessToken = () => ({
+      userId: 'pilot-user',
+      email: 'pilot@example.com',
+      role: 'HOMEOWNER',
+      tokenVersion: 0,
+      mfaEnabled: false,
+      mfaVerified: false,
+    });
+    prismaMock.user.findUnique = async () => ({
+      id: 'pilot-user',
+      email: 'pilot@example.com',
+      firstName: 'Pilot',
+      lastName: 'User',
+      role: 'HOMEOWNER',
+      status: 'PENDING_VERIFICATION',
+      emailVerified: false,
+      tokenVersion: 0,
+      homeownerProfile: { id: 'hp-pilot' },
+      providerProfile: null,
+    });
+    const req = {
+      headers: { authorization: 'Bearer pilot-token' },
+      ip: '127.0.0.1',
+      path: '/api/protected',
+      method: 'GET',
+    };
+    const res = createRes();
+    let nextCalled = false;
+    await authenticate(req, res, () => { nextCalled = true; });
+    assert.equal(nextCalled, true);
+    assert.equal(req.user.emailVerified, true);
+    assert.equal(req.user.status, 'ACTIVE');
+  } finally {
+    if (originalFlag === undefined) delete process.env.DISABLE_EMAIL_VERIFICATION;
+    else process.env.DISABLE_EMAIL_VERIFICATION = originalFlag;
+  }
+});
+
+test('authenticate remains fail-closed when the app config key is absent', async () => {
+  const originalFlag = process.env.DISABLE_EMAIL_VERIFICATION;
+  delete process.env.DISABLE_EMAIL_VERIFICATION;
+  try {
+    jwtUtilMock.verifyAccessToken = () => ({
+      userId: 'pending-user',
+      email: 'pending@example.com',
+      role: 'HOMEOWNER',
+      tokenVersion: 0,
+    });
+    prismaMock.user.findUnique = async () => ({
+      id: 'pending-user',
+      email: 'pending@example.com',
+      firstName: 'Pending',
+      lastName: 'User',
+      role: 'HOMEOWNER',
+      status: 'PENDING_VERIFICATION',
+      emailVerified: false,
+      tokenVersion: 0,
+      homeownerProfile: { id: 'hp-pending' },
+      providerProfile: null,
+    });
+    const req = {
+      headers: { authorization: 'Bearer pending-token' },
+      ip: '127.0.0.1',
+      path: '/api/protected',
+      method: 'GET',
+    };
+    const res = createRes();
+    let nextCalled = false;
+    await authenticate(req, res, () => { nextCalled = true; });
+    assert.equal(nextCalled, false);
+    assert.equal(res.statusCode, 403);
+    assert.equal(res.payload?.error?.code, 'EMAIL_NOT_VERIFIED');
+  } finally {
+    if (originalFlag === undefined) delete process.env.DISABLE_EMAIL_VERIFICATION;
+    else process.env.DISABLE_EMAIL_VERIFICATION = originalFlag;
+  }
+});

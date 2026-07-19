@@ -58,6 +58,8 @@ data:
   ENABLE_SIGNUP: "true"
   ENABLE_REVIEWS: "true"
   ENABLE_CHAT: "true"
+  # Pilot-only authentication switch. Set to "false" before general availability.
+  DISABLE_EMAIL_VERIFICATION: "true"
   
   # Rate Limiting
   RATE_LIMIT_WINDOW_MS: "60000"

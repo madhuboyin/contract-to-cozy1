@@ -34,6 +34,7 @@ import { prisma } from '../lib/prisma';
 const TOS_VERSION = '2026-07-09';
 import { logger, auditLog } from '../lib/logger';
 import { securityTokenReuseTotal } from '../lib/metrics';
+import { isEmailVerificationDisabled } from '../config/appConfig';
 
 export class AuthService {
   private buildSessionUser(user: {
@@ -193,6 +194,7 @@ export class AuthService {
    * Register a new user and auto-login
    */
   async register(data: RegisterInput): Promise<RegisterResponse> {
+    const emailVerificationDisabled = isEmailVerificationDisabled();
     // Check if user already exists
     const existingUser = await prisma.user.findUnique({
       where: { email: data.email },
@@ -214,8 +216,8 @@ export class AuthService {
         lastName: data.lastName,
         phone: data.phone,
         role: data.role,
-        status: 'PENDING_VERIFICATION',
-        emailVerified: false,
+        status: emailVerificationDisabled ? 'ACTIVE' : 'PENDING_VERIFICATION',
+        emailVerified: emailVerificationDisabled,
         // registerSchema requires acceptedTerms === true, so reaching here
         // means the user explicitly agreed at signup.
         tosAcceptedAt: new Date(),
@@ -262,9 +264,16 @@ export class AuthService {
       );
     }
 
-    const emailVerificationToken = generateEmailVerificationToken(user.id, user.email);
+    const emailVerificationToken = emailVerificationDisabled
+      ? null
+      : generateEmailVerificationToken(user.id, user.email);
 
-    if (process.env.NODE_ENV !== 'development') {
+    if (emailVerificationDisabled) {
+      auditLog('AUTH_EMAIL_VERIFICATION_BYPASSED', user.id, {
+        stage: 'registration',
+        source: 'app_config',
+      });
+    } else if (process.env.NODE_ENV !== 'development' && emailVerificationToken) {
       try {
         await this.enqueueVerificationDelivery(
           {
@@ -286,7 +295,9 @@ export class AuthService {
     }
 
     return {
-      message: 'Account created. Verify your email before signing in.',
+      message: emailVerificationDisabled
+        ? 'Account created. Email verification is disabled for the pilot.'
+        : 'Account created. Verify your email before signing in.',
       user: {
         id: user.id,
         email: user.email,
@@ -298,7 +309,9 @@ export class AuthService {
         mfaEnabled: user.mfaEnabled,
         createdAt: user.createdAt.toISOString(),
       },
-      ...(process.env.NODE_ENV === 'development' ? { emailVerificationToken } : {}),
+      ...(process.env.NODE_ENV === 'development' && emailVerificationToken
+        ? { emailVerificationToken }
+        : {}),
     };
   }
 
@@ -307,7 +320,7 @@ export class AuthService {
    */
   async login(data: LoginInput): Promise<({ accessToken: string; refreshToken: string; user: UserResponse }) | MfaChallengeResponse> {
     // Find user by email and include MFA state.
-    const user = await prisma.user.findUnique({
+    let user = await prisma.user.findUnique({
       where: { email: data.email },
     });
     // Note: Prisma includes all scalar fields on the User model by default
@@ -334,8 +347,23 @@ export class AuthService {
       throw new APIError('Account is inactive', 403, 'ACCOUNT_INACTIVE');
     }
 
-    if (!user.emailVerified) {
+    const emailVerificationDisabled = isEmailVerificationDisabled();
+    if (!emailVerificationDisabled && !user.emailVerified) {
       throw new APIError('Email verification required before sign-in', 403, 'EMAIL_NOT_VERIFIED');
+    }
+
+    if (emailVerificationDisabled && !user.emailVerified) {
+      user = await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          emailVerified: true,
+          status: 'ACTIVE',
+        },
+      });
+      auditLog('AUTH_EMAIL_VERIFICATION_BYPASSED', user.id, {
+        stage: 'login',
+        source: 'app_config',
+      });
     }
 
     // MFA gate: if the user has TOTP configured, issue a short-lived challenge
@@ -638,13 +666,30 @@ export class AuthService {
   /**
    * Resend verification email
    */
-  async resendVerificationEmail(userId: string): Promise<{ emailVerificationToken?: string }> {
+  async resendVerificationEmail(userId: string): Promise<{
+    emailVerificationToken?: string;
+    verificationDisabled?: true;
+  }> {
     const user = await prisma.user.findUnique({
       where: { id: userId },
     });
 
     if (!user) {
       throw new APIError('User not found', 404, 'USER_NOT_FOUND');
+    }
+
+    if (isEmailVerificationDisabled()) {
+      if (!user.emailVerified || user.status === 'PENDING_VERIFICATION') {
+        await prisma.user.update({
+          where: { id: user.id },
+          data: { emailVerified: true, status: 'ACTIVE' },
+        });
+      }
+      auditLog('AUTH_EMAIL_VERIFICATION_BYPASSED', user.id, {
+        stage: 'resend_verification',
+        source: 'app_config',
+      });
+      return { verificationDisabled: true };
     }
 
     if (user.emailVerified) {

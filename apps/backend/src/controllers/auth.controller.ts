@@ -266,7 +266,9 @@ export class AuthController {
       res.status(200).json({
         success: true,
         data: {
-          message: 'Verification email sent',
+          message: result.verificationDisabled
+            ? 'Email verification is disabled for the pilot. Account activated.'
+            : 'Verification email sent',
           ...result,
         },
       });

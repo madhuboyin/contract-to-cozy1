@@ -40,6 +40,11 @@ spec:
                 configMapKeyRef:
                   name: app-config
                   key: API_PORT
+            - name: DISABLE_EMAIL_VERIFICATION
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: DISABLE_EMAIL_VERIFICATION
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:

@@ -7,6 +7,7 @@ import { prisma } from '../lib/prisma';
 import { auditLog } from '../lib/logger';
 import { securityAuthDenialsTotal } from '../lib/metrics';
 import { getAccessTokenFromRequest } from '../utils/authCookies.util';
+import { isEmailVerificationDisabled } from '../config/appConfig';
 
 // NOTE: AuthRequest type is defined in '../types/auth.types' and is assumed
 // to have been updated to include homeownerProfile and providerProfile on req.user.
@@ -119,7 +120,8 @@ async function _authenticate(
     // Email verification gate — blocks unverified users from all application
     // routes. Auth-flow routes (/me, /logout, /resend-verification) bypass this
     // by calling authenticateAllowUnverified instead.
-    if (requireEmailVerified && !user.emailVerified) {
+    const emailVerificationDisabled = isEmailVerificationDisabled();
+    if (requireEmailVerified && !emailVerificationDisabled && !user.emailVerified) {
       securityAuthDenialsTotal.inc({ surface: 'auth_middleware', status_code: '403', code: 'EMAIL_NOT_VERIFIED' });
       res.status(403).json({
         success: false,
@@ -137,8 +139,10 @@ async function _authenticate(
       role: user.role as UserRole,
       firstName: user.firstName,
       lastName: user.lastName,
-      emailVerified: user.emailVerified,
-      status: user.status as any,
+      emailVerified: user.emailVerified || emailVerificationDisabled,
+      status: (emailVerificationDisabled && user.status === 'PENDING_VERIFICATION'
+        ? 'ACTIVE'
+        : user.status) as any,
       homeownerProfile: user.homeownerProfile,
       providerProfile: user.providerProfile,
       // MFA fields decoded from the JWT payload
