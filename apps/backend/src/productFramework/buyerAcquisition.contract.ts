@@ -20,6 +20,13 @@ export const BUYER_TASK_SOURCE_TYPES = [
 export const BuyerPlanPhaseSchema = z.enum(BUYER_PLAN_PHASES);
 export const BuyerPlanPrioritySchema = z.enum(BUYER_PLAN_PRIORITIES);
 export const BuyerTaskSourceTypeSchema = z.enum(BUYER_TASK_SOURCE_TYPES);
+export const BUYER_FINDING_DISPOSITIONS = [
+  'VERIFIED_FACT',
+  'PRE_CLOSE_NEGOTIATION',
+  'POST_CLOSE_ACTION',
+  'DISMISSED',
+] as const;
+export const BuyerFindingDispositionSchema = z.enum(BUYER_FINDING_DISPOSITIONS);
 
 export const BuyerTaskLineageSchema = z.object({
   sourceType: BuyerTaskSourceTypeSchema,
@@ -38,7 +45,27 @@ export const BuyerPlanTaskInputSchema = z.object({
   dueAt: z.string().datetime().nullable().optional(),
   serviceCategory: z.string().trim().min(1).max(100).nullable().optional(),
   assignedToUserId: z.string().trim().min(1).nullable().optional(),
+  completionEvidence: z.record(z.string(), z.unknown()).nullable().optional(),
   lineage: BuyerTaskLineageSchema.partial().optional(),
+});
+
+export const BuyerLifecycleUpdateSchema = z.object({
+  targetCloseDate: z.string().datetime().nullable().optional(),
+  ownershipStartedAt: z.string().datetime().nullable().optional(),
+}).refine((value) => value.targetCloseDate !== undefined || value.ownershipStartedAt !== undefined, {
+  message: 'At least one lifecycle anchor must be provided.',
+});
+
+export const BuyerFindingDispositionInputSchema = z.object({
+  disposition: BuyerFindingDispositionSchema,
+  notes: z.string().trim().max(2_000).nullable().optional(),
+  assignedToUserId: z.string().trim().min(1).nullable().optional(),
+  dueAt: z.string().datetime().nullable().optional(),
+});
+
+export const BuyerDocumentVerificationInputSchema = z.object({
+  status: z.enum(['VERIFIED', 'REJECTED']),
+  notes: z.string().trim().max(1_000).nullable().optional(),
 });
 
 export const BuyerImportReadinessSchema = z.object({
@@ -65,3 +92,5 @@ export const BuyerImportReadinessSchema = z.object({
 
 export type BuyerPlanTaskInput = z.infer<typeof BuyerPlanTaskInputSchema>;
 export type BuyerImportReadiness = z.infer<typeof BuyerImportReadinessSchema>;
+export type BuyerLifecycleUpdate = z.infer<typeof BuyerLifecycleUpdateSchema>;
+export type BuyerFindingDispositionInput = z.infer<typeof BuyerFindingDispositionInputSchema>;

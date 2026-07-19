@@ -2357,6 +2357,7 @@ export type HomeBuyerTaskStatus =
 export type BuyerPlanPhase = 'PRE_CLOSE' | 'FIRST_30_DAYS' | 'DAYS_31_TO_90' | 'RECURRING_HOME';
 export type BuyerPlanPriority = 'NOW' | 'SOON' | 'PLAN' | 'CONSIDER';
 export type BuyerTaskSourceType = 'SYSTEM' | 'USER' | 'INSPECTION_FINDING' | 'DOCUMENT' | 'GUIDANCE_JOURNEY' | 'HOME_ACTION';
+export type BuyerFindingDisposition = 'PENDING_REVIEW' | 'VERIFIED_FACT' | 'PRE_CLOSE_NEGOTIATION' | 'POST_CLOSE_ACTION' | 'DISMISSED';
 
 export type HomeBuyerTaskServiceCategory =
   | 'INSPECTION'
@@ -2384,6 +2385,7 @@ export interface HomeBuyerTask {
   phase: BuyerPlanPhase;
   priority: BuyerPlanPriority;
   dueAt: string | null;
+  anchorOffsetDays: number | null;
   assignedToUserId: string | null;
   sourceType: BuyerTaskSourceType;
   sourceEntityType: string | null;
@@ -2396,6 +2398,8 @@ export interface HomeBuyerTask {
   sortOrder: number;
   bookingId: string | null;
   completedAt: Date | null;
+  completionEvidenceJson: Record<string, unknown> | null;
+  handedOffMaintenanceTaskId: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -2408,6 +2412,7 @@ export interface HomeBuyerChecklist {
   targetCloseDate: string | null;
   ownershipStartedAt: string | null;
   transitionedToRecurringAt: string | null;
+  handoffCompletedAt: string | null;
   tasks: HomeBuyerTask[];
   createdAt: Date;
   updatedAt: Date;
@@ -2430,16 +2435,21 @@ export interface CreateHomeBuyerTaskInput {
   phase?: BuyerPlanPhase;
   priority?: BuyerPlanPriority;
   dueAt?: string | null;
+  assignedToUserId?: string | null;
+  completionEvidenceJson?: Record<string, unknown> | null;
 }
 
 export interface UpdateHomeBuyerTaskInput {
   title?: string;
   description?: string | null;
+  status?: HomeBuyerTaskStatus;
   serviceCategory?: HomeBuyerTaskServiceCategory | null;
   sortOrder?: number;
   phase?: BuyerPlanPhase;
   priority?: BuyerPlanPriority;
   dueAt?: string | null;
+  assignedToUserId?: string | null;
+  completionEvidenceJson?: Record<string, unknown> | null;
 }
 
 export interface BuyerImportReadiness {
@@ -2447,6 +2457,58 @@ export interface BuyerImportReadiness {
   inspectionReports: { total: number; reviewPending: number; confirmed: number; openMaterialFindings: number };
   documents: { total: number; verified: number; unverified: number };
   nextRecommendedStep: 'IMPORT_INSPECTION' | 'REVIEW_EXTRACTION' | 'VERIFY_MATERIAL_FINDINGS' | 'VERIFY_DOCUMENTS' | 'BUILD_90_DAY_PLAN';
+}
+
+export interface BuyerEvidenceFinding {
+  id: string;
+  reportId: string;
+  homeSystem: string;
+  subsystem: string | null;
+  location: string | null;
+  severity: 'SAFETY' | 'MAJOR' | 'MINOR' | 'MONITOR' | 'INFORMATIONAL';
+  status: 'OPEN' | 'RESOLVED' | 'DISMISSED' | 'ACCEPTED_AS_IS';
+  inspectorDescription: string;
+  aiInterpretation: string;
+  estimatedCostCentsLow: number | null;
+  estimatedCostCentsHigh: number | null;
+  extractionConfidence: 'HIGH' | 'MEDIUM' | 'LOW';
+  buyerDisposition: BuyerFindingDisposition;
+  buyerDispositionNotes: string | null;
+  buyerDispositionAt: string | null;
+  buyerTaskId: string | null;
+  buyerGuidanceJourneyId: string | null;
+}
+
+export interface BuyerEvidenceReview {
+  reports: Array<{
+    id: string;
+    reportType: string;
+    inspectionDate: string;
+    inspectorName: string | null;
+    status: 'PROCESSING' | 'REVIEW_PENDING' | 'CONFIRMED' | 'ARCHIVED';
+    findings: BuyerEvidenceFinding[];
+  }>;
+  documents: Array<{
+    id: string;
+    name: string;
+    type: string;
+    description: string | null;
+    verificationStatus: 'UNVERIFIED' | 'PENDING' | 'VERIFIED' | 'REJECTED';
+    verifiedAt: string | null;
+    parserVersion: string | null;
+    ocrQualityScore: number | null;
+    createdAt: string;
+  }>;
+}
+
+export interface BuyerAcceptanceStatus {
+  propertyId: string;
+  planStatus: 'ACTIVE' | 'HANDED_OFF' | 'ARCHIVED';
+  findings: { total: number; reviewed: number; material: number; materialBranched: number };
+  documents: { total: number; verified: number };
+  tasks: { total: number; assigned: number; completed: number };
+  handoff: { completed: boolean; completedAt: string | null };
+  acceptanceReady: boolean;
 }
 
 // -----------------------------------------------------------------------------

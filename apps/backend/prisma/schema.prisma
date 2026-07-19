@@ -405,6 +405,14 @@ enum BuyerTaskSourceType {
   HOME_ACTION
 }
 
+enum BuyerFindingDisposition {
+  PENDING_REVIEW
+  VERIFIED_FACT
+  PRE_CLOSE_NEGOTIATION
+  POST_CLOSE_ACTION
+  DISMISSED
+}
+
 enum MaintenanceTaskStatus {
   PENDING
   IN_PROGRESS
@@ -1993,6 +2001,7 @@ model HomeBuyerChecklist {
   targetCloseDate           DateTime?
   ownershipStartedAt        DateTime?
   transitionedToRecurringAt DateTime?
+  handoffCompletedAt        DateTime?
 
   // Relations
   tasks HomeBuyerTask[]
@@ -2013,10 +2022,11 @@ model HomeBuyerTask {
   status      HomeBuyerTaskStatus @default(PENDING)
 
   // Canonical 90-day ownership-plan placement and stable idempotency key.
-  actionKey String
-  phase     BuyerPlanPhase    @default(FIRST_30_DAYS)
-  priority  BuyerPlanPriority @default(PLAN)
-  dueAt     DateTime?
+  actionKey        String
+  phase            BuyerPlanPhase    @default(FIRST_30_DAYS)
+  priority         BuyerPlanPriority @default(PLAN)
+  dueAt            DateTime?
+  anchorOffsetDays Int?
 
   // Service integration
   serviceCategory ServiceCategory?
@@ -2030,18 +2040,20 @@ model HomeBuyerTask {
   booking   Booking? @relation(fields: [bookingId], references: [id], onDelete: SetNull)
 
   // Completion tracking
-  completedAt DateTime?
+  completedAt            DateTime?
+  completionEvidenceJson Json?
 
   // Task assignment
   assignedToUserId String?
   assignedTo       User?   @relation("HomeBuyerTaskAssignee", fields: [assignedToUserId], references: [id])
 
   // Durable lineage back to imported evidence or a canonical journey/action.
-  sourceType        BuyerTaskSourceType @default(USER)
-  sourceEntityType  String?
-  sourceEntityId    String?
-  guidanceJourneyId String?
-  homeActionKey     String?
+  sourceType                 BuyerTaskSourceType @default(USER)
+  sourceEntityType           String?
+  sourceEntityId             String?
+  guidanceJourneyId          String?
+  homeActionKey              String?
+  handedOffMaintenanceTaskId String?
 
   // Display
   sortOrder Int @default(0)
@@ -2057,6 +2069,7 @@ model HomeBuyerTask {
   @@index([status])
   @@index([assignedToUserId])
   @@index([sourceEntityType, sourceEntityId])
+  @@index([handedOffMaintenanceTaskId])
   @@map("home_buyer_tasks")
 }
 
@@ -12743,6 +12756,15 @@ model InspectionFinding {
   resolutionCostCents Int?
   warrantyExpiresAt   DateTime?
 
+  // Phase 5 buyer-acquisition review and downstream lineage.
+  buyerDisposition         BuyerFindingDisposition @default(PENDING_REVIEW)
+  buyerDispositionNotes    String?
+  buyerDispositionAt       DateTime?
+  buyerDispositionByUserId String?
+  buyerTaskId              String?
+  buyerGuidanceJourneyId   String?
+  buyerMaintenanceTaskId   String?
+
   // Links set during write-back on confirmation
   permitFlagId    String?
   inventoryItemId String?
@@ -12768,6 +12790,9 @@ model InspectionFinding {
   @@index([reportId])
   @@index([propertyId, severity])
   @@index([propertyId, status])
+  @@index([propertyId, buyerDisposition])
+  @@index([buyerTaskId])
+  @@index([buyerGuidanceJourneyId])
   @@index([propertyId, homeSystem])
   @@index([permitFlagId])
   @@index([inventoryItemId])

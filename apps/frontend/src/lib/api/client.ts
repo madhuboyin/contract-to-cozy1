@@ -71,6 +71,9 @@ import {
   HomeBuyerTask,
   HomeBuyerTaskStats,
   BuyerImportReadiness,
+  BuyerEvidenceReview,
+  BuyerFindingDisposition,
+  BuyerAcceptanceStatus,
   HomeBuyerTaskStatus,
   CreateHomeBuyerTaskInput,
   UpdateHomeBuyerTaskInput,
@@ -3158,6 +3161,50 @@ class APIClient {
   async getBuyerImportReadiness(propertyId: string): Promise<APIResponse<BuyerImportReadiness>> {
     return this.request<BuyerImportReadiness>(
       `/api/home-buyer-tasks/properties/${propertyId}/import-readiness`,
+      { method: 'GET' },
+    );
+  }
+
+  async getBuyerEvidenceReview(propertyId: string): Promise<APIResponse<BuyerEvidenceReview>> {
+    return this.request<BuyerEvidenceReview>(
+      `/api/home-buyer-tasks/properties/${propertyId}/evidence-review`,
+      { method: 'GET' },
+    );
+  }
+
+  async updateBuyerLifecycle(propertyId: string, input: {
+    targetCloseDate?: string | null;
+    ownershipStartedAt?: string | null;
+  }): Promise<APIResponse<HomeBuyerChecklist>> {
+    return this.request<HomeBuyerChecklist>(`/api/home-buyer-tasks/properties/${propertyId}/lifecycle`, {
+      method: 'PATCH', body: JSON.stringify(input),
+    });
+  }
+
+  async dispositionBuyerFinding(propertyId: string, findingId: string, input: {
+    disposition: Exclude<BuyerFindingDisposition, 'PENDING_REVIEW'>;
+    notes?: string | null;
+    assignedToUserId?: string | null;
+    dueAt?: string | null;
+  }): Promise<APIResponse<{ finding: unknown; taskId: string | null; guidanceJourneyId: string | null }>> {
+    return this.request(`/api/home-buyer-tasks/properties/${propertyId}/findings/${findingId}/disposition`, {
+      method: 'POST', body: JSON.stringify(input),
+    });
+  }
+
+  async verifyBuyerDocument(propertyId: string, documentId: string, status: 'VERIFIED' | 'REJECTED', notes?: string | null) {
+    return this.request(`/api/home-buyer-tasks/properties/${propertyId}/documents/${documentId}/verification`, {
+      method: 'PATCH', body: JSON.stringify({ status, notes }),
+    });
+  }
+
+  async handoffBuyerPlan(propertyId: string): Promise<APIResponse<{ handedOff: boolean; reason: string; taskCount: number }>> {
+    return this.request(`/api/home-buyer-tasks/properties/${propertyId}/handoff`, { method: 'POST' });
+  }
+
+  async getBuyerAcceptanceStatus(propertyId: string): Promise<APIResponse<BuyerAcceptanceStatus>> {
+    return this.request<BuyerAcceptanceStatus>(
+      `/api/home-buyer-tasks/properties/${propertyId}/acceptance-status`,
       { method: 'GET' },
     );
   }

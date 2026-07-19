@@ -9,6 +9,12 @@ import {
   LinkTaskToBookingRequest,
 } from '../types/task.types';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
+import { BuyerAcquisitionService } from '../services/buyerAcquisition.service';
+import {
+  BuyerDocumentVerificationInputSchema,
+  BuyerFindingDispositionInputSchema,
+  BuyerLifecycleUpdateSchema,
+} from '../productFramework/buyerAcquisition.contract';
 
 /**
  * GET /api/home-buyer-tasks/properties/:propertyId/checklist
@@ -25,7 +31,9 @@ const handleGetChecklist = async (
     }
 
     const { propertyId } = req.params;
-    const checklist = await HomeBuyerTaskService.getOrCreateChecklist(req.user.userId, propertyId);
+    let checklist = await HomeBuyerTaskService.getOrCreateChecklist(req.user.userId, propertyId);
+    const handoff = await BuyerAcquisitionService.ensureRecurringHandoff(req.user.userId, propertyId);
+    if (handoff.handedOff) checklist = await HomeBuyerTaskService.getOrCreateChecklist(req.user.userId, propertyId);
 
     analyticsEmitter.track({
       eventType: AnalyticsEvent.TOOL_USED,
@@ -33,7 +41,7 @@ const handleGetChecklist = async (
       propertyId,
       moduleKey: AnalyticsModule.HOME_BUYER,
       featureKey: AnalyticsFeature.HOME_BUYER_TASK,
-      metadataJson: {},
+      metadataJson: { actionType: 'buyer_plan_opened', planStatus: checklist.status, handoffReason: handoff.reason },
     });
 
     return res.status(200).json({
@@ -377,6 +385,101 @@ const handleGetImportReadiness = async (req: AuthRequest, res: Response, next: N
   }
 };
 
+const handleUpdateLifecycle = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    if (!req.user) return res.status(401).json({ message: 'Authentication required.' });
+    const input = BuyerLifecycleUpdateSchema.parse(req.body);
+    const plan = await BuyerAcquisitionService.updateLifecycle(req.user.userId, req.params.propertyId, input);
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.ACTION_COMPLETED,
+      userId: req.user.userId,
+      propertyId: req.params.propertyId,
+      moduleKey: AnalyticsModule.HOME_BUYER,
+      featureKey: AnalyticsFeature.HOME_BUYER_TASK,
+      metadataJson: { actionType: 'buyer_lifecycle_updated' },
+    });
+    return res.json({ success: true, data: plan });
+  } catch (error) { next(error); }
+};
+
+const handleGetEvidenceReview = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    if (!req.user) return res.status(401).json({ message: 'Authentication required.' });
+    const review = await BuyerAcquisitionService.getEvidenceReview(req.user.userId, req.params.propertyId);
+    return res.json({ success: true, data: review });
+  } catch (error) { next(error); }
+};
+
+const handleVerifyDocument = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    if (!req.user) return res.status(401).json({ message: 'Authentication required.' });
+    const input = BuyerDocumentVerificationInputSchema.parse(req.body);
+    const document = await BuyerAcquisitionService.verifyDocument(
+      req.user.userId, req.params.propertyId, req.params.documentId, input,
+    );
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.ACTION_COMPLETED,
+      userId: req.user.userId,
+      propertyId: req.params.propertyId,
+      moduleKey: AnalyticsModule.HOME_BUYER,
+      featureKey: AnalyticsFeature.HOME_BUYER_TASK,
+      metadataJson: { actionType: 'buyer_document_reviewed', documentId: req.params.documentId, status: input.status },
+    });
+    return res.json({ success: true, data: document });
+  } catch (error) { next(error); }
+};
+
+const handleDispositionFinding = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    if (!req.user) return res.status(401).json({ message: 'Authentication required.' });
+    const input = BuyerFindingDispositionInputSchema.parse(req.body);
+    const result = await BuyerAcquisitionService.dispositionFinding(
+      req.user.userId, req.params.propertyId, req.params.findingId, input,
+    );
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.DECISION_GUIDED,
+      userId: req.user.userId,
+      propertyId: req.params.propertyId,
+      moduleKey: AnalyticsModule.HOME_BUYER,
+      featureKey: AnalyticsFeature.HOME_BUYER_TASK,
+      metadataJson: {
+        actionType: 'buyer_finding_dispositioned',
+        findingId: req.params.findingId,
+        disposition: input.disposition,
+        taskId: result.taskId,
+        guidanceJourneyId: result.guidanceJourneyId,
+      },
+    });
+    return res.json({ success: true, data: result });
+  } catch (error) { next(error); }
+};
+
+const handleHandoff = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    if (!req.user) return res.status(401).json({ message: 'Authentication required.' });
+    const result = await BuyerAcquisitionService.ensureRecurringHandoff(req.user.userId, req.params.propertyId);
+    if (result.handedOff) {
+      analyticsEmitter.track({
+        eventType: AnalyticsEvent.ACTION_COMPLETED,
+        userId: req.user.userId,
+        propertyId: req.params.propertyId,
+        moduleKey: AnalyticsModule.HOME_BUYER,
+        featureKey: AnalyticsFeature.HOME_BUYER_TASK,
+        metadataJson: { actionType: 'buyer_plan_handed_off', ...result },
+      });
+    }
+    return res.json({ success: true, data: result });
+  } catch (error) { next(error); }
+};
+
+const handleGetAcceptanceStatus = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    if (!req.user) return res.status(401).json({ message: 'Authentication required.' });
+    const status = await BuyerAcquisitionService.getAcceptanceStatus(req.user.userId, req.params.propertyId);
+    return res.json({ success: true, data: status });
+  } catch (error) { next(error); }
+};
+
 export const homeBuyerTaskController = {
   handleGetChecklist,
   handleGetTasks,
@@ -388,4 +491,10 @@ export const homeBuyerTaskController = {
   handleLinkToBooking,
   handleGetStats,
   handleGetImportReadiness,
+  handleUpdateLifecycle,
+  handleGetEvidenceReview,
+  handleVerifyDocument,
+  handleDispositionFinding,
+  handleHandoff,
+  handleGetAcceptanceStatus,
 };

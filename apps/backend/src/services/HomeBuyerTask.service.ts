@@ -26,6 +26,7 @@ type TaskInput = {
   sourceEntityId?: string | null;
   guidanceJourneyId?: string | null;
   homeActionKey?: string | null;
+  completionEvidenceJson?: Record<string, unknown> | null;
 };
 
 type BuyerChecklistWithTasks = Prisma.HomeBuyerChecklistGetPayload<{ include: { tasks: true } }>;
@@ -123,6 +124,7 @@ export class HomeBuyerTaskService {
             phase,
             priority,
             dueAt: offsetDate(now, days),
+            anchorOffsetDays: days,
             serviceCategory,
             assignedToUserId: ownerUserId,
             sourceType: 'SYSTEM',
@@ -152,7 +154,13 @@ export class HomeBuyerTaskService {
     await this.getTask(userId, propertyId, taskId);
     return prisma.homeBuyerTask.update({
       where: { id: taskId },
-      data: { status, completedAt: status === 'COMPLETED' ? new Date() : null },
+      data: {
+        status,
+        completedAt: status === 'COMPLETED' ? new Date() : null,
+        completionEvidenceJson: status === 'COMPLETED'
+          ? { proofType: 'USER_ATTESTATION', confirmedByUserId: userId, confirmedAt: new Date().toISOString() }
+          : undefined,
+      },
     });
   }
 
@@ -163,12 +171,29 @@ export class HomeBuyerTaskService {
   }): Promise<HomeBuyerTask> {
     await this.getTask(userId, propertyId, taskId);
     if (data.serviceCategory) await this.validateServiceCategory(data.serviceCategory);
+    if (data.assignedToUserId) {
+      const member = await prisma.householdMember.findUnique({
+        where: { propertyId_userId: { propertyId, userId: data.assignedToUserId } },
+        select: { id: true },
+      });
+      const owner = member ? null : await prisma.property.findFirst({
+        where: { id: propertyId, homeownerProfile: { userId: data.assignedToUserId } },
+        select: { id: true },
+      });
+      if (!member && !owner) throw new Error('Assigned user is not a member of this property household.');
+    }
     return prisma.homeBuyerTask.update({
       where: { id: taskId },
       data: {
         ...data,
         dueAt: data.dueAt === undefined ? undefined : data.dueAt === null ? null : new Date(data.dueAt),
         completedAt: data.status === undefined ? undefined : data.status === 'COMPLETED' ? new Date() : null,
+        completionEvidenceJson: data.completionEvidenceJson === null
+          ? Prisma.JsonNull
+          : data.completionEvidenceJson as Prisma.InputJsonValue | undefined
+            ?? (data.status === 'COMPLETED'
+              ? { proofType: 'USER_ATTESTATION', confirmedByUserId: userId, confirmedAt: new Date().toISOString() }
+              : undefined),
       },
     });
   }
@@ -188,6 +213,7 @@ export class HomeBuyerTaskService {
         phase: data.phase ?? 'FIRST_30_DAYS',
         priority: data.priority ?? 'PLAN',
         dueAt: data.dueAt ? new Date(data.dueAt) : null,
+        anchorOffsetDays: null,
         serviceCategory: data.serviceCategory ?? null,
         assignedToUserId: data.assignedToUserId ?? userId,
         sourceType: data.sourceType ?? 'USER',

@@ -25,6 +25,7 @@ import {
     priority?: BuyerPlanPriority;
     dueAt?: string | null;
     assignedToUserId?: string | null;
+    completionEvidenceJson?: Record<string, unknown> | null;
     sourceType?: BuyerTaskSourceType;
     sourceEntityType?: string | null;
     sourceEntityId?: string | null;
@@ -46,6 +47,7 @@ import {
     priority?: BuyerPlanPriority;
     dueAt?: string | null;
     assignedToUserId?: string | null;
+    completionEvidenceJson?: Record<string, unknown> | null;
   }
   
   /**

@@ -8,6 +8,7 @@ require('ts-node/register');
 const {
   BuyerPlanTaskInputSchema,
   BuyerImportReadinessSchema,
+  BuyerFindingDispositionInputSchema,
 } = require('../../src/productFramework/buyerAcquisition.contract.ts');
 
 function read(relativePath) {
@@ -43,6 +44,12 @@ test('import readiness contract returns an explicit next step', () => {
     nextRecommendedStep: 'REVIEW_EXTRACTION',
   });
   assert.equal(readiness.nextRecommendedStep, 'REVIEW_EXTRACTION');
+});
+
+test('buyer finding review contract has explicit durable dispositions', () => {
+  for (const disposition of ['VERIFIED_FACT', 'PRE_CLOSE_NEGOTIATION', 'POST_CLOSE_ACTION', 'DISMISSED']) {
+    assert.equal(BuyerFindingDispositionInputSchema.safeParse({ disposition }).success, true);
+  }
 });
 
 test('Prisma buyer plan is property-scoped and source-traceable', () => {

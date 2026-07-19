@@ -22,6 +22,7 @@ import {
   getFeatureAdoptionHandler,
   getFunnelHandler,
   getPhase1PilotHandler,
+  getPhase5PilotHandler,
   getCohortsHandler,
   getTopToolsHandler,
 } from '../controllers/adminAnalytics.controller';
@@ -157,6 +158,12 @@ router.get(
   '/admin/analytics/phase1-pilot',
   validate(OverviewQuerySchema),
   getPhase1PilotHandler,
+);
+
+router.get(
+  '/admin/analytics/phase5-pilot',
+  validate(OverviewQuerySchema),
+  getPhase5PilotHandler,
 );
 
 /**

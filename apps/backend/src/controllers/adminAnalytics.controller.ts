@@ -8,6 +8,7 @@ import { getOverviewMetrics, getTrends, getFeatureAdoption, getTopToolsMetrics }
 import { getFunnelMetrics } from '../services/adminAnalytics/funnelService';
 import { getCohortMetrics } from '../services/adminAnalytics/cohortService';
 import { getPhase1PilotMetrics } from '../services/adminAnalytics/phase1PilotService';
+import { getPhase5PilotMetrics } from '../services/adminAnalytics/phase5PilotService';
 
 // Helper: parse optional Date from express query (validate middleware already transforms)
 function qDate(val: unknown): Date | undefined {
@@ -104,6 +105,19 @@ export async function getPhase1PilotHandler(
 ): Promise<void> {
   try {
     const data = await getPhase1PilotMetrics(qDate(req.query.from), qDate(req.query.to));
+    res.json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function getPhase5PilotHandler(
+  req: CustomRequest,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const data = await getPhase5PilotMetrics(qDate(req.query.from), qDate(req.query.to));
     res.json({ success: true, data });
   } catch (err) {
     next(err);

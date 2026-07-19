@@ -26,6 +26,12 @@ router.get('/properties/:propertyId/tasks', homeBuyerTaskController.handleGetTas
  */
 router.get('/properties/:propertyId/stats', homeBuyerTaskController.handleGetStats);
 router.get('/properties/:propertyId/import-readiness', homeBuyerTaskController.handleGetImportReadiness);
+router.get('/properties/:propertyId/evidence-review', homeBuyerTaskController.handleGetEvidenceReview);
+router.get('/properties/:propertyId/acceptance-status', homeBuyerTaskController.handleGetAcceptanceStatus);
+router.patch('/properties/:propertyId/lifecycle', homeBuyerTaskController.handleUpdateLifecycle);
+router.patch('/properties/:propertyId/documents/:documentId/verification', homeBuyerTaskController.handleVerifyDocument);
+router.post('/properties/:propertyId/findings/:findingId/disposition', homeBuyerTaskController.handleDispositionFinding);
+router.post('/properties/:propertyId/handoff', homeBuyerTaskController.handleHandoff);
 
 /**
  * GET /api/home-buyer-tasks/tasks/:taskId

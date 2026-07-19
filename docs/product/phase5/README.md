@@ -31,17 +31,32 @@ The canonical contract is `apps/backend/src/productFramework/buyerAcquisition.co
 - System plan tasks are retained and may be marked `NOT_NEEDED`; only user-created tasks may be deleted.
 - An established-owner context marks an active acquisition checklist `HANDED_OFF` and records the transition time.
 
-## Remaining Phase 5 increments
+## Completion increment
 
-1. Promote confirmed inspection findings into verified facts, negotiation decisions, dismissed findings, or lineage-bearing plan actions.
-2. Add material-finding branching into canonical repair journeys and Home Actions with idempotent write-back.
-3. Add a focused document-import/review surface for inspection, disclosure, warranty, and transaction documents.
-4. Add target-close and ownership-start editing, and calculate due dates from those anchors.
-5. Add household owner assignment UI and responsibility completion evidence.
-6. Convert unresolved recurring-handoff tasks into the standard Home feed without duplication.
-7. Add Phase 5 integration and acceptance tests covering multi-property isolation, source lineage, day-91 handoff, and inspection promotion.
-8. Add Phase 5 launch instrumentation and pilot acceptance evidence.
+Status: implemented in code.
+
+The completion increment adds:
+
+1. Explicit inspection-finding dispositions: verified fact, pre-close negotiation, post-close action, or dismissed.
+2. Idempotent creation of property-plan tasks from actionable findings with durable finding, task, guidance-journey, and Home Action lineage.
+3. A dedicated inspection follow-up guidance journey for every actionable safety or major finding. These journeys enter the canonical Home Action feed through the existing guidance promotion adapter.
+4. A combined inspection and transaction-document review surface, including property document verification.
+5. Editable target-close and ownership-start anchors with automatic due-date recalculation.
+6. Household task assignment and proof-bearing task completion.
+7. An idempotent day-91 or established-owner handoff that converts unresolved post-close work into normal property maintenance tasks.
+8. Handoff checks at the standard Home Action feed boundary, eliminating dependency on a buyer-only dashboard or scheduled migration job.
+9. Property acceptance-status reporting and admin pilot metrics at `/api/admin/analytics/phase5-pilot`.
+10. Phase 5 contract, integration, and acceptance tests covering lineage, promotion, handoff, UI/API coverage, and the no-migration-script constraint.
+
+## Acceptance criteria status
+
+- Inspection findings become verified facts, actions, decisions, or dismissed items with lineage: complete.
+- The 90-day plan has priorities, owners, timing, completion state, and completion evidence: complete.
+- Material findings branch into inspection repair guidance and canonical Home Actions: complete.
+- On day 91, unresolved work transitions idempotently into the standard recurring Home loop: complete.
+
+Phase 5 implementation is code-complete. Deployment verification and pilot metric evaluation remain operational release activities, not missing application implementation.
 
 ## Operator action
 
-Apply the updated Prisma schema to the target database and regenerate the Prisma client as part of deployment. Do not run a migration script from this repository; none is created for this phase.
+Apply the updated Prisma schema to the target database and regenerate the Prisma client as part of deployment. Do not run a migration script from this repository; none is created for this phase. After deployment, validate the Phase 5 pilot report and at least one real day-91 or established-owner handoff against the target database.
