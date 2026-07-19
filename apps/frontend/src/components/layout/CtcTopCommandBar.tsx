@@ -22,7 +22,7 @@ interface CtcTopCommandBarProps {
 }
 
 function usePropertyData() {
-  const { selectedPropertyId } = usePropertyContext();
+  const { selectedPropertyId, setSelectedPropertyId } = usePropertyContext();
 
   // Fetch all properties
   const { data: propertiesResponse } = useQuery({
@@ -34,31 +34,42 @@ function usePropertyData() {
     staleTime: 5 * 60 * 1000,
   });
 
-  // Fetch selected property details
+  const properties = propertiesResponse?.properties || [];
+  const selectedProperty = properties.find((property) => property.id === selectedPropertyId);
+  const resolvedPropertyId = selectedProperty?.id
+    ?? properties.find((property) => property.isPrimary)?.id
+    ?? properties[0]?.id;
+
+  React.useEffect(() => {
+    if (!propertiesResponse) return;
+    if (resolvedPropertyId !== selectedPropertyId) setSelectedPropertyId(resolvedPropertyId);
+  }, [propertiesResponse, resolvedPropertyId, selectedPropertyId, setSelectedPropertyId]);
+
+  // Fetch selected property details only after resolving the selection against
+  // the authenticated user's current property list.
   const { data: property } = useQuery({
-    queryKey: ['property', selectedPropertyId],
+    queryKey: ['property', resolvedPropertyId],
     queryFn: async () => {
-      if (!selectedPropertyId) return null;
-      const response = await api.getProperty(selectedPropertyId);
+      if (!resolvedPropertyId) return null;
+      const response = await api.getProperty(resolvedPropertyId);
       return response.success ? response.data : null;
     },
-    enabled: !!selectedPropertyId,
+    enabled: !!resolvedPropertyId,
     staleTime: 5 * 60 * 1000,
   });
 
   // Fetch onboarding status to drive the setup ring
   const { data: onboardingStatus } = useQuery({
-    queryKey: ['onboarding-status', selectedPropertyId],
-    queryFn: () => getOnboardingStatus(selectedPropertyId!),
-    enabled: !!selectedPropertyId,
+    queryKey: ['onboarding-status', resolvedPropertyId],
+    queryFn: () => getOnboardingStatus(resolvedPropertyId!),
+    enabled: !!resolvedPropertyId,
     staleTime: 60 * 1000,
   });
 
-  const properties = propertiesResponse?.properties || [];
   const address = property?.address || 'Main Home';
 
   return {
-    propertyId: selectedPropertyId,
+    propertyId: resolvedPropertyId,
     propertyAddress: address,
     properties,
     property: property ?? null,

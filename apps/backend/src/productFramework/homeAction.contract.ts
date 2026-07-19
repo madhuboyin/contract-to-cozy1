@@ -50,6 +50,27 @@ export const HOME_ACTION_CTA_KINDS = [
   'CORRECT_FACT',
 ] as const;
 
+/**
+ * Canonical Home Action confidence is a 0..1 ratio. Some legacy producers
+ * still expose a 0..100 percentage. Keep this normalization at the contract
+ * boundary as a final safety net, in addition to normalizing in source
+ * adapters, so one legacy producer cannot make the entire Home feed fail.
+ */
+export function normalizeHomeActionConfidenceScore(value: unknown): number | null {
+  if (value == null) return null;
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return null;
+  const ratio = numeric > 1 ? numeric / 100 : numeric;
+  return Math.max(0, Math.min(1, ratio));
+}
+
+const ConfidenceRatioSchema = z.preprocess(
+  (value) => typeof value === 'number' && Number.isFinite(value)
+    ? normalizeHomeActionConfidenceScore(value)
+    : value,
+  z.number().min(0).max(1).nullable(),
+);
+
 const ActionLinkSchema = z.object({
   kind: z.enum(HOME_ACTION_CTA_KINDS),
   label: z.string().trim().min(1).max(120),
@@ -63,7 +84,7 @@ const EvidenceReferenceSchema = z.object({
   source: z.string().trim().min(1).max(300),
   observedAt: z.string().datetime().nullable(),
   freshness: z.enum(['CURRENT', 'STALE', 'UNKNOWN']),
-  confidence: z.number().min(0).max(1).nullable(),
+  confidence: ConfidenceRatioSchema,
 });
 
 const AssumptionSchema = z.object({
@@ -114,7 +135,7 @@ export const HomeActionSchema = z.object({
   options: z.array(DecisionOptionSchema).max(20),
   tradeoffs: z.array(TradeoffSchema).max(50),
   confidence: z.object({
-    score: z.number().min(0).max(1).nullable(),
+    score: ConfidenceRatioSchema,
     label: z.enum(['LOW', 'MEDIUM', 'HIGH']),
     missing: z.array(z.string().trim().min(1).max(240)).max(30),
   }),
@@ -188,19 +209,6 @@ export const HomeActionSchema = z.object({
 });
 
 export type HomeAction = z.infer<typeof HomeActionSchema>;
-
-/**
- * Canonical Home Action confidence is a 0..1 ratio. Some legacy orchestration
- * producers still expose a 0..100 percentage, so normalize only at their
- * adapter boundary while preserving already-canonical ratios.
- */
-export function normalizeHomeActionConfidenceScore(value: unknown): number | null {
-  if (value == null) return null;
-  const numeric = Number(value);
-  if (!Number.isFinite(numeric)) return null;
-  const ratio = numeric > 1 ? numeric / 100 : numeric;
-  return Math.max(0, Math.min(1, ratio));
-}
 
 export function parseHomeAction(input: unknown): HomeAction {
   return HomeActionSchema.parse(input);

@@ -30,6 +30,11 @@ spec:
       containers:
         - name: api
           image: ghcr.io/madhuboyin/contract-to-cozy/backend:latest
+          # `Always` ensures newly-created pods resolve the current digest.
+          # Pushing this mutable tag still requires a rollout restart (or an
+          # immutable image tag update) because apply alone does not recreate
+          # an unchanged pod template.
+          imagePullPolicy: Always
           ports:
             - containerPort: 8080
           env:

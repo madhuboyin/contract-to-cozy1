@@ -186,7 +186,7 @@ function chooseNextTask(actions: OrchestratedActionDTO[], bookings: Booking[]): 
 
 function useResolvedPropertyId() {
   const pathname = usePathname();
-  const { selectedPropertyId } = usePropertyContext();
+  const { selectedPropertyId, setSelectedPropertyId } = usePropertyContext();
   const propertyIdFromPath = getPropertyIdFromPathname(pathname || '');
 
   const propertiesQuery = useQuery({
@@ -196,13 +196,28 @@ function useResolvedPropertyId() {
       return res.success ? res.data.properties : [];
     },
     staleTime: 5 * 60 * 1000,
-    enabled: !selectedPropertyId && !propertyIdFromPath,
   });
 
-  const fallbackProperty = propertiesQuery.data?.find((property) => property.isPrimary) ?? propertiesQuery.data?.[0];
+  const properties = propertiesQuery.data ?? [];
+  const routeProperty = propertyIdFromPath
+    ? properties.find((property) => property.id === propertyIdFromPath)
+    : undefined;
+  const selectedProperty = selectedPropertyId
+    ? properties.find((property) => property.id === selectedPropertyId)
+    : undefined;
+  const fallbackProperty = properties.find((property) => property.isPrimary) ?? properties[0];
+  const resolvedProperty = routeProperty ?? selectedProperty ?? fallbackProperty;
+
+  React.useEffect(() => {
+    if (!propertiesQuery.isSuccess) return;
+    const resolvedId = resolvedProperty?.id;
+    if (resolvedId !== selectedPropertyId) setSelectedPropertyId(resolvedId);
+  }, [propertiesQuery.isSuccess, resolvedProperty?.id, selectedPropertyId, setSelectedPropertyId]);
 
   return {
-    propertyId: selectedPropertyId || propertyIdFromPath || fallbackProperty?.id,
+    // Wait for the authoritative property list instead of issuing requests for
+    // a stale localStorage selection that belongs to an older account/session.
+    propertyId: propertiesQuery.isSuccess ? resolvedProperty?.id : undefined,
     isLoading: propertiesQuery.isLoading,
   };
 }

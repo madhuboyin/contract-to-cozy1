@@ -70,9 +70,17 @@ kubectl top pods -n production
 ## Update
 
 ```bash
+# Preferred: deploy an immutable tag so the pod template changes and Kubernetes
+# performs a rollout automatically.
 kubectl set image deployment/api-deployment \
   api=ghcr.io/madhuboyin/contract-to-cozy/backend:v1.0.1 \
   -n production
+
+# If the pilot workflow pushes backend:latest instead, applying the unchanged
+# manifest does not recreate existing pods. Explicitly restart and wait until
+# every API replica is on the newly-pulled digest.
+kubectl rollout restart deployment/api-deployment -n production
+kubectl rollout status deployment/api-deployment -n production
 ```
 
 ## Logs

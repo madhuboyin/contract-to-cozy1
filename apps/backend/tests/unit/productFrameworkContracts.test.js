@@ -136,6 +136,16 @@ test('canonical adapters normalize legacy percentage confidence from every produ
   assert.doesNotThrow(() => HomeActionSchema.parse(action));
 });
 
+test('Home Action contract boundary normalizes legacy percentage confidence defensively', () => {
+  const fixture = structuredClone(goldenTestHomes[0].action);
+  fixture.evidence[0].confidence = 85;
+  fixture.confidence.score = 85;
+
+  const action = HomeActionSchema.parse(fixture);
+  assert.equal(action.evidence[0].confidence, 0.85);
+  assert.equal(action.confidence.score, 0.85);
+});
+
 test('north-star metric declares owners and aggregates an explicit eligible denominator', () => {
   const eligibleSuccess = {
     lineage: {
