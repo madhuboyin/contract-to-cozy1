@@ -186,6 +186,11 @@ Manage notifications in your dashboard.
     });
 
     logger.error({ err }, '[EMAIL-WORKER] Batch email delivery failed');
+    // WKR-008: rethrow after marking the deliveries FAILED — swallowing
+    // this let BullMQ mark the job "completed" on an actual send failure,
+    // so it never showed up in queue failure counts and never triggered
+    // alertOnJobFailure (emailNotificationWorker.on('failed', ...)).
+    throw err;
   }
 }
 

@@ -11,7 +11,7 @@ const assert = require('node:assert/strict');
 
 require('ts-node/register');
 
-function loadService({ tasks, existingUpdateShouldFail = false } = {}) {
+function loadService({ tasks, existingUpdateShouldFail = false, createImpl } = {}) {
   const updateCalls = [];
   const prismaMock = {
     propertyMaintenanceTask: {
@@ -42,6 +42,7 @@ function loadService({ tasks, existingUpdateShouldFail = false } = {}) {
       NotificationService: {
         create: async (input) => {
           createCalls.push(input);
+          if (createImpl) return createImpl(input);
           return createReturnValue;
         },
       },
@@ -162,4 +163,42 @@ test('threads WORKER_OUTBOUND_NOTIFICATIONS_ENABLED into transportEnabled', asyn
 
   assert.equal(getCreateCalls()[0].transportEnabled, true);
   delete process.env.WORKER_OUTBOUND_NOTIFICATIONS_ENABLED;
+});
+
+test('WKR-008: isolates a per-task failure instead of aborting the whole run', async () => {
+  const tasks = [
+    task({ id: 'task-1', propertyId: 'property-1' }),
+    task({ id: 'task-2', propertyId: 'property-2', property: { homeownerProfile: { userId: 'user-2' } } }),
+  ];
+  const { service, getCreateCalls, getUpdateCalls } = loadService({
+    tasks,
+    createImpl: async (input) => {
+      if (input.entityId === 'task-1') throw new Error('boom');
+      return { id: 'notification-2' };
+    },
+  });
+
+  const result = await service.processMaintenanceReminders({ now: new Date('2026-07-19T00:00:00.000Z') });
+
+  assert.equal(result.examined, 2);
+  assert.equal(result.notified, 1);
+  assert.equal(result.failed, 1);
+  assert.equal(getCreateCalls().length, 2);
+  // task-1 failed before its stamping update; task-2 succeeded and got stamped.
+  assert.equal(getUpdateCalls().length, 1);
+  assert.equal(getUpdateCalls()[0].where.id, 'task-2');
+});
+
+test('WKR-008: rejects the run when every task fails, instead of reporting false success', async () => {
+  const { service } = loadService({
+    tasks: [task()],
+    createImpl: async () => {
+      throw new Error('notification service unavailable');
+    },
+  });
+
+  await assert.rejects(
+    () => service.processMaintenanceReminders({ now: new Date('2026-07-19T00:00:00.000Z') }),
+    /All 1 task\(s\) failed/,
+  );
 });

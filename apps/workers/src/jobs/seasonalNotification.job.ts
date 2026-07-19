@@ -94,6 +94,8 @@ export async function sendSeasonalNotifications() {
   if (errors > 0 && errors === checklistsToNotify.length) {
     throw new Error(`[SEASONAL-NOTIFY] All ${errors} checklist(s) failed — rejecting run instead of reporting false success`);
   }
+
+  return { examined: checklistsToNotify.length, notified, skipped, failed: errors };
 }
 
 async function notifyForChecklist(checklist: any, transportEnabled: boolean): Promise<boolean> {

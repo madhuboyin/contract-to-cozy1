@@ -70,6 +70,7 @@ import {
   collectWorkerFlagDiagnostics,
 } from '../../backend/src/config/workerExecutionPolicy';
 import { areHumanPolicyApprovalsEnforced } from '../../backend/src/config/appConfig';
+import { WorkerRunResult, isWorkerRunResult, deriveRunStatus } from './lib/workerRunResult';
 import { prisma } from './lib/prisma';
 import { HiddenAssetService } from '../../backend/src/services/hiddenAssets.service';
 import RiskAssessmentService from '../../backend/src/services/RiskAssessment.service';
@@ -449,8 +450,9 @@ async function sendMaintenanceReminders() {
   const result = await processMaintenanceReminders();
   logger.info(
     { ...result },
-    `[maintenance-reminders] examined=${result.examined} notified=${result.notified} skipped=${result.skipped}`,
+    `[maintenance-reminders] examined=${result.examined} notified=${result.notified} skipped=${result.skipped} failed=${result.failed}`,
   );
+  return result;
 }
 
 /**
@@ -632,14 +634,14 @@ async function processHiddenAssetScan(jobData: PropertyIntelligenceJobPayload) {
 // appear in the Worker Jobs admin dashboard.
 // =============================================================================
 
-const CRON_HANDLERS: Record<string, () => Promise<void>> = {
-  'maintenance-reminders':           async () => { await sendMaintenanceReminders(); },
+const CRON_HANDLERS: Record<string, () => Promise<void | WorkerRunResult>> = {
+  'maintenance-reminders':           async () => sendMaintenanceReminders(),
   'daily-email-digest':              async () => { await runDailyEmailDigest(); },
   'weekly-home-brief-digest':        async () => { await runWeeklyHomeBriefDigest(); },
   'new-home-warranty-deadlines':     async () => { await runNewHomeWarrantyDeadlineJob(); },
   'seasonal-checklist-expiration':   async () => { await expireSeasonalChecklists(); },
   'seasonal-checklist-generation':   async () => { await generateSeasonalChecklists(); },
-  'seasonal-notifications':          async () => { await sendSeasonalNotifications(); },
+  'seasonal-notifications':          async () => sendSeasonalNotifications(),
   'weekly-score-snapshots':          async () => { await captureWeeklyScoreSnapshotsJob(); },
   'hidden-asset-refresh':            async () => { await runHiddenAssetRefreshJob(); },
   'coverage-lapse-incidents':        async () => { await coverageLapseIncidentsJob(); },
@@ -711,7 +713,7 @@ function scheduleCronJobs(): void {
         const decision = evaluateWorkerExecution(entry.key, 'scheduled', entry);
         if (!decision.allowed) {
           logger.info(`[${entry.key}] Skipped tick — ${decision.reason}`);
-          void recordCronRun(entry.key, {
+          await recordCronRun(entry.key, {
             status: 'skipped',
             finishedAt: Date.now(),
             durationMs: 0,
@@ -727,19 +729,38 @@ function scheduleCronJobs(): void {
         const stopTimer = cronJobDurationSeconds.startTimer({ job_key: entry.key });
         try {
           logger.info(`[${entry.key}] Starting: ${entry.name}`);
-          await handler();
-          logger.info(`[${entry.key}] ✅ Completed`);
-          cronJobRunsTotal.inc({ job_key: entry.key, status: 'success' });
+          const outcome = await handler();
+
+          // WKR-008: a handler can opt into structured reporting by
+          // resolving with a WorkerRunResult. FAILED (resolved, but
+          // nothing succeeded) is treated exactly like a thrown error —
+          // it must not be recorded as a false SUCCEEDED just because the
+          // promise resolved.
+          if (isWorkerRunResult(outcome) && deriveRunStatus(outcome) === 'FAILED') {
+            throw new Error(
+              outcome.reason ??
+                `[${entry.key}] resolved with FAILED status (examined=${outcome.examined}, failed=${outcome.failed}, notified=${outcome.notified ?? 0})`,
+            );
+          }
+          const runStatus = isWorkerRunResult(outcome) ? deriveRunStatus(outcome) : 'SUCCEEDED';
+          const isPartial = runStatus === 'PARTIAL';
+
+          logger.info(`[${entry.key}] ✅ Completed${isPartial ? ' (partial)' : ''}`);
+          cronJobRunsTotal.inc({ job_key: entry.key, status: isPartial ? 'partial' : 'success' });
           cronJobLastSuccessTimestamp.set({ job_key: entry.key }, Date.now() / 1000);
-          void recordCronRun(entry.key, {
-            status: 'completed',
+          await recordCronRun(entry.key, {
+            status: isPartial ? 'partial' : 'completed',
             finishedAt: Date.now(),
             durationMs: stopTimer() * 1000,
+            failReason: isPartial
+              ? (outcome as WorkerRunResult).reason ??
+                `${(outcome as WorkerRunResult).failed} of ${(outcome as WorkerRunResult).examined} failed`
+              : undefined,
           });
         } catch (err) {
           logger.error({ err }, `[${entry.key}] ❌ Failed`);
           cronJobRunsTotal.inc({ job_key: entry.key, status: 'failure' });
-          void recordCronRun(entry.key, {
+          await recordCronRun(entry.key, {
             status: 'failed',
             finishedAt: Date.now(),
             durationMs: stopTimer() * 1000,
@@ -868,6 +889,10 @@ function startWorker() {
         await sendEmailNotificationJob(job.data.notificationDeliveryId);
       } else if (job.name === 'SEND_FEEDBACK_NOTIFICATION') {
         await sendFeedbackNotificationJob(job.data);
+      } else {
+        // WKR-009: a producer/consumer name mismatch silently "completed"
+        // instead of surfacing — fail loudly instead.
+        throw new Error(`[EMAIL-WORKER] Unknown job name: ${job.name}`);
       }
     },
     {
@@ -907,6 +932,8 @@ function startWorker() {
       async (job) => {
         if (job.name === 'SEND_PUSH_NOTIFICATION') {
           await sendPushNotificationJob(job.data.notificationDeliveryId);
+        } else {
+          throw new Error(`[PUSH-WORKER] Unknown job name: ${job.name}`);
         }
       },
       { connection: redisConnection }
@@ -930,6 +957,8 @@ function startWorker() {
       async (job) => {
         if (job.name === 'SEND_SMS_NOTIFICATION') {
           await sendSmsNotificationJob(job.data.notificationDeliveryId);
+        } else {
+          throw new Error(`[SMS-WORKER] Unknown job name: ${job.name}`);
         }
       },
       { connection: redisConnection }
@@ -1046,6 +1075,8 @@ const recallWorker = new Worker(
       await recallIngestJob();
     } else if (job.name === RECALL_MATCH_JOB) {
       await recallMatchJob();
+    } else {
+      throw new Error(`[RECALL-WORKER] Unknown job name: ${job.name}`);
     }
   },
   { 
@@ -1312,7 +1343,13 @@ const cronTriggerWorker = new Worker(
       }
     }
     logger.info(`[CRON-TRIGGER] Running manually triggered job: ${job.name}`);
-    await handler();
+    const outcome = await handler();
+    if (isWorkerRunResult(outcome) && deriveRunStatus(outcome) === 'FAILED') {
+      throw new Error(
+        outcome.reason ??
+          `[CRON-TRIGGER] "${job.name}" resolved with FAILED status (examined=${outcome.examined}, failed=${outcome.failed})`,
+      );
+    }
   },
   {
     connection: redisConnection,

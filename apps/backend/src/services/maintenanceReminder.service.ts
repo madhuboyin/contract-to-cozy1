@@ -16,6 +16,7 @@
 import { prisma } from '../lib/prisma';
 import { NotificationService } from './notification.service';
 import { areWorkerOutboundNotificationsEnabled } from '../config/workerExecutionPolicy';
+import { logger } from '../lib/logger';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -28,6 +29,7 @@ export type MaintenanceReminderResult = {
   examined: number;
   notified: number;
   skipped: number;
+  failed: number;
 };
 
 export async function processMaintenanceReminders(options: {
@@ -52,6 +54,7 @@ export async function processMaintenanceReminders(options: {
 
   let notified = 0;
   let skipped = 0;
+  let failed = 0;
   const transportEnabled = areWorkerOutboundNotificationsEnabled();
 
   for (const task of tasks) {
@@ -70,42 +73,53 @@ export async function processMaintenanceReminders(options: {
       continue;
     }
 
-    const daysUntilDue = Math.round((dueAt.getTime() - now.getTime()) / DAY_MS);
-    const isMaterial = daysUntilDue <= MATERIAL_DEADLINE_DAYS;
-    const dueLabel =
-      daysUntilDue < 0
-        ? `overdue since ${dueAt.toLocaleDateString()}`
-        : daysUntilDue === 0
-        ? 'due today'
-        : `due ${dueAt.toLocaleDateString()} (in ${daysUntilDue} day${daysUntilDue === 1 ? '' : 's'})`;
+    // WKR-008: isolate per-task failures so one bad reminder doesn't abort
+    // every other homeowner's reminder for the rest of this run.
+    try {
+      const daysUntilDue = Math.round((dueAt.getTime() - now.getTime()) / DAY_MS);
+      const isMaterial = daysUntilDue <= MATERIAL_DEADLINE_DAYS;
+      const dueLabel =
+        daysUntilDue < 0
+          ? `overdue since ${dueAt.toLocaleDateString()}`
+          : daysUntilDue === 0
+          ? 'due today'
+          : `due ${dueAt.toLocaleDateString()} (in ${daysUntilDue} day${daysUntilDue === 1 ? '' : 's'})`;
 
-    const result = await NotificationService.create({
-      userId,
-      type: 'MAINTENANCE_TASK_REMINDER',
-      title: `Maintenance reminder: ${task.title}`,
-      message: `"${task.title}" is ${dueLabel}.`,
-      actionUrl: `/dashboard/properties/${task.propertyId}/tools/guidance-overview`,
-      entityType: 'PROPERTY_MAINTENANCE_TASK',
-      entityId: task.id,
-      category: isMaterial ? 'MATERIAL_DEADLINE' : 'MAINTENANCE',
-      urgency: isMaterial ? 'MATERIAL' : 'ROUTINE',
-      transportEnabled,
-      metadata: {
-        propertyId: task.propertyId,
-        actionKey: task.actionKey ?? undefined,
-        nextDueDate: dueAt.toISOString(),
-        daysUntilDue,
-      },
-    });
+      const result = await NotificationService.create({
+        userId,
+        type: 'MAINTENANCE_TASK_REMINDER',
+        title: `Maintenance reminder: ${task.title}`,
+        message: `"${task.title}" is ${dueLabel}.`,
+        actionUrl: `/dashboard/properties/${task.propertyId}/tools/guidance-overview`,
+        entityType: 'PROPERTY_MAINTENANCE_TASK',
+        entityId: task.id,
+        category: isMaterial ? 'MATERIAL_DEADLINE' : 'MAINTENANCE',
+        urgency: isMaterial ? 'MATERIAL' : 'ROUTINE',
+        transportEnabled,
+        metadata: {
+          propertyId: task.propertyId,
+          actionKey: task.actionKey ?? undefined,
+          nextDueDate: dueAt.toISOString(),
+          daysUntilDue,
+        },
+      });
 
-    await prisma.propertyMaintenanceTask.update({
-      where: { id: task.id },
-      data: { remindedForDueDate: dueAt },
-    });
+      await prisma.propertyMaintenanceTask.update({
+        where: { id: task.id },
+        data: { remindedForDueDate: dueAt },
+      });
 
-    if (result) notified += 1;
-    else skipped += 1;
+      if (result) notified += 1;
+      else skipped += 1;
+    } catch (err) {
+      failed += 1;
+      logger.error({ err, taskId: task.id, propertyId: task.propertyId }, '[maintenance-reminders] Failed to remind for task');
+    }
   }
 
-  return { examined: tasks.length, notified, skipped };
+  if (failed > 0 && failed === tasks.length) {
+    throw new Error(`[maintenance-reminders] All ${failed} task(s) failed — rejecting run instead of reporting false success`);
+  }
+
+  return { examined: tasks.length, notified, skipped, failed };
 }

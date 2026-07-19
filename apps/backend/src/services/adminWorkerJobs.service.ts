@@ -27,7 +27,7 @@ export interface QueueStats {
 export interface RecentRun {
   id: string;
   jobName: string;
-  status: 'completed' | 'failed' | 'skipped';
+  status: 'completed' | 'failed' | 'skipped' | 'partial';
   finishedAt: number | null;
   durationMs: number | null;
   failReason?: string;
@@ -67,7 +67,7 @@ cronHistoryRedis.on('error', (err) => {
 });
 
 interface StoredCronRun {
-  status: 'completed' | 'failed' | 'skipped';
+  status: 'completed' | 'failed' | 'skipped' | 'partial';
   finishedAt: number;
   durationMs: number;
   failReason?: string;

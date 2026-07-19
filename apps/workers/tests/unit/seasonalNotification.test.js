@@ -26,7 +26,7 @@ test('never calls a channel transport directly (governance bypass regression gua
   assert.match(source, /areWorkerOutboundNotificationsEnabled/);
 });
 
-function loadJob({ checklists, climateSetting = { notificationEnabled: true } }) {
+function loadJob({ checklists, climateSetting = { notificationEnabled: true }, createImpl }) {
   const prismaMock = {
     seasonalChecklist: {
       findMany: async () => checklists,
@@ -49,6 +49,7 @@ function loadJob({ checklists, climateSetting = { notificationEnabled: true } })
       NotificationService: {
         create: async (input) => {
           createCalls.push(input);
+          if (createImpl) return createImpl(input);
           return { id: 'notification-1' };
         },
       },
@@ -141,4 +142,32 @@ test('threads WORKER_OUTBOUND_NOTIFICATIONS_ENABLED into transportEnabled', asyn
 
   assert.equal(getCreateCalls()[0].transportEnabled, true);
   delete process.env.WORKER_OUTBOUND_NOTIFICATIONS_ENABLED;
+});
+
+test('WKR-008: returns a WorkerRunResult-shaped outcome the scheduler can classify', async () => {
+  const { job } = loadJob({ checklists: [checklist()] });
+
+  const result = await job.sendSeasonalNotifications();
+
+  assert.equal(result.examined, 1);
+  assert.equal(result.notified, 1);
+  assert.equal(result.skipped, 0);
+  assert.equal(result.failed, 0);
+});
+
+test('WKR-008: isolates a per-checklist failure and reports it in `failed`', async () => {
+  const { job, getCreateCalls } = loadJob({
+    checklists: [checklist({ id: 'checklist-1', propertyId: 'property-1' }), checklist({ id: 'checklist-2', propertyId: 'property-2' })],
+    createImpl: async (input) => {
+      if (input.entityId === 'checklist-1') throw new Error('boom');
+      return { id: 'notification-2' };
+    },
+  });
+
+  const result = await job.sendSeasonalNotifications();
+
+  assert.equal(result.examined, 2);
+  assert.equal(result.notified, 1);
+  assert.equal(result.failed, 1);
+  assert.equal(getCreateCalls().length, 2);
 });

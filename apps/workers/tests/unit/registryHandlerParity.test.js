@@ -21,9 +21,12 @@ require('ts-node/register');
 
 const { JOB_REGISTRY } = require('../../../backend/src/config/workerJobRegistry.ts');
 
-function extractCronHandlerKeys() {
-  const source = fs.readFileSync(path.resolve(__dirname, '../../src/worker.ts'), 'utf8');
-  const start = source.indexOf('const CRON_HANDLERS: Record<string, () => Promise<void>> = {');
+function readWorkerSource() {
+  return fs.readFileSync(path.resolve(__dirname, '../../src/worker.ts'), 'utf8');
+}
+
+function extractCronHandlerKeys(source) {
+  const start = source.indexOf('const CRON_HANDLERS: Record<string, () => Promise<void | WorkerRunResult>> = {');
   assert.notEqual(start, -1, 'Could not locate CRON_HANDLERS declaration in worker.ts');
   const end = source.indexOf('\n};', start);
   assert.notEqual(end, -1, 'Could not locate end of CRON_HANDLERS declaration in worker.ts');
@@ -35,7 +38,7 @@ test('every JOB_REGISTRY cron entry has a CRON_HANDLERS entry and vice versa', (
   const registryCronKeys = new Set(
     JOB_REGISTRY.filter((j) => j.type === 'cron' && j.cronExpression).map((j) => j.key),
   );
-  const handlerKeys = new Set(extractCronHandlerKeys());
+  const handlerKeys = new Set(extractCronHandlerKeys(readWorkerSource()));
 
   const missingHandler = [...registryCronKeys].filter((k) => !handlerKeys.has(k));
   const missingRegistry = [...handlerKeys].filter((k) => !registryCronKeys.has(k));
@@ -66,5 +69,38 @@ test('RUNNER_REGISTRY covers every runner file under src/runners', () => {
   for (const runner of RUNNER_REGISTRY) {
     assert.ok(runner.impact, `${runner.key} is missing impact`);
     assert.ok(runner.customerJob, `${runner.key} is missing customerJob`);
+  }
+});
+
+// WKR-009: a producer/consumer job-name mismatch on these queues previously
+// fell through the dispatch if/else silently — the handler resolved
+// `undefined` and BullMQ marked the job "completed" even though nothing
+// ran. Each processor below must have a throwing else/default branch.
+test('BullMQ queue processors in worker.ts have exhaustive job-name dispatch', () => {
+  const source = readWorkerSource();
+
+  function extractProcessorBody(queueVarDeclaration) {
+    const start = source.indexOf(queueVarDeclaration);
+    assert.notEqual(start, -1, `Could not locate "${queueVarDeclaration}" in worker.ts`);
+    // Grab a generous window past the declaration — enough to cover the
+    // processor's dispatch body without needing a full brace parser.
+    return source.slice(start, start + 1200);
+  }
+
+  const processors = [
+    { label: 'emailNotificationWorker', decl: "const emailNotificationWorker = new Worker(" },
+    { label: 'pushWorker', decl: "const pushWorker = new Worker(" },
+    { label: 'smsWorker', decl: "const smsWorker = new Worker(" },
+    { label: 'recallWorker', decl: "const recallWorker = new Worker(" },
+  ];
+
+  for (const { label, decl } of processors) {
+    const body = extractProcessorBody(decl);
+    assert.match(body, /\belse\b[\s\S]*?\{/, `${label} has no else/default dispatch branch`);
+    assert.match(
+      body,
+      /throw new Error\(`\[.*Unknown job name: \$\{job\.name\}`\)/,
+      `${label} does not throw on an unrecognized job.name`,
+    );
   }
 });
