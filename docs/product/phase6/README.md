@@ -35,15 +35,34 @@ The assessment is not a claim that the journey has proven channel economics. It 
 - The existing-home `HomeBuyerChecklist` is not reused because its inspection/closing phases and 90-day horizon do not model builder responsibility or first-year warranty rights.
 - New-home tasks use stable Home Action keys so later increments can promote deadlines and unresolved work into the canonical feed without introducing another action identity.
 
-## Pending Phase 6 increments
+## Completion increment
 
-- Punch-list item capture with photos, builder responses, promised dates, escalation, and verified closure.
-- Warranty-term extraction, source citations, notice rules, and deadline notification promotion.
-- Direct registration workflows for appliance/system model and serial evidence.
-- Permit, final-inspection, and commissioning evidence classification.
-- Automated 30-day, 90-day, and one-year inspection preparation bundles.
-- Idempotent transition of unresolved tasks into the recurring Home feed and Living Home Record.
-- Admin pilot cohort metrics and explicit expansion-gate reporting.
+Status: implemented in code.
+
+The completion increment adds:
+
+- durable punch-list items with locations, evidence-document IDs, promised dates, builder response history, dispute state, and homeowner-verified closure;
+- a source-cited warranty-rights register with coverage, notice requirements, expiry, extraction confidence, verification, canonical deadline tasks, and governed notifications;
+- inventory-linked manufacturer/model/serial registration with confirmed identity written back to the canonical inventory record;
+- classified permit, final-inspection, commissioning, manual, certificate, and photo evidence with verification lineage;
+- idempotent 30-day, 90-day, and one-year inspection-preparation bundles;
+- first-year transition of unresolved work into canonical maintenance actions plus a Living Home Record milestone;
+- automatic handoff checks at the standard Home Action feed boundary;
+- property acceptance reporting and admin pilot/expansion-gate metrics at `/api/admin/analytics/phase6-pilot`; and
+- responsive workflow controls for punch lists, warranty rights, registration, evidence, and inspection preparation.
+
+## Acceptance status
+
+- Walkthrough and punch-list capture: complete.
+- Builder responsibility, response history, deadlines, disputes, and verified closure: complete.
+- Warranty rights, citations, notice deadlines, canonical alerts, and notifications: complete.
+- Model and serial registration with inventory write-back: complete.
+- Permit, final-inspection, and commissioning evidence: complete.
+- Seasonal/homeowner responsibilities and 30-day, 90-day, and one-year preparation: complete.
+- Recurring Home and Living Home Record transition: complete.
+- Pilot cohort and expansion-gate reporting: complete in code; a `READY` decision requires real operational evidence and cannot be manufactured by implementation.
+
+Phase 6 is code-complete. Schema application, pilot usage, threshold review, and the eventual expansion decision are operational release activities.
 
 ## Operator action
 

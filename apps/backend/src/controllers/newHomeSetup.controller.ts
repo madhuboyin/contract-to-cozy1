@@ -4,6 +4,12 @@ import {
   NewHomeLifecycleInputSchema,
   NewHomePilotAssessmentInputSchema,
   NewHomeTaskUpdateSchema,
+  NewHomePunchListInputSchema,
+  NewHomeBuilderResponseInputSchema,
+  NewHomeWarrantyRightInputSchema,
+  NewHomeRegistrationInputSchema,
+  NewHomeEvidenceInputSchema,
+  NewHomeInspectionBundleUpdateSchema,
 } from '../productFramework/newHomeSetup.contract';
 import { NewHomeSetupService } from '../services/newHomeSetup.service';
 
@@ -59,6 +65,18 @@ const updateTask = async (req: AuthRequest, res: Response, next: NextFunction) =
   } catch (error) { next(error); }
 };
 
+const createPunchListItem = async (req: AuthRequest, res: Response, next: NextFunction) => { try { const data = await NewHomeSetupService.createPunchListItem(userId(req), req.params.propertyId, NewHomePunchListInputSchema.parse(req.body)); return res.status(201).json({ success: true, data }); } catch (error) { next(error); } };
+const addBuilderResponse = async (req: AuthRequest, res: Response, next: NextFunction) => { try { const data = await NewHomeSetupService.addBuilderResponse(userId(req), req.params.propertyId, req.params.itemId, NewHomeBuilderResponseInputSchema.parse(req.body)); return res.status(201).json({ success: true, data }); } catch (error) { next(error); } };
+const createWarrantyRight = async (req: AuthRequest, res: Response, next: NextFunction) => { try { const data = await NewHomeSetupService.createWarrantyRight(userId(req), req.params.propertyId, NewHomeWarrantyRightInputSchema.parse(req.body)); return res.status(201).json({ success: true, data }); } catch (error) { next(error); } };
+const promoteWarrantyDocument = async (req: AuthRequest, res: Response, next: NextFunction) => { try { const data = await NewHomeSetupService.promoteWarrantyDocument(userId(req), req.params.propertyId, req.body); return res.status(201).json({ success: true, data }); } catch (error) { next(error); } };
+const verifyWarrantyRight = async (req: AuthRequest, res: Response, next: NextFunction) => { try { const data = await NewHomeSetupService.verifyWarrantyRight(userId(req), req.params.propertyId, req.params.rightId); return res.json({ success: true, data }); } catch (error) { next(error); } };
+const upsertRegistration = async (req: AuthRequest, res: Response, next: NextFunction) => { try { const data = await NewHomeSetupService.upsertRegistration(userId(req), req.params.propertyId, NewHomeRegistrationInputSchema.parse(req.body)); return res.json({ success: true, data }); } catch (error) { next(error); } };
+const addEvidence = async (req: AuthRequest, res: Response, next: NextFunction) => { try { const data = await NewHomeSetupService.addEvidence(userId(req), req.params.propertyId, NewHomeEvidenceInputSchema.parse(req.body)); return res.status(201).json({ success: true, data }); } catch (error) { next(error); } };
+const ensureInspectionBundles = async (req: AuthRequest, res: Response, next: NextFunction) => { try { const data = await NewHomeSetupService.ensureInspectionBundles(userId(req), req.params.propertyId); return res.json({ success: true, data }); } catch (error) { next(error); } };
+const updateInspectionBundle = async (req: AuthRequest, res: Response, next: NextFunction) => { try { const data = await NewHomeSetupService.updateInspectionBundle(userId(req), req.params.propertyId, req.params.bundleId, NewHomeInspectionBundleUpdateSchema.parse(req.body)); return res.json({ success: true, data }); } catch (error) { next(error); } };
+const handoff = async (req: AuthRequest, res: Response, next: NextFunction) => { try { const data = await NewHomeSetupService.ensureRecurringHandoff(userId(req), req.params.propertyId); return res.json({ success: true, data }); } catch (error) { next(error); } };
+const getAcceptanceStatus = async (req: AuthRequest, res: Response, next: NextFunction) => { try { const data = await NewHomeSetupService.getAcceptanceStatus(userId(req), req.params.propertyId); return res.json({ success: true, data }); } catch (error) { next(error); } };
+
 export const newHomeSetupController = {
   getOverview,
   getAssessment,
@@ -66,4 +84,15 @@ export const newHomeSetupController = {
   getPlan,
   updateLifecycle,
   updateTask,
+  createPunchListItem,
+  addBuilderResponse,
+  createWarrantyRight,
+  promoteWarrantyDocument,
+  verifyWarrantyRight,
+  upsertRegistration,
+  addEvidence,
+  ensureInspectionBundles,
+  updateInspectionBundle,
+  handoff,
+  getAcceptanceStatus,
 };

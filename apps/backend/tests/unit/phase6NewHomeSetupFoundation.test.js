@@ -79,3 +79,24 @@ test('API and dashboard expose the specialized path without a migration script',
   const migrationRoot = path.resolve(__dirname, '../../prisma/migrations');
   assert.deepEqual(fs.readdirSync(migrationRoot).filter((entry) => /phase.?6|new.?home/i.test(entry)), []);
 });
+
+test('completion increment implements detailed rights, evidence, inspection, and handoff workflows', () => {
+  const service = read('../../src/services/newHomeSetup.service.ts');
+  const routes = read('../../src/routes/newHomeSetup.routes.ts');
+  const homeFeed = read('../../src/services/homeActions.service.ts');
+  const metrics = read('../../src/services/adminAnalytics/phase6PilotService.ts');
+  for (const model of ['NewHomePunchListItem', 'NewHomeBuilderResponse', 'NewHomeWarrantyRight', 'NewHomeSystemRegistration', 'NewHomeEvidenceRecord', 'NewHomeInspectionBundle']) {
+    assert.match(read('../../prisma/schema.prisma'), new RegExp(`model ${model}`));
+  }
+  assert.match(service, /BUILDER_RESPONSE_AND_USER_VERIFICATION/);
+  assert.match(service, /sourceCitation/);
+  assert.match(service, /NEW_HOME_WARRANTY_DEADLINE/);
+  assert.match(service, /verificationSource: input\.status === 'CONFIRMED' \? 'NEW_HOME_REGISTRATION'/);
+  assert.match(service, /new-home-first-year-handoff/);
+  assert.match(service, /homeEvent\.create/);
+  assert.match(routes, /inspection-bundles/);
+  assert.match(routes, /acceptance-status/);
+  assert.match(homeFeed, /NewHomeSetupService\.ensureRecurringHandoff/);
+  assert.match(metrics, /INSUFFICIENT_EVIDENCE/);
+  assert.match(metrics, /phase6-v1/);
+});

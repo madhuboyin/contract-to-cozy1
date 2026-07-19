@@ -13,6 +13,7 @@ import { recordOrchestrationEvent } from './orchestrationEvent.service';
 import { snoozeAction } from './orchestrationSnooze.service';
 import { getPromotedHomeActions } from './homeActionSourcePromotion.service';
 import { BuyerAcquisitionService } from './buyerAcquisition.service';
+import { NewHomeSetupService } from './newHomeSetup.service';
 
 export const HOME_ACTION_COMMANDS = [
   'COMPLETE',
@@ -163,6 +164,7 @@ export async function getHomeActionFeed(propertyId: string, userId: string) {
   // Day-91 handoff is idempotent and runs at the standard Home-feed boundary,
   // so the property does not depend on a buyer dashboard or a separate cron.
   await BuyerAcquisitionService.ensureRecurringHandoff(userId, propertyId).catch(() => null);
+  await NewHomeSetupService.ensureRecurringHandoff(userId, propertyId).catch(() => null);
   const orchestration = await getOrchestrationSummary(propertyId, userId);
   const promoted = await getPromotedHomeActions(propertyId);
   const candidates: HomeAction[] = [...orchestration.homeActions, ...promoted.actions];

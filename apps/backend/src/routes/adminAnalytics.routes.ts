@@ -23,6 +23,7 @@ import {
   getFunnelHandler,
   getPhase1PilotHandler,
   getPhase5PilotHandler,
+  getPhase6PilotHandler,
   getCohortsHandler,
   getTopToolsHandler,
 } from '../controllers/adminAnalytics.controller';
@@ -165,6 +166,8 @@ router.get(
   validate(OverviewQuerySchema),
   getPhase5PilotHandler,
 );
+
+router.get('/admin/analytics/phase6-pilot', validate(OverviewQuerySchema), getPhase6PilotHandler);
 
 /**
  * @swagger

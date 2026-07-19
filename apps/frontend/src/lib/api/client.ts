@@ -3257,6 +3257,50 @@ class APIClient {
     });
   }
 
+  async createNewHomePunchListItem(propertyId: string, input: { title: string; description?: string | null; location?: string | null; priority?: 'NOW' | 'SOON' | 'PLAN' | 'CONSIDER'; builderContact?: string | null; promisedBy?: string | null; evidenceDocumentIds?: string[] }) {
+    return this.request(`/api/new-home-setup/properties/${propertyId}/punch-list`, { method: 'POST', body: JSON.stringify(input) });
+  }
+
+  async addNewHomeBuilderResponse(propertyId: string, itemId: string, input: { responseType: 'COMMENT' | 'ACKNOWLEDGED' | 'SCHEDULED' | 'REJECTED' | 'RESOLVED'; message?: string | null; promisedBy?: string | null; verifyClosure?: boolean }) {
+    return this.request(`/api/new-home-setup/properties/${propertyId}/punch-list/${itemId}/responses`, { method: 'POST', body: JSON.stringify(input) });
+  }
+
+  async createNewHomeWarrantyRight(propertyId: string, input: { coverageTitle: string; coverageSummary: string; expiresAt: string; sourceCitation: string; providerName?: string | null; noticeMethod?: string | null; noticeDestination?: string | null; noticeDeadlineAt?: string | null; sourceDocumentId?: string | null; extractionConfidence?: number | null; verified?: boolean }) {
+    return this.request(`/api/new-home-setup/properties/${propertyId}/warranty-rights`, { method: 'POST', body: JSON.stringify(input) });
+  }
+
+  async promoteNewHomeWarrantyDocument(propertyId: string, input: { documentId: string; sourceCitation: string; noticeMethod?: string | null; noticeDestination?: string | null; noticeDeadlineAt?: string | null }) {
+    return this.request(`/api/new-home-setup/properties/${propertyId}/warranty-rights/from-document`, { method: 'POST', body: JSON.stringify(input) });
+  }
+
+  async verifyNewHomeWarrantyRight(propertyId: string, rightId: string) {
+    return this.request(`/api/new-home-setup/properties/${propertyId}/warranty-rights/${rightId}/verify`, { method: 'PATCH' });
+  }
+
+  async upsertNewHomeRegistration(propertyId: string, input: { inventoryItemId: string; manufacturer: string; modelNumber: string; serialNumber: string; registrationUrl?: string | null; status?: 'NOT_STARTED' | 'SUBMITTED' | 'CONFIRMED' | 'NOT_REQUIRED'; confirmationDocumentId?: string | null; notes?: string | null }) {
+    return this.request(`/api/new-home-setup/properties/${propertyId}/registrations`, { method: 'PUT', body: JSON.stringify(input) });
+  }
+
+  async addNewHomeEvidence(propertyId: string, input: { evidenceType: 'PERMIT' | 'FINAL_INSPECTION' | 'COMMISSIONING' | 'MANUAL' | 'CERTIFICATE' | 'PHOTO' | 'OTHER'; label: string; documentId?: string | null; sourceCitation?: string | null; observedAt?: string | null; verified?: boolean; notes?: string | null }) {
+    return this.request(`/api/new-home-setup/properties/${propertyId}/evidence`, { method: 'POST', body: JSON.stringify(input) });
+  }
+
+  async ensureNewHomeInspectionBundles(propertyId: string) {
+    return this.request(`/api/new-home-setup/properties/${propertyId}/inspection-bundles`, { method: 'POST' });
+  }
+
+  async updateNewHomeInspectionBundle(propertyId: string, bundleId: string, input: { status: 'PREPARING' | 'READY' | 'COMPLETED'; inspectionReportId?: string | null }) {
+    return this.request(`/api/new-home-setup/properties/${propertyId}/inspection-bundles/${bundleId}`, { method: 'PATCH', body: JSON.stringify(input) });
+  }
+
+  async handoffNewHomePlan(propertyId: string) {
+    return this.request(`/api/new-home-setup/properties/${propertyId}/handoff`, { method: 'POST' });
+  }
+
+  async getNewHomeAcceptanceStatus(propertyId: string) {
+    return this.request(`/api/new-home-setup/properties/${propertyId}/acceptance-status`);
+  }
+
   /**
    * Create custom HOME_BUYER task (in addition to 8 defaults)
    * 
