@@ -4,6 +4,7 @@ import {
   getTaskSourceBadge,
   normalizeRange,
   normalizeView,
+  parseMaintenanceDate,
   splitAndSortTasks,
 } from '../taskDisplay';
 import type { PropertyMaintenanceTask } from '@/types';
@@ -53,6 +54,20 @@ describe('formatDueDate', () => {
       'text-green-600'
     );
     expect(formatDueDate(null, NOW).text).toBe('Not scheduled');
+    expect(formatDueDate('not-a-date', NOW)).toEqual({
+      text: 'Not scheduled',
+      color: 'text-gray-400',
+    });
+  });
+});
+
+describe('parseMaintenanceDate', () => {
+  it('returns null for malformed legacy values instead of throwing', () => {
+    expect(parseMaintenanceDate('not-a-date')).toBeNull();
+    expect(parseMaintenanceDate(null)).toBeNull();
+    expect(parseMaintenanceDate('2026-08-01T00:00:00.000Z')?.toISOString()).toBe(
+      '2026-08-01T00:00:00.000Z'
+    );
   });
 });
 
@@ -88,6 +103,15 @@ describe('splitAndSortTasks', () => {
     );
     expect(openTasks.map((t) => t.id)).toEqual([overdue.id, soon.id, unscheduled.id]);
     expect(completedTasks.map((t) => t.id)).toEqual([done.id]);
+  });
+
+  it('treats malformed dates as unscheduled and keeps rendering the task', () => {
+    const malformed = makeTask({ nextDueDate: 'not-a-date' });
+    const { openTasks } = splitAndSortTasks([malformed, soon], {
+      completedRange: 'all',
+      now: NOW,
+    });
+    expect(openTasks.map((task) => task.id)).toEqual([soon.id, malformed.id]);
   });
 
   it('priority filter returns empty when nothing matches — never falls back to all', () => {

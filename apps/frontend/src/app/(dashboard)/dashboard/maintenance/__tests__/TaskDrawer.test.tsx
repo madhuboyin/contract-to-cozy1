@@ -96,6 +96,20 @@ describe('TaskDrawer', () => {
     expect(screen.getAllByText('Seasonal').length).toBeGreaterThan(0);
   });
 
+  it('renders malformed legacy dates safely', () => {
+    render(
+      <TaskDrawer
+        {...baseProps}
+        task={makeTask({ nextDueDate: 'not-a-date', lastCompletedDate: 'also-not-a-date' })}
+        onSave={noop}
+        onDelete={noop}
+      />
+    );
+
+    expect(screen.getByLabelText('Next due date')).toHaveValue('');
+    expect(screen.getByText(/Last completed:/)).toHaveTextContent('Last completed: Never');
+  });
+
   it('sends the full payload on save, including priority and cleared date as null', () => {
     const onSave = jest.fn();
     render(<TaskDrawer {...baseProps} task={makeTask()} onSave={onSave} onDelete={noop} />);

@@ -17,7 +17,7 @@ import { cn } from '@/lib/utils';
 import { PRIORITY_CHIP, PriorityLevel } from '@/lib/utils/chipTokens';
 import { formatEnumLabel } from '@/lib/utils/formatters';
 import type { PropertyMaintenanceTask } from '@/types';
-import { formatDueDate, getTaskSourceBadge, normalizeTaskPriority } from '../taskDisplay';
+import { formatDueDate, getTaskSourceBadge, normalizeTaskPriority, parseMaintenanceDate } from '../taskDisplay';
 
 export type TaskListProps = {
   tasks: PropertyMaintenanceTask[];
@@ -34,7 +34,8 @@ function priorityChipClass(priority: string): string {
 }
 
 function completedOn(task: PropertyMaintenanceTask): string {
-  return task.lastCompletedDate ? format(new Date(task.lastCompletedDate), 'MMM dd, yyyy') : '—';
+  const completedDate = parseMaintenanceDate(task.lastCompletedDate);
+  return completedDate ? format(completedDate, 'MMM dd, yyyy') : '—';
 }
 
 function SourceBadge({ task }: { task: PropertyMaintenanceTask }) {

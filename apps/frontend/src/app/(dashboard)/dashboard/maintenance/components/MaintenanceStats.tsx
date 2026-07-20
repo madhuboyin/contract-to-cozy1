@@ -2,6 +2,7 @@
 
 import { format } from 'date-fns';
 import type { PropertyMaintenanceTask } from '@/types';
+import { parseMaintenanceDate } from '../taskDisplay';
 
 function StatTile({ label, value, tone }: { label: string; value: string; tone?: 'alert' }) {
   return (
@@ -22,16 +23,18 @@ function StatTile({ label, value, tone }: { label: string; value: string; tone?:
 
 export function computeMaintenanceStats(tasks: PropertyMaintenanceTask[], now: Date = new Date()) {
   const open = tasks.filter((t) => t.status !== 'COMPLETED' && t.status !== 'CANCELLED');
-  const overdue = open.filter((t) => t.nextDueDate && new Date(t.nextDueDate) < now);
+  const overdue = open.filter((t) => {
+    const dueDate = parseMaintenanceDate(t.nextDueDate);
+    return dueDate ? dueDate < now : false;
+  });
   const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-  const completed30d = tasks.filter(
-    (t) =>
-      t.status === 'COMPLETED' &&
-      t.lastCompletedDate &&
-      new Date(t.lastCompletedDate) >= thirtyDaysAgo
-  );
+  const completed30d = tasks.filter((t) => {
+    if (t.status !== 'COMPLETED') return false;
+    const completedDate = parseMaintenanceDate(t.lastCompletedDate);
+    return completedDate ? completedDate >= thirtyDaysAgo : false;
+  });
   const nextDue = open
-    .map((t) => (t.nextDueDate ? new Date(t.nextDueDate) : null))
+    .map((t) => parseMaintenanceDate(t.nextDueDate))
     .filter((d): d is Date => d !== null)
     .sort((a, b) => a.getTime() - b.getTime())[0];
 

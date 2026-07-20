@@ -110,4 +110,27 @@ describe('computeMaintenanceStats', () => {
     expect(stats.completed30dCount).toBe(1);
     expect(stats.nextDue?.getTime()).toBe(new Date(NOW - 2 * DAY).getTime());
   });
+
+  it('ignores malformed dates instead of crashing a deep-linked maintenance page', () => {
+    const malformed = makeTask({
+      id: 'seasonal-task',
+      source: 'SEASONAL',
+      seasonalChecklistItemId: 'seasonal-item',
+      nextDueDate: 'not-a-date',
+      lastCompletedDate: 'also-not-a-date',
+    });
+
+    expect(() =>
+      render(
+        <TaskList
+          tasks={[malformed]}
+          variant="open"
+          highlightTaskId="seasonal-task"
+          onOpenTask={jest.fn()}
+        />
+      )
+    ).not.toThrow();
+    expect(computeMaintenanceStats([malformed], new Date(NOW)).nextDue).toBeNull();
+    expect(screen.getAllByText('Not scheduled').length).toBeGreaterThan(0);
+  });
 });

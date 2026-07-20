@@ -31,7 +31,7 @@ import type {
   PropertyMaintenanceTask,
   UpdateMaintenanceTaskInput,
 } from '@/types';
-import { getTaskSourceBadge } from '../taskDisplay';
+import { getTaskSourceBadge, parseMaintenanceDate } from '../taskDisplay';
 
 const UNSET = '__UNSET__';
 
@@ -125,6 +125,7 @@ export function TaskDrawer({
   const readOnly = isCompleted || isCancelled;
   const canDelete = task.source !== 'ACTION_CENTER';
   const sourceBadge = getTaskSourceBadge(task);
+  const lastCompletedDate = parseMaintenanceDate(task.lastCompletedDate);
   const busy = isSaving || isDeleting || isCompleting;
   const isProjectFollowUp = Boolean(task.actionKey?.match(/^project:[^:]+:follow-up$/));
 
@@ -179,8 +180,8 @@ export function TaskDrawer({
               ) : null}
               <span className="text-xs text-gray-500">
                 Last completed:{' '}
-                {task.lastCompletedDate
-                  ? format(new Date(task.lastCompletedDate), 'MMM dd, yyyy')
+                {lastCompletedDate
+                  ? format(lastCompletedDate, 'MMM dd, yyyy')
                   : 'Never'}
               </span>
             </div>

@@ -8,6 +8,12 @@ import type {
 export type ViewMode = 'open' | 'completed' | 'all';
 export type CompletedRange = '30d' | '90d' | '1y' | 'all';
 
+export function parseMaintenanceDate(value: string | Date | null | undefined): Date | null {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
 export function normalizeView(val: string | null): ViewMode {
   if (val === 'completed' || val === 'all') return val;
   return 'open';
@@ -44,7 +50,8 @@ export function formatDueDate(
     return { text: 'Not scheduled', color: 'text-gray-400' };
   }
 
-  const dueDate = new Date(nextDueDate);
+  const dueDate = parseMaintenanceDate(nextDueDate);
+  if (!dueDate) return { text: 'Not scheduled', color: 'text-gray-400' };
   const daysUntil = differenceInDays(dueDate, now);
 
   if (daysUntil < 0) return { text: `${Math.abs(daysUntil)} days overdue`, color: 'text-red-600' };
@@ -97,7 +104,10 @@ export function splitAndSortTasks(
   let open = tasks.filter((t) => t.status !== 'COMPLETED' && t.status !== 'CANCELLED');
 
   if (overdueOnly) {
-    open = open.filter((t) => t.nextDueDate && new Date(t.nextDueDate) < now);
+    open = open.filter((t) => {
+      const dueDate = parseMaintenanceDate(t.nextDueDate);
+      return dueDate ? dueDate < now : false;
+    });
   }
 
   if (priorityOnly) {
@@ -108,22 +118,25 @@ export function splitAndSortTasks(
       .sort((a, b) => (PRIORITY_ORDER[b.priority] || 0) - (PRIORITY_ORDER[a.priority] || 0));
   } else {
     open = [...open].sort((a, b) => {
-      if (!a.nextDueDate) return 1;
-      if (!b.nextDueDate) return -1;
-      return new Date(a.nextDueDate).getTime() - new Date(b.nextDueDate).getTime();
+      const aDueDate = parseMaintenanceDate(a.nextDueDate);
+      const bDueDate = parseMaintenanceDate(b.nextDueDate);
+      if (!aDueDate && !bDueDate) return 0;
+      if (!aDueDate) return 1;
+      if (!bDueDate) return -1;
+      return aDueDate.getTime() - bDueDate.getTime();
     });
   }
 
   let completed = tasks.filter((t) => t.status === 'COMPLETED');
   if (cutoff) {
     completed = completed.filter((t) => {
-      const d = t.lastCompletedDate ? new Date(t.lastCompletedDate) : null;
+      const d = parseMaintenanceDate(t.lastCompletedDate);
       return d ? d >= cutoff : false;
     });
   }
   completed = [...completed].sort((a, b) => {
-    const ad = a.lastCompletedDate ? new Date(a.lastCompletedDate).getTime() : 0;
-    const bd = b.lastCompletedDate ? new Date(b.lastCompletedDate).getTime() : 0;
+    const ad = parseMaintenanceDate(a.lastCompletedDate)?.getTime() ?? 0;
+    const bd = parseMaintenanceDate(b.lastCompletedDate)?.getTime() ?? 0;
     return bd - ad;
   });
 
