@@ -339,7 +339,7 @@ export default function HomeEventRadarPageClient({ propertyId: propertyIdOverrid
           propertyId,
           journeyId: guidanceJourneyId,
           stepKey: guidanceStepKey,
-          inventoryItemId: searchParams.get('itemId'),
+          inventoryItemId: searchParams.get('itemId') ?? searchParams.get('sourceEntityId'),
           issueType: searchParams.get('issueType'),
         })
       : null;

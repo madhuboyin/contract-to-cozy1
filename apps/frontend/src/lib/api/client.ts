@@ -81,6 +81,7 @@ import {
   NewHomeSetupTask,
   HomeBuyerTaskStatus,
   ToolDiscoveryAvailabilityDTO,
+  ToolLifecycleEventDTO,
   CreateHomeBuyerTaskInput,
   UpdateHomeBuyerTaskInput,
   PropertyMaintenanceTask,
@@ -2840,6 +2841,13 @@ class APIClient {
     );
     if (response.success && response.data) return response.data;
     throw new APIError('Failed to load tool availability', 'TOOL_DISCOVERY_AVAILABILITY_ERROR');
+  }
+
+  async recordToolLifecycleEvents(propertyId: string, events: ToolLifecycleEventDTO[]) {
+    return this.request<{ accepted: number }>(
+      `/api/properties/${encodeURIComponent(propertyId)}/tool-discovery/events`,
+      { method: 'POST', body: JSON.stringify({ events }) },
+    );
   }
 
   async executeHomeActionCommand(

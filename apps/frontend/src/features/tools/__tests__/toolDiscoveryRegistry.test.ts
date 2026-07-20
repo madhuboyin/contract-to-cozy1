@@ -1,4 +1,5 @@
 import {
+  canonicalizeDiscoverableToolId,
   evaluateToolReadiness,
   getDiscoverableTool,
   getDiscoverableTools,
@@ -24,6 +25,19 @@ describe('toolDiscoveryRegistry', () => {
   it('assigns every discoverable tool to a homeowner outcome', () => {
     const categories = new Set(TOOL_OUTCOME_CATEGORIES.map((category) => category.key));
     expect(getDiscoverableTools().every((tool) => categories.has(tool.outcomeCategory))).toBe(true);
+  });
+
+  it('assigns every discoverable tool a release gate and completion contract', () => {
+    const tools = getDiscoverableTools({ includeWorkflowOnly: true, includeUnavailable: true });
+    expect(tools.length).toBeGreaterThan(0);
+    expect(tools.every((tool) => Boolean(tool.rolloutKey))).toBe(true);
+    expect(tools.every((tool) => Boolean(tool.completionKind))).toBe(true);
+  });
+
+  it('normalizes legacy workflow instrumentation to canonical tool IDs', () => {
+    expect(canonicalizeDiscoverableToolId('do-nothing')).toBe('do-nothing-simulator');
+    expect(canonicalizeDiscoverableToolId('hoa')).toBe('hoa-compliance');
+    expect(canonicalizeDiscoverableToolId('maintenance')).toBeNull();
   });
 
   it('enforces explicit disablement and rollout cohorts only when configured', () => {

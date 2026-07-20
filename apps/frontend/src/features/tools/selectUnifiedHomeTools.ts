@@ -17,6 +17,7 @@ export type UnifiedHomeToolRecommendation = {
   reasonCode: string;
   score: number;
   sourceActionId?: string;
+  sourceEntityType?: string;
   sourceEntityId?: string;
 };
 
@@ -85,6 +86,7 @@ export function selectUnifiedHomeTools(
       reasonCode: 'COVERAGE_GAPS_PRESENT',
       score: 96,
       sourceActionId: coverageAction?.id,
+      sourceEntityType: coverageAction?.source.kind,
       sourceEntityId: coverageAction?.source.entityId,
     });
   }
@@ -100,6 +102,7 @@ export function selectUnifiedHomeTools(
       reasonCode: 'WEATHER_SIGNAL_ACTIVE',
       score: 94,
       sourceActionId: weatherAction?.id,
+      sourceEntityType: weatherAction?.source.kind,
       sourceEntityId: weatherAction?.source.entityId,
     });
   }
@@ -115,6 +118,7 @@ export function selectUnifiedHomeTools(
       reasonCode: 'SERVICE_DECISION_ACTIVE',
       score: 90,
       sourceActionId: serviceAction?.id,
+      sourceEntityType: serviceAction?.source.kind,
       sourceEntityId: serviceAction?.source.entityId,
     });
   }
@@ -129,6 +133,7 @@ export function selectUnifiedHomeTools(
       reasonCode: lifecycleAction ? 'LIFECYCLE_SIGNAL_ACTIVE' : 'TRACKED_SYSTEMS_AVAILABLE',
       score: lifecycleAction ? 88 : 72,
       sourceActionId: lifecycleAction?.id,
+      sourceEntityType: lifecycleAction?.source.kind,
       sourceEntityId: lifecycleAction?.source.entityId,
     });
   }
@@ -146,6 +151,7 @@ export function selectUnifiedHomeTools(
       reasonCode: 'MATERIAL_DECISION_ACTIVE',
       score: 84,
       sourceActionId: materialDecision?.id,
+      sourceEntityType: materialDecision?.source.kind,
       sourceEntityId: materialDecision?.source.entityId,
     });
   }

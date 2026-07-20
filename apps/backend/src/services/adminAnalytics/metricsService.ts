@@ -14,6 +14,12 @@ import {
   getDailyEventCounts,
   getFeatureUsage,
   getTopTools,
+  getToolLifecycleFunnelRows,
+  getToolLifecycleStageTotals,
+} from './repository';
+import type {
+  ToolLifecycleFunnelRow as ToolLifecycleFunnelRepositoryRow,
+  ToolLifecycleStageTotalRow,
 } from './repository';
 import { resolveDateRange } from './schemas';
 import type {
@@ -24,6 +30,8 @@ import type {
   DailyTrendPoint,
   FeatureAdoptionRow,
   TopToolRow,
+  AdminToolLifecycleFunnelResponse,
+  ToolLifecycleStageKey,
 } from './types';
 
 // ============================================================================
@@ -201,6 +209,14 @@ const FEATURE_LABELS: Record<string, string> = {
   admin_analytics_dashboard: 'Admin Analytics',
 };
 
+function labelForFeature(featureKey: string): string {
+  return FEATURE_LABELS[featureKey] ?? featureKey
+    .split(/[-_]/g)
+    .filter(Boolean)
+    .map((part) => part.length <= 3 ? part.toUpperCase() : `${part[0].toUpperCase()}${part.slice(1)}`)
+    .join(' ');
+}
+
 export async function getFeatureAdoption(
   fromRaw: Date | undefined,
   toRaw: Date | undefined,
@@ -247,7 +263,7 @@ export async function getTopToolsMetrics(
     return {
       moduleKey: r.moduleKey ?? 'unknown',
       featureKey: fk,
-      label: FEATURE_LABELS[fk] ?? fk,
+      label: labelForFeature(fk),
       uniqueHomes: Number(r.uniqueHomes),
       totalEvents: Number(r.totalEvents),
       rank: idx + 1,
@@ -257,6 +273,60 @@ export async function getTopToolsMetrics(
   return {
     period: { from: range.from.toISOString(), to: range.to.toISOString() },
     topN,
+    tools,
+  };
+}
+
+export async function getToolLifecycleFunnelMetrics(
+  fromRaw: Date | undefined,
+  toRaw: Date | undefined,
+): Promise<AdminToolLifecycleFunnelResponse> {
+  const range = resolveDateRange(fromRaw, toRaw, 30);
+  const [rows, totals] = await Promise.all([
+    getToolLifecycleFunnelRows(range),
+    getToolLifecycleStageTotals(range),
+  ]);
+
+  return buildToolLifecycleFunnelResponse(range, rows, totals);
+}
+
+export function buildToolLifecycleFunnelResponse(
+  range: { from: Date; to: Date },
+  rows: ToolLifecycleFunnelRepositoryRow[],
+  totals: ToolLifecycleStageTotalRow[],
+): AdminToolLifecycleFunnelResponse {
+
+  const stages = totals.map((row) => ({
+    stage: row.stage.replace(/^TOOL_/, '') as ToolLifecycleStageKey,
+    uniqueHomes: Number(row.uniqueHomes),
+    totalEvents: Number(row.totalEvents),
+  }));
+
+  const tools = rows.map((row) => {
+    const discoveredHomes = Number(row.discoveredHomes);
+    const clickedHomes = Number(row.clickedHomes);
+    const startedHomes = Number(row.startedHomes);
+    const outputHomes = Number(row.outputHomes);
+    const completedHomes = Number(row.completedHomes);
+    const abandonedHomes = Number(row.abandonedHomes);
+    return {
+      toolId: row.toolId,
+      label: labelForFeature(row.toolId),
+      discoveredHomes,
+      clickedHomes,
+      startedHomes,
+      outputHomes,
+      completedHomes,
+      abandonedHomes,
+      clickThroughRate: discoveredHomes > 0 ? clickedHomes / discoveredHomes : null,
+      startRate: clickedHomes > 0 ? startedHomes / clickedHomes : null,
+      completionRate: startedHomes > 0 ? completedHomes / startedHomes : null,
+    };
+  });
+
+  return {
+    period: { from: range.from.toISOString(), to: range.to.toISOString() },
+    stages,
     tools,
   };
 }

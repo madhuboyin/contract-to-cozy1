@@ -41,6 +41,7 @@ import {
   useAdminAnalyticsTopTools,
   useAdminAnalyticsPhase1Pilot,
   useAdminAnalyticsPhase6Pilot,
+  useAdminToolLifecycleFunnel,
 } from '@/hooks/useAdminAnalytics';
 import AdminAnalyticsLineChart from '@/components/admin-analytics/AdminAnalyticsLineChart';
 import {
@@ -916,7 +917,7 @@ function TopToolsTable({
   return (
     <Section
       title="Top Used Tools"
-      description="Most-used features ranked by unique homes."
+      description="Discoverable tools ranked by unique homes that started, generated output, or completed work."
       icon={TrendingUp}
     >
       {tools.length === 0 ? (
@@ -955,6 +956,89 @@ function TopToolsTable({
             </TableBody>
           </Table>
         </div>
+        </ScrollFadeX>
+      )}
+    </Section>
+  );
+}
+
+function ToolLifecycleFunnelSection({
+  filters,
+  enabled,
+}: {
+  filters: AdminAnalyticsFilters;
+  enabled: boolean;
+}) {
+  const q = useAdminToolLifecycleFunnel(filters, enabled);
+  if (q.isLoading) return <Section title="Tool discovery funnel" icon={Sparkles}><TableSkeleton rows={6} /></Section>;
+  if (q.isError) return <Section title="Tool discovery funnel" icon={Sparkles}><ErrorBanner message="Unable to load tool lifecycle data." /></Section>;
+
+  const stages = q.data?.stages ?? [];
+  const tools = q.data?.tools ?? [];
+  const stageOrder = ['DISCOVERED', 'CLICKED', 'STARTED', 'OUTPUT_GENERATED', 'COMPLETED', 'ABANDONED'] as const;
+  const stageByKey = new Map(stages.map((stage) => [stage.stage, stage]));
+
+  return (
+    <Section
+      title="Tool discovery funnel"
+      description="Durable, database-backed movement from contextual discovery to meaningful completion."
+      icon={Sparkles}
+    >
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+        {stageOrder.map((stage) => (
+          <div key={stage} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+              {stage.replace(/_/g, ' ')}
+            </p>
+            <p className="mt-1 text-2xl font-semibold tabular-nums text-slate-950">
+              {num(stageByKey.get(stage)?.uniqueHomes ?? 0)}
+            </p>
+            <p className="text-xs text-slate-500">unique homes</p>
+          </div>
+        ))}
+      </div>
+
+      {tools.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-10 text-center text-sm text-slate-500">
+          No database-backed tool lifecycle events for this period.
+        </div>
+      ) : (
+        <ScrollFadeX>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Tool</TableHead>
+                  <TableHead className="text-right">Discovered</TableHead>
+                  <TableHead className="text-right">Clicked</TableHead>
+                  <TableHead className="text-right">Started</TableHead>
+                  <TableHead className="text-right">Output</TableHead>
+                  <TableHead className="text-right">Completed</TableHead>
+                  <TableHead className="text-right">Abandoned</TableHead>
+                  <TableHead className="text-right">Click rate</TableHead>
+                  <TableHead className="text-right">Completion rate</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {tools.map((tool) => (
+                  <TableRow key={tool.toolId}>
+                    <TableCell>
+                      <p className="font-medium text-slate-900">{tool.label}</p>
+                      <p className="font-mono text-[10px] text-slate-400">{tool.toolId}</p>
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">{num(tool.discoveredHomes)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{num(tool.clickedHomes)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{num(tool.startedHomes)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{num(tool.outputHomes)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{num(tool.completedHomes)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{num(tool.abandonedHomes)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{pct(tool.clickThroughRate)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{pct(tool.completionRate)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
         </ScrollFadeX>
       )}
     </Section>
@@ -1342,6 +1426,8 @@ export default function AnalyticsAdminPage() {
         <FeatureAdoptionTable filters={filters} enabled={isAdmin} key={`adopt-${refreshKey}`} />
 
         {/* ── Top Tools ── */}
+        <ToolLifecycleFunnelSection filters={filters} enabled={isAdmin} key={`tool-lifecycle-${refreshKey}`} />
+
         <TopToolsTable filters={filters} enabled={isAdmin} key={`tools-${refreshKey}`} />
 
         {/* ── Cohort Retention ── */}

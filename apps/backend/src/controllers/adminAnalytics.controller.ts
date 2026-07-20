@@ -4,7 +4,13 @@
 
 import { Response, NextFunction } from 'express';
 import { CustomRequest } from '../types';
-import { getOverviewMetrics, getTrends, getFeatureAdoption, getTopToolsMetrics } from '../services/adminAnalytics/metricsService';
+import {
+  getOverviewMetrics,
+  getTrends,
+  getFeatureAdoption,
+  getTopToolsMetrics,
+  getToolLifecycleFunnelMetrics,
+} from '../services/adminAnalytics/metricsService';
 import { getFunnelMetrics } from '../services/adminAnalytics/funnelService';
 import { getCohortMetrics } from '../services/adminAnalytics/cohortService';
 import { getPhase1PilotMetrics } from '../services/adminAnalytics/phase1PilotService';
@@ -173,6 +179,22 @@ export async function getTopToolsHandler(
     const to = qDate(req.query.to);
     const topN = qNum(req.query.topN, 10);
     const data = await getTopToolsMetrics(from, to, topN);
+    res.json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function getToolLifecycleFunnelHandler(
+  req: CustomRequest,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const data = await getToolLifecycleFunnelMetrics(
+      qDate(req.query.from),
+      qDate(req.query.to),
+    );
     res.json({ success: true, data });
   } catch (err) {
     next(err);

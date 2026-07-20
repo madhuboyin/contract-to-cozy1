@@ -694,9 +694,16 @@ export default function ServicePriceRadarClient() {
   const prefilledQuoteAmount = searchParams.get('quoteAmount');
   const prefilledLinkedEntityType = searchParams.get('linkedEntityType');
   const prefilledLinkedEntityId = searchParams.get('linkedEntityId');
+  const sourceEntityType = searchParams.get('sourceEntityType');
+  const sourceEntityId = searchParams.get('sourceEntityId');
+  const sourceLinkedEntityType = sourceEntityType === 'INVENTORY_ITEM'
+    ? 'APPLIANCE'
+    : ['SYSTEM', 'APPLIANCE', 'DOCUMENT', 'INCIDENT', 'ROOM', 'OTHER'].includes(sourceEntityType ?? '')
+      ? sourceEntityType
+      : null;
   const effectiveLinkedEntityType =
-    prefilledLinkedEntityType ?? (guidanceItemId ? 'APPLIANCE' : null);
-  const effectiveLinkedEntityId = prefilledLinkedEntityId ?? guidanceItemId;
+    prefilledLinkedEntityType ?? (guidanceItemId ? 'APPLIANCE' : sourceLinkedEntityType);
+  const effectiveLinkedEntityId = prefilledLinkedEntityId ?? guidanceItemId ?? sourceEntityId;
   const prefilledLinkedKey =
     effectiveLinkedEntityType && effectiveLinkedEntityId
       ? `${effectiveLinkedEntityType}:${effectiveLinkedEntityId}`

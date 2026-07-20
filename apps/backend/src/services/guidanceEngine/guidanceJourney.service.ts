@@ -25,6 +25,7 @@ import {
   getGuidanceModels,
 } from './guidanceTypes';
 import { logger } from '../../lib/logger';
+import { recordToolLifecycleEvents } from '../analytics/toolLifecycle';
 
 const ACTIVE_GUIDANCE_JOURNEY_STATUSES = ['ACTIVE', 'NOT_STARTED'] as const;
 const REPLACEMENT_BRANCH_TYPE_BY_CHOICE: Record<
@@ -1187,6 +1188,42 @@ export class GuidanceJourneyService {
       propertyId: input.propertyId,
       journeyId: journey.id,
     });
+
+    const lifecycleStage = input.status === 'COMPLETED'
+      ? 'COMPLETED'
+      : input.status === 'IN_PROGRESS'
+        ? 'STARTED'
+        : 'ABANDONED';
+    if (input.actorUserId && normalizedSourceToolKey && normalizedSourceToolKey !== 'frontend') {
+      void recordToolLifecycleEvents({
+        userId: input.actorUserId,
+        propertyId: input.propertyId,
+        events: [...(input.status === 'COMPLETED' ? [{
+          toolId: normalizedSourceToolKey,
+          stage: 'OUTPUT_GENERATED' as const,
+          surface: 'guidance',
+          journeyId: journey.id,
+          sourceEntityId: input.sourceEntityId ?? resolvedInventoryItemId,
+          completionKind: 'GUIDANCE_STEP_COMPLETED',
+          outputKey: resolvedStepKey,
+        }] : []), {
+          toolId: normalizedSourceToolKey,
+          stage: lifecycleStage,
+          surface: 'guidance',
+          journeyId: journey.id,
+          sourceEntityId: input.sourceEntityId ?? resolvedInventoryItemId,
+          completionKind: input.status === 'COMPLETED' ? 'GUIDANCE_STEP_COMPLETED' : null,
+          outputKey: resolvedStepKey,
+          metadata: {
+            guidanceStatus: input.status,
+            guidanceStepKey: resolvedStepKey,
+            reasonCode: input.reasonCode ?? null,
+          },
+        }],
+      }).catch((error) => {
+        logger.warn({ error }, '[ToolLifecycle] Failed to persist guidance tool lifecycle event');
+      });
+    }
 
     return {
       signal,

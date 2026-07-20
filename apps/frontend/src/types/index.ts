@@ -371,6 +371,31 @@ export type ToolDiscoveryAvailabilityDTO = {
   generatedAt: string;
 };
 
+export type ToolLifecycleStageDTO =
+  | 'DISCOVERED'
+  | 'CLICKED'
+  | 'STARTED'
+  | 'OUTPUT_GENERATED'
+  | 'COMPLETED'
+  | 'ABANDONED';
+
+export type ToolLifecycleEventDTO = {
+  toolId: string;
+  stage: ToolLifecycleStageDTO;
+  surface: string;
+  recommendationReason?: string | null;
+  contextVersion?: string | null;
+  sourceActionId?: string | null;
+  sourceEntityType?: string | null;
+  sourceEntityId?: string | null;
+  journeyId?: string | null;
+  completionKind?: string | null;
+  outputKey?: string | null;
+  durationSeconds?: number | null;
+  sessionKey?: string | null;
+  metadata?: Record<string, unknown> | null;
+};
+
 // ============================================================================
 // NEW PROPERTY ENUMS (FIX: ADDED RUNTIME CONSTANTS)
 // ============================================================================

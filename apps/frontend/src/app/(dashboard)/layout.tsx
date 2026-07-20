@@ -46,6 +46,7 @@ import { ActivationHandoffBanner } from '@/components/onboarding/ActivationHando
 import { AppShell } from '@/components/layout/AppShell';
 import { CtcTopCommandBar } from '@/components/layout/CtcTopCommandBar';
 import { FeedbackWidget } from '@/components/feedback/FeedbackWidget';
+import { ToolLaunchContextBoundary } from '@/features/tools/ToolLaunchContextBoundary';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -767,7 +768,7 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
               >
                 <DashboardBreadcrumbs />
                 <ActivationHandoffBanner />
-                {children}
+                <ToolLaunchContextBoundary>{children}</ToolLaunchContextBoundary>
               </div>
             </PullToRefresh>
           </main>

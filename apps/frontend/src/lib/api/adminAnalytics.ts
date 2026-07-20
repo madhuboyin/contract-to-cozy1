@@ -115,6 +115,30 @@ export interface AdminTopToolsResponse {
   tools: TopToolRow[];
 }
 
+export type ToolLifecycleStageKey = 'DISCOVERED' | 'CLICKED' | 'STARTED' | 'OUTPUT_GENERATED' | 'COMPLETED' | 'ABANDONED';
+
+export interface AdminToolLifecycleFunnelResponse {
+  period: { from: string; to: string };
+  stages: Array<{
+    stage: ToolLifecycleStageKey;
+    uniqueHomes: number;
+    totalEvents: number;
+  }>;
+  tools: Array<{
+    toolId: string;
+    label: string;
+    discoveredHomes: number;
+    clickedHomes: number;
+    startedHomes: number;
+    outputHomes: number;
+    completedHomes: number;
+    abandonedHomes: number;
+    clickThroughRate: number | null;
+    startRate: number | null;
+    completionRate: number | null;
+  }>;
+}
+
 export interface AdminPhase1PilotMetric {
   numerator: number;
   denominator: number;
@@ -246,6 +270,16 @@ export async function fetchAdminAnalyticsTopTools(
   const response = await api.get<AdminTopToolsResponse>(
     '/api/admin/analytics/top-tools',
     { params },
+  );
+  return response.data;
+}
+
+export async function fetchAdminToolLifecycleFunnel(
+  filters: AdminAnalyticsFilters,
+): Promise<AdminToolLifecycleFunnelResponse> {
+  const response = await api.get<AdminToolLifecycleFunnelResponse>(
+    '/api/admin/analytics/tool-lifecycle',
+    { params: buildParams(filters) },
   );
   return response.data;
 }

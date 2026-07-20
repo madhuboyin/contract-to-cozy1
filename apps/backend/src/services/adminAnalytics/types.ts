@@ -138,3 +138,37 @@ export interface AdminTopToolsResponse {
   topN: number;
   tools: TopToolRow[];
 }
+
+export type ToolLifecycleStageKey =
+  | 'DISCOVERED'
+  | 'CLICKED'
+  | 'STARTED'
+  | 'OUTPUT_GENERATED'
+  | 'COMPLETED'
+  | 'ABANDONED';
+
+export interface ToolLifecycleStageMetric {
+  stage: ToolLifecycleStageKey;
+  uniqueHomes: number;
+  totalEvents: number;
+}
+
+export interface ToolLifecycleFunnelToolRow {
+  toolId: string;
+  label: string;
+  discoveredHomes: number;
+  clickedHomes: number;
+  startedHomes: number;
+  outputHomes: number;
+  completedHomes: number;
+  abandonedHomes: number;
+  clickThroughRate: number | null;
+  startRate: number | null;
+  completionRate: number | null;
+}
+
+export interface AdminToolLifecycleFunnelResponse {
+  period: { from: string; to: string };
+  stages: ToolLifecycleStageMetric[];
+  tools: ToolLifecycleFunnelToolRow[];
+}

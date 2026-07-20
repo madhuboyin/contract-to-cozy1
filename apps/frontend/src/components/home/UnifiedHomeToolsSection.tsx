@@ -66,6 +66,7 @@ export function UnifiedHomeToolsSection({
           const href = tool.buildHref(propertyId, {
             launchSurface: 'unified_home',
             sourceActionId: recommendation.sourceActionId,
+            sourceEntityType: recommendation.sourceEntityType,
             sourceEntityId: recommendation.sourceEntityId,
             contextVersion: home.propertyContext.contextVersion,
             recommendationReason: `${UNIFIED_HOME_TOOL_RULE_VERSION}:${recommendation.reasonCode}`,
@@ -86,6 +87,8 @@ export function UnifiedHomeToolsSection({
                   recommendationReason: `${UNIFIED_HOME_TOOL_RULE_VERSION}:${recommendation.reasonCode}`,
                   contextVersion: home.propertyContext.contextVersion,
                   sourceActionId: recommendation.sourceActionId,
+                  sourceEntityType: recommendation.sourceEntityType,
+                  sourceEntityId: recommendation.sourceEntityId,
                 });
                 if (recommendation.sourceActionId) {
                   void api.recordHomeActionOpened(propertyId, recommendation.sourceActionId);

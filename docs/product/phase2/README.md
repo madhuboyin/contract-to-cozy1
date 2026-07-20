@@ -157,11 +157,26 @@ Closure increment implemented July 20, 2026:
 - Added discovery impression, click, search, and completed-workflow attribution across Unified Home, Explore tools, command search, and Related Tools.
 - Added backend policy tests, frontend registry/selector/analytics tests, and a no-database Playwright acceptance fixture covering bounded Home recommendations, safe deep-link context, catalog search, and workflow-only exclusion.
 
+Outcome-telemetry and destination-context increment implemented July 20, 2026:
+
+- Reviewed the existing Admin Analytics module before extending telemetry and retained `ProductAnalyticsEvent` as the reporting source of truth; no parallel analytics store was introduced.
+- Added authenticated, property-authorized batch ingestion at `POST /api/properties/:propertyId/tool-discovery/events` for the canonical lifecycle stages `DISCOVERED`, `CLICKED`, `STARTED`, `OUTPUT_GENERATED`, `COMPLETED`, and `ABANDONED`.
+- Persisted discovery impressions, clicks, tool starts, generated outputs, meaningful completions, and qualified abandonment from the shared frontend analytics and dashboard tool boundary. Browser Faro events remain available for diagnosis but are no longer the only discovery evidence.
+- Declared a completion kind for every discoverable tool so Admin reporting can distinguish output viewing, output generation, plan creation, decision recording, and action initiation rather than treating navigation as success.
+- Connected guidance-journey status changes and existing backend tool-output instrumentation to the same lifecycle vocabulary. Legacy backend feature identifiers are canonicalized only when they map to the discovery registry; unrelated backend events do not enter the discovery funnel.
+- Added a dashboard-wide launch-context boundary that restores property, Home Action, source entity, Property Context version, journey, and recommendation attribution and displays continuity for contextual launches.
+- Made Coverage Options, Home Event Radar, and Service Price Radar consume the source entity context to focus or prefill the relevant record instead of asking the homeowner to repeat known setup.
+- Added `GET /api/admin/analytics/tool-lifecycle` and a **Tool discovery funnel** section to Admin Analytics with unique-home stage totals and per-tool click, start, output, completion, and abandonment metrics.
+- Corrected **Top Used Tools** to rank canonical tools only from starts, generated outputs, and completions rather than grouping every feature event as tool usage.
+- Completed rollout-key parity across the discovery registry and backend cohort flags. When enforcement is enabled, a missing rollout mapping now fails closed; current beta testing remains unblocked while `ENFORCE_TOOL_DISCOVERY_RELEASE_GATES=false`.
+- Added contract tests for lifecycle taxonomy and backend alias normalization, and extended frontend tests for rollout/completion metadata and durable workflow attribution.
+
 Operational launch note:
 
 - Keep `ENFORCE_TOOL_DISCOVERY_RELEASE_GATES=false` during the current beta so incomplete cohort configuration cannot block testing.
 - Before admitting real users, set it to `true`, review every `TOOL_ROLLOUT_*` value, and use `TOOL_DISCOVERY_DISABLED_IDS` as an immediate discovery kill list when a tool must remain reachable only through an existing workflow.
 - Tool discovery does not require a Prisma schema change or migration.
+- Lifecycle telemetry also reuses the existing product analytics event table; deployment does not require a Prisma schema change, migration, or separate test database.
 
 ## Increment 1 acceptance evidence
 
@@ -183,4 +198,6 @@ node --test apps/backend/tests/unit/personalizationMaterializeRecommendations.te
 node --test apps/backend/tests/unit/unifiedHomePropertyContextConvergence.test.js
 npx tsc --noEmit -p apps/frontend/tsconfig.json
 npm -C apps/frontend run qa:product-framework:routes
+node --test apps/backend/tests/unit/adminToolLifecycleMetrics.test.js apps/backend/tests/unit/toolLifecycleAnalytics.test.js apps/backend/tests/unit/toolDiscoveryAvailability.test.js
+npm -C apps/frontend test -- --runInBand src/features/tools/__tests__/toolDiscoveryRegistry.test.ts src/features/tools/__tests__/selectUnifiedHomeTools.test.ts src/lib/analytics/__tests__/toolDiscoveryEvents.test.ts
 ```

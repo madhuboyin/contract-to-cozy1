@@ -25,6 +25,7 @@ import {
   AnalyticsFeature,
 } from './taxonomy';
 import { logger } from '../../lib/logger';
+import { canonicalizeToolLifecycleId } from './toolLifecycle.contract';
 
 // ============================================================================
 // HELPERS
@@ -190,9 +191,25 @@ export class ProductAnalyticsService {
   static async trackToolUsed(input: TrackToolUsedInput) {
     const meta: Record<string, unknown> = { ...(input.metadataJson ?? {}) };
     if (input.toolName) meta.toolName = input.toolName;
+    const canonicalToolId = canonicalizeToolLifecycleId(input.toolName ?? input.featureKey);
+    if (canonicalToolId) meta.canonicalToolId = canonicalToolId;
+    const ctaStage = meta.telemetry_type === 'CTA' && typeof meta.cta_type === 'string'
+      ? String(meta.cta_type).toUpperCase()
+      : null;
+    const lifecycleEventName = ctaStage === 'EXPOSED'
+      ? 'TOOL_DISCOVERED'
+      : ctaStage === 'CLICKED'
+        ? 'TOOL_CLICKED'
+        : ctaStage === 'COMPLETED'
+          ? 'TOOL_COMPLETED'
+          : input.moduleKey === 'telemetry'
+            ? null
+            : 'TOOL_OUTPUT_GENERATED';
+    const eventName = canonicalToolId ? lifecycleEventName : null;
 
     return ProductAnalyticsService.trackEvent({
       eventType:    ProductAnalyticsEventType.TOOL_USED,
+      eventName,
       userId:       input.userId,
       propertyId:   input.propertyId,
       moduleKey:    input.moduleKey,

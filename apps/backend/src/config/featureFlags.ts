@@ -99,6 +99,20 @@ const TOOL_DEFAULTS: Record<string, { label: string; defaultPct: number }> = {
   RENOVATION_RISK_ADVISOR:   { label: 'Renovation Risk Advisor',     defaultPct: 100 },
   PLANT_ADVISOR:             { label: 'Plant Advisor',               defaultPct: 100 },
   NEIGHBORHOOD_CHANGE_RADAR: { label: 'Neighborhood Change Radar',   defaultPct: 25  },
+  VISUAL_INSPECTOR:          { label: 'Visual Inspector',            defaultPct: 100 },
+  TAX_APPEAL:                { label: 'Tax Appeal',                  defaultPct: 100 },
+  GUIDANCE_OVERVIEW:         { label: 'Guidance Overview',           defaultPct: 100 },
+  QUOTE_COMPARISON:          { label: 'Quote Comparison',            defaultPct: 100 },
+  RESERVE_FUND:              { label: 'Reserve Fund',                defaultPct: 100 },
+  HOME_TIMELINE:             { label: 'Home Timeline',               defaultPct: 100 },
+  FINANCING:                 { label: 'Financing',                   defaultPct: 100 },
+  COVERAGE_OPTIONS:          { label: 'Coverage Options',            defaultPct: 100 },
+  MATERIAL_SPECS:            { label: 'Material Specifications',     defaultPct: 100 },
+  DIY:                       { label: 'DIY',                         defaultPct: 100 },
+  PERMITS:                   { label: 'Permits',                     defaultPct: 100 },
+  HOA_COMPLIANCE:            { label: 'HOA Compliance',              defaultPct: 100 },
+  INSPECTION_HUB:            { label: 'Inspection Hub',              defaultPct: 100 },
+  PROJECT_TRACKER:           { label: 'Project Tracker',             defaultPct: 100 },
 
 };
 

@@ -27,6 +27,7 @@ import {
   decidePhase6PilotAdmissionHandler,
   getCohortsHandler,
   getTopToolsHandler,
+  getToolLifecycleFunnelHandler,
 } from '../controllers/adminAnalytics.controller';
 
 const router = Router();
@@ -241,6 +242,12 @@ router.get(
   '/admin/analytics/top-tools',
   validate(TopToolsQuerySchema),
   getTopToolsHandler,
+);
+
+router.get(
+  '/admin/analytics/tool-lifecycle',
+  validate(OverviewQuerySchema),
+  getToolLifecycleFunnelHandler,
 );
 
 export default router;

@@ -16,13 +16,31 @@ export type ToolOutcomeCategory =
   | 'SAVE_OPTIMIZE'
   | 'UNDERSTAND_HOME';
 
-export type ToolDiscoverySurface = 'unified_home' | 'explore_tools' | 'command_palette' | 'workflow';
+export type ToolDiscoverySurface =
+  | 'unified_home'
+  | 'explore_tools'
+  | 'command_palette'
+  | 'workflow'
+  | 'direct'
+  | 'guidance'
+  | 'home_tools'
+  | 'dashboard'
+  | 'unknown';
 export type ToolReleaseStage = 'ACTIVE' | 'BETA';
 export type ToolSafetyTier = 'LOW_CONSEQUENCE' | 'MATERIAL_FINANCIAL' | 'REGULATED_COVERAGE' | 'SAFETY_EMERGENCY';
+export type ToolCompletionKind =
+  | 'OUTPUT_VIEWED'
+  | 'OUTPUT_GENERATED'
+  | 'ARTIFACT_CREATED'
+  | 'DECISION_RECORDED'
+  | 'ACTION_INITIATED'
+  | 'ACTION_COMPLETED'
+  | 'PLAN_CREATED';
 
 export type ToolLaunchContext = {
   launchSurface: ToolDiscoverySurface;
   sourceActionId?: string | null;
+  sourceEntityType?: string | null;
   sourceEntityId?: string | null;
   contextVersion?: string | null;
   recommendationReason?: string | null;
@@ -57,6 +75,7 @@ export type DiscoverableToolDefinition = {
     minimumCoverageGaps: number;
   };
   expectedOutput: string;
+  completionKind: ToolCompletionKind;
   completionSignal: 'workflow_completed';
   routeHints: string[];
   buildHref: (propertyId?: string | null, context?: ToolLaunchContext) => string;
@@ -138,6 +157,20 @@ const ROLLOUT_KEY_BY_TOOL_ID: Record<string, string> = {
   'home-renovation-risk-advisor': 'RENOVATION_RISK_ADVISOR',
   'plant-advisor': 'PLANT_ADVISOR',
   'neighborhood-change-radar': 'NEIGHBORHOOD_CHANGE_RADAR',
+  'visual-inspector': 'VISUAL_INSPECTOR',
+  'tax-appeal': 'TAX_APPEAL',
+  'guidance-overview': 'GUIDANCE_OVERVIEW',
+  'quote-comparison': 'QUOTE_COMPARISON',
+  'reserve-fund': 'RESERVE_FUND',
+  'home-timeline': 'HOME_TIMELINE',
+  financing: 'FINANCING',
+  'coverage-options': 'COVERAGE_OPTIONS',
+  'material-specs': 'MATERIAL_SPECS',
+  diy: 'DIY',
+  permits: 'PERMITS',
+  'hoa-compliance': 'HOA_COMPLIANCE',
+  'inspection-hub': 'INSPECTION_HUB',
+  'project-tracker': 'PROJECT_TRACKER',
 };
 
 const BETA_TOOL_IDS = new Set([
@@ -173,11 +206,21 @@ const OUTPUT_BY_CATEGORY: Record<ToolOutcomeCategory, string> = {
   UNDERSTAND_HOME: 'A clearer property record, history, or system view.',
 };
 
+const COMPLETION_KIND_BY_CATEGORY: Record<ToolOutcomeCategory, ToolCompletionKind> = {
+  DECIDE_COMPARE: 'DECISION_RECORDED',
+  PROTECT_MONITOR: 'OUTPUT_VIEWED',
+  MAINTAIN_PREVENT: 'ACTION_INITIATED',
+  PLAN_BUDGET: 'PLAN_CREATED',
+  SAVE_OPTIMIZE: 'OUTPUT_GENERATED',
+  UNDERSTAND_HOME: 'OUTPUT_VIEWED',
+};
+
 function appendLaunchContext(href: string, context?: ToolLaunchContext): string {
   if (!context) return href;
   const params = new URLSearchParams();
   params.set('launchSurface', context.launchSurface);
   if (context.sourceActionId) params.set('sourceActionId', context.sourceActionId);
+  if (context.sourceEntityType) params.set('sourceEntityType', context.sourceEntityType);
   if (context.sourceEntityId) params.set('sourceEntityId', context.sourceEntityId);
   if (context.contextVersion) params.set('contextVersion', context.contextVersion);
   if (context.recommendationReason) params.set('recommendationReason', context.recommendationReason);
@@ -214,6 +257,7 @@ function policyFor(id: string, category: ToolOutcomeCategory) {
       ...(REQUIREMENT_OVERRIDES[id] ?? {}),
     },
     expectedOutput: OUTPUT_BY_CATEGORY[category],
+    completionKind: COMPLETION_KIND_BY_CATEGORY[category],
     completionSignal: 'workflow_completed' as const,
   };
 }
@@ -265,6 +309,27 @@ const aiOnlyTools: DiscoverableToolDefinition[] = MOBILE_AI_TOOL_CATALOG
 
 const DISCOVERABLE_TOOLS = [...homeTools, ...aiOnlyTools];
 
+const TOOL_ID_ALIASES: Record<string, string> = {
+  'budget-planner': 'budget',
+  'climate-risk': 'climate',
+  'coverage-analysis': 'coverage-intelligence',
+  'document-vault': 'documents',
+  'do-nothing': 'do-nothing-simulator',
+  'energy-audit': 'energy',
+  hoa: 'hoa-compliance',
+  'home-capital-timeline': 'capital-timeline',
+  'home-upgrades': 'modifications',
+  'permit-tracker': 'permits',
+  vault: 'documents',
+  'value-tracker': 'appreciation',
+};
+
+export function canonicalizeDiscoverableToolId(toolId: string): string | null {
+  const normalized = toolId.trim().toLowerCase().replace(/_/g, '-');
+  const canonical = TOOL_ID_ALIASES[normalized] ?? normalized;
+  return DISCOVERABLE_TOOLS.some((tool) => tool.id === canonical) ? canonical : null;
+}
+
 export function isToolReleased(
   tool: DiscoverableToolDefinition,
   availability?: ToolDiscoveryAvailabilityDTO,
@@ -273,7 +338,8 @@ export function isToolReleased(
   if (!availability) return true;
   if (!availability.enabled) return false;
   if (availability.disabledToolIds.includes(tool.id)) return false;
-  if (!availability.enforceReleaseGates || !tool.rolloutKey) return true;
+  if (!availability.enforceReleaseGates) return true;
+  if (!tool.rolloutKey) return false;
   return availability.rollouts[tool.rolloutKey]?.enabled === true;
 }
 
@@ -306,7 +372,12 @@ export function getDiscoverableTools(options: {
 }
 
 export function getDiscoverableTool(toolId: string): DiscoverableToolDefinition | undefined {
-  return DISCOVERABLE_TOOLS.find((tool) => tool.id === toolId);
+  const canonicalToolId = canonicalizeDiscoverableToolId(toolId);
+  return canonicalToolId ? DISCOVERABLE_TOOLS.find((tool) => tool.id === canonicalToolId) : undefined;
+}
+
+export function findDiscoverableToolByHref(href: string): DiscoverableToolDefinition | undefined {
+  return DISCOVERABLE_TOOLS.find((tool) => tool.matchesHref(href));
 }
 
 export function contextFromUnifiedHome(home: UnifiedHomeDTO): ToolDiscoveryContext {

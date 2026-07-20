@@ -32,6 +32,7 @@ export default function CoverageOptionsClient() {
     return qs ? `${pathname}?${qs}` : pathname;
   }, [pathname, searchParams]);
   const guidanceStepKey = searchParams.get('guidanceStepKey') ?? 'compare_coverage_options';
+  const focusedEntityId = searchParams.get('itemId') ?? searchParams.get('sourceEntityId');
 
   const [loading, setLoading] = React.useState(false);
   const [data, setData] = React.useState<any>(null);
@@ -91,7 +92,15 @@ export default function CoverageOptionsClient() {
     }
   }
 
-  const gaps = data?.gaps ?? [];
+  const gaps = React.useMemo(() => {
+    const rows = Array.isArray(data?.gaps) ? data.gaps : [];
+    if (!focusedEntityId) return rows;
+    return [...rows].sort((left, right) => {
+      const leftMatch = left.inventoryItemId === focusedEntityId || left.id === focusedEntityId;
+      const rightMatch = right.inventoryItemId === focusedEntityId || right.id === focusedEntityId;
+      return Number(rightMatch) - Number(leftMatch);
+    });
+  }, [data?.gaps, focusedEntityId]);
   const counts = data?.counts ?? {};
   const totalGaps = counts.total ?? 0;
   const topGap = gaps[0] ?? null;

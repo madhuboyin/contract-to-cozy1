@@ -27,7 +27,6 @@
 
 import { prisma } from '../../lib/prisma';
 import { DateRange } from './types';
-
 // Module key to exclude from user-facing metrics (admin's own usage)
 const ADMIN_MODULE_KEY = 'admin_analytics';
 
@@ -367,18 +366,106 @@ export interface TopToolRow {
 export async function getTopTools(range: DateRange, topN: number): Promise<TopToolRow[]> {
   return prisma.$queryRaw<TopToolRow[]>`
     SELECT
-      "moduleKey",
-      "featureKey",
+      'tool_discovery' AS "moduleKey",
+      COALESCE(
+        "metadataJson"->>'canonicalToolId',
+        "metadataJson"->>'toolId',
+        REPLACE("featureKey", '_', '-')
+      ) AS "featureKey",
       COUNT(DISTINCT "propertyId") ::bigint AS "uniqueHomes",
       COUNT(*) ::bigint AS "totalEvents"
     FROM "product_analytics_events"
     WHERE "occurredAt" >= ${range.from}
       AND "occurredAt" <= ${range.to}
+      AND "eventType" = 'TOOL_USED'
+      AND "eventName" IN ('TOOL_STARTED', 'TOOL_OUTPUT_GENERATED', 'TOOL_COMPLETED')
       AND "featureKey" IS NOT NULL
       AND "propertyId" IS NOT NULL
       AND "userId" IS NOT NULL
-    GROUP BY "moduleKey", "featureKey"
+    GROUP BY COALESCE(
+      "metadataJson"->>'canonicalToolId',
+      "metadataJson"->>'toolId',
+      REPLACE("featureKey", '_', '-')
+    )
     ORDER BY "uniqueHomes" DESC, "totalEvents" DESC
     LIMIT ${topN}
+  `;
+}
+
+export interface ToolLifecycleFunnelRow {
+  toolId: string;
+  discoveredHomes: bigint;
+  clickedHomes: bigint;
+  startedHomes: bigint;
+  outputHomes: bigint;
+  completedHomes: bigint;
+  abandonedHomes: bigint;
+}
+
+export interface ToolLifecycleStageTotalRow {
+  stage: string;
+  uniqueHomes: bigint;
+  totalEvents: bigint;
+}
+
+export async function getToolLifecycleFunnelRows(range: DateRange): Promise<ToolLifecycleFunnelRow[]> {
+  return prisma.$queryRaw<ToolLifecycleFunnelRow[]>`
+    SELECT
+      COALESCE(
+        "metadataJson"->>'canonicalToolId',
+        "metadataJson"->>'toolId',
+        REPLACE("featureKey", '_', '-')
+      ) AS "toolId",
+      COUNT(DISTINCT "propertyId") FILTER (WHERE "eventName" = 'TOOL_DISCOVERED')::bigint AS "discoveredHomes",
+      COUNT(DISTINCT "propertyId") FILTER (WHERE "eventName" = 'TOOL_CLICKED')::bigint AS "clickedHomes",
+      COUNT(DISTINCT "propertyId") FILTER (WHERE "eventName" = 'TOOL_STARTED')::bigint AS "startedHomes",
+      COUNT(DISTINCT "propertyId") FILTER (WHERE "eventName" = 'TOOL_OUTPUT_GENERATED')::bigint AS "outputHomes",
+      COUNT(DISTINCT "propertyId") FILTER (WHERE "eventName" = 'TOOL_COMPLETED')::bigint AS "completedHomes",
+      COUNT(DISTINCT "propertyId") FILTER (WHERE "eventName" = 'TOOL_ABANDONED')::bigint AS "abandonedHomes"
+    FROM "product_analytics_events"
+    WHERE "occurredAt" >= ${range.from}
+      AND "occurredAt" <= ${range.to}
+      AND "eventType" = 'TOOL_USED'
+      AND "eventName" IN (
+        'TOOL_DISCOVERED',
+        'TOOL_CLICKED',
+        'TOOL_STARTED',
+        'TOOL_OUTPUT_GENERATED',
+        'TOOL_COMPLETED',
+        'TOOL_ABANDONED'
+      )
+      AND "featureKey" IS NOT NULL
+      AND "propertyId" IS NOT NULL
+      AND "userId" IS NOT NULL
+    GROUP BY COALESCE(
+      "metadataJson"->>'canonicalToolId',
+      "metadataJson"->>'toolId',
+      REPLACE("featureKey", '_', '-')
+    )
+    ORDER BY "startedHomes" DESC, "clickedHomes" DESC, "discoveredHomes" DESC
+  `;
+}
+
+export async function getToolLifecycleStageTotals(range: DateRange): Promise<ToolLifecycleStageTotalRow[]> {
+  return prisma.$queryRaw<ToolLifecycleStageTotalRow[]>`
+    SELECT
+      "eventName" AS stage,
+      COUNT(DISTINCT "propertyId")::bigint AS "uniqueHomes",
+      COUNT(*)::bigint AS "totalEvents"
+    FROM "product_analytics_events"
+    WHERE "occurredAt" >= ${range.from}
+      AND "occurredAt" <= ${range.to}
+      AND "eventType" = 'TOOL_USED'
+      AND "eventName" IN (
+        'TOOL_DISCOVERED',
+        'TOOL_CLICKED',
+        'TOOL_STARTED',
+        'TOOL_OUTPUT_GENERATED',
+        'TOOL_COMPLETED',
+        'TOOL_ABANDONED'
+      )
+      AND "propertyId" IS NOT NULL
+      AND "userId" IS NOT NULL
+    GROUP BY "eventName"
   `;
 }

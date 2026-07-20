@@ -30,4 +30,7 @@ test('tool discovery exposes the existing cohort registry', () => {
   assert.ok(result.rollouts.HOME_EVENT_RADAR);
   assert.equal(typeof result.rollouts.HOME_EVENT_RADAR.enabled, 'boolean');
   assert.equal(typeof result.rollouts.HOME_EVENT_RADAR.rolloutPct, 'number');
+  assert.ok(result.rollouts.COVERAGE_OPTIONS);
+  assert.ok(result.rollouts.PROJECT_TRACKER);
+  assert.ok(result.rollouts.VISUAL_INSPECTOR);
 });

@@ -1,4 +1,9 @@
 import { getFaro } from '@/lib/monitoring/faro';
+import {
+  canonicalizeDiscoverableToolId,
+  getDiscoverableTool,
+} from '@/features/tools/toolDiscoveryRegistry';
+import { persistToolLifecycleEvents } from '@/features/tools/toolLifecycleTelemetry';
 
 // ---------------------------------------------------------------------------
 // Event catalogue
@@ -203,6 +208,8 @@ export interface CtcEventProperties {
     recommendationReason?: string | null;
     contextVersion?: string | null;
     sourceActionId?: string | null;
+    sourceEntityType?: string | null;
+    sourceEntityId?: string | null;
   };
   tool_discovery_catalog_searched: {
     propertyId?: string | null;
@@ -299,12 +306,74 @@ export function track<E extends CtcEventName>(
   emitEvent(event, properties as Record<string, unknown>);
 
   if (event === 'tool_discovery_clicked') {
-    rememberDiscoveryAttribution(properties as DiscoveryAttribution);
+    const attribution = properties as DiscoveryAttribution;
+    rememberDiscoveryAttribution(attribution);
+    persistToolLifecycleEvents(attribution.propertyId, [{
+      toolId: attribution.toolId,
+      stage: 'CLICKED',
+      surface: attribution.surface,
+      recommendationReason: attribution.recommendationReason,
+      contextVersion: attribution.contextVersion,
+      sourceActionId: attribution.sourceActionId,
+      sourceEntityType: attribution.sourceEntityType,
+      sourceEntityId: attribution.sourceEntityId,
+    }]);
+  }
+
+  if (event === 'tool_discovery_impression') {
+    const impression = properties as CtcEventProperties['tool_discovery_impression'];
+    persistToolLifecycleEvents(impression.propertyId, impression.toolIds.map((toolId, index) => ({
+      toolId,
+      stage: 'DISCOVERED',
+      surface: impression.surface,
+      recommendationReason: impression.recommendationReasons?.[index] ?? null,
+      contextVersion: impression.contextVersion,
+    })));
+  }
+
+  if (event === 'workflow_started') {
+    const workflow = properties as CtcEventProperties['workflow_started'];
+    const toolId = canonicalizeDiscoverableToolId(workflow.tool);
+    if (toolId) {
+      persistToolLifecycleEvents(workflow.propertyId, [{
+        toolId,
+        stage: 'STARTED',
+        surface: workflow.entryPoint || 'direct',
+      }]);
+    }
   }
 
   if (event === 'workflow_completed') {
     const workflow = properties as CtcEventProperties['workflow_completed'];
-    const attribution = readDiscoveryAttribution(workflow.tool);
+    const toolId = canonicalizeDiscoverableToolId(workflow.tool);
+    if (!toolId) return;
+    const attribution = readDiscoveryAttribution(toolId);
+    const completionKind = getDiscoverableTool(toolId)?.completionKind ?? 'OUTPUT_GENERATED';
+    persistToolLifecycleEvents(workflow.propertyId, [
+      {
+        toolId,
+        stage: 'OUTPUT_GENERATED',
+        surface: attribution?.surface ?? 'direct',
+        recommendationReason: attribution?.recommendationReason ?? null,
+        contextVersion: attribution?.contextVersion ?? null,
+        sourceActionId: attribution?.sourceActionId ?? null,
+        sourceEntityType: attribution?.sourceEntityType ?? null,
+        sourceEntityId: attribution?.sourceEntityId ?? null,
+        completionKind,
+      },
+      {
+        toolId,
+        stage: 'COMPLETED',
+        surface: attribution?.surface ?? 'direct',
+        recommendationReason: attribution?.recommendationReason ?? null,
+        contextVersion: attribution?.contextVersion ?? null,
+        sourceActionId: attribution?.sourceActionId ?? null,
+        sourceEntityType: attribution?.sourceEntityType ?? null,
+        sourceEntityId: attribution?.sourceEntityId ?? null,
+        completionKind,
+        durationSeconds: workflow.durationSeconds,
+      },
+    ]);
     if (attribution) {
       emitEvent('tool_discovery_outcome', {
         propertyId: attribution.propertyId ?? workflow.propertyId,
