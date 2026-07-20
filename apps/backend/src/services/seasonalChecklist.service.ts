@@ -228,11 +228,19 @@ export class SeasonalChecklistService {
       throw new Error('Seasonal checklist not found');
     }
 
-    // Backfill: items added before bulk-add used the maintenance path are
-    // ADDED without a linked PropertyMaintenanceTask, so "View in Maintenance"
-    // never renders for them. Materialize the missing task on read.
+    // Backfill: (a) items added before bulk-add used the maintenance path
+    // are ADDED without a linked PropertyMaintenanceTask, so "View in
+    // Maintenance" never renders for them; (b) checklists generated before
+    // W3 auto-promotion shipped have RECOMMENDED items that were never
+    // promoted at all. Materialize the missing task on read either way —
+    // every generated seasonal item is a canonical task by default now.
+    // autoPromotionSkipped excludes items a homeowner explicitly removed —
+    // RECOMMENDED is also the default state for "never promoted", so status
+    // alone can't distinguish the two.
     const legacyAddedItems = checklist.items.filter(
-      (item) => item.status === 'ADDED' && !item.maintenanceTask
+      (item) =>
+        !item.maintenanceTask &&
+        (item.status === 'ADDED' || (item.status === 'RECOMMENDED' && !item.autoPromotionSkipped)),
     );
     if (legacyAddedItems.length > 0) {
       let healedAny = false;

@@ -345,7 +345,11 @@ import {
     }
   
     /**
-     * Create tasks from seasonal checklist items.
+     * Create tasks from seasonal checklist items (user-initiated — enforces
+     * property access). System-triggered callers (seasonal generation,
+     * read-time self-heal) use createFromSeasonalItemInternal directly,
+     * which has no acting user and must not be gated by ownership checks
+     * meant for interactive requests.
      */
   static async createFromSeasonalItem(
     userId: string,
@@ -354,7 +358,20 @@ import {
   ): Promise<PropertyMaintenanceTask> {
     // Verify property access (CONTRIBUTOR+ required to create tasks)
     await this.verifyPropertyOwnership(userId, propertyId, 'CONTRIBUTOR');
+    return this.createFromSeasonalItemInternal(propertyId, seasonalItemId);
+  }
 
+  /**
+   * Core seasonal-item-to-task promotion, with no access-control check.
+   * W3 (maintenance/seasonal): every generated seasonal item is promoted
+   * to a canonical PropertyMaintenanceTask automatically — this is the
+   * shared implementation between that generation-time promotion and the
+   * user-facing createFromSeasonalItem.
+   */
+  static async createFromSeasonalItemInternal(
+    propertyId: string,
+    seasonalItemId: string
+  ): Promise<PropertyMaintenanceTask> {
     // Get seasonal item with all relations
     const seasonalItem = await prisma.seasonalChecklistItem.findUnique({
       where: { id: seasonalItemId },
@@ -429,12 +446,16 @@ import {
 
       logger.info({ taskId: task.id }, '[SEASONAL] Successfully created PropertyMaintenanceTask');
 
-      // Update seasonal item to mark as added
+      // Update seasonal item to mark as added. autoPromotionSkipped is
+      // cleared here too — a task now exists again, so the "explicitly
+      // removed" marker set by removeSeasonalTaskFromMaintenance no
+      // longer applies.
       await prisma.seasonalChecklistItem.update({
         where: { id: seasonalItemId },
         data: {
           status: 'ADDED',
           addedAt: new Date(),
+          autoPromotionSkipped: false,
         },
       });
 

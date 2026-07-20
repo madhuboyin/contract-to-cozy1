@@ -2,6 +2,7 @@
 import { prisma } from '../lib/prisma';
 import { logger } from '../lib/logger';
 import { evaluateSeasonalTemplateApplicability } from '../../../backend/src/services/seasonal/applicabilityPolicy';
+import { PropertyMaintenanceTaskService } from '../../../backend/src/services/PropertyMaintenanceTask.service';
 import {
   Season,
   getSeasonStartDate,
@@ -364,29 +365,51 @@ async function generateChecklistForProperty(
     },
   });
 
-  // Create checklist items
-  if (filteredTemplates.length > 0) {
-    const items = filteredTemplates.map((template: SeasonalTaskTemplate) => ({
-      seasonalChecklistId: checklist.id,
-      seasonalTaskTemplateId: template.id,
-      propertyId,
-      taskKey: template.taskKey,
-      title: template.title,
-      description: template.description,
-      priority: template.priority,
-      status: 'RECOMMENDED',
-      recommendedDate: seasonStartDate,
-    }));
-
+  // Create checklist items and, per W3 (maintenance/seasonal), promote each
+  // one to a canonical PropertyMaintenanceTask immediately — seasonal
+  // recommendations are no longer a parallel identity that only becomes
+  // "real" once a homeowner clicks "Add to Checklist".
+  let promoted = 0;
+  let promotionFailed = 0;
+  for (const template of filteredTemplates as SeasonalTaskTemplate[]) {
     // @ts-ignore - Model exists in schema but may not be in generated client
-    await (prisma as any).seasonalChecklistItem.createMany({
-      data: items,
+    const item = await (prisma as any).seasonalChecklistItem.create({
+      data: {
+        seasonalChecklistId: checklist.id,
+        seasonalTaskTemplateId: template.id,
+        propertyId,
+        taskKey: template.taskKey,
+        title: template.title,
+        description: template.description,
+        priority: template.priority,
+        status: 'RECOMMENDED',
+        recommendedDate: seasonStartDate,
+      },
+    });
+
+    try {
+      await PropertyMaintenanceTaskService.createFromSeasonalItemInternal(propertyId, item.id);
+      promoted += 1;
+    } catch (err) {
+      promotionFailed += 1;
+      logger.error(
+        { err, seasonalItemId: item.id, propertyId },
+        '[SEASONAL] Failed to promote seasonal item to a canonical maintenance task',
+      );
+    }
+  }
+
+  if (promoted > 0) {
+    // @ts-ignore - Model exists in schema but may not be in generated client
+    await (prisma as any).seasonalChecklist.update({
+      where: { id: checklist.id },
+      data: { tasksAdded: promoted },
     });
   }
 
   logger.info(
     `[SEASONAL] ✅ Created ${season} ${year} checklist with ${filteredTemplates.length} tasks ` +
-    `for property ${propertyId.substring(0, 8)}`
+    `(promoted ${promoted}, failed ${promotionFailed}) for property ${propertyId.substring(0, 8)}`
   );
 }
 

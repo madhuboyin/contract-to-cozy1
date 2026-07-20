@@ -4880,6 +4880,14 @@ model SeasonalChecklistItem {
   completedAt            DateTime?          @map("completed_at")
   dismissedAt            DateTime?          @map("dismissed_at")
   snoozedUntil           DateTime?          @map("snoozed_until")
+  // W3 (maintenance/seasonal): every generated item is auto-promoted to a
+  // canonical PropertyMaintenanceTask by default, and stale/pre-existing
+  // checklists are retroactively healed on read (see getSeasonalChecklist).
+  // Set when a homeowner explicitly unlinks the task via "Remove" so that
+  // self-heal doesn't silently recreate a task they deliberately removed —
+  // status alone can't carry this because RECOMMENDED is also the default
+  // state for an item that was simply never promoted yet.
+  autoPromotionSkipped   Boolean            @default(false) @map("auto_promotion_skipped")
   createdAt              DateTime           @default(now()) @map("created_at")
   updatedAt              DateTime           @updatedAt @map("updated_at")
 

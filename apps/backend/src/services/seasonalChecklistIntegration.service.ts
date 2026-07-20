@@ -135,12 +135,18 @@ export async function removeSeasonalTaskFromMaintenance(
     };
   }
 
-  // 4. Update seasonal item status back to RECOMMENDED
+  // 4. Update seasonal item status back to RECOMMENDED. autoPromotionSkipped
+  // records that this was an explicit removal, not "never promoted yet" —
+  // read-time self-heal (getSeasonalChecklist) must not recreate a task
+  // the homeowner deliberately removed. It's cleared automatically the
+  // moment a task exists again (manual re-add, or self-heal for a
+  // *different* still-unpromoted item on the same checklist).
   await prisma.seasonalChecklistItem.update({
     where: { id: seasonalItemId },
     data: {
       status: 'RECOMMENDED',
       addedAt: null,
+      autoPromotionSkipped: true,
     },
   });
 

@@ -333,6 +333,7 @@ RUN sed -i 's/\.\.\/\.\.\/backend\/src\/utils\/riskCalculator\.util/\.\/shared\/
     sed -i 's/\.\.\/\.\.\/backend\/src\/services\/RiskAssessment\.service/\.\/shared\/backend\/services\/RiskAssessment\.service/g' src/worker.ts && \
     sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/seasonal\/applicabilityPolicy/\.\.\/shared\/backend\/services\/seasonal\/applicabilityPolicy/g' src/jobs/seasonalChecklistGeneration.job.ts src/jobs/seasonalNotification.job.ts && \
     sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/seasonal\/seasonWindow/\.\.\/shared\/backend\/services\/seasonal\/seasonWindow/g' src/jobs/seasonalChecklistGeneration.job.ts && \
+    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/PropertyMaintenanceTask\.service/\.\.\/shared\/backend\/services\/PropertyMaintenanceTask.service/g' src/jobs/seasonalChecklistGeneration.job.ts && \
     sed -i 's/\.\.\/\.\.\/backend\/src\/config\/workerJobRegistry/\.\/shared\/backend\/config\/workerJobRegistry/g' src/worker.ts && \
     sed -i 's/\.\.\/\.\.\/backend\/src\/config\/queueDefaults/\.\/shared\/backend\/config\/queueDefaults/g' src/worker.ts && \
     sed -i 's/\.\.\/\.\.\/backend\/src\/config\/queueDefaults/\.\/shared\/backend\/config\/queueDefaults/g' src/runners/highPriorityEmailEnqueue.poller.ts && \
