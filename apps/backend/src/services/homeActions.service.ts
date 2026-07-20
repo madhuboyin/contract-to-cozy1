@@ -16,6 +16,10 @@ import { BuyerAcquisitionService } from './buyerAcquisition.service';
 import { NewHomeSetupService } from './newHomeSetup.service';
 import { getGuidanceJourneyDisplayTitle } from './guidanceEngine/guidanceTemplateRegistry';
 import { getHomeAssetDisplayLabel } from '../productFramework/homeAssetDisplay';
+import { materializeRecommendationsForProperty } from '../modules/personalization/application/materializeRecommendations.usecase';
+import { getAggregationPropertyContext } from './aggregationContext/context';
+import { getContextCompleteness } from '../modules/propertyContext/application/getContextCompleteness';
+import { applyPersonalizationHomeActionLifecycle } from '../modules/personalization/application/applyHomeActionLifecycle.usecase';
 
 export const HOME_ACTION_COMMANDS = [
   'COMPLETE',
@@ -173,7 +177,11 @@ export async function getHomeActionFeed(propertyId: string, userId: string) {
   await BuyerAcquisitionService.ensureRecurringHandoff(userId, propertyId).catch(() => null);
   await NewHomeSetupService.ensureRecurringHandoff(userId, propertyId).catch(() => null);
   const orchestration = await getOrchestrationSummary(propertyId, userId);
-  const promoted = await getPromotedHomeActions(propertyId);
+  const personalization = await materializeRecommendationsForProperty(propertyId, 'HOME_READ', userId)
+    .catch(() => null);
+  const promoted = await getPromotedHomeActions(propertyId, prisma, {
+    includePersonalization: Boolean(personalization && !personalization.paused),
+  });
   const candidates: HomeAction[] = [...orchestration.homeActions, ...promoted.actions];
   const entryContext = await getEntryContext(propertyId, userId);
 
@@ -245,7 +253,7 @@ export async function recordHomeActionOpened(propertyId: string, actionId: strin
 
 export async function getUnifiedHome(propertyId: string, userId: string) {
   const feed = await getHomeActionFeed(propertyId, userId);
-  const [property, inventory, documentCount, verifiedDocumentCount, recentEvents, activeProject, activeJourney] =
+  const [property, inventory, documentCount, verifiedDocumentCount, recentEvents, activeProject, activeJourney, propertyContextSnapshot] =
     await Promise.all([
       prisma.property.findUnique({
         where: { id: propertyId },
@@ -316,21 +324,17 @@ export async function getUnifiedHome(propertyId: string, userId: string) {
           },
         },
       }),
+      getAggregationPropertyContext(propertyId, userId, 'UNIFIED_HOME'),
     ]);
 
   if (!property) throw new Error('Property not found or access denied.');
 
-  const knownPropertyFacts = [
-    property.yearBuilt,
-    property.propertySize,
-    property.bedrooms,
-    property.bathrooms,
-    property.heatingType,
-    property.coolingType,
-    property.roofType,
-  ].filter((value) => value != null).length;
-  const recordSignals = knownPropertyFacts + (inventory.length > 0 ? 1 : 0) + (documentCount > 0 ? 1 : 0);
-  const recordCompleteness = Math.round((recordSignals / 9) * 100);
+  const contextCompleteness = getContextCompleteness(propertyContextSnapshot);
+  const knownPropertyFacts = contextCompleteness.scopes.reduce((sum, scope) => sum + scope.knownFacts, 0);
+  const missingPropertyFacts = contextCompleteness.scopes.reduce((sum, scope) => sum + scope.missingFactKeys.length, 0);
+  const conflictedPropertyFacts = contextCompleteness.scopes.reduce((sum, scope) => sum + scope.conflictedFactKeys.length, 0);
+  const stalePropertyFacts = contextCompleteness.scopes.reduce((sum, scope) => sum + scope.staleFactKeys.length, 0);
+  const recordCompleteness = contextCompleteness.completenessPercent;
   const coverageGapCount = inventory.filter((item) =>
     !item.coverageNotRequired && !item.warrantyId && !item.insurancePolicyId).length;
 
@@ -377,6 +381,16 @@ export async function getUnifiedHome(propertyId: string, userId: string) {
       address: `${property.address}, ${property.city}, ${property.state} ${property.zipCode}`,
       dwellingType: property.dwellingType,
       updatedAt: property.updatedAt.toISOString(),
+    },
+    propertyContext: {
+      contextVersion: contextCompleteness.contextVersion,
+      scopes: propertyContextSnapshot.scopes,
+      completenessPercent: recordCompleteness,
+      knownFactCount: knownPropertyFacts,
+      missingFactCount: missingPropertyFacts,
+      conflictedFactCount: conflictedPropertyFacts,
+      staleFactCount: stalePropertyFacts,
+      warningCount: propertyContextSnapshot.warnings.length,
     },
     attention: {
       actions: feed.actions,
@@ -495,6 +509,17 @@ export async function executeHomeActionCommand(
       source: 'USER',
       createdBy: userId,
       payload: { command: input.command, reason, consequenceAcknowledged: input.consequenceAcknowledged },
+    });
+  }
+
+  if (action.source.kind === 'PERSONALIZATION') {
+    await applyPersonalizationHomeActionLifecycle({
+      recommendationId: action.source.entityId,
+      propertyId,
+      userId,
+      command: input.command as Exclude<HomeActionCommandInput['command'], 'CORRECT_FACT'>,
+      reason,
+      nextTriggerAt,
     });
   }
 

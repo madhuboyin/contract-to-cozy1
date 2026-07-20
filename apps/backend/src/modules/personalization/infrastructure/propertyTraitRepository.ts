@@ -9,6 +9,7 @@ import { InventoryItemFact } from '../domain/traits';
 import { getAggregationPropertyContext } from '../../../services/aggregationContext/context';
 
 export interface PropertyTraitFacts {
+  contextVersion: string;
   hasSmokeDetectors: boolean | null;
   roofReplacementYear: number | null;
   inventoryItems: InventoryItemFact[];
@@ -64,6 +65,7 @@ export async function loadPropertyTraitFactsFromContext(
   };
   const items = known<Array<InventoryServiceFact & { assetType?: string | null }>>('inventory.items') ?? [];
   return {
+    contextVersion: context.contextVersion,
     hasSmokeDetectors: known<boolean>('safety.hasSmokeDetectors'),
     roofReplacementYear: known<number>('structure.roofReplacementYear'),
     inventoryItems: items

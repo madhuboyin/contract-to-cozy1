@@ -303,6 +303,16 @@ export type UnifiedHomeDTO = {
     dwellingType: string;
     updatedAt: string;
   };
+  propertyContext: {
+    contextVersion: string;
+    scopes: PropertyContextScope[];
+    completenessPercent: number;
+    knownFactCount: number;
+    missingFactCount: number;
+    conflictedFactCount: number;
+    staleFactCount: number;
+    warningCount: number;
+  };
   attention: {
     actions: RankedHomeActionDTO[];
     totalCount: number;

@@ -366,7 +366,13 @@ export function UnifiedHomeSurface({ propertyId }: { propertyId: string }) {
     {
       label: 'Record complete',
       value: `${home.glance.recordCompleteness}%`,
-      detail: 'Review known and missing home facts',
+      detail: home.propertyContext.conflictedFactCount > 0
+        ? `Review ${home.propertyContext.conflictedFactCount} conflicting home fact${home.propertyContext.conflictedFactCount === 1 ? '' : 's'}`
+        : home.propertyContext.staleFactCount > 0
+          ? `Refresh ${home.propertyContext.staleFactCount} stale home fact${home.propertyContext.staleFactCount === 1 ? '' : 's'}`
+          : home.propertyContext.missingFactCount > 0
+            ? `Add ${home.propertyContext.missingFactCount} missing home fact${home.propertyContext.missingFactCount === 1 ? '' : 's'}`
+            : 'Review your verified Home Record',
       href: home.glance.recordHref,
     },
     {

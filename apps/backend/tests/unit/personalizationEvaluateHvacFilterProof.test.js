@@ -200,6 +200,8 @@ test('positive fixture: HVAC serviced 200 days ago -> eligible TRUE, run recorde
   assert.equal(runs[0].result, 'TRUE');
   assert.equal(runs[0].definitionId, 'def-1');
   assert.equal(runs[0].ruleVersion, HVAC_FILTER_PROOF_RULE_VERSION);
+  assert.equal(result.contextVersion, 'personalization-test-context');
+  assert.equal(runs[0].resultJson.contextVersion, 'personalization-test-context');
 
   // The current property-trait snapshot is returned for materialization and
   // audit without a separate configurable scoring payload.

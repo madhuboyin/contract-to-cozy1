@@ -8,6 +8,7 @@ import { RecommendationGovernanceSchema } from '../productFramework/recommendati
 import { buildRecommendationResponseContract, resolveRecommendationResponseStatus } from '../productFramework/recommendationResponse.contract';
 import { getGuidanceJourneyDisplayTitle } from './guidanceEngine/guidanceTemplateRegistry';
 import { getHomeAssetDisplayLabel } from '../productFramework/homeAssetDisplay';
+import { findPersonalizationDefinition } from '../modules/personalization/catalog/personalizationDefinitions';
 
 const DEFAULT_FEEDBACK: HomeAction['feedbackControls'] = [
   'COMPLETE', 'DEFER', 'SNOOZE', 'DISMISS', 'ALREADY_DONE', 'NOT_RELEVANT', 'CORRECT_FACT',
@@ -15,7 +16,7 @@ const DEFAULT_FEEDBACK: HomeAction['feedbackControls'] = [
 
 export type HomeActionSourceDb = Pick<typeof prisma,
   'guidanceJourney' | 'incident' | 'recallMatch' | 'coverageAnalysis' | 'projectRecord' |
-  'seasonalChecklist' | 'orchestrationActionEvent' | 'orchestrationActionSnooze'>;
+  'seasonalChecklist' | 'personalizedRecommendation' | 'orchestrationActionEvent' | 'orchestrationActionSnooze'>;
 
 function lowConsequenceGovernance(policyVersion = 'phase2-v1'): HomeAction['governance'] {
   return {
@@ -73,6 +74,65 @@ function guidanceDecisionContract(governance: HomeAction['governance']) {
         optionId: 'continue_evidence_review',
         dimension: 'EFFORT' as const,
         summary: 'Keeps the decision context together but still depends on the completeness of the home record.',
+      },
+      {
+        optionId: 'verify_with_professional',
+        dimension: 'COST' as const,
+        summary: 'May add time or professional cost while reducing uncertainty for a material decision.',
+      },
+    ],
+  };
+}
+
+function personalizationExplanation(reasonCodes: unknown, fallback: string): string {
+  if (!Array.isArray(reasonCodes)) return fallback;
+  for (const reason of reasonCodes) {
+    if (!reason || typeof reason !== 'object') continue;
+    const params = (reason as { params?: unknown }).params;
+    if (!params || typeof params !== 'object') continue;
+    const message = (params as { message?: unknown }).message;
+    if (typeof message === 'string' && message.trim()) return message.trim().slice(0, 1200);
+  }
+  return fallback;
+}
+
+function contextVersionFromEvaluation(resultJson: unknown): string | null {
+  if (!resultJson || typeof resultJson !== 'object' || Array.isArray(resultJson)) return null;
+  const value = (resultJson as { contextVersion?: unknown }).contextVersion;
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+function personalizationDecisionContract(governance: HomeAction['governance']) {
+  if (governance.safetyTier !== 'MATERIAL_FINANCIAL' && governance.safetyTier !== 'REGULATED_COVERAGE') {
+    return { assumptions: [], options: [], tradeoffs: [] };
+  }
+  return {
+    assumptions: [{
+      key: 'property_context_currency',
+      label: 'Property context is current',
+      value: 'This recommendation uses the facts and service history currently recorded for this home.',
+      source: 'PROPERTY_FACT' as const,
+      editable: true,
+    }],
+    options: [
+      {
+        id: 'review_recorded_context',
+        label: 'Review the recorded context',
+        summary: 'Confirm the underlying home facts and service history before deciding what to do.',
+        recommended: true,
+      },
+      {
+        id: 'verify_with_professional',
+        label: 'Verify independently',
+        summary: 'Ask a qualified professional to assess condition, scope, and timing before committing.',
+        recommended: false,
+      },
+    ],
+    tradeoffs: [
+      {
+        optionId: 'review_recorded_context',
+        dimension: 'EFFORT' as const,
+        summary: 'Keeps the decision grounded in the Home Record but depends on its current completeness.',
       },
       {
         optionId: 'verify_with_professional',
@@ -526,6 +586,138 @@ async function loadCoverageActions(propertyId: string, db: HomeActionSourceDb): 
   });
 }
 
+async function loadPersonalizationActions(propertyId: string, db: HomeActionSourceDb): Promise<HomeAction[]> {
+  const now = new Date();
+  const recommendations = await db.personalizedRecommendation.findMany({
+    where: {
+      propertyId,
+      status: 'ACTIVE',
+      OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+      definition: {
+        status: 'ACTIVE',
+        AND: [
+          { OR: [{ effectiveFrom: null }, { effectiveFrom: { lte: now } }] },
+          { OR: [{ effectiveTo: null }, { effectiveTo: { gt: now } }] },
+        ],
+      },
+    },
+    orderBy: [{ score: 'desc' }, { lastEvaluatedAt: 'desc' }],
+    take: 25,
+    select: {
+      id: true,
+      status: true,
+      score: true,
+      priorityBand: true,
+      confidence: true,
+      ruleVersion: true,
+      contentVersion: true,
+      firstEligibleAt: true,
+      lastEvaluatedAt: true,
+      expiresAt: true,
+      definition: {
+        select: {
+          code: true,
+          category: true,
+          status: true,
+          safetyTier: true,
+          governancePolicyVersion: true,
+        },
+      },
+      evaluationRun: { select: { resultJson: true } },
+      explanations: {
+        orderBy: { version: 'desc' },
+        take: 1,
+        select: { headline: true, reasonCodes: true, evidenceJson: true },
+      },
+    },
+  });
+
+  return recommendations.flatMap((recommendation) => {
+    const reviewed = findPersonalizationDefinition(recommendation.definition.code);
+    if (!reviewed || !reviewed.modules.includes('DASHBOARD')) return [];
+    if (recommendation.definition.safetyTier !== reviewed.governance.safetyTier ||
+      recommendation.definition.governancePolicyVersion !== reviewed.governance.policyVersion) return [];
+
+    const explanation = recommendation.explanations[0];
+    const confidence = normalizeHomeActionConfidenceScore(recommendation.confidence);
+    const headline = explanation?.headline?.trim() || reviewed.headline;
+    const summary = personalizationExplanation(explanation?.reasonCodes, reviewed.body);
+    const contextVersion = contextVersionFromEvaluation(recommendation.evaluationRun?.resultJson) ??
+      contextVersionFromEvaluation(explanation?.evidenceJson);
+    // A Home recommendation without the Property Context version that produced
+    // it cannot be proven current. Dedicated personalization surfaces may still
+    // explain it, but the default Home feed fails closed.
+    if (!contextVersion) return [];
+
+    const governance = reviewed.governance;
+    const decisionContract = personalizationDecisionContract(governance);
+    const safety = governance.safetyTier === 'SAFETY_EMERGENCY';
+    const priority: HomeAction['priority'] = safety
+      ? 'NOW'
+      : recommendation.priorityBand === 'HIGH'
+        ? 'SOON'
+        : recommendation.priorityBand === 'LOW'
+          ? 'CONSIDER'
+          : 'PLAN';
+    const href = `/dashboard/personalization?propertyId=${encodeURIComponent(propertyId)}`;
+    const sourceVersion = `${contextVersion.slice(0, 56)}:r${recommendation.ruleVersion}:c${recommendation.contentVersion}`;
+
+    return [adaptHomeActionSource('PERSONALIZATION', {
+      id: `personalization:${recommendation.id}`,
+      propertyId,
+      lineageId: `personalization:${recommendation.id}`,
+      sourceEntityId: recommendation.id,
+      sourceVersion,
+      state: 'OPEN',
+      priority,
+      signal: headline,
+      whyItMatters: summary,
+      recommendedAction: safety ? `Review ${headline} now` : `Review ${headline}`,
+      expectedOutcome: reviewed.body,
+      timing: {
+        dueAt: recommendation.expiresAt?.toISOString() ?? null,
+        windowStart: recommendation.firstEligibleAt.toISOString(),
+        windowEnd: recommendation.expiresAt?.toISOString() ?? null,
+        rationale: recommendation.expiresAt
+          ? 'This reviewed recommendation remains applicable until its recorded expiry or the Home Record changes.'
+          : 'This reviewed recommendation remains applicable until the Home Record changes or the underlying rule no longer matches.',
+      },
+      evidence: [{
+        id: recommendation.id,
+        type: 'SYSTEM_DERIVATION',
+        label: `Reviewed property-context evaluation for ${headline}`.slice(0, 240),
+        source: `ContractToCozy reviewed personalization rule ${recommendation.definition.code}`,
+        observedAt: recommendation.lastEvaluatedAt.toISOString(),
+        freshness: 'CURRENT',
+        confidence,
+      }],
+      ...decisionContract,
+      confidence: {
+        score: confidence,
+        label: confidenceLabel(confidence),
+        missing: confidence == null ? ['Personalization confidence'] : [],
+      },
+      governance,
+      primaryCta: {
+        kind: safety ? 'ESCALATE' : 'REVIEW',
+        label: safety ? 'Review safety guidance' : 'Review recommendation',
+        href,
+      },
+      secondaryCtas: [{
+        kind: 'CORRECT_FACT',
+        label: 'Correct home information',
+        href: `/dashboard/properties/${propertyId}`,
+      }],
+      feedbackControls: safety
+        ? ['COMPLETE', 'ALREADY_DONE', 'CORRECT_FACT']
+        : DEFAULT_FEEDBACK,
+      relatedJourneyId: null,
+      createdAt: recommendation.firstEligibleAt.toISOString(),
+      lastEvaluatedAt: recommendation.lastEvaluatedAt.toISOString(),
+    })];
+  });
+}
+
 async function loadProjectActions(propertyId: string, db: HomeActionSourceDb): Promise<HomeAction[]> {
   const projects = await db.projectRecord.findMany({
     where: { propertyId, status: { in: ['PLANNING', 'IN_PROGRESS', 'PAUSED', 'DISPUTED'] } },
@@ -562,6 +754,7 @@ async function loadProjectActions(propertyId: string, db: HomeActionSourceDb): P
 export async function getPromotedHomeActions(
   propertyId: string,
   db: HomeActionSourceDb = prisma,
+  options: { includePersonalization?: boolean } = {},
 ): Promise<{
   actions: HomeAction[];
   diagnostics: { candidateCount: number; suppressedCount: number; snoozedCount: number };
@@ -574,6 +767,7 @@ export async function getPromotedHomeActions(
     loadGuidanceActions(propertyId, db, activeWeatherIncidentIds), Promise.resolve(incidentActions),
     loadRecallActions(propertyId, db), loadCoverageActions(propertyId, db),
     loadProjectActions(propertyId, db), loadSeasonalChecklistActions(propertyId, db),
+    options.includePersonalization === false ? Promise.resolve([]) : loadPersonalizationActions(propertyId, db),
   ]);
   const candidates = groups.flat();
   if (candidates.length === 0) {

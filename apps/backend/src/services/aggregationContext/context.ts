@@ -4,6 +4,7 @@ import { evaluateAggregationContext } from './applicabilityPolicy';
 import { projectAggregationLifecycle } from './lifecycle';
 
 export type AggregationContextFeature =
+  | 'UNIFIED_HOME'
   | 'DASHBOARD_TODAY'
   | 'ACTION_CENTER'
   | 'PERSONALIZED_GUIDANCE'
@@ -15,6 +16,7 @@ export type AggregationContextFeature =
   | 'WORKER_BATCH';
 
 export const AGGREGATION_FEATURE_SCOPES: Record<AggregationContextFeature, PropertyContextScope[]> = {
+  UNIFIED_HOME: ['CORE', 'LOCATION', 'STRUCTURE', 'SYSTEMS', 'INVENTORY', 'MAINTENANCE', 'COVERAGE', 'RISK', 'PROJECTS', 'EVENTS', 'GUIDANCE_STATE', 'PRODUCT_CONTEXT'],
   DASHBOARD_TODAY: ['CORE', 'MAINTENANCE', 'RISK', 'FINANCIAL', 'GUIDANCE_STATE', 'PRODUCT_CONTEXT'],
   ACTION_CENTER: ['CORE', 'MAINTENANCE', 'COVERAGE', 'RISK', 'PROJECTS', 'GUIDANCE_STATE'],
   PERSONALIZED_GUIDANCE: ['CORE', 'STRUCTURE', 'SYSTEMS', 'SAFETY', 'INVENTORY', 'MAINTENANCE', 'GUIDANCE_STATE'],
@@ -27,6 +29,7 @@ export const AGGREGATION_FEATURE_SCOPES: Record<AggregationContextFeature, Prope
 };
 
 const PRIMARY_DECISION_BY_FEATURE = {
+  UNIFIED_HOME: 'dashboardToday',
   DASHBOARD_TODAY: 'dashboardToday',
   ACTION_CENTER: 'actionCenter',
   PERSONALIZED_GUIDANCE: 'personalizedGuidance',

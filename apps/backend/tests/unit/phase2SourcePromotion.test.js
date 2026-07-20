@@ -12,6 +12,8 @@ function stubSources({
   snoozedActionKey = null,
   guidanceConfidence = 0.85,
   includeWeatherGuidance = false,
+  includePersonalization = false,
+  personalizationContextVersion = 'context-v1',
 } = {}) {
   const guidanceJourneys = [{
     id: 'journey-1', propertyId: 'property-1', inventoryItemId: 'item-1', primarySignalId: 'signal-1',
@@ -66,6 +68,21 @@ function stubSources({
         { id: 'seasonal-item-3', title: 'Inspect exterior drainage', priority: 'RECOMMENDED', status: 'ADDED', snoozedUntil: null, recommendedDate: NOW, updatedAt: NOW },
       ],
     }] },
+    personalizedRecommendation: { findMany: async () => includePersonalization ? [{
+      id: 'personalization-1', propertyId: 'property-1', status: 'ACTIVE', score: 60,
+      priorityBand: 'MEDIUM', confidence: 1, ruleVersion: 1, contentVersion: 2,
+      firstEligibleAt: NOW, lastEvaluatedAt: NOW, expiresAt: LATER,
+      definition: {
+        code: 'hvac_filter_replacement_check_proof', category: 'low_cost_prevention', status: 'ACTIVE',
+        safetyTier: 'LOW_CONSEQUENCE', governancePolicyVersion: 'phase4-v1',
+      },
+      evaluationRun: { resultJson: { contextVersion: personalizationContextVersion } },
+      explanations: [{
+        headline: 'Your HVAC filter may be due for a replacement check',
+        reasonCodes: [{ params: { message: 'The recorded HVAC service interval may have passed.' } }],
+        evidenceJson: { contextVersion: personalizationContextVersion },
+      }],
+    }] : [] },
     orchestrationActionEvent: { findMany: async () =>
       terminalActionKey ? [{ actionKey: terminalActionKey }] : [] },
     orchestrationActionSnooze: { findMany: async () =>
@@ -94,6 +111,32 @@ test('keeps the active weather incident and suppresses its duplicate guidance jo
   assert.equal(weather.evidence[0].source, 'National Weather Service — NWS Mount Holly NJ');
   assert.equal(weather.timing.windowEnd, LATER.toISOString());
   assert.equal(result.actions.some((action) => action.id === 'guidance:journey-weather'), false);
+});
+
+test('promotes an active reviewed personalization recommendation with its Property Context version', async () => {
+  const result = await getPromotedHomeActions('property-1', stubSources({ includePersonalization: true }));
+  const action = result.actions.find((candidate) => candidate.id === 'personalization:personalization-1');
+  assert.ok(action);
+  assert.equal(action.source.kind, 'PERSONALIZATION');
+  assert.match(action.source.version, /^context-v1:r1:c2$/);
+  assert.equal(action.primaryCta.label, 'Review recommendation');
+  assert.equal(action.evidence[0].source, 'ContractToCozy reviewed personalization rule hvac_filter_replacement_check_proof');
+  assert.equal(action.governance.safetyTier, 'LOW_CONSEQUENCE');
+});
+
+test('fails closed when personalization lacks a Property Context version or promotion is disabled', async () => {
+  const missingVersion = await getPromotedHomeActions(
+    'property-1',
+    stubSources({ includePersonalization: true, personalizationContextVersion: null }),
+  );
+  assert.equal(missingVersion.actions.some((action) => action.source.kind === 'PERSONALIZATION'), false);
+
+  const disabled = await getPromotedHomeActions(
+    'property-1',
+    stubSources({ includePersonalization: true }),
+    { includePersonalization: false },
+  );
+  assert.equal(disabled.actions.some((action) => action.source.kind === 'PERSONALIZATION'), false);
 });
 
 test('does not promote a weather incident after its authoritative alert expiry', async () => {

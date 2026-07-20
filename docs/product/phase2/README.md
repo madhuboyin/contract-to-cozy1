@@ -87,9 +87,29 @@ Implemented:
 
 The target Prisma schema has been applied. This beta has no separate test, development, or staging database, so schema migration is not a Phase 2 documentation or implementation gap. Continue to use deterministic service tests, frontend builds, the executable route audit, and narrowly scoped authenticated smoke checks against beta data. Before a real-user launch, execute production-readiness acceptance for representative guidance, incident, recall, coverage, project, maintenance, seasonal, weather, and activation records.
 
-### Future source eligibility
+## Property Context and Personalization convergence increment
 
-- `PERSONALIZATION` retains a canonical adapter and requires an active definition plus evidence and governance metadata. Missing human attestations are advisory during internal beta and blocking when `ENFORCE_HUMAN_POLICY_APPROVALS=true`; technical safety validation is never bypassed. See [governance modes](../governance-modes.md).
+Implementation plan (completed):
+
+- Unified Home uses the bounded canonical Property Context snapshot for record completeness instead of maintaining a parallel field-count formula.
+- The Home response exposes the exact `contextVersion`, fact-state totals, and warning totals used for its summary so downstream actions and Ask can detect stale context.
+- Personalization materialization reads the same authorized `PERSONALIZED_GUIDANCE` context and records its `contextVersion` in the existing evaluation evidence JSON; no schema migration or migration script is required.
+- Only active, in-window, code-matched, evidence-backed personalization definitions are eligible for canonical Home promotion.
+- Eligible personalization recommendations pass through the shared Home Action adapter, recommendation-response contract, governance contract, ranking, deduplication, suppression, snooze, lifecycle-command, and north-star lineage paths.
+- Safety personalization cannot be deferred or dismissed from Home. Material personalization exposes assumptions, alternatives, and tradeoffs before action.
+- Home lifecycle commands synchronize the underlying personalization recommendation so dedicated personalization and maintenance surfaces cannot contradict Unified Home.
+- Optional household-profile answers remain consent-controlled and are never copied into Home Action evidence. Property-owned reviewed recommendations do not require optional-profile consent.
+- `ENFORCE_HUMAN_POLICY_APPROVALS=false` keeps missing human attestations advisory in beta; active definition/rule/content status, kill switch, evidence, confidence, authorization, safety, and privacy controls remain mandatory.
+
+Acceptance criteria:
+
+- Home and the Property Context completeness endpoint return the same percentage for the same scopes and `contextVersion`.
+- A changed Property Context version causes personalization re-evaluation and supersedes or refreshes stale Home recommendations.
+- An eligible personalization recommendation appears once in the ranked Home feed and full action plan.
+- An equivalent maintenance or guidance action deduplicates with the personalization recommendation when it uses the same homeowner-facing signal.
+- Complete, already-done, not-relevant, dismiss, and snooze behavior remains consistent across Home and personalization module surfaces.
+- No sensitive household-profile answer is present in Home Action evidence, analytics metadata, or action URLs.
+- Focused tests cover eligibility, governance mismatch, expiry, context version, ranking, deduplication, safety lifecycle, and underlying recommendation synchronization.
 
 ## Increment 1 acceptance evidence
 
@@ -104,7 +124,7 @@ The target Prisma schema has been applied. This beta has no separate test, devel
 
 ```bash
 npm -C apps/backend run build
-node --test apps/backend/tests/unit/phase2HomeActions.test.js
+GEMINI_API_KEY=dummy node --test apps/backend/tests/unit/phase2HomeActions.test.js
 node --test apps/backend/tests/unit/phase2SourcePromotion.test.js
 npx tsc --noEmit -p apps/frontend/tsconfig.json
 npm -C apps/frontend run qa:product-framework:routes

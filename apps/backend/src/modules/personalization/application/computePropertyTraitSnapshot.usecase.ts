@@ -25,6 +25,7 @@ export type ComputePropertyTraitSnapshotStatus = 'COMPLETED' | 'FAILED';
 export interface ComputePropertyTraitSnapshotResult {
   status: ComputePropertyTraitSnapshotStatus;
   errorCode?: 'PROPERTY_NOT_FOUND';
+  contextVersion?: string;
   traits?: Record<string, TraitReading>;
 }
 
@@ -59,5 +60,5 @@ export async function computePropertyTraitSnapshot(
     })),
   );
 
-  return { status: 'COMPLETED', traits };
+  return { status: 'COMPLETED', contextVersion: facts.contextVersion, traits };
 }

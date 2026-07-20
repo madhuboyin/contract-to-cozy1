@@ -18,6 +18,7 @@ function loadUseCase({ contentAvailable = true, paused = false, evaluationStatus
       ? {
         status: 'COMPLETED', result: 'TRUE', eligible: true,
         definitionId: `def-${code}`, ruleVersion: 1, evaluationRunId: `run-${trigger}`,
+        contextVersion: 'personalization-test-context',
         traitsSnapshot: code === 'hvac_filter_replacement_check_proof'
           ? { hvacFilterDaysSinceServiced: { known: true, value: 200 } }
           : {},
@@ -53,6 +54,7 @@ test('materializes all five eligible personalization definitions using active ve
   assert.ok(upserts.every((item) => item.headline === 'Reviewed title'));
   assert.ok(upserts.every((item) => item.reasonCodes[0].params.message === 'Reviewed explanation'));
   assert.ok(upserts.every((item) => item.evaluationRunId === 'run-MANUAL'));
+  assert.ok(upserts.every((item) => item.evidence.contextVersion === 'personalization-test-context'));
   assert.ok(upserts.every((item) => !Object.hasOwn(item, 'householdId')));
   const hvac = upserts.find((item) => item.definitionId === 'def-hvac_filter_replacement_check_proof');
   assert.equal(hvac.score, 62);

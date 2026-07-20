@@ -85,6 +85,7 @@ test('all traits known: persists property-owned DerivedTrait rows without househ
 
   const result = await computePropertyTraitSnapshot('prop-1');
   assert.equal(result.status, 'COMPLETED');
+  assert.equal(result.contextVersion, 'personalization-test-context');
   assert.equal(result.traits.hvacFilterReplacementOverdue.known, true);
   assert.equal(result.traits.hvacFilterReplacementOverdue.value, true);
   assert.equal(result.traits.smokeDetectorMissing.known, true);

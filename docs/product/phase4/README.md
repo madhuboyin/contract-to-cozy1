@@ -1,6 +1,6 @@
 # Product Framework Phase 4 — Trust, Cadence, Grounded Ask, and Recurring Care
 
-Status: Implementation-complete through Increment 7; owner-applied database acceptance and pilot validation pending
+Status: Implementation-complete through Increment 8; owner-applied database acceptance and pilot validation pending
 
 Missing human review attestations are visible but non-blocking during the no-real-user internal beta. Set `ENFORCE_HUMAN_POLICY_APPROVALS=true` before real-user launch to restore hard tier-specific activation gates. Technical trust contracts and incident controls remain enforced in both modes; see [governance modes](../governance-modes.md).
 
@@ -110,9 +110,23 @@ Implemented:
 - Added category-specific Email cadence and quiet-hour controls while explaining that In-App continuity alerts remain enabled.
 - Added a gated database-backed Phase 4 acceptance harness covering owner-applied schema presence, scoped preference resolution, digest routing state, notification outcomes, confirmed Ask actions, fact capture, comparison workspaces, and idempotent replay.
 
+## Increment 8 — Unified Home convergence
+
+Implementation plan (completed):
+
+- Carry the canonical Property Context version from the bounded personalization snapshot into the existing evaluation evidence JSON and canonical Home Action source version.
+- Materialize reviewed personalization during Home reads using the same kill switch, active definition/rule/content, evidence, confidence, and governance controls as the dedicated personalization APIs.
+- Promote eligible instances as `PERSONALIZATION` Home Actions with safe evidence, homeowner-readable explanations, tier-appropriate CTAs, material decision support, and safety escalation.
+- Apply the shared Home ranking, cross-source deduplication, terminal suppression, snooze, feedback, and signal-to-outcome lineage contracts.
+- Synchronize Home resolution with the underlying `PersonalizedRecommendation` lifecycle and recommendation feedback/suppression policy.
+- Keep optional household profile data out of Home evidence and preserve consent/capability boundaries on dedicated profile surfaces.
+- Replace Unified Home's custom record-completeness formula with canonical Property Context completeness and expose the version/fact-state summary in the Home contract.
+
+This increment uses existing Property Context, evaluation-run JSON, personalized recommendation, recommendation feedback/suppression, orchestration lifecycle, and analytics structures. It introduces no Prisma schema change and no migration script.
+
 ## Remaining Phase 4 execution
 
-No planned Phase 4 code increment remains. Because there are no real users, completion is implementation-complete rather than outcome-validated. The repository owner must:
+Increment 8 closes the remaining architectural gap between governed personalization and the default Unified Home experience. Because there are no real users, completion is implementation-complete rather than outcome-validated. The repository owner must:
 
 - apply the current Prisma schema to the target database without a repository migration script;
 - run the gated database-backed acceptance harness against an isolated target database, then complete authenticated HTTP/browser acceptance for grounded answers and homeowner controls;
@@ -129,6 +143,10 @@ node --test apps/backend/tests/unit/personalizationCatalogAdmin.test.js
 node --test apps/backend/tests/unit/phase4GuidanceTrustContracts.test.js
 node --test apps/backend/tests/unit/phase4RecommendationIncidents.test.js
 node --test apps/backend/tests/unit/personalizationRecordRecommendationFeedback.test.js
+node --test apps/backend/tests/unit/phase2SourcePromotion.test.js
+node --test apps/backend/tests/unit/personalizationUnifiedHomeLifecycle.test.js
+node --test apps/backend/tests/unit/unifiedHomePropertyContextConvergence.test.js
+npx tsc --noEmit -p apps/frontend/tsconfig.json
 node --test apps/backend/tests/unit/personalizationQuality.test.js
 node --test apps/backend/tests/unit/phase4RemainingCompletion.test.js
 PHASE4_ACCEPTANCE_DATABASE_URL='postgresql://...' node --test apps/backend/tests/integration/phase4TrustCadenceGroundedAsk.db.test.js

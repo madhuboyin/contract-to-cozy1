@@ -42,6 +42,8 @@ export interface EvaluateDefinitionResult {
   evaluationRunId?: string;
   /** Present only on COMPLETED — the property trait set this evaluation ran against. */
   traitsSnapshot?: Record<string, TraitReading>;
+  /** Canonical Property Context version used to derive the trait snapshot. */
+  contextVersion?: string;
 }
 
 export async function evaluateDefinitionForProperty(
@@ -123,7 +125,7 @@ export async function evaluateDefinitionForProperty(
     trigger,
     status: 'COMPLETED',
     result: evaluation.result,
-    resultJson: { traits: snapshot.traits, evidence: evaluation.evidence },
+    resultJson: { contextVersion: snapshot.contextVersion, traits: snapshot.traits, evidence: evaluation.evidence },
     startedAt,
     completedAt: new Date(),
   });
@@ -135,6 +137,7 @@ export async function evaluateDefinitionForProperty(
     definitionId: loadedRule.definitionId,
     ruleVersion: loadedRule.ruleVersion,
     evaluationRunId: run.id,
+    contextVersion: snapshot.contextVersion,
     traitsSnapshot: snapshot.traits,
   };
 }

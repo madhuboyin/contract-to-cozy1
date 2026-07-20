@@ -82,7 +82,7 @@ export async function materializeRecommendationsForProperty(
         templateKey: definition.reasonTemplateKey,
         params: { message: content.body, ...(factSummary ? { factSummary } : {}) },
       }],
-      evidence: { result: evaluation.result },
+      evidence: { result: evaluation.result, contextVersion: evaluation.contextVersion ?? null },
       score,
       priorityBand: priorityBandFromScore(score),
       confidence: 1,
