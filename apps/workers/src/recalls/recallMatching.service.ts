@@ -1,6 +1,6 @@
 // apps/workers/src/recalls/recallMatching.service.ts
 import { prisma } from '../lib/prisma';
-import { includesEither, normManufacturer, normModel } from './normalize';
+import { includesEither, exactModelMatch, normManufacturer, normModel } from './normalize';
 
 type Candidate = {
   propertyId: string;
@@ -12,7 +12,7 @@ type Candidate = {
 
 function scoreMatch(assetMfg: string, assetModel: string, recallMfg: string, recallModel: string) {
   const mfgMatch = includesEither(assetMfg, recallMfg);
-  const modelMatch = includesEither(assetModel, recallModel);
+  const modelMatch = exactModelMatch(assetModel, recallModel);
 
   if (mfgMatch && modelMatch) return { confidencePct: 95, status: 'OPEN' as const };
   if (mfgMatch && (assetModel || recallModel)) return { confidencePct: 80, status: 'NEEDS_CONFIRMATION' as const };
