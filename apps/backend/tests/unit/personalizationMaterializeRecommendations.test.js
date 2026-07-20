@@ -8,22 +8,35 @@ function installModule(relativePath, exports) {
   require.cache[resolved] = { id: resolved, filename: resolved, loaded: true, exports };
 }
 
-function loadUseCase({ contentAvailable = true, paused = false, evaluationStatus = 'COMPLETED' } = {}) {
+function loadUseCase({
+  contentAvailable = true,
+  paused = false,
+  evaluationStatus = 'COMPLETED',
+  contextVersions = ['personalization-test-context'],
+} = {}) {
   const upserts = [];
   const expired = [];
+  let evaluationCount = 0;
   installModule('../../src/modules/personalization/application/evaluateDefinition.usecase.ts', {
-    evaluateDefinitionForProperty: async (_propertyId, code, trigger) => paused
-      ? { status: 'PAUSED' }
-      : evaluationStatus === 'COMPLETED'
-      ? {
+    evaluateDefinitionForProperty: async (_propertyId, code, trigger) => {
+      const contextVersion = contextVersions[Math.min(
+        Math.floor(evaluationCount / 5),
+        contextVersions.length - 1,
+      )];
+      evaluationCount += 1;
+      return paused
+        ? { status: 'PAUSED' }
+        : evaluationStatus === 'COMPLETED'
+        ? {
         status: 'COMPLETED', result: 'TRUE', eligible: true,
         definitionId: `def-${code}`, ruleVersion: 1, evaluationRunId: `run-${trigger}`,
-        contextVersion: 'personalization-test-context',
+        contextVersion,
         traitsSnapshot: code === 'hvac_filter_replacement_check_proof'
           ? { hvacFilterDaysSinceServiced: { known: true, value: 200 } }
           : {},
       }
-      : { status: 'FAILED', errorCode: 'DEFINITION_NOT_ACTIVE', definitionId: `def-${code}` },
+        : { status: 'FAILED', errorCode: 'DEFINITION_NOT_ACTIVE', definitionId: `def-${code}` };
+    },
   });
   installModule('../../src/modules/personalization/infrastructure/suppressionRepository.ts', {
     findActiveSuppression: async () => null,
@@ -84,4 +97,13 @@ test('inactive definitions expire previously stored recommendations', async () =
   assert.deepEqual(result, { evaluated: 5, active: 0 });
   assert.equal(upserts.length, 0);
   assert.equal(expired.length, 5);
+});
+
+test('a changed Property Context version refreshes recommendation evidence', async () => {
+  const { materializeRecommendationsForProperty, upserts } = loadUseCase({ contextVersions: ['context-v1', 'context-v2'] });
+  await materializeRecommendationsForProperty('prop-1', 'HOME_READ');
+  await materializeRecommendationsForProperty('prop-1', 'HOME_READ');
+  assert.equal(upserts.length, 10);
+  assert.ok(upserts.slice(0, 5).every((item) => item.evidence.contextVersion === 'context-v1'));
+  assert.ok(upserts.slice(5).every((item) => item.evidence.contextVersion === 'context-v2'));
 });

@@ -14,6 +14,11 @@ function stubSources({
   includeWeatherGuidance = false,
   includePersonalization = false,
   personalizationContextVersion = 'context-v1',
+  personalizationCode = 'hvac_filter_replacement_check_proof',
+  personalizationSafetyTier = 'LOW_CONSEQUENCE',
+  personalizationPolicyVersion = 'phase4-v1',
+  personalizationExpiresAt = LATER,
+  personalizationHeadline = 'Your HVAC filter may be due for a replacement check',
 } = {}) {
   const guidanceJourneys = [{
     id: 'journey-1', propertyId: 'property-1', inventoryItemId: 'item-1', primarySignalId: 'signal-1',
@@ -71,14 +76,14 @@ function stubSources({
     personalizedRecommendation: { findMany: async () => includePersonalization ? [{
       id: 'personalization-1', propertyId: 'property-1', status: 'ACTIVE', score: 60,
       priorityBand: 'MEDIUM', confidence: 1, ruleVersion: 1, contentVersion: 2,
-      firstEligibleAt: NOW, lastEvaluatedAt: NOW, expiresAt: LATER,
+      firstEligibleAt: NOW, lastEvaluatedAt: NOW, expiresAt: personalizationExpiresAt,
       definition: {
-        code: 'hvac_filter_replacement_check_proof', category: 'low_cost_prevention', status: 'ACTIVE',
-        safetyTier: 'LOW_CONSEQUENCE', governancePolicyVersion: 'phase4-v1',
+        code: personalizationCode, category: 'low_cost_prevention', status: 'ACTIVE',
+        safetyTier: personalizationSafetyTier, governancePolicyVersion: personalizationPolicyVersion,
       },
       evaluationRun: { resultJson: { contextVersion: personalizationContextVersion } },
       explanations: [{
-        headline: 'Your HVAC filter may be due for a replacement check',
+        headline: personalizationHeadline,
         reasonCodes: [{ params: { message: 'The recorded HVAC service interval may have passed.' } }],
         evidenceJson: { contextVersion: personalizationContextVersion },
       }],
@@ -137,6 +142,42 @@ test('fails closed when personalization lacks a Property Context version or prom
     { includePersonalization: false },
   );
   assert.equal(disabled.actions.some((action) => action.source.kind === 'PERSONALIZATION'), false);
+});
+
+test('fails closed for governance mismatch and expired personalization', async () => {
+  const governanceMismatch = await getPromotedHomeActions(
+    'property-1',
+    stubSources({ includePersonalization: true, personalizationPolicyVersion: 'unreviewed-v2' }),
+  );
+  assert.equal(governanceMismatch.actions.some((action) => action.source.kind === 'PERSONALIZATION'), false);
+
+  const expired = await getPromotedHomeActions(
+    'property-1',
+    stubSources({ includePersonalization: true, personalizationExpiresAt: new Date(Date.now() - 60_000) }),
+  );
+  assert.equal(expired.actions.some((action) => action.source.kind === 'PERSONALIZATION'), false);
+});
+
+test('safety personalization exposes escalation-only action controls', async () => {
+  const result = await getPromotedHomeActions('property-1', stubSources({
+    includePersonalization: true,
+    personalizationCode: 'smoke_co_detector_battery_check',
+    personalizationSafetyTier: 'SAFETY_EMERGENCY',
+    personalizationHeadline: 'Check your smoke and carbon monoxide detector batteries',
+  }));
+  const action = result.actions.find((candidate) => candidate.source.kind === 'PERSONALIZATION');
+  assert.ok(action);
+  assert.equal(action.priority, 'NOW');
+  assert.equal(action.primaryCta.kind, 'ESCALATE');
+  assert.deepEqual(action.feedbackControls, ['COMPLETE', 'ALREADY_DONE', 'CORRECT_FACT']);
+});
+
+test('personalization Home Actions expose no household-profile data', async () => {
+  const result = await getPromotedHomeActions('property-1', stubSources({ includePersonalization: true }));
+  const action = result.actions.find((candidate) => candidate.source.kind === 'PERSONALIZATION');
+  assert.ok(action);
+  const exposed = JSON.stringify({ evidence: action.evidence, href: action.primaryCta.href, source: action.source });
+  assert.doesNotMatch(exposed, /household|profileAnswer|consentVersion/i);
 });
 
 test('does not promote a weather incident after its authoritative alert expiry', async () => {

@@ -633,6 +633,8 @@ async function loadPersonalizationActions(propertyId: string, db: HomeActionSour
   });
 
   return recommendations.flatMap((recommendation) => {
+    if (recommendation.status !== 'ACTIVE' || recommendation.definition.status !== 'ACTIVE') return [];
+    if (recommendation.expiresAt && recommendation.expiresAt <= now) return [];
     const reviewed = findPersonalizationDefinition(recommendation.definition.code);
     if (!reviewed || !reviewed.modules.includes('DASHBOARD')) return [];
     if (recommendation.definition.safetyTier !== reviewed.governance.safetyTier ||

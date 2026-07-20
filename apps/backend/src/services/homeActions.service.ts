@@ -10,7 +10,7 @@ import {
 } from './entryContext.service';
 import { getOrchestrationSummary } from './orchestration.service';
 import { recordOrchestrationEvent } from './orchestrationEvent.service';
-import { snoozeAction } from './orchestrationSnooze.service';
+import { publishOrchestrationSnoozeSignal, snoozeAction } from './orchestrationSnooze.service';
 import { getPromotedHomeActions } from './homeActionSourcePromotion.service';
 import { BuyerAcquisitionService } from './buyerAcquisition.service';
 import { NewHomeSetupService } from './newHomeSetup.service';
@@ -20,6 +20,7 @@ import { materializeRecommendationsForProperty } from '../modules/personalizatio
 import { getAggregationPropertyContext } from './aggregationContext/context';
 import { getContextCompleteness } from '../modules/propertyContext/application/getContextCompleteness';
 import { applyPersonalizationHomeActionLifecycle } from '../modules/personalization/application/applyHomeActionLifecycle.usecase';
+import { logger } from '../lib/logger';
 
 export const HOME_ACTION_COMMANDS = [
   'COMPLETE',
@@ -177,8 +178,15 @@ export async function getHomeActionFeed(propertyId: string, userId: string) {
   await BuyerAcquisitionService.ensureRecurringHandoff(userId, propertyId).catch(() => null);
   await NewHomeSetupService.ensureRecurringHandoff(userId, propertyId).catch(() => null);
   const orchestration = await getOrchestrationSummary(propertyId, userId);
-  const personalization = await materializeRecommendationsForProperty(propertyId, 'HOME_READ', userId)
-    .catch(() => null);
+  let personalization: Awaited<ReturnType<typeof materializeRecommendationsForProperty>> | null = null;
+  let personalizationStatus: 'AVAILABLE' | 'PAUSED' | 'FAILED' = 'AVAILABLE';
+  try {
+    personalization = await materializeRecommendationsForProperty(propertyId, 'HOME_READ', userId);
+    if (personalization.paused) personalizationStatus = 'PAUSED';
+  } catch (error) {
+    personalizationStatus = 'FAILED';
+    logger.warn({ err: error, propertyId, userId }, 'Unified Home personalization materialization failed closed');
+  }
   const promoted = await getPromotedHomeActions(propertyId, prisma, {
     includePersonalization: Boolean(personalization && !personalization.paused),
   });
@@ -228,6 +236,11 @@ export async function getHomeActionFeed(propertyId: string, userId: string) {
       suppressedCount: orchestration.suppressedActions.length + promoted.diagnostics.suppressedCount,
       snoozedCount: orchestration.snoozedActions.length + promoted.diagnostics.snoozedCount,
       promotedCount: promoted.actions.length,
+      personalization: {
+        status: personalizationStatus,
+        evaluatedCount: personalization?.evaluated ?? 0,
+        activeCount: personalization?.active ?? 0,
+      },
     },
   };
 }
@@ -497,7 +510,20 @@ export async function executeHomeActionCommand(
     return { ...result, command: input.command };
   }
 
-  if (nextTriggerAt) {
+  if (action.source.kind === 'PERSONALIZATION') {
+    const personalizationLifecycle = await applyPersonalizationHomeActionLifecycle({
+      recommendationId: action.source.entityId,
+      propertyId,
+      actionKey: action.id,
+      userId,
+      command: input.command as Exclude<HomeActionCommandInput['command'], 'CORRECT_FACT'>,
+      reason,
+      nextTriggerAt,
+    });
+    if (personalizationLifecycle.snoozed) {
+      await publishOrchestrationSnoozeSignal(propertyId, action.id);
+    }
+  } else if (nextTriggerAt) {
     await snoozeAction({ propertyId, actionKey: action.id, snoozeUntil: nextTriggerAt, snoozeReason: reason });
   } else {
     await recordOrchestrationEvent({
@@ -509,17 +535,6 @@ export async function executeHomeActionCommand(
       source: 'USER',
       createdBy: userId,
       payload: { command: input.command, reason, consequenceAcknowledged: input.consequenceAcknowledged },
-    });
-  }
-
-  if (action.source.kind === 'PERSONALIZATION') {
-    await applyPersonalizationHomeActionLifecycle({
-      recommendationId: action.source.entityId,
-      propertyId,
-      userId,
-      command: input.command as Exclude<HomeActionCommandInput['command'], 'CORRECT_FACT'>,
-      reason,
-      nextTriggerAt,
     });
   }
 

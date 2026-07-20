@@ -291,6 +291,11 @@ export type HomeActionFeedDTO = {
     suppressedCount: number;
     snoozedCount: number;
     promotedCount: number;
+    personalization: {
+      status: 'AVAILABLE' | 'PAUSED' | 'FAILED';
+      evaluatedCount: number;
+      activeCount: number;
+    };
   };
 };
 

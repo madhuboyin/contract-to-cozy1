@@ -121,6 +121,9 @@ Implementation plan (completed):
 - Synchronize Home resolution with the underlying `PersonalizedRecommendation` lifecycle and recommendation feedback/suppression policy.
 - Keep optional household profile data out of Home evidence and preserve consent/capability boundaries on dedicated profile surfaces.
 - Replace Unified Home's custom record-completeness formula with canonical Property Context completeness and expose the version/fact-state summary in the Home contract.
+- Normalize every Home lifecycle command into the canonical personalization feedback contract and persist the Home orchestration record plus recommendation lifecycle atomically.
+- Preserve distinct repeated snooze history, classify homeowner dismissals correctly, and expose fail-closed personalization diagnostics without leaking optional profile data.
+- Verify context refresh, governance mismatch, expiry, cross-source deduplication, safety lifecycle restrictions, privacy, and all lifecycle mappings in focused tests.
 
 This increment uses existing Property Context, evaluation-run JSON, personalized recommendation, recommendation feedback/suppression, orchestration lifecycle, and analytics structures. It introduces no Prisma schema change and no migration script.
 

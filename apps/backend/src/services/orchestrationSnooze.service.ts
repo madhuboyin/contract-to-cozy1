@@ -12,6 +12,17 @@ export type ActiveSnooze = {
   daysRemaining: number;
 };
 
+export async function publishOrchestrationSnoozeSignal(
+  propertyId: string,
+  actionKey: string,
+): Promise<void> {
+  try {
+    await signalService.publishMaintenanceAdherenceSignal({ propertyId, sourceId: actionKey });
+  } catch (signalError) {
+    logger.warn({ signalError, propertyId, actionKey }, 'Maintenance adherence signal publish failed (snooze lifecycle)');
+  }
+}
+
 /**
  * Get active snooze for an action
  */
@@ -78,14 +89,7 @@ export async function snoozeAction(params: {
     },
   });
 
-  try {
-    await signalService.publishMaintenanceAdherenceSignal({
-      propertyId,
-      sourceId: actionKey,
-    });
-  } catch (signalError) {
-    logger.warn({ signalError }, 'Maintenance adherence signal publish failed (snooze)');
-  }
+  await publishOrchestrationSnoozeSignal(propertyId, actionKey);
 
   return { success: true };
 }
@@ -108,14 +112,7 @@ export async function unsnoozeAction(
     },
   });
 
-  try {
-    await signalService.publishMaintenanceAdherenceSignal({
-      propertyId,
-      sourceId: actionKey,
-    });
-  } catch (signalError) {
-    logger.warn({ signalError }, 'Maintenance adherence signal publish failed (unsnooze)');
-  }
+  await publishOrchestrationSnoozeSignal(propertyId, actionKey);
 
   return { success: true };
 }

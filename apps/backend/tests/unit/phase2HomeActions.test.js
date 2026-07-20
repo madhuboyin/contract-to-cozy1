@@ -5,6 +5,46 @@ const path = require('node:path');
 
 require('ts-node/register');
 
+process.env.GEMINI_API_KEY ||= 'phase2-test-key';
+const { EventEmitter } = require('node:events');
+class RedisTestDouble extends EventEmitter {
+  constructor() {
+    super();
+    this.options = { maxRetriesPerRequest: null };
+  }
+  status = 'ready';
+  duplicate() { return new RedisTestDouble(); }
+  async connect() { return undefined; }
+  async info() { return 'redis_version:7.0.0'; }
+  defineCommand(name) { this[name] = async () => null; }
+  async eval() { return [1, 60_000]; }
+  async decr() { return 0; }
+  async del() { return 0; }
+  async quit() { return 'OK'; }
+  disconnect() {}
+}
+const ioredisPath = require.resolve('ioredis');
+require.cache[ioredisPath] = {
+  id: ioredisPath,
+  filename: ioredisPath,
+  loaded: true,
+  exports: { __esModule: true, default: RedisTestDouble, Redis: RedisTestDouble },
+};
+const redisPath = require.resolve('../../src/lib/redis.ts');
+require.cache[redisPath] = {
+  id: redisPath,
+  filename: redisPath,
+  loaded: true,
+  exports: {
+    redis: {
+      status: 'ready',
+      eval: async () => [1, 60_000],
+      decr: async () => 0,
+      del: async () => 0,
+    },
+  },
+};
+
 const { goldenTestHomes } = require('../fixtures/productFramework/goldenTestHomes.js');
 const {
   HomeActionCommandSchema,
@@ -25,7 +65,7 @@ function actionFixture(id, overrides = {}) {
   return Object.assign(action, overrides);
 }
 
-function routeFor(routePath, method) {
+function routeFor(router, routePath, method) {
   return router.stack
     .filter((layer) => layer.route)
     .find((layer) => layer.route.path === routePath && layer.route.methods?.[method])
@@ -47,12 +87,15 @@ test('canonical feed ranks urgency and consequence with an explicit missing-cont
 test('canonical feed surfaces one winner for duplicate cross-source signals and preserves merge diagnostics', () => {
   const lower = actionFixture('lower', { lineageId: 'shared-lineage', priority: 'PLAN' });
   const higher = actionFixture('higher', { lineageId: 'shared-lineage', priority: 'NOW' });
+  lower.source.kind = 'PERSONALIZATION';
+  higher.source.kind = 'MAINTENANCE';
   const distinct = actionFixture('distinct', { priority: 'SOON', signal: 'Review roof flashing before winter' });
   const result = rankAndDeduplicateHomeActions([lower, distinct, higher]);
 
   assert.equal(result.length, 2);
   assert.equal(result[0].id, 'higher');
   assert.deepEqual(result[0].deduplication.mergedActionIds, ['lower']);
+  assert.equal(result[0].source.kind, 'MAINTENANCE');
   assert.deepEqual(result.map((item) => item.ranking.rank), [1, 2]);
 });
 
@@ -184,10 +227,10 @@ test('canonical lifecycle commands require safe deferment and dismissal inputs',
 test('Phase 2 home-action routes are property-scoped and mutation requires contributor access', () => {
   const router = require('../../src/routes/homeActions.routes.ts').default;
   const { propertyAuthMiddleware } = require('../../src/middleware/propertyAuth.middleware.ts');
-  const feed = routeFor('/properties/:propertyId/home-actions', 'get');
-  const home = routeFor('/properties/:propertyId/home', 'get');
-  const command = routeFor('/properties/:propertyId/home-actions/:actionId/commands', 'post');
-  const interaction = routeFor('/properties/:propertyId/home-actions/:actionId/interactions', 'post');
+  const feed = routeFor(router, '/properties/:propertyId/home-actions', 'get');
+  const home = routeFor(router, '/properties/:propertyId/home', 'get');
+  const command = routeFor(router, '/properties/:propertyId/home-actions/:actionId/commands', 'post');
+  const interaction = routeFor(router, '/properties/:propertyId/home-actions/:actionId/interactions', 'post');
   assert.ok(feed);
   assert.ok(home);
   assert.ok(command);

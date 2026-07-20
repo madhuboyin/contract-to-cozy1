@@ -25,7 +25,20 @@ test('Unified Home materializes and conditionally promotes governed personalizat
 
   assert.match(home, /materializeRecommendationsForProperty\(propertyId, 'HOME_READ', userId\)/);
   assert.match(home, /includePersonalization: Boolean\(personalization && !personalization\.paused\)/);
+  assert.match(home, /Unified Home personalization materialization failed closed/);
+  assert.match(home, /status: personalizationStatus/);
   assert.match(promotion, /adaptHomeActionSource\('PERSONALIZATION'/);
   assert.match(promotion, /contextVersionFromEvaluation/);
   assert.match(promotion, /governancePolicyVersion !== reviewed\.governance\.policyVersion/);
+});
+
+test('personalization Home lifecycle uses one transactional orchestration boundary', () => {
+  const home = read('backend/src/services/homeActions.service.ts');
+  const lifecycle = read('backend/src/modules/personalization/application/applyHomeActionLifecycle.usecase.ts');
+  assert.match(home, /actionKey: action\.id/);
+  assert.match(home, /publishOrchestrationSnoozeSignal\(propertyId, action\.id\)/);
+  assert.match(lifecycle, /return prisma\.\$transaction\(async \(db\) =>/);
+  assert.match(lifecycle, /db\.orchestrationActionSnooze\.create/);
+  assert.match(lifecycle, /db\.orchestrationActionEvent\.upsert/);
+  assert.match(lifecycle, /db\.personalizedRecommendation\.update/);
 });

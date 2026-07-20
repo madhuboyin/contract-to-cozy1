@@ -101,6 +101,16 @@ Implementation plan (completed):
 - Optional household-profile answers remain consent-controlled and are never copied into Home Action evidence. Property-owned reviewed recommendations do not require optional-profile consent.
 - `ENFORCE_HUMAN_POLICY_APPROVALS=false` keeps missing human attestations advisory in beta; active definition/rule/content status, kill switch, evidence, confidence, authorization, safety, and privacy controls remain mandatory.
 
+Closure hardening implemented July 20, 2026:
+
+- Normalized Home commands to the canonical personalization feedback vocabulary and reason codes, including `COMPLETED`, `SNOOZED`, `DISMISSED`, and `NOT_RELEVANT`.
+- Made orchestration terminal/snooze persistence, recommendation feedback, suppression, and underlying recommendation status one transaction for personalization actions.
+- Derived repeated snooze feedback identity from each durable snooze record, while retaining idempotent terminal-event behavior.
+- Classified explicit dismissals as homeowner dismissals rather than system suppression.
+- Added fail-closed materialization logging and additive Home diagnostics for available, paused, and failed personalization states.
+- Added defensive active/expiry checks at the Home promotion boundary.
+- Added executable coverage for context refresh, governance mismatch, expiry, cross-source deduplication, safety controls, privacy, every lifecycle mapping, repeated snooze, and shared transaction wiring.
+
 Acceptance criteria:
 
 - Home and the Property Context completeness endpoint return the same percentage for the same scopes and `contextVersion`.
@@ -124,8 +134,11 @@ Acceptance criteria:
 
 ```bash
 npm -C apps/backend run build
-GEMINI_API_KEY=dummy node --test apps/backend/tests/unit/phase2HomeActions.test.js
+node --test apps/backend/tests/unit/phase2HomeActions.test.js
 node --test apps/backend/tests/unit/phase2SourcePromotion.test.js
+node --test apps/backend/tests/unit/personalizationUnifiedHomeLifecycle.test.js
+node --test apps/backend/tests/unit/personalizationMaterializeRecommendations.test.js
+node --test apps/backend/tests/unit/unifiedHomePropertyContextConvergence.test.js
 npx tsc --noEmit -p apps/frontend/tsconfig.json
 npm -C apps/frontend run qa:product-framework:routes
 ```
