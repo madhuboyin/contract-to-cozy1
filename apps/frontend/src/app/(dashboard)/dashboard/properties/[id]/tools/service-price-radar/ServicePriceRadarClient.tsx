@@ -67,6 +67,7 @@ import TrustStrip from '../../components/route-templates/TrustStrip';
 import { pricingLoopTrust } from '@/lib/trust/trustPresets';
 import { track } from '@/lib/analytics/events';
 import { buildGuidanceOverviewHref } from '@/lib/navigation/guidanceOverviewHref';
+import { useToolLaunchContext } from '@/features/tools/ToolLaunchContextBoundary';
 
 // Maps inventory item category to the closest ServiceRadarCategory for pre-selection.
 const INVENTORY_CATEGORY_TO_SERVICE_RADAR: Partial<Record<InventoryItemCategory, ServiceRadarCategory>> = {
@@ -640,6 +641,7 @@ function RecentCheckRow({
 export default function ServicePriceRadarClient() {
   const params = useParams<{ id: string }>();
   const searchParams = useSearchParams();
+  const toolLaunchContext = useToolLaunchContext();
   const propertyId = params.id;
   const resultRef = useRef<HTMLDivElement | null>(null);
   const loadRef = useRef(0);
@@ -675,12 +677,12 @@ export default function ServicePriceRadarClient() {
 
   const launchSurface = normalizeLaunchSurface(searchParams.get('launchSurface'));
   const guidanceContext: GuidanceToolContext = {
-    guidanceJourneyId: searchParams.get('guidanceJourneyId'),
+    guidanceJourneyId: searchParams.get('guidanceJourneyId') ?? toolLaunchContext?.resolved.prefill.journeyId ?? null,
     guidanceStepKey: searchParams.get('guidanceStepKey'),
     guidanceSignalIntentFamily: searchParams.get('guidanceSignalIntentFamily'),
   };
   const isGuidanceContext = Boolean(guidanceContext.guidanceJourneyId);
-  const guidanceItemId = searchParams.get('itemId');
+  const guidanceItemId = toolLaunchContext?.resolved.prefill.itemId ?? searchParams.get('itemId');
   const guidanceBackHref = guidanceContext.guidanceJourneyId
     ? buildGuidanceOverviewHref({
         propertyId,
@@ -694,8 +696,8 @@ export default function ServicePriceRadarClient() {
   const prefilledQuoteAmount = searchParams.get('quoteAmount');
   const prefilledLinkedEntityType = searchParams.get('linkedEntityType');
   const prefilledLinkedEntityId = searchParams.get('linkedEntityId');
-  const sourceEntityType = searchParams.get('sourceEntityType');
-  const sourceEntityId = searchParams.get('sourceEntityId');
+  const sourceEntityType = toolLaunchContext?.resolved.prefill.entityType ?? searchParams.get('sourceEntityType');
+  const sourceEntityId = toolLaunchContext?.resolved.prefill.entityId ?? searchParams.get('sourceEntityId');
   const sourceLinkedEntityType = sourceEntityType === 'INVENTORY_ITEM'
     ? 'APPLIANCE'
     : ['SYSTEM', 'APPLIANCE', 'DOCUMENT', 'INCIDENT', 'ROOM', 'OTHER'].includes(sourceEntityType ?? '')

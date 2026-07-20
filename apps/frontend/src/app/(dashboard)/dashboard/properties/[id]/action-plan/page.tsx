@@ -1,7 +1,8 @@
 'use client';
 
+import { useEffect } from 'react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, ClipboardList, Wrench } from 'lucide-react';
 import { api } from '@/lib/api/client';
@@ -17,7 +18,9 @@ import { Button } from '@/components/ui/button';
 
 export default function PrioritizedActionPlanPage() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const propertyId = (Array.isArray(params.id) ? params.id[0] : params.id) as string;
+  const focusActionId = searchParams.get('focusActionId');
   const queryClient = useQueryClient();
   const query = useQuery({
     queryKey: ['home-action-plan', propertyId],
@@ -25,6 +28,17 @@ export default function PrioritizedActionPlanPage() {
     enabled: Boolean(propertyId),
     staleTime: 2 * 60 * 1000,
   });
+
+  useEffect(() => {
+    if (!focusActionId || !query.data) return;
+    const frame = window.requestAnimationFrame(() => {
+      document.getElementById(`home-action-${focusActionId}`)?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center',
+      });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [focusActionId, query.data]);
 
   if (query.isLoading) {
     return <div className="mx-auto max-w-6xl py-16 text-center text-sm text-slate-500">Preparing your prioritized action plan…</div>;
@@ -86,37 +100,56 @@ export default function PrioritizedActionPlanPage() {
           <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-sm text-emerald-800">
             No action currently needs your attention.
           </div>
-        ) : entries.map((entry) => entry.kind === 'ACTION' ? (
-          <ActionCard
-            key={entry.action.id}
-            action={entry.action}
-            propertyId={propertyId}
-            showSupportingDetails
-            onChanged={refreshPlan}
-          />
-        ) : entry.kind === 'CRITICAL_WEATHER' ? (
-          <CriticalWeatherActionCard
-            key={entry.action.id}
-            action={entry.action}
-            propertyId={propertyId}
-            showSupportingDetails
-          />
-        ) : entry.kind === 'SEASONAL_CHECKLIST' ? (
-          <SeasonalChecklistActionCard
-            key={entry.action.id}
-            action={entry.action}
-            propertyId={propertyId}
-            showSupportingDetails
-          />
-        ) : (
-          <CoverageCorrectionGroupCard
-            key={`coverage-plan-group:${entry.actions.map((action) => action.id).join(':')}`}
-            actions={entry.actions}
-            subjects={entry.subjects}
-            href={coverageHref}
-            showSupportingDetails
-          />
-        ))}
+        ) : entries.map((entry) => {
+          const actions = entry.kind === 'COVERAGE_CORRECTION_GROUP' ? entry.actions : [entry.action];
+          const isFocused = Boolean(focusActionId && actions.some((action) =>
+            action.id === focusActionId ||
+            action.lineageId === focusActionId ||
+            action.deduplication.mergedActionIds.includes(focusActionId),
+          ));
+          const anchorId = isFocused && focusActionId
+            ? `home-action-${focusActionId}`
+            : `home-action-${actions[0]?.id ?? 'unknown'}`;
+          const entryKey = entry.kind === 'COVERAGE_CORRECTION_GROUP'
+            ? `coverage-plan-group:${entry.actions.map((action) => action.id).join(':')}`
+            : entry.action.id;
+
+          return (
+            <div
+              id={anchorId}
+              key={entryKey}
+              className={`scroll-mt-28 rounded-2xl transition-shadow ${isFocused ? 'ring-2 ring-teal-500 ring-offset-4 ring-offset-white' : ''}`}
+            >
+              {entry.kind === 'ACTION' ? (
+                <ActionCard
+                  action={entry.action}
+                  propertyId={propertyId}
+                  showSupportingDetails
+                  onChanged={refreshPlan}
+                />
+              ) : entry.kind === 'CRITICAL_WEATHER' ? (
+                <CriticalWeatherActionCard
+                  action={entry.action}
+                  propertyId={propertyId}
+                  showSupportingDetails
+                />
+              ) : entry.kind === 'SEASONAL_CHECKLIST' ? (
+                <SeasonalChecklistActionCard
+                  action={entry.action}
+                  propertyId={propertyId}
+                  showSupportingDetails
+                />
+              ) : (
+                <CoverageCorrectionGroupCard
+                  actions={entry.actions}
+                  subjects={entry.subjects}
+                  href={coverageHref}
+                  showSupportingDetails
+                />
+              )}
+            </div>
+          );
+        })}
       </section>
     </main>
   );

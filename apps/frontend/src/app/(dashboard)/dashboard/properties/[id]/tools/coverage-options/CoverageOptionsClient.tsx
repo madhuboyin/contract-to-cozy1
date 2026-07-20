@@ -20,19 +20,26 @@ import RouteStateCard from '@/components/system/RouteStateCard';
 import { formatEnumLabel } from '@/lib/utils/formatters';
 import { buildGuidanceOverviewHref } from '@/lib/navigation/guidanceOverviewHref';
 import { track } from '@/lib/analytics/events';
+import { useToolLaunchContext } from '@/features/tools/ToolLaunchContextBoundary';
 
 export default function CoverageOptionsClient() {
   const params = useParams<{ id: string }>();
   const propertyId = params.id;
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const guidanceJourneyId = searchParams.get('guidanceJourneyId') ?? undefined;
+  const toolLaunchContext = useToolLaunchContext();
+  const guidanceJourneyId = searchParams.get('guidanceJourneyId') ??
+    toolLaunchContext?.resolved.prefill.journeyId ??
+    undefined;
   const currentPathWithQuery = React.useMemo(() => {
     const qs = searchParams.toString();
     return qs ? `${pathname}?${qs}` : pathname;
   }, [pathname, searchParams]);
   const guidanceStepKey = searchParams.get('guidanceStepKey') ?? 'compare_coverage_options';
-  const focusedEntityId = searchParams.get('itemId') ?? searchParams.get('sourceEntityId');
+  const focusedEntityId = toolLaunchContext?.resolved.prefill.itemId ??
+    toolLaunchContext?.resolved.prefill.entityId ??
+    searchParams.get('itemId') ??
+    searchParams.get('sourceEntityId');
 
   const [loading, setLoading] = React.useState(false);
   const [data, setData] = React.useState<any>(null);

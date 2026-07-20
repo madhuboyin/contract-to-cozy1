@@ -39,7 +39,13 @@ function ReplaceRepairContent() {
   const searchParams = useSearchParams();
   const serializedSearchParams = searchParams.toString();
   const propertyIdFromUrl = searchParams.get('propertyId');
-  const queryItemId = searchParams.get('itemId') ?? searchParams.get('inventoryItemId') ?? undefined;
+  const sourceEntityType = searchParams.get('sourceEntityType')?.toUpperCase();
+  const sourceInventoryItemId = sourceEntityType === 'INVENTORY_ITEM' || sourceEntityType === 'APPLIANCE'
+    ? searchParams.get('sourceEntityId') ?? undefined
+    : undefined;
+  const queryItemId = searchParams.get('itemId') ??
+    searchParams.get('inventoryItemId') ??
+    sourceInventoryItemId;
 
   const [properties, setProperties] = useState<Property[]>([]);
   const { selectedPropertyId, setSelectedPropertyId } = useDashboardPropertySelection(propertyIdFromUrl);

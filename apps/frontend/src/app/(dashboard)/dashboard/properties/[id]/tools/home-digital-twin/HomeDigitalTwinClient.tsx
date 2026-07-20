@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { track } from '@/lib/analytics/events';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -70,6 +70,7 @@ import {
   computeDigitalTwinScenario,
   updateDigitalTwinScenario,
 } from './homeDigitalTwinApi';
+import { useToolLaunchContext } from '@/features/tools/ToolLaunchContextBoundary';
 
 // ============================================================================
 // DISPLAY CONFIG
@@ -1003,6 +1004,11 @@ export default function HomeDigitalTwinClient() {
   const propertyId = params.id;
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const toolLaunchContext = useToolLaunchContext();
+  const focusedEntityId = toolLaunchContext?.resolved.prefill.itemId ??
+    toolLaunchContext?.resolved.prefill.entityId ??
+    null;
+  const consumedFocusRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!propertyId) return;
@@ -1047,6 +1053,24 @@ export default function HomeDigitalTwinClient() {
     recommendations?.find((s) => s.key === selectedSuggestionKey) ?? null;
   const selectedScenario =
     twin?.recentScenarios.find((s) => s.id === selectedScenarioId) ?? null;
+
+  useEffect(() => {
+    if (!focusedEntityId || !twin || consumedFocusRef.current === focusedEntityId) return;
+    const component = twin.components.find((candidate) =>
+      candidate.id === focusedEntityId || candidate.sourceReferenceId === focusedEntityId,
+    );
+    if (!component) return;
+    consumedFocusRef.current = focusedEntityId;
+    setSelectedComponentId(component.id);
+    setComponentSheetOpen(true);
+    const frame = window.requestAnimationFrame(() => {
+      document.getElementById(`twin-component-${component.id}`)?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center',
+      });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [focusedEntityId, twin]);
 
   // ── Init mutation ───────────────────────────────────────────────────────────
   const initMutation = useMutation({
@@ -1225,7 +1249,17 @@ export default function HomeDigitalTwinClient() {
               />
               <div className="space-y-2" role="list" aria-label="Modeled home systems">
                 {twin.components.map((c) => (
-                  <div key={c.id} role="listitem">
+                  <div
+                    id={`twin-component-${c.id}`}
+                    key={c.id}
+                    role="listitem"
+                    className={cn(
+                      'scroll-mt-28 rounded-[22px]',
+                      focusedEntityId && (c.id === focusedEntityId || c.sourceReferenceId === focusedEntityId)
+                        ? 'ring-2 ring-teal-500 ring-offset-2'
+                        : '',
+                    )}
+                  >
                     <ComponentCard
                       component={c}
                       onClick={() => {

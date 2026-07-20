@@ -46,6 +46,7 @@ import { getInventoryItem, listInventoryRooms } from '../../../../inventory/inve
 import { InventoryItem, InventoryRoom } from '@/types';
 import { track } from '@/lib/analytics/events';
 import { PropertyContextCapturePanel } from '@/components/property-context/PropertyContextCapturePanel';
+import { useToolLaunchContext } from '@/features/tools/ToolLaunchContextBoundary';
 
 // ─── Helpers ────────────────────────────────────────────────────────
 function money(cents: number | null | undefined) {
@@ -985,7 +986,9 @@ export default function CapitalTimelineClient() {
   const params = useParams<{ id: string }>();
   const propertyId = params.id;
   const searchParams = useSearchParams();
+  const toolLaunchContext = useToolLaunchContext();
   const requestedAssumptionSetId = searchParams.get('assumptionSetId');
+  const focusedInventoryItemId = toolLaunchContext?.resolved.prefill.itemId ?? null;
   const backHref = `/dashboard/properties/${propertyId}`;
 
   const [horizonYears, setHorizonYears] = useState<5 | 10>(10);
@@ -1128,14 +1131,33 @@ export default function CapitalTimelineClient() {
   }
 
   // ─── Summary stats ──────────────────────────────────────────────
-  const items = data?.items ?? [];
-  const contextInventoryItemId = items.find((item) => item.inventoryItemId && (
+  const items = React.useMemo(() => data?.items ?? [], [data?.items]);
+  const contextInventoryItemId = focusedInventoryItemId ?? items.find((item) => item.inventoryItemId && (
     item.missingFactors.includes('INSTALL_DATE') || item.missingFactors.includes('CONDITION')
   ))?.inventoryItemId ?? null;
   const propertyContextOperationInput = React.useMemo(
     () => contextInventoryItemId ? { inventoryItemId: contextInventoryItemId } : {},
     [contextInventoryItemId],
   );
+
+  useEffect(() => {
+    if (!focusedInventoryItemId) return;
+    const focusedItem = items.find((item) => item.inventoryItemId === focusedInventoryItemId);
+    if (!focusedItem) return;
+    setExpandedItems((previous) => {
+      if (previous.has(focusedItem.id)) return previous;
+      const next = new Set(previous);
+      next.add(focusedItem.id);
+      return next;
+    });
+    const frame = window.requestAnimationFrame(() => {
+      document.getElementById(`capital-item-${focusedItem.id}`)?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center',
+      });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [focusedInventoryItemId, items]);
   const totalMin = items.reduce((s, i) => s + (i.estimatedCostMinCents ?? 0), 0);
   const totalMax = items.reduce((s, i) => s + (i.estimatedCostMaxCents ?? 0), 0);
   const highPriorityCount = items.filter((i) => i.priority === 'HIGH').length;
@@ -1466,6 +1488,9 @@ export default function CapitalTimelineClient() {
             <div className="space-y-3">
               {items.map((item) => {
                 const isExpanded = expandedItems.has(item.id);
+                const isContextItem = Boolean(
+                  focusedInventoryItemId && item.inventoryItemId === focusedInventoryItemId,
+                );
                 const isEditing = editingItem?.id === item.id;
                 const canEdit = !!item.inventoryItemId;
                 const itemOverrides = item.inventoryItemId
@@ -1476,8 +1501,13 @@ export default function CapitalTimelineClient() {
 
                 return (
                   <div
+                    id={`capital-item-${item.id}`}
                     key={item.id}
-                    className="overflow-hidden rounded-2xl border border-white/70 bg-gradient-to-br from-white/80 via-slate-50/72 to-teal-50/45 shadow-[0_14px_28px_-22px_rgba(15,23,42,0.65)] backdrop-blur dark:border-slate-700/70 dark:from-slate-900/55 dark:via-slate-900/48 dark:to-slate-900/38"
+                    className={`scroll-mt-28 overflow-hidden rounded-2xl border bg-gradient-to-br from-white/80 via-slate-50/72 to-teal-50/45 shadow-[0_14px_28px_-22px_rgba(15,23,42,0.65)] backdrop-blur dark:from-slate-900/55 dark:via-slate-900/48 dark:to-slate-900/38 ${
+                      isContextItem
+                        ? 'border-teal-400 ring-2 ring-teal-400/50 dark:border-teal-500'
+                        : 'border-white/70 dark:border-slate-700/70'
+                    }`}
                   >
                     {/* Item Header */}
                     <div className="p-4 sm:p-5">

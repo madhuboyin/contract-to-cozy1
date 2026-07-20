@@ -27,6 +27,7 @@ import type { Property, RadarFeedItem as RadarFeedItemType, RadarUserState } fro
 import { buildGuidanceOverviewHref } from '@/lib/navigation/guidanceOverviewHref';
 import { ScrollFadeX } from '@/components/ui/ScrollFadeX';
 import { PropertyContextStatusNotice } from '@/components/property-context/PropertyContextStatusNotice';
+import { useToolLaunchContext } from '@/features/tools/ToolLaunchContextBoundary';
 
 // ---------------------------------------------------------------------------
 // Filter chip type
@@ -313,9 +314,15 @@ type HomeEventRadarPageClientProps = {
 
 export default function HomeEventRadarPageClient({ propertyId: propertyIdOverride }: HomeEventRadarPageClientProps) {
   const searchParams = useSearchParams();
+  const toolLaunchContext = useToolLaunchContext();
   const { selectedPropertyId, setSelectedPropertyId } = usePropertyContext();
   const rawPropertyId = propertyIdOverride ?? selectedPropertyId ?? searchParams.get('propertyId') ?? undefined;
   const propertyId = (rawPropertyId && rawPropertyId !== 'undefined') ? rawPropertyId : undefined;
+  const guidanceStepKey = searchParams.get('guidanceStepKey');
+  const guidanceJourneyId = searchParams.get('guidanceJourneyId') ??
+    toolLaunchContext?.resolved.prefill.journeyId ??
+    null;
+  const launchSurface = normalizeLaunchSurface(searchParams.get('launchSurface'));
 
   React.useEffect(() => {
     if (!propertyIdOverride) return;
@@ -330,16 +337,16 @@ export default function HomeEventRadarPageClient({ propertyId: propertyIdOverrid
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [propertyId]);
 
-  const guidanceStepKey = searchParams.get('guidanceStepKey');
-  const guidanceJourneyId = searchParams.get('guidanceJourneyId');
-  const launchSurface = normalizeLaunchSurface(searchParams.get('launchSurface'));
   const guidanceBackHref =
     propertyId && guidanceJourneyId
       ? buildGuidanceOverviewHref({
           propertyId,
           journeyId: guidanceJourneyId,
           stepKey: guidanceStepKey,
-          inventoryItemId: searchParams.get('itemId') ?? searchParams.get('sourceEntityId'),
+          inventoryItemId: toolLaunchContext?.resolved.prefill.itemId ??
+            toolLaunchContext?.resolved.prefill.entityId ??
+            searchParams.get('itemId') ??
+            searchParams.get('sourceEntityId'),
           issueType: searchParams.get('issueType'),
         })
       : null;
