@@ -21,6 +21,7 @@ type RenovationInspectionStageType =
 import { prisma } from '../lib/prisma';
 import { APIError } from '../middleware/error.middleware';
 import { generatePermitDisclosureQueue } from './JobQueue.service';
+import { presignGetObject } from './storage/presign';
 
 // ── Inspection milestone templates ───────────────────────────────────────────
 
@@ -74,6 +75,13 @@ const ACTIVE_STATUSES: PermitRecordStatus[] = ['ISSUED', 'INSPECTION_PENDING'];
 function toArr(val: string | string[] | undefined): string[] {
   if (!val) return [];
   return Array.isArray(val) ? val : [val];
+}
+
+async function presignDisclosureExportUrl(fileKey: string | null): Promise<string | null> {
+  if (!fileKey) return null;
+  const bucket = process.env.S3_BUCKET;
+  if (!bucket) return null;
+  return presignGetObject({ bucket, key: fileKey, expiresInSeconds: 60 });
 }
 
 // ── Service ───────────────────────────────────────────────────────────────────
@@ -562,7 +570,7 @@ export class PermitTrackerService {
       status: record.status,
       totalPermits: record.totalPermits,
       openFlags: record.openFlags,
-      fileUrl: record.status === 'COMPLETED' && !urlExpired ? record.fileUrl : null,
+      fileUrl: record.status === 'COMPLETED' && !urlExpired ? await presignDisclosureExportUrl(record.fileKey) : null,
       expiresAt: record.expiresAt?.toISOString(),
       errorMessage: record.errorMessage,
       generatedContextVersion: typeof snapshot?.propertyContextVersion === 'string'
@@ -581,7 +589,7 @@ export class PermitTrackerService {
         status: true,
         totalPermits: true,
         openFlags: true,
-        fileUrl: true,
+        fileKey: true,
         expiresAt: true,
         errorMessage: true,
         snapshotJson: true,
@@ -590,18 +598,21 @@ export class PermitTrackerService {
     });
 
     const now = new Date();
-    return records.map((r) => ({
+    return Promise.all(records.map(async (r) => ({
       ...r,
+      fileKey: undefined,
       snapshotJson: undefined,
       generatedContextVersion:
         r.snapshotJson && typeof r.snapshotJson === 'object' && !Array.isArray(r.snapshotJson) &&
         typeof (r.snapshotJson as Record<string, unknown>).propertyContextVersion === 'string'
           ? (r.snapshotJson as Record<string, unknown>).propertyContextVersion
           : null,
-      fileUrl: r.status === 'COMPLETED' && r.expiresAt != null && r.expiresAt > now ? r.fileUrl : null,
+      fileUrl: r.status === 'COMPLETED' && r.expiresAt != null && r.expiresAt > now
+        ? await presignDisclosureExportUrl(r.fileKey)
+        : null,
       expiresAt: r.expiresAt?.toISOString(),
       createdAt: r.createdAt.toISOString(),
-    }));
+    })));
   }
 
   // ── Private helpers ───────────────────────────────────────────────────────

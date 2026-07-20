@@ -30,39 +30,39 @@ export async function permitInspectionReminderJob(): Promise<void> {
   logger.info(`[PermitInspectionReminder] Found ${milestones.length} upcoming inspection milestone(s)`);
 
   for (const milestone of milestones) {
-    const userId = milestone.property?.homeownerProfile?.userId;
-    if (!userId) continue;
-
-    const contextCheck = await checkPermitWorkerContext(
-      milestone.propertyId,
-      { permitWorkTypes: milestone.permitRecord?.workTypes ?? [] },
-      true,
-    );
-    if (!contextCheck.allowed) {
-      logger.info(
-        { milestoneId: milestone.id, propertyId: milestone.propertyId, reasonCodes: contextCheck.reasonCodes },
-        '[PermitInspectionReminder] skipped after property context recheck',
-      );
-      continue;
-    }
-
-    const scheduledDate = milestone.scheduledDate
-      ? new Date(milestone.scheduledDate).toLocaleDateString('en-US', {
-          weekday: 'short',
-          month: 'short',
-          day: 'numeric',
-        })
-      : 'soon';
-
-    const propertyLabel = [milestone.property?.address, milestone.property?.city]
-      .filter(Boolean)
-      .join(', ') || 'your property';
-
-    const permitLabel = milestone.permitRecord?.permitNumber
-      ? `Permit #${milestone.permitRecord.permitNumber}`
-      : milestone.permitRecord?.category ?? 'Permit';
-
     try {
+      const userId = milestone.property?.homeownerProfile?.userId;
+      if (!userId) continue;
+
+      const contextCheck = await checkPermitWorkerContext(
+        milestone.propertyId,
+        { permitWorkTypes: milestone.permitRecord?.workTypes ?? [] },
+        true,
+      );
+      if (!contextCheck.allowed) {
+        logger.info(
+          { milestoneId: milestone.id, propertyId: milestone.propertyId, reasonCodes: contextCheck.reasonCodes },
+          '[PermitInspectionReminder] skipped after property context recheck',
+        );
+        continue;
+      }
+
+      const scheduledDate = milestone.scheduledDate
+        ? new Date(milestone.scheduledDate).toLocaleDateString('en-US', {
+            weekday: 'short',
+            month: 'short',
+            day: 'numeric',
+          })
+        : 'soon';
+
+      const propertyLabel = [milestone.property?.address, milestone.property?.city]
+        .filter(Boolean)
+        .join(', ') || 'your property';
+
+      const permitLabel = milestone.permitRecord?.permitNumber
+        ? `Permit #${milestone.permitRecord.permitNumber}`
+        : milestone.permitRecord?.category ?? 'Permit';
+
       await NotificationService.create({
         userId,
         type: 'MAINTENANCE_REMINDER',
@@ -71,6 +71,15 @@ export async function permitInspectionReminderJob(): Promise<void> {
         actionUrl: `/dashboard/properties/${milestone.propertyId}/tools/permits`,
         entityType: 'PermitInspectionMilestone',
         entityId: milestone.id,
+        // W3 (permits): was uncategorized — inferred to 'MAINTENANCE' by
+        // notificationPreference.service.ts's type-string regex, the same
+        // bucket as routine seasonal/habit nudges, which meant (a) this
+        // reminder defaulted to weekly-digest cadence instead of immediate
+        // despite the 3-day inspection deadline, and (b) muting routine
+        // maintenance chatter would have silently muted a real scheduling
+        // deadline too. MATERIAL_DEADLINE is immediate-cadence by default.
+        category: 'MATERIAL_DEADLINE',
+        urgency: 'MATERIAL',
         metadata: { propertyId: milestone.propertyId },
       });
 

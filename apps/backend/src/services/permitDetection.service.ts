@@ -123,7 +123,12 @@ export class PermitDetectionService {
         workType,
         installYear,
         triggerType: 'INVENTORY_CROSS_REFERENCE',
-        flagReason: `${item.name} (${item.category}) installed ~${installYear} per inventory; no matching permit found within ±${WINDOW_YEARS} years`,
+        // W3 (permits): worded as fact ("no matching permit found") with no
+        // acknowledgment that permit requirements are set locally — some
+        // municipalities don't require one for this kind of work at all.
+        // This is an inference from indirect evidence (inventory + permit
+        // records), not an authoritative jurisdiction determination.
+        flagReason: `${item.name} (${item.category}) installed ~${installYear} per inventory; no matching permit record found within ±${WINDOW_YEARS} years. Permit requirements vary by municipality — verify with your local building department.`,
         inventoryItemId: item.id,
       });
     }
@@ -165,23 +170,41 @@ export class PermitDetectionService {
       }
     }
 
-    // Emit high-risk HomeEvent if any HIGH flags were created
+    // Emit a high-risk HomeEvent, but only once for a given open-flag set.
+    // `created` counts every upsert (including no-op updates against an
+    // already-flagged item), so this ran on every re-detection where any
+    // HIGH flag remained open — a homeowner who re-triggered a permit fetch
+    // a few times got a fresh "potential unpermitted work" HomeEvent each
+    // time for the exact same unresolved issue. The idempotency key is
+    // derived from the actual set of currently-open HIGH flag ids, so a new
+    // event only fires when that set genuinely changes (a new flag appears
+    // or one gets resolved) — same fingerprint-on-the-actual-set pattern
+    // used by reserveFundReconciliation.job.ts for the same class of bug.
     if (created > 0) {
-      const highFlags = await prisma.permitUnpermittedFlag.count({
+      const highFlags = await prisma.permitUnpermittedFlag.findMany({
         where: { propertyId, disclosureRisk: 'HIGH', status: { in: ['FLAGGED', 'INVESTIGATING'] } },
+        select: { id: true },
       });
-      if (highFlags > 0) {
-        await prisma.homeEvent.create({
-          data: {
-            propertyId,
-            title: 'Potential unpermitted work detected',
-            summary: `${highFlags} high-risk item(s) flagged — review your permit tracker`,
-            type: 'NOTE',
-            importance: 'HIGH',
-            visibility: 'PRIVATE',
-            occurredAt: new Date(),
-          },
-        }).catch((err) => logger.warn({ err }, '[PermitDetectionService] homeEvent create failed'));
+      if (highFlags.length > 0) {
+        const idempotencyKey = `permit-unpermitted:${highFlags.map((f) => f.id).sort().join(',')}`;
+        const existingEvent = await prisma.homeEvent.findFirst({
+          where: { propertyId, idempotencyKey },
+          select: { id: true },
+        });
+        if (!existingEvent) {
+          await prisma.homeEvent.create({
+            data: {
+              propertyId,
+              title: 'Potential unpermitted work detected',
+              summary: `${highFlags.length} high-risk item(s) flagged — review your permit tracker`,
+              type: 'NOTE',
+              importance: 'HIGH',
+              visibility: 'PRIVATE',
+              occurredAt: new Date(),
+              idempotencyKey,
+            },
+          }).catch((err) => logger.warn({ err }, '[PermitDetectionService] homeEvent create failed'));
+        }
       }
     }
 

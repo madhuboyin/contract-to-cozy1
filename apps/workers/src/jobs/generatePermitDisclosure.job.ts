@@ -34,6 +34,13 @@ async function buildDisclosureSnapshot(propertyId: string) {
         finaledDate: true,
         description: true,
         contractorName: true,
+        // W3 (permits): auto-fetched records are matched to a property via
+        // a fuzzy address match and category-inferred via keyword regex —
+        // not guaranteed-correct. This is a seller-disclosure document; it
+        // previously presented every record with identical authority
+        // regardless of source, with no caveat for unverified auto-matches.
+        source: true,
+        isVerified: true,
       },
       orderBy: { issueDate: 'desc' },
     }),
@@ -120,6 +127,18 @@ async function renderDisclosurePdf(
       write(`  ${permit.description.slice(0, 100)}`, leftMargin + 10, y, 9);
       nextLine();
     }
+    // W3 (permits): auto-matched/unverified records carry real address- and
+    // category-inference uncertainty that a seller-disclosure reader needs
+    // to know about, not just a homeowner-entered or verified record.
+    const provenanceLabel = permit.isVerified
+      ? 'Verified'
+      : permit.source === 'MANUAL_ENTRY'
+        ? 'Manually entered — unverified'
+        : permit.source === 'DOCUMENT_UPLOAD'
+          ? 'From uploaded document — unverified'
+          : 'Auto-matched from public records — unverified, confirm with municipality';
+    write(`  Source: ${provenanceLabel}`, leftMargin + 10, y, 9);
+    nextLine();
   }
 
   if (permits.length === 0) {
@@ -199,14 +218,21 @@ export async function generatePermitDisclosureJob(exportId: string): Promise<voi
       userId: exp.requestedByUserId,
     });
 
-    const fileUrl = `https://${uploaded.bucket}.s3.amazonaws.com/${uploaded.key}`;
-
     await (prisma as any).permitDisclosureExport.update({
       where: { id: exportId },
       data: {
         status: 'COMPLETED',
+        // W3 (permits): this used to also persist a raw, permanent,
+        // non-expiring https://<bucket>.s3.amazonaws.com/<key> URL — unlike
+        // every other export job in this codebase (generateHomeReportExport,
+        // generateMaterialSpecExport), which store only the object key and
+        // presign a short-lived URL on read. A permit disclosure PDF
+        // (permit history + unpermitted-work flags) is exactly the kind of
+        // legally-sensitive document that shouldn't be guessable-URL
+        // fetchable forever, undermining the 7-day expiresAt retention
+        // below. fileUrl is presigned on read instead — see
+        // permitTracker.service.ts#getDisclosureExport/listDisclosureExports.
         fileKey: uploaded.key,
-        fileUrl,
         totalPermits: snapshot.permits.length,
         openFlags: snapshot.flags.length,
         snapshotJson: {
