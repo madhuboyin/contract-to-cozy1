@@ -213,6 +213,8 @@ COPY apps/backend/src/services/analytics/index.ts \
      apps/backend/src/services/analytics/taxonomy.ts \
      apps/backend/src/services/analytics/northStarLineage.ts \
      apps/backend/src/services/analytics/northStarMetric.service.ts \
+     apps/backend/src/services/analytics/toolLifecycle.ts \
+     apps/backend/src/services/analytics/toolLifecycle.contract.ts \
      src/shared/backend/services/analytics/
 # Replace analytics validation schemas with the worker's typed pass-through stub.
 COPY apps/workers/stubs/analytics-schemas.ts src/shared/backend/services/analytics/schemas.ts
