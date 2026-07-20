@@ -2,6 +2,7 @@
 import { prisma } from '../lib/prisma';
 import { fetchCpscRecalls } from '../recalls/cpsc.client';
 import { RecallSeverity, RecallSource, RecallStatus } from '@prisma/client';
+import { logger } from '../lib/logger';
 
 function deriveSeverity(hazard?: string, summary?: string): RecallSeverity {
   const t = `${hazard || ''} ${summary || ''}`.toLowerCase();
@@ -46,9 +47,16 @@ export async function ingestRecallsJob() {
   const now = new Date();
 
   let upserted = 0;
+  let failed = 0;
 
+  // Per-item error isolation: this feed carries safety-relevant recalls
+  // (fire/injury/death hazards) — a single malformed or constraint-violating
+  // item must not silently abort the whole run and drop every remaining
+  // recall for that day. Same isolation pattern already established for
+  // seasonal checklist generation, permit inspection reminders, etc.
   for (const item of items) {
-    await prisma.$transaction(async (tx) => {
+    try {
+      await prisma.$transaction(async (tx) => {
       const recall = await tx.recallRecord.upsert({
         where: {
           source_externalId: { source: RecallSource.CPSC, externalId: item.externalId },
@@ -142,15 +150,19 @@ export async function ingestRecallsJob() {
       if (rows.length) {
         await tx.recallProduct.createMany({ data: rows.slice(0, 200) });
       }
-    }, {
-      // Default 5s timeout/2s maxWait is too tight under connection-pool contention
-      // from other cron jobs sharing this pod's Prisma client around the same 2-3 AM window.
-      maxWait: 10000,
-      timeout: 15000,
-    });
+      }, {
+        // Default 5s timeout/2s maxWait is too tight under connection-pool contention
+        // from other cron jobs sharing this pod's Prisma client around the same 2-3 AM window.
+        maxWait: 10000,
+        timeout: 15000,
+      });
 
-    upserted++;
+      upserted++;
+    } catch (err) {
+      failed++;
+      logger.warn({ err, externalId: item.externalId }, '[RECALL-INGEST] upsert skipped for one item');
+    }
   }
 
-  return { fetched: items.length, upserted };
+  return { fetched: items.length, upserted, failed };
 }

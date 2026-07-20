@@ -22,12 +22,24 @@ export async function providerCredentialExpireJob() {
   logger.info(`[ProviderCredentialExpire] ${expired.length} credential(s) past expiry`);
 
   const affectedProviderIds = new Set<string>();
+  let expiredOk = 0;
+  let expireFailed = 0;
+  // Per-item error isolation: one credential's update failing (constraint
+  // violation, transient DB blip) must not abort expiry for the rest of the
+  // batch — a provider whose credential should have expired but silently
+  // didn't stays incorrectly eligible until the next run picks it up.
   for (const credential of expired) {
-    await prisma.providerCredential.update({
-      where: { id: credential.id },
-      data: { status: 'EXPIRED' },
-    });
-    affectedProviderIds.add(credential.providerProfileId);
+    try {
+      await prisma.providerCredential.update({
+        where: { id: credential.id },
+        data: { status: 'EXPIRED' },
+      });
+      affectedProviderIds.add(credential.providerProfileId);
+      expiredOk++;
+    } catch (err) {
+      expireFailed++;
+      logger.error({ err, credentialId: credential.id }, '[ProviderCredentialExpire] expire update failed for one credential');
+    }
   }
 
   let providersRecomputed = 0;
@@ -40,5 +52,5 @@ export async function providerCredentialExpireJob() {
     }
   }
 
-  return { expiredCount: expired.length, providersRecomputed };
+  return { expiredCount: expiredOk, expireFailed, providersRecomputed };
 }

@@ -21,8 +21,14 @@ export async function providerMissingCredentialSweepJob() {
 
   let alertsCreated = 0;
   let alertsResolved = 0;
+  let providersFailed = 0;
 
+  // Per-provider error isolation: this loop previously had zero try/catch
+  // at all — one provider's query/update failure aborted the entire sweep,
+  // so every other provider silently got no missing-credential check that
+  // week. Same isolation pattern already used elsewhere in this project.
   for (const provider of providers) {
+    try {
     const openAlerts = await prisma.providerComplianceAlert.findMany({
       where: {
         providerProfileId: provider.id,
@@ -111,11 +117,15 @@ export async function providerMissingCredentialSweepJob() {
       });
       alertsCreated++;
     }
+    } catch (err) {
+      providersFailed++;
+      logger.error({ err, providerProfileId: provider.id }, '[ProviderMissingCredentialSweep] sweep failed for one provider');
+    }
   }
 
   logger.info(
-    `[ProviderMissingCredentialSweep] ${alertsCreated} alert(s) created, ${alertsResolved} resolved across ${providers.length} provider(s)`
+    `[ProviderMissingCredentialSweep] ${alertsCreated} alert(s) created, ${alertsResolved} resolved, ${providersFailed} provider(s) failed, across ${providers.length} provider(s)`
   );
 
-  return { alertsCreated, alertsResolved };
+  return { alertsCreated, alertsResolved, providersFailed };
 }
