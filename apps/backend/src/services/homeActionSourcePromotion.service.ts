@@ -15,7 +15,7 @@ const DEFAULT_FEEDBACK: HomeAction['feedbackControls'] = [
 
 export type HomeActionSourceDb = Pick<typeof prisma,
   'guidanceJourney' | 'incident' | 'recallMatch' | 'coverageAnalysis' | 'projectRecord' |
-  'orchestrationActionEvent' | 'orchestrationActionSnooze'>;
+  'seasonalChecklist' | 'orchestrationActionEvent' | 'orchestrationActionSnooze'>;
 
 function lowConsequenceGovernance(policyVersion = 'phase2-v1'): HomeAction['governance'] {
   return {
@@ -112,13 +112,26 @@ function confidenceLabel(score: number | null): HomeAction['confidence']['label'
   return 'HIGH';
 }
 
-async function loadGuidanceActions(propertyId: string, db: HomeActionSourceDb): Promise<HomeAction[]> {
+async function loadGuidanceActions(
+  propertyId: string,
+  db: HomeActionSourceDb,
+  activeWeatherIncidentIds: Set<string> = new Set(),
+): Promise<HomeAction[]> {
   const journeys = await db.guidanceJourney.findMany({
     where: { propertyId, status: { in: ['NOT_STARTED', 'ACTIVE'] } },
     orderBy: { updatedAt: 'desc' },
     take: 20,
     include: {
-      primarySignal: { select: { id: true, severity: true, confidenceScore: true, lastObservedAt: true } },
+      primarySignal: {
+        select: {
+          id: true,
+          severity: true,
+          confidenceScore: true,
+          lastObservedAt: true,
+          sourceEntityType: true,
+          sourceEntityId: true,
+        },
+      },
       inventoryItem: { select: { name: true, assetType: true, category: true } },
       steps: {
         where: { status: { in: ['PENDING', 'IN_PROGRESS', 'BLOCKED'] } },
@@ -128,7 +141,17 @@ async function loadGuidanceActions(propertyId: string, db: HomeActionSourceDb): 
     },
   });
 
-  return journeys.map((journey) => {
+  return journeys
+    .filter((journey) => {
+      const incidentDerivedWeather = journey.issueDomain === 'WEATHER' &&
+        String(journey.primarySignal?.sourceEntityType ?? '').toUpperCase() === 'INCIDENT';
+      if (!incidentDerivedWeather) return true;
+      const sourceIncidentId = journey.primarySignal?.sourceEntityId;
+      return sourceIncidentId
+        ? !activeWeatherIncidentIds.has(sourceIncidentId)
+        : activeWeatherIncidentIds.size === 0;
+    })
+    .map((journey) => {
     const step = journey.steps[0];
     const confidence = normalizeHomeActionConfidenceScore(journey.primarySignal?.confidenceScore);
     const governance = guidanceGovernance(step, journey.templateVersion ?? 'phase4-v1');
@@ -244,6 +267,19 @@ async function loadIncidentActions(propertyId: string, db: HomeActionSourceDb): 
   return incidents.map((incident) => {
     const proposed = incident.actions[0];
     const critical = incident.severity === 'CRITICAL';
+    const isWeather = incident.sourceType === 'WEATHER';
+    const details = incident.details && typeof incident.details === 'object' && !Array.isArray(incident.details)
+      ? incident.details as Record<string, unknown>
+      : {};
+    const weatherExpiry = typeof details.expires === 'string' && !Number.isNaN(new Date(details.expires).getTime())
+      ? new Date(details.expires).toISOString()
+      : incident.expiredAt?.toISOString() ?? null;
+    const weatherInstruction = typeof details.instruction === 'string' && details.instruction.trim()
+      ? details.instruction.trim().slice(0, 1000)
+      : null;
+    const weatherSource = typeof details.senderName === 'string' && details.senderName.trim()
+      ? `National Weather Service — ${details.senderName.trim()}`
+      : 'National Weather Service';
     const confidence = incident.confidence == null ? null : Math.max(0, Math.min(1, incident.confidence / 100));
     const href = proposed?.ctaUrl ?? `/dashboard/properties/${propertyId}/incidents/${incident.id}`;
     const governance = lowConsequenceGovernance();
@@ -263,20 +299,126 @@ async function loadIncidentActions(propertyId: string, db: HomeActionSourceDb): 
       priority: critical ? 'NOW' : incident.severity === 'WARNING' ? 'SOON' : 'PLAN',
       signal: incident.title,
       whyItMatters: incident.summary ?? 'An active property incident may affect safety, damage exposure, or timely response.',
-      recommendedAction: proposed?.ctaLabel ?? (critical ? 'Review safety response now' : 'Review incident'),
-      expectedOutcome: 'Confirm the incident response and preserve the evidence needed for follow-up.',
-      timing: { dueAt: null, windowStart: incident.openedAt.toISOString(), windowEnd: incident.expiredAt?.toISOString() ?? null, rationale: critical ? 'Critical incidents require prompt review.' : 'The incident remains active and unresolved.' },
-      evidence: [{ id: incident.id, type: 'SYSTEM_DERIVATION', label: incident.title, source: incident.sourceType, observedAt: incident.openedAt.toISOString(), freshness: 'CURRENT', confidence }],
+      recommendedAction: isWeather
+        ? `Review ${incident.title} safety guidance`
+        : proposed?.ctaLabel ?? (critical ? 'Review safety response now' : 'Review incident'),
+      expectedOutcome: weatherInstruction ?? 'Confirm the incident response and preserve the evidence needed for follow-up.',
+      timing: {
+        dueAt: isWeather ? weatherExpiry : null,
+        windowStart: incident.openedAt.toISOString(),
+        windowEnd: isWeather ? weatherExpiry : incident.expiredAt?.toISOString() ?? null,
+        rationale: isWeather
+          ? weatherExpiry ? 'This official weather alert remains active until the recorded expiration time.' : 'This official weather alert remains active until the source clears it.'
+          : critical ? 'Critical incidents require prompt review.' : 'The incident remains active and unresolved.',
+      },
+      evidence: [{
+        id: incident.id,
+        type: isWeather ? 'EXTERNAL_SOURCE' : 'SYSTEM_DERIVATION',
+        label: incident.title,
+        source: isWeather ? weatherSource : incident.sourceType,
+        observedAt: incident.openedAt.toISOString(),
+        freshness: 'CURRENT',
+        confidence,
+      }],
       assumptions: [], options: [], tradeoffs: [],
       confidence: { score: confidence, label: confidenceLabel(confidence), missing: confidence == null ? ['Incident confidence'] : [] },
       governance,
-      primaryCta: { kind: critical ? 'ESCALATE' : 'REVIEW', label: proposed?.ctaLabel ?? 'Review incident', href },
+      primaryCta: { kind: critical ? 'ESCALATE' : 'REVIEW', label: isWeather ? 'Review weather alert' : proposed?.ctaLabel ?? 'Review incident', href },
       secondaryCtas: [{ kind: 'CORRECT_FACT', label: 'Correct incident context', href: `/dashboard/properties/${propertyId}/incidents/${incident.id}` }],
-      feedbackControls: critical ? ['COMPLETE', 'ALREADY_DONE', 'CORRECT_FACT'] : DEFAULT_FEEDBACK,
+      feedbackControls: critical && isWeather ? ['ALREADY_DONE', 'CORRECT_FACT'] : critical ? ['COMPLETE', 'ALREADY_DONE', 'CORRECT_FACT'] : DEFAULT_FEEDBACK,
       relatedJourneyId: null,
       createdAt: incident.createdAt.toISOString(),
       lastEvaluatedAt: (incident.lastEvaluatedAt ?? incident.updatedAt).toISOString(),
     });
+  });
+}
+
+function seasonLabel(season: string): string {
+  return season.charAt(0) + season.slice(1).toLowerCase();
+}
+
+async function loadSeasonalChecklistActions(propertyId: string, db: HomeActionSourceDb): Promise<HomeAction[]> {
+  const now = new Date();
+  const checklists = await db.seasonalChecklist.findMany({
+    where: {
+      propertyId,
+      status: { in: ['PENDING', 'IN_PROGRESS'] },
+      seasonEndDate: { gte: now },
+    },
+    orderBy: { seasonStartDate: 'asc' },
+    take: 4,
+    include: { items: { orderBy: [{ priority: 'asc' }, { recommendedDate: 'asc' }] } },
+  });
+
+  // Generation may prepare the next season before the current one closes.
+  // Home presents one seasonal focus: the active checklist when present,
+  // otherwise the nearest upcoming checklist from the ordered result.
+  return checklists.slice(0, 1).flatMap((checklist) => {
+    const pendingItems = checklist.items.filter((item) =>
+      item.status === 'RECOMMENDED' ||
+      item.status === 'ADDED' ||
+      (item.status === 'SNOOZED' && (!item.snoozedUntil || item.snoozedUntil <= now)),
+    );
+    if (pendingItems.length === 0) return [];
+
+    const criticalCount = pendingItems.filter((item) => item.priority === 'CRITICAL').length;
+    const active = checklist.seasonStartDate <= now && checklist.seasonEndDate >= now;
+    const daysUntilStart = Math.max(0, Math.ceil((checklist.seasonStartDate.getTime() - now.getTime()) / 86_400_000));
+    const daysRemaining = Math.max(0, Math.ceil((checklist.seasonEndDate.getTime() - now.getTime()) / 86_400_000));
+    const displaySeason = seasonLabel(checklist.season);
+    const progress = `${checklist.tasksCompleted} of ${checklist.totalTasks} complete`;
+    const priority: HomeAction['priority'] = active && criticalCount > 0
+      ? 'NOW'
+      : criticalCount > 0 || (active && daysRemaining <= 14)
+        ? 'SOON'
+        : 'PLAN';
+    const timingSummary = active
+      ? `${daysRemaining} day${daysRemaining === 1 ? '' : 's'} remain in ${displaySeason.toLowerCase()}.`
+      : `${displaySeason} starts in ${daysUntilStart} day${daysUntilStart === 1 ? '' : 's'}.`;
+
+    return [adaptHomeActionSource('MAINTENANCE', {
+      id: `seasonal-checklist:${checklist.id}`,
+      propertyId,
+      lineageId: `seasonal-checklist:${checklist.id}`,
+      sourceEntityId: checklist.id,
+      sourceVersion: checklist.updatedAt.toISOString(),
+      state: checklist.status === 'IN_PROGRESS' ? 'IN_PROGRESS' : 'OPEN',
+      priority,
+      signal: `${displaySeason} seasonal checklist: ${pendingItems.length} task${pendingItems.length === 1 ? '' : 's'} remaining`,
+      whyItMatters: `${progress}. ${criticalCount > 0 ? `${criticalCount} critical task${criticalCount === 1 ? '' : 's'} still need attention. ` : ''}${timingSummary}`,
+      recommendedAction: `Review the ${displaySeason} seasonal checklist`,
+      expectedOutcome: `Complete or deliberately manage the remaining ${displaySeason.toLowerCase()} preparation tasks before the seasonal window closes.`,
+      timing: {
+        dueAt: checklist.seasonEndDate.toISOString(),
+        windowStart: checklist.seasonStartDate.toISOString(),
+        windowEnd: checklist.seasonEndDate.toISOString(),
+        rationale: timingSummary,
+      },
+      evidence: pendingItems.slice(0, 50).map((item) => ({
+        id: item.id,
+        type: 'SYSTEM_DERIVATION' as const,
+        label: item.title,
+        source: `${displaySeason} seasonal checklist`,
+        observedAt: item.updatedAt.toISOString(),
+        freshness: 'CURRENT' as const,
+        confidence: 1,
+      })),
+      assumptions: [],
+      options: [],
+      tradeoffs: [],
+      confidence: { score: 1, label: 'HIGH', missing: [] },
+      governance: lowConsequenceGovernance('phase2-seasonal-v1'),
+      primaryCta: {
+        kind: 'REVIEW',
+        label: 'View seasonal checklist',
+        href: `/dashboard/seasonal?propertyId=${encodeURIComponent(propertyId)}`,
+      },
+      secondaryCtas: [],
+      feedbackControls: ['CORRECT_FACT'],
+      relatedJourneyId: null,
+      createdAt: checklist.createdAt.toISOString(),
+      lastEvaluatedAt: checklist.updatedAt.toISOString(),
+    })];
   });
 }
 
@@ -410,9 +552,14 @@ export async function getPromotedHomeActions(
   actions: HomeAction[];
   diagnostics: { candidateCount: number; suppressedCount: number; snoozedCount: number };
 }> {
+  const incidentActions = await loadIncidentActions(propertyId, db);
+  const activeWeatherIncidentIds = new Set(incidentActions
+    .filter((action) => action.evidence.some((evidence) => evidence.source.includes('National Weather Service')))
+    .map((action) => action.source.entityId));
   const groups = await Promise.all([
-    loadGuidanceActions(propertyId, db), loadIncidentActions(propertyId, db), loadRecallActions(propertyId, db),
-    loadCoverageActions(propertyId, db), loadProjectActions(propertyId, db),
+    loadGuidanceActions(propertyId, db, activeWeatherIncidentIds), Promise.resolve(incidentActions),
+    loadRecallActions(propertyId, db), loadCoverageActions(propertyId, db),
+    loadProjectActions(propertyId, db), loadSeasonalChecklistActions(propertyId, db),
   ]);
   const candidates = groups.flat();
   if (candidates.length === 0) {

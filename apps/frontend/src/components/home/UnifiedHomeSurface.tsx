@@ -8,6 +8,8 @@ import {
   ArrowRight,
   Check,
   Clock3,
+  CloudLightning,
+  CalendarDays,
   FileCheck2,
   Home,
   MessageCircle,
@@ -34,13 +36,31 @@ export function coverageCorrectionSubject(action: RankedHomeActionDTO): string |
   return action.recommendedAction.match(/^Add coverage information for (.+)$/i)?.[1]?.trim() || null;
 }
 
+export function isSeasonalChecklistAction(action: RankedHomeActionDTO): boolean {
+  return action.source.kind === 'MAINTENANCE' && action.id.startsWith('seasonal-checklist:');
+}
+
+export function isCriticalWeatherAction(action: RankedHomeActionDTO): boolean {
+  return action.source.kind === 'INCIDENT' &&
+    action.governance.safetyTier === 'SAFETY_EMERGENCY' &&
+    action.evidence.some((evidence) => /weather|national weather service/i.test(evidence.source));
+}
+
 export type AttentionEntry =
   | { kind: 'ACTION'; action: RankedHomeActionDTO }
+  | { kind: 'SEASONAL_CHECKLIST'; action: RankedHomeActionDTO }
+  | { kind: 'CRITICAL_WEATHER'; action: RankedHomeActionDTO }
   | { kind: 'COVERAGE_CORRECTION_GROUP'; actions: RankedHomeActionDTO[]; subjects: string[] };
+
+function entryForAction(action: RankedHomeActionDTO): AttentionEntry {
+  if (isCriticalWeatherAction(action)) return { kind: 'CRITICAL_WEATHER', action };
+  if (isSeasonalChecklistAction(action)) return { kind: 'SEASONAL_CHECKLIST', action };
+  return { kind: 'ACTION', action };
+}
 
 export function groupAttentionActions(actions: RankedHomeActionDTO[]): AttentionEntry[] {
   const coverageActions = actions.filter((action) => coverageCorrectionSubject(action));
-  if (coverageActions.length < 2) return actions.map((action) => ({ kind: 'ACTION', action }));
+  if (coverageActions.length < 2) return actions.map(entryForAction);
 
   const groupedIds = new Set(coverageActions.map((action) => action.id));
   const subjects = [...new Set(coverageActions
@@ -49,11 +69,104 @@ export function groupAttentionActions(actions: RankedHomeActionDTO[]): Attention
   let inserted = false;
 
   return actions.flatMap((action): AttentionEntry[] => {
-    if (!groupedIds.has(action.id)) return [{ kind: 'ACTION', action }];
+    if (!groupedIds.has(action.id)) return [entryForAction(action)];
     if (inserted) return [];
     inserted = true;
     return [{ kind: 'COVERAGE_CORRECTION_GROUP', actions: coverageActions, subjects }];
   });
+}
+
+function formattedAlertExpiry(value: string | null): string | null {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+}
+
+export function CriticalWeatherActionCard({
+  action,
+  propertyId,
+  showSupportingDetails = false,
+}: {
+  action: RankedHomeActionDTO;
+  propertyId: string;
+  showSupportingDetails?: boolean;
+}) {
+  const expiry = formattedAlertExpiry(action.timing.windowEnd ?? action.timing.dueAt);
+  return (
+    <article className="rounded-2xl border-2 border-rose-300 bg-gradient-to-br from-rose-50 to-amber-50 p-4 shadow-sm" role="alert">
+      <div className="flex items-start gap-3">
+        <div className="rounded-xl bg-rose-100 p-2 text-rose-700"><CloudLightning className="h-5 w-5" /></div>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge className="rounded-full bg-rose-700 text-white hover:bg-rose-700">Critical weather</Badge>
+            <span className="text-xs font-semibold text-rose-800">Priority #{action.ranking.rank}</span>
+            {expiry && <span className="text-xs text-rose-700">Active until {expiry}</span>}
+          </div>
+          <h3 className="mt-3 text-lg font-semibold text-slate-950">{action.signal}</h3>
+          <p className="mt-1 text-sm leading-6 text-slate-700">{action.whyItMatters}</p>
+          {showSupportingDetails && (
+            <div className="mt-3 rounded-xl border border-rose-200 bg-white/80 p-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-rose-800">Official guidance</p>
+              <p className="mt-1 text-sm leading-6 text-slate-700">{action.expectedOutcome}</p>
+              <p className="mt-2 text-xs text-slate-500">Source: {action.evidence[0]?.source ?? 'Official weather alert'}</p>
+            </div>
+          )}
+          <div className="mt-4">
+            <Button asChild size="sm" className="rounded-full bg-rose-700 hover:bg-rose-800">
+              <Link href={action.primaryCta.href} onClick={() => { void api.recordHomeActionOpened(propertyId, action.id); }}>
+                Review weather alert<ArrowRight className="ml-1 h-3.5 w-3.5" />
+              </Link>
+            </Button>
+          </div>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+export function SeasonalChecklistActionCard({
+  action,
+  propertyId,
+  showSupportingDetails = false,
+}: {
+  action: RankedHomeActionDTO;
+  propertyId: string;
+  showSupportingDetails?: boolean;
+}) {
+  return (
+    <article className="rounded-2xl border border-emerald-200 bg-gradient-to-br from-white to-emerald-50/70 p-4 shadow-sm">
+      <div className="flex items-start gap-3">
+        <div className="rounded-xl bg-emerald-100 p-2 text-emerald-700"><CalendarDays className="h-5 w-5" /></div>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="outline" className={priorityTone(action.priority)}>{action.priority}</Badge>
+            <span className="text-xs font-semibold text-emerald-800">Seasonal checklist</span>
+            <span className="text-xs text-slate-500">Priority #{action.ranking.rank}</span>
+          </div>
+          <h3 className="mt-3 text-base font-semibold text-slate-950">{action.signal}</h3>
+          <p className="mt-1 text-sm leading-6 text-slate-600">{action.whyItMatters}</p>
+          {showSupportingDetails && (
+            <div className="mt-3 border-t border-emerald-100 pt-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-emerald-800">Remaining tasks</p>
+              <ul className="mt-2 grid gap-2 sm:grid-cols-2">
+                {action.evidence.map((evidence) => (
+                  <li key={evidence.id} className="rounded-lg bg-white/80 px-3 py-2 text-sm text-slate-700">{evidence.label}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          <div className="mt-4">
+            <Button asChild size="sm" className="rounded-full">
+              <Link href={action.primaryCta.href} onClick={() => { void api.recordHomeActionOpened(propertyId, action.id); }}>
+                View seasonal checklist<ArrowRight className="ml-1 h-3.5 w-3.5" />
+              </Link>
+            </Button>
+          </div>
+        </div>
+      </div>
+    </article>
+  );
 }
 
 export function CoverageCorrectionGroupCard({
@@ -306,6 +419,10 @@ export function UnifiedHomeSurface({ propertyId }: { propertyId: string }) {
           <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-sm text-emerald-800">No action currently needs your attention.</div>
         ) : visibleAttentionEntries.map((entry) => entry.kind === 'ACTION' ? (
           <ActionCard key={entry.action.id} action={entry.action} propertyId={propertyId} onChanged={() => query.refetch()} />
+        ) : entry.kind === 'CRITICAL_WEATHER' ? (
+          <CriticalWeatherActionCard key={entry.action.id} action={entry.action} propertyId={propertyId} />
+        ) : entry.kind === 'SEASONAL_CHECKLIST' ? (
+          <SeasonalChecklistActionCard key={entry.action.id} action={entry.action} propertyId={propertyId} />
         ) : (
           <CoverageCorrectionGroupCard
             key={`coverage-group:${entry.actions.map((action) => action.id).join(':')}`}

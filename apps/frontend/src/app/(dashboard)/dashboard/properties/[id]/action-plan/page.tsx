@@ -8,6 +8,8 @@ import { api } from '@/lib/api/client';
 import {
   ActionCard,
   CoverageCorrectionGroupCard,
+  CriticalWeatherActionCard,
+  SeasonalChecklistActionCard,
   groupAttentionActions,
 } from '@/components/home/UnifiedHomeSurface';
 import { Badge } from '@/components/ui/badge';
@@ -91,6 +93,20 @@ export default function PrioritizedActionPlanPage() {
             propertyId={propertyId}
             showSupportingDetails
             onChanged={refreshPlan}
+          />
+        ) : entry.kind === 'CRITICAL_WEATHER' ? (
+          <CriticalWeatherActionCard
+            key={entry.action.id}
+            action={entry.action}
+            propertyId={propertyId}
+            showSupportingDetails
+          />
+        ) : entry.kind === 'SEASONAL_CHECKLIST' ? (
+          <SeasonalChecklistActionCard
+            key={entry.action.id}
+            action={entry.action}
+            propertyId={propertyId}
+            showSupportingDetails
           />
         ) : (
           <CoverageCorrectionGroupCard

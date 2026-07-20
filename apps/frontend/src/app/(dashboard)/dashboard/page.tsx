@@ -30,8 +30,6 @@ import { WelcomeModal } from './components/WelcomeModal';
 
 import { HomeBuyerDashboard } from './components/HomeBuyerDashboard';
 import { ExistingOwnerDashboard } from './components/ExistingOwnerDashboard';
-import { SeasonalBanner } from '@/components/seasonal/SeasonalBanner';
-import { SeasonalWidget } from '@/components/seasonal/SeasonalWidget';
 import AhaHero from './components/AhaHero';
 import { RoomsSnapshotSection } from './components/RoomsSnapshotSection';
 import { LocalUpdatesCarousel } from '@/components/localUpdates/LocalUpdatesCarousel';
@@ -54,7 +52,6 @@ const MilestoneCelebration = dynamic(
   { ssr: false },
 );
 import { recordGuidanceToolStatus } from '@/lib/api/guidanceApi';
-import { seasonalAPI } from '@/lib/api/seasonal.api';
 import { getHomeSavingsSummary } from '@/lib/api/homeSavingsApi';
 import { useQuery } from '@tanstack/react-query';
 import CommandCenterTemplate from './components/CommandCenterTemplate';
@@ -707,17 +704,6 @@ export default function DashboardPage() {
     staleTime: 5 * 60 * 1000,
   });
 
-  const seasonalChecklistQuery = useQuery({
-    queryKey: ['seasonal-checklist', effectiveSelectedPropertyId],
-    queryFn: async () => {
-      if (!effectiveSelectedPropertyId) return null;
-      return seasonalAPI.getCurrentChecklist(effectiveSelectedPropertyId);
-    },
-    enabled: Boolean(effectiveSelectedPropertyId),
-    staleTime: 5 * 60 * 1000,
-    refetchOnWindowFocus: true,
-  });
-
   const homeSavingsSummaryQuery = useQuery({
     queryKey: ['home-savings-summary', effectiveSelectedPropertyId],
     queryFn: async () => {
@@ -1035,53 +1021,6 @@ export default function DashboardPage() {
         impactLabel,
         etaLabel,
         ...buildHealthInsightActionMeta(compactHealthInsightTitle, healthScore ?? 0),
-      };
-    }
-
-    // 2.5 Seasonal checklist — time-bound, surfaces between health insights and coverage gaps
-    const seasonalChecklist = (seasonalChecklistQuery.data as { checklist?: { id: string; season: string; year: number; totalTasks: number; tasksCompleted: number; tasksAdded: number; status: string; seasonStartDate: string; seasonEndDate: string; items: Array<{ id: string; title: string; priority: string; status: string }> } | null })?.checklist;
-    if (
-      seasonalChecklist &&
-      (seasonalChecklist.status === 'PENDING' || seasonalChecklist.status === 'IN_PROGRESS') &&
-      seasonalChecklist.tasksCompleted < seasonalChecklist.totalTasks
-    ) {
-      const SEASON_LABEL: Record<string, string> = { SPRING: 'Spring', SUMMER: 'Summer', FALL: 'Fall', WINTER: 'Winter' };
-      const seasonLabel = SEASON_LABEL[seasonalChecklist.season] ?? seasonalChecklist.season;
-      const pendingTasks = seasonalChecklist.totalTasks - seasonalChecklist.tasksCompleted;
-      const criticalItems = seasonalChecklist.items.filter(
-        i => i.priority === 'CRITICAL' && ['recommended', 'added'].includes(String(i.status || '').toLowerCase()),
-      );
-      const seasonStart = parseISO(seasonalChecklist.seasonStartDate);
-      const isUpcomingSeason = seasonStart > new Date();
-      const daysUntilStart = Math.max(differenceInDays(seasonStart, new Date()), 1);
-      const daysRemaining = differenceInDays(parseISO(seasonalChecklist.seasonEndDate), new Date());
-      const timeframeText = isUpcomingSeason
-        ? `${seasonLabel} starts in ${daysUntilStart} day${daysUntilStart === 1 ? '' : 's'}.`
-        : `${daysRemaining} day${daysRemaining === 1 ? '' : 's'} left in the season.`;
-      const title = criticalItems.length > 0
-        ? `${seasonLabel} checklist: ${criticalItems.length} critical task${criticalItems.length === 1 ? '' : 's'} pending.`
-        : `${seasonLabel} checklist: ${pendingTasks} task${pendingTasks === 1 ? '' : 's'} ready to action.`;
-      const subtitle = criticalItems.length > 0
-        ? `${criticalItems.length} critical prep task${criticalItems.length === 1 ? '' : 's'} identified for ${seasonLabel.toLowerCase()}. ${timeframeText}`
-        : `Your ${seasonLabel.toLowerCase()} home prep checklist is ready. ${pendingTasks} task${pendingTasks === 1 ? '' : 's'} remaining. ${timeframeText}`;
-      const seasonalHref = `/dashboard/seasonal${effectiveSelectedPropertyId ? `?propertyId=${effectiveSelectedPropertyId}` : ''}`;
-      const completionPct = Math.round((seasonalChecklist.tasksCompleted / Math.max(seasonalChecklist.totalTasks, 1)) * 100);
-      return {
-        badgeLabel: `${seasonLabel} prep`,
-        title,
-        subtitle,
-        ctaLabel: 'View seasonal checklist',
-        href: seasonalHref,
-        impactLabel: `${pendingTasks} task${pendingTasks === 1 ? '' : 's'} pending`,
-        etaLabel: isUpcomingSeason ? `Starts in ${daysUntilStart}d` : `${daysRemaining}d remaining`,
-        ...buildTopCardActionMeta(
-          'Season',
-          seasonLabel,
-          `${pendingTasks} task${pendingTasks === 1 ? '' : 's'} pending`,
-          'Progress',
-          `${seasonalChecklist.tasksCompleted} / ${seasonalChecklist.totalTasks}`,
-          completionPct,
-        ),
       };
     }
 

@@ -228,6 +228,10 @@ test('unified Home uses one five-section responsive surface and five homeowner d
   assert.doesNotMatch(homeSurface, /home\.contractVersion/);
   assert.match(homeSurface, /Prioritized actions/);
   assert.match(homeSurface, /COVERAGE_CORRECTION_GROUP/);
+  assert.match(homeSurface, /CRITICAL_WEATHER/);
+  assert.match(homeSurface, /SEASONAL_CHECKLIST/);
+  assert.match(homeSurface, /Critical weather/);
+  assert.match(homeSurface, /View seasonal checklist/);
   assert.match(homeSurface, /Review coverage gaps/);
   assert.match(homeSurface, /Why this priority:/);
   assert.match(homeSurface, /View full action plan/);

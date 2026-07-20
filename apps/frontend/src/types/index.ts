@@ -209,7 +209,12 @@ export type ActivationHomeActionDTO = {
     whyItMatters: string;
     recommendedAction: string;
     expectedOutcome: string;
-    timing: { rationale: string };
+    timing: {
+      dueAt: string | null;
+      windowStart: string | null;
+      windowEnd: string | null;
+      rationale: string;
+    };
     evidence: Array<{ id: string; label: string; source: string; freshness: string; confidence: number | null }>;
     assumptions: Array<{ key: string; label: string; value: string; editable: boolean }>;
     confidence: { score: number | null; label: 'LOW' | 'MEDIUM' | 'HIGH'; missing: string[] };
