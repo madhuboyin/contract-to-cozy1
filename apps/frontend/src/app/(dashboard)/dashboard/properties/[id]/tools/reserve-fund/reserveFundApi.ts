@@ -18,6 +18,8 @@ export type ReserveFundDTO = {
   lastRecalculatedAt: string | null;
   isActive: boolean;
   propertyContextVersion?: string | null;
+  /** Educational-estimate boundary — see homeReserveFund.service.ts#getSummary. */
+  disclaimer?: string;
 };
 
 export type ReserveFundResult = {

@@ -6771,6 +6771,16 @@ model HomeReserveFund {
   sourceAnalysisId       String?
   propertyContextVersion String?
 
+  // W3 (financial): reconciliation suggestions are computed live, never
+  // persisted (see homeReserveFundReconciliation.service.ts) — without
+  // this, the same still-open suggestion set re-notified the homeowner
+  // every single weekly run indefinitely until manually accepted.
+  // reserveFundReconciliation.job.ts stamps a fingerprint of the current
+  // suggestion set (sorted lineItemId:expenseId pairs) here and only
+  // notifies again when that set actually changes.
+  reconciliationNotifiedFingerprint String?
+  reconciliationNotifiedAt          DateTime?
+
   isActive Boolean @default(true)
 
   createdAt DateTime @default(now())

@@ -672,6 +672,11 @@ export default function ReserveFundClient() {
                 )}
               </>
             )}
+            {fund.disclaimer && (
+              <p className="mt-4 border-t border-slate-200/70 pt-3 text-xs leading-relaxed text-slate-500 dark:border-slate-700/70 dark:text-slate-400">
+                {fund.disclaimer}
+              </p>
+            )}
           </div>
 
           {/* Reconciliation suggestions */}

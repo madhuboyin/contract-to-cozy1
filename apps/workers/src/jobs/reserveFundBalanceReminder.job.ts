@@ -68,6 +68,8 @@ export async function reserveFundBalanceReminderJob(): Promise<void> {
         actionUrl: `/dashboard/properties/${fund.propertyId}/tools/reserve-fund`,
         entityType: 'HomeReserveFund',
         entityId: fund.id,
+        category: 'GENERAL',
+        urgency: 'ROUTINE',
         metadata: { propertyId: fund.propertyId },
       });
       notified++;

@@ -17,6 +17,17 @@ import {
 import { homeReserveFundCalculationService } from './homeReserveFundCalculation.service';
 import { getFinancialContextDecisions } from './financialContext/context';
 
+// W3 (financial) — educational-estimate boundary: recommendedMonthlyContributionCents
+// and currentShortfallCents are a single point estimate chosen from a cost
+// range (see pointEstimateCents() in homeReserveFundCalculation.service.ts),
+// not a guaranteed figure. The refinance radar already surfaces an
+// equivalent disclaimer on every response (REFINANCE_DISCLAIMER,
+// refinanceRadar.config.ts) — the reserve fund summary had none.
+export const RESERVE_FUND_DISCLAIMER =
+  'These figures are educational estimates based on typical replacement costs and your ' +
+  'selected posture, not a guarantee or a professional inspection. Actual costs vary by ' +
+  'contractor, materials, and property condition.';
+
 export type AddContributionInput = {
   type: HomeReserveFundContributionType;
   amountCents: number;
@@ -29,7 +40,8 @@ export type AddContributionInput = {
 export class HomeReserveFundService {
   // ── GET /reserve-fund ──────────────────────────────────────────────
   async getSummary(propertyId: string) {
-    return homeReserveFundCalculationService.getOrCreateFund(propertyId);
+    const fund = await homeReserveFundCalculationService.getOrCreateFund(propertyId);
+    return { ...fund, disclaimer: RESERVE_FUND_DISCLAIMER };
   }
 
   // ── PATCH /reserve-fund ─────────────────────────────────────────────
