@@ -325,13 +325,19 @@ export function adaptOrchestratedActionToHomeAction(
   const displayTitle = getHomeAssetDisplayLabel({ name: action.title, assetType: action.systemType, category: action.category });
   const ctaLabel = action.cta?.label?.trim();
   const description = action.description?.trim();
-  const recommendedAction = ctaLabel?.toLowerCase() === 'schedule service'
+  const isServiceAction = ctaLabel?.toLowerCase() === 'schedule service';
+  const recommendedAction = isServiceAction
     ? `Schedule service for ${displayTitle}`
     : description && description.toLowerCase() !== ctaLabel?.toLowerCase()
       ? description
       : ctaLabel
         ? `${ctaLabel} for ${displayTitle}`
         : `Review ${displayTitle}`;
+  const serviceSubject = displayTitle.replace(/^HVAC\s+/i, '').toLowerCase();
+  const serviceTiming = action.overdue ? 'now' : action.priority >= 70 ? 'soon' : 'when convenient';
+  const homeownerRationale = isServiceAction
+    ? `Routine ${serviceSubject} maintenance is recommended ${serviceTiming} based on the information in your Home Record.`
+    : description ?? `This open action is supported by the current maintenance or risk context for ${displayTitle}.`;
 
   return adaptHomeActionSource(sourceKind, {
     id: action.actionKey,
@@ -342,10 +348,10 @@ export function adaptOrchestratedActionToHomeAction(
     job: critical ? 'MAJOR_MOMENT' : undefined,
     state: action.snooze ? 'SNOOZED' : 'OPEN',
     priority: critical || action.overdue ? 'NOW' : action.priority >= 70 ? 'SOON' : 'PLAN',
-    signal: action.description ?? displayTitle,
+    signal: isServiceAction ? `Schedule service for ${displayTitle}` : action.description ?? displayTitle,
     whyItMatters: critical
       ? 'The current risk assessment marks this condition critical and requiring prompt review.'
-      : description ?? `This open action is supported by the current maintenance or risk context for ${displayTitle}.`,
+      : homeownerRationale,
     recommendedAction,
     expectedOutcome: critical
       ? 'Escalate the condition safely and confirm the appropriate professional response.'

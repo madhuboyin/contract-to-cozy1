@@ -159,6 +159,40 @@ test('orchestration recommendations preserve the affected service context', () =
 
   assert.equal(action.recommendedAction, 'Schedule service for HVAC Furnace');
   assert.equal(action.primaryCta.label, 'Schedule Service');
+  assert.equal(
+    action.whyItMatters,
+    'Routine furnace maintenance is recommended soon based on the information in your Home Record.',
+  );
+});
+
+test('service recommendations do not leak a conflicting coverage action', () => {
+  const action = adaptOrchestratedActionToHomeAction({
+    id: 'risk-hvac-conflicting-copy',
+    actionKey: 'risk:hvac:conflicting-copy',
+    source: 'RISK',
+    propertyId: 'property-1',
+    title: 'HVAC Furnace',
+    description: 'Add Home Warranty',
+    systemType: 'HVAC',
+    category: 'HVAC',
+    riskLevel: 'HIGH',
+    coverage: { hasCoverage: false, type: 'NONE', expiresOn: null },
+    confidence: { score: 0.9, level: 'HIGH', explanation: [] },
+    priority: 80,
+    cta: { show: true, label: 'Schedule Service', reason: 'ACTION_REQUIRED' },
+    suppression: { suppressed: false, reasons: [] },
+    signalSources: [],
+    primarySignalSource: null,
+    overdue: false,
+    createdAt: new Date('2026-07-01T12:00:00.000Z'),
+  });
+
+  assert.equal(action.recommendedAction, 'Schedule service for HVAC Furnace');
+  assert.equal(
+    action.whyItMatters,
+    'Routine furnace maintenance is recommended soon based on the information in your Home Record.',
+  );
+  assert.doesNotMatch(action.signal, /warranty/i);
 });
 
 test('Home asset labels humanize identifiers and simplify roof construction subtypes', () => {
@@ -280,9 +314,16 @@ test('unified Home uses one five-section responsive surface and five homeowner d
     homeSurface.indexOf('export function SeasonalChecklistActionCard'),
     homeSurface.indexOf('export function CoverageCorrectionGroupCard'),
   );
+  const genericActionCardSource = homeSurface.slice(
+    homeSurface.indexOf('export function ActionCard'),
+    homeSurface.indexOf('export function UnifiedHomeSurface'),
+  );
   assert.match(seasonalCardSource, /flex flex-wrap items-center gap-2/);
   assert.doesNotMatch(seasonalCardSource, /flex items-start gap-3/);
-  assert.match(homeSurface, /Why this priority:/);
+  assert.doesNotMatch(homeSurface, /Why this priority:/);
+  assert.doesNotMatch(genericActionCardSource, /Priority #\{action\.ranking\.rank\}/);
+  assert.doesNotMatch(genericActionCardSource, /confidence\.label/);
+  assert.match(genericActionCardSource, /Mark done/);
   assert.match(homeSurface, /View full action plan/);
   assert.match(actionPlan, /api\.getHomeActions\(propertyId\)/);
   assert.match(actionPlan, /Ranked actions and supporting details/);

@@ -269,12 +269,9 @@ export function ActionCard({
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <Badge variant="outline" className={priorityTone(action.priority)}>{action.priority}</Badge>
-            <span className="text-xs text-slate-500">Priority #{action.ranking.rank}</span>
-            <span className="text-xs text-slate-500">{action.confidence.label.toLowerCase()} confidence</span>
           </div>
           <h3 className="mt-3 text-base font-semibold text-slate-950">{action.recommendedAction}</h3>
           <p className="mt-1 text-sm leading-6 text-slate-600">{action.whyItMatters}</p>
-          <p className="mt-2 text-xs leading-5 text-slate-500"><span className="font-semibold text-slate-600">Why this priority:</span> {action.ranking.explanation}</p>
         </div>
       </div>
       {showSupportingDetails && (
@@ -312,7 +309,7 @@ export function ActionCard({
         </Button>
         {action.feedbackControls.includes('COMPLETE') && (
           <Button size="sm" variant="outline" className="rounded-full" disabled={Boolean(pending)} onClick={() => execute('COMPLETE')}>
-            <Check className="mr-1 h-3.5 w-3.5" />Complete
+            <Check className="mr-1 h-3.5 w-3.5" />Mark done
           </Button>
         )}
         {canDefer && (
