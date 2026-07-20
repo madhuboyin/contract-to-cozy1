@@ -1,6 +1,8 @@
 import { Request, Response } from 'express';
 import { sharedDataBackfillService } from '../services/sharedDataBackfill.service';
 import { signalService } from '../services/signal.service';
+import { JOB_REGISTRY } from '../config/workerJobRegistry';
+import { evaluateWorkerExecution } from '../config/workerExecutionPolicy';
 import { logger } from '../lib/logger';
 
 function parseScope(req: Request): { propertyId?: string; limit?: number; startAfterPropertyId?: string } {
@@ -18,6 +20,27 @@ function parseScope(req: Request): { propertyId?: string; limit?: number; startA
 
 export async function runSharedDataBackfillHandler(req: Request, res: Response): Promise<void> {
   try {
+    // WKR-011: shared-data-backfill is disabled by default in beta and
+    // classed HIGH_IMPACT_MANUAL — the queued admin trigger path
+    // (adminWorkerJobs.service.ts#triggerJob) already enforces this via
+    // evaluateWorkerExecution, but this REST endpoint calls the backfill
+    // service directly and previously had no equivalent gate, so any admin
+    // holding SHARED_DATA_OPERATE could run a real, unscoped write bypassing
+    // the same-environment beta safety default.
+    const registryEntry = JOB_REGISTRY.find((j) => j.key === 'shared-data-backfill');
+    if (!registryEntry) {
+      res.status(500).json({ success: false, error: { message: 'shared-data-backfill is not registered.' } });
+      return;
+    }
+    const decision = evaluateWorkerExecution('shared-data-backfill', 'manual', registryEntry);
+    if (!decision.allowed) {
+      res.status(403).json({
+        success: false,
+        error: { message: `Shared data backfill is not currently enabled (${decision.reason}).` },
+      });
+      return;
+    }
+
     const summary = await sharedDataBackfillService.runBackfill({
       propertyId: typeof req.body?.propertyId === 'string' ? req.body.propertyId : undefined,
       dryRun: typeof req.body?.dryRun === 'boolean' ? req.body.dryRun : true,

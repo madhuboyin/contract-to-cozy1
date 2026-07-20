@@ -3,6 +3,21 @@ const assert = require('node:assert/strict');
 
 require('ts-node/register');
 
+// habitGeneration.job.ts now imports NotificationService (W3/home
+// intelligence — notifies on newly generated high-priority habits), whose
+// real module transitively opens live BullMQ/Redis connections via
+// JobQueue.service.ts at import time. Stub it before the first require of
+// the job file below, even though this file only exercises the pure
+// buildHabitPropertyContext helper — see reserveFundReconciliationJob.test.js
+// for the same trap.
+const notificationServicePath = require.resolve('../../../backend/src/services/notification.service.ts');
+require.cache[notificationServicePath] = {
+  id: notificationServicePath,
+  filename: notificationServicePath,
+  loaded: true,
+  exports: { NotificationService: { create: async () => null } },
+};
+
 const { buildHabitPropertyContext } = require('../../src/jobs/habitGeneration.job.ts');
 const {
   evaluateHabitTemplateApplicability,

@@ -246,6 +246,11 @@ export interface GenerationResult {
     templateKey: string;
     action: 'created' | 'skipped';
     reason?: string;
+    // Populated for 'created' entries only — lets callers (e.g. the
+    // background batch job) decide whether a newly created habit is worth
+    // surfacing to the homeowner without a second DB round-trip.
+    impactType?: HabitImpactType;
+    priorityScore?: number;
   }>;
 }
 
@@ -448,7 +453,12 @@ export async function generateHabitsForProperty(
     // Mark as alive within this run to prevent same-run duplicates
     aliveTemplateIds.add(template.id);
     result.created++;
-    result.details.push({ templateKey: template.key, action: 'created' });
+    result.details.push({
+      templateKey: template.key,
+      action: 'created',
+      impactType: template.impactType,
+      priorityScore,
+    });
   }
 
   return result;

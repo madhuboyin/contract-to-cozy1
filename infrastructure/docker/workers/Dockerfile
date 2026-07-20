@@ -359,7 +359,8 @@ RUN sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/notification\.service/\.
     src/jobs/neighborhoodChangeNotification.job.ts \
     src/jobs/processDomainEvents.job.ts \
     src/recalls/recallFollowups.service.ts \
-    src/jobs/seasonalNotification.job.ts
+    src/jobs/seasonalNotification.job.ts \
+    src/jobs/habitGeneration.job.ts
 
 RUN sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/newHomeWarrantyDeadline\.service/\.\.\/shared\/backend\/services\/newHomeWarrantyDeadline.service/g' \
     src/jobs/newHomeWarrantyDeadline.job.ts

@@ -6,8 +6,17 @@
 
 import { prisma } from '../lib/prisma';
 import { generateHabitsForProperty } from '../../../backend/src/services/homeHabitCoach/habitGenerationEngine';
+import { NotificationService } from '../../../backend/src/services/notification.service';
 import { logger } from '../lib/logger';
 import { createHash } from 'node:crypto';
+
+// Newly generated habits previously had no notification and no canonical
+// Home Action promotion — invisible unless the homeowner proactively opened
+// the Home Habit Coach tool. Only the highest-impact templates (safety and
+// damage prevention) are worth an unprompted notification; lower-impact
+// habits (efficiency, air quality, general upkeep) stay discoverable on the
+// tool page only, same as before, to avoid adding low-value noise.
+const NOTIFY_WORTHY_IMPACT_TYPES = new Set(['PREVENT_DAMAGE', 'IMPROVE_SAFETY']);
 
 function contextFact(key: string, value: unknown) {
   return {
@@ -114,18 +123,53 @@ export async function runHabitGenerationJob(): Promise<void> {
       exteriorProfile: { select: { hasIrrigation: true, hasDrainageIssues: true } },
       responsibilities: { select: { scope: true, party: true } },
       inventoryItems: { select: { category: true, name: true, tags: true } },
+      homeownerProfile: { select: { userId: true } },
     },
   });
 
   let successCount = 0;
   let failureCount = 0;
   let totalCreated = 0;
+  let notified = 0;
 
   for (const property of properties) {
     try {
       const result = await generateHabitsForProperty(property.id, buildHabitPropertyContext(property));
       successCount++;
       totalCreated += result.created;
+
+      const userId = property.homeownerProfile?.userId;
+      const notifyWorthy = result.details.filter(
+        (d) => d.action === 'created' && d.impactType && NOTIFY_WORTHY_IMPACT_TYPES.has(d.impactType),
+      );
+
+      if (userId && notifyWorthy.length > 0) {
+        const title =
+          notifyWorthy.length === 1
+            ? 'New home care habit added'
+            : `${notifyWorthy.length} new home care habits added`;
+        const message =
+          notifyWorthy.length === 1
+            ? 'A safety or damage-prevention habit was added to your home care routine. Tap to review.'
+            : `${notifyWorthy.length} safety or damage-prevention habits were added to your home care routine. Tap to review.`;
+
+        await NotificationService.create({
+          userId,
+          type: 'HOME_HABIT_GENERATED',
+          title,
+          message,
+          actionUrl: `/dashboard/properties/${property.id}/tools/home-habit-coach`,
+          entityType: 'PROPERTY',
+          entityId: property.id,
+          category: 'MAINTENANCE',
+          urgency: 'ROUTINE',
+          metadata: {
+            propertyId: property.id,
+            templateKeys: notifyWorthy.map((d) => d.templateKey),
+          },
+        });
+        notified++;
+      }
     } catch (error) {
       failureCount++;
       logger.error({ err: error }, `[HABIT-GEN] Generation failed for property ${property.id}`);
@@ -134,6 +178,7 @@ export async function runHabitGenerationJob(): Promise<void> {
 
   logger.info(
     `[HABIT-GEN] Batch complete. ` +
-      `Success: ${successCount}, Failed: ${failureCount}, Total: ${properties.length}, Habits created: ${totalCreated}`,
+      `Success: ${successCount}, Failed: ${failureCount}, Total: ${properties.length}, ` +
+      `Habits created: ${totalCreated}, Notified: ${notified}`,
   );
 }
