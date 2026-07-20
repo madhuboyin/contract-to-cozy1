@@ -45,6 +45,7 @@ import { getAggregationContextEnvelope } from './aggregationContext/context';
 import { aggregationLifecycleIdentity } from './aggregationContext/lifecycle';
 import {
   adaptHomeActionSource,
+  getHomeAssetDisplayLabel,
   normalizeHomeActionConfidenceScore,
   type HomeAction,
 } from '../productFramework';
@@ -321,15 +322,16 @@ export function adaptOrchestratedActionToHomeAction(
   const dueAt = action.nextDueDate?.toISOString() ?? null;
   const observedAt = action.createdAt?.toISOString() ?? evaluatedAt.toISOString();
   const confidenceScore = normalizeHomeActionConfidenceScore(action.confidence?.score);
+  const displayTitle = getHomeAssetDisplayLabel({ name: action.title, assetType: action.systemType, category: action.category });
   const ctaLabel = action.cta?.label?.trim();
   const description = action.description?.trim();
   const recommendedAction = ctaLabel?.toLowerCase() === 'schedule service'
-    ? `Schedule service for ${action.title}`
+    ? `Schedule service for ${displayTitle}`
     : description && description.toLowerCase() !== ctaLabel?.toLowerCase()
       ? description
       : ctaLabel
-        ? `${ctaLabel} for ${action.title}`
-        : `Review ${action.title}`;
+        ? `${ctaLabel} for ${displayTitle}`
+        : `Review ${displayTitle}`;
 
   return adaptHomeActionSource(sourceKind, {
     id: action.actionKey,
@@ -340,10 +342,10 @@ export function adaptOrchestratedActionToHomeAction(
     job: critical ? 'MAJOR_MOMENT' : undefined,
     state: action.snooze ? 'SNOOZED' : 'OPEN',
     priority: critical || action.overdue ? 'NOW' : action.priority >= 70 ? 'SOON' : 'PLAN',
-    signal: action.description ?? action.title,
+    signal: action.description ?? displayTitle,
     whyItMatters: critical
       ? 'The current risk assessment marks this condition critical and requiring prompt review.'
-      : description ?? `This open action is supported by the current maintenance or risk context for ${action.title}.`,
+      : description ?? `This open action is supported by the current maintenance or risk context for ${displayTitle}.`,
     recommendedAction,
     expectedOutcome: critical
       ? 'Escalate the condition safely and confirm the appropriate professional response.'
@@ -361,7 +363,7 @@ export function adaptOrchestratedActionToHomeAction(
     evidence: [{
       id: `orchestration:${action.actionKey}`,
       type: 'SYSTEM_DERIVATION',
-      label: action.title,
+      label: displayTitle,
       source: action.source === 'CHECKLIST' ? 'Seasonal or maintenance checklist' : 'Risk assessment',
       observedAt,
       freshness: action.confidence?.level === 'LOW' ? 'UNKNOWN' : 'CURRENT',

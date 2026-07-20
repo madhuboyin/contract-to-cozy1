@@ -15,6 +15,7 @@ const { adaptOrchestratedActionToHomeAction } = require('../../src/services/orch
 const { adaptHomeActionSource } = require('../../src/productFramework/homeActionSourceAdapters.ts');
 const { buildRecommendationResponseContract } = require('../../src/productFramework/recommendationResponse.contract.ts');
 const { getGuidanceJourneyDisplayTitle } = require('../../src/services/guidanceEngine/guidanceTemplateRegistry.ts');
+const { getHomeAssetDisplayLabel } = require('../../src/productFramework/homeAssetDisplay.ts');
 
 function actionFixture(id, overrides = {}) {
   const action = structuredClone(goldenTestHomes.find((item) => item.id === 'existing-repair').action);
@@ -113,8 +114,14 @@ test('orchestration recommendations preserve the affected service context', () =
     createdAt: new Date('2026-07-01T12:00:00.000Z'),
   });
 
-  assert.equal(action.recommendedAction, 'Schedule service for HVAC furnace');
+  assert.equal(action.recommendedAction, 'Schedule service for HVAC Furnace');
   assert.equal(action.primaryCta.label, 'Schedule Service');
+});
+
+test('Home asset labels humanize identifiers and simplify roof construction subtypes', () => {
+  assert.equal(getHomeAssetDisplayLabel({ name: 'HVAC_FURNACE' }), 'HVAC Furnace');
+  assert.equal(getHomeAssetDisplayLabel({ name: 'Roof Shingle' }), 'Roof');
+  assert.equal(getHomeAssetDisplayLabel({ name: 'Main water heater' }), 'Main Water Heater');
 });
 
 test('degraded material actions use one CTA-aligned homeowner instruction', () => {
@@ -125,6 +132,7 @@ test('degraded material actions use one CTA-aligned homeowner instruction', () =
     sourceEntityId: source.entityId,
     sourceVersion: source.version,
     job,
+    withheldRecommendedAction: 'Add coverage information for HVAC Furnace',
     primaryCta: { kind: 'PURCHASE', label: 'Purchase coverage', href: '/purchase' },
     secondaryCtas: [{ kind: 'CORRECT_FACT', label: 'Add home information', href: '/home-record' }],
     recommendationResponse: buildRecommendationResponseContract({
@@ -133,7 +141,7 @@ test('degraded material actions use one CTA-aligned homeowner instruction', () =
     }),
   });
 
-  assert.equal(action.recommendedAction, 'Review the home information needed before continuing');
+  assert.equal(action.recommendedAction, 'Add coverage information for HVAC Furnace');
   assert.equal(action.primaryCta.kind, 'CORRECT_FACT');
   assert.equal(action.primaryCta.label, 'Add home information');
   assert.equal(action.secondaryCtas.some((cta) => cta.kind === 'CORRECT_FACT'), false);
@@ -211,6 +219,8 @@ test('unified Home uses one five-section responsive surface and five homeowner d
   assert.doesNotMatch(homeSurface, /suggestedQuestions/);
   assert.doesNotMatch(homeSurface, /home\.contractVersion/);
   assert.match(homeSurface, /Prioritized actions/);
+  assert.match(homeSurface, /COVERAGE_CORRECTION_GROUP/);
+  assert.match(homeSurface, /Review coverage gaps/);
   assert.match(homeSurface, /Why this priority:/);
   for (const destination of ['recordHref', 'systemsHref', 'coverageHref', 'workHref']) {
     assert.match(homeSurface, new RegExp(destination));

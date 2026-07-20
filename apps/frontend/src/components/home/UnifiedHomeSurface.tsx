@@ -29,6 +29,68 @@ function priorityTone(priority: RankedHomeActionDTO['priority']) {
   return 'border-slate-200 bg-slate-50 text-slate-600';
 }
 
+function coverageCorrectionSubject(action: RankedHomeActionDTO): string | null {
+  if (action.source.kind !== 'GUIDANCE' || action.governance.safetyTier !== 'REGULATED_COVERAGE') return null;
+  return action.recommendedAction.match(/^Add coverage information for (.+)$/i)?.[1]?.trim() || null;
+}
+
+type AttentionEntry =
+  | { kind: 'ACTION'; action: RankedHomeActionDTO }
+  | { kind: 'COVERAGE_CORRECTION_GROUP'; actions: RankedHomeActionDTO[]; subjects: string[] };
+
+function groupAttentionActions(actions: RankedHomeActionDTO[]): AttentionEntry[] {
+  const coverageActions = actions.filter((action) => coverageCorrectionSubject(action));
+  if (coverageActions.length < 2) return actions.map((action) => ({ kind: 'ACTION', action }));
+
+  const groupedIds = new Set(coverageActions.map((action) => action.id));
+  const subjects = [...new Set(coverageActions
+    .map((action) => coverageCorrectionSubject(action))
+    .filter((subject): subject is string => Boolean(subject)))];
+  let inserted = false;
+
+  return actions.flatMap((action): AttentionEntry[] => {
+    if (!groupedIds.has(action.id)) return [{ kind: 'ACTION', action }];
+    if (inserted) return [];
+    inserted = true;
+    return [{ kind: 'COVERAGE_CORRECTION_GROUP', actions: coverageActions, subjects }];
+  });
+}
+
+function CoverageCorrectionGroupCard({
+  actions,
+  subjects,
+  href,
+}: {
+  actions: RankedHomeActionDTO[];
+  subjects: string[];
+  href: string;
+}) {
+  const first = actions[0];
+  return (
+    <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="flex flex-wrap items-center gap-2">
+        <Badge variant="outline" className={priorityTone(first.priority)}>{first.priority}</Badge>
+        <span className="text-xs text-slate-500">{actions.length} related items</span>
+        <span className="text-xs text-slate-500">{first.confidence.label.toLowerCase()} confidence</span>
+      </div>
+      <h3 className="mt-3 text-base font-semibold text-slate-950">
+        Add coverage information for {actions.length} home items
+      </h3>
+      <p className="mt-1 text-sm leading-6 text-slate-600">
+        These items are missing coverage details. Review them together, then update each record with any coverage you already have.
+      </p>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {subjects.map((subject) => <Badge key={subject} variant="secondary" className="rounded-full">{subject}</Badge>)}
+      </div>
+      <div className="mt-4">
+        <Button asChild size="sm" className="rounded-full">
+          <Link href={href}>Review coverage gaps<ArrowRight className="ml-1 h-3.5 w-3.5" /></Link>
+        </Button>
+      </div>
+    </article>
+  );
+}
+
 function ActionCard({
   action,
   propertyId,
@@ -134,9 +196,10 @@ export function UnifiedHomeSurface({ propertyId }: { propertyId: string }) {
   }
 
   const home = query.data;
-  const visibleAttentionActions = showAllActions
-    ? home.attention.actions
-    : home.attention.actions.slice(0, 5);
+  const attentionEntries = groupAttentionActions(home.attention.actions);
+  const visibleAttentionEntries = showAllActions
+    ? attentionEntries
+    : attentionEntries.slice(0, 5);
   const openAsk = () => {
     window.dispatchEvent(new CustomEvent('cozy-chat-open'));
   };
@@ -188,7 +251,7 @@ export function UnifiedHomeSurface({ propertyId }: { propertyId: string }) {
       <section aria-labelledby="attention-heading" className="space-y-3">
         <div className="flex items-end justify-between gap-4">
           <div><h2 id="attention-heading" className="text-xl font-semibold text-slate-950">What needs attention</h2><p className="text-sm text-slate-500">A limited, ranked list with the reason and next move.</p></div>
-          {home.attention.actions.length > 5 && (
+          {attentionEntries.length > 5 && (
             <Button
               type="button"
               variant="ghost"
@@ -202,8 +265,15 @@ export function UnifiedHomeSurface({ propertyId }: { propertyId: string }) {
         </div>
         {home.attention.actions.length === 0 ? (
           <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-sm text-emerald-800">No action currently needs your attention.</div>
-        ) : visibleAttentionActions.map((action) => (
-          <ActionCard key={action.id} action={action} propertyId={propertyId} onChanged={() => query.refetch()} />
+        ) : visibleAttentionEntries.map((entry) => entry.kind === 'ACTION' ? (
+          <ActionCard key={entry.action.id} action={entry.action} propertyId={propertyId} onChanged={() => query.refetch()} />
+        ) : (
+          <CoverageCorrectionGroupCard
+            key={`coverage-group:${entry.actions.map((action) => action.id).join(':')}`}
+            actions={entry.actions}
+            subjects={entry.subjects}
+            href={home.glance.coverageHref}
+          />
         ))}
       </section>
 

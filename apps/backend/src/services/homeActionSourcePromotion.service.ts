@@ -7,6 +7,7 @@ import { prisma } from '../lib/prisma';
 import { RecommendationGovernanceSchema } from '../productFramework/recommendationGovernance.contract';
 import { buildRecommendationResponseContract, resolveRecommendationResponseStatus } from '../productFramework/recommendationResponse.contract';
 import { getGuidanceJourneyDisplayTitle } from './guidanceEngine/guidanceTemplateRegistry';
+import { getHomeAssetDisplayLabel } from '../productFramework/homeAssetDisplay';
 
 const DEFAULT_FEEDBACK: HomeAction['feedbackControls'] = [
   'COMPLETE', 'DEFER', 'SNOOZE', 'DISMISS', 'ALREADY_DONE', 'NOT_RELEVANT', 'CORRECT_FACT',
@@ -118,7 +119,7 @@ async function loadGuidanceActions(propertyId: string, db: HomeActionSourceDb): 
     take: 20,
     include: {
       primarySignal: { select: { id: true, severity: true, confidenceScore: true, lastObservedAt: true } },
-      inventoryItem: { select: { name: true } },
+      inventoryItem: { select: { name: true, assetType: true, category: true } },
       steps: {
         where: { status: { in: ['PENDING', 'IN_PROGRESS', 'BLOCKED'] } },
         orderBy: { stepOrder: 'asc' },
@@ -143,9 +144,17 @@ async function loadGuidanceActions(propertyId: string, db: HomeActionSourceDb): 
     });
     const decisionContract = guidanceDecisionContract(governance);
     const journeyTitle = getGuidanceJourneyDisplayTitle(journey.journeyTypeKey, journey.issueType);
-    const title = journey.inventoryItem?.name
-      ? `${journeyTitle} for ${journey.inventoryItem.name}`
+    const subjectLabel = journey.inventoryItem
+      ? getHomeAssetDisplayLabel(journey.inventoryItem)
+      : null;
+    const title = subjectLabel
+      ? `${journeyTitle} for ${subjectLabel}`
       : journeyTitle;
+    const isCoverageJourney = journey.journeyTypeKey === 'coverage_gap_resolution';
+    const correctionLabel = isCoverageJourney ? 'Add coverage information' : 'Add home information';
+    const correctionHref = isCoverageJourney && journey.inventoryItemId
+      ? `/dashboard/properties/${propertyId}/inventory/items/${encodeURIComponent(journey.inventoryItemId)}/coverage`
+      : `/dashboard/properties/${propertyId}/onboarding`;
     const href = resolveGuidanceHref({
       propertyId,
       journeyId: journey.id,
@@ -166,6 +175,11 @@ async function loadGuidanceActions(propertyId: string, db: HomeActionSourceDb): 
       recommendedAction: recommendationResponse.materialActionAllowed
         ? step?.label ?? 'Continue this home decision'
         : recommendationResponse.safeNextAction,
+      withheldRecommendedAction: subjectLabel
+        ? isCoverageJourney
+          ? `Add coverage information for ${subjectLabel}`
+          : `Review home information for ${subjectLabel} before continuing`
+        : undefined,
       expectedOutcome: 'Advance the active journey without losing its property, evidence, or decision context.',
       timing: {
         dueAt: null,
@@ -195,8 +209,8 @@ async function loadGuidanceActions(propertyId: string, db: HomeActionSourceDb): 
       secondaryCtas: [
         {
           kind: 'CORRECT_FACT',
-          label: 'Add home information',
-          href: `/dashboard/properties/${propertyId}/onboarding`,
+          label: correctionLabel,
+          href: correctionHref,
         },
         ...(governance.safetyTier === 'SAFETY_EMERGENCY'
           ? [{

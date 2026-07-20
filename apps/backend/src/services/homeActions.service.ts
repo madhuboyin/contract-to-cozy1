@@ -15,6 +15,7 @@ import { getPromotedHomeActions } from './homeActionSourcePromotion.service';
 import { BuyerAcquisitionService } from './buyerAcquisition.service';
 import { NewHomeSetupService } from './newHomeSetup.service';
 import { getGuidanceJourneyDisplayTitle } from './guidanceEngine/guidanceTemplateRegistry';
+import { getHomeAssetDisplayLabel } from '../productFramework/homeAssetDisplay';
 
 export const HOME_ACTION_COMMANDS = [
   'COMPLETE',
@@ -307,7 +308,7 @@ export async function getUnifiedHome(propertyId: string, userId: string) {
         where: { propertyId, status: 'ACTIVE' },
         orderBy: { updatedAt: 'desc' },
         include: {
-          inventoryItem: { select: { name: true } },
+          inventoryItem: { select: { name: true, assetType: true, category: true } },
           steps: {
             where: { status: { in: ['PENDING', 'IN_PROGRESS', 'BLOCKED'] } },
             orderBy: { stepOrder: 'asc' },
@@ -358,8 +359,8 @@ export async function getUnifiedHome(propertyId: string, userId: string) {
       ? {
           kind: 'GUIDANCE_JOURNEY' as const,
           id: activeJourney.id,
-          title: activeJourney.inventoryItem?.name
-            ? `${getGuidanceJourneyDisplayTitle(activeJourney.journeyTypeKey, activeJourney.issueType)} for ${activeJourney.inventoryItem.name}`
+          title: activeJourney.inventoryItem
+            ? `${getGuidanceJourneyDisplayTitle(activeJourney.journeyTypeKey, activeJourney.issueType)} for ${getHomeAssetDisplayLabel(activeJourney.inventoryItem)}`
             : getGuidanceJourneyDisplayTitle(activeJourney.journeyTypeKey, activeJourney.issueType),
           stage: activeJourney.decisionStage,
           blocker: journeyStep?.status === 'BLOCKED' ? journeyStep.description ?? journeyStep.label : null,

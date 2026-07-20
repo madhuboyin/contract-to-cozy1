@@ -17,6 +17,7 @@ export type HomeActionSourceInput = Omit<HomeAction, 'source' | 'job' | 'recomme
   sourceVersion: string | null;
   job?: HomeAction['job'];
   recommendationResponse?: RecommendationResponseContract;
+  withheldRecommendedAction?: string;
 };
 
 type SourceAdapterDefinition = {
@@ -55,7 +56,14 @@ function createAdapter(kind: HomeActionSourceKind): SourceAdapterDefinition {
     defaultJob,
     description: SOURCE_DESCRIPTIONS[kind],
     adapt(input) {
-      const { sourceEntityId, sourceVersion, job, recommendationResponse: suppliedResponse, ...action } = input;
+      const {
+        sourceEntityId,
+        sourceVersion,
+        job,
+        recommendationResponse: suppliedResponse,
+        withheldRecommendedAction,
+        ...action
+      } = input;
       const contractAction = {
         ...action,
         evidence: action.evidence.map((evidence) => ({
@@ -86,7 +94,7 @@ function createAdapter(kind: HomeActionSourceKind): SourceAdapterDefinition {
       const normalizedAction = mustWithhold ? {
         ...contractAction,
         recommendedAction: correction
-          ? 'Review the home information needed before continuing'
+          ? withheldRecommendedAction ?? 'Review the home information needed before continuing'
           : recommendationResponse.safeNextAction,
         primaryCta: correction ?? {
           kind: 'REVIEW' as const,
