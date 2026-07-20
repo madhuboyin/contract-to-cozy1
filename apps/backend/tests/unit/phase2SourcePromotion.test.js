@@ -96,6 +96,76 @@ test('keeps the active weather incident and suppresses its duplicate guidance jo
   assert.equal(result.actions.some((action) => action.id === 'guidance:journey-weather'), false);
 });
 
+test('does not promote a weather incident after its authoritative alert expiry', async () => {
+  const db = stubSources();
+  const originalFindMany = db.incident.findMany;
+  db.incident.findMany = async () => {
+    const incidents = await originalFindMany();
+    return incidents.map((incident) => ({
+      ...incident,
+      details: { ...incident.details, expires: new Date(Date.now() - 60_000).toISOString() },
+    }));
+  };
+
+  const result = await getPromotedHomeActions('property-1', db);
+  assert.equal(result.actions.some((action) => action.id === 'incident:incident-1'), false);
+});
+
+test('skips an empty seasonal record and promotes the active actionable checklist', async () => {
+  const db = stubSources();
+  const currentStart = new Date(Date.now() - 2 * 86_400_000);
+  const currentEnd = new Date(Date.now() + 20 * 86_400_000);
+  const upcomingStart = new Date(Date.now() + 30 * 86_400_000);
+  const upcomingEnd = new Date(Date.now() + 90 * 86_400_000);
+  db.seasonalChecklist.findMany = async () => [
+    {
+      id: 'seasonal-empty', propertyId: 'property-1', season: 'SPRING', year: 2026,
+      status: 'IN_PROGRESS', totalTasks: 2, tasksCompleted: 2,
+      seasonStartDate: currentStart, seasonEndDate: currentEnd, createdAt: currentStart, updatedAt: NOW,
+      items: [
+        { id: 'seasonal-empty-1', title: 'Completed task', priority: 'RECOMMENDED', status: 'COMPLETED', snoozedUntil: null, recommendedDate: currentStart, updatedAt: NOW },
+        { id: 'seasonal-empty-2', title: 'Dismissed task', priority: 'OPTIONAL', status: 'DISMISSED', snoozedUntil: null, recommendedDate: currentStart, updatedAt: NOW },
+      ],
+    },
+    {
+      id: 'seasonal-upcoming', propertyId: 'property-1', season: 'FALL', year: 2026,
+      status: 'PENDING', totalTasks: 1, tasksCompleted: 0,
+      seasonStartDate: upcomingStart, seasonEndDate: upcomingEnd, createdAt: NOW, updatedAt: NOW,
+      items: [
+        { id: 'seasonal-upcoming-1', title: 'Service the heating system', priority: 'CRITICAL', status: 'RECOMMENDED', snoozedUntil: null, recommendedDate: upcomingStart, updatedAt: NOW },
+      ],
+    },
+  ];
+
+  const result = await getPromotedHomeActions('property-1', db);
+  assert.equal(result.actions.some((action) => action.id === 'seasonal-checklist:seasonal-empty'), false);
+  assert.ok(result.actions.find((action) => action.id === 'seasonal-checklist:seasonal-upcoming'));
+});
+
+test('prefers an active seasonal checklist over an earlier actionable upcoming record', async () => {
+  const db = stubSources();
+  const now = Date.now();
+  const upcoming = {
+    id: 'seasonal-upcoming', propertyId: 'property-1', season: 'FALL', year: 2026,
+    status: 'PENDING', totalTasks: 1, tasksCompleted: 0,
+    seasonStartDate: new Date(now + 10 * 86_400_000), seasonEndDate: new Date(now + 70 * 86_400_000), createdAt: NOW, updatedAt: NOW,
+    items: [{ id: 'upcoming-item', title: 'Prepare for fall', priority: 'RECOMMENDED', status: 'RECOMMENDED', snoozedUntil: null, recommendedDate: NOW, updatedAt: NOW }],
+  };
+  const active = {
+    id: 'seasonal-active', propertyId: 'property-1', season: 'SUMMER', year: 2026,
+    status: 'IN_PROGRESS', totalTasks: 1, tasksCompleted: 0,
+    seasonStartDate: new Date(now - 10 * 86_400_000), seasonEndDate: new Date(now + 20 * 86_400_000), createdAt: NOW, updatedAt: NOW,
+    items: [{ id: 'active-item', title: 'Complete summer maintenance', priority: 'RECOMMENDED', status: 'ADDED', snoozedUntil: null, recommendedDate: NOW, updatedAt: NOW }],
+  };
+  // Deliberately return the upcoming record first to prove selection is not
+  // dependent on database ordering.
+  db.seasonalChecklist.findMany = async () => [upcoming, active];
+
+  const result = await getPromotedHomeActions('property-1', db);
+  assert.ok(result.actions.find((action) => action.id === 'seasonal-checklist:seasonal-active'));
+  assert.equal(result.actions.some((action) => action.id === 'seasonal-checklist:seasonal-upcoming'), false);
+});
+
 test('normalizes legacy guidance percentages before trust evaluation and Home Action validation', async () => {
   const result = await getPromotedHomeActions('property-1', stubSources({ guidanceConfidence: 40 }));
   const guidance = result.actions.find((action) => action.source.kind === 'GUIDANCE');

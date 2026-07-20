@@ -264,7 +264,7 @@ async function loadIncidentActions(propertyId: string, db: HomeActionSourceDb): 
     include: { actions: { where: { status: { in: ['PROPOSED', 'CREATED', 'IN_PROGRESS'] } }, orderBy: { createdAt: 'asc' }, take: 1 } },
   });
 
-  return incidents.map((incident) => {
+  return incidents.flatMap((incident) => {
     const proposed = incident.actions[0];
     const critical = incident.severity === 'CRITICAL';
     const isWeather = incident.sourceType === 'WEATHER';
@@ -274,6 +274,10 @@ async function loadIncidentActions(propertyId: string, db: HomeActionSourceDb): 
     const weatherExpiry = typeof details.expires === 'string' && !Number.isNaN(new Date(details.expires).getTime())
       ? new Date(details.expires).toISOString()
       : incident.expiredAt?.toISOString() ?? null;
+    // The worker normally resolves alerts after a successful NWS refresh, but
+    // Home must not depend on that asynchronous sweep to remove an alert whose
+    // authoritative expiry has already passed.
+    if (isWeather && weatherExpiry && new Date(weatherExpiry) <= new Date()) return [];
     const weatherInstruction = typeof details.instruction === 'string' && details.instruction.trim()
       ? details.instruction.trim().slice(0, 1000)
       : null;
@@ -289,7 +293,7 @@ async function loadIncidentActions(propertyId: string, db: HomeActionSourceDb): 
       governance.conservativeFallback = 'Avoid the affected system or area until a qualified professional confirms it is safe.';
       governance.emergencyEscalation = 'If there is immediate danger, active damage, fire, gas, or electrical risk, leave the area and contact emergency services or the appropriate utility.';
     }
-    return adaptHomeActionSource('INCIDENT', {
+    return [adaptHomeActionSource('INCIDENT', {
       id: `incident:${incident.id}`,
       propertyId,
       lineageId: `incident:${incident.fingerprint}`,
@@ -329,7 +333,7 @@ async function loadIncidentActions(propertyId: string, db: HomeActionSourceDb): 
       relatedJourneyId: null,
       createdAt: incident.createdAt.toISOString(),
       lastEvaluatedAt: (incident.lastEvaluatedAt ?? incident.updatedAt).toISOString(),
-    });
+    })];
   });
 }
 
@@ -351,15 +355,25 @@ async function loadSeasonalChecklistActions(propertyId: string, db: HomeActionSo
   });
 
   // Generation may prepare the next season before the current one closes.
-  // Home presents one seasonal focus: the active checklist when present,
-  // otherwise the nearest upcoming checklist from the ordered result.
-  return checklists.slice(0, 1).flatMap((checklist) => {
+  // Select only after removing empty/stale candidates so one checklist with
+  // no actionable items cannot hide a later applicable checklist. Prefer the
+  // active checklist, then the nearest upcoming checklist.
+  const actionableChecklists = checklists.map((checklist) => {
     const pendingItems = checklist.items.filter((item) =>
       item.status === 'RECOMMENDED' ||
       item.status === 'ADDED' ||
       (item.status === 'SNOOZED' && (!item.snoozedUntil || item.snoozedUntil <= now)),
     );
-    if (pendingItems.length === 0) return [];
+    return { checklist, pendingItems };
+  }).filter(({ pendingItems }) => pendingItems.length > 0)
+    .sort((a, b) => {
+      const aActive = a.checklist.seasonStartDate <= now && a.checklist.seasonEndDate >= now;
+      const bActive = b.checklist.seasonStartDate <= now && b.checklist.seasonEndDate >= now;
+      if (aActive !== bActive) return aActive ? -1 : 1;
+      return a.checklist.seasonStartDate.getTime() - b.checklist.seasonStartDate.getTime();
+    });
+
+  return actionableChecklists.slice(0, 1).map(({ checklist, pendingItems }) => {
 
     const criticalCount = pendingItems.filter((item) => item.priority === 'CRITICAL').length;
     const active = checklist.seasonStartDate <= now && checklist.seasonEndDate >= now;
@@ -376,7 +390,7 @@ async function loadSeasonalChecklistActions(propertyId: string, db: HomeActionSo
       ? `${daysRemaining} day${daysRemaining === 1 ? '' : 's'} remain in ${displaySeason.toLowerCase()}.`
       : `${displaySeason} starts in ${daysUntilStart} day${daysUntilStart === 1 ? '' : 's'}.`;
 
-    return [adaptHomeActionSource('MAINTENANCE', {
+    return adaptHomeActionSource('MAINTENANCE', {
       id: `seasonal-checklist:${checklist.id}`,
       propertyId,
       lineageId: `seasonal-checklist:${checklist.id}`,
@@ -418,7 +432,7 @@ async function loadSeasonalChecklistActions(propertyId: string, db: HomeActionSo
       relatedJourneyId: null,
       createdAt: checklist.createdAt.toISOString(),
       lastEvaluatedAt: checklist.updatedAt.toISOString(),
-    })];
+    });
   });
 }
 

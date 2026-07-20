@@ -60,7 +60,9 @@ Implemented July 20, 2026:
 - Deduplicated equivalent low-confidence context actions and replaced raw enum/system identifiers with homeowner-readable names.
 - Added context-specific service titles and CTAs, including the affected home system or item.
 - Added one grouped seasonal-maintenance Home Action for the active or nearest checklist, including task count, critical-task count, progress, timing, and a checklist destination.
+- Selects seasonal focus only after excluding empty/stale checklists, preferring the active actionable checklist before the nearest actionable upcoming checklist.
 - Added distinct critical-weather Home presentation with urgent priority, NWS source and instructions, expiry context, and restricted lifecycle controls.
+- Excludes weather incidents whose authoritative NWS expiry has passed even if asynchronous worker resolution has not completed yet.
 - Suppressed lower-value incident-derived weather guidance when the canonical severe-weather action represents the same event.
 - Kept notifications as the delivery and awareness channel while making unresolved seasonal and critical-weather work persistently discoverable on Home.
 - Aligned the Home-at-a-glance prioritized-action count with the same canonical ranked feed opened by its link.
