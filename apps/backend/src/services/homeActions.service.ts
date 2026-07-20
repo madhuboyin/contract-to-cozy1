@@ -356,13 +356,6 @@ export async function getUnifiedHome(propertyId: string, userId: string) {
         }
       : null;
 
-  const suggestedQuestions = [
-    feed.actions[0] ? `Why is “${feed.actions[0].recommendedAction}” my top priority?` : null,
-    coverageGapCount > 0 ? `Which ${coverageGapCount} home item${coverageGapCount === 1 ? '' : 's'} lack coverage?` : null,
-    recordCompleteness < 80 ? 'Which missing home fact would improve my guidance most?' : null,
-    'What should I plan for over the next 12 months?',
-  ].filter((value): value is string => Boolean(value)).slice(0, 3);
-
   return {
     contractVersion: 'phase2-home-v1',
     property: {
@@ -393,14 +386,9 @@ export async function getUnifiedHome(propertyId: string, userId: string) {
         occurredAt: event.occurredAt.toISOString(),
       })),
       recordHref: `/dashboard/properties/${propertyId}`,
-    },
-    ask: {
-      grounding: {
-        propertyId,
-        actionIds: feed.actions.slice(0, 5).map((action) => action.id),
-        latestHomeEventIds: recentEvents.map((event) => event.id),
-      },
-      suggestedQuestions,
+      systemsHref: `/dashboard/properties/${propertyId}/inventory`,
+      coverageHref: `/dashboard/properties/${propertyId}/inventory?tab=items&smart=gaps`,
+      workHref: `/dashboard/actions?propertyId=${encodeURIComponent(propertyId)}`,
     },
     diagnostics: feed.diagnostics,
     generatedAt: new Date().toISOString(),

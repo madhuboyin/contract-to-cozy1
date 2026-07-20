@@ -81,7 +81,7 @@ function ActionCard({
           </div>
           <h3 className="mt-3 text-base font-semibold text-slate-950">{action.recommendedAction}</h3>
           <p className="mt-1 text-sm leading-6 text-slate-600">{action.whyItMatters}</p>
-          <p className="mt-2 text-xs leading-5 text-slate-500">{action.ranking.explanation}</p>
+          <p className="mt-2 text-xs leading-5 text-slate-500"><span className="font-semibold text-slate-600">Why this priority:</span> {action.ranking.explanation}</p>
         </div>
       </div>
       <div className="mt-4 flex flex-wrap gap-2">
@@ -133,9 +133,36 @@ export function UnifiedHomeSurface({ propertyId }: { propertyId: string }) {
   }
 
   const home = query.data;
-  const openAsk = (question?: string) => {
-    window.dispatchEvent(new CustomEvent('cozy-chat-open', { detail: { question } }));
+  const openAsk = () => {
+    window.dispatchEvent(new CustomEvent('cozy-chat-open'));
   };
+
+  const glanceItems = [
+    {
+      label: 'Record complete',
+      value: `${home.glance.recordCompleteness}%`,
+      detail: 'Review known and missing home facts',
+      href: home.glance.recordHref,
+    },
+    {
+      label: 'Systems tracked',
+      value: home.glance.trackedSystems,
+      detail: 'Open systems and inventory',
+      href: home.glance.systemsHref,
+    },
+    {
+      label: 'Coverage gaps',
+      value: home.glance.coverageGapCount,
+      detail: home.glance.coverageGapCount > 0 ? 'Review uncovered items' : 'Review coverage records',
+      href: home.glance.coverageHref,
+    },
+    {
+      label: 'Open work',
+      value: home.glance.openWorkCount,
+      detail: 'Open actions, projects, and tasks',
+      href: home.glance.workHref,
+    },
+  ];
 
   return (
     <div className="mx-auto w-full max-w-6xl space-y-6">
@@ -193,16 +220,33 @@ export function UnifiedHomeSurface({ propertyId }: { propertyId: string }) {
         <CardHeader><CardTitle className="flex items-center gap-2 text-lg"><FileCheck2 className="h-5 w-5 text-sky-600" />Home at a glance</CardTitle><CardDescription>Systems, coverage, work, and recent changes supporting your next action.</CardDescription></CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            {[['Record complete', `${home.glance.recordCompleteness}%`], ['Systems tracked', home.glance.trackedSystems], ['Coverage gaps', home.glance.coverageGapCount], ['Open work', home.glance.openWorkCount]].map(([label, value]) => <div key={String(label)} className="rounded-xl bg-slate-50 p-3"><p className="text-xs text-slate-500">{label}</p><p className="mt-1 text-xl font-semibold text-slate-950">{value}</p></div>)}
+            {glanceItems.map((item) => (
+              <Link
+                key={item.label}
+                href={item.href}
+                aria-label={`${item.label}: ${item.value}. ${item.detail}`}
+                className="group rounded-xl border border-transparent bg-slate-50 p-3 transition hover:border-teal-200 hover:bg-teal-50/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2"
+              >
+                <p className="text-xs text-slate-500">{item.label}</p>
+                <p className="mt-1 text-xl font-semibold text-slate-950">{item.value}</p>
+                <p className="mt-2 flex items-center gap-1 text-xs font-medium text-teal-700">
+                  {item.detail}<ArrowRight className="h-3 w-3 transition-transform group-hover:translate-x-0.5" />
+                </p>
+              </Link>
+            ))}
           </div>
           {home.glance.recentChanges.length > 0 && <div className="mt-4 space-y-2"><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Recent changes</p>{home.glance.recentChanges.map((event) => <div key={event.id} className="flex items-start justify-between gap-3 border-t border-slate-100 py-2 text-sm"><span className="text-slate-700">{event.title}</span><span className="shrink-0 text-xs text-slate-400">{new Date(event.occurredAt).toLocaleDateString()}</span></div>)}</div>}
-          <Button asChild variant="outline" size="sm" className="mt-4 rounded-full"><Link href={home.glance.recordHref}>Open Home Record</Link></Button>
         </CardContent>
       </Card>
 
       <Card className="rounded-[24px] border-teal-200 bg-teal-50/50 shadow-sm">
-        <CardHeader><CardTitle className="flex items-center gap-2 text-lg"><Sparkles className="h-5 w-5 text-teal-700" />Ask ContractToCozy</CardTitle><CardDescription>Questions grounded in this property’s actions and recent record.</CardDescription></CardHeader>
-        <CardContent className="space-y-2">{home.ask.suggestedQuestions.map((question) => <button key={question} type="button" onClick={() => openAsk(question)} className="flex w-full items-center justify-between gap-3 rounded-xl border border-teal-200 bg-white px-4 py-3 text-left text-sm font-medium text-slate-800 transition hover:border-teal-400"><span>{question}</span><MessageCircle className="h-4 w-4 shrink-0 text-teal-600" /></button>)}<Button className="mt-2 rounded-full" onClick={() => openAsk()}><MessageCircle className="mr-2 h-4 w-4" />Ask another question</Button></CardContent>
+        <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2 text-lg"><Sparkles className="h-5 w-5 text-teal-700" />Ask ContractToCozy</CardTitle>
+            <CardDescription className="mt-1">For open-ended questions that require explanation across this home’s records and actions.</CardDescription>
+          </div>
+          <Button className="shrink-0 rounded-full" onClick={openAsk}><MessageCircle className="mr-2 h-4 w-4" />Ask about this home</Button>
+        </div>
       </Card>
     </div>
   );

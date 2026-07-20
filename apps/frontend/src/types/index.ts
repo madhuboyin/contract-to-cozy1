@@ -331,10 +331,9 @@ export type UnifiedHomeDTO = {
       occurredAt: string;
     }>;
     recordHref: string;
-  };
-  ask: {
-    grounding: { propertyId: string; actionIds: string[]; latestHomeEventIds: string[] };
-    suggestedQuestions: string[];
+    systemsHref: string;
+    coverageHref: string;
+    workHref: string;
   };
   diagnostics: HomeActionFeedDTO['diagnostics'];
   generatedAt: string;
