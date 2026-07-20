@@ -644,7 +644,10 @@ const CRON_HANDLERS: Record<string, () => Promise<void | WorkerRunResult>> = {
   'seasonal-notifications':          async () => sendSeasonalNotifications(),
   'weekly-score-snapshots':          async () => { await captureWeeklyScoreSnapshotsJob(); },
   'hidden-asset-refresh':            async () => { await runHiddenAssetRefreshJob(); },
-  'coverage-lapse-incidents':        async () => { await coverageLapseIncidentsJob(); },
+  'coverage-lapse-incidents':        async () => {
+    const result = await coverageLapseIncidentsJob();
+    logger.info({ ...result }, `[coverage-lapse-incidents] createdOrUpdated=${result.createdOrUpdated} resolved=${result.resolved}`);
+  },
   'freeze-risk-incidents':           async () => { await freezeRiskIncidentsJob(); },
   'severe-weather-alerts':           async () => { await severeWeatherAlertsJob(); },
   'neighborhood-change-notifications': async () => { await neighborhoodChangeNotificationJob(); },

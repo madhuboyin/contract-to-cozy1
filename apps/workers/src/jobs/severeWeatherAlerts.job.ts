@@ -47,7 +47,14 @@ export async function severeWeatherAlertsJob() {
   // resolved coordinates onto Property.latitude/longitude, so future runs
   // skip geocoding entirely for properties whose zip hasn't changed.
   const geoRunCache = new Map<string, Geo | null>();
-  const alertsCache = new Map<string, SevereWeatherAlert[]>();
+  // WKR (risk/weather/coverage W3 fix): getActiveAlerts returns [] both when
+  // there are genuinely no active alerts AND when the NWS fetch itself
+  // failed (timeout/HTTP error/exception) — the two are indistinguishable
+  // from the array alone. Caching `fetchSucceeded` alongside the alerts
+  // lets the resolution loop below tell "confirmed clear" apart from
+  // "we don't know" so a transient NWS outage can't silently auto-resolve
+  // real, still-active severe weather incidents.
+  const alertsCache = new Map<string, { alerts: SevereWeatherAlert[]; fetchSucceeded: boolean }>();
 
   for await (const p of iterateAllProperties()) {
     const zip = (p.zipCode ?? '').trim();
@@ -56,13 +63,17 @@ export async function severeWeatherAlertsJob() {
     const geo = await getPropertyGeo(p, geoRunCache);
     if (!geo) continue;
 
-    let alerts = alertsCache.get(zip);
-    if (alerts === undefined) {
-      alerts = await severeWeatherAlertService.getActiveAlerts(geo.lat, geo.lon, (outcome) => {
+    let cached = alertsCache.get(zip);
+    if (cached === undefined) {
+      let fetchSucceeded = false;
+      const alerts = await severeWeatherAlertService.getActiveAlerts(geo.lat, geo.lon, (outcome) => {
         nwsFetchOutcomeTotal.inc({ outcome });
+        fetchSucceeded = outcome === 'ok';
       });
-      alertsCache.set(zip, alerts);
+      cached = { alerts, fetchSucceeded };
+      alertsCache.set(zip, cached);
     }
+    const { alerts, fetchSucceeded } = cached;
 
     const activeAlertIds = new Set(alerts.map(a => a.nwsAlertId));
 
@@ -198,13 +209,20 @@ export async function severeWeatherAlertsJob() {
     // Resolve any remaining open severe-weather incidents for this property
     // that are no longer represented in the currently active alert list
     // (already-superseded ones were handled above and are skipped here).
-    for (const [nwsAlertId, incidentId] of openIncidentIdByAlertId) {
-      if (supersededIncidentIds.has(incidentId)) continue;
-      if (!activeAlertIds.has(nwsAlertId)) {
-        // Route through IncidentService.setStatus (not a raw prisma update) so its
-        // RESOLVED-transition hook archives the linked guidance journey/signal too.
-        await IncidentService.setStatus(incidentId, IncidentStatus.RESOLVED);
-        resolved++;
+    // Conservative failure: only when the NWS fetch actually succeeded —
+    // an empty result from a failed fetch means "unknown", not "cleared",
+    // and must not auto-resolve real open incidents. The 48h stale safety
+    // net below still catches genuinely-cleared incidents if the outage
+    // persists across runs.
+    if (fetchSucceeded) {
+      for (const [nwsAlertId, incidentId] of openIncidentIdByAlertId) {
+        if (supersededIncidentIds.has(incidentId)) continue;
+        if (!activeAlertIds.has(nwsAlertId)) {
+          // Route through IncidentService.setStatus (not a raw prisma update) so its
+          // RESOLVED-transition hook archives the linked guidance journey/signal too.
+          await IncidentService.setStatus(incidentId, IncidentStatus.RESOLVED);
+          resolved++;
+        }
       }
     }
   }

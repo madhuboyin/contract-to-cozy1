@@ -46,10 +46,28 @@ async function getForecastMinF(lat: number, lon: number): Promise<number | null>
     )}&longitude=${encodeURIComponent(String(lon))}` +
     `&hourly=temperature_2m&temperature_unit=celsius&timezone=UTC&start_date=${startDate}&end_date=${endDate}`;
 
-  const res = await fetch(url, { method: 'GET' });
-  if (!res.ok) return null;
+  // WKR (risk/weather/coverage W3 fix): a thrown fetch/JSON-parse exception
+  // (network error, timeout, malformed body) used to propagate unhandled
+  // out of this function and crash the whole job — every other property
+  // in the run would be skipped too. Treat it the same as the existing
+  // "no data" (null) path below, which the caller already handles
+  // conservatively (skip that property, don't create or resolve anything).
+  let json: any;
+  try {
+    const ctrl = new AbortController();
+    const timeout = setTimeout(() => ctrl.abort(), 8_000);
+    try {
+      const res = await fetch(url, { method: 'GET', signal: ctrl.signal });
+      if (!res.ok) return null;
+      json = await res.json();
+    } finally {
+      clearTimeout(timeout);
+    }
+  } catch (error) {
+    logger.error({ err: error, lat, lon }, '[FREEZE-RISK] Forecast fetch failed');
+    return null;
+  }
 
-  const json: any = await res.json();
   const times: string[] = json?.hourly?.time ?? [];
   const tempsC: number[] = json?.hourly?.temperature_2m ?? [];
 

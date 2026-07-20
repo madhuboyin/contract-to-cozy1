@@ -1,5 +1,6 @@
 // apps/workers/src/jobs/coverageLapseIncidents.job.ts
 import { prisma } from '../lib/prisma';
+import { IncidentStatus } from '@prisma/client';
 import { IncidentService } from '../../../backend/src/services/incidents/incident.service';
 import { guidanceJourneyService } from '../../../backend/src/services/guidanceEngine/guidanceJourney.service';
 import { logger } from '../lib/logger';
@@ -7,6 +8,63 @@ import { logger } from '../lib/logger';
 function daysBetween(a: Date, b: Date) {
   const ms = b.getTime() - a.getTime();
   return Math.round(ms / (1000 * 60 * 60 * 24));
+}
+
+const OPEN_COVERAGE_LAPSE_STATUSES: IncidentStatus[] = [
+  IncidentStatus.DETECTED,
+  IncidentStatus.EVALUATED,
+  IncidentStatus.ACTIVE,
+  IncidentStatus.ACTIONED,
+  IncidentStatus.MITIGATED,
+];
+
+/**
+ * WKR (risk/weather/coverage W3 fix): the creation query above only looks
+ * at policies whose expiryDate is still inside the lookahead window — once
+ * an unresolved incident's triggering policy ages out of that window,
+ * `upsertIncident` is never called for its fingerprint again, so
+ * IncidentOrchestrator's inline auto-resolve (which only runs from inside
+ * upsertIncident) never re-fires either. The incident stayed open forever
+ * even after the homeowner renewed coverage. This resolves any open
+ * COVERAGE_LAPSE incident whose property now has a policy (the original,
+ * renewed in place, or a replacement) covering the date right after the
+ * original gap — independent of the creation query's window.
+ */
+async function resolveCoveredLapseIncidents(now: Date): Promise<number> {
+  const openIncidents = await prisma.incident.findMany({
+    where: {
+      sourceType: 'COVERAGE',
+      typeKey: 'COVERAGE_LAPSE',
+      isSuppressed: false,
+      status: { in: OPEN_COVERAGE_LAPSE_STATUSES },
+    },
+    select: { id: true, propertyId: true, details: true },
+  });
+
+  let resolved = 0;
+  for (const incident of openIncidents) {
+    const details = (incident.details as Record<string, unknown> | null) ?? {};
+    const expiryDateRaw = typeof details.expiryDate === 'string' ? details.expiryDate : null;
+    if (!expiryDateRaw) continue;
+    const expiryDate = new Date(expiryDateRaw);
+    if (Number.isNaN(expiryDate.getTime())) continue;
+
+    const coveringPolicy = await prisma.insurancePolicy.findFirst({
+      where: {
+        propertyId: incident.propertyId,
+        startDate: { lte: expiryDate },
+        expiryDate: { gt: expiryDate },
+      },
+      select: { id: true },
+    });
+    if (!coveringPolicy) continue;
+
+    // Route through IncidentService.setStatus (not a raw prisma update) so its
+    // RESOLVED-transition hook archives the linked guidance journey/signal too.
+    await IncidentService.setStatus(incident.id, IncidentStatus.RESOLVED);
+    resolved++;
+  }
+  return resolved;
 }
 
 /**
@@ -113,5 +171,7 @@ export async function coverageLapseIncidentsJob() {
     createdOrUpdated++;
   }
 
-  return { createdOrUpdated };
+  const resolved = await resolveCoveredLapseIncidents(now);
+
+  return { createdOrUpdated, resolved };
 }
