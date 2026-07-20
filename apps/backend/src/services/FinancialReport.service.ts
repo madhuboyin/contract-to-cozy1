@@ -5,7 +5,7 @@ import { calculateFinancialEfficiency } from '../utils/FinancialCalculator.util'
 import { FinancialEfficiencyReport, PropertyType } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 // Import the singleton instance (the value) AND the named constant
-import JobQueueService, { propertyIntelligenceQueue } from './JobQueue.service'; 
+import JobQueueService, { getPropertyIntelligenceQueue } from './JobQueue.service';
 import { PropertyIntelligenceJobType, PropertyIntelligenceJobPayload } from '../config/risk-job-types'; 
 import { FinancialCalculationResult } from '../utils/FinancialCalculator.util';
 import { logger } from '../lib/logger';
@@ -150,8 +150,8 @@ export class FinancialReportService {
         const jobName = PropertyIntelligenceJobType.CALCULATE_FES;
         const jobId = `${propertyId}-${jobName}`;
         // Access propertyIntelligenceQueue directly from the import
-        const jobStatus = await propertyIntelligenceQueue.getJob(jobId);
-        
+        const jobStatus = await getPropertyIntelligenceQueue().getJob(jobId);
+
         // 1. Check if the job is currently queued/running
         if (jobStatus) {
             const status = await jobStatus.getState();
@@ -228,7 +228,7 @@ export class FinancialReportService {
         const jobName = PropertyIntelligenceJobType.CALCULATE_FES;
         const jobId = `${propertyId}-${jobName}`;
         // Access propertyIntelligenceQueue directly from the import
-        const jobStatus = await propertyIntelligenceQueue.getJob(jobId);
+        const jobStatus = await getPropertyIntelligenceQueue().getJob(jobId);
 
         // Check for active job first (even if a stale report exists)
         if (jobStatus) {

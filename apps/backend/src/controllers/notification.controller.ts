@@ -3,7 +3,9 @@ import { Response } from 'express';
 import { AuthRequest } from '../types/auth.types';
 import { NotificationService } from '../services/notification.service';
 import { prisma } from '../lib/prisma';
-import { emailNotificationQueue } from '../services/JobQueue.service';
+import { getEmailNotificationQueue } from '../services/JobQueue.service';
+import { JOB_REGISTRY } from '../config/workerJobRegistry';
+import { evaluateWorkerExecution } from '../config/workerExecutionPolicy';
 import { NotificationChannel, DeliveryStatus,SignalSourceType, SignalTriggerType } from '@prisma/client';
 import { z } from 'zod';
 import { NotificationOutcomeSchema, NotificationPreferenceInputSchema } from '../productFramework/notificationPolicy.contract';
@@ -302,6 +304,26 @@ static async markAsUnread(req: AuthRequest, res: Response) {
       });
     }
 
+    // Cross-cutting W4 fix: this on-demand retry path bypassed
+    // evaluateWorkerExecution entirely, unlike NotificationService.create's
+    // transportEnabled threading — a manual retry could force a real
+    // outbound send even while WORKER_OUTBOUND_NOTIFICATIONS_ENABLED=false.
+    // Checked before flipping the delivery to PENDING below: doing the gate
+    // check after that write would leave a blocked delivery stuck in
+    // PENDING forever with nothing to ever process it.
+    if (delivery.channel === NotificationChannel.EMAIL) {
+      const registryEntry = JOB_REGISTRY.find((j) => j.key === 'email-notification');
+      const decision = registryEntry
+        ? evaluateWorkerExecution('email-notification', 'manual', registryEntry)
+        : { allowed: false, reason: 'missing registry entry' };
+      if (!decision.allowed) {
+        return res.status(403).json({
+          success: false,
+          message: `Email delivery retry is not currently enabled (${decision.reason}).`,
+        });
+      }
+    }
+
     await prisma.notificationDelivery.update({
       where: { id: deliveryId },
       data: {
@@ -312,7 +334,7 @@ static async markAsUnread(req: AuthRequest, res: Response) {
 
     // Retry only supported channels
     if (delivery.channel === NotificationChannel.EMAIL) {
-      await emailNotificationQueue.add(
+      await getEmailNotificationQueue().add(
         'SEND_EMAIL_NOTIFICATION',
         { notificationDeliveryId: deliveryId },
         { jobId: deliveryId } // idempotent

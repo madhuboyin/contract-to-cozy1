@@ -6,8 +6,10 @@ import { APIError } from '../middleware/error.middleware';
 import { socrataAdapter } from './permitAdapters/socrata.adapter';
 import { accelaAdapter } from './permitAdapters/accela.adapter';
 import { permitNormalizer, PropertyAddress } from './permitAdapters/permitNormalizer';
-import { permitFetchQueue, detectUnpermittedWorkQueue } from './JobQueue.service';
+import { getPermitFetchQueue, getDetectUnpermittedWorkQueue } from './JobQueue.service';
 import { checkPermitWorkerContext } from './projectCompliance/permitWorkerContext.service';
+import { JOB_REGISTRY } from '../config/workerJobRegistry';
+import { evaluateWorkerExecution } from '../config/workerExecutionPolicy';
 
 function buildNormalizedKey(city: string, state: string): string {
   const citySlug = city.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
@@ -36,6 +38,25 @@ async function resolvePropertyAddress(propertyId: string): Promise<PropertyAddre
 
 export class PermitFetchService {
   async triggerFetch(propertyId: string, trigger: PermitFetchTrigger): Promise<{ fetchJobId: string }> {
+    // Cross-cutting W4 fix: this on-demand enqueue previously bypassed
+    // evaluateWorkerExecution entirely, so a
+    // WORKER_JOB_PERMIT_FETCH_ENABLED=false override (or the group
+    // WORKER_EXTERNAL_INGEST_ENABLED flag this job's externalProvider
+    // requires) had zero effect. This is the user's primary requested
+    // action, so a blocked decision fails the request rather than
+    // silently doing nothing.
+    const registryEntry = JOB_REGISTRY.find((j) => j.key === 'permit-fetch');
+    const decision = registryEntry
+      ? evaluateWorkerExecution('permit-fetch', 'manual', registryEntry)
+      : { allowed: false, reason: 'missing registry entry' };
+    if (!decision.allowed) {
+      throw new APIError(
+        `Permit history fetch is not currently enabled (${decision.reason}).`,
+        503,
+        'WORKER_JOB_DISABLED',
+      );
+    }
+
     const addressInfo = await resolvePropertyAddress(propertyId);
 
     const dataSource = await prisma.permitDataSource.findFirst({
@@ -66,7 +87,7 @@ export class PermitFetchService {
       },
     });
 
-    await permitFetchQueue.add('fetch-permit-history', { fetchJobId: job.id, propertyId });
+    await getPermitFetchQueue().add('fetch-permit-history', { fetchJobId: job.id, propertyId });
 
     return { fetchJobId: job.id };
   }
@@ -158,7 +179,23 @@ export class PermitFetchService {
         data: { lastFetchAt: new Date(), totalPermitsFetched: { increment: inserted } },
       });
 
-      await detectUnpermittedWorkQueue.add('detect-unpermitted-work', { propertyId: job.propertyId });
+      // Cross-cutting W4 fix: gate the chained follow-up job too. Unlike
+      // triggerFetch above, this is an automatic secondary step after a
+      // successful fetch, not the user's primary action — a blocked
+      // decision is logged and skipped, not thrown, so it never turns an
+      // otherwise-successful permit fetch into a failure.
+      const dtRegistryEntry = JOB_REGISTRY.find((j) => j.key === 'detect-unpermitted-work');
+      const dtDecision = dtRegistryEntry
+        ? evaluateWorkerExecution('detect-unpermitted-work', 'manual', dtRegistryEntry)
+        : { allowed: false, reason: 'missing registry entry' };
+      if (dtDecision.allowed) {
+        await getDetectUnpermittedWorkQueue().add('detect-unpermitted-work', { propertyId: job.propertyId });
+      } else {
+        logger.info(
+          { propertyId: job.propertyId, reason: dtDecision.reason },
+          '[PermitFetchService] detect-unpermitted-work enqueue skipped by worker execution policy',
+        );
+      }
     } catch (err: any) {
       logger.error({ err, fetchJobId }, '[PermitFetchService] runFetch failed');
       await prisma.permitFetchJob.update({

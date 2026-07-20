@@ -11,6 +11,9 @@ import {
 } from '../config/risk-job-types';
 import { logger } from '../lib/logger';
 import { DEFAULT_JOB_RETENTION } from '../config/queueDefaults';
+import { createLazyQueue } from '../lib/queuePort';
+import { JOB_REGISTRY } from '../config/workerJobRegistry';
+import { evaluateWorkerExecution } from '../config/workerExecutionPolicy';
 
 // -----------------------------------------------------------------------------
 // Shared Redis Connection Configuration
@@ -30,11 +33,13 @@ export const connection = {
 // -----------------------------------------------------------------------------
 
 // Property Intelligence Queue
-export const propertyIntelligenceQueue =
-  new Queue<PropertyIntelligenceJobPayload>(
-    'property-intelligence-queue',
-    { connection, defaultJobOptions: DEFAULT_JOB_RETENTION }
-  );
+export const getPropertyIntelligenceQueue = createLazyQueue<PropertyIntelligenceJobPayload>(
+  () =>
+    new Queue<PropertyIntelligenceJobPayload>('property-intelligence-queue', {
+      connection,
+      defaultJobOptions: DEFAULT_JOB_RETENTION,
+    }),
+);
 
 // Email Notification Queue
 // Union payload: the existing 'SEND_EMAIL_NOTIFICATION' job carries a
@@ -52,20 +57,25 @@ export interface EmailNotificationJobPayload {
   userId?: string;
 }
 
-export const emailNotificationQueue =
-  new Queue<EmailNotificationJobPayload>(
-    'email-notification-queue',
-    { connection, defaultJobOptions: DEFAULT_JOB_RETENTION }
-  );
+export const getEmailNotificationQueue = createLazyQueue<EmailNotificationJobPayload>(
+  () =>
+    new Queue<EmailNotificationJobPayload>('email-notification-queue', {
+      connection,
+      defaultJobOptions: DEFAULT_JOB_RETENTION,
+    }),
+);
 
 // Push notification queue
 interface PushNotificationJobPayload {
   notificationDeliveryId: string;
 }
 
-export const pushNotificationQueue = new Queue<PushNotificationJobPayload>(
-  'push-notification-queue',
-  { connection, defaultJobOptions: DEFAULT_JOB_RETENTION }
+export const getPushNotificationQueue = createLazyQueue<PushNotificationJobPayload>(
+  () =>
+    new Queue<PushNotificationJobPayload>('push-notification-queue', {
+      connection,
+      defaultJobOptions: DEFAULT_JOB_RETENTION,
+    }),
 );
 
 // SMS notification queue
@@ -73,9 +83,12 @@ interface SmsNotificationJobPayload {
   notificationDeliveryId: string;
 }
 
-export const smsNotificationQueue = new Queue<SmsNotificationJobPayload>(
-  'sms-notification-queue',
-  { connection, defaultJobOptions: DEFAULT_JOB_RETENTION }
+export const getSmsNotificationQueue = createLazyQueue<SmsNotificationJobPayload>(
+  () =>
+    new Queue<SmsNotificationJobPayload>('sms-notification-queue', {
+      connection,
+      defaultJobOptions: DEFAULT_JOB_RETENTION,
+    }),
 );
 
 // Permit History & Unpermitted Work Tracker queues
@@ -93,19 +106,28 @@ export interface GeneratePermitDisclosureJobPayload {
   propertyId: string;
 }
 
-export const permitFetchQueue = new Queue<PermitFetchJobPayload>(
-  'permit-fetch-queue',
-  { connection, defaultJobOptions: DEFAULT_JOB_RETENTION }
+export const getPermitFetchQueue = createLazyQueue<PermitFetchJobPayload>(
+  () =>
+    new Queue<PermitFetchJobPayload>('permit-fetch-queue', {
+      connection,
+      defaultJobOptions: DEFAULT_JOB_RETENTION,
+    }),
 );
 
-export const detectUnpermittedWorkQueue = new Queue<DetectUnpermittedWorkJobPayload>(
-  'detect-unpermitted-work-queue',
-  { connection, defaultJobOptions: DEFAULT_JOB_RETENTION }
+export const getDetectUnpermittedWorkQueue = createLazyQueue<DetectUnpermittedWorkJobPayload>(
+  () =>
+    new Queue<DetectUnpermittedWorkJobPayload>('detect-unpermitted-work-queue', {
+      connection,
+      defaultJobOptions: DEFAULT_JOB_RETENTION,
+    }),
 );
 
-export const generatePermitDisclosureQueue = new Queue<GeneratePermitDisclosureJobPayload>(
-  'generate-permit-disclosure-queue',
-  { connection, defaultJobOptions: DEFAULT_JOB_RETENTION }
+export const getGeneratePermitDisclosureQueue = createLazyQueue<GeneratePermitDisclosureJobPayload>(
+  () =>
+    new Queue<GeneratePermitDisclosureJobPayload>('generate-permit-disclosure-queue', {
+      connection,
+      defaultJobOptions: DEFAULT_JOB_RETENTION,
+    }),
 );
 
 // -----------------------------------------------------------------------------
@@ -119,6 +141,25 @@ export class JobQueueService {
   public async enqueuePropertyIntelligenceJobs(
     propertyId: string
   ): Promise<void> {
+    // Cross-cutting W4 fix: this on-demand enqueue (called from property
+    // create/update, booking, warranty edits, financial reports) previously
+    // bypassed evaluateWorkerExecution entirely, so a
+    // WORKER_JOB_PROPERTY_INTELLIGENCE_ENABLED=false override had no effect.
+    // A blocked decision is logged and skipped rather than thrown — this is
+    // a background side-effect of the caller's primary action, not the
+    // action itself, so it must not fail property creation/booking/etc.
+    const registryEntry = JOB_REGISTRY.find((j) => j.key === 'property-intelligence');
+    const decision = registryEntry
+      ? evaluateWorkerExecution('property-intelligence', 'manual', registryEntry)
+      : { allowed: false, reason: 'missing registry entry' };
+    if (!decision.allowed) {
+      logger.info(
+        { propertyId, reason: decision.reason },
+        '[QUEUE-MANAGER] property-intelligence enqueue skipped by worker execution policy',
+      );
+      return;
+    }
+
     logger.info(
       `[QUEUE-MANAGER] Enqueueing intelligence jobs for property ${propertyId}`
     );
@@ -128,7 +169,9 @@ export class JobQueueService {
       backoff: { type: 'exponential', delay: 5000 },
     };
 
-    await propertyIntelligenceQueue.add(
+    const queue = getPropertyIntelligenceQueue();
+
+    await queue.add(
       PropertyIntelligenceJobType.CALCULATE_RISK_REPORT,
       {
         propertyId,
@@ -140,7 +183,7 @@ export class JobQueueService {
       }
     );
 
-    await propertyIntelligenceQueue.add(
+    await queue.add(
       PropertyIntelligenceJobType.CALCULATE_FES,
       {
         propertyId,
@@ -152,7 +195,7 @@ export class JobQueueService {
       }
     );
 
-    await propertyIntelligenceQueue.add(
+    await queue.add(
       PropertyIntelligenceJobType.CALCULATE_HIDDEN_ASSETS,
       {
         propertyId,
@@ -177,7 +220,19 @@ export class JobQueueService {
     data: PropertyIntelligenceJobPayload,
     options?: any
   ): Promise<void> {
-    await propertyIntelligenceQueue.add(
+    const registryEntry = JOB_REGISTRY.find((j) => j.key === 'property-intelligence');
+    const decision = registryEntry
+      ? evaluateWorkerExecution('property-intelligence', 'manual', registryEntry)
+      : { allowed: false, reason: 'missing registry entry' };
+    if (!decision.allowed) {
+      logger.info(
+        { jobName, reason: decision.reason },
+        '[QUEUE-MANAGER] property-intelligence enqueue skipped by worker execution policy',
+      );
+      return;
+    }
+
+    await getPropertyIntelligenceQueue().add(
       jobName,
       data,
       {

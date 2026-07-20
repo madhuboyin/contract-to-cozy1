@@ -27,14 +27,17 @@ function loadService({ record, records, presignImpl }) {
   const prismaPath = require.resolve('../../src/lib/prisma.ts');
   require.cache[prismaPath] = { id: prismaPath, filename: prismaPath, loaded: true, exports: { prisma: prismaMock } };
 
-  // JobQueue.service.ts opens real BullMQ/Redis connections at import time —
-  // stub it before the first require of permitTracker.service.ts below.
+  // W4 fix: JobQueue.service.ts's queues are now lazily constructed (see
+  // apps/backend/src/lib/queuePort.ts), so requiring it no longer opens a
+  // real Redis connection at import time — this stub is kept only because
+  // getGeneratePermitDisclosureQueue() would still construct/use a real
+  // queue if requestDisclosureExport() were exercised in this file.
   const jobQueuePath = require.resolve('../../src/services/JobQueue.service.ts');
   require.cache[jobQueuePath] = {
     id: jobQueuePath,
     filename: jobQueuePath,
     loaded: true,
-    exports: { generatePermitDisclosureQueue: { add: async () => ({ id: 'job-1' }) } },
+    exports: { getGeneratePermitDisclosureQueue: () => ({ add: async () => ({ id: 'job-1' }) }) },
   };
 
   const presignPath = require.resolve('../../src/services/storage/presign.ts');

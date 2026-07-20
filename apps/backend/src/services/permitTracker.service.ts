@@ -20,8 +20,10 @@ type RenovationInspectionStageType =
   | 'ROUGH_IN' | 'ELECTRICAL' | 'PLUMBING' | 'MECHANICAL' | 'INSULATION' | 'FINAL' | 'OTHER';
 import { prisma } from '../lib/prisma';
 import { APIError } from '../middleware/error.middleware';
-import { generatePermitDisclosureQueue } from './JobQueue.service';
+import { getGeneratePermitDisclosureQueue } from './JobQueue.service';
 import { presignGetObject } from './storage/presign';
+import { JOB_REGISTRY } from '../config/workerJobRegistry';
+import { evaluateWorkerExecution } from '../config/workerExecutionPolicy';
 
 // ── Inspection milestone templates ───────────────────────────────────────────
 
@@ -538,6 +540,22 @@ export class PermitTrackerService {
   // ── Disclosure Export ─────────────────────────────────────────────────────
 
   async requestDisclosureExport(propertyId: string, userId: string) {
+    // Cross-cutting W4 fix: this on-demand enqueue previously bypassed
+    // evaluateWorkerExecution entirely. This is the user's primary
+    // requested action, so a blocked decision fails the request — before
+    // creating any row — rather than silently doing nothing.
+    const registryEntry = JOB_REGISTRY.find((j) => j.key === 'generate-permit-disclosure');
+    const decision = registryEntry
+      ? evaluateWorkerExecution('generate-permit-disclosure', 'manual', registryEntry)
+      : { allowed: false, reason: 'missing registry entry' };
+    if (!decision.allowed) {
+      throw new APIError(
+        `Permit disclosure export is not currently enabled (${decision.reason}).`,
+        503,
+        'WORKER_JOB_DISABLED',
+      );
+    }
+
     const exportRecord = await prisma.permitDisclosureExport.create({
       data: {
         propertyId,
@@ -546,7 +564,7 @@ export class PermitTrackerService {
       },
     });
 
-    await generatePermitDisclosureQueue.add('generate-permit-disclosure', {
+    await getGeneratePermitDisclosureQueue().add('generate-permit-disclosure', {
       exportId: exportRecord.id,
       propertyId,
     });

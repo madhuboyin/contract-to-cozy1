@@ -11,18 +11,31 @@ import { evaluateDiyApplicability } from './diy/applicabilityPolicy';
 import { knownContextValue } from './propertyContextDecision';
 import { AiGuideGenerationResponseSchema } from '../validators/diy.validators';
 import { APIError } from '../middleware/error.middleware';
+import { createLazyQueue } from '../lib/queuePort';
+import { JOB_REGISTRY } from '../config/workerJobRegistry';
+import { evaluateWorkerExecution } from '../config/workerExecutionPolicy';
 
 export const DIY_AI_GUIDE_JOB = 'GENERATE_DIY_AI_GUIDE';
 export const DIY_AI_GUIDE_QUEUE = 'diy-ai-guide-queue';
 
-export const diyAiGuideQueue = new Queue<{ guideId: string }>(DIY_AI_GUIDE_QUEUE, {
-  connection,
-  defaultJobOptions: {
-    attempts: 2,
-    backoff: { type: 'exponential', delay: 3000 },
-    ...DEFAULT_JOB_RETENTION,
-  },
-});
+// Hang-trap fix (W4): this used to be `export const diyAiGuideQueue = new
+// Queue(...)`, constructed eagerly at module scope — every test touching
+// this file, even indirectly, opened a real ioredis connection at
+// `require()` time and had to stub `require.cache['bullmq']` before the
+// first require to avoid hanging. Lazy construction defers the real Queue
+// until first call; `getDiyAiGuideQueue.__setForTesting(fake)` lets tests
+// inject an in-memory fake before that first call ever happens.
+export const getDiyAiGuideQueue = createLazyQueue<{ guideId: string }>(
+  () =>
+    new Queue<{ guideId: string }>(DIY_AI_GUIDE_QUEUE, {
+      connection,
+      defaultJobOptions: {
+        attempts: 2,
+        backoff: { type: 'exponential', delay: 3000 },
+        ...DEFAULT_JOB_RETENTION,
+      },
+    }),
+);
 
 class DiyAiGuideService {
   private ai: GoogleGenAI | null = null;
@@ -48,6 +61,24 @@ class DiyAiGuideService {
       throw new APIError('AI features are currently unavailable. Please try again later.', 503, 'AI_UNAVAILABLE');
     }
 
+    // Cross-cutting W4 fix: this on-demand enqueue previously bypassed
+    // evaluateWorkerExecution entirely, so a
+    // WORKER_JOB_GENERATE_DIY_AI_GUIDE_ENABLED=false override (or the group
+    // WORKER_EXTERNAL_INGEST_ENABLED flag this job's externalProvider
+    // requires) had zero effect. Checked before creating any row, same
+    // fail-closed-early pattern as the AI_UNAVAILABLE check above.
+    const registryEntry = JOB_REGISTRY.find((j) => j.key === 'generate-diy-ai-guide');
+    const decision = registryEntry
+      ? evaluateWorkerExecution('generate-diy-ai-guide', 'manual', registryEntry)
+      : { allowed: false, reason: 'missing registry entry' };
+    if (!decision.allowed) {
+      throw new APIError(
+        `AI guide generation is not currently enabled (${decision.reason}).`,
+        503,
+        'WORKER_JOB_DISABLED',
+      );
+    }
+
     // Idempotency (W3/AI-DIY — "idempotency"): a double-submit (double-tap
     // before the button disables, or a retried request after a network
     // blip) previously always created a brand-new guide row and enqueued a
@@ -65,7 +96,7 @@ class DiyAiGuideService {
       data: { userId, propertyId, userPrompt, status: 'PENDING' },
     });
 
-    await diyAiGuideQueue.add(DIY_AI_GUIDE_JOB, { guideId: guide.id }, {
+    await getDiyAiGuideQueue().add(DIY_AI_GUIDE_JOB, { guideId: guide.id }, {
       jobId: `diy-guide-${guide.id}`,
     });
 

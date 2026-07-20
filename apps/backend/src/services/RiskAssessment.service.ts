@@ -14,7 +14,7 @@ import {
 import { prisma } from '../lib/prisma'; 
 import { calculateAssetRisk, calculateTotalRiskScore, filterRelevantAssets, AssetRiskDetail } from '../utils/riskCalculator.util';
 import { RISK_ASSET_CONFIG } from '../config/risk-constants';
-import JobQueueService, { propertyIntelligenceQueue } from './JobQueue.service'; 
+import JobQueueService, { getPropertyIntelligenceQueue } from './JobQueue.service';
 import { PropertyIntelligenceJobType, PropertyIntelligenceJobPayload } from '../config/risk-job-types';
 // PHASE 2.4 INTEGRATION
 import { createTasksFromRiskAssessment } from './riskAssessmentIntegration.service';
@@ -145,7 +145,7 @@ class RiskAssessmentService {
     const jobName = PropertyIntelligenceJobType.CALCULATE_RISK_REPORT;
     const jobId = `${propertyId}-${jobName}`;
     
-    const jobStatus = await propertyIntelligenceQueue.getJob(jobId);
+    const jobStatus = await getPropertyIntelligenceQueue().getJob(jobId);
     
     if (jobStatus) {
         const state = await jobStatus.getState();

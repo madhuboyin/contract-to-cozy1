@@ -8,7 +8,7 @@ import { Response } from 'express';
 import { AuthRequest } from '../types/auth.types';
 import { prisma } from '../lib/prisma';
 import { logger } from '../lib/logger';
-import { emailNotificationQueue } from '../services/JobQueue.service';
+import { getEmailNotificationQueue } from '../services/JobQueue.service';
 
 // Placeholder team alias for pilot feedback alerts — override via env in
 // any environment where a real monitored inbox exists.
@@ -50,7 +50,7 @@ export class FeedbackController {
       // enqueue (e.g. Redis unavailable) or failed send must never fail the
       // user's feedback submission, so this is not awaited and any error is
       // only logged.
-      emailNotificationQueue
+      getEmailNotificationQueue()
         .add(
           'SEND_FEEDBACK_NOTIFICATION',
           {

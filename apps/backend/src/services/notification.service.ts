@@ -3,9 +3,9 @@
 import { prisma } from '../lib/prisma';
 import { NotificationChannel, DeliveryStatus,SignalSourceType, SignalTriggerType } from '@prisma/client';
 import {
-  emailNotificationQueue,
-  pushNotificationQueue,
-  smsNotificationQueue,
+  getEmailNotificationQueue,
+  getPushNotificationQueue,
+  getSmsNotificationQueue,
 } from './JobQueue.service';
 import { getAggregationContextEnvelope } from './aggregationContext/context';
 import { resolveNotificationPolicy } from './notificationPreference.service';
@@ -188,7 +188,7 @@ export class NotificationService {
         try {
           switch (delivery.channel) {
           case NotificationChannel.EMAIL:
-            await emailNotificationQueue.add(
+            await getEmailNotificationQueue().add(
               'SEND_EMAIL_NOTIFICATION',
               { notificationDeliveryId: delivery.id },
               {
@@ -204,14 +204,14 @@ export class NotificationService {
             break;
 
           case NotificationChannel.PUSH:
-            await pushNotificationQueue.add(
+            await getPushNotificationQueue().add(
               'SEND_PUSH_NOTIFICATION',
               { notificationDeliveryId: delivery.id }
             );
             break;
 
           case NotificationChannel.SMS:
-            await smsNotificationQueue.add(
+            await getSmsNotificationQueue().add(
               'SEND_SMS_NOTIFICATION',
               { notificationDeliveryId: delivery.id }
             );

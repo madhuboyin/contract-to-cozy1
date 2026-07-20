@@ -23,25 +23,14 @@ require('ts-node/register');
 // path instead of the disabled-state short-circuit.
 process.env.GEMINI_API_KEY = process.env.GEMINI_API_KEY || 'test-key';
 
-// diyAiGuide.service.ts constructs a real BullMQ Queue at module scope
-// (`new Queue(DIY_AI_GUIDE_QUEUE, { connection, ... })`), which opens a real
-// ioredis connection immediately on import — before any mock in a per-test
-// setup function would run. Stub bullmq's Queue class before the first
-// require of the service (or anything that transitively imports
-// JobQueue.service.ts, which constructs many more real queues the same way).
-const bullmqPath = require.resolve('bullmq');
-require.cache[bullmqPath] = {
-  id: bullmqPath,
-  filename: bullmqPath,
-  loaded: true,
-  exports: {
-    Queue: class FakeQueue {
-      async add() {
-        return { id: 'job-1' };
-      }
-    },
-  },
-};
+// W4 fix: initiateGeneration now also gates on evaluateWorkerExecution.
+// generate-diy-ai-guide has externalProvider: 'Gemini', so under default
+// beta flags (WORKER_EXTERNAL_INGEST_ENABLED=false) it would be blocked —
+// see the dedicated "blocked by worker execution policy" test below, which
+// clears this override deliberately. Set it here so every other test
+// exercises the real generation path instead of the blocked short-circuit.
+process.env.WORKER_JOB_GENERATE_DIY_AI_GUIDE_ENABLED =
+  process.env.WORKER_JOB_GENERATE_DIY_AI_GUIDE_ENABLED || 'true';
 
 function loadService({
   existingGuide = null,
@@ -113,6 +102,19 @@ function loadService({
   const servicePath = require.resolve('../../src/services/diyAiGuide.service.ts');
   delete require.cache[servicePath];
   const mod = require(servicePath);
+
+  // W4 fix: getDiyAiGuideQueue() lazily constructs the real BullMQ Queue on
+  // first call instead of at module scope, and exposes __setForTesting so
+  // tests can inject an in-memory fake before that first call — no more
+  // require.cache['bullmq'] stubbing, no real Redis connection ever opens.
+  calls.enqueued = [];
+  mod.getDiyAiGuideQueue.__setForTesting({
+    add: async (name, data, opts) => {
+      calls.enqueued.push({ name, data, opts });
+      return { id: opts?.jobId ?? 'job-1' };
+    },
+    getJob: async () => undefined,
+  });
 
   // Patch the AI call after require (the class instance holds no exported
   // seam for the Gemini client, so stub the method directly on the
@@ -252,6 +254,30 @@ test('initiateGeneration fails closed with a clear AI_UNAVAILABLE error when GEM
     assert.equal(calls.creates.length, 0, 'must not create a guide row that would only fail later during generation');
   } finally {
     process.env.GEMINI_API_KEY = originalKey;
+  }
+});
+
+test('initiateGeneration is blocked by worker execution policy when external ingest is disabled (default beta flags)', async () => {
+  const originalOverride = process.env.WORKER_JOB_GENERATE_DIY_AI_GUIDE_ENABLED;
+  const originalExternalIngest = process.env.WORKER_EXTERNAL_INGEST_ENABLED;
+  delete process.env.WORKER_JOB_GENERATE_DIY_AI_GUIDE_ENABLED;
+  delete process.env.WORKER_EXTERNAL_INGEST_ENABLED; // falls back to its beta default: false
+  try {
+    const { diyAiGuideService, calls } = loadService({ existingGuide: null, geminiResponseText: validGuideResponse() });
+
+    await assert.rejects(
+      () => diyAiGuideService.initiateGeneration('user-1', 'property-1', 'fix my fence'),
+      (err) => {
+        assert.equal(err.statusCode, 503);
+        assert.equal(err.code, 'WORKER_JOB_DISABLED');
+        return true;
+      },
+    );
+    assert.equal(calls.creates.length, 0, 'must not create a guide row when the job is policy-disabled');
+    assert.equal(calls.enqueued.length, 0, 'must not enqueue when the job is policy-disabled');
+  } finally {
+    process.env.WORKER_JOB_GENERATE_DIY_AI_GUIDE_ENABLED = originalOverride;
+    process.env.WORKER_EXTERNAL_INGEST_ENABLED = originalExternalIngest;
   }
 });
 
