@@ -10,6 +10,8 @@ Date started: July 18, 2026
 
 Make ContractToCozy feel like one calm home operating system rather than a catalog of independent tools. Phase 2 introduces one property-scoped action contract, one lifecycle command surface, and one responsive Home hierarchy.
 
+Tools remain part of that operating system through bounded contextual discovery rather than a feature-led dashboard. Unified Home may recommend up to three property-relevant tools after the ranked actions and supporting Home summary. The searchable **Explore tools** library and command palette provide deliberate access to the full launchable set, while workflow-only tools remain available only in their required workflows.
+
 ## Increment 1 — Canonical action-system cutover
 
 Implemented:
@@ -120,6 +122,28 @@ Acceptance criteria:
 - Complete, already-done, not-relevant, dismiss, and snooze behavior remains consistent across Home and personalization module surfaces.
 - No sensitive household-profile answer is present in Home Action evidence, analytics metadata, or action URLs.
 - Focused tests cover eligibility, governance mismatch, expiry, context version, ranking, deduplication, safety lifecycle, and underlying recommendation synchronization.
+
+## Unified Home tool-discovery convergence
+
+Implemented July 20, 2026:
+
+- Added a bounded **Tools for this home** section to the default Unified Home experience.
+- Selected recommendations deterministically from the canonical ranked Home actions, Home-at-a-glance summary, and Property Context health; no Gemini request is used.
+- Added homeowner-facing reason, outcome, readiness guidance, and property-aware deep links to each recommendation.
+- Suppressed tool recommendations when an existing ranked action already launches that tool.
+- Introduced one shared discovery registry that combines the previously separate Home Tools and AI Tools inventories, deduplicates overlapping entries, excludes workflow-only utilities from general discovery, and classifies tools by homeowner outcome.
+- Reworked `/dashboard/home-tools` into a searchable **Explore tools** library organized around decide, protect, maintain, plan, save, and understand outcomes.
+- Redirected the legacy `/dashboard/ai-tools` entry point to the canonical library while preserving query context.
+- Added the full launchable discovery registry and an **Explore all home tools** shortcut to the dashboard command palette.
+
+Acceptance criteria:
+
+- Unified Home shows no more than three tool recommendations and retains ranked actions as the primary hierarchy.
+- Every recommendation explains why it applies now, the expected homeowner outcome, and what context improves the result.
+- A tool already used as a ranked-action CTA is not repeated in the recommendation section.
+- Explore tools retains the selected property, supports search, and excludes workflow-only tools.
+- Legacy AI Tools links resolve to Explore tools without losing query parameters.
+- Command search finds tools by title, description, and outcome category.
 
 ## Increment 1 acceptance evidence
 

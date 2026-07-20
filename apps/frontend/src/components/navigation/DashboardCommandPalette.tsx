@@ -10,12 +10,14 @@ import { usePropertyContext } from '@/lib/property/PropertyContext';
 import { buildPropertyAwareDashboardHref } from '@/lib/routes/dashboardPropertyAwareHref';
 import { ADMIN_NAV } from '@/lib/navigation/adminNavigation';
 import { Command } from 'cmdk';
+import { getDiscoverableTools } from '@/features/tools/toolDiscoveryRegistry';
 
 type CommandItem = {
   id: string;
   label: string;
   href: string;
-  group: 'Navigation' | 'Recent Actions' | 'Quick Shortcuts';
+  group: 'Navigation' | 'Recent Actions' | 'Quick Shortcuts' | 'Tools';
+  keywords?: string[];
 };
 
 type DashboardCommandPaletteProps = {
@@ -173,9 +175,23 @@ export default function DashboardCommandPalette({ propertyId }: DashboardCommand
       { id: 'quick-savings', label: 'Review savings', href: saveHref, group: 'Quick Shortcuts' },
       { id: 'quick-vault', label: 'Open vault', href: vaultHref, group: 'Quick Shortcuts' },
       { id: 'quick-home-lab', label: 'Open Home Lab', href: homeLabHref, group: 'Quick Shortcuts' },
+      {
+        id: 'quick-explore-tools',
+        label: 'Explore all home tools',
+        href: `/dashboard/home-tools${resolvedPropertyId ? `?propertyId=${encodeURIComponent(resolvedPropertyId)}` : ''}`,
+        group: 'Quick Shortcuts',
+      },
     ];
 
-    return [...navItems, ...recent, ...quick];
+    const tools: CommandItem[] = getDiscoverableTools().map((tool) => ({
+      id: `tool-${tool.id}`,
+      label: tool.label,
+      href: tool.buildHref(resolvedPropertyId),
+      group: 'Tools',
+      keywords: [tool.description, tool.outcomeCategory.replace(/_/g, ' ')],
+    }));
+
+    return [...navItems, ...recent, ...quick, ...tools];
   }, [
     homeLabHref,
     inventoryHref,
@@ -190,7 +206,7 @@ export default function DashboardCommandPalette({ propertyId }: DashboardCommand
     vaultHref,
   ]);
 
-  const groups: Array<CommandItem['group']> = ['Navigation', 'Recent Actions', 'Quick Shortcuts'];
+  const groups: Array<CommandItem['group']> = ['Navigation', 'Recent Actions', 'Quick Shortcuts', 'Tools'];
 
   const onSelect = (href: string) => {
     setOpen(false);
@@ -216,7 +232,7 @@ export default function DashboardCommandPalette({ propertyId }: DashboardCommand
                 autoFocus
                 value={query}
                 onValueChange={setQuery}
-                placeholder="Search pages, actions, and shortcuts..."
+                placeholder="Search pages, actions, shortcuts, and tools..."
                 className="h-10 w-full rounded-md border border-input bg-background pl-9 pr-3 text-sm outline-none ring-offset-background placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               />
             </div>
@@ -236,7 +252,7 @@ export default function DashboardCommandPalette({ propertyId }: DashboardCommand
                     <Command.Item
                       key={item.id}
                       value={item.label}
-                      keywords={[item.group, item.href]}
+                      keywords={[item.group, item.href, ...(item.keywords ?? [])]}
                       onSelect={() => onSelect(item.href)}
                       className="flex cursor-pointer items-center rounded-md px-2 py-2 text-sm text-gray-700 outline-none transition-colors data-[selected=true]:bg-brand-50 data-[selected=true]:text-brand-700"
                     >

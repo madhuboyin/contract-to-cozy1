@@ -451,6 +451,7 @@ Within one session, a new user should receive something credible and actionable 
 1. Decisions you may need to make — contextual entry points based on property state and active work.
 1. Active major moment — shown prominently only when an event is in progress.
 1. Home at a glance — health, recent activity, open work, and coverage gaps as supporting context.
+1. Tools for this home — a maximum of three contextual utilities selected from the ranked action feed and current Property Context, with a clear reason, expected outcome, readiness note, and path to the complete library.
 1. Ask about this home — conversational access grounded in the Living Home Record.
 
 > **IMPORTANT** — Do not duplicate the jobs as three top-level tabs while also retaining a full feature-led navigation. That creates two competing information architectures.
@@ -463,9 +464,33 @@ Within one session, a new user should receive something credible and actionable 
 | Plan & Projects | Decisions, tasks, projects, budgets, and active event journeys. |
 | Home Record | Systems, timeline, documents, work history, providers, and property facts. |
 | Ask | Situation-first conversational entry grounded in property context. |
-| Search / command | Direct access to objects and actions without understanding taxonomy. |
+| Search / command | Direct access to objects, actions, and tools without understanding taxonomy. |
 
 *The exact labels should be usability-tested. The governing principle is stable: visible navigation should reflect homeowner intent and continuity, not internal services.*
+
+#### Tool discovery and integration
+
+ContractToCozy may contain many useful utilities without presenting itself as a feature catalog. Tools are execution capabilities behind homeowner jobs; they should appear when they help the homeowner understand, decide, plan, protect, or complete an outcome.
+
+The experience uses two complementary discovery layers:
+
+1. **Contextual discovery on Home and inside workflows.** Unified Home shows no more than three tools selected deterministically from its canonical ranked actions and Property Context. Each recommendation states why it applies now, what outcome it supports, what inputs improve it, and a specific CTA. When a ranked action already launches the same tool, Home must not repeat it in the tools section.
+1. **One canonical Explore tools library.** A property-aware, searchable library provides deliberate access to the broader capability set. It combines previously separate Home Tools and AI Tools catalogs because AI is an implementation method rather than a homeowner job.
+
+The canonical library organizes tools by homeowner outcome:
+
+- Decide and compare
+- Protect and monitor
+- Maintain and prevent
+- Plan and budget
+- Save and optimize
+- Understand your home
+
+Tool discovery must also be available through Search / command. Workflow-only utilities remain hidden from general browsing and appear only after their required object or workflow exists. Tool links carry the selected property and any safe action, journey, item, or document context required to avoid repeated setup.
+
+One shared discovery registry governs homeowner title, description, outcome category, route construction, eligibility, workflow-only status, and iconography across Home, Explore tools, and Search / command. Recommendation selection remains deterministic during beta and consumes the canonical Unified Home and Property Context contracts; it does not require a generative-model request.
+
+Tool success is measured by meaningful starts, completed outputs, resulting action or decision, and recorded outcome—not catalog impressions or clicks alone. Entry surface and recommendation reason should be retained in analytics so the team can distinguish useful contextual discovery from browsing.
 
 ### 17. Recommendation experience
 
