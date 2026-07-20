@@ -1,0 +1,14 @@
+## Variant A: Homeowner Technology Buyer
+ContractToCozy can be positioned as a homeowner intelligence platform built to connect the fragmented realities of homeownership into one operating layer. Repository review shows working software across onboarding, inventory, maintenance, coverage, savings, risk, permits, documents, neighborhood context, and what-if planning, tied together by shared property and homeowner models plus a guidance engine that helps determine what matters next.
+
+For a homeowner technology buyer, the appeal is roadmap acceleration. Instead of starting from a blank page on adjacent ownership workflows, the buyer gains a broad product architecture, working UX patterns, APIs, jobs, data models, and a coherent view of how discrete homeowner experiences can reinforce one another. The value is not “36 tools.” It is the groundwork for a more complete homeowner relationship.
+
+## Variant B: Mortgage, Insurance, Or Financial-Services Buyer
+ContractToCozy can be framed as a property-context layer for retention, cross-sell, and proactive financial engagement. The codebase includes refinance monitoring with scenario storage and rate ingestion, coverage intelligence tied to policy and warranty context, home savings workflows across recurring categories, reserve-fund and capital-planning surfaces, and additional decision-support flows such as true-cost, break-even, and risk-premium optimization.
+
+For a mortgage, insurance, or financial-services buyer, the strategic value is the combination of financial opportunity discovery with home-specific context. The platform demonstrates how mortgage posture, insurance details, asset condition, maintenance burden, and household economics can be connected into smarter timing and recommendation workflows. It would still require production hardening, but it provides an existing foundation for a richer homeowner-financial experience.
+
+## Variant C: Real-Estate, Brokerage, Builder, Or Home-Services Buyer
+ContractToCozy can be positioned as a lifecycle bridge from move-in through ownership, maintenance, improvement, and eventual sale. Beyond core home-profile and inventory workflows, the repository shows meaningful work in permits, inspection handling, renovation compliance, DIY/project planning, service-price benchmarking, negotiation support, seller prep, and neighborhood change monitoring.
+
+For real-estate, brokerage, builder, or home-services buyers, that breadth matters because it extends the customer relationship beyond a single transaction. The platform demonstrates how a buyer could connect pre-purchase findings, ownership memory, service needs, improvement planning, and resale readiness into a longer-lived homeowner journey. Acquisition could accelerate roadmap exploration without requiring the buyer to rebuild the full problem map internally.
