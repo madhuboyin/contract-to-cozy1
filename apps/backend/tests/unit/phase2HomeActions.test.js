@@ -204,6 +204,14 @@ test('unified Home uses one five-section responsive surface and five homeowner d
     path.resolve(__dirname, '../../../frontend/src/components/home/UnifiedHomeSurface.tsx'),
     'utf8',
   );
+  const actionPlan = fs.readFileSync(
+    path.resolve(__dirname, '../../../frontend/src/app/(dashboard)/dashboard/properties/[id]/action-plan/page.tsx'),
+    'utf8',
+  );
+  const homeService = fs.readFileSync(
+    path.resolve(__dirname, '../../src/services/homeActions.service.ts'),
+    'utf8',
+  );
   const dashboard = fs.readFileSync(
     path.resolve(__dirname, '../../../frontend/src/app/(dashboard)/dashboard/page.tsx'),
     'utf8',
@@ -222,6 +230,12 @@ test('unified Home uses one five-section responsive surface and five homeowner d
   assert.match(homeSurface, /COVERAGE_CORRECTION_GROUP/);
   assert.match(homeSurface, /Review coverage gaps/);
   assert.match(homeSurface, /Why this priority:/);
+  assert.match(homeSurface, /View full action plan/);
+  assert.match(actionPlan, /api\.getHomeActions\(propertyId\)/);
+  assert.match(actionPlan, /Ranked actions and supporting details/);
+  assert.match(actionPlan, /showSupportingDetails/);
+  assert.match(actionPlan, /Open Resolution Center/);
+  assert.match(homeService, /\/dashboard\/properties\/\$\{propertyId\}\/action-plan/);
   for (const destination of ['recordHref', 'systemsHref', 'coverageHref', 'workHref']) {
     assert.match(homeSurface, new RegExp(destination));
   }

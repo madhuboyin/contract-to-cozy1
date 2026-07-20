@@ -381,7 +381,7 @@ export async function getUnifiedHome(propertyId: string, userId: string) {
     attention: {
       actions: feed.actions,
       totalCount: feed.actions.length,
-      planHref: '#attention-heading',
+      planHref: `/dashboard/properties/${propertyId}/action-plan`,
     },
     decisions,
     activeMajorMoment,
@@ -401,7 +401,7 @@ export async function getUnifiedHome(propertyId: string, userId: string) {
       recordHref: `/dashboard/properties/${propertyId}`,
       systemsHref: `/dashboard/properties/${propertyId}/inventory`,
       coverageHref: `/dashboard/properties/${propertyId}/inventory?tab=items&smart=gaps`,
-      workHref: '#attention-heading',
+      workHref: `/dashboard/properties/${propertyId}/action-plan`,
     },
     diagnostics: feed.diagnostics,
     generatedAt: new Date().toISOString(),

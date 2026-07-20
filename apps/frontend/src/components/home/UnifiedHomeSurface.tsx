@@ -29,16 +29,16 @@ function priorityTone(priority: RankedHomeActionDTO['priority']) {
   return 'border-slate-200 bg-slate-50 text-slate-600';
 }
 
-function coverageCorrectionSubject(action: RankedHomeActionDTO): string | null {
+export function coverageCorrectionSubject(action: RankedHomeActionDTO): string | null {
   if (action.source.kind !== 'GUIDANCE' || action.governance.safetyTier !== 'REGULATED_COVERAGE') return null;
   return action.recommendedAction.match(/^Add coverage information for (.+)$/i)?.[1]?.trim() || null;
 }
 
-type AttentionEntry =
+export type AttentionEntry =
   | { kind: 'ACTION'; action: RankedHomeActionDTO }
   | { kind: 'COVERAGE_CORRECTION_GROUP'; actions: RankedHomeActionDTO[]; subjects: string[] };
 
-function groupAttentionActions(actions: RankedHomeActionDTO[]): AttentionEntry[] {
+export function groupAttentionActions(actions: RankedHomeActionDTO[]): AttentionEntry[] {
   const coverageActions = actions.filter((action) => coverageCorrectionSubject(action));
   if (coverageActions.length < 2) return actions.map((action) => ({ kind: 'ACTION', action }));
 
@@ -56,14 +56,16 @@ function groupAttentionActions(actions: RankedHomeActionDTO[]): AttentionEntry[]
   });
 }
 
-function CoverageCorrectionGroupCard({
+export function CoverageCorrectionGroupCard({
   actions,
   subjects,
   href,
+  showSupportingDetails = false,
 }: {
   actions: RankedHomeActionDTO[];
   subjects: string[];
   href: string;
+  showSupportingDetails?: boolean;
 }) {
   const first = actions[0];
   return (
@@ -82,6 +84,21 @@ function CoverageCorrectionGroupCard({
       <div className="mt-3 flex flex-wrap gap-2">
         {subjects.map((subject) => <Badge key={subject} variant="secondary" className="rounded-full">{subject}</Badge>)}
       </div>
+      {showSupportingDetails && (
+        <div className="mt-4 space-y-2 border-t border-slate-100 pt-4">
+          {actions.map((action) => (
+            <div key={action.id} className="flex flex-col gap-2 rounded-xl bg-slate-50 p-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-sm font-semibold text-slate-900">{coverageCorrectionSubject(action) ?? action.recommendedAction}</p>
+                <p className="mt-1 text-xs text-slate-500">Priority #{action.ranking.rank} · {action.confidence.label.toLowerCase()} confidence</p>
+              </div>
+              <Button asChild size="sm" variant="outline" className="rounded-full">
+                <Link href={action.primaryCta.href}>Review item</Link>
+              </Button>
+            </div>
+          ))}
+        </div>
+      )}
       <div className="mt-4">
         <Button asChild size="sm" className="rounded-full">
           <Link href={href}>Review coverage gaps<ArrowRight className="ml-1 h-3.5 w-3.5" /></Link>
@@ -91,14 +108,16 @@ function CoverageCorrectionGroupCard({
   );
 }
 
-function ActionCard({
+export function ActionCard({
   action,
   propertyId,
   onChanged,
+  showSupportingDetails = false,
 }: {
   action: RankedHomeActionDTO;
   propertyId: string;
   onChanged: () => Promise<unknown>;
+  showSupportingDetails?: boolean;
 }) {
   const { toast } = useToast();
   const [pending, setPending] = React.useState<HomeActionCommand | null>(null);
@@ -146,6 +165,35 @@ function ActionCard({
           <p className="mt-2 text-xs leading-5 text-slate-500"><span className="font-semibold text-slate-600">Why this priority:</span> {action.ranking.explanation}</p>
         </div>
       </div>
+      {showSupportingDetails && (
+        <div className="mt-4 grid gap-3 border-t border-slate-100 pt-4 md:grid-cols-2">
+          <div className="rounded-xl bg-slate-50 p-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Expected outcome</p>
+            <p className="mt-1 text-sm leading-6 text-slate-700">{action.expectedOutcome}</p>
+          </div>
+          <div className="rounded-xl bg-slate-50 p-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Timing</p>
+            <p className="mt-1 text-sm leading-6 text-slate-700">{action.timing.rationale}</p>
+          </div>
+          <div className="rounded-xl bg-slate-50 p-3 md:col-span-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Supporting evidence</p>
+            <ul className="mt-2 space-y-2">
+              {action.evidence.map((evidence) => (
+                <li key={evidence.id} className="text-sm text-slate-700">
+                  <span className="font-medium">{evidence.label}</span>
+                  <span className="text-slate-500"> · {evidence.source} · {evidence.freshness.toLowerCase()}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+          {action.confidence.missing.length > 0 && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 md:col-span-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-amber-800">Missing information</p>
+              <p className="mt-1 text-sm text-amber-800">{action.confidence.missing.join(' · ')}</p>
+            </div>
+          )}
+        </div>
+      )}
       <div className="mt-4 flex flex-wrap gap-2">
         <Button asChild size="sm" className="rounded-full">
           <Link href={action.primaryCta.href} onClick={() => { void api.recordHomeActionOpened(propertyId, action.id); }}>{action.primaryCta.label}<ArrowRight className="ml-1 h-3.5 w-3.5" /></Link>
@@ -176,7 +224,6 @@ function ActionCard({
 }
 
 export function UnifiedHomeSurface({ propertyId }: { propertyId: string }) {
-  const [showAllActions, setShowAllActions] = React.useState(false);
   const query = useQuery({
     queryKey: ['unified-home', propertyId],
     queryFn: () => api.getUnifiedHome(propertyId),
@@ -197,9 +244,7 @@ export function UnifiedHomeSurface({ propertyId }: { propertyId: string }) {
 
   const home = query.data;
   const attentionEntries = groupAttentionActions(home.attention.actions);
-  const visibleAttentionEntries = showAllActions
-    ? attentionEntries
-    : attentionEntries.slice(0, 5);
+  const visibleAttentionEntries = attentionEntries.slice(0, 5);
   const openAsk = () => {
     window.dispatchEvent(new CustomEvent('cozy-chat-open'));
   };
@@ -251,15 +296,9 @@ export function UnifiedHomeSurface({ propertyId }: { propertyId: string }) {
       <section aria-labelledby="attention-heading" className="space-y-3">
         <div className="flex items-end justify-between gap-4">
           <div><h2 id="attention-heading" className="text-xl font-semibold text-slate-950">What needs attention</h2><p className="text-sm text-slate-500">A limited, ranked list with the reason and next move.</p></div>
-          {attentionEntries.length > 5 && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="rounded-full text-teal-700 hover:text-teal-800"
-              onClick={() => setShowAllActions((current) => !current)}
-            >
-              {showAllActions ? 'Show top priorities' : `View all ${home.attention.totalCount} actions`}
+          {home.attention.totalCount > 0 && (
+            <Button asChild variant="ghost" size="sm" className="rounded-full text-teal-700 hover:text-teal-800">
+              <Link href={home.attention.planHref}>View full action plan</Link>
             </Button>
           )}
         </div>
