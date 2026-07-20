@@ -31,6 +31,24 @@ export async function createHomeReportExport(req: Request, res: Response) {
       });
     }
 
+    // W3 (exports — "concurrent duplicate requests"): unlike
+    // materialSpec.service.ts#requestExport, this previously created a new
+    // PENDING row unconditionally — a double-click or two open tabs
+    // triggered two full generations and two S3 uploads for the same
+    // property, wasted compute/storage, and combined with the poller's
+    // claim race, could leave one upload orphaned.
+    const inFlight = await prisma.homeReportExport.findFirst({
+      where: { propertyId, status: { in: ['PENDING', 'GENERATING'] } },
+      select: { id: true },
+    });
+    if (inFlight) {
+      return res.status(409).json({
+        success: false,
+        message: 'A report export is already in progress for this property.',
+        data: { exportId: inFlight.id },
+      });
+    }
+
     const exp = await prisma.homeReportExport.create({
       data: {
         userId,

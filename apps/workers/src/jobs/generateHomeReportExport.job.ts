@@ -19,24 +19,27 @@ export async function generateHomeReportExportJob(exportId: string) {
   });
 
   if (!exp) return;
-
-  // ✅ ADD THIS FIRST
-  if (exp.status === HomeReportExportStatus.DELETED) {
-    return;
-  }
-
-  // Existing guard (keep it)
   if (exp.status !== HomeReportExportStatus.PENDING) {
     return;
   }
 
-  await prisma.homeReportExport.update({
-    where: { id: exportId },
-      data: {
-        status: HomeReportExportStatus.GENERATING,
-        startedAt: new Date(),
-      },
+  // Atomic claim (W3/exports — "safe claim ownership"): the poller does a
+  // plain findMany + this job's own findUnique/update, with no guard against
+  // two overlapping poll ticks (or two worker replicas) both reading PENDING
+  // before either flips the row to GENERATING — both would generate and
+  // upload, and whichever terminal update writes last wins, silently
+  // orphaning the other's S3 object. The WHERE-guarded updateMany only
+  // succeeds (count === 1) for whichever caller gets there first.
+  const claim = await prisma.homeReportExport.updateMany({
+    where: { id: exportId, status: HomeReportExportStatus.PENDING },
+    data: {
+      status: HomeReportExportStatus.GENERATING,
+      startedAt: new Date(),
+    },
   });
+  if (claim.count !== 1) {
+    return;
+  }
 
   await prisma.homeReportExportEvent.create({
     data: {
@@ -44,6 +47,15 @@ export async function generateHomeReportExportJob(exportId: string) {
       type: 'GENERATION_STARTED',
     },
   });
+
+  // Cleanup-on-terminal-failure (W3/exports — "object cleanup"): tracks the
+  // just-uploaded object only until the READY update that persists its key
+  // actually commits. If anything after the upload throws — including the
+  // READY update itself — nothing in the DB references the object yet, so
+  // it must be deleted here or it's orphaned forever (S3 cost leak, never
+  // reachable by the expiry-cleanup runner since that runner only finds
+  // rows that already have a storageKey).
+  let uploaded: { bucket: string; key: string } | undefined;
 
   try {
     // Recheck current applicability with the same policy the backend uses
@@ -79,7 +91,7 @@ export async function generateHomeReportExportJob(exportId: string) {
     const checksum = sha256(pdfBuffer);
     const fileName = `home-report-${exp.propertyId}-${new Date().toISOString().slice(0, 10)}.pdf`;
 
-    const uploaded = await uploadPdfBuffer({
+    uploaded = await uploadPdfBuffer({
       buffer: pdfBuffer,
       fileName,
       checksumSha256: checksum,
@@ -100,6 +112,8 @@ export async function generateHomeReportExportJob(exportId: string) {
       return;
     }
 
+    const { bucket, key } = uploaded;
+
     await prisma.homeReportExport.update({
       where: { id: exportId },
       data: {
@@ -107,10 +121,14 @@ export async function generateHomeReportExportJob(exportId: string) {
         completedAt: new Date(),
         snapshot: snapshot as any,
         contextVersion: snapshot.meta.contextVersion,
-        storageBucket: uploaded.bucket,
-        storageKey: uploaded.key,
+        storageBucket: bucket,
+        storageKey: key,
       },
     });
+    // READY committed with the storage key persisted — the row is now the
+    // object's reference. A later failure (e.g. the event-log insert below)
+    // must not delete a properly-referenced object.
+    uploaded = undefined;
 
     await prisma.homeReportExportEvent.create({
       data: {
@@ -119,12 +137,18 @@ export async function generateHomeReportExportJob(exportId: string) {
         meta: {
           fileName,
           checksum,
-          bucket: uploaded.bucket,
-          key: uploaded.key,
+          bucket,
+          key,
         },
       },
     });
   } catch (err: any) {
+    if (uploaded) {
+      try {
+        await deleteObject(uploaded.bucket, uploaded.key);
+      } catch {}
+    }
+
     // ❗ If deleted mid-generation, do NOT overwrite status to FAILED
     const latest = await prisma.homeReportExport.findUnique({
       where: { id: exportId },

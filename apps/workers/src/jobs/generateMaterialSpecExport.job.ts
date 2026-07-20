@@ -3,6 +3,7 @@ import { chromium } from 'playwright';
 import { prisma } from '../lib/prisma';
 import { MaterialSpecExportStatus } from '@prisma/client';
 import { uploadPdfBuffer } from '../../../backend/src/services/storage/reportStorage';
+import { deleteObject } from '../storage/deleteObject';
 import { logger } from '../lib/logger';
 
 function sha256(buf: Buffer): string {
@@ -180,10 +181,19 @@ export async function generateMaterialSpecExportJob(exportId: string): Promise<v
   if (!exportRecord) return;
   if (exportRecord.status !== MaterialSpecExportStatus.PENDING) return;
 
-  await prisma.materialSpecExport.update({
-    where: { id: exportId },
+  // Atomic claim (W3/exports — "safe claim ownership"): see
+  // generateHomeReportExport.job.ts for the same fix and full rationale —
+  // two overlapping poll ticks could otherwise both claim and generate for
+  // the same PENDING row.
+  const claim = await prisma.materialSpecExport.updateMany({
+    where: { id: exportId, status: MaterialSpecExportStatus.PENDING },
     data: { status: MaterialSpecExportStatus.GENERATING },
   });
+  if (claim.count !== 1) return;
+
+  // Cleanup-on-terminal-failure (W3/exports — "object cleanup"): see
+  // generateHomeReportExport.job.ts for the same fix and full rationale.
+  let uploaded: { bucket: string; key: string } | undefined;
 
   try {
     // Build where clause based on scopeType
@@ -259,7 +269,7 @@ export async function generateMaterialSpecExportJob(exportId: string): Promise<v
       .slice(0, 40);
     const fileName = `material-specs-${slug}-${new Date().toISOString().slice(0, 10)}.pdf`;
 
-    const uploaded = await uploadPdfBuffer({
+    uploaded = await uploadPdfBuffer({
       buffer: pdfBuffer,
       fileName,
       checksumSha256: checksum,
@@ -276,10 +286,21 @@ export async function generateMaterialSpecExportJob(exportId: string): Promise<v
         fileUrl: uploaded.key,
       },
     });
+    // COMPLETED committed with the file key persisted — a later failure
+    // must not delete a now-properly-referenced object.
+    uploaded = undefined;
 
     logger.info({ exportId, totalSpecs: specs.length }, '[materialSpecExport] completed');
   } catch (err: any) {
     logger.error({ err, exportId }, '[materialSpecExport] failed');
+
+    if (uploaded) {
+      try {
+        await deleteObject(uploaded.bucket, uploaded.key);
+      } catch (cleanupErr) {
+        logger.warn({ err: cleanupErr, exportId }, '[materialSpecExport] orphaned-object cleanup failed');
+      }
+    }
 
     await prisma.materialSpecExport.update({
       where: { id: exportId },

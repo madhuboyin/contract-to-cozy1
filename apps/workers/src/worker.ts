@@ -21,6 +21,7 @@ import { expireSeasonalChecklists } from './jobs/seasonalChecklistExpiration.job
 import { runHomeReportExportPoller } from './runners/homeReportExport.poller';
 import { runReportExportCleanup } from './runners/reportExport.cleanup';
 import { runMaterialSpecExportPoller } from './runners/materialSpecExport.poller';
+import { runMaterialSpecExportCleanup } from './runners/materialSpecExport.cleanup';
 import { startDomainEventsPoller } from './runners/domainEvents.poller';
 import { startHighPriorityEmailEnqueuePoller } from './runners/highPriorityEmailEnqueue.poller';
 import { startClaimFollowUpDuePoller } from './runners/claimFollowUpDue.poller';
@@ -1011,6 +1012,9 @@ if (runnerAllowed('report-export-cleanup')) {
 }
 if (runnerAllowed('material-spec-export-poller')) {
   restartAfterDelay('Material spec export poller', runMaterialSpecExportPoller);
+}
+if (runnerAllowed('material-spec-export-cleanup')) {
+  restartAfterDelay('Material spec export cleanup', runMaterialSpecExportCleanup);
 }
 
 if (runnerAllowed('high-priority-email-enqueue-poller')) {
