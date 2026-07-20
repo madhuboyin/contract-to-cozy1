@@ -7,6 +7,10 @@ import { SharedSignalKey, signalService } from './signal.service';
 import { DecisionCandidate, runDecisionEngine } from './decisionEngine.service';
 import { logSharedDataEvent } from './sharedDataObservability.service';
 import { analyticsEmitter, AnalyticsModule } from './analytics';
+import {
+  isRiskReportInventoryAssetType,
+  visibleInventoryItemWhere,
+} from './riskAssetApplicability';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -220,7 +224,7 @@ async function ensureInventoryItemsFromRiskReport(propertyId: string): Promise<v
     if (!rawEntry || typeof rawEntry !== 'object' || Array.isArray(rawEntry)) continue;
     const entry = rawEntry as Record<string, unknown>;
     const systemType = typeof entry.systemType === 'string' ? entry.systemType.trim() : '';
-    if (!systemType || systemType.startsWith('MAJOR_APPLIANCE_')) continue;
+    if (!systemType || !isRiskReportInventoryAssetType(systemType)) continue;
 
     const category = mapAssetTypeToCategory(systemType);
     if (category !== 'SYSTEMS' && category !== 'SAFETY' && category !== 'STRUCTURE') continue;
@@ -405,7 +409,7 @@ export async function ensureHomeItems(propertyId: string): Promise<void> {
 
   const [inventoryItems, existingHomeItems] = await Promise.all([
     prisma.inventoryItem.findMany({
-      where: { propertyId },
+      where: { propertyId, ...visibleInventoryItemWhere() },
       select: { id: true, name: true, category: true, roomId: true, assetType: true },
     }),
     prisma.homeItem.findMany({

@@ -21,6 +21,7 @@ import { getAggregationPropertyContext } from './aggregationContext/context';
 import { getContextCompleteness } from '../modules/propertyContext/application/getContextCompleteness';
 import { applyPersonalizationHomeActionLifecycle } from '../modules/personalization/application/applyHomeActionLifecycle.usecase';
 import { logger } from '../lib/logger';
+import { visibleInventoryItemWhere } from './riskAssetApplicability';
 
 export const HOME_ACTION_COMMANDS = [
   'COMPLETE',
@@ -289,7 +290,7 @@ export async function getUnifiedHome(propertyId: string, userId: string) {
         },
       }),
       prisma.inventoryItem.findMany({
-        where: { propertyId },
+        where: { propertyId, ...visibleInventoryItemWhere() },
         select: {
           id: true,
           name: true,

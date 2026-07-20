@@ -276,6 +276,12 @@ test('unified Home uses one five-section responsive surface and five homeowner d
   assert.match(homeSurface, /Critical weather/);
   assert.match(homeSurface, /View seasonal checklist/);
   assert.match(homeSurface, /Review coverage gaps/);
+  const seasonalCardSource = homeSurface.slice(
+    homeSurface.indexOf('export function SeasonalChecklistActionCard'),
+    homeSurface.indexOf('export function CoverageCorrectionGroupCard'),
+  );
+  assert.match(seasonalCardSource, /flex flex-wrap items-center gap-2/);
+  assert.doesNotMatch(seasonalCardSource, /flex items-start gap-3/);
   assert.match(homeSurface, /Why this priority:/);
   assert.match(homeSurface, /View full action plan/);
   assert.match(actionPlan, /api\.getHomeActions\(propertyId\)/);

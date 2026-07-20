@@ -15,6 +15,7 @@ import {
 } from './majorAppliance.util';
 import { assertSafeUrl } from '../utils/ssrfGuard';
 import { logger } from '../lib/logger';
+import { visibleInventoryItemWhere } from './riskAssetApplicability';
 
 function normalize(v: any) {
   return String(v ?? '').trim().toLowerCase();
@@ -234,7 +235,7 @@ export class InventoryService {
     return item;
   }
   async listItems(propertyId: string, query: ListItemsQuery) {
-    const where: any = { propertyId };
+    const where: any = { propertyId, ...visibleInventoryItemWhere() };
 
     if (query.roomId) where.roomId = query.roomId;
     if (query.category) where.category = query.category;

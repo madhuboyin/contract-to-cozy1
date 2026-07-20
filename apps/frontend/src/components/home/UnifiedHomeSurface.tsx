@@ -138,34 +138,31 @@ export function SeasonalChecklistActionCard({
 }) {
   return (
     <article className="rounded-2xl border border-emerald-200 bg-gradient-to-br from-white to-emerald-50/70 p-4 shadow-sm">
-      <div className="flex items-start gap-3">
-        <div className="rounded-xl bg-emerald-100 p-2 text-emerald-700"><CalendarDays className="h-5 w-5" /></div>
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge variant="outline" className={priorityTone(action.priority)}>{action.priority}</Badge>
-            <span className="text-xs font-semibold text-emerald-800">Seasonal checklist</span>
-            <span className="text-xs text-slate-500">Priority #{action.ranking.rank}</span>
-          </div>
-          <h3 className="mt-3 text-base font-semibold text-slate-950">{action.signal}</h3>
-          <p className="mt-1 text-sm leading-6 text-slate-600">{action.whyItMatters}</p>
-          {showSupportingDetails && (
-            <div className="mt-3 border-t border-emerald-100 pt-3">
-              <p className="text-xs font-semibold uppercase tracking-wide text-emerald-800">Remaining tasks</p>
-              <ul className="mt-2 grid gap-2 sm:grid-cols-2">
-                {action.evidence.map((evidence) => (
-                  <li key={evidence.id} className="rounded-lg bg-white/80 px-3 py-2 text-sm text-slate-700">{evidence.label}</li>
-                ))}
-              </ul>
-            </div>
-          )}
-          <div className="mt-4">
-            <Button asChild size="sm" className="rounded-full">
-              <Link href={action.primaryCta.href} onClick={() => { void api.recordHomeActionOpened(propertyId, action.id); }}>
-                View seasonal checklist<ArrowRight className="ml-1 h-3.5 w-3.5" />
-              </Link>
-            </Button>
-          </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <Badge variant="outline" className={priorityTone(action.priority)}>{action.priority}</Badge>
+        <span className="flex items-center gap-1 text-xs font-semibold text-emerald-800">
+          <CalendarDays className="h-4 w-4" />Seasonal checklist
+        </span>
+        <span className="text-xs text-slate-500">Priority #{action.ranking.rank}</span>
+      </div>
+      <h3 className="mt-3 text-base font-semibold text-slate-950">{action.signal}</h3>
+      <p className="mt-1 text-sm leading-6 text-slate-600">{action.whyItMatters}</p>
+      {showSupportingDetails && (
+        <div className="mt-3 border-t border-emerald-100 pt-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-emerald-800">Remaining tasks</p>
+          <ul className="mt-2 grid gap-2 sm:grid-cols-2">
+            {action.evidence.map((evidence) => (
+              <li key={evidence.id} className="rounded-lg bg-white/80 px-3 py-2 text-sm text-slate-700">{evidence.label}</li>
+            ))}
+          </ul>
         </div>
+      )}
+      <div className="mt-4">
+        <Button asChild size="sm" className="rounded-full">
+          <Link href={action.primaryCta.href} onClick={() => { void api.recordHomeActionOpened(propertyId, action.id); }}>
+            View seasonal checklist<ArrowRight className="ml-1 h-3.5 w-3.5" />
+          </Link>
+        </Button>
       </div>
     </article>
   );

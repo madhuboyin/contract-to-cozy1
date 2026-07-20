@@ -64,6 +64,7 @@ import {
 } from '../controllers/inventoryOcr.controller';
 import { requirePremiumForOcr } from '../middleware/premiumOcrGate.middleware';
 import { logger } from '../lib/logger';
+import { visibleInventoryItemWhere } from '../services/riskAssetApplicability';
 import {
   validateXlsxUpload,
   validateImageUpload,
@@ -234,7 +235,7 @@ router.get(
       const format = String(req.query.format || 'csv');
 
       const items = await prisma.inventoryItem.findMany({
-        where: { propertyId },
+        where: { propertyId, ...visibleInventoryItemWhere() },
         include: {
           room: { select: { name: true } },
           documents: { select: { id: true, name: true, type: true, createdAt: true } },

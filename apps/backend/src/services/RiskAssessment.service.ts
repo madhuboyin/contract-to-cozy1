@@ -22,6 +22,7 @@ import { logger } from '../lib/logger';
 import { getPropertyContext } from '../modules/propertyContext';
 import { evaluateProtectionContext } from './protection/applicabilityPolicy';
 import type { FeatureDecision, PropertyContextSnapshot } from '../modules/propertyContext';
+import { hasConfirmedBasement } from './riskAssetApplicability';
 
 interface PropertyWithRelations extends Property {
   warranties: Warranty[];
@@ -266,8 +267,11 @@ class RiskAssessmentService {
           logger.warn({ err: e }, '[RISK-SERVICE] Failed to build inventory major appliance risks');
         }
 
-        // Property-level resilience impact: sump-pump backup reduces basement flood risk.
-        assetRisks.push(this.buildBasementFloodRisk(property as PropertyWithRelations));
+        // Basement risk is property-level context, not an assumed physical asset.
+        // Fail closed unless the property's foundation explicitly confirms a basement.
+        if (hasConfirmedBasement(property.foundationType)) {
+          assetRisks.push(this.buildBasementFloodRisk(property as PropertyWithRelations));
+        }
         
         logger.info(`[RISK-SERVICE] Calculated risk for ${assetRisks.length} assets`);
         

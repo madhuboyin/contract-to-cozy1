@@ -61,6 +61,7 @@ Implemented July 20, 2026:
 - Removed internal contract/version labels from homeowner-facing Home presentation.
 - Deduplicated equivalent low-confidence context actions and replaced raw enum/system identifiers with homeowner-readable names.
 - Added context-specific service titles and CTAs, including the affected home system or item.
+- Aligned the Seasonal Checklist card content edge with the other attention cards while retaining its contextual label and icon.
 - Added one grouped seasonal-maintenance Home Action for the active or nearest checklist, including task count, critical-task count, progress, timing, and a checklist destination.
 - Selects seasonal focus only after excluding empty/stale checklists, preferring the active actionable checklist before the nearest actionable upcoming checklist.
 - Added distinct critical-weather Home presentation with urgent priority, NWS source and instructions, expiry context, and restricted lifecycle controls.
@@ -191,15 +192,21 @@ Operational launch note:
 
 ## Validation
 
+Automated acceptance rerun July 20, 2026 from commit `830f565`:
+
+- Backend Phase 2 contract suite: 48 passed.
+- Frontend tool-discovery and destination-context suites: 18 passed.
+- Backend build and frontend type-check: passed.
+- Product-framework route audit: 216 routes classified, passed.
+
+Use the package-scoped backend command below. Running the same test files directly
+from the repository root does not load `apps/backend/tsconfig.json` for `ts-node`
+consistently across supported Node versions.
+
 ```bash
 npm -C apps/backend run build
-node --test apps/backend/tests/unit/phase2HomeActions.test.js
-node --test apps/backend/tests/unit/phase2SourcePromotion.test.js
-node --test apps/backend/tests/unit/personalizationUnifiedHomeLifecycle.test.js
-node --test apps/backend/tests/unit/personalizationMaterializeRecommendations.test.js
-node --test apps/backend/tests/unit/unifiedHomePropertyContextConvergence.test.js
+npm -C apps/backend run test:phase2
 npx tsc --noEmit -p apps/frontend/tsconfig.json
 npm -C apps/frontend run qa:product-framework:routes
-node --test apps/backend/tests/unit/adminToolLifecycleMetrics.test.js apps/backend/tests/unit/toolLifecycleAnalytics.test.js apps/backend/tests/unit/toolDiscoveryAvailability.test.js
-npm -C apps/frontend test -- --runInBand src/features/tools/__tests__/toolDiscoveryRegistry.test.ts src/features/tools/__tests__/selectUnifiedHomeTools.test.ts src/lib/analytics/__tests__/toolDiscoveryEvents.test.ts
+npm -C apps/frontend test -- --runInBand src/features/tools/__tests__/toolDiscoveryRegistry.test.ts src/features/tools/__tests__/selectUnifiedHomeTools.test.ts src/features/tools/__tests__/toolDestinationContext.test.ts src/lib/analytics/__tests__/toolDiscoveryEvents.test.ts
 ```

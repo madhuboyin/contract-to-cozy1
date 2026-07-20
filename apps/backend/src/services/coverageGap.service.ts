@@ -1,5 +1,6 @@
 import { prisma } from '../lib/prisma';
 import { isCoverageActive } from './coverage/contextPolicy';
+import { visibleInventoryItemWhere } from './riskAssetApplicability';
 
 const HIGH_VALUE_THRESHOLD_CENTS = 50000;       // $500
 const APPLIANCE_THRESHOLD_CENTS = 25000;        // $250
@@ -53,6 +54,7 @@ export async function detectCoverageGaps(
   const items = await prisma.inventoryItem.findMany({
     where: {
       propertyId,
+      ...visibleInventoryItemWhere(),
       replacementCostCents: { not: null },
       OR: [
         { replacementCostCents: { gte: HIGH_VALUE_THRESHOLD_CENTS } },
