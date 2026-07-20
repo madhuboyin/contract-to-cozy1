@@ -1,6 +1,6 @@
 # Product Framework Phase 2 — Unified Home and Action System
 
-Status: Increments 1–3 implemented; database-backed runtime integration remains pending owner schema application
+Status: Increments 1–3 and post-cutover Home experience hardening implemented
 
 Contract version: `phase2-v1`
 
@@ -50,6 +50,21 @@ Implemented:
 - Reclassified the full action plan under Plan & Projects and kept specialized tools contextual.
 - Added stable shown, opened, acted, resolved, superseded, and verified action-lineage taxonomy and interaction capture.
 
+## Post-cutover Home experience hardening
+
+Implemented July 20, 2026:
+
+- Added a property-scoped Prioritized Action Plan at `/dashboard/properties/:propertyId/action-plan` so the Home summary links to the complete ranked list and its supporting timing, consequence, confidence, evidence, and next-action details.
+- Kept the Prioritized Action Plan broader than the Resolution Center. The plan includes every eligible canonical Home Action; the Resolution Center remains the execution surface for repair, incident, provider, and related resolution cases.
+- Removed internal contract/version labels from homeowner-facing Home presentation.
+- Deduplicated equivalent low-confidence context actions and replaced raw enum/system identifiers with homeowner-readable names.
+- Added context-specific service titles and CTAs, including the affected home system or item.
+- Added one grouped seasonal-maintenance Home Action for the active or nearest checklist, including task count, critical-task count, progress, timing, and a checklist destination.
+- Added distinct critical-weather Home presentation with urgent priority, NWS source and instructions, expiry context, and restricted lifecycle controls.
+- Suppressed lower-value incident-derived weather guidance when the canonical severe-weather action represents the same event.
+- Kept notifications as the delivery and awareness channel while making unresolved seasonal and critical-weather work persistently discoverable on Home.
+- Aligned the Home-at-a-glance prioritized-action count with the same canonical ranked feed opened by its link.
+
 ## Increment 3 — Source promotion and route-contract hardening
 
 Implemented:
@@ -66,13 +81,9 @@ Implemented:
 - Replaced duplicate global inspection-report guidance destinations with the property-scoped inspection hub.
 - Added service-level integration coverage for all five promoted source families and lifecycle suppression.
 
-## Remaining Phase 2 implementation
+## Remaining Phase 2 operational acceptance
 
-### Database-backed runtime acceptance
-
-- Apply the Phase 2 `ProductAnalyticsEventType` enum change to the target database. No migration script is included by design.
-- Run authenticated database-backed acceptance against a property containing guidance, incident, recall, coverage, project, maintenance, and activation records.
-- Confirm notification deep links produced by live jobs against the route-contract audit before duplicate-route redirects are enabled.
+The target Prisma schema has been applied. This beta has no separate test, development, or staging database, so schema migration is not a Phase 2 documentation or implementation gap. Continue to use deterministic service tests, frontend builds, the executable route audit, and narrowly scoped authenticated smoke checks against beta data. Before a real-user launch, execute production-readiness acceptance for representative guidance, incident, recall, coverage, project, maintenance, seasonal, weather, and activation records.
 
 ### Future source eligibility
 

@@ -5,8 +5,29 @@
 **Feature:** Seasonal Maintenance System  
 **Product:** Contract to Cozy - Property Management Platform  
 **Tech Stack:** Next.js/React (Frontend), Node.js/Express (Backend), PostgreSQL (Database), Kubernetes (Deployment)  
-**Status:** 🟡 Core feature deployed, completion sync pending  
-**Last Updated:** December 28, 2024
+**Status:** 🟢 Canonical Home integration implemented; historical sections retained for subsystem reference
+**Last Updated:** July 20, 2026
+
+> **Current architecture notice:** This document began as the December 2024 seasonal subsystem handoff. References below to a standalone dashboard card or Action Center describe the original implementation. The current homeowner experience uses the canonical Unified Home and Prioritized Action Plan described in `docs/product/phase2/README.md`.
+
+## July 2026 Unified Home integration
+
+Seasonal maintenance is no longer discoverable only through a notification:
+
+- the backend promotes one grouped canonical Home Action for the active or nearest applicable seasonal checklist;
+- the action includes applicable task count, critical-task count, completion progress, season timing, confidence/evidence metadata, and a property-scoped checklist destination;
+- the Home feed and Prioritized Action Plan retain the action until canonical lifecycle and eligibility rules remove it;
+- the notification remains a delivery signal and links into the same property context; and
+- repeated checklist records are collapsed into one homeowner action so Home does not become a duplicate task list.
+
+Critical weather follows the same persistent-discovery principle but remains a separate safety action. Active severe-weather events surface on Home with urgent priority, NWS source/instructions, expiry context, and no ordinary complete/dismiss controls. Lower-value incident-derived weather guidance is suppressed when it represents the same canonical event.
+
+Current product boundary:
+
+- **Unified Home:** limited, ranked seasonal and weather actions requiring attention.
+- **Prioritized Action Plan:** the complete eligible ranked Home Action list with supporting details.
+- **Seasonal checklist:** task-level execution and completion.
+- **Notifications:** timely awareness and return path, not the sole place where unresolved work exists.
 
 ---
 
@@ -1844,6 +1865,10 @@ NODE_ENV=production
 
 **End of Handoff Document**
 
-*Last Updated: December 28, 2024*  
-*Version: 1.0*  
-*Status: Ready for continued development*
+*Original handoff published: December 28, 2024*
+
+*Architecture update: July 20, 2026*
+
+*Version: 1.1*
+
+*Status: Canonical Home integration implemented; historical subsystem details retained*

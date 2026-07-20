@@ -692,7 +692,7 @@ The database is treated as pre-launch and disposable. When a phase requires pers
 
 **Objective:** Make the application feel like one calm operating system rather than a tool catalog.
 
-**Implementation status:** Started July 18, 2026. Increments 1–3 implement the canonical property-scoped action feed, deterministic ranking and cross-source deduplication, safe lifecycle commands, dismissal suppression, household authorization, a shared responsive five-section Home contract/surface, five-destination homeowner navigation, grounded Ask, full action-lineage semantics, frontend client support, promotion of active guidance, incident, recall, coverage, and project sources, lifecycle suppression across promoted sources, guidance-template route cutover, and living canonical CTA, journey, and static notification route contracts. Database-backed runtime acceptance remains pending repository-owner application of the Phase 2 analytics enum; no migration script is included. Reviewed personalization remains intentionally gated until explicit evidence and governance eligibility exist. See `docs/product/phase2/README.md`.
+**Implementation status:** Started July 18, 2026. Increments 1–3 implement the canonical property-scoped action feed, deterministic ranking and cross-source deduplication, safe lifecycle commands, dismissal suppression, household authorization, a shared responsive five-section Home contract/surface, five-destination homeowner navigation, grounded Ask, full action-lineage semantics, frontend client support, promotion of active guidance, incident, recall, coverage, and project sources, lifecycle suppression across promoted sources, guidance-template route cutover, and living canonical CTA, journey, and static notification route contracts. Post-cutover hardening adds a property-scoped Prioritized Action Plan, consistent summary/detail counts, homeowner-readable action labels, duplicate context-action suppression, grouped seasonal checklist promotion, and distinct critical-weather presentation with source, instructions, expiry, safety lifecycle rules, and duplicate incident-guidance suppression. The target Prisma schema has been applied. With no separate test/dev/stage database during beta, remaining acceptance is operational smoke and pre-launch evidence rather than a migration requirement. Reviewed personalization remains intentionally gated until explicit evidence and governance eligibility exist. See `docs/product/phase2/README.md`.
 
 #### Backend
 
@@ -712,6 +712,11 @@ Build one responsive Home surface:
 3. **Active major moment** — current stage, blocker, and next milestone.
 4. **Home at a glance** — systems, recent changes, coverage, and record completeness.
 5. **Ask ContractToCozy** — property-grounded input with suggested questions and controlled actions.
+
+The Home hierarchy follows two additional presentation rules:
+
+- notifications deliver awareness, but unresolved seasonal maintenance and critical-weather work must also remain discoverable on Home; and
+- summary cards must link to their underlying details and use the same canonical source and eligibility rules as the destination. The Prioritized Action Plan covers the complete ranked Home Action feed, while the Resolution Center is a narrower execution surface for repair, incident, provider, and related resolution cases.
 
 Consolidate navigation to the target shell. Update all internal links, notification URLs, tests, and guidance route templates in the same cutover. Temporary development redirects are optional, but long-lived user-compatibility redirects are not required before launch.
 

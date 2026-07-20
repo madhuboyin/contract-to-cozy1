@@ -4,6 +4,18 @@ Status: Dedicated audit complete; implementation plan proposed
 
 Date: July 19, 2026
 
+Implementation status update: July 20, 2026
+
+The original findings below preserve the audit baseline. Since that audit, the unified Home integration has advanced:
+
+- seasonal checklists now promote one grouped, property-scoped canonical Home Action for the active or nearest season rather than depending on notification discovery;
+- the seasonal Home Action exposes applicable and critical task counts, completion progress, timing, evidence, and a direct checklist destination;
+- canonical severe-weather actions now surface distinctly on Home with urgent priority, NWS attribution/instructions, event expiry, and safety-appropriate lifecycle restrictions;
+- incident-derived weather guidance is suppressed when it duplicates the canonical severe-weather event; and
+- worker notification delivery remains an awareness channel, while unresolved homeowner work persists in the canonical Home and Prioritized Action Plan.
+
+Accordingly, W1 item 5 (seasonal reconciliation with Unified Home and Plan & Projects) and the weather-to-Home presentation portion of W3 are complete. Other W1/W3 findings remain governed by their own implementation and validation evidence; this update does not mark the entire worker plan complete.
+
 Scope: `apps/workers`, the backend-owned worker registry and manual-trigger service, worker deployment/build configuration, worker-generated notifications and routes, and worker-specific tests.
 
 ## 1. Executive verdict
@@ -334,7 +346,7 @@ Implement:
 2. Source maintenance reminders from canonical property maintenance/Home Actions, with stable keys and terminal/snooze suppression.
 3. Route seasonal homeowner messaging through `NotificationService.create`.
 4. Remove direct SMTP calls for homeowner messages; retain direct transport only for explicitly internal operational email.
-5. Reconcile legacy seasonal checklist actions with the unified Home and Plan & Projects experience.
+5. **Completed July 20, 2026:** Reconcile legacy seasonal checklist actions with the unified Home and Plan & Projects experience.
 6. Add canonical source, evidence, confidence, timing, consequence, category, and action URL metadata.
 7. Extend the route audit to worker sources and add typed URL builders for claims, recalls, permits, reserve fund, neighborhood, seasonal, and warranty destinations.
 8. Ensure worker-created actionable outcomes appear once in the Home feed and preserve lineage.
@@ -380,8 +392,8 @@ Implement the following domain slices:
 
 | Slice | Required work |
 |---|---|
-| Maintenance and seasonal | Complete W1; remove parallel reminder identity and preserve canonical lifecycle. |
-| Risk/weather/coverage | Verify source freshness, safety tier, property applicability, conservative failure, canonical incident/action promotion, and expiry. |
+| Maintenance and seasonal | Seasonal checklist promotion to canonical Home is complete. Finish remaining W1 notification/reminder governance and preserve canonical lifecycle. |
+| Risk/weather/coverage | Canonical severe-weather Home presentation, expiry context, and duplicate guidance suppression are implemented. Continue verifying source freshness, safety tier, property applicability, conservative failure, and job-level reliability. |
 | Recall | Prove ingest deduplication, match confidence, homeowner confirmation, follow-up promotion, and route validity. |
 | Provider compliance | Verify booking impact, homeowner versus provider/admin visibility, credential redaction, and automatic resolution. |
 | Financial | Enforce educational-estimate boundaries, source timestamp, context applicability, material-notification cadence, and duplicate suppression. |
