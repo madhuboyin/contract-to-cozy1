@@ -1887,6 +1887,60 @@ const templateDefinitions: GuidanceJourneyTemplateDefinition[] = [
 
 const templates: GuidanceJourneyTemplate[] = templateDefinitions.map(applyGuidanceGovernance);
 
+const JOURNEY_DISPLAY_TITLES: Record<string, string> = {
+  asset_lifecycle_resolution: 'Resolve an equipment or system issue',
+  replacement_purchase_now: 'Replace a home item now',
+  replacement_plan_later: 'Plan a future replacement',
+  replacement_shop_now: 'Compare replacement options',
+  coverage_gap_resolution: 'Resolve a coverage gap',
+  recall_safety_resolution: 'Resolve a safety recall',
+  weather_risk_resolution: 'Prepare for a weather risk',
+  tax_reassessment_resolution: 'Review a property tax assessment',
+  inspection_followup_resolution: 'Follow up on an inspection',
+  financial_exposure_resolution: 'Review a financial exposure',
+  financial_inaction_resolution: 'Review the cost of waiting',
+  compliance_resolution: 'Resolve a compliance requirement',
+  energy_efficiency_resolution: 'Improve home energy efficiency',
+  warranty_purchase_journey: 'Choose warranty coverage',
+  insurance_purchase_journey: 'Choose insurance coverage',
+  warranty_quote_comparison_journey: 'Compare warranty quotes',
+  warranty_renewal_journey: 'Review a warranty renewal',
+  insurance_quote_comparison_journey: 'Compare insurance quotes',
+  insurance_renewal_journey: 'Review an insurance renewal',
+  general_inspection_journey: 'Plan a home inspection',
+  inspection_quote_journey: 'Compare inspection quotes',
+  pre_purchase_inspection_journey: 'Plan a pre-purchase inspection',
+  annual_maintenance_inspection_journey: 'Plan an annual maintenance inspection',
+  post_repair_inspection_journey: 'Plan a post-repair inspection',
+  cleaning_service_journey: 'Plan a cleaning service',
+  generic_guidance_resolution: 'Continue a home decision',
+};
+
+function humanizeGuidanceKey(value: string): string {
+  const words = value
+    .trim()
+    .replace(/[^a-zA-Z0-9]+/g, ' ')
+    .replace(/\b(resolution|journey)\b/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!words) return 'Continue a home decision';
+  return `${words.charAt(0).toUpperCase()}${words.slice(1).toLowerCase()}`;
+}
+
+/** Homeowner-facing label for a journey. Raw template and issue keys must never reach the UI. */
+export function getGuidanceJourneyDisplayTitle(
+  journeyTypeKey?: string | null,
+  issueType?: string | null,
+): string {
+  if (journeyTypeKey && JOURNEY_DISPLAY_TITLES[journeyTypeKey]) {
+    return JOURNEY_DISPLAY_TITLES[journeyTypeKey];
+  }
+  if (issueType && JOURNEY_DISPLAY_TITLES[issueType]) {
+    return JOURNEY_DISPLAY_TITLES[issueType];
+  }
+  return humanizeGuidanceKey(issueType || journeyTypeKey || '');
+}
+
 const templateByFamily = new Map<string, GuidanceJourneyTemplate>();
 for (const template of templates) {
   for (const family of template.signalIntentFamilies) {

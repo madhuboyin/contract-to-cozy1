@@ -14,6 +14,7 @@ import { snoozeAction } from './orchestrationSnooze.service';
 import { getPromotedHomeActions } from './homeActionSourcePromotion.service';
 import { BuyerAcquisitionService } from './buyerAcquisition.service';
 import { NewHomeSetupService } from './newHomeSetup.service';
+import { getGuidanceJourneyDisplayTitle } from './guidanceEngine/guidanceTemplateRegistry';
 
 export const HOME_ACTION_COMMANDS = [
   'COMPLETE',
@@ -120,11 +121,16 @@ export function scoreHomeAction(action: HomeAction): { score: number; components
   };
   const score = components.consequence + components.urgency + components.confidence +
     components.householdRelevance + components.actionability - components.missingContextPenalty;
+  const contextExplanation = missingContextPenalty > 0
+    ? `${action.confidence.missing.length} missing context item${action.confidence.missing.length === 1 ? '' : 's'} lowered priority`
+    : action.recommendationResponse.status !== 'AVAILABLE'
+      ? 'source confidence is insufficient'
+      : 'no missing-context penalty';
   const explanation = [
     `${action.priority === 'NOW' ? 'Immediate' : action.priority === 'SOON' ? 'Time-sensitive' : action.priority === 'PLAN' ? 'Plannable' : 'Optional'} timing`,
     `${action.governance.safetyTier.toLowerCase().replace(/_/g, ' ')} consequence`,
     `${action.confidence.label.toLowerCase()} confidence`,
-    missingContextPenalty > 0 ? `${action.confidence.missing.length} missing context item${action.confidence.missing.length === 1 ? '' : 's'} lowered priority` : 'no missing-context penalty',
+    contextExplanation,
   ].join(' · ');
   return { score, components, explanation };
 }
@@ -301,6 +307,7 @@ export async function getUnifiedHome(propertyId: string, userId: string) {
         where: { propertyId, status: 'ACTIVE' },
         orderBy: { updatedAt: 'desc' },
         include: {
+          inventoryItem: { select: { name: true } },
           steps: {
             where: { status: { in: ['PENDING', 'IN_PROGRESS', 'BLOCKED'] } },
             orderBy: { stepOrder: 'asc' },
@@ -326,9 +333,12 @@ export async function getUnifiedHome(propertyId: string, userId: string) {
   const coverageGapCount = inventory.filter((item) =>
     !item.coverageNotRequired && !item.warrantyId && !item.insurancePolicyId).length;
 
+  const topAttentionActions = feed.actions.slice(0, 5);
+  const attentionActionIds = new Set(topAttentionActions.map((action) => action.id));
   const decisions = feed.actions
     .filter((action) => action.job === 'DECIDE' ||
       ['MATERIAL_FINANCIAL', 'REGULATED_COVERAGE'].includes(action.governance.safetyTier))
+    .filter((action) => !attentionActionIds.has(action.id))
     .slice(0, 3);
 
   const projectMilestone = activeProject?.milestones[0] ?? null;
@@ -348,7 +358,9 @@ export async function getUnifiedHome(propertyId: string, userId: string) {
       ? {
           kind: 'GUIDANCE_JOURNEY' as const,
           id: activeJourney.id,
-          title: activeJourney.issueType ?? activeJourney.journeyTypeKey ?? 'Active home decision',
+          title: activeJourney.inventoryItem?.name
+            ? `${getGuidanceJourneyDisplayTitle(activeJourney.journeyTypeKey, activeJourney.issueType)} for ${activeJourney.inventoryItem.name}`
+            : getGuidanceJourneyDisplayTitle(activeJourney.journeyTypeKey, activeJourney.issueType),
           stage: activeJourney.decisionStage,
           blocker: journeyStep?.status === 'BLOCKED' ? journeyStep.description ?? journeyStep.label : null,
           nextMilestone: journeyStep?.label ?? 'Continue the current decision',
@@ -366,9 +378,9 @@ export async function getUnifiedHome(propertyId: string, userId: string) {
       updatedAt: property.updatedAt.toISOString(),
     },
     attention: {
-      actions: feed.actions.slice(0, 5),
+      actions: feed.actions,
       totalCount: feed.actions.length,
-      planHref: `/dashboard/actions?propertyId=${encodeURIComponent(propertyId)}`,
+      planHref: '#attention-heading',
     },
     decisions,
     activeMajorMoment,
@@ -380,7 +392,7 @@ export async function getUnifiedHome(propertyId: string, userId: string) {
       documentCount,
       verifiedDocumentCount,
       coverageGapCount,
-      openWorkCount: feed.actions.length + (activeProject ? 1 : 0),
+      openWorkCount: feed.actions.length,
       recentChanges: recentEvents.map((event) => ({
         ...event,
         occurredAt: event.occurredAt.toISOString(),
@@ -388,7 +400,7 @@ export async function getUnifiedHome(propertyId: string, userId: string) {
       recordHref: `/dashboard/properties/${propertyId}`,
       systemsHref: `/dashboard/properties/${propertyId}/inventory`,
       coverageHref: `/dashboard/properties/${propertyId}/inventory?tab=items&smart=gaps`,
-      workHref: `/dashboard/actions?propertyId=${encodeURIComponent(propertyId)}`,
+      workHref: '#attention-heading',
     },
     diagnostics: feed.diagnostics,
     generatedAt: new Date().toISOString(),

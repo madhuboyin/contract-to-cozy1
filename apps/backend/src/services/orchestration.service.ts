@@ -321,6 +321,15 @@ export function adaptOrchestratedActionToHomeAction(
   const dueAt = action.nextDueDate?.toISOString() ?? null;
   const observedAt = action.createdAt?.toISOString() ?? evaluatedAt.toISOString();
   const confidenceScore = normalizeHomeActionConfidenceScore(action.confidence?.score);
+  const ctaLabel = action.cta?.label?.trim();
+  const description = action.description?.trim();
+  const recommendedAction = ctaLabel?.toLowerCase() === 'schedule service'
+    ? `Schedule service for ${action.title}`
+    : description && description.toLowerCase() !== ctaLabel?.toLowerCase()
+      ? description
+      : ctaLabel
+        ? `${ctaLabel} for ${action.title}`
+        : `Review ${action.title}`;
 
   return adaptHomeActionSource(sourceKind, {
     id: action.actionKey,
@@ -334,8 +343,8 @@ export function adaptOrchestratedActionToHomeAction(
     signal: action.description ?? action.title,
     whyItMatters: critical
       ? 'The current risk assessment marks this condition critical and requiring prompt review.'
-      : 'This open home action is supported by current maintenance or risk context.',
-    recommendedAction: action.cta?.label ?? `Review ${action.title}`,
+      : description ?? `This open action is supported by the current maintenance or risk context for ${action.title}.`,
+    recommendedAction,
     expectedOutcome: critical
       ? 'Escalate the condition safely and confirm the appropriate professional response.'
       : 'Resolve or deliberately schedule the action with its supporting context preserved.',

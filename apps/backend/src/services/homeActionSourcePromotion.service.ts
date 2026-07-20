@@ -6,6 +6,7 @@ import {
 import { prisma } from '../lib/prisma';
 import { RecommendationGovernanceSchema } from '../productFramework/recommendationGovernance.contract';
 import { buildRecommendationResponseContract, resolveRecommendationResponseStatus } from '../productFramework/recommendationResponse.contract';
+import { getGuidanceJourneyDisplayTitle } from './guidanceEngine/guidanceTemplateRegistry';
 
 const DEFAULT_FEEDBACK: HomeAction['feedbackControls'] = [
   'COMPLETE', 'DEFER', 'SNOOZE', 'DISMISS', 'ALREADY_DONE', 'NOT_RELEVANT', 'CORRECT_FACT',
@@ -117,6 +118,7 @@ async function loadGuidanceActions(propertyId: string, db: HomeActionSourceDb): 
     take: 20,
     include: {
       primarySignal: { select: { id: true, severity: true, confidenceScore: true, lastObservedAt: true } },
+      inventoryItem: { select: { name: true } },
       steps: {
         where: { status: { in: ['PENDING', 'IN_PROGRESS', 'BLOCKED'] } },
         orderBy: { stepOrder: 'asc' },
@@ -140,7 +142,10 @@ async function loadGuidanceActions(propertyId: string, db: HomeActionSourceDb): 
       reasonCode: responseStatus === 'AVAILABLE' ? 'GUIDANCE_AVAILABLE' : `GUIDANCE_${responseStatus}`,
     });
     const decisionContract = guidanceDecisionContract(governance);
-    const title = journey.issueType ?? journey.journeyTypeKey ?? 'Active home decision';
+    const journeyTitle = getGuidanceJourneyDisplayTitle(journey.journeyTypeKey, journey.issueType);
+    const title = journey.inventoryItem?.name
+      ? `${journeyTitle} for ${journey.inventoryItem.name}`
+      : journeyTitle;
     const href = resolveGuidanceHref({
       propertyId,
       journeyId: journey.id,
@@ -182,7 +187,7 @@ async function loadGuidanceActions(propertyId: string, db: HomeActionSourceDb): 
       governance,
       primaryCta: {
         kind: 'REVIEW',
-        label: recommendationResponse.materialActionAllowed ? step?.label ?? 'Continue journey' : 'Review missing information',
+        label: recommendationResponse.materialActionAllowed ? step?.label ?? 'Continue journey' : 'Review home information',
         href: recommendationResponse.materialActionAllowed
           ? href
           : `/dashboard/properties/${propertyId}/tools/guidance-overview?journeyId=${encodeURIComponent(journey.id)}`,
@@ -190,7 +195,7 @@ async function loadGuidanceActions(propertyId: string, db: HomeActionSourceDb): 
       secondaryCtas: [
         {
           kind: 'CORRECT_FACT',
-          label: 'Correct home context',
+          label: 'Add home information',
           href: `/dashboard/properties/${propertyId}/onboarding`,
         },
         ...(governance.safetyTier === 'SAFETY_EMERGENCY'

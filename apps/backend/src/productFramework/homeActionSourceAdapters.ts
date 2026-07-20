@@ -85,13 +85,15 @@ function createAdapter(kind: HomeActionSourceKind): SourceAdapterDefinition {
       const correction = contractAction.secondaryCtas.find((cta) => cta.kind === 'CORRECT_FACT');
       const normalizedAction = mustWithhold ? {
         ...contractAction,
-        recommendedAction: recommendationResponse.safeNextAction,
+        recommendedAction: correction
+          ? 'Review the home information needed before continuing'
+          : recommendationResponse.safeNextAction,
         primaryCta: correction ?? {
           kind: 'REVIEW' as const,
           label: 'Review missing information',
           href: contractAction.primaryCta.href,
         },
-        secondaryCtas: contractAction.secondaryCtas.filter((cta) => !materialKinds.has(cta.kind)),
+        secondaryCtas: contractAction.secondaryCtas.filter((cta) => cta !== correction && !materialKinds.has(cta.kind)),
       } : contractAction;
       return parseHomeAction({
         ...normalizedAction,

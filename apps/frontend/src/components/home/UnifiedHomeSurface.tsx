@@ -114,6 +114,7 @@ function ActionCard({
 }
 
 export function UnifiedHomeSurface({ propertyId }: { propertyId: string }) {
+  const [showAllActions, setShowAllActions] = React.useState(false);
   const query = useQuery({
     queryKey: ['unified-home', propertyId],
     queryFn: () => api.getUnifiedHome(propertyId),
@@ -133,6 +134,9 @@ export function UnifiedHomeSurface({ propertyId }: { propertyId: string }) {
   }
 
   const home = query.data;
+  const visibleAttentionActions = showAllActions
+    ? home.attention.actions
+    : home.attention.actions.slice(0, 5);
   const openAsk = () => {
     window.dispatchEvent(new CustomEvent('cozy-chat-open'));
   };
@@ -157,9 +161,9 @@ export function UnifiedHomeSurface({ propertyId }: { propertyId: string }) {
       href: home.glance.coverageHref,
     },
     {
-      label: 'Open work',
+      label: 'Prioritized actions',
       value: home.glance.openWorkCount,
-      detail: 'Open actions, projects, and tasks',
+      detail: 'Review your ranked action plan',
       href: home.glance.workHref,
     },
   ];
@@ -178,18 +182,27 @@ export function UnifiedHomeSurface({ propertyId }: { propertyId: string }) {
         <div className="mt-5 flex flex-wrap gap-2 text-xs text-slate-600">
           <Badge variant="outline" className="rounded-full bg-white">{home.attention.totalCount} open actions</Badge>
           <Badge variant="outline" className="rounded-full bg-white">{home.glance.recordCompleteness}% record complete</Badge>
-          <Badge variant="outline" className="rounded-full bg-white">{home.contractVersion}</Badge>
         </div>
       </header>
 
       <section aria-labelledby="attention-heading" className="space-y-3">
         <div className="flex items-end justify-between gap-4">
           <div><h2 id="attention-heading" className="text-xl font-semibold text-slate-950">What needs attention</h2><p className="text-sm text-slate-500">A limited, ranked list with the reason and next move.</p></div>
-          <Link href={home.attention.planHref} className="text-sm font-semibold text-teal-700 hover:text-teal-800">View full plan</Link>
+          {home.attention.actions.length > 5 && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="rounded-full text-teal-700 hover:text-teal-800"
+              onClick={() => setShowAllActions((current) => !current)}
+            >
+              {showAllActions ? 'Show top priorities' : `View all ${home.attention.totalCount} actions`}
+            </Button>
+          )}
         </div>
         {home.attention.actions.length === 0 ? (
           <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-sm text-emerald-800">No action currently needs your attention.</div>
-        ) : home.attention.actions.map((action) => (
+        ) : visibleAttentionActions.map((action) => (
           <ActionCard key={action.id} action={action} propertyId={propertyId} onChanged={() => query.refetch()} />
         ))}
       </section>
