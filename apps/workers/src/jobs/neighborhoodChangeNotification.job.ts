@@ -12,6 +12,11 @@
 //   - Skip events with very low data confidence (PRELIMINARY with no dates/source)
 //   - Deduplicated: one notification per property+event link
 //   - Respects per-user notification preferences (emailEnabled)
+//   - Noise cap (W3/neighborhood): multiple qualifying links for the same
+//     property discovered in one run are combined into a single
+//     notification instead of one per link — a burst of same-day nearby
+//     events (several permit filings, a zoning change plus a development
+//     announcement, etc) no longer floods the homeowner.
 
 import { prisma } from '../lib/prisma';
 import { NotificationService } from '../../../backend/src/services/notification.service';
@@ -127,9 +132,26 @@ export async function neighborhoodChangeNotificationJob(): Promise<void> {
 
   logger.info(`[NEIGHBORHOOD-NOTIFY] Found ${newLinks.length} new high-impact link(s) to process.`);
 
-  let notified = 0;
+  // Idempotency, pre-fetched once instead of one query per link: collect
+  // every propertyNeighborhoodEvent id this job has already notified about,
+  // across both the current array-metadata shape and the pre-batching
+  // singular shape (for notifications created before this change).
+  const alreadyNotifiedLinkIds = await collectAlreadyNotifiedLinkIds(
+    Array.from(new Set(newLinks.map((l: any) => l.property?.homeownerProfile?.userId).filter(Boolean))) as string[],
+  );
+
   let skipped = 0;
   let failed = 0;
+
+  type EligibleLink = {
+    linkId: string;
+    eventId: string;
+    eventTypeLabel: string;
+    eventTitle: string;
+    eventType: string | null;
+    impactScore: number;
+  };
+  const eligibleByProperty = new Map<string, { userId: string; address: string; links: EligibleLink[] }>();
 
   for (const link of newLinks) {
     const userId: string | undefined = link.property?.homeownerProfile?.userId;
@@ -195,58 +217,16 @@ export async function neighborhoodChangeNotificationJob(): Promise<void> {
       }
 
       // Idempotency check: has a notification already been sent for this exact link?
-      const existing = await (prisma as any).notification.findFirst({
-        where: {
-          userId,
-          type: 'NEIGHBORHOOD_CHANGE_DETECTED',
-          entityType: 'PROPERTY',
-          entityId: propertyId,
-          metadata: {
-            path: ['propertyNeighborhoodEventId'],
-            equals: linkId,
-          },
-        },
-        select: { id: true },
-      });
-
-      if (existing) {
+      if (alreadyNotifiedLinkIds.has(linkId)) {
         skipped++;
         continue;
       }
 
-      const eventTypeLabel =
-        EVENT_TYPE_LABELS[link.event?.eventType as string] ?? 'Neighborhood change';
-      const eventTitle: string = link.event?.title ?? eventTypeLabel;
-      const address: string = link.property?.address ?? 'your property';
-      const actionUrl = `/dashboard/properties/${propertyId}/tools/neighborhood-change-radar`;
+      const impactScore: number = link.impactScore ?? 0;
 
-      // Build a context-specific, non-overclaiming notification title
-      const notificationTitle = buildNotificationTitle(
-        link.event?.eventType as string,
-        link.impactScore ?? 0,
-      );
-
-      await NotificationService.create({
-          userId,
-          type: 'NEIGHBORHOOD_CHANGE_DETECTED',
-          title: notificationTitle,
-          message: `${eventTitle} nearby may be relevant to ${address}. Tap to review the potential impact.`,
-          actionUrl,
-          entityType: 'PROPERTY',
-          entityId: propertyId,
-          category: 'GENERAL',
-          urgency: 'ROUTINE',
-          metadata: {
-            propertyId,
-            neighborhoodEventId: eventId,
-            propertyNeighborhoodEventId: linkId,
-            impactScore: link.impactScore ?? 0,
-            eventType: link.event?.eventType ?? null,
-          },
-      });
-
+      // Guidance-engine signal ingestion tracks the underlying event
+      // regardless of how notifications get batched below — kept per-link.
       try {
-        const impactScore: number = link.impactScore ?? 0;
         await guidanceJourneyService.ingestSignal({
           propertyId,
           signalIntentFamily: 'neighborhood_change_detected',
@@ -272,7 +252,21 @@ export async function neighborhoodChangeNotificationJob(): Promise<void> {
         logger.warn({ err: guidanceError }, '[GUIDANCE] neighborhood change signal ingest failed');
       }
 
-      notified++;
+      const group: { userId: string; address: string; links: EligibleLink[] } =
+        eligibleByProperty.get(propertyId) ?? {
+          userId,
+          address: link.property?.address ?? 'your property',
+          links: [],
+        };
+      group.links.push({
+        linkId,
+        eventId,
+        eventTypeLabel: EVENT_TYPE_LABELS[link.event?.eventType as string] ?? 'Neighborhood change',
+        eventTitle: link.event?.title ?? (EVENT_TYPE_LABELS[link.event?.eventType as string] ?? 'Neighborhood change'),
+        eventType: link.event?.eventType ?? null,
+        impactScore,
+      });
+      eligibleByProperty.set(propertyId, group);
     } catch (err: any) {
       logger.error(
         `[NEIGHBORHOOD-NOTIFY] Failed for link ${linkId} (property=${propertyId}):`,
@@ -282,9 +276,97 @@ export async function neighborhoodChangeNotificationJob(): Promise<void> {
     }
   }
 
+  let notified = 0;
+  let eventsNotified = 0;
+
+  for (const [propertyId, group] of eligibleByProperty) {
+    try {
+      const { userId, address, links } = group;
+      const actionUrl = `/dashboard/properties/${propertyId}/tools/neighborhood-change-radar`;
+      const maxImpactScore = Math.max(...links.map((l) => l.impactScore));
+
+      const { title, message } =
+        links.length === 1
+          ? {
+              title: buildNotificationTitle(links[0].eventType as string, links[0].impactScore),
+              message: `${links[0].eventTitle} nearby may be relevant to ${address}. Tap to review the potential impact.`,
+            }
+          : {
+              title: `${links.length} neighborhood changes detected nearby`,
+              message:
+                `${links.length} nearby updates — including ${links[0].eventTypeLabel.toLowerCase()}` +
+                ` — may be relevant to ${address}. Tap to review the potential impact.`,
+            };
+
+      await NotificationService.create({
+        userId,
+        type: 'NEIGHBORHOOD_CHANGE_DETECTED',
+        title,
+        message,
+        actionUrl,
+        entityType: 'PROPERTY',
+        entityId: propertyId,
+        // W3 (neighborhood): was 'GENERAL' — MUTE_TYPE mutes by category
+        // (notificationPreference.service.ts#recordNotificationOutcome), so
+        // a homeowner muting neighborhood chatter would have silently
+        // muted every other unrelated GENERAL-category notification for
+        // that property too (reserve fund reminders, etc), and vice versa.
+        // A dedicated category makes muting precise.
+        category: 'NEIGHBORHOOD',
+        urgency: 'ROUTINE',
+        metadata: {
+          propertyId,
+          neighborhoodEventIds: links.map((l) => l.eventId),
+          propertyNeighborhoodEventIds: links.map((l) => l.linkId),
+          impactScore: maxImpactScore,
+          eventTypes: links.map((l) => l.eventType),
+        },
+      });
+
+      notified++;
+      eventsNotified += links.length;
+    } catch (err: any) {
+      logger.error(`[NEIGHBORHOOD-NOTIFY] Failed to notify property ${propertyId}:`, err?.message ?? err);
+      failed++;
+    }
+  }
+
   logger.info(
-    `[NEIGHBORHOOD-NOTIFY] Done. notified=${notified} skipped=${skipped} failed=${failed}`,
+    `[NEIGHBORHOOD-NOTIFY] Done. notified=${notified} (${eventsNotified} event(s) batched) skipped=${skipped} failed=${failed}`,
   );
+}
+
+/**
+ * Every propertyNeighborhoodEvent id already covered by a prior
+ * NEIGHBORHOOD_CHANGE_DETECTED notification for any of the given users —
+ * checks both the batched array metadata shape and the pre-batching
+ * singular shape, so notifications created before this change still count.
+ */
+async function collectAlreadyNotifiedLinkIds(userIds: string[]): Promise<Set<string>> {
+  if (userIds.length === 0) return new Set();
+
+  const existing = await (prisma as any).notification.findMany({
+    where: {
+      userId: { in: userIds },
+      type: 'NEIGHBORHOOD_CHANGE_DETECTED',
+      entityType: 'PROPERTY',
+    },
+    select: { metadata: true },
+  });
+
+  const ids = new Set<string>();
+  for (const notification of existing) {
+    const metadata = (notification.metadata ?? {}) as Record<string, unknown>;
+    if (Array.isArray(metadata.propertyNeighborhoodEventIds)) {
+      for (const id of metadata.propertyNeighborhoodEventIds) {
+        if (typeof id === 'string') ids.add(id);
+      }
+    }
+    if (typeof metadata.propertyNeighborhoodEventId === 'string') {
+      ids.add(metadata.propertyNeighborhoodEventId);
+    }
+  }
+  return ids;
 }
 
 // ---------------------------------------------------------------------------
