@@ -18,6 +18,7 @@ import { logger } from '../lib/logger';
  * does not silently disable brute-force protection across all pods.
  */
 class RedisRateLimitStore implements Store {
+  private readonly namespace: string;
   private readonly windowMs: number;
   private readonly fallback = new Map<string, { hits: number; resetAt: number }>();
   private redisHealthy = true;
@@ -25,12 +26,19 @@ class RedisRateLimitStore implements Store {
   // (pods), so it suppresses the false-positive double-count warning.
   readonly localKeys = false;
 
-  constructor(windowMs: number) {
+  constructor(namespace: string, windowMs: number) {
+    if (!/^[a-z0-9-]+$/.test(namespace)) {
+      throw new Error(`Invalid rate-limit namespace: ${namespace}`);
+    }
+    this.namespace = namespace;
     this.windowMs = windowMs;
   }
 
   private redisKey(key: string): string {
-    return `rl:${key}`;
+    // Each policy must own an independent bucket. Without this namespace,
+    // ordinary API traffic and specialist limits (for example Gemini chat)
+    // increment the same Redis key for a user and contaminate each other.
+    return `rl:${this.namespace}:${key}`;
   }
 
   private incrementFallback(rKey: string): ClientRateLimitInfo {
@@ -203,7 +211,7 @@ export const authRateLimiter = rateLimit({
   windowMs: authConfig.rateLimit.windowMs,
   max: authConfig.rateLimit.maxRequests,
   keyGenerator: authRateLimitKey,
-  store: new RedisRateLimitStore(authConfig.rateLimit.windowMs),
+  store: new RedisRateLimitStore('auth', authConfig.rateLimit.windowMs),
   message: {
     success: false,
     error: {
@@ -224,7 +232,7 @@ const strictWindowMs = 60 * 60 * 1000; // 1 hour
 export const strictRateLimiter = rateLimit({
   windowMs: strictWindowMs,
   max: 3,
-  store: new RedisRateLimitStore(strictWindowMs),
+  store: new RedisRateLimitStore('strict', strictWindowMs),
   message: {
     success: false,
     error: {
@@ -241,7 +249,7 @@ export const vaultPasswordRateLimiter = rateLimit({
   max: 3,
   keyGenerator: (req) => propertyScopedIpKey(req, 'vault-password'),
   skip: (req) => typeof req.body?.accessToken === 'string' && req.body.accessToken.trim().length > 0,
-  store: new RedisRateLimitStore(strictWindowMs),
+  store: new RedisRateLimitStore('vault-password', strictWindowMs),
   message: {
     success: false,
     error: {
@@ -258,7 +266,7 @@ export const vaultShareAccessRateLimiter = rateLimit({
   max: 30,
   keyGenerator: (req) => propertyScopedIpKey(req, 'vault-share'),
   skip: (req) => !(typeof req.body?.accessToken === 'string' && req.body.accessToken.trim().length > 0),
-  store: new RedisRateLimitStore(strictWindowMs),
+  store: new RedisRateLimitStore('vault-share', strictWindowMs),
   message: {
     success: false,
     error: {
@@ -285,7 +293,7 @@ export const apiRateLimiter = rateLimit({
     const path = getPathAtApiBoundary(req);
     return path === '/auth' || path.startsWith('/auth/');
   },
-  store: new RedisRateLimitStore(apiWindowMs),
+  store: new RedisRateLimitStore('api', apiWindowMs),
   message: {
     success: false,
     error: {
@@ -307,7 +315,7 @@ export const aiOracleRateLimiter = rateLimit({
   windowMs: aiOracleWindowMs,
   max: 5,
   keyGenerator: rateLimitKey,
-  store: new RedisRateLimitStore(aiOracleWindowMs),
+  store: new RedisRateLimitStore('ai-oracle', aiOracleWindowMs),
   message: {
     success: false,
     error: {
@@ -329,7 +337,7 @@ export const geminiRateLimiter = rateLimit({
   windowMs: geminiWindowMs,
   max: 30,
   keyGenerator: rateLimitKey,
-  store: new RedisRateLimitStore(geminiWindowMs),
+  store: new RedisRateLimitStore('gemini-chat', geminiWindowMs),
   message: {
     success: false,
     error: {
@@ -352,7 +360,7 @@ export const expensiveAiRateLimiter = rateLimit({
   windowMs: expensiveAiWindowMs,
   max: 10,
   keyGenerator: rateLimitKey,
-  store: new RedisRateLimitStore(expensiveAiWindowMs),
+  store: new RedisRateLimitStore('expensive-ai', expensiveAiWindowMs),
   message: {
     success: false,
     error: {
@@ -378,7 +386,7 @@ export const uploadRateLimiter = rateLimit({
   windowMs: uploadWindowMs,
   max: 10,
   keyGenerator: rateLimitKey,
-  store: new RedisRateLimitStore(uploadWindowMs),
+  store: new RedisRateLimitStore('upload', uploadWindowMs),
   message: {
     success: false,
     error: {
@@ -406,7 +414,7 @@ export const ocrRateLimiter = rateLimit({
   windowMs: ocrWindowMs,
   max: ocrMaxPerMinute,
   keyGenerator: ocrRateLimitKey,
-  store: new RedisRateLimitStore(ocrWindowMs),
+  store: new RedisRateLimitStore('ocr', ocrWindowMs),
   message: {
     success: false,
     error: {

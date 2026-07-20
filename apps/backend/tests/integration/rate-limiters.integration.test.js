@@ -209,6 +209,32 @@ test('gemini rate limiter returns 429 with retry metadata after threshold', asyn
   assert.ok(Number(retryAfter) >= 0, 'Retry-After should be numeric');
 });
 
+test('general dashboard API traffic does not consume the Gemini chat allowance', async () => {
+  clearBuckets();
+
+  // This reproduced the production failure: 30 ordinary requests populated
+  // rl:<identity>, then the user's first chat request became hit 31.
+  for (let i = 0; i < 30; i += 1) {
+    const dashboardRequest = await runLimiter(apiRateLimiter, {
+      method: 'GET',
+      path: `/properties/property-1/dashboard-signal-${i}`,
+      ip: '10.0.0.20',
+    });
+    assert.equal(dashboardRequest.blocked, false);
+  }
+
+  const firstChatRequest = await runLimiter(geminiRateLimiter, {
+    path: '/api/gemini/chat',
+    ip: '10.0.0.20',
+  });
+
+  assert.equal(firstChatRequest.blocked, false);
+  assert.ok(bucketStore.has('rl:api:ip:10.0.0.20'));
+  assert.ok(bucketStore.has('rl:gemini-chat:ip:10.0.0.20'));
+  assert.equal(bucketStore.get('rl:api:ip:10.0.0.20')?.count, 30);
+  assert.equal(bucketStore.get('rl:gemini-chat:ip:10.0.0.20')?.count, 1);
+});
+
 test('ocr rate limiter returns 429 with retry metadata after threshold', async () => {
   clearBuckets();
 
