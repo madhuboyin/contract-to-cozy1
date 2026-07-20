@@ -4194,6 +4194,8 @@ export interface DiyProjectDetail extends DiyProjectSummary {
   steps: DiyProjectStep[];
   materials: DiyProjectMaterial[];
   tools: DiyProjectTool[];
+  aiGuideId?: string;
+  aiGuide?: { generatedSummary?: string; safetyWarningsJson?: string[] };
 }
 
 export interface DiyAiGuide {

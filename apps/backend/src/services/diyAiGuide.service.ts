@@ -9,6 +9,8 @@ import { DEFAULT_JOB_RETENTION } from '../config/queueDefaults';
 import { getPropertyContext } from '../modules/propertyContext';
 import { evaluateDiyApplicability } from './diy/applicabilityPolicy';
 import { knownContextValue } from './propertyContextDecision';
+import { AiGuideGenerationResponseSchema } from '../validators/diy.validators';
+import { APIError } from '../middleware/error.middleware';
 
 export const DIY_AI_GUIDE_JOB = 'GENERATE_DIY_AI_GUIDE';
 export const DIY_AI_GUIDE_QUEUE = 'diy-ai-guide-queue';
@@ -35,6 +37,30 @@ class DiyAiGuideService {
   }
 
   async initiateGeneration(userId: string, propertyId: string, userPrompt: string): Promise<string> {
+    // Explicit AI-disabled behavior (W3/AI-DIY): previously the only
+    // "is AI available" check was an implicit throw inside getAi(), deep
+    // inside the worker job — so a missing GEMINI_API_KEY meant a homeowner
+    // submitted a prompt, watched a PENDING guide sit there, and only found
+    // out AI was unavailable a full poll cycle later via a generic FAILED
+    // state. Failing closed here, before any row is created, gives an
+    // immediate, honest, request-time answer instead of a confusing delay.
+    if (!process.env.GEMINI_API_KEY) {
+      throw new APIError('AI features are currently unavailable. Please try again later.', 503, 'AI_UNAVAILABLE');
+    }
+
+    // Idempotency (W3/AI-DIY — "idempotency"): a double-submit (double-tap
+    // before the button disables, or a retried request after a network
+    // blip) previously always created a brand-new guide row and enqueued a
+    // brand-new Gemini call — no dedup existed at all. Reusing an
+    // already-in-flight request for the exact same prompt avoids a wasted
+    // paid API call; a genuinely different prompt for the same property
+    // still creates its own guide.
+    const inFlight = await prisma.diyAiGuide.findFirst({
+      where: { userId, propertyId, userPrompt, status: { in: ['PENDING', 'GENERATING'] } },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (inFlight) return inFlight.id;
+
     const guide = await prisma.diyAiGuide.create({
       data: { userId, propertyId, userPrompt, status: 'PENDING' },
     });
@@ -48,9 +74,20 @@ class DiyAiGuideService {
 
   async generate(guideId: string): Promise<void> {
     const guide = await prisma.diyAiGuide.findUnique({ where: { id: guideId } });
-    if (!guide || !['PENDING', 'GENERATING'].includes(guide.status)) return;
+    if (!guide || guide.status !== 'PENDING') return;
 
-    await prisma.diyAiGuide.update({ where: { id: guideId }, data: { status: 'GENERATING' } });
+    // Atomic claim (W3/AI-DIY — "idempotency"): the previous findUnique +
+    // status-check + separate update was not atomic, and the allowed-status
+    // set even included GENERATING — so a second call while one was
+    // already in flight (BullMQ stalled-job redelivery, a manual re-call)
+    // would pass the check and fire a second, duplicate, paid Gemini call.
+    // Same race class already fixed for the export jobs in the exports
+    // slice. Only the caller whose guarded write actually lands proceeds.
+    const claim = await prisma.diyAiGuide.updateMany({
+      where: { id: guideId, status: 'PENDING' },
+      data: { status: 'GENERATING' },
+    });
+    if (claim.count !== 1) return;
 
     try {
       const [skillProfile, context] = await Promise.all([
@@ -96,8 +133,38 @@ If the project involves main electrical panels, gas lines, load-bearing structur
 
       const rawText = response.text ?? '';
       const cleaned = rawText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-      const parsed = JSON.parse(cleaned);
-      const applicability = evaluateDiyApplicability(context, parsed.category ?? 'OTHER');
+
+      let parsedRaw: unknown;
+      try {
+        parsedRaw = JSON.parse(cleaned);
+      } catch {
+        await prisma.diyAiGuide.update({
+          where: { id: guideId },
+          data: { status: 'FAILED', errorMessage: 'AI response was not valid JSON.' },
+        });
+        return;
+      }
+
+      // Structured output validation (W3/AI-DIY): previously trusted
+      // wholesale — a malformed/incomplete response (missing fields, wrong
+      // types, empty steps) was persisted as COMPLETED and only surfaced
+      // as a raw Prisma error later, when the homeowner converted the
+      // guide into a project.
+      const validation = AiGuideGenerationResponseSchema.safeParse(parsedRaw);
+      if (!validation.success) {
+        logger.warn(
+          { guideId, issues: validation.error.issues },
+          '[DIY-AI-GUIDE] AI response failed structured validation',
+        );
+        await prisma.diyAiGuide.update({
+          where: { id: guideId },
+          data: { status: 'FAILED', errorMessage: 'AI response did not match the expected guide format.' },
+        });
+        return;
+      }
+      const parsed = validation.data;
+
+      const applicability = evaluateDiyApplicability(context, parsed.category);
       if (applicability.status !== 'APPLICABLE') {
         await prisma.diyAiGuide.update({
           where: { id: guideId },

@@ -10,6 +10,7 @@ import TemplateCard from '@/components/features/diy/TemplateCard';
 import AiGuideSheet from '@/components/features/diy/AiGuideSheet';
 import { STATUS_LABELS, STATUS_COLOR } from '@/components/features/diy/DiyUtils';
 import { track } from '@/lib/analytics/events';
+import { toast } from '@/components/ui/use-toast';
 
 export default function PropertyDiyToolPage() {
   const params = useParams<{ id: string }>();
@@ -39,11 +40,32 @@ export default function PropertyDiyToolPage() {
         const guide = await api.getDiyAiGuide(propertyId, guideId);
         if (guide.status === 'COMPLETED') {
           clearInterval(poll);
-          const project = await api.createDiyProject(propertyId, { aiGuideId: guide.id });
-          track('action_completed', { tool: 'diy', actionType: 'create_project', propertyId });
-          router.push(`/dashboard/diy/projects/${project.id}?propertyId=${propertyId}`);
+          try {
+            const project = await api.createDiyProject(propertyId, { aiGuideId: guide.id });
+            track('action_completed', { tool: 'diy', actionType: 'create_project', propertyId });
+            router.push(`/dashboard/diy/projects/${project.id}?propertyId=${propertyId}`);
+          } catch (err: any) {
+            // W3 (AI/DIY): the backend now rejects starting a project for a
+            // HIRE_REQUIRED guide (previously unenforced server-side); this
+            // surfaces that clearly instead of an unhandled failure.
+            const code = err?.payload?.error?.code;
+            toast({
+              title: code === 'DIY_HIRE_REQUIRED' ? 'Professional required' : 'Could not start project',
+              description:
+                err?.message ||
+                'This project could not be started. Please try again or browse a template instead.',
+              variant: 'destructive',
+            });
+          }
         } else if (guide.status === 'FAILED') {
+          // Previously silent — the sheet closed and nothing happened, with
+          // no explanation for why the guide never appeared.
           clearInterval(poll);
+          toast({
+            title: 'Guide generation failed',
+            description: "We couldn't generate a guide for that project. Please try rephrasing your request.",
+            variant: 'destructive',
+          });
         }
       } catch { clearInterval(poll); }
     }, 3000);

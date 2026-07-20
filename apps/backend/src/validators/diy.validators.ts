@@ -143,3 +143,47 @@ export const AdminCreateTemplateSchema = z.object({
 });
 
 export const AdminUpdateTemplateSchema = AdminCreateTemplateSchema.partial().omit({ slug: true });
+
+// W3 (AI/DIY — "structured output validation"): the Gemini response for a
+// generated DIY guide was previously trusted wholesale (JSON.parse only,
+// no shape check) before being persisted as status COMPLETED. Malformed
+// output (missing fields, wrong types, empty steps) only surfaced later —
+// well after the guide already reported success — as a raw Prisma error
+// when a homeowner converted the guide into a project. This schema is the
+// gate between "the model returned something" and "safe to persist/serve."
+const aiGuideStepSchema = z.object({
+  stepNumber: z.number().int().min(1),
+  title: z.string().min(1).max(200),
+  description: z.string().min(1).max(2000),
+  estimatedMinutes: z.number().int().min(0).nullable().optional(),
+  safetyNote: z.string().max(500).nullable().optional(),
+  tipNote: z.string().max(500).nullable().optional(),
+});
+
+const aiGuideMaterialSchema = z.object({
+  name: z.string().min(1).max(200),
+  unit: z.string().min(1).max(50),
+  quantity: z.number().min(0),
+  unitPriceCents: z.number().int().min(0).nullable().optional(),
+  purchaseNote: z.string().max(500).nullable().optional(),
+});
+
+const aiGuideToolSchema = z.object({
+  name: z.string().min(1).max(200),
+  isRequired: z.boolean(),
+  defaultToolAction: z.enum(['ALREADY_OWNED', 'RENT', 'BUY']).nullable().optional(),
+});
+
+export const AiGuideGenerationResponseSchema = z.object({
+  title: z.string().min(1).max(200),
+  summary: z.string().min(1).max(2000),
+  category,
+  verdict: z.enum(['DIY_RECOMMENDED', 'BORDERLINE', 'HIRE_RECOMMENDED', 'HIRE_REQUIRED']),
+  safetyWarnings: z.array(z.string()).default([]),
+  steps: z.array(aiGuideStepSchema).default([]),
+  materials: z.array(aiGuideMaterialSchema).default([]),
+  tools: z.array(aiGuideToolSchema).default([]),
+}).refine((d) => d.verdict === 'HIRE_REQUIRED' || d.steps.length > 0, {
+  message: 'A DIY-recommended guide must include at least one step',
+  path: ['steps'],
+});

@@ -236,6 +236,19 @@ export class DiyService {
     if (aiGuideId) {
       const guide = await prisma.diyAiGuide.findFirst({ where: { id: aiGuideId, propertyId } });
       if (!guide || guide.status !== 'COMPLETED') throw new APIError('AI guide not ready', 400);
+      // W3 (AI/DIY — "safety boundary"): the AI is prompted to set
+      // HIRE_REQUIRED for panel/gas-line/structural work, but nothing
+      // enforced that verdict server-side — the template flow has a
+      // frontend-only "canStart" gate for the same concept, and the AI
+      // path had no gate at all, so a well-behaved LLM response was still
+      // just as startable as a DIY_RECOMMENDED one via a direct API call.
+      if (guide.decisionVerdict === 'HIRE_REQUIRED') {
+        throw new APIError(
+          'This project involves work that requires a licensed professional and cannot be started as a DIY project.',
+          409,
+          'DIY_HIRE_REQUIRED',
+        );
+      }
       const context = await getPropertyContext(
         propertyId,
         { userId },
@@ -370,6 +383,13 @@ export class DiyService {
         steps: { orderBy: { stepNumber: 'asc' } },
         materials: { orderBy: { id: 'asc' } },
         tools: { orderBy: { id: 'asc' } },
+        // W3 (AI/DIY — "evidence limitations"): guide-level AI safety
+        // warnings and the AI-generated summary were captured at generation
+        // time but never surfaced anywhere on the project view — the
+        // homeowner saw the same UI whether the plan came from an
+        // admin-curated template or an unverified LLM response, with no
+        // disclaimer distinguishing the two.
+        aiGuide: { select: { generatedSummary: true, safetyWarningsJson: true } },
       },
     });
     if (!project) throw new APIError('Project not found', 404);

@@ -280,6 +280,9 @@ COPY apps/backend/src/productFramework/recommendationGovernance.contract.ts \
 # Copy DIY AI guide service and current Property Context policy used by the worker.
 COPY apps/backend/src/services/diyAiGuide.service.ts src/shared/backend/services/
 COPY apps/backend/src/services/diy/applicabilityPolicy.ts src/shared/backend/services/diy/
+# W3 (AI/DIY) — diyAiGuide.service.ts now validates the Gemini response
+# against AiGuideGenerationResponseSchema before persisting it.
+COPY apps/backend/src/validators/diy.validators.ts src/shared/backend/validators/
 # Copy permit services and adapters (used by permit worker jobs)
 COPY apps/backend/src/services/permitAdapters/permitNormalizer.ts \
      apps/backend/src/services/permitAdapters/socrata.adapter.ts \
