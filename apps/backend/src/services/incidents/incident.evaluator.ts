@@ -82,6 +82,13 @@ export async function evaluateIncident(incidentId: string) {
       'WEATHER_FORECAST_HEAVY_RAIN',
       'WEATHER_ALERT_NWS',
       'COVERAGE_CHECK',
+      // W3 (provider compliance): a credential's expiry date is a direct,
+      // deterministic platform fact — more authoritative than a
+      // probabilistic weather forecast, not less. Without this, a fresh
+      // booking-risk incident scored confidence 40 (< the 45 activation
+      // threshold) on first detection, so the homeowner silently got no
+      // notification until a second signal accumulated a day+ later.
+      'PROVIDER_CREDENTIAL_EXPIRY',
     ].includes(String(latestSignal?.signalType ?? '')),
     signalAgeMinutes: ageMinutes,
   });

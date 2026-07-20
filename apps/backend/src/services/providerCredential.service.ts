@@ -10,7 +10,16 @@ import { APIError } from '../middleware/error.middleware';
 import { NotificationService } from './notification.service';
 import { providerComplianceService } from './providerCompliance.service';
 import { uploadDocumentBuffer } from './storage/reportStorage';
-import { DocumentType, ProviderCredentialType, ServiceCategory, UserRole } from '@prisma/client';
+import { IncidentService } from './incidents/incident.service';
+import { DocumentType, IncidentStatus, ProviderCredentialType, ServiceCategory, UserRole } from '@prisma/client';
+
+const OPEN_PROVIDER_CREDENTIAL_LAPSE_STATUSES: IncidentStatus[] = [
+  IncidentStatus.DETECTED,
+  IncidentStatus.EVALUATED,
+  IncidentStatus.ACTIVE,
+  IncidentStatus.ACTIONED,
+  IncidentStatus.MITIGATED,
+];
 
 const DOCUMENT_TYPE_BY_CREDENTIAL_TYPE: Record<ProviderCredentialType, DocumentType> = {
   TRADE_LICENSE: DocumentType.LICENSE,
@@ -115,7 +124,48 @@ class ProviderCredentialService {
 
     await providerComplianceService.recomputeProviderStatus(credential.providerProfileId);
 
+    // W3 (provider compliance) — automatic resolution: renew() creates a
+    // new credential row (renewalOfCredentialId) rather than mutating the
+    // expiring one, so approving a renewal previously left the old
+    // credential's EXPIRING_SOON alert and any open homeowner-visible
+    // PROVIDER_CREDENTIAL_LAPSE incident open until the *old* credential's
+    // real calendar expiry passed — days or weeks after the risk was
+    // actually fixed, requiring manual dismissal in the meantime.
+    if (credential.renewalOfCredentialId) {
+      await this.resolveSupersededCredentialAlerts(credential.renewalOfCredentialId);
+    }
+
     return credential;
+  }
+
+  private async resolveSupersededCredentialAlerts(supersededCredentialId: string): Promise<void> {
+    const now = new Date();
+
+    await prisma.providerComplianceAlert.updateMany({
+      where: {
+        credentialId: supersededCredentialId,
+        status: { in: ['NEW', 'ACKNOWLEDGED'] },
+      },
+      data: { status: 'RESOLVED', resolvedAt: now },
+    });
+
+    const openIncidents = await prisma.incident.findMany({
+      where: {
+        typeKey: 'PROVIDER_CREDENTIAL_LAPSE',
+        isSuppressed: false,
+        status: { in: OPEN_PROVIDER_CREDENTIAL_LAPSE_STATUSES },
+      },
+      select: { id: true, details: true },
+    });
+
+    for (const incident of openIncidents) {
+      const details = (incident.details as Record<string, unknown> | null) ?? {};
+      if (details.credentialId !== supersededCredentialId) continue;
+      // Route through IncidentService.setStatus (not a raw prisma update) so
+      // its RESOLVED-transition hook archives the linked guidance journey/
+      // signal too.
+      await IncidentService.setStatus(incident.id, IncidentStatus.RESOLVED);
+    }
   }
 
   async reject(credentialId: string, adminUserId: string, rejectionReason: string) {

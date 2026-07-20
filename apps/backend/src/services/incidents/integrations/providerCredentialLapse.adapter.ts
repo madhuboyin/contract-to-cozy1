@@ -76,6 +76,13 @@ export class ProviderCredentialLapseAdapter {
           credentialId: credential.id,
           credentialType: credential.type,
           expiryDate: credential.expiryDate.toISOString(),
+          // W3 (provider compliance): evaluateIncident's generic
+          // computeSeverity() reads timeWindowHours from `details`, not
+          // the severityScore hint above (that gets recomputed and
+          // discarded) — without this, every booking-risk incident
+          // defaulted to the same lowest urgency bucket regardless of
+          // whether expiry was in 1 day or 29 days.
+          timeWindowHours: Math.max(days, 0) * 24,
         },
         status: 'DETECTED',
         fingerprint: `property:${booking.propertyId}|PROVIDER_CREDENTIAL_LAPSE|booking:${booking.id}|cred:${credential.id}`,
