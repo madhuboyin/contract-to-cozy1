@@ -63,6 +63,11 @@ data:
   # Beta governance switch. Set to "true" before admitting any real users.
   # Technical safety and evidence validation remain enforced in both modes.
   ENFORCE_HUMAN_POLICY_APPROVALS: "false"
+  # Tool discovery remains open during beta. Before real-user launch, set
+  # enforcement to true and control individual cohorts with TOOL_ROLLOUT_*.
+  TOOL_DISCOVERY_ENABLED: "true"
+  ENFORCE_TOOL_DISCOVERY_RELEASE_GATES: "false"
+  TOOL_DISCOVERY_DISABLED_IDS: ""
 
   # Worker execution policy (apps/backend/src/config/workerExecutionPolicy.ts).
   # Beta defaults per the worker module audit — flip a flag to "true" only

@@ -11,6 +11,8 @@ import { buildPropertyAwareDashboardHref } from '@/lib/routes/dashboardPropertyA
 import { ADMIN_NAV } from '@/lib/navigation/adminNavigation';
 import { Command } from 'cmdk';
 import { getDiscoverableTools } from '@/features/tools/toolDiscoveryRegistry';
+import { useToolDiscoveryAvailability } from '@/features/tools/useToolDiscoveryAvailability';
+import { track } from '@/lib/analytics/events';
 
 type CommandItem = {
   id: string;
@@ -18,6 +20,7 @@ type CommandItem = {
   href: string;
   group: 'Navigation' | 'Recent Actions' | 'Quick Shortcuts' | 'Tools';
   keywords?: string[];
+  toolId?: string;
 };
 
 type DashboardCommandPaletteProps = {
@@ -81,6 +84,7 @@ export default function DashboardCommandPalette({ propertyId }: DashboardCommand
   const pathname = usePathname();
   const { user } = useAuth();
   const { selectedPropertyId } = usePropertyContext();
+  const availabilityQuery = useToolDiscoveryAvailability();
   const [open, setOpen] = React.useState(false);
   const [query, setQuery] = React.useState('');
   const [recentActions, setRecentActions] = React.useState<Array<{ id: string; label: string }>>([]);
@@ -183,12 +187,13 @@ export default function DashboardCommandPalette({ propertyId }: DashboardCommand
       },
     ];
 
-    const tools: CommandItem[] = getDiscoverableTools().map((tool) => ({
+    const tools: CommandItem[] = getDiscoverableTools({ availability: availabilityQuery.data }).map((tool) => ({
       id: `tool-${tool.id}`,
       label: tool.label,
-      href: tool.buildHref(resolvedPropertyId),
+      href: tool.buildHref(resolvedPropertyId, { launchSurface: 'command_palette' }),
       group: 'Tools',
       keywords: [tool.description, tool.outcomeCategory.replace(/_/g, ' ')],
+      toolId: tool.id,
     }));
 
     return [...navItems, ...recent, ...quick, ...tools];
@@ -204,14 +209,33 @@ export default function DashboardCommandPalette({ propertyId }: DashboardCommand
     riskReportHref,
     saveHref,
     vaultHref,
+    availabilityQuery.data,
   ]);
 
   const groups: Array<CommandItem['group']> = ['Navigation', 'Recent Actions', 'Quick Shortcuts', 'Tools'];
 
-  const onSelect = (href: string) => {
+  React.useEffect(() => {
+    if (!open || isAdminNav) return;
+    const toolIds = items.filter((item) => item.group === 'Tools' && item.toolId).map((item) => item.toolId!);
+    if (toolIds.length === 0) return;
+    track('tool_discovery_impression', {
+      propertyId: resolvedPropertyId,
+      surface: 'command_palette',
+      toolIds,
+    });
+  }, [isAdminNav, items, open, resolvedPropertyId]);
+
+  const onSelect = (item: CommandItem) => {
+    if (item.toolId) {
+      track('tool_discovery_clicked', {
+        propertyId: resolvedPropertyId,
+        surface: 'command_palette',
+        toolId: item.toolId,
+      });
+    }
     setOpen(false);
     setQuery('');
-    router.push(href);
+    router.push(item.href);
   };
 
   return (
@@ -253,7 +277,7 @@ export default function DashboardCommandPalette({ propertyId }: DashboardCommand
                       key={item.id}
                       value={item.label}
                       keywords={[item.group, item.href, ...(item.keywords ?? [])]}
-                      onSelect={() => onSelect(item.href)}
+                      onSelect={() => onSelect(item)}
                       className="flex cursor-pointer items-center rounded-md px-2 py-2 text-sm text-gray-700 outline-none transition-colors data-[selected=true]:bg-brand-50 data-[selected=true]:text-brand-700"
                     >
                       {item.label}

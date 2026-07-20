@@ -103,4 +103,30 @@ describe('selectUnifiedHomeTools', () => {
     ]), 2);
     expect(recommendations).toHaveLength(2);
   });
+
+  it('filters recommendations disabled by the release policy', () => {
+    const fixture = home([action({ signal: 'Flood watch for this home' })]);
+    const recommendations = selectUnifiedHomeTools(fixture, 5, {
+      enabled: true,
+      enforceReleaseGates: false,
+      disabledToolIds: ['home-event-radar'],
+      rollouts: {},
+      generatedAt: '2026-07-20T00:00:00.000Z',
+    });
+    expect(recommendations.map((item) => item.toolId)).not.toContain('home-event-radar');
+  });
+
+  it('uses active project moments as a recommendation signal', () => {
+    const fixture = home([]);
+    fixture.activeMajorMoment = {
+      kind: 'PROJECT',
+      id: 'project-1',
+      title: 'Kitchen renovation',
+      stage: 'PLANNING',
+      blocker: null,
+      nextMilestone: 'Review contractor scope',
+      href: '/dashboard/projects/project-1',
+    };
+    expect(selectUnifiedHomeTools(fixture, 5).map((item) => item.toolId)).toContain('home-renovation-risk-advisor');
+  });
 });

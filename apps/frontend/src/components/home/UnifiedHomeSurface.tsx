@@ -23,8 +23,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/components/ui/use-toast';
-import { buildPropertyAwareToolHref, getToolDefinition } from '@/features/tools/toolRegistry';
-import { selectUnifiedHomeTools } from '@/features/tools/selectUnifiedHomeTools';
+import { UnifiedHomeToolsSection } from '@/components/home/UnifiedHomeToolsSection';
+import { useToolDiscoveryAvailability } from '@/features/tools/useToolDiscoveryAvailability';
 
 function priorityTone(priority: RankedHomeActionDTO['priority']) {
   if (priority === 'NOW') return 'border-rose-200 bg-rose-50 text-rose-700';
@@ -339,6 +339,7 @@ export function ActionCard({
 }
 
 export function UnifiedHomeSurface({ propertyId }: { propertyId: string }) {
+  const toolAvailabilityQuery = useToolDiscoveryAvailability();
   const query = useQuery({
     queryKey: ['unified-home', propertyId],
     queryFn: () => api.getUnifiedHome(propertyId),
@@ -360,8 +361,6 @@ export function UnifiedHomeSurface({ propertyId }: { propertyId: string }) {
   const home = query.data;
   const attentionEntries = groupAttentionActions(home.attention.actions);
   const visibleAttentionEntries = attentionEntries.slice(0, 5);
-  const recommendedTools = selectUnifiedHomeTools(home, 3);
-  const exploreToolsHref = `/dashboard/home-tools?propertyId=${encodeURIComponent(propertyId)}&backTo=${encodeURIComponent('/dashboard')}`;
   const openAsk = () => {
     window.dispatchEvent(new CustomEvent('cozy-chat-open'));
   };
@@ -488,45 +487,11 @@ export function UnifiedHomeSurface({ propertyId }: { propertyId: string }) {
         </CardContent>
       </Card>
 
-      <section aria-labelledby="home-tools-heading" className="rounded-[24px] border border-indigo-200 bg-gradient-to-br from-white to-indigo-50/60 p-5 shadow-sm">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <h2 id="home-tools-heading" className="flex items-center gap-2 text-lg font-semibold text-slate-950">
-              <Sparkles className="h-5 w-5 text-indigo-600" />Tools for this home
-            </h2>
-            <p className="mt-1 text-sm text-slate-500">Useful next steps selected from this home’s ranked actions and current record.</p>
-          </div>
-          <Button asChild variant="outline" size="sm" className="w-fit rounded-full bg-white">
-            <Link href={exploreToolsHref}>Explore all tools<ArrowRight className="ml-1 h-3.5 w-3.5" /></Link>
-          </Button>
-        </div>
-
-        <div className="mt-4 grid gap-3 md:grid-cols-3">
-          {recommendedTools.map((recommendation) => {
-            const tool = getToolDefinition(recommendation.toolId);
-            const ToolIcon = tool.icon;
-            return (
-              <Link
-                key={recommendation.toolId}
-                href={buildPropertyAwareToolHref(recommendation.toolId, propertyId)}
-                className="group rounded-2xl border border-slate-200 bg-white p-4 transition hover:-translate-y-0.5 hover:border-indigo-300 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="rounded-xl bg-indigo-50 p-2 text-indigo-700"><ToolIcon className="h-5 w-5" /></div>
-                  <Badge variant="outline" className="rounded-full border-indigo-200 bg-indigo-50 text-[10px] text-indigo-700">For this home</Badge>
-                </div>
-                <h3 className="mt-3 font-semibold text-slate-950">{tool.label}</h3>
-                <p className="mt-2 text-sm leading-5 text-slate-700">{recommendation.whyNow}</p>
-                <p className="mt-2 text-sm leading-5 text-slate-500">{recommendation.outcome}</p>
-                <p className="mt-3 border-t border-slate-100 pt-3 text-xs text-slate-500">{recommendation.readiness}</p>
-                <span className="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-indigo-700">
-                  Open tool<ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
-                </span>
-              </Link>
-            );
-          })}
-        </div>
-      </section>
+      <UnifiedHomeToolsSection
+        home={home}
+        propertyId={propertyId}
+        availability={toolAvailabilityQuery.data}
+      />
 
       <Card className="rounded-[24px] border-teal-200 bg-teal-50/50 shadow-sm">
         <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">

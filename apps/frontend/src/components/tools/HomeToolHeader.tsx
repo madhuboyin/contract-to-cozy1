@@ -8,7 +8,8 @@ import { api } from '@/lib/api/client';
 import RelatedTools from '@/components/tools/RelatedTools';
 import type { Property } from '@/types';
 import type { PageContextId } from '@/features/tools/contextToolMappings';
-import { getToolDefinition, type ToolId } from '@/features/tools/toolRegistry';
+import type { ToolId } from '@/features/tools/toolRegistry';
+import { getDiscoverableTool } from '@/features/tools/toolDiscoveryRegistry';
 
 type HomeToolHeaderProps = {
   toolId: ToolId;
@@ -43,7 +44,8 @@ export default function HomeToolHeader({
   backLabel = 'Back to property',
   showBackLink = false,
 }: HomeToolHeaderProps) {
-  const definition = getToolDefinition(toolId);
+  const definition = getDiscoverableTool(toolId);
+  if (!definition) return null;
   const Icon = definition.icon;
   const resolvedBackHref = backHref ?? (propertyId ? `/dashboard/properties/${propertyId}` : null);
 

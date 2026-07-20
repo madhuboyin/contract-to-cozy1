@@ -490,6 +490,10 @@ Tool discovery must also be available through Search / command. Workflow-only ut
 
 One shared discovery registry governs homeowner title, description, outcome category, route construction, eligibility, workflow-only status, and iconography across Home, Explore tools, and Search / command. Recommendation selection remains deterministic during beta and consumes the canonical Unified Home and Property Context contracts; it does not require a generative-model request.
 
+The registry also declares release stage, rollout key, safety tier, minimum useful context, expected output, completion signal, and route aliases. General discovery must exclude explicitly disabled or out-of-cohort tools when release-gate enforcement is active. A released tool with incomplete context may remain discoverable, but the interface must explain what information would improve its result. During the no-real-user beta, release-gate enforcement may remain disabled through configuration so testing is not blocked; the same control must be enabled before launch without requiring a database change.
+
+Contextual launches preserve safe identifiers for the selected property, source Home Action, source entity, Property Context version, active journey, and deterministic recommendation reason. These identifiers allow the destination to reuse known context and let analytics connect discovery to a tool start and completed outcome without placing sensitive household answers in the URL.
+
 Tool success is measured by meaningful starts, completed outputs, resulting action or decision, and recorded outcome—not catalog impressions or clicks alone. Entry surface and recommendation reason should be retained in analytics so the team can distinguish useful contextual discovery from browsing.
 
 ### 17. Recommendation experience

@@ -284,6 +284,7 @@ type QuickActionTileProps = {
   tone?: 'neutral' | 'brand';
   badgeLabel?: string | null;
   variant?: 'default' | 'compact';
+  onClick?: React.MouseEventHandler<HTMLAnchorElement>;
 };
 
 export function QuickActionTile({
@@ -297,6 +298,7 @@ export function QuickActionTile({
   tone = 'neutral',
   badgeLabel = 'AI',
   variant = 'default',
+  onClick,
 }: QuickActionTileProps) {
   const normalizedBadgeLabel =
     typeof badgeLabel === 'string' ? badgeLabel.trim() : badgeLabel;
@@ -306,6 +308,7 @@ export function QuickActionTile({
     return (
       <Link
         href={href}
+        onClick={onClick}
         className={cn(
           'no-brand-style block rounded-[18px] border px-3 py-2.5 shadow-[0_6px_14px_rgba(15,23,42,0.05)] transition-transform active:scale-[0.99]',
           MOBILE_INTERACTIVE_FOCUS_RING,
@@ -355,6 +358,7 @@ export function QuickActionTile({
   return (
     <Link
       href={href}
+      onClick={onClick}
       className={cn(
         'no-brand-style block rounded-[20px] border p-3.5 shadow-[0_8px_24px_rgba(15,23,42,0.05)] transition-transform active:scale-[0.99]',
         MOBILE_INTERACTIVE_FOCUS_RING,

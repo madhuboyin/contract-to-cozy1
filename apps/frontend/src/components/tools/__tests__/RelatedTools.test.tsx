@@ -12,6 +12,10 @@ jest.mock('@/features/tools/relatedToolsAnalytics', () => ({
   trackRelatedToolsEvent,
 }));
 
+jest.mock('@/features/tools/useToolDiscoveryAvailability', () => ({
+  useToolDiscoveryAvailability: () => ({ data: undefined }),
+}));
+
 import RelatedTools from '../RelatedTools';
 
 describe('RelatedTools', () => {
@@ -29,10 +33,11 @@ describe('RelatedTools', () => {
     );
 
     expect(screen.getByText('Related tools')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /Negotiation Shield/i })).toHaveAttribute(
-      'href',
-      '/dashboard/properties/prop-1/tools/negotiation-shield',
+    const negotiationLink = screen.getByRole('link', { name: /Negotiation Shield/i });
+    expect(negotiationLink.getAttribute('href')).toContain(
+      '/dashboard/properties/prop-1/tools/negotiation-shield?',
     );
+    expect(negotiationLink.getAttribute('href')).toContain('launchSurface=workflow');
     expect(screen.getByRole('link', { name: /Cost Explainer/i })).toBeInTheDocument();
   });
 

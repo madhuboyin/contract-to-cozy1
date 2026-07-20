@@ -9,11 +9,10 @@ import type { PageContextId } from '@/features/tools/contextToolMappings';
 import { getRelatedToolIds, getContextToolId } from '@/features/tools/getRelatedTools';
 import { trackRelatedToolsEvent } from '@/features/tools/relatedToolsAnalytics';
 import { resolvePageContext } from '@/features/tools/resolvePageContext';
-import {
-  buildPropertyAwareToolHref,
-  getToolDefinition,
-  type ToolId,
-} from '@/features/tools/toolRegistry';
+import type { ToolId } from '@/features/tools/toolRegistry';
+import { getDiscoverableTool, isToolReleased } from '@/features/tools/toolDiscoveryRegistry';
+import { useToolDiscoveryAvailability } from '@/features/tools/useToolDiscoveryAvailability';
+import { track } from '@/lib/analytics/events';
 
 export type RelatedToolsProps = {
   context?: PageContextId | null;
@@ -48,6 +47,7 @@ export default function RelatedTools({
   minViewport = 'base',
 }: RelatedToolsProps) {
   const pathname = usePathname();
+  const availabilityQuery = useToolDiscoveryAvailability();
   const titleId = useId();
   const impressionKeyRef = useRef<string | null>(null);
   const [isVisibleViewport, setIsVisibleViewport] = useState(() => getViewportMatch(minViewport));
@@ -81,14 +81,19 @@ export default function RelatedTools({
       maxItems,
     });
 
-    return toolIds.map((toolId) => {
-      const definition = getToolDefinition(toolId);
+    return toolIds.flatMap((toolId) => {
+      const definition = getDiscoverableTool(toolId);
+      if (!definition || !isToolReleased(definition, availabilityQuery.data)) return [];
       return {
         ...definition,
-        href: buildPropertyAwareToolHref(toolId, propertyId),
+        id: toolId,
+        href: definition.buildHref(propertyId, {
+          launchSurface: 'workflow',
+          recommendationReason: `related-tools:${resolvedContext ?? 'unknown'}`,
+        }),
       };
     });
-  }, [effectiveCurrentToolId, maxItems, propertyId, resolvedContext]);
+  }, [availabilityQuery.data, effectiveCurrentToolId, maxItems, propertyId, resolvedContext]);
 
   useEffect(() => {
     if (!isVisibleViewport || !resolvedContext || items.length === 0) return;
@@ -137,6 +142,13 @@ export default function RelatedTools({
               href={item.href}
               className="group inline-flex min-w-0 max-w-full items-center gap-2 rounded-full border border-slate-200/80 bg-white/72 px-3 py-2 text-left text-sm font-medium text-slate-700 shadow-[0_1px_2px_rgba(15,23,42,0.03)] transition-all duration-150 hover:border-slate-300 hover:bg-white hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/60"
               onClick={() => {
+                track('tool_discovery_clicked', {
+                  propertyId,
+                  surface: 'workflow',
+                  toolId: item.id,
+                  position: index,
+                  recommendationReason: `related-tools:${resolvedContext}`,
+                });
                 void trackRelatedToolsEvent('related_tools_click', {
                   propertyId,
                   pageContext: resolvedContext,

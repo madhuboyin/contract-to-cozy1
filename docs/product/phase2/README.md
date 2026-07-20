@@ -145,6 +145,24 @@ Acceptance criteria:
 - Legacy AI Tools links resolve to Explore tools without losing query parameters.
 - Command search finds tools by title, description, and outcome category.
 
+Closure increment implemented July 20, 2026:
+
+- Expanded the canonical discovery registry with release stage, rollout key, safety tier, minimum useful context, expected output, completion signal, and route aliases.
+- Connected discovery to the existing backend cohort rollout registry through authenticated `/api/tool-discovery/availability` without adding a database table or migration.
+- Added beta-safe configuration: `TOOL_DISCOVERY_ENABLED=true`, `ENFORCE_TOOL_DISCOVERY_RELEASE_GATES=false`, and an empty `TOOL_DISCOVERY_DISABLED_IDS` list. Enforcement can be enabled before real-user launch, and arbitrary `TOOL_ROLLOUT_*` keys can be supplied through `app-config`.
+- Filtered Unified Home, Explore tools, command search, and workflow-level Related Tools using the same availability response. Availability failures remain fail-open only while beta enforcement is disabled.
+- Added readiness evaluation so released tools can explain missing property, fact, system, or coverage context without disappearing unnecessarily.
+- Hardened deterministic selection with explicit rule versioning, active project moments, material decisions, availability filtering, and alias-aware CTA deduplication.
+- Preserved property, Home Action, source entity, Property Context version, journey, item, launch surface, and non-sensitive recommendation reason in deep links.
+- Added discovery impression, click, search, and completed-workflow attribution across Unified Home, Explore tools, command search, and Related Tools.
+- Added backend policy tests, frontend registry/selector/analytics tests, and a no-database Playwright acceptance fixture covering bounded Home recommendations, safe deep-link context, catalog search, and workflow-only exclusion.
+
+Operational launch note:
+
+- Keep `ENFORCE_TOOL_DISCOVERY_RELEASE_GATES=false` during the current beta so incomplete cohort configuration cannot block testing.
+- Before admitting real users, set it to `true`, review every `TOOL_ROLLOUT_*` value, and use `TOOL_DISCOVERY_DISABLED_IDS` as an immediate discovery kill list when a tool must remain reachable only through an existing workflow.
+- Tool discovery does not require a Prisma schema change or migration.
+
 ## Increment 1 acceptance evidence
 
 - One authenticated, property-scoped endpoint returns canonical ranked actions.

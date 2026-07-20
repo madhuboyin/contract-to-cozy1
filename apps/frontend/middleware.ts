@@ -198,7 +198,15 @@ export function middleware(request: NextRequest) {
     '/cookies',
   ];
 
-  const isPublicRoute = pathname === '/' || publicRoutes.some((r) => pathname.startsWith(r));
+  const isEnabledAcceptanceRoute =
+    (pathname === '/acceptance/property-context' &&
+      process.env.PROPERTY_CONTEXT_ACCEPTANCE_FIXTURE === '1') ||
+    (pathname === '/acceptance/tool-discovery' &&
+      process.env.TOOL_DISCOVERY_ACCEPTANCE_FIXTURE === '1');
+  const isPublicRoute =
+    pathname === '/' ||
+    publicRoutes.some((r) => pathname.startsWith(r)) ||
+    isEnabledAcceptanceRoute;
 
   const token =
     ACCESS_COOKIE_CANDIDATES.map((name) => request.cookies.get(name)?.value).find(Boolean) ?? undefined;

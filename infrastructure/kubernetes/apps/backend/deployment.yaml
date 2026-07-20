@@ -37,6 +37,11 @@ spec:
           imagePullPolicy: Always
           ports:
             - containerPort: 8080
+          # Non-sensitive app-config keys are also imported so new
+          # TOOL_ROLLOUT_* controls can be changed without editing this manifest.
+          envFrom:
+            - configMapRef:
+                name: app-config
           env:
             - name: NODE_ENV
               value: "production"

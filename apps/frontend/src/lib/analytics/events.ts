@@ -48,6 +48,10 @@ export type CtcEventName =
   | 'recommendation_shown'
   | 'action_taken'
   | 'action_completed'
+  | 'tool_discovery_impression'
+  | 'tool_discovery_clicked'
+  | 'tool_discovery_catalog_searched'
+  | 'tool_discovery_outcome'
   // Savings
   | 'savings_projected'
   | 'savings_verified'
@@ -184,6 +188,34 @@ export interface CtcEventProperties {
   recommendation_shown: { tool: CtcTool; confidenceLevel: 'LOW' | 'MEDIUM' | 'HIGH'; source: string };
   action_taken: { tool: CtcTool; actionType: string; propertyId: string };
   action_completed: { tool: CtcTool; actionType: string; propertyId: string };
+  tool_discovery_impression: {
+    propertyId?: string | null;
+    surface: 'unified_home' | 'explore_tools' | 'command_palette' | 'workflow';
+    toolIds: string[];
+    recommendationReasons?: string[];
+    contextVersion?: string | null;
+  };
+  tool_discovery_clicked: {
+    propertyId?: string | null;
+    surface: 'unified_home' | 'explore_tools' | 'command_palette' | 'workflow';
+    toolId: string;
+    position?: number;
+    recommendationReason?: string | null;
+    contextVersion?: string | null;
+    sourceActionId?: string | null;
+  };
+  tool_discovery_catalog_searched: {
+    propertyId?: string | null;
+    queryLength: number;
+    resultCount: number;
+  };
+  tool_discovery_outcome: {
+    propertyId?: string | null;
+    toolId: string;
+    sourceSurface: string;
+    recommendationReason?: string | null;
+    outcome: 'workflow_completed';
+  };
   // Savings
   savings_projected: { tool: CtcTool; amountUsd: number; propertyId: string };
   savings_verified: { tool: CtcTool; amountUsd: number; propertyId: string };
@@ -223,18 +255,64 @@ export interface CtcEventProperties {
 // a Faro endpoint configured.
 // ---------------------------------------------------------------------------
 
+type DiscoveryAttribution = CtcEventProperties['tool_discovery_clicked'];
+
+function discoveryAttributionKey(toolId: string): string {
+  return `ctc:tool-discovery-attribution:${toolId}`;
+}
+
+function rememberDiscoveryAttribution(properties: DiscoveryAttribution): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.sessionStorage.setItem(discoveryAttributionKey(properties.toolId), JSON.stringify(properties));
+  } catch {
+    // Analytics attribution must never block navigation.
+  }
+}
+
+function readDiscoveryAttribution(toolId: string): DiscoveryAttribution | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const key = discoveryAttributionKey(toolId);
+    const raw = window.sessionStorage.getItem(key);
+    if (!raw) return null;
+    window.sessionStorage.removeItem(key);
+    return JSON.parse(raw) as DiscoveryAttribution;
+  } catch {
+    return null;
+  }
+}
+
+function emitEvent(event: string, properties: Record<string, unknown>): void {
+  const faro = getFaro();
+  if (faro) {
+    faro.api.pushEvent(event, toEventAttributes(properties));
+    return;
+  }
+  if (process.env.NODE_ENV !== 'production') console.debug('[ctc:event]', event, properties);
+}
+
 export function track<E extends CtcEventName>(
   event: E,
   properties: CtcEventProperties[E],
 ): void {
-  const faro = getFaro();
+  emitEvent(event, properties as Record<string, unknown>);
 
-  if (faro) {
-    faro.api.pushEvent(event, toEventAttributes(properties as Record<string, unknown>));
-    return;
+  if (event === 'tool_discovery_clicked') {
+    rememberDiscoveryAttribution(properties as DiscoveryAttribution);
   }
 
-  if (process.env.NODE_ENV !== 'production') {
-    console.debug('[ctc:event]', event, properties);
+  if (event === 'workflow_completed') {
+    const workflow = properties as CtcEventProperties['workflow_completed'];
+    const attribution = readDiscoveryAttribution(workflow.tool);
+    if (attribution) {
+      emitEvent('tool_discovery_outcome', {
+        propertyId: attribution.propertyId ?? workflow.propertyId,
+        toolId: attribution.toolId,
+        sourceSurface: attribution.surface,
+        recommendationReason: attribution.recommendationReason ?? null,
+        outcome: 'workflow_completed',
+      });
+    }
   }
 }

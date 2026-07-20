@@ -162,6 +162,7 @@ import inspectionHubRoutes from './routes/inspectionHub.routes';
 import projectTrackerRoutes from './routes/projectTracker.routes';
 import sharedDataRoutes from './routes/sharedData.routes';
 import releaseGateRoutes from './routes/releaseGate.routes';
+import toolDiscoveryRoutes from './routes/toolDiscovery.routes';
 import mfaRoutes from './routes/mfa.routes';
 import { logger, auditLog } from './lib/logger';
 import { register } from './lib/metrics';
@@ -594,6 +595,7 @@ app.use('/api', inspectionHubRoutes);
 app.use('/api', projectTrackerRoutes);
 app.use('/api', gazetteRoutes);
 app.use('/api', gazetteInternalRoutes);
+app.use('/api', toolDiscoveryRoutes);
 app.use('/api/admin/release-gates', authenticate, requireMfa, requireRole(UserRole.ADMIN), requireCapability('RELEASE_GATE_VIEW'), releaseGateRoutes);
 
 // 404 handler

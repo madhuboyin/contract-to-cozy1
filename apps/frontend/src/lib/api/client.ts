@@ -80,6 +80,7 @@ import {
   NewHomeSetupPlan,
   NewHomeSetupTask,
   HomeBuyerTaskStatus,
+  ToolDiscoveryAvailabilityDTO,
   CreateHomeBuyerTaskInput,
   UpdateHomeBuyerTaskInput,
   PropertyMaintenanceTask,
@@ -2831,6 +2832,14 @@ class APIClient {
     );
     if (response.success && response.data) return response.data;
     throw new APIError('Failed to load Home', 'UNIFIED_HOME_ERROR');
+  }
+
+  async getToolDiscoveryAvailability(): Promise<ToolDiscoveryAvailabilityDTO> {
+    const response = await this.request<ToolDiscoveryAvailabilityDTO>(
+      '/api/tool-discovery/availability',
+    );
+    if (response.success && response.data) return response.data;
+    throw new APIError('Failed to load tool availability', 'TOOL_DISCOVERY_AVAILABILITY_ERROR');
   }
 
   async executeHomeActionCommand(

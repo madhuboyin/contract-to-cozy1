@@ -359,6 +359,18 @@ export type UnifiedHomeDTO = {
   generatedAt: string;
 };
 
+export type ToolDiscoveryAvailabilityDTO = {
+  enabled: boolean;
+  enforceReleaseGates: boolean;
+  disabledToolIds: string[];
+  rollouts: Record<string, {
+    enabled: boolean;
+    cohort: 'DISABLED' | 'INTERNAL' | 'BETA' | 'FULL';
+    rolloutPct: number;
+  }>;
+  generatedAt: string;
+};
+
 // ============================================================================
 // NEW PROPERTY ENUMS (FIX: ADDED RUNTIME CONSTANTS)
 // ============================================================================
