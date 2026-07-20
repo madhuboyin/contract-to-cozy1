@@ -21,6 +21,7 @@
     "acceptance:phase3": "node --test tests/integration/phase3VerifiedClosure.db.test.js",
     "acceptance:phase6": "node --test tests/integration/phase6NewHomeControlledPilot.db.test.js",
     "lint:ssrf": "node scripts/check-ssrf-guards.js",
+    "lint:notification-boundary": "node scripts/check-notification-boundary.js",
     "report:weekly": "ts-node scripts/weekly-retention-report.ts",
     "backfill:property-activation": "ts-node scripts/backfill-property-activation.ts",
     "bootstrap:admin-capabilities": "ts-node scripts/adminCapabilityBootstrap.ts"

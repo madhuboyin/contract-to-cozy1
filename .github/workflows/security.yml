@@ -33,6 +33,11 @@ jobs:
       # Enforce SSRF guard usage for backend fetch() call sites
       - run: npm run lint:ssrf
 
+      # W4 item 6 (worker audit): enforce that Notification rows are only
+      # ever created through NotificationService, never a raw prisma call
+      # that bypasses preference/cadence/quiet-hours resolution.
+      - run: npm run lint:notification-boundary
+
       # Fails the job on any high or critical severity vulnerability
       - run: npm audit --audit-level=high
 

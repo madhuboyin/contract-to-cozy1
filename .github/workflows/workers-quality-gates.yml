@@ -1,0 +1,76 @@
+name: Workers Quality Gates
+
+# W4 item 5 (worker audit): apps/workers previously had zero CI coverage —
+# security.yml's audit-workers job only ran `npm audit`, never the test
+# suite, and no workflow ever built infrastructure/docker/workers/Dockerfile.
+# Every prior worker-module-audit slice that touched a workers-side or
+# Dockerfile-copied backend import had to validate the Docker build
+# manually (local Docker daemon has been unavailable across this project's
+# entire session history) — this job makes that validation continuous
+# instead of a manual, easy-to-skip step.
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Workers Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: apps/backend/package-lock.json
+
+      # Workers' Prisma client is generated from the backend schema and
+      # copied in manually (see apps/workers/package.json's postinstall) —
+      # replicated explicitly here since --ignore-scripts skips postinstall.
+      - name: Install backend deps
+        working-directory: apps/backend
+        run: npm ci --ignore-scripts
+
+      - name: Generate Prisma Client
+        working-directory: apps/backend
+        run: npm run prisma:generate
+
+      - name: Install workers deps
+        working-directory: apps/workers
+        run: npm ci --ignore-scripts
+
+      - name: Copy Prisma client into workers node_modules
+        working-directory: apps/workers
+        run: |
+          cp -r ../backend/node_modules/@prisma/client node_modules/
+          mkdir -p node_modules/.prisma
+          cp -r ../backend/node_modules/.prisma/client node_modules/.prisma/
+
+      - name: Unit tests
+        working-directory: apps/workers
+        run: npm test
+
+      - name: Notification delivery boundary
+        working-directory: apps/workers
+        run: npm run lint:notification-boundary
+
+      - name: Worker-safe import boundary
+        working-directory: apps/workers
+        run: npm run lint:worker-import-boundary
+
+  docker-build:
+    name: Workers Docker Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Build context is the repo root — the Dockerfile's own COPY
+      # instructions (COPY apps/workers/package*.json, COPY apps/backend/src/...)
+      # are only valid relative to the repo root, not apps/workers/ itself.
+      - name: Build workers image
+        run: docker build -f infrastructure/docker/workers/Dockerfile .
