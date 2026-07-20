@@ -9,6 +9,9 @@ RUN apk add --no-cache python3 make g++ openssl openssl-dev
 
 COPY package*.json ./
 RUN npm ci --only=production && npm cache clean --force
+# The API compiles to CommonJS. Fail the image build if the installed SDK's
+# require export is malformed or a stale dependency layer contains ESM syntax.
+RUN node -e "const sdk = require('@google/genai'); if (typeof sdk.GoogleGenAI !== 'function') throw new Error('@google/genai CommonJS export is invalid')"
 
 # Stage 2: Prisma generation (isolated — only schema + packages, no source)
 # Uses a glibc (Debian slim) base instead of Alpine/musl for this stage only —
@@ -78,6 +81,9 @@ COPY --from=prisma-gen /app/node_modules/@prisma ./node_modules/@prisma
 # Compiled application
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/package*.json ./
+
+# Recheck the exact dependency tree shipped in the final runtime image.
+RUN node -e "const sdk = require('@google/genai'); if (typeof sdk.GoogleGenAI !== 'function') throw new Error('@google/genai CommonJS export is invalid')"
 
 # Prisma schema (needed for migrations / runtime)
 COPY prisma ./prisma

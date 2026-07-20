@@ -41,6 +41,7 @@ RUN for attempt in 1 2 3; do \
       echo "npm ci failed (attempt ${attempt}), retrying in $((attempt * 10))s..."; \
       sleep $((attempt * 10)); \
     done
+RUN node -e "const sdk = require('@google/genai'); if (typeof sdk.GoogleGenAI !== 'function') throw new Error('@google/genai CommonJS export is invalid')"
 
 # Copy shared backend source files into worker source tree
 RUN mkdir -p src/shared/backend/utils \
@@ -140,6 +141,7 @@ COPY apps/backend/src/services/PropertyMaintenanceTask.service.ts \
      apps/backend/src/services/seasonalChecklistStatus.service.ts \
      apps/backend/src/services/riskAssessmentIntegration.service.ts \
      apps/backend/src/services/RiskAssessment.service.ts \
+     apps/backend/src/services/riskAssetApplicability.ts \
      apps/backend/src/services/entryContextPolicy.ts \
      src/shared/backend/services/
 COPY apps/backend/src/utils/maintenanceDueDate.ts \
@@ -450,6 +452,8 @@ COPY --from=builder /app/apps/workers/node_modules ./node_modules
 COPY --from=builder /app/apps/backend/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/apps/backend/node_modules/@prisma ./node_modules/@prisma
 COPY --from=builder /app/apps/workers/dist ./dist
+
+RUN node -e "const sdk = require('@google/genai'); if (typeof sdk.GoogleGenAI !== 'function') throw new Error('@google/genai CommonJS export is invalid')"
 
 HEALTHCHECK --interval=60s --timeout=3s --start-period=60s --retries=3 \
   CMD pgrep -f "node dist/worker.js" || exit 1
