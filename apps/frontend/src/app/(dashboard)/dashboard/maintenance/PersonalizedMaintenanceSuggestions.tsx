@@ -11,6 +11,7 @@ import {
   convertPersonalizationRecommendationToTask,
   getModulePersonalizationRecommendations,
 } from '@/lib/api/personalizationApi';
+import { formatMaintenanceTaskTitle } from './taskDisplay';
 
 export function PersonalizedMaintenanceSuggestions({ propertyId }: { propertyId?: string }) {
   const { toast } = useToast();
@@ -31,7 +32,7 @@ export function PersonalizedMaintenanceSuggestions({ propertyId }: { propertyId?
       queryClient.invalidateQueries({ queryKey: ['maintenance-tasks', propertyId] });
       toast({
         title: result.deduped ? 'Already in maintenance' : 'Added to maintenance',
-        description: result.task.title,
+        description: formatMaintenanceTaskTitle(result.task.title),
       });
     },
     onError: () => {

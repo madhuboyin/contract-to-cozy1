@@ -4,6 +4,10 @@ import type {
   MaintenanceTaskServiceCategory,
   PropertyMaintenanceTask,
 } from '@/types';
+export {
+  formatMaintenanceTaskDescription,
+  formatMaintenanceTaskTitle,
+} from '@/lib/utils/maintenanceDisplay';
 
 export type ViewMode = 'open' | 'completed' | 'all';
 export type CompletedRange = '30d' | '90d' | '1y' | 'all';

@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { PropertyMaintenanceTask } from '@/types'; 
 import { format, differenceInDays } from 'date-fns';
-import humanizeActionType from '@/lib/utils/humanize';
+import { formatMaintenanceTaskTitle } from '@/lib/utils/maintenanceDisplay';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { BadgeStatus, StatusBadge } from '@/components/ui/StatusBadge';
 
@@ -97,7 +97,7 @@ export const RecurringMaintenanceCard: React.FC<RecurringMaintenanceCardProps> =
             <div className="space-y-3">
               {displayTasks.map((task) => {
                 const statusBadge = getStatusBadge(task);
-                const formattedTitle = humanizeActionType(task.title);
+                const formattedTitle = formatMaintenanceTaskTitle(task.title);
                 const queryParts = [
                   `taskId=${encodeURIComponent(task.id)}`,
                   selectedPropertyId ? `propertyId=${encodeURIComponent(selectedPropertyId)}` : null,

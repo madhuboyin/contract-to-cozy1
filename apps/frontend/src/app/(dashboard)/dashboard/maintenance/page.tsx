@@ -34,6 +34,7 @@ import type {
 import { PersonalizedMaintenanceSuggestions } from './PersonalizedMaintenanceSuggestions';
 import {
   normalizeRange,
+  formatMaintenanceTaskTitle,
   normalizeTaskPriority,
   normalizeView,
   splitAndSortTasks,
@@ -434,13 +435,13 @@ export default function MaintenancePage() {
 
       const prior = {
         id: task.id,
-        title: task.title,
+        title: formatMaintenanceTaskTitle(task.title),
         isRecurring: Boolean(task.isRecurring),
         nextDueDate: task.nextDueDate,
       };
       toast({
         title: 'Task completed',
-        description: `"${task.title}" marked as complete.`,
+        description: `"${formatMaintenanceTaskTitle(task.title)}" marked as complete.`,
         action: (
           <ToastAction altText="Undo" onClick={() => undoComplete(prior)}>
             Undo
@@ -466,7 +467,7 @@ export default function MaintenancePage() {
     onSuccess: (_updated, task) => {
       invalidateTasks();
       setDrawerOpen(false);
-      toast({ title: 'Task reopened', description: `"${task.title}" is back on your list.` });
+      toast({ title: 'Task reopened', description: `"${formatMaintenanceTaskTitle(task.title)}" is back on your list.` });
       scrollToTaskRow(task.id);
     },
     onError: (error: any) => {

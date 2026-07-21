@@ -31,7 +31,7 @@ import type {
   PropertyMaintenanceTask,
   UpdateMaintenanceTaskInput,
 } from '@/types';
-import { getTaskSourceBadge, parseMaintenanceDate } from '../taskDisplay';
+import { formatMaintenanceTaskDescription, formatMaintenanceTaskTitle, getTaskSourceBadge, parseMaintenanceDate } from '../taskDisplay';
 
 const UNSET = '__UNSET__';
 
@@ -107,8 +107,8 @@ export function TaskDrawer({
 
   React.useEffect(() => {
     if (!task) return;
-    setTitle(task.title);
-    setNotes(task.description ?? '');
+    setTitle(formatMaintenanceTaskTitle(task.title));
+    setNotes(formatMaintenanceTaskDescription(task) ?? '');
     setPriority(task.priority);
     setCategory(task.serviceCategory ?? UNSET);
     setIsRecurring(Boolean(task.isRecurring));
@@ -154,7 +154,7 @@ export function TaskDrawer({
   const handleDelete = async () => {
     const confirmed = await requestConfirmation({
       title: 'Remove this task?',
-      description: `"${task.title}" will be removed from your maintenance schedule.`,
+      description: `"${formatMaintenanceTaskTitle(task.title)}" will be removed from your maintenance schedule.`,
       confirmLabel: 'Remove task',
     });
     if (!confirmed) return;
@@ -169,7 +169,7 @@ export function TaskDrawer({
         onOpenAutoFocus={(event) => event.preventDefault()}
       >
         <SheetHeader className="border-b px-5 py-4 text-left">
-          <SheetTitle className="pr-8">{task.title}</SheetTitle>
+          <SheetTitle className="pr-8">{formatMaintenanceTaskTitle(task.title)}</SheetTitle>
           <SheetDescription asChild>
             <div className="flex flex-wrap items-center gap-2">
               {sourceBadge ? (

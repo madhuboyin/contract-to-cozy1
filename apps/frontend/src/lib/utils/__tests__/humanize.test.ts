@@ -2,8 +2,11 @@ import humanizeActionType from '../humanize';
 
 describe('humanizeActionType', () => {
   it('returns known mapped labels', () => {
-    expect(humanizeActionType('ROOF_SHINGLE')).toBe('Roof Shingle Inspection');
-    expect(humanizeActionType('WATER_HEATER_TANK')).toBe('Water Heater Tank Service');
+    expect(humanizeActionType('ROOF_SHINGLE')).toBe('Roof');
+    expect(humanizeActionType('WATER_HEATER_TANK')).toBe('Water Heater');
+    expect(humanizeActionType('HVAC_FURNACE')).toBe('HVAC Furnace');
+    expect(humanizeActionType('HVAC_HEAT_PUMP')).toBe('HVAC Heat Pump');
+    expect(humanizeActionType('HVAC_FILTER')).toBe('HVAC Filter');
     expect(humanizeActionType('SAFETY_SMOKE_CO_DETECTOR')).toBe('Smoke & CO Detector Check');
     expect(humanizeActionType('SAFETY_RECALL_SIM_TEST_BATTERY')).toBe('Battery Safety Recall Check');
     expect(humanizeActionType('SAFETY_RECALL_SIMULATION_KITCHEN')).toBe('Kitchen Appliance Safety Recall');

@@ -45,6 +45,21 @@ describe('TaskList', () => {
     expect(screen.getAllByText('Seasonal').length).toBeGreaterThan(0);
   });
 
+  it('uses canonical asset names for legacy Action Center risk titles', () => {
+    const task = makeTask({
+      id: 'risk-task',
+      title: 'HIGH Risk: HVAC_FURNACE',
+      description: 'Add Home Warranty',
+      source: 'ACTION_CENTER',
+    });
+    render(<TaskList tasks={[task]} variant="open" onOpenTask={jest.fn()} />);
+
+    expect(screen.getAllByText('HVAC Furnace').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Review coverage options for HVAC Furnace.').length).toBeGreaterThan(0);
+    expect(screen.queryByText('HIGH Risk: HVAC_FURNACE')).toBeNull();
+    expect(screen.queryByText('Add Home Warranty')).toBeNull();
+  });
+
   it('highlights the deep-linked row', () => {
     const task = makeTask({ id: 't2' });
     const { container } = render(
@@ -109,6 +124,20 @@ describe('computeMaintenanceStats', () => {
     expect(stats.overdueCount).toBe(1);
     expect(stats.completed30dCount).toBe(1);
     expect(stats.nextDue?.getTime()).toBe(new Date(NOW - 2 * DAY).getTime());
+    expect(stats.nextDueTask?.id).toBe(tasks[0].id);
+    expect(stats.nextDueCount).toBe(1);
+  });
+
+  it('reports how many tasks share the earliest due date', () => {
+    const dueDate = new Date(NOW + 5 * DAY).toISOString();
+    const stats = computeMaintenanceStats([
+      makeTask({ title: 'Inspect dryer vent', nextDueDate: dueDate }),
+      makeTask({ title: 'Inspect exterior drainage', nextDueDate: dueDate }),
+      makeTask({ title: 'Later task', nextDueDate: new Date(NOW + 10 * DAY).toISOString() }),
+    ], new Date(NOW));
+
+    expect(stats.nextDueTask?.title).toBe('Inspect dryer vent');
+    expect(stats.nextDueCount).toBe(2);
   });
 
   it('ignores malformed dates instead of crashing a deep-linked maintenance page', () => {

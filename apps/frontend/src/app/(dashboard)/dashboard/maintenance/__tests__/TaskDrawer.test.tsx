@@ -110,6 +110,21 @@ describe('TaskDrawer', () => {
     expect(screen.getByText(/Last completed:/)).toHaveTextContent('Last completed: Never');
   });
 
+  it('uses the canonical Home asset label for legacy risk tasks', () => {
+    render(
+      <TaskDrawer
+        {...baseProps}
+        task={makeTask({ title: 'HIGH Risk: HVAC_FURNACE', description: 'Add Home Warranty', source: 'ACTION_CENTER' })}
+        onSave={noop}
+        onDelete={noop}
+      />
+    );
+
+    expect(screen.getByRole('heading', { name: 'HVAC Furnace' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Task name')).toHaveValue('HVAC Furnace');
+    expect(screen.getByLabelText('Notes')).toHaveValue('Review coverage options for HVAC Furnace.');
+  });
+
   it('sends the full payload on save, including priority and cleared date as null', () => {
     const onSave = jest.fn();
     render(<TaskDrawer {...baseProps} task={makeTask()} onSave={onSave} onDelete={noop} />);

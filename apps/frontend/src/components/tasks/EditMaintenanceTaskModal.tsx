@@ -35,6 +35,10 @@ import {
   UpdateMaintenanceTaskInput,
 } from '@/types';
 import { format, parseISO } from 'date-fns';
+import {
+  formatMaintenanceTaskDescription,
+  formatMaintenanceTaskTitle,
+} from '@/lib/utils/maintenanceDisplay';
 import { MAINTENANCE_SERVICE_CATEGORY_OPTIONS } from '@/lib/config/serviceCategoryMapping';
 
 interface EditMaintenanceTaskModalProps {
@@ -70,8 +74,8 @@ export function EditMaintenanceTaskModal({
   useEffect(() => {
     if (task) {
       setFormData({
-        title: task.title,
-        description: task.description || '',
+        title: formatMaintenanceTaskTitle(task.title),
+        description: formatMaintenanceTaskDescription(task) || '',
         priority: task.priority,
         estimatedCost: task.estimatedCost || undefined,
         actualCost: task.actualCost || undefined,

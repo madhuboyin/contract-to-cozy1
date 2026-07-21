@@ -2,9 +2,9 @@
 
 import { format } from 'date-fns';
 import type { PropertyMaintenanceTask } from '@/types';
-import { parseMaintenanceDate } from '../taskDisplay';
+import { formatMaintenanceTaskTitle, parseMaintenanceDate } from '../taskDisplay';
 
-function StatTile({ label, value, tone }: { label: string; value: string; tone?: 'alert' }) {
+function StatTile({ label, value, detail, tone }: { label: string; value: string; detail?: string; tone?: 'alert' }) {
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-3.5 shadow-[0_6px_14px_rgba(15,23,42,0.05)]">
       <p className="mb-0 text-xs font-medium text-slate-500">{label}</p>
@@ -17,6 +17,7 @@ function StatTile({ label, value, tone }: { label: string; value: string; tone?:
       >
         {value}
       </p>
+      {detail ? <p className="mb-0 mt-1 truncate text-xs text-slate-500" title={detail}>{detail}</p> : null}
     </div>
   );
 }
@@ -33,16 +34,23 @@ export function computeMaintenanceStats(tasks: PropertyMaintenanceTask[], now: D
     const completedDate = parseMaintenanceDate(t.lastCompletedDate);
     return completedDate ? completedDate >= thirtyDaysAgo : false;
   });
-  const nextDue = open
-    .map((t) => parseMaintenanceDate(t.nextDueDate))
-    .filter((d): d is Date => d !== null)
-    .sort((a, b) => a.getTime() - b.getTime())[0];
+  const dueTasks = open
+    .map((task) => ({ task, dueDate: parseMaintenanceDate(task.nextDueDate) }))
+    .filter((entry): entry is { task: PropertyMaintenanceTask; dueDate: Date } => entry.dueDate !== null)
+    .sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime());
+  const nextDueEntry = dueTasks[0] ?? null;
+  const nextDueDay = nextDueEntry?.dueDate.toISOString().slice(0, 10) ?? null;
+  const nextDueCount = nextDueDay
+    ? dueTasks.filter((entry) => entry.dueDate.toISOString().slice(0, 10) === nextDueDay).length
+    : 0;
 
   return {
     openCount: open.length,
     overdueCount: overdue.length,
     completed30dCount: completed30d.length,
-    nextDue: nextDue ?? null,
+    nextDue: nextDueEntry?.dueDate ?? null,
+    nextDueTask: nextDueEntry?.task ?? null,
+    nextDueCount,
   };
 }
 
@@ -58,7 +66,13 @@ export function MaintenanceStats({ tasks }: { tasks: PropertyMaintenanceTask[] }
         tone={stats.overdueCount > 0 ? 'alert' : undefined}
       />
       <StatTile label="Completed (30d)" value={String(stats.completed30dCount)} />
-      <StatTile label="Next due" value={stats.nextDue ? format(stats.nextDue, 'MMM d') : '—'} />
+      <StatTile
+        label="Next due"
+        value={stats.nextDue ? format(stats.nextDue, 'MMM d') : '—'}
+        detail={stats.nextDueTask
+          ? `${formatMaintenanceTaskTitle(stats.nextDueTask.title)}${stats.nextDueCount > 1 ? ` +${stats.nextDueCount - 1} more` : ''}`
+          : undefined}
+      />
     </div>
   );
 }

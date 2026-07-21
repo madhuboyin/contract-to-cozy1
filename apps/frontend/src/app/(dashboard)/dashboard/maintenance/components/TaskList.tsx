@@ -17,7 +17,7 @@ import { cn } from '@/lib/utils';
 import { PRIORITY_CHIP, PriorityLevel } from '@/lib/utils/chipTokens';
 import { formatEnumLabel } from '@/lib/utils/formatters';
 import type { PropertyMaintenanceTask } from '@/types';
-import { formatDueDate, getTaskSourceBadge, normalizeTaskPriority, parseMaintenanceDate } from '../taskDisplay';
+import { formatDueDate, formatMaintenanceTaskDescription, formatMaintenanceTaskTitle, getTaskSourceBadge, normalizeTaskPriority, parseMaintenanceDate } from '../taskDisplay';
 
 export type TaskListProps = {
   tasks: PropertyMaintenanceTask[];
@@ -77,6 +77,7 @@ export function TaskList({
           <TableBody>
             {tasks.map((task) => {
               const dueDateInfo = formatDueDate(task.nextDueDate);
+              const description = formatMaintenanceTaskDescription(task);
               const isPending = pendingTaskId === task.id;
               return (
                 <TableRow
@@ -90,9 +91,9 @@ export function TaskList({
                   onClick={() => onOpenTask(task)}
                 >
                   <TableCell className="max-w-md">
-                    <div className="font-medium">{task.title}</div>
-                    {task.description ? (
-                      <div className="mt-0.5 truncate text-sm text-gray-500">{task.description}</div>
+                    <div className="font-medium">{formatMaintenanceTaskTitle(task.title)}</div>
+                    {description ? (
+                      <div className="mt-0.5 truncate text-sm text-gray-500">{description}</div>
                     ) : null}
                   </TableCell>
                   <TableCell>
@@ -157,6 +158,7 @@ export function TaskList({
       <div className="md:hidden space-y-3">
         {tasks.map((task) => {
           const dueDateInfo = formatDueDate(task.nextDueDate);
+          const description = formatMaintenanceTaskDescription(task);
           const isPending = pendingTaskId === task.id;
           return (
             <Card
@@ -171,7 +173,7 @@ export function TaskList({
             >
               <div className="flex justify-between items-start gap-2 mb-2">
                 <div className="min-w-0">
-                  <h3 className="font-bold text-base leading-tight">{task.title}</h3>
+                  <h3 className="font-bold text-base leading-tight">{formatMaintenanceTaskTitle(task.title)}</h3>
                   <div className="mt-1 flex flex-wrap items-center gap-1.5">
                     <SourceBadge task={task} />
                     <Badge
@@ -186,8 +188,8 @@ export function TaskList({
                 </div>
               </div>
 
-              {task.description ? (
-                <p className="text-sm text-gray-600 line-clamp-2 mb-3">{task.description}</p>
+              {description ? (
+                <p className="text-sm text-gray-600 line-clamp-2 mb-3">{description}</p>
               ) : null}
 
               <div

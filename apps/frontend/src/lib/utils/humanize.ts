@@ -1,12 +1,12 @@
 const DISPLAY_LABELS: Record<string, string> = {
   // Requested high-priority mappings
-  ROOF_SHINGLE: 'Roof Shingle Inspection',
-  WATER_HEATER_TANK: 'Water Heater Tank Service',
+  ROOF_SHINGLE: 'Roof',
+  WATER_HEATER_TANK: 'Water Heater',
   SAFETY_SMOKE_CO_DETECTOR: 'Smoke & CO Detector Check',
   SAFETY_SMOKE_CO_DETECTORS: 'Smoke & CO Detector Check',
   FREEZE_PROTECTION: 'Freeze Protection Check',
-  HVAC_FILTER: 'HVAC Filter Replacement',
-  HVAC_FILTER_CHECK: 'HVAC Filter Replacement',
+  HVAC_FILTER: 'HVAC Filter',
+  HVAC_FILTER_CHECK: 'HVAC Filter',
   GUTTER_CLEANING: 'Gutter Cleaning',
   PEST_INSPECTION: 'Pest Inspection',
   ELECTRICAL_PANEL: 'Electrical Panel Inspection',
@@ -15,14 +15,14 @@ const DISPLAY_LABELS: Record<string, string> = {
   PLUMBING_CHECK: 'Plumbing Check',
 
   // Additional action/system enums from Prisma + risk config
-  WATER_HEATER_TANKLESS: 'Tankless Water Heater Service',
-  ROOF_TILE_METAL: 'Roof Tile/Metal Inspection',
+  WATER_HEATER_TANKLESS: 'Tankless Water Heater',
+  ROOF_TILE_METAL: 'Roof',
   FOUNDATION_CONCRETE_SLAB: 'Foundation Slab Inspection',
   MAJOR_APPLIANCE_FRIDGE: 'Refrigerator Service',
   MAJOR_APPLIANCE_DISHWASHER: 'Dishwasher Service',
-  HVAC_FURNACE: 'HVAC Furnace Service',
-  HVAC_FURNACE_FILTER: 'HVAC Filter Replacement',
-  HVAC_HEAT_PUMP: 'HVAC Heat Pump Service',
+  HVAC_FURNACE: 'HVAC Furnace',
+  HVAC_FURNACE_FILTER: 'HVAC Filter',
+  HVAC_HEAT_PUMP: 'HVAC Heat Pump',
 
   // MitigationActionType
   LEAK_SENSORS: 'Leak Sensor Installation',

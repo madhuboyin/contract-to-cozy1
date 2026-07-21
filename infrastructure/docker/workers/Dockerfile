@@ -280,6 +280,7 @@ COPY apps/backend/src/services/guidanceEngine/guidanceTypes.ts \
 COPY apps/backend/src/productFramework/recommendationGovernance.contract.ts \
      apps/backend/src/productFramework/recommendationResponse.contract.ts \
      apps/backend/src/productFramework/homeAction.contract.ts \
+     apps/backend/src/productFramework/homeAssetDisplay.ts \
      apps/backend/src/productFramework/outcomeLineage.contract.ts \
      src/shared/backend/productFramework/
 # Copy DIY AI guide service and current Property Context policy used by the worker.

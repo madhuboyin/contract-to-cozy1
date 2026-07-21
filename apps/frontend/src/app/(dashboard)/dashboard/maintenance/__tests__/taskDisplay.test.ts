@@ -1,6 +1,8 @@
 import {
   cutoffForCompletedRange,
   formatDueDate,
+  formatMaintenanceTaskDescription,
+  formatMaintenanceTaskTitle,
   getTaskSourceBadge,
   normalizeRange,
   normalizeView,
@@ -68,6 +70,33 @@ describe('parseMaintenanceDate', () => {
     expect(parseMaintenanceDate('2026-08-01T00:00:00.000Z')?.toISOString()).toBe(
       '2026-08-01T00:00:00.000Z'
     );
+  });
+});
+
+describe('formatMaintenanceTaskTitle', () => {
+  it('uses the canonical Home asset label for legacy risk and enum titles', () => {
+    expect(formatMaintenanceTaskTitle('HIGH Risk: HVAC_FURNACE')).toBe('HVAC Furnace');
+    expect(formatMaintenanceTaskTitle('CRITICAL Risk: WATER_HEATER_TANK')).toBe('Water Heater');
+    expect(formatMaintenanceTaskTitle('ROOF_SHINGLE')).toBe('Roof');
+  });
+
+  it('preserves homeowner-written task instructions', () => {
+    expect(formatMaintenanceTaskTitle('Inspect and clean dryer vent')).toBe(
+      'Inspect and clean dryer vent'
+    );
+  });
+});
+
+describe('formatMaintenanceTaskDescription', () => {
+  it('turns legacy warranty and identifier copy into a homeowner-facing explanation', () => {
+    expect(formatMaintenanceTaskDescription(makeTask({
+      title: 'HIGH Risk: HVAC_FURNACE',
+      description: 'Add Home Warranty',
+    }))).toBe('Review coverage options for HVAC Furnace.');
+    expect(formatMaintenanceTaskDescription(makeTask({
+      title: 'Review system',
+      description: 'Maintenance required for WATER_HEATER_TANK',
+    }))).toBe('Maintenance required for Water Heater');
   });
 });
 

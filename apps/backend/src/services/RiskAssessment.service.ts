@@ -23,6 +23,7 @@ import { getPropertyContext } from '../modules/propertyContext';
 import { evaluateProtectionContext } from './protection/applicabilityPolicy';
 import type { FeatureDecision, PropertyContextSnapshot } from '../modules/propertyContext';
 import { hasConfirmedBasement } from './riskAssetApplicability';
+import { getHomeAssetDisplayLabel } from '../productFramework/homeAssetDisplay';
 
 interface PropertyWithRelations extends Property {
   warranties: Warranty[];
@@ -340,19 +341,26 @@ class RiskAssessmentService {
         const recommendations = (reportData.details as AssetRiskDetail[])
           .filter((c: AssetRiskDetail) => c.riskLevel === 'HIGH' || c.riskLevel === 'CRITICAL')
           .filter((c: AssetRiskDetail) => !String(c.systemType || '').startsWith('MAJOR_APPLIANCE_'))
-          .map((c: AssetRiskDetail) => ({
-            assetType: c.systemType,
-            systemType: c.systemType,
-            category: c.category,
-            title: `${c.riskLevel} Risk: ${c.assetName || c.systemType}`,
-            description: c.actionCta || `Maintenance required for ${c.systemType}`,
-            priority: (c.riskLevel === 'CRITICAL' ? 'URGENT' : 'HIGH') as 'URGENT' | 'HIGH' | 'MEDIUM' | 'LOW',
-            riskLevel: c.riskLevel as 'CRITICAL' | 'HIGH' | 'ELEVATED' | 'MODERATE' | 'LOW',
-            estimatedCost: Number(c.outOfPocketCost ?? c.replacementCost ?? 0),
-            age: c.age,
-            expectedLife: c.expectedLife,
-            exposure: Number(c.outOfPocketCost ?? c.replacementCost ?? 0),
-          }));
+          .map((c: AssetRiskDetail) => {
+            const assetLabel = getHomeAssetDisplayLabel({
+              name: c.assetName,
+              assetType: c.systemType,
+              category: c.category,
+            });
+            return {
+              assetType: c.systemType,
+              systemType: c.systemType,
+              category: c.category,
+              title: assetLabel,
+              description: c.actionCta || `Maintenance required for ${assetLabel}`,
+              priority: (c.riskLevel === 'CRITICAL' ? 'URGENT' : 'HIGH') as 'URGENT' | 'HIGH' | 'MEDIUM' | 'LOW',
+              riskLevel: c.riskLevel as 'CRITICAL' | 'HIGH' | 'ELEVATED' | 'MODERATE' | 'LOW',
+              estimatedCost: Number(c.outOfPocketCost ?? c.replacementCost ?? 0),
+              age: c.age,
+              expectedLife: c.expectedLife,
+              exposure: Number(c.outOfPocketCost ?? c.replacementCost ?? 0),
+            };
+          });
 
         if (recommendations.length > 0) {
           logger.info(`[RISK-SERVICE] Creating ${recommendations.length} maintenance tasks for HIGH/CRITICAL risks...`);

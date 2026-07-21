@@ -33,6 +33,10 @@ import { TaskStatusBadge } from './TaskStatusBadge';
 import { TaskPriorityBadge } from './TaskPriorityBadge';
 import { PropertyMaintenanceTask } from '@/types';
 import humanizeActionType from '@/lib/utils/humanize';
+import {
+  formatMaintenanceTaskDescription,
+  formatMaintenanceTaskTitle,
+} from '@/lib/utils/maintenanceDisplay';
 import AssignTaskSheet from '@/components/features/household/AssignTaskSheet';
 
 interface MaintenanceTaskCardProps {
@@ -114,7 +118,8 @@ export function MaintenanceTaskCard({
   };
 
   const sourceBadge = getSourceBadge();
-  const readableTitle = humanizeActionType(task.title);
+  const readableTitle = formatMaintenanceTaskTitle(task.title);
+  const readableDescription = formatMaintenanceTaskDescription(task);
 
   return (
     <Card className={`hover:shadow-md transition-shadow active:scale-[0.99] ${compact ? 'mb-2' : 'mb-4'}`}>
@@ -223,9 +228,9 @@ export function MaintenanceTaskCard({
           </div>
 
           {/* Description */}
-          {task.description && (
+          {readableDescription && (
             <p className="text-sm text-gray-600 line-clamp-2 leading-relaxed">
-              {task.description}
+              {readableDescription}
             </p>
           )}
 
