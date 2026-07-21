@@ -5,9 +5,14 @@ import { logger } from '../lib/logger';
 const POLL_INTERVAL_MS = Number(process.env.MATERIAL_SPEC_EXPORT_POLL_MS || 10_000);
 const BATCH_SIZE = Number(process.env.MATERIAL_SPEC_EXPORT_BATCH_SIZE || 3);
 
+// W5 item 7 (graceful shutdown): see homeReportExport.poller.ts's identical note.
+let stopped = false;
+export function stopMaterialSpecExportPoller(): void {
+  stopped = true;
+}
+
 export async function runMaterialSpecExportPoller() {
-  // eslint-disable-next-line no-constant-condition
-  while (true) {
+  while (!stopped) {
     try {
       const pending = await prisma.materialSpecExport.findMany({
         where: { status: 'PENDING' },

@@ -18,15 +18,16 @@ import { sendSmsNotificationJob } from './jobs/sendSmsNotification.job';
 import { generateSeasonalChecklists } from './jobs/seasonalChecklistGeneration.job';
 import { sendSeasonalNotifications } from './jobs/seasonalNotification.job';
 import { expireSeasonalChecklists } from './jobs/seasonalChecklistExpiration.job';
-import { runHomeReportExportPoller } from './runners/homeReportExport.poller';
-import { runReportExportCleanup } from './runners/reportExport.cleanup';
-import { runMaterialSpecExportPoller } from './runners/materialSpecExport.poller';
-import { runMaterialSpecExportCleanup } from './runners/materialSpecExport.cleanup';
+import { runHomeReportExportPoller, stopHomeReportExportPoller } from './runners/homeReportExport.poller';
+import { runReportExportCleanup, stopReportExportCleanup } from './runners/reportExport.cleanup';
+import { runMaterialSpecExportPoller, stopMaterialSpecExportPoller } from './runners/materialSpecExport.poller';
+import { runMaterialSpecExportCleanup, stopMaterialSpecExportCleanup } from './runners/materialSpecExport.cleanup';
 import { startDomainEventsPoller } from './runners/domainEvents.poller';
 import { startHighPriorityEmailEnqueuePoller } from './runners/highPriorityEmailEnqueue.poller';
 import { startClaimFollowUpDuePoller } from './runners/claimFollowUpDue.poller';
 import { alertOnJobFailure } from './lib/jobFailureAlert';
 import { initCronRunHistory, recordCronRun } from './lib/cronRunHistory';
+import { registerShutdownHandler, installGracefulShutdown } from './lib/gracefulShutdown';
 import { acquireCronLease, releaseCronLease } from './lib/cronLease';
 import { DEFAULT_JOB_RETENTION } from '../../backend/src/config/queueDefaults';
 import { recallIngestJob, RECALL_INGEST_JOB } from './jobs/recallIngest.job';
@@ -255,6 +256,10 @@ const CRON_LEASE_TTL_MS = Number(process.env.CRON_LEASE_TTL_MS) || 10 * 60 * 100
 function scheduleCronJobs(): void {
   const cronEntries = JOB_REGISTRY.filter((j) => j.type === 'cron' && j.cronExpression);
   const missingHandlerKeys: string[] = [];
+  // W5 item 7: collect every scheduled task so shutdown can stop them all —
+  // node-cron's own timers otherwise keep firing (and keep the event loop
+  // alive) after a SIGTERM.
+  const scheduledTasks: Array<{ stop: () => void }> = [];
 
   for (const entry of cronEntries) {
     const handler = CRON_HANDLERS[entry.key];
@@ -267,7 +272,7 @@ function scheduleCronJobs(): void {
       continue;
     }
     const cronExpr = CRON_ENV_OVERRIDES[entry.key] ?? entry.cronExpression;
-    cron.schedule(
+    const task = cron.schedule(
       cronExpr,
       async () => {
         const decision = evaluateWorkerExecution(entry.key, 'scheduled', entry);
@@ -332,8 +337,13 @@ function scheduleCronJobs(): void {
       },
       { timezone: 'America/New_York' },
     );
+    scheduledTasks.push(task);
     logger.info(`[REGISTRY] Scheduled "${entry.name}" — ${cronExpr} (${entry.schedule})`);
   }
+
+  registerShutdownHandler('registry-cron-tasks', () => {
+    for (const task of scheduledTasks) task.stop();
+  });
 
   // Warn about handlers that have no registry entry (invisible in admin UI)
   const registeredKeys = new Set(cronEntries.map((e) => e.key));
@@ -438,6 +448,7 @@ function startWorker() {
   propertyIntelligenceWorker.on('error', (err) => {
     logger.error({ err }, '[QUEUE] Worker experienced an error');
   });
+  registerShutdownHandler('propertyIntelligenceWorker', () => propertyIntelligenceWorker.close());
 
   // =============================================================================
   // Email Notification Worker
@@ -478,6 +489,7 @@ function startWorker() {
   emailNotificationWorker.on('error', (err) => {
     logger.error({ err }, '[QUEUE] Email notification worker error');
   });
+  registerShutdownHandler('emailNotificationWorker', () => emailNotificationWorker.close());
 
   // ===============================
   // PUSH NOTIFICATIONS (WKR-010: no delivery provider is implemented yet —
@@ -503,6 +515,7 @@ function startWorker() {
       logger.error({ err }, `[PUSH-WORKER] delivery ${job?.data?.notificationDeliveryId} failed`);
       void alertOnJobFailure('push-notification-queue', job, err);
     });
+    registerShutdownHandler('pushWorker', () => pushWorker.close());
   } else {
     logger.info('[WORKER] Push Notification Worker not started — disabled (no delivery provider implemented; set WORKER_JOB_PUSH_NOTIFICATION_ENABLED=true once one exists)');
   }
@@ -527,6 +540,7 @@ function startWorker() {
       logger.error({ err }, `[SMS-WORKER] delivery ${job?.data?.notificationDeliveryId} failed`);
       void alertOnJobFailure('sms-notification-queue', job, err);
     });
+    registerShutdownHandler('smsWorker', () => smsWorker.close());
   } else {
     logger.info('[WORKER] SMS Notification Worker not started — disabled (no delivery provider implemented; set WORKER_JOB_SMS_NOTIFICATION_ENABLED=true once one exists)');
   }
@@ -562,37 +576,44 @@ function runnerAllowed(key: string): boolean {
 
 if (runnerAllowed('home-report-export-poller')) {
   restartAfterDelay('Report export poller', runHomeReportExportPoller);
+  registerShutdownHandler('home-report-export-poller', stopHomeReportExportPoller);
 }
 if (runnerAllowed('report-export-cleanup')) {
   restartAfterDelay('Report export cleanup', runReportExportCleanup);
+  registerShutdownHandler('report-export-cleanup', stopReportExportCleanup);
 }
 if (runnerAllowed('material-spec-export-poller')) {
   restartAfterDelay('Material spec export poller', runMaterialSpecExportPoller);
+  registerShutdownHandler('material-spec-export-poller', stopMaterialSpecExportPoller);
 }
 if (runnerAllowed('material-spec-export-cleanup')) {
   restartAfterDelay('Material spec export cleanup', runMaterialSpecExportCleanup);
+  registerShutdownHandler('material-spec-export-cleanup', stopMaterialSpecExportCleanup);
 }
 
 if (runnerAllowed('high-priority-email-enqueue-poller')) {
-  startHighPriorityEmailEnqueuePoller({
+  const stopHighPriorityEmailEnqueuePoller = startHighPriorityEmailEnqueuePoller({
     intervalMs: 10_000,
     batchSize: 50,
     redisConnection,
   });
+  registerShutdownHandler('high-priority-email-enqueue-poller', stopHighPriorityEmailEnqueuePoller);
 }
 
 if (runnerAllowed('domain-events-poller')) {
-  startDomainEventsPoller({
+  const stopDomainEventsPoller = startDomainEventsPoller({
     intervalMs: 30_000,
     batchSize: 25,
   });
+  registerShutdownHandler('domain-events-poller', stopDomainEventsPoller);
 }
 
 if (runnerAllowed('claim-follow-up-due-poller')) {
-  startClaimFollowUpDuePoller({
+  const stopClaimFollowUpDuePoller = startClaimFollowUpDuePoller({
     intervalMs: 60_000,
     batchSize: 50,
   });
+  registerShutdownHandler('claim-follow-up-due-poller', stopClaimFollowUpDuePoller);
 }
 
 // =============================================================================
@@ -664,6 +685,9 @@ recallWorker.on('failed', (job, err) => {
   void alertOnJobFailure(RECALL_QUEUE_NAME, job, err);
 });
 
+registerShutdownHandler('recallWorker', () => recallWorker.close());
+registerShutdownHandler('recallQueue', () => recallQueue.close());
+
 // Enqueue recall jobs on startup (using repeatable logic instead of manual IDs)
 // This ensures only ONE instance of this job exists in the queue at a time.
 async function setupScheduledJobs() {
@@ -714,6 +738,8 @@ diyAiGuideWorker.on('failed', (job, err) => {
   void alertOnJobFailure(DIY_AI_GUIDE_QUEUE, job, err);
 });
 
+registerShutdownHandler('diyAiGuideWorker', () => diyAiGuideWorker.close());
+
 // =============================================================================
 // PERMIT HISTORY & UNPERMITTED WORK TRACKER — BullMQ workers
 // =============================================================================
@@ -733,6 +759,7 @@ permitFetchWorker.on('failed', (job, err) => {
   logger.error({ err }, `[PERMIT-FETCH-WORKER] fetchJob ${job?.data?.fetchJobId} failed`);
   void alertOnJobFailure('permit-fetch-queue', job, err);
 });
+registerShutdownHandler('permitFetchWorker', () => permitFetchWorker.close());
 
 const detectUnpermittedWorker = new Worker<{ propertyId: string }>(
   'detect-unpermitted-work-queue',
@@ -749,6 +776,7 @@ detectUnpermittedWorker.on('failed', (job, err) => {
   logger.error({ err }, `[DETECT-UNPERMITTED-WORKER] property ${job?.data?.propertyId} failed`);
   void alertOnJobFailure('detect-unpermitted-work-queue', job, err);
 });
+registerShutdownHandler('detectUnpermittedWorker', () => detectUnpermittedWorker.close());
 
 const permitDisclosureWorker = new Worker<{ exportId: string; propertyId: string }>(
   'generate-permit-disclosure-queue',
@@ -765,6 +793,7 @@ permitDisclosureWorker.on('failed', (job, err) => {
   logger.error({ err }, `[PERMIT-DISCLOSURE-WORKER] export ${job?.data?.exportId} failed`);
   void alertOnJobFailure('generate-permit-disclosure-queue', job, err);
 });
+registerShutdownHandler('permitDisclosureWorker', () => permitDisclosureWorker.close());
 
 // =============================================================================
 // GUARDRAIL: QA/E2E dummy-ingest jobs must never run in production. These
@@ -803,7 +832,7 @@ const radarDummyIngestEnabled = process.env.RADAR_DUMMY_INGEST_ENABLED === 'true
 const radarDummyIngestCron = process.env.RADAR_DUMMY_INGEST_CRON || '*/30 * * * *';
 
 if (radarDummyIngestEnabled) {
-  cron.schedule(radarDummyIngestCron, async () => {
+  const radarDummyIngestTask = cron.schedule(radarDummyIngestCron, async () => {
     try {
       logger.info('[RADAR-DUMMY-INGEST] Running dummy radar ingest job...');
       await ingestRadarSignalsJob();
@@ -811,6 +840,7 @@ if (radarDummyIngestEnabled) {
       logger.error({ err }, '[RADAR-DUMMY-INGEST] Job failed');
     }
   }, { timezone: 'America/New_York' });
+  registerShutdownHandler('radar-dummy-ingest-cron', () => radarDummyIngestTask.stop());
 
   logger.info(`[RADAR-DUMMY-INGEST] Dummy radar ingest scheduled for: ${radarDummyIngestCron} America/New_York`);
 
@@ -828,7 +858,7 @@ const homeRiskReplayDummyIngestEnabled = process.env.HOME_RISK_REPLAY_DUMMY_INGE
 const homeRiskReplayDummyIngestCron = process.env.HOME_RISK_REPLAY_DUMMY_INGEST_CRON || '15 */6 * * *';
 
 if (homeRiskReplayDummyIngestEnabled) {
-  cron.schedule(homeRiskReplayDummyIngestCron, async () => {
+  const homeRiskReplayDummyIngestTask = cron.schedule(homeRiskReplayDummyIngestCron, async () => {
     try {
       logger.info('[HOME-RISK-INGEST] Running dummy home risk event ingest job...');
       await ingestHomeRiskEventsJob();
@@ -836,6 +866,7 @@ if (homeRiskReplayDummyIngestEnabled) {
       logger.error({ err }, '[HOME-RISK-INGEST] Job failed');
     }
   }, { timezone: 'America/New_York' });
+  registerShutdownHandler('home-risk-replay-dummy-ingest-cron', () => homeRiskReplayDummyIngestTask.stop());
 
   logger.info(`[HOME-RISK-INGEST] Dummy home risk ingest scheduled for: ${homeRiskReplayDummyIngestCron} America/New_York`);
 
@@ -859,7 +890,7 @@ const neighborhoodDummyIngestEnabled = process.env.NEIGHBORHOOD_DUMMY_INGEST_ENA
 const neighborhoodDummyIngestCron = process.env.NEIGHBORHOOD_DUMMY_INGEST_CRON || '45 */6 * * *';
 
 if (neighborhoodDummyIngestEnabled) {
-  cron.schedule(neighborhoodDummyIngestCron, async () => {
+  const neighborhoodDummyIngestTask = cron.schedule(neighborhoodDummyIngestCron, async () => {
     try {
       logger.info('[NEIGHBORHOOD-DUMMY-INGEST] Running dummy neighborhood event ingest job...');
       await ingestNeighborhoodDummyEventsJob();
@@ -867,6 +898,7 @@ if (neighborhoodDummyIngestEnabled) {
       logger.error({ err }, '[NEIGHBORHOOD-DUMMY-INGEST] Job failed');
     }
   }, { timezone: 'America/New_York' });
+  registerShutdownHandler('neighborhood-dummy-ingest-cron', () => neighborhoodDummyIngestTask.stop());
 
   logger.info(`[NEIGHBORHOOD-DUMMY-INGEST] Dummy neighborhood ingest scheduled for: ${neighborhoodDummyIngestCron} America/New_York`);
 
@@ -944,6 +976,7 @@ cronTriggerWorker.on('failed', (job, err) => {
   logger.error(`[CRON-TRIGGER] Job ${job?.id} (${job?.name}) failed:`, err);
   void alertOnJobFailure('cron-trigger-queue', job, err);
 });
+registerShutdownHandler('cronTriggerWorker', () => cronTriggerWorker.close());
 
 // =============================================================================
 // STARTUP DIAGNOSTICS — WKR-004/WKR-005: make the effective worker execution
@@ -968,4 +1001,11 @@ cronTriggerWorker.on('failed', (job, err) => {
 initCronRunHistory(redisConnection);
 scheduleCronJobs();
 startWorker();
-startMetricsServer();
+const metricsServer = startMetricsServer();
+registerShutdownHandler('metricsServer', () => new Promise<void>((resolve) => metricsServer.close(() => resolve())));
+
+// W5 item 7: install the SIGTERM/SIGINT handler last, once every resource
+// above has had a chance to register itself — a signal arriving mid-boot
+// (before this line runs) is not caught, same as before this change; the
+// realistic window for that is a few hundred ms of process startup.
+installGracefulShutdown();

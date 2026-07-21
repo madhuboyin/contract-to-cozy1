@@ -71,9 +71,14 @@ export async function reportExportCleanupTick(): Promise<void> {
   }
 }
 
+// W5 item 7 (graceful shutdown): see homeReportExport.poller.ts's identical note.
+let stopped = false;
+export function stopReportExportCleanup(): void {
+  stopped = true;
+}
+
 export async function runReportExportCleanup() {
-  // eslint-disable-next-line no-constant-condition
-  while (true) {
+  while (!stopped) {
     try {
       await reportExportCleanupTick();
     } catch (e) {

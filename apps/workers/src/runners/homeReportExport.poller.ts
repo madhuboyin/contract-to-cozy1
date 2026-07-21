@@ -6,9 +6,16 @@ import { logger } from '../lib/logger';
 const POLL_INTERVAL_MS = Number(process.env.REPORT_EXPORT_POLL_MS || 10_000);
 const BATCH_SIZE = Number(process.env.REPORT_EXPORT_BATCH_SIZE || 3);
 
+// W5 item 7 (graceful shutdown): this loop previously had no stop
+// mechanism at all — a SIGTERM would abandon it mid-loop with no chance
+// to finish the current batch or exit the process cleanly.
+let stopped = false;
+export function stopHomeReportExportPoller(): void {
+  stopped = true;
+}
+
 export async function runHomeReportExportPoller() {
-  // eslint-disable-next-line no-constant-condition
-  while (true) {
+  while (!stopped) {
     try {
       const pending = await prisma.homeReportExport.findMany({
         where: { status: 'PENDING' },

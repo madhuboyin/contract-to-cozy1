@@ -84,7 +84,7 @@ export const severeWeatherIncidentsTotal = new Counter({
 
 const METRICS_PORT = Number(process.env.METRICS_PORT) || 9091;
 
-export function startMetricsServer(): void {
+export function startMetricsServer(): http.Server {
   const server = http.createServer(async (_req, res) => {
     if (_req.url !== '/metrics') {
       res.writeHead(404);
@@ -98,4 +98,8 @@ export function startMetricsServer(): void {
   server.listen(METRICS_PORT, () => {
     logger.info(`Workers metrics server listening on :${METRICS_PORT}/metrics`);
   });
+
+  // W5 item 7 (graceful shutdown): returning the server lets the caller
+  // close it on SIGTERM instead of leaving the listener open indefinitely.
+  return server;
 }

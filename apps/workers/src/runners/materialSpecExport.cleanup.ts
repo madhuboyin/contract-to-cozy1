@@ -75,9 +75,14 @@ export async function materialSpecExportCleanupTick(): Promise<void> {
   }
 }
 
+// W5 item 7 (graceful shutdown): see homeReportExport.poller.ts's identical note.
+let stopped = false;
+export function stopMaterialSpecExportCleanup(): void {
+  stopped = true;
+}
+
 export async function runMaterialSpecExportCleanup() {
-  // eslint-disable-next-line no-constant-condition
-  while (true) {
+  while (!stopped) {
     try {
       await materialSpecExportCleanupTick();
     } catch (e) {
