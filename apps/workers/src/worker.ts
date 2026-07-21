@@ -28,6 +28,7 @@ import { startClaimFollowUpDuePoller } from './runners/claimFollowUpDue.poller';
 import { alertOnJobFailure } from './lib/jobFailureAlert';
 import { initCronRunHistory, recordCronRun } from './lib/cronRunHistory';
 import { registerShutdownHandler, installGracefulShutdown } from './lib/gracefulShutdown';
+import { validateStartupDependencies } from './lib/startupValidation';
 import { acquireCronLease, releaseCronLease } from './lib/cronLease';
 import { DEFAULT_JOB_RETENTION } from '../../backend/src/config/queueDefaults';
 import { recallIngestJob, RECALL_INGEST_JOB } from './jobs/recallIngest.job';
@@ -997,15 +998,28 @@ registerShutdownHandler('cronTriggerWorker', () => cronTriggerWorker.close());
   logger.info(`[GOVERNANCE] ENFORCE_HUMAN_POLICY_APPROVALS=${areHumanPolicyApprovalsEnforced()}`);
 })();
 
-// Start cron jobs from registry, then start BullMQ worker
-initCronRunHistory(redisConnection);
-scheduleCronJobs();
-startWorker();
-const metricsServer = startMetricsServer();
-registerShutdownHandler('metricsServer', () => new Promise<void>((resolve) => metricsServer.close(() => resolve())));
+// W5 item 6: verify required external dependencies (DB, Redis, and —
+// gated on which jobs are currently enabled — SMTP/S3/Gemini) before
+// scheduling any cron work or starting the metrics server. This does not
+// gate the BullMQ Workers/queues constructed earlier in this file (they're
+// instantiated synchronously at module load and begin accepting jobs on
+// construction — deferring that is out of scope here, see the W5
+// items-1-5 shared-package epic); in production, a failed check throws so
+// the process exits fast and visibly instead of limping along with a job
+// class it can't actually execute.
+void (async function startWorkerProcess() {
+  await validateStartupDependencies();
 
-// W5 item 7: install the SIGTERM/SIGINT handler last, once every resource
-// above has had a chance to register itself — a signal arriving mid-boot
-// (before this line runs) is not caught, same as before this change; the
-// realistic window for that is a few hundred ms of process startup.
-installGracefulShutdown();
+  // Start cron jobs from registry, then start BullMQ worker
+  initCronRunHistory(redisConnection);
+  scheduleCronJobs();
+  startWorker();
+  const metricsServer = startMetricsServer();
+  registerShutdownHandler('metricsServer', () => new Promise<void>((resolve) => metricsServer.close(() => resolve())));
+
+  // W5 item 7: install the SIGTERM/SIGINT handler last, once every resource
+  // above has had a chance to register itself — a signal arriving mid-boot
+  // (before this line runs) is not caught, same as before this change; the
+  // realistic window for that is a few hundred ms of process startup.
+  installGracefulShutdown();
+})();
