@@ -350,7 +350,9 @@ RUN sed -i 's/\.\.\/\.\.\/backend\/src\/utils\/riskCalculator\.util/\.\/shared\/
     sed -i 's/\.\.\/\.\.\/backend\/src\/config\/workerExecutionPolicy/\.\/shared\/backend\/config\/workerExecutionPolicy/g' src/worker.ts && \
     sed -i 's/\.\.\/\.\.\/backend\/src\/config\/appConfig/\.\/shared\/backend\/config\/appConfig/g' src/worker.ts && \
     sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/config\/workerExecutionPolicy/\.\.\/shared\/backend\/config\/workerExecutionPolicy/g' src/jobs/seasonalNotification.job.ts && \
-    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/hiddenAssets\.service/\.\.\/shared\/backend\/services\/hiddenAssets\.service/g' src/jobs/hiddenAssetRefresh.job.ts && \
+    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/hiddenAssets\.service/\.\.\/shared\/backend\/services\/hiddenAssets\.service/g' src/jobs/hiddenAssetRefresh.job.ts src/jobs/propertyIntelligence.job.ts && \
+    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/utils\/FinancialCalculator\.util/\.\.\/shared\/backend\/utils\/FinancialCalculator\.util/g' src/jobs/propertyIntelligence.job.ts && \
+    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/RiskAssessment\.service/\.\.\/shared\/backend\/services\/RiskAssessment\.service/g' src/jobs/propertyIntelligence.job.ts && \
     sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/neighborhoodIntelligence\/neighborhoodPropertyMatchService/\.\.\/shared\/backend\/neighborhoodIntelligence\/neighborhoodPropertyMatchService/g' src/jobs/refreshNeighborhoodEvents.job.ts && \
     sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/neighborhoodIntelligence\/neighborhoodPropertyMatchService/\.\.\/shared\/backend\/neighborhoodIntelligence\/neighborhoodPropertyMatchService/g' src/jobs/ingestNeighborhoodDummyEvents.job.ts && \
     sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/homeHabitCoach\/habitGenerationEngine/\.\.\/shared\/backend\/services\/homeHabitCoach\/habitGenerationEngine/g' src/jobs/habitGeneration.job.ts && \
