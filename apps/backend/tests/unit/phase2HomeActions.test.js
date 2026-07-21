@@ -160,6 +160,10 @@ test('orchestration recommendations preserve the affected service context', () =
   assert.equal(action.recommendedAction, 'Schedule service for HVAC Furnace');
   assert.equal(action.primaryCta.label, 'Schedule Service');
   assert.equal(
+    action.primaryCta.href,
+    '/dashboard/providers?propertyId=property-1&category=HVAC&serviceLabel=HVAC+Furnace&intent=service-booking&from=home-action&actionKey=risk%3Ahvac',
+  );
+  assert.equal(
     action.whyItMatters,
     'Routine furnace maintenance is recommended soon based on the information in your Home Record.',
   );
@@ -193,6 +197,36 @@ test('service recommendations do not leak a conflicting coverage action', () => 
     'Routine furnace maintenance is recommended soon based on the information in your Home Record.',
   );
   assert.doesNotMatch(action.signal, /warranty/i);
+});
+
+test('service recommendations send water-heater work to plumbing provider search', () => {
+  const action = adaptOrchestratedActionToHomeAction({
+    id: 'risk-water-heater',
+    actionKey: 'risk:water-heater',
+    source: 'RISK',
+    propertyId: 'property-1',
+    title: 'WATER_HEATER_TANK',
+    description: null,
+    systemType: 'WATER_HEATER_TANK',
+    category: 'SYSTEM',
+    riskLevel: 'HIGH',
+    coverage: { hasCoverage: false, type: 'NONE', expiresOn: null },
+    confidence: { score: 0.9, level: 'HIGH', explanation: [] },
+    priority: 80,
+    cta: { show: true, label: 'Schedule Service', reason: 'ACTION_REQUIRED' },
+    suppression: { suppressed: false, reasons: [] },
+    signalSources: [],
+    primarySignalSource: null,
+    relatedEntity: { type: 'INVENTORY_ITEM', id: 'water-heater-item' },
+    overdue: false,
+    createdAt: new Date('2026-07-01T12:00:00.000Z'),
+  });
+
+  assert.match(action.primaryCta.href, /^\/dashboard\/providers\?/);
+  assert.match(action.primaryCta.href, /category=PLUMBING/);
+  assert.match(action.primaryCta.href, /serviceLabel=Water\+Heater/);
+  assert.match(action.primaryCta.href, /actionKey=risk%3Awater-heater/);
+  assert.match(action.primaryCta.href, /itemId=water-heater-item/);
 });
 
 test('Home asset labels humanize identifiers and simplify roof construction subtypes', () => {

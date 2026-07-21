@@ -335,6 +335,9 @@ export function adaptOrchestratedActionToHomeAction(
         : `Review ${displayTitle}`;
   const serviceSubject = displayTitle.replace(/^HVAC\s+/i, '').toLowerCase();
   const serviceTiming = action.overdue ? 'now' : action.priority >= 70 ? 'soon' : 'when convenient';
+  const serviceHref = isServiceAction && !critical
+    ? buildProviderSearchHref(action, displayTitle)
+    : null;
   const homeownerRationale = isServiceAction
     ? `Routine ${serviceSubject} maintenance is recommended ${serviceTiming} based on the information in your Home Record.`
     : description ?? `This open action is supported by the current maintenance or risk context for ${displayTitle}.`;
@@ -415,7 +418,7 @@ export function adaptOrchestratedActionToHomeAction(
     primaryCta: {
       kind: critical ? 'ESCALATE' : 'REVIEW',
       label: action.cta?.label ?? (critical ? 'Review safety escalation' : 'Review action'),
-      href: `/dashboard/actions?propertyId=${encodeURIComponent(action.propertyId)}`,
+      href: serviceHref ?? `/dashboard/actions?propertyId=${encodeURIComponent(action.propertyId)}`,
     },
     secondaryCtas: [],
     feedbackControls: ['COMPLETE', 'DEFER', 'SNOOZE', 'DISMISS', 'ALREADY_DONE', 'NOT_RELEVANT', 'CORRECT_FACT'],
@@ -423,6 +426,43 @@ export function adaptOrchestratedActionToHomeAction(
     createdAt: observedAt,
     lastEvaluatedAt: evaluatedAt.toISOString(),
   });
+}
+
+function buildProviderSearchHref(action: OrchestratedAction, serviceLabel: string): string {
+  const params = new URLSearchParams({
+    propertyId: action.propertyId,
+    category: resolveProviderServiceCategory(action),
+    serviceLabel,
+    intent: 'service-booking',
+    from: 'home-action',
+    actionKey: action.actionKey,
+  });
+  if (action.relatedEntity?.type === 'INVENTORY_ITEM') {
+    params.set('itemId', action.relatedEntity.id);
+  }
+
+  return `/dashboard/providers?${params.toString()}`;
+}
+
+function resolveProviderServiceCategory(action: OrchestratedAction): ServiceCategory {
+  const explicitCategory = normalizeUpper(action.serviceCategory ?? action.category);
+  const providerCategories = new Set<string>(Object.values(ServiceCategory));
+  if (providerCategories.has(explicitCategory)) {
+    return explicitCategory as ServiceCategory;
+  }
+
+  const assetContext = normalizeUpper(`${action.systemType ?? ''} ${action.title ?? ''}`);
+  if (assetContext.includes('HVAC')) return ServiceCategory.HVAC;
+  if (assetContext.includes('WATER_HEATER') || assetContext.includes('WATER HEATER') || assetContext.includes('PLUMB')) {
+    return ServiceCategory.PLUMBING;
+  }
+  if (assetContext.includes('ELECTRIC')) return ServiceCategory.ELECTRICAL;
+  if (assetContext.includes('LANDSCAP')) return ServiceCategory.LANDSCAPING;
+  if (assetContext.includes('CLEAN')) return ServiceCategory.CLEANING;
+  if (assetContext.includes('PEST')) return ServiceCategory.PEST_CONTROL;
+  if (assetContext.includes('LOCK')) return ServiceCategory.LOCKSMITH;
+
+  return ServiceCategory.HANDYMAN;
 }
 
 export interface CompletionCreateInput {
