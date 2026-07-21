@@ -25,6 +25,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { useToast } from '@/components/ui/use-toast';
 import { UnifiedHomeToolsSection } from '@/components/home/UnifiedHomeToolsSection';
 import { useToolDiscoveryAvailability } from '@/features/tools/useToolDiscoveryAvailability';
+import { resolveHomeActionPrimaryHref } from '@/lib/navigation/homeActionNavigation';
 
 function priorityTone(priority: RankedHomeActionDTO['priority']) {
   if (priority === 'NOW') return 'border-rose-200 bg-rose-50 text-rose-700';
@@ -260,6 +261,7 @@ export function ActionCard({
   };
 
   const correctionHref = action.secondaryCtas.find((cta) => /correct|context/i.test(cta.label))?.href;
+  const primaryHref = resolveHomeActionPrimaryHref(action, propertyId);
   const canDefer = action.governance.safetyTier !== 'SAFETY_EMERGENCY' &&
     (action.feedbackControls.includes('DEFER') || action.feedbackControls.includes('SNOOZE'));
 
@@ -305,7 +307,7 @@ export function ActionCard({
       )}
       <div className="mt-4 flex flex-wrap gap-2">
         <Button asChild size="sm" className="rounded-full">
-          <Link href={action.primaryCta.href} onClick={() => { void api.recordHomeActionOpened(propertyId, action.id); }}>{action.primaryCta.label}<ArrowRight className="ml-1 h-3.5 w-3.5" /></Link>
+          <Link href={primaryHref} onClick={() => { void api.recordHomeActionOpened(propertyId, action.id); }}>{action.primaryCta.label}<ArrowRight className="ml-1 h-3.5 w-3.5" /></Link>
         </Button>
         {action.feedbackControls.includes('COMPLETE') && (
           <Button size="sm" variant="outline" className="rounded-full" disabled={Boolean(pending)} onClick={() => execute('COMPLETE')}>
