@@ -182,13 +182,15 @@ export default function MaintenancePage() {
     queryFn: async () => {
       const res = await api.getProperties();
       if (!res.success) throw new Error('Failed to fetch properties.');
-      return res.data.properties as Property[];
+      // Keep the shared `properties` query cache compatible with the top
+      // command bar, which stores the complete response data object.
+      return res.data;
     },
   });
 
   const effectivePropertyId = useMemo(() => {
     if (selectedPropertyId) return selectedPropertyId;
-    const properties = propertiesQuery.data ?? [];
+    const properties = (propertiesQuery.data?.properties ?? []) as Property[];
     const primary = properties.find((p) => p.isPrimary);
     return primary?.id || properties[0]?.id;
   }, [selectedPropertyId, propertiesQuery.data]);

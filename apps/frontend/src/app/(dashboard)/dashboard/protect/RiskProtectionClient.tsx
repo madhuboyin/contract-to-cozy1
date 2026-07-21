@@ -62,10 +62,11 @@ export default function RiskProtectionClient() {
 
   const tasksQuery = useQuery({
     queryKey: ['maintenance-tasks', selectedPropertyId],
-    queryFn: () =>
-      selectedPropertyId
-        ? api.getMaintenanceTasks(selectedPropertyId, { includeCompleted: false })
-        : Promise.resolve(null as any),
+    queryFn: async () => {
+      if (!selectedPropertyId) return [];
+      const response = await api.getMaintenanceTasks(selectedPropertyId, { includeCompleted: false });
+      return response.success ? response.data : [];
+    },
     enabled: !!selectedPropertyId,
   });
 
@@ -125,8 +126,8 @@ export default function RiskProtectionClient() {
   const riskData = riskQuery.data && riskQuery.data !== 'QUEUED' ? riskQuery.data : null;
   const riskScore = (riskData as any)?.riskScore ?? null;
   const openRecalls = recallsQuery.data?.matches || [];
-  const urgentTasks = (tasksQuery.data as any)?.success
-    ? (tasksQuery.data as any).data.filter((t: any) => t.priority === 'URGENT')
+  const urgentTasks = Array.isArray(tasksQuery.data)
+    ? tasksQuery.data.filter((task) => task.priority === 'URGENT')
     : [];
   const coverageGaps = (coverageGapQuery.data as any)?.success
     ? (coverageGapQuery.data as any).data.gaps || []
