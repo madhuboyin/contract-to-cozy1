@@ -14,6 +14,7 @@ import { AuthRequest } from '../types/auth.types';
 import { z } from 'zod';
 import { getProjectComplianceEnvelope } from '../services/projectCompliance/context';
 import { prisma } from '../lib/prisma';
+import { shouldPauseProviderSearch } from '../services/providerSearchApplicability';
 
 const createServiceSchema = z.object({
   category: z.enum(['INSPECTION', 'HANDYMAN']),
@@ -85,7 +86,10 @@ export class ProviderController {
         }
       }
 
-      const result = propertyContext && propertyContext.decision.status !== 'APPLICABLE'
+      // Unknown responsibility should not prevent discovery. Homeowners may browse
+      // providers while confirming who will ultimately arrange the work. A known
+      // association/landlord assignment remains a hard stop.
+      const result = shouldPauseProviderSearch(propertyContext)
         ? {
           providers: [],
           pagination: {

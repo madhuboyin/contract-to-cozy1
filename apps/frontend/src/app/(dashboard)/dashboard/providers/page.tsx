@@ -42,10 +42,24 @@ import {
   buildExecutionGuardMessage,
 } from '@/features/guidance/utils/executionGuardMessaging';
 import { extractGuidanceContinuityContext, hasGuidanceContinuityContext } from '@/features/guidance/utils/guidanceContinuity';
-import { PropertyContextStatusNotice } from '@/components/property-context/PropertyContextStatusNotice';
 import type { PropertyContextEnvelope } from '@/components/property-context/propertyContextTypes';
+import {
+  getProviderResponsibilityConfig,
+  isResponsibilityAssignedElsewhere,
+  isResponsibilityUnknown,
+  responsibilityPartyLabel,
+  type ProviderResponsibilityParty,
+} from '@/lib/providers/providerResponsibility';
 
 const DEFAULT_RADIUS = 25;
+
+const RESPONSIBILITY_OPTIONS: Array<{ value: ProviderResponsibilityParty; label: string }> = [
+  { value: 'OWNER', label: 'I do / the homeowner' },
+  { value: 'LANDLORD', label: 'Landlord or property manager' },
+  { value: 'ASSOCIATION', label: 'HOA or condo association' },
+  { value: 'SHARED', label: 'Shared responsibility' },
+  { value: 'UNKNOWN', label: 'I’m not sure' },
+];
 
 interface ServiceFilterProps {
   onFilterChange: (filters: { zipCode: string; category: string | undefined }) => void;
@@ -434,6 +448,10 @@ export default function ProvidersPage() {
   const [contextItemName, setContextItemName] = useState<string | null>(null);
   const [propertyZipCode, setPropertyZipCode] = useState<string>('');
   const [propertyContext, setPropertyContext] = useState<PropertyContextEnvelope | null>(null);
+  const [responsibilityParties, setResponsibilityParties] = useState<Record<string, ProviderResponsibilityParty>>({});
+  const [responsibilitySaving, setResponsibilitySaving] = useState(false);
+  const [responsibilityError, setResponsibilityError] = useState<string | null>(null);
+  const [notSureResponsibilityScopes, setNotSureResponsibilityScopes] = useState<Set<string>>(() => new Set());
   const initialZipCode = '';
   const initialCategory = defaultCategory || '';
   const hasInitialFetchedRef = useRef(false);
@@ -442,12 +460,22 @@ export default function ProvidersPage() {
     category: initialCategory,
   });
   const isGuidanceExecutionBlocked = hasGuardScopeContext && Boolean(providerGuardQuery.data?.blocked);
-  const isPropertyContextBlocked = Boolean(
+  const propertyContextNeedsAttention = Boolean(
     targetPropertyId && propertyContext && propertyContext.decision.status !== 'APPLICABLE',
+  );
+  const responsibilityConfig = getProviderResponsibilityConfig(filters.category);
+  const responsibilityParty = responsibilityConfig ? responsibilityParties[responsibilityConfig.scope] ?? null : null;
+  const responsibilityNotSure = Boolean(
+    responsibilityConfig && notSureResponsibilityScopes.has(responsibilityConfig.scope),
+  );
+  const responsibilityAssignedElsewhere = isResponsibilityAssignedElsewhere(propertyContext);
+  const responsibilityUnknown = isResponsibilityUnknown(propertyContext, responsibilityConfig);
+  const isPropertyContextBlocked = Boolean(
+    targetPropertyId && propertyContext?.decision.status === 'NOT_APPLICABLE',
   );
   const isExecutionBlocked = isGuidanceExecutionBlocked || isPropertyContextBlocked;
   const requiresServiceCategory = Boolean(
-    isPropertyContextBlocked &&
+    propertyContextNeedsAttention &&
     filters.category === 'ALL' &&
     propertyContext?.decision.reasonCodes.includes('WORK_SCOPE_RESPONSIBILITY_MAPPING_UNKNOWN'),
   );
@@ -546,6 +574,12 @@ export default function ProvidersPage() {
           if (propertyRes.success && propertyRes.data?.zipCode) {
             zipForInitialSearch = propertyRes.data.zipCode;
             setPropertyZipCode(propertyRes.data.zipCode);
+            const responsibilities = (propertyRes.data as typeof propertyRes.data & {
+              responsibilities?: Array<{ scope: string; party: ProviderResponsibilityParty }>;
+            }).responsibilities;
+            setResponsibilityParties(Object.fromEntries(
+              (responsibilities ?? []).map((entry) => [entry.scope, entry.party]),
+            ));
           }
         } catch (loadError) {
           console.error('Failed to load target property context:', loadError);
@@ -620,42 +654,119 @@ export default function ProvidersPage() {
     });
   };
 
+  const saveResponsibility = async (party: ProviderResponsibilityParty) => {
+    if (!targetPropertyId || !responsibilityConfig || responsibilitySaving) return;
+    setResponsibilitySaving(true);
+    setResponsibilityError(null);
+    try {
+      await api.patch(`/api/properties/${targetPropertyId}/context/${encodeURIComponent(responsibilityConfig.factKey)}`, {
+        value: party,
+        sourceType: 'USER_REPORTED',
+        confidence: party === 'UNKNOWN' ? null : 0.9,
+      });
+      setResponsibilityParties((current) => ({ ...current, [responsibilityConfig.scope]: party }));
+      setNotSureResponsibilityScopes((current) => {
+        const next = new Set(current);
+        if (party === 'UNKNOWN') next.add(responsibilityConfig.scope);
+        else next.delete(responsibilityConfig.scope);
+        return next;
+      });
+      track('provider_responsibility_answered', {
+        category: filters.category,
+        party,
+      });
+      await fetchProviders(filters);
+    } catch (caught) {
+      setResponsibilityError(caught instanceof Error ? caught.message : 'Could not save your answer. Please try again.');
+    } finally {
+      setResponsibilitySaving(false);
+    }
+  };
+
+  const responsibilityCorrectionHref = propertyContext?.decision.correctionPaths?.[0] ??
+    (targetPropertyId ? `/dashboard/properties/${targetPropertyId}/edit#responsibility` : undefined);
+  const showResponsibilityQuestion = responsibilityUnknown && !responsibilityNotSure;
+  const delegatedParty = responsibilityPartyLabel(responsibilityParty);
+
+  const primaryAction = responsibilityAssignedElsewhere
+    ? {
+        title: `Check who should arrange ${responsibilityConfig?.subject ?? 'this service'}.`,
+        description: `Your Home Record currently says ${delegatedParty} handles this work. Review that answer if it is not correct.`,
+        primaryAction: responsibilityCorrectionHref ? (
+          <Link
+            href={responsibilityCorrectionHref}
+            className="inline-flex min-h-[44px] w-full items-center justify-center rounded-xl bg-brand-primary px-4 py-2 text-sm font-semibold text-white hover:bg-brand-primary/90"
+          >
+            Review responsibility
+          </Link>
+        ) : <span />,
+        impactLabel: 'Provider search paused',
+        confidenceLabel: 'Based on your Home Record',
+      }
+    : showResponsibilityQuestion
+      ? {
+          title: `Who handles ${responsibilityConfig?.subject ?? 'this service'} for this home?`,
+          description: 'Choose the best match so we can show the right next step. We will not assume this from the home type.',
+          primaryAction: (
+            <div className="grid w-full grid-cols-1 gap-2 sm:grid-cols-2">
+              {RESPONSIBILITY_OPTIONS.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => void saveResponsibility(option.value)}
+                  disabled={responsibilitySaving}
+                  className="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-800 hover:border-brand-primary hover:bg-brand-50 disabled:opacity-60"
+                >
+                  {responsibilitySaving ? 'Saving...' : option.label}
+                </button>
+              ))}
+              {responsibilityError ? <p className="mb-0 text-sm text-rose-700 sm:col-span-2">{responsibilityError}</p> : null}
+            </div>
+          ),
+          impactLabel: 'One quick question',
+          confidenceLabel: 'No responsibility assumed',
+        }
+      : {
+          title: providers.length > 0 ? 'Compare best-fit providers before booking.' : 'Start with one clear provider search.',
+          description: responsibilityNotSure
+            ? 'You can browse providers now. Confirm who handles the work before completing a booking.'
+            : providers.length > 0
+              ? 'Review profile quality, reviews, and service fit so your booking decision is confident and fast.'
+              : 'Use service category and ZIP to generate a focused, trustworthy shortlist.',
+          primaryAction: (
+            <button
+              type="button"
+              onClick={runSearch}
+              disabled={dataLoading}
+              className="inline-flex min-h-[44px] w-full items-center justify-center rounded-xl bg-brand-primary px-4 py-2 text-sm font-semibold text-white hover:bg-brand-primary/90 disabled:opacity-60"
+            >
+              {dataLoading ? 'Searching providers...' : 'Run provider search'}
+            </button>
+          ),
+          supportingAction: (
+            <button
+              type="button"
+              onClick={() => handleFilterChange({
+                zipCode: targetPropertyId ? propertyZipCode : '',
+                category: undefined,
+              })}
+              className="inline-flex min-h-[40px] w-full items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+            >
+              Reset filters
+            </button>
+          ),
+          impactLabel: providers.length > 0 ? `${providers.length} matched providers` : 'Search required',
+          confidenceLabel: responsibilityNotSure
+            ? 'Responsibility still to be confirmed'
+            : targetPropertyId ? 'Property context applied' : 'General marketplace search',
+        };
+
   return (
     <ProviderShellTemplate
       title="Provider Search"
       subtitle="Find trusted local professionals by service and location."
       eyebrow="Provider Marketplace"
-      primaryAction={{
-        title: providers.length > 0 ? 'Compare best-fit providers before booking.' : 'Start with one clear provider search.',
-        description:
-          providers.length > 0
-            ? 'Review profile quality, reviews, and service fit so your booking decision is confident and fast.'
-            : 'Use service category and ZIP to generate a focused, trustworthy shortlist.',
-        primaryAction: (
-          <button
-            type="button"
-            onClick={runSearch}
-            disabled={dataLoading}
-            className="inline-flex min-h-[44px] w-full items-center justify-center rounded-xl bg-brand-primary px-4 py-2 text-sm font-semibold text-white hover:bg-brand-primary/90 disabled:opacity-60"
-          >
-            {dataLoading ? 'Searching providers...' : 'Run provider search'}
-          </button>
-        ),
-        supportingAction: (
-          <button
-            type="button"
-            onClick={() => handleFilterChange({
-              zipCode: targetPropertyId ? propertyZipCode : '',
-              category: undefined,
-            })}
-            className="inline-flex min-h-[40px] w-full items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-          >
-            Reset filters
-          </button>
-        ),
-        impactLabel: providers.length > 0 ? `${providers.length} matched providers` : 'Search required',
-        confidenceLabel: targetPropertyId ? 'Property context applied' : 'General marketplace search',
-      }}
+      primaryAction={primaryAction}
       trust={{
         confidenceLabel: 'Match quality combines category fit, location radius, and provider profile quality signals.',
         freshnessLabel: dataLoading ? 'Updating matches now' : 'Results refresh after every search run',
@@ -664,12 +775,13 @@ export default function ProvidersPage() {
       }}
       summary={
         <div className="space-y-3">
-          <PropertyContextStatusNotice context={propertyContext} title="Provider and booking context" />
           <MobileKpiStrip className="sm:grid-cols-3">
             <MobileKpiTile
               label="Matches"
-              value={dataLoading ? '...' : providers.length}
-              hint={dataLoading ? 'Searching now' : providers.length === 1 ? 'Provider found' : 'Providers found'}
+              value={responsibilityAssignedElsewhere ? 'Paused' : dataLoading ? '...' : providers.length}
+              hint={responsibilityAssignedElsewhere
+                ? 'Responsibility check'
+                : dataLoading ? 'Searching now' : providers.length === 1 ? 'Provider found' : 'Providers found'}
               tone={providers.length > 0 ? 'positive' : 'neutral'}
             />
             <MobileKpiTile label="ZIP" value={filters.zipCode || 'Any'} hint="Location filter" />
@@ -682,13 +794,15 @@ export default function ProvidersPage() {
         </div>
       }
       filters={
-        <ServiceFilter
-          onFilterChange={handleFilterChange}
-          defaultCategory={defaultCategory}
-          defaultZipCode={propertyZipCode}
-          isSearching={dataLoading}
-          lockZipToProperty={Boolean(targetPropertyId)}
-        />
+        responsibilityAssignedElsewhere ? undefined : (
+          <ServiceFilter
+            onFilterChange={handleFilterChange}
+            defaultCategory={defaultCategory}
+            defaultZipCode={propertyZipCode}
+            isSearching={dataLoading}
+            lockZipToProperty={Boolean(targetPropertyId)}
+          />
+        )
       }
     >
       {fromSource === 'replace-repair' && (
@@ -775,23 +889,17 @@ export default function ProvidersPage() {
         </MobileCard>
       ) : null}
 
-      {isPropertyContextBlocked ? (
+      {requiresServiceCategory ? (
         <GuidanceWarningBanner
-          title={requiresServiceCategory
-            ? 'Select a service category before choosing a provider'
-            : 'Complete property details before choosing a provider'}
-          message={
-            requiresServiceCategory
-              ? 'Property-scoped provider recommendations require a specific type of work so responsibility can be checked correctly.'
-              : propertyContext?.decision.status === 'UNKNOWN'
-              ? 'Provider recommendations are paused until the required responsibility and work context is known.'
-              : 'This work is assigned to another responsible party for the selected property.'
-          }
-          details={propertyContext?.decision.reasonCodes ?? []}
-          actionLabel={requiresServiceCategory ? undefined : 'Review property details'}
-          actionHref={requiresServiceCategory
-            ? undefined
-            : propertyContext?.decision.correctionPaths?.[0] ?? `/dashboard/properties/${targetPropertyId}/edit`}
+          title="Select a service category"
+          message="Choose the type of work first so we can ask only the responsibility question that applies."
+        />
+      ) : propertyContextNeedsAttention && !responsibilityUnknown && !responsibilityAssignedElsewhere ? (
+        <GuidanceWarningBanner
+          title="Review one property detail before booking"
+          message="The property information needed for this service is incomplete or needs review. You can continue after confirming it."
+          actionLabel="Review property details"
+          actionHref={responsibilityCorrectionHref}
         />
       ) : null}
 
@@ -809,16 +917,17 @@ export default function ProvidersPage() {
         />
       ) : null}
 
-      <MobileSection>
-        <MobileSectionHeader
-          title={dataLoading ? 'Searching providers...' : `${providers.length} provider${providers.length !== 1 ? 's' : ''} found`}
-          subtitle={
-            insightContext
+      {!responsibilityAssignedElsewhere ? <>
+        <MobileSection>
+          <MobileSectionHeader
+            title={dataLoading ? 'Searching providers...' : `${providers.length} provider${providers.length !== 1 ? 's' : ''} found`}
+            subtitle={
+              insightContext
               ? `Showing specialists for ${formatEnumLabel(insightContext)}`
               : 'Tap a provider to review profile details and ratings.'
-          }
-        />
-      </MobileSection>
+            }
+          />
+        </MobileSection>
 
       {dataLoading ? (
         <MobileCard variant="compact" className="py-10 text-center">
@@ -856,7 +965,9 @@ export default function ProvidersPage() {
       ) : (
         <EmptyStateCard
           title="No providers found"
-          description="Try broadening your service category or removing the ZIP filter, then run search again."
+          description={responsibilityUnknown
+            ? 'No matching providers were found. You can adjust the service category and search again while responsibility remains unconfirmed.'
+            : 'Try broadening your service category or removing the ZIP filter, then run search again.'}
           action={
             <button
               type="button"
@@ -868,6 +979,7 @@ export default function ProvidersPage() {
           }
         />
       )}
+      </> : null}
 
       <BottomSafeAreaReserve size="chatAware" />
     </ProviderShellTemplate>

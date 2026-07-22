@@ -94,6 +94,7 @@ describe('Property Context create/edit form round trips', () => {
       expect(source).not.toMatch(/outdoorSpaceTypes:\s*[^\n]*\['PRIVATE_YARD'/);
       expect(source).not.toMatch(/RESPONSIBILITY_SCOPES\.map\(\(scope\)\s*=>\s*\(\{\s*scope,\s*party:\s*[^}]*responsibilityParty/);
     }
+    expect(createPage).toMatch(/responsibilities:\s*defaultResponsibilityParties\('UNKNOWN'\)/);
     expect(editPage).toMatch(/mapResponsibilitiesToForm\(property\.responsibilities\)/);
   });
 });

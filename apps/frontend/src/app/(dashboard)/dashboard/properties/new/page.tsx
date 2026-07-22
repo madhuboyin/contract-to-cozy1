@@ -123,7 +123,9 @@ export default function NewPropertyPage() {
     occupancyStatus: '',
     yearBuilt: '',
     propertySize: '',
-    responsibilities: defaultResponsibilityParties('OWNER'),
+    // A new property does not establish who handles every system. Capture the
+    // relevant responsibility when the homeowner reaches that workflow.
+    responsibilities: defaultResponsibilityParties('UNKNOWN'),
     outdoorSpaceTypes: [],
     heatingType: '',
     coolingType: '',

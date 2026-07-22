@@ -43,6 +43,7 @@ export type CtcEventName =
   | 'property_onboarded'
   // Monetization / Resolution
   | 'provider_searched'
+  | 'provider_responsibility_answered'
   | 'booking_initiated'
   // Workflow funnel
   | 'workflow_started'
@@ -179,6 +180,7 @@ export interface CtcEventProperties {
   
   // Monetization / Resolution
   provider_searched: { category: string; location: string; resultCount?: number };
+  provider_responsibility_answered: { category: string; party: string };
   booking_initiated: { providerId?: string; category: string; source: string };
   
   // Diagnostics
