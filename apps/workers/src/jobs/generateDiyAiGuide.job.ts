@@ -1,5 +1,5 @@
 // apps/workers/src/jobs/generateDiyAiGuide.job.ts
-import { diyAiGuideService } from '../../../backend/src/services/diyAiGuide.service';
+import { diyAiGuideService } from '@worker-shared/services/diyAiGuide.service';
 import { logger } from '../lib/logger';
 
 export const GENERATE_DIY_AI_GUIDE_JOB = 'GENERATE_DIY_AI_GUIDE';

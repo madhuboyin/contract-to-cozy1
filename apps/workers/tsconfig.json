@@ -9,7 +9,19 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "resolveJsonModule": true
+    "resolveJsonModule": true,
+    // W5 (items 1/2/4): worker-safe backend imports go through this alias
+    // instead of a `../../../backend/src/...`-style relative path, so the
+    // import statement text is identical locally and in the Docker build —
+    // only tsconfig.docker.json's `paths` target differs (local dev/tests
+    // resolve straight to the live sibling `apps/backend/src`; the Docker
+    // build resolves to the copied `src/shared/backend` mirror). This is
+    // what lets the Dockerfile drop its `sed` import-rewriting step for any
+    // file migrated to this alias.
+    "baseUrl": ".",
+    "paths": {
+      "@worker-shared/*": ["../backend/src/*"]
+    }
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist"]

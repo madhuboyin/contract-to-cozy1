@@ -1,5 +1,5 @@
 import { prisma } from '../lib/prisma';
-import { NotificationService } from '../../../backend/src/services/notification.service';
+import { NotificationService } from '@worker-shared/services/notification.service';
 
 type DomainEventStatus = 'PENDING' | 'PROCESSING' | 'PROCESSED' | 'FAILED';
 type DomainEventType = 'CLAIM_SUBMITTED' | 'CLAIM_CLOSED' | 'FOLLOW_UP_DUE';

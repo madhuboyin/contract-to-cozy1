@@ -8,7 +8,7 @@
 
 import { prisma } from '../lib/prisma';
 import { logger } from '../lib/logger';
-import { providerComplianceService } from '../../../backend/src/services/providerCompliance.service';
+import { providerComplianceService } from '@worker-shared/services/providerCompliance.service';
 
 export async function providerCredentialExpireJob() {
   const now = new Date();

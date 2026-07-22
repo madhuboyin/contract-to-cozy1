@@ -1,5 +1,5 @@
 import { prisma } from '../lib/prisma';
-import { signalService } from '../../../backend/src/services/signal.service';
+import { signalService } from '@worker-shared/services/signal.service';
 import { logger } from '../lib/logger';
 
 export type SharedSignalRefreshJobSummary = {

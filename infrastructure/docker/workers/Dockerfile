@@ -320,100 +320,16 @@ COPY apps/workers/stubs/gemini-service.ts src/shared/backend/services/gemini.ser
 # Copy worker source code + TS config
 COPY apps/workers/src ./src
 COPY apps/workers/tsconfig.json ./tsconfig.json
+COPY apps/workers/tsconfig.docker.json ./tsconfig.docker.json
 
-# Rewrite import paths
-RUN sed -i 's/\.\.\/\.\.\/backend\/src\/utils\/riskCalculator\.util/\.\/shared\/backend\/utils\/riskCalculator\.util/g' src/worker.ts && \
-    sed -i 's/\.\.\/\.\.\/backend\/src\/utils\/FinancialCalculator\.util/\.\/shared\/backend\/utils\/FinancialCalculator\.util/g' src/worker.ts && \
-    sed -i 's/\.\.\/\.\.\/backend\/src\/config\/risk-constants/\.\/shared\/backend\/config\/risk-constants/g' src/worker.ts && \
-    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/storage\/reportStorage/\.\.\/shared\/backend\/services\/storage\/reportStorage/g' src/jobs/generateHomeReportExport.job.ts && \
-    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/pdf\/renderHomeReportPackPdf/\.\.\/shared\/backend\/services\/pdf\/renderHomeReportPackPdf/g' src/jobs/generateHomeReportExport.job.ts && \
-    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/planningContext\/reportSnapshot/\.\.\/shared\/backend\/services\/planningContext\/reportSnapshot/g' src/jobs/generateHomeReportExport.job.ts && \
-    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/homeEventRadarMatcher\.service/\.\.\/shared\/backend\/services\/homeEventRadarMatcher\.service/g' src/jobs/ingestRadarSignals.job.ts && \
-    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/sharedDataBackfill\.service/\.\.\/shared\/backend\/services\/sharedDataBackfill\.service/g' src/jobs/sharedDataBackfill.job.ts && \
-    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/sharedDataBackfill\.service/\.\.\/shared\/backend\/services\/sharedDataBackfill\.service/g' src/jobs/sharedDataConsistencyAudit.job.ts && \
-    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/signal\.service/\.\.\/shared\/backend\/services\/signal\.service/g' src/jobs/sharedSignalHealthAudit.job.ts && \
-    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/signal\.service/\.\.\/shared\/backend\/services\/signal\.service/g' src/jobs/sharedSignalRefresh.job.ts && \
-    sed -i 's/\.\.\/\.\.\/backend\/src\/services\/domainEvents\/domainEvents\.service/\.\/shared\/backend\/services\/domainEvents\/domainEvents\.service/g' src/runners/claimFollowUpDue.poller.ts && \
-    # This ensures the domainEvents service can find the prisma lib in its new shared relative path
-    sed -i 's/\.\.\/\.\.\/lib\/prisma/\.\.\/\.\.\/lib\/prisma/g' src/shared/backend/services/domainEvents/domainEvents.service.ts && \
-    sed -i 's/\.\.\/\.\.\/backend\/src\/services\/incidents\/incident\.service/\.\/shared\/backend\/services\/incidents\/incident\.service/g' src/jobs/coverageLapseIncidents.job.ts && \
-    sed -i 's/\.\.\/\.\.\/backend\/src\/services\/incidents\/incident\.service/\.\/shared\/backend\/services\/incidents\/incident\.service/g' src/jobs/freezeRiskIncidents.job.ts && \
-    sed -i 's/\.\.\/\.\.\/backend\/src\/services\/hiddenAssets\.service/\.\/shared\/backend\/services\/hiddenAssets\.service/g' src/worker.ts && \
-    sed -i 's/\.\.\/\.\.\/backend\/src\/services\/RiskAssessment\.service/\.\/shared\/backend\/services\/RiskAssessment\.service/g' src/worker.ts && \
-    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/seasonal\/applicabilityPolicy/\.\.\/shared\/backend\/services\/seasonal\/applicabilityPolicy/g' src/jobs/seasonalChecklistGeneration.job.ts src/jobs/seasonalNotification.job.ts && \
-    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/seasonal\/seasonWindow/\.\.\/shared\/backend\/services\/seasonal\/seasonWindow/g' src/jobs/seasonalChecklistGeneration.job.ts && \
-    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/PropertyMaintenanceTask\.service/\.\.\/shared\/backend\/services\/PropertyMaintenanceTask.service/g' src/jobs/seasonalChecklistGeneration.job.ts && \
-    sed -i 's/\.\.\/\.\.\/backend\/src\/config\/workerJobRegistry/\.\/shared\/backend\/config\/workerJobRegistry/g' src/worker.ts && \
-    sed -i 's/\.\.\/\.\.\/backend\/src\/config\/queueDefaults/\.\/shared\/backend\/config\/queueDefaults/g' src/worker.ts && \
-    sed -i 's/\.\.\/\.\.\/backend\/src\/config\/queueDefaults/\.\/shared\/backend\/config\/queueDefaults/g' src/runners/highPriorityEmailEnqueue.poller.ts && \
-    sed -i 's/\.\.\/\.\.\/backend\/src\/services\/maintenanceReminder\.service/\.\/shared\/backend\/services\/maintenanceReminder\.service/g' src/worker.ts && \
-    sed -i 's/\.\.\/\.\.\/backend\/src\/config\/workerExecutionPolicy/\.\/shared\/backend\/config\/workerExecutionPolicy/g' src/worker.ts && \
-    sed -i 's/\.\.\/\.\.\/backend\/src\/config\/appConfig/\.\/shared\/backend\/config\/appConfig/g' src/worker.ts && \
-    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/config\/workerExecutionPolicy/\.\.\/shared\/backend\/config\/workerExecutionPolicy/g' src/jobs/seasonalNotification.job.ts && \
-    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/config\/workerJobRegistry/\.\.\/shared\/backend\/config\/workerJobRegistry/g' src/lib/startupValidation.ts && \
-    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/config\/workerExecutionPolicy/\.\.\/shared\/backend\/config\/workerExecutionPolicy/g' src/lib/startupValidation.ts && \
-    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/hiddenAssets\.service/\.\.\/shared\/backend\/services\/hiddenAssets\.service/g' src/jobs/hiddenAssetRefresh.job.ts src/jobs/propertyIntelligence.job.ts && \
-    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/utils\/FinancialCalculator\.util/\.\.\/shared\/backend\/utils\/FinancialCalculator\.util/g' src/jobs/propertyIntelligence.job.ts && \
-    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/RiskAssessment\.service/\.\.\/shared\/backend\/services\/RiskAssessment\.service/g' src/jobs/propertyIntelligence.job.ts && \
-    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/neighborhoodIntelligence\/neighborhoodPropertyMatchService/\.\.\/shared\/backend\/neighborhoodIntelligence\/neighborhoodPropertyMatchService/g' src/jobs/refreshNeighborhoodEvents.job.ts && \
-    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/neighborhoodIntelligence\/neighborhoodPropertyMatchService/\.\.\/shared\/backend\/neighborhoodIntelligence\/neighborhoodPropertyMatchService/g' src/jobs/ingestNeighborhoodDummyEvents.job.ts && \
-    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/homeHabitCoach\/habitGenerationEngine/\.\.\/shared\/backend\/services\/homeHabitCoach\/habitGenerationEngine/g' src/jobs/habitGeneration.job.ts && \
-    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/refinanceRadar\/engine\/mortgageRate\.service/\.\.\/shared\/backend\/refinanceRadar\/engine\/mortgageRate\.service/g' src/jobs/ingestMortgageRates.job.ts && \
-    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/modules\/gazette\/services\/gazetteGenerationJobRunner\.service/\.\.\/shared\/backend\/modules\/gazette\/services\/gazetteGenerationJobRunner\.service/g' src/jobs/gazetteGeneration.job.ts && \
-    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/guidanceEngine\/guidanceJourney\.service/\.\.\/shared\/backend\/services\/guidanceEngine\/guidanceJourney\.service/g' src/jobs/coverageLapseIncidents.job.ts && \
-    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/guidanceEngine\/guidanceJourney\.service/\.\.\/shared\/backend\/services\/guidanceEngine\/guidanceJourney\.service/g' src/jobs/freezeRiskIncidents.job.ts && \
-    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/guidanceEngine\/guidanceJourney\.service/\.\.\/shared\/backend\/services\/guidanceEngine\/guidanceJourney\.service/g' src/jobs/neighborhoodChangeNotification.job.ts && \
-    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/neighborhoodIntelligence\/impactRules/\.\.\/shared\/backend\/neighborhoodIntelligence\/impactRules/g' src/jobs/neighborhoodChangeNotification.job.ts && \
-    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/neighborhoodIntelligence\/geoUtils/\.\.\/shared\/backend\/neighborhoodIntelligence\/geoUtils/g' src/jobs/neighborhoodChangeNotification.job.ts && \
-    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/planningContext\/context/\.\.\/shared\/backend\/services\/planningContext\/context/g' src/jobs/neighborhoodChangeNotification.job.ts
-
-# Route all worker notification callers through the worker-safe service stub.
-RUN sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/notification\.service/\.\.\/shared\/backend\/services\/notification\.service/g' \
-    src/jobs/neighborhoodChangeNotification.job.ts \
-    src/jobs/processDomainEvents.job.ts \
-    src/recalls/recallFollowups.service.ts \
-    src/jobs/seasonalNotification.job.ts \
-    src/jobs/habitGeneration.job.ts
-
-RUN sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/newHomeWarrantyDeadline\.service/\.\.\/shared\/backend\/services\/newHomeWarrantyDeadline.service/g' \
-    src/jobs/newHomeWarrantyDeadline.job.ts
-
-RUN sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/aggregationContext\/batch/\.\.\/shared\/backend\/services\/aggregationContext\/batch/g' \
-    src/jobs/gazetteGeneration.job.ts src/services/aggregationDeliveryPolicy.ts
-
-# Rewrite paths introduced by DIY and permit features
-RUN sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/diyAiGuide\.service/\.\.\/shared\/backend\/services\/diyAiGuide\.service/g' src/jobs/generateDiyAiGuide.job.ts && \
-    sed -i 's/\.\.\/\.\.\/backend\/src\/services\/diyAiGuide\.service/\.\/shared\/backend\/services\/diyAiGuide\.service/g' src/worker.ts && \
-    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/storage\/reportStorage/\.\.\/shared\/backend\/services\/storage\/reportStorage/g' src/jobs/generateMaterialSpecExport.job.ts && \
-    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/permitFetch\.service/\.\.\/shared\/backend\/services\/permitFetch\.service/g' src/jobs/fetchPermitHistory.job.ts && \
-    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/permitDetection\.service/\.\.\/shared\/backend\/services\/permitDetection\.service/g' src/jobs/detectUnpermittedWork.job.ts && \
-    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/storage\/reportStorage/\.\.\/shared\/backend\/services\/storage\/reportStorage/g' src/jobs/generatePermitDisclosure.job.ts && \
-    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/notification\.service/\.\.\/shared\/backend\/services\/notification\.service/g' src/jobs/permitInspectionReminder.job.ts && \
-    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/projectCompliance\/permitWorkerContext\.service/\.\.\/shared\/backend\/services\/projectCompliance\/permitWorkerContext.service/g' src/jobs/generatePermitDisclosure.job.ts src/jobs/permitInspectionReminder.job.ts
-
-# Rewrite paths introduced by the severe weather alerts job
-RUN sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/incidents\/incident\.service/\.\.\/shared\/backend\/services\/incidents\/incident\.service/g' src/jobs/severeWeatherAlerts.job.ts && \
-    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/guidanceEngine\/guidanceJourney\.service/\.\.\/shared\/backend\/services\/guidanceEngine\/guidanceJourney\.service/g' src/jobs/severeWeatherAlerts.job.ts && \
-    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/severeWeatherAlert\.service/\.\.\/shared\/backend\/services\/severeWeatherAlert\.service/g' src/jobs/severeWeatherAlerts.job.ts
-
-# Rewrite paths introduced by the Home Reserve Fund Planner jobs
-RUN sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/homeReserveFundCalculation\.service/\.\.\/shared\/backend\/services\/homeReserveFundCalculation\.service/g' src/jobs/recalculateReserveFunds.job.ts && \
-    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/homeReserveFundReconciliation\.service/\.\.\/shared\/backend\/services\/homeReserveFundReconciliation\.service/g' src/jobs/reserveFundReconciliation.job.ts && \
-    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/notification\.service/\.\.\/shared\/backend\/services\/notification\.service/g' src/jobs/reserveFundReconciliation.job.ts && \
-    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/notification\.service/\.\.\/shared\/backend\/services\/notification\.service/g' src/jobs/reserveFundBalanceReminder.job.ts && \
-    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/financialContext\/reserveFundWorkerContext\.service/\.\.\/shared\/backend\/services\/financialContext\/reserveFundWorkerContext.service/g' src/jobs/recalculateReserveFunds.job.ts src/jobs/reserveFundBalanceReminder.job.ts src/jobs/reserveFundReconciliation.job.ts
-
-# Rewrite paths introduced by the Provider Trust & Compliance Verification jobs
-RUN sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/providerCompliance\.service/\.\.\/shared\/backend\/services\/providerCompliance\.service/g' src/jobs/providerCredentialExpire.job.ts && \
-    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/incidents\/integrations\/providerCredentialLapse\.adapter/\.\.\/shared\/backend\/services\/incidents\/integrations\/providerCredentialLapse\.adapter/g' src/jobs/providerCredentialLapse.job.ts
-
-# Rewrite paths introduced by the tax assessment ingestion job
-RUN sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/taxAssessmentFetch\.service/\.\.\/shared\/backend\/services\/taxAssessmentFetch\.service/g' src/jobs/ingestTaxAssessmentEvents.job.ts && \
-    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/homeEventRadarMatcher\.service/\.\.\/shared\/backend\/services\/homeEventRadarMatcher\.service/g' src/jobs/ingestTaxAssessmentEvents.job.ts && \
-    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/taxAssessorAdapters\/taxAssessmentTypes/\.\.\/shared\/backend\/services\/taxAssessorAdapters\/taxAssessmentTypes/g' src/radar/normalizeTaxAssessment.ts
-
-# Compile TS -> dist/
-RUN npx tsc --project ./tsconfig.json
+# W5 (items 1/2/4): worker source no longer imports backend files via
+# `../../../backend/src/...`-style relative paths that need per-file `sed`
+# rewriting — every such import now goes through the `@worker-shared/*`
+# alias (apps/workers/tsconfig.json), which tsconfig.docker.json points at
+# this same copied src/shared/backend tree. tsc-alias rewrites the alias
+# back into a real relative path in the compiled dist/ output below, so no
+# module-resolution shim is needed at runtime either.
+RUN npx tsc --project ./tsconfig.docker.json && npx tsc-alias -p ./tsconfig.docker.json
 
 # Prune to production dependencies
 RUN npm prune --omit=dev

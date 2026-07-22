@@ -1,4 +1,4 @@
-import { processNewHomeWarrantyDeadlines } from '../../../backend/src/services/newHomeWarrantyDeadline.service';
+import { processNewHomeWarrantyDeadlines } from '@worker-shared/services/newHomeWarrantyDeadline.service';
 
 export async function runNewHomeWarrantyDeadlineJob() {
   return processNewHomeWarrantyDeadlines();

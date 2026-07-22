@@ -1,22 +1,27 @@
 #!/usr/bin/env node
 
 /**
- * Worker-safe import boundary lint check (W4 item 7).
+ * Worker-safe import boundary lint check (W4 item 7 / W5 items 1-4).
  *
- * Every prior W3 slice that added a new apps/workers/src import reaching
- * into apps/backend/src broke `docker build` at least once with a TS2307
- * "Cannot find module" error, because infrastructure/docker/workers/Dockerfile
- * copies a hand-curated list of backend source files into the image and
- * rewrites their (and the workers files') import paths with `sed` — a new
- * import has no automatic coverage. See the
- * feedback_workers_docker_curated_copy_list memory entry.
+ * Every apps/workers/src file that reaches into backend source now does so
+ * through the `@worker-shared/*` alias (apps/workers/tsconfig.json) rather
+ * than a `../../../backend/src/...`-style relative path. Locally that alias
+ * resolves straight to the live sibling apps/backend/src, so it always
+ * "just works" in dev/tests. The Docker build is different: it resolves
+ * the same alias (tsconfig.docker.json) against a hand-curated COPY'd
+ * mirror at src/shared/backend/... — so a new `@worker-shared/X` import
+ * with no matching `COPY .../X.ts src/shared/backend/.../` line still
+ * breaks `docker build` with a TS2307 "Cannot find module" error, exactly
+ * like the old sed-rewrite mechanism this replaced (W5 removed the ~70
+ * hand-maintained `sed -i` rules; the COPY-list itself is unchanged and
+ * still needs this check). See feedback_workers_docker_curated_copy_list.
  *
  * This does NOT run a real Docker build. It parses the same Dockerfile the
- * build uses and checks two things:
+ * build uses and checks:
  *
- *   1. Every apps/workers/src file's import that reaches into `backend/src`
- *      has a matching `RUN sed -i 's/<pattern>/.../g' <this file>` rule in
- *      the Dockerfile — i.e. the Dockerfile actually knows to rewrite it.
+ *   1. Every apps/workers/src file's `@worker-shared/X` import has a
+ *      matching Dockerfile `COPY` instruction that lands a file at the
+ *      corresponding src/shared/backend/X(.ts) path in the image.
  *   2. Every backend source file the Dockerfile's `COPY` instructions
  *      reference still exists on disk (catches a copied file being
  *      renamed/deleted without updating the Dockerfile).
@@ -24,10 +29,10 @@
  * Known gap (documented, not silently swept under the rug): a backend file
  * that IS already copied into the image (e.g. diyAiGuide.service.ts,
  * permitFetch.service.ts, RiskAssessment.service.ts) can itself gain a NEW
- * backend-reaching import — this script does not trace into those files'
- * own imports. When editing one of the Dockerfile's copied backend files,
- * manually verify new imports resolve inside the copied tree (see the W4
- * slice-1 memory entry for the exact manual-check pattern used there).
+ * `@worker-shared/X` (or old-style relative) backend-reaching import — this
+ * script does not trace into those files' own imports. When editing one of
+ * the Dockerfile's copied backend files, manually verify new imports
+ * resolve inside the copied tree.
  */
 
 const fs = require('fs');
@@ -78,46 +83,56 @@ function joinContinuations(text) {
   return joined;
 }
 
-function parseDockerfileSedRules(text) {
-  const rules = []; // { file, pattern, replacement }
+// COPY <src...> <dst> instructions. Multiple sources always mean dst is a
+// directory (Docker's own COPY semantics); a single source may target
+// either a directory (dst ends with '/') or a renamed single file (a stub
+// swap, e.g. stubs/job-queue-service.ts -> .../JobQueue.service.ts).
+function parseDockerfileCopyRules(text) {
+  const rules = [];
   for (const instr of joinContinuations(text)) {
-    if (!instr.includes('sed -i')) continue;
-    for (const part of instr.split('&&')) {
-      // Pattern/replacement bodies contain escaped slashes (`\/`, from
-      // escaped path separators like `\.\.\/backend\/src`) — `(?:\\.|[^/])*`
-      // treats each `\<char>` pair as a unit so an escaped slash doesn't
-      // prematurely end the match at sed's own `/` delimiter.
-      const m = part.match(/sed -i\s+'s\/((?:\\.|[^/])*)\/((?:\\.|[^/])*)\/g'\s+(.+)$/);
-      if (!m) continue;
-      const [, rawPattern, rawReplacement, filesStr] = m;
-      // sed's pattern/replacement bodies here always escape both regex
-      // metacharacters (`.`) and the delimiter (`/`) with a backslash —
-      // unescape any `\<char>` pair back to its literal char so this can
-      // be plain-substring-matched against a real (unescaped) import spec.
-      const pattern = rawPattern.replace(/\\(.)/g, '$1');
-      const replacement = rawReplacement.replace(/\\(.)/g, '$1');
-      for (const file of filesStr.trim().split(/\s+/)) {
-        if (file) rules.push({ file, pattern, replacement });
-      }
-    }
+    const trimmed = instr.trim();
+    if (!trimmed.startsWith('COPY ')) continue;
+    let rest = trimmed.slice('COPY '.length).trim();
+    if (rest.startsWith('--from=')) continue; // stage-to-stage copies, not source-tree copies
+    const parts = rest.split(/\s+/);
+    if (parts.length < 2) continue;
+    const dest = parts[parts.length - 1];
+    const sources = parts.slice(0, -1);
+    rules.push({ sources, dest });
   }
   return rules;
 }
 
-// COPY <src...> <dst> — we only care about `apps/backend/src/...` sources,
-// to check they still exist on disk.
+// Backend source files referenced by any COPY instruction (for the
+// still-exists-on-disk check).
 function parseDockerfileBackendCopySources(text) {
   const sources = [];
-  for (const instr of joinContinuations(text)) {
-    if (!instr.trim().startsWith('COPY ')) continue;
-    const parts = instr.trim().slice('COPY '.length).trim().split(/\s+/);
-    if (parts.length < 2) continue;
-    const srcs = parts.slice(0, -1);
+  for (const { sources: srcs } of parseDockerfileCopyRules(text)) {
     for (const src of srcs) {
       if (src.startsWith('apps/backend/src/')) sources.push(src);
     }
   }
   return sources;
+}
+
+// Every module path actually available under src/shared/... in the built
+// image, e.g. "src/shared/backend/config/workerJobRegistry".
+function resolveAvailableSharedModules(copyRules) {
+  const available = new Set();
+  for (const { sources, dest } of copyRules) {
+    if (!dest.startsWith('src/shared/')) continue;
+    const destIsDir = dest.endsWith('/') || sources.length > 1;
+    if (destIsDir) {
+      const destDir = dest.endsWith('/') ? dest.slice(0, -1) : dest;
+      for (const src of sources) {
+        const base = path.basename(src).replace(/\.ts$/, '');
+        available.add(`${destDir}/${base}`);
+      }
+    } else {
+      available.add(dest.replace(/\.ts$/, ''));
+    }
+  }
+  return available;
 }
 
 function importsFromSource(source) {
@@ -131,27 +146,27 @@ function importsFromSource(source) {
 // Takes pre-read { relFile, source } entries rather than doing its own
 // filesystem I/O, so the matching logic itself (the part worth testing) can
 // be exercised with synthetic fixtures instead of real files.
-function findImportViolationsFromSources(entries, rulesByFile) {
+function findImportViolationsFromSources(entries, availableSharedModules) {
   const violations = [];
   for (const { relFile, source } of entries) {
     const specs = importsFromSource(source);
-    const fileRules = rulesByFile.get(relFile) || [];
-
     for (const spec of specs) {
-      if (!spec.includes('backend/src')) continue;
-      const covered = fileRules.some((rule) => spec.includes(rule.pattern));
-      if (!covered) violations.push({ file: relFile, spec });
+      if (!spec.startsWith('@worker-shared/')) continue;
+      const modulePath = 'src/shared/backend/' + spec.slice('@worker-shared/'.length);
+      if (!availableSharedModules.has(modulePath)) {
+        violations.push({ file: relFile, spec });
+      }
     }
   }
   return violations;
 }
 
-function findImportViolations(files, rulesByFile) {
+function findImportViolations(files, availableSharedModules) {
   const entries = files.map((file) => ({
     relFile: 'src/' + path.relative(SRC_ROOT, file).split(path.sep).join('/'),
     source: fs.readFileSync(file, 'utf8'),
   }));
-  return findImportViolationsFromSources(entries, rulesByFile);
+  return findImportViolationsFromSources(entries, availableSharedModules);
 }
 
 function findMissingCopySources(copySources) {
@@ -160,30 +175,26 @@ function findMissingCopySources(copySources) {
 
 if (require.main === module) {
   const dockerfileText = fs.readFileSync(DOCKERFILE_PATH, 'utf8');
-  const sedRules = parseDockerfileSedRules(dockerfileText);
-  const rulesByFile = new Map();
-  for (const rule of sedRules) {
-    if (!rulesByFile.has(rule.file)) rulesByFile.set(rule.file, []);
-    rulesByFile.get(rule.file).push(rule);
-  }
+  const copyRules = parseDockerfileCopyRules(dockerfileText);
+  const availableSharedModules = resolveAvailableSharedModules(copyRules);
   const copySources = parseDockerfileBackendCopySources(dockerfileText);
 
   const files = collectTsFiles(SRC_ROOT);
-  const importViolations = findImportViolations(files, rulesByFile);
+  const importViolations = findImportViolations(files, availableSharedModules);
   const missingCopySources = findMissingCopySources(copySources);
 
   if (importViolations.length > 0 || missingCopySources.length > 0) {
     console.error('[worker-import-boundary] FAIL');
     if (importViolations.length > 0) {
-      console.error('\nbackend-source imports with no matching Dockerfile sed rewrite rule');
+      console.error('\n@worker-shared imports with no matching Dockerfile COPY destination');
       console.error('(these will break `docker build` with a TS2307 "Cannot find module" error):');
       for (const v of importViolations) {
         console.error(`  - ${v.file}: import '${v.spec}'`);
       }
       console.error(
-        "\nFix: add a `RUN sed -i 's/<escaped old import>/<escaped new import>/g' <this file>` line to\n" +
-        'infrastructure/docker/workers/Dockerfile (and a matching `COPY` line for the target backend\n' +
-        'file, if it is not already copied). See feedback_workers_docker_curated_copy_list for the pattern.'
+        '\nFix: add a `COPY apps/backend/src/<path>.ts src/shared/backend/<path>/` line to\n' +
+        'infrastructure/docker/workers/Dockerfile so the alias resolves inside the image too.\n' +
+        'See feedback_workers_docker_curated_copy_list for the pattern.'
       );
     }
     if (missingCopySources.length > 0) {
@@ -197,15 +208,16 @@ if (require.main === module) {
 
   console.log(
     `[worker-import-boundary] PASS: validated ${files.length} TypeScript files against ` +
-    `${sedRules.length} Dockerfile sed rules and ${copySources.length} backend COPY sources`,
+    `${availableSharedModules.size} available @worker-shared modules and ${copySources.length} backend COPY sources`,
   );
 }
 
 module.exports = {
   collectTsFiles,
   joinContinuations,
-  parseDockerfileSedRules,
+  parseDockerfileCopyRules,
   parseDockerfileBackendCopySources,
+  resolveAvailableSharedModules,
   importsFromSource,
   findImportViolations,
   findImportViolationsFromSources,

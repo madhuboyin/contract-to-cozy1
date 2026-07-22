@@ -13,9 +13,9 @@
 // reminder without needing new schema.
 
 import { prisma } from '../lib/prisma';
-import { NotificationService } from '../../../backend/src/services/notification.service';
+import { NotificationService } from '@worker-shared/services/notification.service';
 import { logger } from '../lib/logger';
-import { checkReserveFundWorkerContext } from '../../../backend/src/services/financialContext/reserveFundWorkerContext.service';
+import { checkReserveFundWorkerContext } from '@worker-shared/services/financialContext/reserveFundWorkerContext.service';
 
 const STALE_BALANCE_DAYS = 45;
 

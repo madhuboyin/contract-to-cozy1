@@ -20,10 +20,10 @@
 
 import { prisma } from '../lib/prisma';
 import { logger } from '../lib/logger';
-import { evaluateSeasonalTemplateApplicability } from '../../../backend/src/services/seasonal/applicabilityPolicy';
+import { evaluateSeasonalTemplateApplicability } from '@worker-shared/services/seasonal/applicabilityPolicy';
 import { buildSeasonalPropertyContext } from './seasonalChecklistGeneration.job';
-import { NotificationService } from '../../../backend/src/services/notification.service';
-import { areWorkerOutboundNotificationsEnabled } from '../../../backend/src/config/workerExecutionPolicy';
+import { NotificationService } from '@worker-shared/services/notification.service';
+import { areWorkerOutboundNotificationsEnabled } from '@worker-shared/config/workerExecutionPolicy';
 
 const SEASON_NAMES: Record<string, string> = {
   SPRING: 'Spring',

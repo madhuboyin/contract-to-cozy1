@@ -10,9 +10,9 @@
 import { PropertyType } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { logger } from '../lib/logger';
-import { calculateFinancialEfficiency } from '../../../backend/src/utils/FinancialCalculator.util';
-import { HiddenAssetService } from '../../../backend/src/services/hiddenAssets.service';
-import RiskAssessmentService from '../../../backend/src/services/RiskAssessment.service';
+import { calculateFinancialEfficiency } from '@worker-shared/utils/FinancialCalculator.util';
+import { HiddenAssetService } from '@worker-shared/services/hiddenAssets.service';
+import RiskAssessmentService from '@worker-shared/services/RiskAssessment.service';
 import { capturePropertyScoreSnapshots } from './propertyScoreSnapshots.job';
 
 export enum PropertyIntelligenceJobType {

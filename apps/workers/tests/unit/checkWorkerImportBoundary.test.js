@@ -1,102 +1,108 @@
 // apps/workers/tests/unit/checkWorkerImportBoundary.test.js
 //
-// W4 item 7: unit coverage for the Dockerfile sed-rule parser that backs
-// scripts/check-worker-import-boundary.js. Uses synthetic Dockerfile
-// snippets, not the real one, so this stays fast/deterministic and
-// exercises the parser's escaping logic directly rather than only via
-// "does it currently pass against the real Dockerfile" (which the script
-// itself already proves when run — this covers the failure path too).
+// W5 (items 1/2/4): unit coverage for the Dockerfile COPY-rule parser that
+// backs scripts/check-worker-import-boundary.js. Since W5 removed the `sed`
+// import-rewriting mechanism in favor of the @worker-shared/* tsconfig
+// alias, this script's job changed from "is every backend import covered by
+// a sed rule" to "does every @worker-shared/X import have a matching COPY
+// destination in the image." Uses synthetic Dockerfile snippets, not the
+// real one, so this stays fast/deterministic and exercises the parser's
+// directory-vs-renamed-file COPY semantics directly.
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const {
-  parseDockerfileSedRules,
+  parseDockerfileCopyRules,
+  resolveAvailableSharedModules,
   findImportViolationsFromSources,
   findMissingCopySources,
 } = require('../../scripts/check-worker-import-boundary.js');
 
-test('parseDockerfileSedRules extracts a single-line sed rule', () => {
-  const dockerfile = `RUN sed -i 's/\\.\\.\\/\\.\\.\\/backend\\/src\\/services\\/foo/\\.\\.\\/shared\\/backend\\/services\\/foo/g' src/worker.ts`;
-  const rules = parseDockerfileSedRules(dockerfile);
+test('parseDockerfileCopyRules extracts a single-source, directory-destination COPY', () => {
+  const dockerfile = `COPY apps/backend/src/config/workerJobRegistry.ts src/shared/backend/config/`;
+  const rules = parseDockerfileCopyRules(dockerfile);
   assert.equal(rules.length, 1);
-  assert.equal(rules[0].file, 'src/worker.ts');
-  assert.equal(rules[0].pattern, '../../backend/src/services/foo');
-  assert.equal(rules[0].replacement, '../shared/backend/services/foo');
+  assert.deepEqual(rules[0].sources, ['apps/backend/src/config/workerJobRegistry.ts']);
+  assert.equal(rules[0].dest, 'src/shared/backend/config/');
 });
 
-test('parseDockerfileSedRules follows backslash line continuations chained with &&', () => {
+test('parseDockerfileCopyRules follows backslash line continuations for a multi-source COPY', () => {
   const dockerfile = [
-    `RUN sed -i 's/\\.\\.\\/backend\\/src\\/a/\\.\\/shared\\/backend\\/a/g' src/worker.ts && \\`,
-    `    sed -i 's/\\.\\.\\/backend\\/src\\/b/\\.\\/shared\\/backend\\/b/g' src/worker.ts`,
+    `COPY apps/backend/src/services/a.ts \\`,
+    `     apps/backend/src/services/b.ts \\`,
+    `     src/shared/backend/services/`,
   ].join('\n');
-  const rules = parseDockerfileSedRules(dockerfile);
-  assert.equal(rules.length, 2);
-  assert.equal(rules[0].pattern, '../backend/src/a');
-  assert.equal(rules[1].pattern, '../backend/src/b');
-});
-
-test('parseDockerfileSedRules drops comment-only lines inside a continuation, matching Docker\'s own joiner', () => {
-  const dockerfile = [
-    `RUN sed -i 's/\\.\\.\\/backend\\/src\\/a/\\.\\/shared\\/backend\\/a/g' \\`,
-    `    # this comment must not become part of the file list`,
-    `    src/worker.ts`,
-  ].join('\n');
-  const rules = parseDockerfileSedRules(dockerfile);
+  const rules = parseDockerfileCopyRules(dockerfile);
   assert.equal(rules.length, 1);
-  assert.equal(rules[0].file, 'src/worker.ts');
+  assert.deepEqual(rules[0].sources, ['apps/backend/src/services/a.ts', 'apps/backend/src/services/b.ts']);
+  assert.equal(rules[0].dest, 'src/shared/backend/services/');
 });
 
-test('parseDockerfileSedRules applies one sed command to multiple listed files', () => {
+test('parseDockerfileCopyRules drops comment-only lines inside a continuation, matching Docker\'s own joiner', () => {
   const dockerfile = [
-    `RUN sed -i 's/\\.\\.\\/\\.\\.\\/\\.\\.\\/backend\\/src\\/services\\/notification\\.service/\\.\\.\\/shared\\/backend\\/services\\/notification\\.service/g' \\`,
-    `    src/jobs/a.job.ts \\`,
-    `    src/jobs/b.job.ts`,
+    `COPY apps/backend/src/services/a.ts \\`,
+    `     # this comment must not become part of the source list`,
+    `     src/shared/backend/services/`,
   ].join('\n');
-  const rules = parseDockerfileSedRules(dockerfile);
-  assert.equal(rules.length, 2);
-  assert.deepEqual(rules.map((r) => r.file).sort(), ['src/jobs/a.job.ts', 'src/jobs/b.job.ts']);
-  assert.equal(rules[0].pattern, '../../../backend/src/services/notification.service');
+  const rules = parseDockerfileCopyRules(dockerfile);
+  assert.equal(rules.length, 1);
+  assert.deepEqual(rules[0].sources, ['apps/backend/src/services/a.ts']);
 });
 
-test('findImportViolationsFromSources flags a backend import with no covering sed rule', () => {
+test('parseDockerfileCopyRules ignores stage-to-stage --from= copies', () => {
+  const dockerfile = `COPY --from=builder /app/apps/workers/dist ./dist`;
+  const rules = parseDockerfileCopyRules(dockerfile);
+  assert.equal(rules.length, 0);
+});
+
+test('resolveAvailableSharedModules exposes a directory-destination COPY source under its dest dir, extension stripped', () => {
+  const available = resolveAvailableSharedModules([
+    { sources: ['apps/backend/src/config/workerJobRegistry.ts'], dest: 'src/shared/backend/config/' },
+  ]);
+  assert.ok(available.has('src/shared/backend/config/workerJobRegistry'));
+});
+
+test('resolveAvailableSharedModules treats a single source with a non-slash-terminated, differently-named dest as a rename (stub swap)', () => {
+  const available = resolveAvailableSharedModules([
+    { sources: ['apps/workers/stubs/job-queue-service.ts'], dest: 'src/shared/backend/services/JobQueue.service.ts' },
+  ]);
+  assert.ok(available.has('src/shared/backend/services/JobQueue.service'));
+  assert.equal(available.size, 1);
+});
+
+test('resolveAvailableSharedModules ignores COPY rules whose dest is outside src/shared/', () => {
+  const available = resolveAvailableSharedModules([
+    { sources: ['apps/workers/package.json'], dest: './apps/workers/package.json' },
+  ]);
+  assert.equal(available.size, 0);
+});
+
+test('findImportViolationsFromSources flags an @worker-shared import with no matching COPY destination', () => {
   const entries = [
-    { relFile: 'src/jobs/new.job.ts', source: `import { foo } from '../../../backend/src/services/foo';` },
+    { relFile: 'src/jobs/new.job.ts', source: `import { foo } from '@worker-shared/services/foo';` },
   ];
-  const violations = findImportViolationsFromSources(entries, new Map());
+  const violations = findImportViolationsFromSources(entries, new Set());
   assert.equal(violations.length, 1);
   assert.equal(violations[0].file, 'src/jobs/new.job.ts');
-  assert.equal(violations[0].spec, '../../../backend/src/services/foo');
+  assert.equal(violations[0].spec, '@worker-shared/services/foo');
 });
 
-test('findImportViolationsFromSources does not flag a backend import that IS covered by a matching sed rule', () => {
+test('findImportViolationsFromSources does not flag an @worker-shared import that IS covered by a COPY destination', () => {
   const entries = [
-    { relFile: 'src/jobs/covered.job.ts', source: `import { foo } from '../../../backend/src/services/foo';` },
+    { relFile: 'src/jobs/covered.job.ts', source: `import { foo } from '@worker-shared/services/foo';` },
   ];
-  const rulesByFile = new Map([
-    ['src/jobs/covered.job.ts', [{ file: 'src/jobs/covered.job.ts', pattern: '../../../backend/src/services/foo', replacement: '../shared/backend/services/foo' }]],
-  ]);
-  const violations = findImportViolationsFromSources(entries, rulesByFile);
+  const available = new Set(['src/shared/backend/services/foo']);
+  const violations = findImportViolationsFromSources(entries, available);
   assert.equal(violations.length, 0);
 });
 
-test('findImportViolationsFromSources ignores imports that never reach into backend/src', () => {
+test('findImportViolationsFromSources ignores imports that are not @worker-shared', () => {
   const entries = [
     { relFile: 'src/jobs/local.job.ts', source: `import { foo } from '../lib/localHelper';\nimport { bar } from 'bullmq';` },
   ];
-  const violations = findImportViolationsFromSources(entries, new Map());
+  const violations = findImportViolationsFromSources(entries, new Set());
   assert.equal(violations.length, 0);
-});
-
-test('findImportViolationsFromSources does not credit a sed rule registered for a different file', () => {
-  const entries = [
-    { relFile: 'src/jobs/uncovered.job.ts', source: `import { foo } from '../../../backend/src/services/foo';` },
-  ];
-  const rulesByFile = new Map([
-    ['src/jobs/other.job.ts', [{ file: 'src/jobs/other.job.ts', pattern: '../../../backend/src/services/foo', replacement: '../shared/backend/services/foo' }]],
-  ]);
-  const violations = findImportViolationsFromSources(entries, rulesByFile);
-  assert.equal(violations.length, 1);
 });
 
 test('findMissingCopySources reports a COPY source that does not exist on disk', () => {

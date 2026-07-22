@@ -2,7 +2,7 @@ import crypto from 'crypto';
 import { chromium } from 'playwright';
 import { prisma } from '../lib/prisma';
 import { MaterialSpecExportStatus } from '@prisma/client';
-import { uploadPdfBuffer } from '../../../backend/src/services/storage/reportStorage';
+import { uploadPdfBuffer } from '@worker-shared/services/storage/reportStorage';
 import { deleteObject } from '../storage/deleteObject';
 import { logger } from '../lib/logger';
 

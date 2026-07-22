@@ -13,7 +13,7 @@
 
 import { prisma } from '../lib/prisma';
 import { logger } from '../lib/logger';
-import { ProviderCredentialLapseAdapter } from '../../../backend/src/services/incidents/integrations/providerCredentialLapse.adapter';
+import { ProviderCredentialLapseAdapter } from '@worker-shared/services/incidents/integrations/providerCredentialLapse.adapter';
 
 const LOOKAHEAD_DAYS = 30;
 

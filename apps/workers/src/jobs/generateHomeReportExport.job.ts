@@ -1,12 +1,12 @@
 import crypto from 'crypto';
 import { prisma } from '../lib/prisma';
 import { HomeReportExportStatus } from '@prisma/client';
-import { uploadPdfBuffer } from '../../../backend/src/services/storage/reportStorage';
-import { renderHomeReportPackPdf } from '../../../backend/src/services/pdf/renderHomeReportPackPdf';
+import { uploadPdfBuffer } from '@worker-shared/services/storage/reportStorage';
+import { renderHomeReportPackPdf } from '@worker-shared/services/pdf/renderHomeReportPackPdf';
 import {
   buildAuthoritativeReportSnapshot,
   checkReportWorkerContext,
-} from '../../../backend/src/services/planningContext/reportSnapshot';
+} from '@worker-shared/services/planningContext/reportSnapshot';
 import { deleteObject } from '../storage/deleteObject';
 
 function sha256(buf: Buffer) {

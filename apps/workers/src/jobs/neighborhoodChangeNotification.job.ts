@@ -19,11 +19,11 @@
 //     announcement, etc) no longer floods the homeowner.
 
 import { prisma } from '../lib/prisma';
-import { NotificationService } from '../../../backend/src/services/notification.service';
-import { guidanceJourneyService } from '../../../backend/src/services/guidanceEngine/guidanceJourney.service';
-import { NEIGHBORHOOD_IMPACT_RULES } from '../../../backend/src/neighborhoodIntelligence/impactRules';
-import { haversineDistanceMiles, isValidLatLng } from '../../../backend/src/neighborhoodIntelligence/geoUtils';
-import { getPlanningContextEnvelope } from '../../../backend/src/services/planningContext/context';
+import { NotificationService } from '@worker-shared/services/notification.service';
+import { guidanceJourneyService } from '@worker-shared/services/guidanceEngine/guidanceJourney.service';
+import { NEIGHBORHOOD_IMPACT_RULES } from '@worker-shared/neighborhoodIntelligence/impactRules';
+import { haversineDistanceMiles, isValidLatLng } from '@worker-shared/neighborhoodIntelligence/geoUtils';
+import { getPlanningContextEnvelope } from '@worker-shared/services/planningContext/context';
 import { logger } from '../lib/logger';
 
 /**

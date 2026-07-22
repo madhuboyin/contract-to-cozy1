@@ -3,7 +3,7 @@ import { fetchDummyRadarSignals } from '../radar/dummyRadar.client';
 import { normalizeDummyRadarSignal } from '../radar/normalize';
 import type { CanonicalRadarSignal } from '../radar/radar.types';
 import { upsertCanonicalRadarEvent } from '../radar/upsertCanonicalRadarEvent';
-import { runMatchingForEvent } from '../../../backend/src/services/homeEventRadarMatcher.service';
+import { runMatchingForEvent } from '@worker-shared/services/homeEventRadarMatcher.service';
 import { logger } from '../lib/logger';
 
 const DEFAULT_TARGET_ZIPS = ['08536', '10019'];

@@ -1,6 +1,6 @@
 // apps/workers/src/runners/claimFollowUpDue.poller.ts
 import { prisma } from '../lib/prisma';
-import { DomainEventsService } from '../../../backend/src/services/domainEvents/domainEvents.service';
+import { DomainEventsService } from '@worker-shared/services/domainEvents/domainEvents.service';
 import { logger } from '../lib/logger';
 
 function sleep(ms: number) {

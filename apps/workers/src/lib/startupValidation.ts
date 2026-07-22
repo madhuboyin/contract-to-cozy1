@@ -21,8 +21,8 @@
 import Redis from 'ioredis';
 import { prisma } from './prisma';
 import { logger } from './logger';
-import { JOB_REGISTRY, RUNNER_REGISTRY } from '../../../backend/src/config/workerJobRegistry';
-import { evaluateWorkerExecution, type WorkerTriggerType } from '../../../backend/src/config/workerExecutionPolicy';
+import { JOB_REGISTRY, RUNNER_REGISTRY } from '@worker-shared/config/workerJobRegistry';
+import { evaluateWorkerExecution, type WorkerTriggerType } from '@worker-shared/config/workerExecutionPolicy';
 
 export interface StartupCheckResult {
   name: string;

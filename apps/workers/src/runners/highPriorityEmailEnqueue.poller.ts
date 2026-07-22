@@ -2,7 +2,7 @@ import { Queue } from 'bullmq';
 import { prisma } from '../lib/prisma';
 import { DeliveryStatus, NotificationChannel } from '@prisma/client';
 import { logger } from '../lib/logger';
-import { DEFAULT_JOB_RETENTION } from '../../../backend/src/config/queueDefaults';
+import { DEFAULT_JOB_RETENTION } from '@worker-shared/config/queueDefaults';
 
 const QUEUE_NAME = 'email-notification-queue';
 const JOB_NAME = 'SEND_EMAIL_NOTIFICATION';

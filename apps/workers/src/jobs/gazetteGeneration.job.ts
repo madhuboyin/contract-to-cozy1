@@ -11,9 +11,9 @@
 //   - Notification and analytics are handled inside the generation service on publish
 
 import { prisma } from '../lib/prisma';
-import { GazetteGenerationJobRunnerService } from '../../../backend/src/modules/gazette/services/gazetteGenerationJobRunner.service';
+import { GazetteGenerationJobRunnerService } from '@worker-shared/modules/gazette/services/gazetteGenerationJobRunner.service';
 import { logger } from '../lib/logger';
-import { getAggregationContextBatch } from '../../../backend/src/services/aggregationContext/batch';
+import { getAggregationContextBatch } from '@worker-shared/services/aggregationContext/batch';
 
 export async function runGazetteGenerationJob(): Promise<void> {
   const startedAt = new Date().toISOString();

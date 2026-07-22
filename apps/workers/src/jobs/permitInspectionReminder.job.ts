@@ -1,7 +1,7 @@
 import { prisma } from '../lib/prisma';
-import { NotificationService } from '../../../backend/src/services/notification.service';
+import { NotificationService } from '@worker-shared/services/notification.service';
 import { logger } from '../lib/logger';
-import { checkPermitWorkerContext } from '../../../backend/src/services/projectCompliance/permitWorkerContext.service';
+import { checkPermitWorkerContext } from '@worker-shared/services/projectCompliance/permitWorkerContext.service';
 
 export async function permitInspectionReminderJob(): Promise<void> {
   const now = new Date();

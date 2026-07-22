@@ -1,9 +1,9 @@
 import crypto from 'crypto';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { prisma } from '../lib/prisma';
-import { uploadPdfBuffer } from '../../../backend/src/services/storage/reportStorage';
+import { uploadPdfBuffer } from '@worker-shared/services/storage/reportStorage';
 import { logger } from '../lib/logger';
-import { checkPermitWorkerContext } from '../../../backend/src/services/projectCompliance/permitWorkerContext.service';
+import { checkPermitWorkerContext } from '@worker-shared/services/projectCompliance/permitWorkerContext.service';
 
 export const GENERATE_PERMIT_DISCLOSURE_JOB = 'generate-permit-disclosure';
 

@@ -12,9 +12,9 @@
 // changed, matching the FRD's "belt and suspenders" design.
 
 import { prisma } from '../lib/prisma';
-import { homeReserveFundCalculationService } from '../../../backend/src/services/homeReserveFundCalculation.service';
+import { homeReserveFundCalculationService } from '@worker-shared/services/homeReserveFundCalculation.service';
 import { logger } from '../lib/logger';
-import { checkReserveFundWorkerContext } from '../../../backend/src/services/financialContext/reserveFundWorkerContext.service';
+import { checkReserveFundWorkerContext } from '@worker-shared/services/financialContext/reserveFundWorkerContext.service';
 
 const STALE_RECALC_DAYS = 35;
 

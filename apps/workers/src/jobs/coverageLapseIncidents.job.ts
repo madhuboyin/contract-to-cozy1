@@ -1,8 +1,8 @@
 // apps/workers/src/jobs/coverageLapseIncidents.job.ts
 import { prisma } from '../lib/prisma';
 import { IncidentStatus } from '@prisma/client';
-import { IncidentService } from '../../../backend/src/services/incidents/incident.service';
-import { guidanceJourneyService } from '../../../backend/src/services/guidanceEngine/guidanceJourney.service';
+import { IncidentService } from '@worker-shared/services/incidents/incident.service';
+import { guidanceJourneyService } from '@worker-shared/services/guidanceEngine/guidanceJourney.service';
 import { logger } from '../lib/logger';
 
 function daysBetween(a: Date, b: Date) {

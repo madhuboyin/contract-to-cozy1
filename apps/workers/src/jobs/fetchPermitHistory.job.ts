@@ -1,4 +1,4 @@
-import { permitFetchService } from '../../../backend/src/services/permitFetch.service';
+import { permitFetchService } from '@worker-shared/services/permitFetch.service';
 
 export const FETCH_PERMIT_HISTORY_JOB = 'fetch-permit-history';
 

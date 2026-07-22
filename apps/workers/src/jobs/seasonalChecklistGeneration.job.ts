@@ -1,15 +1,15 @@
 // apps/workers/src/jobs/seasonalChecklistGeneration.job.ts
 import { prisma } from '../lib/prisma';
 import { logger } from '../lib/logger';
-import { evaluateSeasonalTemplateApplicability } from '../../../backend/src/services/seasonal/applicabilityPolicy';
-import { PropertyMaintenanceTaskService } from '../../../backend/src/services/PropertyMaintenanceTask.service';
+import { evaluateSeasonalTemplateApplicability } from '@worker-shared/services/seasonal/applicabilityPolicy';
+import { PropertyMaintenanceTaskService } from '@worker-shared/services/PropertyMaintenanceTask.service';
 import {
   Season,
   getSeasonStartDate,
   getSeasonEndDate,
   resolveCurrentSeasonWindow,
   resolveUpcomingSeasonWindow,
-} from '../../../backend/src/services/seasonal/seasonWindow';
+} from '@worker-shared/services/seasonal/seasonWindow';
 
 // Define types locally since they may not be exported from Prisma client
 type NotificationTiming = 'EARLY' | 'STANDARD' | 'LATE';

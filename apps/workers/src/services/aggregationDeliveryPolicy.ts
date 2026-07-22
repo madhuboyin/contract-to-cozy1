@@ -1,6 +1,6 @@
 import { DeliveryStatus } from '@prisma/client';
 import { prisma } from '../lib/prisma';
-import { getAggregationContextBatch } from '../../../backend/src/services/aggregationContext/batch';
+import { getAggregationContextBatch } from '@worker-shared/services/aggregationContext/batch';
 
 type NotificationLike = {
   id: string;

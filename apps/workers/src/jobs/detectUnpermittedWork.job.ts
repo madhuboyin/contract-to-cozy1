@@ -1,4 +1,4 @@
-import { permitDetectionService } from '../../../backend/src/services/permitDetection.service';
+import { permitDetectionService } from '@worker-shared/services/permitDetection.service';
 
 export const DETECT_UNPERMITTED_WORK_JOB = 'detect-unpermitted-work';
 

@@ -4,7 +4,7 @@
 // Invoked by the Sunday 3 AM cron in worker.ts.
 
 import { prisma } from '../lib/prisma';
-import { HiddenAssetService } from '../../../backend/src/services/hiddenAssets.service';
+import { HiddenAssetService } from '@worker-shared/services/hiddenAssets.service';
 import { logger } from '../lib/logger';
 
 const hiddenAssetService = new HiddenAssetService();

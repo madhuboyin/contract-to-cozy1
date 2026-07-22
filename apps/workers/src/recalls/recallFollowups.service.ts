@@ -1,6 +1,6 @@
 // apps/workers/src/recalls/recallFollowups.service.ts
 import { prisma } from '../lib/prisma';
-import { NotificationService } from '../../../backend/src/services/notification.service';
+import { NotificationService } from '@worker-shared/services/notification.service';
 
 const NOTIF_TYPE_RECALL = 'RECALL_ALERT';
 const NOTIF_ENTITY_TYPE = 'RECALL_MATCH';

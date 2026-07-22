@@ -16,10 +16,10 @@ import { iterateAllProperties } from '../lib/paginateProperties';
 import {
   taxAssessmentFetchService,
   PropertyForTaxFetch,
-} from '../../../backend/src/services/taxAssessmentFetch.service';
+} from '@worker-shared/services/taxAssessmentFetch.service';
 import { normalizeTaxAssessmentRecord } from '../radar/normalizeTaxAssessment';
 import { upsertCanonicalRadarEvent } from '../radar/upsertCanonicalRadarEvent';
-import { runMatchingForEvent } from '../../../backend/src/services/homeEventRadarMatcher.service';
+import { runMatchingForEvent } from '@worker-shared/services/homeEventRadarMatcher.service';
 import { logger } from '../lib/logger';
 
 async function loadPropertiesForTaxFetch(): Promise<PropertyForTaxFetch[]> {

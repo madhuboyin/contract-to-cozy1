@@ -2,7 +2,7 @@ import type { CanonicalRadarSignal } from './radar.types';
 import type {
   RawTaxAssessmentRecord,
   TaxAssessorDataSourceConfig,
-} from '../../../backend/src/services/taxAssessorAdapters/taxAssessmentTypes';
+} from '@worker-shared/services/taxAssessorAdapters/taxAssessmentTypes';
 
 type PropertyForNormalize = {
   id: string;

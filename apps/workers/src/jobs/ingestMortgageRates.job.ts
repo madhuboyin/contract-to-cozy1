@@ -17,7 +17,7 @@
 // so running this job multiple times on the same day is safe.
 
 import fetch from 'node-fetch';
-import { MortgageRateService } from '../../../backend/src/refinanceRadar/engine/mortgageRate.service';
+import { MortgageRateService } from '@worker-shared/refinanceRadar/engine/mortgageRate.service';
 import { logger } from '../lib/logger';
 
 // ─── FRED API config ──────────────────────────────────────────────────────────

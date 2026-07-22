@@ -17,7 +17,7 @@
 //   NEIGHBORHOOD_DUMMY_MAX_PROPERTIES — cap on how many properties to target.
 //   NEIGHBORHOOD_DUMMY_FIXTURE_SET    — consumed by dummyNeighborhoodEvent.client.ts.
 
-import { NeighborhoodPropertyMatchService } from '../../../backend/src/neighborhoodIntelligence/neighborhoodPropertyMatchService';
+import { NeighborhoodPropertyMatchService } from '@worker-shared/neighborhoodIntelligence/neighborhoodPropertyMatchService';
 import { fetchDummyNeighborhoodEvents } from '../neighborhoodIntelligence/dummyNeighborhoodEvent.client';
 import { prisma } from '../lib/prisma';
 import type { DummyNeighborhoodRawEvent } from '../neighborhoodIntelligence/neighborhoodIntelligence.types';

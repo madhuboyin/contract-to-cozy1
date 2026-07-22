@@ -5,8 +5,8 @@
 // Invoked by the weekly cron in worker.ts (Saturday 3:30 AM EST).
 
 import { prisma } from '../lib/prisma';
-import { generateHabitsForProperty } from '../../../backend/src/services/homeHabitCoach/habitGenerationEngine';
-import { NotificationService } from '../../../backend/src/services/notification.service';
+import { generateHabitsForProperty } from '@worker-shared/services/homeHabitCoach/habitGenerationEngine';
+import { NotificationService } from '@worker-shared/services/notification.service';
 import { logger } from '../lib/logger';
 import { createHash } from 'node:crypto';
 

@@ -7,7 +7,7 @@
 // Schedule: Weekly (Sunday 5:00 AM EST via worker.ts cron)
 // Can be disabled: NEIGHBORHOOD_REFRESH_ENABLED=false
 
-import { NeighborhoodPropertyMatchService } from '../../../backend/src/neighborhoodIntelligence/neighborhoodPropertyMatchService';
+import { NeighborhoodPropertyMatchService } from '@worker-shared/neighborhoodIntelligence/neighborhoodPropertyMatchService';
 import { prisma } from '../lib/prisma';
 import { logger } from '../lib/logger';
 

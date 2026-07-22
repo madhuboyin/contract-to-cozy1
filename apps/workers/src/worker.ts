@@ -9,7 +9,7 @@ import * as dotenv from 'dotenv';
 dotenv.config();
 import { Worker, Queue } from 'bullmq';
 
-import { calculateFinancialEfficiency } from '../../backend/src/utils/FinancialCalculator.util';
+import { calculateFinancialEfficiency } from '@worker-shared/utils/FinancialCalculator.util';
 import { calculateHealthScore } from './utils/propertyScore.util';
 import { sendEmailNotificationJob, runDailyEmailDigest, runWeeklyHomeBriefDigest } from './jobs/sendEmailNotification.job';
 import { sendFeedbackNotificationJob } from './jobs/sendFeedbackNotification.job';
@@ -30,7 +30,7 @@ import { initCronRunHistory, recordCronRun } from './lib/cronRunHistory';
 import { registerShutdownHandler, installGracefulShutdown } from './lib/gracefulShutdown';
 import { validateStartupDependencies } from './lib/startupValidation';
 import { acquireCronLease, releaseCronLease } from './lib/cronLease';
-import { DEFAULT_JOB_RETENTION } from '../../backend/src/config/queueDefaults';
+import { DEFAULT_JOB_RETENTION } from '@worker-shared/config/queueDefaults';
 import { recallIngestJob, RECALL_INGEST_JOB } from './jobs/recallIngest.job';
 import { recallMatchJob, RECALL_MATCH_JOB } from './jobs/recallMatch.job';
 import { coverageLapseIncidentsJob } from './jobs/coverageLapseIncidents.job';
@@ -54,7 +54,7 @@ import { runSharedDataConsistencyAuditJob } from './jobs/sharedDataConsistencyAu
 import { runSharedSignalRefreshJob } from './jobs/sharedSignalRefresh.job';
 import { runSharedSignalHealthAuditJob } from './jobs/sharedSignalHealthAudit.job';
 import { generateDiyAiGuideJob, GENERATE_DIY_AI_GUIDE_JOB } from './jobs/generateDiyAiGuide.job';
-import { DIY_AI_GUIDE_QUEUE } from '../../backend/src/services/diyAiGuide.service';
+import { DIY_AI_GUIDE_QUEUE } from '@worker-shared/services/diyAiGuide.service';
 import { fetchPermitHistoryJob, FETCH_PERMIT_HISTORY_JOB } from './jobs/fetchPermitHistory.job';
 import { detectUnpermittedWorkJob, DETECT_UNPERMITTED_WORK_JOB } from './jobs/detectUnpermittedWork.job';
 import { generatePermitDisclosureJob, GENERATE_PERMIT_DISCLOSURE_JOB } from './jobs/generatePermitDisclosure.job';
@@ -74,17 +74,17 @@ import {
   PropertyIntelligenceJobPayload,
 } from './jobs/propertyIntelligence.job';
 import { captureWeeklyScoreSnapshotsJob } from './jobs/propertyScoreSnapshots.job';
-import { processMaintenanceReminders } from '../../backend/src/services/maintenanceReminder.service';
-import { JOB_REGISTRY, RUNNER_REGISTRY } from '../../backend/src/config/workerJobRegistry';
+import { processMaintenanceReminders } from '@worker-shared/services/maintenanceReminder.service';
+import { JOB_REGISTRY, RUNNER_REGISTRY } from '@worker-shared/config/workerJobRegistry';
 import {
   evaluateWorkerExecution,
   collectWorkerFlagDiagnostics,
-} from '../../backend/src/config/workerExecutionPolicy';
-import { areHumanPolicyApprovalsEnforced } from '../../backend/src/config/appConfig';
+} from '@worker-shared/config/workerExecutionPolicy';
+import { areHumanPolicyApprovalsEnforced } from '@worker-shared/config/appConfig';
 import { WorkerRunResult, isWorkerRunResult, deriveRunStatus } from './lib/workerRunResult';
 import { prisma } from './lib/prisma';
-import { HiddenAssetService } from '../../backend/src/services/hiddenAssets.service';
-import RiskAssessmentService from '../../backend/src/services/RiskAssessment.service';
+import { HiddenAssetService } from '@worker-shared/services/hiddenAssets.service';
+import RiskAssessmentService from '@worker-shared/services/RiskAssessment.service';
 import { logger } from './lib/logger';
 import {
   startMetricsServer,

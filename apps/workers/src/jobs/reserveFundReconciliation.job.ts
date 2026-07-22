@@ -18,10 +18,10 @@ import { prisma } from '../lib/prisma';
 import {
   homeReserveFundReconciliationService,
   ReconciliationSuggestion,
-} from '../../../backend/src/services/homeReserveFundReconciliation.service';
-import { NotificationService } from '../../../backend/src/services/notification.service';
+} from '@worker-shared/services/homeReserveFundReconciliation.service';
+import { NotificationService } from '@worker-shared/services/notification.service';
 import { logger } from '../lib/logger';
-import { checkReserveFundWorkerContext } from '../../../backend/src/services/financialContext/reserveFundWorkerContext.service';
+import { checkReserveFundWorkerContext } from '@worker-shared/services/financialContext/reserveFundWorkerContext.service';
 
 export function fingerprintSuggestions(suggestions: ReconciliationSuggestion[]): string {
   const pairs = suggestions

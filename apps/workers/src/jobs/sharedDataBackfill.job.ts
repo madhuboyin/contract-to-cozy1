@@ -1,4 +1,4 @@
-import { sharedDataBackfillService } from '../../../backend/src/services/sharedDataBackfill.service';
+import { sharedDataBackfillService } from '@worker-shared/services/sharedDataBackfill.service';
 import { logger } from '../lib/logger';
 
 type SharedDataBackfillJobResult = {
