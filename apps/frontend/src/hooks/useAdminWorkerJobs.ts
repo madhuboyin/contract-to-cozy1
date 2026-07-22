@@ -30,7 +30,8 @@ export function useWorkerGovernance(enabled = true) {
 export function useTriggerWorkerJob() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (jobKey: string) => triggerWorkerJob(jobKey),
+    mutationFn: ({ jobKey, dryRun }: { jobKey: string; dryRun?: boolean }) =>
+      triggerWorkerJob(jobKey, { dryRun }),
     onSuccess: () => {
       // Refresh job list after triggering so queue stats update
       setTimeout(() => qc.invalidateQueries({ queryKey: QUERY_KEY }), 1500);

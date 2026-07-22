@@ -653,7 +653,7 @@ export const JOB_REGISTRY: JobRegistryEntry[] = [
     impact: 'INTERNAL_WRITE',
     customerJob: 'PLATFORM_OPERATIONS',
     defaultEnabledInBeta: false,
-    supportsDryRun: false,
+    supportsDryRun: true,
     supportsPropertyScope: true,
     broadSweep: true,
     humanApprovalClass: 'HIGH_IMPACT_MANUAL',

@@ -26,12 +26,14 @@ export async function getWorkerGovernanceHandler(req: Request, res: Response): P
 
 export async function triggerJobHandler(req: AuthRequest, res: Response): Promise<void> {
   const { jobKey } = req.params;
+  const dryRun = req.body?.dryRun === true;
   try {
-    const result = await triggerJob(jobKey);
+    const result = await triggerJob(jobKey, { dryRun });
     auditLog('ADMIN_ACTION', req.user?.userId ?? null, {
       ip: req.ip,
       action: 'trigger_worker_job',
       jobKey,
+      dryRun,
     });
     res.json({ success: true, data: result });
   } catch (err: any) {

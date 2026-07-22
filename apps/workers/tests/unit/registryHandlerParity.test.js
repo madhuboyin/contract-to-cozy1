@@ -26,7 +26,9 @@ function readWorkerSource() {
 }
 
 function extractCronHandlerKeys(source) {
-  const start = source.indexOf('const CRON_HANDLERS: Record<string, () => Promise<void | WorkerRunResult>> = {');
+  const start = source.indexOf(
+    'const CRON_HANDLERS: Record<string, (opts?: { dryRun?: boolean }) => Promise<void | WorkerRunResult>> = {',
+  );
   assert.notEqual(start, -1, 'Could not locate CRON_HANDLERS declaration in worker.ts');
   const end = source.indexOf('\n};', start);
   assert.notEqual(end, -1, 'Could not locate end of CRON_HANDLERS declaration in worker.ts');

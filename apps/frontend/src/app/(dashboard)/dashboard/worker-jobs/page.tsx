@@ -156,7 +156,7 @@ function JobCard({
   triggerSuccess,
 }: {
   job: WorkerJobDetail;
-  onTrigger: (key: string) => void;
+  onTrigger: (key: string, dryRun?: boolean) => void;
   triggering: boolean;
   triggerSuccess: boolean;
 }) {
@@ -164,6 +164,7 @@ function JobCard({
   const lastRun = job.recentRuns[0] ?? null;
   const triggerType = getTriggerType(job);
   const nextRun = getNextRunLabel(job.cronExpression);
+  const [dryRun, setDryRun] = useState(job.supportsDryRun);
 
   const failureCount = job.queueStats?.failed ?? null;
   const successCount = job.queueStats?.completed ?? null;
@@ -213,7 +214,7 @@ function JobCard({
               variant="outline"
               className="h-7 shrink-0 rounded px-2.5 text-[11px] font-semibold"
               disabled={triggering}
-              onClick={() => onTrigger(job.key)}
+              onClick={() => onTrigger(job.key, job.supportsDryRun ? dryRun : undefined)}
             >
               {triggering ? (
                 <Loader2 className="mr-1 h-3 w-3 animate-spin" />
@@ -222,10 +223,21 @@ function JobCard({
               ) : (
                 <Play className="mr-1 h-3 w-3" />
               )}
-              {triggerSuccess ? 'Queued' : 'Run Job'}
+              {triggerSuccess ? 'Queued' : dryRun && job.supportsDryRun ? 'Dry Run' : 'Run Job'}
             </Button>
           ) : null}
         </div>
+        {job.triggerSupported && job.supportsDryRun && (
+          <label className="mt-1.5 flex items-center gap-1.5 text-[11px] text-slate-500">
+            <input
+              type="checkbox"
+              className="h-3 w-3 rounded border-slate-300"
+              checked={dryRun}
+              onChange={(e) => setDryRun(e.target.checked)}
+            />
+            Dry run (no writes/sends)
+          </label>
+        )}
 
         {/* ── Row 2: description ── */}
         <p className="mt-1.5 line-clamp-2 text-[11px] leading-[1.55] text-slate-500">
@@ -359,7 +371,7 @@ function CategorySection({
   jobs: WorkerJobDetail[];
   triggeringKey: string | null;
   triggeredKey: string | null;
-  onTrigger: (key: string) => void;
+  onTrigger: (key: string, dryRun?: boolean) => void;
 }) {
   return (
     <div>
@@ -436,24 +448,27 @@ export default function WorkerJobsPage() {
 
   if (guard.status !== 'ready') return guard.node;
 
-  function handleTrigger(jobKey: string) {
+  function handleTrigger(jobKey: string, dryRun?: boolean) {
     setTriggeringKey(jobKey);
     setTriggeredKey(null);
-    trigger.mutate(jobKey, {
-      onSuccess: () => {
-        setTriggeringKey(null);
-        setTriggeredKey(jobKey);
-        setTimeout(() => setTriggeredKey(null), 3000);
+    trigger.mutate(
+      { jobKey, dryRun },
+      {
+        onSuccess: () => {
+          setTriggeringKey(null);
+          setTriggeredKey(jobKey);
+          setTimeout(() => setTriggeredKey(null), 3000);
+        },
+        onError: (err: any) => {
+          setTriggeringKey(null);
+          toast({
+            title: 'Unable to queue job',
+            description: err?.message ?? 'Failed to trigger job. Please try again.',
+            variant: 'destructive',
+          });
+        },
       },
-      onError: (err: any) => {
-        setTriggeringKey(null);
-        toast({
-          title: 'Unable to queue job',
-          description: err?.message ?? 'Failed to trigger job. Please try again.',
-          variant: 'destructive',
-        });
-      },
-    });
+    );
   }
 
   const jobs: WorkerJobDetail[] = jobsQ.data ?? [];

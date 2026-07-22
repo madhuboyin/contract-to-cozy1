@@ -50,6 +50,8 @@ export interface WorkerJobDetail {
   effectiveEnabled: boolean;
   /** Why effectiveEnabled is false — omitted when true. */
   disabledReason?: string;
+  /** Whether a manual trigger can pass { dryRun: true } and have the job honor it (W4 item 8). */
+  supportsDryRun: boolean;
 }
 
 // ─── Cron run history (for jobs with no BullMQ queue) ─────────────────────────
@@ -249,7 +251,10 @@ export function getWorkerGovernanceStatus(): WorkerGovernanceStatus {
   return { enforceHumanPolicyApprovals: areHumanPolicyApprovalsEnforced(), flags, runners };
 }
 
-export async function triggerJob(jobKey: string): Promise<{ queued: boolean; jobId?: string }> {
+export async function triggerJob(
+  jobKey: string,
+  options?: { dryRun?: boolean },
+): Promise<{ queued: boolean; jobId?: string }> {
   const entry = JOB_REGISTRY.find((j) => j.key === jobKey);
   if (!entry) throw new Error(`Unknown job key: ${jobKey}`);
   if (!entry.triggerSupported) throw new Error(`Manual trigger not supported for job: ${jobKey}`);
@@ -263,10 +268,19 @@ export async function triggerJob(jobKey: string): Promise<{ queued: boolean; job
     throw new Error(`Manual trigger not supported for job: ${jobKey} (${decision.reason})`);
   }
 
+  const dryRun = options?.dryRun === true;
+  // W4 item 8: dry-run is a per-job contract, not a universal capability —
+  // a job that never declared supportsDryRun has no code path honoring the
+  // flag, so a caller requesting one must get a clear rejection rather than
+  // silently running the job for real.
+  if (dryRun && !entry.supportsDryRun) {
+    throw new Error(`Dry-run not supported for job: ${jobKey}`);
+  }
+
   const q = getQueue(entry.queueName);
   const job = await q.add(
     entry.jobName,
-    {},
+    { dryRun },
     {
       attempts: 3,
       backoff: { type: 'exponential', delay: 5000 },

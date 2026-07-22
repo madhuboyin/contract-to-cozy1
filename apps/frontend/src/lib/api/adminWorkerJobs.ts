@@ -51,6 +51,8 @@ export interface WorkerJobDetail {
   effectiveEnabled: boolean;
   /** Why effectiveEnabled is false — omitted when true. */
   disabledReason?: string;
+  /** Whether a manual trigger can pass { dryRun: true } and have the job honor it. */
+  supportsDryRun: boolean;
 }
 
 export interface WorkerGovernanceStatus {
@@ -71,10 +73,13 @@ export async function fetchWorkerGovernance(): Promise<WorkerGovernanceStatus> {
   return res.data;
 }
 
-export async function triggerWorkerJob(jobKey: string): Promise<{ queued: boolean; jobId?: string }> {
+export async function triggerWorkerJob(
+  jobKey: string,
+  options?: { dryRun?: boolean },
+): Promise<{ queued: boolean; jobId?: string }> {
   const res = await api.post<{ queued: boolean; jobId?: string }>(
     `/api/admin/worker-jobs/${jobKey}/trigger`,
-    {},
+    { dryRun: options?.dryRun === true },
   );
   return res.data;
 }

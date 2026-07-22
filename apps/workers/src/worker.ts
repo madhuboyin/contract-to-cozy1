@@ -193,7 +193,7 @@ async function sendMaintenanceReminders() {
 // appear in the Worker Jobs admin dashboard.
 // =============================================================================
 
-const CRON_HANDLERS: Record<string, () => Promise<void | WorkerRunResult>> = {
+const CRON_HANDLERS: Record<string, (opts?: { dryRun?: boolean }) => Promise<void | WorkerRunResult>> = {
   'maintenance-reminders':           async () => sendMaintenanceReminders(),
   'daily-email-digest':              async () => { await runDailyEmailDigest(); },
   'weekly-home-brief-digest':        async () => { await runWeeklyHomeBriefDigest(); },
@@ -221,7 +221,7 @@ const CRON_HANDLERS: Record<string, () => Promise<void | WorkerRunResult>> = {
   },
   'tax-assessment-ingest':           async () => { await ingestTaxAssessmentEventsJob(); },
   'home-gazette-generation':         async () => { await runGazetteGenerationJob(); },
-  'shared-data-backfill':            async () => { await runSharedDataBackfillJob(); },
+  'shared-data-backfill':            async (opts) => { await runSharedDataBackfillJob(opts); },
   'shared-data-consistency-audit':   async () => { await runSharedDataConsistencyAuditJob(); },
   'shared-signal-refresh':           async () => { await runSharedSignalRefreshJob(); },
   'shared-signal-health-audit':      async () => { await runSharedSignalHealthAuditJob(); },
@@ -938,8 +938,17 @@ const cronTriggerWorker = new Worker(
         throw new Error(`[CRON-TRIGGER] Manual trigger for "${job.name}" blocked — ${decision.reason}`);
       }
     }
-    logger.info(`[CRON-TRIGGER] Running manually triggered job: ${job.name}`);
-    const outcome = await handler();
+    const dryRun = job.data?.dryRun === true;
+    // W4 item 8: same defense-in-depth reasoning as the policy check above —
+    // adminWorkerJobs.service.ts#triggerJob() already rejects a dryRun
+    // request for a job with no dry-run code path before queueing it, but a
+    // job already sitting in the queue when the registry changes must not
+    // silently run for real (or silently no-op) once picked up.
+    if (dryRun && registryEntry && !registryEntry.supportsDryRun) {
+      throw new Error(`[CRON-TRIGGER] Dry-run requested for "${job.name}" but it does not support dry-run`);
+    }
+    logger.info(`[CRON-TRIGGER] Running manually triggered job: ${job.name}${dryRun ? ' (dry run)' : ''}`);
+    const outcome = await handler({ dryRun });
     if (isWorkerRunResult(outcome) && deriveRunStatus(outcome) === 'FAILED') {
       throw new Error(
         outcome.reason ??
