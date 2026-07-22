@@ -951,6 +951,7 @@ class APIClient {
     longitude?: number;
     radius?: number;
     category?: string;
+    workCategory?: string;
     minRating?: number;
     verifiedOnly?: boolean;
     page?: number;

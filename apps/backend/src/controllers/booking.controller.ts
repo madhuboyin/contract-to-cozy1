@@ -88,7 +88,7 @@ export class BookingController {
         bookingInput.propertyId,
         userId,
         'PROVIDER_BOOKING',
-        { serviceCategory: booking.category },
+        { serviceCategory: bookingInput.workCategory ?? booking.category },
       );
 
       if (guidanceJourneyId) {

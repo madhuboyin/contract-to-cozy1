@@ -179,7 +179,7 @@ export class BookingService {
       input.propertyId,
       homeownerId,
       'PROVIDER_BOOKING',
-      { serviceCategory: service.category },
+      { serviceCategory: input.workCategory ?? service.category },
       'providerBooking',
     );
 

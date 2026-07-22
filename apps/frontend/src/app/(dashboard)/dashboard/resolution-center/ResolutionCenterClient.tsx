@@ -48,7 +48,7 @@ import { CompletionModal } from '@/components/orchestration/CompletionModal';
 import { toast } from '@/components/ui/use-toast';
 import { track } from '@/lib/analytics/events';
 import { ServiceSelectionSheet } from './ServiceSelectionSheet';
-import { normalizeProviderCategoryForSearch } from '@/lib/config/serviceCategoryMapping';
+import { getProviderWorkCategory, resolveProviderSearchCategory } from '@/lib/config/serviceCategoryMapping';
 
 // ─── Journey system ───────────────────────────────────────────────────────────
 
@@ -1708,12 +1708,13 @@ export default function ResolutionCenterClient() {
       intent: 'next-task',
       returnTo: '/dashboard/resolution-center',
     });
-    const maybeCategory = normalizeProviderCategoryForSearch(
-      celebratingItem?.serviceCategory || celebratingItem?.category || celebratingItem?.systemType
-    );
+    const rawCategory = celebratingItem?.serviceCategory || celebratingItem?.category || celebratingItem?.systemType || celebratingItem?.title;
+    const maybeCategory = resolveProviderSearchCategory(rawCategory);
+    const workCategory = getProviderWorkCategory(rawCategory);
     if (maybeCategory) {
       params.set('category', maybeCategory);
     }
+    if (workCategory) params.set('workCategory', workCategory);
     if (celebratingItem?.title) {
       params.set('serviceLabel', celebratingItem.title);
     }

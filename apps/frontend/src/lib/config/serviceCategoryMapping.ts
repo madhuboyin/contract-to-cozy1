@@ -90,6 +90,38 @@ const LEGACY_PROVIDER_CATEGORY_ALIASES: Record<string, ServiceCategory> = {
   SAFETY: 'HANDYMAN',
 };
 
+const PROVIDER_WORK_CATEGORY_ALIASES: Record<string, string> = {
+  HVAC_FURNACE: 'HVAC',
+  HVAC_HEAT_PUMP: 'HVAC',
+  WATER_HEATER_TANK: 'WATER_HEATER',
+  WATER_HEATER_TANKLESS: 'WATER_HEATER',
+  ROOF_SHINGLE: 'ROOFING',
+  ROOF_TILE_METAL: 'ROOFING',
+  ROOF_EXTERIOR: 'ROOFING',
+  ROOF: 'ROOFING',
+  ELECTRICAL_PANEL: 'ELECTRICAL',
+  ELECTRICAL_PANEL_MODERN: 'ELECTRICAL',
+  ELECTRICAL_PANEL_OLD: 'ELECTRICAL',
+  SAFETY: 'SECURITY_SAFETY',
+  SAFETY_SMOKE_CO_DETECTORS: 'SECURITY_SAFETY',
+  APPLIANCE: 'APPLIANCE_REPAIR',
+  MAJOR_APPLIANCE_FRIDGE: 'APPLIANCE_REPAIR',
+  MAJOR_APPLIANCE_DISHWASHER: 'APPLIANCE_REPAIR',
+  SMART_HOME: 'HANDYMAN',
+  FURNITURE: 'HANDYMAN',
+  ELECTRONICS: 'HANDYMAN',
+  OTHER: 'HANDYMAN',
+};
+
+const RESPONSIBILITY_WORK_CATEGORIES = new Set([
+  'PLUMBING', 'HVAC', 'WATER_HEATER', 'ROOFING', 'GUTTERS', 'SIDING', 'WINDOWS_DOORS',
+  'LANDSCAPING', 'LANDSCAPING_DRAINAGE', 'PEST_CONTROL', 'ELECTRICAL', 'FOUNDATION',
+  'INSULATION', 'FLOORING', 'PAINTING', 'SOLAR', 'SECURITY_SAFETY', 'LOCKSMITH',
+  'HANDYMAN', 'GENERAL_HANDYMAN', 'MOLD_REMEDIATION', 'INSPECTION', 'APPLIANCE_REPAIR',
+  'APPLIANCE_REPLACEMENT', 'CLEANING', 'MOVING', 'INSURANCE', 'ATTORNEY', 'FINANCE',
+  'WARRANTY', 'ADMIN',
+]);
+
 const MAINTENANCE_TO_PROVIDER_CATEGORY_MAP: Record<MaintenanceTaskServiceCategory, ServiceCategory> = {
   HVAC: 'HVAC',
   PLUMBING: 'PLUMBING',
@@ -115,6 +147,13 @@ const SYSTEM_TYPE_TO_MAINTENANCE_CATEGORY: Record<string, MaintenanceTaskService
   SAFETY_SMOKE_CO_DETECTORS: 'HANDYMAN',
   MAJOR_APPLIANCE_FRIDGE: 'APPLIANCE_REPAIR',
   MAJOR_APPLIANCE_DISHWASHER: 'APPLIANCE_REPAIR',
+  APPLIANCE: 'APPLIANCE_REPAIR',
+  ROOF_EXTERIOR: 'ROOFING',
+  SAFETY: 'HANDYMAN',
+  SMART_HOME: 'HANDYMAN',
+  FURNITURE: 'HANDYMAN',
+  ELECTRONICS: 'HANDYMAN',
+  OTHER: 'HANDYMAN',
 };
 
 const INVENTORY_TO_WARRANTY_CATEGORY_MAP: Partial<Record<InventoryItemCategory, WarrantyCategory>> = {
@@ -233,6 +272,24 @@ export function getProviderCategoryForSystemType(systemType?: string | null): Se
   return getProviderCategoryForMaintenanceCategory(maintenanceCategory);
 }
 
+/**
+ * Keeps the homeowner's actual work scope separate from the broader provider
+ * marketplace category. For example, roofing searches Inspection providers but
+ * still evaluates roof responsibility.
+ */
+export function getProviderWorkCategory(rawCategoryOrSystemType?: string | null): string | undefined {
+  const normalized = normalizeMappingKey(rawCategoryOrSystemType);
+  if (!normalized) return undefined;
+  if (PROVIDER_WORK_CATEGORY_ALIASES[normalized]) return PROVIDER_WORK_CATEGORY_ALIASES[normalized];
+  if (RESPONSIBILITY_WORK_CATEGORIES.has(normalized)) return normalized;
+  if (normalized.startsWith('HVAC_')) return 'HVAC';
+  if (normalized.startsWith('WATER_HEATER')) return 'WATER_HEATER';
+  if (normalized.startsWith('ROOF_')) return 'ROOFING';
+  if (normalized.startsWith('ELECTRICAL_')) return 'ELECTRICAL';
+  if (normalized.startsWith('MAJOR_APPLIANCE_')) return 'APPLIANCE_REPAIR';
+  return undefined;
+}
+
 export function normalizeProviderCategoryForSearch(rawCategory?: string | null): ServiceCategory | undefined {
   const normalized = normalizeMappingKey(rawCategory);
   if (!normalized) return undefined;
@@ -246,6 +303,12 @@ export function normalizeProviderCategoryForSearch(rawCategory?: string | null):
   }
 
   return LEGACY_PROVIDER_CATEGORY_ALIASES[normalized];
+}
+
+export function resolveProviderSearchCategory(rawCategoryOrSystemType?: string | null): ServiceCategory | undefined {
+  if (!normalizeMappingKey(rawCategoryOrSystemType)) return undefined;
+  return normalizeProviderCategoryForSearch(rawCategoryOrSystemType) ??
+    getProviderCategoryForSystemType(rawCategoryOrSystemType);
 }
 
 export function getWarrantyCategoryForInventoryCategory(

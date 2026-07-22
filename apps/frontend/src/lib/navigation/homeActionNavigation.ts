@@ -1,5 +1,5 @@
 import type { RankedHomeActionDTO } from '@/types';
-import { getProviderCategoryForSystemType } from '@/lib/config/serviceCategoryMapping';
+import { getProviderCategoryForSystemType, getProviderWorkCategory } from '@/lib/config/serviceCategoryMapping';
 
 type ServiceActionDestination = Pick<
   RankedHomeActionDTO,
@@ -20,14 +20,19 @@ export function resolveHomeActionPrimaryHref(
   if (!isServiceAction || action.governance.safetyTier === 'SAFETY_EMERGENCY') {
     return action.primaryCta.href;
   }
-  if (action.primaryCta.href.startsWith('/dashboard/providers')) {
-    return action.primaryCta.href;
-  }
-
   const serviceLabel = action.recommendedAction.match(/^schedule service for\s+(.+)$/i)?.[1]?.trim() ||
     action.evidence.find((evidence) => evidence.label.trim())?.label.trim() ||
     action.signal.replace(/^schedule service for\s+/i, '').trim() ||
     'Home maintenance';
+  if (action.primaryCta.href.startsWith('/dashboard/providers')) {
+    const destination = new URL(action.primaryCta.href, 'https://contracttocozy.local');
+    if (!destination.searchParams.has('workCategory')) {
+      const workCategory = getProviderWorkCategory(serviceLabel);
+      if (workCategory) destination.searchParams.set('workCategory', workCategory);
+    }
+    return `${destination.pathname}${destination.search}${destination.hash}`;
+  }
+
   const params = new URLSearchParams({
     propertyId,
     category: getProviderCategoryForSystemType(serviceLabel),
@@ -36,6 +41,8 @@ export function resolveHomeActionPrimaryHref(
     from: 'home-action',
     actionKey: action.lineageId,
   });
+  const workCategory = getProviderWorkCategory(serviceLabel);
+  if (workCategory) params.set('workCategory', workCategory);
 
   return `/dashboard/providers?${params.toString()}`;
 }

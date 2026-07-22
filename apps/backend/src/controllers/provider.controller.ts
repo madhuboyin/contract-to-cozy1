@@ -51,7 +51,7 @@ export class ProviderController {
       const userId = req.user?.userId;
       // --- END FIX ---
 
-      const { propertyId, ...providerQuery } = query;
+      const { propertyId, workCategory, ...providerQuery } = query;
       let propertyContext = null;
       let effectiveQuery = providerQuery;
 
@@ -60,7 +60,7 @@ export class ProviderController {
           propertyId,
           userId,
           'PROVIDER_BOOKING',
-          { serviceCategory: providerQuery.category ?? 'UNSPECIFIED' },
+          { serviceCategory: workCategory ?? providerQuery.category ?? 'UNSPECIFIED' },
         );
         const property = await prisma.property.findUnique({
           where: { id: propertyId },

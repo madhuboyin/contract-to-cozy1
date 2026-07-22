@@ -5,7 +5,7 @@
 import { type GuidanceActionModel } from '@/features/guidance/utils/guidanceMappers';
 import { type GuidanceStepDTO } from '@/lib/api/guidanceApi';
 import { formatIssueDomain } from '@/features/guidance/utils/guidanceDisplay';
-import { getProviderCategoryForSystemType } from '@/lib/config/serviceCategoryMapping';
+import { getProviderCategoryForSystemType, getProviderWorkCategory } from '@/lib/config/serviceCategoryMapping';
 import { formatEnumLabel } from '@/lib/utils/formatters';
 import {
   type AssetScopeOption,
@@ -36,6 +36,8 @@ export function buildProvidersHref(propertyId: string, option: AssetScopeOption)
   const params = new URLSearchParams();
   params.set('propertyId', propertyId);
   params.set('category', getProviderCategoryForSystemType(option.systemType));
+  const workCategory = getProviderWorkCategory(option.systemType);
+  if (workCategory) params.set('workCategory', workCategory);
   params.set('insightFactor', option.systemType || option.assetName);
   if (option.inventoryItemId) params.set('itemId', option.inventoryItemId);
   params.set('assetName', option.assetName);

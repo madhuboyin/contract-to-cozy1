@@ -36,6 +36,10 @@ import {
 } from '@/app/(dashboard)/dashboard/properties/[id]/tools/service-price-radar/servicePriceRadarApi';
 import { cn } from '@/lib/utils';
 import { formatEnumLabel } from '@/lib/utils/formatters';
+import {
+  getProviderCategoryForMaintenanceCategory,
+  getProviderWorkCategory,
+} from '@/lib/config/serviceCategoryMapping';
 
 import { navigateBackWithDashboardFallback } from '@/lib/navigation/backNavigation';
 interface QuoteEntry {
@@ -158,7 +162,14 @@ export default function QuoteComparisonPage() {
   };
 
   const handleBookProvider = (q: QuoteResult) => {
-    const params = new URLSearchParams({ propertyId, category });
+    const params = new URLSearchParams({
+      propertyId,
+      category: getProviderCategoryForMaintenanceCategory(category),
+    });
+    const workCategory = getProviderWorkCategory(searchParams.get('workCategory')) ??
+      getProviderWorkCategory(category) ??
+      getProviderWorkCategory(serviceLabel);
+    if (workCategory) params.set('workCategory', workCategory);
     if (q.vendorName) params.set('vendorName', q.vendorName);
     if (serviceLabel) params.set('serviceLabel', serviceLabel);
     params.set('from', 'quote-comparison');

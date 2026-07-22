@@ -161,7 +161,7 @@ test('orchestration recommendations preserve the affected service context', () =
   assert.equal(action.primaryCta.label, 'Schedule Service');
   assert.equal(
     action.primaryCta.href,
-    '/dashboard/providers?propertyId=property-1&category=HVAC&serviceLabel=HVAC+Furnace&intent=service-booking&from=home-action&actionKey=risk%3Ahvac',
+    '/dashboard/providers?propertyId=property-1&category=HVAC&serviceLabel=HVAC+Furnace&intent=service-booking&from=home-action&actionKey=risk%3Ahvac&workCategory=HVAC',
   );
   assert.equal(
     action.whyItMatters,
@@ -224,9 +224,36 @@ test('service recommendations send water-heater work to plumbing provider search
 
   assert.match(action.primaryCta.href, /^\/dashboard\/providers\?/);
   assert.match(action.primaryCta.href, /category=PLUMBING/);
+  assert.match(action.primaryCta.href, /workCategory=WATER_HEATER/);
   assert.match(action.primaryCta.href, /serviceLabel=Water\+Heater/);
   assert.match(action.primaryCta.href, /actionKey=risk%3Awater-heater/);
   assert.match(action.primaryCta.href, /itemId=water-heater-item/);
+});
+
+test('roof recommendations search inspectors while preserving roof responsibility', () => {
+  const action = adaptOrchestratedActionToHomeAction({
+    id: 'risk-roof',
+    actionKey: 'risk:roof',
+    source: 'RISK',
+    propertyId: 'property-1',
+    title: 'ROOF_SHINGLE',
+    description: null,
+    systemType: 'ROOF_SHINGLE',
+    category: 'ROOF_EXTERIOR',
+    riskLevel: 'HIGH',
+    coverage: { hasCoverage: false, type: 'NONE', expiresOn: null },
+    confidence: { score: 0.9, level: 'HIGH', explanation: [] },
+    priority: 80,
+    cta: { show: true, label: 'Schedule Service', reason: 'ACTION_REQUIRED' },
+    suppression: { suppressed: false, reasons: [] },
+    signalSources: [],
+    primarySignalSource: null,
+    overdue: false,
+    createdAt: new Date('2026-07-01T12:00:00.000Z'),
+  });
+
+  assert.match(action.primaryCta.href, /category=INSPECTION/);
+  assert.match(action.primaryCta.href, /workCategory=ROOFING/);
 });
 
 test('Home asset labels humanize identifiers and simplify roof construction subtypes', () => {

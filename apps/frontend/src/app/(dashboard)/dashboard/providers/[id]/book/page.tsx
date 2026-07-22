@@ -36,6 +36,7 @@ import {
 import { navigateBackWithDashboardFallback } from '@/lib/navigation/backNavigation';
 import { buildGuidanceOverviewHref } from '@/lib/navigation/guidanceOverviewHref';
 import { extractGuidanceContinuityContext, hasGuidanceContinuityContext } from '@/features/guidance/utils/guidanceContinuity';
+import { getProviderWorkCategory } from '@/lib/config/serviceCategoryMapping';
 function getInitials(firstName: string, lastName: string) {
   return (firstName?.[0] || '') + (lastName?.[0] || '');
 }
@@ -48,6 +49,7 @@ export default function BookProviderPage() {
 
   const searchParams = useSearchParams();
   const serviceCategory = searchParams.get('service') || searchParams.get('category');
+  const serviceLabel = searchParams.get('serviceLabel');
   const preSelectedPropertyId = searchParams.get('propertyId');
   const insightFactor = searchParams.get('insightFactor');
   const insightContext = searchParams.get('insightContext');
@@ -83,6 +85,10 @@ export default function BookProviderPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string>('');
   const [contextItemName, setContextItemName] = useState<string | null>(null);
+  const workCategory = getProviderWorkCategory(searchParams.get('workCategory')) ??
+    getProviderWorkCategory(serviceLabel) ??
+    getProviderWorkCategory(insightFactor) ??
+    getProviderWorkCategory(serviceCategory);
 
   const [selectedServiceId, setSelectedServiceId] = useState('');
   const { selectedPropertyId, setSelectedPropertyId } = useDashboardPropertySelection(preSelectedPropertyId);
@@ -172,11 +178,6 @@ export default function BookProviderPage() {
   }, [guidanceJourneyId, guidanceAssetName, guidanceIssueDescription, searchParams, contextItemName]);
 
   useEffect(() => {
-    loadData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [providerId, serviceCategory]);
-
-  useEffect(() => {
     if (selectedPropertyId && inventoryItemId) {
       api.get<{ item: { name: string } }>(`/api/properties/${selectedPropertyId}/inventory/items/${inventoryItemId}`)
         .then(res => {
@@ -188,7 +189,7 @@ export default function BookProviderPage() {
     }
   }, [selectedPropertyId, inventoryItemId]);
 
-  const loadData = async () => {
+  async function loadData() {
     try {
       const [providerRes, servicesRes, propertiesRes, verificationSummaryRes] = await Promise.all([
         api.getProvider(providerId),
@@ -244,7 +245,12 @@ export default function BookProviderPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }
+
+  useEffect(() => {
+    loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [providerId, serviceCategory]);
 
   const handleServiceChange = (serviceId: string) => {
     setSelectedServiceId(serviceId);
@@ -367,6 +373,7 @@ export default function BookProviderPage() {
       ...(guidanceJourneyId && { guidanceJourneyId }),
       ...(guidanceJourneyId && guidanceStepKey && { guidanceStepKey }),
       ...(guidanceSignalIntentFamily && { guidanceSignalIntentFamily }),
+      ...(workCategory && { workCategory }),
       ...(hasGuardScopeContext && { guidanceEnforceGuard: true }),
     };
 

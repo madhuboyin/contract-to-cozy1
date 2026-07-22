@@ -14,8 +14,9 @@ import { cn } from '@/lib/utils';
 import { ServiceCategoryIcon } from '@/components/ServiceCategoryIcon';
 import { formatEnumLabel } from '@/lib/utils/formatters';
 import {
-  normalizeProviderCategoryForSearch,
+  getProviderWorkCategory,
   PROVIDER_SEARCH_CATEGORY_OPTIONS,
+  resolveProviderSearchCategory,
 } from '@/lib/config/serviceCategoryMapping';
 import { track } from '@/lib/analytics/events';
 import {
@@ -206,6 +207,7 @@ const ProviderList = ({
   targetPropertyId,
   insightContext,
   category,
+  workCategory,
   serviceLabel,
   fromSource,
   returnTo,
@@ -227,6 +229,7 @@ const ProviderList = ({
   targetPropertyId?: string;
   insightContext?: string;
   category?: string;
+  workCategory?: string;
   serviceLabel?: string;
   fromSource?: string;
   returnTo?: string;
@@ -270,6 +273,7 @@ const ProviderList = ({
         if (targetPropertyId) queryParams.append('propertyId', targetPropertyId);
         if (insightContext) queryParams.append('insightFactor', insightContext);
         if (category) queryParams.append('category', category);
+        if (workCategory) queryParams.append('workCategory', workCategory);
         if (serviceLabel) queryParams.append('serviceLabel', serviceLabel);
         if (fromSource) queryParams.append('from', fromSource);
         if (returnTo) queryParams.append('returnTo', returnTo);
@@ -396,12 +400,16 @@ export default function ProvidersPage() {
   const searchParams = useSearchParams();
   const { selectedPropertyId: dashboardSelectedPropertyId } = usePropertyContext();
 
-  const defaultCategory = normalizeProviderCategoryForSearch(
-    searchParams.get('category') ||
-      searchParams.get('service') ||
-      searchParams.get('serviceLabel')
-  );
+  const rawCategory = searchParams.get('category') || searchParams.get('service') || undefined;
+  const serviceLabel = searchParams.get('serviceLabel') || undefined;
   const insightContext = searchParams.get('insightFactor') || undefined;
+  const defaultCategory = resolveProviderSearchCategory(
+    rawCategory || serviceLabel
+  );
+  const defaultWorkCategory = getProviderWorkCategory(searchParams.get('workCategory')) ??
+    getProviderWorkCategory(serviceLabel) ??
+    getProviderWorkCategory(insightContext) ??
+    getProviderWorkCategory(rawCategory);
   const targetPropertyId = searchParams.get('propertyId') || dashboardSelectedPropertyId || undefined;
   const predictionId = searchParams.get('predictionId') || undefined;
   const inventoryItemId = searchParams.get('itemId') || undefined;
@@ -415,7 +423,6 @@ export default function ProvidersPage() {
   const priceFinalizationId = searchParams.get('priceFinalizationId') || undefined;
   const finalPrice = searchParams.get('finalPrice') || undefined;
   const vendorName = searchParams.get('vendorName') || undefined;
-  const serviceLabel = searchParams.get('serviceLabel') || undefined;
   const hasGuardScopeContext = Boolean(
     guidanceJourneyId ||
       guidanceStepKey ||
@@ -458,12 +465,13 @@ export default function ProvidersPage() {
   const [filters, setFilters] = useState({
     zipCode: initialZipCode,
     category: initialCategory,
+    workCategory: defaultWorkCategory,
   });
   const isGuidanceExecutionBlocked = hasGuardScopeContext && Boolean(providerGuardQuery.data?.blocked);
   const propertyContextNeedsAttention = Boolean(
     targetPropertyId && propertyContext && propertyContext.decision.status !== 'APPLICABLE',
   );
-  const responsibilityConfig = getProviderResponsibilityConfig(filters.category);
+  const responsibilityConfig = getProviderResponsibilityConfig(filters.workCategory ?? filters.category);
   const responsibilityParty = responsibilityConfig ? responsibilityParties[responsibilityConfig.scope] ?? null : null;
   const responsibilityNotSure = Boolean(
     responsibilityConfig && notSureResponsibilityScopes.has(responsibilityConfig.scope),
@@ -514,9 +522,10 @@ export default function ProvidersPage() {
       setDataLoading(true);
       setError(null);
       try {
-        const params: { propertyId?: string; category?: string; radius: number; zipCode?: string } = {
+        const params: { propertyId?: string; category?: string; workCategory?: string; radius: number; zipCode?: string } = {
           propertyId: targetPropertyId,
           category: currentFilters.category === 'ALL' || !currentFilters.category ? undefined : currentFilters.category,
+          workCategory: currentFilters.workCategory,
           radius: DEFAULT_RADIUS,
         };
 
@@ -554,11 +563,14 @@ export default function ProvidersPage() {
       const updatedFilters = {
         zipCode: newFilters.zipCode,
         category: newFilters.category || 'ALL',
+        workCategory: newFilters.category === defaultCategory
+          ? defaultWorkCategory ?? getProviderWorkCategory(newFilters.category)
+          : getProviderWorkCategory(newFilters.category),
       };
       setFilters(updatedFilters);
       fetchProviders(updatedFilters);
     },
-    [fetchProviders]
+    [defaultCategory, defaultWorkCategory, fetchProviders]
   );
 
   useEffect(() => {
@@ -600,6 +612,7 @@ export default function ProvidersPage() {
       const initialFilterState = {
         zipCode: zipForInitialSearch,
         category: initialCategory || 'ALL',
+        workCategory: defaultWorkCategory,
       };
       setFilters(initialFilterState);
 
@@ -607,6 +620,7 @@ export default function ProvidersPage() {
         fetchProviders({
           zipCode: initialFilterState.zipCode,
           category: initialCategory || 'ALL',
+          workCategory: initialFilterState.workCategory,
         });
       }
     };
@@ -843,7 +857,7 @@ export default function ProvidersPage() {
           </div>
           {targetPropertyId && serviceLabel && (
             <Link
-              href={`/dashboard/quote-comparison?propertyId=${targetPropertyId}&category=${filters.category}&serviceLabel=${encodeURIComponent(serviceLabel)}`}
+              href={`/dashboard/quote-comparison?propertyId=${targetPropertyId}&category=${filters.category}${filters.workCategory ? `&workCategory=${encodeURIComponent(filters.workCategory)}` : ''}&serviceLabel=${encodeURIComponent(serviceLabel)}`}
               className="inline-flex items-center gap-1.5 text-xs font-semibold text-violet-700 underline underline-offset-2 hover:text-violet-900"
             >
               Compare multiple quotes first
@@ -945,6 +959,7 @@ export default function ProvidersPage() {
           targetPropertyId={targetPropertyId}
           insightContext={insightContext}
           category={filters.category === 'ALL' ? undefined : filters.category}
+          workCategory={filters.workCategory}
           serviceLabel={serviceLabel}
           fromSource={fromSource}
           returnTo={effectiveReturnTo}

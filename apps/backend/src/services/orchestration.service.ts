@@ -437,11 +437,36 @@ function buildProviderSearchHref(action: OrchestratedAction, serviceLabel: strin
     from: 'home-action',
     actionKey: action.actionKey,
   });
+  const workCategory = resolveProviderWorkCategory(action, serviceLabel);
+  if (workCategory) params.set('workCategory', workCategory);
   if (action.relatedEntity?.type === 'INVENTORY_ITEM') {
     params.set('itemId', action.relatedEntity.id);
   }
 
   return `/dashboard/providers?${params.toString()}`;
+}
+
+function resolveProviderWorkCategory(action: OrchestratedAction, serviceLabel: string): string | null {
+  const context = normalizeUpper([
+    action.serviceCategory,
+    action.category,
+    action.systemType,
+    action.title,
+    serviceLabel,
+  ].filter(Boolean).join(' '));
+  if (context.includes('HVAC') || context.includes('FURNACE') || context.includes('HEAT_PUMP')) return 'HVAC';
+  if (context.includes('WATER_HEATER') || context.includes('WATER HEATER')) return 'WATER_HEATER';
+  if (context.includes('PLUMB')) return 'PLUMBING';
+  if (context.includes('ROOF') || context.includes('SHINGLE') || context.includes('GUTTER')) return 'ROOFING';
+  if (context.includes('ELECTRIC')) return 'ELECTRICAL';
+  if (context.includes('LANDSCAP') || context.includes('DRAINAGE')) return 'LANDSCAPING';
+  if (context.includes('PEST')) return 'PEST_CONTROL';
+  if (context.includes('LOCK')) return 'LOCKSMITH';
+  if (context.includes('SAFETY') || context.includes('SMOKE') || context.includes('SECURITY')) return 'SECURITY_SAFETY';
+  if (context.includes('APPLIANCE')) return 'APPLIANCE_REPAIR';
+  if (context.includes('CLEAN')) return 'CLEANING';
+  if (context.includes('HANDYMAN') || context.includes('REPAIR')) return 'HANDYMAN';
+  return null;
 }
 
 function resolveProviderServiceCategory(action: OrchestratedAction): ServiceCategory {
@@ -455,6 +480,9 @@ function resolveProviderServiceCategory(action: OrchestratedAction): ServiceCate
   if (assetContext.includes('HVAC')) return ServiceCategory.HVAC;
   if (assetContext.includes('WATER_HEATER') || assetContext.includes('WATER HEATER') || assetContext.includes('PLUMB')) {
     return ServiceCategory.PLUMBING;
+  }
+  if (assetContext.includes('ROOF') || assetContext.includes('SHINGLE') || assetContext.includes('GUTTER')) {
+    return ServiceCategory.INSPECTION;
   }
   if (assetContext.includes('ELECTRIC')) return ServiceCategory.ELECTRICAL;
   if (assetContext.includes('LANDSCAP')) return ServiceCategory.LANDSCAPING;

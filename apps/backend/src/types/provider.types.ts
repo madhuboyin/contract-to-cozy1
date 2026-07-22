@@ -3,6 +3,15 @@
 import { z } from 'zod';
 import { ServiceCategory, InspectionType, HandymanType, ProviderStatus, ProviderCredentialType } from '@prisma/client';
 
+export const PROVIDER_WORK_CATEGORIES = [
+  'PLUMBING', 'HVAC', 'WATER_HEATER', 'ROOFING', 'GUTTERS', 'SIDING', 'WINDOWS_DOORS',
+  'LANDSCAPING', 'LANDSCAPING_DRAINAGE', 'PEST_CONTROL', 'ELECTRICAL', 'FOUNDATION',
+  'INSULATION', 'FLOORING', 'PAINTING', 'SOLAR', 'SECURITY_SAFETY', 'LOCKSMITH',
+  'HANDYMAN', 'GENERAL_HANDYMAN', 'MOLD_REMEDIATION', 'INSPECTION', 'APPLIANCE_REPAIR',
+  'APPLIANCE_REPLACEMENT', 'CLEANING', 'MOVING', 'INSURANCE', 'ATTORNEY', 'FINANCE',
+  'WARRANTY', 'ADMIN',
+] as const;
+
 /**
  * Provider Search Query Schema
  */
@@ -18,6 +27,9 @@ export const providerSearchSchema = z.object({
 
   // Service filters
   category: z.nativeEnum(ServiceCategory).optional(),
+  // The original homeowner work scope may be more specific than the provider
+  // marketplace category (for example ROOFING providers are grouped under INSPECTION).
+  workCategory: z.enum(PROVIDER_WORK_CATEGORIES).optional(),
   inspectionType: z.nativeEnum(InspectionType).optional(),
   handymanType: z.nativeEnum(HandymanType).optional(),
   // Provider Trust & Compliance Verification — restrict to providers verified

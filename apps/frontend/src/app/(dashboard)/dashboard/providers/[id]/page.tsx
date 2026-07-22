@@ -69,6 +69,7 @@ export default function ProviderDetailPage() {
   const finalPrice = searchParams.get('finalPrice');
   const vendorName = searchParams.get('vendorName');
   const serviceLabel = searchParams.get('serviceLabel');
+  const workCategory = searchParams.get('workCategory');
   const returnTo = searchParams.get('returnTo');
   const intent = searchParams.get('intent');
   const actionKey = searchParams.get('actionKey');
@@ -198,12 +199,7 @@ export default function ProviderDetailPage() {
 
   const isToggling = addFavoriteMutation.isPending || removeFavoriteMutation.isPending;
 
-  useEffect(() => {
-    loadData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [providerId]);
-
-  const loadData = async () => {
+  async function loadData() {
     try {
       const [providerRes, servicesRes, verificationSummary, reviewsRes] = await Promise.all([
         api.getProvider(providerId),
@@ -232,7 +228,12 @@ export default function ProviderDetailPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }
+
+  useEffect(() => {
+    loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [providerId]);
 
   if (loading || favoritesQuery.isLoading) {
     return (
@@ -310,6 +311,7 @@ export default function ProviderDetailPage() {
     if (propertyId) queryParams.append('propertyId', propertyId);
     if (insightFactor) queryParams.append('insightFactor', insightFactor);
     if (category) queryParams.append('category', category);
+    if (workCategory) queryParams.append('workCategory', workCategory);
     if (predictionId) queryParams.append('predictionId', predictionId);
     if (itemId) queryParams.append('itemId', itemId);
     if (guidanceJourneyId) queryParams.append('guidanceJourneyId', guidanceJourneyId);

@@ -1778,6 +1778,7 @@ export interface CreateBookingInput {
   guidanceJourneyId?: string;
   guidanceStepKey?: string;
   guidanceSignalIntentFamily?: string;
+  workCategory?: string;
   guidanceEnforceGuard?: boolean;
 }
 

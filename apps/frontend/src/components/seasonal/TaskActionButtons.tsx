@@ -2,6 +2,7 @@
 import React from 'react';
 import { Youtube, FileText, Phone, ExternalLink } from 'lucide-react';
 import Link from 'next/link';
+import { getProviderCategoryForMaintenanceCategory, getProviderWorkCategory } from '@/lib/config/serviceCategoryMapping';
 
 interface TaskActionButtonsProps {
   tutorialUrl?: string;
@@ -21,6 +22,15 @@ export function TaskActionButtons({
   // Generate YouTube search URL if no specific tutorial provided
   const youtubeUrl = tutorialUrl || 
     `https://www.youtube.com/results?search_query=${encodeURIComponent(taskTitle + ' DIY home maintenance')}`;
+  const providerHref = serviceCategory ? (() => {
+    const params = new URLSearchParams({
+      category: getProviderCategoryForMaintenanceCategory(serviceCategory),
+      serviceLabel: taskTitle,
+    });
+    const workCategory = getProviderWorkCategory(serviceCategory) ?? getProviderWorkCategory(taskTitle);
+    if (workCategory) params.set('workCategory', workCategory);
+    return `/dashboard/providers?${params.toString()}`;
+  })() : null;
 
   return (
     <div className="space-y-2">
@@ -54,9 +64,9 @@ export function TaskActionButtons({
         )}
 
         {/* Find Professional Button */}
-        {serviceCategory && (
+        {providerHref && (
           <Link
-            href={`/dashboard/providers?category=${serviceCategory}`}
+            href={providerHref}
             className="inline-flex items-center gap-1.5 px-3 py-2.5 sm:py-1.5 bg-green-50 border border-green-200 rounded-md hover:bg-green-100 transition-colors text-xs group"
           >
             <Phone className="w-3.5 h-3.5 text-green-600" />

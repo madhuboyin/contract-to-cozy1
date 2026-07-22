@@ -31,6 +31,7 @@ import { mapGuidanceJourneyToActionModel } from '@/features/guidance/utils/guida
 
 import { navigateBackWithDashboardFallback } from '@/lib/navigation/backNavigation';
 import { PropertyContextCapturePanel } from '@/components/property-context/PropertyContextCapturePanel';
+import { getProviderCategoryForSystemType, getProviderWorkCategory } from '@/lib/config/serviceCategoryMapping';
 const CATEGORY_LIFESPAN_YEARS: Record<string, number> = {
   APPLIANCE: 12,
   HVAC: 15,
@@ -266,7 +267,11 @@ export default function ReplaceRepairClient() {
     const query = new URLSearchParams();
     if (propertyId) query.append('propertyId', propertyId);
     if (itemId) query.append('itemId', itemId);
-    if (item?.category) query.append('category', item.category);
+    if (item?.category) {
+      query.append('category', getProviderCategoryForSystemType(item.category));
+      const workCategory = getProviderWorkCategory(item.category);
+      if (workCategory) query.append('workCategory', workCategory);
+    }
     if (activeJourneyAction?.journeyId) {
       query.append('guidanceJourneyId', activeJourneyAction.journeyId);
     }

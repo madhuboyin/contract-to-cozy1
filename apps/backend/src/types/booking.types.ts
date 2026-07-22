@@ -2,6 +2,7 @@
 
 import { z } from 'zod';
 import { BookingStatus, ProviderCredentialType, ServiceCategory } from '@prisma/client';
+import { PROVIDER_WORK_CATEGORIES } from './provider.types';
 
 /**
  * Create Booking Schema
@@ -34,6 +35,7 @@ export const createBookingSchema = z.object({
   guidanceJourneyId: z.string().uuid('Invalid guidance journey ID').optional(),
   guidanceStepKey: z.string().optional(),
   guidanceSignalIntentFamily: z.string().optional(),
+  workCategory: z.enum(PROVIDER_WORK_CATEGORIES).optional(),
   guidanceEnforceGuard: z.boolean().optional(),
 });
 

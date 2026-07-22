@@ -42,7 +42,7 @@ function action(overrides: Partial<RankedHomeActionDTO> = {}): RankedHomeActionD
 describe('resolveHomeActionPrimaryHref', () => {
   it('replaces a legacy Fix destination with contextual HVAC provider search', () => {
     expect(resolveHomeActionPrimaryHref(action(), 'property-1')).toBe(
-      '/dashboard/providers?propertyId=property-1&category=HVAC&serviceLabel=HVAC+Furnace&intent=service-booking&from=home-action&actionKey=risk%3Aproperty-1%3Ahvac',
+      '/dashboard/providers?propertyId=property-1&category=HVAC&serviceLabel=HVAC+Furnace&intent=service-booking&from=home-action&actionKey=risk%3Aproperty-1%3Ahvac&workCategory=HVAC',
     );
   });
 
@@ -54,12 +54,26 @@ describe('resolveHomeActionPrimaryHref', () => {
     }), 'property-1');
 
     expect(href).toContain('category=PLUMBING');
+    expect(href).toContain('workCategory=WATER_HEATER');
     expect(href).toContain('serviceLabel=Water+Heater');
   });
 
-  it('preserves a provider destination that already contains richer context', () => {
+  it('keeps roof responsibility even though roofing providers use the inspection marketplace category', () => {
+    const href = resolveHomeActionPrimaryHref(action({
+      signal: 'Schedule service for Roof Shingle',
+      recommendedAction: 'Schedule service for Roof Shingle',
+      evidence: [{ id: 'roof', label: 'Roof Shingle', source: 'Risk assessment', freshness: 'CURRENT', confidence: 0.9 }],
+    }), 'property-1');
+
+    expect(href).toContain('category=INSPECTION');
+    expect(href).toContain('workCategory=ROOFING');
+  });
+
+  it('preserves a provider destination and adds its missing work scope', () => {
     const href = '/dashboard/providers?propertyId=property-1&category=HVAC&itemId=item-1';
-    expect(resolveHomeActionPrimaryHref(action({ primaryCta: { label: 'Schedule Service', href } }), 'property-1')).toBe(href);
+    expect(resolveHomeActionPrimaryHref(action({ primaryCta: { label: 'Schedule Service', href } }), 'property-1')).toBe(
+      `${href}&workCategory=HVAC`,
+    );
   });
 
   it('does not bypass safety escalation destinations', () => {
