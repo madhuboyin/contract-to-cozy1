@@ -56,7 +56,6 @@ export default function PrioritizedActionPlanPage() {
   const feed = query.data;
   const entries = groupAttentionActions(feed.actions);
   const urgentCount = feed.actions.filter((action) => action.priority === 'NOW' || action.priority === 'SOON').length;
-  const coverageHref = `/dashboard/properties/${propertyId}/inventory?tab=items&smart=gaps`;
   const refreshPlan = async () => {
     await query.refetch();
     await queryClient.invalidateQueries({ queryKey: ['unified-home', propertyId] });
@@ -143,7 +142,7 @@ export default function PrioritizedActionPlanPage() {
                 <CoverageCorrectionGroupCard
                   actions={entry.actions}
                   subjects={entry.subjects}
-                  href={coverageHref}
+                  propertyId={propertyId}
                   showSupportingDetails
                 />
               )}

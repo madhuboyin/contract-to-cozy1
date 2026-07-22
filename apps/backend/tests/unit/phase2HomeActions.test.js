@@ -370,7 +370,9 @@ test('unified Home uses one five-section responsive surface and five homeowner d
   assert.match(homeSurface, /SEASONAL_CHECKLIST/);
   assert.match(homeSurface, /Critical weather/);
   assert.match(homeSurface, /View seasonal checklist/);
-  assert.match(homeSurface, /Review coverage gaps/);
+  assert.match(homeSurface, /Review coverage information/);
+  assert.match(homeSurface, /tab=coverage&focus=incomplete/);
+  assert.doesNotMatch(homeSurface, /These items are missing coverage details/);
   const seasonalCardSource = homeSurface.slice(
     homeSurface.indexOf('export function SeasonalChecklistActionCard'),
     homeSurface.indexOf('export function CoverageCorrectionGroupCard'),

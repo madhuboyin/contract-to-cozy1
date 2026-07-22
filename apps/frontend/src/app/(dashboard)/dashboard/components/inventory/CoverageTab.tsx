@@ -91,12 +91,21 @@ export default function CoverageTab({ items, rooms, onOpenCoverage, onOpenAction
     [items],
   );
 
+  const incompleteItems = useMemo(
+    () => items.filter((item) => item.coverageState === 'INCOMPLETE'),
+    [items],
+  );
+
   useEffect(() => {
     const highlightId = searchParams.get('highlight');
-    if (!highlightId) return;
+    const focus = searchParams.get('focus');
+    if (!highlightId && focus !== 'incomplete') return;
 
     const timeoutId = window.setTimeout(() => {
-      const element = document.querySelector(`[data-item-id="${highlightId}"]`);
+      const selector = highlightId
+        ? `[data-item-id="${highlightId}"]`
+        : '[data-coverage-section="incomplete"]';
+      const element = document.querySelector(selector);
       if (element instanceof HTMLElement) {
         element.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
@@ -186,6 +195,65 @@ export default function CoverageTab({ items, rooms, onOpenCoverage, onOpenAction
           </div>
         </div>
       </div>
+
+      {incompleteItems.length > 0 ? (
+        <div
+          data-coverage-section="incomplete"
+          className="rounded-xl border border-amber-200 bg-amber-50/40 p-5"
+        >
+          <div className="mb-1 flex items-center gap-2">
+            <HelpCircle className="h-4 w-4 text-amber-600" />
+            <h3 className="text-sm font-semibold text-amber-800">
+              Coverage information incomplete ({incompleteItems.length})
+            </h3>
+          </div>
+          <p className="mb-4 text-xs leading-5 text-amber-800/80">
+            Confirm the item, responsibility, lifecycle details, and any existing policy or warranty before we identify a coverage gap.
+          </p>
+
+          <div className="space-y-2">
+            {incompleteItems.map((item) => {
+              const Icon = resolveIcon(
+                getInventoryItemIcon({
+                  name: item.name,
+                  type: (item as any).type ?? (item as any).itemType,
+                  category: item.category,
+                  subtype: (item as any).subtype,
+                  kind: (item as any).kind,
+                  label: (item as any).label ?? (item as any).displayName,
+                  applianceType: (item as any).applianceType,
+                  sourceHash: item.sourceHash,
+                }),
+                HelpCircle,
+              );
+              const location = item.room?.name
+                || item.locationLabel
+                || (item.recordGroup === 'SYSTEMS_STRUCTURE' ? 'Whole home' : 'Room needed');
+
+              return (
+                <div
+                  key={item.id}
+                  data-item-id={item.id}
+                  className="flex flex-col gap-2 border-b border-amber-100 py-3 last:border-0 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div className="flex items-center gap-2">
+                    <Icon className="h-3.5 w-3.5 text-amber-600" />
+                    <span className="text-sm font-medium text-gray-800">{item.displayName || item.name}</span>
+                    <span className="text-[11px] text-gray-500">{location}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => onOpenCoverage(item)}
+                    className="rounded-lg bg-teal-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-teal-700"
+                  >
+                    Review information
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
 
       {gapItems.length > 0 ? (
         <div className="rounded-xl border border-red-200 bg-white p-5">

@@ -172,15 +172,16 @@ export function SeasonalChecklistActionCard({
 export function CoverageCorrectionGroupCard({
   actions,
   subjects,
-  href,
+  propertyId,
   showSupportingDetails = false,
 }: {
   actions: RankedHomeActionDTO[];
   subjects: string[];
-  href: string;
+  propertyId: string;
   showSupportingDetails?: boolean;
 }) {
   const first = actions[0];
+  const href = `/dashboard/properties/${propertyId}/inventory?tab=coverage&focus=incomplete`;
   return (
     <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="flex flex-wrap items-center gap-2">
@@ -192,7 +193,7 @@ export function CoverageCorrectionGroupCard({
         Add coverage information for {actions.length} home items
       </h3>
       <p className="mt-1 text-sm leading-6 text-slate-600">
-        These items are missing coverage details. Review them together, then update each record with any coverage you already have.
+        Coverage information is incomplete for these items. Confirm each item and add what you know before we identify a coverage gap.
       </p>
       <div className="mt-3 flex flex-wrap gap-2">
         {subjects.map((subject) => <Badge key={subject} variant="secondary" className="rounded-full">{subject}</Badge>)}
@@ -214,7 +215,7 @@ export function CoverageCorrectionGroupCard({
       )}
       <div className="mt-4">
         <Button asChild size="sm" className="rounded-full">
-          <Link href={href}>Review coverage gaps<ArrowRight className="ml-1 h-3.5 w-3.5" /></Link>
+          <Link href={href}>Review coverage information<ArrowRight className="ml-1 h-3.5 w-3.5" /></Link>
         </Button>
       </div>
     </article>
@@ -433,7 +434,7 @@ export function UnifiedHomeSurface({ propertyId }: { propertyId: string }) {
             key={`coverage-group:${entry.actions.map((action) => action.id).join(':')}`}
             actions={entry.actions}
             subjects={entry.subjects}
-            href={home.glance.coverageHref}
+            propertyId={propertyId}
           />
         ))}
       </section>
