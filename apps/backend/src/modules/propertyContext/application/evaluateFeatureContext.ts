@@ -79,6 +79,37 @@ function requirementState(
     const hasLifecycleDate = typeof item.installedOn === 'string' || typeof item.purchasedOn === 'string';
     return hasCondition && hasLifecycleDate ? 'KNOWN' : 'UNKNOWN';
   }
+  if (requirement.collectionPredicate?.startsWith('SELECTED_ITEM_')) {
+    if (!Array.isArray(collectionValue)) return 'UNKNOWN';
+    const itemId = operationInput?.inventoryItemId;
+    if (typeof itemId !== 'string' || !itemId.trim()) return 'UNKNOWN';
+    const item = collectionValue.find((candidate) => candidate && typeof candidate === 'object'
+      && (candidate as { id?: unknown }).id === itemId) as Record<string, unknown> | undefined;
+    if (!item) return 'UNKNOWN';
+    if (requirement.collectionPredicate === 'SELECTED_ITEM_CONFIRMATION_INCOMPLETE') {
+      const inferred = item.verificationSource === 'PROPERTY_DETAILS'
+        || (typeof item.sourceHash === 'string' && item.sourceHash.startsWith('RISK_REPORT_SYSTEM:'))
+        || (Array.isArray(item.tags) && item.tags.includes('RISK_REPORT_INFERRED'));
+      return !inferred || item.isVerified === true ? 'KNOWN' : 'UNKNOWN';
+    }
+    if (requirement.collectionPredicate === 'SELECTED_ITEM_COVERAGE_LIFECYCLE_INCOMPLETE') {
+      if (item.warrantyId || item.insurancePolicyId) return 'KNOWN';
+      const hasCondition = typeof item.condition === 'string' && item.condition !== 'UNKNOWN';
+      const hasLifecycleDate = typeof item.installedOn === 'string' || typeof item.purchasedOn === 'string';
+      return hasCondition && hasLifecycleDate ? 'KNOWN' : 'UNKNOWN';
+    }
+    if (requirement.collectionPredicate === 'SELECTED_ITEM_VALUE_INCOMPLETE') {
+      if (item.warrantyId || item.insurancePolicyId) return 'KNOWN';
+      return (typeof item.replacementCostCents === 'number' && item.replacementCostCents > 0)
+        || operationInput?.hasDisclosedEstimate === true
+        ? 'KNOWN'
+        : 'UNKNOWN';
+    }
+    if (requirement.collectionPredicate === 'SELECTED_ITEM_COVERAGE_EVIDENCE_INCOMPLETE') {
+      if (item.warrantyId || item.insurancePolicyId) return 'KNOWN';
+      return item.coverageEvidenceStatus === 'NONE' || item.coverageEvidenceStatus === 'NOT_SURE' ? 'KNOWN' : 'UNKNOWN';
+    }
+  }
   if (requirement.collectionPredicate === 'INCLUDES_OPERATION_INPUT_VALUE') {
     const inputKey = requirement.collectionOperationInputKey;
     const expected = inputKey ? operationInput?.[inputKey] : undefined;

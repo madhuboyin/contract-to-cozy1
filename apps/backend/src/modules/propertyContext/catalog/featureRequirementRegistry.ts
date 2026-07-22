@@ -18,7 +18,14 @@ export interface FactRequirementDefinition {
   captureKey: string;
   /** Collection facts below this size are treated as missing for this operation. */
   minimumItems?: number;
-  collectionPredicate?: 'ACTIVE_DATE_RANGE' | 'SELECTED_ITEM_LIFECYCLE_INCOMPLETE' | 'INCLUDES_OPERATION_INPUT_VALUE';
+  collectionPredicate?:
+    | 'ACTIVE_DATE_RANGE'
+    | 'SELECTED_ITEM_LIFECYCLE_INCOMPLETE'
+    | 'SELECTED_ITEM_CONFIRMATION_INCOMPLETE'
+    | 'SELECTED_ITEM_COVERAGE_LIFECYCLE_INCOMPLETE'
+    | 'SELECTED_ITEM_VALUE_INCOMPLETE'
+    | 'SELECTED_ITEM_COVERAGE_EVIDENCE_INCOMPLETE'
+    | 'INCLUDES_OPERATION_INPUT_VALUE';
   collectionOperationInputKey?: string;
   operationInputWhen?: {
     key: string;
@@ -431,6 +438,58 @@ export const FEATURE_CONTEXT_REQUIREMENTS: readonly FeatureContextRequirementDef
         collectionPredicate: 'ACTIVE_DATE_RANGE',
       },
     ],
+  },
+  {
+    featureKey: 'COVERAGE_INTELLIGENCE',
+    operationKey: 'ASSESS_ITEM_COVERAGE',
+    adoption: adopted('Inventory item coverage', 'SHARED_GATE'),
+    policyVersion: '1.0',
+    promptStrategy: 'MINIMUM_PATH',
+    required: [
+      {
+        factKey: 'inventory.items',
+        classification: 'REQUIRED_APPLICABILITY',
+        reasonCode: 'CONFIRM_INFERRED_HOME_SYSTEM',
+        priority: 10,
+        acceptableStates: ['KNOWN'],
+        captureKey: 'INVENTORY_ITEM_CONFIRMATION',
+        collectionPredicate: 'SELECTED_ITEM_CONFIRMATION_INCOMPLETE',
+      },
+      { factKey: 'responsibility.roof', classification: 'REQUIRED_APPLICABILITY', reasonCode: 'CONFIRM_ROOF_COVERAGE_RESPONSIBILITY', priority: 20, acceptableStates: ['KNOWN'], captureKey: 'RESPONSIBILITY_ROOF', operationInputWhen: { key: 'responsibilityScope', operator: 'EQUALS', value: 'ROOF' } },
+      { factKey: 'responsibility.hvac', classification: 'REQUIRED_APPLICABILITY', reasonCode: 'CONFIRM_HVAC_COVERAGE_RESPONSIBILITY', priority: 20, acceptableStates: ['KNOWN'], captureKey: 'RESPONSIBILITY_HVAC', operationInputWhen: { key: 'responsibilityScope', operator: 'EQUALS', value: 'HVAC' } },
+      { factKey: 'responsibility.plumbing', classification: 'REQUIRED_APPLICABILITY', reasonCode: 'CONFIRM_PLUMBING_COVERAGE_RESPONSIBILITY', priority: 20, acceptableStates: ['KNOWN'], captureKey: 'RESPONSIBILITY_PLUMBING', operationInputWhen: { key: 'responsibilityScope', operator: 'EQUALS', value: 'PLUMBING' } },
+      { factKey: 'responsibility.buildingExterior', classification: 'REQUIRED_APPLICABILITY', reasonCode: 'CONFIRM_EXTERIOR_COVERAGE_RESPONSIBILITY', priority: 20, acceptableStates: ['KNOWN'], captureKey: 'RESPONSIBILITY_BUILDING_EXTERIOR', operationInputWhen: { key: 'responsibilityScope', operator: 'EQUALS', value: 'BUILDING_EXTERIOR' } },
+      { factKey: 'responsibility.commonSafety', classification: 'REQUIRED_APPLICABILITY', reasonCode: 'CONFIRM_SAFETY_COVERAGE_RESPONSIBILITY', priority: 20, acceptableStates: ['KNOWN'], captureKey: 'RESPONSIBILITY_COMMON_SAFETY', operationInputWhen: { key: 'responsibilityScope', operator: 'EQUALS', value: 'COMMON_SAFETY' } },
+      { factKey: 'responsibility.sharedSystems', classification: 'REQUIRED_APPLICABILITY', reasonCode: 'CONFIRM_SHARED_SYSTEM_COVERAGE_RESPONSIBILITY', priority: 20, acceptableStates: ['KNOWN'], captureKey: 'RESPONSIBILITY_SHARED_SYSTEMS', operationInputWhen: { key: 'responsibilityScope', operator: 'EQUALS', value: 'SHARED_SYSTEMS' } },
+      {
+        factKey: 'inventory.items',
+        classification: 'REQUIRED_CALCULATION',
+        reasonCode: 'ADD_ITEM_LIFECYCLE_FOR_COVERAGE',
+        priority: 30,
+        acceptableStates: ['KNOWN'],
+        captureKey: 'INVENTORY_ITEM_COVERAGE_LIFECYCLE',
+        collectionPredicate: 'SELECTED_ITEM_COVERAGE_LIFECYCLE_INCOMPLETE',
+      },
+      {
+        factKey: 'inventory.items',
+        classification: 'REQUIRED_APPLICABILITY',
+        reasonCode: 'CONFIRM_ITEM_COVERAGE_EVIDENCE',
+        priority: 40,
+        acceptableStates: ['KNOWN'],
+        captureKey: 'INVENTORY_ITEM_COVERAGE_EVIDENCE',
+        collectionPredicate: 'SELECTED_ITEM_COVERAGE_EVIDENCE_INCOMPLETE',
+      },
+      {
+        factKey: 'inventory.items',
+        classification: 'REQUIRED_CALCULATION',
+        reasonCode: 'ADD_ITEM_VALUE_FOR_COVERAGE',
+        priority: 50,
+        acceptableStates: ['KNOWN'],
+        captureKey: 'INVENTORY_ITEM_VALUE',
+        collectionPredicate: 'SELECTED_ITEM_VALUE_INCOMPLETE',
+      },
+    ],
+    enhancements: [],
   },
   {
     featureKey: 'MAINTENANCE',

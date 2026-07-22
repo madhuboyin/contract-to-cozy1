@@ -33,6 +33,7 @@ import {
 import { getWarrantyCategoryForInventoryCategory } from '@/lib/config/serviceCategoryMapping';
 import { buildGuidanceOverviewHref } from '@/lib/navigation/guidanceOverviewHref';
 import { cn } from '@/lib/utils';
+import { PropertyContextCapturePanel } from '@/components/property-context/PropertyContextCapturePanel';
 
 const EMPTY_OVERRIDES: ItemCoverageAnalysisOverrides = {
   coverageType: 'WARRANTY',
@@ -104,8 +105,8 @@ function inferAgeYears(item: InventoryItem): number | null {
 
 function buildPrefillOverrides(item: InventoryItem): ItemCoverageAnalysisOverrides {
   const replacementCostUsd =
-    item.replacementCostCents !== null && item.replacementCostCents !== undefined
-      ? Math.round((item.replacementCostCents / 100) * 100) / 100
+    item.effectiveReplacementCostCents !== null && item.effectiveReplacementCostCents !== undefined
+      ? Math.round((item.effectiveReplacementCostCents / 100) * 100) / 100
       : undefined;
 
   const lifespan = CATEGORY_LIFESPAN_YEARS[item.category] ?? CATEGORY_LIFESPAN_YEARS.OTHER;
@@ -247,6 +248,7 @@ export default function ItemGetCoverageClient() {
   const [error, setError] = useState<string | null>(null);
   const [overrides, setOverrides] = useState<ItemCoverageAnalysisOverrides>(EMPTY_OVERRIDES);
   const [itemName, setItemName] = useState<string>('Inventory Item');
+  const [item, setItem] = useState<InventoryItem | null>(null);
   const [roomName, setRoomName] = useState<string | null>(null);
   const [didAutoPrefill, setDidAutoPrefill] = useState(false);
   const [showInputs, setShowInputs] = useState(false);
@@ -297,14 +299,16 @@ export default function ItemGetCoverageClient() {
 
       if (itemResult.status === 'fulfilled') {
         const fetchedItem = itemResult.value;
-        setItemName(fetchedItem.name || 'Inventory Item');
-        setRoomName(fetchedItem.room?.name || null);
+        setItem(fetchedItem);
+        setItemName(fetchedItem.displayName || fetchedItem.name || 'Inventory Item');
+        setRoomName(fetchedItem.room?.name || fetchedItem.locationLabel || null);
         setItemCondition((fetchedItem.condition as InventoryItemCondition) || 'UNKNOWN');
         if (!didAutoPrefill) {
           setOverrides((prev) => mergeOverridesWithPrefill(prev, buildPrefillOverrides(fetchedItem)));
           setDidAutoPrefill(true);
         }
       } else {
+        setItem(null);
         setItemName('Inventory Item');
         setRoomName(null);
       }
@@ -406,6 +410,16 @@ export default function ItemGetCoverageClient() {
   const config = analysis
     ? verdictConfig(analysis.overallVerdict, analysis.warranty.recommendation)
     : null;
+  const coverageState = item?.coverageState ?? 'INCOMPLETE';
+  const needsCoverageContext = coverageState === 'INCOMPLETE';
+  const coverageManagedElsewhere = coverageState === 'MANAGED_ELSEWHERE';
+  const coverageNotRequired = coverageState === 'NOT_REQUIRED';
+  const mayAnalyzeCoverage = coverageState === 'MISSING' || coverageState === 'CONFIRMED';
+  const coverageOperationInput = useMemo(() => ({
+    inventoryItemId: itemId,
+    responsibilityScope: item?.responsibilityScope ?? undefined,
+    hasDisclosedEstimate: item?.replacementValueSource === 'ESTIMATED',
+  }), [item?.replacementValueSource, item?.responsibilityScope, itemId]);
 
   const recommendScenarioTesting = analysis?.warranty.recommendation === 'REPLACE_SOON';
 
@@ -591,7 +605,39 @@ export default function ItemGetCoverageClient() {
         </MobileCard>
       )}
 
-      {!loading && !hasAnalysis && (
+      {!loading && item && (
+        <MobileCard className="space-y-3">
+          <div className="flex items-start gap-3">
+            <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-teal-600" />
+            <div>
+              <p className="font-semibold text-gray-900">{item.coverageStateLabel || 'Coverage information incomplete'}</p>
+              <p className="mt-1 text-sm text-gray-600">{item.coverageStateDetail}</p>
+              {item.provenanceLabel ? <p className="mt-2 text-xs font-medium text-gray-500">{item.provenanceLabel}</p> : null}
+              {item.replacementValueSource === 'ESTIMATED' && item.effectiveReplacementCostCents ? (
+                <p className="mt-1 text-xs text-gray-500">Estimated replacement value: {money(item.effectiveReplacementCostCents / 100)}</p>
+              ) : null}
+            </div>
+          </div>
+          {coverageManagedElsewhere ? (
+            <p className="rounded-xl bg-teal-50 p-3 text-sm text-teal-900">
+              Homeowner coverage and replacement actions are paused because this system is recorded as managed by another responsible party.
+            </p>
+          ) : null}
+          {coverageNotRequired ? <p className="text-sm text-gray-600">Coverage tracking is turned off for this item.</p> : null}
+        </MobileCard>
+      )}
+
+      {!loading && item && needsCoverageContext ? (
+        <PropertyContextCapturePanel
+          propertyId={propertyId}
+          featureKey="COVERAGE_INTELLIGENCE"
+          operationKey="ASSESS_ITEM_COVERAGE"
+          operationInput={coverageOperationInput}
+          onCaptured={async () => { await fetchStatus(); }}
+        />
+      ) : null}
+
+      {!loading && mayAnalyzeCoverage && !hasAnalysis && (
         <>
           <MobileCard className="space-y-3">
             <div className="flex items-start gap-3">
@@ -599,7 +645,7 @@ export default function ItemGetCoverageClient() {
               <div>
                 <p className="font-semibold text-gray-900">No analysis yet for {itemName}</p>
                 <p className="text-sm text-gray-500 mt-1">
-                  Run the analysis to find out whether coverage is worth it. We'll look at the item's
+                  Run the analysis to find out whether coverage is worth it. We&apos;ll look at the item&apos;s
                   age, replacement value, and typical repair costs to give you a recommendation.
                 </p>
               </div>
@@ -638,7 +684,7 @@ export default function ItemGetCoverageClient() {
         </>
       )}
 
-      {!loading && hasAnalysis && analysis && config && (
+      {!loading && mayAnalyzeCoverage && hasAnalysis && analysis && config && (
         <>
           {/* Verdict */}
           <div className={cn('rounded-2xl border p-4 space-y-3', config.bg, config.border)}>

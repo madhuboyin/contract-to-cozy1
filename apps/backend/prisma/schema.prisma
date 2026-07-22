@@ -583,6 +583,12 @@ enum InventoryItemSource {
   INTEGRATION
 }
 
+enum InventoryCoverageEvidenceStatus {
+  UNKNOWN
+  NONE
+  NOT_SURE
+}
+
 enum ImportBatchStatus {
   COMPLETED
   PARTIAL
@@ -882,6 +888,11 @@ model InventoryItem {
 
   // Coverage waiver — user has opted this item out of coverage tracking
   coverageNotRequired Boolean @default(false)
+
+  // Explicit homeowner evidence is distinct from an empty relationship. An
+  // empty warranty/policy link means "not entered" until the homeowner says
+  // they have no coverage or are not sure.
+  coverageEvidenceStatus InventoryCoverageEvidenceStatus @default(UNKNOWN)
 
   // Notes + tags
   notes String?

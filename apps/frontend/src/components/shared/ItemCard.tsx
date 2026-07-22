@@ -25,23 +25,30 @@ type ItemCardProps = {
   onAttachDocument?: (itemId: string) => void;
 };
 
-type CoverageStatus = 'gap' | 'partial' | 'covered' | 'waived';
+type CoverageStatus = 'missing' | 'confirmed' | 'managed' | 'incomplete' | 'not-required';
 
 function getCoverageStatus(item: InventoryItem): CoverageStatus {
-  if (item.coverageNotRequired) return 'waived';
+  if (item.coverageState) {
+    return {
+      CONFIRMED: 'confirmed',
+      MISSING: 'missing',
+      MANAGED_ELSEWHERE: 'managed',
+      INCOMPLETE: 'incomplete',
+      NOT_REQUIRED: 'not-required',
+    }[item.coverageState] as CoverageStatus;
+  }
+  if (item.coverageNotRequired) return 'not-required';
 
   const hasWarranty = Boolean(item.warrantyId);
   const hasInsurance = Boolean(item.insurancePolicyId);
 
-  if (!hasWarranty && !hasInsurance) return 'gap';
-  if (!hasWarranty || !hasInsurance) return 'partial';
-  return 'covered';
+  if (!hasWarranty && !hasInsurance) return 'incomplete';
+  return 'confirmed';
 }
 
 function getCoveragePercent(item: InventoryItem): number {
   const status = getCoverageStatus(item);
-  if (status === 'covered' || status === 'waived') return 100;
-  if (status === 'partial') return 65;
+  if (status === 'confirmed') return 100;
   return 0;
 }
 
@@ -49,7 +56,8 @@ function getRoomLabel(item: InventoryItem): string {
   const rawRoom =
     typeof (item as any).room === 'string'
       ? (item as any).room
-      : item.room?.name || (item as any).roomName || 'Unassigned';
+      : item.room?.name || (item as any).roomName || item.locationLabel
+        || (item.recordGroup === 'SYSTEMS_STRUCTURE' ? 'Whole home' : 'Room needed');
 
   return normalizeDisplaySegments(rawRoom);
 }
@@ -58,7 +66,7 @@ function getReplacementValue(item: InventoryItem): number | null {
   const direct = (item as any).replacementValue;
   if (typeof direct === 'number' && Number.isFinite(direct)) return direct;
 
-  return centsToDollars(item.replacementCostCents);
+  return centsToDollars(item.effectiveReplacementCostCents ?? item.replacementCostCents);
 }
 
 function getDocumentCount(item: InventoryItem): number {
@@ -88,6 +96,7 @@ export default function ItemCard({
   const isCompact = variant === 'inventory';
   const coverageStatus = getCoverageStatus(item);
   const coveragePercent = getCoveragePercent(item);
+  const hasAssessableCoverage = coverageStatus === 'confirmed' || coverageStatus === 'missing';
   const hasWarranty = Boolean(item.warrantyId);
   const hasInsurance = Boolean(item.insurancePolicyId);
   const replacementValue = getReplacementValue(item);
@@ -111,10 +120,11 @@ export default function ItemCard({
   );
 
   const coverageStyle = {
-    gap: 'border-l-4 border-l-red-400',
-    partial: 'border-l-4 border-l-amber-400',
-    covered: 'border-l-4 border-l-emerald-400',
-    waived: 'border-l-4 border-l-slate-300',
+    missing: 'border-l-4 border-l-red-400',
+    incomplete: 'border-l-4 border-l-sky-400',
+    confirmed: 'border-l-4 border-l-emerald-400',
+    managed: 'border-l-4 border-l-violet-400',
+    'not-required': 'border-l-4 border-l-slate-300',
   }[coverageStatus];
 
   function handleOpenCoverage(event: React.MouseEvent<HTMLButtonElement>) {
@@ -178,38 +188,50 @@ export default function ItemCard({
 
             <div className="min-w-0">
               <p className={`truncate font-semibold leading-tight text-gray-900 ${isCompact ? 'text-sm' : 'text-base'}`}>
-                {item.name || 'Untitled'}
+                {item.displayName || item.name || 'Untitled'}
               </p>
               <p className="mt-0.5 text-[11px] text-gray-400">
                 {titleCaseCategory(String(item.category || 'OTHER'))} · {getRoomLabel(item)}
               </p>
+              {item.provenanceLabel ? <p className="mt-1 text-[11px] font-medium text-sky-700">{item.provenanceLabel}</p> : null}
             </div>
           </div>
 
-          {coverageStatus === 'gap' ? (
+          {coverageStatus === 'missing' ? (
             <span className="whitespace-nowrap rounded-full border border-red-200 bg-red-100 px-2 py-0.5 text-[11px] font-semibold text-red-700">
-              Coverage gap
+              Coverage missing
             </span>
-          ) : coverageStatus === 'partial' ? (
-            <span className="whitespace-nowrap rounded-full border border-amber-200 bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
-              Partial coverage
+          ) : coverageStatus === 'incomplete' ? (
+            <span className="whitespace-nowrap rounded-full border border-sky-200 bg-sky-100 px-2 py-0.5 text-[11px] font-semibold text-sky-700">
+              Coverage status incomplete
             </span>
-          ) : coverageStatus === 'waived' ? (
+          ) : coverageStatus === 'managed' ? (
+            <span className="whitespace-nowrap rounded-full border border-violet-200 bg-violet-100 px-2 py-0.5 text-[11px] font-semibold text-violet-700">
+              {item.coverageStateLabel || 'Managed elsewhere'}
+            </span>
+          ) : coverageStatus === 'not-required' ? (
             <span className="whitespace-nowrap rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-500">
-              Not required
+              Coverage not required
             </span>
           ) : (
             <span className="flex flex-shrink-0 items-center gap-1 rounded-full border border-emerald-200 bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
               <CheckCircle className="h-2.5 w-2.5" />
-              Covered
+              Coverage confirmed
             </span>
           )}
         </div>
 
+        {item.coverageStateDetail && coverageStatus !== 'confirmed' ? (
+          <p className="text-xs leading-relaxed text-gray-500">{item.coverageStateDetail}</p>
+        ) : null}
+
         <div className="flex min-h-[26px] items-center justify-between">
           <span className="text-[11px] font-semibold tracking-normal text-gray-400">Replacement</span>
           {hasReplacementValue ? (
-            <span className="text-sm font-bold text-gray-800">{formatCurrency(replacementValue)}</span>
+            <span className="text-right text-sm font-bold text-gray-800">
+              {formatCurrency(replacementValue)}
+              {item.replacementValueSource === 'ESTIMATED' ? <span className="block text-[10px] font-medium text-gray-400">Estimated</span> : null}
+            </span>
           ) : (
             <InlineValueEditor
               itemId={item.id}
@@ -245,12 +267,10 @@ export default function ItemCard({
               </TooltipProvider>
             </span>
 
-            {hasReplacementValue ? (
+            {hasReplacementValue && hasAssessableCoverage ? (
               <span
                 className={`font-semibold ${
-                  coverageStatus === 'waived'
-                    ? 'text-slate-400'
-                    : coveragePercent === 100
+                  coveragePercent === 100
                       ? 'text-emerald-600'
                       : coveragePercent >= 50
                         ? 'text-amber-500'
@@ -265,12 +285,10 @@ export default function ItemCard({
           </div>
 
           <div className="h-1.5 overflow-hidden rounded-full bg-gray-100">
-            {hasReplacementValue ? (
+            {hasReplacementValue && hasAssessableCoverage ? (
               <div
                 className={`h-full rounded-full transition-all duration-700 ${
-                  coverageStatus === 'waived'
-                    ? 'bg-slate-300'
-                    : coveragePercent === 100
+                  coveragePercent === 100
                       ? 'bg-emerald-500'
                       : coveragePercent >= 50
                         ? 'bg-amber-400'
@@ -302,7 +320,7 @@ export default function ItemCard({
         </div>
 
         <div className={`flex items-center gap-2 pt-1 ${isCompact ? '' : 'mt-1'}`}>
-          {coverageStatus !== 'covered' && coverageStatus !== 'waived' ? (
+          {coverageStatus === 'missing' ? (
             <>
               <button
                 type="button"
@@ -327,6 +345,28 @@ export default function ItemCard({
                 Replace/Repair
               </button>
             </>
+          ) : coverageStatus === 'incomplete' ? (
+            <button
+              type="button"
+              onClick={handleOpenCoverage}
+              className={[
+                'flex flex-1 items-center justify-center rounded-lg bg-sky-600 text-xs font-semibold text-white transition-colors hover:bg-sky-700',
+                isCompact ? 'py-2' : 'py-2.5',
+              ].join(' ')}
+            >
+              Complete coverage details
+            </button>
+          ) : coverageStatus === 'managed' ? (
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                router.push(`/dashboard/properties/${item.propertyId}/edit?section=responsibility`);
+              }}
+              className="flex flex-1 items-center justify-center rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-xs font-semibold text-violet-700 hover:bg-violet-100"
+            >
+              Review responsibility
+            </button>
           ) : (
             <>
               <div className="flex flex-1 items-center gap-1.5">

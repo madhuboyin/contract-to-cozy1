@@ -26,6 +26,8 @@ export interface WorkerRunResult {
   failed?: number;
   /** Human-readable context, surfaced in cron history/metrics on PARTIAL or FAILED. */
   reason?: string;
+  /** Present when this run was a scoped smoke-test run (W6) — lets its writes be found and cleaned up by exact ID. */
+  smokeCorrelationId?: string;
 }
 
 /**

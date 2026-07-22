@@ -19,11 +19,14 @@ export function isRiskReportInventoryAssetType(systemType: string): boolean {
 
 export function visibleInventoryItemWhere() {
   return {
-    AND: [{
-      OR: [
-        { assetType: null },
-        { assetType: { notIn: [...NON_INVENTORY_RISK_ASSET_TYPES] } },
-      ],
-    }],
+    AND: [
+      {
+        OR: [
+          { assetType: null },
+          { assetType: { notIn: [...NON_INVENTORY_RISK_ASSET_TYPES] } },
+        ],
+      },
+      { tags: { hasNone: ['INFERRED_NOT_PRESENT'] } },
+    ],
   };
 }

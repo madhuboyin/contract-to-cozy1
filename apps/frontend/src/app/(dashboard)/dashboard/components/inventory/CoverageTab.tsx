@@ -14,70 +14,80 @@ type CoverageTabProps = {
   onOpenActions: (count: number) => void;
 };
 
-function getCoverageStatus(item: InventoryItem): 'uncovered' | 'partial' | 'covered' | 'waived' {
-  if (item.coverageNotRequired) return 'waived';
+function getCoverageStatus(item: InventoryItem): 'missing' | 'incomplete' | 'confirmed' | 'excluded' {
+  if (item.coverageState === 'NOT_REQUIRED' || item.coverageState === 'MANAGED_ELSEWHERE') return 'excluded';
+  if (item.coverageState === 'CONFIRMED') return 'confirmed';
+  if (item.coverageState === 'MISSING') return 'missing';
+  if (item.coverageState === 'INCOMPLETE') return 'incomplete';
+  if (item.coverageNotRequired) return 'excluded';
 
   const hasWarranty = Boolean(item.warrantyId);
   const hasInsurance = Boolean(item.insurancePolicyId);
-  if (!hasWarranty && !hasInsurance) return 'uncovered';
-  if (!hasWarranty || !hasInsurance) return 'partial';
-  return 'covered';
+  if (!hasWarranty && !hasInsurance) return 'incomplete';
+  return 'confirmed';
 }
 
 export default function CoverageTab({ items, rooms, onOpenCoverage, onOpenActions }: CoverageTabProps) {
   const searchParams = useSearchParams();
   const valuedItems = useMemo(
-    () => items.filter((item) => Number(centsToDollars(item.replacementCostCents) || 0) > 0),
+    () => items.filter((item) => getCoverageStatus(item) !== 'excluded'
+      && Number(centsToDollars(item.effectiveReplacementCostCents ?? item.replacementCostCents) || 0) > 0),
     [items],
   );
 
   const breakdown = useMemo(() => {
-    let fullyCoveredValue = 0;
-    let partiallyCoveredValue = 0;
-    let uncoveredValue = 0;
+    let confirmedValue = 0;
+    let incompleteValue = 0;
+    let missingValue = 0;
 
     for (const item of valuedItems) {
-      const value = Number(centsToDollars(item.replacementCostCents) || 0);
+      const value = Number(centsToDollars(item.effectiveReplacementCostCents ?? item.replacementCostCents) || 0);
       const status = getCoverageStatus(item);
-      if (status === 'covered' || status === 'waived') fullyCoveredValue += value;
-      else if (status === 'partial') partiallyCoveredValue += value;
-      else uncoveredValue += value;
+      if (status === 'confirmed') confirmedValue += value;
+      else if (status === 'incomplete') incompleteValue += value;
+      else if (status === 'missing') missingValue += value;
     }
 
-    const total = fullyCoveredValue + partiallyCoveredValue + uncoveredValue;
-    const coveredPercent = total > 0 ? ((fullyCoveredValue + partiallyCoveredValue * 0.65) / total) * 100 : 0;
+    const assessableTotal = confirmedValue + missingValue;
+    const coveredPercent = assessableTotal > 0 ? (confirmedValue / assessableTotal) * 100 : 0;
 
     return {
-      fullyCoveredValue,
-      partiallyCoveredValue,
-      uncoveredValue,
-      total,
+      confirmedValue,
+      incompleteValue,
+      missingValue,
+      total: confirmedValue + incompleteValue + missingValue,
       coveredPercent,
     };
   }, [valuedItems]);
 
   const coverageByRoom = useMemo(() => {
-    return rooms.map((room) => {
-      const roomItems = valuedItems.filter((item) => item.roomId === room.id);
-      const totalValue = roomItems.reduce((sum, item) => sum + Number(centsToDollars(item.replacementCostCents) || 0), 0);
+    const locations = [
+      ...rooms.map((room) => ({ id: room.id, name: room.name, match: (item: InventoryItem) => item.roomId === room.id })),
+      { id: 'whole-home', name: 'Whole home', match: (item: InventoryItem) => !item.roomId && item.recordGroup === 'SYSTEMS_STRUCTURE' },
+    ];
+    return locations.map((room) => {
+      const locationItems = valuedItems.filter(room.match);
+      const roomItems = locationItems
+        .filter((item) => ['confirmed', 'missing'].includes(getCoverageStatus(item)));
+      const totalValue = roomItems.reduce((sum, item) => sum + Number(centsToDollars(item.effectiveReplacementCostCents ?? item.replacementCostCents) || 0), 0);
       const coveredValue = roomItems.reduce((sum, item) => {
-        const value = Number(centsToDollars(item.replacementCostCents) || 0);
+        const value = Number(centsToDollars(item.effectiveReplacementCostCents ?? item.replacementCostCents) || 0);
         const status = getCoverageStatus(item);
-        if (status === 'covered' || status === 'waived') return sum + value;
-        if (status === 'partial') return sum + value * 0.65;
+        if (status === 'confirmed') return sum + value;
         return sum;
       }, 0);
 
       return {
         id: room.id,
         name: room.name,
-        coverageRate: totalValue > 0 ? Math.round((coveredValue / totalValue) * 100) : 0,
+        coverageRate: totalValue > 0 ? Math.round((coveredValue / totalValue) * 100) : null,
+        itemCount: locationItems.length,
       };
-    });
+    }).filter((location) => location.itemCount > 0);
   }, [rooms, valuedItems]);
 
   const gapItems = useMemo(
-    () => items.filter((item) => getCoverageStatus(item) !== 'covered' && getCoverageStatus(item) !== 'waived'),
+    () => items.filter((item) => item.coverageState === 'MISSING' && item.coverageActionable === true),
     [items],
   );
 
@@ -97,9 +107,9 @@ export default function CoverageTab({ items, rooms, onOpenCoverage, onOpenAction
 
   const donutStyle = useMemo(() => {
     const total = Math.max(1, breakdown.total);
-    const full = (breakdown.fullyCoveredValue / total) * 100;
-    const partial = (breakdown.partiallyCoveredValue / total) * 100;
-    const uncovered = (breakdown.uncoveredValue / total) * 100;
+    const full = (breakdown.confirmedValue / total) * 100;
+    const partial = (breakdown.incompleteValue / total) * 100;
+    const uncovered = (breakdown.missingValue / total) * 100;
     return {
       background: `conic-gradient(#10b981 0% ${full}%, #f59e0b ${full}% ${full + partial}%, #ef4444 ${full + partial}% ${full + partial + uncovered}%)`,
     };
@@ -122,9 +132,9 @@ export default function CoverageTab({ items, rooms, onOpenCoverage, onOpenAction
 
             <div className="space-y-2.5">
               {[
-                { label: 'Fully covered', value: breakdown.fullyCoveredValue, dot: 'bg-emerald-500', textColor: 'text-emerald-700' },
-                { label: 'Partially covered', value: breakdown.partiallyCoveredValue, dot: 'bg-amber-400', textColor: 'text-amber-700' },
-                { label: 'Uncovered', value: breakdown.uncoveredValue, dot: 'bg-red-400', textColor: 'text-red-700' },
+                { label: 'Coverage confirmed', value: breakdown.confirmedValue, dot: 'bg-emerald-500', textColor: 'text-emerald-700' },
+                { label: 'Information incomplete', value: breakdown.incompleteValue, dot: 'bg-amber-400', textColor: 'text-amber-700' },
+                { label: 'Coverage missing', value: breakdown.missingValue, dot: 'bg-red-400', textColor: 'text-red-700' },
               ].map((entry) => (
                 <div key={entry.label} className="flex items-center gap-2">
                   <div className={`h-2.5 w-2.5 flex-shrink-0 rounded-full ${entry.dot}`} />
@@ -145,26 +155,30 @@ export default function CoverageTab({ items, rooms, onOpenCoverage, onOpenAction
                   <span className="font-medium text-gray-700">{room.name}</span>
                   <span
                     className={`font-bold ${
-                      room.coverageRate === 100
+                      room.coverageRate === null
+                        ? 'text-amber-600'
+                        : room.coverageRate === 100
                         ? 'text-emerald-600'
                         : room.coverageRate >= 50
                           ? 'text-amber-500'
                           : 'text-red-500'
                     }`}
                   >
-                    {room.coverageRate}%
+                    {room.coverageRate === null ? 'Incomplete' : `${room.coverageRate}%`}
                   </span>
                 </div>
                 <div className="h-2 overflow-hidden rounded-full bg-gray-100">
                   <div
                     className={`h-full rounded-full transition-all duration-700 ${
-                      room.coverageRate === 100
+                      room.coverageRate === null
+                        ? 'bg-amber-300'
+                        : room.coverageRate === 100
                         ? 'bg-emerald-500'
                         : room.coverageRate >= 50
                           ? 'bg-amber-400'
                           : 'bg-red-400'
                     }`}
-                    style={{ width: `${room.coverageRate}%` }}
+                    style={{ width: `${room.coverageRate ?? 100}%` }}
                   />
                 </div>
               </div>
@@ -205,7 +219,7 @@ export default function CoverageTab({ items, rooms, onOpenCoverage, onOpenAction
                 }),
                 HelpCircle,
               );
-              const replacementValue = centsToDollars(item.replacementCostCents);
+              const replacementValue = centsToDollars(item.effectiveReplacementCostCents ?? item.replacementCostCents);
               const isHighlighted = searchParams.get('highlight') === item.id;
 
               return (
@@ -218,8 +232,8 @@ export default function CoverageTab({ items, rooms, onOpenCoverage, onOpenAction
                 >
                   <div className="flex items-center gap-2">
                     <Icon className="h-3.5 w-3.5 text-gray-400" />
-                    <span className="text-sm text-gray-700">{item.name}</span>
-                    <span className="text-[11px] text-gray-400">{item.room?.name || 'Unassigned'}</span>
+                    <span className="text-sm text-gray-700">{item.displayName || item.name}</span>
+                    <span className="text-[11px] text-gray-400">{item.room?.name || item.locationLabel || 'Room needed'}</span>
                   </div>
 
                   <div className="flex items-center gap-3">

@@ -19,6 +19,7 @@
 import fetch from 'node-fetch';
 import { MortgageRateService } from '@worker-shared/refinanceRadar/engine/mortgageRate.service';
 import { logger } from '../lib/logger';
+import { generateSmokeCorrelationId } from '@worker-shared/lib/smokeTestCorrelation';
 
 // ─── FRED API config ──────────────────────────────────────────────────────────
 
@@ -47,6 +48,8 @@ export interface MortgageRateIngestResult {
   created: boolean;   // false if snapshot already existed for this date
   skipped: boolean;
   reason?: string;
+  /** Present when this run was manually/admin-triggered (W6 item 3) — lets a smoke run's writes be found and cleaned up by exact ID. */
+  smokeCorrelationId?: string;
 }
 
 // ─── FRED fetch helper ────────────────────────────────────────────────────────
@@ -97,13 +100,25 @@ async function fetchFredSeries(
 
 const mortgageRateService = new MortgageRateService();
 
-export async function ingestMortgageRatesJob(): Promise<MortgageRateIngestResult> {
+export async function ingestMortgageRatesJob(
+  opts?: { dryRun?: boolean },
+): Promise<MortgageRateIngestResult> {
+  const dryRun = opts?.dryRun === true;
+  // Only a manual/admin trigger ever calls this with `opts` at all — the
+  // nightly scheduled tick invokes every CRON_HANDLERS entry with zero
+  // arguments (see scheduleCronJobs() in worker.ts). mortgage-rate-ingest
+  // isn't property-scoped, so (unlike the two property-scoped W6 jobs)
+  // there's no propertyId to key tagging off — "was this a manual trigger"
+  // is the next best signal, and tagging every manually-triggered real
+  // write (not just literal smoke runs) is harmless since the job is
+  // already idempotent per (source, date).
+  const smokeCorrelationId = opts !== undefined ? generateSmokeCorrelationId('mortgage-rate-ingest') : undefined;
   const fredApiKey = process.env.FRED_API_KEY?.trim();
 
   // ── Attempt 1: FRED API ──────────────────────────────────────────────────
   if (fredApiKey) {
     try {
-      logger.info('[MORTGAGE-RATE-INGEST] Fetching from FRED API...');
+      logger.info(`[MORTGAGE-RATE-INGEST] Fetching from FRED API...${dryRun ? ' (dry run)' : ''}`);
 
       const [result30, result15] = await Promise.all([
         fetchFredSeries(FRED_30YR_SERIES, fredApiKey),
@@ -114,6 +129,23 @@ export async function ingestMortgageRatesJob(): Promise<MortgageRateIngestResult
         logger.warn(`[MORTGAGE-RATE-INGEST] FRED returned no data for ${FRED_30YR_SERIES}`);
       } else if (!result15) {
         logger.warn(`[MORTGAGE-RATE-INGEST] FRED returned no data for ${FRED_15YR_SERIES}`);
+      } else if (dryRun) {
+        // The FRED fetch above is a harmless read — only the write needs
+        // gating. Report exactly what a real run would have persisted.
+        logger.info(
+          `[MORTGAGE-RATE-INGEST] (dry run) Would ingest date=${result30.date} ` +
+          `30yr=${result30.rate}% 15yr=${result15.rate}%`,
+        );
+        return {
+          success: true,
+          source: 'FRED',
+          date: result30.date,
+          rate30yr: result30.rate,
+          rate15yr: result15.rate,
+          created: false,
+          skipped: true,
+          reason: 'dry-run: no snapshot written',
+        };
       } else {
         const { snapshot, created } = await mortgageRateService.ingestSnapshot({
           date: result30.date,   // both series report same survey date
@@ -125,6 +157,7 @@ export async function ingestMortgageRatesJob(): Promise<MortgageRateIngestResult
             fetchedAt: new Date().toISOString(),
             series30yr: FRED_30YR_SERIES,
             series15yr: FRED_15YR_SERIES,
+            ...(smokeCorrelationId ? { smokeCorrelationId } : {}),
           },
         });
 
@@ -142,6 +175,7 @@ export async function ingestMortgageRatesJob(): Promise<MortgageRateIngestResult
           rate15yr: snapshot.rate15yr,
           created,
           skipped: false,
+          smokeCorrelationId,
         };
       }
     } catch (err) {
@@ -162,13 +196,30 @@ export async function ingestMortgageRatesJob(): Promise<MortgageRateIngestResult
       Number.isFinite(rate15yrEnv) && rate15yrEnv > 0) {
     const today = new Date().toISOString().split('T')[0];
 
+    if (dryRun) {
+      logger.info(
+        `[MORTGAGE-RATE-INGEST] (dry run) Would ingest manual-fallback date=${today} ` +
+        `30yr=${rate30yrEnv}% 15yr=${rate15yrEnv}%`,
+      );
+      return {
+        success: true,
+        source: 'MANUAL',
+        date: today,
+        rate30yr: rate30yrEnv,
+        rate15yr: rate15yrEnv,
+        created: false,
+        skipped: true,
+        reason: 'dry-run: no snapshot written',
+      };
+    }
+
     const { snapshot, created } = await mortgageRateService.ingestSnapshot({
       date: today,
       rate30yr: rate30yrEnv,
       rate15yr: rate15yrEnv,
       source: 'MANUAL',
       sourceRef: 'env:MORTGAGE_RATE_30YR_FALLBACK+MORTGAGE_RATE_15YR_FALLBACK',
-      metadataJson: { fetchedAt: new Date().toISOString() },
+      metadataJson: { fetchedAt: new Date().toISOString(), ...(smokeCorrelationId ? { smokeCorrelationId } : {}) },
     });
 
     logger.info(
@@ -185,6 +236,7 @@ export async function ingestMortgageRatesJob(): Promise<MortgageRateIngestResult
       rate15yr: snapshot.rate15yr,
       created,
       skipped: false,
+      smokeCorrelationId,
     };
   }
 

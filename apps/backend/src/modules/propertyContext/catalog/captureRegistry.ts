@@ -28,6 +28,21 @@ const enumSchema = (values: readonly string[]): ScalarCaptureInputSchema => ({
 });
 
 const booleanSchema: ScalarCaptureInputSchema = { type: 'BOOLEAN', trueLabel: 'Yes', falseLabel: 'No' };
+const responsibilitySchema: ScalarCaptureInputSchema = {
+  type: 'SINGLE_SELECT',
+  options: Object.values(ResponsibleParty).map((value) => ({
+    value,
+    label: value === 'OWNER'
+      ? 'I am responsible'
+      : value === 'ASSOCIATION'
+        ? 'My HOA or association'
+        : value === 'LANDLORD'
+          ? 'My landlord'
+          : value === 'SHARED'
+            ? 'Responsibility is shared'
+            : 'I’m not sure',
+  })),
+};
 const nonNegativeInteger = (unit?: string): ScalarCaptureInputSchema => ({ type: 'INTEGER', min: 0, unit });
 const nonNegativeDecimal = (unit?: string): ScalarCaptureInputSchema => ({ type: 'DECIMAL', min: 0, unit });
 
@@ -70,7 +85,7 @@ for (const key of [
 ]) inputSchemas[key] = booleanSchema;
 
 for (const definition of PROPERTY_FACT_CATALOG.filter(({ key }) => key.startsWith('responsibility.'))) {
-  inputSchemas[definition.key] = enumSchema(Object.values(ResponsibleParty));
+  inputSchemas[definition.key] = responsibilitySchema;
 }
 
 const copy: Record<string, CaptureCopy> = {
@@ -136,7 +151,7 @@ const structuredDefinitions: ContextCaptureDefinition[] = [
           key: 'landscapingResponsibility',
           label: 'Who handles landscaping?',
           required: true,
-          inputSchema: enumSchema(Object.values(ResponsibleParty)),
+          inputSchema: responsibilitySchema,
           when: { fieldKey: 'hasPrivateOutdoorSpace', operator: 'EQUALS', value: true },
         },
       ],
@@ -163,7 +178,7 @@ const structuredDefinitions: ContextCaptureDefinition[] = [
       fields: [
         { key: 'heatingType', label: 'Main heating system', required: true, inputSchema: inputSchemas['systems.heatingType'] as ScalarCaptureInputSchema },
         { key: 'coolingType', label: 'Main cooling system', required: true, inputSchema: inputSchemas['systems.coolingType'] as ScalarCaptureInputSchema },
-        { key: 'hvacResponsibility', label: 'Who handles HVAC?', required: true, inputSchema: enumSchema(Object.values(ResponsibleParty)) },
+        { key: 'hvacResponsibility', label: 'Who handles HVAC?', required: true, inputSchema: responsibilitySchema },
       ],
     },
     allowNotSure: true,
@@ -187,7 +202,7 @@ const structuredDefinitions: ContextCaptureDefinition[] = [
       fields: [
         { key: 'hasSmokeDetectors', label: 'Smoke detectors installed', required: true, inputSchema: booleanSchema },
         { key: 'hasCoDetectors', label: 'Carbon-monoxide detectors installed', required: true, inputSchema: booleanSchema },
-        { key: 'commonSafetyResponsibility', label: 'Who handles common safety devices?', required: true, inputSchema: enumSchema(Object.values(ResponsibleParty)) },
+        { key: 'commonSafetyResponsibility', label: 'Who handles common safety devices?', required: true, inputSchema: responsibilitySchema },
       ],
     },
     allowNotSure: true,
@@ -211,7 +226,7 @@ const structuredDefinitions: ContextCaptureDefinition[] = [
       fields: [
         { key: 'roofType', label: 'Roof type', required: true, inputSchema: inputSchemas['structure.roofType'] as ScalarCaptureInputSchema },
         { key: 'roofReplacementYear', label: 'Approximate replacement year', required: false, inputSchema: inputSchemas['structure.roofReplacementYear'] as ScalarCaptureInputSchema },
-        { key: 'roofResponsibility', label: 'Who handles the roof?', required: true, inputSchema: enumSchema(Object.values(ResponsibleParty)) },
+        { key: 'roofResponsibility', label: 'Who handles the roof?', required: true, inputSchema: responsibilitySchema },
       ],
     },
     allowNotSure: true,
@@ -229,6 +244,102 @@ const structuredDefinitions: ContextCaptureDefinition[] = [
 for (const definition of structuredDefinitions) definitions.set(definition.captureKey, definition);
 
 const relationalDefinitions: ContextCaptureDefinition[] = [
+  {
+    captureKey: 'INVENTORY_ITEM_CONFIRMATION',
+    factKeys: ['inventory.items'],
+    mode: 'RELATIONAL',
+    title: 'Confirm this home system',
+    question: 'We added this system based on your property details. Is it present at this home?',
+    helpText: 'Confirming it prevents inferred property details from becoming homeowner actions without your review.',
+    inputSchema: {
+      type: 'RELATIONAL_UPDATE', entityType: 'INVENTORY_ITEM', entityId: '', updateLabel: 'Save and continue', currentValues: {},
+      fields: [{ key: 'confirmation', label: 'System confirmation', required: true, inputSchema: { type: 'SINGLE_SELECT', options: [
+        { label: 'Yes, this is correct', value: 'CONFIRMED' },
+        { label: 'No, this system is not present', value: 'NOT_PRESENT' },
+        { label: 'I’m not sure', value: 'NOT_SURE' },
+      ] } }],
+    },
+    allowNotSure: false,
+    canonicalOwner: 'InventoryItem',
+    actionKey: 'CONFIRM_INVENTORY_ITEM',
+    sensitivity: 'STANDARD',
+    relationalAdapterKey: 'INVENTORY_ITEM_CONFIRMATION',
+    relationalEntityInputKey: 'inventoryItemId',
+  },
+  {
+    captureKey: 'INVENTORY_ITEM_COVERAGE_LIFECYCLE',
+    factKeys: ['inventory.items'],
+    mode: 'RELATIONAL',
+    title: 'Add lifecycle details',
+    question: 'About when was this installed, and what condition is it in?',
+    helpText: 'An approximate date is enough. These details determine whether missing coverage is actionable.',
+    inputSchema: {
+      type: 'RELATIONAL_UPDATE', entityType: 'INVENTORY_ITEM', entityId: '', updateLabel: 'Save and continue', currentValues: {},
+      fields: [
+        { key: 'installedOn', label: 'Approximate installation date', helpText: 'Use YYYY-MM-DD. January 1 is fine when only the year is known.', required: true, inputSchema: { type: 'SHORT_TEXT', maxLength: 10 } },
+        { key: 'condition', label: 'Current condition', required: true, inputSchema: enumSchema(['NEW', 'GOOD', 'FAIR', 'POOR']) },
+      ],
+    },
+    allowNotSure: false,
+    canonicalOwner: 'InventoryItem',
+    actionKey: 'UPDATE_INVENTORY_ITEM_COVERAGE_LIFECYCLE',
+    sensitivity: 'STANDARD',
+    relationalAdapterKey: 'INVENTORY_ITEM_COVERAGE_LIFECYCLE',
+    relationalEntityInputKey: 'inventoryItemId',
+  },
+  {
+    captureKey: 'INVENTORY_ITEM_VALUE',
+    factKeys: ['inventory.items'],
+    mode: 'RELATIONAL',
+    title: 'Confirm replacement value',
+    question: 'What would this system or item cost to replace today?',
+    helpText: 'Use your estimate if you do not have a receipt. Any system estimate shown on the card remains clearly labeled.',
+    inputSchema: {
+      type: 'RELATIONAL_UPDATE', entityType: 'INVENTORY_ITEM', entityId: '', updateLabel: 'Save and continue', currentValues: {},
+      fields: [{ key: 'replacementValueUsd', label: 'Replacement value', required: true, inputSchema: { type: 'DECIMAL', min: 1, unit: 'USD' } }],
+    },
+    allowNotSure: false,
+    canonicalOwner: 'InventoryItem',
+    actionKey: 'UPDATE_INVENTORY_ITEM_VALUE',
+    sensitivity: 'FINANCIAL',
+    relationalAdapterKey: 'INVENTORY_ITEM_VALUE',
+    relationalEntityInputKey: 'inventoryItemId',
+  },
+  {
+    captureKey: 'INVENTORY_ITEM_COVERAGE_EVIDENCE',
+    factKeys: ['inventory.items'],
+    mode: 'RELATIONAL',
+    title: 'Confirm current coverage',
+    question: 'Do you have warranty or insurance coverage for this item?',
+    helpText: 'An empty Home Record means coverage has not been entered—it does not mean you are uninsured.',
+    inputSchema: {
+      type: 'RELATIONAL_UPDATE', entityType: 'INVENTORY_ITEM', entityId: '', updateLabel: 'Save and finish', currentValues: {},
+      fields: [
+        { key: 'coverageChoice', label: 'Coverage information', required: true, inputSchema: { type: 'SINGLE_SELECT', options: [
+          { label: 'I do not have coverage', value: 'NO_COVERAGE' },
+          { label: 'I’m not sure', value: 'NOT_SURE' },
+          { label: 'Add insurance policy', value: 'ADD_INSURANCE' },
+          { label: 'Add warranty', value: 'ADD_WARRANTY' },
+        ] } },
+        { key: 'carrierName', label: 'Insurance carrier', required: true, when: { fieldKey: 'coverageChoice', operator: 'EQUALS', value: 'ADD_INSURANCE' }, inputSchema: { type: 'SHORT_TEXT', maxLength: 120 } },
+        { key: 'insurancePolicyNumber', label: 'Policy number', required: true, when: { fieldKey: 'coverageChoice', operator: 'EQUALS', value: 'ADD_INSURANCE' }, inputSchema: { type: 'SHORT_TEXT', maxLength: 120 } },
+        { key: 'insuranceCoverageType', label: 'Coverage type', required: true, when: { fieldKey: 'coverageChoice', operator: 'EQUALS', value: 'ADD_INSURANCE' }, inputSchema: enumSchema(['HOMEOWNER', 'LANDLORD', 'FLOOD', 'OTHER']) },
+        { key: 'insurancePremiumUsd', label: 'Annual premium', required: true, when: { fieldKey: 'coverageChoice', operator: 'EQUALS', value: 'ADD_INSURANCE' }, inputSchema: { type: 'DECIMAL', min: 0, unit: 'USD' } },
+        { key: 'insuranceStartDate', label: 'Policy start date', required: true, when: { fieldKey: 'coverageChoice', operator: 'EQUALS', value: 'ADD_INSURANCE' }, inputSchema: { type: 'SHORT_TEXT', maxLength: 10 } },
+        { key: 'insuranceExpiryDate', label: 'Policy expiry date', required: true, when: { fieldKey: 'coverageChoice', operator: 'EQUALS', value: 'ADD_INSURANCE' }, inputSchema: { type: 'SHORT_TEXT', maxLength: 10 } },
+        { key: 'warrantyProviderName', label: 'Warranty provider', required: true, when: { fieldKey: 'coverageChoice', operator: 'EQUALS', value: 'ADD_WARRANTY' }, inputSchema: { type: 'SHORT_TEXT', maxLength: 120 } },
+        { key: 'warrantyCategory', label: 'Warranty category', required: true, when: { fieldKey: 'coverageChoice', operator: 'EQUALS', value: 'ADD_WARRANTY' }, inputSchema: enumSchema(['APPLIANCE', 'HVAC', 'ROOFING', 'PLUMBING', 'ELECTRICAL', 'STRUCTURAL', 'HOME_WARRANTY_PLAN', 'OTHER']) },
+        { key: 'warrantyStartDate', label: 'Warranty start date', required: true, when: { fieldKey: 'coverageChoice', operator: 'EQUALS', value: 'ADD_WARRANTY' }, inputSchema: { type: 'SHORT_TEXT', maxLength: 10 } },
+        { key: 'warrantyExpiryDate', label: 'Warranty expiry date', required: true, when: { fieldKey: 'coverageChoice', operator: 'EQUALS', value: 'ADD_WARRANTY' }, inputSchema: { type: 'SHORT_TEXT', maxLength: 10 } },
+      ],
+    },
+    allowNotSure: false,
+    canonicalOwner: 'InventoryItem',
+    actionKey: 'UPDATE_INVENTORY_ITEM_COVERAGE_EVIDENCE',
+    sensitivity: 'FINANCIAL',
+    relationalAdapterKey: 'INVENTORY_ITEM_COVERAGE_EVIDENCE',
+    relationalEntityInputKey: 'inventoryItemId',
+  },
   {
     captureKey: 'INVENTORY_ITEM_LIFECYCLE_UPDATE',
     factKeys: ['inventory.items'],
@@ -272,6 +383,7 @@ const relationalDefinitions: ContextCaptureDefinition[] = [
         { key: 'name', label: 'Item or system name', required: true, inputSchema: { type: 'SHORT_TEXT', maxLength: 120 } },
         { key: 'category', label: 'Category', required: true, inputSchema: enumSchema(['APPLIANCE', 'HVAC', 'PLUMBING', 'ELECTRICAL', 'ROOF_EXTERIOR', 'SAFETY', 'SMART_HOME', 'OTHER']) },
         { key: 'condition', label: 'Current condition', required: true, inputSchema: enumSchema(['NEW', 'GOOD', 'FAIR', 'POOR', 'UNKNOWN']) },
+        { key: 'roomId', label: 'Room (required for appliances and belongings)', required: false, inputSchema: { type: 'SINGLE_SELECT', options: [] } },
       ],
     },
     allowNotSure: false,

@@ -3,7 +3,13 @@
 // React Query hooks for the Admin Worker Jobs dashboard.
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { fetchWorkerJobs, fetchWorkerGovernance, triggerWorkerJob } from '@/lib/api/adminWorkerJobs';
+import {
+  fetchWorkerJobs,
+  fetchWorkerGovernance,
+  triggerWorkerJob,
+  previewSmokeCleanup,
+  deleteSmokeCleanup,
+} from '@/lib/api/adminWorkerJobs';
 
 const QUERY_KEY = ['admin-worker-jobs'];
 const GOVERNANCE_QUERY_KEY = ['admin-worker-jobs-governance'];
@@ -30,11 +36,23 @@ export function useWorkerGovernance(enabled = true) {
 export function useTriggerWorkerJob() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ jobKey, dryRun }: { jobKey: string; dryRun?: boolean }) =>
-      triggerWorkerJob(jobKey, { dryRun }),
+    mutationFn: ({ jobKey, dryRun, propertyId }: { jobKey: string; dryRun?: boolean; propertyId?: string }) =>
+      triggerWorkerJob(jobKey, { dryRun, propertyId }),
     onSuccess: () => {
       // Refresh job list after triggering so queue stats update
       setTimeout(() => qc.invalidateQueries({ queryKey: QUERY_KEY }), 1500);
     },
+  });
+}
+
+export function usePreviewSmokeCleanup() {
+  return useMutation({
+    mutationFn: (correlationId: string) => previewSmokeCleanup(correlationId),
+  });
+}
+
+export function useDeleteSmokeCleanup() {
+  return useMutation({
+    mutationFn: (correlationId: string) => deleteSmokeCleanup(correlationId),
   });
 }

@@ -22,6 +22,7 @@ import { getContextCompleteness } from '../modules/propertyContext/application/g
 import { applyPersonalizationHomeActionLifecycle } from '../modules/personalization/application/applyHomeActionLifecycle.usecase';
 import { logger } from '../lib/logger';
 import { visibleInventoryItemWhere } from './riskAssetApplicability';
+import { detectCoverageGaps } from './coverageGap.service';
 
 export const HOME_ACTION_COMMANDS = [
   'COMPLETE',
@@ -349,8 +350,7 @@ export async function getUnifiedHome(propertyId: string, userId: string) {
   const conflictedPropertyFacts = contextCompleteness.scopes.reduce((sum, scope) => sum + scope.conflictedFactKeys.length, 0);
   const stalePropertyFacts = contextCompleteness.scopes.reduce((sum, scope) => sum + scope.staleFactKeys.length, 0);
   const recordCompleteness = contextCompleteness.completenessPercent;
-  const coverageGapCount = inventory.filter((item) =>
-    !item.coverageNotRequired && !item.warrantyId && !item.insurancePolicyId).length;
+  const coverageGapCount = (await detectCoverageGaps(propertyId)).length;
 
   const topAttentionActions = feed.actions.slice(0, 5);
   const attentionActionIds = new Set(topAttentionActions.map((action) => action.id));

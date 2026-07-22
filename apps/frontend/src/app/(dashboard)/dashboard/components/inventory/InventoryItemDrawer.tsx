@@ -39,6 +39,7 @@ import {
   INVENTORY_ITEM_CATEGORIES,
   isMajorApplianceName,
   PURCHASE_DATE_CATEGORIES,
+  ROOM_REQUIRED_CATEGORIES,
 } from '@/lib/config/inventoryConfig';
 
 
@@ -796,6 +797,10 @@ useEffect(() => {
       setSaveError('Name is required.');
       return;
     }
+    if (ROOM_REQUIRED_CATEGORIES.includes(category) && !roomId) {
+      setSaveError('Choose a room for appliances and belongings. Whole-home systems do not require a room.');
+      return;
+    }
     if (category === 'APPLIANCE') {
       const year = Number(installYear);
       if (!installYear || !Number.isFinite(year) || year < 1900 || year > CURRENT_YEAR + 1) {
@@ -1210,13 +1215,15 @@ useEffect(() => {
                 </div>
 
                 <div>
-                  <div className="text-sm font-semibold text-gray-800">Room</div>
+                  <div className="text-sm font-semibold text-gray-800">
+                    Room{ROOM_REQUIRED_CATEGORIES.includes(category) ? ' *' : ' (optional for whole-home systems)'}
+                  </div>
                   <select
                     value={roomId}
                     onChange={(e) => setRoomId(e.target.value)}
                     className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm"
                   >
-                    <option value="">Unassigned</option>
+                    <option value="">{ROOM_REQUIRED_CATEGORIES.includes(category) ? 'Select a room' : 'Whole home'}</option>
                     {props.rooms.map((r) => (
                       <option key={r.id} value={r.id}>
                         {r.name}
@@ -1489,7 +1496,7 @@ useEffect(() => {
                   className="mt-0.5 h-4 w-4 rounded accent-black"
                 />
                 <div>
-                  <p className="text-sm font-medium text-gray-800">This item doesn't need coverage</p>
+                  <p className="text-sm font-medium text-gray-800">This item doesn&apos;t need coverage</p>
                   <p className="text-xs text-gray-500 mt-0.5">Removes it from the coverage gaps list without treating it as uncovered.</p>
                 </div>
               </label>
@@ -1712,7 +1719,7 @@ useEffect(() => {
               <span className="font-medium">
                 ${Number(replacementCost || 0).toLocaleString(undefined, { minimumFractionDigits: 0 })}
               </span>
-              . Are you sure it doesn't need coverage?
+              . Are you sure it doesn&apos;t need coverage?
             </p>
             <div className="mt-5 flex gap-3">
               <button

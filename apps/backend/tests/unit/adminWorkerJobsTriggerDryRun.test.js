@@ -41,6 +41,40 @@ const DRY_RUN_UNSUPPORTED_ENTRY = {
   supportsDryRun: false,
 };
 
+// W6 item 2/5: property-scope entries for the propertyId allowlist contract.
+const PROPERTY_SCOPE_SUPPORTED_ENTRY = {
+  ...DRY_RUN_SUPPORTED_ENTRY,
+  key: 'test-property-scope-supported',
+  jobName: 'test-property-scope-supported',
+  supportsPropertyScope: true,
+};
+
+const PROPERTY_SCOPE_UNSUPPORTED_ENTRY = {
+  ...DRY_RUN_SUPPORTED_ENTRY,
+  key: 'test-property-scope-unsupported',
+  jobName: 'test-property-scope-unsupported',
+  supportsPropertyScope: false,
+};
+
+function withEnv(overrides, fn) {
+  const originals = {};
+  for (const key of Object.keys(overrides)) {
+    originals[key] = process.env[key];
+    if (overrides[key] === undefined) delete process.env[key];
+    else process.env[key] = overrides[key];
+  }
+  return (async () => {
+    try {
+      return await fn();
+    } finally {
+      for (const key of Object.keys(originals)) {
+        if (originals[key] === undefined) delete process.env[key];
+        else process.env[key] = originals[key];
+      }
+    }
+  })();
+}
+
 function loadTriggerJob({ addImpl } = {}) {
   const calls = { added: [] };
 
@@ -79,7 +113,12 @@ function loadTriggerJob({ addImpl } = {}) {
     filename: registryPath,
     loaded: true,
     exports: {
-      JOB_REGISTRY: [DRY_RUN_SUPPORTED_ENTRY, DRY_RUN_UNSUPPORTED_ENTRY],
+      JOB_REGISTRY: [
+        DRY_RUN_SUPPORTED_ENTRY,
+        DRY_RUN_UNSUPPORTED_ENTRY,
+        PROPERTY_SCOPE_SUPPORTED_ENTRY,
+        PROPERTY_SCOPE_UNSUPPORTED_ENTRY,
+      ],
       RUNNER_REGISTRY: [],
     },
   };
@@ -97,7 +136,7 @@ test('dryRun=true is queued as job data for a job that declares supportsDryRun',
   assert.equal(result.queued, true);
   assert.equal(calls.added.length, 1);
   assert.equal(calls.added[0].name, 'test-dry-run-supported');
-  assert.deepEqual(calls.added[0].data, { dryRun: true });
+  assert.deepEqual(calls.added[0].data, { dryRun: true, propertyId: undefined });
 });
 
 test('dryRun=true is rejected outright for a job with no dry-run code path', async () => {
@@ -114,7 +153,7 @@ test('omitting dryRun defaults to a real (non-dry) run for either job', async ()
 
   await triggerJob('test-dry-run-unsupported');
 
-  assert.deepEqual(calls.added[0].data, { dryRun: false });
+  assert.deepEqual(calls.added[0].data, { dryRun: false, propertyId: undefined });
 });
 
 test('an explicit dryRun=false is allowed even for a job that does not support dry-run at all', async () => {
@@ -123,5 +162,36 @@ test('an explicit dryRun=false is allowed even for a job that does not support d
   const result = await triggerJob('test-dry-run-unsupported', { dryRun: false });
 
   assert.equal(result.queued, true);
-  assert.deepEqual(calls.added[0].data, { dryRun: false });
+  assert.deepEqual(calls.added[0].data, { dryRun: false, propertyId: undefined });
+});
+
+test('propertyId is rejected outright for a job that does not declare supportsPropertyScope', async () => {
+  const { triggerJob } = loadTriggerJob();
+
+  await assert.rejects(
+    () => triggerJob('test-property-scope-unsupported', { propertyId: 'property-1' }),
+    /Property scope not supported for job: test-property-scope-unsupported/,
+  );
+});
+
+test('propertyId not in SMOKE_TEST_PROPERTY_ALLOWLIST is rejected even for a property-scope-capable job', async () => {
+  await withEnv({ SMOKE_TEST_PROPERTY_ALLOWLIST: 'some-other-property' }, async () => {
+    const { triggerJob } = loadTriggerJob();
+
+    await assert.rejects(
+      () => triggerJob('test-property-scope-supported', { propertyId: 'property-not-allowed' }),
+      /is not in SMOKE_TEST_PROPERTY_ALLOWLIST/,
+    );
+  });
+});
+
+test('an allowlisted propertyId is queued as job data for a property-scope-capable job', async () => {
+  await withEnv({ SMOKE_TEST_PROPERTY_ALLOWLIST: 'property-allowed' }, async () => {
+    const { triggerJob, calls } = loadTriggerJob();
+
+    const result = await triggerJob('test-property-scope-supported', { propertyId: 'property-allowed' });
+
+    assert.equal(result.queued, true);
+    assert.deepEqual(calls.added[0].data, { dryRun: false, propertyId: 'property-allowed' });
+  });
 });

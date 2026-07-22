@@ -9,8 +9,12 @@ import {
 import { guidanceJourneyService } from '../services/guidanceEngine/guidanceJourney.service';
 import { logger } from '../lib/logger';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
+import { InventoryService } from '../services/inventory.service';
+import { evaluateFeatureContext } from '../modules/propertyContext/application/evaluateFeatureContext';
+import { APIError } from '../middleware/error.middleware';
 
 const service = new CoverageIntelligenceService();
+const inventoryService = new InventoryService();
 
 export async function getCoverageAnalysis(req: CustomRequest, res: Response) {
   try {
@@ -174,6 +178,26 @@ export async function runItemCoverageAnalysis(req: CustomRequest, res: Response)
         : null;
 
     const overrides = (req.body?.overrides ?? {}) as ItemCoverageAnalysisOverrides;
+    const item = await inventoryService.getItem(propertyId, itemId);
+    const featureContext = await evaluateFeatureContext(propertyId, userId, {
+      featureKey: 'COVERAGE_INTELLIGENCE',
+      operationKey: 'ASSESS_ITEM_COVERAGE',
+      operationInput: {
+        inventoryItemId: itemId,
+        responsibilityScope: item.responsibilityScope ?? undefined,
+        hasDisclosedEstimate: item.replacementValueSource === 'ESTIMATED',
+      },
+    });
+    if (!featureContext.canExecute || !['MISSING', 'CONFIRMED'].includes(item.coverageState)) {
+      throw new APIError(
+        item.coverageState === 'MANAGED_ELSEWHERE'
+          ? 'This system is managed by another responsible party.'
+          : 'Complete the item coverage information before running an analysis.',
+        409,
+        'PROPERTY_CONTEXT_REQUIRED',
+        featureContext,
+      );
+    }
     const analysis = await service.runItemAnalysis(propertyId, itemId, userId, overrides);
 
     try {
@@ -217,8 +241,10 @@ export async function runItemCoverageAnalysis(req: CustomRequest, res: Response)
     return res.json({ success: true, data: { analysis } });
   } catch (error: any) {
     logger.error({ err: error }, 'Error running item coverage analysis');
-    return res.status(500).json({
+    const statusCode = error instanceof APIError ? error.statusCode : 500;
+    return res.status(statusCode).json({
       success: false,
+      code: error instanceof APIError ? error.code : undefined,
       message: error?.message || 'Failed to run item coverage analysis.',
     });
   }

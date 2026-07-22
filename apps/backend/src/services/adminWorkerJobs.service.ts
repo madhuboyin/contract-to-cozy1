@@ -10,6 +10,9 @@ import { JOB_REGISTRY, RUNNER_REGISTRY } from '../config/workerJobRegistry';
 import { DEFAULT_JOB_RETENTION } from '../config/queueDefaults';
 import { evaluateWorkerExecution, collectWorkerFlagDiagnostics } from '../config/workerExecutionPolicy';
 import { areHumanPolicyApprovalsEnforced } from '../config/appConfig';
+import { isPropertyAllowlisted, isSmokeAllowlistConfigured } from '../config/smokeTestConfig';
+import { isSmokeCorrelationId } from '../lib/smokeTestCorrelation';
+import { prisma } from '../lib/prisma';
 import { logger } from '../lib/logger';
 
 // Re-export types so routes/controllers don't need two import paths
@@ -31,6 +34,10 @@ export interface RecentRun {
   finishedAt: number | null;
   durationMs: number | null;
   failReason?: string;
+  /** Whether this run was requested with { dryRun: true } (W6 smoke checklist). */
+  dryRun?: boolean;
+  /** The handler's returned outcome (WorkerRunResult or a job-specific shape), when available. */
+  result?: unknown;
 }
 
 export interface WorkerJobDetail {
@@ -52,6 +59,10 @@ export interface WorkerJobDetail {
   disabledReason?: string;
   /** Whether a manual trigger can pass { dryRun: true } and have the job honor it (W4 item 8). */
   supportsDryRun: boolean;
+  /** Whether a scoped smoke run can pass { propertyId } (W6 item 2/5) — see workerJobRegistry's supportsPropertyScope. */
+  supportsPropertyScope: boolean;
+  /** Both SMOKE_TEST_PROPERTY_ALLOWLIST and SMOKE_TEST_RECIPIENT_EMAIL_ALLOWLIST have at least one entry (W6 smoke-checklist prerequisite). */
+  smokeAllowlistConfigured: boolean;
 }
 
 // ─── Cron run history (for jobs with no BullMQ queue) ─────────────────────────
@@ -180,6 +191,8 @@ async function getRecentRuns(queueName: string, jobName: string | undefined, lim
       finishedAt: job.finishedOn ?? null,
       durationMs:
         job.finishedOn && job.processedOn ? job.finishedOn - job.processedOn : null,
+      dryRun: job.data?.dryRun === true,
+      result: job.returnvalue,
     })),
     ...filterByName(failed).map((job) => ({
       id: job.id ?? '',
@@ -189,6 +202,7 @@ async function getRecentRuns(queueName: string, jobName: string | undefined, lim
       durationMs:
         job.finishedOn && job.processedOn ? job.finishedOn - job.processedOn : null,
       failReason: job.failedReason ?? undefined,
+      dryRun: job.data?.dryRun === true,
     })),
   ];
 
@@ -206,21 +220,24 @@ function effectiveExecutionState(job: { key: string } & Parameters<typeof evalua
 }
 
 export async function listWorkerJobs(): Promise<WorkerJobDetail[]> {
+  // Same value for every job — computed once per call, not per job, but kept
+  // on each WorkerJobDetail so the frontend doesn't need a second fetch.
+  const smokeAllowlistConfigured = isSmokeAllowlistConfigured();
   return Promise.all(
     JOB_REGISTRY.map(async (job) => {
       const state = effectiveExecutionState(job);
       if (!job.queueName) {
         const recentRuns = await getCronRunHistory(job.key);
-        return { ...job, ...state, recentRuns };
+        return { ...job, ...state, recentRuns, smokeAllowlistConfigured };
       }
       try {
         const [queueStats, recentRuns] = await Promise.all([
           getQueueStats(job.queueName, job.jobName),
           getRecentRuns(job.queueName, job.jobName),
         ]);
-        return { ...job, ...state, queueStats, recentRuns };
+        return { ...job, ...state, queueStats, recentRuns, smokeAllowlistConfigured };
       } catch {
-        return { ...job, ...state, recentRuns: [] };
+        return { ...job, ...state, recentRuns: [], smokeAllowlistConfigured };
       }
     }),
   );
@@ -253,7 +270,7 @@ export function getWorkerGovernanceStatus(): WorkerGovernanceStatus {
 
 export async function triggerJob(
   jobKey: string,
-  options?: { dryRun?: boolean },
+  options?: { dryRun?: boolean; propertyId?: string },
 ): Promise<{ queued: boolean; jobId?: string }> {
   const entry = JOB_REGISTRY.find((j) => j.key === jobKey);
   if (!entry) throw new Error(`Unknown job key: ${jobKey}`);
@@ -277,14 +294,80 @@ export async function triggerJob(
     throw new Error(`Dry-run not supported for job: ${jobKey}`);
   }
 
+  const propertyId = options?.propertyId?.trim() || undefined;
+  // W6 item 2/5: a scoped smoke run must both (a) target a job that
+  // actually supports property scoping and (b) target a property the
+  // operator has explicitly allowlisted — reject here with a clear error
+  // rather than queueing a job that would fail deep inside the worker.
+  if (propertyId) {
+    if (!entry.supportsPropertyScope) {
+      throw new Error(`Property scope not supported for job: ${jobKey}`);
+    }
+    if (!isPropertyAllowlisted(propertyId)) {
+      throw new Error(`propertyId ${propertyId} is not in SMOKE_TEST_PROPERTY_ALLOWLIST`);
+    }
+  }
+
   const q = getQueue(entry.queueName);
   const job = await q.add(
     entry.jobName,
-    { dryRun },
+    { dryRun, propertyId },
     {
       attempts: 3,
       backoff: { type: 'exponential', delay: 5000 },
     },
   );
   return { queued: true, jobId: job.id };
+}
+
+// ─── W6 item 3: smoke-run cleanup (exact IDs only, never a date/status sweep) ─
+
+export interface SmokeCleanupPreview {
+  correlationId: string;
+  notificationIds: string[];
+  mortgageRateSnapshotIds: string[];
+}
+
+async function resolveSmokeRecordIds(correlationId: string): Promise<SmokeCleanupPreview> {
+  if (!isSmokeCorrelationId(correlationId)) {
+    throw new Error(`Not a smoke correlation ID: ${correlationId}`);
+  }
+  const [notifications, snapshots] = await Promise.all([
+    prisma.notification.findMany({
+      where: { metadata: { path: ['smokeCorrelationId'], equals: correlationId } },
+      select: { id: true },
+    }),
+    prisma.mortgageRateSnapshot.findMany({
+      where: { metadataJson: { path: ['smokeCorrelationId'], equals: correlationId } },
+      select: { id: true },
+    }),
+  ]);
+  return {
+    correlationId,
+    notificationIds: notifications.map((n) => n.id),
+    mortgageRateSnapshotIds: snapshots.map((s) => s.id),
+  };
+}
+
+/** Preview exactly which records a smoke run created, by correlation ID — no writes. */
+export async function previewSmokeCleanup(correlationId: string): Promise<SmokeCleanupPreview> {
+  return resolveSmokeRecordIds(correlationId);
+}
+
+/** Delete exactly the records tagged with this correlation ID — never a date/status range. */
+export async function deleteSmokeRecords(correlationId: string): Promise<SmokeCleanupPreview> {
+  const preview = await resolveSmokeRecordIds(correlationId);
+  await Promise.all([
+    preview.notificationIds.length
+      ? prisma.notification.deleteMany({ where: { id: { in: preview.notificationIds } } })
+      : Promise.resolve(),
+    preview.mortgageRateSnapshotIds.length
+      ? prisma.mortgageRateSnapshot.deleteMany({ where: { id: { in: preview.mortgageRateSnapshotIds } } })
+      : Promise.resolve(),
+  ]);
+  logger.info(
+    { correlationId, notificationCount: preview.notificationIds.length, snapshotCount: preview.mortgageRateSnapshotIds.length },
+    '[ADMIN-WORKER-JOBS] Smoke-test records deleted by exact correlation ID',
+  );
+  return preview;
 }

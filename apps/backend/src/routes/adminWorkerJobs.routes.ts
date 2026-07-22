@@ -7,7 +7,13 @@ import { Router } from 'express';
 import { UserRole } from '../types/auth.types';
 import { authenticate, requireMfa, requireRole } from '../middleware/auth.middleware';
 import { requireCapability } from '../middleware/adminCapability.middleware';
-import { getWorkerJobsHandler, triggerJobHandler, getWorkerGovernanceHandler } from '../controllers/adminWorkerJobs.controller';
+import {
+  getWorkerJobsHandler,
+  triggerJobHandler,
+  getWorkerGovernanceHandler,
+  previewSmokeCleanupHandler,
+  deleteSmokeCleanupHandler,
+} from '../controllers/adminWorkerJobs.controller';
 
 const router = Router();
 
@@ -63,5 +69,28 @@ router.get('/admin/worker-jobs', requireCapability('WORKER_JOB_VIEW'), getWorker
  *         description: Trigger not supported for this job
  */
 router.post('/admin/worker-jobs/:jobKey/trigger', requireCapability('WORKER_JOB_TRIGGER'), triggerJobHandler);
+
+/**
+ * @swagger
+ * /api/admin/worker-jobs/smoke/{correlationId}:
+ *   get:
+ *     summary: Preview exact record IDs created by a smoke-test run (W6 item 3) — no writes
+ *     tags: [Admin Worker Jobs]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Exact Notification/MortgageRateSnapshot IDs tagged with this correlation ID
+ *   delete:
+ *     summary: Delete exactly the records tagged with this correlation ID — never a date/status sweep
+ *     tags: [Admin Worker Jobs]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Deleted record IDs
+ */
+router.get('/admin/worker-jobs/smoke/:correlationId', requireCapability('WORKER_JOB_SMOKE_CLEANUP'), previewSmokeCleanupHandler);
+router.delete('/admin/worker-jobs/smoke/:correlationId', requireCapability('WORKER_JOB_SMOKE_CLEANUP'), deleteSmokeCleanupHandler);
 
 export default router;

@@ -40,23 +40,28 @@ import {
 import type { SmartFilterId } from './InventoryFilterBar';
 import type { InventoryPortfolioFilter, PortfolioStats } from './PortfolioIntelligenceStrip';
 
-type CoverageStatus = 'gap' | 'partial' | 'covered' | 'waived';
+type CoverageStatus = 'missing' | 'confirmed' | 'managed' | 'incomplete' | 'not-required';
 
 function getCoverageStatus(item: InventoryItem): CoverageStatus {
-  if (item.coverageNotRequired) return 'waived';
+  if (item.coverageState) return ({
+    CONFIRMED: 'confirmed',
+    MISSING: 'missing',
+    MANAGED_ELSEWHERE: 'managed',
+    INCOMPLETE: 'incomplete',
+    NOT_REQUIRED: 'not-required',
+  } as const)[item.coverageState];
+  if (item.coverageNotRequired) return 'not-required';
 
   const hasWarranty = Boolean(item.warrantyId);
   const hasInsurance = Boolean(item.insurancePolicyId);
 
-  if (!hasWarranty && !hasInsurance) return 'gap';
-  if (!hasWarranty || !hasInsurance) return 'partial';
-  return 'covered';
+  if (!hasWarranty && !hasInsurance) return 'incomplete';
+  return 'confirmed';
 }
 
 function getCoveragePercent(item: InventoryItem): number {
   const status = getCoverageStatus(item);
-  if (status === 'covered' || status === 'waived') return 100;
-  if (status === 'partial') return 65;
+  if (status === 'confirmed') return 100;
   return 0;
 }
 
@@ -64,7 +69,8 @@ function getRoomLabel(item: InventoryItem): string {
   const rawRoom =
     typeof (item as any).room === 'string'
       ? (item as any).room
-      : item.room?.name || (item as any).roomName || 'Unassigned';
+      : item.room?.name || (item as any).roomName || item.locationLabel
+        || (item.recordGroup === 'SYSTEMS_STRUCTURE' ? 'Whole home' : 'Room needed');
 
   return normalizeDisplaySegments(rawRoom);
 }
@@ -72,7 +78,7 @@ function getRoomLabel(item: InventoryItem): string {
 function getReplacementValue(item: InventoryItem): number | null {
   const direct = (item as any).replacementValue;
   if (typeof direct === 'number' && Number.isFinite(direct)) return direct;
-  return centsToDollars(item.replacementCostCents);
+  return centsToDollars(item.effectiveReplacementCostCents ?? item.replacementCostCents);
 }
 
 function getDocumentCount(item: InventoryItem): number {
@@ -606,6 +612,7 @@ export function MobileInventoryItemCard({
 
   const coverageStatus = getCoverageStatus(item);
   const coveragePercent = getCoveragePercent(item);
+  const hasAssessableCoverage = coverageStatus === 'confirmed' || coverageStatus === 'missing';
   const hasWarranty = Boolean(item.warrantyId);
   const hasInsurance = Boolean(item.insurancePolicyId);
   const replacementValue = getReplacementValue(item);
@@ -653,11 +660,11 @@ export function MobileInventoryItemCard({
       id={`item-${item.id}`}
       className={[
         'rounded-[20px] border p-3.5 shadow-[0_10px_22px_rgba(15,23,42,0.05)] transition-all duration-150',
-        coverageStatus === 'gap'
+        coverageStatus === 'missing'
           ? 'border-rose-200 bg-rose-50/30'
-          : coverageStatus === 'partial'
-            ? 'border-amber-200 bg-amber-50/30'
-            : coverageStatus === 'waived'
+          : coverageStatus === 'incomplete'
+            ? 'border-sky-200 bg-sky-50/30'
+            : coverageStatus === 'not-required' || coverageStatus === 'managed'
               ? 'border-slate-200 bg-slate-50/50'
               : 'border-[hsl(var(--mobile-border-subtle))] bg-white',
       ].join(' ')}
@@ -679,34 +686,41 @@ export function MobileInventoryItemCard({
             </div>
             <div className="min-w-0">
               <p className="mb-0 truncate text-[1.05rem] font-semibold leading-tight text-[hsl(var(--mobile-text-primary))]">
-                {item.name || 'Untitled'}
+                {item.displayName || item.name || 'Untitled'}
               </p>
               <p className="mb-0 mt-1 text-xs text-[hsl(var(--mobile-text-secondary))]">
                 {titleCaseCategory(String(item.category || 'OTHER'))} · {getRoomLabel(item)}
               </p>
+              {item.provenanceLabel ? <p className="mb-0 mt-1 text-[11px] font-medium text-sky-700">{item.provenanceLabel}</p> : null}
             </div>
           </div>
 
           <StatusChip
             tone={
-              coverageStatus === 'covered'
+              coverageStatus === 'confirmed'
                 ? 'good'
-                : coverageStatus === 'waived'
+                : coverageStatus === 'not-required' || coverageStatus === 'managed'
                   ? 'info'
-                  : coverageStatus === 'partial'
+                  : coverageStatus === 'incomplete'
                     ? 'elevated'
                     : 'needsAction'
             }
           >
-            {coverageStatus === 'covered'
-              ? 'Covered'
-              : coverageStatus === 'waived'
-                ? 'Not required'
-                : coverageStatus === 'partial'
-                  ? 'Partial'
-                  : 'Coverage Gap'}
+            {item.coverageStateLabel || (coverageStatus === 'confirmed'
+              ? 'Coverage confirmed'
+              : coverageStatus === 'not-required'
+                ? 'Coverage not required'
+                : coverageStatus === 'incomplete'
+                  ? 'Coverage status incomplete'
+                  : coverageStatus === 'managed'
+                    ? 'Managed elsewhere'
+                    : 'Coverage missing')}
           </StatusChip>
         </div>
+
+        {item.coverageStateDetail && coverageStatus !== 'confirmed' ? (
+          <p className="mb-0 text-xs leading-relaxed text-[hsl(var(--mobile-text-secondary))]">{item.coverageStateDetail}</p>
+        ) : null}
 
         <div className="grid grid-cols-2 gap-2">
           <div className="rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 py-2">
@@ -714,9 +728,10 @@ export function MobileInventoryItemCard({
               Replacement Value
             </p>
             {hasValue ? (
-              <p className="mb-0 mt-1 text-lg font-semibold text-[hsl(var(--mobile-text-primary))]">
-                {formatCurrency(replacementValue)}
-              </p>
+              <div>
+                <p className="mb-0 mt-1 text-lg font-semibold text-[hsl(var(--mobile-text-primary))]">{formatCurrency(replacementValue)}</p>
+                {item.replacementValueSource === 'ESTIMATED' ? <p className="mb-0 text-[10px] text-[hsl(var(--mobile-text-muted))]">Estimated</p> : null}
+              </div>
             ) : (
               <div className="mt-1">
                 <InlineValueEditor
@@ -736,23 +751,19 @@ export function MobileInventoryItemCard({
               Coverage
             </p>
             <p className="mb-0 mt-1 text-lg font-semibold text-[hsl(var(--mobile-text-primary))]">
-              {hasValue ? `${coveragePercent}%` : '—'}
+              {hasValue && hasAssessableCoverage ? `${coveragePercent}%` : '—'}
             </p>
           </div>
         </div>
 
         <div className="h-1.5 overflow-hidden rounded-full bg-[hsl(var(--mobile-bg-muted))]">
-          {hasValue ? (
+          {hasValue && hasAssessableCoverage ? (
             <div
               className={[
                 'h-full rounded-full transition-all duration-700',
-                coverageStatus === 'covered'
+                coverageStatus === 'confirmed'
                   ? 'bg-emerald-500'
-                  : coverageStatus === 'waived'
-                    ? 'bg-slate-300'
-                    : coverageStatus === 'partial'
-                      ? 'bg-amber-400'
-                      : 'bg-rose-500',
+                  : 'bg-rose-500',
               ].join(' ')}
               style={{ width: `${coveragePercent}%` }}
             />
@@ -790,15 +801,30 @@ export function MobileInventoryItemCard({
         </div>
 
         <div className="grid grid-cols-2 gap-2">
-          {coverageStatus !== 'covered' ? (
+          {coverageStatus === 'missing' || coverageStatus === 'incomplete' ? (
             <button
               type="button"
               onClick={handleOpenCoverage}
               className="inline-flex min-h-[40px] items-center justify-center gap-1.5 rounded-xl bg-[hsl(var(--mobile-brand-strong))] px-3 py-2 text-sm font-semibold text-white"
             >
               <Shield className="h-4 w-4" />
-              Get coverage
+              {coverageStatus === 'missing' ? 'Get coverage' : 'Complete details'}
             </button>
+          ) : coverageStatus === 'managed' ? (
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                router.push(`/dashboard/properties/${item.propertyId}/edit?section=responsibility`);
+              }}
+              className="inline-flex min-h-[40px] items-center justify-center rounded-xl border border-violet-200 bg-violet-50 px-3 py-2 text-sm font-semibold text-violet-700"
+            >
+              Review responsibility
+            </button>
+          ) : coverageStatus === 'not-required' ? (
+            <div className="inline-flex min-h-[40px] items-center justify-center rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-600">
+              Coverage not required
+            </div>
           ) : (
             <div className="inline-flex min-h-[40px] items-center justify-center rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700">
               <CheckCircle2 className="mr-1.5 h-4 w-4" />
@@ -806,13 +832,13 @@ export function MobileInventoryItemCard({
             </div>
           )}
 
-          <button
-            type="button"
-            onClick={handleOpenReplaceRepair}
-            className="inline-flex min-h-[40px] items-center justify-center rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 py-2 text-sm font-semibold text-[hsl(var(--mobile-text-primary))]"
-          >
-            Replace/Repair
-          </button>
+          {coverageStatus !== 'managed' ? <button
+              type="button"
+              onClick={handleOpenReplaceRepair}
+              className="inline-flex min-h-[40px] items-center justify-center rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 py-2 text-sm font-semibold text-[hsl(var(--mobile-text-primary))]"
+            >
+              Replace/Repair
+            </button> : <div />}
         </div>
       </div>
     </div>

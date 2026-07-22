@@ -18,9 +18,24 @@ import {
 import { useAdminGuard } from '@/hooks/useAdminGuard';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
-import { useWorkerJobs, useTriggerWorkerJob, useWorkerGovernance } from '@/hooks/useAdminWorkerJobs';
+import {
+  useWorkerJobs,
+  useTriggerWorkerJob,
+  useWorkerGovernance,
+  usePreviewSmokeCleanup,
+  useDeleteSmokeCleanup,
+} from '@/hooks/useAdminWorkerJobs';
 import type { WorkerJobDetail, JobCategory, RecentRun } from '@/lib/api/adminWorkerJobs';
 import { AdminConsoleShell, AdminRouteState } from '@/components/ops/AdminConsoleShell';
+
+// W6: the 4 lowest-risk jobs (one per customerJob domain) wired end-to-end
+// for controlled smoke validation — see docs/product/ContractToCozy_W6_Smoke_Runbook.md.
+const SMOKE_CHECKLIST_JOB_KEYS = new Set([
+  'permit-inspection-reminders',
+  'new-home-warranty-deadlines',
+  'mortgage-rate-ingest',
+  'shared-data-consistency-audit',
+]);
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -149,6 +164,119 @@ const HEALTH_BORDER: Record<HealthStatus, string> = {
 
 // ─── Job Card ─────────────────────────────────────────────────────────────────
 
+// ─── Smoke Checklist (W6) ───────────────────────────────────────────────────
+//
+// Prerequisites / planned effects / actual result for the 4 representative
+// jobs — reuses the existing dry-run trigger + recentRuns plumbing rather
+// than inventing a parallel surface. "Planned effects" is the dry-run
+// trigger's returned WorkerRunResult (surfaced via recentRuns once the
+// BullMQ job completes); "actual result" is the same recentRuns list for a
+// non-dry-run scoped trigger.
+
+function SmokeChecklistPanel({
+  job,
+  onRunScopedLive,
+  triggering,
+}: {
+  job: WorkerJobDetail;
+  onRunScopedLive: (propertyId?: string) => void;
+  triggering: boolean;
+}) {
+  const [propertyId, setPropertyId] = useState('');
+  const preview = usePreviewSmokeCleanup();
+  const del = useDeleteSmokeCleanup();
+  const { toast } = useToast();
+
+  const lastRun = job.recentRuns[0] ?? null;
+  const lastResult = (lastRun?.result ?? null) as { smokeCorrelationId?: string } | null;
+  const correlationId = lastResult?.smokeCorrelationId;
+
+  const prereqs: Array<{ label: string; ok: boolean }> = [
+    { label: 'Dry-run supported', ok: job.supportsDryRun },
+    { label: 'Job enabled', ok: job.effectiveEnabled },
+    { label: 'Smoke allowlists configured', ok: job.smokeAllowlistConfigured },
+  ];
+
+  function handleCleanup() {
+    if (!correlationId) return;
+    preview.mutate(correlationId, {
+      onSuccess: (data) => {
+        const total = data.notificationIds.length + data.mortgageRateSnapshotIds.length;
+        if (total === 0) {
+          toast({ title: 'Nothing to clean up', description: 'No records found for this correlation ID.' });
+          return;
+        }
+        del.mutate(correlationId, {
+          onSuccess: () => toast({ title: 'Cleaned up', description: `Deleted ${total} record(s).` }),
+          onError: (err: any) => toast({ title: 'Cleanup failed', description: err?.message, variant: 'destructive' }),
+        });
+      },
+      onError: (err: any) => toast({ title: 'Preview failed', description: err?.message, variant: 'destructive' }),
+    });
+  }
+
+  return (
+    <div className="mt-3 rounded-xl border border-dashed border-slate-200 bg-slate-50/70 p-2.5">
+      <p className="mb-1.5 text-[11px] font-semibold tracking-normal text-slate-500">Smoke checklist</p>
+
+      <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px]">
+        {prereqs.map((p) => (
+          <span key={p.label} className="flex items-center gap-1">
+            {p.ok ? (
+              <CheckCircle2 className="h-2.5 w-2.5 text-emerald-500" />
+            ) : (
+              <XCircle className="h-2.5 w-2.5 text-rose-400" />
+            )}
+            <span className={p.ok ? 'text-slate-500' : 'text-rose-600'}>{p.label}</span>
+          </span>
+        ))}
+      </div>
+
+      {job.supportsPropertyScope && (
+        <div className="mt-2 flex items-center gap-1.5">
+          <input
+            type="text"
+            placeholder="Allowlisted property ID"
+            value={propertyId}
+            onChange={(e) => setPropertyId(e.target.value)}
+            className="h-6 flex-1 rounded border border-slate-300 px-1.5 text-[11px]"
+          />
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-6 shrink-0 rounded px-2 text-[10px] font-semibold"
+            disabled={triggering || !propertyId.trim()}
+            onClick={() => onRunScopedLive(propertyId.trim())}
+          >
+            Run scoped live
+          </Button>
+        </div>
+      )}
+
+      {lastRun && (
+        <div className="mt-2 text-[11px] text-slate-500">
+          <span className="font-medium text-slate-600">Last result{lastRun.dryRun ? ' (dry run)' : ''}:</span>{' '}
+          <span className="font-mono text-slate-500">
+            {lastResult ? JSON.stringify(lastResult) : '—'}
+          </span>
+        </div>
+      )}
+
+      {correlationId && (
+        <Button
+          size="sm"
+          variant="outline"
+          className="mt-1.5 h-6 rounded px-2 text-[10px] font-semibold"
+          disabled={preview.isPending || del.isPending}
+          onClick={handleCleanup}
+        >
+          {preview.isPending || del.isPending ? 'Cleaning up...' : 'Clean up this run'}
+        </Button>
+      )}
+    </div>
+  );
+}
+
 function JobCard({
   job,
   onTrigger,
@@ -156,7 +284,7 @@ function JobCard({
   triggerSuccess,
 }: {
   job: WorkerJobDetail;
-  onTrigger: (key: string, dryRun?: boolean) => void;
+  onTrigger: (key: string, dryRun?: boolean, propertyId?: string) => void;
   triggering: boolean;
   triggerSuccess: boolean;
 }) {
@@ -337,6 +465,9 @@ function JobCard({
                   <span className="text-slate-400">{timeAgo(run.finishedAt)}</span>
                   <span className="text-slate-300">·</span>
                   <span className="font-mono text-slate-400">{fmtDuration(run.durationMs)}</span>
+                  {run.dryRun && (
+                    <span className="rounded bg-slate-200 px-1 text-[10px] font-semibold text-slate-600">dry run</span>
+                  )}
                   {run.status === 'failed' && run.failReason && (
                     <>
                       <span className="text-slate-300">·</span>
@@ -353,6 +484,14 @@ function JobCard({
             </div>
           )}
         </div>
+
+        {SMOKE_CHECKLIST_JOB_KEYS.has(job.key) && (
+          <SmokeChecklistPanel
+            job={job}
+            triggering={triggering}
+            onRunScopedLive={(propertyId) => onTrigger(job.key, false, propertyId)}
+          />
+        )}
       </div>
     </div>
   );
@@ -371,7 +510,7 @@ function CategorySection({
   jobs: WorkerJobDetail[];
   triggeringKey: string | null;
   triggeredKey: string | null;
-  onTrigger: (key: string, dryRun?: boolean) => void;
+  onTrigger: (key: string, dryRun?: boolean, propertyId?: string) => void;
 }) {
   return (
     <div>
@@ -448,11 +587,11 @@ export default function WorkerJobsPage() {
 
   if (guard.status !== 'ready') return guard.node;
 
-  function handleTrigger(jobKey: string, dryRun?: boolean) {
+  function handleTrigger(jobKey: string, dryRun?: boolean, propertyId?: string) {
     setTriggeringKey(jobKey);
     setTriggeredKey(null);
     trigger.mutate(
-      { jobKey, dryRun },
+      { jobKey, dryRun, propertyId },
       {
         onSuccess: () => {
           setTriggeringKey(null);

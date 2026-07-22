@@ -23,11 +23,14 @@ test('risk concepts cannot be projected as physical inventory assets', () => {
   assert.equal(isRiskReportInventoryAssetType('BASEMENT_FLOOD_RISK'), false);
   assert.equal(isRiskReportInventoryAssetType('UNRECOGNIZED_RISK'), false);
   assert.deepEqual(visibleInventoryItemWhere(), {
-    AND: [{
-      OR: [
-        { assetType: null },
-        { assetType: { notIn: ['BASEMENT_FLOOD_RISK'] } },
-      ],
-    }],
+    AND: [
+      {
+        OR: [
+          { assetType: null },
+          { assetType: { notIn: ['BASEMENT_FLOOD_RISK'] } },
+        ],
+      },
+      { tags: { hasNone: ['INFERRED_NOT_PRESENT'] } },
+    ],
   });
 });

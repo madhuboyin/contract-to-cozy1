@@ -32,6 +32,7 @@ export const INVENTORY_CATEGORY_FILTER_OPTIONS: ReadonlyArray<{
 
 export const INSTALL_YEAR_CATEGORIES: readonly InventoryItemCategory[] = ['APPLIANCE'] as const;
 export const PURCHASE_DATE_CATEGORIES: readonly InventoryItemCategory[] = ['ELECTRONICS', 'FURNITURE', 'OTHER'] as const;
+export const ROOM_REQUIRED_CATEGORIES: readonly InventoryItemCategory[] = ['APPLIANCE', 'FURNITURE', 'ELECTRONICS', 'OTHER'] as const;
 
 export const MAJOR_APPLIANCE_KEYWORDS = [
   'dishwasher',

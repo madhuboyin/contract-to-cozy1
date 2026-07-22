@@ -16,6 +16,7 @@ import {
 import { assertSafeUrl } from '../utils/ssrfGuard';
 import { logger } from '../lib/logger';
 import { visibleInventoryItemWhere } from './riskAssetApplicability';
+import { buildInventoryCoveragePresentation } from './inventoryCoverageState.service';
 
 function normalize(v: any) {
   return String(v ?? '').trim().toLowerCase();
@@ -83,6 +84,7 @@ async function fetchJsonWithTimeout(url: string, timeoutMs = 8000) {
 }
 
 const TAG_PROPERTY_APPLIANCE = 'PROPERTY_APPLIANCE';
+const ROOM_REQUIRED_CATEGORIES = new Set(['APPLIANCE', 'FURNITURE', 'ELECTRONICS', 'OTHER']);
 
 function mergeTags(
   existing: string[] | null | undefined,
@@ -222,17 +224,20 @@ export class InventoryService {
 
   // ---------------- Items ----------------
   async getItem(propertyId: string, itemId: string) {
-    const item = await prisma.inventoryItem.findFirst({
-      where: { id: itemId, propertyId },
-      include: {
-        room: true,
-        warranty: true,
-        insurancePolicy: true,
-        documents: { orderBy: { createdAt: 'desc' } },
-      },
-    });
+    const [item, responsibilities] = await Promise.all([
+      prisma.inventoryItem.findFirst({
+        where: { id: itemId, propertyId },
+        include: {
+          room: true,
+          warranty: true,
+          insurancePolicy: true,
+          documents: { orderBy: { createdAt: 'desc' } },
+        },
+      }),
+      prisma.propertyResponsibility.findMany({ where: { propertyId }, select: { scope: true, party: true } }),
+    ]);
     if (!item) throw new APIError('Inventory item not found', 404, 'ITEM_NOT_FOUND');
-    return item;
+    return { ...item, ...buildInventoryCoveragePresentation(item, responsibilities) };
   }
   async listItems(propertyId: string, query: ListItemsQuery) {
     const where: any = { propertyId, ...visibleInventoryItemWhere() };
@@ -260,19 +265,30 @@ export class InventoryService {
     if (query.hasDocuments === true) where.documents = { some: {} };
     if (query.hasDocuments === false) where.documents = { none: {} };
 
-    return prisma.inventoryItem.findMany({
-      where,
-      include: {
-        room: true,
-        warranty: true,
-        insurancePolicy: true,
-        documents: { orderBy: { createdAt: 'desc' } },
-      },
-      orderBy: [{ updatedAt: 'desc' }],
-    });
+    const [items, responsibilities] = await Promise.all([
+      prisma.inventoryItem.findMany({
+        where,
+        include: {
+          room: true,
+          warranty: true,
+          insurancePolicy: true,
+          documents: { orderBy: { createdAt: 'desc' } },
+        },
+        orderBy: [{ updatedAt: 'desc' }],
+      }),
+      prisma.propertyResponsibility.findMany({ where: { propertyId }, select: { scope: true, party: true } }),
+    ]);
+    return items.map((item) => ({ ...item, ...buildInventoryCoveragePresentation(item, responsibilities) }));
   }
 
   async createItem(propertyId: string, data: any, userId: string | null) {
+    if (ROOM_REQUIRED_CATEGORIES.has(String(data.category)) && !data.roomId) {
+      throw new APIError(
+        'Choose a room for appliances and belongings. Whole-home systems do not require a room.',
+        400,
+        'ROOM_REQUIRED',
+      );
+    }
     await this.assertRoomBelongs(propertyId, data.roomId);
     await this.assertWarrantyBelongs(propertyId, data.warrantyId);
     await this.assertInsuranceBelongs(propertyId, data.insurancePolicyId);
@@ -333,6 +349,8 @@ export class InventoryService {
         name: data.name,
         category: data.category,
         condition: data.condition || 'UNKNOWN',
+        isVerified: true,
+        verificationSource: 'USER_REPORTED',
   
         roomId: data.roomId || null,
         warrantyId: data.warrantyId || null,
@@ -423,6 +441,7 @@ export class InventoryService {
         tags: true,
         sourceHash: true,
         name: true,
+        roomId: true,
         isVerified: true,
       },
     });
@@ -437,6 +456,14 @@ export class InventoryService {
   
     const nextName = ('name' in patch) ? patch.name : existing.name;
     const nextCategory = ('category' in patch) ? patch.category : existing.category;
+    const nextRoomId = ('roomId' in patch) ? patch.roomId : existing.roomId;
+    if (ROOM_REQUIRED_CATEGORIES.has(String(nextCategory)) && !nextRoomId) {
+      throw new APIError(
+        'Choose a room for appliances and belongings. Whole-home systems do not require a room.',
+        400,
+        'ROOM_REQUIRED',
+      );
+    }
     
     if (String(nextCategory) === 'APPLIANCE') {
       const inferredType = inferMajorApplianceType(nextName);

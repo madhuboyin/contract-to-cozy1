@@ -87,7 +87,7 @@ RUN mkdir -p src/shared/backend/services/coverage \
 COPY apps/backend/src/services/coverage/contextPolicy.ts src/shared/backend/services/coverage/
 
 COPY apps/backend/src/utils/riskCalculator.util.ts apps/backend/src/utils/FinancialCalculator.util.ts src/shared/backend/utils/
-COPY apps/backend/src/config/risk-constants.ts apps/backend/src/config/workerJobRegistry.ts apps/backend/src/config/queueDefaults.ts apps/backend/src/config/workerExecutionPolicy.ts apps/backend/src/config/appConfig.ts src/shared/backend/config/
+COPY apps/backend/src/config/risk-constants.ts apps/backend/src/config/workerJobRegistry.ts apps/backend/src/config/queueDefaults.ts apps/backend/src/config/workerExecutionPolicy.ts apps/backend/src/config/appConfig.ts apps/backend/src/config/smokeTestConfig.ts src/shared/backend/config/
 # Maintenance reminders (WKR-001) — a plain relative-import sibling of the
 # already-copied notification.service/prisma/workerExecutionPolicy shared
 # tree, so it needs a COPY only, no sed rewrite.
@@ -112,6 +112,7 @@ COPY apps/backend/src/lib/prisma.ts \
      apps/backend/src/lib/requestContext.ts \
      apps/backend/src/lib/metrics.ts \
      apps/backend/src/lib/queuePort.ts \
+     apps/backend/src/lib/smokeTestCorrelation.ts \
      src/shared/backend/lib/
 COPY apps/backend/src/services/incidents/incident.service.ts src/shared/backend/services/incidents/
 COPY apps/backend/src/types/incidents.types.ts src/shared/backend/types/

@@ -45,6 +45,10 @@ import { useToast } from '@/components/ui/use-toast';
 import TrustStrip from '../components/route-templates/TrustStrip';
 
 function getCoverageStatus(item: InventoryItem): 'uncovered' | 'partial' | 'covered' | 'waived' {
+  if (item.coverageState === 'NOT_REQUIRED' || item.coverageState === 'MANAGED_ELSEWHERE') return 'waived';
+  if (item.coverageState === 'CONFIRMED') return 'covered';
+  if (item.coverageState === 'MISSING') return 'uncovered';
+  if (item.coverageState === 'INCOMPLETE') return 'partial';
   if (item.coverageNotRequired) return 'waived';
 
   const hasWarranty = Boolean(item.warrantyId);
@@ -57,13 +61,16 @@ function getCoverageStatus(item: InventoryItem): 'uncovered' | 'partial' | 'cove
 
 function getCoveragePercent(item: InventoryItem): number {
   const status = getCoverageStatus(item);
-  if (status === 'covered' || status === 'waived') return 100;
-  if (status === 'partial') return 65;
+  if (status === 'covered') return 100;
   return 0;
 }
 
 function hasReplacementValue(item: InventoryItem): boolean {
-  return Number(item.replacementCostCents || 0) > 0;
+  return Number(item.effectiveReplacementCostCents ?? item.replacementCostCents ?? 0) > 0;
+}
+
+function isActionableCoverageGap(item: InventoryItem): boolean {
+  return item.coverageState === 'MISSING' && item.coverageActionable === true;
 }
 
 function smartFilterLabel(filter: SmartFilterId): string {
@@ -255,22 +262,28 @@ export default function InventoryClient() {
   }
 
   const portfolioStats: PortfolioStats = useMemo(() => {
-    const totalValue = items.reduce((sum, item) => sum + Number(item.replacementCostCents || 0) / 100, 0);
+    const totalValue = items.reduce((sum, item) => sum + Number(item.effectiveReplacementCostCents ?? item.replacementCostCents ?? 0) / 100, 0);
 
-    const coveredValue = items.reduce((sum, item) => {
-      const value = Number(item.replacementCostCents || 0) / 100;
+    const assessableItems = items.filter((item) => item.coverageState === 'CONFIRMED' || isActionableCoverageGap(item));
+    const assessableValue = assessableItems.reduce(
+      (sum, item) => sum + Number(item.effectiveReplacementCostCents ?? item.replacementCostCents ?? 0) / 100,
+      0,
+    );
+
+    const coveredValue = assessableItems.reduce((sum, item) => {
+      const value = Number(item.effectiveReplacementCostCents ?? item.replacementCostCents ?? 0) / 100;
       return sum + (value * getCoveragePercent(item)) / 100;
     }, 0);
 
-    const gapCount = items.filter((item) => getCoverageStatus(item) !== 'covered' && getCoverageStatus(item) !== 'waived').length;
+    const gapCount = items.filter(isActionableCoverageGap).length;
     const missingValueCount = items.filter((item) => !hasReplacementValue(item)).length;
     const docCount = items.filter((item) => (item.documents?.length ?? 0) > 0).length;
-    const notRequiredCount = items.filter((item) => item.coverageNotRequired).length;
+    const notRequiredCount = items.filter((item) => item.coverageState === 'NOT_REQUIRED' || item.coverageNotRequired).length;
 
     return {
       totalValue,
       coveredValue,
-      coverageRate: totalValue > 0 ? (coveredValue / totalValue) * 100 : 0,
+      coverageRate: assessableValue > 0 ? (coveredValue / assessableValue) * 100 : 0,
       gapCount,
       missingValueCount,
       docCount,
@@ -281,8 +294,8 @@ export default function InventoryClient() {
 
   const exposedValue = useMemo(() => {
     return items
-      .filter((item) => getCoverageStatus(item) !== 'covered' && getCoverageStatus(item) !== 'waived')
-      .reduce((sum, item) => sum + Number(item.replacementCostCents || 0) / 100, 0);
+      .filter(isActionableCoverageGap)
+      .reduce((sum, item) => sum + Number(item.effectiveReplacementCostCents ?? item.replacementCostCents ?? 0) / 100, 0);
   }, [items]);
 
   const filteredItems = useMemo(() => {
@@ -299,13 +312,13 @@ export default function InventoryClient() {
       if (recallFilter === 'with-recalls' && !hasRecall) return false;
       if (recallFilter === 'no-recalls' && hasRecall) return false;
 
-      if (activeSmartFilter === 'gaps' && (getCoverageStatus(item) === 'covered' || getCoverageStatus(item) === 'waived')) return false;
+      if (activeSmartFilter === 'gaps' && !isActionableCoverageGap(item)) return false;
       if (activeSmartFilter === 'no-value' && hasReplacementValue(item)) return false;
       if (activeSmartFilter === 'recalls' && !hasRecall) return false;
       if (activeSmartFilter === 'not-required' && !item.coverageNotRequired) return false;
       if (activeSmartFilter === 'missing-age' && item.installedOn) return false;
-      if (activeSmartFilter === 'missing-date' && item.purchasedOn) return false;
-      if (activeSmartFilter === 'missing-warranty' && item.warrantyId) return false;
+      if (activeSmartFilter === 'missing-date' && (item.recordGroup === 'SYSTEMS_STRUCTURE' || item.purchasedOn)) return false;
+      if (activeSmartFilter === 'missing-warranty' && (!isActionableCoverageGap(item) || item.warrantyId)) return false;
 
       return true;
     });
@@ -331,8 +344,13 @@ export default function InventoryClient() {
   }, [items, recallCountByItem]);
 
   const missingAgeCount = useMemo(() => items.filter((item) => !item.installedOn).length, [items]);
-  const missingDateCount = useMemo(() => items.filter((item) => !item.purchasedOn).length, [items]);
-  const missingWarrantyCount = useMemo(() => items.filter((item) => !item.warrantyId).length, [items]);
+  const missingDateCount = useMemo(() => items.filter((item) => item.recordGroup !== 'SYSTEMS_STRUCTURE' && !item.purchasedOn).length, [items]);
+  const missingWarrantyCount = useMemo(() => items.filter((item) => isActionableCoverageGap(item) && !item.warrantyId).length, [items]);
+
+  const groupedItems = useMemo(() => ({
+    systems: filteredItems.filter((item) => item.recordGroup === 'SYSTEMS_STRUCTURE'),
+    belongings: filteredItems.filter((item) => item.recordGroup !== 'SYSTEMS_STRUCTURE'),
+  }), [filteredItems]);
 
   async function handleExportCsv() {
     try {
@@ -445,7 +463,7 @@ export default function InventoryClient() {
           <MobileSection>
             <TrustStrip
               variant="footnote"
-              confidenceLabel={`${Math.round(portfolioStats.coverageRate)}% coverage confidence across ${portfolioStats.totalItems} items`}
+              confidenceLabel={`${Math.round(portfolioStats.coverageRate)}% coverage rate for items with complete coverage context`}
               freshnessLabel="Updates from latest inventory, docs, recalls, and coverage links"
               sourceLabel="Inventory data + warranty/insurance linkage + recall matches"
             />
@@ -554,31 +572,39 @@ export default function InventoryClient() {
                 }
               />
             ) : (
-              <div className="space-y-2.5">
+              <div className="space-y-7">
                 <MobileSectionHeader
                   title={filteredGapCount > 0 ? 'Needs attention' : 'Inventory List'}
                   subtitle={`${filteredItems.length} items`}
                 />
-                <AnimatePresence mode="popLayout">
-                  {filteredItems.map((item, index) => (
-                    <motion.div
-                      key={item.id}
-                      layout
-                      initial={{ opacity: 0, scale: 0.98 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      exit={{ opacity: 0, scale: 0.98 }}
-                      transition={{ duration: 0.18, delay: index * 0.02 }}
-                      className={highlightItemId === item.id ? 'rounded-[22px] ring-2 ring-amber-300' : ''}
-                    >
-                      <MobileInventoryItemCard
-                        item={item}
-                        onClick={onEdit}
-                        onAddValue={onSaveInlineValue}
-                        onAttachDocument={openItemById}
-                      />
-                    </motion.div>
-                  ))}
-                </AnimatePresence>
+                {([
+                  { key: 'systems', title: 'Systems & Structure', subtitle: 'Whole-home equipment and structural components', items: groupedItems.systems },
+                  { key: 'belongings', title: 'Appliances & Belongings', subtitle: 'Room-based appliances and belongings', items: groupedItems.belongings },
+                ] as const).filter((group) => group.items.length > 0).map((group) => (
+                  <section key={group.key} className="space-y-2.5">
+                    <MobileSectionHeader title={group.title} subtitle={group.subtitle} />
+                    <AnimatePresence mode="popLayout">
+                      {group.items.map((item, index) => (
+                        <motion.div
+                          key={item.id}
+                          layout
+                          initial={{ opacity: 0, scale: 0.98 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          exit={{ opacity: 0, scale: 0.98 }}
+                          transition={{ duration: 0.18, delay: index * 0.02 }}
+                          className={highlightItemId === item.id ? 'rounded-[22px] ring-2 ring-amber-300' : ''}
+                        >
+                          <MobileInventoryItemCard
+                            item={item}
+                            onClick={onEdit}
+                            onAddValue={onSaveInlineValue}
+                            onAttachDocument={openItemById}
+                          />
+                        </motion.div>
+                      ))}
+                    </AnimatePresence>
+                  </section>
+                ))}
               </div>
             )}
           </MobileSection>
@@ -625,7 +651,7 @@ export default function InventoryClient() {
 
           <TrustStrip
             variant="footnote"
-            confidenceLabel={`${Math.round(portfolioStats.coverageRate)}% coverage confidence across ${portfolioStats.totalItems} items`}
+            confidenceLabel={`${Math.round(portfolioStats.coverageRate)}% coverage rate for items with complete coverage context`}
             freshnessLabel="Live from inventory updates, coverage links, and recall scans"
             sourceLabel="Inventory graph + documents + policy associations"
           />
@@ -716,28 +742,51 @@ export default function InventoryClient() {
               </button>
             </div>
           ) : (
-            <div className="grid auto-rows-fr grid-cols-1 gap-6 sm:grid-cols-2 sm:gap-5 xl:grid-cols-3">
-              <AnimatePresence mode="popLayout">
-                {filteredItems.map((item, index) => (
-                  <motion.div
-                    key={item.id}
-                    layout
-                    initial={{ opacity: 0, scale: 0.97 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.97 }}
-                    transition={{ duration: 0.2, delay: index * 0.03 }}
-                    className={highlightItemId === item.id ? 'rounded-2xl ring-2 ring-amber-300' : ''}
-                  >
-                    <ItemCard
-                      item={item}
-                      variant="inventory"
-                      onClick={onEdit}
-                      onAddValue={onSaveInlineValue}
-                      onAttachDocument={openItemById}
-                    />
-                  </motion.div>
-                ))}
-              </AnimatePresence>
+            <div className="space-y-10">
+              {([
+                {
+                  key: 'systems',
+                  title: 'Systems & Structure',
+                  description: 'Whole-home equipment and structural components. A room is optional.',
+                  items: groupedItems.systems,
+                },
+                {
+                  key: 'belongings',
+                  title: 'Appliances & Belongings',
+                  description: 'Room-based appliances, electronics, furniture, and valuables.',
+                  items: groupedItems.belongings,
+                },
+              ] as const).filter((group) => group.items.length > 0).map((group) => (
+                <section key={group.key} aria-labelledby={`inventory-group-${group.key}`}>
+                  <div className="mb-4">
+                    <h2 id={`inventory-group-${group.key}`} className="text-lg font-semibold text-gray-950">{group.title}</h2>
+                    <p className="mt-1 text-sm text-gray-500">{group.description}</p>
+                  </div>
+                  <div className="grid auto-rows-fr grid-cols-1 gap-6 sm:grid-cols-2 sm:gap-5 xl:grid-cols-3">
+                    <AnimatePresence mode="popLayout">
+                      {group.items.map((item, index) => (
+                        <motion.div
+                          key={item.id}
+                          layout
+                          initial={{ opacity: 0, scale: 0.97 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          exit={{ opacity: 0, scale: 0.97 }}
+                          transition={{ duration: 0.2, delay: index * 0.03 }}
+                          className={highlightItemId === item.id ? 'rounded-2xl ring-2 ring-amber-300' : ''}
+                        >
+                          <ItemCard
+                            item={item}
+                            variant="inventory"
+                            onClick={onEdit}
+                            onAddValue={onSaveInlineValue}
+                            onAttachDocument={openItemById}
+                          />
+                        </motion.div>
+                      ))}
+                    </AnimatePresence>
+                  </div>
+                </section>
+              ))}
             </div>
           )}
         </div>

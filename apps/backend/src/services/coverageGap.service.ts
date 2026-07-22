@@ -1,6 +1,7 @@
 import { prisma } from '../lib/prisma';
 import { isCoverageActive } from './coverage/contextPolicy';
 import { visibleInventoryItemWhere } from './riskAssetApplicability';
+import { buildInventoryCoveragePresentation } from './inventoryCoverageState.service';
 
 const HIGH_VALUE_THRESHOLD_CENTS = 50000;       // $500
 const APPLIANCE_THRESHOLD_CENTS = 25000;        // $250
@@ -51,27 +52,23 @@ export async function detectCoverageGaps(
 ): Promise<CoverageGapResult[] | CoverageGapDetectResult> {
   const today = new Date();
 
-  const items = await prisma.inventoryItem.findMany({
-    where: {
-      propertyId,
-      ...visibleInventoryItemWhere(),
-      replacementCostCents: { not: null },
-      OR: [
-        { replacementCostCents: { gte: HIGH_VALUE_THRESHOLD_CENTS } },
-        { category: 'APPLIANCE', replacementCostCents: { gte: APPLIANCE_THRESHOLD_CENTS } },
-      ],
-    },
-    include: {
-      room: { select: { name: true } },
-      warranty: true,
-      insurancePolicy: true,
-    },
-  });
+  const [items, responsibilities] = await Promise.all([
+    prisma.inventoryItem.findMany({
+      where: { propertyId, ...visibleInventoryItemWhere() },
+      include: {
+        room: { select: { name: true } },
+        warranty: true,
+        insurancePolicy: true,
+      },
+    }),
+    prisma.propertyResponsibility.findMany({ where: { propertyId }, select: { scope: true, party: true } }),
+  ]);
 
   const waived: WaivedCoverageResult[] = [];
   const results: CoverageGapResult[] = [];
 
   for (const item of items) {
+    const presentation = buildInventoryCoveragePresentation(item, responsibilities, today);
     if (item.coverageNotRequired) {
       waived.push({
         inventoryItemId: item.id,
@@ -79,11 +76,15 @@ export async function detectCoverageGaps(
         itemName: item.name,
         itemCategory: item.category ? String(item.category) : null,
         roomName: item.room?.name ?? null,
-        exposureCents: item.replacementCostCents ?? 0,
+        exposureCents: presentation.effectiveReplacementCostCents ?? 0,
         currency: item.currency || 'USD',
       });
       continue;
     }
+
+    const exposureCents = presentation.effectiveReplacementCostCents ?? 0;
+    const threshold = item.category === 'APPLIANCE' ? APPLIANCE_THRESHOLD_CENTS : HIGH_VALUE_THRESHOLD_CENTS;
+    if (presentation.coverageState !== 'MISSING' || !presentation.coverageActionable || exposureCents < threshold) continue;
 
     const itemCategory = item.category ? String(item.category) : null;
     const hasWarranty = !!item.warranty;
@@ -96,7 +97,6 @@ export async function detectCoverageGaps(
 
     const reasons: string[] = [];
     const currency = item.currency || 'USD';
-    const exposureCents = item.replacementCostCents ?? 0;
 
     // 1) No coverage at all
     if (!hasWarranty && !hasInsurance) {

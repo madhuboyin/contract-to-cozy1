@@ -11,6 +11,7 @@ import {
   isRiskReportInventoryAssetType,
   visibleInventoryItemWhere,
 } from './riskAssetApplicability';
+import { getHomeAssetDisplayLabel } from '../productFramework/homeAssetDisplay';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -50,6 +51,16 @@ function mapAssetTypeToCategory(assetType: string): string {
   if (assetType.startsWith('SAFETY')) return 'SAFETY';
   if (assetType.startsWith('FOUNDATION') || assetType.startsWith('ROOF')) return 'STRUCTURE';
   return 'SYSTEMS';
+}
+
+function inventoryCategoryForAssetType(assetType: string): 'HVAC' | 'PLUMBING' | 'ELECTRICAL' | 'ROOF_EXTERIOR' | 'SAFETY' | 'STRUCTURAL' | 'OTHER' {
+  if (assetType.startsWith('HVAC_')) return 'HVAC';
+  if (assetType.startsWith('WATER_HEATER_')) return 'PLUMBING';
+  if (assetType.startsWith('ELECTRICAL_')) return 'ELECTRICAL';
+  if (assetType.startsWith('ROOF_')) return 'ROOF_EXTERIOR';
+  if (assetType.startsWith('SAFETY_')) return 'SAFETY';
+  if (assetType.startsWith('FOUNDATION_')) return 'STRUCTURAL';
+  return 'OTHER';
 }
 
 function isRiskAssessmentCategory(category: string | null | undefined): boolean {
@@ -244,9 +255,46 @@ async function ensureInventoryItemsFromRiskReport(propertyId: string): Promise<v
       propertyId,
       assetType: { in: systemTypes },
     },
-    select: { assetType: true },
+    select: {
+      id: true,
+      assetType: true,
+      name: true,
+      category: true,
+      roomId: true,
+      sourceType: true,
+      isVerified: true,
+      verificationSource: true,
+      sourceHash: true,
+      tags: true,
+      brand: true,
+      model: true,
+      serialNo: true,
+    },
   });
   const existingTypes = new Set(existing.map((row) => row.assetType));
+
+  // Correct legacy rows created by this materializer before provenance and
+  // homeowner-facing categories were available. The narrow shape check avoids
+  // relabeling user-maintained inventory records.
+  const legacyUpdates = existing.filter((item) => {
+    if (!item.assetType || item.sourceHash || item.verificationSource || item.isVerified || item.roomId) return false;
+    if (item.sourceType !== 'MANUAL' || item.category !== 'OTHER' || item.brand || item.model || item.serialNo) return false;
+    const legacyName = item.assetType.toLowerCase().replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+    return item.name === legacyName;
+  });
+  if (legacyUpdates.length) {
+    await prisma.$transaction(legacyUpdates.map((item) => prisma.inventoryItem.update({
+      where: { id: item.id },
+      data: {
+        name: getHomeAssetDisplayLabel({ assetType: item.assetType }),
+        category: inventoryCategoryForAssetType(item.assetType!),
+        sourceType: 'INTEGRATION',
+        verificationSource: 'PROPERTY_DETAILS',
+        sourceHash: `RISK_REPORT_SYSTEM:${item.assetType}`,
+        tags: { set: [...new Set([...item.tags, 'RISK_REPORT_INFERRED', 'PROPERTY_LEVEL_SYSTEM'])] },
+      },
+    })));
+  }
   const missingTypes = systemTypes.filter((type) => !existingTypes.has(type));
   if (missingTypes.length === 0) return;
 
@@ -264,10 +312,13 @@ async function ensureInventoryItemsFromRiskReport(propertyId: string): Promise<v
       return {
         propertyId,
         assetType,
-        name: assetType.toLowerCase().replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
-        category: 'OTHER' as const,
+        name: getHomeAssetDisplayLabel({ assetType }),
+        category: inventoryCategoryForAssetType(assetType),
         installedOn,
-        sourceType: 'MANUAL' as const,
+        sourceType: 'INTEGRATION' as const,
+        verificationSource: 'PROPERTY_DETAILS',
+        sourceHash: `RISK_REPORT_SYSTEM:${assetType}`,
+        tags: ['RISK_REPORT_INFERRED', 'PROPERTY_LEVEL_SYSTEM'],
       };
     }),
     skipDuplicates: true,

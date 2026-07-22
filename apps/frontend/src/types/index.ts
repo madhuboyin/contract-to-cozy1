@@ -91,9 +91,15 @@ export type InventoryItemCategory =
   | 'SMART_HOME'
   | 'FURNITURE'
   | 'ELECTRONICS'
+  | 'INTERIOR'
+  | 'STRUCTURAL'
+  | 'EXTERIOR'
+  | 'SITE'
   | 'OTHER';
 
 export type InventoryItemCondition = 'NEW' | 'GOOD' | 'FAIR' | 'POOR' | 'UNKNOWN';
+export type InventoryCoverageState = 'CONFIRMED' | 'MISSING' | 'MANAGED_ELSEWHERE' | 'INCOMPLETE' | 'NOT_REQUIRED';
+export type InventoryRecordGroup = 'SYSTEMS_STRUCTURE' | 'APPLIANCES_BELONGINGS';
 
 export type ImportBatchStatus = 'COMPLETED' | 'PARTIAL' | 'FAILED' | 'ROLLED_BACK';
 
@@ -152,6 +158,28 @@ export type InventoryItem = {
   sourceHash: string | null;
 
   coverageNotRequired: boolean;
+  coverageEvidenceStatus?: 'UNKNOWN' | 'NONE' | 'NOT_SURE';
+
+  // Backend-owned Home Record presentation. These values keep cards,
+  // summaries, and coverage actions on the same applicability policy.
+  displayName?: string;
+  recordGroup?: InventoryRecordGroup;
+  locationLabel?: string;
+  provenanceLabel?: string | null;
+  isInferred?: boolean;
+  responsibilityScope?: string | null;
+  responsibleParty?: 'OWNER' | 'ASSOCIATION' | 'LANDLORD' | 'SHARED' | 'UNKNOWN' | null;
+  coverageState?: InventoryCoverageState;
+  coverageStateLabel?: string;
+  coverageStateDetail?: string;
+  coverageActionable?: boolean;
+  missingContext?: string[];
+  effectiveReplacementCostCents?: number | null;
+  replacementValueSource?: 'RECORDED' | 'ESTIMATED' | null;
+  sourceType?: 'MANUAL' | 'BULK_UPLOAD' | 'MOBILE_SCAN' | 'INTEGRATION';
+  isVerified?: boolean;
+  verificationSource?: string | null;
+  assetType?: string | null;
 
   createdAt: string;
   updatedAt: string;

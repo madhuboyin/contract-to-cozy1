@@ -1,5 +1,12 @@
-import { InventoryItemCategory, InventoryItemCondition, Prisma, WarrantyCategory } from '@prisma/client';
+import {
+  InventoryCoverageEvidenceStatus,
+  InventoryItemCategory,
+  InventoryItemCondition,
+  Prisma,
+  WarrantyCategory,
+} from '@prisma/client';
 import { prisma } from '../../../lib/prisma';
+import { visibleInventoryItemWhere } from '../../../services/riskAssetApplicability';
 import type {
   ContextCaptureDefinition,
   RelationalCaptureInputSchema,
@@ -49,21 +56,77 @@ export async function resolveRelationalCaptureSchema(
   if (definition.inputSchema.type === 'RELATIONAL_UPDATE') {
     const inputKey = definition.relationalEntityInputKey;
     const entityId = inputKey ? operationInput?.[inputKey] : undefined;
-    if (definition.relationalAdapterKey !== 'INVENTORY_ITEM_LIFECYCLE' || typeof entityId !== 'string' || !entityId.trim()) {
+    if (!definition.relationalAdapterKey.startsWith('INVENTORY_ITEM_') || typeof entityId !== 'string' || !entityId.trim()) {
       throw new Error('Relational update is missing its scoped inventory item.');
     }
     const item = await prisma.inventoryItem.findFirst({
       where: { id: entityId, propertyId },
-      select: { id: true, condition: true, installedOn: true, purchasedOn: true },
+      select: {
+        id: true,
+        condition: true,
+        installedOn: true,
+        purchasedOn: true,
+        replacementCostCents: true,
+        coverageEvidenceStatus: true,
+        insurancePolicyId: true,
+        warrantyId: true,
+      },
     });
     if (!item) throw new Error('The selected inventory item does not belong to this property.');
+    let fields = definition.inputSchema.fields;
+    let coverageChoice: string = item.insurancePolicyId
+      ? `INSURANCE:${item.insurancePolicyId}`
+      : item.warrantyId
+        ? `WARRANTY:${item.warrantyId}`
+        : item.coverageEvidenceStatus === 'NONE'
+          ? 'NO_COVERAGE'
+          : item.coverageEvidenceStatus === 'NOT_SURE'
+            ? 'NOT_SURE'
+            : '';
+    if (definition.relationalAdapterKey === 'INVENTORY_ITEM_COVERAGE_EVIDENCE') {
+      const today = new Date();
+      const [policies, warranties] = await Promise.all([
+        prisma.insurancePolicy.findMany({
+          where: { propertyId, startDate: { lte: today }, expiryDate: { gte: today } },
+          select: { id: true, carrierName: true, policyNumber: true },
+          orderBy: [{ expiryDate: 'desc' }, { createdAt: 'asc' }],
+        }),
+        prisma.warranty.findMany({
+          where: { propertyId, startDate: { lte: today }, expiryDate: { gte: today } },
+          select: { id: true, providerName: true, policyNumber: true },
+          orderBy: [{ expiryDate: 'desc' }, { createdAt: 'asc' }],
+        }),
+      ]);
+      fields = fields.map((field) => field.key !== 'coverageChoice' || field.inputSchema.type !== 'SINGLE_SELECT'
+        ? field
+        : {
+          ...field,
+          inputSchema: {
+            ...field.inputSchema,
+            options: [
+              ...policies.map((policy) => ({
+                label: `Use insurance: ${policy.carrierName} · ${policy.policyNumber}`,
+                value: `INSURANCE:${policy.id}`,
+              })),
+              ...warranties.map((warranty) => ({
+                label: `Use warranty: ${warranty.providerName}${warranty.policyNumber ? ` · ${warranty.policyNumber}` : ''}`,
+                value: `WARRANTY:${warranty.id}`,
+              })),
+              ...field.inputSchema.options,
+            ],
+          },
+        });
+    }
     return {
       ...definition.inputSchema,
       entityId: item.id,
+      fields,
       currentValues: {
         condition: item.condition,
         installedOn: item.installedOn?.toISOString().slice(0, 10) ?? '',
         purchasedOn: item.purchasedOn?.toISOString().slice(0, 10) ?? '',
+        replacementValueUsd: item.replacementCostCents ? item.replacementCostCents / 100 : undefined,
+        coverageChoice,
       },
     };
   }
@@ -71,12 +134,24 @@ export async function resolveRelationalCaptureSchema(
     throw new Error('Relational select/create capture has an invalid input schema.');
   }
   let options: RelationalSelectCreateInputSchema['options'];
+  let createFields = definition.inputSchema.createFields;
   if (definition.relationalAdapterKey === 'INVENTORY_ITEM') {
-    options = (await prisma.inventoryItem.findMany({
-      where: { propertyId },
-      select: { id: true, name: true, category: true, condition: true },
-      orderBy: [{ name: 'asc' }, { createdAt: 'asc' }],
-    })).map((item) => ({ id: item.id, label: item.name, description: `${item.category} · ${item.condition}` }));
+    const [items, rooms] = await Promise.all([
+      prisma.inventoryItem.findMany({
+        where: { propertyId, ...visibleInventoryItemWhere() },
+        select: { id: true, name: true, category: true, condition: true },
+        orderBy: [{ name: 'asc' }, { createdAt: 'asc' }],
+      }),
+      prisma.inventoryRoom.findMany({
+        where: { propertyId },
+        select: { id: true, name: true },
+        orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+      }),
+    ]);
+    options = items.map((item) => ({ id: item.id, label: item.name, description: `${item.category} · ${item.condition}` }));
+    createFields = createFields.map((field) => field.key !== 'roomId' || field.inputSchema.type !== 'SINGLE_SELECT'
+      ? field
+      : { ...field, inputSchema: { ...field.inputSchema, options: rooms.map((room) => ({ value: room.id, label: room.name })) } });
   } else if (definition.relationalAdapterKey === 'INSURANCE_POLICY') {
     options = (await prisma.insurancePolicy.findMany({
       where: { propertyId, startDate: { lte: new Date() }, expiryDate: { gte: new Date() } },
@@ -98,7 +173,7 @@ export async function resolveRelationalCaptureSchema(
       description: warranty.category,
     }));
   }
-  return { ...definition.inputSchema, options };
+  return { ...definition.inputSchema, options, createFields };
 }
 
 function parseOptionalDateOnly(values: Record<string, unknown>, key: string): Date | null {
@@ -139,6 +214,129 @@ async function updateInventoryItemLifecycle(
   return { entityType: 'INVENTORY_ITEM', entityId: item.id, created: false };
 }
 
+async function updateInventoryItemConfirmation(
+  tx: Prisma.TransactionClient,
+  propertyId: string,
+  entityId: unknown,
+  values: Record<string, unknown>,
+): Promise<RelationalCaptureSelection> {
+  if (typeof entityId !== 'string' || !entityId.trim()) throw new Error('Inventory item identity is required.');
+  const confirmation = requiredText(values, 'confirmation');
+  if (!['CONFIRMED', 'NOT_PRESENT', 'NOT_SURE'].includes(confirmation)) throw new Error('Choose whether this system is present.');
+  const item = await tx.inventoryItem.findFirst({ where: { id: entityId, propertyId }, select: { id: true, tags: true } });
+  if (!item) throw new Error('The selected inventory item does not belong to this property.');
+  if (confirmation === 'CONFIRMED') {
+    await tx.inventoryItem.update({
+      where: { id: item.id },
+      data: { isVerified: true, verificationSource: 'USER_CONFIRMED' },
+    });
+  } else if (confirmation === 'NOT_PRESENT') {
+    await tx.inventoryItem.update({
+      where: { id: item.id },
+      data: {
+        isVerified: true,
+        verificationSource: 'USER_CONFIRMED_ABSENT',
+        tags: { set: [...new Set([...item.tags, 'INFERRED_NOT_PRESENT'])] },
+      },
+    });
+  }
+  return { entityType: 'INVENTORY_ITEM', entityId: item.id, created: false };
+}
+
+async function updateInventoryItemCoverageLifecycle(
+  tx: Prisma.TransactionClient,
+  propertyId: string,
+  entityId: unknown,
+  values: Record<string, unknown>,
+): Promise<RelationalCaptureSelection> {
+  if (typeof entityId !== 'string' || !entityId.trim()) throw new Error('Inventory item identity is required.');
+  const condition = requiredText(values, 'condition');
+  if (!Object.values(InventoryItemCondition).includes(condition as InventoryItemCondition) || condition === 'UNKNOWN') {
+    throw new Error('Select the current condition.');
+  }
+  const item = await tx.inventoryItem.findFirst({ where: { id: entityId, propertyId }, select: { id: true } });
+  if (!item) throw new Error('The selected inventory item does not belong to this property.');
+  await tx.inventoryItem.update({
+    where: { id: item.id },
+    data: { condition: condition as InventoryItemCondition, installedOn: parseDateOnly(values, 'installedOn') },
+  });
+  return { entityType: 'INVENTORY_ITEM', entityId: item.id, created: false };
+}
+
+async function updateInventoryItemValue(
+  tx: Prisma.TransactionClient,
+  propertyId: string,
+  entityId: unknown,
+  values: Record<string, unknown>,
+): Promise<RelationalCaptureSelection> {
+  if (typeof entityId !== 'string' || !entityId.trim()) throw new Error('Inventory item identity is required.');
+  const replacementValueUsd = values.replacementValueUsd;
+  if (typeof replacementValueUsd !== 'number' || !Number.isFinite(replacementValueUsd) || replacementValueUsd <= 0) {
+    throw new Error('Enter a replacement value greater than zero.');
+  }
+  const item = await tx.inventoryItem.findFirst({ where: { id: entityId, propertyId }, select: { id: true } });
+  if (!item) throw new Error('The selected inventory item does not belong to this property.');
+  await tx.inventoryItem.update({
+    where: { id: item.id },
+    data: { replacementCostCents: Math.round(replacementValueUsd * 100) },
+  });
+  return { entityType: 'INVENTORY_ITEM', entityId: item.id, created: false };
+}
+
+async function updateInventoryItemCoverageEvidence(
+  tx: Prisma.TransactionClient,
+  propertyId: string,
+  entityId: unknown,
+  values: Record<string, unknown>,
+): Promise<RelationalCaptureSelection> {
+  if (typeof entityId !== 'string' || !entityId.trim()) throw new Error('Inventory item identity is required.');
+  const coverageChoice = requiredText(values, 'coverageChoice');
+  const item = await tx.inventoryItem.findFirst({ where: { id: entityId, propertyId }, select: { id: true } });
+  if (!item) throw new Error('The selected inventory item does not belong to this property.');
+
+  if (coverageChoice === 'NO_COVERAGE' || coverageChoice === 'NOT_SURE') {
+    await tx.inventoryItem.update({
+      where: { id: item.id },
+      data: {
+        coverageEvidenceStatus: coverageChoice === 'NO_COVERAGE'
+          ? InventoryCoverageEvidenceStatus.NONE
+          : InventoryCoverageEvidenceStatus.NOT_SURE,
+      },
+    });
+  } else if (coverageChoice.startsWith('INSURANCE:')) {
+    const policyId = coverageChoice.slice('INSURANCE:'.length);
+    const policy = await tx.insurancePolicy.findFirst({ where: { id: policyId, propertyId }, select: { id: true } });
+    if (!policy) throw new Error('The selected insurance policy does not belong to this property.');
+    await tx.inventoryItem.update({ where: { id: item.id }, data: { insurancePolicyId: policy.id, coverageEvidenceStatus: 'UNKNOWN' } });
+  } else if (coverageChoice.startsWith('WARRANTY:')) {
+    const warrantyId = coverageChoice.slice('WARRANTY:'.length);
+    const warranty = await tx.warranty.findFirst({ where: { id: warrantyId, propertyId }, select: { id: true } });
+    if (!warranty) throw new Error('The selected warranty does not belong to this property.');
+    await tx.inventoryItem.update({ where: { id: item.id }, data: { warrantyId: warranty.id, coverageEvidenceStatus: 'UNKNOWN' } });
+  } else if (coverageChoice === 'ADD_INSURANCE') {
+    const selection = await createInsurancePolicy(tx, propertyId, {
+      carrierName: values.carrierName,
+      policyNumber: values.insurancePolicyNumber,
+      coverageType: values.insuranceCoverageType,
+      premiumAmount: values.insurancePremiumUsd,
+      startDate: values.insuranceStartDate,
+      expiryDate: values.insuranceExpiryDate,
+    });
+    await tx.inventoryItem.update({ where: { id: item.id }, data: { insurancePolicyId: selection.entityId, coverageEvidenceStatus: 'UNKNOWN' } });
+  } else if (coverageChoice === 'ADD_WARRANTY') {
+    const selection = await createWarranty(tx, propertyId, {
+      providerName: values.warrantyProviderName,
+      category: values.warrantyCategory,
+      startDate: values.warrantyStartDate,
+      expiryDate: values.warrantyExpiryDate,
+    });
+    await tx.inventoryItem.update({ where: { id: item.id }, data: { warrantyId: selection.entityId, coverageEvidenceStatus: 'UNKNOWN' } });
+  } else {
+    throw new Error('Choose a valid coverage option.');
+  }
+  return { entityType: 'INVENTORY_ITEM', entityId: item.id, created: false };
+}
+
 async function selectExisting(
   tx: Prisma.TransactionClient,
   propertyId: string,
@@ -147,7 +345,7 @@ async function selectExisting(
 ): Promise<RelationalCaptureSelection> {
   if (typeof entityId !== 'string' || !entityId.trim()) throw new Error('Select an existing record to continue.');
   if (adapterKey === 'INVENTORY_ITEM') {
-    const item = await tx.inventoryItem.findFirst({ where: { id: entityId, propertyId }, select: { id: true } });
+    const item = await tx.inventoryItem.findFirst({ where: { id: entityId, propertyId, ...visibleInventoryItemWhere() }, select: { id: true } });
     if (!item) throw new Error('The selected inventory item does not belong to this property.');
     return { entityType: 'INVENTORY_ITEM', entityId: item.id, created: false };
   }
@@ -169,11 +367,19 @@ async function createInventoryItem(
   const name = requiredText(values, 'name');
   const category = values.category;
   const condition = values.condition;
+  const roomId = optionalText(values, 'roomId');
   if (typeof category !== 'string' || !Object.values(InventoryItemCategory).includes(category as InventoryItemCategory)) {
     throw new Error('Select a registered inventory category.');
   }
   if (typeof condition !== 'string' || !Object.values(InventoryItemCondition).includes(condition as InventoryItemCondition)) {
     throw new Error('Select a registered inventory condition.');
+  }
+  if (['APPLIANCE', 'FURNITURE', 'ELECTRONICS', 'OTHER'].includes(String(category)) && !roomId) {
+    throw new Error('Choose a room for appliances and belongings. Whole-home systems do not require a room.');
+  }
+  if (roomId) {
+    const room = await tx.inventoryRoom.findFirst({ where: { id: roomId, propertyId }, select: { id: true } });
+    if (!room) throw new Error('The selected room does not belong to this property.');
   }
   const candidates = await tx.inventoryItem.findMany({
     where: { propertyId, category: category as InventoryItemCategory },
@@ -187,6 +393,7 @@ async function createInventoryItem(
       name,
       category: category as InventoryItemCategory,
       condition: condition as InventoryItemCondition,
+      roomId,
       sourceType: 'MANUAL',
       verificationSource: 'PROPERTY_CONTEXT_INLINE',
     },
@@ -293,7 +500,12 @@ export async function executeRelationalCapture(
     if (answer.mode !== 'UPDATE' || answer.entityId !== scopedEntityId || !answer.values || typeof answer.values !== 'object' || Array.isArray(answer.values)) {
       throw new Error('Update the item selected for this operation.');
     }
-    return updateInventoryItemLifecycle(tx, propertyId, answer.entityId, answer.values as Record<string, unknown>);
+    const values = answer.values as Record<string, unknown>;
+    if (definition.relationalAdapterKey === 'INVENTORY_ITEM_CONFIRMATION') return updateInventoryItemConfirmation(tx, propertyId, answer.entityId, values);
+    if (definition.relationalAdapterKey === 'INVENTORY_ITEM_COVERAGE_LIFECYCLE') return updateInventoryItemCoverageLifecycle(tx, propertyId, answer.entityId, values);
+    if (definition.relationalAdapterKey === 'INVENTORY_ITEM_VALUE') return updateInventoryItemValue(tx, propertyId, answer.entityId, values);
+    if (definition.relationalAdapterKey === 'INVENTORY_ITEM_COVERAGE_EVIDENCE') return updateInventoryItemCoverageEvidence(tx, propertyId, answer.entityId, values);
+    return updateInventoryItemLifecycle(tx, propertyId, answer.entityId, values);
   }
   if (answer.mode === 'SELECT') return selectExisting(tx, propertyId, definition.relationalAdapterKey, answer.entityId);
   if (answer.mode !== 'CREATE' || !answer.values || typeof answer.values !== 'object' || Array.isArray(answer.values)) {

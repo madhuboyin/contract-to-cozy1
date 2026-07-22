@@ -193,11 +193,11 @@ async function sendMaintenanceReminders() {
 // appear in the Worker Jobs admin dashboard.
 // =============================================================================
 
-const CRON_HANDLERS: Record<string, (opts?: { dryRun?: boolean }) => Promise<void | WorkerRunResult>> = {
+const CRON_HANDLERS: Record<string, (opts?: { dryRun?: boolean; propertyId?: string }) => Promise<void | WorkerRunResult>> = {
   'maintenance-reminders':           async () => sendMaintenanceReminders(),
   'daily-email-digest':              async () => { await runDailyEmailDigest(); },
   'weekly-home-brief-digest':        async () => { await runWeeklyHomeBriefDigest(); },
-  'new-home-warranty-deadlines':     async () => { await runNewHomeWarrantyDeadlineJob(); },
+  'new-home-warranty-deadlines':     async (opts) => runNewHomeWarrantyDeadlineJob(opts),
   'seasonal-checklist-expiration':   async () => { await expireSeasonalChecklists(); },
   'seasonal-checklist-generation':   async () => { await generateSeasonalChecklists(); },
   'seasonal-notifications':          async () => sendSeasonalNotifications(),
@@ -213,11 +213,25 @@ const CRON_HANDLERS: Record<string, (opts?: { dryRun?: boolean }) => Promise<voi
   'neighborhood-radar-refresh':      async () => { await refreshNeighborhoodEventsJob(); },
   'inventory-draft-cleanup':         async () => { await cleanupInventoryDraftsJob(); },
   'home-habit-generation':           async () => { await runHabitGenerationJob(); },
-  'mortgage-rate-ingest':            async () => {
-    const result = await ingestMortgageRatesJob();
+  'mortgage-rate-ingest':            async (opts) => {
+    // Forward `opts` only when the caller actually passed one — a defined
+    // opts is itself the "this was a manual/admin trigger" signal
+    // ingestMortgageRatesJob uses to decide whether to tag a correlation ID.
+    const result = await ingestMortgageRatesJob(opts ? { dryRun: opts.dryRun } : undefined);
     if (!result.success) {
       logger.warn({ reason: result.reason }, '[mortgage-rate-ingest] No rates ingested');
     }
+    // MortgageRateIngestResult isn't WorkerRunResult-shaped (no `examined`)
+    // — map it so the admin smoke checklist can still show what happened,
+    // without changing the never-fails-the-run leniency this job already had.
+    return {
+      examined: 1,
+      created: result.created ? 1 : 0,
+      skipped: result.skipped ? 1 : 0,
+      failed: 0,
+      reason: result.reason ?? `${result.source} ${result.date ?? ''} 30yr=${result.rate30yr ?? '—'}% 15yr=${result.rate15yr ?? '—'}%`,
+      smokeCorrelationId: result.smokeCorrelationId,
+    };
   },
   'tax-assessment-ingest':           async () => { await ingestTaxAssessmentEventsJob(); },
   'home-gazette-generation':         async () => { await runGazetteGenerationJob(); },
@@ -226,7 +240,7 @@ const CRON_HANDLERS: Record<string, (opts?: { dryRun?: boolean }) => Promise<voi
   'shared-signal-refresh':           async () => { await runSharedSignalRefreshJob(); },
   'shared-signal-health-audit':      async () => { await runSharedSignalHealthAuditJob(); },
   'expire-guidance-signals':         async () => { await expireGuidanceSignalsJob(); },
-  'permit-inspection-reminders':     async () => { await permitInspectionReminderJob(); },
+  'permit-inspection-reminders':     async (opts) => permitInspectionReminderJob(opts),
   'reserve-fund-recalculation':      async () => { await recalculateReserveFundsJob(); },
   'reserve-fund-reconciliation':     async () => { await reserveFundReconciliationJob(); },
   'reserve-fund-balance-reminder':   async () => { await reserveFundBalanceReminderJob(); },
@@ -947,14 +961,25 @@ const cronTriggerWorker = new Worker(
     if (dryRun && registryEntry && !registryEntry.supportsDryRun) {
       throw new Error(`[CRON-TRIGGER] Dry-run requested for "${job.name}" but it does not support dry-run`);
     }
-    logger.info(`[CRON-TRIGGER] Running manually triggered job: ${job.name}${dryRun ? ' (dry run)' : ''}`);
-    const outcome = await handler({ dryRun });
+    const propertyId: string | undefined =
+      typeof job.data?.propertyId === 'string' && job.data.propertyId ? job.data.propertyId : undefined;
+    // W6 item 2/5: same defense-in-depth reasoning — a scoped smoke run's
+    // property allowlist membership is re-checked at the job/service layer
+    // too (see permitInspectionReminderJob / processNewHomeWarrantyDeadlines),
+    // but a job that doesn't declare supportsPropertyScope at all shouldn't
+    // silently ignore a propertyId a caller thought was scoping the run.
+    if (propertyId && registryEntry && !registryEntry.supportsPropertyScope) {
+      throw new Error(`[CRON-TRIGGER] propertyId requested for "${job.name}" but it does not support property scope`);
+    }
+    logger.info(`[CRON-TRIGGER] Running manually triggered job: ${job.name}${dryRun ? ' (dry run)' : ''}${propertyId ? ` (property ${propertyId})` : ''}`);
+    const outcome = await handler({ dryRun, propertyId });
     if (isWorkerRunResult(outcome) && deriveRunStatus(outcome) === 'FAILED') {
       throw new Error(
         outcome.reason ??
           `[CRON-TRIGGER] "${job.name}" resolved with FAILED status (examined=${outcome.examined}, failed=${outcome.failed})`,
       );
     }
+    return outcome;
   },
   {
     connection: redisConnection,

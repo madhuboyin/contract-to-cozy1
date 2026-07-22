@@ -161,7 +161,15 @@ export interface ContextCaptureDefinition {
   /** Backend-only mapping. It is removed from evaluator/API responses. */
   answerBindings?: Record<string, string>;
   /** Backend-only allowlisted relational command. */
-  relationalAdapterKey?: 'INVENTORY_ITEM' | 'INVENTORY_ITEM_LIFECYCLE' | 'INSURANCE_POLICY' | 'WARRANTY';
+  relationalAdapterKey?:
+    | 'INVENTORY_ITEM'
+    | 'INVENTORY_ITEM_LIFECYCLE'
+    | 'INVENTORY_ITEM_CONFIRMATION'
+    | 'INVENTORY_ITEM_COVERAGE_LIFECYCLE'
+    | 'INVENTORY_ITEM_VALUE'
+    | 'INVENTORY_ITEM_COVERAGE_EVIDENCE'
+    | 'INSURANCE_POLICY'
+    | 'WARRANTY';
   /** Backend-only operation-input key that scopes a relational update to an explicit entity. */
   relationalEntityInputKey?: string;
 }

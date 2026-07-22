@@ -79,10 +79,15 @@ export function PropertyContextCapturePanel({
   const stale = requirement.state === 'STALE';
   const conflicted = requirement.state === 'CONFLICTED';
 
-  const fieldIsActive = (field: Extract<typeof schema, { type: 'GROUP' }>['fields'][number]) => {
+  const fieldIsActive = (field: { when?: { fieldKey: string; operator: 'EQUALS' | 'NOT_EQUALS'; value: string | number | boolean } }) => {
     if (!field.when) return true;
     const actual = groupDraft[field.when.fieldKey];
     return field.when.operator === 'EQUALS' ? actual === field.when.value : actual !== field.when.value;
+  };
+  const fieldIsMissing = (field: { key: string; required: boolean }) => {
+    if (!field.required) return false;
+    const value = groupDraft[field.key];
+    return value === undefined || value === null || value === '' || (Array.isArray(value) && value.length === 0);
   };
 
   const notSureGroupAnswer = () => schema.type === 'GROUP'
@@ -134,7 +139,7 @@ export function PropertyContextCapturePanel({
               disabled={saving}
               onChange={(value) => setGroupDraft((current) => ({ ...current, [field.key]: value }))}
             />)}
-            <button type="submit" disabled={saving || schema.fields.filter(fieldIsActive).some((field) => field.required && !Object.prototype.hasOwnProperty.call(groupDraft, field.key))} className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white">{stale || conflicted ? 'Confirm and continue' : 'Save and continue'}</button>
+            <button type="submit" disabled={saving || schema.fields.filter(fieldIsActive).some(fieldIsMissing)} className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white">{stale || conflicted ? 'Confirm and continue' : 'Save and continue'}</button>
           </form> : null}
           {schema.type === 'RELATIONAL_SELECT_CREATE' ? <div className="w-full space-y-4">
             {schema.options.length ? <div className="flex gap-2" role="tablist" aria-label="Choose or add a record">
@@ -150,21 +155,21 @@ export function PropertyContextCapturePanel({
             </form> : null}
             {relationalMode === 'CREATE' ? <form className="space-y-4" onSubmit={(event) => { event.preventDefault(); void capture({ mode: 'CREATE', values: groupDraft }); }}>
               {schema.createFields.map((field) => <StructuredFieldControl key={field.key} field={field} value={groupDraft[field.key]} disabled={saving} onChange={(value) => setGroupDraft((current) => ({ ...current, [field.key]: value }))} />)}
-              <button type="submit" disabled={saving || schema.createFields.some((field) => field.required && !Object.prototype.hasOwnProperty.call(groupDraft, field.key))} className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white">Add and continue</button>
+              <button type="submit" disabled={saving || schema.createFields.some(fieldIsMissing)} className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white">Add and continue</button>
             </form> : null}
           </div> : null}
           {schema.type === 'RELATIONAL_UPDATE' ? <form className="w-full space-y-4" onSubmit={(event) => {
             event.preventDefault();
             void capture({ mode: 'UPDATE', entityId: schema.entityId, values: groupDraft });
           }}>
-            {schema.fields.map((field) => <StructuredFieldControl
+            {schema.fields.filter(fieldIsActive).map((field) => <StructuredFieldControl
               key={field.key}
               field={field}
               value={groupDraft[field.key]}
               disabled={saving}
               onChange={(value) => setGroupDraft((current) => ({ ...current, [field.key]: value }))}
             />)}
-            <button type="submit" disabled={saving || schema.fields.some((field) => field.required && !groupDraft[field.key])} className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white">{schema.updateLabel}</button>
+            <button type="submit" disabled={saving || schema.fields.filter(fieldIsActive).some(fieldIsMissing)} className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white">{schema.updateLabel}</button>
           </form> : null}
           {requirement.capture.allowNotSure ? <button type="button" disabled={saving} onClick={() => void capture(schema.type === 'GROUP' ? notSureGroupAnswer() : null)} className="rounded-lg px-3 py-2 text-sm font-medium underline">Not sure</button> : null}
           {enhancement ? <button type="button" disabled={saving} onClick={() => setDismissedVersion(evaluation.contextVersion)} className="rounded-lg px-3 py-2 text-sm font-medium underline">Skip for now</button> : null}

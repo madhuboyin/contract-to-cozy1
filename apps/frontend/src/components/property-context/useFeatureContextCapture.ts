@@ -4,6 +4,13 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '@/lib/api/client';
 import type { FeatureContextCaptureResult, FeatureContextEvaluation } from './featureContextTypes';
 
+function containsUnknownAnswer(value: unknown): boolean {
+  if (value === null || value === 'UNKNOWN' || value === 'NOT_SURE') return true;
+  if (Array.isArray(value)) return value.some(containsUnknownAnswer);
+  if (typeof value === 'object') return Object.values(value as Record<string, unknown>).some(containsUnknownAnswer);
+  return false;
+}
+
 export function useFeatureContextCapture({
   propertyId,
   featureKey,
@@ -103,10 +110,7 @@ export function useFeatureContextCapture({
       if (!response.success) throw new Error(response.message || 'Could not save this detail.');
       if (captureIdentity !== activeIdentity.current) return;
       setEvaluation(response.data.evaluation);
-      const containsUnknown = value === null || value === 'UNKNOWN' || (
-        value !== null && typeof value === 'object' && Object.values(value as Record<string, unknown>)
-          .some((entry) => entry === null || entry === 'UNKNOWN')
-      );
+      const containsUnknown = containsUnknownAnswer(value);
       setSuppressedRequirementId(
         containsUnknown && response.data.evaluation.requirements[0]?.requirementId === requirement.requirementId
           ? requirement.requirementId

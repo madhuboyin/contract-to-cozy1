@@ -32,6 +32,10 @@ export interface RecentRun {
   finishedAt: number | null;
   durationMs: number | null;
   failReason?: string;
+  /** Whether this run was requested with { dryRun: true }. */
+  dryRun?: boolean;
+  /** The handler's returned outcome, when available (W6 smoke checklist "actual result"). */
+  result?: unknown;
 }
 
 export interface WorkerJobDetail {
@@ -53,6 +57,16 @@ export interface WorkerJobDetail {
   disabledReason?: string;
   /** Whether a manual trigger can pass { dryRun: true } and have the job honor it. */
   supportsDryRun: boolean;
+  /** Whether a scoped smoke run can pass { propertyId }. */
+  supportsPropertyScope: boolean;
+  /** Both smoke-test allowlists (property + recipient) have at least one entry configured. */
+  smokeAllowlistConfigured: boolean;
+}
+
+export interface SmokeCleanupPreview {
+  correlationId: string;
+  notificationIds: string[];
+  mortgageRateSnapshotIds: string[];
 }
 
 export interface WorkerGovernanceStatus {
@@ -75,11 +89,21 @@ export async function fetchWorkerGovernance(): Promise<WorkerGovernanceStatus> {
 
 export async function triggerWorkerJob(
   jobKey: string,
-  options?: { dryRun?: boolean },
+  options?: { dryRun?: boolean; propertyId?: string },
 ): Promise<{ queued: boolean; jobId?: string }> {
   const res = await api.post<{ queued: boolean; jobId?: string }>(
     `/api/admin/worker-jobs/${jobKey}/trigger`,
-    { dryRun: options?.dryRun === true },
+    { dryRun: options?.dryRun === true, propertyId: options?.propertyId },
   );
+  return res.data;
+}
+
+export async function previewSmokeCleanup(correlationId: string): Promise<SmokeCleanupPreview> {
+  const res = await api.get<SmokeCleanupPreview>(`/api/admin/worker-jobs/smoke/${encodeURIComponent(correlationId)}`);
+  return res.data;
+}
+
+export async function deleteSmokeCleanup(correlationId: string): Promise<SmokeCleanupPreview> {
+  const res = await api.delete<SmokeCleanupPreview>(`/api/admin/worker-jobs/smoke/${encodeURIComponent(correlationId)}`);
   return res.data;
 }
