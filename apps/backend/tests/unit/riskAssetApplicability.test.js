@@ -30,7 +30,7 @@ test('risk concepts cannot be projected as physical inventory assets', () => {
           { assetType: { notIn: ['BASEMENT_FLOOD_RISK'] } },
         ],
       },
-      { tags: { hasNone: ['INFERRED_NOT_PRESENT'] } },
+      { NOT: { tags: { has: 'INFERRED_NOT_PRESENT' } } },
     ],
   });
 });

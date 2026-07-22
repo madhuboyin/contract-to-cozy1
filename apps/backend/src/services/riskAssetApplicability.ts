@@ -1,3 +1,4 @@
+import type { Prisma } from '@prisma/client';
 import { RISK_ASSET_CONFIG } from '../config/risk-constants';
 
 export const NON_INVENTORY_RISK_ASSET_TYPES = ['BASEMENT_FLOOD_RISK'] as const;
@@ -17,7 +18,7 @@ export function isRiskReportInventoryAssetType(systemType: string): boolean {
     !systemType.startsWith('MAJOR_APPLIANCE_');
 }
 
-export function visibleInventoryItemWhere() {
+export function visibleInventoryItemWhere(): Prisma.InventoryItemWhereInput {
   return {
     AND: [
       {
@@ -26,7 +27,7 @@ export function visibleInventoryItemWhere() {
           { assetType: { notIn: [...NON_INVENTORY_RISK_ASSET_TYPES] } },
         ],
       },
-      { tags: { hasNone: ['INFERRED_NOT_PRESENT'] } },
+      { NOT: { tags: { has: 'INFERRED_NOT_PRESENT' } } },
     ],
   };
 }
