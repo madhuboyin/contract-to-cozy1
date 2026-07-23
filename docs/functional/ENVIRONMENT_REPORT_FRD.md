@@ -292,7 +292,7 @@ Every insight must support:
 - FR-9.3: Personalization must prefer plants added to the home, then saved recommendations, then room profiles.
 - FR-9.4: Plant guidance must use available plant humidity, light, maintenance, watering-cadence, room-type, cooling, heating, and backup-heat context.
 - FR-9.5: Saved recommendations must not be presented as confirmed plant ownership.
-- FR-9.6: When no Plant Advisor data exists, the module must provide a contextual setup CTA rather than plant-specific guidance.
+- FR-9.6: When no Plant Advisor data exists, the module must provide a clearly optional, contextual setup CTA rather than plant-specific guidance. Setup copy must not imply that the property already has plants.
 - FR-9.7: The CTA must preserve property, weather trigger, launch surface, and relevant room context.
 - FR-9.8: Poor-air-quality guidance must explicitly avoid presenting houseplants as a substitute for indoor-air filtration.
 - FR-9.9: A Plant Advisor query failure must degrade only the cross-sell module and must not fail the Environment Report.

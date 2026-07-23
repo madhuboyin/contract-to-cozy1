@@ -175,13 +175,15 @@ function PlantAdvisorWeatherCard({ module }: { module: PlantAdvisorWeatherModule
       <div className="flex min-w-0 flex-1 items-center gap-3">
         <div className="shrink-0 rounded-full bg-emerald-100 p-2 text-emerald-700"><Sprout className="h-4 w-4" /></div>
         <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">Plant care</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">
+            {isSetup ? 'Plant Advisor · Optional' : 'Plant care'}
+          </p>
           <p className="text-sm font-semibold text-emerald-950">{module.title}</p>
           <p className="mt-0.5 text-xs leading-relaxed text-emerald-800/80">{module.summary}</p>
         </div>
       </div>
       <Button asChild variant={isSetup ? 'default' : 'ghost'} size="sm" className="shrink-0 justify-start text-emerald-800 hover:bg-emerald-100 hover:text-emerald-950">
-        <Link href={module.action.href}>{isSetup ? 'Set up Plant Advisor' : `Open ${triggerLabels[module.trigger]} plan`}<ArrowRight className="ml-1.5 h-4 w-4" /></Link>
+        <Link href={module.action.href}>{isSetup ? module.action.label : `Open ${triggerLabels[module.trigger]} plan`}<ArrowRight className="ml-1.5 h-4 w-4" /></Link>
       </Button>
     </div>
   );

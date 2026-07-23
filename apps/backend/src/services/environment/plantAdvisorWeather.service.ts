@@ -53,16 +53,16 @@ function contextLevel(context: PlantContext): PlantAdvisorContextLevel {
 }
 
 function setupCopy(trigger: PlantWeatherTrigger): Pick<PlantAdvisorWeatherModule, 'title' | 'summary'> {
-  const titles: Record<PlantWeatherTrigger, string> = {
-    heat: 'Help your plants through the heat',
-    freeze: 'Help your plants through cold weather',
-    low_humidity: 'Help your plants through dry air',
-    storm: 'Prepare your plants for storm-related changes',
-    air_quality: 'Keep plant care steady while outdoor air is poor',
+  const weatherLabels: Record<PlantWeatherTrigger, string> = {
+    heat: 'hot weather',
+    freeze: 'cold weather',
+    low_humidity: 'dry conditions',
+    storm: 'storms and power interruptions',
+    air_quality: 'poor outdoor air quality',
   };
   return {
-    title: titles[trigger],
-    summary: 'Set up a room in Plant Advisor to receive weather-aware placement and care recommendations.',
+    title: 'Get weather-aware plant guidance',
+    summary: `Add the plants you care for to receive room-specific placement and care guidance during ${weatherLabels[trigger]}.`,
   };
 }
 

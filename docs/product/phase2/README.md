@@ -237,6 +237,15 @@ Acceptance criteria:
 - Confirming detectors are installed removes the installation recommendation after re-evaluation.
 - Confirming they are not installed retains safety guidance with an actionable next step.
 - Choosing **Not sure** records explicit uncertainty and does not present absence as a confirmed fact.
+
+## Environment-to-Plant-Advisor context convergence
+
+Implemented July 23, 2026:
+
+- Environment Report retains weather-relevant Plant Advisor discovery when no plant records exist, as required by the Environment Report product contract.
+- The empty setup state is presented as optional tool discovery and no longer claims that the homeowner has plants or needs to prepare them.
+- Setup copy invites the homeowner to add plants for room-specific weather guidance; confirmed plants continue to receive plant- and room-specific care guidance.
+- Outdoor Plant Advisor execution remains gated by private outdoor-space and landscaping-responsibility Property Context, while indoor setup remains available without exterior ownership assumptions.
 - Routed household-size capture to the consent-controlled personalization profile instead of adding it to Property Details or copying it into the Property record.
 - Kept property age limited to the building year. Children or older-adult safety needs and pets remain separate optional household-profile questions and are never inferred from the home.
 - Added a clearly labeled household-context entry point to Home setup so users can find the optional flow without confusing it with ownership, occupancy status, or property age.

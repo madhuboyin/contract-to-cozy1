@@ -68,6 +68,9 @@ test('offers contextual Plant Advisor setup when heat is relevant and no plant d
   assert.equal(modules[0].trigger, 'heat');
   assert.equal(modules[0].relatedInsightId, heatInsight.id);
   assert.equal(modules[0].contextLevel, 'setup');
+  assert.equal(modules[0].title, 'Get weather-aware plant guidance');
+  assert.match(modules[0].summary, /Add the plants you care for/);
+  assert.doesNotMatch(modules[0].title, /your plants/i);
   assert.equal(modules[0].action.label, 'Set up Plant Advisor');
   assert.match(modules[0].action.href, /launchSurface=environment-report/);
   assert.match(modules[0].action.href, /weatherContext=heat/);
@@ -112,6 +115,20 @@ test('adds low-humidity guidance without requiring a home-risk insight', () => {
   assert.equal(modules.length, 1);
   assert.equal(modules[0].trigger, 'low_humidity');
   assert.equal(modules[0].relatedInsightId, null);
+  assert.match(modules[0].summary, /dry conditions/);
+});
+
+test('setup discovery does not imply confirmed plants for storm weather', () => {
+  const stormInsight = { ...heatInsight, id: 'storm-setup-1', category: 'storm' };
+  const modules = derivePlantAdvisorWeatherModules('property-1', sections(), [stormInsight], {
+    profiles: [],
+    plants: [],
+  });
+
+  assert.equal(modules[0].contextLevel, 'setup');
+  assert.equal(modules[0].title, 'Get weather-aware plant guidance');
+  assert.match(modules[0].summary, /storms and power interruptions/);
+  assert.doesNotMatch(`${modules[0].title} ${modules[0].summary}`, /prepare your plants/i);
 });
 
 test('poor-air guidance explicitly avoids presenting plants as filtration', () => {
