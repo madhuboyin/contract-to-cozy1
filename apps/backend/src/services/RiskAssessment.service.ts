@@ -8,6 +8,7 @@ import {
   InsurancePolicy,
   InventoryItem,
   InventoryRoom,
+  PropertyResponsibility,
   RiskCategory,
 } from '@prisma/client';
 
@@ -24,11 +25,13 @@ import { evaluateProtectionContext } from './protection/applicabilityPolicy';
 import type { FeatureDecision, PropertyContextSnapshot } from '../modules/propertyContext';
 import { hasConfirmedBasement } from './riskAssetApplicability';
 import { getHomeAssetDisplayLabel } from '../productFramework/homeAssetDisplay';
+import { isAssetOwnerActionable } from './inventoryCoverageState.service';
 
 interface PropertyWithRelations extends Property {
   warranties: Warranty[];
   insurancePolicies: InsurancePolicy[];
   riskReport: RiskAssessmentReport | null;
+  responsibilities: PropertyResponsibility[];
   // ✅ New: Inventory source of truth
   inventoryItems: Array<
     InventoryItem & {
@@ -236,7 +239,12 @@ class RiskAssessmentService {
           logger.warn(`[RISK-CALC] Basic property data missing for ${propertyId}. Running inventory-only assessment.`);
         } else {
           logger.info(`[RISK-SERVICE] Filtering assets for property ${propertyId}...`);
-          const relevantConfigs = filterRelevantAssets(property as PropertyWithRelations, RISK_ASSET_CONFIG);
+          const relevantConfigs = filterRelevantAssets(property as PropertyWithRelations, RISK_ASSET_CONFIG)
+            .filter((config) => isAssetOwnerActionable(
+              config.systemType,
+              String(config.category),
+              (property as PropertyWithRelations).responsibilities,
+            ));
           logger.info(`[RISK-SERVICE] Filtered from ${RISK_ASSET_CONFIG.length} to ${relevantConfigs.length} relevant assets`);
         
           for (const config of relevantConfigs) {
@@ -610,6 +618,7 @@ class RiskAssessmentService {
         warranties: true,
         insurancePolicies: true,
         riskReport: true,
+        responsibilities: true,
         // ✅ New: inventory items drive MAJOR_APPLIANCE risks
         inventoryItems: {
           include: {

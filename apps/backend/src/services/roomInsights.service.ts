@@ -3,6 +3,7 @@ import { prisma } from '../lib/prisma';
 import { APIError } from '../middleware/error.middleware';
 import { RoomType } from '@prisma/client';
 import { computeRoomHealthScore } from './roomHealthScore.service';
+import { detectCoverageGaps } from './coverageGap.service';
 
 
 function centsToDollars(cents: number) {
@@ -75,7 +76,11 @@ export class RoomInsightsService {
 
     const replacementTotalCents = items.reduce((sum, it) => sum + (it.replacementCostCents || 0), 0);
 
-    const coverageGapsCount = items.filter((it) => !it.warrantyId && !it.insurancePolicyId).length;
+    const actionableCoverageGaps = await detectCoverageGaps(propertyId);
+    const roomItemIds = new Set(items.map((item) => item.id));
+    const coverageGapsCount = actionableCoverageGaps.filter(
+      (gap) => roomItemIds.has(gap.inventoryItemId),
+    ).length;
 
     const appliancesCount = items.filter((it) => it.category === 'APPLIANCE').length;
 
@@ -135,8 +140,8 @@ export class RoomInsightsService {
           title: 'Close coverage gaps',
           detail:
             coverageGapsCount > 0
-              ? `${coverageGapsCount} items are missing warranty or insurance mapping.`
-              : 'No obvious coverage gaps found for items in this room.',
+              ? `${coverageGapsCount} actionable coverage ${coverageGapsCount === 1 ? 'gap needs' : 'gaps need'} review.`
+              : 'No actionable coverage gaps found for items in this room.',
         },
       ];
 

@@ -149,6 +149,18 @@ export function reconcileCoverageHomeActions(
   });
 }
 
+export function selectEligibleActiveJourney<T extends { id: string }>(
+  journeys: readonly T[],
+  actions: readonly Pick<HomeAction, 'relatedJourneyId'>[],
+): T | null {
+  const eligibleJourneyIds = new Set(
+    actions
+      .map((action) => action.relatedJourneyId)
+      .filter((id): id is string => Boolean(id)),
+  );
+  return journeys.find((journey) => eligibleJourneyIds.has(journey.id)) ?? null;
+}
+
 async function loadCurrentCoverageStates(propertyId: string): Promise<Map<string, CoverageStateForHomeAction>> {
   const [items, responsibilities] = await Promise.all([
     prisma.inventoryItem.findMany({
@@ -328,7 +340,7 @@ export async function recordHomeActionOpened(propertyId: string, actionId: strin
 
 export async function getUnifiedHome(propertyId: string, userId: string) {
   const feed = await getHomeActionFeed(propertyId, userId);
-  const [property, inventory, documentCount, verifiedDocumentCount, recentEvents, activeProject, activeJourney, propertyContextSnapshot] =
+  const [property, inventory, documentCount, verifiedDocumentCount, recentEvents, activeProject, activeJourneyCandidates, propertyContextSnapshot] =
     await Promise.all([
       prisma.property.findUnique({
         where: { id: propertyId },
@@ -387,9 +399,10 @@ export async function getUnifiedHome(propertyId: string, userId: string) {
           },
         },
       }),
-      prisma.guidanceJourney.findFirst({
+      prisma.guidanceJourney.findMany({
         where: { propertyId, status: 'ACTIVE' },
         orderBy: { updatedAt: 'desc' },
+        take: 20,
         include: {
           inventoryItem: { select: { name: true, assetType: true, category: true } },
           steps: {
@@ -422,6 +435,7 @@ export async function getUnifiedHome(propertyId: string, userId: string) {
 
   const projectMilestone = activeProject?.milestones[0] ?? null;
   const projectIssue = activeProject?.issues[0] ?? null;
+  const activeJourney = selectEligibleActiveJourney(activeJourneyCandidates, feed.actions);
   const journeyStep = activeJourney?.steps[0] ?? null;
   const activeMajorMoment = activeProject
     ? {

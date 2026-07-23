@@ -12,6 +12,13 @@ import { buildGuidanceOverviewHref } from '@/lib/navigation/guidanceOverviewHref
 
 export type UrgentActionItem = ResolutionCenterAction;
 
+export function isCanonicalActionableCoverageGap(item: InventoryItem): boolean {
+  if (item.coverageState !== 'MISSING' || item.coverageActionable !== true) return false;
+  const exposureCents = item.effectiveReplacementCostCents ?? item.replacementCostCents ?? 0;
+  const thresholdCents = item.category === 'APPLIANCE' ? 25000 : 50000;
+  return exposureCents >= thresholdCents;
+}
+
 type ChecklistEntry = {
   id: string;
   status: string;
@@ -154,40 +161,23 @@ export function consolidateUrgentActions(
 
   if (inventoryItems) {
     inventoryItems.forEach((item) => {
-      if (item.coverageNotRequired) return;
+      if (!isCanonicalActionableCoverageGap(item)) return;
 
-      const hasWarranty = Boolean(item.warrantyId);
-      const hasInsurance = Boolean(item.insurancePolicyId);
       const replacementValue = item.replacementCostCents ? item.replacementCostCents / 100 : 0;
       const replacementValueText =
         replacementValue > 0
           ? `Replacement value: $${replacementValue.toFixed(0)}.`
           : 'Replacement value has not been added yet.';
 
-      if (!hasWarranty && !hasInsurance) {
-        actions.push({
-          id: `COVERAGE-GAP-${item.id}`,
-          type: 'COVERAGE_GAP',
-          title: `${item.name} needs coverage`,
-          description: `No warranty or insurance coverage. ${replacementValueText}`,
-          propertyId: item.propertyId || 'N/A',
-          severity: 'WARNING',
-          itemId: item.id,
-        });
-        return;
-      }
-
-      if (!hasWarranty || !hasInsurance) {
-        actions.push({
-          id: `COVERAGE-PARTIAL-${item.id}`,
-          type: 'COVERAGE_PARTIAL',
-          title: `${item.name} has partial coverage`,
-          description: `Missing ${!hasWarranty ? 'warranty' : 'insurance'} coverage. ${replacementValueText}`,
-          propertyId: item.propertyId || 'N/A',
-          severity: 'INFO',
-          itemId: item.id,
-        });
-      }
+      actions.push({
+        id: `COVERAGE-GAP-${item.id}`,
+        type: 'COVERAGE_GAP',
+        title: `${item.name} needs coverage`,
+        description: `${item.coverageStateDetail || 'Coverage is missing.'} ${replacementValueText}`,
+        propertyId: item.propertyId || 'N/A',
+        severity: 'WARNING',
+        itemId: item.id,
+      });
     });
   }
 
@@ -225,7 +215,7 @@ export function resolveUrgentActionHref(action: UrgentActionItem, propertyId?: s
 
   if (action.type === 'COVERAGE_GAP' || action.type === 'COVERAGE_PARTIAL') {
     if (action.itemId) {
-      return `/dashboard/properties/${actionPropertyId}/focus/coverage/${action.itemId}`;
+      return `/dashboard/properties/${actionPropertyId}/inventory/items/${action.itemId}/coverage`;
     }
   }
 

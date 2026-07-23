@@ -453,7 +453,8 @@ export default function CoverageIntelligencePanel({
     return items.find((item) => item.id === selectedItemId) ?? null;
   }, [items, selectedItemId]);
 
-  const selectedItemHasGap = !!selectedItem && !selectedItem.coverageNotRequired && (!selectedItem.warrantyId || !selectedItem.insurancePolicyId);
+  const selectedItemHasGap = selectedItem?.coverageState === 'MISSING'
+    && selectedItem.coverageActionable === true;
   const currentPathWithQuery = useMemo(() => {
     const query = searchParams.toString();
     return query ? `${pathname}?${query}` : pathname;
@@ -545,7 +546,7 @@ export default function CoverageIntelligencePanel({
               </select>
             </label>
             <Button type="button" disabled={!selectedItemId} onClick={openItemCoverage}>
-              Get coverage
+              Review coverage
             </Button>
           </div>
           {selectedItem ? (
@@ -554,8 +555,9 @@ export default function CoverageIntelligencePanel({
                 { label: 'Category', value: selectedItem.category },
                 { label: 'Room', value: selectedItem.room?.name ?? 'Unassigned room' },
                 {
-                  label: 'Coverage links',
-                  value: selectedItemHasGap ? 'Gap detected' : 'Active links present',
+                  label: 'Coverage status',
+                  value: selectedItem.coverageStateLabel
+                    || (selectedItemHasGap ? 'Coverage missing' : 'Coverage information incomplete'),
                   emphasize: selectedItemHasGap,
                 },
               ]}

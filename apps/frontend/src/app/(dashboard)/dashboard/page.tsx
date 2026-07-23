@@ -94,6 +94,13 @@ function formatUsd(value: number): string {
   }).format(value);
 }
 
+function isCanonicalActionableCoverageGap(item: InventoryItem): boolean {
+  if (item.coverageState !== 'MISSING' || item.coverageActionable !== true) return false;
+  const exposureCents = item.effectiveReplacementCostCents ?? item.replacementCostCents ?? 0;
+  const thresholdCents = item.category === 'APPLIANCE' ? 25000 : 50000;
+  return exposureCents >= thresholdCents;
+}
+
 function resolvePriorityAlertSavings(
   incident: IncidentDTO | undefined,
 ): number {
@@ -527,39 +534,23 @@ const consolidateUrgentActions = (
     // 5. Process Inventory Coverage Gaps
     if (inventoryItems) {
         inventoryItems.forEach(item => {
-            if (item.coverageNotRequired) return;
+            if (!isCanonicalActionableCoverageGap(item)) return;
 
-            const hasWarranty = Boolean(item.warrantyId);
-            const hasInsurance = Boolean(item.insurancePolicyId);
             const replacementValue = item.replacementCostCents ? item.replacementCostCents / 100 : 0;
             const replacementValueText = replacementValue > 0
                 ? `Replacement value: $${replacementValue.toFixed(0)}.`
                 : 'Replacement value has not been added yet.';
 
-            if (!hasWarranty && !hasInsurance) {
-                actions.push({
-                    id: `COVERAGE-GAP-${item.id}`,
-                    type: 'COVERAGE_GAP',
-                    title: `${item.name} needs coverage`,
-                    description: `No warranty or insurance coverage. ${replacementValueText}`,
-                    propertyId: item.propertyId || 'N/A',
-                    severity: 'WARNING',
-                    itemId: item.id,
-                    exposureCents: item.replacementCostCents ?? 0,
-                });
-            } else if (!hasWarranty || !hasInsurance) {
-                const missing = !hasWarranty ? 'warranty' : 'insurance';
-                actions.push({
-                    id: `COVERAGE-PARTIAL-${item.id}`,
-                    type: 'COVERAGE_PARTIAL',
-                    title: `${item.name} has partial coverage`,
-                    description: `Missing ${missing} coverage. ${replacementValueText}`,
-                    propertyId: item.propertyId || 'N/A',
-                    severity: 'INFO',
-                    itemId: item.id,
-                    exposureCents: item.replacementCostCents ?? 0,
-                });
-            }
+            actions.push({
+                id: `COVERAGE-GAP-${item.id}`,
+                type: 'COVERAGE_GAP',
+                title: `${item.name} needs coverage`,
+                description: `${item.coverageStateDetail || 'Coverage is missing.'} ${replacementValueText}`,
+                propertyId: item.propertyId || 'N/A',
+                severity: 'WARNING',
+                itemId: item.id,
+                exposureCents: item.replacementCostCents ?? 0,
+            });
         });
     }
 
@@ -605,7 +596,7 @@ function resolveUrgentActionHref(action: UrgentActionItem, propertyId?: string):
 
   if (action.type === 'COVERAGE_GAP' || action.type === 'COVERAGE_PARTIAL') {
     if (action.itemId) {
-      return `/dashboard/properties/${actionPropertyId}/focus/coverage/${action.itemId}`;
+      return `/dashboard/properties/${actionPropertyId}/inventory/items/${action.itemId}/coverage`;
     }
   }
 
@@ -863,8 +854,8 @@ export default function DashboardPage() {
       );
   
       const coverageGapExposure = inventoryItems
-        .filter((item: InventoryItem) => !item.coverageNotRequired && !item.warrantyId && !item.insurancePolicyId)
-        .reduce((sum: number, item: InventoryItem) => sum + Number(item.replacementCostCents || 0) / 100, 0);
+        .filter(isCanonicalActionableCoverageGap)
+        .reduce((sum: number, item: InventoryItem) => sum + Number(item.effectiveReplacementCostCents ?? item.replacementCostCents ?? 0) / 100, 0);
 
       setData({
         bookings,
@@ -1067,7 +1058,7 @@ export default function DashboardPage() {
         : `${topItemName}${topExposureText} has no warranty or insurance. Fully exposed if it fails or is damaged.`;
       const ctaLabel = remainingCount > 0 ? `Review ${topItemName} first` : `Review ${topItemName}`;
       const ctaHref = topGap.itemId && effectiveSelectedPropertyId
-        ? `/dashboard/properties/${effectiveSelectedPropertyId}/focus/coverage/${topGap.itemId}`
+        ? `/dashboard/properties/${effectiveSelectedPropertyId}/inventory/items/${topGap.itemId}/coverage`
         : buildPropertyAwareDashboardHref(effectiveSelectedPropertyId, `/dashboard/properties/${effectiveSelectedPropertyId}/inventory?tab=items&smart=gaps`);
       const etaLabel = 'ETA 2 min';
       return {
@@ -1100,7 +1091,7 @@ export default function DashboardPage() {
         : `${topItemName}${topExposureText} has either a warranty or insurance but not both. One coverage type is missing.`;
       const ctaLabel = remainingCount > 0 ? `Review ${topItemName} first` : `Review ${topItemName}`;
       const ctaHref = topPartial.itemId && effectiveSelectedPropertyId
-        ? `/dashboard/properties/${effectiveSelectedPropertyId}/focus/coverage/${topPartial.itemId}`
+        ? `/dashboard/properties/${effectiveSelectedPropertyId}/inventory/items/${topPartial.itemId}/coverage`
         : buildPropertyAwareDashboardHref(effectiveSelectedPropertyId, `/dashboard/properties/${effectiveSelectedPropertyId}/inventory?tab=items&smart=gaps`);
       const etaLabel = 'ETA 2 min';
       return {

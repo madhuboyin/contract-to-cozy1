@@ -63,9 +63,12 @@ export function getInventoryRecordGroup(item: CoverageItem): InventoryRecordGrou
     : 'APPLIANCES_BELONGINGS';
 }
 
-export function getInventoryResponsibilityScope(item: CoverageItem): string | null {
-  const asset = normalizedAsset(item);
-  const category = String(item.category);
+export function getResponsibilityScopeForAsset(
+  assetTypeOrName: string | null | undefined,
+  categoryValue?: string | null,
+): string | null {
+  const asset = String(assetTypeOrName ?? '').trim().toUpperCase().replace(/[^A-Z0-9]+/g, '_');
+  const category = String(categoryValue ?? '');
   if (asset.includes('HVAC') || asset.includes('FURNACE') || asset.includes('HEAT_PUMP') || category === 'HVAC') return 'HVAC';
   if (asset.includes('WATER_HEATER') || category === 'PLUMBING') return 'PLUMBING';
   if (asset.includes('ROOF') || category === 'ROOF_EXTERIOR') return 'ROOF';
@@ -73,6 +76,21 @@ export function getInventoryResponsibilityScope(item: CoverageItem): string | nu
   if (category === 'EXTERIOR') return 'BUILDING_EXTERIOR';
   if (category === 'ELECTRICAL' || category === 'STRUCTURAL' || category === 'SITE') return 'SHARED_SYSTEMS';
   return null;
+}
+
+export function isAssetOwnerActionable(
+  assetTypeOrName: string | null | undefined,
+  categoryValue: string | null | undefined,
+  responsibilities: readonly { scope: string; party: string }[],
+): boolean {
+  const responsibilityScope = getResponsibilityScopeForAsset(assetTypeOrName, categoryValue);
+  if (!responsibilityScope) return true;
+  const responsibility = responsibilities.find((entry) => String(entry.scope) === responsibilityScope);
+  return !responsibility || !['ASSOCIATION', 'LANDLORD', 'SHARED'].includes(String(responsibility.party));
+}
+
+export function getInventoryResponsibilityScope(item: CoverageItem): string | null {
+  return getResponsibilityScopeForAsset(normalizedAsset(item), String(item.category));
 }
 
 export function isInferredInventoryItem(item: CoverageItem): boolean {

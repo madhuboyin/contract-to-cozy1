@@ -15,6 +15,14 @@ content operations, and analytics
 - `docs/property-context/PROPERTY_CONTEXT_CATALOG_GOVERNANCE_FRD.md`
 - `docs/functional/ADMIN_MODULE_FRD.md`
 
+## Implementation note — coverage intelligence slice
+
+As of July 23, 2026, `COVERAGE_INTELLIGENCE / ASSESS_ITEM_COVERAGE` implements the relational JIT pattern for a selected inventory item. It captures item confirmation, responsibility, lifecycle/condition, coverage evidence, and financial relevance without redirecting to Property Details. The item is re-evaluated inline after save.
+
+Coverage state remains fail-closed while required applicability or evidence is unknown. **I'm not sure** produces **Coverage information incomplete**, not a coverage gap. HOA-, landlord-, and shared-managed systems remain in the Living Home Record but do not produce homeowner coverage actions. Active coverage journeys are reconciled when current Property Context invalidates their former owner-action premise, and Unified Home only promotes journeys retained by the canonical action feed.
+
+This note records the implemented coverage slice; the broader cross-feature FRD remains the target contract for features that have not yet adopted relational JIT capture.
+
 ---
 
 ## 1. Executive summary

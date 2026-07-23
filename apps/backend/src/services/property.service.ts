@@ -19,6 +19,7 @@ import { generateHabitsForProperty } from './homeHabitCoach/habitGenerationEngin
 import { getPropertyContext } from '../modules/propertyContext';
 import { HouseholdService } from './household.service';
 import { reevaluateActiveWeatherIncidentsForProperty } from './incidents/incident.evaluator';
+import { reconcileCoverageGuidanceJourneyApplicability } from './coverageJourneyReconciliation.service';
 
 import { prisma } from '../lib/prisma';
 import { logger } from '../lib/logger';
@@ -876,6 +877,10 @@ export async function updateProperty(
     return updated;
   });
 
+  if ((data.responsibilities?.length ?? 0) > 0) {
+    await reconcileCoverageGuidanceJourneyApplicability(propertyId);
+  }
+
   if (data.purchasePriceCents !== undefined || data.purchaseDate !== undefined) {
     await prisma.propertyFinancingProfile.upsert({
       where: { propertyId },
@@ -907,7 +912,8 @@ export async function updateProperty(
   }
 
   // PHASE 2 ADDITION: FIX: Use the comprehensive job enqueuer
-  if (Object.keys(propertyUpdateData).length > 0) {
+  const hasResponsibilityUpdates = (data.responsibilities?.length ?? 0) > 0;
+  if (Object.keys(propertyUpdateData).length > 0 || hasResponsibilityUpdates) {
       await JobQueueService.enqueuePropertyIntelligenceJobs(propertyId);
   }
 

@@ -1,362 +1,114 @@
-# 📦 ContractToCozy — Inventory & Coverage  
-## Functional + Technical Design Document (V1)
-
----
+# ContractToCozy — Living Home Record and Coverage Intelligence
 
-## 1. Overview
+Status: Implemented beta contract
 
-### Objective
-The **Inventory** and **Coverage** features form a **foundational layer** of ContractToCozy that enables:
+Last updated: July 23, 2026
 
-- Accurate tracking of home assets & valuables
-- Document-driven ownership proof
-- Automated detection of coverage gaps
-- Insurance readiness (claims + quotes)
-- Tight integration with Action Center orchestration
-
-Inventory is now a **core navigation item** in the dashboard.
-
-Coverage is a **derived intelligence layer** surfaced via actions, badges, and contextual modals (not yet a top-level page).
-
----
-
-## 2. Inventory Feature — Functional Scope
-
-### 2.1 Core Capabilities
-- Create and manage **Inventory Rooms**
-- Create, update, and view **Inventory Items**
-- Attach documents (receipts, warranties, manuals)
-- Store financial metadata:
-  - Purchase cost
-  - Replacement cost
-  - Currency
-- Link inventory items to:
-  - HomeAsset (system-level assets)
-  - Warranty
-  - Insurance Policy
-
----
-
-### 2.2 Inventory UX Surfaces
-
-#### A. Navbar
-- **Inventory** added as a top-level navigation item
-- Signals inventory as a foundational feature
-
-#### B. Inventory List Page
-- Grid/list of InventoryItemCard
-- Top actions:
-  - Add item
-  - Export CSV (insurance-ready)
-- Coverage gap banner (planned enhancement)
-- Room-based organization
-
-#### C. Inventory Item Card
-- Item name, category, room
-- Replacement value
-- Document count indicator
-- Warranty / Insurance pills
-- **Coverage Gap badge** (if missing warranty or insurance)
-
-#### D. Inventory Item Drawer
-- Item details
-- Warranty & Insurance dropdowns
-- Documents section:
-  - Upload
-  - Auto-attach
-  - View / unlink
-- Coverage status & actions:
-  - “Get insurance quotes”
-  - “What’s covered?”
-
----
-
-## 3. Coverage Feature — Functional Scope
-
-Coverage is **derived**, not manually created.
-
-### 3.1 Coverage Types
-- Warranty coverage
-- Insurance coverage
-
-### 3.2 Coverage Gap Detector (V1)
-Automatically identifies high-value inventory items with:
-- No coverage
-- Partial coverage
-- Expired coverage
-
-**High-value threshold (V1):**
-- Replacement cost ≥ $1,500
-
----
-
-### 3.3 Coverage Gap Surfacing
-
-| Surface | Status |
-|------|------|
-| Action Center | ✅ Implemented |
-| Inventory Item Card badge | ✅ Implemented |
-| Inventory Item Drawer | ✅ Implemented |
-| Inventory page banner | ⏳ Pending |
-| Coverage summary page | ⏳ Pending |
-
----
+## 1. Product model
 
-## 4. Action Center Integration
-
-Coverage gaps are injected into orchestration as **derived risk actions**.
-
-### Action Characteristics
-- Stable `actionKey`: `COVERAGE_GAP::<inventoryItemId>`
-- Priority:
-  - HIGH → No coverage
-  - MEDIUM → Partial / expired coverage
-- CTAs:
-  - Get insurance quotes
-  - What’s covered?
-
-### Suppression
-- Fully integrated with existing:
-  - Snoozes
-  - User-completed actions
-  - Checklist suppression
-  - Maintenance task suppression
-
----
-
-## 5. Insurance Quote Flow (Coverage → Action)
-
-### Functional Flow
-1. Coverage gap action shown
-2. User clicks **Get insurance quotes**
-3. Modal opens (prefilled context)
-4. User submits request
-5. InsuranceQuoteRequest record created
-6. Optional notification triggered
-
-### Purpose
-- Internal lead pipeline
-- No paid APIs
-- Future monetization hook
-
----
-
-## 6. “What’s Covered?” Explanation
-
-### Purpose
-Educate users clearly on:
-- What warranty covers
-- What insurance covers
-- Why both matter
-- Current coverage status per item
-
-### Data Sources
-- Warranty.coverageDetails
-- InsurancePolicy fields
-- Active/expired status
-
----
-
-## 7. Document Intelligence (Inventory + Coverage)
-
-### Capabilities
-- Upload & analyze documents
-- Extract:
-  - Product name
-  - Brand
-  - Model
-  - Serial number
-- Auto-create Warranty (when detected)
-- Auto-attach document to inventory item
-
-### AI Asset Mapping
-- Suggests matching:
-  - InventoryItem
-  - HomeAsset
-- Confidence scoring with explanation
-- User-controlled (no forced auto-linking)
-
----
-
-## 8. Inventory Export (Insurance-Ready)
-
-### Export Type
-- CSV (V1)
-
-### Includes
-- Room
-- Item metadata
-- Costs
-- Warranty & Insurance details
-- Attached document names
-
-### Use Cases
-- Insurance claims
-- Adjuster communication
-- Backup documentation
-
----
-
-## 9. Data Model Changes
-
-### New Tables
-
-#### `inventory_rooms`
-- propertyId
-- name
-- floorLevel
-- sortOrder
-
-#### `inventory_items`
-- propertyId
-- roomId
-- homeAssetId
-- warrantyId
-- insurancePolicyId
-- name
-- category
-- condition
-- brand
-- model
-- serialNo
-- purchaseCostCents
-- replacementCostCents
-- currency
-- notes
-- tags
-
-#### `insurance_quote_requests`
-- homeownerProfileId
-- propertyId
-- inventoryItemId
-- source
-- gapType
-- exposureCents
-- contact preferences
-- status
-
----
-
-### Updated Relations
-- InventoryItem ↔ Warranty
-- InventoryItem ↔ InsurancePolicy
-- InventoryItem ↔ HomeAsset
-- InventoryItem ↔ Document
-
----
-
-## 10. Backend Files Added / Updated
-
-### New
-- `coverageGap.service.ts`
-- `insuranceQuote.routes.ts`
-
-### Updated
-- `orchestration.service.ts`
-- `document.routes.ts`
-- Inventory routes (export endpoint)
-- Prisma schema
-
----
-
-## 11. Frontend Files Added / Updated
-
-### Inventory
-- `InventoryClient.tsx`
-- `InventoryItemCard.tsx`
-- `InventoryItemDrawer.tsx`
-
-### Coverage
-- `InsuranceQuoteModal.tsx`
-- `WhatsCoveredModal.tsx`
-
-### Navigation
-- Dashboard navbar (Inventory added)
-
----
-
-## 12. Pending Features (Next Logical Steps)
-
-### High Priority
-- Inventory page **Coverage Gap banner + filter**
-- Coverage summary page (Inventory → Coverage tab)
-- PDF export for insurance claims
-
-### Medium Priority
-- Coverage confidence scoring
-- Coverage gap trend over time
-- Bulk coverage review
-
-### Low Priority
-- Auto-create inventory item from document
-- Insurance provider marketplace integration
-- Claim pre-fill workflows
-
----
-
-## 13. Architectural Principles Followed
-
-- No paid APIs
-- Deterministic AI (explainable)
-- Orchestration-driven actions
-- Document-first intelligence
-- Inventory as system-of-record
-
----
-
-# 🔁 New Session Prompt (Reusable)
-
-Copy the following verbatim to start a new ChatGPT session:
-
----
-
-## 📌 New Session Prompt
-
-You are continuing development on **ContractToCozy**, a homeowner platform with strong focus on **Inventory, Coverage, Documents, and Action Center orchestration**.
-
-### Context Summary
-- Inventory is a **core top-level feature** (already added to navbar).
-- Coverage is a **derived intelligence layer**, not a standalone CRUD feature.
-
-### Inventory Features Implemented
-- Inventory Rooms & Items
-- Item-level costs (purchase/replacement)
-- Document upload & AI analysis
-- Auto-attach documents to items
-- AI-suggested document → asset mapping
-- Warranty & Insurance linking
-- CSV export for insurance claims
-- Coverage gap badge on inventory cards
-
-### Coverage Features Implemented
-- Coverage Gap Detector (high-value items)
-- Action Center integration via orchestration
-- “Get insurance quotes” flow
-- InsuranceQuoteRequest model + backend
-- “What’s covered?” explanation modal
-
-### Backend Changes
-- New tables: `inventory_rooms`, `inventory_items`, `insurance_quote_requests`
-- New service: `coverageGap.service.ts`
-- Orchestration updated to inject coverage gap actions
-- Document routes extended for asset suggestions
-
-### Frontend Changes
-- Inventory pages + drawer
-- InventoryItemCard with coverage badge
-- InsuranceQuoteModal
-- WhatsCoveredModal
-
-### Pending Work
-- Inventory page coverage gap banner + filter
-- Coverage summary page (likely under Inventory)
-- PDF export for insurance claims
-- Coverage confidence scoring
-
-### Guidelines
-- Follow existing orchestration + suppression patterns
-- No paid APIs
-- Inventory is the source of truth
-- Coverage is derived, explainable, and action-driven
-
-Continue from here without redesigning what already exists.
+The Living Home Record tracks both property-level systems and room-level possessions. The Home Record presents them as two explicit groups:
+
+- **Systems & Structure** — roof, HVAC, water heater, electrical, plumbing, safety, exterior, and other whole-home systems.
+- **Appliances & Belongings** — room-associated appliances, electronics, furniture, valuables, and other possessions.
+
+Property systems are valid Home Record assets even when they are not assigned to a room. Their location label is **Whole home**, never **Unassigned**. Homeowner-facing labels use canonical names such as **Roof**, **Water Heater**, and **HVAC Furnace**.
+
+Automatically inferred systems retain provenance such as **Based on property details** or **Needs confirmation**. They are not presented as manually entered records.
+
+## 2. Canonical coverage states
+
+Coverage is derived by `inventoryCoverageState.service.ts` and `coverageGap.service.ts`. A missing warranty or insurance relation alone is not a coverage gap.
+
+| State | Meaning | Owner coverage action |
+| --- | --- | --- |
+| `CONFIRMED` | Active warranty or policy evidence is linked | No |
+| `MISSING` | Item exists, owner responsibility and lifecycle context are sufficient, the user confirmed no coverage, and financial relevance is known | Yes |
+| `MANAGED_ELSEWHERE` | HOA, landlord, or a shared party is responsible | No |
+| `INCOMPLETE` | Confirmation, responsibility, lifecycle, condition, value, or coverage evidence is missing or uncertain | No |
+| `NOT_REQUIRED` | The user explicitly waived coverage or confirmed that the inferred system is absent | No |
+
+An inferred item with unknown age, value, responsibility, or coverage evidence must say **Coverage information incomplete**. It must not show a red **Coverage gap** badge or prioritize **Get coverage**.
+
+Exact installation year is an accuracy prerequisite when there is otherwise insufficient context, but it is not absolute: verified active/expired policy evidence can establish a factual coverage state without an exact age. Recorded replacement value is preferred; a disclosed estimate may satisfy financial relevance.
+
+## 3. Responsibility and applicability
+
+Responsibility is resolved consistently for Roof, HVAC, Plumbing/Water Heater, common safety, building exterior, and shared electrical/structural/site systems.
+
+- `OWNER` may receive owner maintenance, financial-risk, provider, and coverage actions when the remaining prerequisites are satisfied.
+- `ASSOCIATION` displays **Managed by your HOA**.
+- `LANDLORD` displays **Managed by your landlord**.
+- `SHARED` displays **Shared responsibility**.
+- Unknown responsibility keeps an inferred property system incomplete.
+
+A system managed elsewhere remains in the Living Home Record because it physically belongs to the property, but homeowner coverage-gap, replacement, booking, and risk actions are suppressed. Relevant HOA/landlord/contact/document actions may be offered instead.
+
+Applicability fails closed. A basement-dependent asset or recommendation is not created when the property has no confirmed basement. Unknown applicability requests or waits for the required Property Context rather than manufacturing a homeowner problem.
+
+## 4. Just-in-time coverage capture
+
+Opening an incomplete item evaluates:
+
+```text
+COVERAGE_INTELLIGENCE / ASSESS_ITEM_COVERAGE
+inventoryItemId = selected item
+```
+
+The same-screen sequence is:
+
+1. Confirm an inferred item exists.
+2. Confirm who is responsible.
+3. Capture approximate installation/replacement year and condition.
+4. Capture warranty/policy evidence, **I don't have coverage**, or **I'm not sure**.
+5. Capture recorded value or disclose an estimated replacement value.
+6. Save, re-evaluate, and refresh the item inline.
+
+**I'm not sure** remains `INCOMPLETE`; it is not equivalent to confirmed missing coverage. The workflow must remain on the current item and must not redirect to the full Property Details editor.
+
+## 5. Canonical consumers
+
+The backend coverage detector is the source of truth for:
+
+- Home attention cards and Home-at-a-glance counts;
+- the full Prioritized Action Plan;
+- Resolution Center coverage cases;
+- Active major moments and guidance journeys;
+- Inventory/Home Record badges, filters, and summaries;
+- room health and room coverage counts;
+- coverage analysis and protection tools;
+- provider and risk-derived owner actions.
+
+Frontend projections must consume `coverageState`, `coverageActionable`, `coverageStateLabel`, `effectiveReplacementCostCents`, and responsibility metadata. They must not reconstruct a gap from `!warrantyId`, `!insurancePolicyId`, or local partial-coverage rules.
+
+Actionable financial thresholds are currently:
+
+- Appliances & Belongings: effective replacement value of at least $250.
+- Systems & Structure: effective replacement value of at least $500.
+
+## 6. Journey reconciliation
+
+An active `coverage_gap_resolution` journey is historical workflow state, not independent proof that a current gap exists.
+
+When responsibility or item context changes:
+
+- `CONFIRMED`, `MANAGED_ELSEWHERE`, and `NOT_REQUIRED` journeys are archived;
+- journeys for removed/hidden items are archived;
+- `MISSING` and `INCOMPLETE` journeys may remain active because the former is actionable and the latter preserves a valid JIT capture workflow;
+- Home selects an Active major moment only when that journey is retained by the canonical action feed.
+
+This prevents an association-managed Roof from resurfacing on Home or Guidance after it has been removed from current coverage actions.
+
+## 7. Inventory documents and export
+
+Inventory items can link receipts, manuals, warranties, insurance policies, and other documents. Document intelligence may suggest item associations but does not silently force them. CSV export includes room/location, item metadata, costs, coverage relations, and document names for claims and household records.
+
+## 8. Acceptance criteria
+
+- Property-level systems appear under **Systems & Structure** with **Whole home**.
+- Room inventory appears under **Appliances & Belongings**.
+- Unknown or inferred context never becomes a definite red coverage gap.
+- HOA-, landlord-, and shared-managed assets never create homeowner coverage, provider, replacement, or financial-risk actions.
+- All coverage counts and filters agree for the same property and context version.
+- Updating responsibility removes stale owner actions and reconciles active coverage journeys.
+- The Active major moment cannot bypass canonical action eligibility.
+- JIT capture stays inline and re-evaluates the selected item after save.

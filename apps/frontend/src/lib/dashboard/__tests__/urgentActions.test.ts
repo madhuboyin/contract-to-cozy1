@@ -24,6 +24,10 @@ function createInventoryItem(overrides: Partial<InventoryItem>): InventoryItem {
     tags: [],
     sourceHash: null,
     coverageNotRequired: false,
+    coverageState: 'MISSING',
+    coverageStateLabel: 'Coverage missing',
+    coverageStateDetail: 'You confirmed that no warranty or insurance is linked.',
+    coverageActionable: true,
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
     ...overrides,
@@ -47,20 +51,21 @@ describe('consolidateUrgentActions - Coverage Gaps', () => {
     expect(actions[0].itemId).toBe('item-1');
   });
 
-  it('creates a COVERAGE_PARTIAL action for an item with only warranty', () => {
+  it('does not infer a partial gap when the backend coverage state is confirmed', () => {
     const inventoryItems: InventoryItem[] = [
       createInventoryItem({
         id: 'item-2',
         name: 'Refrigerator',
         warrantyId: 'warranty-1',
+        coverageState: 'CONFIRMED',
+        coverageStateLabel: 'Coverage confirmed',
+        coverageActionable: false,
       }),
     ];
 
     const actions = consolidateUrgentActions([], [], [], [], [], inventoryItems);
 
-    expect(actions).toHaveLength(1);
-    expect(actions[0].type).toBe('COVERAGE_PARTIAL');
-    expect(actions[0].title).toBe('Refrigerator has partial coverage');
+    expect(actions).toHaveLength(0);
   });
 
   it('does not create an action for a fully covered item', () => {
@@ -70,6 +75,8 @@ describe('consolidateUrgentActions - Coverage Gaps', () => {
         name: 'Oven',
         warrantyId: 'warranty-1',
         insurancePolicyId: 'policy-1',
+        coverageState: 'CONFIRMED',
+        coverageActionable: false,
       }),
     ];
 
@@ -78,7 +85,7 @@ describe('consolidateUrgentActions - Coverage Gaps', () => {
     expect(actions).toHaveLength(0);
   });
 
-  it('still creates an action for low-value items so Fix matches the coverage tab count', () => {
+  it('does not create a financial coverage action below the canonical appliance threshold', () => {
     const inventoryItems: InventoryItem[] = [
       createInventoryItem({
         id: 'item-4',
@@ -89,11 +96,10 @@ describe('consolidateUrgentActions - Coverage Gaps', () => {
 
     const actions = consolidateUrgentActions([], [], [], [], [], inventoryItems);
 
-    expect(actions).toHaveLength(1);
-    expect(actions[0].type).toBe('COVERAGE_GAP');
+    expect(actions).toHaveLength(0);
   });
 
-  it('creates an action when replacement cost is missing', () => {
+  it('does not create an action when financial relevance is missing', () => {
     const inventoryItems: InventoryItem[] = [
       createInventoryItem({
         id: 'item-4b',
@@ -104,31 +110,40 @@ describe('consolidateUrgentActions - Coverage Gaps', () => {
 
     const actions = consolidateUrgentActions([], [], [], [], [], inventoryItems);
 
-    expect(actions).toHaveLength(1);
-    expect(actions[0].description).toContain('Replacement value has not been added yet.');
+    expect(actions).toHaveLength(0);
   });
 
-  it('prioritizes COVERAGE_GAP ahead of COVERAGE_PARTIAL', () => {
+  it('excludes managed and incomplete records while retaining an actionable gap', () => {
     const inventoryItems: InventoryItem[] = [
       createInventoryItem({
         id: 'item-5',
-        name: 'Partial Item',
-        warrantyId: 'warranty-1',
+        name: 'Association Roof',
+        category: 'ROOF_EXTERIOR',
+        coverageState: 'MANAGED_ELSEWHERE',
+        coverageStateLabel: 'Managed by your HOA',
+        coverageActionable: false,
       }),
       createInventoryItem({
         id: 'item-6',
         name: 'No Coverage Item',
       }),
+      createInventoryItem({
+        id: 'item-6b',
+        name: 'Water Heater',
+        category: 'PLUMBING',
+        coverageState: 'INCOMPLETE',
+        coverageStateLabel: 'Coverage status incomplete',
+        coverageActionable: false,
+      }),
     ];
 
     const actions = consolidateUrgentActions([], [], [], [], [], inventoryItems);
 
-    expect(actions).toHaveLength(2);
+    expect(actions).toHaveLength(1);
     expect(actions[0].type).toBe('COVERAGE_GAP');
-    expect(actions[1].type).toBe('COVERAGE_PARTIAL');
   });
 
-  it('resolves coverage gap actions to the focused coverage page', () => {
+  it('resolves coverage gap actions to the canonical context-aware coverage page', () => {
     const [action] = consolidateUrgentActions(
       [],
       [],
@@ -139,7 +154,7 @@ describe('consolidateUrgentActions - Coverage Gaps', () => {
     );
 
     expect(resolveUrgentActionHref(action, 'prop-1')).toBe(
-      '/dashboard/properties/prop-1/focus/coverage/item-7',
+      '/dashboard/properties/prop-1/inventory/items/item-7/coverage',
     );
   });
 });

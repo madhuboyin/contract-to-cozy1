@@ -50,9 +50,13 @@ const {
   HomeActionCommandSchema,
   rankAndDeduplicateHomeActions,
   reconcileCoverageHomeActions,
+  selectEligibleActiveJourney,
   scoreHomeAction,
 } = require('../../src/services/homeActions.service.ts');
-const { adaptOrchestratedActionToHomeAction } = require('../../src/services/orchestration.service.ts');
+const {
+  adaptOrchestratedActionToHomeAction,
+  isRiskDetailOwnerActionable,
+} = require('../../src/services/orchestration.service.ts');
 const { adaptHomeActionSource } = require('../../src/productFramework/homeActionSourceAdapters.ts');
 const { buildRecommendationResponseContract } = require('../../src/productFramework/recommendationResponse.contract.ts');
 const { getGuidanceJourneyDisplayTitle } = require('../../src/services/guidanceEngine/guidanceTemplateRegistry.ts');
@@ -150,6 +154,41 @@ test('coverage reconciliation exposes exactly one current state per inventory it
     );
     assert.deepEqual(resolved, []);
   }
+});
+
+test('active major moment only selects a journey retained by the canonical action feed', () => {
+  const journeys = [
+    { id: 'roof-managed-by-association', updatedAt: '2026-07-23' },
+    { id: 'water-heater-needs-context', updatedAt: '2026-07-22' },
+  ];
+  const eligibleAction = actionFixture('water-heater-context', {
+    relatedJourneyId: 'water-heater-needs-context',
+  });
+
+  assert.deepEqual(
+    selectEligibleActiveJourney(journeys, [eligibleAction]),
+    journeys[1],
+  );
+  assert.equal(selectEligibleActiveJourney(journeys, []), null);
+});
+
+test('risk-derived owner actions respect Roof, HVAC, and plumbing responsibility', () => {
+  const responsibilities = [
+    { scope: 'ROOF', party: 'ASSOCIATION' },
+    { scope: 'HVAC', party: 'LANDLORD' },
+    { scope: 'PLUMBING', party: 'SHARED' },
+  ];
+  assert.equal(isRiskDetailOwnerActionable({ systemType: 'ROOF_SHINGLE' }, responsibilities), false);
+  assert.equal(isRiskDetailOwnerActionable({ systemType: 'HVAC_FURNACE' }, responsibilities), false);
+  assert.equal(isRiskDetailOwnerActionable({ systemType: 'WATER_HEATER_TANK' }, responsibilities), false);
+  assert.equal(isRiskDetailOwnerActionable({ systemType: 'DISHWASHER', category: 'APPLIANCE' }, responsibilities), true);
+  assert.equal(
+    isRiskDetailOwnerActionable(
+      { systemType: 'ROOF_SHINGLE' },
+      [{ scope: 'ROOF', party: 'OWNER' }],
+    ),
+    true,
+  );
 });
 
 test('orchestration percentages are normalized for Home Action evidence and confidence', () => {

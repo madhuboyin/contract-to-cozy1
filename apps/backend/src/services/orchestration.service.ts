@@ -25,6 +25,7 @@ import { OrchestrationSuppressionService, SuppressionSource } from './orchestrat
 import { computeActionKey } from './orchestrationActionKey';
 import { getPropertySnoozes, ActiveSnooze } from './orchestrationSnooze.service';
 import { detectCoverageGaps } from './coverageGap.service';
+import { isAssetOwnerActionable } from './inventoryCoverageState.service';
 import { AssumptionSetService } from './assumptionSet.service';
 import { PreferenceProfileService } from './preferenceProfile.service';
 import { SharedSignalKey, SignalDTO, signalService } from './signal.service';
@@ -177,6 +178,17 @@ export type OrchestratedAction = {
   overdue: boolean;
   createdAt?: Date | null;
 };
+
+export function isRiskDetailOwnerActionable(
+  detail: { systemType?: string | null; assetName?: string | null; category?: string | null },
+  responsibilities: readonly { scope: string; party: string }[],
+): boolean {
+  return isAssetOwnerActionable(
+    detail.systemType ?? detail.assetName,
+    detail.category,
+    responsibilities,
+  );
+}
 
 export type OrchestrationTargetTool = DecisionTargetTool;
 
@@ -2110,6 +2122,12 @@ export async function getOrchestrationSummary(propertyId: string, userId?: strin
             expiryDate: true,
           },
         },
+        responsibilities: {
+          select: {
+            scope: true,
+            party: true,
+          },
+        },
       },
     })
     .catch(() => null as any),
@@ -2118,6 +2136,7 @@ export async function getOrchestrationSummary(propertyId: string, userId?: strin
 
   const warranties = propertyCoverage?.warranties ?? [];
   const insurancePolicies = propertyCoverage?.insurancePolicies ?? [];
+  const responsibilities = propertyCoverage?.responsibilities ?? [];
 
   // 2) Risk report
   const riskReport = await prisma.riskAssessmentReport
@@ -2170,9 +2189,12 @@ export async function getOrchestrationSummary(propertyId: string, userId?: strin
   }, 'RAW CHECKLIST ITEMS FROM DB');
 
   // 4) Build candidate actions
-  const candidateRiskActions: OrchestratedAction[] = Array.isArray(riskDetails)
+  const applicableRiskDetails = Array.isArray(riskDetails)
+    ? riskDetails.filter((detail: any) => isRiskDetailOwnerActionable(detail, responsibilities))
+    : [];
+  const candidateRiskActions: OrchestratedAction[] = Array.isArray(applicableRiskDetails)
   ? (await Promise.all(
-      riskDetails.map((d: any, idx: number) => {
+      applicableRiskDetails.map((d: any, idx: number) => {
         logger.info({
           assetName: d?.assetName,
           systemType: d?.systemType,

@@ -26,6 +26,7 @@ import {
 } from './guidanceTypes';
 import { logger } from '../../lib/logger';
 import { recordToolLifecycleEvents } from '../analytics/toolLifecycle';
+import { reconcileCoverageGuidanceJourneyApplicability } from '../coverageJourneyReconciliation.service';
 
 const ACTIVE_GUIDANCE_JOURNEY_STATUSES = ['ACTIVE', 'NOT_STARTED'] as const;
 const REPLACEMENT_BRANCH_TYPE_BY_CHOICE: Record<
@@ -1684,6 +1685,7 @@ export class GuidanceJourneyService {
 
   async listActiveJourneysForProperty(propertyId: string) {
     const { guidanceJourney } = getGuidanceModels();
+    await reconcileCoverageGuidanceJourneyApplicability(propertyId);
 
     const fetchJourneys = () => guidanceJourney.findMany({
       where: {

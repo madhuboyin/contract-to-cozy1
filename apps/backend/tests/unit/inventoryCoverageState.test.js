@@ -5,6 +5,8 @@ require('ts-node/register');
 
 const {
   buildInventoryCoveragePresentation,
+  getResponsibilityScopeForAsset,
+  isAssetOwnerActionable,
 } = require('../../src/services/inventoryCoverageState.service.ts');
 const {
   getCaptureDefinition,
@@ -57,6 +59,27 @@ test('association-managed systems stay in the record without homeowner gap actio
   assert.equal(result.coverageState, 'MANAGED_ELSEWHERE');
   assert.equal(result.coverageStateLabel, 'Managed by your HOA');
   assert.equal(result.coverageActionable, false);
+});
+
+test('responsibility scopes are consistent for risk, provider, and coverage asset labels', () => {
+  assert.equal(getResponsibilityScopeForAsset('ROOF_SHINGLE', 'ROOF_EXTERIOR'), 'ROOF');
+  assert.equal(getResponsibilityScopeForAsset('HVAC_FURNACE', 'SYSTEMS'), 'HVAC');
+  assert.equal(getResponsibilityScopeForAsset('WATER_HEATER_TANK', 'PLUMBING'), 'PLUMBING');
+  assert.equal(getResponsibilityScopeForAsset('DISHWASHER', 'APPLIANCE'), null);
+});
+
+test('owner actions exclude systems managed by an association, landlord, or shared party', () => {
+  const responsibilities = [
+    { scope: 'ROOF', party: 'ASSOCIATION' },
+    { scope: 'HVAC', party: 'LANDLORD' },
+    { scope: 'PLUMBING', party: 'SHARED' },
+  ];
+
+  assert.equal(isAssetOwnerActionable('ROOF_SHINGLE', 'ROOF_EXTERIOR', responsibilities), false);
+  assert.equal(isAssetOwnerActionable('HVAC_FURNACE', 'HVAC', responsibilities), false);
+  assert.equal(isAssetOwnerActionable('WATER_HEATER_TANK', 'PLUMBING', responsibilities), false);
+  assert.equal(isAssetOwnerActionable('DISHWASHER', 'APPLIANCE', responsibilities), true);
+  assert.equal(isAssetOwnerActionable('ROOF_SHINGLE', 'ROOF_EXTERIOR', []), true);
 });
 
 test('a homeowner-rejected inferred system is not treated as a coverage problem', () => {

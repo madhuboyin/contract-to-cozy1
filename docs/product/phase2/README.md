@@ -190,6 +190,29 @@ Operational launch note:
 - Safety actions cannot be silently deferred or dismissed.
 - Desktop and mobile clients can consume the same feed DTO when the unified Home surface is cut over.
 
+## Property-context action eligibility convergence
+
+Implemented July 23, 2026:
+
+- Made the canonical inventory coverage presentation and coverage-gap detector the source of truth for Home, the full action plan, Resolution Center, Home Record summaries, room health, coverage analysis, and legacy dashboard projections.
+- Removed frontend inference based only on missing warranty or insurance IDs. An item must be in canonical `MISSING` state, be financially relevant, and be marked actionable by the backend before it is presented as a coverage gap.
+- Applied the shared Roof, HVAC, Plumbing/Water Heater, common-safety, exterior, and shared-system responsibility mapping to coverage, provider, orchestration, and risk-report boundaries.
+- Suppressed homeowner coverage, replacement, provider, and risk actions when responsibility belongs to an association, landlord, or shared party.
+- Reconciled active coverage guidance journeys when current item or responsibility context makes them confirmed, managed elsewhere, not required, removed, or hidden.
+- Restricted **Active major moment** selection to journeys retained by the canonical Home Action feed. The newest database journey can no longer bypass current property applicability.
+- Kept incomplete coverage journeys eligible for same-screen JIT context capture while preventing them from being labeled as definite coverage gaps.
+- Recomputed property intelligence after responsibility-only edits so cached risk projections converge with current ownership context.
+- Aligned room coverage counts with the same actionable detector used by Home and Resolution Center.
+- Kept basement-dependent assets and actions fail-closed unless a basement is confirmed.
+
+Acceptance criteria:
+
+- An association-managed Roof remains visible in the Living Home Record as **Managed by your HOA** but is absent from coverage-gap counts, Resolution Center owner cases, risk actions, and Active major moments.
+- A landlord-managed HVAC system and shared-managed plumbing system follow the same rule.
+- A stale managed-elsewhere coverage journey is archived and the next eligible journey is selected, or no major moment is shown.
+- Unknown responsibility, uncertain coverage evidence, or insufficient lifecycle/value context remains **Coverage information incomplete**.
+- Home, Home Record, room health, Resolution Center, risk projections, guidance, and frontend fallback projections do not independently reconstruct applicability.
+
 ## Validation
 
 Automated acceptance rerun July 20, 2026 from commit `830f565`:
