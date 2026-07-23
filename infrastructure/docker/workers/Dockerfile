@@ -96,6 +96,7 @@ COPY apps/backend/src/services/homeEventRadarMatcher.service.ts \
      apps/backend/src/services/eventSignalProjection.service.ts \
      apps/backend/src/services/sharedDataObservability.service.ts \
      apps/backend/src/services/coverageGap.service.ts \
+     apps/backend/src/services/inventoryCoverageState.service.ts \
      apps/backend/src/services/signal.service.ts \
      apps/backend/src/services/signalPriorityBoost.service.ts \
      apps/backend/src/services/assumptionSet.service.ts \
