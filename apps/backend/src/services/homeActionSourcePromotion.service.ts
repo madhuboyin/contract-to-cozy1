@@ -248,7 +248,9 @@ async function loadGuidanceActions(
       id: `guidance:${journey.id}`,
       propertyId,
       lineageId: journey.primarySignalId ?? `guidance:${journey.id}`,
-      sourceEntityId: journey.id,
+      sourceEntityId: isCoverageJourney && journey.inventoryItemId
+        ? journey.inventoryItemId
+        : journey.id,
       sourceVersion: journey.templateVersion ?? 'phase2-v1',
       state: step?.status === 'IN_PROGRESS' ? 'IN_PROGRESS' : 'OPEN',
       priority: journey.primarySignal?.severity === 'CRITICAL' ? 'NOW'

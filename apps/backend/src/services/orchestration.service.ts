@@ -380,7 +380,9 @@ export function adaptOrchestratedActionToHomeAction(
     id: action.actionKey,
     propertyId: action.propertyId,
     lineageId: action.actionKey,
-    sourceEntityId: action.checklistItemId ?? action.orchestrationActionId ?? action.id,
+    sourceEntityId: isCoverageAction && action.relatedEntity?.type === 'INVENTORY_ITEM'
+      ? action.relatedEntity.id
+      : action.checklistItemId ?? action.orchestrationActionId ?? action.id,
     sourceVersion: 'phase0-v1',
     job: critical ? 'MAJOR_MOMENT' : undefined,
     state: action.snooze ? 'SNOOZED' : 'OPEN',

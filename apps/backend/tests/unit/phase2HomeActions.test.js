@@ -49,6 +49,7 @@ const { goldenTestHomes } = require('../fixtures/productFramework/goldenTestHome
 const {
   HomeActionCommandSchema,
   rankAndDeduplicateHomeActions,
+  reconcileCoverageHomeActions,
   scoreHomeAction,
 } = require('../../src/services/homeActions.service.ts');
 const { adaptOrchestratedActionToHomeAction } = require('../../src/services/orchestration.service.ts');
@@ -97,6 +98,58 @@ test('canonical feed surfaces one winner for duplicate cross-source signals and 
   assert.deepEqual(result[0].deduplication.mergedActionIds, ['lower']);
   assert.equal(result[0].source.kind, 'MAINTENANCE');
   assert.deepEqual(result.map((item) => item.ranking.rank), [1, 2]);
+});
+
+test('coverage actions use inventory identity for canonical deduplication', () => {
+  const correction = actionFixture('coverage-correction', {
+    source: { kind: 'GUIDANCE', entityId: 'hvac-item', version: 'phase2-v1' },
+    governance: {
+      ...actionFixture('coverage-correction-governance').governance,
+      safetyTier: 'REGULATED_COVERAGE',
+    },
+    signal: 'Add information for HVAC Furnace',
+  });
+  const review = actionFixture('coverage-review', {
+    source: { kind: 'COVERAGE', entityId: 'hvac-item', version: 'phase2-v1' },
+    signal: 'No active coverage is linked to HVAC Furnace',
+  });
+
+  const result = rankAndDeduplicateHomeActions([correction, review]);
+  assert.equal(result.length, 1);
+  assert.equal(result[0].deduplication.canonicalKey, 'coverage-item:hvac-item');
+});
+
+test('coverage reconciliation exposes exactly one current state per inventory item', () => {
+  const correction = actionFixture('coverage-correction', {
+    source: { kind: 'GUIDANCE', entityId: 'hvac-item', version: 'phase2-v1' },
+    governance: {
+      ...actionFixture('coverage-correction-governance').governance,
+      safetyTier: 'REGULATED_COVERAGE',
+    },
+  });
+  const review = actionFixture('coverage-review', {
+    source: { kind: 'COVERAGE', entityId: 'hvac-item', version: 'phase2-v1' },
+  });
+
+  const incomplete = reconcileCoverageHomeActions(
+    [correction, review],
+    new Map([['hvac-item', { coverageState: 'INCOMPLETE', coverageActionable: false }]]),
+  );
+  assert.deepEqual(incomplete.map((action) => action.id), ['coverage-correction']);
+
+  const missing = reconcileCoverageHomeActions(
+    [correction, review],
+    new Map([['hvac-item', { coverageState: 'MISSING', coverageActionable: true }]]),
+  );
+  assert.deepEqual(missing.map((action) => action.id), ['coverage-review']);
+
+  for (const coverageState of ['CONFIRMED', 'MANAGED_ELSEWHERE', 'NOT_REQUIRED']) {
+    const resolved = reconcileCoverageHomeActions(
+      [correction, review],
+      new Map([['hvac-item', { coverageState, coverageActionable: false }]]),
+    );
+    assert.deepEqual(resolved, []);
+  }
 });
 
 test('orchestration percentages are normalized for Home Action evidence and confidence', () => {
@@ -224,6 +277,7 @@ test('coverage recommendations preserve item context and open the item coverage 
   });
 
   assert.equal(action.source.kind, 'COVERAGE');
+  assert.equal(action.source.entityId, 'dishwasher-item');
   assert.equal(action.recommendedAction, 'Review coverage for Dishwasher');
   assert.match(action.whyItMatters, /Dishwasher in Kitchen/);
   assert.match(action.whyItMatters, /\$1,200/);

@@ -23,6 +23,10 @@ import { applyPersonalizationHomeActionLifecycle } from '../modules/personalizat
 import { logger } from '../lib/logger';
 import { visibleInventoryItemWhere } from './riskAssetApplicability';
 import { detectCoverageGaps } from './coverageGap.service';
+import {
+  buildInventoryCoveragePresentation,
+  type InventoryCoveragePresentation,
+} from './inventoryCoverageState.service';
 
 export const HOME_ACTION_COMMANDS = [
   'COMPLETE',
@@ -109,10 +113,61 @@ function normalizedSignal(value: string): string {
 }
 
 export function homeActionCanonicalKey(action: HomeAction): string {
+  const inventoryCoverageAction = action.source.kind === 'COVERAGE' || (
+    action.source.kind === 'GUIDANCE' &&
+    action.governance.safetyTier === 'REGULATED_COVERAGE'
+  );
+  if (inventoryCoverageAction) return `coverage-item:${action.source.entityId}`;
+
   const signal = normalizedSignal(action.signal);
   if (signal) return `signal:${signal}`;
   if (action.lineageId) return `lineage:${action.lineageId}`;
   return `entity:${action.source.entityId}`;
+}
+
+type CoverageStateForHomeAction = Pick<InventoryCoveragePresentation, 'coverageState' | 'coverageActionable'>;
+
+export function reconcileCoverageHomeActions(
+  actions: HomeAction[],
+  coverageByInventoryItemId: ReadonlyMap<string, CoverageStateForHomeAction>,
+): HomeAction[] {
+  return actions.filter((action) => {
+    const isLiveCoverageReview = action.source.kind === 'COVERAGE';
+    const isCoverageGuidance = action.source.kind === 'GUIDANCE' &&
+      action.governance.safetyTier === 'REGULATED_COVERAGE' &&
+      coverageByInventoryItemId.has(action.source.entityId);
+    if (!isLiveCoverageReview && !isCoverageGuidance) return true;
+
+    const presentation = coverageByInventoryItemId.get(action.source.entityId);
+    if (!presentation) return false;
+
+    if (isLiveCoverageReview) {
+      return presentation.coverageState === 'MISSING' && presentation.coverageActionable;
+    }
+
+    return presentation.coverageState === 'INCOMPLETE';
+  });
+}
+
+async function loadCurrentCoverageStates(propertyId: string): Promise<Map<string, CoverageStateForHomeAction>> {
+  const [items, responsibilities] = await Promise.all([
+    prisma.inventoryItem.findMany({
+      where: { propertyId, ...visibleInventoryItemWhere() },
+      include: { warranty: true, insurancePolicy: true },
+    }),
+    prisma.propertyResponsibility.findMany({
+      where: { propertyId },
+      select: { scope: true, party: true },
+    }),
+  ]);
+
+  return new Map(items.map((item) => {
+    const presentation = buildInventoryCoveragePresentation(item, responsibilities);
+    return [item.id, {
+      coverageState: presentation.coverageState,
+      coverageActionable: presentation.coverageActionable,
+    }];
+  }));
 }
 
 export function scoreHomeAction(action: HomeAction): { score: number; components: RankingComponents; explanation: string } {
@@ -192,14 +247,18 @@ export async function getHomeActionFeed(propertyId: string, userId: string) {
   const promoted = await getPromotedHomeActions(propertyId, prisma, {
     includePersonalization: Boolean(personalization && !personalization.paused),
   });
-  const candidates: HomeAction[] = [...orchestration.homeActions, ...promoted.actions];
+  const rawCandidates: HomeAction[] = [...orchestration.homeActions, ...promoted.actions];
   const entryContext = await getEntryContext(propertyId, userId);
 
   if (entryContext && !entryContext.firstValue.firstActionResolvedAt) {
     const activation = await getActivationFirstValue(propertyId, userId);
-    candidates.push(activation.action);
-    for (const bucket of Object.values(activation.plan)) candidates.push(...bucket);
+    rawCandidates.push(activation.action);
+    for (const bucket of Object.values(activation.plan)) rawCandidates.push(...bucket);
   }
+
+  const coverageStates = await loadCurrentCoverageStates(propertyId);
+  const candidates = reconcileCoverageHomeActions(rawCandidates, coverageStates);
+  const coverageConflictSuppressedCount = rawCandidates.length - candidates.length;
 
   const actions = rankAndDeduplicateHomeActions(candidates);
   emitHomeActionsSurfaced({ propertyId, userId, actions, source: 'phase2_home_actions' });
@@ -232,10 +291,11 @@ export async function getHomeActionFeed(propertyId: string, userId: string) {
       CONSIDER: actions.filter((action) => action.priority === 'CONSIDER'),
     },
     diagnostics: {
-      candidateCount: candidates.length,
+      candidateCount: rawCandidates.length,
       surfacedCount: actions.length,
       duplicateCount: candidates.length - actions.length,
-      suppressedCount: orchestration.suppressedActions.length + promoted.diagnostics.suppressedCount,
+      suppressedCount: orchestration.suppressedActions.length + promoted.diagnostics.suppressedCount + coverageConflictSuppressedCount,
+      coverageConflictSuppressedCount,
       snoozedCount: orchestration.snoozedActions.length + promoted.diagnostics.snoozedCount,
       promotedCount: promoted.actions.length,
       personalization: {
