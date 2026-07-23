@@ -106,6 +106,11 @@ async function getCronRunHistory(jobKey: string, limit = 3): Promise<RecentRun[]
   }
 }
 
+// WKR-007 (partial): dedup window for triggerJob()'s deterministic jobId —
+// see the comment at its call site. Short enough that a legitimate two
+// manual re-triggers of the same job a minute apart both go through.
+const MANUAL_TRIGGER_DEDUP_WINDOW_MS = 15_000;
+
 // ─── Queue instances (lazy, keyed by name) ────────────────────────────────────
 
 const queueCache = new Map<string, Queue>();
@@ -309,10 +314,21 @@ export async function triggerJob(
   }
 
   const q = getQueue(entry.queueName);
+  // A stable jobId within a short window de-duplicates a double-click/
+  // double-submit of the admin "Run Job" button — BullMQ treats `add()` with
+  // an already-present, not-yet-removed jobId as a no-op that returns the
+  // existing job rather than queueing a second one. The window is bucketed
+  // (not fully static) so a deliberate later re-trigger of the same job with
+  // the same params isn't permanently blocked once a prior run has left a
+  // completed job occupying that id (DEFAULT_JOB_RETENTION keeps up to 500
+  // completed jobs, so a static id could stay "taken" indefinitely).
+  const dedupBucket = Math.floor(Date.now() / MANUAL_TRIGGER_DEDUP_WINDOW_MS);
+  const jobId = `manual:${jobKey}:${dryRun}:${propertyId ?? 'none'}:${dedupBucket}`;
   const job = await q.add(
     entry.jobName,
     { dryRun, propertyId },
     {
+      jobId,
       attempts: 3,
       backoff: { type: 'exponential', delay: 5000 },
     },

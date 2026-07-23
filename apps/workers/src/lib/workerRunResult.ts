@@ -20,6 +20,8 @@ export interface WorkerRunResult {
   created?: number;
   updated?: number;
   notified?: number;
+  /** Existing records re-derived/re-synced this run (radar/hidden-asset-style refresh jobs) — a success signal, same as created/updated/notified. */
+  refreshed?: number;
   /** Intentionally skipped (idempotency, not applicable, etc) — not a failure signal. */
   skipped?: number;
   /** Items that errored. Drives PARTIAL/FAILED classification below. */
@@ -48,6 +50,7 @@ export function isWorkerRunResult(value: unknown): value is WorkerRunResult {
 export function deriveRunStatus(result: WorkerRunResult): WorkerRunStatus {
   const failed = result.failed ?? 0;
   if (failed <= 0) return 'SUCCEEDED';
-  const succeededSome = (result.notified ?? 0) + (result.created ?? 0) + (result.updated ?? 0) > 0;
+  const succeededSome =
+    (result.notified ?? 0) + (result.created ?? 0) + (result.updated ?? 0) + (result.refreshed ?? 0) > 0;
   return succeededSome ? 'PARTIAL' : 'FAILED';
 }

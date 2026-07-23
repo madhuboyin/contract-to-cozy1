@@ -202,10 +202,31 @@ const CRON_HANDLERS: Record<string, (opts?: { dryRun?: boolean; propertyId?: str
   'seasonal-checklist-generation':   async () => { await generateSeasonalChecklists(); },
   'seasonal-notifications':          async () => sendSeasonalNotifications(),
   'weekly-score-snapshots':          async () => { await captureWeeklyScoreSnapshotsJob(); },
+  // WKR-008: this handler and the four below it (neighborhood-radar-refresh,
+  // home-habit-generation, reserve-fund-recalculation,
+  // provider-missing-credential-sweep) each already isolate per-item
+  // failures internally (a broken item is logged and counted, not thrown)
+  // and had a real result object available right here — but the block-body
+  // arrow only logged it and never `return`ed it, so `outcome` resolved to
+  // `undefined` at the scheduler (isWorkerRunResult(undefined) is false).
+  // A run where every single item failed still reported SUCCEEDED. Returning
+  // the (mapped, where the job's own field names don't already match
+  // WorkerRunResult's) result fixes that for both the scheduled tick and a
+  // manual/admin "Run Job" trigger, which go through this same handler map.
   'hidden-asset-refresh':            async (opts) => {
     const result = await runHiddenAssetRefreshJob(opts);
     logger.info({ ...result }, `[hidden-asset-refresh] examined=${result.examined} refreshed=${result.refreshed}`);
+    return result;
   },
+  // coverage-lapse-incidents / freeze-risk-incidents / severe-weather-alerts:
+  // deliberately NOT returned below (unlike the five above) — none of these
+  // three isolate per-item failures (no try/catch around the per-property
+  // upsert loop), so a single item's error already aborts the whole run and
+  // rejects, which the scheduler handles correctly today. Their result
+  // shape also has no `examined` field, so it isn't WorkerRunResult-shaped;
+  // returning it as-is would fail the CRON_HANDLERS type signature, and
+  // fabricating an `examined` value here wouldn't reflect a real per-item
+  // outcome these jobs don't track.
   'coverage-lapse-incidents':        async () => {
     const result = await coverageLapseIncidentsJob();
     logger.info({ ...result }, `[coverage-lapse-incidents] createdOrUpdated=${result.createdOrUpdated} resolved=${result.resolved}`);
@@ -222,11 +243,13 @@ const CRON_HANDLERS: Record<string, (opts?: { dryRun?: boolean; propertyId?: str
   'neighborhood-radar-refresh':      async (opts) => {
     const result = await refreshNeighborhoodEventsJob(opts);
     logger.info({ ...result }, `[neighborhood-radar-refresh] examined=${result.examined} refreshed=${result.refreshed}`);
+    return result;
   },
   'inventory-draft-cleanup':         async () => { await cleanupInventoryDraftsJob(); },
   'home-habit-generation':           async (opts) => {
     const result = await runHabitGenerationJob(opts);
     logger.info({ ...result }, `[home-habit-generation] examined=${result.examined} created=${result.created} notified=${result.notified}`);
+    return result;
   },
   'mortgage-rate-ingest':            async (opts) => {
     // Forward `opts` only when the caller actually passed one — a defined
@@ -259,6 +282,18 @@ const CRON_HANDLERS: Record<string, (opts?: { dryRun?: boolean; propertyId?: str
   'reserve-fund-recalculation':      async (opts) => {
     const result = await recalculateReserveFundsJob(opts);
     logger.info({ ...result }, `[reserve-fund-recalculation] recalculated=${result.recalculated} skipped=${result.skipped} failed=${result.failed}`);
+    // WKR-008: recalculateReserveFundsJob isolates per-fund failures
+    // (catch + failed++, loop continues) — every fund resolves into exactly
+    // one of recalculated/skipped/failed, so their sum is the true
+    // `examined` count without needing the job itself to return one.
+    return {
+      examined: result.recalculated + result.skipped + result.failed,
+      updated: result.recalculated,
+      skipped: result.skipped,
+      failed: result.failed,
+      reason: result.failed > 0 ? `${result.failed} fund(s) failed to recalculate` : undefined,
+      smokeCorrelationId: result.smokeCorrelationId,
+    };
   },
   'reserve-fund-reconciliation':     async () => { await reserveFundReconciliationJob(); },
   'reserve-fund-balance-reminder':   async () => { await reserveFundBalanceReminderJob(); },
@@ -266,7 +301,23 @@ const CRON_HANDLERS: Record<string, (opts?: { dryRun?: boolean; propertyId?: str
   'provider-credential-lapse':       async () => { await providerCredentialLapseJob(); },
   'provider-missing-credential-sweep': async (opts) => {
     const result = await providerMissingCredentialSweepJob(opts);
-    logger.info({ ...result }, `[provider-missing-credential-sweep] created=${result.alertsCreated} resolved=${result.alertsResolved}`);
+    logger.info(
+      { ...result },
+      `[provider-missing-credential-sweep] created=${result.alertsCreated} resolved=${result.alertsResolved} failed=${result.providersFailed}`,
+    );
+    // WKR-008: providerMissingCredentialSweepJob isolates per-provider
+    // failures (catch + providersFailed++, loop continues) — map to
+    // WorkerRunResult so a run where every provider's check failed reports
+    // FAILED/PARTIAL instead of the always-SUCCEEDED the discarded return
+    // value previously produced.
+    return {
+      examined: result.providersExamined,
+      created: result.alertsCreated,
+      updated: result.alertsResolved,
+      failed: result.providersFailed,
+      reason: result.providersFailed > 0 ? `${result.providersFailed} provider(s) failed the credential sweep` : undefined,
+      smokeCorrelationId: result.smokeCorrelationId,
+    };
   },
   'weekly-retention-report':         async () => { await runWeeklyRetentionReportJob(); },
 };
@@ -314,6 +365,12 @@ function scheduleCronJobs(): void {
         const decision = evaluateWorkerExecution(entry.key, 'scheduled', entry);
         if (!decision.allowed) {
           logger.info(`[${entry.key}] Skipped tick — ${decision.reason}`);
+          // WKR-014: this decision path recorded run history but never
+          // touched the Prometheus counter, so a permanently-disabled job's
+          // skips were invisible in metrics even though they were visible
+          // in Redis history — the exact inconsistency between the two
+          // outcome stores this finding called out.
+          cronJobRunsTotal.inc({ job_key: entry.key, status: 'skipped' });
           await recordCronRun(entry.key, {
             status: 'skipped',
             finishedAt: Date.now(),
@@ -383,8 +440,10 @@ function scheduleCronJobs(): void {
 
   // Warn about handlers that have no registry entry (invisible in admin UI)
   const registeredKeys = new Set(cronEntries.map((e) => e.key));
+  const orphanedHandlerKeys: string[] = [];
   for (const key of Object.keys(CRON_HANDLERS)) {
     if (!registeredKeys.has(key)) {
+      orphanedHandlerKeys.push(key);
       logger.warn(
         `[REGISTRY] ⚠️  Handler exists for unregistered job "${key}" — ` +
         `add it to JOB_REGISTRY in workerJobRegistry.ts`,
@@ -392,18 +451,66 @@ function scheduleCronJobs(): void {
     }
   }
 
-  // WKR-006: a registry entry with no handler means the admin UI and
-  // operators believe a job is scheduled when it silently never runs.
-  // That's tolerable in local dev (a handler may be mid-refactor) but must
-  // not reach production undetected.
-  if (process.env.NODE_ENV === 'production' && missingHandlerKeys.length > 0) {
+  // WKR-006: registry/handler drift must not reach production undetected in
+  // EITHER direction. A registry entry with no handler means the admin UI
+  // and operators believe a job is scheduled when it silently never runs.
+  // An orphaned handler (no registry entry) is not just dead code: nothing
+  // stops it from being invoked directly by anything that enqueues its job
+  // name onto cron-trigger-queue, since cronTriggerWorker only applies
+  // evaluateWorkerExecution when it finds a matching registry entry (see
+  // "Defense in depth" above) — an unregistered handler runs completely
+  // outside the governance policy if reached that way. Previously only the
+  // first direction failed startup, and only in production; both directions
+  // are tolerable in local dev (a handler may be mid-refactor) but neither
+  // may reach production undetected.
+  if (process.env.NODE_ENV === 'production' && (missingHandlerKeys.length > 0 || orphanedHandlerKeys.length > 0)) {
+    const problems = [
+      ...missingHandlerKeys.map((k) => `${k} (registry entry, no handler)`),
+      ...orphanedHandlerKeys.map((k) => `${k} (handler, no registry entry)`),
+    ];
     throw new Error(
-      `Refusing to start in production: ${missingHandlerKeys.length} registry job(s) have no ` +
-        `CRON_HANDLERS entry: ${missingHandlerKeys.join(', ')}`,
+      `Refusing to start in production: registry/handler drift detected: ${problems.join(', ')}`,
     );
   }
 
+  validateRegistryQueueWiring();
+
   logger.info(`[REGISTRY] ${cronEntries.length} cron jobs scheduled from registry`);
+}
+
+/**
+ * WKR-006: validates every JOB_REGISTRY entry's declared `queueName` is a
+ * queue an actual BullMQ Worker in this process consumes (KNOWN_QUEUE_NAMES,
+ * defined once every such Worker exists — see the module-scope comment
+ * where it's declared). A registry entry pointing at an unconsumed queue
+ * name means manual triggers/admin "Run Job" requests for it queue jobs
+ * nobody ever picks up — no error, no retry, just a silently stuck job.
+ * Called from scheduleCronJobs() at the same startup point as the
+ * handler-parity check above, by which time KNOWN_QUEUE_NAMES (declared
+ * later in this file, after every Worker/Queue is constructed) is already
+ * initialized — module top-level `const`s all evaluate before this
+ * function's caller runs, in file order, so the later declaration position
+ * doesn't create a temporal-dead-zone issue here.
+ */
+function validateRegistryQueueWiring(): void {
+  const driftEntries = JOB_REGISTRY.filter(
+    (entry) => entry.queueName && !KNOWN_QUEUE_NAMES.has(entry.queueName),
+  );
+  if (driftEntries.length === 0) return;
+
+  for (const entry of driftEntries) {
+    logger.warn(
+      `[REGISTRY] ⚠️  Job "${entry.key}" declares queueName "${entry.queueName}", ` +
+      `which no BullMQ Worker in this process consumes — manual triggers for it would queue silently-stuck jobs`,
+    );
+  }
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error(
+      `Refusing to start in production: registry queue-name drift detected: ${driftEntries
+        .map((e) => `${e.key} -> "${e.queueName}"`)
+        .join(', ')}`,
+    );
+  }
 }
 
 /**
@@ -1033,6 +1140,27 @@ cronTriggerWorker.on('failed', (job, err) => {
   void alertOnJobFailure('cron-trigger-queue', job, err);
 });
 registerShutdownHandler('cronTriggerWorker', () => cronTriggerWorker.close());
+
+// WKR-006: every BullMQ queue name a JOB_REGISTRY entry can declare must be
+// consumed by an actual `new Worker(...)` in this process, or a manual
+// trigger/admin "Run Job" request for that entry queues a job nothing ever
+// picks up — silent, and invisible until someone notices a job never runs.
+// Kept as a literal set (not derived) because several of the queue-name
+// arguments above are inline string literals, not named constants; this is
+// the single place drift between "queues consumed" and "queues declared in
+// the registry" gets caught, see validateRegistryQueueWiring() below.
+const KNOWN_QUEUE_NAMES = new Set<string>([
+  QUEUE_NAME,
+  'email-notification-queue',
+  'push-notification-queue',
+  'sms-notification-queue',
+  RECALL_QUEUE_NAME,
+  DIY_AI_GUIDE_QUEUE,
+  'permit-fetch-queue',
+  'detect-unpermitted-work-queue',
+  'generate-permit-disclosure-queue',
+  'cron-trigger-queue',
+]);
 
 // =============================================================================
 // STARTUP DIAGNOSTICS — WKR-004/WKR-005: make the effective worker execution

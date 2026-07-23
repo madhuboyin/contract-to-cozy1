@@ -6,6 +6,7 @@ import { buildDigestHtml, escapeHtml } from '../email/buildDigestHtml';
 import { buildWeatherAlertCardHtml, isWeatherCardMetadata } from '../email/buildWeatherAlertCardHtml';
 import { logger } from '../lib/logger';
 import { filterDeliveriesByAggregationPolicy } from '../services/aggregationDeliveryPolicy';
+import type { WorkerRunResult } from '../lib/workerRunResult';
 
 const MAX_NOTIFICATIONS_PER_EMAIL = 10;
 
@@ -194,15 +195,15 @@ Manage notifications in your dashboard.
   }
 }
 
-export async function runDailyEmailDigest() {
+export async function runDailyEmailDigest(): Promise<WorkerRunResult> {
   return runPreferenceDigest('DAILY_DIGEST');
 }
 
-export async function runWeeklyHomeBriefDigest() {
+export async function runWeeklyHomeBriefDigest(): Promise<WorkerRunResult> {
   return runPreferenceDigest('WEEKLY_BRIEF');
 }
 
-async function runPreferenceDigest(cadence: 'DAILY_DIGEST' | 'WEEKLY_BRIEF') {
+async function runPreferenceDigest(cadence: 'DAILY_DIGEST' | 'WEEKLY_BRIEF'): Promise<WorkerRunResult> {
   // 1️⃣ Find users with pending EMAIL deliveries
   const users = await prisma.notificationDelivery.findMany({
     where: {
@@ -230,17 +231,35 @@ async function runPreferenceDigest(cadence: 'DAILY_DIGEST' | 'WEEKLY_BRIEF') {
 
   logger.info(`[DIGEST] Users with pending notifications: ${userIds.length}`);
 
-  // 2️⃣ Send one email per user
+  // WKR-008: this loop previously caught and logged a per-user send failure
+  // and nothing else — the function returned void, so the scheduler always
+  // recorded SUCCEEDED even on a run where every single user's digest email
+  // failed to send. Returning a WorkerRunResult lets the scheduler tell
+  // SUCCEEDED, PARTIAL, and (all-failed) FAILED apart instead.
+  let notified = 0;
+  let skipped = 0;
+  let failed = 0;
   for (const userId of userIds) {
     try {
-      await sendUserDigest(userId, cadence);
+      const outcome = await sendUserDigest(userId, cadence);
+      if (outcome === 'sent') notified++;
+      else skipped++;
     } catch (err) {
+      failed++;
       logger.error({ err }, `[DIGEST] Failed for user=${userId}`);
     }
   }
+
+  return {
+    examined: userIds.length,
+    notified,
+    skipped,
+    failed,
+    reason: failed > 0 ? `${failed} of ${userIds.length} user digest(s) failed to send` : undefined,
+  };
 }
 
-async function sendUserDigest(userId: string, cadence: 'DAILY_DIGEST' | 'WEEKLY_BRIEF') {
+async function sendUserDigest(userId: string, cadence: 'DAILY_DIGEST' | 'WEEKLY_BRIEF'): Promise<'sent' | 'skipped'> {
   const pendingDeliveries = await prisma.notificationDelivery.findMany({
     where: {
       channel: NotificationChannel.EMAIL,
@@ -264,10 +283,10 @@ async function sendUserDigest(userId: string, cadence: 'DAILY_DIGEST' | 'WEEKLY_
   });
   const deliveries = await filterDeliveriesByAggregationPolicy(cadenceDeliveries);
 
-  if (deliveries.length === 0) return;
+  if (deliveries.length === 0) return 'skipped';
 
   const user = deliveries[0].notification.user;
-  if (!user?.email) return;
+  if (!user?.email) return 'skipped';
 
   const notifications = deliveries.map(d => d.notification);
 
@@ -296,4 +315,5 @@ async function sendUserDigest(userId: string, cadence: 'DAILY_DIGEST' | 'WEEKLY_
   logger.info(
     `[DIGEST] Sent ${notifications.length} notifications to ${user.email}`
   );
+  return 'sent';
 }

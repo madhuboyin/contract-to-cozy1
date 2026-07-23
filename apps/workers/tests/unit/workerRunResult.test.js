@@ -27,6 +27,9 @@ test('deriveRunStatus: some failures with some success is PARTIAL', () => {
   assert.equal(deriveRunStatus({ examined: 5, notified: 3, failed: 2 }), 'PARTIAL');
   assert.equal(deriveRunStatus({ examined: 5, created: 1, failed: 4 }), 'PARTIAL');
   assert.equal(deriveRunStatus({ examined: 5, updated: 1, failed: 4 }), 'PARTIAL');
+  // `refreshed` is the success signal radar/hidden-asset-style refresh jobs
+  // use — must count toward "some succeeded" the same as notified/created/updated.
+  assert.equal(deriveRunStatus({ examined: 5, refreshed: 1, failed: 4 }), 'PARTIAL');
 });
 
 test('deriveRunStatus: failures with zero successes is FAILED even though the promise resolved', () => {

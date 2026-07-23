@@ -157,5 +157,5 @@ export async function providerMissingCredentialSweepJob(opts?: { dryRun?: boolea
     `[ProviderMissingCredentialSweep] ${alertsCreated} alert(s) created, ${alertsResolved} resolved, ${providersFailed} provider(s) failed, across ${providers.length} provider(s)`
   );
 
-  return { alertsCreated, alertsResolved, providersFailed, smokeCorrelationId };
+  return { alertsCreated, alertsResolved, providersFailed, providersExamined: providers.length, smokeCorrelationId };
 }

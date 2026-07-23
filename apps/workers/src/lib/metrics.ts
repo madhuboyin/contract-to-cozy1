@@ -39,7 +39,7 @@ export const jobsActiveGauge = new Gauge({
 export const cronJobRunsTotal = new Counter({
   name: 'cron_job_runs_total',
   help: 'Total number of node-cron job runs, by outcome',
-  labelNames: ['job_key', 'status'] as const, // status: success|failure
+  labelNames: ['job_key', 'status'] as const, // status: success|partial|failure|skipped
   registers: [register],
 });
 

@@ -47,6 +47,29 @@ const options = {
     service: 'workers',
     env: process.env.NODE_ENV || 'development',
   },
+  // WKR-015: redact sensitive fields wherever they appear in the log object
+  // tree, mirroring apps/backend/src/lib/logger.ts's paths. Free-text
+  // payloads (stack traces, alert-email bodies) aren't covered by this —
+  // see ./redact.ts's redactText() for those.
+  redact: {
+    paths: [
+      'req.headers.authorization',
+      '*.password',
+      '*.passwordHash',
+      '*.token',
+      '*.refreshToken',
+      '*.accessToken',
+      '*.apiKey',
+      '*.secret',
+      '*.mfaSecret',
+      '*.ssn',
+      '*.policyNumber',
+      '*.claimNumber',
+      '*.credential',
+      '*.credentials',
+    ],
+    censor: '[REDACTED]',
+  },
 };
 
 export const logger: AppLogger = isDev

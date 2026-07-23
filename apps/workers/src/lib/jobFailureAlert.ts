@@ -11,6 +11,7 @@ import { UserRole } from '@prisma/client';
 import { prisma } from './prisma';
 import { sendEmail } from '../email/email.service';
 import { logger } from './logger';
+import { redactText } from './redact';
 
 const ALERT_COOLDOWN_MS = 30 * 60 * 1000; // avoid re-alerting on every recurring run of a persistently-broken job
 const lastAlertSentAt = new Map<string, number>();
@@ -40,7 +41,12 @@ export async function alertOnJobFailure(
     });
     if (!admins.length) return;
 
-    const message = err instanceof Error ? (err.stack ?? err.message) : String(err);
+    const rawMessage = err instanceof Error ? (err.stack ?? err.message) : String(err);
+    // WKR-015: this raw error text can otherwise carry emails, tokens, or
+    // connection-string credentials straight into an outbound email — scrub
+    // before truncating, not after, so a redaction doesn't get cut in half
+    // at the slice boundary.
+    const message = redactText(rawMessage);
     const subject = `[Worker Alert] ${jobLabel} failed after ${attemptsMade}/${maxAttempts} attempt(s)`;
     const html = `
       <p>Queue: <b>${queueName}</b></p>
