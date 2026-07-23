@@ -142,6 +142,16 @@ class APIError extends Error {
   }
 }
 
+function parseRetryAfterSeconds(value: string | null): number | undefined {
+  if (!value) return undefined;
+  const seconds = Number(value);
+  if (Number.isFinite(seconds)) return Math.max(0, Math.ceil(seconds));
+
+  const retryAt = Date.parse(value);
+  if (!Number.isFinite(retryAt)) return undefined;
+  return Math.max(0, Math.ceil((retryAt - Date.now()) / 1000));
+}
+
 // FIX 2: Define a temporary structural type for ProviderProfile to resolve the 'Cannot find name' error.
 type ProviderProfile = Provider & {
   user: User & { phone: string | null }; 
@@ -487,7 +497,13 @@ class APIClient {
         }
         
         const errorMessage = typeof rawError === 'string' ? rawError : 'An unexpected error occurred';
-        throw new APIError(errorMessage, response.status, data);
+        const retryAfterSeconds = response.status === 429
+          ? parseRetryAfterSeconds(response.headers.get('retry-after'))
+          : undefined;
+        const errorPayload = retryAfterSeconds === undefined
+          ? data
+          : { ...(data && typeof data === 'object' ? data : {}), retryAfterSeconds };
+        throw new APIError(errorMessage, response.status, errorPayload);
       }
 
       // --- SUCCESS HANDLING ---

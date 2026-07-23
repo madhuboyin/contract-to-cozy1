@@ -22,6 +22,13 @@ export const httpRequestDurationSeconds = new Histogram({
   registers: [register],
 });
 
+export const apiRateLimitRejectionsTotal = new Counter({
+  name: 'api_rate_limit_rejections_total',
+  help: 'General API requests rejected by identity scope',
+  labelNames: ['identity_scope'] as const,
+  registers: [register],
+});
+
 // ─── Security metrics ────────────────────────────────────────────────────────
 
 export const securityTokenReuseTotal = new Counter({

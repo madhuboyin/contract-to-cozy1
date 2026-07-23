@@ -8,12 +8,11 @@ import { AddRoomForm } from '@/components/manage-rooms/AddRoomForm';
 import { ManageRoomsHeader } from '@/components/manage-rooms/ManageRoomsHeader';
 import { RoomsList } from '@/components/manage-rooms/RoomsList';
 import { MANAGE_ROOM_TYPE_VALUES, type ManageRoom, type ManageRoomType } from '@/components/manage-rooms/types';
-import type { InventoryItem, InventoryRoom } from '@/types';
+import type { InventoryRoom } from '@/types';
 
 import {
   createInventoryRoom,
   deleteInventoryRoom,
-  listInventoryItems,
   listInventoryRooms,
   updateInventoryRoom,
 } from '../../../../inventory/inventoryApi';
@@ -35,12 +34,16 @@ function isManageRoomType(value: string): value is ManageRoomType {
   return (MANAGE_ROOM_TYPE_VALUES as readonly string[]).includes(value);
 }
 
-function buildItemCountMap(items: InventoryItem[]): Record<string, number> {
-  return items.reduce<Record<string, number>>((acc, item) => {
-    if (!item.roomId) return acc;
-    acc[item.roomId] = (acc[item.roomId] ?? 0) + 1;
-    return acc;
-  }, {});
+type RequestError = {
+  status?: number | string;
+  payload?: { retryAfterSeconds?: number };
+};
+
+function getRateLimitRetrySeconds(error: unknown): number | null {
+  const requestError = error as RequestError;
+  if (Number(requestError?.status) !== 429) return null;
+  const seconds = Number(requestError.payload?.retryAfterSeconds);
+  return Number.isFinite(seconds) ? Math.max(0, Math.ceil(seconds)) : 60;
 }
 
 export default function RoomsClient() {
@@ -48,7 +51,9 @@ export default function RoomsClient() {
   const propertyId = String(params.id || '');
 
   const [rooms, setRooms] = useState<InventoryRoomWithType[]>([]);
-  const [itemCounts, setItemCounts] = useState<Record<string, number>>({});
+  const [hasLoadedRooms, setHasLoadedRooms] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [retryAfterSeconds, setRetryAfterSeconds] = useState(0);
 
   const [roomType, setRoomType] = useState<ManageRoomType | ''>('');
   const [customLabel, setCustomLabel] = useState('');
@@ -59,9 +64,9 @@ export default function RoomsClient() {
     () =>
       rooms.map((room) => ({
         ...room,
-        itemCount: itemCounts[room.id] ?? 0,
+        itemCount: room.itemCount ?? 0,
       })),
-    [rooms, itemCounts]
+    [rooms]
   );
 
   const totalItems = useMemo(
@@ -72,18 +77,24 @@ export default function RoomsClient() {
   async function refresh() {
     if (!propertyId) return;
 
+    setIsLoading(true);
     try {
-      const [nextRooms, items] = await Promise.all([
-        listInventoryRooms(propertyId),
-        listInventoryItems(propertyId, {}),
-      ]);
-
+      const nextRooms = await listInventoryRooms(propertyId);
       setRooms((nextRooms || []) as InventoryRoomWithType[]);
-      setItemCounts(buildItemCountMap(items || []));
+      setHasLoadedRooms(true);
+      setRetryAfterSeconds(0);
       setError(null);
     } catch (err) {
       console.error('Failed to load rooms:', err);
-      setError('Failed to load rooms. Please try again.');
+      const retrySeconds = getRateLimitRetrySeconds(err);
+      if (retrySeconds !== null) {
+        setRetryAfterSeconds(retrySeconds);
+        setError('Rooms are temporarily unavailable because several requests were made recently.');
+      } else {
+        setError('We could not load your rooms. Please try again.');
+      }
+    } finally {
+      setIsLoading(false);
     }
   }
 
@@ -91,6 +102,14 @@ export default function RoomsClient() {
     void refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [propertyId]);
+
+  useEffect(() => {
+    if (retryAfterSeconds <= 0) return;
+    const timer = window.setInterval(() => {
+      setRetryAfterSeconds((seconds) => Math.max(0, seconds - 1));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [retryAfterSeconds]);
 
   async function handleAddRoom() {
     if (!propertyId || !roomType || isAdding) return;
@@ -131,11 +150,6 @@ export default function RoomsClient() {
     try {
       await deleteInventoryRoom(propertyId, roomId);
       setRooms((prev) => prev.filter((room) => room.id !== roomId));
-      setItemCounts((prev) => {
-        const next = { ...prev };
-        delete next[roomId];
-        return next;
-      });
     } catch (err) {
       console.error('Failed to delete room:', err);
       setError('Failed to delete room. Please try again.');
@@ -155,8 +169,14 @@ export default function RoomsClient() {
       summary={
         <ResultHeroCard
           title="Room Inventory"
-          value={`${roomsWithCounts.length} room${roomsWithCounts.length === 1 ? '' : 's'}`}
-          status={<StatusChip tone={roomsWithCounts.length > 0 ? 'good' : 'info'}>{totalItems} item{totalItems === 1 ? '' : 's'}</StatusChip>}
+          value={isLoading && !hasLoadedRooms
+            ? 'Loading…'
+            : !hasLoadedRooms && error
+              ? 'Unavailable'
+              : `${roomsWithCounts.length} room${roomsWithCounts.length === 1 ? '' : 's'}`}
+          status={hasLoadedRooms
+            ? <StatusChip tone={roomsWithCounts.length > 0 ? 'good' : 'info'}>{totalItems} item{totalItems === 1 ? '' : 's'}</StatusChip>
+            : undefined}
           summary="Add, rename, and remove rooms without leaving inventory flow."
         />
       }
@@ -171,8 +191,21 @@ export default function RoomsClient() {
       </div>
 
       {error && (
-        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {error}
+        <div className="flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="font-medium">{error}</p>
+            {retryAfterSeconds > 0 && (
+              <p className="mt-1 text-xs text-amber-800">Try again in {retryAfterSeconds} second{retryAfterSeconds === 1 ? '' : 's'}.</p>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => void refresh()}
+            disabled={isLoading || retryAfterSeconds > 0}
+            className="shrink-0 rounded-lg border border-amber-300 bg-white px-3 py-2 font-semibold text-amber-900 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {isLoading ? 'Trying again…' : 'Try again'}
+          </button>
         </div>
       )}
 

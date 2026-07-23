@@ -1,11 +1,12 @@
 import rateLimit, { ipKeyGenerator, Store, ClientRateLimitInfo } from 'express-rate-limit';
-import type { Request } from 'express';
+import type { Request, RequestHandler } from 'express';
 import { createHash } from 'crypto';
 import { authConfig } from '../config/jwt.config';
 import { verifyAccessToken } from '../utils/jwt.util';
 import { getAccessTokenFromRequest } from '../utils/authCookies.util';
 import { redis } from '../lib/redis';
 import { logger } from '../lib/logger';
+import { apiRateLimitRejectionsTotal } from '../lib/metrics';
 
 /**
  * Redis-backed rate-limit store.
@@ -187,6 +188,14 @@ const authenticatedApiMaxRequests = Number(
   Math.max(apiMaxRequests, 2000)
 );
 
+const apiRateLimitMessage = {
+  success: false,
+  error: {
+    message: 'Too many requests, please try again later',
+    code: 'RATE_LIMIT_EXCEEDED',
+  },
+};
+
 function resolveApiRateLimitMax(req: Request): number {
   const token = getAccessTokenFromRequest(req);
   if (!token) return apiMaxRequests;
@@ -282,7 +291,7 @@ export const vaultShareAccessRateLimiter = rateLimit({
  * General API rate limiter — backed by Redis so the limit is shared across
  * all backend pods (replacing the per-pod MemoryStore).
  */
-export const apiRateLimiter = rateLimit({
+const baseApiRateLimiter = rateLimit({
   windowMs: apiWindowMs,
   max: resolveApiRateLimitMax,
   keyGenerator: rateLimitKey,
@@ -294,16 +303,36 @@ export const apiRateLimiter = rateLimit({
     return path === '/auth' || path.startsWith('/auth/');
   },
   store: new RedisRateLimitStore('api', apiWindowMs),
-  message: {
-    success: false,
-    error: {
-      message: 'Too many requests, please try again later',
-      code: 'RATE_LIMIT_EXCEEDED',
-    },
+  message: apiRateLimitMessage,
+  handler: (req, res, _next, options) => {
+    apiRateLimitRejectionsTotal.inc({
+      identity_scope: rateLimitKey(req).startsWith('user:') ? 'user' : 'ip',
+    });
+    res.status(options.statusCode).send(options.message);
   },
   standardHeaders: true,
   legacyHeaders: false,
 });
+
+const API_RATE_LIMIT_APPLIED = Symbol('apiRateLimitApplied');
+type ApiRateLimitedRequest = Request & { [API_RATE_LIMIT_APPLIED]?: boolean };
+
+/**
+ * The general limiter is mounted globally and is still present on legacy
+ * routers. Make it idempotent per request so those nested registrations do not
+ * increment the same Redis bucket more than once. Specialist limiters retain
+ * their own independent namespaces and are intentionally unaffected.
+ */
+export const apiRateLimiter: RequestHandler = (req, res, next) => {
+  const markedRequest = req as ApiRateLimitedRequest;
+  if (markedRequest[API_RATE_LIMIT_APPLIED]) {
+    next();
+    return;
+  }
+
+  markedRequest[API_RATE_LIMIT_APPLIED] = true;
+  baseApiRateLimiter(req, res, next);
+};
 
 const aiOracleWindowMs = 60 * 60 * 1000; // 1 hour
 

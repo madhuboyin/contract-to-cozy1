@@ -181,6 +181,25 @@ async function runLimiter(middleware, reqOptions = {}) {
   });
 }
 
+async function runLimiterWithRequest(middleware, req) {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const done = (result) => {
+      if (settled) return;
+      settled = true;
+      resolve(result);
+    };
+    const res = createMockRes(() => done({ blocked: true, req, res }));
+    const next = (error) => error ? reject(error) : done({ blocked: false, req, res });
+    try {
+      const maybePromise = middleware(req, res, next);
+      if (maybePromise && typeof maybePromise.then === 'function') maybePromise.catch(reject);
+    } catch (error) {
+      reject(error);
+    }
+  });
+}
+
 test.after(() => {
   restoreRedis();
 });
@@ -233,6 +252,22 @@ test('general dashboard API traffic does not consume the Gemini chat allowance',
   assert.ok(bucketStore.has('rl:gemini-chat:ip:10.0.0.20'));
   assert.equal(bucketStore.get('rl:api:ip:10.0.0.20')?.count, 30);
   assert.equal(bucketStore.get('rl:gemini-chat:ip:10.0.0.20')?.count, 1);
+});
+
+test('general API limiter counts a request only once when mounted globally and on a router', async () => {
+  clearBuckets();
+  const req = createMockReq({
+    method: 'GET',
+    path: '/properties/property-1/inventory/rooms',
+    ip: '10.0.0.25',
+  });
+
+  const globalPass = await runLimiterWithRequest(apiRateLimiter, req);
+  const routerPass = await runLimiterWithRequest(apiRateLimiter, req);
+
+  assert.equal(globalPass.blocked, false);
+  assert.equal(routerPass.blocked, false);
+  assert.equal(bucketStore.get('rl:api:ip:10.0.0.25')?.count, 1);
 });
 
 test('ocr rate limiter returns 429 with retry metadata after threshold', async () => {

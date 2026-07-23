@@ -111,10 +111,22 @@ export class InventoryService {
   // ---------------- Rooms ----------------
 
   async listRooms(propertyId: string) {
-    return prisma.inventoryRoom.findMany({
+    const rooms = await prisma.inventoryRoom.findMany({
       where: { propertyId },
       orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+      include: {
+        _count: {
+          select: {
+            items: { where: visibleInventoryItemWhere() },
+          },
+        },
+      },
     });
+
+    return rooms.map(({ _count, ...room }) => ({
+      ...room,
+      itemCount: _count.items,
+    }));
   }
   /**
    * Check if a major appliance already exists for this property.

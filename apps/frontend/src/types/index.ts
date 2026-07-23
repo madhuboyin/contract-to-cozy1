@@ -125,6 +125,7 @@ export type InventoryRoom = {
   name: string;
   floorLevel: number | null;
   sortOrder: number;
+  itemCount?: number;
   createdAt: string;
   updatedAt: string;
 };

@@ -234,12 +234,13 @@ app.use(
 // Requests using Authorization: Bearer <token> are skipped (see csrf.middleware.ts).
 app.use('/api', csrfProtection);
 
+// Record HTTP request count and duration for all routes.
+// This must run before the global limiter so rejected requests are observable.
+app.use(metricsMiddleware);
+
 // Apply global API rate limiting at the app boundary so all /api/* routes
 // are covered, including any that do not self-apply a per-route limiter.
 app.use('/api', apiRateLimiter);
-
-// Record HTTP request count and duration for all routes.
-app.use(metricsMiddleware);
 
 if (process.env.NODE_ENV === 'development') {
   app.use((req: Request, res: Response, next: NextFunction) => {
