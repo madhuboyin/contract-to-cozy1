@@ -9,6 +9,8 @@
 
 import { NeighborhoodPropertyMatchService } from '@worker-shared/neighborhoodIntelligence/neighborhoodPropertyMatchService';
 import { prisma } from '../lib/prisma';
+import { isPropertyAllowlisted } from '@worker-shared/config/smokeTestConfig';
+import { generateSmokeCorrelationId } from '@worker-shared/lib/smokeTestCorrelation';
 import { logger } from '../lib/logger';
 
 const matchService = new NeighborhoodPropertyMatchService();
@@ -20,29 +22,43 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-export async function refreshNeighborhoodEventsJob(): Promise<void> {
+export async function refreshNeighborhoodEventsJob(
+  opts?: { dryRun?: boolean; propertyId?: string },
+): Promise<{ examined: number; refreshed: number; skipped: number; failed: number; smokeCorrelationId?: string }> {
+  const dryRun = opts?.dryRun === true;
+  if (opts?.propertyId && !isPropertyAllowlisted(opts.propertyId)) {
+    throw new Error(
+      `[NEIGHBORHOOD-REFRESH] propertyId ${opts.propertyId} is not in SMOKE_TEST_PROPERTY_ALLOWLIST`,
+    );
+  }
+  const smokeCorrelationId = opts?.propertyId ? generateSmokeCorrelationId('neighborhood-radar-refresh') : undefined;
+
   const enabled = process.env.NEIGHBORHOOD_REFRESH_ENABLED !== 'false';
   if (!enabled) {
     logger.info('[NEIGHBORHOOD-REFRESH] Skipped — NEIGHBORHOOD_REFRESH_ENABLED=false');
-    return;
+    return { examined: 0, refreshed: 0, skipped: 0, failed: 0, smokeCorrelationId };
   }
 
-  logger.info('[NEIGHBORHOOD-REFRESH] Starting weekly neighborhood radar refresh...');
+  logger.info(`[NEIGHBORHOOD-REFRESH] Starting weekly neighborhood radar refresh...${dryRun ? ' (dry run)' : ''}`);
+
+  const where = opts?.propertyId ? { id: opts.propertyId } : undefined;
 
   // Count total properties for progress logging
-  const total = await (prisma as any).property.count();
+  const total = await (prisma as any).property.count({ where });
   if (total === 0) {
     logger.info('[NEIGHBORHOOD-REFRESH] No properties found, nothing to do.');
-    return;
+    return { examined: 0, refreshed: 0, skipped: 0, failed: 0, smokeCorrelationId };
   }
 
   let offset = 0;
   let successCount = 0;
   let failureCount = 0;
+  let skippedCount = 0;
 
   while (offset < total) {
     const properties = await (prisma as any).property.findMany({
       select: { id: true },
+      where,
       skip: offset,
       take: BATCH_SIZE,
       orderBy: { createdAt: 'asc' },
@@ -51,6 +67,15 @@ export async function refreshNeighborhoodEventsJob(): Promise<void> {
     if (properties.length === 0) break;
 
     for (const property of properties) {
+      // Shallow dry-run: NeighborhoodPropertyMatchService's recompute has
+      // multiple interleaved deleteMany/upsert/createMany write sites —
+      // threading a real dryRun through it is out of proportion for this
+      // slice. Skip the call entirely and count what would have run.
+      if (dryRun) {
+        skippedCount++;
+        logger.info(`[NEIGHBORHOOD-REFRESH] (dry run) Would recompute radar for property ${property.id}`);
+        continue;
+      }
       try {
         const result = await matchService.recomputePropertyNeighborhoodRadar(property.id);
         logger.info(
@@ -74,6 +99,8 @@ export async function refreshNeighborhoodEventsJob(): Promise<void> {
   }
 
   logger.info(
-    `[NEIGHBORHOOD-REFRESH] Completed. success=${successCount} failures=${failureCount} total=${total}`,
+    `[NEIGHBORHOOD-REFRESH] Completed. success=${successCount} skipped=${skippedCount} failures=${failureCount} total=${total}`,
   );
+
+  return { examined: total, refreshed: successCount, skipped: skippedCount, failed: failureCount, smokeCorrelationId };
 }

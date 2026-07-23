@@ -7,6 +7,8 @@
 import { prisma } from '../lib/prisma';
 import { generateHabitsForProperty } from '@worker-shared/services/homeHabitCoach/habitGenerationEngine';
 import { NotificationService } from '@worker-shared/services/notification.service';
+import { isPropertyAllowlisted } from '@worker-shared/config/smokeTestConfig';
+import { generateSmokeCorrelationId } from '@worker-shared/lib/smokeTestCorrelation';
 import { logger } from '../lib/logger';
 import { createHash } from 'node:crypto';
 
@@ -101,8 +103,18 @@ export function buildHabitPropertyContext(property: any, now: Date = new Date())
   };
 }
 
-export async function runHabitGenerationJob(): Promise<void> {
-  logger.info(`[HABIT-GEN] Starting batch habit generation at ${new Date().toISOString()}`);
+export async function runHabitGenerationJob(
+  opts?: { dryRun?: boolean; propertyId?: string },
+): Promise<{ examined: number; created: number; notified: number; skipped: number; failed: number; smokeCorrelationId?: string }> {
+  const dryRun = opts?.dryRun === true;
+  if (opts?.propertyId && !isPropertyAllowlisted(opts.propertyId)) {
+    throw new Error(
+      `[HABIT-GEN] propertyId ${opts.propertyId} is not in SMOKE_TEST_PROPERTY_ALLOWLIST`,
+    );
+  }
+  const smokeCorrelationId = opts?.propertyId ? generateSmokeCorrelationId('home-habit-generation') : undefined;
+
+  logger.info(`[HABIT-GEN] Starting batch habit generation at ${new Date().toISOString()}${dryRun ? ' (dry run)' : ''}`);
 
   const properties = await prisma.property.findMany({
     select: {
@@ -125,14 +137,26 @@ export async function runHabitGenerationJob(): Promise<void> {
       inventoryItems: { select: { category: true, name: true, tags: true } },
       homeownerProfile: { select: { userId: true } },
     },
+    ...(opts?.propertyId ? { where: { id: opts.propertyId } } : {}),
   });
 
   let successCount = 0;
   let failureCount = 0;
   let totalCreated = 0;
   let notified = 0;
+  let skippedCount = 0;
 
   for (const property of properties) {
+    // Shallow dry-run: generateHabitsForProperty() is also called directly
+    // from property.service.ts's onboarding flow (a live request path) —
+    // threading a real dryRun through it is out of proportion for this
+    // slice and risks affecting that other caller. Skip the call entirely
+    // and count what would have run.
+    if (dryRun) {
+      skippedCount++;
+      logger.info(`[HABIT-GEN] (dry run) Would generate habits for property ${property.id}`);
+      continue;
+    }
     try {
       const result = await generateHabitsForProperty(property.id, buildHabitPropertyContext(property));
       successCount++;
@@ -178,7 +202,9 @@ export async function runHabitGenerationJob(): Promise<void> {
 
   logger.info(
     `[HABIT-GEN] Batch complete. ` +
-      `Success: ${successCount}, Failed: ${failureCount}, Total: ${properties.length}, ` +
+      `Success: ${successCount}, Skipped: ${skippedCount}, Failed: ${failureCount}, Total: ${properties.length}, ` +
       `Habits created: ${totalCreated}, Notified: ${notified}`,
   );
+
+  return { examined: properties.length, created: totalCreated, notified, skipped: skippedCount, failed: failureCount, smokeCorrelationId };
 }

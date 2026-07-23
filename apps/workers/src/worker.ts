@@ -202,7 +202,10 @@ const CRON_HANDLERS: Record<string, (opts?: { dryRun?: boolean; propertyId?: str
   'seasonal-checklist-generation':   async () => { await generateSeasonalChecklists(); },
   'seasonal-notifications':          async () => sendSeasonalNotifications(),
   'weekly-score-snapshots':          async () => { await captureWeeklyScoreSnapshotsJob(); },
-  'hidden-asset-refresh':            async () => { await runHiddenAssetRefreshJob(); },
+  'hidden-asset-refresh':            async (opts) => {
+    const result = await runHiddenAssetRefreshJob(opts);
+    logger.info({ ...result }, `[hidden-asset-refresh] examined=${result.examined} refreshed=${result.refreshed}`);
+  },
   'coverage-lapse-incidents':        async () => {
     const result = await coverageLapseIncidentsJob();
     logger.info({ ...result }, `[coverage-lapse-incidents] createdOrUpdated=${result.createdOrUpdated} resolved=${result.resolved}`);
@@ -216,9 +219,15 @@ const CRON_HANDLERS: Record<string, (opts?: { dryRun?: boolean; propertyId?: str
     logger.info({ ...result }, `[severe-weather-alerts] createdOrUpdated=${result.createdOrUpdated} resolved=${result.resolved}`);
   },
   'neighborhood-change-notifications': async () => { await neighborhoodChangeNotificationJob(); },
-  'neighborhood-radar-refresh':      async () => { await refreshNeighborhoodEventsJob(); },
+  'neighborhood-radar-refresh':      async (opts) => {
+    const result = await refreshNeighborhoodEventsJob(opts);
+    logger.info({ ...result }, `[neighborhood-radar-refresh] examined=${result.examined} refreshed=${result.refreshed}`);
+  },
   'inventory-draft-cleanup':         async () => { await cleanupInventoryDraftsJob(); },
-  'home-habit-generation':           async () => { await runHabitGenerationJob(); },
+  'home-habit-generation':           async (opts) => {
+    const result = await runHabitGenerationJob(opts);
+    logger.info({ ...result }, `[home-habit-generation] examined=${result.examined} created=${result.created} notified=${result.notified}`);
+  },
   'mortgage-rate-ingest':            async (opts) => {
     // Forward `opts` only when the caller actually passed one — a defined
     // opts is itself the "this was a manual/admin trigger" signal
