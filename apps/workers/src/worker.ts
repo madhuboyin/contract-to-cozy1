@@ -29,7 +29,7 @@ import { alertOnJobFailure } from './lib/jobFailureAlert';
 import { initCronRunHistory, recordCronRun } from './lib/cronRunHistory';
 import { registerShutdownHandler, installGracefulShutdown } from './lib/gracefulShutdown';
 import { validateStartupDependencies } from './lib/startupValidation';
-import { acquireCronLease, releaseCronLease } from './lib/cronLease';
+import { runWithCronLease } from './lib/cronExecutionCoordinator';
 import { DEFAULT_JOB_RETENTION } from '@worker-shared/config/queueDefaults';
 import { recallIngestJob, RECALL_INGEST_JOB } from './jobs/recallIngest.job';
 import { recallMatchJob, RECALL_MATCH_JOB } from './jobs/recallMatch.job';
@@ -335,11 +335,6 @@ const CRON_ENV_OVERRIDES: Record<string, string | undefined> = {
   'reserve-fund-reconciliation': process.env.RESERVE_FUND_RECONCILIATION_CRON,
 };
 
-// Crash-recovery safety net only — the lease is normally released explicitly
-// right after the handler finishes (see scheduleCronJobs). Default is well
-// under the tightest registry interval (severe-weather-alerts, every 15 min).
-const CRON_LEASE_TTL_MS = Number(process.env.CRON_LEASE_TTL_MS) || 10 * 60 * 1000; // 10 minutes
-
 function scheduleCronJobs(): void {
   const cronEntries = JOB_REGISTRY.filter((j) => j.type === 'cron' && j.cronExpression);
   const missingHandlerKeys: string[] = [];
@@ -379,53 +374,69 @@ function scheduleCronJobs(): void {
           });
           return;
         }
-        const gotLease = await acquireCronLease(entry.key, CRON_LEASE_TTL_MS);
-        if (!gotLease) {
-          logger.debug(`[${entry.key}] Skipped tick — lease held by another replica`);
-          return;
-        }
-        const stopTimer = cronJobDurationSeconds.startTimer({ job_key: entry.key });
-        try {
-          logger.info(`[${entry.key}] Starting: ${entry.name}`);
-          const outcome = await handler();
+        // WKR-007: the lease is now acquired/renewed/released by the same
+        // coordinator the manual cron-trigger path uses (see
+        // cronTriggerWorker below) — one concurrency mechanism instead of
+        // two that could silently diverge, and a long-running handler no
+        // longer risks losing its lease mid-run (the coordinator renews it).
+        const leaseOutcome = await runWithCronLease(entry.key, async () => {
+          const stopTimer = cronJobDurationSeconds.startTimer({ job_key: entry.key });
+          try {
+            logger.info(`[${entry.key}] Starting: ${entry.name}`);
+            const outcome = await handler();
 
-          // WKR-008: a handler can opt into structured reporting by
-          // resolving with a WorkerRunResult. FAILED (resolved, but
-          // nothing succeeded) is treated exactly like a thrown error —
-          // it must not be recorded as a false SUCCEEDED just because the
-          // promise resolved.
-          if (isWorkerRunResult(outcome) && deriveRunStatus(outcome) === 'FAILED') {
-            throw new Error(
-              outcome.reason ??
-                `[${entry.key}] resolved with FAILED status (examined=${outcome.examined}, failed=${outcome.failed}, notified=${outcome.notified ?? 0})`,
-            );
+            // WKR-008: a handler can opt into structured reporting by
+            // resolving with a WorkerRunResult. FAILED (resolved, but
+            // nothing succeeded) is treated exactly like a thrown error —
+            // it must not be recorded as a false SUCCEEDED just because the
+            // promise resolved.
+            if (isWorkerRunResult(outcome) && deriveRunStatus(outcome) === 'FAILED') {
+              throw new Error(
+                outcome.reason ??
+                  `[${entry.key}] resolved with FAILED status (examined=${outcome.examined}, failed=${outcome.failed}, notified=${outcome.notified ?? 0})`,
+              );
+            }
+            const runStatus = isWorkerRunResult(outcome) ? deriveRunStatus(outcome) : 'SUCCEEDED';
+            const isPartial = runStatus === 'PARTIAL';
+
+            logger.info(`[${entry.key}] ✅ Completed${isPartial ? ' (partial)' : ''}`);
+            cronJobRunsTotal.inc({ job_key: entry.key, status: isPartial ? 'partial' : 'success' });
+            cronJobLastSuccessTimestamp.set({ job_key: entry.key }, Date.now() / 1000);
+            await recordCronRun(entry.key, {
+              status: isPartial ? 'partial' : 'completed',
+              finishedAt: Date.now(),
+              durationMs: stopTimer() * 1000,
+              failReason: isPartial
+                ? (outcome as WorkerRunResult).reason ??
+                  `${(outcome as WorkerRunResult).failed} of ${(outcome as WorkerRunResult).examined} failed`
+                : undefined,
+            });
+          } catch (err) {
+            logger.error({ err }, `[${entry.key}] ❌ Failed`);
+            cronJobRunsTotal.inc({ job_key: entry.key, status: 'failure' });
+            await recordCronRun(entry.key, {
+              status: 'failed',
+              finishedAt: Date.now(),
+              durationMs: stopTimer() * 1000,
+              failReason: err instanceof Error ? err.message : String(err),
+            });
           }
-          const runStatus = isWorkerRunResult(outcome) ? deriveRunStatus(outcome) : 'SUCCEEDED';
-          const isPartial = runStatus === 'PARTIAL';
+        });
 
-          logger.info(`[${entry.key}] ✅ Completed${isPartial ? ' (partial)' : ''}`);
-          cronJobRunsTotal.inc({ job_key: entry.key, status: isPartial ? 'partial' : 'success' });
-          cronJobLastSuccessTimestamp.set({ job_key: entry.key }, Date.now() / 1000);
+        if (leaseOutcome.status === 'skipped') {
+          logger.debug(`[${entry.key}] Skipped tick — ${leaseOutcome.reason}`);
+          // WKR-014: record this the same way the governance-disabled skip
+          // above does — a job that's frequently lease-contended (a prior
+          // run still in flight when the next tick fires) should be as
+          // visible in metrics/history as one that's flag-disabled, not a
+          // silent no-op only a debug log line would show.
+          cronJobRunsTotal.inc({ job_key: entry.key, status: 'skipped' });
           await recordCronRun(entry.key, {
-            status: isPartial ? 'partial' : 'completed',
+            status: 'skipped',
             finishedAt: Date.now(),
-            durationMs: stopTimer() * 1000,
-            failReason: isPartial
-              ? (outcome as WorkerRunResult).reason ??
-                `${(outcome as WorkerRunResult).failed} of ${(outcome as WorkerRunResult).examined} failed`
-              : undefined,
+            durationMs: 0,
+            failReason: leaseOutcome.reason,
           });
-        } catch (err) {
-          logger.error({ err }, `[${entry.key}] ❌ Failed`);
-          cronJobRunsTotal.inc({ job_key: entry.key, status: 'failure' });
-          await recordCronRun(entry.key, {
-            status: 'failed',
-            finishedAt: Date.now(),
-            durationMs: stopTimer() * 1000,
-            failReason: err instanceof Error ? err.message : String(err),
-          });
-        } finally {
-          await releaseCronLease(entry.key);
         }
       },
       { timezone: 'America/New_York' },
@@ -1100,7 +1111,19 @@ const cronTriggerWorker = new Worker(
       throw new Error(`[CRON-TRIGGER] propertyId requested for "${job.name}" but it does not support property scope`);
     }
     logger.info(`[CRON-TRIGGER] Running manually triggered job: ${job.name}${dryRun ? ' (dry run)' : ''}${propertyId ? ` (property ${propertyId})` : ''}`);
-    const outcome = await handler({ dryRun, propertyId });
+    // WKR-007: acquire the same lease scheduled ticks use (both this queue
+    // and scheduleCronJobs() only ever reach here for a `type: 'cron'`
+    // registry entry — the two paths use the identical jobKey/entry.key —
+    // so a manual trigger can no longer run concurrently with an in-flight
+    // scheduled run of the same job, or vice versa.
+    const leaseOutcome = await runWithCronLease(job.name, () => handler({ dryRun, propertyId }));
+    if (leaseOutcome.status === 'skipped') {
+      throw new Error(
+        `[CRON-TRIGGER] "${job.name}" was not started — ${leaseOutcome.reason}. ` +
+        `A scheduled or another manual run of this job is already in progress; try again shortly.`,
+      );
+    }
+    const outcome = leaseOutcome.result;
     if (isWorkerRunResult(outcome) && deriveRunStatus(outcome) === 'FAILED') {
       throw new Error(
         outcome.reason ??

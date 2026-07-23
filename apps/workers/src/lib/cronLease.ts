@@ -66,6 +66,32 @@ export async function acquireCronLease(jobKey: string, ttlMs: number): Promise<b
 }
 
 /**
+ * WKR-007: extend jobKey's lease TTL while this process still holds it — a
+ * heartbeat so a handler that legitimately runs longer than the original
+ * TTL doesn't lose its lease to another replica mid-run. Guarded by
+ * lockedBy = OWNER_ID, same as release, so a replica can never renew a
+ * lease it doesn't currently hold.
+ *
+ * Returns false if this replica no longer owns the lease (it already
+ * expired and was reclaimed by another replica, or was released) — there
+ * is no safe way to abort a handler already in flight, so the caller can
+ * only log/alert that a duplicate run may now be happening.
+ */
+export async function renewCronLease(jobKey: string, ttlMs: number): Promise<boolean> {
+  const expiresAt = new Date(Date.now() + ttlMs);
+  try {
+    const renewed = await prisma.cronJobLock.updateMany({
+      where: { jobKey, lockedBy: OWNER_ID },
+      data: { expiresAt },
+    });
+    return renewed.count === 1;
+  } catch (err) {
+    logger.error({ err, jobKey }, '[cronLease] Failed to renew lease');
+    return false;
+  }
+}
+
+/**
  * Release the lease immediately after the handler finishes (success or
  * failure), so the *next* scheduled tick doesn't have to wait out the TTL.
  * This matters for jobs with short intervals (e.g. severe-weather-alerts
