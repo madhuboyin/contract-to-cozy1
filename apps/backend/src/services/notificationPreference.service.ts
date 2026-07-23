@@ -110,14 +110,57 @@ export async function recordNotificationOutcome(userId: string, notificationId: 
     create: { notificationId, userId, type: type as NotificationOutcomeType, category, propertyId }, update: {},
   });
   if (type === 'MUTE_TYPE') {
-    for (const channel of Object.values(NotificationChannel)) {
-      await upsertNotificationPreference(userId, { propertyId, category: category as NotificationCategory, channel, enabled: false, cadence: 'MUTED', timezone: 'UTC' });
-    }
+    // Only email is user-configurable during the pilot. Keep the mandatory
+    // in-app continuity channel intact when feedback is submitted from a card.
+    // Scope by the notification type's stable category rather than urgency:
+    // a maintenance reminder near its due date may use MATERIAL_DEADLINE for
+    // delivery timing, but muting it must not suppress every material deadline.
+    const muteCategory = inferNotificationCategory(notification.type);
+    await upsertNotificationPreference(userId, {
+      propertyId,
+      category: muteCategory,
+      channel: 'EMAIL',
+      enabled: false,
+      cadence: 'MUTED',
+      timezone: 'UTC',
+    });
   }
   if (type === 'NOT_RELEVANT' || type === 'ALREADY_HANDLED') {
     await prisma.notification.update({ where: { id: notificationId }, data: { isRead: true, readAt: new Date() } });
   }
   return outcome;
+}
+
+export async function revokeNotificationOutcome(
+  userId: string,
+  notificationId: string,
+  type: NotificationOutcome,
+  restoreIsRead?: boolean,
+) {
+  const notification = await prisma.notification.findFirst({
+    where: { id: notificationId, userId },
+    select: { id: true },
+  });
+  if (!notification) return null;
+
+  const removed = await prisma.notificationOutcome.deleteMany({
+    where: { notificationId, userId, type: type as NotificationOutcomeType },
+  });
+
+  if (
+    (type === 'NOT_RELEVANT' || type === 'ALREADY_HANDLED') &&
+    typeof restoreIsRead === 'boolean'
+  ) {
+    await prisma.notification.update({
+      where: { id: notificationId },
+      data: {
+        isRead: restoreIsRead,
+        readAt: restoreIsRead ? new Date() : null,
+      },
+    });
+  }
+
+  return { removed: removed.count };
 }
 
 export async function getNotificationQuality(userId: string, since = new Date(Date.now() - 30 * 86_400_000)) {

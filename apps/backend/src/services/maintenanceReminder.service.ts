@@ -90,7 +90,7 @@ export async function processMaintenanceReminders(options: {
         type: 'MAINTENANCE_TASK_REMINDER',
         title: `Maintenance reminder: ${task.title}`,
         message: `"${task.title}" is ${dueLabel}.`,
-        actionUrl: `/dashboard/properties/${task.propertyId}/tools/guidance-overview`,
+        actionUrl: `/dashboard/maintenance?propertyId=${encodeURIComponent(task.propertyId)}&taskId=${encodeURIComponent(task.id)}&from=notification`,
         entityType: 'PROPERTY_MAINTENANCE_TASK',
         entityId: task.id,
         category: isMaterial ? 'MATERIAL_DEADLINE' : 'MAINTENANCE',

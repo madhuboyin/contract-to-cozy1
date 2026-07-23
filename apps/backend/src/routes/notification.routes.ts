@@ -26,6 +26,7 @@ router.get('/unread-count', authenticate, NotificationController.unreadCount);
 router.post('/read-all', authenticate, NotificationController.markAllAsRead);
 
 router.post('/:id/outcomes', authenticate, NotificationController.recordOutcome);
+router.delete('/:id/outcomes/:type', authenticate, NotificationController.revokeOutcome);
 
 // Mark single notification as read (Changed from .post to .patch to match frontend)
 router.patch('/:id/read', authenticate, NotificationController.markAsRead);

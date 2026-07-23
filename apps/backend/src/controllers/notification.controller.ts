@@ -13,6 +13,7 @@ import {
   getNotificationQuality,
   listNotificationPreferences,
   recordNotificationOutcome,
+  revokeNotificationOutcome,
   upsertNotificationPreference,
 } from '../services/notificationPreference.service';
 
@@ -160,6 +161,27 @@ export class NotificationController {
     const outcome = NotificationOutcomeSchema.safeParse(req.body?.type);
     if (!notificationId.success || !outcome.success) return res.status(400).json({ success: false, error: { message: 'Invalid notification outcome' } });
     const result = await recordNotificationOutcome(userId, notificationId.data, outcome.data);
+    if (!result) return res.status(404).json({ success: false, error: { message: 'Notification not found' } });
+    return res.json({ success: true, data: result });
+  }
+
+  static async revokeOutcome(req: AuthRequest, res: Response) {
+    const userId = req.user?.userId;
+    if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+
+    const notificationId = z.string().uuid().safeParse(req.params.id);
+    const outcome = NotificationOutcomeSchema.safeParse(req.params.type);
+    const restoreIsRead = z.boolean().optional().safeParse(req.body?.restoreIsRead);
+    if (!notificationId.success || !outcome.success || !restoreIsRead.success) {
+      return res.status(400).json({ success: false, error: { message: 'Invalid notification outcome reversal' } });
+    }
+
+    const result = await revokeNotificationOutcome(
+      userId,
+      notificationId.data,
+      outcome.data,
+      restoreIsRead.data,
+    );
     if (!result) return res.status(404).json({ success: false, error: { message: 'Notification not found' } });
     return res.json({ success: true, data: result });
   }

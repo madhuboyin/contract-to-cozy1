@@ -246,6 +246,12 @@ export class NotificationService {
       where: { userId },
       orderBy: { createdAt: 'desc' },
       take: limit,
+      include: {
+        outcomes: {
+          where: { userId },
+          select: { type: true, createdAt: true },
+        },
+      },
     });
   }
 

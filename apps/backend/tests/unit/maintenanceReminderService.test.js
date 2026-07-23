@@ -91,7 +91,10 @@ test('creates a governed notification for a due task and stamps remindedForDueDa
   assert.equal(calls[0].userId, 'user-1');
   assert.equal(calls[0].entityType, 'PROPERTY_MAINTENANCE_TASK');
   assert.equal(calls[0].entityId, 'task-1');
-  assert.equal(calls[0].actionUrl, '/dashboard/properties/property-1/tools/guidance-overview');
+  assert.equal(
+    calls[0].actionUrl,
+    '/dashboard/maintenance?propertyId=property-1&taskId=task-1&from=notification',
+  );
   // due tomorrow (1 day out) is within the material-deadline window
   assert.equal(calls[0].category, 'MATERIAL_DEADLINE');
   assert.equal(calls[0].urgency, 'MATERIAL');

@@ -3151,6 +3151,17 @@ class APIClient {
     return this.request(`/api/notifications/${notificationId}/outcomes`, { method: 'POST', body: { type } });
   }
 
+  async revokeNotificationOutcome(
+    notificationId: string,
+    type: 'OPENED' | 'USEFUL' | 'NOT_USEFUL' | 'MUTE_TYPE' | 'NOT_RELEVANT' | 'ALREADY_HANDLED',
+    restoreIsRead?: boolean,
+  ) {
+    return this.request(`/api/notifications/${notificationId}/outcomes/${type}`, {
+      method: 'DELETE',
+      body: typeof restoreIsRead === 'boolean' ? { restoreIsRead } : {},
+    });
+  }
+
   
   /**
    * Get or create HOME_BUYER checklist with 8 default tasks

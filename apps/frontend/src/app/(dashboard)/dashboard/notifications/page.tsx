@@ -2,12 +2,15 @@
 'use client';
 
 import React from 'react';
-import Link from 'next/link';
-import { BellOff, Circle, RotateCcw, ThumbsDown, ThumbsUp } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { BellOff, Check, Circle, RotateCcw, ThumbsDown, ThumbsUp } from 'lucide-react';
 import { useNotifications } from '@/lib/notifications/NotificationContext';
 import { api } from '@/lib/api/client';
 import { Notification } from '@/lib/notifications/NotificationContext';
 import { toSafeAppPath } from '@/lib/security/url';
+import { resolveNotificationActionUrl } from '@/lib/notifications/destination';
+import { ToastAction } from '@/components/ui/toast';
+import { useToast } from '@/components/ui/use-toast';
 import {
   ActionPriorityRow,
   BottomSafeAreaReserve,
@@ -96,12 +99,15 @@ function renderSignalBadge(n: Notification) {
 }
 
 export default function NotificationsPage() {
+  const router = useRouter();
+  const { toast } = useToast();
   const { notifications, markRead, markAllRead, refresh } = useNotifications();
   const [selectedCategory, setSelectedCategory] = React.useState('ALL');
   const [cadence, setCadence] = React.useState('WEEKLY_BRIEF');
   const [quietStart, setQuietStart] = React.useState('21:00');
   const [quietEnd, setQuietEnd] = React.useState('07:00');
   const [savingPreference, setSavingPreference] = React.useState(false);
+  const [pendingOutcomeById, setPendingOutcomeById] = React.useState<Record<string, string>>({});
 
   React.useEffect(() => {
     void refresh();
@@ -134,14 +140,90 @@ export default function NotificationsPage() {
     }
   };
 
-  const recordOutcome = async (event: React.MouseEvent, id: string, type: 'USEFUL' | 'NOT_USEFUL' | 'MUTE_TYPE' | 'NOT_RELEVANT' | 'ALREADY_HANDLED') => {
+  const recordOutcome = async (
+    event: React.MouseEvent,
+    notification: Notification,
+    type: 'USEFUL' | 'NOT_USEFUL' | 'MUTE_TYPE' | 'NOT_RELEVANT' | 'ALREADY_HANDLED',
+  ) => {
     event.preventDefault();
     event.stopPropagation();
-    await api.recordNotificationOutcome(id, type);
-    await refresh();
+
+    const id = notification.id;
+    const existingOutcome = notification.outcomes?.some((outcome) => outcome.type === type);
+    if (type === 'MUTE_TYPE' && !existingOutcome) {
+      const reminderLabel = notification.type === 'MAINTENANCE_TASK_REMINDER'
+        ? 'maintenance reminder emails'
+        : 'email notifications like this';
+      const confirmed = window.confirm(
+        `Mute ${reminderLabel} for this property? In-app alerts will remain available.`,
+      );
+      if (!confirmed) return;
+    }
+
+    setPendingOutcomeById((current) => ({ ...current, [id]: type }));
+    try {
+      if (type === 'USEFUL' && existingOutcome) {
+        await api.revokeNotificationOutcome(id, type);
+        toast({ title: 'Feedback removed' });
+      } else {
+        await api.recordNotificationOutcome(id, type);
+        if (type === 'USEFUL') {
+          toast({ title: 'Thanks for the feedback' });
+        } else if (type === 'MUTE_TYPE') {
+          toast({
+            title: 'Email reminders muted',
+            description: 'In-app alerts remain available. You can change email cadence in Notification preferences.',
+          });
+        } else {
+          const originalIsRead = notification.isRead;
+          const outcomeLabel = type === 'NOT_RELEVANT' ? 'Notification dismissed' : 'Marked as already handled';
+          toast({
+            title: outcomeLabel,
+            action: (
+              <ToastAction
+                altText="Undo"
+                onClick={async () => {
+                  try {
+                    await api.revokeNotificationOutcome(id, type, originalIsRead);
+                    await refresh();
+                  } catch (error: any) {
+                    toast({
+                      title: 'Unable to undo',
+                      description: error?.message || 'Please try again.',
+                      variant: 'destructive',
+                    });
+                  }
+                }}
+              >
+                Undo
+              </ToastAction>
+            ),
+          });
+        }
+      }
+      await refresh();
+    } catch (error: any) {
+      toast({
+        title: 'Notification update failed',
+        description: error?.message || 'Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setPendingOutcomeById((current) => {
+        const next = { ...current };
+        delete next[id];
+        return next;
+      });
+    }
   };
 
-  const sortedNotifications = [...notifications].sort((a, b) => {
+  const visibleNotifications = notifications.filter((notification) =>
+    !notification.outcomes?.some((outcome) =>
+      outcome.type === 'NOT_RELEVANT' || outcome.type === 'ALREADY_HANDLED'
+    )
+  );
+
+  const sortedNotifications = [...visibleNotifications].sort((a, b) => {
     if (a.isRead === b.isRead) {
       return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
     }
@@ -156,8 +238,10 @@ export default function NotificationsPage() {
     try {
       await api.markNotificationAsUnread(id);
       await refresh();
+      toast({ title: 'Marked as unread' });
     } catch (err) {
       console.error('Failed to mark as unread:', err);
+      toast({ title: 'Unable to mark as unread', description: 'Please try again.', variant: 'destructive' });
     }
   };
 
@@ -183,7 +267,7 @@ export default function NotificationsPage() {
       summary={
         <MobileKpiStrip>
           <MobileKpiTile label="Unread" value={unreadCount} hint="Needs review" tone={unreadCount > 0 ? 'warning' : 'neutral'} />
-          <MobileKpiTile label="Total" value={notifications.length} hint="All notifications" />
+          <MobileKpiTile label="Total" value={visibleNotifications.length} hint="All notifications" />
         </MobileKpiStrip>
       }
     >
@@ -203,17 +287,36 @@ export default function NotificationsPage() {
           <button type="button" disabled={savingPreference} onClick={savePreference} className="min-h-[40px] rounded-lg bg-brand-primary px-3 text-sm font-semibold text-white disabled:opacity-60">{savingPreference ? 'Saving…' : 'Save preferences'}</button>
         </div>
       </MobileCard>
-      {notifications.length === 0 ? (
-        <EmptyStateCard title="No notifications yet" description="You will see intelligence, booking, and account alerts here." />
+      {visibleNotifications.length === 0 ? (
+        <EmptyStateCard
+          title={notifications.length === 0 ? 'No notifications yet' : "You're all caught up"}
+          description={notifications.length === 0
+            ? 'You will see intelligence, booking, and account alerts here.'
+            : 'Dismissed and handled notifications no longer need your attention.'}
+        />
       ) : (
         <div className="space-y-2.5">
           {sortedNotifications.map((notification) => {
+            const resolvedActionUrl = resolveNotificationActionUrl(notification);
+            const contextAwareActionUrl = resolvedActionUrl
+              ? appendGuidanceContext(resolvedActionUrl, notification.guidanceContext)
+              : null;
+            const safePath = contextAwareActionUrl ? toSafeAppPath(contextAwareActionUrl) : null;
+            const href = safePath
+              ? safePath.startsWith('/') && !safePath.startsWith('/dashboard')
+                ? `/dashboard${safePath}`
+                : safePath
+              : null;
+            const usefulSelected = notification.outcomes?.some((outcome) => outcome.type === 'USEFUL') ?? false;
+            const emailMuted = notification.outcomes?.some((outcome) => outcome.type === 'MUTE_TYPE') ?? false;
+            const outcomePending = Boolean(pendingOutcomeById[notification.id]);
+
             const innerContent = (
               <MobileCard
                 variant="compact"
                 className={`space-y-2.5 transition-all ${
                   notification.isRead ? 'border-slate-200 bg-white/70' : 'border-brand-primary/25 bg-brand-primary/[0.04]'
-                }`}
+                } ${href ? 'cursor-pointer hover:border-brand-primary/40 hover:shadow-sm' : ''}`}
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0 flex items-start gap-2">
@@ -253,66 +356,53 @@ export default function NotificationsPage() {
                           title="Mark as unread"
                         >
                           <RotateCcw className="h-3 w-3" />
-                          Reset
+                          Mark unread
                         </button>
                       ) : null}
-                      <button type="button" onClick={(event) => recordOutcome(event, notification.id, 'USEFUL')} className="inline-flex min-h-[32px] items-center gap-1 px-2 text-[11px] text-slate-500"><ThumbsUp className="h-3 w-3" /> Useful</button>
-                      <button type="button" onClick={(event) => recordOutcome(event, notification.id, 'NOT_RELEVANT')} className="inline-flex min-h-[32px] items-center gap-1 px-2 text-[11px] text-slate-500"><ThumbsDown className="h-3 w-3" /> Not relevant</button>
-                      <button type="button" onClick={(event) => recordOutcome(event, notification.id, 'ALREADY_HANDLED')} className="min-h-[32px] px-2 text-[11px] text-slate-500">Already handled</button>
-                      <button type="button" onClick={(event) => recordOutcome(event, notification.id, 'MUTE_TYPE')} className="inline-flex min-h-[32px] items-center gap-1 px-2 text-[11px] text-slate-500"><BellOff className="h-3 w-3" /> Mute type</button>
+                      <button
+                        type="button"
+                        disabled={outcomePending}
+                        aria-pressed={usefulSelected}
+                        onClick={(event) => recordOutcome(event, notification, 'USEFUL')}
+                        className={`inline-flex min-h-[32px] items-center gap-1 rounded-md px-2 text-[11px] disabled:opacity-50 ${usefulSelected ? 'bg-emerald-50 font-semibold text-emerald-700' : 'text-slate-500 hover:bg-slate-50'}`}
+                      >
+                        {usefulSelected ? <Check className="h-3 w-3" /> : <ThumbsUp className="h-3 w-3" />}
+                        {usefulSelected ? 'Useful · saved' : 'Useful'}
+                      </button>
+                      <button type="button" disabled={outcomePending} onClick={(event) => recordOutcome(event, notification, 'NOT_RELEVANT')} className="inline-flex min-h-[32px] items-center gap-1 rounded-md px-2 text-[11px] text-slate-500 hover:bg-slate-50 disabled:opacity-50"><ThumbsDown className="h-3 w-3" /> Not relevant</button>
+                      <button type="button" disabled={outcomePending} onClick={(event) => recordOutcome(event, notification, 'ALREADY_HANDLED')} className="min-h-[32px] rounded-md px-2 text-[11px] text-slate-500 hover:bg-slate-50 disabled:opacity-50">Already handled</button>
+                      <button
+                        type="button"
+                        disabled={outcomePending || emailMuted}
+                        onClick={(event) => recordOutcome(event, notification, 'MUTE_TYPE')}
+                        className={`inline-flex min-h-[32px] items-center gap-1 rounded-md px-2 text-[11px] disabled:opacity-70 ${emailMuted ? 'bg-slate-100 font-medium text-slate-600' : 'text-slate-500 hover:bg-slate-50'}`}
+                      >
+                        {emailMuted ? <Check className="h-3 w-3" /> : <BellOff className="h-3 w-3" />}
+                        {emailMuted ? 'Email muted' : 'Mute email type'}
+                      </button>
                     </>
                   }
                 />
               </MobileCard>
             );
 
-            if (notification.actionUrl) {
-              const contextAwareActionUrl = appendGuidanceContext(
-                notification.actionUrl,
-                notification.guidanceContext
-              );
-              const safePath = toSafeAppPath(contextAwareActionUrl);
-              if (!safePath) {
-                return (
-                  <div
-                    key={notification.id}
-                    onClick={() => {
-                      if (!notification.isRead) {
-                        markRead(notification.id);
-                      }
-                    }}
-                  >
-                    {innerContent}
-                  </div>
-                );
-              }
-              const href =
-                safePath.startsWith('/') && !safePath.startsWith('/dashboard')
-                  ? `/dashboard${safePath}`
-                  : safePath;
-
-              return (
-                <Link
-                  key={notification.id}
-                  href={href}
-                  onClick={() => {
-                    if (!notification.isRead) {
-                      markRead(notification.id);
-                    }
-                  }}
-                  className="no-brand-style block"
-                >
-                  {innerContent}
-                </Link>
-              );
-            }
-
             return (
               <div
                 key={notification.id}
+                role={href ? 'link' : undefined}
+                tabIndex={href ? 0 : undefined}
+                aria-label={href ? `Open ${notification.title}` : undefined}
                 onClick={() => {
                   if (!notification.isRead) {
-                    markRead(notification.id);
+                    void markRead(notification.id);
+                  }
+                  if (href) router.push(href);
+                }}
+                onKeyDown={(event) => {
+                  if (href && event.currentTarget === event.target && (event.key === 'Enter' || event.key === ' ')) {
+                    event.preventDefault();
+                    if (!notification.isRead) void markRead(notification.id);
+                    router.push(href);
                   }
                 }}
               >

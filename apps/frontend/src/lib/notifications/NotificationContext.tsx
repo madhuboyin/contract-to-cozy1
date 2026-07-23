@@ -34,6 +34,10 @@ export type Notification = {
   signalSource?: SignalSourceBadge;
   guidanceContext?: GuidanceContextBadge | null;
   metadata?: Record<string, unknown> | null;
+  outcomes?: Array<{
+    type: 'OPENED' | 'USEFUL' | 'NOT_USEFUL' | 'MUTE_TYPE' | 'NOT_RELEVANT' | 'ALREADY_HANDLED';
+    createdAt: string;
+  }>;
 };
 
 type NotificationContextType = {
