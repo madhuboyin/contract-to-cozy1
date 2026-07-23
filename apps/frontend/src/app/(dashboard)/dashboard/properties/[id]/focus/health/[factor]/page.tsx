@@ -177,11 +177,23 @@ function getFactorDescription(factorName: string | undefined, condition: string 
   return `${cond || "Status unavailable"} — review recommended`;
 }
 
-function getInsightStatusExplanation(status: string | undefined, factorName?: string): string {
+function isApplianceFactor(factorName: string | undefined): boolean {
+  return String(factorName || "").toLowerCase().includes("appliance");
+}
+
+function getInsightStatusExplanation(
+  status: string | undefined,
+  factorName?: string,
+  applianceCount = 0,
+): string {
   const s = String(status || "");
   if (s === "Missing Data") {
-    const isAppliance = String(factorName || "").toLowerCase().includes("appliance");
-    if (isAppliance) return "No appliance data has been added yet. Adding items to your inventory lets us track health, coverage, and recall status for each appliance.";
+    if (isApplianceFactor(factorName)) {
+      if (applianceCount > 0) {
+        return `${applianceCount} appliance${applianceCount === 1 ? " is" : "s are"} tracked. Add any missing appliance details to improve health, coverage, and recall guidance.`;
+      }
+      return "No appliance data has been added yet. Adding items to your inventory lets us track health, coverage, and recall status for each appliance.";
+    }
     return "Data for this factor hasn't been recorded yet. Adding it unlocks a real score for this factor and specific next steps.";
   }
   if (s === "Incomplete") {
@@ -206,6 +218,9 @@ function getInsightStatusExplanation(status: string | undefined, factorName?: st
       'Occupancy & Wear': 'Your home sees active daily use — staying current on routine maintenance keeps wear from piling up over time.',
       'Structure Factor': 'Your structural elements look okay but warrant a closer look — a periodic inspection every few years is a smart habit for any home.',
       'Roof Condition': 'Your roof is intact but showing some wear — keeping an eye on it after storms helps you catch issues early.',
+      'Appliances': applianceCount > 0
+        ? `${applianceCount} appliance${applianceCount === 1 ? " is" : "s are"} tracked. Add other major appliances or complete their details to improve health, coverage, and recall guidance.`
+        : 'Add your major appliances to start tracking their health, coverage, and recall status.',
     };
     return watchMap[factor] ?? 'This area is in decent shape but worth keeping an eye on — periodic checks help you stay ahead of anything that might come up.';
   }
@@ -1200,6 +1215,11 @@ type PropertyWithHealth = {
   hasCoDetectors?: boolean | null;
   hasSecuritySystem?: boolean | null;
   hasFireExtinguisher?: boolean | null;
+  majorAppliances?: Array<{
+    id?: string;
+    assetType?: string | null;
+    installationYear?: number | null;
+  }>;
   healthScore?: {
     totalScore?: unknown;
     insights?: unknown[];
@@ -1276,13 +1296,20 @@ export default function HealthInsightFocusPage() {
   );
 
   const propertyName = prop?.name || "this property";
+  const applianceRecords = Array.isArray(prop?.majorAppliances) ? prop.majorAppliances : [];
+  const applianceCount = applianceRecords.length;
+  const applianceFactor = isApplianceFactor(insight?.factor);
   const displayName = getDisplayFactorName(insight?.factor);
-  const status = insight?.status;
+  // Defend against a stale health snapshot while the canonical property
+  // appliance projection is already available on this response.
+  const status = applianceFactor && applianceCount > 0 && insight?.status === "Missing Data"
+    ? applianceCount >= 3 ? "Complete" : "Partial"
+    : insight?.status;
   const score = asNumber(insight?.score) ?? 0;
   const impact = getInsightImpact(status);
   const details = insight?.details ?? [];
   const factorDescription = getFactorDescription(insight?.factor, status);
-  const statusExplanation = getInsightStatusExplanation(status, insight?.factor);
+  const statusExplanation = getInsightStatusExplanation(status, insight?.factor, applianceCount);
   const actionHint = getFactorActionHint(insight?.factor, status);
   const primaryCta = getPrimaryCta(insight?.factor, status, propertyId);
   const friendlyStatus = getUserFriendlyStatus(status);
@@ -1556,6 +1583,33 @@ export default function HealthInsightFocusPage() {
                 ))}
               </div>
               <p className="text-[11px] text-slate-400 mt-2">Lifespan bars show age relative to typical maximum.</p>
+            </div>
+          )}
+
+          {/* ── Appliance summary strip ── */}
+          {applianceFactor && applianceCount > 0 && (
+            <div className="px-5 py-3 bg-slate-50 border-b border-slate-100">
+              <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide mb-2">
+                Appliances tracked
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {applianceRecords.map((appliance, index) => {
+                  const label = String(appliance.assetType || "Appliance")
+                    .toLowerCase()
+                    .split("_")
+                    .map((word) => word ? word[0].toUpperCase() + word.slice(1) : word)
+                    .join(" ");
+                  return (
+                    <span
+                      key={appliance.id || `${label}-${index}`}
+                      className="inline-flex items-center rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-700"
+                    >
+                      {label}
+                      {appliance.installationYear ? ` · ${appliance.installationYear}` : ""}
+                    </span>
+                  );
+                })}
+              </div>
             </div>
           )}
 

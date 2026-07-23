@@ -78,6 +78,38 @@ export function calculateHealthScore(
   const relatedInventoryItems = Array.isArray((property as { inventoryItems?: InventoryItem[] }).inventoryItems)
     ? ((property as { inventoryItems?: InventoryItem[] }).inventoryItems ?? [])
     : [];
+  const inventoryItemsWereLoaded = Array.isArray(
+    (property as { inventoryItems?: InventoryItem[] }).inventoryItems
+  );
+  const projectedMajorAppliances = Array.isArray(
+    (property as {
+      majorAppliances?: Array<{
+        assetType?: string | null;
+        installationYear?: number | null;
+      }>;
+    }).majorAppliances
+  )
+    ? ((property as {
+        majorAppliances?: Array<{
+          assetType?: string | null;
+          installationYear?: number | null;
+        }>;
+      }).majorAppliances ?? [])
+        .filter((item) => item?.assetType)
+        .map((item) => ({
+          assetType: item.assetType,
+          name: item.assetType || 'Appliance',
+          installedOn: item.installationYear
+            ? new Date(Date.UTC(item.installationYear, 0, 1))
+            : null,
+        }))
+    : [];
+  // InventoryItem is the canonical appliance source when that relation is
+  // loaded. Property endpoints expose the same records through the
+  // majorAppliances projection, so use that projection as the fallback.
+  const relatedAppliances = inventoryItemsWereLoaded
+    ? relatedInventoryItems.filter((item) => item.category === 'APPLIANCE')
+    : projectedMajorAppliances;
   const relatedWarranties = Array.isArray((property as { warranties?: Warranty[] }).warranties)
     ? ((property as { warranties?: Warranty[] }).warranties ?? [])
     : [];
@@ -304,7 +336,7 @@ export function calculateHealthScore(
   }
   
   // 7. Appliance Ages (Max 5) - FIX 3: Add detailed appliance list
-  const assetCount = relatedInventoryItems.length;
+  const assetCount = relatedAppliances.length;
   const maxAssetsForScore = 3; // Define completeness threshold
   
   // Check for active home warranty coverage for any appliance
@@ -319,12 +351,12 @@ export function calculateHealthScore(
     let appScore = Math.min(maxScore, assetCount * (maxScore / maxAssetsForScore)); 
     
     // Determine Age Risk: Flag if any primary asset is over 15 years old.
-    const criticallyAging = relatedInventoryItems.some(
-        (a: InventoryItem) => a.installedOn !== null && currentYear - a.installedOn.getUTCFullYear() > 15
+    const criticallyAging = relatedAppliances.some(
+        (a) => a.installedOn !== null && currentYear - a.installedOn.getUTCFullYear() > 15
     );
     
     // Count appliances needing warranty
-    const appliancesNeedingWarranty = relatedInventoryItems.filter((a: InventoryItem) => {
+    const appliancesNeedingWarranty = relatedAppliances.filter((a) => {
         const age = a.installedOn ? currentYear - a.installedOn.getUTCFullYear() : 0;
         return age > 15; // Critically aging appliance
     });
@@ -336,7 +368,7 @@ export function calculateHealthScore(
             insights.push({ factor: 'Appliances', status: 'Complete', score: appScore });
         } else {
             // One insight per aging appliance so each gets its own named card
-            appliancesNeedingWarranty.forEach((a: InventoryItem, index: number) => {
+            appliancesNeedingWarranty.forEach((a, index: number) => {
                 const assetName = (a.assetType ?? a.name).split('_').map((w: string) =>
                     w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()
                 ).join(' ');
