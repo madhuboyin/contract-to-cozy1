@@ -34,6 +34,28 @@ function applianceInsight(result) {
   return result.insights.find((insight) => insight.factor === 'Appliances');
 }
 
+test('missing optional household size does not create an actionable health insight', () => {
+  const result = calculateHealthScore(property({
+    propertySize: 1800,
+    occupantsCount: null,
+  }), 0);
+
+  assert.equal(
+    result.insights.some((insight) => insight.factor === 'Usage/Wear Factor'),
+    false,
+  );
+});
+
+test('legacy household size can still refine wear guidance when present', () => {
+  const result = calculateHealthScore(property({
+    propertySize: 1800,
+    occupantsCount: 4,
+  }), 0);
+
+  const insight = result.insights.find((candidate) => candidate.factor === 'Usage/Wear Factor');
+  assert.equal(insight?.status, 'High Density');
+});
+
 test('complete property appliance records produce a complete appliance factor', () => {
   const result = calculateHealthScore(property({
     majorAppliances: [

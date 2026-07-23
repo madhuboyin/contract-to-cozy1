@@ -303,8 +303,15 @@ function getPrimaryCta(
   const factor = getDisplayFactorName(factorName);
   const s = String(status || "");
   const isAppliance = String(factorName || "").toLowerCase().includes("appliance");
+  const isOccupancy = isOccupancyFactor(factorName);
 
   if (s === "Missing Data" || s === "Incomplete" || (isAppliance && s === "Partial")) {
+    if (isOccupancy) {
+      return {
+        label: "Manage optional household details",
+        href: `/dashboard/personalization?propertyId=${encodeURIComponent(propertyId)}`,
+      };
+    }
     if (isAppliance) {
       return {
         label: s === "Partial" ? "Complete appliance details" : "Add appliances",
@@ -1669,11 +1676,11 @@ export default function HealthInsightFocusPage() {
                 <div className="flex items-center gap-2.5">
                   <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0" />
                   <p className="text-sm text-slate-600">
-                    Occupant count is missing.{" "}
-                    <Link href={`/dashboard/properties/${propertyId}/edit`} className="text-teal-600 font-medium hover:underline">
-                      Add it to your property profile
+                    Household size has not been shared.{" "}
+                    <Link href={`/dashboard/personalization?propertyId=${encodeURIComponent(propertyId)}`} className="text-teal-600 font-medium hover:underline">
+                      Manage optional household details
                     </Link>{" "}
-                    to refine this score.
+                    to improve wear guidance. This is separate from your property record.
                   </p>
                 </div>
               )}

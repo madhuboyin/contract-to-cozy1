@@ -2,6 +2,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm, SubmitHandler, useFieldArray, useFormContext } from "react-hook-form";
@@ -16,6 +17,7 @@ import {
   KeyRound,
   Leaf,
   Loader2,
+  PawPrint,
   Plus,
   Save,
   Sparkles,
@@ -126,6 +128,54 @@ const RESPONSIBILITY_PRESETS = [
   { value: 'LANDLORD', label: 'My landlord handles most', description: 'Best when a landlord arranges repairs and upkeep.', icon: KeyRound },
   { value: 'SHARED', label: 'Responsibilities are shared', description: 'Use this when maintenance is usually coordinated together.', icon: UsersRound },
 ] as const;
+
+type ResponsibilityScope = (typeof RESPONSIBILITY_SCOPES)[number];
+type ResponsibleParty = (typeof RESPONSIBLE_PARTY_OPTIONS)[number];
+
+const RESPONSIBILITY_SCOPE_LABELS: Record<ResponsibilityScope, string> = {
+  ROOF: 'Roof',
+  BUILDING_EXTERIOR: 'Building exterior',
+  LANDSCAPING: 'Landscaping',
+  TREES_SHRUBS: 'Trees & shrubs',
+  DRIVEWAY_WALKWAYS: 'Driveway & walkways',
+  DECK_PATIO_BALCONY: 'Deck, patio & balcony',
+  PLUMBING: 'Plumbing',
+  HVAC: 'Central HVAC',
+  COMMON_SAFETY: 'Common-area safety',
+  SNOW_ICE: 'Snow & ice',
+  PEST_CONTROL: 'Pest control',
+  SHARED_SYSTEMS: 'Shared systems',
+};
+
+const RESPONSIBLE_PARTY_LABELS: Record<ResponsibleParty, string> = {
+  OWNER: 'You',
+  ASSOCIATION: 'Association',
+  LANDLORD: 'Landlord',
+  SHARED: 'Shared',
+  UNKNOWN: 'Not sure',
+};
+
+const RESPONSIBILITY_GROUPS: Array<{
+  title: string;
+  description: string;
+  scopes: ResponsibilityScope[];
+}> = [
+  {
+    title: 'Structure & exterior',
+    description: 'Building envelope and private outdoor areas',
+    scopes: ['ROOF', 'BUILDING_EXTERIOR', 'DRIVEWAY_WALKWAYS', 'DECK_PATIO_BALCONY'],
+  },
+  {
+    title: 'Grounds & seasonal care',
+    description: 'Routine outdoor and seasonal upkeep',
+    scopes: ['LANDSCAPING', 'TREES_SHRUBS', 'SNOW_ICE', 'PEST_CONTROL'],
+  },
+  {
+    title: 'Systems & shared safety',
+    description: 'Core equipment and common building systems',
+    scopes: ['PLUMBING', 'HVAC', 'COMMON_SAFETY', 'SHARED_SYSTEMS'],
+  },
+];
 
 const APPLIANCE_DISPLAY_LABELS: Record<string, string> = {
   DISHWASHER: 'Dishwasher',
@@ -2106,6 +2156,24 @@ export default function EditPropertyPage() {
                       )}
                     />
                   </div>
+                  <div className="mt-5 flex flex-col gap-4 rounded-2xl border border-violet-200/80 bg-gradient-to-br from-violet-50 to-white p-4 dark:border-violet-800/50 dark:from-violet-950/30 dark:to-slate-950/20 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex min-w-0 items-start gap-3">
+                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-violet-100 text-violet-700 dark:bg-violet-900/50 dark:text-violet-300">
+                        <PawPrint className="h-5 w-5" />
+                      </span>
+                      <div>
+                        <p className="font-semibold text-foreground">Optional household context</p>
+                        <p className="mt-1 max-w-2xl text-xs leading-5 text-muted-foreground">
+                          Household size is kept separate from property age. Children or older-adult safety needs and pets also belong in this private, consent-controlled profile—not in the structural Home Record.
+                        </p>
+                      </div>
+                    </div>
+                    <Button asChild type="button" variant="outline" className="shrink-0 bg-white dark:bg-slate-950/60">
+                      <Link href={`/dashboard/personalization?propertyId=${encodeURIComponent(propertyId)}`}>
+                        Manage household details
+                      </Link>
+                    </Button>
+                  </div>
                 </section>
 
                 <section id="responsibility" className="rounded-2xl border border-black/10 p-4 dark:border-white/10 sm:p-5">
@@ -2150,35 +2218,70 @@ export default function EditPropertyPage() {
                       );
                     })}
                   </div>
-                  <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-black/10 pt-4 dark:border-white/10">
-                    <p className="text-xs text-muted-foreground">
-                      {responsibilityPreset === 'UNKNOWN' ? 'Not sure? Choose a general match or set each area separately.' : 'Have a few exceptions? Set responsibility area by area.'}
-                    </p>
-                    <Button type="button" variant="outline" size="sm" onClick={() => setResponsibilityDetailsExpanded((expanded) => !expanded)} aria-expanded={responsibilityDetailsExpanded}>
+                  <div className="mt-4 flex flex-col gap-3 rounded-xl border border-black/10 bg-slate-50/70 p-3 dark:border-white/10 dark:bg-slate-900/40 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-foreground">
+                        {responsibilityPreset === 'UNKNOWN' ? 'Choose a general match or review each area.' : 'Only customize the areas that work differently.'}
+                      </p>
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {RESPONSIBLE_PARTY_OPTIONS.map((party) => {
+                          const count = RESPONSIBILITY_SCOPES.filter((scope) => watchResponsibilities?.[scope] === party).length;
+                          if (count === 0) return null;
+                          return (
+                            <span key={party} className="rounded-full border border-black/10 bg-white px-2.5 py-1 text-[11px] font-medium text-muted-foreground dark:border-white/10 dark:bg-slate-950/60">
+                              {RESPONSIBLE_PARTY_LABELS[party]} · {count}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    </div>
+                    <Button type="button" variant="outline" size="sm" className="shrink-0 bg-white dark:bg-slate-950/60" onClick={() => setResponsibilityDetailsExpanded((expanded) => !expanded)} aria-expanded={responsibilityDetailsExpanded}>
                       <Wrench className="mr-2 h-4 w-4" />
-                      {responsibilityDetailsExpanded ? 'Hide custom details' : 'Customize responsibilities'}
+                      {responsibilityDetailsExpanded ? 'Hide details' : 'Review exceptions'}
                       <ChevronDown className={cn("ml-2 h-4 w-4 transition-transform", responsibilityDetailsExpanded && "rotate-180")} />
                     </Button>
                   </div>
                   {responsibilityDetailsExpanded && (
-                    <div className="mt-4 grid grid-cols-1 gap-3 rounded-xl bg-slate-50 p-4 dark:bg-slate-900/50 sm:grid-cols-2 lg:grid-cols-3">
-                      {RESPONSIBILITY_SCOPES.map((scope) => (
-                        <FormField
-                          key={scope}
-                          control={form.control}
-                          name={`responsibilities.${scope}` as const}
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel className="text-xs">{formatEnumLabel(scope)}</FormLabel>
-                              <Select onValueChange={field.onChange} value={field.value}>
-                                <FormControl><SelectTrigger id={`field-responsibility-${scope}`} className="bg-white dark:bg-slate-950/50"><SelectValue /></SelectTrigger></FormControl>
-                                <SelectContent>{RESPONSIBLE_PARTY_OPTIONS.map((option) => <SelectItem key={option} value={option}>{option === 'UNKNOWN' ? 'Not sure' : formatEnumLabel(option)}</SelectItem>)}</SelectContent>
-                              </Select>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      ))}
+                    <div className="mt-4 overflow-hidden rounded-2xl border border-black/10 bg-slate-100 dark:border-white/10 dark:bg-slate-800">
+                      <div className="border-b border-black/10 bg-white px-4 py-3 dark:border-white/10 dark:bg-slate-950/70">
+                        <p className="text-sm font-semibold text-foreground">Responsibility details</p>
+                        <p className="mt-0.5 text-xs text-muted-foreground">Use “Shared” when you coordinate the work with another party.</p>
+                      </div>
+                      <div className="grid gap-px lg:grid-cols-3">
+                        {RESPONSIBILITY_GROUPS.map((group) => (
+                          <section key={group.title} className="bg-white p-4 dark:bg-slate-950/55">
+                            <h4 className="text-sm font-semibold text-foreground">{group.title}</h4>
+                            <p className="mb-4 mt-1 min-h-8 text-xs leading-4 text-muted-foreground">{group.description}</p>
+                            <div className="space-y-2">
+                              {group.scopes.map((scope) => (
+                                <FormField
+                                  key={scope}
+                                  control={form.control}
+                                  name={`responsibilities.${scope}` as const}
+                                  render={({ field }) => (
+                                    <FormItem className="flex items-center justify-between gap-3 rounded-xl border border-black/5 bg-slate-50/80 px-3 py-2 dark:border-white/5 dark:bg-slate-900/70">
+                                      <FormLabel className="min-w-0 flex-1 text-xs font-medium leading-4">{RESPONSIBILITY_SCOPE_LABELS[scope]}</FormLabel>
+                                      <Select onValueChange={field.onChange} value={field.value}>
+                                        <FormControl>
+                                          <SelectTrigger id={`field-responsibility-${scope}`} className="h-9 w-[128px] shrink-0 bg-white text-xs dark:bg-slate-950/70">
+                                            <SelectValue />
+                                          </SelectTrigger>
+                                        </FormControl>
+                                        <SelectContent>
+                                          {RESPONSIBLE_PARTY_OPTIONS.map((option) => (
+                                            <SelectItem key={option} value={option}>{RESPONSIBLE_PARTY_LABELS[option]}</SelectItem>
+                                          ))}
+                                        </SelectContent>
+                                      </Select>
+                                      <FormMessage />
+                                    </FormItem>
+                                  )}
+                                />
+                              ))}
+                            </div>
+                          </section>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </section>

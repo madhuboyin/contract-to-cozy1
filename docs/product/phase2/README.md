@@ -213,6 +213,25 @@ Acceptance criteria:
 - Unknown responsibility, uncertain coverage evidence, or insufficient lifecycle/value context remains **Coverage information incomplete**.
 - Home, Home Record, room health, Resolution Center, risk projections, guidance, and frontend fallback projections do not independently reconstruct applicability.
 
+## Household-context and responsibility editing convergence
+
+Implemented July 23, 2026:
+
+- Stopped treating an unshared occupant count as missing structural property data. Optional household size no longer creates a health-factor problem, Resolution Center case, or required property-completion action.
+- Routed household-size capture to the consent-controlled personalization profile instead of adding it to Property Details or copying it into the Property record.
+- Kept property age limited to the building year. Children or older-adult safety needs and pets remain separate optional household-profile questions and are never inferred from the home.
+- Added a clearly labeled household-context entry point to Home setup so users can find the optional flow without confusing it with ownership, occupancy status, or property age.
+- Replaced the twelve-field responsibility dropdown wall with four high-level presets, an at-a-glance party summary, and grouped exception controls for structure, grounds, and shared systems.
+- Preserved every canonical responsibility scope and the existing owner/association/landlord/shared/unknown values; the redesign changes presentation, not responsibility semantics.
+
+Acceptance criteria:
+
+- A property without optional household consent does not show **Occupant count is missing** as an actionable health problem.
+- Household size is collected only after explicit profile consent and is described as optional.
+- Property age never asks for or implies children, older adults, or pets.
+- Property Details provides a discoverable path to optional household context without embedding sensitive answers in the Property form.
+- Responsibility exceptions remain fully editable but are grouped into compact, scan-friendly sections.
+
 ## Validation
 
 Automated acceptance rerun July 20, 2026 from commit `830f565`:

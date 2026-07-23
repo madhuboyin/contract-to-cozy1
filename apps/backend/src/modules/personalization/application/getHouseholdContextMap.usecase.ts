@@ -82,6 +82,8 @@ function profileAnswerDetail(value: unknown): string {
     return selected.length > 0 ? selected.join(' · ') : 'Neither';
   }
   if (typeof answer.value === 'boolean') return answer.value ? 'Yes' : 'No';
+  const scalarValue = safeScalar(answer.value);
+  if (scalarValue) return scalarValue;
   return 'Explicit answer recorded';
 }
 

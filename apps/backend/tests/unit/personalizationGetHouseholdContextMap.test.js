@@ -36,6 +36,7 @@ test('builds a sanitized current-state map from consented relational records', a
     consentedAt: at,
     properties: [{ occupancyType: 'PRIMARY', effectiveFrom: at, effectiveTo: null }],
     profileAnswers: [
+      { question: { code: 'HOUSEHOLD_SIZE', prompt: 'How many people live in your household?' }, answerJson: { value: 3 }, createdAt: at },
       { question: { code: 'HOUSEHOLD_COMPOSITION_SAFETY', prompt: 'Household safety needs?' }, answerJson: { hasChildren: true, hasSeniors: false }, createdAt: at },
       { question: { code: 'PREFERENCE_BUDGET_POSTURE', prompt: 'Favor lower-cost options?' }, answerJson: { value: true, privateNote: 'must-not-leak' }, createdAt: at },
     ],
@@ -59,7 +60,7 @@ test('builds a sanitized current-state map from consented relational records', a
   assert.deepEqual(result.summary, {
     PROPERTY: 1,
     HOUSEHOLD: 1,
-    PROFILE_FACT: 2,
+    PROFILE_FACT: 3,
     DERIVED_TRAIT: 1,
     RECOMMENDATION: 1,
   });
@@ -67,6 +68,10 @@ test('builds a sanitized current-state map from consented relational records', a
   assert.ok(result.edges.some((edge) => edge.type === 'HAS_EXPLICIT_FACT'));
   assert.ok(result.edges.some((edge) => edge.type === 'HAS_DERIVED_TRAIT'));
   assert.ok(result.edges.some((edge) => edge.type === 'HAS_RECOMMENDATION'));
+  assert.equal(
+    result.nodes.find((node) => node.id.startsWith('profile:household_size'))?.detail,
+    '3',
+  );
   const serialized = JSON.stringify(result);
   assert.doesNotMatch(serialized, /property-secret|must-not-leak|asset-secret|rawAssetId|privateNote/);
   assert.match(serialized, /Current-state view only/);

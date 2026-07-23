@@ -188,7 +188,10 @@ export function calculateHealthScore(
     maxUnlockableScore += BASE_WEIGHTS.SYSTEMS;
   }
 
-  // 4. Usage/Wear Factor (Max 10) 
+  // 4. Usage/Wear Factor (Max 10)
+  // Household size is optional, consent-controlled context. It can refine
+  // guidance when a legacy property record already contains the value, but
+  // its absence must not create a missing-data problem or an action item.
   if (property.occupantsCount && property.propertySize) {
     let usageScore = BASE_WEIGHTS.USAGE_WEAR; // Start high
     // Deduct 2 points per occupant over 2.
@@ -197,9 +200,6 @@ export function calculateHealthScore(
     }
     baseScore += usageScore;
     insights.push({ factor: 'Usage/Wear Factor', status: usageScore > 8 ? 'Low Density' : 'High Density', score: usageScore });
-  } else {
-    insights.push({ factor: 'Usage/Wear Factor', status: 'Missing Data', score: 0 });
-    maxUnlockableScore += BASE_WEIGHTS.USAGE_WEAR;
   }
   
   // 5. Size Factor (Max 5)
