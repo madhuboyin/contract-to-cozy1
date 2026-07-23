@@ -5,10 +5,36 @@ import { IncidentService } from '@worker-shared/services/incidents/incident.serv
 import { guidanceJourneyService } from '@worker-shared/services/guidanceEngine/guidanceJourney.service';
 import { isPropertyAllowlisted } from '@worker-shared/config/smokeTestConfig';
 import { generateSmokeCorrelationId } from '@worker-shared/lib/smokeTestCorrelation';
-import { logger } from '../lib/logger';
+import { logger, AppLogger } from '../lib/logger';
 import { Geo } from '../lib/geocodeZip';
 import { getPropertyGeo } from '../lib/propertyGeo';
 import { iterateAllProperties } from '../lib/paginateProperties';
+
+// W4 item 1: small, job-scoped dependency interface (see
+// reserveFundBalanceReminder.job.ts for the pattern). iterateAllProperties
+// and getPropertyGeo are injected as plain function references — both
+// import the real prisma singleton directly rather than accepting deps
+// themselves, which is exactly what forced the old require.cache tests to
+// separately purge paginateProperties.ts/propertyGeo.ts's own module cache
+// entries (see the comment this replaced in freezeRiskIncidentsDryRun.test.js).
+// Injecting them here removes that fragility outright.
+export interface FreezeRiskIncidentsDeps {
+  prisma: Pick<typeof prisma, 'incident'>;
+  incidentService: Pick<typeof IncidentService, 'setStatus' | 'upsertIncident'>;
+  guidanceJourneyService: Pick<typeof guidanceJourneyService, 'ingestSignal'>;
+  logger: AppLogger;
+  iterateAllProperties: typeof iterateAllProperties;
+  getPropertyGeo: typeof getPropertyGeo;
+}
+
+const defaultDeps: FreezeRiskIncidentsDeps = {
+  prisma,
+  incidentService: IncidentService,
+  guidanceJourneyService,
+  logger,
+  iterateAllProperties,
+  getPropertyGeo,
+};
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 const OPEN_FREEZE_STATUSES: IncidentStatus[] = [
@@ -95,7 +121,9 @@ async function getForecastMinF(lat: number, lon: number): Promise<number | null>
 
 export async function freezeRiskIncidentsJob(
   opts?: { dryRun?: boolean; propertyId?: string },
+  deps: FreezeRiskIncidentsDeps = defaultDeps,
 ) {
+  const { prisma, incidentService, guidanceJourneyService, logger, iterateAllProperties, getPropertyGeo } = deps;
   const dryRun = opts?.dryRun === true;
   // W6 item 5 (smoke validation): a scoped smoke run passes an explicit
   // propertyId — that property must itself be operator-allowlisted, so a
@@ -151,7 +179,7 @@ export async function freezeRiskIncidentsJob(
           logger.info(`[FreezeRiskIncidents] (dry run) Would resolve incident ${incident.id}`);
           continue;
         }
-        await IncidentService.setStatus(incident.id, IncidentStatus.RESOLVED);
+        await incidentService.setStatus(incident.id, IncidentStatus.RESOLVED);
         resolved++;
       }
       continue;
@@ -166,7 +194,7 @@ export async function freezeRiskIncidentsJob(
       continue;
     }
 
-    await IncidentService.upsertIncident(
+    await incidentService.upsertIncident(
       {
         propertyId: p.id,
         userId: null,
@@ -259,7 +287,7 @@ export async function freezeRiskIncidentsJob(
       logger.info(`[FreezeRiskIncidents] (dry run) Would resolve stale incident ${incident.id}`);
       continue;
     }
-    await IncidentService.setStatus(incident.id, IncidentStatus.RESOLVED);
+    await incidentService.setStatus(incident.id, IncidentStatus.RESOLVED);
     resolved++;
   }
 

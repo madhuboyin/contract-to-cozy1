@@ -10,6 +10,14 @@ type Candidate = {
   isVerified: boolean;
 };
 
+// W4 item 1: small, job-scoped dependency interface (see
+// reserveFundBalanceReminder.job.ts for the pattern).
+export interface RecallMatchingDeps {
+  prisma: Pick<typeof prisma, 'recallRecord' | 'inventoryItem' | 'recallMatch'>;
+}
+
+const defaultDeps: RecallMatchingDeps = { prisma };
+
 function scoreMatch(assetMfg: string, assetModel: string, recallMfg: string, recallModel: string) {
   const mfgMatch = includesEither(assetMfg, recallMfg);
   const modelMatch = exactModelMatch(assetModel, recallModel);
@@ -19,7 +27,8 @@ function scoreMatch(assetMfg: string, assetModel: string, recallMfg: string, rec
   return { confidencePct: 0, status: 'NEEDS_CONFIRMATION' as const };
 }
 
-export async function runRecallMatchingScan() {
+export async function runRecallMatchingScan(deps: RecallMatchingDeps = defaultDeps) {
+  const { prisma } = deps;
   const recalls = await prisma.recallRecord.findMany({
     where: { status: 'ACTIVE' },
     include: { products: true },

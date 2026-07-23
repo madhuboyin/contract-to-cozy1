@@ -1,15 +1,33 @@
 import { prisma } from '../lib/prisma';
 import { NotificationService } from '@worker-shared/services/notification.service';
-import { logger } from '../lib/logger';
+import { logger, AppLogger } from '../lib/logger';
 import { checkPermitWorkerContext } from '@worker-shared/services/projectCompliance/permitWorkerContext.service';
 import { isPropertyAllowlisted } from '@worker-shared/config/smokeTestConfig';
 import { generateSmokeCorrelationId } from '@worker-shared/lib/smokeTestCorrelation';
 import type { WorkerRunResult } from '../lib/workerRunResult';
 import { permitTrackerUrl } from '../lib/deepLinks';
 
+// W4 item 1: small, job-scoped dependency interface (see
+// reserveFundBalanceReminder.job.ts for the pattern).
+export interface PermitInspectionReminderDeps {
+  prisma: Pick<typeof prisma, 'permitInspectionMilestone'>;
+  notificationService: Pick<typeof NotificationService, 'create'>;
+  checkPermitWorkerContext: typeof checkPermitWorkerContext;
+  logger: AppLogger;
+}
+
+const defaultDeps: PermitInspectionReminderDeps = {
+  prisma,
+  notificationService: NotificationService,
+  checkPermitWorkerContext,
+  logger,
+};
+
 export async function permitInspectionReminderJob(
   opts?: { dryRun?: boolean; propertyId?: string },
+  deps: PermitInspectionReminderDeps = defaultDeps,
 ): Promise<WorkerRunResult> {
+  const { prisma, notificationService, checkPermitWorkerContext, logger } = deps;
   const dryRun = opts?.dryRun === true;
   // W6 item 5 (smoke validation): a scoped smoke run passes an explicit
   // propertyId — that property must itself be operator-allowlisted, so a
@@ -94,7 +112,7 @@ export async function permitInspectionReminderJob(
         continue;
       }
 
-      await NotificationService.create({
+      await notificationService.create({
         userId,
         type: 'MAINTENANCE_REMINDER',
         title: `Inspection Reminder: ${milestone.stageName}`,

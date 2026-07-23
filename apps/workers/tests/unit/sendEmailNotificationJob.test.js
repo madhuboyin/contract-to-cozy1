@@ -7,13 +7,20 @@
 // sendEmailNotificationJob carrying a documented prior fix (WKR-008 — used
 // to swallow send failures, so BullMQ reported "completed" on an actual
 // failed send). This locks that regression down explicitly.
+//
+// W4 item 1 (DI refactor): dependencies are injected directly instead of
+// via require.cache.
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
 require('ts-node/register');
 
-function loadJob({
+const { sendEmailNotificationJob, runDailyEmailDigest, runWeeklyHomeBriefDigest } = require('../../src/jobs/sendEmailNotification.job.ts');
+
+const noopLogger = { info() {}, warn() {}, error() {}, debug() {}, fatal() {}, child() { return this; } };
+
+function fakeDeps({
   seedDelivery,
   pendingDeliveries = [],
   digestPendingRows = [],
@@ -23,56 +30,37 @@ function loadJob({
 }) {
   const calls = { sentEmails: [], updateManyArgs: [] };
 
-  const prismaMock = {
-    notificationDelivery: {
-      findUnique: async () => seedDelivery,
-      findMany: async (args) => {
-        // Three distinct findMany call shapes share this mock, distinguished
-        // most-specific-first: sendEmailNotificationJob's "more HIGH-priority
-        // deliveries for the same user" query filters on BOTH
-        // notification.userId AND notification.metadata.path — check metadata
-        // first or it's misrouted to the per-user digest branch below (which
-        // only filters on notification.userId, no metadata). The digest's
-        // initial broad scan filters on neither.
-        if (args.where.notification?.metadata) return pendingDeliveries;
-        if (args.where.notification?.userId) return digestDeliveriesByUser[args.where.notification.userId] ?? [];
-        return digestPendingRows;
-      },
-      updateMany: async (args) => {
-        calls.updateManyArgs.push(args);
-        return { count: args.where.id.in.length };
-      },
-    },
-  };
-  const prismaPath = require.resolve('../../src/lib/prisma.ts');
-  require.cache[prismaPath] = { id: prismaPath, filename: prismaPath, loaded: true, exports: { prisma: prismaMock } };
-
-  const emailPath = require.resolve('../../src/email/email.service.ts');
-  require.cache[emailPath] = {
-    id: emailPath,
-    filename: emailPath,
-    loaded: true,
-    exports: {
-      sendEmail: async (to, subject, html) => {
-        calls.sentEmails.push({ to, subject, html });
-        if (sendEmailImpl) return sendEmailImpl(to, subject, html);
+  const deps = {
+    prisma: {
+      notificationDelivery: {
+        findUnique: async () => seedDelivery,
+        findMany: async (args) => {
+          // Three distinct findMany call shapes share this mock, distinguished
+          // most-specific-first: sendEmailNotificationJob's "more HIGH-priority
+          // deliveries for the same user" query filters on BOTH
+          // notification.userId AND notification.metadata.path — check metadata
+          // first or it's misrouted to the per-user digest branch below (which
+          // only filters on notification.userId, no metadata). The digest's
+          // initial broad scan filters on neither.
+          if (args.where.notification?.metadata) return pendingDeliveries;
+          if (args.where.notification?.userId) return digestDeliveriesByUser[args.where.notification.userId] ?? [];
+          return digestPendingRows;
+        },
+        updateMany: async (args) => {
+          calls.updateManyArgs.push(args);
+          return { count: args.where.id.in.length };
+        },
       },
     },
-  };
-
-  const policyPath = require.resolve('../../src/services/aggregationDeliveryPolicy.ts');
-  require.cache[policyPath] = {
-    id: policyPath,
-    filename: policyPath,
-    loaded: true,
-    exports: {
-      filterDeliveriesByAggregationPolicy: async (deliveries) => (aggregationAllowsAll ? deliveries : []),
+    sendEmail: async (to, subject, html) => {
+      calls.sentEmails.push({ to, subject, html });
+      if (sendEmailImpl) return sendEmailImpl(to, subject, html);
     },
+    filterDeliveriesByAggregationPolicy: async (deliveries) => (aggregationAllowsAll ? deliveries : []),
+    logger: noopLogger,
   };
 
-  const jobPath = require.resolve('../../src/jobs/sendEmailNotification.job.ts');
-  delete require.cache[jobPath];
-  return { ...require(jobPath), calls };
+  return { deps, calls };
 }
 
 function deliveryFixture(overrides = {}) {
@@ -96,33 +84,33 @@ function deliveryFixture(overrides = {}) {
 // ── sendEmailNotificationJob ────────────────────────────────────────────
 
 test('sendEmailNotificationJob: does nothing when the seed delivery does not exist', async () => {
-  const { sendEmailNotificationJob, calls } = loadJob({ seedDelivery: null });
+  const { deps, calls } = fakeDeps({ seedDelivery: null });
 
-  await sendEmailNotificationJob('delivery-1');
+  await sendEmailNotificationJob('delivery-1', deps);
 
   assert.equal(calls.sentEmails.length, 0);
 });
 
 test('sendEmailNotificationJob: does nothing when the seed delivery is not PENDING', async () => {
-  const { sendEmailNotificationJob, calls } = loadJob({ seedDelivery: deliveryFixture({ status: 'SENT' }) });
+  const { deps, calls } = fakeDeps({ seedDelivery: deliveryFixture({ status: 'SENT' }) });
 
-  await sendEmailNotificationJob('delivery-1');
+  await sendEmailNotificationJob('delivery-1', deps);
 
   assert.equal(calls.sentEmails.length, 0);
 });
 
 test('sendEmailNotificationJob: does nothing for a non-HIGH-priority notification (daily digest handles it)', async () => {
   const seed = deliveryFixture({ notification: { ...deliveryFixture().notification, metadata: { priority: 'LOW' } } });
-  const { sendEmailNotificationJob, calls } = loadJob({ seedDelivery: seed });
+  const { deps, calls } = fakeDeps({ seedDelivery: seed });
 
-  await sendEmailNotificationJob('delivery-1');
+  await sendEmailNotificationJob('delivery-1', deps);
 
   assert.equal(calls.sentEmails.length, 0);
 });
 
 test('sendEmailNotificationJob: batches multiple pending HIGH deliveries into one email and marks all SENT', async () => {
   const seed = deliveryFixture();
-  const { sendEmailNotificationJob, calls } = loadJob({
+  const { deps, calls } = fakeDeps({
     seedDelivery: seed,
     pendingDeliveries: [
       { id: 'delivery-1', notification: seed.notification },
@@ -130,7 +118,7 @@ test('sendEmailNotificationJob: batches multiple pending HIGH deliveries into on
     ],
   });
 
-  await sendEmailNotificationJob('delivery-1');
+  await sendEmailNotificationJob('delivery-1', deps);
 
   assert.equal(calls.sentEmails.length, 1, 'must send exactly one batched email');
   assert.equal(calls.sentEmails[0].to, 'homeowner@example.com');
@@ -141,19 +129,19 @@ test('sendEmailNotificationJob: batches multiple pending HIGH deliveries into on
 
 test('sendEmailNotificationJob: uses the single notification\'s own title as subject when there is only one', async () => {
   const seed = deliveryFixture();
-  const { sendEmailNotificationJob, calls } = loadJob({
+  const { deps, calls } = fakeDeps({
     seedDelivery: seed,
     pendingDeliveries: [{ id: 'delivery-1', notification: seed.notification }],
   });
 
-  await sendEmailNotificationJob('delivery-1');
+  await sendEmailNotificationJob('delivery-1', deps);
 
   assert.equal(calls.sentEmails[0].subject, 'Title');
 });
 
 test('sendEmailNotificationJob: a failed send marks every batched delivery FAILED and rethrows (WKR-008 regression lock)', async () => {
   const seed = deliveryFixture();
-  const { sendEmailNotificationJob, calls } = loadJob({
+  const { deps, calls } = fakeDeps({
     seedDelivery: seed,
     pendingDeliveries: [{ id: 'delivery-1', notification: seed.notification }],
     sendEmailImpl: async () => {
@@ -161,7 +149,7 @@ test('sendEmailNotificationJob: a failed send marks every batched delivery FAILE
     },
   });
 
-  await assert.rejects(() => sendEmailNotificationJob('delivery-1'), /SMTP unavailable/);
+  await assert.rejects(() => sendEmailNotificationJob('delivery-1', deps), /SMTP unavailable/);
 
   const failedUpdate = calls.updateManyArgs.find((u) => u.data.status === 'FAILED');
   assert.ok(failedUpdate, 'must mark the deliveries FAILED, not leave them silently PENDING');
@@ -170,13 +158,13 @@ test('sendEmailNotificationJob: a failed send marks every batched delivery FAILE
 
 test('sendEmailNotificationJob: sends nothing when the aggregation delivery policy filters everything out', async () => {
   const seed = deliveryFixture();
-  const { sendEmailNotificationJob, calls } = loadJob({
+  const { deps, calls } = fakeDeps({
     seedDelivery: seed,
     pendingDeliveries: [{ id: 'delivery-1', notification: seed.notification }],
     aggregationAllowsAll: false,
   });
 
-  await sendEmailNotificationJob('delivery-1');
+  await sendEmailNotificationJob('delivery-1', deps);
 
   assert.equal(calls.sentEmails.length, 0);
 });
@@ -184,7 +172,7 @@ test('sendEmailNotificationJob: sends nothing when the aggregation delivery poli
 // ── runDailyEmailDigest / runWeeklyHomeBriefDigest ──────────────────────
 
 test('runDailyEmailDigest: includes users with an unset cadence (defaults to daily) and DAILY_DIGEST cadence', async () => {
-  const { runDailyEmailDigest, calls } = loadJob({
+  const { deps, calls } = fakeDeps({
     seedDelivery: null,
     digestPendingRows: [
       { notification: { userId: 'user-1', metadata: {} } }, // unset cadence -> daily
@@ -197,14 +185,14 @@ test('runDailyEmailDigest: includes users with an unset cadence (defaults to dai
     },
   });
 
-  await runDailyEmailDigest();
+  await runDailyEmailDigest(deps);
 
   const recipients = calls.sentEmails.map((e) => e.to).sort();
   assert.deepEqual(recipients, ['u1@example.com', 'u2@example.com'], 'user-3 (WEEKLY_BRIEF) must not get a daily digest');
 });
 
 test('runWeeklyHomeBriefDigest: only includes users with WEEKLY_BRIEF cadence', async () => {
-  const { runWeeklyHomeBriefDigest, calls } = loadJob({
+  const { deps, calls } = fakeDeps({
     seedDelivery: null,
     digestPendingRows: [
       { notification: { userId: 'user-1', metadata: {} } }, // unset -> daily, not weekly
@@ -215,13 +203,13 @@ test('runWeeklyHomeBriefDigest: only includes users with WEEKLY_BRIEF cadence', 
     },
   });
 
-  await runWeeklyHomeBriefDigest();
+  await runWeeklyHomeBriefDigest(deps);
 
   assert.deepEqual(calls.sentEmails.map((e) => e.to), ['u3@example.com']);
 });
 
 test('digest: one user failing does not abort the digest run for the rest', async () => {
-  const { runDailyEmailDigest, calls } = loadJob({
+  const { deps, calls } = fakeDeps({
     seedDelivery: null,
     digestPendingRows: [
       { notification: { userId: 'user-1', metadata: {} } },
@@ -233,20 +221,20 @@ test('digest: one user failing does not abort the digest run for the rest', asyn
     },
   });
 
-  await assert.doesNotReject(() => runDailyEmailDigest());
+  await assert.doesNotReject(() => runDailyEmailDigest(deps));
 
   assert.deepEqual(calls.sentEmails.map((e) => e.to), ['u2@example.com']);
 });
 
 test('digest: skips a user with no pending deliveries left after the aggregation policy filter', async () => {
-  const { runDailyEmailDigest, calls } = loadJob({
+  const { deps, calls } = fakeDeps({
     seedDelivery: null,
     digestPendingRows: [{ notification: { userId: 'user-1', metadata: {} } }],
     digestDeliveriesByUser: { 'user-1': [{ id: 'd1', notification: { userId: 'user-1', title: 'T1', message: 'M1', actionUrl: null, metadata: {}, user: { email: 'u1@example.com', firstName: 'A' } } }] },
     aggregationAllowsAll: false,
   });
 
-  await runDailyEmailDigest();
+  await runDailyEmailDigest(deps);
 
   assert.equal(calls.sentEmails.length, 0);
 });

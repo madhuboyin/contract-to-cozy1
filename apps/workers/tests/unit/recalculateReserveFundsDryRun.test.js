@@ -8,12 +8,20 @@
 // the recalculate() call but still counts what would happen; a scoped
 // propertyId both filters the query and is independently re-checked against
 // the operator allowlist; and a real scoped run tags a smokeCorrelationId.
+//
+// W4 item 1 (DI refactor): dependencies are injected directly instead of
+// via require.cache.
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
+process.env.GEMINI_API_KEY = process.env.GEMINI_API_KEY || 'test-key';
+
 require('ts-node/register');
-require('tsconfig-paths/register');
+
+const { recalculateReserveFundsJob } = require('../../src/jobs/recalculateReserveFunds.job.ts');
+
+const noopLogger = { info() {}, warn() {}, error() {}, debug() {}, fatal() {}, child() { return this; } };
 
 function fundFixture(overrides = {}) {
   return {
@@ -25,55 +33,36 @@ function fundFixture(overrides = {}) {
   };
 }
 
-function loadJob({ funds, contextResult }) {
+function fakeDeps({ funds, contextResult }) {
   const calls = { recalculateArgs: [], findManyArgs: [] };
 
-  const prismaMock = {
-    homeReserveFund: {
-      findMany: async (args) => {
-        calls.findManyArgs.push(args);
-        return funds;
-      },
-    },
-    homeCapitalTimelineAnalysis: { findFirst: async () => ({ id: 'analysis-1' }) },
-  };
-  const prismaPath = require.resolve('../../src/lib/prisma.ts');
-  require.cache[prismaPath] = { id: prismaPath, filename: prismaPath, loaded: true, exports: { prisma: prismaMock } };
-
-  const calcServicePath = require.resolve('../../../backend/src/services/homeReserveFundCalculation.service.ts');
-  require.cache[calcServicePath] = {
-    id: calcServicePath,
-    filename: calcServicePath,
-    loaded: true,
-    exports: {
-      homeReserveFundCalculationService: {
-        recalculate: async (propertyId, trigger, contextVersion, userId) => {
-          calls.recalculateArgs.push({ propertyId, trigger, contextVersion, userId });
+  const deps = {
+    prisma: {
+      homeReserveFund: {
+        findMany: async (args) => {
+          calls.findManyArgs.push(args);
+          return funds;
         },
       },
+      homeCapitalTimelineAnalysis: { findFirst: async () => ({ id: 'analysis-1' }) },
     },
+    homeReserveFundCalculationService: {
+      recalculate: async (propertyId, trigger, contextVersion, userId) => {
+        calls.recalculateArgs.push({ propertyId, trigger, contextVersion, userId });
+      },
+    },
+    checkReserveFundWorkerContext: async () =>
+      contextResult ?? { allowed: true, userId: 'user-1', contextVersion: 'v1', reasonCodes: [] },
+    logger: noopLogger,
   };
 
-  const contextPath = require.resolve('../../../backend/src/services/financialContext/reserveFundWorkerContext.service.ts');
-  require.cache[contextPath] = {
-    id: contextPath,
-    filename: contextPath,
-    loaded: true,
-    exports: {
-      checkReserveFundWorkerContext: async () =>
-        contextResult ?? { allowed: true, userId: 'user-1', contextVersion: 'v1', reasonCodes: [] },
-    },
-  };
-
-  const jobPath = require.resolve('../../src/jobs/recalculateReserveFunds.job.ts');
-  delete require.cache[jobPath];
-  return { ...require(jobPath), calls };
+  return { deps, calls };
 }
 
 test('dry run: examines and counts a fund needing recalc but calls recalculate() for none', async () => {
-  const { recalculateReserveFundsJob, calls } = loadJob({ funds: [fundFixture()] });
+  const { deps, calls } = fakeDeps({ funds: [fundFixture()] });
 
-  const result = await recalculateReserveFundsJob({ dryRun: true });
+  const result = await recalculateReserveFundsJob({ dryRun: true }, deps);
 
   assert.equal(calls.recalculateArgs.length, 0);
   assert.equal(result.recalculated, 1);
@@ -81,9 +70,9 @@ test('dry run: examines and counts a fund needing recalc but calls recalculate()
 });
 
 test('no opts (the monthly cron tick): behaves exactly like a real run', async () => {
-  const { recalculateReserveFundsJob, calls } = loadJob({ funds: [fundFixture()] });
+  const { deps, calls } = fakeDeps({ funds: [fundFixture()] });
 
-  const result = await recalculateReserveFundsJob();
+  const result = await recalculateReserveFundsJob(undefined, deps);
 
   assert.equal(calls.recalculateArgs.length, 1);
   assert.equal(result.recalculated, 1);
@@ -93,9 +82,9 @@ test('a scoped propertyId is applied as a query filter', async () => {
   const originalEnv = process.env.SMOKE_TEST_PROPERTY_ALLOWLIST;
   process.env.SMOKE_TEST_PROPERTY_ALLOWLIST = 'property-allowed';
   try {
-    const { recalculateReserveFundsJob, calls } = loadJob({ funds: [fundFixture({ propertyId: 'property-allowed' })] });
+    const { deps, calls } = fakeDeps({ funds: [fundFixture({ propertyId: 'property-allowed' })] });
 
-    await recalculateReserveFundsJob({ dryRun: true, propertyId: 'property-allowed' });
+    await recalculateReserveFundsJob({ dryRun: true, propertyId: 'property-allowed' }, deps);
 
     assert.equal(calls.findManyArgs[0].where.propertyId, 'property-allowed');
   } finally {
@@ -107,10 +96,10 @@ test('a propertyId not in SMOKE_TEST_PROPERTY_ALLOWLIST is rejected outright, be
   const originalEnv = process.env.SMOKE_TEST_PROPERTY_ALLOWLIST;
   process.env.SMOKE_TEST_PROPERTY_ALLOWLIST = 'some-other-property';
   try {
-    const { recalculateReserveFundsJob, calls } = loadJob({ funds: [fundFixture()] });
+    const { deps, calls } = fakeDeps({ funds: [fundFixture()] });
 
     await assert.rejects(
-      () => recalculateReserveFundsJob({ dryRun: true, propertyId: 'property-not-allowed' }),
+      () => recalculateReserveFundsJob({ dryRun: true, propertyId: 'property-not-allowed' }, deps),
       /not in SMOKE_TEST_PROPERTY_ALLOWLIST/,
     );
     assert.equal(calls.findManyArgs.length, 0, 'must reject before querying, not after');
@@ -123,9 +112,9 @@ test('a real scoped run tags the result with a smokeCorrelationId', async () => 
   const originalEnv = process.env.SMOKE_TEST_PROPERTY_ALLOWLIST;
   process.env.SMOKE_TEST_PROPERTY_ALLOWLIST = 'property-allowed';
   try {
-    const { recalculateReserveFundsJob, calls } = loadJob({ funds: [fundFixture({ propertyId: 'property-allowed' })] });
+    const { deps, calls } = fakeDeps({ funds: [fundFixture({ propertyId: 'property-allowed' })] });
 
-    const result = await recalculateReserveFundsJob({ dryRun: false, propertyId: 'property-allowed' });
+    const result = await recalculateReserveFundsJob({ dryRun: false, propertyId: 'property-allowed' }, deps);
 
     assert.equal(calls.recalculateArgs.length, 1);
     assert.match(result.smokeCorrelationId, /^smoke:reserve-fund-recalculation:/);
@@ -135,9 +124,9 @@ test('a real scoped run tags the result with a smokeCorrelationId', async () => 
 });
 
 test('an unscoped run (no propertyId) tags nothing', async () => {
-  const { recalculateReserveFundsJob } = loadJob({ funds: [fundFixture()] });
+  const { deps } = fakeDeps({ funds: [fundFixture()] });
 
-  const result = await recalculateReserveFundsJob();
+  const result = await recalculateReserveFundsJob(undefined, deps);
 
   assert.equal(result.smokeCorrelationId, undefined);
 });

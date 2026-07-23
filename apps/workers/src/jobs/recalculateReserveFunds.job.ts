@@ -13,16 +13,34 @@
 
 import { prisma } from '../lib/prisma';
 import { homeReserveFundCalculationService } from '@worker-shared/services/homeReserveFundCalculation.service';
-import { logger } from '../lib/logger';
+import { logger, AppLogger } from '../lib/logger';
 import { checkReserveFundWorkerContext } from '@worker-shared/services/financialContext/reserveFundWorkerContext.service';
 import { isPropertyAllowlisted } from '@worker-shared/config/smokeTestConfig';
 import { generateSmokeCorrelationId } from '@worker-shared/lib/smokeTestCorrelation';
 
 const STALE_RECALC_DAYS = 35;
 
+// W4 item 1: small, job-scoped dependency interface (see
+// reserveFundBalanceReminder.job.ts for the pattern).
+export interface RecalculateReserveFundsDeps {
+  prisma: Pick<typeof prisma, 'homeReserveFund' | 'homeCapitalTimelineAnalysis'>;
+  homeReserveFundCalculationService: Pick<typeof homeReserveFundCalculationService, 'recalculate'>;
+  checkReserveFundWorkerContext: typeof checkReserveFundWorkerContext;
+  logger: AppLogger;
+}
+
+const defaultDeps: RecalculateReserveFundsDeps = {
+  prisma,
+  homeReserveFundCalculationService,
+  checkReserveFundWorkerContext,
+  logger,
+};
+
 export async function recalculateReserveFundsJob(
   opts?: { dryRun?: boolean; propertyId?: string },
+  deps: RecalculateReserveFundsDeps = defaultDeps,
 ): Promise<{ recalculated: number; skipped: number; failed: number; smokeCorrelationId?: string }> {
+  const { prisma, homeReserveFundCalculationService, checkReserveFundWorkerContext, logger } = deps;
   const dryRun = opts?.dryRun === true;
   if (opts?.propertyId && !isPropertyAllowlisted(opts.propertyId)) {
     throw new Error(

@@ -9,58 +9,45 @@
 // counts what would happen; a scoped propertyId both filters the query and
 // is independently re-checked against the operator allowlist; a real
 // scoped run tags a smokeCorrelationId.
+//
+// W4 item 1 (DI refactor): dependencies are injected directly instead of
+// via require.cache.
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
 require('ts-node/register');
-require('tsconfig-paths/register');
 
-function loadJob({ properties, generationResultsByProperty = {} }) {
+const { runHabitGenerationJob } = require('../../src/jobs/habitGeneration.job.ts');
+
+const noopLogger = { info() {}, warn() {}, error() {}, debug() {}, fatal() {}, child() { return this; } };
+
+function fakeDeps({ properties, generationResultsByProperty = {} }) {
   const calls = { generated: [], createCalls: [], findManyArgs: [] };
 
-  const prismaMock = {
-    property: {
-      findMany: async (args) => {
-        calls.findManyArgs.push(args);
-        return properties;
-      },
-    },
-  };
-  const prismaPath = require.resolve('../../src/lib/prisma.ts');
-  require.cache[prismaPath] = { id: prismaPath, filename: prismaPath, loaded: true, exports: { prisma: prismaMock } };
-
-  const engineServicePath = require.resolve('../../../backend/src/services/homeHabitCoach/habitGenerationEngine.ts');
-  require.cache[engineServicePath] = {
-    id: engineServicePath,
-    filename: engineServicePath,
-    loaded: true,
-    exports: {
-      generateHabitsForProperty: async (propertyId) => {
-        calls.generated.push(propertyId);
-        return generationResultsByProperty[propertyId] ?? { created: 0, skipped: 0, details: [] };
-      },
-    },
-  };
-
-  const notificationServicePath = require.resolve('../../../backend/src/services/notification.service.ts');
-  require.cache[notificationServicePath] = {
-    id: notificationServicePath,
-    filename: notificationServicePath,
-    loaded: true,
-    exports: {
-      NotificationService: {
-        create: async (input) => {
-          calls.createCalls.push(input);
-          return { id: `notification-${calls.createCalls.length}` };
+  const deps = {
+    prisma: {
+      property: {
+        findMany: async (args) => {
+          calls.findManyArgs.push(args);
+          return properties;
         },
       },
     },
+    generateHabitsForProperty: async (propertyId) => {
+      calls.generated.push(propertyId);
+      return generationResultsByProperty[propertyId] ?? { created: 0, skipped: 0, details: [] };
+    },
+    notificationService: {
+      create: async (input) => {
+        calls.createCalls.push(input);
+        return { id: `notification-${calls.createCalls.length}` };
+      },
+    },
+    logger: noopLogger,
   };
 
-  const jobPath = require.resolve('../../src/jobs/habitGeneration.job.ts');
-  delete require.cache[jobPath];
-  return { job: require(jobPath), calls };
+  return { deps, calls };
 }
 
 function property(overrides = {}) {
@@ -88,9 +75,9 @@ function property(overrides = {}) {
 }
 
 test('dry run: examines and counts properties but generates habits for none', async () => {
-  const { job, calls } = loadJob({ properties: [property(), property({ id: 'property-2' })] });
+  const { deps, calls } = fakeDeps({ properties: [property(), property({ id: 'property-2' })] });
 
-  const result = await job.runHabitGenerationJob({ dryRun: true });
+  const result = await runHabitGenerationJob({ dryRun: true }, deps);
 
   assert.equal(calls.generated.length, 0);
   assert.equal(calls.createCalls.length, 0);
@@ -100,7 +87,7 @@ test('dry run: examines and counts properties but generates habits for none', as
 });
 
 test('no opts (the weekly cron tick): behaves exactly like a real run', async () => {
-  const { job, calls } = loadJob({
+  const { deps, calls } = fakeDeps({
     properties: [property()],
     generationResultsByProperty: {
       'property-1': {
@@ -111,7 +98,7 @@ test('no opts (the weekly cron tick): behaves exactly like a real run', async ()
     },
   });
 
-  const result = await job.runHabitGenerationJob();
+  const result = await runHabitGenerationJob(undefined, deps);
 
   assert.deepEqual(calls.generated, ['property-1']);
   assert.equal(calls.createCalls.length, 1);
@@ -123,9 +110,9 @@ test('a scoped propertyId is applied as a query filter', async () => {
   const originalEnv = process.env.SMOKE_TEST_PROPERTY_ALLOWLIST;
   process.env.SMOKE_TEST_PROPERTY_ALLOWLIST = 'property-allowed';
   try {
-    const { job, calls } = loadJob({ properties: [property({ id: 'property-allowed' })] });
+    const { deps, calls } = fakeDeps({ properties: [property({ id: 'property-allowed' })] });
 
-    await job.runHabitGenerationJob({ dryRun: true, propertyId: 'property-allowed' });
+    await runHabitGenerationJob({ dryRun: true, propertyId: 'property-allowed' }, deps);
 
     assert.equal(calls.findManyArgs[0].where.id, 'property-allowed');
   } finally {
@@ -137,10 +124,10 @@ test('a propertyId not in SMOKE_TEST_PROPERTY_ALLOWLIST is rejected outright, be
   const originalEnv = process.env.SMOKE_TEST_PROPERTY_ALLOWLIST;
   process.env.SMOKE_TEST_PROPERTY_ALLOWLIST = 'some-other-property';
   try {
-    const { job, calls } = loadJob({ properties: [property()] });
+    const { deps, calls } = fakeDeps({ properties: [property()] });
 
     await assert.rejects(
-      () => job.runHabitGenerationJob({ dryRun: true, propertyId: 'property-not-allowed' }),
+      () => runHabitGenerationJob({ dryRun: true, propertyId: 'property-not-allowed' }, deps),
       /not in SMOKE_TEST_PROPERTY_ALLOWLIST/,
     );
     assert.equal(calls.findManyArgs.length, 0, 'must reject before querying, not after');
@@ -153,12 +140,12 @@ test('a real scoped run tags the result with a smokeCorrelationId', async () => 
   const originalEnv = process.env.SMOKE_TEST_PROPERTY_ALLOWLIST;
   process.env.SMOKE_TEST_PROPERTY_ALLOWLIST = 'property-allowed';
   try {
-    const { job, calls } = loadJob({
+    const { deps, calls } = fakeDeps({
       properties: [property({ id: 'property-allowed' })],
       generationResultsByProperty: { 'property-allowed': { created: 0, skipped: 0, details: [] } },
     });
 
-    const result = await job.runHabitGenerationJob({ dryRun: false, propertyId: 'property-allowed' });
+    const result = await runHabitGenerationJob({ dryRun: false, propertyId: 'property-allowed' }, deps);
 
     assert.deepEqual(calls.generated, ['property-allowed']);
     assert.match(result.smokeCorrelationId, /^smoke:home-habit-generation:/);
@@ -168,9 +155,9 @@ test('a real scoped run tags the result with a smokeCorrelationId', async () => 
 });
 
 test('an unscoped run (no propertyId) tags nothing', async () => {
-  const { job } = loadJob({ properties: [property()] });
+  const { deps } = fakeDeps({ properties: [property()] });
 
-  const result = await job.runHabitGenerationJob();
+  const result = await runHabitGenerationJob(undefined, deps);
 
   assert.equal(result.smokeCorrelationId, undefined);
 });

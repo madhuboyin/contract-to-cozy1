@@ -5,11 +5,20 @@
 // analysis" trigger, the 35-day staleness trigger, the "already up to
 // date" skip (neither behind nor stale), and the existing per-fund error
 // isolation.
+//
+// W4 item 1 (DI refactor): dependencies are injected directly instead of
+// via require.cache.
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
+process.env.GEMINI_API_KEY = process.env.GEMINI_API_KEY || 'test-key';
+
 require('ts-node/register');
+
+const { recalculateReserveFundsJob } = require('../../src/jobs/recalculateReserveFunds.job.ts');
+
+const noopLogger = { info() {}, warn() {}, error() {}, debug() {}, fatal() {}, child() { return this; } };
 
 function fundFixture(overrides = {}) {
   return {
@@ -21,65 +30,46 @@ function fundFixture(overrides = {}) {
   };
 }
 
-function loadJob({ funds, contextResult, latestAnalysis = null, recalculateShouldFailFor = new Set() }) {
+function fakeDeps({ funds, contextResult, latestAnalysis = null, recalculateShouldFailFor = new Set() }) {
   const calls = { recalculateArgs: [] };
 
-  const prismaMock = {
-    homeReserveFund: { findMany: async () => funds },
-    homeCapitalTimelineAnalysis: { findFirst: async () => latestAnalysis },
-  };
-  const prismaPath = require.resolve('../../src/lib/prisma.ts');
-  require.cache[prismaPath] = { id: prismaPath, filename: prismaPath, loaded: true, exports: { prisma: prismaMock } };
-
-  const calcServicePath = require.resolve('../../../backend/src/services/homeReserveFundCalculation.service.ts');
-  require.cache[calcServicePath] = {
-    id: calcServicePath,
-    filename: calcServicePath,
-    loaded: true,
-    exports: {
-      homeReserveFundCalculationService: {
-        recalculate: async (propertyId, trigger, contextVersion, userId) => {
-          calls.recalculateArgs.push({ propertyId, trigger, contextVersion, userId });
-          if (recalculateShouldFailFor.has(propertyId)) throw new Error(`recalculate failed for ${propertyId}`);
-        },
+  const deps = {
+    prisma: {
+      homeReserveFund: { findMany: async () => funds },
+      homeCapitalTimelineAnalysis: { findFirst: async () => latestAnalysis },
+    },
+    homeReserveFundCalculationService: {
+      recalculate: async (propertyId, trigger, contextVersion, userId) => {
+        calls.recalculateArgs.push({ propertyId, trigger, contextVersion, userId });
+        if (recalculateShouldFailFor.has(propertyId)) throw new Error(`recalculate failed for ${propertyId}`);
       },
     },
+    checkReserveFundWorkerContext: async () =>
+      contextResult ?? { allowed: true, userId: 'user-1', contextVersion: 'v1', reasonCodes: [] },
+    logger: noopLogger,
   };
 
-  const contextPath = require.resolve('../../../backend/src/services/financialContext/reserveFundWorkerContext.service.ts');
-  require.cache[contextPath] = {
-    id: contextPath,
-    filename: contextPath,
-    loaded: true,
-    exports: {
-      checkReserveFundWorkerContext: async () =>
-        contextResult ?? { allowed: true, userId: 'user-1', contextVersion: 'v1', reasonCodes: [] },
-    },
-  };
-
-  const jobPath = require.resolve('../../src/jobs/recalculateReserveFunds.job.ts');
-  delete require.cache[jobPath];
-  return { ...require(jobPath), calls };
+  return { deps, calls };
 }
 
 test('skips a fund when Property Context is not current/allowed', async () => {
-  const { recalculateReserveFundsJob, calls } = loadJob({
+  const { deps, calls } = fakeDeps({
     funds: [fundFixture()],
     contextResult: { allowed: false, userId: null, reasonCodes: ['STALE_CONTEXT'] },
   });
 
-  await recalculateReserveFundsJob();
+  await recalculateReserveFundsJob(undefined, deps);
 
   assert.equal(calls.recalculateArgs.length, 0);
 });
 
 test('recalculates a fund that is behind the latest READY Capital Timeline analysis', async () => {
-  const { recalculateReserveFundsJob, calls } = loadJob({
+  const { deps, calls } = fakeDeps({
     funds: [fundFixture({ sourceAnalysisId: 'analysis-old', lastRecalculatedAt: new Date() })],
     latestAnalysis: { id: 'analysis-new' },
   });
 
-  await recalculateReserveFundsJob();
+  await recalculateReserveFundsJob(undefined, deps);
 
   assert.equal(calls.recalculateArgs.length, 1);
   assert.equal(calls.recalculateArgs[0].propertyId, 'property-1');
@@ -89,40 +79,40 @@ test('recalculates a fund that is behind the latest READY Capital Timeline analy
 });
 
 test('recalculates a fund that has never been recalculated (lastRecalculatedAt null)', async () => {
-  const { recalculateReserveFundsJob, calls } = loadJob({
+  const { deps, calls } = fakeDeps({
     funds: [fundFixture({ lastRecalculatedAt: null })],
     latestAnalysis: { id: 'analysis-1' }, // matches sourceAnalysisId, not behind
   });
 
-  await recalculateReserveFundsJob();
+  await recalculateReserveFundsJob(undefined, deps);
 
   assert.equal(calls.recalculateArgs.length, 1);
 });
 
 test('recalculates a fund whose last recalculation is older than 35 days', async () => {
-  const { recalculateReserveFundsJob, calls } = loadJob({
+  const { deps, calls } = fakeDeps({
     funds: [fundFixture({ lastRecalculatedAt: new Date(Date.now() - 40 * 24 * 60 * 60 * 1000) })],
     latestAnalysis: { id: 'analysis-1' },
   });
 
-  await recalculateReserveFundsJob();
+  await recalculateReserveFundsJob(undefined, deps);
 
   assert.equal(calls.recalculateArgs.length, 1);
 });
 
 test('skips a fund that is neither behind the latest analysis nor stale', async () => {
-  const { recalculateReserveFundsJob, calls } = loadJob({
+  const { deps, calls } = fakeDeps({
     funds: [fundFixture({ sourceAnalysisId: 'analysis-1', lastRecalculatedAt: new Date() })],
     latestAnalysis: { id: 'analysis-1' }, // same as sourceAnalysisId — not behind
   });
 
-  await recalculateReserveFundsJob();
+  await recalculateReserveFundsJob(undefined, deps);
 
   assert.equal(calls.recalculateArgs.length, 0);
 });
 
 test('one fund failing does not abort the sweep for the rest of the batch', async () => {
-  const { recalculateReserveFundsJob, calls } = loadJob({
+  const { deps, calls } = fakeDeps({
     funds: [
       fundFixture({ propertyId: 'property-1', lastRecalculatedAt: null }),
       fundFixture({ propertyId: 'property-2', lastRecalculatedAt: null }),
@@ -130,15 +120,15 @@ test('one fund failing does not abort the sweep for the rest of the batch', asyn
     recalculateShouldFailFor: new Set(['property-1']),
   });
 
-  await assert.doesNotReject(() => recalculateReserveFundsJob());
+  await assert.doesNotReject(() => recalculateReserveFundsJob(undefined, deps));
 
   assert.equal(calls.recalculateArgs.length, 2, 'both must still be attempted');
 });
 
 test('does nothing when there are no active funds', async () => {
-  const { recalculateReserveFundsJob, calls } = loadJob({ funds: [] });
+  const { deps, calls } = fakeDeps({ funds: [] });
 
-  await recalculateReserveFundsJob();
+  await recalculateReserveFundsJob(undefined, deps);
 
   assert.equal(calls.recalculateArgs.length, 0);
 });

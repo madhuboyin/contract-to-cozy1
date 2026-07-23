@@ -7,52 +7,37 @@
 // a smokeCorrelationId, since `opts` being defined at all is itself the
 // "this was a manual/admin trigger, not the natural cron tick" signal
 // (scheduleCronJobs() in worker.ts calls every handler with zero args).
+//
+// W4 item 1 (DI refactor): dependencies are injected directly instead of
+// via require.cache.
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
 require('ts-node/register');
-require('tsconfig-paths/register');
 
-function fredResponse(observations) {
-  return { ok: true, status: 200, statusText: 'OK', json: async () => ({ observations }) };
-}
+const { ingestMortgageRatesJob } = require('../../src/jobs/ingestMortgageRates.job.ts');
 
-function loadJob({ fetchImpl, ingestSnapshotImpl }) {
-  const calls = { fetchUrls: [], ingestSnapshotArgs: [] };
+const noopLogger = { info() {}, warn() {}, error() {}, debug() {}, fatal() {}, child() { return this; } };
 
-  const nodeFetchPath = require.resolve('node-fetch');
-  require.cache[nodeFetchPath] = {
-    id: nodeFetchPath,
-    filename: nodeFetchPath,
-    loaded: true,
-    exports: {
-      __esModule: true,
-      default: async (url, opts) => {
-        calls.fetchUrls.push(url);
-        return fetchImpl(url, opts);
+function fakeDeps({ fetchFredSeriesImpl, ingestSnapshotImpl }) {
+  const calls = { fetchFredSeriesCalls: [], ingestSnapshotArgs: [] };
+
+  const deps = {
+    fetchFredSeries: async (seriesId, apiKey) => {
+      calls.fetchFredSeriesCalls.push(seriesId);
+      return fetchFredSeriesImpl(seriesId, apiKey);
+    },
+    mortgageRateService: {
+      ingestSnapshot: async (args) => {
+        calls.ingestSnapshotArgs.push(args);
+        return ingestSnapshotImpl(args);
       },
     },
+    logger: noopLogger,
   };
 
-  const servicePath = require.resolve('../../../backend/src/refinanceRadar/engine/mortgageRate.service.ts');
-  require.cache[servicePath] = {
-    id: servicePath,
-    filename: servicePath,
-    loaded: true,
-    exports: {
-      MortgageRateService: class {
-        async ingestSnapshot(args) {
-          calls.ingestSnapshotArgs.push(args);
-          return ingestSnapshotImpl(args);
-        }
-      },
-    },
-  };
-
-  const jobPath = require.resolve('../../src/jobs/ingestMortgageRates.job.ts');
-  delete require.cache[jobPath];
-  return { ...require(jobPath), calls };
+  return { deps, calls };
 }
 
 function withEnv(overrides, fn) {
@@ -74,19 +59,19 @@ function withEnv(overrides, fn) {
   })();
 }
 
+const fredPair = (seriesId) =>
+  seriesId === 'MORTGAGE30US' ? { date: '2026-07-17', rate: 6.5 } : { date: '2026-07-17', rate: 5.75 };
+
 test('dry run: fetches the real FRED data but writes no snapshot', async () => {
   await withEnv({ FRED_API_KEY: 'test-key' }, async () => {
-    const { ingestMortgageRatesJob, calls } = loadJob({
-      fetchImpl: (url) =>
-        url.includes('MORTGAGE30US')
-          ? fredResponse([{ date: '2026-07-17', value: '6.50' }])
-          : fredResponse([{ date: '2026-07-17', value: '5.75' }]),
+    const { deps, calls } = fakeDeps({
+      fetchFredSeriesImpl: fredPair,
       ingestSnapshotImpl: () => { throw new Error('must not be called during dry run'); },
     });
 
-    const result = await ingestMortgageRatesJob({ dryRun: true });
+    const result = await ingestMortgageRatesJob({ dryRun: true }, deps);
 
-    assert.equal(calls.fetchUrls.length, 2, 'the FRED fetch itself is a harmless read and still happens');
+    assert.equal(calls.fetchFredSeriesCalls.length, 2, 'the FRED fetch itself is a harmless read and still happens');
     assert.equal(calls.ingestSnapshotArgs.length, 0);
     assert.equal(result.success, true);
     assert.equal(result.created, false);
@@ -98,15 +83,12 @@ test('dry run: fetches the real FRED data but writes no snapshot', async () => {
 
 test('no opts (the weekly cron tick): behaves exactly like a real run and tags nothing', async () => {
   await withEnv({ FRED_API_KEY: 'test-key' }, async () => {
-    const { ingestMortgageRatesJob, calls } = loadJob({
-      fetchImpl: (url) =>
-        url.includes('MORTGAGE30US')
-          ? fredResponse([{ date: '2026-07-17', value: '6.50' }])
-          : fredResponse([{ date: '2026-07-17', value: '5.75' }]),
+    const { deps, calls } = fakeDeps({
+      fetchFredSeriesImpl: fredPair,
       ingestSnapshotImpl: (args) => ({ snapshot: { date: args.date, rate30yr: args.rate30yr, rate15yr: args.rate15yr }, created: true }),
     });
 
-    const result = await ingestMortgageRatesJob();
+    const result = await ingestMortgageRatesJob(undefined, deps);
 
     assert.equal(calls.ingestSnapshotArgs.length, 1);
     assert.equal(calls.ingestSnapshotArgs[0].metadataJson.smokeCorrelationId, undefined);
@@ -116,15 +98,12 @@ test('no opts (the weekly cron tick): behaves exactly like a real run and tags n
 
 test('a manually-triggered real run (opts defined) tags the snapshot with a smokeCorrelationId', async () => {
   await withEnv({ FRED_API_KEY: 'test-key' }, async () => {
-    const { ingestMortgageRatesJob, calls } = loadJob({
-      fetchImpl: (url) =>
-        url.includes('MORTGAGE30US')
-          ? fredResponse([{ date: '2026-07-17', value: '6.50' }])
-          : fredResponse([{ date: '2026-07-17', value: '5.75' }]),
+    const { deps, calls } = fakeDeps({
+      fetchFredSeriesImpl: fredPair,
       ingestSnapshotImpl: (args) => ({ snapshot: { date: args.date, rate30yr: args.rate30yr, rate15yr: args.rate15yr }, created: true }),
     });
 
-    const result = await ingestMortgageRatesJob({ dryRun: false });
+    const result = await ingestMortgageRatesJob({ dryRun: false }, deps);
 
     assert.match(calls.ingestSnapshotArgs[0].metadataJson.smokeCorrelationId, /^smoke:mortgage-rate-ingest:/);
     assert.equal(result.smokeCorrelationId, calls.ingestSnapshotArgs[0].metadataJson.smokeCorrelationId);
@@ -133,15 +112,12 @@ test('a manually-triggered real run (opts defined) tags the snapshot with a smok
 
 test('a manually-triggered dry run also tags the returned (unwritten) result, for correlation-preview purposes', async () => {
   await withEnv({ FRED_API_KEY: 'test-key' }, async () => {
-    const { ingestMortgageRatesJob } = loadJob({
-      fetchImpl: (url) =>
-        url.includes('MORTGAGE30US')
-          ? fredResponse([{ date: '2026-07-17', value: '6.50' }])
-          : fredResponse([{ date: '2026-07-17', value: '5.75' }]),
+    const { deps } = fakeDeps({
+      fetchFredSeriesImpl: fredPair,
       ingestSnapshotImpl: () => { throw new Error('must not be called during dry run'); },
     });
 
-    const result = await ingestMortgageRatesJob({ dryRun: true });
+    const result = await ingestMortgageRatesJob({ dryRun: true }, deps);
 
     // Dry run never writes, so there's nothing to tag for real — the
     // point is only that the harmless-GET path doesn't crash when opts is defined.

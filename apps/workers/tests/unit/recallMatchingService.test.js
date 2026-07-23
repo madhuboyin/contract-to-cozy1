@@ -9,6 +9,9 @@
 // this could assert a false recall match as fact. Fixed with
 // exactModelMatch() (exact equality after normalization) for model
 // comparison; manufacturer matching keeps its looser substring check.
+//
+// W4 item 1 (DI refactor): dependencies are injected directly instead of
+// via require.cache.
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -16,6 +19,7 @@ const assert = require('node:assert/strict');
 require('ts-node/register');
 
 const { exactModelMatch, normModel } = require('../../src/recalls/normalize.ts');
+const { runRecallMatchingScan } = require('../../src/recalls/recallMatching.service.ts');
 
 test('exactModelMatch requires exact equality, not substring containment', () => {
   assert.equal(exactModelMatch(normModel('5024'), normModel('125024')), false);
@@ -24,24 +28,21 @@ test('exactModelMatch requires exact equality, not substring containment', () =>
   assert.equal(exactModelMatch(normModel('5024'), normModel('5024')), true);
 });
 
-function loadMatchingService({ recalls, inventory }) {
+function fakeDeps({ recalls, inventory }) {
   const createCalls = [];
-  const prismaMock = {
-    recallRecord: { findMany: async () => recalls },
-    inventoryItem: { findMany: async () => inventory },
-    recallMatch: {
-      create: async (args) => {
-        createCalls.push(args.data);
-        return { id: `match-${createCalls.length}` };
+  const deps = {
+    prisma: {
+      recallRecord: { findMany: async () => recalls },
+      inventoryItem: { findMany: async () => inventory },
+      recallMatch: {
+        create: async (args) => {
+          createCalls.push(args.data);
+          return { id: `match-${createCalls.length}` };
+        },
       },
     },
   };
-  const prismaPath = require.resolve('../../src/lib/prisma.ts');
-  require.cache[prismaPath] = { id: prismaPath, filename: prismaPath, loaded: true, exports: { prisma: prismaMock } };
-
-  const servicePath = require.resolve('../../src/recalls/recallMatching.service.ts');
-  delete require.cache[servicePath];
-  return { service: require(servicePath), getCreateCalls: () => createCalls };
+  return { deps, getCreateCalls: () => createCalls };
 }
 
 function recall(products) {
@@ -60,12 +61,12 @@ function inventoryItem(overrides = {}) {
 }
 
 test('exact manufacturer + exact model on a verified item is a high-confidence OPEN match', async () => {
-  const { service, getCreateCalls } = loadMatchingService({
+  const { deps, getCreateCalls } = fakeDeps({
     recalls: [recall([{ manufacturer: 'Acme', model: '5024' }])],
     inventory: [inventoryItem()],
   });
 
-  const result = await service.runRecallMatchingScan();
+  const result = await runRecallMatchingScan(deps);
 
   assert.equal(result.createdOpen, 1);
   assert.equal(getCreateCalls()[0].confidencePct, 95);
@@ -73,12 +74,12 @@ test('exact manufacturer + exact model on a verified item is a high-confidence O
 });
 
 test('regression guard: a short recall model no longer false-matches as a substring of an unrelated longer asset model', async () => {
-  const { service, getCreateCalls } = loadMatchingService({
+  const { deps, getCreateCalls } = fakeDeps({
     recalls: [recall([{ manufacturer: 'Acme', model: '5024' }])],
     inventory: [inventoryItem({ modelNumber: '125024' })], // "5024" is a substring of "125024" but is a different model
   });
 
-  const result = await service.runRecallMatchingScan();
+  const result = await runRecallMatchingScan(deps);
 
   assert.equal(result.createdOpen, 0);
   // mfg still matches, so it correctly falls to the lower-confidence,
@@ -89,12 +90,12 @@ test('regression guard: a short recall model no longer false-matches as a substr
 });
 
 test('manufacturer-only match (model differs) still requires confirmation, unaffected by the fix', async () => {
-  const { service, getCreateCalls } = loadMatchingService({
+  const { deps, getCreateCalls } = fakeDeps({
     recalls: [recall([{ manufacturer: 'Acme', model: '9999' }])],
     inventory: [inventoryItem({ modelNumber: '5024' })],
   });
 
-  const result = await service.runRecallMatchingScan();
+  const result = await runRecallMatchingScan(deps);
 
   assert.equal(result.createdOpen, 0);
   assert.equal(result.createdNeedsConfirm, 1);
@@ -102,12 +103,12 @@ test('manufacturer-only match (model differs) still requires confirmation, unaff
 });
 
 test('an unverified item never gets an OPEN match even at 95% confidence', async () => {
-  const { service, getCreateCalls } = loadMatchingService({
+  const { deps, getCreateCalls } = fakeDeps({
     recalls: [recall([{ manufacturer: 'Acme', model: '5024' }])],
     inventory: [inventoryItem({ isVerified: false })],
   });
 
-  const result = await service.runRecallMatchingScan();
+  const result = await runRecallMatchingScan(deps);
 
   assert.equal(result.createdOpen, 0);
   assert.equal(result.createdNeedsConfirm, 1);
@@ -116,12 +117,12 @@ test('an unverified item never gets an OPEN match even at 95% confidence', async
 });
 
 test('no manufacturer or model match is filtered out entirely (below the v1 threshold)', async () => {
-  const { service, getCreateCalls } = loadMatchingService({
+  const { deps, getCreateCalls } = fakeDeps({
     recalls: [recall([{ manufacturer: 'Acme', model: '5024' }])],
     inventory: [inventoryItem({ manufacturer: 'Other Co', modelNumber: '1111' })],
   });
 
-  const result = await service.runRecallMatchingScan();
+  const result = await runRecallMatchingScan(deps);
 
   assert.equal(result.createdOpen, 0);
   assert.equal(result.createdNeedsConfirm, 0);

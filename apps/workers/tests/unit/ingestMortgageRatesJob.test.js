@@ -3,51 +3,39 @@
 // W4 item 4: ingestMortgageRatesJob had no dedicated test despite a
 // well-structured 3-tier fallback chain (FRED API → manual env fallback →
 // clean skip) that's easy to get wrong silently. Covers every branch.
+//
+// W4 item 1 (DI refactor): dependencies are injected directly instead of
+// via require.cache. fetchFredSeries (job-scoped, keyed by seriesId) is
+// injected as a plain function reference instead of mocking the node-fetch
+// package's own module cache entry.
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
 require('ts-node/register');
 
-function fredResponse(observations) {
-  return { ok: true, status: 200, statusText: 'OK', json: async () => ({ observations }) };
-}
+const { ingestMortgageRatesJob } = require('../../src/jobs/ingestMortgageRates.job.ts');
 
-function loadJob({ fetchImpl, ingestSnapshotImpl }) {
-  const calls = { fetchUrls: [], ingestSnapshotArgs: [] };
+const noopLogger = { info() {}, warn() {}, error() {}, debug() {}, fatal() {}, child() { return this; } };
 
-  const nodeFetchPath = require.resolve('node-fetch');
-  require.cache[nodeFetchPath] = {
-    id: nodeFetchPath,
-    filename: nodeFetchPath,
-    loaded: true,
-    exports: {
-      __esModule: true,
-      default: async (url, opts) => {
-        calls.fetchUrls.push(url);
-        return fetchImpl(url, opts);
+function fakeDeps({ fetchFredSeriesImpl, ingestSnapshotImpl }) {
+  const calls = { fetchFredSeriesCalls: [], ingestSnapshotArgs: [] };
+
+  const deps = {
+    fetchFredSeries: async (seriesId, apiKey) => {
+      calls.fetchFredSeriesCalls.push(seriesId);
+      return fetchFredSeriesImpl(seriesId, apiKey);
+    },
+    mortgageRateService: {
+      ingestSnapshot: async (args) => {
+        calls.ingestSnapshotArgs.push(args);
+        return ingestSnapshotImpl(args);
       },
     },
+    logger: noopLogger,
   };
 
-  const servicePath = require.resolve('../../../backend/src/refinanceRadar/engine/mortgageRate.service.ts');
-  require.cache[servicePath] = {
-    id: servicePath,
-    filename: servicePath,
-    loaded: true,
-    exports: {
-      MortgageRateService: class {
-        async ingestSnapshot(args) {
-          calls.ingestSnapshotArgs.push(args);
-          return ingestSnapshotImpl(args);
-        }
-      },
-    },
-  };
-
-  const jobPath = require.resolve('../../src/jobs/ingestMortgageRates.job.ts');
-  delete require.cache[jobPath];
-  return { ...require(jobPath), calls };
+  return { deps, calls };
 }
 
 function withEnv(overrides, fn) {
@@ -71,15 +59,13 @@ function withEnv(overrides, fn) {
 
 test('FRED success: ingests both series under source FRED', async () => {
   await withEnv({ FRED_API_KEY: 'test-key' }, async () => {
-    const { ingestMortgageRatesJob, calls } = loadJob({
-      fetchImpl: (url) =>
-        url.includes('MORTGAGE30US')
-          ? fredResponse([{ date: '2026-07-17', value: '6.50' }])
-          : fredResponse([{ date: '2026-07-17', value: '5.75' }]),
+    const { deps, calls } = fakeDeps({
+      fetchFredSeriesImpl: (seriesId) =>
+        seriesId === 'MORTGAGE30US' ? { date: '2026-07-17', rate: 6.5 } : { date: '2026-07-17', rate: 5.75 },
       ingestSnapshotImpl: (args) => ({ snapshot: { date: args.date, rate30yr: args.rate30yr, rate15yr: args.rate15yr }, created: true }),
     });
 
-    const result = await ingestMortgageRatesJob();
+    const result = await ingestMortgageRatesJob(undefined, deps);
 
     assert.equal(result.success, true);
     assert.equal(result.source, 'FRED');
@@ -89,17 +75,16 @@ test('FRED success: ingests both series under source FRED', async () => {
   });
 });
 
-test('FRED returning "." (missing data) for one series falls through to manual fallback', async () => {
+test('FRED returning null (missing data) for one series falls through to manual fallback', async () => {
   await withEnv(
     { FRED_API_KEY: 'test-key', MORTGAGE_RATE_30YR_FALLBACK: '6.5', MORTGAGE_RATE_15YR_FALLBACK: '5.75' },
     async () => {
-      const { ingestMortgageRatesJob, calls } = loadJob({
-        fetchImpl: (url) =>
-          url.includes('MORTGAGE30US') ? fredResponse([{ date: '2026-07-17', value: '.' }]) : fredResponse([{ date: '2026-07-17', value: '5.75' }]),
+      const { deps, calls } = fakeDeps({
+        fetchFredSeriesImpl: (seriesId) => (seriesId === 'MORTGAGE30US' ? null : { date: '2026-07-17', rate: 5.75 }),
         ingestSnapshotImpl: (args) => ({ snapshot: { date: args.date, rate30yr: args.rate30yr, rate15yr: args.rate15yr }, created: true }),
       });
 
-      const result = await ingestMortgageRatesJob();
+      const result = await ingestMortgageRatesJob(undefined, deps);
 
       assert.equal(result.source, 'MANUAL');
       assert.equal(calls.ingestSnapshotArgs.length, 1, 'must not have called ingestSnapshot for the incomplete FRED result');
@@ -111,18 +96,17 @@ test('a thrown FRED fetch error falls through to manual fallback instead of cras
   await withEnv(
     { FRED_API_KEY: 'test-key', MORTGAGE_RATE_30YR_FALLBACK: '6.5', MORTGAGE_RATE_15YR_FALLBACK: '5.75' },
     async () => {
-      const { ingestMortgageRatesJob, calls } = loadJob({
-        fetchImpl: () => {
+      const { deps } = fakeDeps({
+        fetchFredSeriesImpl: () => {
           throw new Error('network down');
         },
         ingestSnapshotImpl: (args) => ({ snapshot: { date: args.date, rate30yr: args.rate30yr, rate15yr: args.rate15yr }, created: true }),
       });
 
-      const result = await ingestMortgageRatesJob();
+      const result = await ingestMortgageRatesJob(undefined, deps);
 
       assert.equal(result.success, true);
       assert.equal(result.source, 'MANUAL');
-      void calls;
     },
   );
 });
@@ -131,17 +115,17 @@ test('no FRED_API_KEY set: uses manual fallback directly without attempting a fe
   await withEnv(
     { FRED_API_KEY: undefined, MORTGAGE_RATE_30YR_FALLBACK: '6.5', MORTGAGE_RATE_15YR_FALLBACK: '5.75' },
     async () => {
-      const { ingestMortgageRatesJob, calls } = loadJob({
-        fetchImpl: () => {
+      const { deps, calls } = fakeDeps({
+        fetchFredSeriesImpl: () => {
           throw new Error('must not be called');
         },
         ingestSnapshotImpl: (args) => ({ snapshot: { date: args.date, rate30yr: args.rate30yr, rate15yr: args.rate15yr }, created: false }),
       });
 
-      const result = await ingestMortgageRatesJob();
+      const result = await ingestMortgageRatesJob(undefined, deps);
 
       assert.equal(result.source, 'MANUAL');
-      assert.equal(calls.fetchUrls.length, 0);
+      assert.equal(calls.fetchFredSeriesCalls.length, 0);
     },
   );
 });
@@ -150,8 +134,8 @@ test('neither FRED nor manual fallback configured: skips cleanly with success=fa
   await withEnv(
     { FRED_API_KEY: undefined, MORTGAGE_RATE_30YR_FALLBACK: undefined, MORTGAGE_RATE_15YR_FALLBACK: undefined },
     async () => {
-      const { ingestMortgageRatesJob, calls } = loadJob({
-        fetchImpl: () => {
+      const { deps, calls } = fakeDeps({
+        fetchFredSeriesImpl: () => {
           throw new Error('must not be called');
         },
         ingestSnapshotImpl: () => {
@@ -159,7 +143,7 @@ test('neither FRED nor manual fallback configured: skips cleanly with success=fa
         },
       });
 
-      const result = await ingestMortgageRatesJob();
+      const result = await ingestMortgageRatesJob(undefined, deps);
 
       assert.deepEqual(result, {
         success: false,
@@ -181,8 +165,8 @@ test('a non-positive manual fallback value is treated as not configured', async 
   await withEnv(
     { FRED_API_KEY: undefined, MORTGAGE_RATE_30YR_FALLBACK: '0', MORTGAGE_RATE_15YR_FALLBACK: '5.75' },
     async () => {
-      const { ingestMortgageRatesJob } = loadJob({
-        fetchImpl: () => {
+      const { deps } = fakeDeps({
+        fetchFredSeriesImpl: () => {
           throw new Error('must not be called');
         },
         ingestSnapshotImpl: () => {
@@ -190,7 +174,7 @@ test('a non-positive manual fallback value is treated as not configured', async 
         },
       });
 
-      const result = await ingestMortgageRatesJob();
+      const result = await ingestMortgageRatesJob(undefined, deps);
 
       assert.equal(result.success, false);
       assert.equal(result.skipped, true);

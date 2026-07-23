@@ -7,79 +7,66 @@
 // could silently close real, still-active incidents. Fixed by tracking
 // fetch success alongside the alerts and only resolving on a confirmed-ok
 // fetch.
+//
+// W4 item 1 (DI refactor): dependencies are injected directly instead of
+// via require.cache. This job transitively imports guidanceJourney.service.ts,
+// which constructs a GeminiService singleton at module load — that throws if
+// GEMINI_API_KEY is unset, so it's stubbed before the real require() below.
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
+process.env.GEMINI_API_KEY = process.env.GEMINI_API_KEY || 'test-key';
+
 require('ts-node/register');
 
-function loadJob({ property, openIncidents = [], alertsOutcome }) {
+const { severeWeatherAlertsJob } = require('../../src/jobs/severeWeatherAlerts.job.ts');
+
+const noopLogger = { info() {}, warn() {}, error() {}, debug() {}, fatal() {}, child() { return this; } };
+
+function fakeDeps({ properties, openIncidents = [], alertsOutcome, alerts = [] }) {
   const setStatusCalls = [];
   const upsertCalls = [];
 
-  const prismaMock = {
-    property: {
-      findMany: async () => [property],
-    },
-    incident: {
-      // Distinguish the per-property open-incidents query (has propertyId)
-      // from the 48h stale-safety-net sweep (has updatedAt, no propertyId)
-      // — both hit the same model, and the safety net must not mask what
-      // this test is actually checking (same-run resolution behavior).
-      findMany: async (args) => (args?.where?.propertyId ? openIncidents : []),
-    },
-  };
-  const prismaPath = require.resolve('../../src/lib/prisma.ts');
-  require.cache[prismaPath] = { id: prismaPath, filename: prismaPath, loaded: true, exports: { prisma: prismaMock } };
-
-  const incidentServicePath = require.resolve('../../../backend/src/services/incidents/incident.service.ts');
-  require.cache[incidentServicePath] = {
-    id: incidentServicePath,
-    filename: incidentServicePath,
-    loaded: true,
-    exports: {
-      IncidentService: {
-        upsertIncident: async (input) => {
-          upsertCalls.push(input);
-          return { id: 'incident-new' };
-        },
-        setStatus: async (id, status) => {
-          setStatusCalls.push({ id, status });
-        },
+  const deps = {
+    prisma: {
+      incident: {
+        // Distinguish the per-property open-incidents query (has propertyId)
+        // from the 48h stale-safety-net sweep (has updatedAt, no propertyId)
+        // — both hit the same model, and the safety net must not mask what
+        // this test is actually checking (same-run resolution behavior).
+        findMany: async (args) => (args?.where?.propertyId ? openIncidents : []),
       },
     },
-  };
-
-  const guidancePath = require.resolve('../../../backend/src/services/guidanceEngine/guidanceJourney.service.ts');
-  require.cache[guidancePath] = {
-    id: guidancePath,
-    filename: guidancePath,
-    loaded: true,
-    exports: { guidanceJourneyService: { ingestSignal: async () => {} } },
-  };
-
-  const alertServicePath = require.resolve('../../../backend/src/services/severeWeatherAlert.service.ts');
-  require.cache[alertServicePath] = {
-    id: alertServicePath,
-    filename: alertServicePath,
-    loaded: true,
-    exports: {
-      severeWeatherAlertService: {
-        getActiveAlerts: async (lat, lon, onOutcome) => {
-          onOutcome?.(alertsOutcome);
-          return []; // both "ok, nothing active" and "failed" return []
-        },
+    incidentService: {
+      upsertIncident: async (input) => {
+        upsertCalls.push(input);
+        return { id: 'incident-new' };
       },
+      setStatus: async (id, status) => {
+        setStatusCalls.push({ id, status });
+      },
+    },
+    guidanceJourneyService: { ingestSignal: async () => {} },
+    severeWeatherAlertService: {
+      getActiveAlerts: async (lat, lon, onOutcome) => {
+        onOutcome?.(alertsOutcome);
+        return alertsOutcome === 'ok' ? alerts : []; // both "ok, nothing active" and "failed" return []
+      },
+    },
+    logger: noopLogger,
+    iterateAllProperties: async function* () {
+      for (const p of properties) yield p;
+    },
+    getPropertyGeo: async (property) => {
+      if (typeof property.latitude === 'number' && typeof property.longitude === 'number') {
+        return { lat: property.latitude, lon: property.longitude };
+      }
+      return null;
     },
   };
 
-  const jobPath = require.resolve('../../src/jobs/severeWeatherAlerts.job.ts');
-  delete require.cache[jobPath];
-  return {
-    job: require(jobPath),
-    getSetStatusCalls: () => setStatusCalls,
-    getUpsertCalls: () => upsertCalls,
-  };
+  return { deps, getSetStatusCalls: () => setStatusCalls, getUpsertCalls: () => upsertCalls };
 }
 
 function property(overrides = {}) {
@@ -106,13 +93,13 @@ function openIncident(overrides = {}) {
 
 test('does NOT resolve open incidents when the NWS fetch failed (fail-open regression guard)', async () => {
   for (const outcome of ['error', 'timeout', 'http_error']) {
-    const { job, getSetStatusCalls } = loadJob({
-      property: property(),
+    const { deps, getSetStatusCalls } = fakeDeps({
+      properties: [property()],
       openIncidents: [openIncident()],
       alertsOutcome: outcome,
     });
 
-    const result = await job.severeWeatherAlertsJob();
+    const result = await severeWeatherAlertsJob(undefined, deps);
 
     assert.equal(getSetStatusCalls().length, 0, `outcome=${outcome} must not resolve any incident`);
     assert.equal(result.resolved, 0);
@@ -120,13 +107,13 @@ test('does NOT resolve open incidents when the NWS fetch failed (fail-open regre
 });
 
 test('resolves an open incident whose alert genuinely cleared (confirmed-ok empty fetch)', async () => {
-  const { job, getSetStatusCalls } = loadJob({
-    property: property(),
+  const { deps, getSetStatusCalls } = fakeDeps({
+    properties: [property()],
     openIncidents: [openIncident()],
     alertsOutcome: 'ok',
   });
 
-  const result = await job.severeWeatherAlertsJob();
+  const result = await severeWeatherAlertsJob(undefined, deps);
 
   assert.equal(getSetStatusCalls().length, 1);
   assert.equal(getSetStatusCalls()[0].id, 'incident-1');

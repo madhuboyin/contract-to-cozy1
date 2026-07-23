@@ -18,7 +18,7 @@ import { generateSmokeCorrelationId } from '@worker-shared/lib/smokeTestCorrelat
 import { Geo } from '../lib/geocodeZip';
 import { getPropertyGeo } from '../lib/propertyGeo';
 import { iterateAllProperties } from '../lib/paginateProperties';
-import { logger } from '../lib/logger';
+import { logger, AppLogger } from '../lib/logger';
 import {
   HAZARD_INTENT_FAMILY,
   HAZARD_CATEGORY,
@@ -39,9 +39,45 @@ const OPEN_SEVERE_WEATHER_STATUSES: IncidentStatus[] = [
   IncidentStatus.MITIGATED,
 ];
 
+// W4 item 1: small, job-scoped dependency interface (see
+// reserveFundBalanceReminder.job.ts for the pattern). iterateAllProperties
+// and getPropertyGeo are injected as plain function references for the same
+// reason as freezeRiskIncidents.job.ts — both import the real prisma
+// singleton directly, so genuine DI requires substituting them rather than
+// relying on a require.cache swap of their own module entries.
+export interface SevereWeatherAlertsDeps {
+  prisma: Pick<typeof prisma, 'incident'>;
+  incidentService: Pick<typeof IncidentService, 'setStatus' | 'upsertIncident'>;
+  guidanceJourneyService: Pick<typeof guidanceJourneyService, 'ingestSignal'>;
+  severeWeatherAlertService: Pick<typeof severeWeatherAlertService, 'getActiveAlerts'>;
+  logger: AppLogger;
+  iterateAllProperties: typeof iterateAllProperties;
+  getPropertyGeo: typeof getPropertyGeo;
+}
+
+const defaultDeps: SevereWeatherAlertsDeps = {
+  prisma,
+  incidentService: IncidentService,
+  guidanceJourneyService,
+  severeWeatherAlertService,
+  logger,
+  iterateAllProperties,
+  getPropertyGeo,
+};
+
 export async function severeWeatherAlertsJob(
   opts?: { dryRun?: boolean; propertyId?: string },
+  deps: SevereWeatherAlertsDeps = defaultDeps,
 ) {
+  const {
+    prisma,
+    incidentService,
+    guidanceJourneyService,
+    severeWeatherAlertService,
+    logger,
+    iterateAllProperties,
+    getPropertyGeo,
+  } = deps;
   const dryRun = opts?.dryRun === true;
   if (opts?.propertyId && !isPropertyAllowlisted(opts.propertyId)) {
     throw new Error(
@@ -128,7 +164,7 @@ export async function severeWeatherAlertsJob(
         continue;
       }
       // Same archival-hook rationale as the resolves below.
-      await IncidentService.setStatus(incidentId, IncidentStatus.RESOLVED);
+      await incidentService.setStatus(incidentId, IncidentStatus.RESOLVED);
       resolved++;
     }
 
@@ -142,7 +178,7 @@ export async function severeWeatherAlertsJob(
         continue;
       }
 
-      await IncidentService.upsertIncident(
+      await incidentService.upsertIncident(
         {
           propertyId: p.id,
           userId: null,
@@ -250,7 +286,7 @@ export async function severeWeatherAlertsJob(
           }
           // Route through IncidentService.setStatus (not a raw prisma update) so its
           // RESOLVED-transition hook archives the linked guidance journey/signal too.
-          await IncidentService.setStatus(incidentId, IncidentStatus.RESOLVED);
+          await incidentService.setStatus(incidentId, IncidentStatus.RESOLVED);
           resolved++;
         }
       }
@@ -279,7 +315,7 @@ export async function severeWeatherAlertsJob(
       logger.info(`[SevereWeatherAlerts] (dry run) Would resolve stale incident ${incident.id}`);
       continue;
     }
-    await IncidentService.setStatus(incident.id, IncidentStatus.RESOLVED);
+    await incidentService.setStatus(incident.id, IncidentStatus.RESOLVED);
     resolved++;
   }
 

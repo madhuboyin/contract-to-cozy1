@@ -7,70 +7,59 @@
 // processed and is independently re-checked against the operator
 // allowlist; and a real scoped run tags the created incident with a
 // smokeCorrelationId.
+//
+// W4 item 1 (DI refactor): dependencies (including iterateAllProperties and
+// getPropertyGeo, both plain function references) are injected directly
+// instead of via require.cache — this also removes the fragility the old
+// version of this comment described, where paginateProperties.ts/
+// propertyGeo.ts's own module-cache entries had to be separately purged on
+// every test because they import the real prisma singleton directly.
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
+process.env.GEMINI_API_KEY = process.env.GEMINI_API_KEY || 'test-key';
+
 require('ts-node/register');
 require('tsconfig-paths/register');
 
-function loadJob({ properties, openIncidents = [] }) {
+const { freezeRiskIncidentsJob } = require('../../src/jobs/freezeRiskIncidents.job.ts');
+
+const noopLogger = { info() {}, warn() {}, error() {}, debug() {}, fatal() {}, child() { return this; } };
+
+function fakeDeps({ properties, openIncidents = [] }) {
   const upsertCalls = [];
   const setStatusCalls = [];
 
-  const prismaMock = {
-    property: {
-      findMany: async () => properties,
-    },
-    incident: {
-      findMany: async () => openIncidents,
-    },
-  };
-  const prismaPath = require.resolve('../../src/lib/prisma.ts');
-  require.cache[prismaPath] = { id: prismaPath, filename: prismaPath, loaded: true, exports: { prisma: prismaMock } };
-
-  const incidentServicePath = require.resolve('../../../backend/src/services/incidents/incident.service.ts');
-  require.cache[incidentServicePath] = {
-    id: incidentServicePath,
-    filename: incidentServicePath,
-    loaded: true,
-    exports: {
-      IncidentService: {
-        upsertIncident: async (input) => {
-          upsertCalls.push(input);
-          return { id: 'incident-new' };
-        },
-        setStatus: async (id, status) => {
-          setStatusCalls.push({ id, status });
-        },
+  const deps = {
+    prisma: {
+      incident: {
+        findMany: async () => openIncidents,
       },
     },
+    incidentService: {
+      upsertIncident: async (input) => {
+        upsertCalls.push(input);
+        return { id: 'incident-new' };
+      },
+      setStatus: async (id, status) => {
+        setStatusCalls.push({ id, status });
+      },
+    },
+    guidanceJourneyService: { ingestSignal: async () => {} },
+    logger: noopLogger,
+    iterateAllProperties: async function* () {
+      for (const p of properties) yield p;
+    },
+    getPropertyGeo: async (property) => {
+      if (typeof property.latitude === 'number' && typeof property.longitude === 'number') {
+        return { lat: property.latitude, lon: property.longitude };
+      }
+      return null;
+    },
   };
 
-  const guidancePath = require.resolve('../../../backend/src/services/guidanceEngine/guidanceJourney.service.ts');
-  require.cache[guidancePath] = {
-    id: guidancePath,
-    filename: guidancePath,
-    loaded: true,
-    exports: { guidanceJourneyService: { ingestSignal: async () => {} } },
-  };
-
-  // paginateProperties.ts/propertyGeo.ts import `prisma` directly and, once
-  // loaded, keep the module-namespace reference they captured at their own
-  // first require() — reassigning require.cache[prismaPath] above only
-  // affects requires that happen AFTER this point. Without also purging
-  // these, every test after the first would silently keep querying the
-  // FIRST test's prisma mock instead of its own.
-  delete require.cache[require.resolve('../../src/lib/paginateProperties.ts')];
-  delete require.cache[require.resolve('../../src/lib/propertyGeo.ts')];
-
-  const jobPath = require.resolve('../../src/jobs/freezeRiskIncidents.job.ts');
-  delete require.cache[jobPath];
-  return {
-    job: require(jobPath),
-    getUpsertCalls: () => upsertCalls,
-    getSetStatusCalls: () => setStatusCalls,
-  };
+  return { deps, getUpsertCalls: () => upsertCalls, getSetStatusCalls: () => setStatusCalls };
 }
 
 function property(overrides = {}) {
@@ -103,9 +92,9 @@ function withFrozenFetch(minTempC, fn) {
 
 test('dry run: examines and counts freeze risk but creates/resolves no incidents', () =>
   withFrozenFetch(-5, async () => {
-    const { job, getUpsertCalls } = loadJob({ properties: [property()] });
+    const { deps, getUpsertCalls } = fakeDeps({ properties: [property()] });
 
-    const result = await job.freezeRiskIncidentsJob({ dryRun: true });
+    const result = await freezeRiskIncidentsJob({ dryRun: true }, deps);
 
     assert.equal(getUpsertCalls().length, 0);
     assert.equal(result.createdOrUpdated, 1);
@@ -114,9 +103,9 @@ test('dry run: examines and counts freeze risk but creates/resolves no incidents
 
 test('no opts (the daily cron tick): behaves exactly like a real run', () =>
   withFrozenFetch(-5, async () => {
-    const { job, getUpsertCalls } = loadJob({ properties: [property()] });
+    const { deps, getUpsertCalls } = fakeDeps({ properties: [property()] });
 
-    const result = await job.freezeRiskIncidentsJob();
+    const result = await freezeRiskIncidentsJob(undefined, deps);
 
     assert.equal(getUpsertCalls().length, 1);
     assert.equal(result.createdOrUpdated, 1);
@@ -127,11 +116,11 @@ test('a scoped propertyId processes only that property', () =>
     const originalEnv = process.env.SMOKE_TEST_PROPERTY_ALLOWLIST;
     process.env.SMOKE_TEST_PROPERTY_ALLOWLIST = 'property-allowed';
     try {
-      const { job, getUpsertCalls } = loadJob({
+      const { deps, getUpsertCalls } = fakeDeps({
         properties: [property({ id: 'property-allowed' }), property({ id: 'property-other' })],
       });
 
-      await job.freezeRiskIncidentsJob({ dryRun: false, propertyId: 'property-allowed' });
+      await freezeRiskIncidentsJob({ dryRun: false, propertyId: 'property-allowed' }, deps);
 
       assert.equal(getUpsertCalls().length, 1);
       assert.equal(getUpsertCalls()[0].propertyId, 'property-allowed');
@@ -144,10 +133,10 @@ test('a propertyId not in SMOKE_TEST_PROPERTY_ALLOWLIST is rejected outright, be
   const originalEnv = process.env.SMOKE_TEST_PROPERTY_ALLOWLIST;
   process.env.SMOKE_TEST_PROPERTY_ALLOWLIST = 'some-other-property';
   try {
-    const { job } = loadJob({ properties: [property()] });
+    const { deps } = fakeDeps({ properties: [property()] });
 
     await assert.rejects(
-      () => job.freezeRiskIncidentsJob({ dryRun: true, propertyId: 'property-not-allowed' }),
+      () => freezeRiskIncidentsJob({ dryRun: true, propertyId: 'property-not-allowed' }, deps),
       /not in SMOKE_TEST_PROPERTY_ALLOWLIST/,
     );
   } finally {
@@ -160,9 +149,9 @@ test('a real scoped run tags the upserted incident with a smokeCorrelationId', (
     const originalEnv = process.env.SMOKE_TEST_PROPERTY_ALLOWLIST;
     process.env.SMOKE_TEST_PROPERTY_ALLOWLIST = 'property-allowed';
     try {
-      const { job, getUpsertCalls } = loadJob({ properties: [property({ id: 'property-allowed' })] });
+      const { deps, getUpsertCalls } = fakeDeps({ properties: [property({ id: 'property-allowed' })] });
 
-      const result = await job.freezeRiskIncidentsJob({ dryRun: false, propertyId: 'property-allowed' });
+      const result = await freezeRiskIncidentsJob({ dryRun: false, propertyId: 'property-allowed' }, deps);
 
       assert.equal(getUpsertCalls().length, 1);
       assert.match(getUpsertCalls()[0].details.smokeCorrelationId, /^smoke:freeze-risk-incidents:/);
@@ -174,9 +163,9 @@ test('a real scoped run tags the upserted incident with a smokeCorrelationId', (
 
 test('an unscoped run (no propertyId) tags nothing', () =>
   withFrozenFetch(-5, async () => {
-    const { job, getUpsertCalls } = loadJob({ properties: [property()] });
+    const { deps, getUpsertCalls } = fakeDeps({ properties: [property()] });
 
-    const result = await job.freezeRiskIncidentsJob();
+    const result = await freezeRiskIncidentsJob(undefined, deps);
 
     assert.equal(getUpsertCalls()[0].details.smokeCorrelationId, undefined);
     assert.equal(result.smokeCorrelationId, undefined);

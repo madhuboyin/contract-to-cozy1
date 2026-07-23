@@ -9,9 +9,25 @@ import { generateHabitsForProperty } from '@worker-shared/services/homeHabitCoac
 import { NotificationService } from '@worker-shared/services/notification.service';
 import { isPropertyAllowlisted } from '@worker-shared/config/smokeTestConfig';
 import { generateSmokeCorrelationId } from '@worker-shared/lib/smokeTestCorrelation';
-import { logger } from '../lib/logger';
+import { logger, AppLogger } from '../lib/logger';
 import { createHash } from 'node:crypto';
 import { homeHabitCoachUrl } from '../lib/deepLinks';
+
+// W4 item 1: small, job-scoped dependency interface (see
+// reserveFundBalanceReminder.job.ts for the pattern).
+export interface HabitGenerationDeps {
+  prisma: Pick<typeof prisma, 'property'>;
+  generateHabitsForProperty: typeof generateHabitsForProperty;
+  notificationService: Pick<typeof NotificationService, 'create'>;
+  logger: AppLogger;
+}
+
+const defaultDeps: HabitGenerationDeps = {
+  prisma,
+  generateHabitsForProperty,
+  notificationService: NotificationService,
+  logger,
+};
 
 // Newly generated habits previously had no notification and no canonical
 // Home Action promotion — invisible unless the homeowner proactively opened
@@ -106,7 +122,9 @@ export function buildHabitPropertyContext(property: any, now: Date = new Date())
 
 export async function runHabitGenerationJob(
   opts?: { dryRun?: boolean; propertyId?: string },
+  deps: HabitGenerationDeps = defaultDeps,
 ): Promise<{ examined: number; created: number; notified: number; skipped: number; failed: number; smokeCorrelationId?: string }> {
+  const { prisma, generateHabitsForProperty, notificationService, logger } = deps;
   const dryRun = opts?.dryRun === true;
   if (opts?.propertyId && !isPropertyAllowlisted(opts.propertyId)) {
     throw new Error(
@@ -178,7 +196,7 @@ export async function runHabitGenerationJob(
             ? 'A safety or damage-prevention habit was added to your home care routine. Tap to review.'
             : `${notifyWorthy.length} safety or damage-prevention habits were added to your home care routine. Tap to review.`;
 
-        await NotificationService.create({
+        await notificationService.create({
           userId,
           type: 'HOME_HABIT_GENERATED',
           title,

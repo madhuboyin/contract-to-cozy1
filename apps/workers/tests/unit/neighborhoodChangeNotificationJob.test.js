@@ -10,64 +10,51 @@
 //      instead of one per link, and idempotency is checked against a
 //      pre-fetched set (covering both the batched array metadata shape and
 //      the pre-batching singular shape) instead of one DB query per link.
+//
+// W4 item 1 (DI refactor): dependencies are injected directly instead of
+// via require.cache. This job transitively imports guidanceJourney.service.ts,
+// which constructs a GeminiService singleton at module load — that throws if
+// GEMINI_API_KEY is unset, so it's stubbed before the real require() below.
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
+process.env.GEMINI_API_KEY = process.env.GEMINI_API_KEY || 'test-key';
+
 require('ts-node/register');
 
-function loadJob({ links, existingNotifications = [], planningApplicable = true }) {
+const { neighborhoodChangeNotificationJob } = require('../../src/jobs/neighborhoodChangeNotification.job.ts');
+
+const noopLogger = { info() {}, warn() {}, error() {}, debug() {}, fatal() {}, child() { return this; } };
+
+function fakeDeps({ links, existingNotifications = [], planningApplicable = true }) {
   const createCalls = [];
 
-  const prismaMock = {
-    propertyNeighborhoodEvent: {
-      findMany: async () => links,
-    },
-    notification: {
-      findMany: async () => existingNotifications,
-    },
-  };
-  const prismaPath = require.resolve('../../src/lib/prisma.ts');
-  require.cache[prismaPath] = { id: prismaPath, filename: prismaPath, loaded: true, exports: { prisma: prismaMock } };
-
-  const notificationServicePath = require.resolve('../../../backend/src/services/notification.service.ts');
-  require.cache[notificationServicePath] = {
-    id: notificationServicePath,
-    filename: notificationServicePath,
-    loaded: true,
-    exports: {
-      NotificationService: {
-        create: async (input) => {
-          createCalls.push(input);
-          return { id: `notification-${createCalls.length}` };
-        },
+  const deps = {
+    prisma: {
+      propertyNeighborhoodEvent: {
+        findMany: async () => links,
+      },
+      notification: {
+        findMany: async () => existingNotifications,
       },
     },
-  };
-
-  const guidancePath = require.resolve('../../../backend/src/services/guidanceEngine/guidanceJourney.service.ts');
-  require.cache[guidancePath] = {
-    id: guidancePath,
-    filename: guidancePath,
-    loaded: true,
-    exports: { guidanceJourneyService: { ingestSignal: async () => {} } },
-  };
-
-  const planningContextPath = require.resolve('../../../backend/src/services/planningContext/context.ts');
-  require.cache[planningContextPath] = {
-    id: planningContextPath,
-    filename: planningContextPath,
-    loaded: true,
-    exports: {
-      getPlanningContextEnvelope: async () => ({
-        decision: { status: planningApplicable ? 'APPLICABLE' : 'NOT_APPLICABLE' },
-      }),
+    notificationService: {
+      create: async (input) => {
+        createCalls.push(input);
+        return { id: `notification-${createCalls.length}` };
+      },
     },
+    guidanceJourneyService: {
+      ingestSignal: async () => {},
+    },
+    getPlanningContextEnvelope: async () => ({
+      decision: { status: planningApplicable ? 'APPLICABLE' : 'NOT_APPLICABLE' },
+    }),
+    logger: noopLogger,
   };
 
-  const jobPath = require.resolve('../../src/jobs/neighborhoodChangeNotification.job.ts');
-  delete require.cache[jobPath];
-  return { job: require(jobPath), getCreateCalls: () => createCalls };
+  return { deps, getCreateCalls: () => createCalls };
 }
 
 function property(overrides = {}) {
@@ -113,9 +100,9 @@ function link(overrides = {}) {
 }
 
 test('single qualifying link sends one notification with the dedicated NEIGHBORHOOD category', async () => {
-  const { job, getCreateCalls } = loadJob({ links: [link()] });
+  const { deps, getCreateCalls } = fakeDeps({ links: [link()] });
 
-  await job.neighborhoodChangeNotificationJob();
+  await neighborhoodChangeNotificationJob(deps);
 
   const calls = getCreateCalls();
   assert.equal(calls.length, 1);
@@ -130,9 +117,9 @@ test('multiple qualifying links for the same property are batched into one notif
     link({ id: 'link-b', eventId: 'event-b', event: event({ id: 'event-b', eventType: 'ZONING_CHANGE' }) }),
     link({ id: 'link-c', eventId: 'event-c', event: event({ id: 'event-c', eventType: 'PARK_DEVELOPMENT' }) }),
   ];
-  const { job, getCreateCalls } = loadJob({ links });
+  const { deps, getCreateCalls } = fakeDeps({ links });
 
-  await job.neighborhoodChangeNotificationJob();
+  await neighborhoodChangeNotificationJob(deps);
 
   const calls = getCreateCalls();
   assert.equal(calls.length, 1, 'must send exactly one notification for the property, not one per link');
@@ -150,9 +137,9 @@ test('links for different properties are notified separately', async () => {
     link({ id: 'link-a', propertyId: 'property-1', property: property({ id: 'property-1' }) }),
     link({ id: 'link-b', propertyId: 'property-2', property: property({ id: 'property-2', homeownerProfile: { userId: 'user-2' } }) }),
   ];
-  const { job, getCreateCalls } = loadJob({ links });
+  const { deps, getCreateCalls } = fakeDeps({ links });
 
-  await job.neighborhoodChangeNotificationJob();
+  await neighborhoodChangeNotificationJob(deps);
 
   const calls = getCreateCalls();
   assert.equal(calls.length, 2);
@@ -162,24 +149,24 @@ test('links for different properties are notified separately', async () => {
 
 test('a link already covered by a prior batched notification is not re-notified', async () => {
   const theLink = link({ id: 'link-a' });
-  const { job, getCreateCalls } = loadJob({
+  const { deps, getCreateCalls } = fakeDeps({
     links: [theLink],
     existingNotifications: [{ metadata: { propertyNeighborhoodEventIds: ['link-a'] } }],
   });
 
-  await job.neighborhoodChangeNotificationJob();
+  await neighborhoodChangeNotificationJob(deps);
 
   assert.equal(getCreateCalls().length, 0);
 });
 
 test('a link already covered by a prior pre-batching (singular field) notification is not re-notified', async () => {
   const theLink = link({ id: 'link-a' });
-  const { job, getCreateCalls } = loadJob({
+  const { deps, getCreateCalls } = fakeDeps({
     links: [theLink],
     existingNotifications: [{ metadata: { propertyNeighborhoodEventId: 'link-a' } }],
   });
 
-  await job.neighborhoodChangeNotificationJob();
+  await neighborhoodChangeNotificationJob(deps);
 
   assert.equal(getCreateCalls().length, 0, 'must recognize the legacy singular metadata shape too');
 });
@@ -189,12 +176,12 @@ test('a new link is still notified alongside an already-notified link for the sa
     link({ id: 'link-old', eventId: 'event-old' }),
     link({ id: 'link-new', eventId: 'event-new' }),
   ];
-  const { job, getCreateCalls } = loadJob({
+  const { deps, getCreateCalls } = fakeDeps({
     links,
     existingNotifications: [{ metadata: { propertyNeighborhoodEventIds: ['link-old'] } }],
   });
 
-  await job.neighborhoodChangeNotificationJob();
+  await neighborhoodChangeNotificationJob(deps);
 
   const calls = getCreateCalls();
   assert.equal(calls.length, 1);
@@ -202,9 +189,9 @@ test('a new link is still notified alongside an already-notified link for the sa
 });
 
 test('links suppressed by Property Context policy are excluded from the batch entirely', async () => {
-  const { job, getCreateCalls } = loadJob({ links: [link()], planningApplicable: false });
+  const { deps, getCreateCalls } = fakeDeps({ links: [link()], planningApplicable: false });
 
-  await job.neighborhoodChangeNotificationJob();
+  await neighborhoodChangeNotificationJob(deps);
 
   assert.equal(getCreateCalls().length, 0);
 });

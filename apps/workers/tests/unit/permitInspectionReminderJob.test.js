@@ -11,61 +11,49 @@
 //   2. Error isolation — checkPermitWorkerContext() was outside the
 //      milestone loop's try/catch, so one milestone throwing aborted every
 //      remaining milestone across every other property for the whole run.
+//
+// W4 item 1 (DI refactor): dependencies are injected directly instead of
+// via require.cache.
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
 require('ts-node/register');
 
-function loadJob({ milestones, contextAllowed = true, contextThrowsFor = null }) {
+const { permitInspectionReminderJob } = require('../../src/jobs/permitInspectionReminder.job.ts');
+
+const noopLogger = { info() {}, warn() {}, error() {}, debug() {}, fatal() {}, child() { return this; } };
+
+function fakeDeps({ milestones, contextAllowed = true, contextThrowsFor = null }) {
   const createCalls = [];
   const updateCalls = [];
 
-  const prismaMock = {
-    permitInspectionMilestone: {
-      findMany: async () => milestones,
-      update: async (args) => {
-        updateCalls.push(args);
-        return {};
-      },
-    },
-  };
-  const prismaPath = require.resolve('../../src/lib/prisma.ts');
-  require.cache[prismaPath] = { id: prismaPath, filename: prismaPath, loaded: true, exports: { prisma: prismaMock } };
-
-  const notificationServicePath = require.resolve('../../../backend/src/services/notification.service.ts');
-  require.cache[notificationServicePath] = {
-    id: notificationServicePath,
-    filename: notificationServicePath,
-    loaded: true,
-    exports: {
-      NotificationService: {
-        create: async (input) => {
-          createCalls.push(input);
-          return { id: `notification-${createCalls.length}` };
+  const deps = {
+    prisma: {
+      permitInspectionMilestone: {
+        findMany: async () => milestones,
+        update: async (args) => {
+          updateCalls.push(args);
+          return {};
         },
       },
     },
-  };
-
-  const contextServicePath = require.resolve('../../../backend/src/services/projectCompliance/permitWorkerContext.service.ts');
-  require.cache[contextServicePath] = {
-    id: contextServicePath,
-    filename: contextServicePath,
-    loaded: true,
-    exports: {
-      checkPermitWorkerContext: async (propertyId) => {
-        if (contextThrowsFor && contextThrowsFor === propertyId) {
-          throw new Error('context lookup exploded');
-        }
-        return { allowed: contextAllowed, contextVersion: 'v1', userId: 'user-1', reasonCodes: [] };
+    notificationService: {
+      create: async (input) => {
+        createCalls.push(input);
+        return { id: `notification-${createCalls.length}` };
       },
     },
+    checkPermitWorkerContext: async (propertyId) => {
+      if (contextThrowsFor && contextThrowsFor === propertyId) {
+        throw new Error('context lookup exploded');
+      }
+      return { allowed: contextAllowed, contextVersion: 'v1', userId: 'user-1', reasonCodes: [] };
+    },
+    logger: noopLogger,
   };
 
-  const jobPath = require.resolve('../../src/jobs/permitInspectionReminder.job.ts');
-  delete require.cache[jobPath];
-  return { job: require(jobPath), getCreateCalls: () => createCalls, getUpdateCalls: () => updateCalls };
+  return { deps, getCreateCalls: () => createCalls, getUpdateCalls: () => updateCalls };
 }
 
 function milestone(overrides = {}) {
@@ -85,9 +73,9 @@ function milestone(overrides = {}) {
 }
 
 test('sends the reminder with MATERIAL_DEADLINE category and MATERIAL urgency', async () => {
-  const { job, getCreateCalls, getUpdateCalls } = loadJob({ milestones: [milestone()] });
+  const { deps, getCreateCalls, getUpdateCalls } = fakeDeps({ milestones: [milestone()] });
 
-  await job.permitInspectionReminderJob();
+  await permitInspectionReminderJob(undefined, deps);
 
   const calls = getCreateCalls();
   assert.equal(calls.length, 1);
@@ -102,9 +90,9 @@ test('a context-check exception for one milestone does not abort the rest of the
     milestone({ id: 'milestone-broken', propertyId: 'property-broken' }),
     milestone({ id: 'milestone-ok', propertyId: 'property-ok' }),
   ];
-  const { job, getCreateCalls } = loadJob({ milestones, contextThrowsFor: 'property-broken' });
+  const { deps, getCreateCalls } = fakeDeps({ milestones, contextThrowsFor: 'property-broken' });
 
-  await job.permitInspectionReminderJob();
+  await permitInspectionReminderJob(undefined, deps);
 
   const calls = getCreateCalls();
   assert.equal(calls.length, 1, 'the healthy milestone after the broken one must still be notified');
@@ -112,19 +100,19 @@ test('a context-check exception for one milestone does not abort the rest of the
 });
 
 test('skips when property context is not applicable', async () => {
-  const { job, getCreateCalls } = loadJob({ milestones: [milestone()], contextAllowed: false });
+  const { deps, getCreateCalls } = fakeDeps({ milestones: [milestone()], contextAllowed: false });
 
-  await job.permitInspectionReminderJob();
+  await permitInspectionReminderJob(undefined, deps);
 
   assert.equal(getCreateCalls().length, 0);
 });
 
 test('skips a milestone with no homeowner', async () => {
-  const { job, getCreateCalls } = loadJob({
+  const { deps, getCreateCalls } = fakeDeps({
     milestones: [milestone({ property: { address: '1 Main St', city: 'X', homeownerProfile: null } })],
   });
 
-  await job.permitInspectionReminderJob();
+  await permitInspectionReminderJob(undefined, deps);
 
   assert.equal(getCreateCalls().length, 0);
 });

@@ -7,62 +7,49 @@
 // independently re-checked against the operator allowlist; and a real
 // scoped run tags its Notification with a smokeCorrelationId so it can be
 // found and cleaned up by exact ID afterward.
+//
+// W4 item 1 (DI refactor): dependencies are injected directly instead of
+// via require.cache.
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
 require('ts-node/register');
-require('tsconfig-paths/register');
 
-function loadJob({ milestones, contextAllowed = true }) {
+const { permitInspectionReminderJob } = require('../../src/jobs/permitInspectionReminder.job.ts');
+
+const noopLogger = { info() {}, warn() {}, error() {}, debug() {}, fatal() {}, child() { return this; } };
+
+function fakeDeps({ milestones, contextAllowed = true }) {
   const findManyCalls = [];
   const createCalls = [];
   const updateCalls = [];
 
-  const prismaMock = {
-    permitInspectionMilestone: {
-      findMany: async (args) => {
-        findManyCalls.push(args);
-        return milestones;
-      },
-      update: async (args) => {
-        updateCalls.push(args);
-        return {};
-      },
-    },
-  };
-  const prismaPath = require.resolve('../../src/lib/prisma.ts');
-  require.cache[prismaPath] = { id: prismaPath, filename: prismaPath, loaded: true, exports: { prisma: prismaMock } };
-
-  const notificationServicePath = require.resolve('../../../backend/src/services/notification.service.ts');
-  require.cache[notificationServicePath] = {
-    id: notificationServicePath,
-    filename: notificationServicePath,
-    loaded: true,
-    exports: {
-      NotificationService: {
-        create: async (input) => {
-          createCalls.push(input);
-          return { id: `notification-${createCalls.length}` };
+  const deps = {
+    prisma: {
+      permitInspectionMilestone: {
+        findMany: async (args) => {
+          findManyCalls.push(args);
+          return milestones;
+        },
+        update: async (args) => {
+          updateCalls.push(args);
+          return {};
         },
       },
     },
-  };
-
-  const contextServicePath = require.resolve('../../../backend/src/services/projectCompliance/permitWorkerContext.service.ts');
-  require.cache[contextServicePath] = {
-    id: contextServicePath,
-    filename: contextServicePath,
-    loaded: true,
-    exports: {
-      checkPermitWorkerContext: async () => ({ allowed: contextAllowed, contextVersion: 'v1', userId: 'user-1', reasonCodes: [] }),
+    notificationService: {
+      create: async (input) => {
+        createCalls.push(input);
+        return { id: `notification-${createCalls.length}` };
+      },
     },
+    checkPermitWorkerContext: async () => ({ allowed: contextAllowed, contextVersion: 'v1', userId: 'user-1', reasonCodes: [] }),
+    logger: noopLogger,
   };
 
-  const jobPath = require.resolve('../../src/jobs/permitInspectionReminder.job.ts');
-  delete require.cache[jobPath];
   return {
-    job: require(jobPath),
+    deps,
     getFindManyCalls: () => findManyCalls,
     getCreateCalls: () => createCalls,
     getUpdateCalls: () => updateCalls,
@@ -86,9 +73,9 @@ function milestone(overrides = {}) {
 }
 
 test('dry run: examines and counts milestones but sends no notification and updates nothing', async () => {
-  const { job, getCreateCalls, getUpdateCalls } = loadJob({ milestones: [milestone()] });
+  const { deps, getCreateCalls, getUpdateCalls } = fakeDeps({ milestones: [milestone()] });
 
-  const result = await job.permitInspectionReminderJob({ dryRun: true });
+  const result = await permitInspectionReminderJob({ dryRun: true }, deps);
 
   assert.equal(getCreateCalls().length, 0);
   assert.equal(getUpdateCalls().length, 0);
@@ -96,9 +83,9 @@ test('dry run: examines and counts milestones but sends no notification and upda
 });
 
 test('no opts (the daily cron tick): behaves exactly like a real run', async () => {
-  const { job, getCreateCalls } = loadJob({ milestones: [milestone()] });
+  const { deps, getCreateCalls } = fakeDeps({ milestones: [milestone()] });
 
-  const result = await job.permitInspectionReminderJob();
+  const result = await permitInspectionReminderJob(undefined, deps);
 
   assert.equal(getCreateCalls().length, 1);
   assert.equal(result.notified, 1);
@@ -108,9 +95,9 @@ test('a scoped propertyId is applied as a query filter', async () => {
   const originalEnv = process.env.SMOKE_TEST_PROPERTY_ALLOWLIST;
   process.env.SMOKE_TEST_PROPERTY_ALLOWLIST = 'property-allowed';
   try {
-    const { job, getFindManyCalls } = loadJob({ milestones: [milestone()] });
+    const { deps, getFindManyCalls } = fakeDeps({ milestones: [milestone()] });
 
-    await job.permitInspectionReminderJob({ dryRun: true, propertyId: 'property-allowed' });
+    await permitInspectionReminderJob({ dryRun: true, propertyId: 'property-allowed' }, deps);
 
     assert.equal(getFindManyCalls()[0].where.propertyId, 'property-allowed');
   } finally {
@@ -122,10 +109,10 @@ test('a propertyId not in SMOKE_TEST_PROPERTY_ALLOWLIST is rejected outright, be
   const originalEnv = process.env.SMOKE_TEST_PROPERTY_ALLOWLIST;
   process.env.SMOKE_TEST_PROPERTY_ALLOWLIST = 'some-other-property';
   try {
-    const { job, getFindManyCalls } = loadJob({ milestones: [milestone()] });
+    const { deps, getFindManyCalls } = fakeDeps({ milestones: [milestone()] });
 
     await assert.rejects(
-      () => job.permitInspectionReminderJob({ dryRun: true, propertyId: 'property-not-allowed' }),
+      () => permitInspectionReminderJob({ dryRun: true, propertyId: 'property-not-allowed' }, deps),
       /not in SMOKE_TEST_PROPERTY_ALLOWLIST/,
     );
     assert.equal(getFindManyCalls().length, 0, 'must reject before querying, not after');
@@ -138,9 +125,9 @@ test('a real scoped run tags the created Notification with a smokeCorrelationId'
   const originalEnv = process.env.SMOKE_TEST_PROPERTY_ALLOWLIST;
   process.env.SMOKE_TEST_PROPERTY_ALLOWLIST = 'property-allowed';
   try {
-    const { job, getCreateCalls } = loadJob({ milestones: [milestone()] });
+    const { deps, getCreateCalls } = fakeDeps({ milestones: [milestone()] });
 
-    const result = await job.permitInspectionReminderJob({ dryRun: false, propertyId: 'property-allowed' });
+    const result = await permitInspectionReminderJob({ dryRun: false, propertyId: 'property-allowed' }, deps);
 
     assert.equal(getCreateCalls().length, 1);
     assert.match(getCreateCalls()[0].metadata.smokeCorrelationId, /^smoke:permit-inspection-reminders:/);
@@ -151,9 +138,9 @@ test('a real scoped run tags the created Notification with a smokeCorrelationId'
 });
 
 test('an unscoped run (no propertyId) tags nothing — only a scoped smoke run gets a correlation ID', async () => {
-  const { job, getCreateCalls } = loadJob({ milestones: [milestone()] });
+  const { deps, getCreateCalls } = fakeDeps({ milestones: [milestone()] });
 
-  const result = await job.permitInspectionReminderJob();
+  const result = await permitInspectionReminderJob(undefined, deps);
 
   assert.equal(getCreateCalls()[0].metadata.smokeCorrelationId, undefined);
   assert.equal(result.smokeCorrelationId, undefined);

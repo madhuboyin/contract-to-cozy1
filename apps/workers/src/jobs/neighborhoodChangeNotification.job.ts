@@ -24,8 +24,29 @@ import { guidanceJourneyService } from '@worker-shared/services/guidanceEngine/g
 import { NEIGHBORHOOD_IMPACT_RULES } from '@worker-shared/neighborhoodIntelligence/impactRules';
 import { haversineDistanceMiles, isValidLatLng } from '@worker-shared/neighborhoodIntelligence/geoUtils';
 import { getPlanningContextEnvelope } from '@worker-shared/services/planningContext/context';
-import { logger } from '../lib/logger';
+import { logger, AppLogger } from '../lib/logger';
 import { neighborhoodChangeRadarUrl } from '../lib/deepLinks';
+
+// W4 item 1: small, job-scoped dependency interface (see
+// reserveFundBalanceReminder.job.ts for the pattern). Pure helpers
+// (haversineDistanceMiles, isValidLatLng, NEIGHBORHOOD_IMPACT_RULES,
+// neighborhoodChangeRadarUrl) are left as plain imports — no test needs to
+// substitute them.
+export interface NeighborhoodChangeNotificationDeps {
+  prisma: Pick<typeof prisma, 'propertyNeighborhoodEvent' | 'notification'>;
+  notificationService: Pick<typeof NotificationService, 'create'>;
+  guidanceJourneyService: Pick<typeof guidanceJourneyService, 'ingestSignal'>;
+  getPlanningContextEnvelope: typeof getPlanningContextEnvelope;
+  logger: AppLogger;
+}
+
+const defaultDeps: NeighborhoodChangeNotificationDeps = {
+  prisma,
+  notificationService: NotificationService,
+  guidanceJourneyService,
+  getPlanningContextEnvelope,
+  logger,
+};
 
 /**
  * Location relevance recheck before sending: geocoded distance within the
@@ -79,7 +100,10 @@ const EVENT_TYPE_LABELS: Record<string, string> = {
   LARGE_CONSTRUCTION: 'Large construction',
 };
 
-export async function neighborhoodChangeNotificationJob(): Promise<void> {
+export async function neighborhoodChangeNotificationJob(
+  deps: NeighborhoodChangeNotificationDeps = defaultDeps
+): Promise<void> {
+  const { prisma, notificationService, guidanceJourneyService, getPlanningContextEnvelope, logger } = deps;
   const since = new Date(Date.now() - LOOKBACK_MS);
 
   logger.info(
@@ -139,6 +163,7 @@ export async function neighborhoodChangeNotificationJob(): Promise<void> {
   // singular shape (for notifications created before this change).
   const alreadyNotifiedLinkIds = await collectAlreadyNotifiedLinkIds(
     Array.from(new Set(newLinks.map((l: any) => l.property?.homeownerProfile?.userId).filter(Boolean))) as string[],
+    deps,
   );
 
   let skipped = 0;
@@ -299,7 +324,7 @@ export async function neighborhoodChangeNotificationJob(): Promise<void> {
                 ` — may be relevant to ${address}. Tap to review the potential impact.`,
             };
 
-      await NotificationService.create({
+      await notificationService.create({
         userId,
         type: 'NEIGHBORHOOD_CHANGE_DETECTED',
         title,
@@ -343,10 +368,10 @@ export async function neighborhoodChangeNotificationJob(): Promise<void> {
  * checks both the batched array metadata shape and the pre-batching
  * singular shape, so notifications created before this change still count.
  */
-async function collectAlreadyNotifiedLinkIds(userIds: string[]): Promise<Set<string>> {
+async function collectAlreadyNotifiedLinkIds(userIds: string[], deps: NeighborhoodChangeNotificationDeps): Promise<Set<string>> {
   if (userIds.length === 0) return new Set();
 
-  const existing = await (prisma as any).notification.findMany({
+  const existing = await (deps.prisma as any).notification.findMany({
     where: {
       userId: { in: userIds },
       type: 'NEIGHBORHOOD_CHANGE_DETECTED',

@@ -7,13 +7,25 @@ import { prisma } from '../lib/prisma';
 import { HiddenAssetService } from '@worker-shared/services/hiddenAssets.service';
 import { isPropertyAllowlisted } from '@worker-shared/config/smokeTestConfig';
 import { generateSmokeCorrelationId } from '@worker-shared/lib/smokeTestCorrelation';
-import { logger } from '../lib/logger';
+import { logger, AppLogger } from '../lib/logger';
 
 const hiddenAssetService = new HiddenAssetService();
 
+// W4 item 1: small, job-scoped dependency interface (see
+// reserveFundBalanceReminder.job.ts for the pattern).
+export interface HiddenAssetRefreshDeps {
+  prisma: Pick<typeof prisma, 'property'>;
+  hiddenAssetService: Pick<HiddenAssetService, 'refreshMatchesInternal'>;
+  logger: AppLogger;
+}
+
+const defaultDeps: HiddenAssetRefreshDeps = { prisma, hiddenAssetService, logger };
+
 export async function runHiddenAssetRefreshJob(
   opts?: { dryRun?: boolean; propertyId?: string },
+  deps: HiddenAssetRefreshDeps = defaultDeps,
 ): Promise<{ examined: number; refreshed: number; skipped: number; failed: number; smokeCorrelationId?: string }> {
+  const { prisma, hiddenAssetService, logger } = deps;
   const dryRun = opts?.dryRun === true;
   if (opts?.propertyId && !isPropertyAllowlisted(opts.propertyId)) {
     throw new Error(

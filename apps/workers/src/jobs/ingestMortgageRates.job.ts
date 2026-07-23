@@ -18,7 +18,7 @@
 
 import fetch from 'node-fetch';
 import { MortgageRateService } from '@worker-shared/refinanceRadar/engine/mortgageRate.service';
-import { logger } from '../lib/logger';
+import { logger, AppLogger } from '../lib/logger';
 import { generateSmokeCorrelationId } from '@worker-shared/lib/smokeTestCorrelation';
 
 // ─── FRED API config ──────────────────────────────────────────────────────────
@@ -100,9 +100,26 @@ async function fetchFredSeries(
 
 const mortgageRateService = new MortgageRateService();
 
+// W4 item 1: small, job-scoped dependency interface (see
+// reserveFundBalanceReminder.job.ts for the pattern). fetchFredSeries is
+// injected as a plain function reference — it imports node-fetch directly
+// (not the global fetch), so a genuine require() of this job needs it
+// substitutable the same way iterateAllProperties/getPropertyGeo are in
+// freezeRiskIncidents.job.ts, rather than relying on a require.cache swap
+// of the node-fetch package itself.
+export interface IngestMortgageRatesDeps {
+  fetchFredSeries: typeof fetchFredSeries;
+  mortgageRateService: Pick<MortgageRateService, 'ingestSnapshot'>;
+  logger: AppLogger;
+}
+
+const defaultDeps: IngestMortgageRatesDeps = { fetchFredSeries, mortgageRateService, logger };
+
 export async function ingestMortgageRatesJob(
   opts?: { dryRun?: boolean },
+  deps: IngestMortgageRatesDeps = defaultDeps,
 ): Promise<MortgageRateIngestResult> {
+  const { fetchFredSeries, mortgageRateService, logger } = deps;
   const dryRun = opts?.dryRun === true;
   // Only a manual/admin trigger ever calls this with `opts` at all — the
   // nightly scheduled tick invokes every CRON_HANDLERS entry with zero

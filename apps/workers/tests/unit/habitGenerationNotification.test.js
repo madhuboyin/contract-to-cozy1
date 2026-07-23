@@ -8,49 +8,37 @@
 // the pre-existing PropertyMaintenanceTask gap); this covers the smaller,
 // more urgent piece — a notification for safety/damage-prevention habits,
 // batched one per property per run (same pattern as the neighborhood slice).
+//
+// W4 item 1 (DI refactor): dependencies are injected directly instead of
+// via require.cache.
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
 require('ts-node/register');
 
-function loadJob({ properties, generationResultsByProperty }) {
+const { runHabitGenerationJob } = require('../../src/jobs/habitGeneration.job.ts');
+
+const noopLogger = { info() {}, warn() {}, error() {}, debug() {}, fatal() {}, child() { return this; } };
+
+function fakeDeps({ properties, generationResultsByProperty }) {
   const createCalls = [];
 
-  const prismaMock = {
-    property: { findMany: async () => properties },
-  };
-  const prismaPath = require.resolve('../../src/lib/prisma.ts');
-  require.cache[prismaPath] = { id: prismaPath, filename: prismaPath, loaded: true, exports: { prisma: prismaMock } };
-
-  const engineServicePath = require.resolve('../../../backend/src/services/homeHabitCoach/habitGenerationEngine.ts');
-  require.cache[engineServicePath] = {
-    id: engineServicePath,
-    filename: engineServicePath,
-    loaded: true,
-    exports: {
-      generateHabitsForProperty: async (propertyId) => generationResultsByProperty[propertyId] ?? { created: 0, skipped: 0, details: [] },
+  const deps = {
+    prisma: {
+      property: { findMany: async () => properties },
     },
-  };
-
-  const notificationServicePath = require.resolve('../../../backend/src/services/notification.service.ts');
-  require.cache[notificationServicePath] = {
-    id: notificationServicePath,
-    filename: notificationServicePath,
-    loaded: true,
-    exports: {
-      NotificationService: {
-        create: async (input) => {
-          createCalls.push(input);
-          return { id: `notification-${createCalls.length}` };
-        },
+    generateHabitsForProperty: async (propertyId) => generationResultsByProperty[propertyId] ?? { created: 0, skipped: 0, details: [] },
+    notificationService: {
+      create: async (input) => {
+        createCalls.push(input);
+        return { id: `notification-${createCalls.length}` };
       },
     },
+    logger: noopLogger,
   };
 
-  const jobPath = require.resolve('../../src/jobs/habitGeneration.job.ts');
-  delete require.cache[jobPath];
-  return { job: require(jobPath), getCreateCalls: () => createCalls };
+  return { deps, getCreateCalls: () => createCalls };
 }
 
 function property(overrides = {}) {
@@ -85,14 +73,14 @@ function skipped(templateKey) {
 }
 
 test('notifies once when a safety-impact habit is newly created', async () => {
-  const { job, getCreateCalls } = loadJob({
+  const { deps, getCreateCalls } = fakeDeps({
     properties: [property()],
     generationResultsByProperty: {
       'property-1': { created: 1, skipped: 0, details: [created('safety_co_detector_test', 'IMPROVE_SAFETY')] },
     },
   });
 
-  await job.runHabitGenerationJob();
+  await runHabitGenerationJob(undefined, deps);
 
   const calls = getCreateCalls();
   assert.equal(calls.length, 1);
@@ -104,7 +92,7 @@ test('notifies once when a safety-impact habit is newly created', async () => {
 });
 
 test('does not notify for low-impact habits (efficiency/general upkeep)', async () => {
-  const { job, getCreateCalls } = loadJob({
+  const { deps, getCreateCalls } = fakeDeps({
     properties: [property()],
     generationResultsByProperty: {
       'property-1': {
@@ -118,13 +106,13 @@ test('does not notify for low-impact habits (efficiency/general upkeep)', async 
     },
   });
 
-  await job.runHabitGenerationJob();
+  await runHabitGenerationJob(undefined, deps);
 
   assert.equal(getCreateCalls().length, 0);
 });
 
 test('batches multiple safety/damage-prevention habits into a single notification', async () => {
-  const { job, getCreateCalls } = loadJob({
+  const { deps, getCreateCalls } = fakeDeps({
     properties: [property()],
     generationResultsByProperty: {
       'property-1': {
@@ -139,7 +127,7 @@ test('batches multiple safety/damage-prevention habits into a single notificatio
     },
   });
 
-  await job.runHabitGenerationJob();
+  await runHabitGenerationJob(undefined, deps);
 
   const calls = getCreateCalls();
   assert.equal(calls.length, 1, 'must send exactly one notification for the property, not one per habit');
@@ -148,33 +136,33 @@ test('batches multiple safety/damage-prevention habits into a single notificatio
 });
 
 test('does not notify when nothing was created (all skipped)', async () => {
-  const { job, getCreateCalls } = loadJob({
+  const { deps, getCreateCalls } = fakeDeps({
     properties: [property()],
     generationResultsByProperty: {
       'property-1': { created: 0, skipped: 1, details: [skipped('safety_co_detector_test')] },
     },
   });
 
-  await job.runHabitGenerationJob();
+  await runHabitGenerationJob(undefined, deps);
 
   assert.equal(getCreateCalls().length, 0);
 });
 
 test('does not notify when the property has no homeowner', async () => {
-  const { job, getCreateCalls } = loadJob({
+  const { deps, getCreateCalls } = fakeDeps({
     properties: [property({ homeownerProfile: null })],
     generationResultsByProperty: {
       'property-1': { created: 1, skipped: 0, details: [created('safety_co_detector_test', 'IMPROVE_SAFETY')] },
     },
   });
 
-  await job.runHabitGenerationJob();
+  await runHabitGenerationJob(undefined, deps);
 
   assert.equal(getCreateCalls().length, 0);
 });
 
 test('notifies each property independently', async () => {
-  const { job, getCreateCalls } = loadJob({
+  const { deps, getCreateCalls } = fakeDeps({
     properties: [
       property({ id: 'property-1', homeownerProfile: { userId: 'user-1' } }),
       property({ id: 'property-2', homeownerProfile: { userId: 'user-2' } }),
@@ -185,7 +173,7 @@ test('notifies each property independently', async () => {
     },
   });
 
-  await job.runHabitGenerationJob();
+  await runHabitGenerationJob(undefined, deps);
 
   const calls = getCreateCalls();
   assert.equal(calls.length, 2);

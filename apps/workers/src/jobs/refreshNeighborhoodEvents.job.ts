@@ -11,7 +11,7 @@ import { NeighborhoodPropertyMatchService } from '@worker-shared/neighborhoodInt
 import { prisma } from '../lib/prisma';
 import { isPropertyAllowlisted } from '@worker-shared/config/smokeTestConfig';
 import { generateSmokeCorrelationId } from '@worker-shared/lib/smokeTestCorrelation';
-import { logger } from '../lib/logger';
+import { logger, AppLogger } from '../lib/logger';
 
 const matchService = new NeighborhoodPropertyMatchService();
 
@@ -22,9 +22,21 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// W4 item 1: small, job-scoped dependency interface (see
+// reserveFundBalanceReminder.job.ts for the pattern).
+export interface RefreshNeighborhoodEventsDeps {
+  prisma: Pick<typeof prisma, 'property'>;
+  matchService: Pick<NeighborhoodPropertyMatchService, 'recomputePropertyNeighborhoodRadar'>;
+  logger: AppLogger;
+}
+
+const defaultDeps: RefreshNeighborhoodEventsDeps = { prisma, matchService, logger };
+
 export async function refreshNeighborhoodEventsJob(
   opts?: { dryRun?: boolean; propertyId?: string },
+  deps: RefreshNeighborhoodEventsDeps = defaultDeps,
 ): Promise<{ examined: number; refreshed: number; skipped: number; failed: number; smokeCorrelationId?: string }> {
+  const { prisma, matchService, logger } = deps;
   const dryRun = opts?.dryRun === true;
   if (opts?.propertyId && !isPropertyAllowlisted(opts.propertyId)) {
     throw new Error(

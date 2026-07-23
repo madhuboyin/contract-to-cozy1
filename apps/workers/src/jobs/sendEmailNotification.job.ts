@@ -7,12 +7,35 @@ import { buildWeatherAlertCardHtml, isWeatherCardMetadata } from '../email/build
 import { logger } from '../lib/logger';
 import { filterDeliveriesByAggregationPolicy } from '../services/aggregationDeliveryPolicy';
 import type { WorkerRunResult } from '../lib/workerRunResult';
+import { AppLogger } from '../lib/logger';
 
 const MAX_NOTIFICATIONS_PER_EMAIL = 10;
 
+// W4 item 1: small, job-scoped dependency interface (see
+// reserveFundBalanceReminder.job.ts for the pattern). The pure HTML-building
+// helpers (buildDigestHtml, escapeHtml, buildWeatherAlertCardHtml,
+// isWeatherCardMetadata) are deliberately left as plain imports rather than
+// deps — like normalize.ts's helpers in recallMatching.service.ts, they're
+// deterministic and no test needs to substitute them.
+export interface SendEmailNotificationDeps {
+  prisma: Pick<typeof prisma, 'notificationDelivery'>;
+  sendEmail: typeof sendEmail;
+  filterDeliveriesByAggregationPolicy: typeof filterDeliveriesByAggregationPolicy;
+  logger: AppLogger;
+}
+
+const defaultDeps: SendEmailNotificationDeps = {
+  prisma,
+  sendEmail,
+  filterDeliveriesByAggregationPolicy,
+  logger,
+};
+
 export async function sendEmailNotificationJob(
-  notificationDeliveryId: string
+  notificationDeliveryId: string,
+  deps: SendEmailNotificationDeps = defaultDeps
 ) {
+  const { prisma, sendEmail, filterDeliveriesByAggregationPolicy, logger } = deps;
   // 1️⃣ Find the triggering delivery
   const seedDelivery = await prisma.notificationDelivery.findUnique({
     where: { id: notificationDeliveryId },
@@ -195,15 +218,16 @@ Manage notifications in your dashboard.
   }
 }
 
-export async function runDailyEmailDigest(): Promise<WorkerRunResult> {
-  return runPreferenceDigest('DAILY_DIGEST');
+export async function runDailyEmailDigest(deps: SendEmailNotificationDeps = defaultDeps): Promise<WorkerRunResult> {
+  return runPreferenceDigest('DAILY_DIGEST', deps);
 }
 
-export async function runWeeklyHomeBriefDigest(): Promise<WorkerRunResult> {
-  return runPreferenceDigest('WEEKLY_BRIEF');
+export async function runWeeklyHomeBriefDigest(deps: SendEmailNotificationDeps = defaultDeps): Promise<WorkerRunResult> {
+  return runPreferenceDigest('WEEKLY_BRIEF', deps);
 }
 
-async function runPreferenceDigest(cadence: 'DAILY_DIGEST' | 'WEEKLY_BRIEF'): Promise<WorkerRunResult> {
+async function runPreferenceDigest(cadence: 'DAILY_DIGEST' | 'WEEKLY_BRIEF', deps: SendEmailNotificationDeps): Promise<WorkerRunResult> {
+  const { prisma, logger } = deps;
   // 1️⃣ Find users with pending EMAIL deliveries
   const users = await prisma.notificationDelivery.findMany({
     where: {
@@ -241,7 +265,7 @@ async function runPreferenceDigest(cadence: 'DAILY_DIGEST' | 'WEEKLY_BRIEF'): Pr
   let failed = 0;
   for (const userId of userIds) {
     try {
-      const outcome = await sendUserDigest(userId, cadence);
+      const outcome = await sendUserDigest(userId, cadence, deps);
       if (outcome === 'sent') notified++;
       else skipped++;
     } catch (err) {
@@ -259,7 +283,8 @@ async function runPreferenceDigest(cadence: 'DAILY_DIGEST' | 'WEEKLY_BRIEF'): Pr
   };
 }
 
-async function sendUserDigest(userId: string, cadence: 'DAILY_DIGEST' | 'WEEKLY_BRIEF'): Promise<'sent' | 'skipped'> {
+async function sendUserDigest(userId: string, cadence: 'DAILY_DIGEST' | 'WEEKLY_BRIEF', deps: SendEmailNotificationDeps): Promise<'sent' | 'skipped'> {
+  const { prisma, sendEmail, filterDeliveriesByAggregationPolicy, logger } = deps;
   const pendingDeliveries = await prisma.notificationDelivery.findMany({
     where: {
       channel: NotificationChannel.EMAIL,

@@ -1,6 +1,6 @@
 // apps/workers/src/jobs/seasonalChecklistGeneration.job.ts
 import { prisma } from '../lib/prisma';
-import { logger } from '../lib/logger';
+import { logger, AppLogger } from '../lib/logger';
 import { evaluateSeasonalTemplateApplicability } from '@worker-shared/services/seasonal/applicabilityPolicy';
 import { PropertyMaintenanceTaskService } from '@worker-shared/services/PropertyMaintenanceTask.service';
 import {
@@ -10,6 +10,32 @@ import {
   resolveCurrentSeasonWindow,
   resolveUpcomingSeasonWindow,
 } from '@worker-shared/services/seasonal/seasonWindow';
+
+// W4 item 1: small, job-scoped dependency interface (see
+// reserveFundBalanceReminder.job.ts for the pattern). The seasonWindow date
+// functions are included despite being pure — the existing test suite
+// substitutes them for determinism instead of relying on the real clock.
+export interface SeasonalChecklistGenerationDeps {
+  prisma: Pick<typeof prisma, 'property' | 'propertyClimateSetting' | 'seasonalChecklist' | 'seasonalTaskTemplate' | 'seasonalChecklistItem'>;
+  logger: AppLogger;
+  evaluateSeasonalTemplateApplicability: typeof evaluateSeasonalTemplateApplicability;
+  propertyMaintenanceTaskService: Pick<typeof PropertyMaintenanceTaskService, 'createFromSeasonalItemInternal'>;
+  getSeasonStartDate: typeof getSeasonStartDate;
+  getSeasonEndDate: typeof getSeasonEndDate;
+  resolveCurrentSeasonWindow: typeof resolveCurrentSeasonWindow;
+  resolveUpcomingSeasonWindow: typeof resolveUpcomingSeasonWindow;
+}
+
+const defaultDeps: SeasonalChecklistGenerationDeps = {
+  prisma,
+  logger,
+  evaluateSeasonalTemplateApplicability,
+  propertyMaintenanceTaskService: PropertyMaintenanceTaskService,
+  getSeasonStartDate,
+  getSeasonEndDate,
+  resolveCurrentSeasonWindow,
+  resolveUpcomingSeasonWindow,
+};
 
 // Define types locally since they may not be exported from Prisma client
 type NotificationTiming = 'EARLY' | 'STANDARD' | 'LATE';
@@ -119,9 +145,10 @@ export function buildSeasonalPropertyContext(property: any, now: Date = new Date
  * - Generate checklist when days <= notification offset (not exact match)
  * - Skip if checklist already exists for that season/year
  */
-export async function generateSeasonalChecklists() {
+export async function generateSeasonalChecklists(deps: SeasonalChecklistGenerationDeps = defaultDeps) {
+  const { prisma, logger, resolveCurrentSeasonWindow, resolveUpcomingSeasonWindow } = deps;
   logger.info('[SEASONAL] Starting checklist generation job...');
-  
+
   try {
     const today = new Date();
 
@@ -225,7 +252,8 @@ export async function generateSeasonalChecklists() {
             property.id,
             upcoming.season,
             upcoming.year,
-            climateRegion
+            climateRegion,
+            deps
           );
 
           generated++;
@@ -249,7 +277,8 @@ export async function generateSeasonalChecklists() {
               property.id,
               currentWindow.season,
               currentWindow.year,
-              climateRegion
+              climateRegion,
+              deps
             );
 
             generated++;
@@ -282,8 +311,17 @@ async function generateChecklistForProperty(
   propertyId: string,
   season: Season,
   year: number,
-  climateRegion: string
+  climateRegion: string,
+  deps: SeasonalChecklistGenerationDeps
 ) {
+  const {
+    prisma,
+    logger,
+    evaluateSeasonalTemplateApplicability,
+    propertyMaintenanceTaskService,
+    getSeasonStartDate,
+    getSeasonEndDate,
+  } = deps;
   // Get property with assets
   const property = await prisma.property.findUnique({
     where: { id: propertyId },
@@ -388,7 +426,7 @@ async function generateChecklistForProperty(
     });
 
     try {
-      await PropertyMaintenanceTaskService.createFromSeasonalItemInternal(propertyId, item.id);
+      await propertyMaintenanceTaskService.createFromSeasonalItemInternal(propertyId, item.id);
       promoted += 1;
     } catch (err) {
       promotionFailed += 1;

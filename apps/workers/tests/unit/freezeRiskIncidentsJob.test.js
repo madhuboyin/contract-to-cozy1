@@ -5,56 +5,56 @@
 // malformed body) used to propagate unhandled out of the whole job,
 // skipping every remaining property in the run, not just the one whose
 // forecast fetch failed.
+//
+// W4 item 1 (DI refactor): dependencies are injected directly instead of
+// via require.cache. This job transitively imports guidanceJourney.service.ts,
+// which constructs a GeminiService singleton at module load — that throws if
+// GEMINI_API_KEY is unset, so it's stubbed before the real require() below.
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
+process.env.GEMINI_API_KEY = process.env.GEMINI_API_KEY || 'test-key';
+
 require('ts-node/register');
 
-function loadJob({ properties, openIncidents = [] }) {
+const { freezeRiskIncidentsJob } = require('../../src/jobs/freezeRiskIncidents.job.ts');
+
+const noopLogger = { info() {}, warn() {}, error() {}, debug() {}, fatal() {}, child() { return this; } };
+
+function fakeDeps({ properties, openIncidents = [] }) {
   const upsertCalls = [];
   const setStatusCalls = [];
 
-  const prismaMock = {
-    property: {
-      findMany: async () => properties,
-    },
-    incident: {
-      findMany: async () => openIncidents,
-    },
-  };
-  const prismaPath = require.resolve('../../src/lib/prisma.ts');
-  require.cache[prismaPath] = { id: prismaPath, filename: prismaPath, loaded: true, exports: { prisma: prismaMock } };
-
-  const incidentServicePath = require.resolve('../../../backend/src/services/incidents/incident.service.ts');
-  require.cache[incidentServicePath] = {
-    id: incidentServicePath,
-    filename: incidentServicePath,
-    loaded: true,
-    exports: {
-      IncidentService: {
-        upsertIncident: async (input) => {
-          upsertCalls.push(input);
-          return { id: 'incident-new' };
-        },
-        setStatus: async (id, status) => {
-          setStatusCalls.push({ id, status });
-        },
+  const deps = {
+    prisma: {
+      incident: {
+        findMany: async () => openIncidents,
       },
     },
+    incidentService: {
+      upsertIncident: async (input) => {
+        upsertCalls.push(input);
+        return { id: 'incident-new' };
+      },
+      setStatus: async (id, status) => {
+        setStatusCalls.push({ id, status });
+      },
+    },
+    guidanceJourneyService: { ingestSignal: async () => {} },
+    logger: noopLogger,
+    iterateAllProperties: async function* () {
+      for (const p of properties) yield p;
+    },
+    getPropertyGeo: async (property) => {
+      if (typeof property.latitude === 'number' && typeof property.longitude === 'number') {
+        return { lat: property.latitude, lon: property.longitude };
+      }
+      return null;
+    },
   };
 
-  const guidancePath = require.resolve('../../../backend/src/services/guidanceEngine/guidanceJourney.service.ts');
-  require.cache[guidancePath] = {
-    id: guidancePath,
-    filename: guidancePath,
-    loaded: true,
-    exports: { guidanceJourneyService: { ingestSignal: async () => {} } },
-  };
-
-  const jobPath = require.resolve('../../src/jobs/freezeRiskIncidents.job.ts');
-  delete require.cache[jobPath];
-  return { job: require(jobPath), getUpsertCalls: () => upsertCalls, getSetStatusCalls: () => setStatusCalls };
+  return { deps, getUpsertCalls: () => upsertCalls, getSetStatusCalls: () => setStatusCalls };
 }
 
 function property(overrides = {}) {
@@ -97,11 +97,11 @@ test('a fetch exception for one property does not crash the run or block other p
   };
 
   try {
-    const { job, getUpsertCalls } = loadJob({
+    const { deps, getUpsertCalls } = fakeDeps({
       properties: [property({ id: 'property-failing' }), property({ id: 'property-ok' })],
     });
 
-    const result = await job.freezeRiskIncidentsJob();
+    const result = await freezeRiskIncidentsJob(undefined, deps);
 
     // property-failing's fetch threw -> getForecastMinF returns null -> skipped,
     // no incident, no crash. property-ok's fetch succeeded -> incident created.
@@ -120,9 +120,9 @@ test('a non-Error thrown value is also handled without crashing the job', async 
   };
 
   try {
-    const { job, getUpsertCalls } = loadJob({ properties: [property()] });
+    const { deps, getUpsertCalls } = fakeDeps({ properties: [property()] });
 
-    const result = await job.freezeRiskIncidentsJob();
+    const result = await freezeRiskIncidentsJob(undefined, deps);
 
     assert.equal(result.createdOrUpdated, 0);
     assert.equal(getUpsertCalls().length, 0);

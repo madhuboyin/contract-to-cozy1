@@ -12,11 +12,18 @@
 //
 // seasonWindow's date functions are mocked for determinism rather than
 // computed from the real system clock.
+//
+// W4 item 1 (DI refactor): dependencies are injected directly instead of
+// via require.cache.
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
 require('ts-node/register');
+
+const { generateSeasonalChecklists } = require('../../src/jobs/seasonalChecklistGeneration.job.ts');
+
+const noopLogger = { info() {}, warn() {}, error() {}, debug() {}, fatal() {}, child() { return this; } };
 
 function propertyFixture(overrides = {}) {
   return {
@@ -36,7 +43,7 @@ function propertyFixture(overrides = {}) {
   };
 }
 
-function loadJob({
+function fakeDeps({
   properties,
   climateSetting = undefined, // undefined = "not found", triggers auto-create
   existingChecklistForUpcoming = null,
@@ -45,7 +52,7 @@ function loadJob({
   applicabilityResult = () => ({ status: 'APPLICABLE' }),
   promotionShouldFailFor = new Set(),
   daysUntilNextSeason = 5,
-  offsetForTiming = 14,
+  checklistCreateShouldFailFor = new Set(),
 } = {}) {
   const calls = {
     checklistCreates: [],
@@ -55,7 +62,9 @@ function loadJob({
     climateSettingCreates: [],
   };
 
-  const prismaMock = {
+  let checklistCreateCallCount = 0;
+
+  const prisma = {
     property: {
       findMany: async () => properties,
       findUnique: async ({ where }) => properties.find((p) => p.id === where.id) ?? null,
@@ -68,13 +77,17 @@ function loadJob({
       },
     },
     seasonalChecklist: {
-      findFirst: async ({ where }) => {
+      findFirst: async () => {
         // Distinguish "upcoming season" vs "current season" lookups by which
         // fixture the caller configured — both use the same shape, so tests
         // only ever configure one non-null result at a time.
         return existingChecklistForUpcoming ?? existingChecklistForCurrent ?? null;
       },
       create: async (args) => {
+        checklistCreateCallCount++;
+        if (checklistCreateShouldFailFor.has(checklistCreateCallCount)) {
+          throw new Error('transient db error');
+        }
         calls.checklistCreates.push(args);
         return { id: 'checklist-1', ...args.data };
       },
@@ -93,65 +106,36 @@ function loadJob({
       },
     },
   };
-  const prismaPath = require.resolve('../../src/lib/prisma.ts');
-  require.cache[prismaPath] = { id: prismaPath, filename: prismaPath, loaded: true, exports: { prisma: prismaMock } };
 
-  const applicabilityPath = require.resolve('../../../backend/src/services/seasonal/applicabilityPolicy.ts');
-  require.cache[applicabilityPath] = {
-    id: applicabilityPath,
-    filename: applicabilityPath,
-    loaded: true,
-    exports: { evaluateSeasonalTemplateApplicability: (_ctx, template) => applicabilityResult(template) },
-  };
-
-  const taskServicePath = require.resolve('../../../backend/src/services/PropertyMaintenanceTask.service.ts');
-  require.cache[taskServicePath] = {
-    id: taskServicePath,
-    filename: taskServicePath,
-    loaded: true,
-    exports: {
-      PropertyMaintenanceTaskService: {
-        createFromSeasonalItemInternal: async (propertyId, seasonalItemId) => {
-          calls.promotions.push(seasonalItemId);
-          if (promotionShouldFailFor.has(seasonalItemId)) throw new Error(`promotion failed for ${seasonalItemId}`);
-        },
+  const deps = {
+    prisma,
+    logger: noopLogger,
+    evaluateSeasonalTemplateApplicability: (_ctx, template) => applicabilityResult(template),
+    propertyMaintenanceTaskService: {
+      createFromSeasonalItemInternal: async (propertyId, seasonalItemId) => {
+        calls.promotions.push(seasonalItemId);
+        if (promotionShouldFailFor.has(seasonalItemId)) throw new Error(`promotion failed for ${seasonalItemId}`);
       },
     },
+    getSeasonStartDate: () => new Date('2026-09-01'),
+    getSeasonEndDate: () => new Date('2026-11-30'),
+    resolveCurrentSeasonWindow: () => ({ season: 'SUMMER', year: 2026, daysUntilStart: -60 }),
+    resolveUpcomingSeasonWindow: () => ({ season: 'FALL', year: 2026, daysUntilStart: daysUntilNextSeason }),
   };
 
-  const seasonWindowPath = require.resolve('../../../backend/src/services/seasonal/seasonWindow.ts');
-  require.cache[seasonWindowPath] = {
-    id: seasonWindowPath,
-    filename: seasonWindowPath,
-    loaded: true,
-    exports: {
-      getSeasonStartDate: () => new Date('2026-09-01'),
-      getSeasonEndDate: () => new Date('2026-11-30'),
-      resolveCurrentSeasonWindow: () => ({ season: 'SUMMER', year: 2026, daysUntilStart: -60 }),
-      resolveUpcomingSeasonWindow: () => ({ season: 'FALL', year: 2026, daysUntilStart: daysUntilNextSeason }),
-    },
-  };
-
-  const jobPath = require.resolve('../../src/jobs/seasonalChecklistGeneration.job.ts');
-  delete require.cache[jobPath];
-  const mod = require(jobPath);
-  // getNotificationOffsetDays isn't exported, but its effect is observable
-  // via daysUntilNextSeason vs. offsetForTiming — climateSetting fixtures
-  // below set notificationTiming to control which branch fires.
-  void offsetForTiming;
-  return { ...mod, calls };
+  return { deps, calls };
 }
 
 // ── generateSeasonalChecklists (top-level orchestration) ──────────────
 
 test('creates a default climate setting with fallback region detection when none exists', async () => {
-  const { generateSeasonalChecklists, calls } = loadJob({
+  const { deps, calls } = fakeDeps({
     properties: [propertyFixture({ state: 'FL' })],
     climateSetting: null,
     existingChecklistForUpcoming: { id: 'existing' }, // short-circuits generation, isolates this test to the create-setting behavior
   });
 
-  await generateSeasonalChecklists();
+  await generateSeasonalChecklists(deps);
 
   assert.equal(calls.climateSettingCreates.length, 1);
   assert.equal(calls.climateSettingCreates[0].data.climateRegion, 'TROPICAL');
@@ -159,45 +143,45 @@ test('creates a default climate setting with fallback region detection when none
 });
 
 test('skips a property with autoGenerateChecklists=false without generating anything', async () => {
-  const { generateSeasonalChecklists, calls } = loadJob({
+  const { deps, calls } = fakeDeps({
     properties: [propertyFixture()],
     climateSetting: { climateRegion: 'MODERATE', notificationTiming: 'STANDARD', autoGenerateChecklists: false, excludedTaskKeys: [] },
   });
 
-  await generateSeasonalChecklists();
+  await generateSeasonalChecklists(deps);
 
   assert.equal(calls.checklistCreates.length, 0);
 });
 
 test('generates the upcoming-season checklist when within the notification offset window', async () => {
-  const { generateSeasonalChecklists, calls } = loadJob({
+  const { deps, calls } = fakeDeps({
     properties: [propertyFixture()],
     climateSetting: { climateRegion: 'MODERATE', notificationTiming: 'STANDARD', autoGenerateChecklists: true, excludedTaskKeys: [] },
     daysUntilNextSeason: 5, // within STANDARD's 14-day offset
     templates: [{ id: 'template-1', taskKey: 'clean-gutters', title: 'Clean gutters', description: null, priority: 'MEDIUM' }],
   });
 
-  await generateSeasonalChecklists();
+  await generateSeasonalChecklists(deps);
 
   assert.equal(calls.checklistCreates.length, 1);
   assert.equal(calls.checklistCreates[0].data.season, 'FALL');
 });
 
 test('does not regenerate an upcoming-season checklist that already exists', async () => {
-  const { generateSeasonalChecklists, calls } = loadJob({
+  const { deps, calls } = fakeDeps({
     properties: [propertyFixture()],
     climateSetting: { climateRegion: 'MODERATE', notificationTiming: 'STANDARD', autoGenerateChecklists: true, excludedTaskKeys: [] },
     daysUntilNextSeason: 5,
     existingChecklistForUpcoming: { id: 'existing-checklist' },
   });
 
-  await generateSeasonalChecklists();
+  await generateSeasonalChecklists(deps);
 
   assert.equal(calls.checklistCreates.length, 0);
 });
 
 test('falls back to generating the current-season checklist when outside the upcoming-season window and none exists yet', async () => {
-  const { generateSeasonalChecklists, calls } = loadJob({
+  const { deps, calls } = fakeDeps({
     properties: [propertyFixture()],
     climateSetting: { climateRegion: 'MODERATE', notificationTiming: 'STANDARD', autoGenerateChecklists: true, excludedTaskKeys: [] },
     daysUntilNextSeason: 90, // far outside any offset window
@@ -205,7 +189,7 @@ test('falls back to generating the current-season checklist when outside the upc
     templates: [{ id: 'template-1', taskKey: 'clean-gutters', title: 'Clean gutters', description: null, priority: 'MEDIUM' }],
   });
 
-  await generateSeasonalChecklists();
+  await generateSeasonalChecklists(deps);
 
   assert.equal(calls.checklistCreates.length, 1);
   assert.equal(calls.checklistCreates[0].data.season, 'SUMMER', 'must generate for the CURRENT season window, not upcoming');
@@ -214,29 +198,17 @@ test('falls back to generating the current-season checklist when outside the upc
 test('one property failing does not abort checklist generation for the rest of the batch', async () => {
   const badProperty = propertyFixture({ id: 'property-bad' });
   const goodProperty = propertyFixture({ id: 'property-good' });
-  const { generateSeasonalChecklists, calls } = loadJob({
+  const { deps, calls } = fakeDeps({
     properties: [badProperty, goodProperty],
-    // climateSetting undefined triggers auto-create; force the create to
-    // throw only for the bad property via a per-property override isn't
-    // directly supported by this mock shape, so instead simulate failure
-    // via an already-existing checklist causing an error path is avoided —
-    // use existingChecklistForUpcoming with a thrown getter instead.
     climateSetting: { climateRegion: 'MODERATE', notificationTiming: 'STANDARD', autoGenerateChecklists: true, excludedTaskKeys: [] },
     daysUntilNextSeason: 5,
     templates: [{ id: 'template-1', taskKey: 'clean-gutters', title: 'Clean gutters', description: null, priority: 'MEDIUM' }],
+    // The checklist create throws once (simulating a transient DB error for
+    // the first property only) — the second property must still succeed.
+    checklistCreateShouldFailFor: new Set([1]),
   });
 
-  // Force the checklist create to throw once (simulating a transient DB
-  // error for the first property only), by wrapping after load.
-  let callCount = 0;
-  const originalCreate = require.cache[require.resolve('../../src/lib/prisma.ts')].exports.prisma.seasonalChecklist.create;
-  require.cache[require.resolve('../../src/lib/prisma.ts')].exports.prisma.seasonalChecklist.create = async (args) => {
-    callCount++;
-    if (callCount === 1) throw new Error('transient db error');
-    return originalCreate(args);
-  };
-
-  await assert.doesNotReject(() => generateSeasonalChecklists());
+  await assert.doesNotReject(() => generateSeasonalChecklists(deps));
 
   assert.equal(calls.checklistCreates.length, 1, 'the second (good) property must still succeed');
 });
@@ -244,7 +216,7 @@ test('one property failing does not abort checklist generation for the rest of t
 // ── generateChecklistForProperty (via generateSeasonalChecklists) ─────
 
 test('excludes templates listed in excludedTaskKeys', async () => {
-  const { generateSeasonalChecklists, calls } = loadJob({
+  const { deps, calls } = fakeDeps({
     properties: [propertyFixture()],
     climateSetting: { climateRegion: 'MODERATE', notificationTiming: 'STANDARD', autoGenerateChecklists: true, excludedTaskKeys: ['clean-gutters'] },
     daysUntilNextSeason: 5,
@@ -254,14 +226,14 @@ test('excludes templates listed in excludedTaskKeys', async () => {
     ],
   });
 
-  await generateSeasonalChecklists();
+  await generateSeasonalChecklists(deps);
 
   assert.equal(calls.itemCreates.length, 1);
   assert.equal(calls.itemCreates[0].data.taskKey, 'check-furnace');
 });
 
 test('excludes templates the applicability policy marks NOT_APPLICABLE', async () => {
-  const { generateSeasonalChecklists, calls } = loadJob({
+  const { deps, calls } = fakeDeps({
     properties: [propertyFixture()],
     climateSetting: { climateRegion: 'MODERATE', notificationTiming: 'STANDARD', autoGenerateChecklists: true, excludedTaskKeys: [] },
     daysUntilNextSeason: 5,
@@ -269,13 +241,13 @@ test('excludes templates the applicability policy marks NOT_APPLICABLE', async (
     applicabilityResult: () => ({ status: 'NOT_APPLICABLE', reasonCodes: ['NO_AC'] }),
   });
 
-  await generateSeasonalChecklists();
+  await generateSeasonalChecklists(deps);
 
   assert.equal(calls.itemCreates.length, 0);
 });
 
 test('promotes each checklist item to a canonical maintenance task and records tasksAdded', async () => {
-  const { generateSeasonalChecklists, calls } = loadJob({
+  const { deps, calls } = fakeDeps({
     properties: [propertyFixture()],
     climateSetting: { climateRegion: 'MODERATE', notificationTiming: 'STANDARD', autoGenerateChecklists: true, excludedTaskKeys: [] },
     daysUntilNextSeason: 5,
@@ -285,7 +257,7 @@ test('promotes each checklist item to a canonical maintenance task and records t
     ],
   });
 
-  await generateSeasonalChecklists();
+  await generateSeasonalChecklists(deps);
 
   assert.equal(calls.promotions.length, 2);
   const tasksAddedUpdate = calls.checklistUpdates.find((u) => u.data.tasksAdded !== undefined);
@@ -293,7 +265,7 @@ test('promotes each checklist item to a canonical maintenance task and records t
 });
 
 test('one item failing promotion does not block the others, and tasksAdded only counts successes', async () => {
-  const { generateSeasonalChecklists, calls } = loadJob({
+  const { deps, calls } = fakeDeps({
     properties: [propertyFixture()],
     climateSetting: { climateRegion: 'MODERATE', notificationTiming: 'STANDARD', autoGenerateChecklists: true, excludedTaskKeys: [] },
     daysUntilNextSeason: 5,
@@ -304,7 +276,7 @@ test('one item failing promotion does not block the others, and tasksAdded only 
     promotionShouldFailFor: new Set(['item-1']),
   });
 
-  await assert.doesNotReject(() => generateSeasonalChecklists());
+  await assert.doesNotReject(() => generateSeasonalChecklists(deps));
 
   assert.equal(calls.promotions.length, 2, 'both must still be attempted');
   const tasksAddedUpdate = calls.checklistUpdates.find((u) => u.data.tasksAdded !== undefined);
