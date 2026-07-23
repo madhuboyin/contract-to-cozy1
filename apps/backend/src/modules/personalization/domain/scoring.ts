@@ -42,7 +42,7 @@ export function buildPropertyFactSummary(
     aging_roof_condition_review: ['roofAgeYears', 'The roof is approximately {value} years old based on the recorded replacement year.'],
   };
   if (definitionCode === 'smoke_detector_installation_review') {
-    return 'Property details currently indicate that smoke detectors are not installed.';
+    return 'Your Home Record currently says smoke detectors are not installed. Confirm or correct this detail.';
   }
   const format = formats[definitionCode];
   if (!format) return null;

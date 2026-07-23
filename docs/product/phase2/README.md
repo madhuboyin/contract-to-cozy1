@@ -218,6 +218,25 @@ Acceptance criteria:
 Implemented July 23, 2026:
 
 - Stopped treating an unshared occupant count as missing structural property data. Optional household size no longer creates a health-factor problem, Resolution Center case, or required property-completion action.
+
+## Safety-device confirmation convergence
+
+Implemented July 23, 2026:
+
+- New-property setup now preserves unanswered smoke-detector, carbon-monoxide-detector, security-system, and fire-extinguisher fields as unknown instead of silently storing `false`.
+- Safety-device questions use explicit **Yes**, **No**, and **Not sure** choices.
+- Personalized smoke-detector guidance now says that the Home Record contains an answer that needs confirmation; it no longer describes detector presence as insurance-style “coverage.”
+- Added **Confirm detector details** as the primary action and reused the backend-owned `SAFETY_DETECTOR_PROFILE` capture schema inline on the guidance screen.
+- The capture confirms smoke detectors, carbon-monoxide detectors, and common-safety responsibility together, then refreshes personalization without redirecting or discarding page context.
+- **Not relevant** and **Report a problem** remain secondary feedback controls rather than the only available actions.
+
+Acceptance criteria:
+
+- Skipping safety questions during property creation does not create a recommendation that claims detectors are absent.
+- A homeowner can correct an existing `false` detector answer from the recommendation card.
+- Confirming detectors are installed removes the installation recommendation after re-evaluation.
+- Confirming they are not installed retains safety guidance with an actionable next step.
+- Choosing **Not sure** records explicit uncertainty and does not present absence as a confirmed fact.
 - Routed household-size capture to the consent-controlled personalization profile instead of adding it to Property Details or copying it into the Property record.
 - Kept property age limited to the building year. Children or older-adult safety needs and pets remain separate optional household-profile questions and are never inferred from the home.
 - Added a clearly labeled household-context entry point to Home setup so users can find the optional flow without confusing it with ownership, occupancy status, or property age.

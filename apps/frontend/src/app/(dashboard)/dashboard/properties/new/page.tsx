@@ -59,10 +59,10 @@ interface PropertyFormData {
   hvacInstallYear: string;
   waterHeaterInstallYear: string;
   roofReplacementYear: string;
-  hasSmokeDetectors: boolean;
-  hasCoDetectors: boolean;
-  hasSecuritySystem: boolean;
-  hasFireExtinguisher: boolean;
+  hasSmokeDetectors: boolean | null;
+  hasCoDetectors: boolean | null;
+  hasSecuritySystem: boolean | null;
+  hasFireExtinguisher: boolean | null;
   hasIrrigation: boolean;
   hasDrainageIssues: boolean;
   hasPrivateOutdoorSpace: boolean;
@@ -134,10 +134,10 @@ export default function NewPropertyPage() {
     hvacInstallYear: '',
     waterHeaterInstallYear: '',
     roofReplacementYear: '',
-    hasSmokeDetectors: false,
-    hasCoDetectors: false,
-    hasSecuritySystem: false,
-    hasFireExtinguisher: false,
+    hasSmokeDetectors: null,
+    hasCoDetectors: null,
+    hasSecuritySystem: null,
+    hasFireExtinguisher: null,
     hasIrrigation: false,
     hasDrainageIssues: false,
     hasPrivateOutdoorSpace: false,
@@ -299,10 +299,10 @@ export default function NewPropertyPage() {
       waterHeaterInstallYear: parseInt(formData.waterHeaterInstallYear) || undefined,
       roofReplacementYear: parseInt(formData.roofReplacementYear) || undefined,
       
-      hasSmokeDetectors: formData.hasSmokeDetectors,
-      hasCoDetectors: formData.hasCoDetectors,
-      hasSecuritySystem: formData.hasSecuritySystem,
-      hasFireExtinguisher: formData.hasFireExtinguisher,
+      hasSmokeDetectors: formData.hasSmokeDetectors ?? undefined,
+      hasCoDetectors: formData.hasCoDetectors ?? undefined,
+      hasSecuritySystem: formData.hasSecuritySystem ?? undefined,
+      hasFireExtinguisher: formData.hasFireExtinguisher ?? undefined,
       hasIrrigation: formData.hasIrrigation,
       hasDrainageIssues: formData.hasDrainageIssues,
       exteriorProfile: {
@@ -426,6 +426,41 @@ export default function NewPropertyPage() {
         className="h-4 w-4 shrink-0 rounded border-slate-300 text-teal-600 focus:ring-teal-500"
       />
     </label>
+  );
+
+  const OptionalBooleanInput = ({
+    label,
+    name,
+    value,
+  }: {
+    label: string;
+    name: 'hasSmokeDetectors' | 'hasCoDetectors' | 'hasSecuritySystem' | 'hasFireExtinguisher';
+    value: boolean | null;
+  }) => (
+    <fieldset className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
+      <legend className="px-1 text-sm font-medium text-slate-700">{label}</legend>
+      <div className="mt-1 grid grid-cols-3 gap-1 rounded-lg bg-slate-100 p-1">
+        {([
+          { label: 'Yes', value: true },
+          { label: 'No', value: false },
+          { label: 'Not sure', value: null },
+        ] as const).map((option) => (
+          <button
+            key={option.label}
+            type="button"
+            aria-pressed={value === option.value}
+            onClick={() => setFormData((current) => ({ ...current, [name]: option.value }))}
+            className={`min-h-[40px] rounded-md px-2 py-2 text-xs font-semibold transition ${
+              value === option.value
+                ? 'bg-white text-slate-950 shadow-sm ring-1 ring-slate-200'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+    </fieldset>
   );
 
   const BasicAddressFields = (
@@ -873,10 +908,10 @@ export default function NewPropertyPage() {
                 )}
 
                 <div className="grid grid-cols-1 gap-2.5 border-t border-slate-200 pt-3 sm:grid-cols-2">
-                  <BooleanInput label="Has Smoke Detectors" name="hasSmokeDetectors" checked={formData.hasSmokeDetectors} />
-                  <BooleanInput label="Has CO Detectors" name="hasCoDetectors" checked={formData.hasCoDetectors} />
-                  <BooleanInput label="Has Security System" name="hasSecuritySystem" checked={formData.hasSecuritySystem} />
-                  <BooleanInput label="Has Fire Extinguisher" name="hasFireExtinguisher" checked={formData.hasFireExtinguisher} />
+                  <OptionalBooleanInput label="Smoke detectors" name="hasSmokeDetectors" value={formData.hasSmokeDetectors} />
+                  <OptionalBooleanInput label="CO detectors" name="hasCoDetectors" value={formData.hasCoDetectors} />
+                  <OptionalBooleanInput label="Security system" name="hasSecuritySystem" value={formData.hasSecuritySystem} />
+                  <OptionalBooleanInput label="Fire extinguisher" name="hasFireExtinguisher" value={formData.hasFireExtinguisher} />
                   <BooleanInput label="Has Irrigation System" name="hasIrrigation" checked={formData.hasIrrigation} />
                   <BooleanInput label="Has Drainage Issues" name="hasDrainageIssues" checked={formData.hasDrainageIssues} />
                 </div>

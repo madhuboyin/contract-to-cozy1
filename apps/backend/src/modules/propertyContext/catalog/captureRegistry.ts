@@ -196,7 +196,7 @@ const structuredDefinitions: ContextCaptureDefinition[] = [
     factKeys: ['safety.hasSmokeDetectors', 'safety.hasCoDetectors', 'responsibility.commonSafety'],
     mode: 'STRUCTURED',
     title: 'Home safety devices',
-    question: 'Confirm the home’s detector coverage and responsibility.',
+    question: 'Confirm the home’s detector setup and who is responsible for it.',
     inputSchema: {
       type: 'GROUP',
       fields: [

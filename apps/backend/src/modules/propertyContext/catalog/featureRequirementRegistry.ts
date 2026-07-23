@@ -27,6 +27,11 @@ export interface FactRequirementDefinition {
     | 'SELECTED_ITEM_COVERAGE_EVIDENCE_INCOMPLETE'
     | 'INCLUDES_OPERATION_INPUT_VALUE';
   collectionOperationInputKey?: string;
+  /**
+   * Capture-only review operations may intentionally reopen a known answer so
+   * the homeowner can confirm or correct it in place.
+   */
+  alwaysCapture?: boolean;
   operationInputWhen?: {
     key: string;
     operator: 'EQUALS' | 'IN' | 'CONTAINS_ANY';
@@ -571,6 +576,25 @@ export const FEATURE_CONTEXT_REQUIREMENTS: readonly FeatureContextRequirementDef
         priority: 2,
         acceptableStates: ['FRESH'],
         captureKey: 'SAFETY_DETECTOR_PROFILE',
+      },
+    ],
+    enhancements: [],
+  },
+  {
+    featureKey: 'PERSONALIZATION',
+    operationKey: 'REVIEW_SAFETY_DETECTOR_PROFILE',
+    adoption: adopted('Personalized Guidance', 'CAPTURE_ONLY'),
+    policyVersion: '1.0',
+    promptStrategy: 'GROUP_RELATED',
+    required: [
+      {
+        factKey: 'safety.hasSmokeDetectors',
+        classification: 'REQUIRED_SAFETY',
+        reasonCode: 'CONFIRM_SAFETY_DETECTOR_PROFILE',
+        priority: 1,
+        acceptableStates: ['KNOWN'],
+        captureKey: 'SAFETY_DETECTOR_PROFILE',
+        alwaysCapture: true,
       },
     ],
     enhancements: [],

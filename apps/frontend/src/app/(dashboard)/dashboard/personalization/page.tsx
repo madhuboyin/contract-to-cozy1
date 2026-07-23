@@ -24,6 +24,7 @@ import {
   SummaryCard,
 } from '@/components/mobile/dashboard/MobilePrimitives';
 import { PropertyContextStatusNotice } from '@/components/property-context/PropertyContextStatusNotice';
+import { PropertyContextCapturePanel } from '@/components/property-context/PropertyContextCapturePanel';
 
 type PersonalizationFeedbackReason = 'ALREADY_DONE' | 'TOO_EXPENSIVE' | 'NOT_APPLICABLE' | 'BAD_TIMING' | 'WRONG_PROFILE' | 'OTHER';
 
@@ -112,6 +113,7 @@ export default function PersonalizationPage() {
   const queryClient = useQueryClient();
   const { selectedPropertyId } = usePropertyContext();
   const [feedbackFor, setFeedbackFor] = useState<string | null>(null);
+  const [contextCaptureFor, setContextCaptureFor] = useState<string | null>(null);
   const propertyId = selectedPropertyId || searchParams.get('propertyId') || undefined;
   const queryKey = ['personalization', propertyId];
 
@@ -239,8 +241,15 @@ export default function PersonalizationPage() {
                 const explanation = recommendation.explanations[0];
                 const why = explanation?.reasonCodes[0]?.params?.message;
                 const factSummary = explanation?.reasonCodes[0]?.params?.factSummary;
+                const isSmokeDetectorReview = recommendation.definition.code === 'smoke_detector_installation_review';
+                const displayHeadline = isSmokeDetectorReview
+                  ? 'Confirm your home’s smoke-detector setup'
+                  : (explanation?.headline || 'Home suggestion');
+                const displayWhy = isSmokeDetectorReview
+                  ? 'Your Home Record currently says smoke detectors are not installed. Confirm or correct that detail. If they are not installed, add and test detectors in the locations required for your home.'
+                  : (why || 'Suggested because a reviewed maintenance rule matched the property history available to ContractToCozy.');
                 return (
-                  <SummaryCard key={recommendation.id} title={explanation?.headline || 'Home suggestion'} subtitle={recommendation.definition.targetModule}>
+                  <SummaryCard key={recommendation.id} title={displayHeadline} subtitle={recommendation.definition.targetModule}>
                     <div className="space-y-3">
                       <div className="flex items-center gap-2">
                         <Lightbulb className="h-4 w-4" aria-hidden="true" />
@@ -249,12 +258,33 @@ export default function PersonalizationPage() {
                         </StatusChip>
                       </div>
                       <p className="text-sm text-[hsl(var(--mobile-text-secondary))]">
-                        {why || 'Suggested because a reviewed maintenance rule matched the property history available to ContractToCozy.'}
+                        {displayWhy}
                       </p>
                       {factSummary ? <p className="text-sm font-medium">Why this home: {factSummary}</p> : null}
                       {recommendation.rankingReasons.map((reason) => (
                         <p key={reason} className="text-xs text-[hsl(var(--mobile-text-secondary))]">Owner preference: {reason}</p>
                       ))}
+                      {isSmokeDetectorReview && personalization.capabilities.canAct ? (
+                        contextCaptureFor === recommendation.id ? (
+                          <PropertyContextCapturePanel
+                            propertyId={propertyId}
+                            featureKey="PERSONALIZATION"
+                            operationKey="REVIEW_SAFETY_DETECTOR_PROFILE"
+                            onCaptured={async () => {
+                              setContextCaptureFor(null);
+                              await recompute.mutateAsync();
+                            }}
+                          />
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setContextCaptureFor(recommendation.id)}
+                            className="min-h-[44px] rounded-xl bg-[hsl(var(--mobile-brand-strong))] px-4 py-2 text-sm font-semibold text-white"
+                          >
+                            Confirm detector details
+                          </button>
+                        )
+                      ) : null}
                       {personalization.capabilities.canGiveFeedback ? (
                         feedbackFor === recommendation.id ? (
                           <div className="space-y-2" aria-label="Why is this suggestion not useful?">

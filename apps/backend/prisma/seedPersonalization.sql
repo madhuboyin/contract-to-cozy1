@@ -79,8 +79,8 @@ WITH personalization_content(code, title, body) AS (
     ),
     (
       'smoke_detector_installation_review',
-      'Confirm smoke-detector coverage for this home',
-      'Your property details currently indicate that smoke detectors are not installed. Confirm the record, then install and test detectors in the locations required for your home.'
+      'Confirm your home’s smoke-detector setup',
+      'Your Home Record currently says smoke detectors are not installed. Confirm or correct that detail. If they are not installed, add and test detectors in the locations required for your home.'
     ),
     (
       'aging_roof_condition_review',

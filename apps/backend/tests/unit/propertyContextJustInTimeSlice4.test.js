@@ -46,3 +46,23 @@ test('safety template execution enforces the shared safety contract and returns 
   assert.match(controller, /needs more property context/);
   assert.match(controller, /status\(422\)/);
 });
+
+test('personalized detector guidance can reopen and correct the safety profile inline', () => {
+  const contract = getFeatureContextRequirement('PERSONALIZATION', 'REVIEW_SAFETY_DETECTOR_PROFILE');
+  assert.equal(contract.adoption.executionDisposition, 'CAPTURE_ONLY');
+  assert.equal(contract.required[0].captureKey, 'SAFETY_DETECTOR_PROFILE');
+  assert.equal(contract.required[0].alwaysCapture, true);
+
+  const page = read('../../../frontend/src/app/(dashboard)/dashboard/personalization/page.tsx');
+  assert.match(page, /Confirm detector details/);
+  assert.match(page, /operationKey="REVIEW_SAFETY_DETECTOR_PROFILE"/);
+  assert.match(page, /await recompute\.mutateAsync\(\)/);
+});
+
+test('new property safety answers remain unknown until the homeowner answers them', () => {
+  const page = read('../../../frontend/src/app/(dashboard)/dashboard/properties/new/page.tsx');
+  assert.match(page, /hasSmokeDetectors: null/);
+  assert.match(page, /hasCoDetectors: null/);
+  assert.match(page, /hasSmokeDetectors: formData\.hasSmokeDetectors \?\? undefined/);
+  assert.match(page, /label: 'Not sure', value: null/);
+});

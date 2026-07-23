@@ -109,8 +109,8 @@ export const PERSONALIZATION_DEFINITIONS: readonly PersonalizationDefinition[] =
   {
     code: 'smoke_detector_installation_review',
     category: 'safety_risk_reduction',
-    headline: 'Confirm smoke-detector coverage for this home',
-    body: 'Your property details currently indicate that smoke detectors are not installed. Confirm the record, then install and test detectors in the locations required for your home.',
+    headline: 'Confirm your home’s smoke-detector setup',
+    body: 'Your Home Record currently says smoke detectors are not installed. Confirm or correct that detail. If they are not installed, add and test detectors in the locations required for your home.',
     reasonCode: 'SMOKE_DETECTORS_NOT_CONFIRMED',
     reasonTemplateKey: 'smoke_detectors_not_confirmed_reason',
     defaultScore: 90,

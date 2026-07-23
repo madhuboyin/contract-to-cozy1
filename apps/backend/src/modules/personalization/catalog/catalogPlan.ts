@@ -67,6 +67,6 @@ export const CATALOG_PLAN: readonly CatalogPlanEntry[] = [
   { code: 'dryer_vent_cleaning_reminder', category: 'low_cost_prevention', targetModule: 'Maintenance', safetyClass: 'SAFETY_SENSITIVE', intent: 'Dryer vent cleaning reminder (fire-prevention, low cost).', status: 'DRAFT' },
 
   // Phase 2.5 focused showcase
-  { code: 'smoke_detector_installation_review', category: 'safety_risk_reduction', targetModule: 'Maintenance', safetyClass: 'SAFETY_SENSITIVE', intent: 'Confirm a property record that indicates smoke detectors are not installed and prompt a coverage review.', status: 'DRAFT' },
+  { code: 'smoke_detector_installation_review', category: 'safety_risk_reduction', targetModule: 'Maintenance', safetyClass: 'SAFETY_SENSITIVE', intent: 'Confirm or correct a property record that indicates smoke detectors are not installed before recommending next steps.', status: 'DRAFT' },
   { code: 'aging_roof_condition_review', category: 'aging_system_planning', targetModule: 'Health', safetyClass: 'ROUTINE', intent: 'Prompt a condition and service-history review when the recorded roof replacement year is at least 25 years ago.', status: 'DRAFT' },
 ];

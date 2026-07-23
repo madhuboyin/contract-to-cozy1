@@ -66,6 +66,10 @@ function requirementState(
   fact: PropertyFact | undefined,
   operationInput?: Record<string, unknown>,
 ): PropertyFact['state'] {
+  if (requirement.alwaysCapture) {
+    if (fact?.state === 'CONFLICTED') return 'CONFLICTED';
+    return fact?.state === 'KNOWN' ? 'STALE' : (fact?.state ?? 'UNKNOWN');
+  }
   if (!fact) return 'UNKNOWN';
   if (fact.state !== 'KNOWN') return fact.state;
   let collectionValue = fact.value;
