@@ -1,5 +1,6 @@
 import { prisma } from '../lib/prisma';
 import { getPropertyById } from './property.service';
+import { detectCoverageGaps, type CoverageGapResult } from './coverageGap.service';
 import type {
   DecisionInsightDTO,
   ExecutionItemDTO,
@@ -56,23 +57,6 @@ type CoverageAnalysisRecord = {
   summary: string | null;
   decisionTrace: unknown;
   inventoryItemId: string | null;
-};
-
-type CoverageGapResult = {
-  inventoryItemId: string;
-  propertyId: string;
-  itemName: string;
-  itemCategory?: string | null;
-  roomName?: string | null;
-  gapType:
-    | 'NO_COVERAGE'
-    | 'WARRANTY_ONLY'
-    | 'INSURANCE_ONLY'
-    | 'EXPIRED_WARRANTY'
-    | 'EXPIRED_INSURANCE';
-  exposureCents: number;
-  currency: string;
-  reasons: string[];
 };
 
 type ResolutionInventoryItemRecord = {
@@ -245,101 +229,6 @@ function dedupeReplaceRepairAnalyses<T extends {
   }
 
   return [...byItemId.values()].sort((a, b) => b.computedAt.getTime() - a.computedAt.getTime());
-}
-
-function isCoverageActive(expiryDate: Date | null | undefined, today: Date): boolean {
-  if (!expiryDate) return false;
-  const normalized = new Date(expiryDate);
-  if (Number.isNaN(normalized.getTime())) return false;
-  return normalized > today;
-}
-
-async function detectResolutionCoverageGaps(propertyId: string): Promise<CoverageGapResult[]> {
-  const today = new Date();
-  const items = await prisma.inventoryItem.findMany({
-    where: { propertyId },
-    include: {
-      room: { select: { name: true } },
-      warranty: true,
-      insurancePolicy: true,
-    },
-  });
-
-  const results: CoverageGapResult[] = [];
-
-  for (const item of items) {
-    if (item.coverageNotRequired) continue;
-
-    const hasWarranty = Boolean(item.warranty);
-    const hasInsurance = Boolean(item.insurancePolicy);
-    const warrantyActive = hasWarranty && isCoverageActive(item.warranty?.expiryDate, today);
-    const insuranceActive = hasInsurance && isCoverageActive(item.insurancePolicy?.expiryDate, today);
-    const reasons: string[] = [];
-
-    if (!hasWarranty && !hasInsurance) {
-      results.push({
-        inventoryItemId: item.id,
-        propertyId,
-        itemName: item.name,
-        itemCategory: item.category ? String(item.category) : null,
-        roomName: item.room?.name ?? null,
-        gapType: 'NO_COVERAGE',
-        exposureCents: item.replacementCostCents ?? 0,
-        currency: item.currency || 'USD',
-        reasons: ['No warranty or insurance coverage found'],
-      });
-      continue;
-    }
-
-    if (hasWarranty && !warrantyActive) reasons.push('Warranty has expired');
-    if (hasInsurance && !insuranceActive) reasons.push('Insurance policy has expired');
-
-    if (warrantyActive && (!hasInsurance || !insuranceActive)) {
-      results.push({
-        inventoryItemId: item.id,
-        propertyId,
-        itemName: item.name,
-        itemCategory: item.category ? String(item.category) : null,
-        roomName: item.room?.name ?? null,
-        gapType: hasInsurance ? 'EXPIRED_INSURANCE' : 'WARRANTY_ONLY',
-        exposureCents: item.replacementCostCents ?? 0,
-        currency: item.currency || 'USD',
-        reasons: hasInsurance ? reasons : ['Missing insurance coverage'],
-      });
-      continue;
-    }
-
-    if (insuranceActive && (!hasWarranty || !warrantyActive)) {
-      results.push({
-        inventoryItemId: item.id,
-        propertyId,
-        itemName: item.name,
-        itemCategory: item.category ? String(item.category) : null,
-        roomName: item.room?.name ?? null,
-        gapType: hasWarranty ? 'EXPIRED_WARRANTY' : 'INSURANCE_ONLY',
-        exposureCents: item.replacementCostCents ?? 0,
-        currency: item.currency || 'USD',
-        reasons: hasWarranty ? reasons : ['Missing warranty coverage'],
-      });
-      continue;
-    }
-
-    if (!warrantyActive || !insuranceActive) {
-      results.push({
-        inventoryItemId: item.id,
-        propertyId,
-        itemName: item.name,
-        itemCategory: item.category ? String(item.category) : null,
-        roomName: item.room?.name ?? null,
-        gapType: !warrantyActive ? 'EXPIRED_WARRANTY' : 'EXPIRED_INSURANCE',
-        exposureCents: item.replacementCostCents ?? 0,
-        currency: item.currency || 'USD',
-        reasons: reasons.length ? reasons : ['Coverage is not active'],
-      });
-    }
-  }
-
-  return results;
 }
 
 function caseKindForAction(action: ResolutionActionDTO): ResolutionCaseDTO['kind'] {
@@ -949,7 +838,10 @@ export async function getResolutionCenter(propertyId: string, userId: string): P
       orderBy: [{ updatedAt: 'desc' }],
       take: 200,
     }),
-    detectResolutionCoverageGaps(propertyId),
+    // Keep Resolution Center aligned with Home Record. The canonical detector
+    // excludes absent/inferred risk concepts, incomplete context, and systems
+    // managed by an HOA, landlord, or shared party.
+    detectCoverageGaps(propertyId),
     prisma.coverageAnalysis.findMany({
       where: {
         propertyId,
