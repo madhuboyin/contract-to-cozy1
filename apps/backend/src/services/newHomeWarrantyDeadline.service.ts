@@ -2,6 +2,7 @@ import { prisma } from '../lib/prisma';
 import { NotificationService } from './notification.service';
 import { isPropertyAllowlisted } from '../config/smokeTestConfig';
 import { generateSmokeCorrelationId } from '../lib/smokeTestCorrelation';
+import { newHomeWarrantyPlanUrl } from '../lib/notificationDeepLinks';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -114,7 +115,7 @@ export async function processNewHomeWarrantyDeadlines(options: {
         type: 'NEW_HOME_WARRANTY_DEADLINE',
         title: `Warranty deadline: ${right.coverageTitle}`,
         message: `Review notice requirements before ${dueAt.toLocaleDateString()}.`,
-        actionUrl: `/dashboard/properties/${right.propertyId}/new-home-plan`,
+        actionUrl: newHomeWarrantyPlanUrl(right.propertyId),
         entityType: 'NEW_HOME_WARRANTY_RIGHT',
         entityId: right.id,
         category: 'MATERIAL_DEADLINE',

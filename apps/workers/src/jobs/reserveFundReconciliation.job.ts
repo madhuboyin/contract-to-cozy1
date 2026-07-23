@@ -21,6 +21,7 @@ import {
 } from '@worker-shared/services/homeReserveFundReconciliation.service';
 import { NotificationService } from '@worker-shared/services/notification.service';
 import { logger } from '../lib/logger';
+import { reserveFundUrl } from '../lib/deepLinks';
 import { checkReserveFundWorkerContext } from '@worker-shared/services/financialContext/reserveFundWorkerContext.service';
 
 export function fingerprintSuggestions(suggestions: ReconciliationSuggestion[]): string {
@@ -78,7 +79,7 @@ export async function reserveFundReconciliationJob(): Promise<void> {
           suggestions.length === 1
             ? 'An expense you logged looks like it may cover one of your reserve fund line items.'
             : `${suggestions.length} logged expenses look like they may cover reserve fund line items.`,
-        actionUrl: `/dashboard/properties/${fund.propertyId}/tools/reserve-fund`,
+        actionUrl: reserveFundUrl(fund.propertyId),
         entityType: 'HomeReserveFund',
         entityId: fund.propertyId,
         category: 'GENERAL',

@@ -16,6 +16,7 @@ import { prisma } from '../lib/prisma';
 import { NotificationService } from '@worker-shared/services/notification.service';
 import { logger } from '../lib/logger';
 import { checkReserveFundWorkerContext } from '@worker-shared/services/financialContext/reserveFundWorkerContext.service';
+import { reserveFundUrl } from '../lib/deepLinks';
 
 const STALE_BALANCE_DAYS = 45;
 
@@ -65,7 +66,7 @@ export async function reserveFundBalanceReminderJob(): Promise<void> {
         message: lastContributionAt
           ? `You haven't logged a deposit or withdrawal in over ${STALE_BALANCE_DAYS} days. Take a moment to confirm your reserve fund balance is still up to date.`
           : "You haven't logged any contributions to your reserve fund yet. Log your current balance to start tracking progress.",
-        actionUrl: `/dashboard/properties/${fund.propertyId}/tools/reserve-fund`,
+        actionUrl: reserveFundUrl(fund.propertyId),
         entityType: 'HomeReserveFund',
         entityId: fund.id,
         category: 'GENERAL',

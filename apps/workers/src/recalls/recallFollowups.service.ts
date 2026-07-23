@@ -1,36 +1,10 @@
 // apps/workers/src/recalls/recallFollowups.service.ts
 import { prisma } from '../lib/prisma';
 import { NotificationService } from '@worker-shared/services/notification.service';
+import { recallFollowUpUrl as buildActionUrl } from '../lib/deepLinks';
 
 const NOTIF_TYPE_RECALL = 'RECALL_ALERT';
 const NOTIF_ENTITY_TYPE = 'RECALL_MATCH';
-
-/**
- * You can tune these URLs later to match your frontend routes.
- * Keeping this stable makes notifications actionable.
- */
-function buildActionUrl(
-  propertyId: string,
-  matchId: string,
-  guidanceContext?: {
-    guidanceJourneyId?: string | null;
-    guidanceStepKey?: string | null;
-    guidanceSignalIntentFamily?: string | null;
-    itemId?: string | null;
-  } | null
-) {
-  // Example: property detail → safety alerts tab (future)
-  // For now, link to property page; FE can add recall panel later.
-  const params = new URLSearchParams();
-  params.set('matchId', matchId);
-  if (guidanceContext?.guidanceJourneyId) params.set('guidanceJourneyId', guidanceContext.guidanceJourneyId);
-  if (guidanceContext?.guidanceStepKey) params.set('guidanceStepKey', guidanceContext.guidanceStepKey);
-  if (guidanceContext?.guidanceSignalIntentFamily) {
-    params.set('guidanceSignalIntentFamily', guidanceContext.guidanceSignalIntentFamily);
-  }
-  if (guidanceContext?.itemId) params.set('itemId', guidanceContext.itemId);
-  return `/dashboard/properties/${propertyId}/recalls?${params.toString()}`;
-}
 
 function taskTitle(recallTitle: string) {
   return `Safety Recall: ${recallTitle}`;

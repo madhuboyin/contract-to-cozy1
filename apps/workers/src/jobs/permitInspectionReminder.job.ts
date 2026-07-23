@@ -5,6 +5,7 @@ import { checkPermitWorkerContext } from '@worker-shared/services/projectComplia
 import { isPropertyAllowlisted } from '@worker-shared/config/smokeTestConfig';
 import { generateSmokeCorrelationId } from '@worker-shared/lib/smokeTestCorrelation';
 import type { WorkerRunResult } from '../lib/workerRunResult';
+import { permitTrackerUrl } from '../lib/deepLinks';
 
 export async function permitInspectionReminderJob(
   opts?: { dryRun?: boolean; propertyId?: string },
@@ -98,7 +99,7 @@ export async function permitInspectionReminderJob(
         type: 'MAINTENANCE_REMINDER',
         title: `Inspection Reminder: ${milestone.stageName}`,
         message: `Your ${milestone.stageName} inspection for ${permitLabel} at ${propertyLabel} is scheduled for ${scheduledDate}. Make sure your contractor is ready.`,
-        actionUrl: `/dashboard/properties/${milestone.propertyId}/tools/permits`,
+        actionUrl: permitTrackerUrl(milestone.propertyId),
         entityType: 'PermitInspectionMilestone',
         entityId: milestone.id,
         // W3 (permits): was uncategorized — inferred to 'MAINTENANCE' by

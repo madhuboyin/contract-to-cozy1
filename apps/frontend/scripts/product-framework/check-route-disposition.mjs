@@ -200,6 +200,17 @@ function normalizeContractRoute(routePath) {
     .replace(/:([A-Za-z][A-Za-z0-9_]*)/g, '[$1]');
 }
 
+// Every `${...}`-templated dynamic segment normalizes to the literal `[id]`
+// above regardless of the variable name that produced it (propertyId,
+// claimId, ...) — Next.js's actual file-system route may name that same
+// positional segment something else (e.g. properties/[id]/claims/[claimId]).
+// The segment *name* never appears in a real URL, so matching on it is not
+// meaningful here; wildcard every bracketed segment on the real-page side
+// too so a contract route matches by structure, not by incidental naming.
+function normalizePageRouteForMatching(route) {
+  return route.replace(/\[[^\]]+\]/g, '[id]');
+}
+
 function extractGuidanceTemplateRoutes() {
   const source = fs.readFileSync(guidanceTemplateRegistry, 'utf8');
   return [...source.matchAll(/routePath:\s*'([^']+)'/g)].map((match) => match[1]);
@@ -215,6 +226,20 @@ function walkTypeScript(directory) {
   return files;
 }
 
+// W1 item 7: typed URL builders construct a route and `return` it rather
+// than writing `actionUrl: \`...\`` inline at the call site — the
+// actionUrl-keyed pattern below can't see through a function call, so
+// without also scanning these specific files, every destination moved into
+// a builder would silently drop out of this audit. Scoped to just the
+// builder files themselves (not scanned broadly across backend/workers
+// source) — a generic `return \`/dashboard...\`` pattern matched anywhere
+// picks up unrelated pre-existing route-construction code with its own
+// (already broken, pre-existing, out-of-scope-here) issues.
+const DEEP_LINK_BUILDER_FILES = [
+  { root: path.join(backendRoot, 'src'), prefix: '', relative: 'lib/notificationDeepLinks.ts' },
+  { root: path.join(workersRoot, 'src'), prefix: 'workers: ', relative: 'lib/deepLinks.ts' },
+];
+
 function extractNotificationRoutes() {
   const routes = [];
   for (const { root, prefix } of NOTIFICATION_SOURCE_ROOTS) {
@@ -225,11 +250,20 @@ function extractNotificationRoutes() {
       }
     }
   }
+  for (const { root, prefix, relative } of DEEP_LINK_BUILDER_FILES) {
+    const file = path.join(root, relative);
+    if (!fs.existsSync(file)) continue;
+    const source = fs.readFileSync(file, 'utf8');
+    for (const match of source.matchAll(/return\s*([`'"])(\/dashboard[^`'"]+)\1/g)) {
+      routes.push({ route: match[2], file: `${prefix}${relative}` });
+    }
+  }
   return routes;
 }
 
 function auditPhase2RouteContracts(routes) {
   const knownRoutes = new Set(routes);
+  const knownRoutesForMatching = new Set(routes.map(normalizePageRouteForMatching));
   const contracts = [
     ...PHASE2_CANONICAL_CTA_ROUTES.map((route) => ({ source: 'Phase 2 canonical CTA', route })),
     ...extractGuidanceTemplateRoutes().map((route) => ({ source: 'Guidance template', route })),
@@ -238,7 +272,9 @@ function auditPhase2RouteContracts(routes) {
   const invalid = [];
   for (const contract of contracts) {
     const normalized = normalizeContractRoute(contract.route);
-    if (!knownRoutes.has(normalized)) invalid.push({ ...contract, normalized });
+    if (!knownRoutes.has(normalized) && !knownRoutesForMatching.has(normalized)) {
+      invalid.push({ ...contract, normalized });
+    }
   }
   return { contracts, invalid };
 }

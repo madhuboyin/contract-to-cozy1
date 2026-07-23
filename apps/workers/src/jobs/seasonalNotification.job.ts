@@ -24,6 +24,7 @@ import { evaluateSeasonalTemplateApplicability } from '@worker-shared/services/s
 import { buildSeasonalPropertyContext } from './seasonalChecklistGeneration.job';
 import { NotificationService } from '@worker-shared/services/notification.service';
 import { areWorkerOutboundNotificationsEnabled } from '@worker-shared/config/workerExecutionPolicy';
+import { seasonalChecklistUrl } from '../lib/deepLinks';
 
 const SEASON_NAMES: Record<string, string> = {
   SPRING: 'Spring',
@@ -98,10 +99,50 @@ export async function sendSeasonalNotifications() {
   return { examined: checklistsToNotify.length, notified, skipped, failed: errors };
 }
 
+// The canonical seasonal Home Action's identity, per
+// homeActionSourcePromotion.service.ts#loadSeasonalChecklistActions — a
+// homeowner snoozing/dismissing that card in Unified Home records an
+// OrchestrationActionSnooze/OrchestrationActionEvent row keyed by exactly
+// this string. Must match precisely or the two systems silently disagree.
+function seasonalChecklistActionKey(checklistId: string): string {
+  return `seasonal-checklist:${checklistId}`;
+}
+
+/**
+ * WKR-002 follow-up: this notification previously only had one-shot
+ * idempotency (notificationSentAt) — a homeowner who dismissed or snoozed
+ * the canonical seasonal Home Action in Unified Home could still get a
+ * fresh notification for the same checklist if it was ever regenerated or
+ * reconciled (which clears notificationSentAt). Checking the same
+ * snooze/dismiss records the Home Action itself uses closes that gap —
+ * maintenance reminders get equivalent suppression for free through the
+ * aggregationContext lifecycle system, which doesn't cover seasonal
+ * checklists (a checklist-level entity, not a per-task one).
+ */
+async function isSeasonalChecklistActionSuppressed(propertyId: string, checklistId: string): Promise<boolean> {
+  const actionKey = seasonalChecklistActionKey(checklistId);
+  const [dismissed, snoozed] = await Promise.all([
+    prisma.orchestrationActionEvent.findFirst({
+      where: { propertyId, actionKey, actionType: { in: ['USER_MARKED_COMPLETE', 'USER_DISMISSED'] } },
+      select: { id: true },
+    }),
+    prisma.orchestrationActionSnooze.findFirst({
+      where: { propertyId, actionKey, endedAt: null, snoozeUntil: { gt: new Date() } },
+      select: { id: true },
+    }),
+  ]);
+  return !!(dismissed || snoozed);
+}
+
 async function notifyForChecklist(checklist: any, transportEnabled: boolean): Promise<boolean> {
   const userId = checklist.property.homeownerProfile?.userId;
   if (!userId) {
     logger.warn(`[SEASONAL-NOTIFY] Skipping checklist ${checklist.id}; property has no homeowner`);
+    return false;
+  }
+
+  if (await isSeasonalChecklistActionSuppressed(checklist.propertyId, checklist.id)) {
+    logger.info(`[SEASONAL-NOTIFY] Skipping checklist ${checklist.id}; canonical Home Action is snoozed or dismissed`);
     return false;
   }
 
@@ -145,7 +186,7 @@ async function notifyForChecklist(checklist: any, transportEnabled: boolean): Pr
       criticalCount > 0
         ? `Your ${seasonName} maintenance checklist has ${applicableItems.length} applicable tasks, including ${criticalCount} critical. Season starts in ${Math.max(daysUntil, 0)} days.`
         : `Your ${seasonName} maintenance checklist has ${applicableItems.length} applicable tasks. Season starts in ${Math.max(daysUntil, 0)} days.`,
-    actionUrl: `/dashboard/seasonal?propertyId=${checklist.propertyId}`,
+    actionUrl: seasonalChecklistUrl(checklist.propertyId),
     entityType: 'SEASONAL_CHECKLIST',
     entityId: checklist.id,
     category: 'MAINTENANCE',

@@ -114,6 +114,7 @@ COPY apps/backend/src/lib/prisma.ts \
      apps/backend/src/lib/metrics.ts \
      apps/backend/src/lib/queuePort.ts \
      apps/backend/src/lib/smokeTestCorrelation.ts \
+     apps/backend/src/lib/notificationDeepLinks.ts \
      src/shared/backend/lib/
 COPY apps/backend/src/services/incidents/incident.service.ts src/shared/backend/services/incidents/
 COPY apps/backend/src/types/incidents.types.ts src/shared/backend/types/

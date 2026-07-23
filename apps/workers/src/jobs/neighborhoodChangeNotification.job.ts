@@ -25,6 +25,7 @@ import { NEIGHBORHOOD_IMPACT_RULES } from '@worker-shared/neighborhoodIntelligen
 import { haversineDistanceMiles, isValidLatLng } from '@worker-shared/neighborhoodIntelligence/geoUtils';
 import { getPlanningContextEnvelope } from '@worker-shared/services/planningContext/context';
 import { logger } from '../lib/logger';
+import { neighborhoodChangeRadarUrl } from '../lib/deepLinks';
 
 /**
  * Location relevance recheck before sending: geocoded distance within the
@@ -282,7 +283,7 @@ export async function neighborhoodChangeNotificationJob(): Promise<void> {
   for (const [propertyId, group] of eligibleByProperty) {
     try {
       const { userId, address, links } = group;
-      const actionUrl = `/dashboard/properties/${propertyId}/tools/neighborhood-change-radar`;
+      const actionUrl = neighborhoodChangeRadarUrl(propertyId);
       const maxImpactScore = Math.max(...links.map((l) => l.impactScore));
 
       const { title, message } =

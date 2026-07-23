@@ -1,5 +1,6 @@
 import { prisma } from '../lib/prisma';
 import { NotificationService } from '@worker-shared/services/notification.service';
+import { claimDetailUrl } from '../lib/deepLinks';
 
 type DomainEventStatus = 'PENDING' | 'PROCESSING' | 'PROCESSED' | 'FAILED';
 type DomainEventType = 'CLAIM_SUBMITTED' | 'CLAIM_CLOSED' | 'FOLLOW_UP_DUE';
@@ -26,12 +27,6 @@ function mustHave<T>(v: T | null | undefined, msg: string): T {
 function safeString(v: any) {
   if (v === null || v === undefined) return '';
   return String(v);
-}
-
-function buildClaimActionUrl(propertyId?: string | null, claimId?: string | null) {
-  if (!propertyId || !claimId) return undefined;
-  // Adjust to your frontend route if different
-  return `/dashboard/properties/${propertyId}/claims/${claimId}`;
 }
 
 async function ensureNotificationForDomainEvent(args: {
@@ -110,7 +105,7 @@ async function handleClaimSubmitted(ev: any) {
   const providerName = safeString(ev.payload?.providerName);
   const claimNumber = safeString(ev.payload?.claimNumber);
 
-  const actionUrl = buildClaimActionUrl(propertyId, claimId);
+  const actionUrl = claimDetailUrl(propertyId, claimId);
 
   const title = 'Claim submitted';
   const message =
@@ -147,7 +142,7 @@ async function handleClaimClosed(ev: any) {
   mustHave(userId, 'DomainEvent missing userId');
   mustHave(claimId, 'DomainEvent payload missing claimId');
 
-  const actionUrl = buildClaimActionUrl(propertyId, claimId);
+  const actionUrl = claimDetailUrl(propertyId, claimId);
 
   const title = 'Claim closed';
   const message = 'Your claim was closed.';

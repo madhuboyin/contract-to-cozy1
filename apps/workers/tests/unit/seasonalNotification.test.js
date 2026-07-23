@@ -26,7 +26,14 @@ test('never calls a channel transport directly (governance bypass regression gua
   assert.match(source, /areWorkerOutboundNotificationsEnabled/);
 });
 
-function loadJob({ checklists, climateSetting = { notificationEnabled: true }, createImpl }) {
+function loadJob({
+  checklists,
+  climateSetting = { notificationEnabled: true },
+  createImpl,
+  dismissedActionKeys = [],
+  activeSnoozeActionKeys = [],
+}) {
+  const calls = { orchestrationActionEventFindFirst: [], orchestrationActionSnoozeFindFirst: [] };
   const prismaMock = {
     seasonalChecklist: {
       findMany: async () => checklists,
@@ -34,6 +41,21 @@ function loadJob({ checklists, climateSetting = { notificationEnabled: true }, c
     },
     propertyClimateSetting: {
       findUnique: async () => climateSetting,
+    },
+    // Backs isSeasonalChecklistActionSuppressed()'s check against the same
+    // dismiss/snooze records the canonical seasonal Home Action itself uses
+    // (homeActionSourcePromotion.service.ts) — defaults to "not suppressed".
+    orchestrationActionEvent: {
+      findFirst: async ({ where }) => {
+        calls.orchestrationActionEventFindFirst.push(where);
+        return dismissedActionKeys.includes(where.actionKey) ? { id: 'event-1' } : null;
+      },
+    },
+    orchestrationActionSnooze: {
+      findFirst: async ({ where }) => {
+        calls.orchestrationActionSnoozeFindFirst.push(where);
+        return activeSnoozeActionKeys.includes(where.actionKey) ? { id: 'snooze-1' } : null;
+      },
     },
   };
   const prismaPath = require.resolve('../../src/lib/prisma.ts');
@@ -73,7 +95,7 @@ function loadJob({ checklists, climateSetting = { notificationEnabled: true }, c
   };
 
   delete require.cache[JOB_FILE];
-  return { job: require(JOB_FILE), getCreateCalls: () => createCalls };
+  return { job: require(JOB_FILE), getCreateCalls: () => createCalls, calls };
 }
 
 function checklist(overrides = {}) {
@@ -170,4 +192,41 @@ test('WKR-008: isolates a per-checklist failure and reports it in `failed`', asy
   assert.equal(result.notified, 1);
   assert.equal(result.failed, 1);
   assert.equal(getCreateCalls().length, 2);
+});
+
+test('does not notify when the canonical seasonal Home Action was dismissed', async () => {
+  const { job, getCreateCalls, calls } = loadJob({
+    checklists: [checklist()],
+    dismissedActionKeys: ['seasonal-checklist:checklist-1'],
+  });
+
+  const result = await job.sendSeasonalNotifications();
+
+  assert.equal(getCreateCalls().length, 0);
+  assert.equal(result.skipped, 1);
+  assert.equal(calls.orchestrationActionEventFindFirst[0].actionKey, 'seasonal-checklist:checklist-1');
+  assert.equal(calls.orchestrationActionEventFindFirst[0].propertyId, 'property-1');
+});
+
+test('does not notify when the canonical seasonal Home Action is actively snoozed', async () => {
+  const { job, getCreateCalls } = loadJob({
+    checklists: [checklist()],
+    activeSnoozeActionKeys: ['seasonal-checklist:checklist-1'],
+  });
+
+  await job.sendSeasonalNotifications();
+
+  assert.equal(getCreateCalls().length, 0);
+});
+
+test('notifies normally when there is no dismiss/snooze record for this checklist', async () => {
+  const { job, getCreateCalls } = loadJob({
+    checklists: [checklist()],
+    dismissedActionKeys: ['seasonal-checklist:some-other-checklist'],
+    activeSnoozeActionKeys: ['seasonal-checklist:some-other-checklist'],
+  });
+
+  await job.sendSeasonalNotifications();
+
+  assert.equal(getCreateCalls().length, 1);
 });

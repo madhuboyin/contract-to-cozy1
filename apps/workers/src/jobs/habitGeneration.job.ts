@@ -11,6 +11,7 @@ import { isPropertyAllowlisted } from '@worker-shared/config/smokeTestConfig';
 import { generateSmokeCorrelationId } from '@worker-shared/lib/smokeTestCorrelation';
 import { logger } from '../lib/logger';
 import { createHash } from 'node:crypto';
+import { homeHabitCoachUrl } from '../lib/deepLinks';
 
 // Newly generated habits previously had no notification and no canonical
 // Home Action promotion — invisible unless the homeowner proactively opened
@@ -182,7 +183,7 @@ export async function runHabitGenerationJob(
           type: 'HOME_HABIT_GENERATED',
           title,
           message,
-          actionUrl: `/dashboard/properties/${property.id}/tools/home-habit-coach`,
+          actionUrl: homeHabitCoachUrl(property.id),
           entityType: 'PROPERTY',
           entityId: property.id,
           category: 'MAINTENANCE',
