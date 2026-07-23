@@ -298,6 +298,7 @@ function caseBadgesForAction(action: ResolutionActionDTO): string[] {
 }
 
 function resolveActionHref(action: ResolutionActionDTO, propertyId: string): string {
+  if (action.href) return action.href;
   if (action.type === 'INCIDENT') {
     return `/dashboard/properties/${propertyId}/incidents/${action.id}`;
   }
@@ -884,9 +885,26 @@ export async function getResolutionCenter(propertyId: string, userId: string): P
     });
   });
 
+  const applianceRecords = Array.isArray(property.majorAppliances)
+    ? property.majorAppliances
+    : [];
+  const appliancesMissingInstallYear = applianceRecords.filter(
+    (appliance) => !appliance.installationYear,
+  );
+  const isAggregateApplianceFactor = (factor: string) =>
+    factor.trim().toLowerCase() === 'appliances';
+
   const insightsByFactor = new Map<string, { factor: string; status: string; statusIndex: number }>();
   property.healthScore?.insights
-    ?.filter((insight) => HEALTH_INSIGHT_STATUSES.includes(insight.status))
+    ?.filter((insight) => {
+      if (isAggregateApplianceFactor(insight.factor)) {
+        // Canonical appliance records take precedence over a stale score
+        // snapshot. Only surface an aggregate case when there is a concrete
+        // field to complete, or no appliances have been recorded at all.
+        return applianceRecords.length === 0 || appliancesMissingInstallYear.length > 0;
+      }
+      return HEALTH_INSIGHT_STATUSES.includes(insight.status);
+    })
     .forEach((insight) => {
       const statusIndex = HEALTH_INSIGHT_STATUSES.indexOf(insight.status);
       const existing = insightsByFactor.get(insight.factor);
@@ -901,6 +919,35 @@ export async function getResolutionCenter(propertyId: string, userId: string): P
 
   insightsByFactor.forEach(({ factor, status }) => {
     const factorId = factor.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    if (isAggregateApplianceFactor(factor)) {
+      const missingNames = appliancesMissingInstallYear.map((appliance) =>
+        String(appliance.assetType || 'Appliance')
+          .toLowerCase()
+          .split('_')
+          .map((word) => word ? word[0].toUpperCase() + word.slice(1) : word)
+          .join(' '),
+      );
+      const hasRecordedAppliances = applianceRecords.length > 0;
+      const title = hasRecordedAppliances
+        ? missingNames.length === 1
+          ? `Add installation year for ${missingNames[0]}`
+          : `Complete installation years for ${missingNames.length} appliances`
+        : 'Add major appliances';
+      const description = hasRecordedAppliances
+        ? `Installation year is missing for ${missingNames.join(', ')}. Add an approximate year to improve lifecycle and recall guidance.`
+        : 'No major appliances are recorded. Add only the appliances that are present in this home.';
+
+      urgentActions.push({
+        id: `${property.id}-INSIGHT-${factorId}`,
+        type: 'HEALTH_INSIGHT',
+        title,
+        description,
+        propertyId: property.id,
+        href: `/dashboard/properties/${property.id}/edit?focus=appliances`,
+      });
+      return;
+    }
+
     const matchedItem = matchInventoryItemForHealthInsight(factor, inventoryItems);
     urgentActions.push({
       id: `${property.id}-INSIGHT-${factorId}`,

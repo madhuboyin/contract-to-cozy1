@@ -20,6 +20,7 @@ export interface ResolutionActionDTO {
   entityType?: 'Warranty' | 'Insurance';
   itemId?: string;
   assetName?: string;
+  href?: string;
 }
 
 export type ResolutionCaseKind =

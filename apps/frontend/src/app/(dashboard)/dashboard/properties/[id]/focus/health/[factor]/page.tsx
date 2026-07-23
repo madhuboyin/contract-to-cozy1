@@ -185,6 +185,7 @@ function getInsightStatusExplanation(
   status: string | undefined,
   factorName?: string,
   applianceCount = 0,
+  incompleteApplianceCount = 0,
 ): string {
   const s = String(status || "");
   if (s === "Missing Data") {
@@ -219,7 +220,9 @@ function getInsightStatusExplanation(
       'Structure Factor': 'Your structural elements look okay but warrant a closer look — a periodic inspection every few years is a smart habit for any home.',
       'Roof Condition': 'Your roof is intact but showing some wear — keeping an eye on it after storms helps you catch issues early.',
       'Appliances': applianceCount > 0
-        ? `${applianceCount} appliance${applianceCount === 1 ? " is" : "s are"} tracked. Add other major appliances or complete their details to improve health, coverage, and recall guidance.`
+        ? incompleteApplianceCount > 0
+          ? `${applianceCount} appliance${applianceCount === 1 ? " is" : "s are"} tracked. Add an approximate installation year for ${incompleteApplianceCount} appliance${incompleteApplianceCount === 1 ? "" : "s"} to improve lifecycle guidance.`
+          : `${applianceCount} appliance${applianceCount === 1 ? " is" : "s are"} tracked with the lifecycle information needed for health guidance.`
         : 'Add your major appliances to start tracking their health, coverage, and recall status.',
     };
     return watchMap[factor] ?? 'This area is in decent shape but worth keeping an eye on — periodic checks help you stay ahead of anything that might come up.';
@@ -301,10 +304,10 @@ function getPrimaryCta(
   const s = String(status || "");
   const isAppliance = String(factorName || "").toLowerCase().includes("appliance");
 
-  if (s === "Missing Data" || s === "Incomplete") {
+  if (s === "Missing Data" || s === "Incomplete" || (isAppliance && s === "Partial")) {
     if (isAppliance) {
       return {
-        label: "Add appliances to inventory",
+        label: s === "Partial" ? "Complete appliance details" : "Add appliances",
         href: `/dashboard/properties/${propertyId}/edit?focus=appliances`,
       };
     }
@@ -322,7 +325,7 @@ function getPrimaryCta(
   if (isAppliance) {
     return {
       label: "View appliance status board",
-      href: `/dashboard/properties/${propertyId}/status-board?category=APPLIANCE&condition=ACTION_NEEDED`,
+      href: `/dashboard/properties/${propertyId}/status-board?category=APPLIANCE`,
     };
   }
   return {
@@ -1298,18 +1301,26 @@ export default function HealthInsightFocusPage() {
   const propertyName = prop?.name || "this property";
   const applianceRecords = Array.isArray(prop?.majorAppliances) ? prop.majorAppliances : [];
   const applianceCount = applianceRecords.length;
+  const incompleteApplianceCount = applianceRecords.filter(
+    (appliance) => !appliance.assetType || !appliance.installationYear,
+  ).length;
   const applianceFactor = isApplianceFactor(insight?.factor);
   const displayName = getDisplayFactorName(insight?.factor);
   // Defend against a stale health snapshot while the canonical property
   // appliance projection is already available on this response.
   const status = applianceFactor && applianceCount > 0 && insight?.status === "Missing Data"
-    ? applianceCount >= 3 ? "Complete" : "Partial"
+    ? incompleteApplianceCount > 0 ? "Partial" : "Complete"
     : insight?.status;
   const score = asNumber(insight?.score) ?? 0;
   const impact = getInsightImpact(status);
   const details = insight?.details ?? [];
   const factorDescription = getFactorDescription(insight?.factor, status);
-  const statusExplanation = getInsightStatusExplanation(status, insight?.factor, applianceCount);
+  const statusExplanation = getInsightStatusExplanation(
+    status,
+    insight?.factor,
+    applianceCount,
+    incompleteApplianceCount,
+  );
   const actionHint = getFactorActionHint(insight?.factor, status);
   const primaryCta = getPrimaryCta(insight?.factor, status, propertyId);
   const friendlyStatus = getUserFriendlyStatus(status);
@@ -1828,6 +1839,15 @@ export default function HealthInsightFocusPage() {
               <ArrowRight className="h-4 w-4 text-slate-400 shrink-0" />
             </div>
           </Link>
+
+          {applianceFactor && primaryCta.href.includes("/edit?focus=appliances") && (
+            <Link href={`/dashboard/properties/${propertyId}/status-board?category=APPLIANCE`} className="block">
+              <div className="rounded-xl border border-slate-200 bg-white hover:bg-slate-50 active:scale-[0.99] transition-all px-4 py-3 flex items-center justify-between gap-2 cursor-pointer">
+                <p className="text-sm font-medium text-slate-700">View appliance health</p>
+                <ArrowRight className="h-4 w-4 text-slate-400 shrink-0" />
+              </div>
+            </Link>
+          )}
 
           {impact === "negative" && !primaryCta.href.includes("tab=maintenance") && (
             <Link href={`/dashboard/properties/${propertyId}/?tab=maintenance&view=insights`} className="block">

@@ -34,7 +34,7 @@ function applianceInsight(result) {
   return result.insights.find((insight) => insight.factor === 'Appliances');
 }
 
-test('property appliance projection prevents a false missing-data insight', () => {
+test('complete property appliance records produce a complete appliance factor', () => {
   const result = calculateHealthScore(property({
     majorAppliances: [
       { assetType: 'DISHWASHER', installationYear: 2016 },
@@ -42,8 +42,8 @@ test('property appliance projection prevents a false missing-data insight', () =
     ],
   }), 0);
 
-  assert.equal(applianceInsight(result)?.status, 'Partial');
-  assert.ok(applianceInsight(result).score > 0);
+  assert.equal(applianceInsight(result)?.status, 'Complete');
+  assert.equal(applianceInsight(result).score, 5);
 });
 
 test('only APPLIANCE inventory records count toward appliance health', () => {
@@ -60,17 +60,28 @@ test('only APPLIANCE inventory records count toward appliance health', () => {
     ],
   }), 0);
 
-  assert.equal(applianceInsight(result)?.status, 'Partial');
+  assert.equal(applianceInsight(result)?.status, 'Complete');
 });
 
-test('three canonical appliance records complete the appliance factor', () => {
+test('one complete canonical appliance record is sufficient for the appliance factor', () => {
   const result = calculateHealthScore(property({
     inventoryItems: [
       { category: 'APPLIANCE', assetType: 'DISHWASHER', name: 'Dishwasher', installedOn: new Date('2016-01-01') },
-      { category: 'APPLIANCE', assetType: 'REFRIGERATOR', name: 'Refrigerator', installedOn: new Date('2016-01-01') },
-      { category: 'APPLIANCE', assetType: 'OVEN_RANGE', name: 'Oven Range', installedOn: new Date('2016-01-01') },
     ],
   }), 0);
 
   assert.equal(applianceInsight(result)?.status, 'Complete');
+});
+
+test('existing appliances with missing installation years produce a partial factor', () => {
+  const result = calculateHealthScore(property({
+    majorAppliances: [
+      { assetType: 'DISHWASHER', installationYear: null },
+      { assetType: 'REFRIGERATOR', installationYear: 2016 },
+    ],
+  }), 0);
+
+  assert.equal(applianceInsight(result)?.status, 'Partial');
+  assert.ok(applianceInsight(result).score > 0);
+  assert.ok(applianceInsight(result).score < 5);
 });

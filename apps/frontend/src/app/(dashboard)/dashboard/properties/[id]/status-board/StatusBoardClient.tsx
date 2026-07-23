@@ -514,6 +514,17 @@ export default function StatusBoardClient() {
   const items = data?.items ?? [];
   const pagination = data?.pagination;
   const groups = data?.groups;
+  const hasActiveResultFilter =
+    conditionFilter !== "all" ||
+    categoryFilter !== "all" ||
+    pinnedOnly ||
+    Boolean(search);
+  const isApplianceActionFilter =
+    categoryFilter.toUpperCase() === "APPLIANCE" &&
+    conditionFilter === "ACTION_NEEDED";
+  const hasNoMatchingItems = hasActiveResultFilter && items.length === 0;
+  const resultCountLabel =
+    hasActiveResultFilter ? "matching items" : "items evaluated";
   const missingInstallDateItem = useMemo(
     () => items.find((item) => item.needsInstallDateForPrediction) ?? null,
     [items]
@@ -538,24 +549,46 @@ export default function StatusBoardClient() {
     ? `${formatDisplayName(priorityActionItem.displayName)} needs attention`
     : pendingInstallDateCount > 0
       ? "Add missing install dates to improve confidence"
+      : isApplianceActionFilter
+        ? "No appliances currently need action"
+        : hasNoMatchingItems
+          ? "No items match these filters"
       : "No urgent status actions detected";
   const priorityActionDescription = priorityActionItem
     ? "Focus this item first to reduce near-term risk and keep cascading replacement costs contained."
     : pendingInstallDateCount > 0
       ? `${pendingInstallDateCount} item${pendingInstallDateCount === 1 ? "" : "s"} still need install dates for stronger lifecycle predictions.`
+      : isApplianceActionFilter
+        ? "Your tracked appliances are not currently flagged for urgent action. Show all appliances to review their health and lifecycle details."
+        : hasNoMatchingItems
+          ? "Clear the active filters to return to all monitored home items."
       : "Everything is currently in a stable window. Review monitor items for preventative upkeep.";
   const priorityImpactLabel = priorityActionItem
     ? `${RECOMMENDATION_LABELS[priorityActionItem.recommendation]} · ${CONDITION_LABELS[priorityActionItem.condition]}`
     : pendingInstallDateCount > 0
       ? `${pendingInstallDateCount} forecast gap${pendingInstallDateCount === 1 ? "" : "s"}`
+      : hasNoMatchingItems
+        ? "0 matching items"
       : "Stable status profile";
   const priorityActionCtaLabel = priorityActionItem
     ? `Review ${formatDisplayName(priorityActionItem.displayName)}`
     : missingInstallDateItem
       ? `Add install date for ${formatDisplayName(missingInstallDateItem.displayName)}`
+      : isApplianceActionFilter
+        ? "Show all appliances"
+        : hasNoMatchingItems
+          ? "Clear filters"
       : summary?.actionNeeded
         ? `Review ${summary.actionNeeded} action-needed items`
         : "Review monitor items";
+
+  const clearResultFilters = useCallback(() => {
+    setConditionFilter("all");
+    setCategoryFilter("all");
+    setPinnedOnly(false);
+    setSearch("");
+    setPage(1);
+  }, []);
 
   const handlePriorityAction = useCallback(() => {
     if (priorityActionItem) {
@@ -575,10 +608,26 @@ export default function StatusBoardClient() {
       return;
     }
 
+    if (hasNoMatchingItems) {
+      if (isApplianceActionFilter) {
+        setConditionFilter("all");
+        setPage(1);
+        return;
+      }
+      clearResultFilters();
+      return;
+    }
+
     setConditionFilter("MONITOR");
     setGroupBy("none");
     setPage(1);
-  }, [missingInstallDateItem, priorityActionItem]);
+  }, [
+    clearResultFilters,
+    hasNoMatchingItems,
+    isApplianceActionFilter,
+    missingInstallDateItem,
+    priorityActionItem,
+  ]);
 
   // Card handlers for new card layout
   const cardHandlers: CardHandlers = useMemo(() => ({
@@ -1419,7 +1468,7 @@ export default function StatusBoardClient() {
                 />
                 <TrustStrip
                   variant="footnote"
-                  confidenceLabel={`${summary.total} items evaluated; ${summary.actionNeeded} currently need action`}
+                  confidenceLabel={`${summary.total} ${resultCountLabel}; ${summary.actionNeeded} currently need action`}
                   freshnessLabel="Updates when inventory details, install dates, or maintenance signals change"
                   sourceLabel="Status board + inventory details + guidance context"
                 />
@@ -1608,12 +1657,36 @@ export default function StatusBoardClient() {
           ) : items.length === 0 ? (
             <RouteStateCard
               state="empty"
-              title="No tracked items yet"
-              description="Add inventory items or home systems to unlock condition tracking and recommendations."
+              title={
+                isApplianceActionFilter
+                  ? "No appliances currently need action"
+                  : hasActiveResultFilter
+                    ? "No items match these filters"
+                    : "No tracked items yet"
+              }
+              description={
+                isApplianceActionFilter
+                  ? "Your tracked appliances are not currently flagged for urgent action. Show all appliances to review their health and lifecycle details."
+                  : hasActiveResultFilter
+                    ? "Clear the active filters to return to all monitored home items."
+                    : "Add inventory items or home systems to unlock condition tracking and recommendations."
+              }
               action={
-                <Button asChild>
-                  <Link href={`/dashboard/properties/${propertyId}/inventory`}>Add inventory items</Link>
-                </Button>
+                hasActiveResultFilter ? (
+                  <Button onClick={isApplianceActionFilter
+                    ? () => {
+                        setConditionFilter("all");
+                        setPage(1);
+                      }
+                    : clearResultFilters}
+                  >
+                    {isApplianceActionFilter ? "Show all appliances" : "Clear filters"}
+                  </Button>
+                ) : (
+                  <Button asChild>
+                    <Link href={`/dashboard/properties/${propertyId}/inventory`}>Add inventory items</Link>
+                  </Button>
+                )
               }
               className="rounded-2xl px-4 py-6"
             />
@@ -1679,7 +1752,7 @@ export default function StatusBoardClient() {
         {summary ? (
           <TrustStrip
             variant="footnote"
-            confidenceLabel={`${summary.total} items evaluated with ${summary.actionNeeded} flagged as action needed`}
+            confidenceLabel={`${summary.total} ${resultCountLabel} with ${summary.actionNeeded} flagged as action needed`}
             freshnessLabel="Updated automatically"
             sourceLabel=""
           />
@@ -1705,7 +1778,7 @@ export default function StatusBoardClient() {
             title={priorityActionTitle}
             description={priorityActionDescription}
             impactLabel={priorityImpactLabel}
-            confidenceLabel={`${summary.total} items evaluated`}
+            confidenceLabel={`${summary.total} ${resultCountLabel}`}
             variant={priorityActionItem ? 'warning' : 'default'}
             primaryAction={(
               <Button className="w-full sm:w-auto" onClick={handlePriorityAction}>
@@ -1745,7 +1818,9 @@ export default function StatusBoardClient() {
                   <p className="stat-number mt-0.5 text-slate-800 dark:text-slate-100">
                     {summary.total}
                   </p>
-                  <p className="mt-1 text-[11px] text-slate-400 dark:text-slate-500 opacity-80">items monitored</p>
+                  <p className="mt-1 text-[11px] text-slate-400 dark:text-slate-500 opacity-80">
+                    {hasActiveResultFilter ? "matching items" : "items monitored"}
+                  </p>
                 </div>
               </div>
               {conditionFilter === "all" && (
@@ -2001,12 +2076,36 @@ export default function StatusBoardClient() {
       ) : items.length === 0 ? (
         <RouteStateCard
           state="empty"
-          title="No tracked items yet"
-          description="Add inventory items or home systems first, then the board can rank what needs attention."
+          title={
+            isApplianceActionFilter
+              ? "No appliances currently need action"
+              : hasActiveResultFilter
+                ? "No items match these filters"
+                : "No tracked items yet"
+          }
+          description={
+            isApplianceActionFilter
+              ? "Your tracked appliances are not currently flagged for urgent action. Show all appliances to review their health and lifecycle details."
+              : hasActiveResultFilter
+                ? "Clear the active filters to return to all monitored home items."
+                : "Add inventory items or home systems first, then the board can rank what needs attention."
+          }
           action={
-            <Button asChild>
-              <Link href={`/dashboard/properties/${propertyId}/inventory`}>Add inventory items</Link>
-            </Button>
+            hasActiveResultFilter ? (
+              <Button onClick={isApplianceActionFilter
+                ? () => {
+                    setConditionFilter("all");
+                    setPage(1);
+                  }
+                : clearResultFilters}
+              >
+                {isApplianceActionFilter ? "Show all appliances" : "Clear filters"}
+              </Button>
+            ) : (
+              <Button asChild>
+                <Link href={`/dashboard/properties/${propertyId}/inventory`}>Add inventory items</Link>
+              </Button>
+            )
           }
           className={`mt-4 ${GLASS_PANEL_CLASS}`}
         />

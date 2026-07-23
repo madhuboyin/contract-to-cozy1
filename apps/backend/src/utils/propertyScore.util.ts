@@ -337,7 +337,6 @@ export function calculateHealthScore(
   
   // 7. Appliance Ages (Max 5) - FIX 3: Add detailed appliance list
   const assetCount = relatedAppliances.length;
-  const maxAssetsForScore = 3; // Define completeness threshold
   
   // Check for active home warranty coverage for any appliance
   const now = new Date();
@@ -347,8 +346,12 @@ export function calculateHealthScore(
 
   if (assetCount > 0) {
     const maxScore = EXTRA_WEIGHTS.APPLIANCES;
-    // Score based on completion ratio (capped at maxScore)
-    let appScore = Math.min(maxScore, assetCount * (maxScore / maxAssetsForScore)); 
+    const appliancesWithInstallDate = relatedAppliances.filter((a) => a.installedOn !== null);
+    const missingInstallDateCount = assetCount - appliancesWithInstallDate.length;
+    // Score the completeness of appliances the homeowner actually has. Do not
+    // assume every home must contain an arbitrary minimum number of appliances.
+    const lifecycleCompleteness = appliancesWithInstallDate.length / assetCount;
+    const appScore = maxScore * (0.5 + lifecycleCompleteness * 0.5);
     
     // Determine Age Risk: Flag if any primary asset is over 15 years old.
     const criticallyAging = relatedAppliances.some(
@@ -379,7 +382,7 @@ export function calculateHealthScore(
                 });
             });
         }
-    } else if (assetCount < maxAssetsForScore) {
+    } else if (missingInstallDateCount > 0) {
         insights.push({ factor: 'Appliances', status: 'Partial', score: appScore });
     } else {
         insights.push({ factor: 'Appliances', status: 'Complete', score: appScore });
