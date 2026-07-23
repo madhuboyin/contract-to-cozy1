@@ -15,13 +15,16 @@ import {
   StatusChip,
 } from '@/components/mobile/dashboard/MobilePrimitives';
 import { AddressAutocomplete } from '@/components/property/AddressAutocomplete';
-import type { OutdoorSpaceType, PropertyResponsibilityScope, ResponsibleParty } from '@/types';
+import PropertyOwnershipResponsibilitySection, {
+  type OccupancyStatus,
+  type OwnershipForm,
+  type PropertyUse,
+} from '@/components/property/PropertyOwnershipResponsibilitySection';
+import type { OutdoorSpaceType } from '@/types';
 import {
   DWELLING_TYPE_LABELS,
   DWELLING_TYPE_OPTIONS,
   OUTDOOR_SPACE_TYPE_OPTIONS,
-  RESPONSIBILITY_SCOPES,
-  RESPONSIBLE_PARTY_OPTIONS,
   defaultResponsibilityParties,
   mapResponsibilitiesToPayload,
   normalizeOutdoorSpaceTypes,
@@ -72,9 +75,6 @@ interface PropertyFormData {
   // REMOVED: applianceAges: string; (Managed internally by majorAppliances state)
 }
 
-const OWNERSHIP_FORM_OPTIONS = ['FEE_SIMPLE', 'CONDOMINIUM', 'COOPERATIVE', 'LEASEHOLD', 'OTHER', 'UNKNOWN'];
-const PROPERTY_USE_OPTIONS = ['PRIMARY_RESIDENCE', 'SECOND_HOME', 'LONG_TERM_RENTAL', 'SHORT_TERM_RENTAL', 'VACANT', 'UNDER_RENOVATION', 'FOR_SALE', 'OTHER', 'UNKNOWN'];
-const OCCUPANCY_STATUS_OPTIONS = ['OWNER_OCCUPIED', 'TENANT_OCCUPIED', 'FAMILY_OCCUPIED', 'MIXED', 'VACANT', 'UNKNOWN'];
 const HEATING_OPTIONS = ['HVAC', 'FURNACE', 'HEAT_PUMP', 'RADIATORS', 'UNKNOWN'];
 const COOLING_OPTIONS = ['CENTRAL_AC', 'WINDOW_AC', 'UNKNOWN'];
 const WATER_HEATER_OPTIONS = ['TANK', 'TANKLESS', 'HEAT_PUMP', 'SOLAR', 'UNKNOWN'];
@@ -171,13 +171,6 @@ export default function NewPropertyPage() {
     }));
   };
 
-  const handleResponsibilityChange = (scope: PropertyResponsibilityScope, party: ResponsibleParty) => {
-    setFormData(prev => ({
-      ...prev,
-      responsibilities: { ...prev.responsibilities, [scope]: party },
-    }));
-  };
-
   const handleOutdoorSpaceTypeChange = (type: OutdoorSpaceType, checked: boolean) => {
     setFormData(prev => ({
       ...prev,
@@ -243,9 +236,9 @@ export default function NewPropertyPage() {
     if (!formData.state.trim() || formData.state.length !== 2) return 'State must be 2 characters (e.g., NJ).';
     if (!/^\d{5}$/.test(formData.zipCode)) return 'ZIP code must be 5 digits.';
     if (!formData.dwellingType) return 'Home type is required.';
-    if (!formData.ownershipForm) return 'Ownership form is required.';
-    if (!formData.propertyUse) return 'Property use is required.';
-    if (!formData.occupancyStatus) return 'Occupancy status is required.';
+    if (!formData.ownershipForm) return 'Choose how this home is owned.';
+    if (!formData.propertyUse) return 'Choose how this home is used.';
+    if (!formData.occupancyStatus) return 'Choose who lives here now.';
     if (!/^\d{4}$/.test(formData.yearBuilt)) return 'Year Built must be a 4-digit year.';
 
     // NEW: Validate structured appliance inputs
@@ -857,32 +850,17 @@ export default function NewPropertyPage() {
               </div>
 
               <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50/70 p-3.5">
-                <h3 className="mb-0 text-sm font-semibold text-slate-900">Ownership, use & responsibility</h3>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  <SelectInput label="Ownership Form" name="ownershipForm" value={formData.ownershipForm} options={OWNERSHIP_FORM_OPTIONS} />
-                  <SelectInput label="Property Use" name="propertyUse" value={formData.propertyUse} options={PROPERTY_USE_OPTIONS} />
-                  <SelectInput label="Occupancy Status" name="occupancyStatus" value={formData.occupancyStatus} options={OCCUPANCY_STATUS_OPTIONS} />
-                </div>
-
-                <div className="grid grid-cols-1 gap-3 border-t border-slate-200 pt-3 sm:grid-cols-2 lg:grid-cols-3">
-                  {RESPONSIBILITY_SCOPES.map((scope) => (
-                    <div key={scope} className="space-y-1.5">
-                      <label htmlFor={`responsibility-${scope}`} className="block text-sm font-medium text-slate-700">
-                        {scope.replace(/_/g, ' ')}
-                      </label>
-                      <select
-                        id={`responsibility-${scope}`}
-                        value={formData.responsibilities[scope]}
-                        onChange={(event) => handleResponsibilityChange(scope, event.target.value as ResponsibleParty)}
-                        className={selectBaseClass}
-                      >
-                        {RESPONSIBLE_PARTY_OPTIONS.map((party) => (
-                          <option key={party} value={party}>{party.replace(/_/g, ' ')}</option>
-                        ))}
-                      </select>
-                    </div>
-                  ))}
-                </div>
+                <PropertyOwnershipResponsibilitySection
+                  idPrefix="new-property"
+                  ownershipForm={formData.ownershipForm}
+                  propertyUse={formData.propertyUse}
+                  occupancyStatus={formData.occupancyStatus}
+                  responsibilities={formData.responsibilities}
+                  onOwnershipFormChange={(value: OwnershipForm) => handleSelectChange('ownershipForm', value)}
+                  onPropertyUseChange={(value: PropertyUse) => handleSelectChange('propertyUse', value)}
+                  onOccupancyStatusChange={(value: OccupancyStatus) => handleSelectChange('occupancyStatus', value)}
+                  onResponsibilitiesChange={(responsibilities) => setFormData((previous) => ({ ...previous, responsibilities }))}
+                />
 
                 <div id="exterior" className="grid grid-cols-1 gap-2.5 border-t border-slate-200 pt-3 sm:grid-cols-2">
                   <BooleanInput label="Private outdoor space" name="hasPrivateOutdoorSpace" checked={formData.hasPrivateOutdoorSpace} />

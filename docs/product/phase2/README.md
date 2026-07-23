@@ -260,6 +260,9 @@ Implemented July 23, 2026:
 - Added a clearly labeled household-context entry point to Home setup so users can find the optional flow without confusing it with ownership, occupancy status, or property age.
 - Replaced the twelve-field responsibility dropdown wall with four high-level presets, an at-a-glance party summary, and grouped exception controls for structure, grounds, and shared systems.
 - Preserved every canonical responsibility scope and the existing owner/association/landlord/shared/unknown values; the redesign changes presentation, not responsibility semantics.
+- Applied the same progressive ownership vocabulary to both new-property setup and Property Details editing. The database field remains `ownershipForm`, but the homeowner-facing question is **How is this home owned?**
+- Replaced legal-enum labels with plain-language choices and a short explanation of the selected ownership setup. **I’m not sure** remains a valid answer and does not imply owner responsibility.
+- New-property setup now asks for one general maintenance-responsibility pattern first and keeps the twelve canonical area-level controls behind **Review exceptions**.
 
 Acceptance criteria:
 
@@ -268,6 +271,8 @@ Acceptance criteria:
 - Property age never asks for or implies children, older adults, or pets.
 - Property Details provides a discoverable path to optional household context without embedding sensitive answers in the Property form.
 - Responsibility exceptions remain fully editable but are grouped into compact, scan-friendly sections.
+- New and edit property flows use the same ownership, use, occupancy, and responsibility labels.
+- A homeowner is never required to understand the internal term **Ownership Form** or raw enum values such as `FEE_SIMPLE` and `UNKNOWN`.
 
 ## Action-plan loading presentation
 

@@ -60,6 +60,14 @@ import { cn } from "@/lib/utils";
 import { humanizeLabel } from "@/lib/utils/string";
 import PropertyEditSection from "@/components/property/PropertyEditSection";
 import PropertyEditSaveBar from "@/components/property/PropertyEditSaveBar";
+import {
+  OCCUPANCY_STATUS_LABELS,
+  OCCUPANCY_STATUS_OPTIONS,
+  OWNERSHIP_FORM_LABELS,
+  OWNERSHIP_FORM_OPTIONS,
+  PROPERTY_USE_LABELS,
+  PROPERTY_USE_OPTIONS,
+} from "@/components/property/PropertyOwnershipResponsibilitySection";
 import FieldNudgeChip from "@/components/ui/FieldNudgeChip";
 import { fieldSizeClass } from "@/components/ui/fieldSizing";
 import {
@@ -88,40 +96,6 @@ const MAJOR_APPLIANCE_OPTIONS = [
 ];
 const MAX_PROPERTY_PHOTO_SIZE_MB = 10;
 const ALLOWED_PROPERTY_PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
-const OWNERSHIP_FORM_OPTIONS = ['FEE_SIMPLE', 'CONDOMINIUM', 'COOPERATIVE', 'LEASEHOLD', 'OTHER', 'UNKNOWN'] as const;
-const PROPERTY_USE_OPTIONS = ['PRIMARY_RESIDENCE', 'SECOND_HOME', 'LONG_TERM_RENTAL', 'SHORT_TERM_RENTAL', 'VACANT', 'UNDER_RENOVATION', 'FOR_SALE', 'OTHER', 'UNKNOWN'] as const;
-const OCCUPANCY_STATUS_OPTIONS = ['OWNER_OCCUPIED', 'TENANT_OCCUPIED', 'FAMILY_OCCUPIED', 'MIXED', 'VACANT', 'UNKNOWN'] as const;
-
-const OWNERSHIP_FORM_LABELS: Record<(typeof OWNERSHIP_FORM_OPTIONS)[number], string> = {
-  FEE_SIMPLE: 'I own the home and land',
-  CONDOMINIUM: 'Condo — I own my unit',
-  COOPERATIVE: 'Co-op — I own shares in the building',
-  LEASEHOLD: 'Leasehold — the land is leased',
-  OTHER: 'Something else',
-  UNKNOWN: 'I’m not sure',
-};
-
-const PROPERTY_USE_LABELS: Record<(typeof PROPERTY_USE_OPTIONS)[number], string> = {
-  PRIMARY_RESIDENCE: 'My primary home',
-  SECOND_HOME: 'A second home',
-  LONG_TERM_RENTAL: 'A long-term rental',
-  SHORT_TERM_RENTAL: 'A short-term rental',
-  VACANT: 'Currently unused',
-  UNDER_RENOVATION: 'Under renovation',
-  FOR_SALE: 'For sale',
-  OTHER: 'Something else',
-  UNKNOWN: 'I’m not sure',
-};
-
-const OCCUPANCY_STATUS_LABELS: Record<(typeof OCCUPANCY_STATUS_OPTIONS)[number], string> = {
-  OWNER_OCCUPIED: 'I live here',
-  TENANT_OCCUPIED: 'Tenants live here',
-  FAMILY_OCCUPIED: 'Family members live here',
-  MIXED: 'A mix of people',
-  VACANT: 'No one right now',
-  UNKNOWN: 'I’m not sure',
-};
-
 const RESPONSIBILITY_PRESETS = [
   { value: 'OWNER', label: 'I handle most maintenance', description: 'Use this for a home you primarily maintain yourself.', icon: HomeIcon },
   { value: 'ASSOCIATION', label: 'My association handles most', description: 'Common for condos, co-ops, and HOA-managed homes.', icon: Building2 },
