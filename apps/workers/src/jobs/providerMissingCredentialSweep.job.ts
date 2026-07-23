@@ -12,9 +12,29 @@
 
 import { prisma } from '../lib/prisma';
 import { generateSmokeCorrelationId } from '@worker-shared/lib/smokeTestCorrelation';
-import { logger } from '../lib/logger';
+import { logger, AppLogger } from '../lib/logger';
 
-export async function providerMissingCredentialSweepJob(opts?: { dryRun?: boolean }) {
+// W4 item 1: small, job-scoped dependency interface (see
+// reserveFundBalanceReminder.job.ts for the pattern this follows).
+// `defaultDeps` wires real implementations so every existing caller is
+// unaffected; tests inject fakes directly instead of require.cache surgery.
+export interface ProviderMissingCredentialSweepDeps {
+  prisma: Pick<typeof prisma, 'providerProfile' | 'providerComplianceAlert' | 'providerCredentialRequirement' | 'providerCredential'>;
+  logger: AppLogger;
+  generateSmokeCorrelationId: typeof generateSmokeCorrelationId;
+}
+
+const defaultDeps: ProviderMissingCredentialSweepDeps = {
+  prisma,
+  logger,
+  generateSmokeCorrelationId,
+};
+
+export async function providerMissingCredentialSweepJob(
+  opts?: { dryRun?: boolean },
+  deps: ProviderMissingCredentialSweepDeps = defaultDeps,
+) {
+  const { prisma, logger, generateSmokeCorrelationId } = deps;
   const dryRun = opts?.dryRun === true;
   // Not property-scoped (this sweep operates on providers, not properties —
   // matches provider-credential-expire's supportsPropertyScope:false

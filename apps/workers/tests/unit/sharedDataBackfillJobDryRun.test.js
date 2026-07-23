@@ -7,31 +7,31 @@
 // run, and the scheduled/no-opts call path (the daily cron tick) must still
 // default to a real run so this feature can't accidentally turn the
 // production sweep into a permanent no-op.
+//
+// W4 item 1 (DI refactor): dependencies are injected directly instead of
+// via require.cache.
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
 require('ts-node/register');
 
-function loadJob({ summary }) {
+const { runSharedDataBackfillJob } = require('../../src/jobs/sharedDataBackfill.job.ts');
+
+const noopLogger = { info() {}, warn() {}, error() {}, debug() {}, fatal() {}, child() { return this; } };
+
+function fakeDeps({ summary }) {
   const calls = { runBackfillArgs: null };
-  const servicePath = require.resolve('../../../backend/src/services/sharedDataBackfill.service.ts');
-  require.cache[servicePath] = {
-    id: servicePath,
-    filename: servicePath,
-    loaded: true,
-    exports: {
-      sharedDataBackfillService: {
-        runBackfill: async (args) => {
-          calls.runBackfillArgs = args;
-          return summary;
-        },
+  const deps = {
+    sharedDataBackfillService: {
+      runBackfill: async (args) => {
+        calls.runBackfillArgs = args;
+        return summary;
       },
     },
+    logger: noopLogger,
   };
-  const jobPath = require.resolve('../../src/jobs/sharedDataBackfill.job.ts');
-  delete require.cache[jobPath];
-  return { ...require(jobPath), calls };
+  return { deps, calls };
 }
 
 const BASE_SUMMARY = (dryRun) => ({
@@ -43,9 +43,9 @@ const BASE_SUMMARY = (dryRun) => ({
 });
 
 test('dry run: opts.dryRun=true is passed through to the service unchanged', async () => {
-  const { runSharedDataBackfillJob, calls } = loadJob({ summary: BASE_SUMMARY(true) });
+  const { deps, calls } = fakeDeps({ summary: BASE_SUMMARY(true) });
 
-  const result = await runSharedDataBackfillJob({ dryRun: true });
+  const result = await runSharedDataBackfillJob({ dryRun: true }, deps);
 
   assert.equal(calls.runBackfillArgs.dryRun, true);
   assert.equal(result.dryRun, true);
@@ -55,26 +55,26 @@ test('dry run: opts.dryRun=true is passed through to the service unchanged', asy
 });
 
 test('no opts (the daily cron tick): defaults to a real run, not dry-run', async () => {
-  const { runSharedDataBackfillJob, calls } = loadJob({ summary: BASE_SUMMARY(false) });
+  const { deps, calls } = fakeDeps({ summary: BASE_SUMMARY(false) });
 
-  const result = await runSharedDataBackfillJob();
+  const result = await runSharedDataBackfillJob(undefined, deps);
 
   assert.equal(calls.runBackfillArgs.dryRun, false);
   assert.equal(result.dryRun, false);
 });
 
 test('opts.dryRun=false is honored explicitly, not coerced to true', async () => {
-  const { runSharedDataBackfillJob, calls } = loadJob({ summary: BASE_SUMMARY(false) });
+  const { deps, calls } = fakeDeps({ summary: BASE_SUMMARY(false) });
 
-  await runSharedDataBackfillJob({ dryRun: false });
+  await runSharedDataBackfillJob({ dryRun: false }, deps);
 
   assert.equal(calls.runBackfillArgs.dryRun, false);
 });
 
 test('a non-boolean dryRun value (e.g. a stray truthy string from malformed job data) is normalized, not passed through raw', async () => {
-  const { runSharedDataBackfillJob, calls } = loadJob({ summary: BASE_SUMMARY(false) });
+  const { deps, calls } = fakeDeps({ summary: BASE_SUMMARY(false) });
 
-  await runSharedDataBackfillJob({ dryRun: 'true' });
+  await runSharedDataBackfillJob({ dryRun: 'true' }, deps);
 
   assert.equal(calls.runBackfillArgs.dryRun, false);
 });

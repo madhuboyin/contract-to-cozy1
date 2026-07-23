@@ -8,6 +8,12 @@
 // direct channel-transport call anywhere in the file, and a real
 // NotificationService.create call with transportEnabled threaded from
 // WORKER_OUTBOUND_NOTIFICATIONS_ENABLED.
+//
+// W4 item 1 (DI refactor): dependencies are injected directly (see
+// SeasonalNotificationDeps in the job file) instead of via require.cache.
+// areWorkerOutboundNotificationsEnabled is still the real implementation
+// (it's a pure env-var read, and one test below exercises that real
+// env-reading behavior directly), not a fake.
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -17,24 +23,33 @@ const path = require('node:path');
 require('ts-node/register');
 
 const JOB_FILE = path.resolve(__dirname, '../../src/jobs/seasonalNotification.job.ts');
+const { sendSeasonalNotifications } = require(JOB_FILE);
+const { areWorkerOutboundNotificationsEnabled } = require('../../../backend/src/config/workerExecutionPolicy.ts');
 
 test('never calls a channel transport directly (governance bypass regression guard)', () => {
   const source = fs.readFileSync(JOB_FILE, 'utf8');
   assert.doesNotMatch(source, /\bsendEmail\s*\(/, 'seasonalNotification.job.ts must not call sendEmail directly — route through NotificationService.create');
-  assert.match(source, /NotificationService\.create\(/);
+  assert.match(source, /notificationService\.create\(/);
   assert.match(source, /transportEnabled/);
   assert.match(source, /areWorkerOutboundNotificationsEnabled/);
 });
 
-function loadJob({
+const noopLogger = { info() {}, warn() {}, error() {}, debug() {}, fatal() {}, child() { return this; } };
+
+function fakeDeps({
   checklists,
   climateSetting = { notificationEnabled: true },
   createImpl,
   dismissedActionKeys = [],
   activeSnoozeActionKeys = [],
 }) {
-  const calls = { orchestrationActionEventFindFirst: [], orchestrationActionSnoozeFindFirst: [] };
-  const prismaMock = {
+  const calls = {
+    orchestrationActionEventFindFirst: [],
+    orchestrationActionSnoozeFindFirst: [],
+    notifications: [],
+  };
+
+  const prisma = {
     seasonalChecklist: {
       findMany: async () => checklists,
       update: async () => ({}),
@@ -58,44 +73,24 @@ function loadJob({
       },
     },
   };
-  const prismaPath = require.resolve('../../src/lib/prisma.ts');
-  require.cache[prismaPath] = { id: prismaPath, filename: prismaPath, loaded: true, exports: { prisma: prismaMock } };
 
-  const createCalls = [];
-  const notificationServicePath = require.resolve('../../../backend/src/services/notification.service.ts');
-  require.cache[notificationServicePath] = {
-    id: notificationServicePath,
-    filename: notificationServicePath,
-    loaded: true,
-    exports: {
-      NotificationService: {
-        create: async (input) => {
-          createCalls.push(input);
-          if (createImpl) return createImpl(input);
-          return { id: 'notification-1' };
-        },
-      },
+  const notificationService = {
+    create: async (input) => {
+      calls.notifications.push(input);
+      if (createImpl) return createImpl(input);
+      return { id: 'notification-1' };
     },
   };
 
-  const applicabilityPath = require.resolve('../../../backend/src/services/seasonal/applicabilityPolicy.ts');
-  require.cache[applicabilityPath] = {
-    id: applicabilityPath,
-    filename: applicabilityPath,
-    loaded: true,
-    exports: { evaluateSeasonalTemplateApplicability: () => ({ status: 'APPLICABLE' }) },
+  const deps = {
+    prisma,
+    logger: noopLogger,
+    notificationService,
+    areWorkerOutboundNotificationsEnabled,
+    evaluateSeasonalTemplateApplicability: () => ({ status: 'APPLICABLE' }),
+    buildSeasonalPropertyContext: () => ({}),
   };
-
-  const checklistGenPath = require.resolve('../../src/jobs/seasonalChecklistGeneration.job.ts');
-  require.cache[checklistGenPath] = {
-    id: checklistGenPath,
-    filename: checklistGenPath,
-    loaded: true,
-    exports: { buildSeasonalPropertyContext: () => ({}) },
-  };
-
-  delete require.cache[JOB_FILE];
-  return { job: require(JOB_FILE), getCreateCalls: () => createCalls, calls };
+  return { deps, calls };
 }
 
 function checklist(overrides = {}) {
@@ -122,54 +117,53 @@ function checklist(overrides = {}) {
 
 test('creates one governed notification per checklist with property-scoped actionUrl', async () => {
   delete process.env.WORKER_OUTBOUND_NOTIFICATIONS_ENABLED;
-  const { job, getCreateCalls } = loadJob({ checklists: [checklist()] });
+  const { deps, calls } = fakeDeps({ checklists: [checklist()] });
 
-  await job.sendSeasonalNotifications();
+  await sendSeasonalNotifications(deps);
 
-  const calls = getCreateCalls();
-  assert.equal(calls.length, 1);
-  assert.equal(calls[0].userId, 'user-1');
-  assert.equal(calls[0].category, 'MAINTENANCE');
-  assert.equal(calls[0].urgency, 'MATERIAL'); // one CRITICAL item present
-  assert.equal(calls[0].actionUrl, '/dashboard/seasonal?propertyId=property-1');
-  assert.equal(calls[0].transportEnabled, false); // default
+  assert.equal(calls.notifications.length, 1);
+  assert.equal(calls.notifications[0].userId, 'user-1');
+  assert.equal(calls.notifications[0].category, 'MAINTENANCE');
+  assert.equal(calls.notifications[0].urgency, 'MATERIAL'); // one CRITICAL item present
+  assert.equal(calls.notifications[0].actionUrl, '/dashboard/seasonal?propertyId=property-1');
+  assert.equal(calls.notifications[0].transportEnabled, false); // default
 });
 
 test('respects an explicit PropertyClimateSetting opt-out', async () => {
-  const { job, getCreateCalls } = loadJob({
+  const { deps, calls } = fakeDeps({
     checklists: [checklist()],
     climateSetting: { notificationEnabled: false },
   });
 
-  await job.sendSeasonalNotifications();
+  await sendSeasonalNotifications(deps);
 
-  assert.equal(getCreateCalls().length, 0);
+  assert.equal(calls.notifications.length, 0);
 });
 
 test('skips a checklist whose property has no homeowner', async () => {
-  const { job, getCreateCalls } = loadJob({
+  const { deps, calls } = fakeDeps({
     checklists: [checklist({ property: { ...checklist().property, homeownerProfile: null } })],
   });
 
-  await job.sendSeasonalNotifications();
+  await sendSeasonalNotifications(deps);
 
-  assert.equal(getCreateCalls().length, 0);
+  assert.equal(calls.notifications.length, 0);
 });
 
 test('threads WORKER_OUTBOUND_NOTIFICATIONS_ENABLED into transportEnabled', async () => {
   process.env.WORKER_OUTBOUND_NOTIFICATIONS_ENABLED = 'true';
-  const { job, getCreateCalls } = loadJob({ checklists: [checklist()] });
+  const { deps, calls } = fakeDeps({ checklists: [checklist()] });
 
-  await job.sendSeasonalNotifications();
+  await sendSeasonalNotifications(deps);
 
-  assert.equal(getCreateCalls()[0].transportEnabled, true);
+  assert.equal(calls.notifications[0].transportEnabled, true);
   delete process.env.WORKER_OUTBOUND_NOTIFICATIONS_ENABLED;
 });
 
 test('WKR-008: returns a WorkerRunResult-shaped outcome the scheduler can classify', async () => {
-  const { job } = loadJob({ checklists: [checklist()] });
+  const { deps } = fakeDeps({ checklists: [checklist()] });
 
-  const result = await job.sendSeasonalNotifications();
+  const result = await sendSeasonalNotifications(deps);
 
   assert.equal(result.examined, 1);
   assert.equal(result.notified, 1);
@@ -178,7 +172,7 @@ test('WKR-008: returns a WorkerRunResult-shaped outcome the scheduler can classi
 });
 
 test('WKR-008: isolates a per-checklist failure and reports it in `failed`', async () => {
-  const { job, getCreateCalls } = loadJob({
+  const { deps, calls } = fakeDeps({
     checklists: [checklist({ id: 'checklist-1', propertyId: 'property-1' }), checklist({ id: 'checklist-2', propertyId: 'property-2' })],
     createImpl: async (input) => {
       if (input.entityId === 'checklist-1') throw new Error('boom');
@@ -186,47 +180,47 @@ test('WKR-008: isolates a per-checklist failure and reports it in `failed`', asy
     },
   });
 
-  const result = await job.sendSeasonalNotifications();
+  const result = await sendSeasonalNotifications(deps);
 
   assert.equal(result.examined, 2);
   assert.equal(result.notified, 1);
   assert.equal(result.failed, 1);
-  assert.equal(getCreateCalls().length, 2);
+  assert.equal(calls.notifications.length, 2);
 });
 
 test('does not notify when the canonical seasonal Home Action was dismissed', async () => {
-  const { job, getCreateCalls, calls } = loadJob({
+  const { deps, calls } = fakeDeps({
     checklists: [checklist()],
     dismissedActionKeys: ['seasonal-checklist:checklist-1'],
   });
 
-  const result = await job.sendSeasonalNotifications();
+  const result = await sendSeasonalNotifications(deps);
 
-  assert.equal(getCreateCalls().length, 0);
+  assert.equal(calls.notifications.length, 0);
   assert.equal(result.skipped, 1);
   assert.equal(calls.orchestrationActionEventFindFirst[0].actionKey, 'seasonal-checklist:checklist-1');
   assert.equal(calls.orchestrationActionEventFindFirst[0].propertyId, 'property-1');
 });
 
 test('does not notify when the canonical seasonal Home Action is actively snoozed', async () => {
-  const { job, getCreateCalls } = loadJob({
+  const { deps, calls } = fakeDeps({
     checklists: [checklist()],
     activeSnoozeActionKeys: ['seasonal-checklist:checklist-1'],
   });
 
-  await job.sendSeasonalNotifications();
+  await sendSeasonalNotifications(deps);
 
-  assert.equal(getCreateCalls().length, 0);
+  assert.equal(calls.notifications.length, 0);
 });
 
 test('notifies normally when there is no dismiss/snooze record for this checklist', async () => {
-  const { job, getCreateCalls } = loadJob({
+  const { deps, calls } = fakeDeps({
     checklists: [checklist()],
     dismissedActionKeys: ['seasonal-checklist:some-other-checklist'],
     activeSnoozeActionKeys: ['seasonal-checklist:some-other-checklist'],
   });
 
-  await job.sendSeasonalNotifications();
+  await sendSeasonalNotifications(deps);
 
-  assert.equal(getCreateCalls().length, 1);
+  assert.equal(calls.notifications.length, 1);
 });

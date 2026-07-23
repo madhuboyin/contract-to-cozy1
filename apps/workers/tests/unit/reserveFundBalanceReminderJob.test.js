@@ -8,11 +8,19 @@
 // (category-bleed muting unrelated notifications, implicit cadence
 // fallthrough), so asserting them directly here guards against a future
 // refactor silently dropping them.
+//
+// W4 item 1 (DI refactor): this job now accepts its dependencies as a
+// plain argument (see ReserveFundBalanceReminderDeps in the job file), so
+// tests inject fakes directly instead of swapping require.cache entries —
+// no ts-node module-cache surgery, no risk of a transitively-cached stale
+// mock (the exact bug class documented in this project's W6 session notes).
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
 require('ts-node/register');
+
+const { reserveFundBalanceReminderJob } = require('../../src/jobs/reserveFundBalanceReminder.job.ts');
 
 const STALE_BALANCE_DAYS = 45;
 const NOW = new Date('2026-07-20T00:00:00Z');
@@ -30,52 +38,34 @@ function fundFixture(overrides = {}) {
   };
 }
 
-function loadJob({ funds, contextAllowed = true, notifyShouldThrow = false }) {
+function fakeDeps({ funds, contextAllowed = true, notifyShouldThrow = false }) {
   const calls = { notifications: [] };
-
-  const prismaMock = {
-    homeReserveFund: { findMany: async () => funds },
-  };
-  const prismaPath = require.resolve('../../src/lib/prisma.ts');
-  require.cache[prismaPath] = { id: prismaPath, filename: prismaPath, loaded: true, exports: { prisma: prismaMock } };
-
-  const notificationServicePath = require.resolve('../../../backend/src/services/notification.service.ts');
-  require.cache[notificationServicePath] = {
-    id: notificationServicePath,
-    filename: notificationServicePath,
-    loaded: true,
-    exports: {
-      NotificationService: {
-        create: async (input) => {
-          calls.notifications.push(input);
-          if (notifyShouldThrow) throw new Error('notify failed');
-          return { id: 'notification-1' };
-        },
+  const deps = {
+    prisma: {
+      homeReserveFund: { findMany: async () => funds },
+    },
+    notificationService: {
+      create: async (input) => {
+        calls.notifications.push(input);
+        if (notifyShouldThrow) throw new Error('notify failed');
+        return { id: 'notification-1' };
       },
     },
+    logger: { info() {}, warn() {}, error() {}, debug() {}, fatal() {}, child() { return this; } },
+    checkReserveFundWorkerContext: async () => ({
+      allowed: contextAllowed,
+      reasonCodes: contextAllowed ? [] : ['TEST_BLOCKED'],
+    }),
   };
-
-  const contextPath = require.resolve('../../../backend/src/services/financialContext/reserveFundWorkerContext.service.ts');
-  require.cache[contextPath] = {
-    id: contextPath,
-    filename: contextPath,
-    loaded: true,
-    exports: {
-      checkReserveFundWorkerContext: async () => ({ allowed: contextAllowed, reasonCodes: contextAllowed ? [] : ['TEST_BLOCKED'] }),
-    },
-  };
-
-  const jobPath = require.resolve('../../src/jobs/reserveFundBalanceReminder.job.ts');
-  delete require.cache[jobPath];
-  return { ...require(jobPath), calls };
+  return { deps, calls };
 }
 
 test('notifies a fund whose last contribution is older than the stale-balance cutoff', async () => {
-  const { reserveFundBalanceReminderJob, calls } = loadJob({
+  const { deps, calls } = fakeDeps({
     funds: [fundFixture({ contributions: [{ occurredAt: STALE_DATE }] })],
   });
 
-  await reserveFundBalanceReminderJob();
+  await reserveFundBalanceReminderJob(deps);
 
   assert.equal(calls.notifications.length, 1);
   assert.equal(calls.notifications[0].category, 'GENERAL');
@@ -84,62 +74,62 @@ test('notifies a fund whose last contribution is older than the stale-balance cu
 });
 
 test('does not notify a fund with a recent contribution', async () => {
-  const { reserveFundBalanceReminderJob, calls } = loadJob({
+  const { deps, calls } = fakeDeps({
     funds: [fundFixture({ contributions: [{ occurredAt: RECENT_DATE }] })],
   });
 
-  await reserveFundBalanceReminderJob();
+  await reserveFundBalanceReminderJob(deps);
 
   assert.equal(calls.notifications.length, 0);
 });
 
 test('falls back to createdAt when a fund has zero contributions, and uses the no-contributions message', async () => {
-  const { reserveFundBalanceReminderJob, calls } = loadJob({
+  const { deps, calls } = fakeDeps({
     funds: [fundFixture({ createdAt: STALE_DATE, contributions: [] })],
   });
 
-  await reserveFundBalanceReminderJob();
+  await reserveFundBalanceReminderJob(deps);
 
   assert.equal(calls.notifications.length, 1);
   assert.match(calls.notifications[0].message, /haven't logged any contributions/);
 });
 
 test('a fund created recently with zero contributions is not notified yet', async () => {
-  const { reserveFundBalanceReminderJob, calls } = loadJob({
+  const { deps, calls } = fakeDeps({
     funds: [fundFixture({ createdAt: RECENT_DATE, contributions: [] })],
   });
 
-  await reserveFundBalanceReminderJob();
+  await reserveFundBalanceReminderJob(deps);
 
   assert.equal(calls.notifications.length, 0);
 });
 
 test('skips a fund with no linked homeowner user id', async () => {
-  const { reserveFundBalanceReminderJob, calls } = loadJob({
+  const { deps, calls } = fakeDeps({
     funds: [fundFixture({ homeownerProfile: null })],
   });
 
-  await reserveFundBalanceReminderJob();
+  await reserveFundBalanceReminderJob(deps);
 
   assert.equal(calls.notifications.length, 0);
 });
 
 test('skips (does not throw) when Property Context applicability is not allowed', async () => {
-  const { reserveFundBalanceReminderJob, calls } = loadJob({
+  const { deps, calls } = fakeDeps({
     funds: [fundFixture()],
     contextAllowed: false,
   });
 
-  await assert.doesNotReject(() => reserveFundBalanceReminderJob());
+  await assert.doesNotReject(() => reserveFundBalanceReminderJob(deps));
   assert.equal(calls.notifications.length, 0);
 });
 
 test('one fund failing to notify does not abort the run for the rest of the batch', async () => {
-  const { reserveFundBalanceReminderJob, calls } = loadJob({
+  const { deps, calls } = fakeDeps({
     funds: [fundFixture({ id: 'fund-1' }), fundFixture({ id: 'fund-2' })],
     notifyShouldThrow: true,
   });
 
-  await assert.doesNotReject(() => reserveFundBalanceReminderJob());
+  await assert.doesNotReject(() => reserveFundBalanceReminderJob(deps));
   assert.equal(calls.notifications.length, 2, 'both must still be attempted even though notify throws for each');
 });

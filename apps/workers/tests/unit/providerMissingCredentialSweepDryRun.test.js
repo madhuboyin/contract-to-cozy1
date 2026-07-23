@@ -9,6 +9,11 @@
 // even with dryRun:false) tags a smokeCorrelationId, mirroring
 // mortgage-rate-ingest's "opts presence is the manual-trigger signal"
 // convention for non-property-scoped jobs.
+//
+// W4 item 1 (DI refactor): dependencies are injected directly instead of
+// via require.cache. Uses the real generateSmokeCorrelationId (a pure
+// function, safe to call in tests) rather than a fake, since the last test
+// below asserts its actual output format.
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -16,7 +21,12 @@ const assert = require('node:assert/strict');
 require('ts-node/register');
 require('tsconfig-paths/register');
 
-function loadJob({
+const { providerMissingCredentialSweepJob } = require('../../src/jobs/providerMissingCredentialSweep.job.ts');
+const { generateSmokeCorrelationId } = require('../../../backend/src/lib/smokeTestCorrelation.ts');
+
+const noopLogger = { info() {}, warn() {}, error() {}, debug() {}, fatal() {}, child() { return this; } };
+
+function fakeDeps({
   providers,
   openAlertsByProvider = {},
   requirementsByProvider = {},
@@ -25,7 +35,7 @@ function loadJob({
 }) {
   const calls = { updates: [], creates: [] };
 
-  const prismaMock = {
+  const prisma = {
     providerProfile: {
       findMany: async () => providers,
     },
@@ -48,12 +58,9 @@ function loadJob({
       findMany: async ({ where }) => credentialsByProvider[where.providerProfileId] ?? [],
     },
   };
-  const prismaPath = require.resolve('../../src/lib/prisma.ts');
-  require.cache[prismaPath] = { id: prismaPath, filename: prismaPath, loaded: true, exports: { prisma: prismaMock } };
 
-  const jobPath = require.resolve('../../src/jobs/providerMissingCredentialSweep.job.ts');
-  delete require.cache[jobPath];
-  return { ...require(jobPath), calls };
+  const deps = { prisma, logger: noopLogger, generateSmokeCorrelationId };
+  return { deps, calls };
 }
 
 function provider(overrides = {}) {
@@ -61,13 +68,13 @@ function provider(overrides = {}) {
 }
 
 test('dry run: examines and counts a new missing-credential alert but creates nothing', async () => {
-  const { providerMissingCredentialSweepJob, calls } = loadJob({
+  const { deps, calls } = fakeDeps({
     providers: [provider()],
     requirementsByProvider: { PLUMBING: [{ serviceCategory: 'PLUMBING', credentialType: 'LICENSE' }] },
     credentialsByProvider: {},
   });
 
-  const result = await providerMissingCredentialSweepJob({ dryRun: true });
+  const result = await providerMissingCredentialSweepJob({ dryRun: true }, deps);
 
   assert.equal(calls.creates.length, 0);
   assert.equal(calls.updates.length, 0);
@@ -75,7 +82,7 @@ test('dry run: examines and counts a new missing-credential alert but creates no
 });
 
 test('dry run: counts a resolvable alert (gap no longer applies) but resolves nothing', async () => {
-  const { providerMissingCredentialSweepJob, calls } = loadJob({
+  const { deps, calls } = fakeDeps({
     providers: [provider()],
     openAlertsByProvider: {
       'provider-1': [{ id: 'alert-1', dedupeKey: 'provider-1:MISSING_REQUIRED_CREDENTIAL:PLUMBING:LICENSE' }],
@@ -84,20 +91,20 @@ test('dry run: counts a resolvable alert (gap no longer applies) but resolves no
     credentialsByProvider: { 'provider-1': [{ type: 'LICENSE', serviceCategories: ['PLUMBING'] }] },
   });
 
-  const result = await providerMissingCredentialSweepJob({ dryRun: true });
+  const result = await providerMissingCredentialSweepJob({ dryRun: true }, deps);
 
   assert.equal(calls.updates.length, 0);
   assert.equal(result.alertsResolved, 1);
 });
 
 test('no opts (the weekly cron tick): behaves exactly like a real run', async () => {
-  const { providerMissingCredentialSweepJob, calls } = loadJob({
+  const { deps, calls } = fakeDeps({
     providers: [provider()],
     requirementsByProvider: { PLUMBING: [{ serviceCategory: 'PLUMBING', credentialType: 'LICENSE' }] },
     credentialsByProvider: {},
   });
 
-  const result = await providerMissingCredentialSweepJob();
+  const result = await providerMissingCredentialSweepJob(undefined, deps);
 
   assert.equal(calls.creates.length, 1);
   assert.equal(result.alertsCreated, 1);
@@ -105,13 +112,13 @@ test('no opts (the weekly cron tick): behaves exactly like a real run', async ()
 });
 
 test('a manual trigger (opts passed, dryRun:false) tags a smokeCorrelationId', async () => {
-  const { providerMissingCredentialSweepJob, calls } = loadJob({
+  const { deps, calls } = fakeDeps({
     providers: [provider()],
     requirementsByProvider: { PLUMBING: [{ serviceCategory: 'PLUMBING', credentialType: 'LICENSE' }] },
     credentialsByProvider: {},
   });
 
-  const result = await providerMissingCredentialSweepJob({ dryRun: false });
+  const result = await providerMissingCredentialSweepJob({ dryRun: false }, deps);
 
   assert.equal(calls.creates.length, 1);
   assert.match(result.smokeCorrelationId, /^smoke:provider-missing-credential-sweep:/);

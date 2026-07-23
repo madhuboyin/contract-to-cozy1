@@ -7,10 +7,21 @@
 // See docs/functional/PROVIDER_TRUST_COMPLIANCE_FRD.md, Section 11.
 
 import { prisma } from '../lib/prisma';
-import { logger } from '../lib/logger';
+import { logger, AppLogger } from '../lib/logger';
 import { providerComplianceService } from '@worker-shared/services/providerCompliance.service';
 
-export async function providerCredentialExpireJob() {
+// W4 item 1: small, job-scoped dependency interface (see
+// reserveFundBalanceReminder.job.ts for the pattern).
+export interface ProviderCredentialExpireDeps {
+  prisma: Pick<typeof prisma, 'providerCredential'>;
+  logger: AppLogger;
+  providerComplianceService: Pick<typeof providerComplianceService, 'recomputeProviderStatus'>;
+}
+
+const defaultDeps: ProviderCredentialExpireDeps = { prisma, logger, providerComplianceService };
+
+export async function providerCredentialExpireJob(deps: ProviderCredentialExpireDeps = defaultDeps) {
+  const { prisma, logger, providerComplianceService } = deps;
   const now = new Date();
 
   const expired = await prisma.providerCredential.findMany({

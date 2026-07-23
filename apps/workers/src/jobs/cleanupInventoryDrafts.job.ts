@@ -1,6 +1,15 @@
 // apps/workers/src/jobs/cleanupInventoryDrafts.job.ts
 import { prisma } from '../lib/prisma';
-import { logger } from '../lib/logger';
+import { logger, AppLogger } from '../lib/logger';
+
+// W4 item 1: small, job-scoped dependency interface (see
+// reserveFundBalanceReminder.job.ts for the pattern).
+export interface CleanupInventoryDraftsDeps {
+  prisma: Pick<typeof prisma, 'inventoryDraftItem'>;
+  logger: AppLogger;
+}
+
+const defaultDeps: CleanupInventoryDraftsDeps = { prisma, logger };
 
 /**
  * Deletes Inventory OCR drafts that were never confirmed and are older than TTL.
@@ -8,7 +17,8 @@ import { logger } from '../lib/logger';
  * Default TTL: 7 days (configurable via INVENTORY_DRAFT_TTL_DAYS)
  * Only deletes status = DRAFT (never touches CONFIRMED/DISMISSED)
  */
-export async function cleanupInventoryDraftsJob() {
+export async function cleanupInventoryDraftsJob(deps: CleanupInventoryDraftsDeps = defaultDeps) {
+  const { prisma, logger } = deps;
   const ttlDays = Number(process.env.INVENTORY_DRAFT_TTL_DAYS || 7);
 
   if (!Number.isFinite(ttlDays) || ttlDays <= 0) {

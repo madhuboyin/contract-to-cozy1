@@ -6,54 +6,49 @@
 // remaining expired-but-not-yet-marked credential incorrectly ACTIVE until
 // the next run. Fixed with the same per-item try/catch pattern already used
 // elsewhere in this project (seasonal checklist generation, recall ingest).
+//
+// W4 item 1 (DI refactor): dependencies are injected directly instead of
+// via require.cache.
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
 require('ts-node/register');
 
-function loadJob({ expiredCredentials, updateShouldFailFor = new Set(), recomputeShouldFailFor = new Set() }) {
+const { providerCredentialExpireJob } = require('../../src/jobs/providerCredentialExpire.job.ts');
+
+const noopLogger = { info() {}, warn() {}, error() {}, debug() {}, fatal() {}, child() { return this; } };
+
+function fakeDeps({ expiredCredentials, updateShouldFailFor = new Set(), recomputeShouldFailFor = new Set() }) {
   const calls = { updates: [], recomputed: [] };
-
-  const prismaMock = {
-    providerCredential: {
-      findMany: async () => expiredCredentials,
-      update: async (args) => {
-        calls.updates.push(args);
-        if (updateShouldFailFor.has(args.where.id)) {
-          throw new Error(`update failed for ${args.where.id}`);
-        }
-        return { id: args.where.id, ...args.data };
-      },
-    },
-  };
-  const prismaPath = require.resolve('../../src/lib/prisma.ts');
-  require.cache[prismaPath] = { id: prismaPath, filename: prismaPath, loaded: true, exports: { prisma: prismaMock } };
-
-  const compliancePath = require.resolve('../../../backend/src/services/providerCompliance.service.ts');
-  require.cache[compliancePath] = {
-    id: compliancePath,
-    filename: compliancePath,
-    loaded: true,
-    exports: {
-      providerComplianceService: {
-        recomputeProviderStatus: async (providerProfileId) => {
-          calls.recomputed.push(providerProfileId);
-          if (recomputeShouldFailFor.has(providerProfileId)) {
-            throw new Error(`recompute failed for ${providerProfileId}`);
+  const deps = {
+    prisma: {
+      providerCredential: {
+        findMany: async () => expiredCredentials,
+        update: async (args) => {
+          calls.updates.push(args);
+          if (updateShouldFailFor.has(args.where.id)) {
+            throw new Error(`update failed for ${args.where.id}`);
           }
+          return { id: args.where.id, ...args.data };
         },
       },
     },
+    logger: noopLogger,
+    providerComplianceService: {
+      recomputeProviderStatus: async (providerProfileId) => {
+        calls.recomputed.push(providerProfileId);
+        if (recomputeShouldFailFor.has(providerProfileId)) {
+          throw new Error(`recompute failed for ${providerProfileId}`);
+        }
+      },
+    },
   };
-
-  const jobPath = require.resolve('../../src/jobs/providerCredentialExpire.job.ts');
-  delete require.cache[jobPath];
-  return { ...require(jobPath), calls };
+  return { deps, calls };
 }
 
 test('expires every credential past its expiryDate and recomputes each affected provider once', async () => {
-  const { providerCredentialExpireJob, calls } = loadJob({
+  const { deps, calls } = fakeDeps({
     expiredCredentials: [
       { id: 'cred-1', providerProfileId: 'provider-a' },
       { id: 'cred-2', providerProfileId: 'provider-a' },
@@ -61,7 +56,7 @@ test('expires every credential past its expiryDate and recomputes each affected 
     ],
   });
 
-  const result = await providerCredentialExpireJob();
+  const result = await providerCredentialExpireJob(deps);
 
   assert.equal(result.expiredCount, 3);
   assert.equal(result.expireFailed, 0);
@@ -71,7 +66,7 @@ test('expires every credential past its expiryDate and recomputes each affected 
 });
 
 test('one credential update failing does not abort expiry for the rest of the batch', async () => {
-  const { providerCredentialExpireJob, calls } = loadJob({
+  const { deps, calls } = fakeDeps({
     expiredCredentials: [
       { id: 'cred-1', providerProfileId: 'provider-a' },
       { id: 'cred-2', providerProfileId: 'provider-b' },
@@ -80,7 +75,7 @@ test('one credential update failing does not abort expiry for the rest of the ba
     updateShouldFailFor: new Set(['cred-2']),
   });
 
-  const result = await providerCredentialExpireJob();
+  const result = await providerCredentialExpireJob(deps);
 
   assert.equal(calls.updates.length, 3, 'must still attempt every credential, not stop at the first failure');
   assert.equal(result.expiredCount, 2, 'only successfully-expired credentials are counted');
@@ -89,7 +84,7 @@ test('one credential update failing does not abort expiry for the rest of the ba
 });
 
 test('one provider recompute failing does not prevent recompute for other affected providers', async () => {
-  const { providerCredentialExpireJob, calls } = loadJob({
+  const { deps, calls } = fakeDeps({
     expiredCredentials: [
       { id: 'cred-1', providerProfileId: 'provider-a' },
       { id: 'cred-2', providerProfileId: 'provider-b' },
@@ -97,7 +92,7 @@ test('one provider recompute failing does not prevent recompute for other affect
     recomputeShouldFailFor: new Set(['provider-a']),
   });
 
-  const result = await providerCredentialExpireJob();
+  const result = await providerCredentialExpireJob(deps);
 
   assert.equal(result.expiredCount, 2);
   assert.equal(result.providersRecomputed, 1, 'only the provider whose recompute succeeded is counted');
@@ -105,9 +100,9 @@ test('one provider recompute failing does not prevent recompute for other affect
 });
 
 test('returns zero counts cleanly when nothing has expired', async () => {
-  const { providerCredentialExpireJob, calls } = loadJob({ expiredCredentials: [] });
+  const { deps, calls } = fakeDeps({ expiredCredentials: [] });
 
-  const result = await providerCredentialExpireJob();
+  const result = await providerCredentialExpireJob(deps);
 
   assert.deepEqual(result, { expiredCount: 0, expireFailed: 0, providersRecomputed: 0 });
   assert.equal(calls.updates.length, 0);

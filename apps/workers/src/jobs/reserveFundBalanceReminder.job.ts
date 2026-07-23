@@ -14,13 +14,36 @@
 
 import { prisma } from '../lib/prisma';
 import { NotificationService } from '@worker-shared/services/notification.service';
-import { logger } from '../lib/logger';
+import { logger, AppLogger } from '../lib/logger';
 import { checkReserveFundWorkerContext } from '@worker-shared/services/financialContext/reserveFundWorkerContext.service';
 import { reserveFundUrl } from '../lib/deepLinks';
 
 const STALE_BALANCE_DAYS = 45;
 
-export async function reserveFundBalanceReminderJob(): Promise<void> {
+// W4 item 1: small, job-scoped dependency interface — only the slice of
+// each collaborator this job actually calls, not the full Prisma client or
+// service surface. `defaultDeps` wires the real implementations so every
+// existing caller (scheduleCronJobs()'s CRON_HANDLERS entry, which invokes
+// this with zero arguments) is unaffected; tests inject fakes as a normal
+// argument instead of swapping require.cache entries.
+export interface ReserveFundBalanceReminderDeps {
+  prisma: Pick<typeof prisma, 'homeReserveFund'>;
+  notificationService: Pick<typeof NotificationService, 'create'>;
+  logger: AppLogger;
+  checkReserveFundWorkerContext: typeof checkReserveFundWorkerContext;
+}
+
+const defaultDeps: ReserveFundBalanceReminderDeps = {
+  prisma,
+  notificationService: NotificationService,
+  logger,
+  checkReserveFundWorkerContext,
+};
+
+export async function reserveFundBalanceReminderJob(
+  deps: ReserveFundBalanceReminderDeps = defaultDeps,
+): Promise<void> {
+  const { prisma, notificationService, logger, checkReserveFundWorkerContext } = deps;
   const cutoff = new Date(Date.now() - STALE_BALANCE_DAYS * 24 * 60 * 60 * 1000);
 
   const funds = await prisma.homeReserveFund.findMany({
@@ -59,7 +82,7 @@ export async function reserveFundBalanceReminderJob(): Promise<void> {
         );
         continue;
       }
-      await NotificationService.create({
+      await notificationService.create({
         userId,
         type: 'RESERVE_FUND_BALANCE_REMINDER',
         title: 'Is your reserve fund balance still accurate?',

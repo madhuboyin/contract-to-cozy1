@@ -1,5 +1,5 @@
 import { signalService } from '@worker-shared/services/signal.service';
-import { logger } from '../lib/logger';
+import { logger, AppLogger } from '../lib/logger';
 
 export type SharedSignalHealthAuditSummary = {
   propertiesEvaluated: number;
@@ -9,7 +9,19 @@ export type SharedSignalHealthAuditSummary = {
   interactionSignals: number;
 };
 
-export async function runSharedSignalHealthAuditJob(): Promise<SharedSignalHealthAuditSummary> {
+// W4 item 1: small, job-scoped dependency interface (see
+// reserveFundBalanceReminder.job.ts for the pattern).
+export interface SharedSignalHealthAuditDeps {
+  signalService: Pick<typeof signalService, 'getSignalHealthOverview'>;
+  logger: AppLogger;
+}
+
+const defaultDeps: SharedSignalHealthAuditDeps = { signalService, logger };
+
+export async function runSharedSignalHealthAuditJob(
+  deps: SharedSignalHealthAuditDeps = defaultDeps,
+): Promise<SharedSignalHealthAuditSummary> {
+  const { signalService, logger } = deps;
   const limitEnv = Number(process.env.SHARED_SIGNAL_AUDIT_LIMIT ?? '0');
   const lookbackEnv = Number(process.env.SHARED_SIGNAL_AUDIT_LOOKBACK_DAYS ?? '120');
 

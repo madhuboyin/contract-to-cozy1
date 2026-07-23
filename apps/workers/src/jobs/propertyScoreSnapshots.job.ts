@@ -10,10 +10,25 @@
 
 import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
-import { logger } from '../lib/logger';
+import { logger, AppLogger } from '../lib/logger';
 import { calculateHealthScore } from '../utils/propertyScore.util';
 
 type ScoreType = 'HEALTH' | 'RISK' | 'FINANCIAL';
+
+// W4 item 1: small, job-scoped dependency interface (see
+// reserveFundBalanceReminder.job.ts for the pattern). The `propertyScoreSnapshot`
+// delegate is still accessed via `as any` at its one call site below — a
+// deliberate, pre-existing defensive check for a client that hasn't been
+// regenerated yet (see the "missing delegate" test), not a typing gap.
+export interface PropertyScoreSnapshotsDeps {
+  prisma: Pick<
+    typeof prisma,
+    'propertyScoreSnapshot' | 'riskAssessmentReport' | 'financialEfficiencyReport' | 'property' | 'warranty' | 'document' | 'booking' | 'inventoryItem'
+  >;
+  logger: AppLogger;
+}
+
+const defaultDeps: PropertyScoreSnapshotsDeps = { prisma, logger };
 
 export function asNumber(value: unknown): number {
   if (typeof value === 'number' && Number.isFinite(value)) return value;
@@ -54,17 +69,21 @@ export function getBandForScore(scoreType: ScoreType, score: number): string {
   return 'Needs Attention';
 }
 
-export async function upsertPropertyScoreSnapshot(input: {
-  propertyId: string;
-  homeownerProfileId: string;
-  scoreType: ScoreType;
-  score: number;
-  scoreMax?: number | null;
-  scoreBand?: string | null;
-  snapshotJson?: Record<string, unknown>;
-  computedAt?: Date;
-  weekStart?: Date;
-}) {
+export async function upsertPropertyScoreSnapshot(
+  input: {
+    propertyId: string;
+    homeownerProfileId: string;
+    scoreType: ScoreType;
+    score: number;
+    scoreMax?: number | null;
+    scoreBand?: string | null;
+    snapshotJson?: Record<string, unknown>;
+    computedAt?: Date;
+    weekStart?: Date;
+  },
+  deps: PropertyScoreSnapshotsDeps = defaultDeps,
+) {
+  const { prisma, logger } = deps;
   const snapshotModel = (prisma as any).propertyScoreSnapshot;
   if (!snapshotModel) {
     logger.warn('[SCORE-SNAPSHOT] Prisma client missing propertyScoreSnapshot delegate. Run prisma generate.');
@@ -125,11 +144,13 @@ export async function upsertPropertyScoreSnapshot(input: {
 
 export async function capturePropertyScoreSnapshots(
   propertyId: string,
-  homeownerProfileId: string
+  homeownerProfileId: string,
+  deps: PropertyScoreSnapshotsDeps = defaultDeps,
 ): Promise<void> {
+  const { prisma } = deps;
   const [riskReport, financialReport, propertyCore, warranties, documentCount, activeBookings, applianceItems] =
     await Promise.all([
-      (prisma as any).riskAssessmentReport.findUnique({
+      prisma.riskAssessmentReport.findUnique({
         where: { propertyId },
         select: {
           riskScore: true,
@@ -138,7 +159,7 @@ export async function capturePropertyScoreSnapshots(
           lastCalculatedAt: true,
         },
       }),
-      (prisma as any).financialEfficiencyReport.findUnique({
+      prisma.financialEfficiencyReport.findUnique({
         where: { propertyId },
         select: {
           financialEfficiencyScore: true,
@@ -149,10 +170,10 @@ export async function capturePropertyScoreSnapshots(
           lastCalculatedAt: true,
         },
       }),
-      (prisma as any).property.findUnique({
+      prisma.property.findUnique({
         where: { id: propertyId },
       }),
-      (prisma as any).warranty.findMany({
+      prisma.warranty.findMany({
         where: { propertyId },
         select: {
           id: true,
@@ -168,10 +189,10 @@ export async function capturePropertyScoreSnapshots(
           updatedAt: true,
         },
       }),
-      (prisma as any).document.count({
+      prisma.document.count({
         where: { propertyId },
       }),
-      (prisma as any).booking.findMany({
+      prisma.booking.findMany({
         where: {
           propertyId,
           status: { in: ['PENDING', 'CONFIRMED', 'IN_PROGRESS'] },
@@ -189,7 +210,7 @@ export async function capturePropertyScoreSnapshots(
           updatedAt: true,
         },
       }),
-      (prisma as any).inventoryItem.findMany({
+      prisma.inventoryItem.findMany({
         where: {
           propertyId,
           category: 'APPLIANCE',
@@ -219,7 +240,7 @@ export async function capturePropertyScoreSnapshots(
         financialExposureTotal: asNumber(riskReport.financialExposureTotal),
         highRiskAssets: highRiskCount,
       },
-    });
+    }, deps);
   }
 
   if (financialReport) {
@@ -240,7 +261,7 @@ export async function capturePropertyScoreSnapshots(
         annualCost,
         marketAverageTotal: asNumber(financialReport.marketAverageTotal),
       },
-    });
+    }, deps);
   }
 
   if (propertyCore) {
@@ -265,14 +286,15 @@ export async function capturePropertyScoreSnapshots(
         ).length,
         insights: health.insights.slice(0, 8),
       },
-    });
+    }, deps);
   }
 }
 
-export async function captureWeeklyScoreSnapshotsJob() {
+export async function captureWeeklyScoreSnapshotsJob(deps: PropertyScoreSnapshotsDeps = defaultDeps) {
+  const { prisma, logger } = deps;
   logger.info(`[${new Date().toISOString()}] Running weekly property score snapshot job...`);
   try {
-    const properties = await (prisma as any).property.findMany({
+    const properties = await prisma.property.findMany({
       select: {
         id: true,
         homeownerProfileId: true,
@@ -284,7 +306,7 @@ export async function captureWeeklyScoreSnapshotsJob() {
 
     for (const property of properties as Array<{ id: string; homeownerProfileId: string }>) {
       try {
-        await capturePropertyScoreSnapshots(property.id, property.homeownerProfileId);
+        await capturePropertyScoreSnapshots(property.id, property.homeownerProfileId, deps);
         successCount += 1;
       } catch (error) {
         failureCount += 1;

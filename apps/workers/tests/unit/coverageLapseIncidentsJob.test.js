@@ -6,16 +6,28 @@
 // re-checks whether the homeowner has since renewed. This tests the added
 // resolveCoveredLapseIncidents sweep, which is independent of the creation
 // query's window.
+//
+// W4 item 1 (DI refactor): dependencies are injected directly instead of
+// via require.cache. guidanceJourney.service.ts (an unused real import at
+// module scope — the actual test calls always go through the injected fake
+// below) transitively constructs a GeminiService singleton at import time,
+// which throws if GEMINI_API_KEY is unset — stub a value before requiring
+// the job so that real, unused module graph can load at all.
+process.env.GEMINI_API_KEY = process.env.GEMINI_API_KEY || 'test-key';
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
 require('ts-node/register');
 
-function loadJob({ expiringPolicies = [], openIncidents = [], coveringPolicyByPropertyId = {} }) {
+const { coverageLapseIncidentsJob } = require('../../src/jobs/coverageLapseIncidents.job.ts');
+
+const noopLogger = { info() {}, warn() {}, error() {}, debug() {}, fatal() {}, child() { return this; } };
+
+function fakeDeps({ expiringPolicies = [], openIncidents = [], coveringPolicyByPropertyId = {} }) {
   const setStatusCalls = [];
 
-  const prismaMock = {
+  const prisma = {
     insurancePolicy: {
       findMany: async () => expiringPolicies,
       // Used both by the creation loop's "is there already a replacement"
@@ -31,35 +43,19 @@ function loadJob({ expiringPolicies = [], openIncidents = [], coveringPolicyByPr
       findMany: async () => openIncidents,
     },
   };
-  const prismaPath = require.resolve('../../src/lib/prisma.ts');
-  require.cache[prismaPath] = { id: prismaPath, filename: prismaPath, loaded: true, exports: { prisma: prismaMock } };
 
-  const incidentServicePath = require.resolve('../../../backend/src/services/incidents/incident.service.ts');
-  require.cache[incidentServicePath] = {
-    id: incidentServicePath,
-    filename: incidentServicePath,
-    loaded: true,
-    exports: {
-      IncidentService: {
-        upsertIncident: async () => ({ id: 'incident-new' }),
-        setStatus: async (id, status) => {
-          setStatusCalls.push({ id, status });
-        },
+  const deps = {
+    prisma,
+    incidentService: {
+      upsertIncident: async () => ({ id: 'incident-new' }),
+      setStatus: async (id, status) => {
+        setStatusCalls.push({ id, status });
       },
     },
+    guidanceJourneyService: { ingestSignal: async () => {} },
+    logger: noopLogger,
   };
-
-  const guidancePath = require.resolve('../../../backend/src/services/guidanceEngine/guidanceJourney.service.ts');
-  require.cache[guidancePath] = {
-    id: guidancePath,
-    filename: guidancePath,
-    loaded: true,
-    exports: { guidanceJourneyService: { ingestSignal: async () => {} } },
-  };
-
-  const jobPath = require.resolve('../../src/jobs/coverageLapseIncidents.job.ts');
-  delete require.cache[jobPath];
-  return { job: require(jobPath), getSetStatusCalls: () => setStatusCalls };
+  return { deps, getSetStatusCalls: () => setStatusCalls };
 }
 
 function incident(overrides = {}) {
@@ -72,12 +68,12 @@ function incident(overrides = {}) {
 }
 
 test('resolves an open incident once the property has a covering policy again', async () => {
-  const { job, getSetStatusCalls } = loadJob({
+  const { deps, getSetStatusCalls } = fakeDeps({
     openIncidents: [incident()],
     coveringPolicyByPropertyId: { 'property-1': 'new-policy-1' },
   });
 
-  const result = await job.coverageLapseIncidentsJob();
+  const result = await coverageLapseIncidentsJob(deps);
 
   assert.equal(result.resolved, 1);
   assert.equal(getSetStatusCalls().length, 1);
@@ -86,24 +82,24 @@ test('resolves an open incident once the property has a covering policy again', 
 });
 
 test('leaves an open incident alone when the property still has no covering policy', async () => {
-  const { job, getSetStatusCalls } = loadJob({
+  const { deps, getSetStatusCalls } = fakeDeps({
     openIncidents: [incident()],
     coveringPolicyByPropertyId: {},
   });
 
-  const result = await job.coverageLapseIncidentsJob();
+  const result = await coverageLapseIncidentsJob(deps);
 
   assert.equal(result.resolved, 0);
   assert.equal(getSetStatusCalls().length, 0);
 });
 
 test('skips an incident with no parseable expiryDate in its details instead of throwing', async () => {
-  const { job, getSetStatusCalls } = loadJob({
+  const { deps, getSetStatusCalls } = fakeDeps({
     openIncidents: [incident({ details: {} }), incident({ id: 'incident-2', details: { expiryDate: 'not-a-date' } })],
     coveringPolicyByPropertyId: { 'property-1': 'new-policy-1' },
   });
 
-  const result = await job.coverageLapseIncidentsJob();
+  const result = await coverageLapseIncidentsJob(deps);
 
   assert.equal(result.resolved, 0);
   assert.equal(getSetStatusCalls().length, 0);

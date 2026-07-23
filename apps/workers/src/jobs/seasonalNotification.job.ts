@@ -19,7 +19,7 @@
 // created for in-app display / dry-run inspection either way.
 
 import { prisma } from '../lib/prisma';
-import { logger } from '../lib/logger';
+import { logger, AppLogger } from '../lib/logger';
 import { evaluateSeasonalTemplateApplicability } from '@worker-shared/services/seasonal/applicabilityPolicy';
 import { buildSeasonalPropertyContext } from './seasonalChecklistGeneration.job';
 import { NotificationService } from '@worker-shared/services/notification.service';
@@ -37,9 +37,34 @@ function getSeasonName(season: string): string {
   return SEASON_NAMES[season] || season;
 }
 
-export async function sendSeasonalNotifications() {
+// W4 item 1: small, job-scoped dependency interface (see
+// reserveFundBalanceReminder.job.ts for the pattern). Includes the two pure
+// applicability/context functions alongside the I/O collaborators — the
+// existing test suite for this job already needed to substitute them (a
+// checklist fixture only has to satisfy whatever shape the fake expects,
+// not the real, much larger PropertyContextSnapshot).
+export interface SeasonalNotificationDeps {
+  prisma: Pick<typeof prisma, 'seasonalChecklist' | 'propertyClimateSetting' | 'orchestrationActionEvent' | 'orchestrationActionSnooze'>;
+  logger: AppLogger;
+  notificationService: Pick<typeof NotificationService, 'create'>;
+  areWorkerOutboundNotificationsEnabled: typeof areWorkerOutboundNotificationsEnabled;
+  evaluateSeasonalTemplateApplicability: typeof evaluateSeasonalTemplateApplicability;
+  buildSeasonalPropertyContext: typeof buildSeasonalPropertyContext;
+}
+
+const defaultDeps: SeasonalNotificationDeps = {
+  prisma,
+  logger,
+  notificationService: NotificationService,
+  areWorkerOutboundNotificationsEnabled,
+  evaluateSeasonalTemplateApplicability,
+  buildSeasonalPropertyContext,
+};
+
+export async function sendSeasonalNotifications(deps: SeasonalNotificationDeps = defaultDeps) {
+  const { prisma, logger } = deps;
   logger.info('[SEASONAL-NOTIFY] Starting notification job...');
-  const transportEnabled = areWorkerOutboundNotificationsEnabled();
+  const transportEnabled = deps.areWorkerOutboundNotificationsEnabled();
 
   const checklistsToNotify = await (prisma as any).seasonalChecklist.findMany({
     where: {
@@ -79,7 +104,7 @@ export async function sendSeasonalNotifications() {
 
   for (const checklist of checklistsToNotify) {
     try {
-      const sent = await notifyForChecklist(checklist, transportEnabled);
+      const sent = await notifyForChecklist(checklist, transportEnabled, deps);
       if (sent) notified += 1;
       else skipped += 1;
     } catch (error) {
@@ -119,14 +144,18 @@ function seasonalChecklistActionKey(checklistId: string): string {
  * aggregationContext lifecycle system, which doesn't cover seasonal
  * checklists (a checklist-level entity, not a per-task one).
  */
-async function isSeasonalChecklistActionSuppressed(propertyId: string, checklistId: string): Promise<boolean> {
+async function isSeasonalChecklistActionSuppressed(
+  propertyId: string,
+  checklistId: string,
+  deps: SeasonalNotificationDeps,
+): Promise<boolean> {
   const actionKey = seasonalChecklistActionKey(checklistId);
   const [dismissed, snoozed] = await Promise.all([
-    prisma.orchestrationActionEvent.findFirst({
+    deps.prisma.orchestrationActionEvent.findFirst({
       where: { propertyId, actionKey, actionType: { in: ['USER_MARKED_COMPLETE', 'USER_DISMISSED'] } },
       select: { id: true },
     }),
-    prisma.orchestrationActionSnooze.findFirst({
+    deps.prisma.orchestrationActionSnooze.findFirst({
       where: { propertyId, actionKey, endedAt: null, snoozeUntil: { gt: new Date() } },
       select: { id: true },
     }),
@@ -134,14 +163,19 @@ async function isSeasonalChecklistActionSuppressed(propertyId: string, checklist
   return !!(dismissed || snoozed);
 }
 
-async function notifyForChecklist(checklist: any, transportEnabled: boolean): Promise<boolean> {
+async function notifyForChecklist(
+  checklist: any,
+  transportEnabled: boolean,
+  deps: SeasonalNotificationDeps,
+): Promise<boolean> {
+  const { prisma, logger, notificationService, evaluateSeasonalTemplateApplicability, buildSeasonalPropertyContext } = deps;
   const userId = checklist.property.homeownerProfile?.userId;
   if (!userId) {
     logger.warn(`[SEASONAL-NOTIFY] Skipping checklist ${checklist.id}; property has no homeowner`);
     return false;
   }
 
-  if (await isSeasonalChecklistActionSuppressed(checklist.propertyId, checklist.id)) {
+  if (await isSeasonalChecklistActionSuppressed(checklist.propertyId, checklist.id, deps)) {
     logger.info(`[SEASONAL-NOTIFY] Skipping checklist ${checklist.id}; canonical Home Action is snoozed or dismissed`);
     return false;
   }
@@ -178,7 +212,7 @@ async function notifyForChecklist(checklist: any, transportEnabled: boolean): Pr
     (new Date(checklist.seasonStartDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24),
   );
 
-  const result = await NotificationService.create({
+  const result = await notificationService.create({
     userId,
     type: 'SEASONAL_CHECKLIST_READY',
     title: `${seasonName} checklist ready — ${applicableItems.length} task${applicableItems.length === 1 ? '' : 's'}`,

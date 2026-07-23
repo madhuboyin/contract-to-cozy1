@@ -4,42 +4,37 @@
 // RETENTION_REPORT_EMAIL skip gate, the zero-events short message, and the
 // week-over-week retention-rate math (including the no-prior-week-baseline
 // edge case).
+//
+// W4 item 1 (DI refactor): dependencies are injected directly instead of
+// via require.cache.
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
 require('ts-node/register');
 
-function loadJob({ currentWeekEvents = [], previousWeekEvents = [] }) {
+const { runWeeklyRetentionReportJob } = require('../../src/jobs/weeklyRetentionReport.job.ts');
+
+const noopLogger = { info() {}, warn() {}, error() {}, debug() {}, fatal() {}, child() { return this; } };
+
+function fakeDeps({ currentWeekEvents = [], previousWeekEvents = [] }) {
   const calls = { sentEmails: [] };
-
-  const prismaMock = {
-    productAnalyticsEvent: {
-      findMany: async ({ where }) => {
-        // Distinguish the two calls by their date-range shape: the current-week
-        // query uses `lte`, the previous-week query uses `lt`.
-        return where.occurredAt.lte !== undefined ? currentWeekEvents : previousWeekEvents;
+  const deps = {
+    prisma: {
+      productAnalyticsEvent: {
+        findMany: async ({ where }) => {
+          // Distinguish the two calls by their date-range shape: the current-week
+          // query uses `lte`, the previous-week query uses `lt`.
+          return where.occurredAt.lte !== undefined ? currentWeekEvents : previousWeekEvents;
+        },
       },
     },
-  };
-  const prismaPath = require.resolve('../../src/lib/prisma.ts');
-  require.cache[prismaPath] = { id: prismaPath, filename: prismaPath, loaded: true, exports: { prisma: prismaMock } };
-
-  const emailPath = require.resolve('../../src/email/email.service.ts');
-  require.cache[emailPath] = {
-    id: emailPath,
-    filename: emailPath,
-    loaded: true,
-    exports: {
-      sendEmail: async (to, subject, html) => {
-        calls.sentEmails.push({ to, subject, html });
-      },
+    sendEmail: async (to, subject, html) => {
+      calls.sentEmails.push({ to, subject, html });
     },
+    logger: noopLogger,
   };
-
-  const jobPath = require.resolve('../../src/jobs/weeklyRetentionReport.job.ts');
-  delete require.cache[jobPath];
-  return { ...require(jobPath), calls };
+  return { deps, calls };
 }
 
 function withEnv(overrides, fn) {
@@ -63,9 +58,9 @@ function withEnv(overrides, fn) {
 
 test('skips sending entirely when RETENTION_REPORT_EMAIL is unset', async () => {
   await withEnv({ RETENTION_REPORT_EMAIL: undefined }, async () => {
-    const { runWeeklyRetentionReportJob, calls } = loadJob({});
+    const { deps, calls } = fakeDeps({});
 
-    await runWeeklyRetentionReportJob();
+    await runWeeklyRetentionReportJob(deps);
 
     assert.equal(calls.sentEmails.length, 0);
   });
@@ -73,9 +68,9 @@ test('skips sending entirely when RETENTION_REPORT_EMAIL is unset', async () => 
 
 test('sends a "no events" message when there were zero events this week', async () => {
   await withEnv({ RETENTION_REPORT_EMAIL: 'ops@example.com' }, async () => {
-    const { runWeeklyRetentionReportJob, calls } = loadJob({ currentWeekEvents: [] });
+    const { deps, calls } = fakeDeps({ currentWeekEvents: [] });
 
-    await runWeeklyRetentionReportJob();
+    await runWeeklyRetentionReportJob(deps);
 
     assert.equal(calls.sentEmails.length, 1);
     assert.match(calls.sentEmails[0].html, /No product analytics events recorded/);
@@ -84,7 +79,7 @@ test('sends a "no events" message when there were zero events this week', async 
 
 test('computes week-over-week retention rate from properties active in both weeks', async () => {
   await withEnv({ RETENTION_REPORT_EMAIL: 'ops@example.com' }, async () => {
-    const { runWeeklyRetentionReportJob, calls } = loadJob({
+    const { deps, calls } = fakeDeps({
       currentWeekEvents: [
         { eventType: 'TOOL_USED', featureKey: 'budget', propertyId: 'property-1', userId: 'user-1' },
         { eventType: 'TOOL_USED', featureKey: 'budget', propertyId: 'property-2', userId: 'user-2' },
@@ -95,7 +90,7 @@ test('computes week-over-week retention rate from properties active in both week
       ],
     });
 
-    await runWeeklyRetentionReportJob();
+    await runWeeklyRetentionReportJob(deps);
 
     const html = calls.sentEmails[0].html;
     assert.match(html, /Active properties last week: <strong>2<\/strong>/);
@@ -106,12 +101,12 @@ test('computes week-over-week retention rate from properties active in both week
 
 test('reports "no prior-week baseline" instead of a bogus 0%/NaN% when there were zero prior-week properties', async () => {
   await withEnv({ RETENTION_REPORT_EMAIL: 'ops@example.com' }, async () => {
-    const { runWeeklyRetentionReportJob, calls } = loadJob({
+    const { deps, calls } = fakeDeps({
       currentWeekEvents: [{ eventType: 'TOOL_USED', featureKey: 'budget', propertyId: 'property-1', userId: 'user-1' }],
       previousWeekEvents: [],
     });
 
-    await runWeeklyRetentionReportJob();
+    await runWeeklyRetentionReportJob(deps);
 
     assert.match(calls.sentEmails[0].html, /no prior-week baseline/);
   });
@@ -119,7 +114,7 @@ test('reports "no prior-week baseline" instead of a bogus 0%/NaN% when there wer
 
 test('groups events by type and by feature correctly', async () => {
   await withEnv({ RETENTION_REPORT_EMAIL: 'ops@example.com' }, async () => {
-    const { runWeeklyRetentionReportJob, calls } = loadJob({
+    const { deps, calls } = fakeDeps({
       currentWeekEvents: [
         { eventType: 'TOOL_USED', featureKey: 'budget', propertyId: 'p1', userId: 'u1' },
         { eventType: 'TOOL_USED', featureKey: 'budget', propertyId: 'p2', userId: 'u2' },
@@ -129,7 +124,7 @@ test('groups events by type and by feature correctly', async () => {
       previousWeekEvents: [],
     });
 
-    await runWeeklyRetentionReportJob();
+    await runWeeklyRetentionReportJob(deps);
 
     const html = calls.sentEmails[0].html;
     assert.match(html, /TOOL_USED<\/td><td[^>]*>3/);

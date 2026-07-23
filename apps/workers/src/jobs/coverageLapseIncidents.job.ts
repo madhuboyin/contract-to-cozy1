@@ -3,7 +3,7 @@ import { prisma } from '../lib/prisma';
 import { IncidentStatus } from '@prisma/client';
 import { IncidentService } from '@worker-shared/services/incidents/incident.service';
 import { guidanceJourneyService } from '@worker-shared/services/guidanceEngine/guidanceJourney.service';
-import { logger } from '../lib/logger';
+import { logger, AppLogger } from '../lib/logger';
 
 function daysBetween(a: Date, b: Date) {
   const ms = b.getTime() - a.getTime();
@@ -18,6 +18,22 @@ const OPEN_COVERAGE_LAPSE_STATUSES: IncidentStatus[] = [
   IncidentStatus.MITIGATED,
 ];
 
+// W4 item 1: small, job-scoped dependency interface (see
+// reserveFundBalanceReminder.job.ts for the pattern).
+export interface CoverageLapseIncidentsDeps {
+  prisma: Pick<typeof prisma, 'incident' | 'insurancePolicy'>;
+  incidentService: Pick<typeof IncidentService, 'setStatus' | 'upsertIncident'>;
+  guidanceJourneyService: Pick<typeof guidanceJourneyService, 'ingestSignal'>;
+  logger: AppLogger;
+}
+
+const defaultDeps: CoverageLapseIncidentsDeps = {
+  prisma,
+  incidentService: IncidentService,
+  guidanceJourneyService,
+  logger,
+};
+
 /**
  * WKR (risk/weather/coverage W3 fix): the creation query above only looks
  * at policies whose expiryDate is still inside the lookahead window — once
@@ -30,7 +46,8 @@ const OPEN_COVERAGE_LAPSE_STATUSES: IncidentStatus[] = [
  * renewed in place, or a replacement) covering the date right after the
  * original gap — independent of the creation query's window.
  */
-async function resolveCoveredLapseIncidents(now: Date): Promise<number> {
+async function resolveCoveredLapseIncidents(now: Date, deps: CoverageLapseIncidentsDeps): Promise<number> {
+  const { prisma, incidentService } = deps;
   const openIncidents = await prisma.incident.findMany({
     where: {
       sourceType: 'COVERAGE',
@@ -61,7 +78,7 @@ async function resolveCoveredLapseIncidents(now: Date): Promise<number> {
 
     // Route through IncidentService.setStatus (not a raw prisma update) so its
     // RESOLVED-transition hook archives the linked guidance journey/signal too.
-    await IncidentService.setStatus(incident.id, IncidentStatus.RESOLVED);
+    await incidentService.setStatus(incident.id, IncidentStatus.RESOLVED);
     resolved++;
   }
   return resolved;
@@ -71,7 +88,8 @@ async function resolveCoveredLapseIncidents(now: Date): Promise<number> {
  * Create COVERAGE_LAPSE incidents when policy expiryDate is within N days.
  * Uses IncidentService (not prisma.incident) to avoid schema mismatch in workers.
  */
-export async function coverageLapseIncidentsJob() {
+export async function coverageLapseIncidentsJob(deps: CoverageLapseIncidentsDeps = defaultDeps) {
+  const { prisma, incidentService, guidanceJourneyService, logger } = deps;
   const LOOKAHEAD_DAYS = 14;
   const now = new Date();
   const lookahead = new Date(now.getTime() + LOOKAHEAD_DAYS * 86400000);
@@ -105,7 +123,7 @@ export async function coverageLapseIncidentsJob() {
     const days = daysBetween(now, p.expiryDate);
     const score = days <= 3 ? 75 : days <= 7 ? 60 : 40;
 
-    await IncidentService.upsertIncident(
+    await incidentService.upsertIncident(
       {
         propertyId: p.propertyId,
         userId: null,
@@ -171,7 +189,7 @@ export async function coverageLapseIncidentsJob() {
     createdOrUpdated++;
   }
 
-  const resolved = await resolveCoveredLapseIncidents(now);
+  const resolved = await resolveCoveredLapseIncidents(now, deps);
 
   return { createdOrUpdated, resolved };
 }

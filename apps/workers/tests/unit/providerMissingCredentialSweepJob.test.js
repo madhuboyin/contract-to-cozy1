@@ -6,13 +6,21 @@
 // provider's query/update failure aborted the whole weekly sweep, meaning
 // every other provider silently got no missing-credential check that week.
 // Fixed with the same per-item isolation pattern used elsewhere.
+//
+// W4 item 1 (DI refactor): dependencies are injected directly (see
+// ProviderMissingCredentialSweepDeps in the job file) instead of via
+// require.cache swapping.
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
 require('ts-node/register');
 
-function loadJob({
+const { providerMissingCredentialSweepJob } = require('../../src/jobs/providerMissingCredentialSweep.job.ts');
+
+const noopLogger = { info() {}, warn() {}, error() {}, debug() {}, fatal() {}, child() { return this; } };
+
+function fakeDeps({
   providers,
   openAlertsByProvider = {},
   requirementsByProvider = {},
@@ -23,7 +31,7 @@ function loadJob({
 }) {
   const calls = { updates: [], creates: [] };
 
-  const prismaMock = {
+  const prisma = {
     providerProfile: {
       findMany: async () => {
         if (providerProfileFindManyShouldThrow) throw new Error('providerProfile.findMany failed');
@@ -52,22 +60,23 @@ function loadJob({
       findMany: async ({ where }) => credentialsByProvider[where.providerProfileId] ?? [],
     },
   };
-  const prismaPath = require.resolve('../../src/lib/prisma.ts');
-  require.cache[prismaPath] = { id: prismaPath, filename: prismaPath, loaded: true, exports: { prisma: prismaMock } };
 
-  const jobPath = require.resolve('../../src/jobs/providerMissingCredentialSweep.job.ts');
-  delete require.cache[jobPath];
-  return { ...require(jobPath), calls };
+  const deps = {
+    prisma,
+    logger: noopLogger,
+    generateSmokeCorrelationId: (jobKey) => `smoke:${jobKey}:test`,
+  };
+  return { deps, calls };
 }
 
 test('creates an alert for a provider missing a required credential', async () => {
-  const { providerMissingCredentialSweepJob, calls } = loadJob({
+  const { deps, calls } = fakeDeps({
     providers: [{ id: 'provider-1', serviceCategories: ['PLUMBING'] }],
     requirementsByProvider: { PLUMBING: [{ serviceCategory: 'PLUMBING', credentialType: 'LICENSE' }] },
     credentialsByProvider: { 'provider-1': [] },
   });
 
-  const result = await providerMissingCredentialSweepJob();
+  const result = await providerMissingCredentialSweepJob(undefined, deps);
 
   assert.equal(result.alertsCreated, 1);
   assert.equal(calls.creates.length, 1);
@@ -75,34 +84,34 @@ test('creates an alert for a provider missing a required credential', async () =
 });
 
 test('does not create a duplicate alert when the credential was already submitted', async () => {
-  const { providerMissingCredentialSweepJob, calls } = loadJob({
+  const { deps, calls } = fakeDeps({
     providers: [{ id: 'provider-1', serviceCategories: ['PLUMBING'] }],
     requirementsByProvider: { PLUMBING: [{ serviceCategory: 'PLUMBING', credentialType: 'LICENSE' }] },
     credentialsByProvider: { 'provider-1': [{ type: 'LICENSE', serviceCategories: ['PLUMBING'] }] },
   });
 
-  const result = await providerMissingCredentialSweepJob();
+  const result = await providerMissingCredentialSweepJob(undefined, deps);
 
   assert.equal(result.alertsCreated, 0);
   assert.equal(calls.creates.length, 0);
 });
 
 test('resolves every open alert when the provider drops all service categories', async () => {
-  const { providerMissingCredentialSweepJob, calls } = loadJob({
+  const { deps, calls } = fakeDeps({
     providers: [{ id: 'provider-1', serviceCategories: [] }],
     openAlertsByProvider: {
       'provider-1': [{ id: 'alert-1', dedupeKey: 'provider-1:MISSING_REQUIRED_CREDENTIAL:PLUMBING:LICENSE' }],
     },
   });
 
-  const result = await providerMissingCredentialSweepJob();
+  const result = await providerMissingCredentialSweepJob(undefined, deps);
 
   assert.equal(result.alertsResolved, 1);
   assert.equal(calls.updates[0].data.status, 'RESOLVED');
 });
 
 test('resolves an open alert once its gap no longer exists', async () => {
-  const { providerMissingCredentialSweepJob, calls } = loadJob({
+  const { deps, calls } = fakeDeps({
     providers: [{ id: 'provider-1', serviceCategories: ['PLUMBING'] }],
     openAlertsByProvider: {
       'provider-1': [{ id: 'alert-1', dedupeKey: 'provider-1:MISSING_REQUIRED_CREDENTIAL:PLUMBING:LICENSE' }],
@@ -111,7 +120,7 @@ test('resolves an open alert once its gap no longer exists', async () => {
     credentialsByProvider: { 'provider-1': [{ type: 'LICENSE', serviceCategories: ['PLUMBING'] }] },
   });
 
-  const result = await providerMissingCredentialSweepJob();
+  const result = await providerMissingCredentialSweepJob(undefined, deps);
 
   assert.equal(result.alertsResolved, 1);
   const resolveCall = calls.updates.find((u) => u.where.id === 'alert-1');
@@ -119,7 +128,7 @@ test('resolves an open alert once its gap no longer exists', async () => {
 });
 
 test('reopens a previously-RESOLVED alert when the gap reappears', async () => {
-  const { providerMissingCredentialSweepJob, calls } = loadJob({
+  const { deps, calls } = fakeDeps({
     providers: [{ id: 'provider-1', serviceCategories: ['PLUMBING'] }],
     requirementsByProvider: { PLUMBING: [{ serviceCategory: 'PLUMBING', credentialType: 'LICENSE' }] },
     credentialsByProvider: { 'provider-1': [] },
@@ -128,7 +137,7 @@ test('reopens a previously-RESOLVED alert when the gap reappears', async () => {
     },
   });
 
-  const result = await providerMissingCredentialSweepJob();
+  const result = await providerMissingCredentialSweepJob(undefined, deps);
 
   assert.equal(result.alertsCreated, 0, 'reopening an existing alert is not counted as a new create');
   assert.equal(calls.creates.length, 0);
@@ -138,7 +147,7 @@ test('reopens a previously-RESOLVED alert when the gap reappears', async () => {
 });
 
 test('one provider throwing does not abort the sweep for the rest of the batch', async () => {
-  const { providerMissingCredentialSweepJob, calls } = loadJob({
+  const { deps, calls } = fakeDeps({
     providers: [
       { id: 'provider-1', serviceCategories: ['PLUMBING'] },
       { id: 'provider-2', serviceCategories: ['ELECTRICAL'] },
@@ -155,7 +164,7 @@ test('one provider throwing does not abort the sweep for the rest of the batch',
     alertUpdateShouldFailFor: new Set(['alert-1']),
   });
 
-  const result = await providerMissingCredentialSweepJob();
+  const result = await providerMissingCredentialSweepJob(undefined, deps);
 
   assert.equal(result.providersFailed, 1);
   assert.equal(result.alertsCreated, 1, 'provider-2 must still get its missing-credential alert created');
@@ -163,10 +172,10 @@ test('one provider throwing does not abort the sweep for the rest of the batch',
 });
 
 test('the whole sweep still throws cleanly if the initial provider query itself fails', async () => {
-  const { providerMissingCredentialSweepJob } = loadJob({
+  const { deps } = fakeDeps({
     providers: [],
     providerProfileFindManyShouldThrow: true,
   });
 
-  await assert.rejects(() => providerMissingCredentialSweepJob());
+  await assert.rejects(() => providerMissingCredentialSweepJob(undefined, deps));
 });

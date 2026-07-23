@@ -12,7 +12,7 @@
 //   only writer of PROVIDER_CREDENTIAL_LAPSE incidents.
 
 import { prisma } from '../lib/prisma';
-import { logger } from '../lib/logger';
+import { logger, AppLogger } from '../lib/logger';
 import { ProviderCredentialLapseAdapter } from '@worker-shared/services/incidents/integrations/providerCredentialLapse.adapter';
 
 const LOOKAHEAD_DAYS = 30;
@@ -21,7 +21,22 @@ function daysBetween(a: Date, b: Date) {
   return Math.round((b.getTime() - a.getTime()) / (1000 * 60 * 60 * 24));
 }
 
-export async function providerCredentialLapseJob() {
+// W4 item 1: small, job-scoped dependency interface (see
+// reserveFundBalanceReminder.job.ts for the pattern).
+export interface ProviderCredentialLapseDeps {
+  prisma: Pick<typeof prisma, 'providerCredential' | 'booking' | 'providerComplianceAlert'>;
+  logger: AppLogger;
+  providerCredentialLapseAdapter: Pick<typeof ProviderCredentialLapseAdapter, 'emitBookingRiskIncident'>;
+}
+
+const defaultDeps: ProviderCredentialLapseDeps = {
+  prisma,
+  logger,
+  providerCredentialLapseAdapter: ProviderCredentialLapseAdapter,
+};
+
+export async function providerCredentialLapseJob(deps: ProviderCredentialLapseDeps = defaultDeps) {
+  const { prisma, logger, providerCredentialLapseAdapter } = deps;
   const now = new Date();
   const lookahead = new Date(now.getTime() + LOOKAHEAD_DAYS * 86400000);
 
@@ -63,7 +78,7 @@ export async function providerCredentialLapseJob() {
     });
 
     if (atRiskBooking) {
-      await ProviderCredentialLapseAdapter.emitBookingRiskIncident({
+      await providerCredentialLapseAdapter.emitBookingRiskIncident({
         credential: { id: credential.id, type: credential.type, expiryDate },
         booking: atRiskBooking,
         provider: { id: credential.providerProfileId, businessName: credential.providerProfile.businessName },

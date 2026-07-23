@@ -1,5 +1,5 @@
 import { sharedDataBackfillService } from '@worker-shared/services/sharedDataBackfill.service';
-import { logger } from '../lib/logger';
+import { logger, AppLogger } from '../lib/logger';
 
 type SharedDataConsistencyAuditResult = {
   propertiesEvaluated: number;
@@ -9,7 +9,19 @@ type SharedDataConsistencyAuditResult = {
   legacyHeavyProperties: number;
 };
 
-export async function runSharedDataConsistencyAuditJob(): Promise<SharedDataConsistencyAuditResult> {
+// W4 item 1: small, job-scoped dependency interface (see
+// reserveFundBalanceReminder.job.ts for the pattern).
+export interface SharedDataConsistencyAuditDeps {
+  sharedDataBackfillService: Pick<typeof sharedDataBackfillService, 'getConsistencyReport' | 'getReadinessReport'>;
+  logger: AppLogger;
+}
+
+const defaultDeps: SharedDataConsistencyAuditDeps = { sharedDataBackfillService, logger };
+
+export async function runSharedDataConsistencyAuditJob(
+  deps: SharedDataConsistencyAuditDeps = defaultDeps,
+): Promise<SharedDataConsistencyAuditResult> {
+  const { sharedDataBackfillService, logger } = deps;
   const limitEnv = Number(process.env.SHARED_DATA_AUDIT_LIMIT ?? '0');
   const limit = Number.isFinite(limitEnv) && limitEnv > 0 ? Math.floor(limitEnv) : undefined;
 

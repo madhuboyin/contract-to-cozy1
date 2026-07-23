@@ -1,11 +1,20 @@
 // apps/workers/src/jobs/seasonalChecklistExpiration.job.ts
 import { prisma } from '../lib/prisma';
-import { logger } from '../lib/logger';
+import { logger, AppLogger } from '../lib/logger';
+
+// W4 item 1: small, job-scoped dependency interface (see
+// reserveFundBalanceReminder.job.ts for the pattern).
+export interface SeasonalChecklistExpirationDeps {
+  prisma: Pick<typeof prisma, 'seasonalChecklist'>;
+  logger: AppLogger;
+}
+
+const defaultDeps: SeasonalChecklistExpirationDeps = { prisma, logger };
 
 /**
  * Background job to mark seasonal checklists as complete/expired
  * Runs daily at 3am
- * 
+ *
  * Logic:
  * - Find all checklists where season has ended (past seasonEndDate)
  * - Update status based on completion:
@@ -13,7 +22,8 @@ import { logger } from '../lib/logger';
  *   - <100% complete → IN_PROGRESS (season ended, not fully complete)
  * - Log completion rates for analytics
  */
-export async function expireSeasonalChecklists() {
+export async function expireSeasonalChecklists(deps: SeasonalChecklistExpirationDeps = defaultDeps) {
+  const { prisma, logger } = deps;
   logger.info('[SEASONAL] Starting checklist expiration job...');
 
   try {
@@ -21,8 +31,7 @@ export async function expireSeasonalChecklists() {
     today.setHours(0, 0, 0, 0); // Start of day
 
     // Find checklists where season has ended and status is still PENDING or IN_PROGRESS
-    // @ts-ignore - Model exists in schema but may not be in generated client
-    const expiredChecklists = await (prisma as any).seasonalChecklist.findMany({
+    const expiredChecklists = await prisma.seasonalChecklist.findMany({
       where: {
         seasonEndDate: {
           lt: today, // Season end date is in the past
@@ -58,8 +67,7 @@ export async function expireSeasonalChecklists() {
         const finalStatus = completionPercentage === 100 ? 'COMPLETED' : 'IN_PROGRESS';
 
         // Update checklist status
-        // @ts-ignore - Model exists in schema but may not be in generated client
-        await (prisma as any).seasonalChecklist.update({
+        await prisma.seasonalChecklist.update({
           where: { id: checklist.id },
           data: {
             status: finalStatus,
@@ -80,7 +88,7 @@ export async function expireSeasonalChecklists() {
         }
 
         // Optional: Create analytics event for tracking
-        await logSeasonalCompletionAnalytics(checklist, completionPercentage);
+        await logSeasonalCompletionAnalytics(checklist, completionPercentage, logger);
       } catch (checklistError) {
         logger.error(
           `[SEASONAL] Error expiring checklist ${checklist.id}:`,
@@ -125,7 +133,8 @@ export async function expireSeasonalChecklists() {
  */
 async function logSeasonalCompletionAnalytics(
   checklist: any,
-  completionPercentage: number
+  completionPercentage: number,
+  logger: AppLogger,
 ) {
   try {
     // Example: Log to console (replace with your analytics service)
@@ -166,7 +175,8 @@ async function logSeasonalCompletionAnalytics(
  * Optional: Clean up old checklists
  * Run this monthly to remove very old completed checklists
  */
-export async function cleanupOldSeasonalChecklists() {
+export async function cleanupOldSeasonalChecklists(deps: SeasonalChecklistExpirationDeps = defaultDeps) {
+  const { prisma, logger } = deps;
   logger.info('[SEASONAL] Starting cleanup job for old checklists...');
 
   try {
@@ -174,8 +184,7 @@ export async function cleanupOldSeasonalChecklists() {
     const twoYearsAgo = new Date();
     twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2);
 
-    // @ts-ignore - Model exists in schema but may not be in generated client
-    const result = await (prisma as any).seasonalChecklist.deleteMany({
+    const result = await prisma.seasonalChecklist.deleteMany({
       where: {
         seasonEndDate: {
           lt: twoYearsAgo,

@@ -12,7 +12,17 @@
 // server-side.
 import { prisma } from '../lib/prisma';
 import { sendEmail } from '../email/email.service';
-import { logger } from '../lib/logger';
+import { logger, AppLogger } from '../lib/logger';
+
+// W4 item 1: small, job-scoped dependency interface (see
+// reserveFundBalanceReminder.job.ts for the pattern).
+export interface WeeklyRetentionReportDeps {
+  prisma: Pick<typeof prisma, 'productAnalyticsEvent'>;
+  sendEmail: typeof sendEmail;
+  logger: AppLogger;
+}
+
+const defaultDeps: WeeklyRetentionReportDeps = { prisma, sendEmail, logger };
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -40,7 +50,8 @@ function renderCountTable(rows: [string, number][]): string {
   return `<table style="border-collapse:collapse;font-size:13px;">${items}</table>`;
 }
 
-export async function runWeeklyRetentionReportJob(): Promise<void> {
+export async function runWeeklyRetentionReportJob(deps: WeeklyRetentionReportDeps = defaultDeps): Promise<void> {
+  const { prisma, sendEmail, logger } = deps;
   const to = process.env.RETENTION_REPORT_EMAIL;
   if (!to) {
     logger.warn('[WEEKLY-RETENTION-REPORT] RETENTION_REPORT_EMAIL not set, skipping send');

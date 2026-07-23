@@ -20,7 +20,7 @@ import {
   ReconciliationSuggestion,
 } from '@worker-shared/services/homeReserveFundReconciliation.service';
 import { NotificationService } from '@worker-shared/services/notification.service';
-import { logger } from '../lib/logger';
+import { logger, AppLogger } from '../lib/logger';
 import { reserveFundUrl } from '../lib/deepLinks';
 import { checkReserveFundWorkerContext } from '@worker-shared/services/financialContext/reserveFundWorkerContext.service';
 
@@ -31,7 +31,26 @@ export function fingerprintSuggestions(suggestions: ReconciliationSuggestion[]):
   return createHash('sha256').update(pairs.join('|')).digest('hex');
 }
 
-export async function reserveFundReconciliationJob(): Promise<void> {
+// W4 item 1: small, job-scoped dependency interface (see
+// reserveFundBalanceReminder.job.ts for the pattern).
+export interface ReserveFundReconciliationDeps {
+  prisma: Pick<typeof prisma, 'homeReserveFund'>;
+  homeReserveFundReconciliationService: Pick<typeof homeReserveFundReconciliationService, 'findMatchSuggestions'>;
+  notificationService: Pick<typeof NotificationService, 'create'>;
+  logger: AppLogger;
+  checkReserveFundWorkerContext: typeof checkReserveFundWorkerContext;
+}
+
+const defaultDeps: ReserveFundReconciliationDeps = {
+  prisma,
+  homeReserveFundReconciliationService,
+  notificationService: NotificationService,
+  logger,
+  checkReserveFundWorkerContext,
+};
+
+export async function reserveFundReconciliationJob(deps: ReserveFundReconciliationDeps = defaultDeps): Promise<void> {
+  const { prisma, homeReserveFundReconciliationService, notificationService, logger, checkReserveFundWorkerContext } = deps;
   const funds = await prisma.homeReserveFund.findMany({
     where: { isActive: true },
     select: {
@@ -71,7 +90,7 @@ export async function reserveFundReconciliationJob(): Promise<void> {
         continue;
       }
 
-      await NotificationService.create({
+      await notificationService.create({
         userId,
         type: 'RESERVE_FUND_RECONCILIATION_SUGGESTION',
         title: 'We found a possible match for your reserve fund',

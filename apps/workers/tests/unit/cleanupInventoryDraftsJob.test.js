@@ -2,29 +2,33 @@
 //
 // W4 item 4: cleanupInventoryDraftsJob had no dedicated test. Small, pure
 // job — one deleteMany, env-driven TTL with a validated fallback.
+//
+// W4 item 1 (DI refactor): dependencies are injected directly instead of
+// via require.cache.
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
 require('ts-node/register');
 
-function loadJob({ deletedCount = 0 } = {}) {
-  const calls = { deleteManyArgs: null };
+const { cleanupInventoryDraftsJob } = require('../../src/jobs/cleanupInventoryDrafts.job.ts');
 
-  const prismaMock = {
-    inventoryDraftItem: {
-      deleteMany: async (args) => {
-        calls.deleteManyArgs = args;
-        return { count: deletedCount };
+const noopLogger = { info() {}, warn() {}, error() {}, debug() {}, fatal() {}, child() { return this; } };
+
+function fakeDeps({ deletedCount = 0 } = {}) {
+  const calls = { deleteManyArgs: null };
+  const deps = {
+    prisma: {
+      inventoryDraftItem: {
+        deleteMany: async (args) => {
+          calls.deleteManyArgs = args;
+          return { count: deletedCount };
+        },
       },
     },
+    logger: noopLogger,
   };
-  const prismaPath = require.resolve('../../src/lib/prisma.ts');
-  require.cache[prismaPath] = { id: prismaPath, filename: prismaPath, loaded: true, exports: { prisma: prismaMock } };
-
-  const jobPath = require.resolve('../../src/jobs/cleanupInventoryDrafts.job.ts');
-  delete require.cache[jobPath];
-  return { ...require(jobPath), calls };
+  return { deps, calls };
 }
 
 function withEnv(overrides, fn) {
@@ -48,9 +52,9 @@ function withEnv(overrides, fn) {
 
 test('only targets DRAFT rows older than the default 7-day TTL when unset', async () => {
   await withEnv({ INVENTORY_DRAFT_TTL_DAYS: undefined }, async () => {
-    const { cleanupInventoryDraftsJob, calls } = loadJob({ deletedCount: 3 });
+    const { deps, calls } = fakeDeps({ deletedCount: 3 });
 
-    const result = await cleanupInventoryDraftsJob();
+    const result = await cleanupInventoryDraftsJob(deps);
 
     assert.equal(result.deletedCount, 3);
     assert.equal(result.ttlDays, 7);
@@ -61,9 +65,9 @@ test('only targets DRAFT rows older than the default 7-day TTL when unset', asyn
 
 test('honors a custom INVENTORY_DRAFT_TTL_DAYS', async () => {
   await withEnv({ INVENTORY_DRAFT_TTL_DAYS: '14' }, async () => {
-    const { cleanupInventoryDraftsJob, calls } = loadJob({ deletedCount: 0 });
+    const { deps, calls } = fakeDeps({ deletedCount: 0 });
 
-    const result = await cleanupInventoryDraftsJob();
+    const result = await cleanupInventoryDraftsJob(deps);
 
     assert.equal(result.ttlDays, 14);
     const expectedCutoff = Date.now() - 14 * 24 * 60 * 60 * 1000;
@@ -73,9 +77,9 @@ test('honors a custom INVENTORY_DRAFT_TTL_DAYS', async () => {
 
 test('falls back to the default 7 days for an invalid TTL value instead of a NaN cutoff', async () => {
   await withEnv({ INVENTORY_DRAFT_TTL_DAYS: 'not-a-number' }, async () => {
-    const { cleanupInventoryDraftsJob } = loadJob({ deletedCount: 0 });
+    const { deps } = fakeDeps({ deletedCount: 0 });
 
-    const result = await cleanupInventoryDraftsJob();
+    const result = await cleanupInventoryDraftsJob(deps);
 
     assert.equal(result.ttlDays, 7);
   });
@@ -83,9 +87,9 @@ test('falls back to the default 7 days for an invalid TTL value instead of a NaN
 
 test('falls back to the default 7 days for a zero or negative TTL', async () => {
   await withEnv({ INVENTORY_DRAFT_TTL_DAYS: '-3' }, async () => {
-    const { cleanupInventoryDraftsJob } = loadJob({ deletedCount: 0 });
+    const { deps } = fakeDeps({ deletedCount: 0 });
 
-    const result = await cleanupInventoryDraftsJob();
+    const result = await cleanupInventoryDraftsJob(deps);
 
     assert.equal(result.ttlDays, 7);
   });

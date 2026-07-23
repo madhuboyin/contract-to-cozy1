@@ -1,12 +1,24 @@
 import { prisma } from '../lib/prisma';
-import { logger } from '../lib/logger';
+import { logger, AppLogger } from '../lib/logger';
+
+// W4 item 1: small, job-scoped dependency interface (see
+// reserveFundBalanceReminder.job.ts for the pattern).
+export interface ExpireGuidanceSignalsDeps {
+  prisma: Pick<typeof prisma, 'guidanceSignal'>;
+  logger: AppLogger;
+}
+
+const defaultDeps: ExpireGuidanceSignalsDeps = { prisma, logger };
 
 /**
  * Sweeps ACTIVE GuidanceSignals whose expiresAt has passed and transitions
  * them to ARCHIVED status. Runs daily so expired signals never linger in
  * active queries longer than ~24 hours past their expiry time.
  */
-export async function expireGuidanceSignalsJob(): Promise<{ archived: number }> {
+export async function expireGuidanceSignalsJob(
+  deps: ExpireGuidanceSignalsDeps = defaultDeps,
+): Promise<{ archived: number }> {
+  const { prisma, logger } = deps;
   const now = new Date();
 
   const expired = await prisma.guidanceSignal.findMany({

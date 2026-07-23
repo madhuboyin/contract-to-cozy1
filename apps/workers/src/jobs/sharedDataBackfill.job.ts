@@ -1,5 +1,5 @@
 import { sharedDataBackfillService } from '@worker-shared/services/sharedDataBackfill.service';
-import { logger } from '../lib/logger';
+import { logger, AppLogger } from '../lib/logger';
 
 type SharedDataBackfillJobResult = {
   dryRun: boolean;
@@ -9,9 +9,20 @@ type SharedDataBackfillJobResult = {
   totalPropertiesConsidered: number;
 };
 
+// W4 item 1: small, job-scoped dependency interface (see
+// reserveFundBalanceReminder.job.ts for the pattern).
+export interface SharedDataBackfillDeps {
+  sharedDataBackfillService: Pick<typeof sharedDataBackfillService, 'runBackfill'>;
+  logger: AppLogger;
+}
+
+const defaultDeps: SharedDataBackfillDeps = { sharedDataBackfillService, logger };
+
 export async function runSharedDataBackfillJob(
   opts?: { dryRun?: boolean },
+  deps: SharedDataBackfillDeps = defaultDeps,
 ): Promise<SharedDataBackfillJobResult> {
+  const { sharedDataBackfillService, logger } = deps;
   const limitEnv = Number(process.env.SHARED_DATA_BACKFILL_LIMIT ?? '0');
   const limit = Number.isFinite(limitEnv) && limitEnv > 0 ? Math.floor(limitEnv) : undefined;
   // W4 item 8: the daily cron tick is always a real run (dryRun defaults

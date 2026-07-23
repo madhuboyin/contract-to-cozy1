@@ -6,13 +6,27 @@
 // module load and must never be `require`d directly in a test. Extracted
 // verbatim into apps/workers/src/jobs/propertyScoreSnapshots.job.ts this
 // session (no logic changes) specifically to make this possible.
+//
+// W4 item 1 (DI refactor): dependencies are injected directly instead of
+// via require.cache.
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
 require('ts-node/register');
 
-function loadModule({
+const {
+  getBandForScore,
+  asNumber,
+  getWeekStartUtc,
+  upsertPropertyScoreSnapshot,
+  capturePropertyScoreSnapshots,
+  captureWeeklyScoreSnapshotsJob,
+} = require('../../src/jobs/propertyScoreSnapshots.job.ts');
+
+const noopLogger = { info() {}, warn() {}, error() {}, debug() {}, fatal() {}, child() { return this; } };
+
+function fakeDeps({
   properties = [],
   riskReport = null,
   financialReport = null,
@@ -40,36 +54,33 @@ function loadModule({
         },
       };
 
-  const prismaMock = {
-    propertyScoreSnapshot: snapshotModel,
-    riskAssessmentReport: {
-      findUnique: async ({ where }) => {
-        if (riskReportShouldFailFor.has(where.propertyId)) throw new Error(`lookup failed for ${where.propertyId}`);
-        return riskReport;
+  const deps = {
+    prisma: {
+      propertyScoreSnapshot: snapshotModel,
+      riskAssessmentReport: {
+        findUnique: async ({ where }) => {
+          if (riskReportShouldFailFor.has(where.propertyId)) throw new Error(`lookup failed for ${where.propertyId}`);
+          return riskReport;
+        },
       },
+      financialEfficiencyReport: { findUnique: async () => financialReport },
+      property: {
+        findUnique: async () => propertyCore,
+        findMany: async () => properties,
+      },
+      warranty: { findMany: async () => [] },
+      document: { count: async () => 0 },
+      booking: { findMany: async () => [] },
+      inventoryItem: { findMany: async () => [] },
     },
-    financialEfficiencyReport: { findUnique: async () => financialReport },
-    property: {
-      findUnique: async () => propertyCore,
-      findMany: async () => properties,
-    },
-    warranty: { findMany: async () => [] },
-    document: { count: async () => 0 },
-    booking: { findMany: async () => [] },
-    inventoryItem: { findMany: async () => [] },
+    logger: noopLogger,
   };
-  const prismaPath = require.resolve('../../src/lib/prisma.ts');
-  require.cache[prismaPath] = { id: prismaPath, filename: prismaPath, loaded: true, exports: { prisma: prismaMock } };
-
-  const modPath = require.resolve('../../src/jobs/propertyScoreSnapshots.job.ts');
-  delete require.cache[modPath];
-  return { ...require(modPath), calls };
+  return { deps, calls };
 }
 
 // ── getBandForScore ──────────────────────────────────────────────────
 
 test('getBandForScore: RISK bands', () => {
-  const { getBandForScore } = loadModule();
   assert.equal(getBandForScore('RISK', 85), 'Low Risk');
   assert.equal(getBandForScore('RISK', 65), 'Moderate Risk');
   assert.equal(getBandForScore('RISK', 45), 'Elevated Risk');
@@ -77,14 +88,12 @@ test('getBandForScore: RISK bands', () => {
 });
 
 test('getBandForScore: FINANCIAL bands', () => {
-  const { getBandForScore } = loadModule();
   assert.equal(getBandForScore('FINANCIAL', 95), 'Excellent');
   assert.equal(getBandForScore('FINANCIAL', 75), 'Average');
   assert.equal(getBandForScore('FINANCIAL', 50), 'Below Average');
 });
 
 test('getBandForScore: HEALTH (default) bands', () => {
-  const { getBandForScore } = loadModule();
   assert.equal(getBandForScore('HEALTH', 90), 'Excellent');
   assert.equal(getBandForScore('HEALTH', 75), 'Good');
   assert.equal(getBandForScore('HEALTH', 55), 'Fair');
@@ -94,22 +103,18 @@ test('getBandForScore: HEALTH (default) bands', () => {
 // ── asNumber ──────────────────────────────────────────────────────────
 
 test('asNumber: passes through a finite number', () => {
-  const { asNumber } = loadModule();
   assert.equal(asNumber(42.5), 42.5);
 });
 
 test('asNumber: unwraps a Prisma Decimal-like object via toNumber()', () => {
-  const { asNumber } = loadModule();
   assert.equal(asNumber({ toNumber: () => 12.3 }), 12.3);
 });
 
 test('asNumber: coerces a numeric string', () => {
-  const { asNumber } = loadModule();
   assert.equal(asNumber('7'), 7);
 });
 
 test('asNumber: falls back to 0 for null/undefined/non-numeric input', () => {
-  const { asNumber } = loadModule();
   assert.equal(asNumber(null), 0);
   assert.equal(asNumber(undefined), 0);
   assert.equal(asNumber('not a number'), 0);
@@ -118,21 +123,18 @@ test('asNumber: falls back to 0 for null/undefined/non-numeric input', () => {
 // ── getWeekStartUtc ───────────────────────────────────────────────────
 
 test('getWeekStartUtc: a Wednesday rolls back to that week\'s Monday at UTC midnight', () => {
-  const { getWeekStartUtc } = loadModule();
   const wednesday = new Date('2026-07-22T15:30:00Z'); // a Wednesday
   const weekStart = getWeekStartUtc(wednesday);
   assert.equal(weekStart.toISOString(), '2026-07-20T00:00:00.000Z'); // that week's Monday
 });
 
 test('getWeekStartUtc: a Monday returns itself at UTC midnight', () => {
-  const { getWeekStartUtc } = loadModule();
   const monday = new Date('2026-07-20T09:00:00Z');
   const weekStart = getWeekStartUtc(monday);
   assert.equal(weekStart.toISOString(), '2026-07-20T00:00:00.000Z');
 });
 
 test('getWeekStartUtc: a Sunday rolls back to the PREVIOUS Monday, not forward', () => {
-  const { getWeekStartUtc } = loadModule();
   const sunday = new Date('2026-07-26T09:00:00Z');
   const weekStart = getWeekStartUtc(sunday);
   assert.equal(weekStart.toISOString(), '2026-07-20T00:00:00.000Z');
@@ -141,14 +143,14 @@ test('getWeekStartUtc: a Sunday rolls back to the PREVIOUS Monday, not forward',
 // ── upsertPropertyScoreSnapshot ──────────────────────────────────────
 
 test('upsertPropertyScoreSnapshot creates a new row when none exists for that property/scoreType/weekStart', async () => {
-  const { upsertPropertyScoreSnapshot, calls } = loadModule({ existingSnapshot: null });
+  const { deps, calls } = fakeDeps({ existingSnapshot: null });
 
   await upsertPropertyScoreSnapshot({
     propertyId: 'property-1',
     homeownerProfileId: 'homeowner-1',
     scoreType: 'RISK',
     score: 72,
-  });
+  }, deps);
 
   assert.equal(calls.creates.length, 1);
   assert.equal(calls.updates.length, 0);
@@ -156,14 +158,14 @@ test('upsertPropertyScoreSnapshot creates a new row when none exists for that pr
 });
 
 test('upsertPropertyScoreSnapshot updates the existing row instead of creating a duplicate', async () => {
-  const { upsertPropertyScoreSnapshot, calls } = loadModule({ existingSnapshot: { id: 'snapshot-1' } });
+  const { deps, calls } = fakeDeps({ existingSnapshot: { id: 'snapshot-1' } });
 
   await upsertPropertyScoreSnapshot({
     propertyId: 'property-1',
     homeownerProfileId: 'homeowner-1',
     scoreType: 'RISK',
     score: 72,
-  });
+  }, deps);
 
   assert.equal(calls.creates.length, 0);
   assert.equal(calls.updates.length, 1);
@@ -171,10 +173,10 @@ test('upsertPropertyScoreSnapshot updates the existing row instead of creating a
 });
 
 test('upsertPropertyScoreSnapshot logs and returns cleanly when the Prisma delegate is missing (client not regenerated yet)', async () => {
-  const { upsertPropertyScoreSnapshot, calls } = loadModule({ snapshotModelMissing: true });
+  const { deps, calls } = fakeDeps({ snapshotModelMissing: true });
 
   await assert.doesNotReject(() =>
-    upsertPropertyScoreSnapshot({ propertyId: 'property-1', homeownerProfileId: 'homeowner-1', scoreType: 'RISK', score: 72 }),
+    upsertPropertyScoreSnapshot({ propertyId: 'property-1', homeownerProfileId: 'homeowner-1', scoreType: 'RISK', score: 72 }, deps),
   );
   assert.equal(calls.creates.length, 0);
 });
@@ -182,11 +184,11 @@ test('upsertPropertyScoreSnapshot logs and returns cleanly when the Prisma deleg
 // ── capturePropertyScoreSnapshots ────────────────────────────────────
 
 test('captures a RISK snapshot when a risk report exists', async () => {
-  const { capturePropertyScoreSnapshots, calls } = loadModule({
+  const { deps, calls } = fakeDeps({
     riskReport: { riskScore: 72.4, financialExposureTotal: 1000, details: [{ riskLevel: 'HIGH' }, { riskLevel: 'LOW' }], lastCalculatedAt: new Date() },
   });
 
-  await capturePropertyScoreSnapshots('property-1', 'homeowner-1');
+  await capturePropertyScoreSnapshots('property-1', 'homeowner-1', deps);
 
   const riskCreate = calls.creates.find((c) => c.data.scoreType === 'RISK');
   assert.ok(riskCreate);
@@ -195,7 +197,7 @@ test('captures a RISK snapshot when a risk report exists', async () => {
 });
 
 test('captures a FINANCIAL snapshot when a financial report exists', async () => {
-  const { capturePropertyScoreSnapshots, calls } = loadModule({
+  const { deps, calls } = fakeDeps({
     financialReport: {
       financialEfficiencyScore: 88,
       actualInsuranceCost: 100,
@@ -206,7 +208,7 @@ test('captures a FINANCIAL snapshot when a financial report exists', async () =>
     },
   });
 
-  await capturePropertyScoreSnapshots('property-1', 'homeowner-1');
+  await capturePropertyScoreSnapshots('property-1', 'homeowner-1', deps);
 
   const financialCreate = calls.creates.find((c) => c.data.scoreType === 'FINANCIAL');
   assert.ok(financialCreate);
@@ -214,24 +216,24 @@ test('captures a FINANCIAL snapshot when a financial report exists', async () =>
 });
 
 test('captures a HEALTH snapshot when the property core record exists', async () => {
-  const { capturePropertyScoreSnapshots, calls } = loadModule({
+  const { deps, calls } = fakeDeps({
     propertyCore: { id: 'property-1', propertySize: 2000, yearBuilt: 2000 },
   });
 
-  await capturePropertyScoreSnapshots('property-1', 'homeowner-1');
+  await capturePropertyScoreSnapshots('property-1', 'homeowner-1', deps);
 
   const healthCreate = calls.creates.find((c) => c.data.scoreType === 'HEALTH');
   assert.ok(healthCreate, 'a HEALTH snapshot must be created whenever the property core record exists');
 });
 
 test('skips every snapshot type independently when its source data is absent', async () => {
-  const { capturePropertyScoreSnapshots, calls } = loadModule({
+  const { deps, calls } = fakeDeps({
     riskReport: null,
     financialReport: null,
     propertyCore: null,
   });
 
-  await capturePropertyScoreSnapshots('property-1', 'homeowner-1');
+  await capturePropertyScoreSnapshots('property-1', 'homeowner-1', deps);
 
   assert.equal(calls.creates.length, 0);
 });
@@ -239,7 +241,7 @@ test('skips every snapshot type independently when its source data is absent', a
 // ── captureWeeklyScoreSnapshotsJob ───────────────────────────────────
 
 test('captureWeeklyScoreSnapshotsJob processes every property', async () => {
-  const { captureWeeklyScoreSnapshotsJob, calls } = loadModule({
+  const { deps, calls } = fakeDeps({
     properties: [
       { id: 'property-1', homeownerProfileId: 'homeowner-1' },
       { id: 'property-2', homeownerProfileId: 'homeowner-2' },
@@ -247,7 +249,7 @@ test('captureWeeklyScoreSnapshotsJob processes every property', async () => {
     riskReport: { riskScore: 50, financialExposureTotal: 0, details: [], lastCalculatedAt: new Date() },
   });
 
-  await captureWeeklyScoreSnapshotsJob();
+  await captureWeeklyScoreSnapshotsJob(deps);
 
   // Both properties share the same mocked riskReport/financialReport/etc.
   // fixtures, so 2 properties x 1 (RISK) snapshot type = 2 creates.
@@ -255,7 +257,7 @@ test('captureWeeklyScoreSnapshotsJob processes every property', async () => {
 });
 
 test('captureWeeklyScoreSnapshotsJob: one property failing does not abort the batch for the rest', async () => {
-  const { captureWeeklyScoreSnapshotsJob, calls } = loadModule({
+  const { deps, calls } = fakeDeps({
     properties: [
       { id: 'property-1', homeownerProfileId: 'homeowner-1' },
       { id: 'property-2', homeownerProfileId: 'homeowner-2' },
@@ -264,7 +266,7 @@ test('captureWeeklyScoreSnapshotsJob: one property failing does not abort the ba
     riskReportShouldFailFor: new Set(['property-1']),
   });
 
-  await assert.doesNotReject(() => captureWeeklyScoreSnapshotsJob());
+  await assert.doesNotReject(() => captureWeeklyScoreSnapshotsJob(deps));
 
   // property-1's capture throws (risk report lookup fails) and is caught;
   // property-2 must still succeed and produce its RISK snapshot.
@@ -272,16 +274,10 @@ test('captureWeeklyScoreSnapshotsJob: one property failing does not abort the ba
 });
 
 test('captureWeeklyScoreSnapshotsJob does not throw even if the initial property query fails (outer catch)', async () => {
-  const prismaPath = require.resolve('../../src/lib/prisma.ts');
-  require.cache[prismaPath] = {
-    id: prismaPath,
-    filename: prismaPath,
-    loaded: true,
-    exports: { prisma: { property: { findMany: async () => { throw new Error('db down'); } } } },
+  const deps = {
+    prisma: { property: { findMany: async () => { throw new Error('db down'); } } },
+    logger: noopLogger,
   };
-  const modPath = require.resolve('../../src/jobs/propertyScoreSnapshots.job.ts');
-  delete require.cache[modPath];
-  const { captureWeeklyScoreSnapshotsJob } = require(modPath);
 
-  await assert.doesNotReject(() => captureWeeklyScoreSnapshotsJob());
+  await assert.doesNotReject(() => captureWeeklyScoreSnapshotsJob(deps));
 });

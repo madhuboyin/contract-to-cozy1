@@ -8,45 +8,40 @@
 // decision, not a bug), but locked down as an explicit, visible contract
 // via SHARED_SIGNAL_REFRESH_LIMIT assertions so a future change to that
 // default doesn't happen silently.
+//
+// W4 item 1 (DI refactor): dependencies are injected directly instead of
+// via require.cache.
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
 require('ts-node/register');
 
-function loadJob({ properties, refreshResultFor, refreshShouldFailFor = new Set() }) {
+const { runSharedSignalRefreshJob } = require('../../src/jobs/sharedSignalRefresh.job.ts');
+
+const noopLogger = { info() {}, warn() {}, error() {}, debug() {}, fatal() {}, child() { return this; } };
+
+function fakeDeps({ properties, refreshResultFor, refreshShouldFailFor = new Set() }) {
   const calls = { findManyArgs: null, refreshedPropertyIds: [] };
-
-  const prismaMock = {
-    property: {
-      findMany: async (args) => {
-        calls.findManyArgs = args;
-        return properties;
-      },
-    },
-  };
-  const prismaPath = require.resolve('../../src/lib/prisma.ts');
-  require.cache[prismaPath] = { id: prismaPath, filename: prismaPath, loaded: true, exports: { prisma: prismaMock } };
-
-  const servicePath = require.resolve('../../../backend/src/services/signal.service.ts');
-  require.cache[servicePath] = {
-    id: servicePath,
-    filename: servicePath,
-    loaded: true,
-    exports: {
-      signalService: {
-        refreshSignalsForProperty: async (propertyId) => {
-          calls.refreshedPropertyIds.push(propertyId);
-          if (refreshShouldFailFor.has(propertyId)) throw new Error(`refresh failed for ${propertyId}`);
-          return refreshResultFor(propertyId);
+  const deps = {
+    prisma: {
+      property: {
+        findMany: async (args) => {
+          calls.findManyArgs = args;
+          return properties;
         },
       },
     },
+    signalService: {
+      refreshSignalsForProperty: async (propertyId) => {
+        calls.refreshedPropertyIds.push(propertyId);
+        if (refreshShouldFailFor.has(propertyId)) throw new Error(`refresh failed for ${propertyId}`);
+        return refreshResultFor(propertyId);
+      },
+    },
+    logger: noopLogger,
   };
-
-  const jobPath = require.resolve('../../src/jobs/sharedSignalRefresh.job.ts');
-  delete require.cache[jobPath];
-  return { ...require(jobPath), calls };
+  return { deps, calls };
 }
 
 function withEnv(overrides, fn) {
@@ -70,12 +65,12 @@ function withEnv(overrides, fn) {
 
 test('defaults to a 250-property cap, most-recently-created first, when SHARED_SIGNAL_REFRESH_LIMIT is unset', async () => {
   await withEnv({ SHARED_SIGNAL_REFRESH_LIMIT: undefined }, async () => {
-    const { runSharedSignalRefreshJob, calls } = loadJob({
+    const { deps, calls } = fakeDeps({
       properties: [],
       refreshResultFor: () => ({ refreshedSignals: [], skippedSignals: [], interactionCount: 0 }),
     });
 
-    await runSharedSignalRefreshJob();
+    await runSharedSignalRefreshJob(deps);
 
     assert.equal(calls.findManyArgs.take, 250);
     assert.deepEqual(calls.findManyArgs.orderBy, [{ createdAt: 'desc' }, { id: 'desc' }]);
@@ -84,19 +79,19 @@ test('defaults to a 250-property cap, most-recently-created first, when SHARED_S
 
 test('honors a custom SHARED_SIGNAL_REFRESH_LIMIT', async () => {
   await withEnv({ SHARED_SIGNAL_REFRESH_LIMIT: '50' }, async () => {
-    const { runSharedSignalRefreshJob, calls } = loadJob({
+    const { deps, calls } = fakeDeps({
       properties: [],
       refreshResultFor: () => ({ refreshedSignals: [], skippedSignals: [], interactionCount: 0 }),
     });
 
-    await runSharedSignalRefreshJob();
+    await runSharedSignalRefreshJob(deps);
 
     assert.equal(calls.findManyArgs.take, 50);
   });
 });
 
 test('aggregates refreshed/skipped signal counts and interaction counts across all properties', async () => {
-  const { runSharedSignalRefreshJob } = loadJob({
+  const { deps } = fakeDeps({
     properties: [{ id: 'property-1' }, { id: 'property-2' }],
     refreshResultFor: (id) =>
       id === 'property-1'
@@ -104,7 +99,7 @@ test('aggregates refreshed/skipped signal counts and interaction counts across a
         : { refreshedSignals: ['s4'], skippedSignals: [], interactionCount: 1 },
   });
 
-  const result = await runSharedSignalRefreshJob();
+  const result = await runSharedSignalRefreshJob(deps);
 
   assert.deepEqual(result, {
     processedProperties: 2,
@@ -116,13 +111,13 @@ test('aggregates refreshed/skipped signal counts and interaction counts across a
 });
 
 test('one property failing does not abort the batch and is counted as errored, not processed', async () => {
-  const { runSharedSignalRefreshJob, calls } = loadJob({
+  const { deps, calls } = fakeDeps({
     properties: [{ id: 'property-1' }, { id: 'property-2' }],
     refreshResultFor: () => ({ refreshedSignals: ['s1'], skippedSignals: [], interactionCount: 0 }),
     refreshShouldFailFor: new Set(['property-1']),
   });
 
-  const result = await runSharedSignalRefreshJob();
+  const result = await runSharedSignalRefreshJob(deps);
 
   assert.equal(result.processedProperties, 1);
   assert.equal(result.erroredProperties, 1);

@@ -5,11 +5,19 @@
 // around services — the real logic lives in those services (out of scope
 // here) — so coverage focuses on the env-driven limit/lookback parsing and
 // the return-shape mapping, which is these jobs' only real content.
+//
+// W4 item 1 (DI refactor): dependencies are injected directly instead of
+// via require.cache.
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
 require('ts-node/register');
+
+const { runSharedDataConsistencyAuditJob } = require('../../src/jobs/sharedDataConsistencyAudit.job.ts');
+const { runSharedSignalHealthAuditJob } = require('../../src/jobs/sharedSignalHealthAudit.job.ts');
+
+const noopLogger = { info() {}, warn() {}, error() {}, debug() {}, fatal() {}, child() { return this; } };
 
 function withEnv(overrides, fn) {
   const originals = {};
@@ -30,59 +38,45 @@ function withEnv(overrides, fn) {
   })();
 }
 
-function loadConsistencyAuditJob({ consistency, readiness }) {
+function consistencyDeps({ consistency, readiness }) {
   const calls = { consistencyArgs: null, readinessArgs: null };
-  const servicePath = require.resolve('../../../backend/src/services/sharedDataBackfill.service.ts');
-  require.cache[servicePath] = {
-    id: servicePath,
-    filename: servicePath,
-    loaded: true,
-    exports: {
-      sharedDataBackfillService: {
-        getConsistencyReport: async (args) => {
-          calls.consistencyArgs = args;
-          return consistency;
-        },
-        getReadinessReport: async (args) => {
-          calls.readinessArgs = args;
-          return readiness;
-        },
+  const deps = {
+    sharedDataBackfillService: {
+      getConsistencyReport: async (args) => {
+        calls.consistencyArgs = args;
+        return consistency;
+      },
+      getReadinessReport: async (args) => {
+        calls.readinessArgs = args;
+        return readiness;
       },
     },
+    logger: noopLogger,
   };
-  const jobPath = require.resolve('../../src/jobs/sharedDataConsistencyAudit.job.ts');
-  delete require.cache[jobPath];
-  return { ...require(jobPath), calls };
+  return { deps, calls };
 }
 
-function loadHealthAuditJob({ overview }) {
+function healthAuditDeps({ overview }) {
   const calls = { overviewArgs: null };
-  const servicePath = require.resolve('../../../backend/src/services/signal.service.ts');
-  require.cache[servicePath] = {
-    id: servicePath,
-    filename: servicePath,
-    loaded: true,
-    exports: {
-      signalService: {
-        getSignalHealthOverview: async (args) => {
-          calls.overviewArgs = args;
-          return overview;
-        },
+  const deps = {
+    signalService: {
+      getSignalHealthOverview: async (args) => {
+        calls.overviewArgs = args;
+        return overview;
       },
     },
+    logger: noopLogger,
   };
-  const jobPath = require.resolve('../../src/jobs/sharedSignalHealthAudit.job.ts');
-  delete require.cache[jobPath];
-  return { ...require(jobPath), calls };
+  return { deps, calls };
 }
 
 test('consistency audit: maps both reports into a flat summary', async () => {
-  const { runSharedDataConsistencyAuditJob } = loadConsistencyAuditJob({
+  const { deps } = consistencyDeps({
     consistency: { propertiesEvaluated: 10, issueCount: 2 },
     readiness: { summary: { ready: 7, partial: 2, legacyHeavy: 1 } },
   });
 
-  const result = await runSharedDataConsistencyAuditJob();
+  const result = await runSharedDataConsistencyAuditJob(deps);
 
   assert.deepEqual(result, {
     propertiesEvaluated: 10,
@@ -95,12 +89,12 @@ test('consistency audit: maps both reports into a flat summary', async () => {
 
 test('consistency audit: SHARED_DATA_AUDIT_LIMIT is passed through when set and valid', async () => {
   await withEnv({ SHARED_DATA_AUDIT_LIMIT: '50' }, async () => {
-    const { runSharedDataConsistencyAuditJob, calls } = loadConsistencyAuditJob({
+    const { deps, calls } = consistencyDeps({
       consistency: { propertiesEvaluated: 0, issueCount: 0 },
       readiness: { summary: { ready: 0, partial: 0, legacyHeavy: 0 } },
     });
 
-    await runSharedDataConsistencyAuditJob();
+    await runSharedDataConsistencyAuditJob(deps);
 
     assert.equal(calls.consistencyArgs.limit, 50);
     assert.equal(calls.readinessArgs.limit, 50);
@@ -109,26 +103,26 @@ test('consistency audit: SHARED_DATA_AUDIT_LIMIT is passed through when set and 
 
 test('consistency audit: an unset/invalid limit is passed through as undefined (no artificial cap)', async () => {
   await withEnv({ SHARED_DATA_AUDIT_LIMIT: undefined }, async () => {
-    const { runSharedDataConsistencyAuditJob, calls } = loadConsistencyAuditJob({
+    const { deps, calls } = consistencyDeps({
       consistency: { propertiesEvaluated: 0, issueCount: 0 },
       readiness: { summary: { ready: 0, partial: 0, legacyHeavy: 0 } },
     });
 
-    await runSharedDataConsistencyAuditJob();
+    await runSharedDataConsistencyAuditJob(deps);
 
     assert.equal(calls.consistencyArgs.limit, undefined);
   });
 });
 
 test('signal health audit: maps the overview into a flat summary', async () => {
-  const { runSharedSignalHealthAuditJob } = loadHealthAuditJob({
+  const { deps } = healthAuditDeps({
     overview: {
       propertiesEvaluated: 5,
       totals: { totalSignals: 20, staleSignals: 3, lowConfidenceSignals: 2, interactionSignals: 1 },
     },
   });
 
-  const result = await runSharedSignalHealthAuditJob();
+  const result = await runSharedSignalHealthAuditJob(deps);
 
   assert.deepEqual(result, {
     propertiesEvaluated: 5,
@@ -141,11 +135,11 @@ test('signal health audit: maps the overview into a flat summary', async () => {
 
 test('signal health audit: defaults limit and lookbackDays to 120 when unset', async () => {
   await withEnv({ SHARED_SIGNAL_AUDIT_LIMIT: undefined, SHARED_SIGNAL_AUDIT_LOOKBACK_DAYS: undefined }, async () => {
-    const { runSharedSignalHealthAuditJob, calls } = loadHealthAuditJob({
+    const { deps, calls } = healthAuditDeps({
       overview: { propertiesEvaluated: 0, totals: { totalSignals: 0, staleSignals: 0, lowConfidenceSignals: 0, interactionSignals: 0 } },
     });
 
-    await runSharedSignalHealthAuditJob();
+    await runSharedSignalHealthAuditJob(deps);
 
     assert.equal(calls.overviewArgs.limit, 120);
     assert.equal(calls.overviewArgs.lookbackDays, 120);
@@ -154,11 +148,11 @@ test('signal health audit: defaults limit and lookbackDays to 120 when unset', a
 
 test('signal health audit: honors custom limit and lookbackDays', async () => {
   await withEnv({ SHARED_SIGNAL_AUDIT_LIMIT: '30', SHARED_SIGNAL_AUDIT_LOOKBACK_DAYS: '60' }, async () => {
-    const { runSharedSignalHealthAuditJob, calls } = loadHealthAuditJob({
+    const { deps, calls } = healthAuditDeps({
       overview: { propertiesEvaluated: 0, totals: { totalSignals: 0, staleSignals: 0, lowConfidenceSignals: 0, interactionSignals: 0 } },
     });
 
-    await runSharedSignalHealthAuditJob();
+    await runSharedSignalHealthAuditJob(deps);
 
     assert.equal(calls.overviewArgs.limit, 30);
     assert.equal(calls.overviewArgs.lookbackDays, 60);
