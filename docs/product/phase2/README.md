@@ -232,6 +232,16 @@ Acceptance criteria:
 - Property Details provides a discoverable path to optional household context without embedding sensitive answers in the Property form.
 - Responsibility exceptions remain fully editable but are grouped into compact, scan-friendly sections.
 
+## Action-plan loading presentation
+
+Implemented July 23, 2026:
+
+- Replaced the empty **Preparing your prioritized action plan** state with a skeleton that matches the final header, summary chips, and ranked action cards.
+- Added a restrained activity rail to the leading card, reduced-motion support, and a short status announcement for assistive technology.
+- Avoided an additional full-screen branded transition so navigation retains the dashboard shell and does not repeat the post-login loading experience.
+- Added delayed recovery controls after eight seconds, with **Retry** and **Back to Home** actions instead of leaving the user in an indefinite loading state.
+- Allowed loaded content to fade in without imposing an artificial minimum loading duration.
+
 ## Validation
 
 Automated acceptance rerun July 20, 2026 from commit `830f565`:

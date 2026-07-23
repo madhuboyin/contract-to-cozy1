@@ -1,10 +1,10 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, ClipboardList, Wrench } from 'lucide-react';
+import { ArrowLeft, ClipboardList, RefreshCw, Wrench } from 'lucide-react';
 import { api } from '@/lib/api/client';
 import {
   ActionCard,
@@ -15,6 +15,98 @@ import {
 } from '@/components/home/UnifiedHomeSurface';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+
+function SkeletonBlock({ className }: { className: string }) {
+  return (
+    <div
+      aria-hidden="true"
+      className={`animate-pulse rounded-full bg-gradient-to-r from-slate-100 via-slate-50 to-slate-100 motion-reduce:animate-none ${className}`}
+    />
+  );
+}
+
+function ActionPlanSkeleton({
+  showRecovery,
+  onRetry,
+}: {
+  showRecovery: boolean;
+  onRetry: () => void;
+}) {
+  return (
+    <main
+      aria-busy="true"
+      aria-label="Loading prioritized action plan"
+      className="mx-auto w-full max-w-6xl space-y-6 pb-16"
+    >
+      <div className="flex items-center justify-between gap-3">
+        <SkeletonBlock className="h-10 w-32" />
+        <SkeletonBlock className="h-10 w-48" />
+      </div>
+
+      <header className="overflow-hidden rounded-[28px] border border-slate-200 bg-gradient-to-br from-white to-teal-50/50 p-6 shadow-sm md:p-8">
+        <div className="flex items-start gap-3">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-teal-100 text-teal-700">
+            <ClipboardList className="h-5 w-5" aria-hidden="true" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <SkeletonBlock className="h-3 w-28" />
+            <SkeletonBlock className="mt-3 h-8 w-64 max-w-full" />
+            <SkeletonBlock className="mt-4 h-3 w-full max-w-3xl" />
+            <SkeletonBlock className="mt-2 h-3 w-4/5 max-w-2xl" />
+          </div>
+        </div>
+        <div className="mt-5 flex flex-wrap gap-2">
+          <SkeletonBlock className="h-7 w-32" />
+          <SkeletonBlock className="h-7 w-32" />
+          <SkeletonBlock className="h-7 w-28" />
+        </div>
+      </header>
+
+      <div className="flex min-h-12 flex-col items-center justify-center gap-3 text-center">
+        <p className="text-sm font-medium text-slate-600" role="status" aria-live="polite">
+          {showRecovery ? 'This is taking longer than expected.' : 'Organizing your next actions…'}
+        </p>
+        {showRecovery ? (
+          <div className="flex flex-wrap justify-center gap-2">
+            <Button type="button" variant="outline" className="rounded-full" onClick={onRetry}>
+              <RefreshCw className="mr-2 h-4 w-4" />
+              Retry
+            </Button>
+            <Button asChild variant="ghost" className="rounded-full">
+              <Link href="/dashboard">Back to Home</Link>
+            </Button>
+          </div>
+        ) : null}
+      </div>
+
+      <section aria-hidden="true" className="space-y-3">
+        <SkeletonBlock className="h-6 w-72 max-w-full" />
+        <SkeletonBlock className="h-4 w-[28rem] max-w-full" />
+        {[0, 1, 2].map((index) => (
+          <div
+            key={index}
+            className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
+          >
+            {index === 0 ? (
+              <div className="absolute inset-x-0 top-0 h-1 animate-pulse bg-gradient-to-r from-transparent via-teal-400 to-transparent motion-reduce:animate-none" />
+            ) : null}
+            <div className="flex flex-wrap items-center gap-2">
+              <SkeletonBlock className="h-6 w-16" />
+              <SkeletonBlock className="h-4 w-24" />
+            </div>
+            <SkeletonBlock className="mt-4 h-6 w-3/5" />
+            <SkeletonBlock className="mt-3 h-4 w-full" />
+            <SkeletonBlock className="mt-2 h-4 w-4/5" />
+            <div className="mt-5 flex flex-wrap gap-2">
+              <SkeletonBlock className="h-10 w-40" />
+              <SkeletonBlock className="h-10 w-28" />
+            </div>
+          </div>
+        ))}
+      </section>
+    </main>
+  );
+}
 
 export default function PrioritizedActionPlanPage() {
   const params = useParams();
@@ -28,6 +120,7 @@ export default function PrioritizedActionPlanPage() {
     enabled: Boolean(propertyId),
     staleTime: 2 * 60 * 1000,
   });
+  const [showSlowLoadingRecovery, setShowSlowLoadingRecovery] = useState(false);
 
   useEffect(() => {
     if (!focusActionId || !query.data) return;
@@ -40,8 +133,23 @@ export default function PrioritizedActionPlanPage() {
     return () => window.cancelAnimationFrame(frame);
   }, [focusActionId, query.data]);
 
+  useEffect(() => {
+    if (!query.isLoading) {
+      setShowSlowLoadingRecovery(false);
+      return;
+    }
+
+    const timer = window.setTimeout(() => setShowSlowLoadingRecovery(true), 8_000);
+    return () => window.clearTimeout(timer);
+  }, [query.isLoading]);
+
   if (query.isLoading) {
-    return <div className="mx-auto max-w-6xl py-16 text-center text-sm text-slate-500">Preparing your prioritized action plan…</div>;
+    return (
+      <ActionPlanSkeleton
+        showRecovery={showSlowLoadingRecovery}
+        onRetry={() => void query.refetch()}
+      />
+    );
   }
 
   if (query.isError || !query.data) {
@@ -62,7 +170,7 @@ export default function PrioritizedActionPlanPage() {
   };
 
   return (
-    <main className="mx-auto w-full max-w-6xl space-y-6 pb-16">
+    <main className="mx-auto w-full max-w-6xl animate-in space-y-6 fade-in duration-300 motion-reduce:animate-none pb-16">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <Button asChild variant="ghost" className="rounded-full">
           <Link href="/dashboard"><ArrowLeft className="mr-2 h-4 w-4" />Back to Home</Link>
