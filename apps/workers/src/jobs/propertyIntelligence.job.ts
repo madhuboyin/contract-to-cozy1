@@ -9,7 +9,7 @@
 
 import { PropertyType } from '@prisma/client';
 import { prisma } from '../lib/prisma';
-import { logger } from '../lib/logger';
+import { logger, AppLogger } from '../lib/logger';
 import { calculateFinancialEfficiency } from '@worker-shared/utils/FinancialCalculator.util';
 import { HiddenAssetService } from '@worker-shared/services/hiddenAssets.service';
 import RiskAssessmentService from '@worker-shared/services/RiskAssessment.service';
@@ -28,17 +28,43 @@ export interface PropertyIntelligenceJobPayload {
 
 const hiddenAssetService = new HiddenAssetService();
 
+// W4 item 1: small, job-scoped dependency interface (see
+// reserveFundBalanceReminder.job.ts for the pattern). capturePropertyScoreSnapshots
+// is injected as a plain function reference (its own deps default to the real
+// implementations independently) rather than trying to match its Deps shape here.
+export interface PropertyIntelligenceDeps {
+  prisma: Pick<typeof prisma, 'property' | 'financialEfficiencyReport' | 'financialEfficiencyConfig'>;
+  logger: AppLogger;
+  riskAssessmentService: Pick<typeof RiskAssessmentService, 'calculateAndSaveReport'>;
+  hiddenAssetService: Pick<HiddenAssetService, 'refreshMatchesInternal'>;
+  calculateFinancialEfficiency: typeof calculateFinancialEfficiency;
+  capturePropertyScoreSnapshots: typeof capturePropertyScoreSnapshots;
+}
+
+const defaultDeps: PropertyIntelligenceDeps = {
+  prisma,
+  logger,
+  riskAssessmentService: RiskAssessmentService,
+  hiddenAssetService,
+  calculateFinancialEfficiency,
+  capturePropertyScoreSnapshots,
+};
+
 /**
  * Process risk assessment calculation.
  * Delegates to RiskAssessmentService.calculateAndSaveReport which fetches
  * the full property including canonical inventory items.
  */
-export async function processRiskCalculation(jobData: PropertyIntelligenceJobPayload) {
+export async function processRiskCalculation(
+  jobData: PropertyIntelligenceJobPayload,
+  deps: PropertyIntelligenceDeps = defaultDeps,
+) {
+  const { prisma, logger, riskAssessmentService, capturePropertyScoreSnapshots } = deps;
   const { propertyId } = jobData;
   logger.info(`[${new Date().toISOString()}] Processing risk calculation for property ${propertyId}...`);
 
   try {
-    await RiskAssessmentService.calculateAndSaveReport(propertyId);
+    await riskAssessmentService.calculateAndSaveReport(propertyId);
     logger.info(`✅ Risk assessment calculated and saved for property ${propertyId}.`);
   } catch (error) {
     logger.error({ err: error }, '❌ Error calculating risk assessment');
@@ -63,14 +89,18 @@ export async function processRiskCalculation(jobData: PropertyIntelligenceJobPay
 /**
  * Process FES calculation
  */
-export async function processFESCalculation(jobData: PropertyIntelligenceJobPayload) {
+export async function processFESCalculation(
+  jobData: PropertyIntelligenceJobPayload,
+  deps: PropertyIntelligenceDeps = defaultDeps,
+) {
+  const { prisma, logger, calculateFinancialEfficiency, capturePropertyScoreSnapshots } = deps;
   logger.info(`[${new Date().toISOString()}] Processing FES calculation for property ${jobData.propertyId}...`);
 
   const propertyId = jobData.propertyId;
 
   try {
     // 1. Fetch property with all financial data (like risk does with fetchPropertyDetails)
-    const property = await (prisma as any).property.findUnique({
+    const property = await prisma.property.findUnique({
       where: { id: propertyId },
       include: {
         insurancePolicies: true,
@@ -82,7 +112,7 @@ export async function processFESCalculation(jobData: PropertyIntelligenceJobPayl
           },
         },
       },
-    });
+    } as any) as any;
 
     if (!property) {
       logger.error(`Property ${propertyId} not found. Job failed.`);
@@ -104,18 +134,18 @@ export async function processFESCalculation(jobData: PropertyIntelligenceJobPayl
       UNKNOWN: null,
     } as Record<string, PropertyType | null>)[String(property.dwellingType)] ?? null;
     if (benchmarkPropertyType) {
-      benchmark = await (prisma as any).financialEfficiencyConfig.findUnique({
+      benchmark = await prisma.financialEfficiencyConfig.findUnique({
         where: {
           zipCode_propertyType: {
             zipCode: property.zipCode,
             propertyType: benchmarkPropertyType
           }
         },
-      });
+      } as any);
 
       // Fallback to global benchmark for property type
       if (!benchmark) {
-        benchmark = await (prisma as any).financialEfficiencyConfig.findFirst({
+        benchmark = await prisma.financialEfficiencyConfig.findFirst({
           where: { zipCode: null, propertyType: benchmarkPropertyType },
         });
       }
@@ -131,7 +161,7 @@ export async function processFESCalculation(jobData: PropertyIntelligenceJobPayl
     });
 
     // 4. Save result to database
-    await (prisma as any).financialEfficiencyReport.upsert({
+    await prisma.financialEfficiencyReport.upsert({
       where: { propertyId },
       update: {
         financialEfficiencyScore: result.score,
@@ -172,7 +202,11 @@ export async function processFESCalculation(jobData: PropertyIntelligenceJobPayl
 /**
  * Process hidden asset scan for a single property
  */
-export async function processHiddenAssetScan(jobData: PropertyIntelligenceJobPayload) {
+export async function processHiddenAssetScan(
+  jobData: PropertyIntelligenceJobPayload,
+  deps: PropertyIntelligenceDeps = defaultDeps,
+) {
+  const { logger, hiddenAssetService } = deps;
   const { propertyId } = jobData;
   logger.info(`[${new Date().toISOString()}] Processing hidden asset scan for property ${propertyId}...`);
 

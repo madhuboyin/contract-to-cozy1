@@ -7,57 +7,50 @@
 // instead of a false-green worker-jobs dashboard card. This is a
 // regression-lock: "fixing" the throw away would silently reintroduce the
 // exact masked-failure bug the surrounding comments describe.
+//
+// W4 item 1 (DI refactor): dependencies are injected directly instead of
+// via require.cache.
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
 require('ts-node/register');
 
-function loadJobs({ delivery, aggregationAllows = true }) {
-  const calls = { updates: [] };
+const { sendPushNotificationJob } = require('../../src/jobs/sendPushNotification.job.ts');
+const { sendSmsNotificationJob } = require('../../src/jobs/sendSmsNotification.job.ts');
 
-  const prismaMock = {
-    notificationDelivery: {
-      findUnique: async () => delivery,
-      update: async (args) => {
-        calls.updates.push(args);
-        return { id: args.where.id, ...args.data };
+const noopLogger = { info() {}, warn() {}, error() {}, debug() {}, fatal() {}, child() { return this; } };
+
+function fakeDeps({ delivery, aggregationAllows = true }) {
+  const calls = { updates: [] };
+  const deps = {
+    prisma: {
+      notificationDelivery: {
+        findUnique: async () => delivery,
+        update: async (args) => {
+          calls.updates.push(args);
+          return { id: args.where.id, ...args.data };
+        },
       },
     },
+    logger: noopLogger,
+    filterDeliveriesByAggregationPolicy: async (deliveries) => (aggregationAllows ? deliveries : []),
   };
-  const prismaPath = require.resolve('../../src/lib/prisma.ts');
-  require.cache[prismaPath] = { id: prismaPath, filename: prismaPath, loaded: true, exports: { prisma: prismaMock } };
-
-  const policyPath = require.resolve('../../src/services/aggregationDeliveryPolicy.ts');
-  require.cache[policyPath] = {
-    id: policyPath,
-    filename: policyPath,
-    loaded: true,
-    exports: {
-      filterDeliveriesByAggregationPolicy: async (deliveries) => (aggregationAllows ? deliveries : []),
-    },
-  };
-
-  const pushPath = require.resolve('../../src/jobs/sendPushNotification.job.ts');
-  delete require.cache[pushPath];
-  const smsPath = require.resolve('../../src/jobs/sendSmsNotification.job.ts');
-  delete require.cache[smsPath];
-
-  return { ...require(pushPath), ...require(smsPath), calls };
+  return { deps, calls };
 }
 
 function pendingDelivery(overrides = {}) {
   return { id: 'delivery-1', status: 'PENDING', notification: { id: 'notification-1' }, ...overrides };
 }
 
-for (const [label, jobExport, tag] of [
-  ['push', 'sendPushNotificationJob', 'PUSH_NOT_IMPLEMENTED'],
-  ['sms', 'sendSmsNotificationJob', 'SMS_NOT_IMPLEMENTED'],
+for (const [label, job, tag] of [
+  ['push', sendPushNotificationJob, 'PUSH_NOT_IMPLEMENTED'],
+  ['sms', sendSmsNotificationJob, 'SMS_NOT_IMPLEMENTED'],
 ]) {
   test(`${label}: marks a PENDING delivery SKIPPED and throws instead of silently completing`, async () => {
-    const { [jobExport]: job, calls } = loadJobs({ delivery: pendingDelivery() });
+    const { deps, calls } = fakeDeps({ delivery: pendingDelivery() });
 
-    await assert.rejects(() => job('delivery-1'), new RegExp(tag));
+    await assert.rejects(() => job('delivery-1', deps), new RegExp(tag));
 
     assert.equal(calls.updates.length, 1);
     assert.equal(calls.updates[0].data.status, 'SKIPPED');
@@ -65,23 +58,23 @@ for (const [label, jobExport, tag] of [
   });
 
   test(`${label}: does nothing and does not throw when the delivery is not PENDING`, async () => {
-    const { [jobExport]: job, calls } = loadJobs({ delivery: pendingDelivery({ status: 'SENT' }) });
+    const { deps, calls } = fakeDeps({ delivery: pendingDelivery({ status: 'SENT' }) });
 
-    await assert.doesNotReject(() => job('delivery-1'));
+    await assert.doesNotReject(() => job('delivery-1', deps));
     assert.equal(calls.updates.length, 0);
   });
 
   test(`${label}: does nothing and does not throw when the delivery no longer exists`, async () => {
-    const { [jobExport]: job, calls } = loadJobs({ delivery: null });
+    const { deps, calls } = fakeDeps({ delivery: null });
 
-    await assert.doesNotReject(() => job('delivery-1'));
+    await assert.doesNotReject(() => job('delivery-1', deps));
     assert.equal(calls.updates.length, 0);
   });
 
   test(`${label}: does nothing when the aggregation delivery policy filters it out`, async () => {
-    const { [jobExport]: job, calls } = loadJobs({ delivery: pendingDelivery(), aggregationAllows: false });
+    const { deps, calls } = fakeDeps({ delivery: pendingDelivery(), aggregationAllows: false });
 
-    await assert.doesNotReject(() => job('delivery-1'));
+    await assert.doesNotReject(() => job('delivery-1', deps));
     assert.equal(calls.updates.length, 0);
   });
 }

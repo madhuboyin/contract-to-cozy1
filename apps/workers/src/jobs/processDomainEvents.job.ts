@@ -5,6 +5,15 @@ import { claimDetailUrl } from '../lib/deepLinks';
 type DomainEventStatus = 'PENDING' | 'PROCESSING' | 'PROCESSED' | 'FAILED';
 type DomainEventType = 'CLAIM_SUBMITTED' | 'CLAIM_CLOSED' | 'FOLLOW_UP_DUE';
 
+// W4 item 1: small, job-scoped dependency interface (see
+// reserveFundBalanceReminder.job.ts for the pattern).
+export interface ProcessDomainEventsDeps {
+  prisma: Pick<typeof prisma, 'notification' | 'domainEvent'>;
+  notificationService: Pick<typeof NotificationService, 'create'>;
+}
+
+const defaultDeps: ProcessDomainEventsDeps = { prisma, notificationService: NotificationService };
+
 function computeBackoffMinutes(attempts: number) {
   if (attempts <= 0) return 0;
   if (attempts === 1) return 1;
@@ -29,18 +38,21 @@ function safeString(v: any) {
   return String(v);
 }
 
-async function ensureNotificationForDomainEvent(args: {
-  domainEventId: string;
-  domainEventType: DomainEventType;
-  userId: string;
-  propertyId?: string | null;
-  claimId: string;
-  title: string;
-  message: string;
-  actionUrl?: string;
-  deliveries: Array<'IN_APP' | 'EMAIL' | 'PUSH' | 'SMS'>;
-  metadata?: any;
-}) {
+async function ensureNotificationForDomainEvent(
+  args: {
+    domainEventId: string;
+    domainEventType: DomainEventType;
+    userId: string;
+    propertyId?: string | null;
+    claimId: string;
+    title: string;
+    message: string;
+    actionUrl?: string;
+    deliveries: Array<'IN_APP' | 'EMAIL' | 'PUSH' | 'SMS'>;
+    metadata?: any;
+  },
+  deps: ProcessDomainEventsDeps,
+) {
   const {
     domainEventId,
     domainEventType,
@@ -50,14 +62,13 @@ async function ensureNotificationForDomainEvent(args: {
     title,
     message,
     actionUrl,
-    deliveries,
     metadata,
   } = args;
 
   // Idempotency at notification creation level:
   // If the domain event is retried and we already created the notification, do nothing.
   // Postgres JSON path filter is supported by Prisma with path/equals.
-  const existing = await prisma.notification.findFirst({
+  const existing = await deps.prisma.notification.findFirst({
     where: {
       userId,
       type: domainEventType,
@@ -73,7 +84,7 @@ async function ensureNotificationForDomainEvent(args: {
 
   if (existing) return existing;
 
-  const notification = await NotificationService.create({
+  const notification = await deps.notificationService.create({
       userId,
       type: domainEventType,
       title,
@@ -94,7 +105,7 @@ async function ensureNotificationForDomainEvent(args: {
   return notification;
 }
 
-async function handleClaimSubmitted(ev: any) {
+async function handleClaimSubmitted(ev: any, deps: ProcessDomainEventsDeps) {
   const userId = ev.userId ?? ev.payload?.userId;
   const claimId = ev.payload?.claimId;
   const propertyId = ev.propertyId ?? ev.payload?.propertyId;
@@ -131,10 +142,10 @@ async function handleClaimSubmitted(ev: any) {
       claimNumber: claimNumber || undefined,
       priority: 'HIGH',
     },
-  });
+  }, deps);
 }
 
-async function handleClaimClosed(ev: any) {
+async function handleClaimClosed(ev: any, deps: ProcessDomainEventsDeps) {
   const userId = ev.userId ?? ev.payload?.userId;
   const claimId = ev.payload?.claimId;
   const propertyId = ev.propertyId ?? ev.payload?.propertyId;
@@ -163,18 +174,21 @@ async function handleClaimClosed(ev: any) {
       finalStatus: ev.payload?.status,
       priority: 'HIGH',
     },
-  });
+  }, deps);
 }
 
 /**
  * Poll + process a batch of DomainEvent rows.
  * Safe for multiple replicas via PROCESSING "lock".
  */
-export async function processDomainEventsJob(opts?: { batchSize?: number }) {
+export async function processDomainEventsJob(
+  opts?: { batchSize?: number },
+  deps: ProcessDomainEventsDeps = defaultDeps,
+) {
+  const { prisma } = deps;
   const batchSize = opts?.batchSize ?? 25;
 
-  // @ts-ignore - Model exists in schema but may not be in generated client
-  const pending = await (prisma as any).domainEvent.findMany({
+  const pending = await prisma.domainEvent.findMany({
     where: {
       OR: [{ status: 'PENDING' as DomainEventStatus }, { status: 'FAILED' as DomainEventStatus }],
     },
@@ -194,8 +208,7 @@ export async function processDomainEventsJob(opts?: { batchSize?: number }) {
     }
 
     // Acquire lock
-    // @ts-ignore - Model exists in schema but may not be in generated client
-    const locked = await (prisma as any).domainEvent.updateMany({
+    const locked = await prisma.domainEvent.updateMany({
       where: { id: ev.id, status: ev.status as DomainEventStatus },
       data: {
         status: 'PROCESSING' as DomainEventStatus,
@@ -210,17 +223,16 @@ export async function processDomainEventsJob(opts?: { batchSize?: number }) {
 
       switch (type) {
         case 'CLAIM_SUBMITTED':
-          await handleClaimSubmitted(ev);
+          await handleClaimSubmitted(ev, deps);
           break;
         case 'CLAIM_CLOSED':
-          await handleClaimClosed(ev);
+          await handleClaimClosed(ev, deps);
           break;
         default:
           throw new Error(`Unhandled DomainEvent type: ${type}`);
       }
 
-      // @ts-ignore - Model exists in schema but may not be in generated client
-      await (prisma as any).domainEvent.update({
+      await prisma.domainEvent.update({
         where: { id: ev.id },
         data: {
           status: 'PROCESSED' as DomainEventStatus,
@@ -232,8 +244,7 @@ export async function processDomainEventsJob(opts?: { batchSize?: number }) {
       processed += 1;
     } catch (err: any) {
       const msg = err?.message ? String(err.message) : 'Unknown error';
-      // @ts-ignore - Model exists in schema but may not be in generated client
-      await (prisma as any).domainEvent.update({
+      await prisma.domainEvent.update({
         where: { id: ev.id },
         data: {
           status: 'FAILED' as DomainEventStatus,

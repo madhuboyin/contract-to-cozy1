@@ -2,7 +2,17 @@
 import { prisma } from '../lib/prisma';
 import { fetchCpscRecalls } from '../recalls/cpsc.client';
 import { RecallSeverity, RecallSource, RecallStatus } from '@prisma/client';
-import { logger } from '../lib/logger';
+import { logger, AppLogger } from '../lib/logger';
+
+// W4 item 1: small, job-scoped dependency interface (see
+// reserveFundBalanceReminder.job.ts for the pattern).
+export interface IngestRecallsDeps {
+  prisma: Pick<typeof prisma, '$transaction'>;
+  fetchCpscRecalls: typeof fetchCpscRecalls;
+  logger: AppLogger;
+}
+
+const defaultDeps: IngestRecallsDeps = { prisma, fetchCpscRecalls, logger };
 
 function deriveSeverity(hazard?: string, summary?: string): RecallSeverity {
   const t = `${hazard || ''} ${summary || ''}`.toLowerCase();
@@ -42,7 +52,8 @@ function unique<T>(xs: T[]): T[] {
   return Array.from(new Set(xs));
 }
 
-export async function ingestRecallsJob() {
+export async function ingestRecallsJob(deps: IngestRecallsDeps = defaultDeps) {
+  const { prisma, fetchCpscRecalls, logger } = deps;
   const items = await fetchCpscRecalls();
   const now = new Date();
 

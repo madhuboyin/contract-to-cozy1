@@ -13,7 +13,38 @@ function sha256(buf: Buffer) {
   return crypto.createHash('sha256').update(buf).digest('hex');
 }
 
-export async function generateHomeReportExportJob(exportId: string) {
+// W4 item 1: small, job-scoped dependency interface (see
+// reserveFundBalanceReminder.job.ts for the pattern).
+export interface GenerateHomeReportExportDeps {
+  prisma: Pick<typeof prisma, 'homeReportExport' | 'homeReportExportEvent'>;
+  uploadPdfBuffer: typeof uploadPdfBuffer;
+  renderHomeReportPackPdf: typeof renderHomeReportPackPdf;
+  buildAuthoritativeReportSnapshot: typeof buildAuthoritativeReportSnapshot;
+  checkReportWorkerContext: typeof checkReportWorkerContext;
+  deleteObject: typeof deleteObject;
+}
+
+const defaultDeps: GenerateHomeReportExportDeps = {
+  prisma,
+  uploadPdfBuffer,
+  renderHomeReportPackPdf,
+  buildAuthoritativeReportSnapshot,
+  checkReportWorkerContext,
+  deleteObject,
+};
+
+export async function generateHomeReportExportJob(
+  exportId: string,
+  deps: GenerateHomeReportExportDeps = defaultDeps,
+) {
+  const {
+    prisma,
+    uploadPdfBuffer,
+    renderHomeReportPackPdf,
+    buildAuthoritativeReportSnapshot,
+    checkReportWorkerContext,
+    deleteObject,
+  } = deps;
   const exp = await prisma.homeReportExport.findUnique({
     where: { id: exportId },
   });

@@ -4,7 +4,7 @@ import { prisma } from '../lib/prisma';
 import { MaterialSpecExportStatus } from '@prisma/client';
 import { uploadPdfBuffer } from '@worker-shared/services/storage/reportStorage';
 import { deleteObject } from '../storage/deleteObject';
-import { logger } from '../lib/logger';
+import { logger, AppLogger } from '../lib/logger';
 
 function sha256(buf: Buffer): string {
   return crypto.createHash('sha256').update(buf).digest('hex');
@@ -172,7 +172,31 @@ async function renderPdf(html: string): Promise<Buffer> {
   }
 }
 
-export async function generateMaterialSpecExportJob(exportId: string): Promise<void> {
+// W4 item 1: small, job-scoped dependency interface (see
+// reserveFundBalanceReminder.job.ts for the pattern). `renderPdf` (a real
+// Playwright/Chromium launch) is injected directly rather than requiring
+// tests to mock the `playwright` package itself.
+export interface GenerateMaterialSpecExportDeps {
+  prisma: Pick<typeof prisma, 'materialSpecExport' | 'materialSpec'>;
+  uploadPdfBuffer: typeof uploadPdfBuffer;
+  deleteObject: typeof deleteObject;
+  renderPdf: typeof renderPdf;
+  logger: AppLogger;
+}
+
+const defaultDeps: GenerateMaterialSpecExportDeps = {
+  prisma,
+  uploadPdfBuffer,
+  deleteObject,
+  renderPdf,
+  logger,
+};
+
+export async function generateMaterialSpecExportJob(
+  exportId: string,
+  deps: GenerateMaterialSpecExportDeps = defaultDeps,
+): Promise<void> {
+  const { prisma, uploadPdfBuffer, deleteObject, renderPdf, logger } = deps;
   const exportRecord = await prisma.materialSpecExport.findUnique({
     where: { id: exportId },
     include: { property: { select: { id: true, address: true, city: true, state: true } } },

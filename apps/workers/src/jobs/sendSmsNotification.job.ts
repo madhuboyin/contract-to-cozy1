@@ -1,7 +1,17 @@
 import { prisma } from '../lib/prisma';
 import { DeliveryStatus } from '@prisma/client';
-import { logger } from '../lib/logger';
+import { logger, AppLogger } from '../lib/logger';
 import { filterDeliveriesByAggregationPolicy } from '../services/aggregationDeliveryPolicy';
+
+// W4 item 1: small, job-scoped dependency interface (see
+// reserveFundBalanceReminder.job.ts for the pattern).
+export interface SendSmsNotificationDeps {
+  prisma: Pick<typeof prisma, 'notificationDelivery'>;
+  logger: AppLogger;
+  filterDeliveriesByAggregationPolicy: typeof filterDeliveriesByAggregationPolicy;
+}
+
+const defaultDeps: SendSmsNotificationDeps = { prisma, logger, filterDeliveriesByAggregationPolicy };
 
 // No Twilio/WhatsApp integration exists yet. Previously this job silently
 // no-op'd and BullMQ reported it as "completed" — the worker-jobs dashboard
@@ -9,7 +19,11 @@ import { filterDeliveriesByAggregationPolicy } from '../services/aggregationDeli
 // alert channel) that never actually delivered anything. Instead we record
 // the real outcome on the delivery row and fail the job loudly so it shows up
 // as needing attention (and triggers job-failure alerting) until SMS is wired up.
-export async function sendSmsNotificationJob(notificationDeliveryId: string) {
+export async function sendSmsNotificationJob(
+  notificationDeliveryId: string,
+  deps: SendSmsNotificationDeps = defaultDeps,
+) {
+  const { prisma, logger, filterDeliveriesByAggregationPolicy } = deps;
   const delivery = await prisma.notificationDelivery.findUnique({
     where: { id: notificationDeliveryId },
     include: { notification: true },
