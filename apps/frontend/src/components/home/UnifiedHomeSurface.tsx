@@ -3,6 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
+import { usePostLoginTransitionReadiness } from '@/components/system/PostLoginTransitionContext';
 import {
   AlertTriangle,
   ArrowRight,
@@ -336,12 +337,19 @@ export function ActionCard({
 }
 
 export function UnifiedHomeSurface({ propertyId }: { propertyId: string }) {
+  const { markReady: markPostLoginReady } = usePostLoginTransitionReadiness();
   const toolAvailabilityQuery = useToolDiscoveryAvailability();
   const query = useQuery({
     queryKey: ['unified-home', propertyId],
     queryFn: () => api.getUnifiedHome(propertyId),
     staleTime: 2 * 60 * 1000,
   });
+
+  React.useEffect(() => {
+    if (!query.isLoading) {
+      markPostLoginReady();
+    }
+  }, [markPostLoginReady, query.isLoading]);
 
   if (query.isLoading) {
     return <div className="py-16 text-center text-sm text-slate-500">Preparing your Home…</div>;

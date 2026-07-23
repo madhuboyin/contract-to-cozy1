@@ -10,6 +10,8 @@ type ProgressMode = 'bar' | 'dots';
 export type PostLoginTransitionProps = {
   progressMode?: ProgressMode;
   className?: string;
+  timedOut?: boolean;
+  onRetry?: () => void;
 };
 
 function ProgressBar({ reducedMotion }: { reducedMotion: boolean }) {
@@ -49,6 +51,8 @@ function ProgressDots({ reducedMotion }: { reducedMotion: boolean }) {
 export default function PostLoginTransition({
   progressMode = 'dots',
   className,
+  timedOut = false,
+  onRetry,
 }: PostLoginTransitionProps) {
   const prefersReducedMotion = useReducedMotion();
   const reducedMotion = prefersReducedMotion ?? false;
@@ -107,16 +111,21 @@ export default function PostLoginTransition({
           className="text-[14px] md:text-[15px] font-semibold tracking-tight text-slate-900 dark:text-slate-50"
           style={{ fontFamily: 'var(--font-heading)' }}
         >
-          Preparing your home command center…
+          {timedOut
+            ? 'Home is taking longer than expected'
+            : 'Preparing your home command center…'}
         </p>
         <p className="mt-1 text-[11.5px] md:text-[12.5px] leading-relaxed text-slate-500 dark:text-slate-400">
-          Syncing your property, protections, and next best actions.
+          {timedOut
+            ? 'Check your connection, then try loading your Home again.'
+            : 'Syncing your property, protections, and next best actions.'}
         </p>
 
         {/* Rotating tertiary status */}
         <div className="mt-2 h-[18px] flex items-center justify-center">
-          <AnimatePresence mode="wait">
-            {messageVisible && (
+          {!timedOut && (
+            <AnimatePresence mode="wait">
+              {messageVisible && (
               <motion.p
                 key={messageIndex}
                 initial={{ opacity: 0, y: 3 }}
@@ -127,8 +136,9 @@ export default function PostLoginTransition({
               >
                 {ROTATING_MESSAGES[messageIndex]}
               </motion.p>
-            )}
-          </AnimatePresence>
+              )}
+            </AnimatePresence>
+          )}
         </div>
       </motion.div>
 
@@ -139,7 +149,15 @@ export default function PostLoginTransition({
         transition={{ duration: 0.4, delay: 0.55 }}
         className="mt-4 flex items-center justify-center w-full max-w-[200px] md:max-w-[240px]"
       >
-        {progressMode === 'bar' ? (
+        {timedOut && onRetry ? (
+          <button
+            type="button"
+            onClick={onRetry}
+            className="rounded-full bg-teal-600 px-5 py-2 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-teal-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2"
+          >
+            Try again
+          </button>
+        ) : progressMode === 'bar' ? (
           <ProgressBar reducedMotion={reducedMotion} />
         ) : (
           <ProgressDots reducedMotion={reducedMotion} />

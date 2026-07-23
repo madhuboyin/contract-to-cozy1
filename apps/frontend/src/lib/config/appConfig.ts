@@ -4,9 +4,15 @@
  */
 export const APP_CONFIG = {
   /**
-   * Minimum number of milliseconds the post-login transition screen stays
-   * visible, regardless of how quickly auth resolves.
-   * Also used as the navigation delay in the login page.
+   * Keep the post-login surface visible long enough to avoid a flash when the
+   * Home payload is already cached. It otherwise remains visible until Home
+   * reports that its initial data has settled.
    */
-  postLoginTransitionMs: 4_000,
+  postLoginTransitionMinMs: 800,
+
+  /**
+   * After this duration the same transition surface offers a retry rather
+   * than exposing a second loading state.
+   */
+  postLoginTransitionMaxMs: 12_000,
 } as const;

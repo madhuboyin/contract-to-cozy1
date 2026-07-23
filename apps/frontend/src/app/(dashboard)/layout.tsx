@@ -9,8 +9,10 @@ import { getNavSectionsForRole } from '@/lib/navigation/jobsNavigation';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { cn } from '@/lib/utils';
 import PostLoginTransition from '@/components/system/PostLoginTransition';
+import { PostLoginTransitionProvider } from '@/components/system/PostLoginTransitionContext';
 import { IdleTimeoutWarningDialog } from '@/components/system/IdleTimeoutWarningDialog';
 import { useIdleTimeout } from '@/hooks/useIdleTimeout';
+import { useCoordinatedPostLoginTransition } from '@/hooks/usePostLoginTransition';
 import { APP_CONFIG } from '@/lib/config/appConfig';
 import { Button } from '@/components/ui/button';
 import {
@@ -526,8 +528,6 @@ function MobileDrawerNav({ user }: { user: User | null }) {
 // Root layout
 // ─────────────────────────────────────────────────────────────────────────────
 
-const MIN_TRANSITION_MS = APP_CONFIG.postLoginTransitionMs;
-
 function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth() as { user: User | null; loading: boolean };
   const router = useRouter();
@@ -558,10 +558,19 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
   // Read (but don't yet consume) the flag during the render phase via a lazy
   // initializer — this is a pure read, so it's safe to run twice under React
   // Strict Mode's dev-only double-invocation.
-  const [transitionVisible, setTransitionVisible] = useState(() => {
+  const [transitionRequested] = useState(() => {
     if (typeof window === 'undefined') return false;
     return window.sessionStorage.getItem(POST_LOGIN_TRANSITION_KEY) === '1';
   });
+  const {
+    transitionVisible,
+    transitionTimedOut,
+    markTransitionReady,
+  } = useCoordinatedPostLoginTransition(
+    transitionRequested,
+    APP_CONFIG.postLoginTransitionMinMs,
+    APP_CONFIG.postLoginTransitionMaxMs,
+  );
   const [transitionBootstrapped, setTransitionBootstrapped] = useState(false);
   const enablePullToRefresh = pathname === '/dashboard' || Boolean(pathname?.match(/^\/dashboard\/properties\/[^/]+$/));
 
@@ -572,14 +581,6 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
     window.sessionStorage.removeItem(POST_LOGIN_TRANSITION_KEY);
     setTransitionBootstrapped(true);
   }, []);
-
-  // Timer effect is keyed off derived state rather than a consumed side
-  // effect, so it re-establishes cleanly if Strict Mode replays mount/cleanup.
-  useEffect(() => {
-    if (!transitionVisible) return;
-    const t = window.setTimeout(() => setTransitionVisible(false), MIN_TRANSITION_MS);
-    return () => window.clearTimeout(t);
-  }, [transitionVisible]);
 
   useEffect(() => {
     if (
@@ -686,14 +687,23 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
   if (user?.role === 'PROVIDER') return null;
 
   return (
-    <>
-      {/* Post-login transition overlay — shown for at least MIN_TRANSITION_MS */}
+    <PostLoginTransitionProvider
+      active={transitionVisible}
+      onReady={markTransitionReady}
+    >
+      {/* Home begins loading underneath this one stable post-login surface. */}
       <AnimatePresence>
-        {transitionVisible && <PostLoginTransition key="dashboard-init" />}
+        {transitionVisible && (
+          <PostLoginTransition
+            key="dashboard-init"
+            timedOut={transitionTimedOut}
+            onRetry={() => window.location.reload()}
+          />
+        )}
       </AnimatePresence>
 
-      {/* Dashboard shell — only rendered once the transition has finished */}
-      {!transitionVisible && (
+      {/* Mount as soon as auth resolves so data hydration is not delayed by the transition. */}
+      {!loading && user && (
       <NotificationProvider>
       <PropertyProvider>
         <AppShell
@@ -790,7 +800,7 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
       </PropertyProvider>
       </NotificationProvider>
       )}
-    </>
+    </PostLoginTransitionProvider>
   );
 }
 

@@ -1,26 +1,58 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+
+export type CoordinatedPostLoginTransition = {
+  transitionVisible: boolean;
+  transitionTimedOut: boolean;
+  markTransitionReady: () => void;
+};
 
 /**
- * Controls visibility of the post-login transition screen.
+ * Coordinates the branded post-login surface with actual Home readiness.
  *
- * Starts showing the transition only if auth was loading on mount.
- * Gives the exit animation time to complete before fully unmounting.
+ * A short minimum prevents a distracting flash for cached responses. The
+ * surface then stays in place until the Home route reports that its initial
+ * payload has settled. A maximum duration prevents a missing signal from
+ * trapping the user.
  */
-export function usePostLoginTransition(
-  authLoading: boolean,
-  exitDelayMs = 600
-): { showTransition: boolean } {
-  const startedLoading = useRef(authLoading);
-  const [showTransition, setShowTransition] = useState(startedLoading.current);
+export function useCoordinatedPostLoginTransition(
+  initiallyVisible: boolean,
+  minimumDurationMs: number,
+  maximumDurationMs: number,
+): CoordinatedPostLoginTransition {
+  const [transitionVisible, setTransitionVisible] = useState(initiallyVisible);
+  const [transitionTimedOut, setTransitionTimedOut] = useState(false);
+  const [minimumElapsed, setMinimumElapsed] = useState(!initiallyVisible);
+  const [contentReady, setContentReady] = useState(!initiallyVisible);
 
   useEffect(() => {
-    if (!authLoading && showTransition) {
-      const t = setTimeout(() => setShowTransition(false), exitDelayMs);
-      return () => clearTimeout(t);
-    }
-  }, [authLoading, showTransition, exitDelayMs]);
+    if (!transitionVisible) return;
 
-  return { showTransition };
+    const minimumTimer = window.setTimeout(
+      () => setMinimumElapsed(true),
+      minimumDurationMs,
+    );
+    const maximumTimer = window.setTimeout(
+      () => setTransitionTimedOut(true),
+      maximumDurationMs,
+    );
+
+    return () => {
+      window.clearTimeout(minimumTimer);
+      window.clearTimeout(maximumTimer);
+    };
+  }, [maximumDurationMs, minimumDurationMs, transitionVisible]);
+
+  useEffect(() => {
+    if (transitionVisible && minimumElapsed && contentReady) {
+      setTransitionVisible(false);
+    }
+  }, [contentReady, minimumElapsed, transitionVisible]);
+
+  const markTransitionReady = useCallback(() => {
+    setContentReady(true);
+  }, []);
+
+  return { transitionVisible, transitionTimedOut, markTransitionReady };
 }

@@ -80,7 +80,7 @@ export default function LoginPage() {
           destination = '/dashboard/knowledge-admin';
         }
 
-        if (typeof window !== 'undefined') {
+        if (typeof window !== 'undefined' && userRole !== 'PROVIDER' && userRole !== 'ADMIN') {
           window.sessionStorage.setItem(POST_LOGIN_TRANSITION_KEY, '1');
         }
         router.replace(destination);
@@ -119,7 +119,7 @@ export default function LoginPage() {
         destination = '/dashboard/knowledge-admin';
       }
 
-      if (typeof window !== 'undefined') {
+      if (typeof window !== 'undefined' && userRole !== 'PROVIDER' && userRole !== 'ADMIN') {
         window.sessionStorage.setItem(POST_LOGIN_TRANSITION_KEY, '1');
       }
       router.replace(destination);

@@ -79,6 +79,7 @@ import { getStatusBoard, StatusBoardItemDTO } from './properties/[id]/status-boa
 import { IncidentDTO } from '@/types/incidents.types';
 import { calculateStalenessStatus } from '@/lib/incidents/stalenessConfig';
 import { UnifiedHomeSurface } from '@/components/home/UnifiedHomeSurface';
+import { usePostLoginTransitionReadiness } from '@/components/system/PostLoginTransitionContext';
 
 const PROPERTY_SETUP_SKIPPED_KEY = 'propertySetupSkipped'; 
 const DASHBOARD_AHA_SEEN_PREFIX = 'dashboardAhaSeen';
@@ -637,6 +638,7 @@ export default function DashboardPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user, loading: userLoading } = useAuth();
+  const { markReady: markPostLoginReady } = usePostLoginTransitionReadiness();
   const { toast } = useToast();
   const [redirectChecked, setRedirectChecked] = useState(false);
   const [showWelcomeScreen, setShowWelcomeScreen] = useState(false);
@@ -682,6 +684,30 @@ export default function DashboardPage() {
     selectedPropertyId && properties.some((property) => property.id === selectedPropertyId)
       ? selectedPropertyId
       : properties[0]?.id;
+
+  // Routes that do not proceed to UnifiedHomeSurface must complete the
+  // post-login handoff themselves. UnifiedHomeSurface owns the signal for the
+  // normal property-backed Home path.
+  useEffect(() => {
+    if (userLoading || data.isLoading || !redirectChecked) return;
+    if (
+      data.error ||
+      showWelcomeScreen ||
+      !effectiveSelectedPropertyId ||
+      user?.role === 'ADMIN'
+    ) {
+      markPostLoginReady();
+    }
+  }, [
+    data.error,
+    data.isLoading,
+    effectiveSelectedPropertyId,
+    markPostLoginReady,
+    redirectChecked,
+    showWelcomeScreen,
+    user?.role,
+    userLoading,
+  ]);
 
   const scoreSnapshotQuery = useQuery({
     queryKey: ['property-score-snapshot', effectiveSelectedPropertyId],
