@@ -18,8 +18,18 @@ test('Maintenance consumes the shared personalization module placement', () => {
 });
 
 test('placement exposes reviewed explanation and capability-aware conversion controls', () => {
-  assert.match(component, /subtitle=\{item\.summary\}/);
+  assert.match(component, /\{item\.summary\}/);
   assert.match(component, /disabled=\{!action\.enabled \|\| added \|\| convert\.isPending\}/);
   assert.match(component, /convertPersonalizationRecommendationToTask/);
   assert.match(component, /min-h-\[44px\]/);
+});
+
+test('maintenance suggestions use a full-width action list with inline safety confirmation', () => {
+  assert.doesNotMatch(component, /lg:grid-cols-3/);
+  assert.match(component, /Suggested actions/);
+  assert.match(component, /Review & confirm/);
+  assert.match(component, /PropertyContextCapturePanel/);
+  assert.match(component, /operationKey="REVIEW_SAFETY_DETECTOR_PROFILE"/);
+  assert.match(component, /Add maintenance task/);
+  assert.match(component, /Safety guidance/);
 });

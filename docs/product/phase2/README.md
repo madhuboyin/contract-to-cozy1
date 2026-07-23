@@ -279,6 +279,25 @@ Implemented July 23, 2026:
 - Added delayed recovery controls after eight seconds, with **Retry** and **Back to Home** actions instead of leaving the user in an indefinite loading state.
 - Allowed loaded content to fade in without imposing an artificial minimum loading duration.
 
+## Maintenance suggestion presentation convergence
+
+Implemented July 23, 2026:
+
+- Replaced the fixed three-column personalization-card grid with one full-width suggested-action list that follows the desktop Maintenance hierarchy and stacks cleanly on smaller screens.
+- Consolidated redundant priority and safety chips into one homeowner-facing status while retaining reviewed professional boundaries under expandable **Safety guidance**.
+- Kept the personalization entry point beside the section heading instead of visually separating it across unused page width.
+- Routed smoke-detector guidance through the existing inline `SAFETY_DETECTOR_PROFILE` capture before enabling maintenance-task creation.
+- Re-evaluated personalization after inline capture so confirmed installed detectors remove the suggestion, confirmed missing detectors expose the maintenance action, and **Not sure** remains incomplete rather than becoming absence.
+- Preserved the recommendation-response failure contract: low-confidence or unavailable material actions remain visibly withheld and disabled.
+
+Acceptance criteria:
+
+- One suggestion uses the available content width rather than occupying one-third of the desktop page.
+- Multiple suggestions render as consistent rows with aligned actions and without duplicating the Maintenance task table.
+- Unknown or legacy smoke-detector context displays **Review & confirm**, not **Add maintenance task**.
+- Inline context capture remains on the Maintenance page and refreshes the suggestion without a redirect or full-page reload.
+- Safety boundaries remain accessible without dominating the default row presentation.
+
 ## Validation
 
 Automated acceptance rerun July 20, 2026 from commit `830f565`:
