@@ -318,15 +318,35 @@ export function adaptOrchestratedActionToHomeAction(
   evaluatedAt = new Date(),
 ): HomeAction {
   const critical = normalizeUpper(action.riskLevel) === 'CRITICAL';
-  const sourceKind = action.source === 'CHECKLIST' ? 'MAINTENANCE' : 'SYSTEM';
+  const isCoverageAction = action.relatedEntity?.type === 'INVENTORY_ITEM'
+    && action.actionKey.startsWith('COVERAGE_GAP::');
+  const sourceKind = action.source === 'CHECKLIST'
+    ? 'MAINTENANCE'
+    : isCoverageAction
+      ? 'COVERAGE'
+      : 'SYSTEM';
   const dueAt = action.nextDueDate?.toISOString() ?? null;
   const observedAt = action.createdAt?.toISOString() ?? evaluatedAt.toISOString();
   const confidenceScore = normalizeHomeActionConfidenceScore(action.confidence?.score);
-  const displayTitle = getHomeAssetDisplayLabel({ name: action.title, assetType: action.systemType, category: action.category });
+  const coverageItemName = isCoverageAction
+    ? action.title.replace(/^(?:No coverage for|Coverage issue for)\s+/i, '').trim()
+    : null;
+  const coverageRoomMatch = coverageItemName?.match(/\s+\(([^()]+)\)$/);
+  const coverageRoomName = coverageRoomMatch?.[1]?.trim() ?? null;
+  const coverageItemDisplayName = coverageRoomMatch
+    ? coverageItemName?.slice(0, coverageRoomMatch.index).trim()
+    : coverageItemName;
+  const displayTitle = getHomeAssetDisplayLabel({
+    name: coverageItemDisplayName ?? action.title,
+    assetType: isCoverageAction ? null : action.systemType,
+    category: action.category,
+  });
   const ctaLabel = action.cta?.label?.trim();
   const description = action.description?.trim();
   const isServiceAction = ctaLabel?.toLowerCase() === 'schedule service';
-  const recommendedAction = isServiceAction
+  const recommendedAction = isCoverageAction
+    ? `Review coverage for ${displayTitle}`
+    : isServiceAction
     ? `Schedule service for ${displayTitle}`
     : description && description.toLowerCase() !== ctaLabel?.toLowerCase()
       ? description
@@ -338,7 +358,21 @@ export function adaptOrchestratedActionToHomeAction(
   const serviceHref = isServiceAction && !critical
     ? buildProviderSearchHref(action, displayTitle)
     : null;
-  const homeownerRationale = isServiceAction
+  const coverageHref = isCoverageAction
+    ? buildInventoryCoverageHref(action)
+    : null;
+  const coverageExposure = action.exposure && action.exposure > 0
+    ? new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: 'USD',
+        maximumFractionDigits: 0,
+      }).format(action.exposure)
+    : null;
+  const homeownerRationale = isCoverageAction
+    ? coverageExposure
+      ? `No active warranty or insurance is linked to ${displayTitle}${coverageRoomName ? ` in ${coverageRoomName}` : ''}. Its recorded or estimated replacement exposure is ${coverageExposure}, so a repair or replacement may be paid out of pocket. Review whether protection or self-funding fits your home.`
+      : `No active warranty or insurance is linked to ${displayTitle}. Review its age, condition, replacement value, and coverage information before deciding whether protection is useful.`
+    : isServiceAction
     ? `Routine ${serviceSubject} maintenance is recommended ${serviceTiming} based on the information in your Home Record.`
     : description ?? `This open action is supported by the current maintenance or risk context for ${displayTitle}.`;
 
@@ -351,12 +385,18 @@ export function adaptOrchestratedActionToHomeAction(
     job: critical ? 'MAJOR_MOMENT' : undefined,
     state: action.snooze ? 'SNOOZED' : 'OPEN',
     priority: critical || action.overdue ? 'NOW' : action.priority >= 70 ? 'SOON' : 'PLAN',
-    signal: isServiceAction ? `Schedule service for ${displayTitle}` : action.description ?? displayTitle,
+    signal: isCoverageAction
+      ? `No active coverage is linked to ${displayTitle}`
+      : isServiceAction
+        ? `Schedule service for ${displayTitle}`
+        : action.description ?? displayTitle,
     whyItMatters: critical
       ? 'The current risk assessment marks this condition critical and requiring prompt review.'
       : homeownerRationale,
     recommendedAction,
-    expectedOutcome: critical
+    expectedOutcome: isCoverageAction
+      ? `Compare coverage with self-funding using ${displayTitle}'s recorded home and financial context.`
+      : critical
       ? 'Escalate the condition safely and confirm the appropriate professional response.'
       : 'Resolve or deliberately schedule the action with its supporting context preserved.',
     timing: {
@@ -373,7 +413,11 @@ export function adaptOrchestratedActionToHomeAction(
       id: `orchestration:${action.actionKey}`,
       type: 'SYSTEM_DERIVATION',
       label: displayTitle,
-      source: action.source === 'CHECKLIST' ? 'Seasonal or maintenance checklist' : 'Risk assessment',
+      source: isCoverageAction
+        ? 'Home Record coverage assessment'
+        : action.source === 'CHECKLIST'
+          ? 'Seasonal or maintenance checklist'
+          : 'Risk assessment',
       observedAt,
       freshness: action.confidence?.level === 'LOW' ? 'UNKNOWN' : 'CURRENT',
       confidence: confidenceScore,
@@ -417,8 +461,10 @@ export function adaptOrchestratedActionToHomeAction(
     },
     primaryCta: {
       kind: critical ? 'ESCALATE' : 'REVIEW',
-      label: action.cta?.label ?? (critical ? 'Review safety escalation' : 'Review action'),
-      href: serviceHref ?? `/dashboard/actions?propertyId=${encodeURIComponent(action.propertyId)}`,
+      label: isCoverageAction
+        ? 'Review coverage options'
+        : action.cta?.label ?? (critical ? 'Review safety escalation' : 'Review action'),
+      href: coverageHref ?? serviceHref ?? `/dashboard/actions?propertyId=${encodeURIComponent(action.propertyId)}`,
     },
     secondaryCtas: [],
     feedbackControls: ['COMPLETE', 'DEFER', 'SNOOZE', 'DISMISS', 'ALREADY_DONE', 'NOT_RELEVANT', 'CORRECT_FACT'],
@@ -426,6 +472,16 @@ export function adaptOrchestratedActionToHomeAction(
     createdAt: observedAt,
     lastEvaluatedAt: evaluatedAt.toISOString(),
   });
+}
+
+function buildInventoryCoverageHref(action: OrchestratedAction): string | null {
+  if (action.relatedEntity?.type !== 'INVENTORY_ITEM') return null;
+
+  const params = new URLSearchParams({
+    from: 'home-action',
+    actionKey: action.actionKey,
+  });
+  return `/dashboard/properties/${encodeURIComponent(action.propertyId)}/inventory/items/${encodeURIComponent(action.relatedEntity.id)}/coverage?${params.toString()}`;
 }
 
 function buildProviderSearchHref(action: OrchestratedAction, serviceLabel: string): string {

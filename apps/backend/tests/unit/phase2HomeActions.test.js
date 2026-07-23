@@ -199,6 +199,43 @@ test('service recommendations do not leak a conflicting coverage action', () => 
   assert.doesNotMatch(action.signal, /warranty/i);
 });
 
+test('coverage recommendations preserve item context and open the item coverage review', () => {
+  const action = adaptOrchestratedActionToHomeAction({
+    id: 'coverage-gap:property-1:dishwasher-item',
+    actionKey: 'COVERAGE_GAP::dishwasher-item',
+    source: 'RISK',
+    propertyId: 'property-1',
+    title: 'No coverage for Dishwasher (Kitchen)',
+    description: 'No warranty or insurance coverage found',
+    systemType: 'APPLIANCE',
+    category: 'APPLIANCE',
+    riskLevel: 'HIGH',
+    exposure: 1200,
+    coverage: { hasCoverage: false, type: 'NONE', expiresOn: null },
+    confidence: { score: 0.9, level: 'HIGH', explanation: [] },
+    priority: 85,
+    cta: { show: true, label: 'Get insurance quotes', reason: 'ACTION_REQUIRED' },
+    suppression: { suppressed: false, reasons: [] },
+    signalSources: [],
+    primarySignalSource: null,
+    relatedEntity: { type: 'INVENTORY_ITEM', id: 'dishwasher-item' },
+    overdue: false,
+    createdAt: new Date('2026-07-01T12:00:00.000Z'),
+  });
+
+  assert.equal(action.source.kind, 'COVERAGE');
+  assert.equal(action.recommendedAction, 'Review coverage for Dishwasher');
+  assert.match(action.whyItMatters, /Dishwasher in Kitchen/);
+  assert.match(action.whyItMatters, /\$1,200/);
+  assert.match(action.whyItMatters, /self-funding/);
+  assert.equal(action.primaryCta.label, 'Review coverage options');
+  assert.equal(
+    action.primaryCta.href,
+    '/dashboard/properties/property-1/inventory/items/dishwasher-item/coverage?from=home-action&actionKey=COVERAGE_GAP%3A%3Adishwasher-item',
+  );
+  assert.doesNotMatch(action.primaryCta.href, /\/fix|\/dashboard\/actions/);
+});
+
 test('service recommendations send water-heater work to plumbing provider search', () => {
   const action = adaptOrchestratedActionToHomeAction({
     id: 'risk-water-heater',
