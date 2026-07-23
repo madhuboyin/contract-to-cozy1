@@ -279,6 +279,11 @@ COPY apps/backend/src/services/guidanceEngine/guidanceTypes.ts \
      apps/backend/src/services/guidanceEngine/guidanceJourney.service.ts \
      apps/backend/src/services/guidanceEngine/guidanceGovernance.catalog.ts \
      src/shared/backend/services/guidanceEngine/
+# guidanceJourney.service.ts also imports coverageJourneyReconciliation.service.ts
+# (a sibling in services/, not guidanceEngine/) — its own deps
+# (riskAssetApplicability.ts, inventoryCoverageState.service.ts, lib/prisma.ts)
+# are already copied above.
+COPY apps/backend/src/services/coverageJourneyReconciliation.service.ts src/shared/backend/services/
 # Product-framework contracts used by guidance governance and analytics lineage.
 COPY apps/backend/src/productFramework/recommendationGovernance.contract.ts \
      apps/backend/src/productFramework/recommendationResponse.contract.ts \
