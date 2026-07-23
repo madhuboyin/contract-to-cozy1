@@ -12,6 +12,9 @@ const {
 const {
   getFeatureContextRequirement,
 } = require('../../src/modules/propertyContext/catalog/featureRequirementRegistry.ts');
+const {
+  selectedItemCoverageEvidenceState,
+} = require('../../src/modules/propertyContext/application/evaluateFeatureContext.ts');
 
 function system(overrides = {}) {
   return {
@@ -78,6 +81,28 @@ test('explicit no-coverage evidence becomes actionable only with sufficient owne
   assert.equal(result.coverageState, 'MISSING');
   assert.equal(result.coverageActionable, true);
   assert.equal(result.replacementValueSource, 'ESTIMATED');
+});
+
+test('an explicit not-sure answer remains incomplete without becoming a coverage gap', () => {
+  const result = buildInventoryCoveragePresentation(system({
+    isVerified: true,
+    verificationSource: 'USER_CONFIRMED',
+    installedOn: new Date('2018-01-01T00:00:00.000Z'),
+    condition: 'GOOD',
+    coverageEvidenceStatus: 'NOT_SURE',
+  }), [{ scope: 'ROOF', party: 'OWNER' }]);
+  assert.equal(result.coverageState, 'INCOMPLETE');
+  assert.equal(result.coverageActionable, false);
+  assert.ok(result.missingContext.includes('COVERAGE_EVIDENCE'));
+  assert.match(result.coverageStateDetail, /previously said you were not sure/i);
+});
+
+test('the JIT evidence gate keeps not-sure actionable while accepting definitive evidence', () => {
+  assert.equal(selectedItemCoverageEvidenceState({ coverageEvidenceStatus: 'NOT_SURE' }), 'UNKNOWN');
+  assert.equal(selectedItemCoverageEvidenceState({ coverageEvidenceStatus: 'UNKNOWN' }), 'UNKNOWN');
+  assert.equal(selectedItemCoverageEvidenceState({ coverageEvidenceStatus: 'NONE' }), 'KNOWN');
+  assert.equal(selectedItemCoverageEvidenceState({ warrantyId: 'warranty-1' }), 'KNOWN');
+  assert.equal(selectedItemCoverageEvidenceState({ insurancePolicyId: 'policy-1' }), 'KNOWN');
 });
 
 test('active linked coverage is valid without an exact lifecycle date', () => {

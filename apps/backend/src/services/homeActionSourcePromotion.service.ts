@@ -192,7 +192,14 @@ async function loadGuidanceActions(
           sourceEntityId: true,
         },
       },
-      inventoryItem: { select: { name: true, assetType: true, category: true } },
+      inventoryItem: {
+        select: {
+          name: true,
+          assetType: true,
+          category: true,
+          coverageEvidenceStatus: true,
+        },
+      },
       steps: {
         where: { status: { in: ['PENDING', 'IN_PROGRESS', 'BLOCKED'] } },
         orderBy: { stepOrder: 'asc' },
@@ -214,15 +221,21 @@ async function loadGuidanceActions(
     .map((journey) => {
     const step = journey.steps[0];
     const confidence = normalizeHomeActionConfidenceScore(journey.primarySignal?.confidenceScore);
+    const isCoverageJourney = journey.journeyTypeKey === 'coverage_gap_resolution';
+    const coverageUncertain = isCoverageJourney &&
+      journey.inventoryItem?.coverageEvidenceStatus === 'NOT_SURE';
+    const missingContextKeys = coverageUncertain
+      ? [...new Set([...journey.missingContextKeys, 'Current coverage evidence'])]
+      : journey.missingContextKeys;
     const governance = guidanceGovernance(step, journey.templateVersion ?? 'phase4-v1');
     const responseStatus = resolveRecommendationResponseStatus({
       confidence,
-      missingFacts: journey.missingContextKeys,
+      missingFacts: missingContextKeys,
     });
     const recommendationResponse = buildRecommendationResponseContract({
       status: responseStatus,
       safetyTier: governance.safetyTier,
-      missingFacts: journey.missingContextKeys,
+      missingFacts: missingContextKeys,
       reasonCode: responseStatus === 'AVAILABLE' ? 'GUIDANCE_AVAILABLE' : `GUIDANCE_${responseStatus}`,
     });
     const decisionContract = guidanceDecisionContract(governance);
@@ -233,10 +246,12 @@ async function loadGuidanceActions(
     const title = subjectLabel
       ? `${journeyTitle} for ${subjectLabel}`
       : journeyTitle;
-    const isCoverageJourney = journey.journeyTypeKey === 'coverage_gap_resolution';
-    const correctionLabel = isCoverageJourney ? 'Add coverage information' : 'Add home information';
+    const correctionLabel = isCoverageJourney
+      ? coverageUncertain ? 'Update coverage information' : 'Add coverage information'
+      : 'Add home information';
+    const actionId = `guidance:${journey.id}`;
     const correctionHref = isCoverageJourney && journey.inventoryItemId
-      ? `/dashboard/properties/${propertyId}/inventory/items/${encodeURIComponent(journey.inventoryItemId)}/coverage`
+      ? `/dashboard/properties/${propertyId}/inventory/items/${encodeURIComponent(journey.inventoryItemId)}/coverage?sourceActionId=${encodeURIComponent(actionId)}&returnTo=${encodeURIComponent('/dashboard')}`
       : `/dashboard/properties/${propertyId}/onboarding`;
     const href = resolveGuidanceHref({
       propertyId,
@@ -245,7 +260,7 @@ async function loadGuidanceActions(
       routePath: step?.routePath ?? null,
     });
     return adaptHomeActionSource('GUIDANCE', {
-      id: `guidance:${journey.id}`,
+      id: actionId,
       propertyId,
       lineageId: journey.primarySignalId ?? `guidance:${journey.id}`,
       sourceEntityId: isCoverageJourney && journey.inventoryItemId
@@ -256,13 +271,17 @@ async function loadGuidanceActions(
       priority: journey.primarySignal?.severity === 'CRITICAL' ? 'NOW'
         : journey.primarySignal?.severity === 'HIGH' || step?.status === 'BLOCKED' ? 'SOON' : 'PLAN',
       signal: `${title}: ${step?.label ?? 'continue the active decision'}`,
-      whyItMatters: step?.description ?? 'This active journey preserves the evidence and decisions needed for the next home outcome.',
+      whyItMatters: coverageUncertain && subjectLabel
+        ? `You previously said you were not sure whether ${subjectLabel} is covered. Confirm the current information, or ask to be reminded later.`
+        : step?.description ?? 'This active journey preserves the evidence and decisions needed for the next home outcome.',
       recommendedAction: recommendationResponse.materialActionAllowed
         ? step?.label ?? 'Continue this home decision'
         : recommendationResponse.safeNextAction,
       withheldRecommendedAction: subjectLabel
         ? isCoverageJourney
-          ? `Add coverage information for ${subjectLabel}`
+          ? coverageUncertain
+            ? `Confirm coverage for ${subjectLabel}`
+            : `Add coverage information for ${subjectLabel}`
           : `Review home information for ${subjectLabel} before continuing`
         : undefined,
       expectedOutcome: 'Advance the active journey without losing its property, evidence, or decision context.',
@@ -282,7 +301,7 @@ async function loadGuidanceActions(
         confidence,
       }],
       ...decisionContract,
-      confidence: { score: confidence, label: confidenceLabel(confidence), missing: journey.missingContextKeys },
+      confidence: { score: confidence, label: confidenceLabel(confidence), missing: missingContextKeys },
       governance,
       primaryCta: {
         kind: 'REVIEW',

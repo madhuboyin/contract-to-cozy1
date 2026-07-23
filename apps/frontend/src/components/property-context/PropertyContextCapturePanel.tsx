@@ -11,6 +11,8 @@ export function PropertyContextCapturePanel({
   operationInput,
   onReady,
   onCaptured,
+  onDefer,
+  deferLabel = 'Remind me later',
 }: {
   propertyId: string;
   featureKey: string;
@@ -18,6 +20,8 @@ export function PropertyContextCapturePanel({
   operationInput?: Record<string, unknown>;
   onReady?: (evaluation: FeatureContextEvaluation) => void | Promise<void>;
   onCaptured?: (result: FeatureContextCaptureResult) => void | Promise<void>;
+  onDefer?: () => void | Promise<void>;
+  deferLabel?: string;
 }) {
   const { evaluation, loading, slow, saving, error, capture, reevaluate, suppressedRequirementId } = useFeatureContextCapture({
     propertyId,
@@ -33,8 +37,22 @@ export function PropertyContextCapturePanel({
   const [relationalMode, setRelationalMode] = useState<'SELECT' | 'CREATE'>('SELECT');
   const [selectedEntityId, setSelectedEntityId] = useState('');
   const [dismissedVersion, setDismissedVersion] = useState<string | null>(null);
+  const [deferring, setDeferring] = useState(false);
+  const [deferError, setDeferError] = useState<string | null>(null);
   const headingId = useId();
   const activeRequirement = evaluation?.requirements[0];
+  const defer = async () => {
+    if (!onDefer) return;
+    setDeferring(true);
+    setDeferError(null);
+    try {
+      await onDefer();
+    } catch (caught) {
+      setDeferError(caught instanceof Error ? caught.message : 'Could not set the reminder.');
+    } finally {
+      setDeferring(false);
+    }
+  };
 
   useEffect(() => {
     const current = activeRequirement?.currentAnswer;
@@ -65,8 +83,12 @@ export function PropertyContextCapturePanel({
   if (suppressedRequirementId === requirement.requirementId) {
     if (requirement.classification === 'ENHANCEMENT_ACCURACY') return null;
     return <section className="rounded-2xl border border-slate-200 bg-slate-50 p-4" role="status">
-      <p className="font-semibold text-slate-900">More property detail is still needed</p>
-      <p className="mt-1 text-sm text-slate-700">We saved that you’re not sure and won’t ask again during this visit. This specific result will remain unavailable until an authorized editor confirms the detail.</p>
+      <p className="font-semibold text-slate-900">We saved that you’re still not sure</p>
+      <p className="mt-1 text-sm text-slate-700">We will not ask again during this visit. Personalized coverage guidance will remain paused until the information is confirmed.</p>
+      {onDefer ? <button type="button" disabled={deferring} onClick={() => void defer()} className="mt-3 min-h-[44px] rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-900">
+        {deferring ? 'Setting reminder…' : deferLabel}
+      </button> : null}
+      {deferError ? <p className="mt-2 text-xs text-red-700" role="alert">{deferError}</p> : null}
     </section>;
   }
   const schema = requirement.capture.inputSchema;
@@ -101,7 +123,7 @@ export function PropertyContextCapturePanel({
 
   return (
     <section className={`rounded-2xl border p-4 [&_button]:min-h-[44px] [&_input]:min-h-[44px] ${enhancement ? 'border-sky-200 bg-sky-50' : 'border-amber-200 bg-amber-50'}`} aria-live="polite" aria-busy={saving} aria-labelledby={headingId}>
-      <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">{conflicted ? 'Resolve conflicting details' : stale ? 'Confirm current details' : enhancement ? 'Improve this result' : 'Required property detail'}</p>
+      <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">{conflicted ? 'Resolve conflicting details' : stale ? 'Confirm current details' : enhancement ? 'Improve this result' : requirement.capture.captureKey === 'INVENTORY_ITEM_COVERAGE_EVIDENCE' ? 'Coverage information needed' : 'Required property detail'}</p>
       <h3 id={headingId} className="mt-1 font-semibold text-slate-950">{requirement.capture.title}</h3>
       <p className="mt-1 text-sm text-slate-800">{requirement.capture.question}</p>
       {requirement.capture.helpText ? <p className="mt-1 text-xs text-slate-600">{requirement.capture.helpText}</p> : null}
@@ -173,10 +195,14 @@ export function PropertyContextCapturePanel({
           </form> : null}
           {requirement.capture.allowNotSure ? <button type="button" disabled={saving} onClick={() => void capture(schema.type === 'GROUP' ? notSureGroupAnswer() : null)} className="rounded-lg px-3 py-2 text-sm font-medium underline">Not sure</button> : null}
           {enhancement ? <button type="button" disabled={saving} onClick={() => setDismissedVersion(evaluation.contextVersion)} className="rounded-lg px-3 py-2 text-sm font-medium underline">Skip for now</button> : null}
+          {onDefer ? <button type="button" disabled={saving || deferring} onClick={() => void defer()} className="rounded-lg px-3 py-2 text-sm font-medium underline">
+            {deferring ? 'Setting reminder…' : deferLabel}
+          </button> : null}
         </div>
       )}
       {saving ? <p className="mt-2 text-xs text-slate-600" role="status">Saving…</p> : null}
       {error ? <p className="mt-2 text-xs text-red-700" role="alert">{error}</p> : null}
+      {deferError ? <p className="mt-2 text-xs text-red-700" role="alert">{deferError}</p> : null}
     </section>
   );
 }

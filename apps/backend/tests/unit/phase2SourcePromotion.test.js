@@ -107,6 +107,67 @@ test('promotes guidance, incident, recall, coverage, project, and seasonal recor
   assert.equal(actions.find((action) => action.source.kind === 'COVERAGE').governance.jurisdictionCheck.status, 'VERIFIED');
 });
 
+test('turns a not-sure coverage journey into a clear confirmation action with inline deferral context', async () => {
+  const db = stubSources();
+  db.guidanceJourney.findMany = async () => [{
+    id: 'coverage-journey', propertyId: 'property-1', inventoryItemId: 'water-heater-item',
+    primarySignalId: 'coverage-signal', journeyTypeKey: 'coverage_gap_resolution',
+    issueDomain: 'COVERAGE', issueType: 'Coverage review', templateVersion: 'phase2-v1',
+    status: 'ACTIVE', startedAt: NOW, createdAt: NOW, updatedAt: NOW,
+    missingContextKeys: ['Current coverage evidence'],
+    inventoryItem: {
+      name: 'Water Heater Tank',
+      assetType: 'WATER_HEATER_TANK',
+      category: 'PLUMBING',
+      coverageEvidenceStatus: 'NOT_SURE',
+    },
+    primarySignal: {
+      id: 'coverage-signal', severity: 'MEDIUM', confidenceScore: 0.8,
+      lastObservedAt: NOW, sourceEntityType: 'INVENTORY_ITEM',
+      sourceEntityId: 'water-heater-item',
+    },
+    steps: [{
+      label: 'Review coverage options',
+      description: 'Review the current coverage evidence.',
+      status: 'BLOCKED',
+      routePath: '/dashboard/properties/:propertyId/inventory/items/:itemId/coverage',
+      governanceJson: {
+        safetyTier: 'REGULATED_COVERAGE',
+        professionalBoundary: 'Coverage information is educational and is not licensed insurance advice.',
+        jurisdictionCheck: {
+          status: 'VERIFIED',
+          jurisdiction: 'NJ',
+          checkedAt: NOW.toISOString(),
+          source: 'Property state',
+        },
+        conservativeFallback: null,
+        emergencyEscalation: null,
+        commercialDisclosure: {
+          involvesCommercialAction: false,
+          relationshipType: 'NONE',
+          compensationMayOccur: false,
+          rankingInfluenced: false,
+          summary: 'No commercial coverage option is ranked.',
+          selectionCriteria: [],
+          nonCommercialAlternatives: [],
+        },
+        reviewedBy: [],
+        policyVersion: 'phase2-v1',
+      },
+    }],
+  }];
+
+  const result = await getPromotedHomeActions('property-1', db);
+  const action = result.actions.find((candidate) => candidate.id === 'guidance:coverage-journey');
+  assert.ok(action);
+  assert.equal(action.recommendedAction, 'Confirm coverage for Water Heater');
+  assert.match(action.whyItMatters, /previously said you were not sure/i);
+  assert.equal(action.primaryCta.label, 'Update coverage information');
+  assert.match(action.primaryCta.href, /sourceActionId=guidance%3Acoverage-journey/);
+  assert.match(action.primaryCta.href, /returnTo=%2Fdashboard/);
+  assert.ok(action.feedbackControls.includes('DEFER'));
+});
+
 test('keeps the active weather incident and suppresses its duplicate guidance journey', async () => {
   const result = await getPromotedHomeActions('property-1', stubSources({ includeWeatherGuidance: true }));
   const weather = result.actions.find((action) => action.id === 'incident:incident-1');

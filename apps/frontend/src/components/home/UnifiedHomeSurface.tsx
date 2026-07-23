@@ -36,7 +36,7 @@ function priorityTone(priority: RankedHomeActionDTO['priority']) {
 
 export function coverageCorrectionSubject(action: RankedHomeActionDTO): string | null {
   if (action.source.kind !== 'GUIDANCE' || action.governance.safetyTier !== 'REGULATED_COVERAGE') return null;
-  return action.recommendedAction.match(/^Add coverage information for (.+)$/i)?.[1]?.trim() || null;
+  return action.recommendedAction.match(/^(?:Add coverage information|Confirm coverage) for (.+)$/i)?.[1]?.trim() || null;
 }
 
 export function isSeasonalChecklistAction(action: RankedHomeActionDTO): boolean {
@@ -190,10 +190,10 @@ export function CoverageCorrectionGroupCard({
         <span className="text-xs text-slate-500">{first.confidence.label.toLowerCase()} confidence</span>
       </div>
       <h3 className="mt-3 text-base font-semibold text-slate-950">
-        Add coverage information for {actions.length} home items
+        Review coverage information for {actions.length} home items
       </h3>
       <p className="mt-1 text-sm leading-6 text-slate-600">
-        Coverage information is incomplete for these items. Confirm each item and add what you know before we identify a coverage gap.
+        Coverage information is incomplete for these items. Confirm what you know, update anything uncertain, or choose to be reminded later.
       </p>
       <div className="mt-3 flex flex-wrap gap-2">
         {subjects.map((subject) => <Badge key={subject} variant="secondary" className="rounded-full">{subject}</Badge>)}

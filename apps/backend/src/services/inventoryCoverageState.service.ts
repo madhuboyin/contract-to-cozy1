@@ -192,7 +192,9 @@ export function buildInventoryCoveragePresentation(
     ...common,
     coverageState: 'INCOMPLETE',
     coverageStateLabel: 'Coverage status incomplete',
-    coverageStateDetail: missingContext.includes('INSTALLATION_YEAR')
+    coverageStateDetail: item.coverageEvidenceStatus === 'NOT_SURE'
+      ? 'You previously said you were not sure whether this item is covered. Confirm the current coverage information when you can.'
+      : missingContext.includes('INSTALLATION_YEAR')
       ? 'No warranty or insurance is linked yet. Add the approximate installation year to understand whether coverage may be useful.'
       : missingContext.includes('RESPONSIBILITY')
         ? 'No warranty or insurance is linked yet. Confirm who is responsible before reviewing homeowner coverage.'

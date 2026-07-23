@@ -34,6 +34,7 @@ import { getWarrantyCategoryForInventoryCategory } from '@/lib/config/serviceCat
 import { buildGuidanceOverviewHref } from '@/lib/navigation/guidanceOverviewHref';
 import { cn } from '@/lib/utils';
 import { PropertyContextCapturePanel } from '@/components/property-context/PropertyContextCapturePanel';
+import { api } from '@/lib/api/client';
 
 const EMPTY_OVERRIDES: ItemCoverageAnalysisOverrides = {
   coverageType: 'WARRANTY',
@@ -222,6 +223,7 @@ export default function ItemGetCoverageClient() {
   const params = useParams<{ id: string; itemId: string }>();
   const propertyId = params.id;
   const itemId = params.itemId;
+  const sourceActionId = searchParams.get('sourceActionId');
   const safeReturnTo = useMemo(() => sanitizeReturnTo(searchParams.get('returnTo')), [searchParams]);
   const currentPathWithQuery = useMemo(() => {
     const query = searchParams.toString();
@@ -287,9 +289,9 @@ export default function ItemGetCoverageClient() {
     setDidAutoPrefill(false);
   }, [itemId]);
 
-  const fetchStatus = async () => {
+  const fetchStatus = async (showLoading = true) => {
     if (!propertyId || !itemId) return;
-    setLoading(true);
+    if (showLoading) setLoading(true);
     setError(null);
     try {
       const [analysisResult, itemResult] = await Promise.allSettled([
@@ -405,6 +407,20 @@ export default function ItemGetCoverageClient() {
     } finally {
       setSavingCondition(false);
     }
+  };
+
+  const deferCoverageReview = async () => {
+    if (!propertyId || !sourceActionId) return;
+    const response = await api.executeHomeActionCommand(propertyId, sourceActionId, {
+      command: 'DEFER',
+      nextTriggerAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+      consequenceAcknowledged: true,
+    });
+    if (!response.success) {
+      throw new Error(response.message || 'Could not set the coverage reminder.');
+    }
+    await queryClient.invalidateQueries({ queryKey: ['unified-home', propertyId] });
+    router.push(safeReturnTo ?? '/dashboard');
   };
 
   const config = analysis
@@ -633,7 +649,9 @@ export default function ItemGetCoverageClient() {
           featureKey="COVERAGE_INTELLIGENCE"
           operationKey="ASSESS_ITEM_COVERAGE"
           operationInput={coverageOperationInput}
-          onCaptured={async () => { await fetchStatus(); }}
+          onCaptured={async () => { await fetchStatus(false); }}
+          onDefer={sourceActionId ? deferCoverageReview : undefined}
+          deferLabel="Remind me in 7 days"
         />
       ) : null}
 

@@ -29,6 +29,18 @@ export const evaluateFeatureContextInputSchema = z.object({
 
 export type EvaluateFeatureContextInput = z.infer<typeof evaluateFeatureContextInputSchema>;
 
+export function selectedItemCoverageEvidenceState(item: {
+  warrantyId?: unknown;
+  insurancePolicyId?: unknown;
+  coverageEvidenceStatus?: unknown;
+}): PropertyFact['state'] {
+  if (item.warrantyId || item.insurancePolicyId) return 'KNOWN';
+  // "Not sure" is an explicit unknown, not evidence that coverage exists or
+  // does not exist. Keep the inline capture available so the homeowner can
+  // resolve or intentionally defer the question without creating a false gap.
+  return item.coverageEvidenceStatus === 'NONE' ? 'KNOWN' : 'UNKNOWN';
+}
+
 function conditionMatches(condition: DeclarativeCondition | undefined, context: PropertyContextSnapshot): boolean {
   if (!condition) return true;
   const fact = context.facts[condition.factKey];
@@ -106,8 +118,7 @@ function requirementState(
         : 'UNKNOWN';
     }
     if (requirement.collectionPredicate === 'SELECTED_ITEM_COVERAGE_EVIDENCE_INCOMPLETE') {
-      if (item.warrantyId || item.insurancePolicyId) return 'KNOWN';
-      return item.coverageEvidenceStatus === 'NONE' || item.coverageEvidenceStatus === 'NOT_SURE' ? 'KNOWN' : 'UNKNOWN';
+      return selectedItemCoverageEvidenceState(item);
     }
   }
   if (requirement.collectionPredicate === 'INCLUDES_OPERATION_INPUT_VALUE') {
