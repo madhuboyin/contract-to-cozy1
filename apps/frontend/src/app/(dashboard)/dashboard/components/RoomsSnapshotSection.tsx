@@ -71,9 +71,11 @@ function buildWhyFactors(insights: any): WhyFactor[] {
     .filter(Boolean) as WhyFactor[];
 }
 
-function computeHealthScore(insights: any): number {
+function computeHealthScore(insights: any): number | null {
   const stats = insights?.stats || {};
   const itemCount = Number(stats.itemCount || 0);
+  if (itemCount === 0) return null;
+
   const docs = Number(stats.docsLinkedCount || 0);
   const gaps = Number(stats.coverageGapsCount || 0);
 
@@ -330,14 +332,16 @@ export function RoomsSnapshotSection({ propertyId }: RoomsSnapshotSectionProps) 
       const bInsights = roomInsights[b.id];
       // Only re-rank when both rooms have loaded insights; otherwise keep original order
       if (aInsights && bInsights) {
-        const aScore = Number.isFinite(Number(aInsights?.healthScore?.score))
-          ? Number(aInsights.healthScore.score)
+        const aBackendScore = aInsights?.healthScore?.score;
+        const bBackendScore = bInsights?.healthScore?.score;
+        const aScore = typeof aBackendScore === 'number' && Number.isFinite(aBackendScore)
+          ? aBackendScore
           : computeHealthScore(aInsights);
-        const bScore = Number.isFinite(Number(bInsights?.healthScore?.score))
-          ? Number(bInsights.healthScore.score)
+        const bScore = typeof bBackendScore === 'number' && Number.isFinite(bBackendScore)
+          ? bBackendScore
           : computeHealthScore(bInsights);
-        const aHasIssues = aScore < 75;
-        const bHasIssues = bScore < 75;
+        const aHasIssues = aScore !== null && aScore < 75;
+        const bHasIssues = bScore !== null && bScore < 75;
         if (aHasIssues && !bHasIssues) return -1;
         if (!aHasIssues && bHasIssues) return 1;
       }
@@ -432,21 +436,25 @@ export function RoomsSnapshotSection({ propertyId }: RoomsSnapshotSectionProps) 
               const RoomIcon = roomIconFor(roomType);
               const insights = roomInsights[room.id];
               const stats = insights?.stats;
-              const backendScore = Number(insights?.healthScore?.score);
+              const backendScore = insights?.healthScore?.score;
               const score = insights
-                ? (Number.isFinite(backendScore) ? backendScore : computeHealthScore(insights))
-                : 0;
-              const statusLabel = safeString(insights?.healthScore?.label) || deriveLabel(score);
+                ? (typeof backendScore === 'number' && Number.isFinite(backendScore) ? backendScore : computeHealthScore(insights))
+                : null;
+              const statusLabel = score === null
+                ? 'Not scored'
+                : safeString(insights?.healthScore?.label) || deriveLabel(score);
               const whyFactors = insights ? buildWhyFactors(insights) : [];
               const itemCount = Number(stats?.itemCount ?? 0);
               const docsCount = Number(stats?.docsLinkedCount ?? 0);
               const gapCount = Number(stats?.coverageGapsCount ?? 0);
               const roomHref = `/dashboard/properties/${propertyId}/rooms/${room.id}`;
-              const roomInsight = insights
+              const roomInsight = insights && score !== null
                 ? buildRoomInsight(score, itemCount, docsCount, gapCount, whyFactors)
                 : null;
-              const statusKey = normalizeStatusLabel(statusLabel);
-              const roomBadge = roomStatusBadge(statusLabel);
+              const statusKey = score === null ? null : normalizeStatusLabel(statusLabel);
+              const roomBadge = score === null
+                ? { status: 'suppressed' as BadgeStatus, customLabel: 'Not scored' }
+                : roomStatusBadge(statusLabel);
               const isInsightLoading = Boolean(insightsLoading[room.id]);
               const hasInsights = Boolean(insights);
               const headerMetaText = isInsightLoading
@@ -456,7 +464,7 @@ export function RoomsSnapshotSection({ propertyId }: RoomsSnapshotSectionProps) 
                   : 'Insights pending';
               const itemMetric = hasInsights ? String(itemCount) : '—';
               const docsMetric = hasInsights ? String(docsCount) : '—';
-              const gapsMetric = hasInsights ? String(gapCount) : '—';
+              const gapsMetric = hasInsights && score !== null ? String(gapCount) : '—';
               const metadataValueClass =
                 hasInsights && gapCount > 0
                   ? statusKey === 'Cost now'
@@ -491,7 +499,7 @@ export function RoomsSnapshotSection({ propertyId }: RoomsSnapshotSectionProps) 
                   <div className="mt-3">
                     {isInsightLoading ? (
                       <div className="text-xs text-gray-400">Loading insights…</div>
-                    ) : insights && roomInsight ? (
+                    ) : insights && roomInsight && score !== null ? (
                       <div className="flex items-start gap-3">
                         <RoomHealthScoreRing
                           value={score}
@@ -510,9 +518,10 @@ export function RoomsSnapshotSection({ propertyId }: RoomsSnapshotSectionProps) 
                         </div>
                       </div>
                     ) : (
-                      <p className="text-xs text-gray-500">
-                        No insights yet. Add items to start room-level tracking.
-                      </p>
+                      <div>
+                        <p className="text-sm font-semibold text-gray-800">Room setup not started</p>
+                        <p className="mt-1 text-xs text-gray-500">Add an item or room details to begin readiness tracking.</p>
+                      </div>
                     )}
                   </div>
 

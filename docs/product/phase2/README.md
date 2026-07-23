@@ -246,6 +246,15 @@ Implemented July 23, 2026:
 - The empty setup state is presented as optional tool discovery and no longer claims that the homeowner has plants or needs to prepare them.
 - Setup copy invites the homeowner to add plants for room-specific weather guidance; confirmed plants continue to receive plant- and room-specific care guidance.
 - Outdoor Plant Advisor execution remains gated by private outdoor-space and landscaping-responsibility Property Context, while indoor setup remains available without exterior ownership assumptions.
+
+## Room readiness evidence gating
+
+Implemented July 23, 2026:
+
+- Replaced the hard-coded numeric baseline for empty rooms with explicit `NOT_STARTED`, `INSUFFICIENT_DATA`, and `SCORED` evaluation states.
+- Empty and profile-only rooms no longer receive a room-health number, attention/risk label, or synthetic trend.
+- Coverage remains unevaluated until a room contains an item, and document actions are not requested before an item exists.
+- The Room Showcase, Rooms hub, inventory room detail, and Home rooms snapshot use the same nullable-score contract and setup presentation.
 - Routed household-size capture to the consent-controlled personalization profile instead of adding it to Property Details or copying it into the Property record.
 - Kept property age limited to the building year. Children or older-adult safety needs and pets remain separate optional household-profile questions and are never inferred from the home.
 - Added a clearly labeled household-context entry point to Home setup so users can find the optional flow without confusing it with ownership, occupancy status, or property age.

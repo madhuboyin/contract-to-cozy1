@@ -47,9 +47,11 @@ const MilestoneCelebration = dynamic(
   { ssr: false },
 );
 
-function computeHealthScore(insights: any, itemsFallback: InventoryItem[]) {
+function computeHealthScore(insights: any, itemsFallback: InventoryItem[]): number | null {
   const stats = insights?.stats || {};
   const itemCount = Number(stats.itemCount ?? itemsFallback.length ?? 0);
+  if (itemCount === 0) return null;
+
   const docs = Number(stats.docsLinkedCount || 0);
   const gaps = Number(stats.coverageGapsCount || 0);
 
@@ -185,19 +187,23 @@ export default function RoomShowcaseClient() {
   }, [template, insights]);
 
   const healthScore = insights?.healthScore;
-
-  const score = useMemo(() => {
-    const backend = Number(healthScore?.score);
-    if (Number.isFinite(backend)) return backend;
-    return computeHealthScore(insights, items);
-  }, [healthScore?.score, insights, items]);
-
   const stats = insights?.stats;
-
   const itemCount = Number(stats?.itemCount ?? items.length ?? 0);
   const docCount = Number(stats?.docsLinkedCount ?? 0);
   const gapCount = Number(stats?.coverageGapsCount ?? 0);
   const valueCount = items.filter((item) => Number(item.replacementCostCents || 0) > 0).length;
+
+  const score = useMemo(() => {
+    const backend = healthScore?.score;
+    if (typeof backend === 'number' && Number.isFinite(backend)) return backend;
+    if (healthScore?.evaluationState === 'NOT_STARTED' || healthScore?.evaluationState === 'INSUFFICIENT_DATA') {
+      return null;
+    }
+    return computeHealthScore(insights, items);
+  }, [healthScore?.evaluationState, healthScore?.score, insights, items]);
+  const evaluationState: 'NOT_STARTED' | 'INSUFFICIENT_DATA' | 'SCORED' =
+    healthScore?.evaluationState
+    ?? (score === null ? 'NOT_STARTED' : 'SCORED');
 
   const improvements = useMemo(() => {
     const source: Array<{ title?: string; detail?: string }> = asArray(healthScore?.improvements);
@@ -228,7 +234,7 @@ export default function RoomShowcaseClient() {
       .filter((v): v is number => Number.isFinite(v));
 
     if (history.length > 1) return history;
-    return [score];
+    return score === null ? [] : [score];
   }, [scanSessions, score]);
 
   const backHref = fromStatusBoard
@@ -341,8 +347,8 @@ export default function RoomShowcaseClient() {
 
           <MobileFilterSurface>
             <div className="flex flex-wrap items-center gap-2">
-              <StatusChip tone={score >= 80 ? 'good' : score >= 60 ? 'elevated' : 'danger'}>
-                Health {score}
+              <StatusChip tone={score === null ? 'info' : score >= 80 ? 'good' : score >= 60 ? 'elevated' : 'danger'}>
+                {score === null ? 'Readiness not scored' : `Health ${score}`}
               </StatusChip>
               <StatusChip tone="info">Value-linked items: {valueCount}</StatusChip>
             </div>
@@ -406,6 +412,7 @@ export default function RoomShowcaseClient() {
             <motion.div variants={sectionVariants} initial="hidden" animate="visible" custom={1} className="w-full">
               <RoomIntelligenceCard
                 healthScore={score}
+                evaluationState={evaluationState}
                 itemCount={itemCount}
                 docCount={docCount}
                 gapCount={gapCount}
@@ -415,6 +422,8 @@ export default function RoomShowcaseClient() {
                 onScrollToItems={scrollToItems}
                 onOpenAddDocument={() => router.push(itemsHref)}
                 onScrollToGaps={() => router.push(itemsHref)}
+                onAddFirstItem={openNewItem}
+                onEditProfile={() => router.push(editHref)}
               />
             </motion.div>
 

@@ -127,9 +127,11 @@ const PROFILE_COMPLETION_KEYS: Record<RoomBase, string[]> = {
   OTHER: ['style', 'flooring'],
 };
 
-function computeHealthScore(roomBase: RoomBase, profile: any, insights: any): number {
+function computeHealthScore(roomBase: RoomBase, profile: any, insights: any): number | null {
   const stats = insights?.stats || {};
   const itemCount = Number(stats.itemCount || 0);
+  if (itemCount === 0) return null;
+
   const docs = Number(stats.docsLinkedCount || 0);
   const gaps = Number(stats.coverageGapsCount || 0);
 
@@ -296,10 +298,12 @@ export default function RoomDetailClient() {
 
   const roomConfig = getRoomConfig(room?.type || roomBase);
   const RoomIcon = roomConfig.icon;
-  const scoreColor = getScoreColorHex(healthScore);
-  const statusLabelRaw = getStatusLabel(healthScore);
-  const statusLabel = STATUS_LABELS[statusLabelRaw] ?? humanizeLabel(statusLabelRaw);
-  const statusColor = getStatusColor(healthScore);
+  const scoreColor = getScoreColorHex(healthScore ?? 0);
+  const statusLabelRaw = healthScore === null ? null : getStatusLabel(healthScore);
+  const statusLabel = statusLabelRaw === null
+    ? 'Not scored'
+    : STATUS_LABELS[statusLabelRaw] ?? humanizeLabel(statusLabelRaw);
+  const statusColor = healthScore === null ? 'text-slate-500' : getStatusColor(healthScore);
   const advisorQuery = new URLSearchParams({
     roomId,
     launchSurface: 'inventory_room_detail',
@@ -466,7 +470,9 @@ export default function RoomDetailClient() {
             roomConfig.borderColor,
           ].join(' ')}
         >
-          <div className={`pointer-events-none absolute inset-0 ${getHealthOverlay(healthScore)}`} />
+          {healthScore !== null ? (
+            <div className={`pointer-events-none absolute inset-0 ${getHealthOverlay(healthScore)}`} />
+          ) : null}
 
           <div className="relative z-10 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div className="flex items-center gap-4">
@@ -533,20 +539,26 @@ export default function RoomDetailClient() {
 
         <div className="border-b border-gray-100 px-6 py-3">
           <div className="flex flex-wrap items-center gap-4">
-            <div className="h-14 w-14 flex-shrink-0">
-              <CircularProgressbar
-                value={healthScore}
-                text={`${healthScore}`}
-                strokeWidth={9}
-                styles={buildStyles({
-                  textSize: '28px',
-                  textColor: '#111827',
-                  pathColor: scoreColor,
-                  trailColor: '#e5e7eb',
-                  pathTransitionDuration: 0.6,
-                })}
-              />
-            </div>
+            {healthScore !== null ? (
+              <div className="h-14 w-14 flex-shrink-0">
+                <CircularProgressbar
+                  value={healthScore}
+                  text={`${healthScore}`}
+                  strokeWidth={9}
+                  styles={buildStyles({
+                    textSize: '28px',
+                    textColor: '#111827',
+                    pathColor: scoreColor,
+                    trailColor: '#e5e7eb',
+                    pathTransitionDuration: 0.6,
+                  })}
+                />
+              </div>
+            ) : (
+              <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-full border-8 border-slate-100 text-lg font-semibold text-slate-400">
+                —
+              </div>
+            )}
 
             <div>
               <div className="flex items-center gap-2">
@@ -554,7 +566,7 @@ export default function RoomDetailClient() {
                 <span className={`text-sm font-bold ${statusColor}`}>{statusLabel}</span>
               </div>
               <p className="mt-0.5 text-xs text-gray-400">
-                {itemCount} items · {docCount} docs · {gapCount} gaps
+                {itemCount} items · {docCount} docs · {healthScore === null ? 'coverage not evaluated' : `${gapCount} gaps`}
               </p>
             </div>
 

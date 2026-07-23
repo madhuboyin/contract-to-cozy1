@@ -8,7 +8,7 @@ import { getHealthOverlay, getRoomConfig } from './roomVisuals';
 type RoomPageHeaderProps = {
   roomName: string;
   roomType?: string | null;
-  healthScore: number;
+  healthScore: number | null;
   itemCount: number;
   gapCount: number;
   docCount: number;
@@ -44,7 +44,9 @@ export default function RoomPageHeader({
         'px-4 py-4 sm:px-6 sm:py-5',
       ].join(' ')}
     >
-      <div className={`pointer-events-none absolute inset-0 ${getHealthOverlay(healthScore)}`} />
+      {healthScore !== null ? (
+        <div className={`pointer-events-none absolute inset-0 ${getHealthOverlay(healthScore)}`} />
+      ) : null}
 
       <div className="relative z-10 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="flex min-w-0 items-center gap-4">
@@ -60,7 +62,7 @@ export default function RoomPageHeader({
           <div className="min-w-0">
             <h1 className="truncate text-2xl font-display font-bold leading-tight text-gray-900">{roomName}</h1>
             <p className="mt-0.5 text-sm text-gray-500">
-              {itemCount} items tracked - {gapCount} gaps - {docCount} documents
+              {itemCount} items tracked - {itemCount === 0 ? 'coverage not evaluated' : `${gapCount} gaps`} - {docCount} documents
             </p>
           </div>
         </div>

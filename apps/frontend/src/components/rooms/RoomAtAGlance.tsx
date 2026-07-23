@@ -36,8 +36,8 @@ export default function RoomAtAGlance({
         {[
           {
             label: 'Gaps',
-            value: gapCount,
-            color: gapCount > 0 ? 'text-red-600' : 'text-emerald-600',
+            value: itemCount === 0 ? '—' : gapCount,
+            color: itemCount === 0 ? 'text-slate-400' : gapCount > 0 ? 'text-red-600' : 'text-emerald-600',
           },
           {
             label: 'Docs',

@@ -12,6 +12,7 @@ export function computeRoomHealthScore(input: {
     docsLinkedCount: number;
     coverageGapsCount: number;
   };
+  profileContextAvailable?: boolean;
   kitchen?: {
     missingAppliances?: string[] | null;
   };
@@ -22,12 +23,45 @@ export function computeRoomHealthScore(input: {
   const itemCount = Number(input.stats.itemCount || 0);
   const docs = Number(input.stats.docsLinkedCount || 0);
   const gaps = Number(input.stats.coverageGapsCount || 0);
+  const profileContextAvailable = input.profileContextAvailable === true;
 
   const missingAppliancesCount = Number(input.kitchen?.missingAppliances?.length || 0);
 
   const hintRaw = input.livingRoom?.comfortScoreHint;
   const comfortScoreHint: RoomHealthScoreDTO['factors']['comfortScoreHint'] =
     hintRaw === 'LOW' || hintRaw === 'MEDIUM' || hintRaw === 'HIGH' ? hintRaw : 'UNKNOWN';
+
+  if (itemCount === 0) {
+    const evaluationState = profileContextAvailable ? 'INSUFFICIENT_DATA' : 'NOT_STARTED';
+
+    return {
+      score: null,
+      band: null,
+      label: profileContextAvailable ? 'Insufficient data' : 'Not started',
+      evaluationState,
+      badges: [profileContextAvailable ? 'More information needed' : 'Setup not started'],
+      improvements: [
+        {
+          title: 'Add your first item',
+          detail: 'Add an appliance, system, or valuable to begin evaluating this room.',
+        },
+        ...(!profileContextAvailable
+          ? [{
+              title: 'Complete the room profile',
+              detail: 'Add lightweight room details so future guidance reflects this space.',
+            }]
+          : []),
+      ],
+      factors: {
+        itemCount,
+        docsLinkedCount: docs,
+        coverageGapsCount: gaps,
+        missingAppliancesCount: 0,
+        comfortScoreHint,
+        profileContextAvailable,
+      },
+    };
+  }
 
   // ---- Scoring: stable, explainable, and close to what your UI already implied ----
   // Base completeness score
@@ -106,6 +140,7 @@ export function computeRoomHealthScore(input: {
     score: finalScore,
     band,
     label,
+    evaluationState: 'SCORED',
     badges,
     improvements,
     factors: {
@@ -114,6 +149,7 @@ export function computeRoomHealthScore(input: {
       coverageGapsCount: gaps,
       missingAppliancesCount,
       comfortScoreHint,
+      profileContextAvailable,
     },
   };
 }

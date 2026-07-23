@@ -16,11 +16,13 @@ function keywordHas(name: string, words: string[]) {
 }
 
 export type RoomHealthBand = 'GOOD' | 'NEEDS_ATTENTION' | 'AT_RISK';
+export type RoomHealthEvaluationState = 'NOT_STARTED' | 'INSUFFICIENT_DATA' | 'SCORED';
 
 export type RoomHealthScoreDTO = {
-  score: number; // 0..100
-  band: RoomHealthBand;
-  label: string; // "Good" | "Needs attention" | "At risk"
+  score: number | null; // 0..100 only when evaluationState is SCORED
+  band: RoomHealthBand | null;
+  label: string; // "Not started" | "Insufficient data" | scored band label
+  evaluationState: RoomHealthEvaluationState;
   badges: string[]; // for small UI chips if you want (e.g., ["Coverage gaps", "Missing appliances"])
   improvements: Array<{ title: string; detail?: string }>; // "how to improve"
   factors: {
@@ -29,6 +31,7 @@ export type RoomHealthScoreDTO = {
     coverageGapsCount: number;
     missingAppliancesCount: number;
     comfortScoreHint: 'LOW' | 'MEDIUM' | 'HIGH' | 'UNKNOWN';
+    profileContextAvailable: boolean;
   };
 };
 
@@ -101,9 +104,10 @@ export class RoomInsightsService {
         docsLinkedCount,
       },
       healthScore: {
-        score: 0,
-        band: 'AT_RISK',
-        label: 'At risk',
+        score: null,
+        band: null,
+        label: 'Not started',
+        evaluationState: 'NOT_STARTED',
         badges: [],
         improvements: [],
         factors: {
@@ -112,6 +116,7 @@ export class RoomInsightsService {
           coverageGapsCount,
           missingAppliancesCount: 0,
           comfortScoreHint: 'UNKNOWN',
+          profileContextAvailable: false,
         },
       },
     };
@@ -119,7 +124,7 @@ export class RoomInsightsService {
     const type = (room.type as any) || 'OTHER';
 
     // ✅ Kitchen “presence” check is intentionally lightweight
-    if (type === 'KITCHEN') {
+    if (type === 'KITCHEN' && items.length > 0) {
       const hasFridge = items.some((it) => keywordHas(it.name, ['fridge', 'refrigerator']));
       const hasRange = items.some((it) => keywordHas(it.name, ['range', 'oven', 'stove']));
       const hasDishwasher = items.some((it) => keywordHas(it.name, ['dishwasher']));
@@ -180,6 +185,12 @@ export class RoomInsightsService {
         docsLinkedCount: base.stats.docsLinkedCount,
         coverageGapsCount: base.stats.coverageGapsCount,
       },
+      profileContextAvailable: Boolean(
+        room.profile
+        && typeof room.profile === 'object'
+        && !Array.isArray(room.profile)
+        && Object.keys(room.profile as Record<string, unknown>).length > 0
+      ),
       kitchen: base.kitchen ? { missingAppliances: base.kitchen.missingAppliances } : undefined,
       livingRoom: base.livingRoom ? { comfortScoreHint: base.livingRoom.comfortScoreHint } : undefined,
     });

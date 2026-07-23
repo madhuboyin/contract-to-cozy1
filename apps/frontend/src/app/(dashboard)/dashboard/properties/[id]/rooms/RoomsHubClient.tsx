@@ -48,9 +48,11 @@ function guessRoomType(name: string) {
   return 'OTHER';
 }
 
-function computeHealthScore(insights: any): number {
+function computeHealthScore(insights: any): number | null {
   const stats = insights?.stats || {};
   const itemCount = Number(stats.itemCount || 0);
+  if (itemCount === 0) return null;
+
   const docs = Number(stats.docsLinkedCount || 0);
   const gaps = Number(stats.coverageGapsCount || 0);
 
@@ -169,8 +171,11 @@ export default function RoomsHubClient() {
         const insights = roomInsights[room.id];
         if (!insights) return null;
 
-        const backendScore = Number(insights?.healthScore?.score);
-        const score = Number.isFinite(backendScore) ? backendScore : computeHealthScore(insights);
+        const backendScore = insights?.healthScore?.score;
+        const score = typeof backendScore === 'number' && Number.isFinite(backendScore)
+          ? backendScore
+          : computeHealthScore(insights);
+        if (score === null) return null;
         return { id: room.id, score };
       })
       .filter(Boolean) as Array<{ id: string; score: number }>;
@@ -195,12 +200,12 @@ export default function RoomsHubClient() {
       const showDetect = !roomWithType.type && inferredType !== 'OTHER';
       const insights = roomInsights[room.id];
       const stats = insights?.stats;
-      const backendScore = Number(insights?.healthScore?.score);
+      const backendScore = insights?.healthScore?.score;
       const score = insights
-        ? Number.isFinite(backendScore)
+        ? typeof backendScore === 'number' && Number.isFinite(backendScore)
           ? backendScore
           : computeHealthScore(insights)
-        : 0;
+        : null;
       const itemCount = Number(stats?.itemCount ?? 0);
       const docCount = Number(stats?.docsLinkedCount ?? 0);
       const gapCount = Number(stats?.coverageGapsCount ?? 0);
@@ -226,9 +231,11 @@ export default function RoomsHubClient() {
 
   const focusRoom = useMemo(() => {
     if (roomCards.length === 0) return null;
-    const cardsWithInsights = roomCards.filter((room) => room.hasInsights);
-    if (cardsWithInsights.length === 0) return roomCards[0];
-    return cardsWithInsights.reduce((min, room) => (room.score < min.score ? room : min), cardsWithInsights[0]);
+    const scoredCards = roomCards.filter(
+      (room): room is MobileRoomCardModel & { score: number } => room.score !== null,
+    );
+    if (scoredCards.length === 0) return roomCards[0];
+    return scoredCards.reduce((min, room) => (room.score < min.score ? room : min), scoredCards[0]);
   }, [roomCards]);
 
   const secondaryRooms = useMemo(

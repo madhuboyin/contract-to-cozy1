@@ -3,7 +3,7 @@ Feature: Rooms Experience
 
 Product: Contract-to-Cozy
 Status: Implemented (v1), extensible
-Last Updated: 2026-01-15
+Last Updated: 2026-07-23
 
 1. Purpose & Scope
 
@@ -248,6 +248,8 @@ BasementInsightsCard
 Purpose
 Summarize room readiness as a simple score (0–100).
 
+An empty room is a setup state, not a low-scoring room. The product must not manufacture a numeric score until there is an inventory item to evaluate.
+
 Inputs
 
 Inventory item count
@@ -267,6 +269,14 @@ Fully explainable
 No backend dependency
 
 Light weighting (nudges, not judgments)
+
+Evaluation states:
+
+- `NOT_STARTED`: no inventory items and no room-profile context; show setup guidance without a score.
+- `INSUFFICIENT_DATA`: room-profile context exists but no inventory item can be evaluated; show the missing input without a score.
+- `SCORED`: at least one inventory item exists; compute and explain the numeric readiness score.
+
+For unscored rooms, coverage is **not evaluated**. The UI must not claim there are zero coverage gaps, apply an at-risk/needs-attention label, fabricate a trend, or request item documents before an item exists.
 
 7. Functional Requirements (Detailed)
 FR-1 Room Type Resolution
@@ -308,6 +318,12 @@ MUST be recomputable client-side
 MUST clamp between 0–100
 
 MUST explain score via sublabel text
+
+MUST return a nullable score with an explicit evaluation state
+
+MUST NOT assign the default readiness baseline to an empty room
+
+MUST show setup actions before document, coverage, or risk actions become applicable
 
 FR-6 UX Consistency
 

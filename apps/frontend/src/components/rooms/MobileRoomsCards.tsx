@@ -16,7 +16,7 @@ import { MOBILE_TYPE_TOKENS } from '@/components/mobile/dashboard/mobileDesignTo
 export type MobileRoomCardModel = {
   room: InventoryRoom & { type?: string | null };
   roomType: string;
-  score: number;
+  score: number | null;
   itemCount: number;
   docCount: number;
   gapCount: number;
@@ -35,6 +35,10 @@ function roomStatusTone(score: number): 'good' | 'elevated' | 'needsAction' {
 
 function roomStatusCopy(score: number): string {
   return getStatusLabel(score).replaceAll('_', ' ');
+}
+
+function roomStateCopy(score: number | null): string {
+  return score === null ? 'Not scored' : roomStatusCopy(score);
 }
 
 function RoomSupportActions({
@@ -154,13 +158,21 @@ export function FocusRoomCard({
   return (
     <SummaryCard
       title={card.room.name || 'Unnamed room'}
-      subtitle={`Score ${Math.round(card.score)} • ${roomStatusCopy(card.score)}`}
-      action={<StatusChip tone={roomStatusTone(card.score)}>{roomStatusCopy(card.score)}</StatusChip>}
+      subtitle={card.score === null ? 'Add room information to calculate readiness' : `Score ${Math.round(card.score)} • ${roomStatusCopy(card.score)}`}
+      action={
+        <StatusChip tone={card.score === null ? 'info' : roomStatusTone(card.score)}>
+          {roomStateCopy(card.score)}
+        </StatusChip>
+      }
     >
       <div className="space-y-3">
         <p className="mb-0 text-sm text-[hsl(var(--mobile-text-secondary))]">{card.tipText}</p>
         <div className="flex items-center justify-between text-sm text-[hsl(var(--mobile-text-secondary))]">
-          <span>{card.gapCount} gap{card.gapCount === 1 ? '' : 's'} detected</span>
+          <span>
+            {card.score === null
+              ? 'Coverage not evaluated'
+              : `${card.gapCount} gap${card.gapCount === 1 ? '' : 's'} detected`}
+          </span>
           <span className="font-semibold text-[hsl(var(--mobile-text-primary))]">
             {card.completenessPercent}% completeness
           </span>
@@ -233,15 +245,17 @@ export function CompactRoomCard({
                 {card.room.name || 'Unnamed room'}
               </p>
               <div className="mt-1">
-                <StatusChip tone={roomStatusTone(card.score)}>{roomStatusCopy(card.score)}</StatusChip>
+                <StatusChip tone={card.score === null ? 'info' : roomStatusTone(card.score)}>
+                  {roomStateCopy(card.score)}
+                </StatusChip>
               </div>
             </div>
           </div>
           <p className="mb-0 text-sm text-[hsl(var(--mobile-text-secondary))]">
-            {card.itemCount} items • {card.docCount} docs • {card.gapCount} gaps
+            {card.itemCount} items • {card.docCount} docs • {card.score === null ? 'coverage not evaluated' : `${card.gapCount} gaps`}
           </p>
           <div className="mt-1 flex items-center gap-2 text-xs text-[hsl(var(--mobile-text-secondary))]">
-            <span>Score {Math.round(card.score)}</span>
+            <span>{card.score === null ? 'Score —' : `Score ${Math.round(card.score)}`}</span>
             <span className="h-1 w-1 rounded-full bg-[hsl(var(--mobile-text-muted))]" />
             <span>{card.completenessPercent}% complete</span>
           </div>

@@ -20,7 +20,7 @@ type RoomListCardProps = {
   roomId: string;
   roomName: string;
   roomType?: string | null;
-  healthScore: number;
+  healthScore: number | null;
   itemCount: number;
   docCount: number;
   gapCount: number;
@@ -48,9 +48,10 @@ export default function RoomListCard({
 }: RoomListCardProps) {
   const roomConfig = getRoomConfig(roomType);
   const RoomIcon: LucideIcon = roomConfig.icon;
-  const scoreColor = getScoreColorHex(healthScore);
-  const statusLabel = getStatusLabel(healthScore);
-  const statusColor = getStatusColor(healthScore);
+  const hasScore = healthScore !== null;
+  const scoreColor = getScoreColorHex(healthScore ?? 0);
+  const statusLabel = hasScore ? getStatusLabel(healthScore) : 'NOT SCORED';
+  const statusColor = hasScore ? getStatusColor(healthScore) : 'text-slate-500';
 
   const tipText = getSpecificRoomTip({
     itemCount,
@@ -74,20 +75,26 @@ export default function RoomListCard({
         {headerAction ? <div className="mb-3">{headerAction}</div> : null}
 
         <div className="mb-2 flex justify-center">
-          <div className="h-[72px] w-[72px]">
-            <CircularProgressbar
-              value={healthScore}
-              text={`${Math.round(healthScore)}`}
-              strokeWidth={9}
-              styles={buildStyles({
-                textSize: '30px',
-                textColor: '#111827',
-                pathColor: scoreColor,
-                trailColor: '#e5e7eb',
-                pathTransitionDuration: 0.8,
-              })}
-            />
-          </div>
+          {hasScore ? (
+            <div className="h-[72px] w-[72px]">
+              <CircularProgressbar
+                value={healthScore}
+                text={`${Math.round(healthScore)}`}
+                strokeWidth={9}
+                styles={buildStyles({
+                  textSize: '30px',
+                  textColor: '#111827',
+                  pathColor: scoreColor,
+                  trailColor: '#e5e7eb',
+                  pathTransitionDuration: 0.8,
+                })}
+              />
+            </div>
+          ) : (
+            <div className="flex h-[72px] w-[72px] items-center justify-center rounded-full border-8 border-slate-100 text-lg font-semibold text-slate-400">
+              —
+            </div>
+          )}
         </div>
 
         <p className={`mb-3 text-center text-xs font-bold ${statusColor}`}>{statusLabel}</p>
@@ -103,7 +110,7 @@ export default function RoomListCard({
           </span>
           <span className={`flex items-center gap-1 ${gapCount > 0 ? 'text-red-500' : ''}`}>
             <AlertCircle className="h-3 w-3" />
-            {gapCount}
+            {hasScore ? gapCount : '—'}
           </span>
         </div>
 
@@ -120,7 +127,9 @@ export default function RoomListCard({
           </div>
         </div>
 
-        <p className="text-center text-[11px] italic leading-relaxed text-gray-500">{tipText}</p>
+        <p className="text-center text-[11px] italic leading-relaxed text-gray-500">
+          {hasScore ? tipText : 'Add an item or room details to begin tracking readiness.'}
+        </p>
 
         <div className="mt-4 flex flex-wrap items-center gap-2">
           <Link

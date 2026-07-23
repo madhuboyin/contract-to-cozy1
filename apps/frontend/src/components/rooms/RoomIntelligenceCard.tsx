@@ -24,7 +24,8 @@ type Tip = {
 };
 
 type RoomIntelligenceCardProps = {
-  healthScore: number;
+  healthScore: number | null;
+  evaluationState: 'NOT_STARTED' | 'INSUFFICIENT_DATA' | 'SCORED';
   itemCount: number;
   docCount: number;
   gapCount: number;
@@ -34,6 +35,8 @@ type RoomIntelligenceCardProps = {
   onScrollToItems: () => void;
   onOpenAddDocument: () => void;
   onScrollToGaps: () => void;
+  onAddFirstItem: () => void;
+  onEditProfile: () => void;
 };
 
 function useCountUp(target: number, duration = 800) {
@@ -161,6 +164,7 @@ function Sparkline({ values, color }: { values: number[]; color: string }) {
 
 export default function RoomIntelligenceCard({
   healthScore,
+  evaluationState,
   itemCount,
   docCount,
   gapCount,
@@ -170,10 +174,13 @@ export default function RoomIntelligenceCard({
   onScrollToItems,
   onOpenAddDocument,
   onScrollToGaps,
+  onAddFirstItem,
+  onEditProfile,
 }: RoomIntelligenceCardProps) {
-  const scoreColor = getScoreColorHex(healthScore);
-  const statusLabel = getStatusLabel(healthScore);
-  const statusColor = getStatusColor(healthScore);
+  const numericScore = healthScore ?? 0;
+  const scoreColor = getScoreColorHex(numericScore);
+  const statusLabel = getStatusLabel(numericScore);
+  const statusColor = getStatusColor(numericScore);
 
   const sortedTips = useMemo(
     () => [...tips].sort((a, b) => tipPriority(a.title) - tipPriority(b.title)),
@@ -182,21 +189,83 @@ export default function RoomIntelligenceCard({
   const topPriorityTip = sortedTips[0] ?? null;
 
   const hasTrendData = scoreHistory.length > 1;
-  const chartData = hasTrendData ? scoreHistory : new Array(12).fill(healthScore);
+  const chartData = hasTrendData ? scoreHistory : [];
   const weeklyDelta = useMemo(() => {
     if (!hasTrendData) return null;
-    const last = scoreHistory[scoreHistory.length - 1] ?? healthScore;
+    const last = scoreHistory[scoreHistory.length - 1] ?? numericScore;
     const baselineIndex = Math.max(0, scoreHistory.length - 8);
     const baseline = scoreHistory[baselineIndex] ?? last;
     return Math.round(last - baseline);
-  }, [hasTrendData, scoreHistory, healthScore]);
+  }, [hasTrendData, scoreHistory, numericScore]);
 
   const animatedItemCount = useCountUp(itemCount);
   const animatedDocCount = useCountUp(docCount);
   const animatedGapCount = useCountUp(gapCount);
   const animatedDelta = useCountUp(weeklyDelta ?? 0);
 
-  const priorityBg = healthScore < 40 ? 'bg-red-50/40' : healthScore <= 65 ? 'bg-amber-50/40' : 'bg-emerald-50/30';
+  const priorityBg = numericScore < 40 ? 'bg-red-50/40' : numericScore <= 65 ? 'bg-amber-50/40' : 'bg-emerald-50/30';
+
+  if (evaluationState !== 'SCORED' || healthScore === null) {
+    const hasSomeContext = evaluationState === 'INSUFFICIENT_DATA';
+
+    return (
+      <section className="w-full overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm ring-1 ring-black/[0.04]">
+        <div className="grid gap-6 p-6 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+          <div className="flex items-start gap-4">
+            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-teal-50 text-teal-700 ring-1 ring-teal-100">
+              <PackagePlus className="h-6 w-6" />
+            </div>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-teal-700">
+                {hasSomeContext ? 'More information needed' : 'Room setup'}
+              </p>
+              <h2 className="mt-1 text-xl font-semibold text-slate-950">
+                {hasSomeContext ? 'Add an item to calculate room readiness' : 'Room setup not started'}
+              </h2>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
+                {hasSomeContext
+                  ? 'You have started describing this room, but there is not enough inventory information for a meaningful score yet.'
+                  : 'No items or room details have been added yet. Add what is in this room or complete its profile to begin personalized tracking.'}
+              </p>
+              <p className="mt-2 text-xs text-slate-500">A readiness score will appear after there is something meaningful to evaluate.</p>
+            </div>
+          </div>
+
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:min-w-[210px]">
+            <button
+              type="button"
+              onClick={onAddFirstItem}
+              className="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-teal-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-teal-700"
+            >
+              Add first item
+            </button>
+            <button
+              type="button"
+              onClick={onEditProfile}
+              className="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
+            >
+              {hasSomeContext ? 'Review room profile' : 'Complete room profile'}
+            </button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-3 divide-x border-t border-slate-100 bg-slate-50/70">
+          <div className="p-4 text-center">
+            <p className="text-xl font-semibold text-slate-900">{itemCount}</p>
+            <p className="mt-0.5 text-[11px] text-slate-500">Items</p>
+          </div>
+          <div className="p-4 text-center">
+            <p className="text-xl font-semibold text-slate-400">—</p>
+            <p className="mt-0.5 text-[11px] text-slate-500">Coverage status</p>
+          </div>
+          <div className="p-4 text-center">
+            <p className="text-xl font-semibold text-slate-400">—</p>
+            <p className="mt-0.5 text-[11px] text-slate-500">Trend</p>
+          </div>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section className="w-full max-w-none overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm ring-1 ring-black/[0.04]">
@@ -206,8 +275,8 @@ export default function RoomIntelligenceCard({
             <div className="relative flex-shrink-0">
               <div className="h-[120px] w-[120px]">
                 <CircularProgressbar
-                  value={healthScore}
-                  text={`${Math.round(healthScore)}`}
+                  value={numericScore}
+                  text={`${Math.round(numericScore)}`}
                   strokeWidth={9}
                   styles={buildStyles({
                     textSize: '26px',
