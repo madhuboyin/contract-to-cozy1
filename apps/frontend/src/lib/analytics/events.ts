@@ -43,6 +43,7 @@ export type CtcEventName =
   | 'property_onboarded'
   // Monetization / Resolution
   | 'provider_searched'
+  | 'provider_search_radius_expanded'
   | 'provider_responsibility_answered'
   | 'booking_initiated'
   // Workflow funnel
@@ -179,7 +180,13 @@ export interface CtcEventProperties {
   property_onboarded: { propertyId: string; durationSeconds: number };
   
   // Monetization / Resolution
-  provider_searched: { category: string; location: string; resultCount?: number };
+  provider_searched: { category: string; location: string; radiusMiles?: number; resultCount?: number };
+  provider_search_radius_expanded: {
+    category: string;
+    zipCode: string;
+    previousRadiusMiles: number;
+    radiusMiles: number;
+  };
   provider_responsibility_answered: { category: string; party: string };
   booking_initiated: { providerId?: string; category: string; source: string };
   

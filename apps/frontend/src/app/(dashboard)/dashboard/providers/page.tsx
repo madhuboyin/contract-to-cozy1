@@ -51,8 +51,11 @@ import {
   responsibilityPartyLabel,
   type ProviderResponsibilityParty,
 } from '@/lib/providers/providerResponsibility';
-
-const DEFAULT_RADIUS = 25;
+import {
+  DEFAULT_PROVIDER_SEARCH_RADIUS,
+  getNextProviderSearchRadius,
+  PROVIDER_SEARCH_RADII,
+} from '@/lib/providers/providerSearchRadius';
 
 const RESPONSIBILITY_OPTIONS: Array<{ value: ProviderResponsibilityParty; label: string }> = [
   { value: 'OWNER', label: 'I do / the homeowner' },
@@ -63,17 +66,26 @@ const RESPONSIBILITY_OPTIONS: Array<{ value: ProviderResponsibilityParty; label:
 ];
 
 interface ServiceFilterProps {
-  onFilterChange: (filters: { zipCode: string; category: string | undefined }) => void;
+  onFilterChange: (filters: { zipCode: string; category: string | undefined; radius: number }) => void;
   defaultCategory?: string;
   defaultZipCode?: string;
+  defaultRadius?: number;
   isSearching: boolean;
   lockZipToProperty?: boolean;
 }
 
+type ProviderSearchFilters = {
+  zipCode: string;
+  category: string;
+  workCategory: string | undefined;
+  radius: number;
+};
+
 const ServiceFilter = React.memo(
-  ({ onFilterChange, defaultCategory, defaultZipCode, isSearching, lockZipToProperty }: ServiceFilterProps) => {
+  ({ onFilterChange, defaultCategory, defaultZipCode, defaultRadius = DEFAULT_PROVIDER_SEARCH_RADIUS, isSearching, lockZipToProperty }: ServiceFilterProps) => {
     const [zipCode, setZipCode] = useState(defaultZipCode || '');
     const [selectedCategory, setSelectedCategory] = useState<string>(defaultCategory || 'ALL');
+    const [searchRadius, setSearchRadius] = useState(defaultRadius);
 
     const displayCategories = useMemo(() => PROVIDER_SEARCH_CATEGORY_OPTIONS, []);
 
@@ -86,26 +98,23 @@ const ServiceFilter = React.memo(
         onFilterChange({
           zipCode: zipCode.trim(),
           category: categoryValue,
+          radius: searchRadius,
         });
       },
-      [zipCode, selectedCategory, onFilterChange]
+      [zipCode, selectedCategory, searchRadius, onFilterChange]
     );
 
     useEffect(() => {
-      if (defaultCategory && defaultCategory !== selectedCategory) {
-        setSelectedCategory(defaultCategory);
-        onFilterChange({
-          zipCode: zipCode.trim(),
-          category: defaultCategory === 'ALL' ? undefined : defaultCategory,
-        });
-      }
-    }, [defaultCategory, selectedCategory, onFilterChange, zipCode]);
+      setSelectedCategory(defaultCategory || 'ALL');
+    }, [defaultCategory]);
 
     useEffect(() => {
-      if (typeof defaultZipCode === 'string' && defaultZipCode !== zipCode) {
-        setZipCode(defaultZipCode);
-      }
-    }, [defaultZipCode, zipCode]);
+      setZipCode(defaultZipCode || '');
+    }, [defaultZipCode]);
+
+    useEffect(() => {
+      setSearchRadius(defaultRadius);
+    }, [defaultRadius]);
 
     return (
       <form onSubmit={handleSearch}>
@@ -131,18 +140,33 @@ const ServiceFilter = React.memo(
             </div>
           }
           primaryFilters={
-            <div>
-              <label className="mb-1 block text-xs font-medium tracking-normal text-slate-500">ZIP code</label>
-              <Input
-                type="text"
-                placeholder="e.g., 78701"
-                value={zipCode}
-                onChange={(e) => setZipCode(e.target.value)}
-                disabled={lockZipToProperty}
-                inputMode="numeric"
-                autoComplete="postal-code"
-                className="h-11 w-full text-sm"
-              />
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-xs font-medium tracking-normal text-slate-500">ZIP code</label>
+                <Input
+                  type="text"
+                  placeholder="e.g., 78701"
+                  value={zipCode}
+                  onChange={(e) => setZipCode(e.target.value)}
+                  disabled={lockZipToProperty}
+                  inputMode="numeric"
+                  autoComplete="postal-code"
+                  className="h-11 w-full text-sm"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium tracking-normal text-slate-500">Search distance</label>
+                <select
+                  value={searchRadius}
+                  onChange={(event) => setSearchRadius(Number(event.target.value))}
+                  className="flex h-11 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                  aria-label="Search distance"
+                >
+                  {PROVIDER_SEARCH_RADII.map((radius) => (
+                    <option key={radius} value={radius}>Within {radius} miles</option>
+                  ))}
+                </select>
+              </div>
             </div>
           }
           chips={
@@ -153,7 +177,7 @@ const ServiceFilter = React.memo(
                   type="button"
                   onClick={() => {
                     setSelectedCategory(category.value);
-                    onFilterChange({ zipCode: zipCode.trim(), category: category.value });
+                    onFilterChange({ zipCode: zipCode.trim(), category: category.value, radius: searchRadius });
                   }}
                   className={cn(
                     'inline-flex min-h-[32px] items-center gap-1.5 rounded-full border px-2.5 text-[11px] font-medium transition-colors',
@@ -179,14 +203,17 @@ const ServiceFilter = React.memo(
                 {isSearching ? 'Searching' : 'Search'}
               </button>
 
-              {((!lockZipToProperty && zipCode) || selectedCategory !== 'ALL') ? (
+              {((!lockZipToProperty && zipCode)
+                || selectedCategory !== 'ALL'
+                || searchRadius !== DEFAULT_PROVIDER_SEARCH_RADIUS) ? (
                 <button
                   type="button"
                   onClick={() => {
                     const resetZip = lockZipToProperty ? (defaultZipCode || '') : '';
                     setZipCode(resetZip);
                     setSelectedCategory('ALL');
-                    onFilterChange({ zipCode: resetZip, category: undefined });
+                    setSearchRadius(DEFAULT_PROVIDER_SEARCH_RADIUS);
+                    onFilterChange({ zipCode: resetZip, category: undefined, radius: DEFAULT_PROVIDER_SEARCH_RADIUS });
                   }}
                   className="inline-flex min-h-[44px] items-center rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50"
                 >
@@ -462,10 +489,11 @@ export default function ProvidersPage() {
   const initialZipCode = '';
   const initialCategory = defaultCategory || '';
   const hasInitialFetchedRef = useRef(false);
-  const [filters, setFilters] = useState({
+  const [filters, setFilters] = useState<ProviderSearchFilters>({
     zipCode: initialZipCode,
     category: initialCategory,
     workCategory: defaultWorkCategory,
+    radius: DEFAULT_PROVIDER_SEARCH_RADIUS,
   });
   const isGuidanceExecutionBlocked = hasGuardScopeContext && Boolean(providerGuardQuery.data?.blocked);
   const propertyContextNeedsAttention = Boolean(
@@ -514,7 +542,7 @@ export default function ProvidersPage() {
     : blockedActionHref;
 
   const fetchProviders = useCallback(
-    async (currentFilters: typeof filters) => {
+    async (currentFilters: ProviderSearchFilters) => {
       if (dataLoading) return;
 
       if (!currentFilters.zipCode && !currentFilters.category) return;
@@ -526,7 +554,7 @@ export default function ProvidersPage() {
           propertyId: targetPropertyId,
           category: currentFilters.category === 'ALL' || !currentFilters.category ? undefined : currentFilters.category,
           workCategory: currentFilters.workCategory,
-          radius: DEFAULT_RADIUS,
+          radius: currentFilters.radius,
         };
 
         if (currentFilters.zipCode) {
@@ -541,6 +569,7 @@ export default function ProvidersPage() {
           track('provider_searched', {
             category: currentFilters.category === 'ALL' ? 'ALL' : (currentFilters.category || 'ALL'),
             location: currentFilters.zipCode || 'any',
+            radiusMiles: currentFilters.radius,
             resultCount: response.data.providers.length,
           });
         } else {
@@ -559,13 +588,14 @@ export default function ProvidersPage() {
   );
 
   const handleFilterChange = useCallback(
-    (newFilters: { zipCode: string; category: string | undefined }) => {
+    (newFilters: { zipCode: string; category: string | undefined; radius: number }) => {
       const updatedFilters = {
         zipCode: newFilters.zipCode,
         category: newFilters.category || 'ALL',
         workCategory: newFilters.category === defaultCategory
           ? defaultWorkCategory ?? getProviderWorkCategory(newFilters.category)
           : getProviderWorkCategory(newFilters.category),
+        radius: newFilters.radius,
       };
       setFilters(updatedFilters);
       fetchProviders(updatedFilters);
@@ -613,6 +643,7 @@ export default function ProvidersPage() {
         zipCode: zipForInitialSearch,
         category: initialCategory || 'ALL',
         workCategory: defaultWorkCategory,
+        radius: DEFAULT_PROVIDER_SEARCH_RADIUS,
       };
       setFilters(initialFilterState);
 
@@ -621,6 +652,7 @@ export default function ProvidersPage() {
           zipCode: initialFilterState.zipCode,
           category: initialCategory || 'ALL',
           workCategory: initialFilterState.workCategory,
+          radius: initialFilterState.radius,
         });
       }
     };
@@ -665,7 +697,23 @@ export default function ProvidersPage() {
     handleFilterChange({
       zipCode: filters.zipCode,
       category: filters.category === 'ALL' ? undefined : filters.category,
+      radius: filters.radius,
     });
+  };
+
+  const nextSearchRadius = getNextProviderSearchRadius(filters.radius, Boolean(filters.zipCode));
+
+  const widenSearch = () => {
+    if (!nextSearchRadius || dataLoading) return;
+    const widenedFilters = { ...filters, radius: nextSearchRadius };
+    setFilters(widenedFilters);
+    track('provider_search_radius_expanded', {
+      category: filters.category,
+      zipCode: filters.zipCode,
+      previousRadiusMiles: filters.radius,
+      radiusMiles: nextSearchRadius,
+    });
+    void fetchProviders(widenedFilters);
   };
 
   const saveResponsibility = async (party: ProviderResponsibilityParty) => {
@@ -763,6 +811,7 @@ export default function ProvidersPage() {
               onClick={() => handleFilterChange({
                 zipCode: targetPropertyId ? propertyZipCode : '',
                 category: undefined,
+                radius: DEFAULT_PROVIDER_SEARCH_RADIUS,
               })}
               className="inline-flex min-h-[40px] w-full items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
             >
@@ -789,7 +838,7 @@ export default function ProvidersPage() {
       }}
       summary={
         <div className="space-y-3">
-          <MobileKpiStrip className="sm:grid-cols-3">
+          <MobileKpiStrip className="sm:grid-cols-4">
             <MobileKpiTile
               label="Matches"
               value={responsibilityAssignedElsewhere ? 'Paused' : dataLoading ? '...' : providers.length}
@@ -799,6 +848,7 @@ export default function ProvidersPage() {
               tone={providers.length > 0 ? 'positive' : 'neutral'}
             />
             <MobileKpiTile label="ZIP" value={filters.zipCode || 'Any'} hint="Location filter" />
+            <MobileKpiTile label="Distance" value={`${filters.radius} mi`} hint="Search area" />
             <MobileKpiTile
               label="Category"
               value={filters.category === 'ALL' ? 'All' : formatEnumLabel(filters.category)}
@@ -813,6 +863,7 @@ export default function ProvidersPage() {
             onFilterChange={handleFilterChange}
             defaultCategory={defaultCategory}
             defaultZipCode={propertyZipCode}
+            defaultRadius={filters.radius}
             isSearching={dataLoading}
             lockZipToProperty={Boolean(targetPropertyId)}
           />
@@ -897,7 +948,7 @@ export default function ProvidersPage() {
             <Info className="mt-0.5 h-4 w-4 shrink-0 text-emerald-700" />
             <div>
               <p className="mb-0 text-sm font-semibold text-emerald-900">Showing pros for {contextItemName} maintenance</p>
-              {propertyZipCode ? <p className="mb-0 mt-0.5 text-xs text-emerald-700">Radius filter uses property ZIP {propertyZipCode}.</p> : null}
+              {propertyZipCode ? <p className="mb-0 mt-0.5 text-xs text-emerald-700">Searching within {filters.radius} miles of property ZIP {propertyZipCode}.</p> : null}
             </div>
           </div>
         </MobileCard>
@@ -981,16 +1032,31 @@ export default function ProvidersPage() {
         <EmptyStateCard
           title="No providers found"
           description={responsibilityUnknown
-            ? 'No matching providers were found. You can adjust the service category and search again while responsibility remains unconfirmed.'
-            : 'Try broadening your service category or removing the ZIP filter, then run search again.'}
+            ? `No matching providers were found within ${filters.radius} miles. You can widen the search or adjust the service category while responsibility remains unconfirmed.`
+            : nextSearchRadius
+              ? `No matching providers were found within ${filters.radius} miles of ${filters.zipCode}. Expand to ${nextSearchRadius} miles while still respecting each provider’s service area.`
+              : `No matching providers were found within ${filters.radius} miles. Try another service category or ZIP code.`}
           action={
-            <button
-              type="button"
-              onClick={() => runSearch()}
-              className="inline-flex min-h-[44px] items-center rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-            >
-              Retry search
-            </button>
+            <div className="flex flex-wrap justify-center gap-2">
+              {nextSearchRadius ? (
+                <button
+                  type="button"
+                  onClick={widenSearch}
+                  disabled={dataLoading}
+                  className="inline-flex min-h-[44px] items-center rounded-lg bg-brand-primary px-4 text-xs font-semibold text-white hover:bg-brand-primary/90 disabled:opacity-60"
+                >
+                  Search within {nextSearchRadius} miles
+                </button>
+              ) : null}
+              <button
+                type="button"
+                onClick={() => runSearch()}
+                disabled={dataLoading}
+                className="inline-flex min-h-[44px] items-center rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+              >
+                Retry current search
+              </button>
+            </div>
           }
         />
       )}
