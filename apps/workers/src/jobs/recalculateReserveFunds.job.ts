@@ -15,16 +15,28 @@ import { prisma } from '../lib/prisma';
 import { homeReserveFundCalculationService } from '@worker-shared/services/homeReserveFundCalculation.service';
 import { logger } from '../lib/logger';
 import { checkReserveFundWorkerContext } from '@worker-shared/services/financialContext/reserveFundWorkerContext.service';
+import { isPropertyAllowlisted } from '@worker-shared/config/smokeTestConfig';
+import { generateSmokeCorrelationId } from '@worker-shared/lib/smokeTestCorrelation';
 
 const STALE_RECALC_DAYS = 35;
 
-export async function recalculateReserveFundsJob(): Promise<void> {
+export async function recalculateReserveFundsJob(
+  opts?: { dryRun?: boolean; propertyId?: string },
+): Promise<{ recalculated: number; skipped: number; failed: number; smokeCorrelationId?: string }> {
+  const dryRun = opts?.dryRun === true;
+  if (opts?.propertyId && !isPropertyAllowlisted(opts.propertyId)) {
+    throw new Error(
+      `[ReserveFundRecalculate] propertyId ${opts.propertyId} is not in SMOKE_TEST_PROPERTY_ALLOWLIST`,
+    );
+  }
+  const smokeCorrelationId = opts?.propertyId ? generateSmokeCorrelationId('reserve-fund-recalculation') : undefined;
+
   const funds = await prisma.homeReserveFund.findMany({
-    where: { isActive: true },
+    where: { isActive: true, ...(opts?.propertyId ? { propertyId: opts.propertyId } : {}) },
     select: { id: true, propertyId: true, sourceAnalysisId: true, lastRecalculatedAt: true },
   });
 
-  logger.info(`[ReserveFundRecalculate] Sweeping ${funds.length} active fund(s)`);
+  logger.info(`[ReserveFundRecalculate] Sweeping ${funds.length} active fund(s)${dryRun ? ' (dry run)' : ''}`);
 
   let recalculated = 0;
   let skipped = 0;
@@ -59,6 +71,12 @@ export async function recalculateReserveFundsJob(): Promise<void> {
         continue;
       }
 
+      if (dryRun) {
+        recalculated++;
+        logger.info(`[ReserveFundRecalculate] (dry run) Would recalculate fund ${fund.id} (property ${fund.propertyId})`);
+        continue;
+      }
+
       await homeReserveFundCalculationService.recalculate(
         fund.propertyId,
         'SCHEDULED',
@@ -75,4 +93,6 @@ export async function recalculateReserveFundsJob(): Promise<void> {
   logger.info(
     `[ReserveFundRecalculate] Done — recalculated: ${recalculated}, skipped (up to date): ${skipped}, failed: ${failed}`
   );
+
+  return { recalculated, skipped, failed, smokeCorrelationId };
 }

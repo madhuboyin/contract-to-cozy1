@@ -3,6 +3,8 @@ import { prisma } from '../lib/prisma';
 import { IncidentStatus } from '@prisma/client';
 import { IncidentService } from '@worker-shared/services/incidents/incident.service';
 import { guidanceJourneyService } from '@worker-shared/services/guidanceEngine/guidanceJourney.service';
+import { isPropertyAllowlisted } from '@worker-shared/config/smokeTestConfig';
+import { generateSmokeCorrelationId } from '@worker-shared/lib/smokeTestCorrelation';
 import { logger } from '../lib/logger';
 import { Geo } from '../lib/geocodeZip';
 import { getPropertyGeo } from '../lib/propertyGeo';
@@ -91,7 +93,22 @@ async function getForecastMinF(lat: number, lon: number): Promise<number | null>
   return minF == null ? null : Math.round(minF * 10) / 10;
 }
 
-export async function freezeRiskIncidentsJob() {
+export async function freezeRiskIncidentsJob(
+  opts?: { dryRun?: boolean; propertyId?: string },
+) {
+  const dryRun = opts?.dryRun === true;
+  // W6 item 5 (smoke validation): a scoped smoke run passes an explicit
+  // propertyId — that property must itself be operator-allowlisted, so a
+  // caller can't accidentally point a "safe" scoped run at a real
+  // homeowner's property. The unscoped nightly sweep passes no propertyId
+  // at all and is unaffected by this check.
+  if (opts?.propertyId && !isPropertyAllowlisted(opts.propertyId)) {
+    throw new Error(
+      `[FreezeRiskIncidents] propertyId ${opts.propertyId} is not in SMOKE_TEST_PROPERTY_ALLOWLIST`,
+    );
+  }
+  const smokeCorrelationId = opts?.propertyId ? generateSmokeCorrelationId('freeze-risk-incidents') : undefined;
+
   let createdOrUpdated = 0;
   let resolved = 0;
   const now = new Date();
@@ -103,6 +120,7 @@ export async function freezeRiskIncidentsJob() {
   const geoRunCache = new Map<string, Geo | null>();
 
   for await (const p of iterateAllProperties()) {
+    if (opts?.propertyId && p.id !== opts.propertyId) continue;
     const zip = (p.zipCode ?? '').trim();
     if (!zip) continue;
 
@@ -128,6 +146,11 @@ export async function freezeRiskIncidentsJob() {
         select: { id: true },
       });
       for (const incident of openFreezeIncidents) {
+        if (dryRun) {
+          resolved++;
+          logger.info(`[FreezeRiskIncidents] (dry run) Would resolve incident ${incident.id}`);
+          continue;
+        }
         await IncidentService.setStatus(incident.id, IncidentStatus.RESOLVED);
         resolved++;
       }
@@ -135,6 +158,13 @@ export async function freezeRiskIncidentsJob() {
     }
 
     const score = scoreFromMinF(minF);
+
+    if (dryRun) {
+      createdOrUpdated++;
+      logger.info(`[FreezeRiskIncidents] (dry run) Would upsert freeze incident for property ${p.id} (minF=${minF})`);
+      await sleep(200);
+      continue;
+    }
 
     await IncidentService.upsertIncident(
       {
@@ -162,6 +192,7 @@ export async function freezeRiskIncidentsJob() {
           },
           mitigationLevel: 'NONE',
           provider: 'open-meteo',
+          ...(smokeCorrelationId ? { smokeCorrelationId } : {}),
         },
         status: 'DETECTED',
         fingerprint: `property:${p.id}|FREEZE_RISK`,
@@ -208,6 +239,8 @@ export async function freezeRiskIncidentsJob() {
   }
 
   // Safety net: resolve lingering stale freeze incidents that were not refreshed recently.
+  // Scoped to opts.propertyId when set, so a scoped smoke run can't touch
+  // stale incidents on unrelated properties.
   const staleCutoff = new Date(now.getTime() - 48 * 60 * 60 * 1000);
   const staleFreezeIncidents = await prisma.incident.findMany({
     where: {
@@ -216,13 +249,19 @@ export async function freezeRiskIncidentsJob() {
       isSuppressed: false,
       status: { in: OPEN_FREEZE_STATUSES },
       updatedAt: { lt: staleCutoff },
+      ...(opts?.propertyId ? { propertyId: opts.propertyId } : {}),
     },
     select: { id: true },
   });
   for (const incident of staleFreezeIncidents) {
+    if (dryRun) {
+      resolved++;
+      logger.info(`[FreezeRiskIncidents] (dry run) Would resolve stale incident ${incident.id}`);
+      continue;
+    }
     await IncidentService.setStatus(incident.id, IncidentStatus.RESOLVED);
     resolved++;
   }
 
-  return { createdOrUpdated, resolved };
+  return { createdOrUpdated, resolved, smokeCorrelationId };
 }

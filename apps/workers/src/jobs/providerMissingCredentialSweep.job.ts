@@ -11,9 +11,19 @@
 // entries indefinitely.
 
 import { prisma } from '../lib/prisma';
+import { generateSmokeCorrelationId } from '@worker-shared/lib/smokeTestCorrelation';
 import { logger } from '../lib/logger';
 
-export async function providerMissingCredentialSweepJob() {
+export async function providerMissingCredentialSweepJob(opts?: { dryRun?: boolean }) {
+  const dryRun = opts?.dryRun === true;
+  // Not property-scoped (this sweep operates on providers, not properties —
+  // matches provider-credential-expire's supportsPropertyScope:false
+  // precedent), so there's no propertyId to key a correlation ID off of.
+  // Mirrors mortgage-rate-ingest's rationale: "opts was passed at all" (i.e.
+  // this was a manual trigger, not the unscoped scheduled tick) is itself
+  // the signal.
+  const smokeCorrelationId = opts !== undefined ? generateSmokeCorrelationId('provider-missing-credential-sweep') : undefined;
+
   const providers = await prisma.providerProfile.findMany({
     where: { status: { in: ['PENDING_APPROVAL', 'ACTIVE'] } },
     select: { id: true, serviceCategories: true },
@@ -40,6 +50,11 @@ export async function providerMissingCredentialSweepJob() {
 
     if (provider.serviceCategories.length === 0) {
       for (const alert of openAlerts) {
+        if (dryRun) {
+          alertsResolved++;
+          logger.info(`[ProviderMissingCredentialSweep] (dry run) Would resolve alert ${alert.id}`);
+          continue;
+        }
         await prisma.providerComplianceAlert.update({
           where: { id: alert.id },
           data: { status: 'RESOLVED', resolvedAt: new Date() },
@@ -78,6 +93,11 @@ export async function providerMissingCredentialSweepJob() {
       // dedupeKey format: `${providerProfileId}:MISSING_REQUIRED_CREDENTIAL:${category}:${type}`
       const [, , category, credentialType] = alert.dedupeKey.split(':');
       if (!missingKeys.has(`${category}:${credentialType}`)) {
+        if (dryRun) {
+          alertsResolved++;
+          logger.info(`[ProviderMissingCredentialSweep] (dry run) Would resolve alert ${alert.id}`);
+          continue;
+        }
         await prisma.providerComplianceAlert.update({
           where: { id: alert.id },
           data: { status: 'RESOLVED', resolvedAt: new Date() },
@@ -96,11 +116,21 @@ export async function providerMissingCredentialSweepJob() {
 
       if (existing) {
         if (existing.status === 'RESOLVED') {
+          if (dryRun) {
+            logger.info(`[ProviderMissingCredentialSweep] (dry run) Would reopen alert ${existing.id}`);
+            continue;
+          }
           await prisma.providerComplianceAlert.update({
             where: { id: existing.id },
             data: { status: 'NEW', resolvedAt: null },
           });
         }
+        continue;
+      }
+
+      if (dryRun) {
+        alertsCreated++;
+        logger.info(`[ProviderMissingCredentialSweep] (dry run) Would create alert for provider ${provider.id} (${key})`);
         continue;
       }
 
@@ -127,5 +157,5 @@ export async function providerMissingCredentialSweepJob() {
     `[ProviderMissingCredentialSweep] ${alertsCreated} alert(s) created, ${alertsResolved} resolved, ${providersFailed} provider(s) failed, across ${providers.length} provider(s)`
   );
 
-  return { alertsCreated, alertsResolved, providersFailed };
+  return { alertsCreated, alertsResolved, providersFailed, smokeCorrelationId };
 }

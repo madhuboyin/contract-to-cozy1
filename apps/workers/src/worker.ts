@@ -207,8 +207,14 @@ const CRON_HANDLERS: Record<string, (opts?: { dryRun?: boolean; propertyId?: str
     const result = await coverageLapseIncidentsJob();
     logger.info({ ...result }, `[coverage-lapse-incidents] createdOrUpdated=${result.createdOrUpdated} resolved=${result.resolved}`);
   },
-  'freeze-risk-incidents':           async () => { await freezeRiskIncidentsJob(); },
-  'severe-weather-alerts':           async () => { await severeWeatherAlertsJob(); },
+  'freeze-risk-incidents':           async (opts) => {
+    const result = await freezeRiskIncidentsJob(opts);
+    logger.info({ ...result }, `[freeze-risk-incidents] createdOrUpdated=${result.createdOrUpdated} resolved=${result.resolved}`);
+  },
+  'severe-weather-alerts':           async (opts) => {
+    const result = await severeWeatherAlertsJob(opts);
+    logger.info({ ...result }, `[severe-weather-alerts] createdOrUpdated=${result.createdOrUpdated} resolved=${result.resolved}`);
+  },
   'neighborhood-change-notifications': async () => { await neighborhoodChangeNotificationJob(); },
   'neighborhood-radar-refresh':      async () => { await refreshNeighborhoodEventsJob(); },
   'inventory-draft-cleanup':         async () => { await cleanupInventoryDraftsJob(); },
@@ -241,12 +247,18 @@ const CRON_HANDLERS: Record<string, (opts?: { dryRun?: boolean; propertyId?: str
   'shared-signal-health-audit':      async () => { await runSharedSignalHealthAuditJob(); },
   'expire-guidance-signals':         async () => { await expireGuidanceSignalsJob(); },
   'permit-inspection-reminders':     async (opts) => permitInspectionReminderJob(opts),
-  'reserve-fund-recalculation':      async () => { await recalculateReserveFundsJob(); },
+  'reserve-fund-recalculation':      async (opts) => {
+    const result = await recalculateReserveFundsJob(opts);
+    logger.info({ ...result }, `[reserve-fund-recalculation] recalculated=${result.recalculated} skipped=${result.skipped} failed=${result.failed}`);
+  },
   'reserve-fund-reconciliation':     async () => { await reserveFundReconciliationJob(); },
   'reserve-fund-balance-reminder':   async () => { await reserveFundBalanceReminderJob(); },
   'provider-credential-expire':      async () => { await providerCredentialExpireJob(); },
   'provider-credential-lapse':       async () => { await providerCredentialLapseJob(); },
-  'provider-missing-credential-sweep': async () => { await providerMissingCredentialSweepJob(); },
+  'provider-missing-credential-sweep': async (opts) => {
+    const result = await providerMissingCredentialSweepJob(opts);
+    logger.info({ ...result }, `[provider-missing-credential-sweep] created=${result.alertsCreated} resolved=${result.alertsResolved}`);
+  },
   'weekly-retention-report':         async () => { await runWeeklyRetentionReportJob(); },
 };
 

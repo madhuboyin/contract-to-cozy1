@@ -13,6 +13,8 @@ import {
   severeWeatherAlertService,
   SevereWeatherAlert,
 } from '@worker-shared/services/severeWeatherAlert.service';
+import { isPropertyAllowlisted } from '@worker-shared/config/smokeTestConfig';
+import { generateSmokeCorrelationId } from '@worker-shared/lib/smokeTestCorrelation';
 import { Geo } from '../lib/geocodeZip';
 import { getPropertyGeo } from '../lib/propertyGeo';
 import { iterateAllProperties } from '../lib/paginateProperties';
@@ -37,7 +39,17 @@ const OPEN_SEVERE_WEATHER_STATUSES: IncidentStatus[] = [
   IncidentStatus.MITIGATED,
 ];
 
-export async function severeWeatherAlertsJob() {
+export async function severeWeatherAlertsJob(
+  opts?: { dryRun?: boolean; propertyId?: string },
+) {
+  const dryRun = opts?.dryRun === true;
+  if (opts?.propertyId && !isPropertyAllowlisted(opts.propertyId)) {
+    throw new Error(
+      `[SevereWeatherAlerts] propertyId ${opts.propertyId} is not in SMOKE_TEST_PROPERTY_ALLOWLIST`,
+    );
+  }
+  const smokeCorrelationId = opts?.propertyId ? generateSmokeCorrelationId('severe-weather-alerts') : undefined;
+
   let createdOrUpdated = 0;
   let resolved = 0;
   const now = new Date();
@@ -57,6 +69,7 @@ export async function severeWeatherAlertsJob() {
   const alertsCache = new Map<string, { alerts: SevereWeatherAlert[]; fetchSucceeded: boolean }>();
 
   for await (const p of iterateAllProperties()) {
+    if (opts?.propertyId && p.id !== opts.propertyId) continue;
     const zip = (p.zipCode ?? '').trim();
     if (!zip) continue;
 
@@ -109,6 +122,11 @@ export async function severeWeatherAlertsJob() {
       }
     }
     for (const incidentId of supersededIncidentIds) {
+      if (dryRun) {
+        resolved++;
+        logger.info(`[SevereWeatherAlerts] (dry run) Would resolve superseded incident ${incidentId}`);
+        continue;
+      }
       // Same archival-hook rationale as the resolves below.
       await IncidentService.setStatus(incidentId, IncidentStatus.RESOLVED);
       resolved++;
@@ -117,6 +135,12 @@ export async function severeWeatherAlertsJob() {
     for (const alert of alerts) {
       const scoring = scoringInputsFor(alert);
       const fingerprint = `property:${p.id}|${TYPE_KEY}|${alert.nwsAlertId}`;
+
+      if (dryRun) {
+        createdOrUpdated++;
+        logger.info(`[SevereWeatherAlerts] (dry run) Would upsert incident for property ${p.id} (alert=${alert.nwsAlertId})`);
+        continue;
+      }
 
       await IncidentService.upsertIncident(
         {
@@ -151,6 +175,7 @@ export async function severeWeatherAlertsJob() {
             mitigationLevel: 'NONE',
             provider: 'nws',
             ...scoring,
+            ...(smokeCorrelationId ? { smokeCorrelationId } : {}),
           },
           status: 'DETECTED',
           fingerprint,
@@ -218,6 +243,11 @@ export async function severeWeatherAlertsJob() {
       for (const [nwsAlertId, incidentId] of openIncidentIdByAlertId) {
         if (supersededIncidentIds.has(incidentId)) continue;
         if (!activeAlertIds.has(nwsAlertId)) {
+          if (dryRun) {
+            resolved++;
+            logger.info(`[SevereWeatherAlerts] (dry run) Would resolve cleared incident ${incidentId}`);
+            continue;
+          }
           // Route through IncidentService.setStatus (not a raw prisma update) so its
           // RESOLVED-transition hook archives the linked guidance journey/signal too.
           await IncidentService.setStatus(incidentId, IncidentStatus.RESOLVED);
@@ -229,6 +259,8 @@ export async function severeWeatherAlertsJob() {
 
   // Safety net: resolve lingering stale severe-weather incidents that were not
   // refreshed recently (e.g. property dropped out of the list, job failures).
+  // Scoped to opts.propertyId when set, so a scoped smoke run can't touch
+  // stale incidents on unrelated properties.
   const staleCutoff = new Date(now.getTime() - 48 * 60 * 60 * 1000);
   const staleIncidents = await prisma.incident.findMany({
     where: {
@@ -237,16 +269,26 @@ export async function severeWeatherAlertsJob() {
       isSuppressed: false,
       status: { in: OPEN_SEVERE_WEATHER_STATUSES },
       updatedAt: { lt: staleCutoff },
+      ...(opts?.propertyId ? { propertyId: opts.propertyId } : {}),
     },
     select: { id: true },
   });
   for (const incident of staleIncidents) {
+    if (dryRun) {
+      resolved++;
+      logger.info(`[SevereWeatherAlerts] (dry run) Would resolve stale incident ${incident.id}`);
+      continue;
+    }
     await IncidentService.setStatus(incident.id, IncidentStatus.RESOLVED);
     resolved++;
   }
 
-  severeWeatherIncidentsTotal.inc({ action: 'created_or_updated' }, createdOrUpdated);
-  severeWeatherIncidentsTotal.inc({ action: 'resolved' }, resolved);
+  // Dry-run activity is hypothetical, not real — don't pollute the
+  // production metric with counts that never actually happened.
+  if (!dryRun) {
+    severeWeatherIncidentsTotal.inc({ action: 'created_or_updated' }, createdOrUpdated);
+    severeWeatherIncidentsTotal.inc({ action: 'resolved' }, resolved);
+  }
 
-  return { createdOrUpdated, resolved };
+  return { createdOrUpdated, resolved, smokeCorrelationId };
 }
