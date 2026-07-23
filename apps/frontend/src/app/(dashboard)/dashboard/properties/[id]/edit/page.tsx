@@ -1875,7 +1875,7 @@ export default function EditPropertyPage() {
                         render={({ field }) => (
                           <FormItem className="w-full">
                             <div className="flex min-h-5 items-center gap-2">
-                              <FormLabel>Replacement year</FormLabel>
+                              <FormLabel>Installed / last replaced</FormLabel>
                               {isRecommended("roofReplacementYear") ? <FieldNudgeChip variant="recommended" /> : null}
                             </div>
                             <FormControl>

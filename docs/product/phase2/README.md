@@ -274,6 +274,23 @@ Acceptance criteria:
 - New and edit property flows use the same ownership, use, occupancy, and responsibility labels.
 - A homeowner is never required to understand the internal term **Ownership Form** or raw enum values such as `FEE_SIMPLE` and `UNKNOWN`.
 
+## Original-system year confirmation
+
+Implemented July 23, 2026:
+
+- New-property setup does not silently copy **Year built** into HVAC, water-heater, or roof lifecycle fields.
+- Homeowners can explicitly confirm that each system is original, enter an approximate later installation year, or keep the year unknown.
+- A bulk **All are original — use [year]** action is available only as an explicit user choice.
+- Confirmed-original selections follow a corrected property year until the property is created; unconfirmed and **Not sure** selections persist no lifecycle year.
+- Roof wording uses **installed or last replaced** so original construction is not described as a replacement.
+- Installation years cannot predate the property year.
+
+Acceptance criteria:
+
+- Entering a property year alone does not create system-age evidence.
+- Downstream risk, maintenance, and coverage logic receives a system year only after explicit confirmation or entry.
+- The new-property advanced canvas provides the same desktop width and grouped responsibility readability as Property Details editing.
+
 ## Action-plan loading presentation
 
 Implemented July 23, 2026:

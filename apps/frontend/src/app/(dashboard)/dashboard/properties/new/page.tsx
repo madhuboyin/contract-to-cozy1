@@ -5,7 +5,7 @@ import { useState, useEffect, useRef, FormEvent, ChangeEvent } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api/client';
-import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Sparkles } from 'lucide-react';
+import { CalendarCheck2, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Sparkles } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import {
   BottomSafeAreaReserve,
@@ -75,6 +75,10 @@ interface PropertyFormData {
   // REMOVED: applianceAges: string; (Managed internally by majorAppliances state)
 }
 
+type SystemYearAnswer = 'UNANSWERED' | 'ORIGINAL' | 'REPLACED' | 'UNKNOWN';
+type SystemYearKey = 'hvacInstallYear' | 'waterHeaterInstallYear' | 'roofReplacementYear';
+type SystemYearAnswers = Record<SystemYearKey, SystemYearAnswer>;
+
 const HEATING_OPTIONS = ['HVAC', 'FURNACE', 'HEAT_PUMP', 'RADIATORS', 'UNKNOWN'];
 const COOLING_OPTIONS = ['CENTRAL_AC', 'WINDOW_AC', 'UNKNOWN'];
 const WATER_HEATER_OPTIONS = ['TANK', 'TANKLESS', 'HEAT_PUMP', 'SOLAR', 'UNKNOWN'];
@@ -103,6 +107,11 @@ export default function NewPropertyPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [systemYearAnswers, setSystemYearAnswers] = useState<SystemYearAnswers>({
+    hvacInstallYear: 'UNANSWERED',
+    waterHeaterInstallYear: 'UNANSWERED',
+    roofReplacementYear: 'UNANSWERED',
+  });
 
   // NEW STATE: Structured input for appliances (empty array initially)
   const [majorAppliances, setMajorAppliances] = useState<ApplianceInput[]>([]);
@@ -153,6 +162,21 @@ export default function NewPropertyPage() {
     };
   }, [propertyPhotoPreviewUrl]);
 
+  useEffect(() => {
+    const confirmedOriginalYear = /^\d{4}$/.test(formData.yearBuilt) ? formData.yearBuilt : '';
+    setFormData((previous) => {
+      const next = { ...previous };
+      let changed = false;
+      (Object.keys(systemYearAnswers) as SystemYearKey[]).forEach((key) => {
+        if (systemYearAnswers[key] === 'ORIGINAL' && next[key] !== confirmedOriginalYear) {
+          next[key] = confirmedOriginalYear;
+          changed = true;
+        }
+      });
+      return changed ? next : previous;
+    });
+  }, [formData.yearBuilt, systemYearAnswers]);
+
   const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value, type } = e.target;
     const target = e.target as (HTMLInputElement | HTMLTextAreaElement);
@@ -168,6 +192,31 @@ export default function NewPropertyPage() {
     setFormData(prev => ({
       ...prev,
       [name]: value,
+    }));
+  };
+
+  const setSystemYearAnswer = (key: SystemYearKey, answer: SystemYearAnswer) => {
+    setSystemYearAnswers((previous) => ({ ...previous, [key]: answer }));
+    setFormData((previous) => ({
+      ...previous,
+      [key]: answer === 'ORIGINAL' && /^\d{4}$/.test(previous.yearBuilt)
+        ? previous.yearBuilt
+        : '',
+    }));
+  };
+
+  const confirmAllSystemsOriginal = () => {
+    if (!/^\d{4}$/.test(formData.yearBuilt)) return;
+    setSystemYearAnswers({
+      hvacInstallYear: 'ORIGINAL',
+      waterHeaterInstallYear: 'ORIGINAL',
+      roofReplacementYear: 'ORIGINAL',
+    });
+    setFormData((previous) => ({
+      ...previous,
+      hvacInstallYear: previous.yearBuilt,
+      waterHeaterInstallYear: previous.yearBuilt,
+      roofReplacementYear: previous.yearBuilt,
     }));
   };
 
@@ -240,6 +289,17 @@ export default function NewPropertyPage() {
     if (!formData.propertyUse) return 'Choose how this home is used.';
     if (!formData.occupancyStatus) return 'Choose who lives here now.';
     if (!/^\d{4}$/.test(formData.yearBuilt)) return 'Year Built must be a 4-digit year.';
+    for (const [field, label] of [
+      ['hvacInstallYear', 'HVAC installation year'],
+      ['waterHeaterInstallYear', 'Water heater installation year'],
+      ['roofReplacementYear', 'Roof installation or replacement year'],
+    ] as const) {
+      const value = formData[field];
+      if (value && !/^\d{4}$/.test(value)) return `${label} must be a 4-digit year.`;
+      if (value && Number(value) < Number(formData.yearBuilt)) {
+        return `${label} cannot be earlier than the year the home was built.`;
+      }
+    }
 
     // NEW: Validate structured appliance inputs
     for (const app of majorAppliances) {
@@ -734,7 +794,7 @@ export default function NewPropertyPage() {
   const requiredRemaining = requiredProgress.length - completedRequired;
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-4 sm:px-6 sm:py-6">
+    <div className="mx-auto max-w-6xl px-4 py-4 sm:px-6 sm:py-6">
       <div className="mb-3">
         <Link
           href="/dashboard/properties"
@@ -822,34 +882,118 @@ export default function NewPropertyPage() {
           }
         >
           {showAdvanced ? (
-            <div className="space-y-3.5">
-              <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50/70 p-3.5">
-                <h3 className="mb-0 text-sm font-semibold text-slate-900">Systems</h3>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="space-y-6">
+              <section className="space-y-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                  <div>
+                    <h3 className="mb-0 text-base font-semibold text-slate-900">Systems</h3>
+                    <p className="mb-0 mt-1 text-sm text-slate-600">
+                      Confirm when major systems were installed. We only save a year after you choose an answer.
+                    </p>
+                  </div>
+                  {/^\d{4}$/.test(formData.yearBuilt) && (
+                    <button
+                      type="button"
+                      onClick={confirmAllSystemsOriginal}
+                      className="inline-flex min-h-[42px] shrink-0 items-center justify-center rounded-xl border border-emerald-200 bg-emerald-50 px-4 text-sm font-semibold text-emerald-800 transition-colors hover:bg-emerald-100"
+                    >
+                      <CalendarCheck2 className="mr-2 h-4 w-4" />
+                      All are original — use {formData.yearBuilt}
+                    </button>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div className="space-y-1.5">
                     <label htmlFor="propertySize" className="block text-sm font-medium text-slate-700">Property Size (sqft)</label>
                     <input type="number" id="propertySize" name="propertySize" value={formData.propertySize} onChange={handleChange} placeholder="e.g., 2500" inputMode="numeric" className={inputBaseClass} />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label htmlFor="hvacInstallYear" className="block text-sm font-medium text-slate-700">HVAC Install Year</label>
-                    <input type="text" id="hvacInstallYear" name="hvacInstallYear" value={formData.hvacInstallYear} onChange={handleChange} placeholder="e.g., 2018" pattern="\d{4}" maxLength={4} inputMode="numeric" autoComplete="off" className={inputBaseClass} />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label htmlFor="waterHeaterInstallYear" className="block text-sm font-medium text-slate-700">Water Heater Install Year</label>
-                    <input type="text" id="waterHeaterInstallYear" name="waterHeaterInstallYear" value={formData.waterHeaterInstallYear} onChange={handleChange} placeholder="e.g., 2020" pattern="\d{4}" maxLength={4} inputMode="numeric" autoComplete="off" className={inputBaseClass} />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label htmlFor="roofReplacementYear" className="block text-sm font-medium text-slate-700">Roof Replacement Year</label>
-                    <input type="text" id="roofReplacementYear" name="roofReplacementYear" value={formData.roofReplacementYear} onChange={handleChange} placeholder="e.g., 2010" pattern="\d{4}" maxLength={4} inputMode="numeric" autoComplete="off" className={inputBaseClass} />
                   </div>
                   <SelectInput label="Heating Type" name="heatingType" value={formData.heatingType} options={HEATING_OPTIONS} />
                   <SelectInput label="Cooling Type" name="coolingType" value={formData.coolingType} options={COOLING_OPTIONS} />
                   <SelectInput label="Roof Type" name="roofType" value={formData.roofType} options={ROOF_OPTIONS} />
                   <SelectInput label="Water Heater Type" name="waterHeaterType" value={formData.waterHeaterType} options={WATER_HEATER_OPTIONS} />
                 </div>
-              </div>
 
-              <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50/70 p-3.5">
+                <div className="grid gap-4 lg:grid-cols-3">
+                  {([
+                    ['hvacInstallYear', 'HVAC', 'When the heating or central cooling system was installed.'],
+                    ['waterHeaterInstallYear', 'Water heater', 'When the current water heater was installed.'],
+                    ['roofReplacementYear', 'Roof', 'When the roof was installed or last replaced.'],
+                  ] as const).map(([key, label, description]) => {
+                    const answer = systemYearAnswers[key];
+                    return (
+                      <div key={key} className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+                        <div className="min-h-[62px]">
+                          <p className="mb-0 font-semibold text-slate-900">{label}</p>
+                          <p className="mb-0 mt-1 text-xs leading-5 text-slate-500">{description}</p>
+                        </div>
+                        <div className="mt-3 grid grid-cols-3 gap-2" role="group" aria-label={`${label} installation timing`}>
+                          {([
+                            ['ORIGINAL', 'Original'],
+                            ['REPLACED', 'Later'],
+                            ['UNKNOWN', 'Not sure'],
+                          ] as const).map(([value, choiceLabel]) => {
+                            const selected = answer === value;
+                            return (
+                              <button
+                                key={value}
+                                type="button"
+                                aria-pressed={selected}
+                                onClick={() => setSystemYearAnswer(key, value)}
+                                className={`min-h-[38px] rounded-lg border px-2 text-xs font-semibold transition-colors ${
+                                  selected
+                                    ? 'border-emerald-600 bg-emerald-600 text-white'
+                                    : 'border-slate-200 bg-white text-slate-600 hover:border-emerald-300 hover:bg-emerald-50'
+                                }`}
+                              >
+                                {choiceLabel}
+                              </button>
+                            );
+                          })}
+                        </div>
+
+                        {answer === 'ORIGINAL' && (
+                          <div className="mt-3 flex min-h-[44px] items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 text-sm text-emerald-900">
+                            <Check className="h-4 w-4 shrink-0" />
+                            {formData.yearBuilt
+                              ? <span><strong>{formData.yearBuilt}</strong> · confirmed as original</span>
+                              : <span>Add the property year built first.</span>}
+                          </div>
+                        )}
+
+                        {answer === 'REPLACED' && (
+                          <div className="mt-3 space-y-1.5">
+                            <label htmlFor={key} className="block text-xs font-medium text-slate-700">
+                              Approximate install year
+                            </label>
+                            <input
+                              type="text"
+                              id={key}
+                              name={key}
+                              value={formData[key]}
+                              onChange={handleChange}
+                              placeholder="YYYY"
+                              pattern="\d{4}"
+                              maxLength={4}
+                              inputMode="numeric"
+                              autoComplete="off"
+                              className={inputBaseClass}
+                            />
+                          </div>
+                        )}
+
+                        {answer === 'UNKNOWN' && (
+                          <p className="mb-0 mt-3 min-h-[44px] rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs leading-5 text-slate-500">
+                            We’ll keep this unknown and ask again only when the year affects a recommendation.
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+
+              <div className="space-y-5">
                 <PropertyOwnershipResponsibilitySection
                   idPrefix="new-property"
                   ownershipForm={formData.ownershipForm}
