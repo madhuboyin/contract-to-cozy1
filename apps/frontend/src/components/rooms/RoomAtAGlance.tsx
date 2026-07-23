@@ -8,7 +8,7 @@ type RoomAtAGlanceProps = {
   docCount: number;
   valueCount: number;
   onEditProfile: () => void;
-  onManageItems: () => void;
+  onAddItem: () => void;
 };
 
 export default function RoomAtAGlance({
@@ -17,7 +17,7 @@ export default function RoomAtAGlance({
   docCount,
   valueCount,
   onEditProfile,
-  onManageItems,
+  onAddItem,
 }: RoomAtAGlanceProps) {
   const completenessPercent = useMemo(() => {
     const hasItems = itemCount > 0;
@@ -79,10 +79,10 @@ export default function RoomAtAGlance({
       </button>
       <button
         type="button"
-        onClick={onManageItems}
+        onClick={onAddItem}
         className="w-full rounded-lg bg-teal-600 py-2 text-center text-sm text-white transition-colors hover:bg-teal-700"
       >
-        Add / manage items
+        Add item
       </button>
     </aside>
   );

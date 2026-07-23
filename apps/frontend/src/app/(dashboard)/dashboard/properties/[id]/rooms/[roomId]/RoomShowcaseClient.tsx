@@ -269,6 +269,11 @@ export default function RoomShowcaseClient() {
     setDrawerOpen(true);
   }
 
+  function openNewItem() {
+    setEditingItem(null);
+    setDrawerOpen(true);
+  }
+
   function openItemById(itemId: string) {
     const found = items.find((item) => item.id === itemId);
     if (found) {
@@ -302,7 +307,7 @@ export default function RoomShowcaseClient() {
       return;
     }
     if (normalized.includes('item') || normalized.includes('appliance')) {
-      router.push(withStatusBoardParam(`/dashboard/properties/${propertyId}/inventory?roomId=${roomId}`));
+      openNewItem();
       return;
     }
     if (normalized.includes('comfort')) {
@@ -428,7 +433,7 @@ export default function RoomShowcaseClient() {
                 </div>
                 <button
                   type="button"
-                  onClick={() => router.push(itemsHref)}
+                  onClick={openNewItem}
                   className="inline-flex items-center gap-1.5 rounded-lg border border-teal-600 px-3 py-1.5 text-sm font-medium text-teal-600 transition-colors hover:bg-teal-50"
                 >
                   <Plus className="h-3.5 w-3.5" />
@@ -440,7 +445,7 @@ export default function RoomShowcaseClient() {
                 {items.length === 0 ? (
                   <button
                     type="button"
-                    onClick={() => router.push(itemsHref)}
+                    onClick={openNewItem}
                     className="col-span-full rounded-xl border-2 border-dashed border-gray-200 p-6 text-left text-sm text-gray-500 transition-colors hover:border-teal-300 hover:bg-teal-50/30"
                   >
                     No items assigned to this room yet. Add your first item to unlock room insights.
@@ -463,7 +468,7 @@ export default function RoomShowcaseClient() {
             <motion.div variants={sectionVariants} initial="hidden" animate="visible" custom={3}>
               <QuickWins
                 quickWins={quickWins}
-                onAddItem={() => router.push(itemsHref)}
+                onAddItem={openNewItem}
                 onOpenChecklist={() => router.push(checklistHref)}
               />
             </motion.div>
@@ -585,7 +590,7 @@ export default function RoomShowcaseClient() {
                 docCount={docCount}
                 valueCount={valueCount}
                 onEditProfile={() => router.push(editHref)}
-                onManageItems={() => router.push(itemsHref)}
+                onAddItem={openNewItem}
               />
 
               <div className="mt-3 rounded-2xl border border-gray-200 bg-white/80 p-3.5 shadow-xl shadow-slate-900/5 backdrop-blur-md">
@@ -649,6 +654,7 @@ export default function RoomShowcaseClient() {
           propertyId={propertyId}
           rooms={rooms}
           initialItem={editingItem}
+          initialRoomId={roomId}
           onSaved={async () => {
             setDrawerOpen(false);
             await refresh();

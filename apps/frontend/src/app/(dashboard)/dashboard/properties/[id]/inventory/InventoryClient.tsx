@@ -798,6 +798,7 @@ export default function InventoryClient() {
         propertyId={propertyId}
         rooms={rooms}
         initialItem={editingItem}
+        initialRoomId={roomIdFromUrl}
         initialCategory={categoryFromUrl}
         highlightRecallMatchId={highlightRecallMatchId}
         onSaved={async () => {

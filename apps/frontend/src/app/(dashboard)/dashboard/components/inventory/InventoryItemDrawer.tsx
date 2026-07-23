@@ -66,6 +66,7 @@ import {
   inferServicePriceRadarCategoryFromInventoryItem,
 } from '@/lib/routes/servicePriceRadar';
 import { buildHomeRiskReplayHref } from '@/lib/routes/homeRiskReplay';
+import { resolveInventoryItemRoomId } from '@/lib/inventory/resolveInventoryItemRoomId';
 import { trackHomeRiskReplayEvent } from '@/app/(dashboard)/dashboard/properties/[id]/tools/home-risk-replay/homeRiskReplayApi';
 
 const CONDITIONS: InventoryItemCondition[] = ['NEW', 'GOOD', 'FAIR', 'POOR', 'UNKNOWN'];
@@ -181,6 +182,7 @@ export default function InventoryItemDrawer(props: {
   propertyId: string;
   rooms: InventoryRoom[];
   initialItem: InventoryItem | null;
+  initialRoomId?: string | null;
   initialCategory?: InventoryItemCategory | null;
   highlightRecallMatchId?: string | null;
   onSaved: () => void;
@@ -367,7 +369,7 @@ useEffect(() => {
     setName(item?.name ?? '');
     setCategory(item?.category ?? props.initialCategory ?? 'OTHER');
     setCondition(item?.condition ?? 'UNKNOWN');
-    setRoomId(item?.roomId ?? '');
+    setRoomId(resolveInventoryItemRoomId(item?.roomId, props.initialRoomId));
 
     setManufacturer((item as any)?.manufacturer ?? '');
     setModelNumber((item as any)?.modelNumber ?? '');
@@ -420,7 +422,7 @@ useEffect(() => {
     setQrOpen(false);
     setQrError(null);
     setLastQrText('');
-  }, [props.open]);
+  }, [props.initialCategory, props.initialItem, props.initialRoomId, props.open]);
   
   useEffect(() => {
     touchedRef.current = touched;
