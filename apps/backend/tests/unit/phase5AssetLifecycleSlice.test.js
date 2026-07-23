@@ -107,7 +107,30 @@ test('worker image packages the Phase 5 financial policy dependency chain', () =
   const dockerfile = read('../../../../infrastructure/docker/workers/Dockerfile');
   assert.match(dockerfile, /services\/financialContext\/context\.ts/);
   assert.match(dockerfile, /reserveFundWorkerContext\.service\.ts/);
-  assert.match(dockerfile, /reserveFundBalanceReminder\.job\.ts src\/jobs\/reserveFundReconciliation\.job\.ts/);
+
+  // W5 replaced ~70 hand-maintained `sed -i` import-rewrite rules (the
+  // mechanism this test originally checked a literal fragment of) with a
+  // @worker-shared/* tsconfig path alias — see this Dockerfile's own
+  // comments and check-worker-import-boundary.js, which now generically
+  // guards that every @worker-shared/* import has a matching COPY
+  // destination for all worker source files, not just these. What still
+  // matters specifically for "Phase 5 financial workers": all three reserve
+  // job files actually depend on the shared reserve-fund policy via that
+  // supported alias (not a stale relative path the Docker build can't
+  // resolve). recalculateReserveFunds.job.ts is a third dependent this test
+  // never covered even under the old mechanism.
+  const expectedImport = "from '@worker-shared/services/financialContext/reserveFundWorkerContext.service'";
+  for (const jobFile of [
+    'recalculateReserveFunds.job.ts',
+    'reserveFundBalanceReminder.job.ts',
+    'reserveFundReconciliation.job.ts',
+  ]) {
+    const source = read(`../../../workers/src/jobs/${jobFile}`);
+    assert.ok(
+      source.includes(expectedImport),
+      `${jobFile} must import the shared reserve-fund policy via the @worker-shared alias`,
+    );
+  }
 });
 
 test('reserve fund persists context provenance in the Prisma model', () => {
