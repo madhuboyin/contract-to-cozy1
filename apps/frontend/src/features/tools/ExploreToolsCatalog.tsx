@@ -63,6 +63,7 @@ function ExploreCapabilityTile({
     surface: 'explore_tools',
     registryVersion,
     recommendationReason: launchContext?.recommendationReason,
+    recommendationVersion: launchContext?.recommendationVersion,
     contextVersion: launchContext?.contextVersion,
   });
   const ToolIcon = tool.icon;
@@ -80,6 +81,7 @@ function ExploreCapabilityTile({
           toolId: tool.id,
           position,
           recommendationReason: launchContext?.recommendationReason,
+          recommendationVersion: launchContext?.recommendationVersion,
           contextVersion: launchContext?.contextVersion,
           sourceActionId: launchContext?.sourceActionId,
         })}

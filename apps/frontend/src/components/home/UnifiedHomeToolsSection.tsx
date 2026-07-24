@@ -9,12 +9,11 @@ import { Button } from '@/components/ui/button';
 import { api } from '@/lib/api/client';
 import { track } from '@/lib/analytics/events';
 import { appendCapabilityLaunchContext } from '@/features/tools/capabilityCatalog';
+import {
+  capabilitySuggestionLaunchContext,
+} from '@/features/tools/capabilitySuggestionLaunchContext';
 import { getDiscoverableTool } from '@/features/tools/toolDiscoveryRegistry';
 import { useCapabilityImpression } from '@/features/tools/useCapabilityImpression';
-
-function recommendationReason(suggestion: CapabilitySuggestionDTO): string {
-  return `${suggestion.recommendationVersion}:${suggestion.reasonCode}`;
-}
 
 function CapabilitySuggestionCard({
   suggestion,
@@ -29,27 +28,23 @@ function CapabilitySuggestionCard({
 }) {
   const tool = getDiscoverableTool(suggestion.capabilityId);
   const ToolIcon = tool?.icon ?? Sparkles;
-  const reason = recommendationReason(suggestion);
+  const launchContext = capabilitySuggestionLaunchContext(
+    suggestion,
+    'unified_home',
+  );
   const impressionRef = useCapabilityImpression<HTMLAnchorElement>({
     capabilityId: suggestion.capabilityId,
     propertyId,
     surface: 'unified_home',
     registryVersion,
-    recommendationReason: reason,
+    recommendationReason: suggestion.reasonCode,
+    recommendationVersion: suggestion.recommendationVersion,
     contextVersion: suggestion.contextVersion,
   });
-  const href = appendCapabilityLaunchContext(suggestion.launch.href, {
-    launchSurface: 'unified_home',
-    sourceActionId: suggestion.source.actionId,
-    sourceEntityType: suggestion.source.entityType,
-    sourceEntityId: suggestion.source.entityId,
-    contextVersion: suggestion.contextVersion,
-    recommendationReason: reason,
-    journeyId: suggestion.source.journeyId,
-    itemId: suggestion.source.entityType === 'INVENTORY_ITEM'
-      ? suggestion.source.entityId
-      : null,
-  });
+  const href = appendCapabilityLaunchContext(
+    suggestion.launch.href,
+    launchContext,
+  );
   const readinessExplanation = suggestion.readiness.explanations[0]
     ?? (suggestion.readiness.state === 'READY'
       ? 'Ready with the current Home Record.'
@@ -66,7 +61,8 @@ function CapabilitySuggestionCard({
           surface: 'unified_home',
           toolId: suggestion.capabilityId,
           position,
-          recommendationReason: reason,
+          recommendationReason: suggestion.reasonCode,
+          recommendationVersion: suggestion.recommendationVersion,
           contextVersion: suggestion.contextVersion,
           sourceActionId: suggestion.source.actionId,
           sourceEntityType: suggestion.source.entityType,

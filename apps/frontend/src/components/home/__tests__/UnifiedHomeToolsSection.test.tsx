@@ -157,7 +157,10 @@ describe('UnifiedHomeToolsSection', () => {
     expect(link.getAttribute('href')).toContain('journeyId=journey-1');
     expect(link.getAttribute('href')).toContain('itemId=item-1');
     expect(link.getAttribute('href')).toContain(
-      'recommendationReason=capability-recommendation-v1%3AREASON_1',
+      'recommendationReason=REASON_1',
+    );
+    expect(link.getAttribute('href')).toContain(
+      'recommendationVersion=capability-recommendation-v1',
     );
 
     fireEvent.click(link);
@@ -166,6 +169,8 @@ describe('UnifiedHomeToolsSection', () => {
       sourceActionId: 'action-1',
       journeyId: 'journey-1',
       contextVersion: 'context-v3',
+      recommendationReason: 'REASON_1',
+      recommendationVersion: 'capability-recommendation-v1',
     }));
     expect(mockRecordHomeActionOpened).toHaveBeenCalledWith(
       'property-1',

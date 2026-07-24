@@ -164,7 +164,10 @@ describe('SmartContextToolsSection', () => {
     expect(link.getAttribute('href')).toContain('contextVersion=context-v8');
     expect(link.getAttribute('href')).toContain('journeyId=journey-1');
     expect(link.getAttribute('href')).toContain(
-      'recommendationReason=capability-recommendation-v1%3APROPERTY_REASON_1',
+      'recommendationReason=PROPERTY_REASON_1',
+    );
+    expect(link.getAttribute('href')).toContain(
+      'recommendationVersion=capability-recommendation-v1',
     );
 
     fireEvent.click(link);
@@ -175,6 +178,8 @@ describe('SmartContextToolsSection', () => {
         toolId: 'material-specs',
         sourceActionId: 'action-1',
         journeyId: 'journey-1',
+        recommendationReason: 'PROPERTY_REASON_1',
+        recommendationVersion: 'capability-recommendation-v1',
       }),
     );
     expect(mockRecordHomeActionOpened).toHaveBeenCalledWith(

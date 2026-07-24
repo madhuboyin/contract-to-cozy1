@@ -504,6 +504,7 @@ export type ToolLifecycleEventDTO = {
   stage: ToolLifecycleStageDTO;
   surface: string;
   recommendationReason?: string | null;
+  recommendationVersion?: string | null;
   contextVersion?: string | null;
   sourceActionId?: string | null;
   sourceEntityType?: string | null;

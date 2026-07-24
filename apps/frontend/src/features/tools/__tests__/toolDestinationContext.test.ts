@@ -103,7 +103,8 @@ describe('resolveToolDestinationContext', () => {
         sourceEntityType: 'INVENTORY_ITEM',
         sourceEntityId: 'furnace-1',
         contextVersion: 'context-v2',
-        recommendationReason: 'rule-v2:COVERAGE_GAPS_PRESENT',
+        recommendationReason: 'COVERAGE_GAPS_PRESENT',
+        recommendationVersion: 'capability-recommendation-v1',
       },
     });
 
@@ -146,5 +147,28 @@ describe('resolveToolDestinationContext', () => {
     expect(result.prefill.serviceKey).toBe('WATER_HEATER_SERVICE');
     expect(result.nextJourneyLabel).toBe('Review service prices');
     expect(result.journeyHref).toContain('journeyId=journey-1');
+  });
+
+  it('retains safe prefill but withholds resume links for unresolved source IDs', () => {
+    const result = resolveToolDestinationContext({
+      propertyId: 'property-1',
+      home: home(),
+      context: {
+        launchSurface: 'property_detail',
+        sourceActionId: 'missing-action',
+        sourceEntityType: 'INVENTORY_ITEM',
+        sourceEntityId: 'furnace-1',
+        contextVersion: 'context-v1',
+        recommendationReason: 'COVERAGE_GAPS_PRESENT',
+        recommendationVersion: 'capability-recommendation-v1',
+        journeyId: 'missing-journey',
+      },
+    });
+
+    expect(result.sourceActionFound).toBe(false);
+    expect(result.actionPlanHref).toBeNull();
+    expect(result.journeyHref).toBeNull();
+    expect(result.prefill.itemId).toBe('furnace-1');
+    expect(result.contextVersionStatus).toBe('UPDATED');
   });
 });

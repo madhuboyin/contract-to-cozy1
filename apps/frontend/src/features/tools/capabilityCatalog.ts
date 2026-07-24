@@ -51,6 +51,7 @@ export function appendCapabilityLaunchContext(
   if (context.sourceEntityId) params.set('sourceEntityId', context.sourceEntityId);
   if (context.contextVersion) params.set('contextVersion', context.contextVersion);
   if (context.recommendationReason) params.set('recommendationReason', context.recommendationReason);
+  if (context.recommendationVersion) params.set('recommendationVersion', context.recommendationVersion);
   if (context.journeyId) params.set('journeyId', context.journeyId);
   if (context.guidanceStepKey) params.set('guidanceStepKey', context.guidanceStepKey);
   if (context.guidanceSignalIntentFamily) {

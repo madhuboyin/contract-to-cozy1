@@ -207,6 +207,7 @@ export interface CtcEventProperties {
     surface: 'unified_home' | 'property_detail' | 'explore_tools' | 'command_palette' | 'workflow';
     toolIds: string[];
     recommendationReasons?: string[];
+    recommendationVersions?: string[];
     contextVersion?: string | null;
   };
   tool_discovery_clicked: {
@@ -215,6 +216,7 @@ export interface CtcEventProperties {
     toolId: string;
     position?: number;
     recommendationReason?: string | null;
+    recommendationVersion?: string | null;
     contextVersion?: string | null;
     sourceActionId?: string | null;
     sourceEntityType?: string | null;
@@ -231,6 +233,7 @@ export interface CtcEventProperties {
     toolId: string;
     sourceSurface: string;
     recommendationReason?: string | null;
+    recommendationVersion?: string | null;
     outcome: 'workflow_completed';
   };
   // Savings
@@ -323,6 +326,7 @@ export function track<E extends CtcEventName>(
       stage: 'CLICKED',
       surface: attribution.surface,
       recommendationReason: attribution.recommendationReason,
+      recommendationVersion: attribution.recommendationVersion,
       contextVersion: attribution.contextVersion,
       sourceActionId: attribution.sourceActionId,
       sourceEntityType: attribution.sourceEntityType,
@@ -338,6 +342,7 @@ export function track<E extends CtcEventName>(
       stage: 'DISCOVERED',
       surface: impression.surface,
       recommendationReason: impression.recommendationReasons?.[index] ?? null,
+      recommendationVersion: impression.recommendationVersions?.[index] ?? null,
       contextVersion: impression.contextVersion,
     })));
   }
@@ -366,6 +371,7 @@ export function track<E extends CtcEventName>(
         stage: 'OUTPUT_GENERATED',
         surface: attribution?.surface ?? 'direct',
         recommendationReason: attribution?.recommendationReason ?? null,
+        recommendationVersion: attribution?.recommendationVersion ?? null,
         contextVersion: attribution?.contextVersion ?? null,
         sourceActionId: attribution?.sourceActionId ?? null,
         sourceEntityType: attribution?.sourceEntityType ?? null,
@@ -378,6 +384,7 @@ export function track<E extends CtcEventName>(
         stage: 'COMPLETED',
         surface: attribution?.surface ?? 'direct',
         recommendationReason: attribution?.recommendationReason ?? null,
+        recommendationVersion: attribution?.recommendationVersion ?? null,
         contextVersion: attribution?.contextVersion ?? null,
         sourceActionId: attribution?.sourceActionId ?? null,
         sourceEntityType: attribution?.sourceEntityType ?? null,
@@ -393,6 +400,7 @@ export function track<E extends CtcEventName>(
         toolId: attribution.toolId,
         sourceSurface: attribution.surface,
         recommendationReason: attribution.recommendationReason ?? null,
+        recommendationVersion: attribution.recommendationVersion ?? null,
         outcome: 'workflow_completed',
       });
     }

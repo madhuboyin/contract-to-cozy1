@@ -51,10 +51,14 @@ describe('canonical capability catalog helpers', () => {
       launchSurface: 'explore_tools',
       sourceActionId: 'action-1',
       contextVersion: 'context-v3',
+      recommendationReason: 'PROJECT_CONTEXT_PRESENT',
+      recommendationVersion: 'capability-recommendation-v1',
     });
     expect(href).toContain('launchSurface=explore_tools');
     expect(href).toContain('sourceActionId=action-1');
     expect(href).toContain('contextVersion=context-v3');
+    expect(href).toContain('recommendationReason=PROJECT_CONTEXT_PRESENT');
+    expect(href).toContain('recommendationVersion=capability-recommendation-v1');
   });
 
   it('reports missing property and specialist context without hiding the capability', () => {

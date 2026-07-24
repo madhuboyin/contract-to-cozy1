@@ -18,6 +18,7 @@ test('tool lifecycle events use the durable TOOL_USED taxonomy', () => {
       stage: 'COMPLETED',
       surface: 'unified_home',
       recommendationReason: 'coverage-gap',
+      recommendationVersion: 'capability-recommendation-v1',
       completionKind: 'DECISION_RECORDED',
       sessionKey: 'session-1',
     }],
@@ -30,6 +31,7 @@ test('tool lifecycle events use the durable TOOL_USED taxonomy', () => {
   assert.equal(events[0].featureKey, 'coverage-options');
   assert.equal(events[0].source, 'unified_home');
   assert.equal(events[0].metadataJson.completionKind, 'DECISION_RECORDED');
+  assert.equal(events[0].metadataJson.recommendationVersion, 'capability-recommendation-v1');
 });
 
 test('tool lifecycle stage names remain queryable without a Prisma enum change', () => {

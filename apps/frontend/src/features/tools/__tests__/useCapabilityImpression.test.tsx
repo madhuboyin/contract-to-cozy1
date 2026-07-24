@@ -33,6 +33,8 @@ function Fixture() {
     propertyId: 'property-1',
     surface: 'explore_tools',
     registryVersion: 'registry-v1',
+    recommendationReason: 'PROJECT_CONTEXT_PRESENT',
+    recommendationVersion: 'capability-recommendation-v1',
   });
   return <div ref={ref}>Material Specs</div>;
 }
@@ -90,6 +92,8 @@ describe('useCapabilityImpression', () => {
     expect(track).toHaveBeenCalledWith('tool_discovery_impression', expect.objectContaining({
       surface: 'explore_tools',
       toolIds: ['material-specs'],
+      recommendationReasons: ['PROJECT_CONTEXT_PRESENT'],
+      recommendationVersions: ['capability-recommendation-v1'],
     }));
   });
 

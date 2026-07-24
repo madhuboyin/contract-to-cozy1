@@ -21,6 +21,7 @@ export type ToolLifecycleEventInput = {
   stage: ToolLifecycleStage;
   surface: string;
   recommendationReason?: string | null;
+  recommendationVersion?: string | null;
   contextVersion?: string | null;
   sourceActionId?: string | null;
   sourceEntityType?: string | null;
@@ -59,6 +60,7 @@ export function buildToolLifecycleAnalyticsEvents(args: {
       toolId: canonicalToolId,
       canonicalToolId,
       recommendationReason: event.recommendationReason ?? null,
+      recommendationVersion: event.recommendationVersion ?? null,
       contextVersion: event.contextVersion ?? null,
       sourceActionId: event.sourceActionId ?? null,
       sourceEntityType: event.sourceEntityType ?? null,

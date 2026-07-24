@@ -23,7 +23,8 @@ describe('tool discovery analytics', () => {
       propertyId: 'property-1',
       surface: 'unified_home',
       toolId: 'coverage-options',
-      recommendationReason: 'capability-recommendation-v1:COVERAGE_GAPS_PRESENT',
+      recommendationReason: 'COVERAGE_GAPS_PRESENT',
+      recommendationVersion: 'capability-recommendation-v1',
       journeyId: 'journey-1',
     });
     track('workflow_completed', {
@@ -35,6 +36,7 @@ describe('tool discovery analytics', () => {
     expect(pushEvent).toHaveBeenCalledWith('tool_discovery_outcome', expect.objectContaining({
       toolId: 'coverage-options',
       sourceSurface: 'unified_home',
+      recommendationVersion: 'capability-recommendation-v1',
       outcome: 'workflow_completed',
     }));
     expect(mockPersistToolLifecycleEvents).toHaveBeenCalledWith(
@@ -44,6 +46,8 @@ describe('tool discovery analytics', () => {
           toolId: 'coverage-options',
           stage: 'COMPLETED',
           journeyId: 'journey-1',
+          recommendationReason: 'COVERAGE_GAPS_PRESENT',
+          recommendationVersion: 'capability-recommendation-v1',
         }),
       ]),
     );

@@ -12,6 +12,7 @@ import {
   findDiscoverableToolByHref,
   type ToolLaunchContext,
 } from './toolDiscoveryRegistry';
+import { parseToolLaunchContext } from './capabilitySuggestionLaunchContext';
 import { hasRecentToolCompletion, persistToolLifecycleEvent } from './toolLifecycleTelemetry';
 import {
   resolveToolDestinationContext,
@@ -35,21 +36,6 @@ function readPropertyId(pathname: string, selectedPropertyId?: string | null): s
   return selectedPropertyId ?? null;
 }
 
-function normalizeSurface(value: string | null): ToolLaunchContext['launchSurface'] {
-  if (
-    value === 'unified_home' ||
-    value === 'explore_tools' ||
-    value === 'command_palette' ||
-    value === 'workflow' ||
-    value === 'guidance' ||
-    value === 'home_tools' ||
-    value === 'dashboard'
-  ) {
-    return value;
-  }
-  return value ? 'unknown' : 'direct';
-}
-
 export function useToolLaunchContext(): ToolLaunchContextValue {
   return useContext(Context);
 }
@@ -69,18 +55,7 @@ export function ToolLaunchContextBoundary({ children }: { children: ReactNode })
     return {
       toolId: tool.id,
       propertyId,
-      context: {
-        launchSurface: normalizeSurface(searchParams.get('launchSurface')),
-        sourceActionId: searchParams.get('sourceActionId'),
-        sourceEntityType: searchParams.get('sourceEntityType'),
-        sourceEntityId: searchParams.get('sourceEntityId'),
-        contextVersion: searchParams.get('contextVersion'),
-        recommendationReason: searchParams.get('recommendationReason'),
-        journeyId: searchParams.get('journeyId') ?? searchParams.get('guidanceJourneyId'),
-        guidanceStepKey: searchParams.get('guidanceStepKey'),
-        guidanceSignalIntentFamily: searchParams.get('guidanceSignalIntentFamily'),
-        itemId: searchParams.get('itemId'),
-      },
+      context: parseToolLaunchContext(searchParams),
     };
   }, [pathname, query, searchParams, selectedPropertyId]);
 
@@ -121,6 +96,7 @@ export function ToolLaunchContextBoundary({ children }: { children: ReactNode })
       toolId: baseValue.toolId,
       surface: baseValue.context.launchSurface,
       recommendationReason: baseValue.context.recommendationReason,
+      recommendationVersion: baseValue.context.recommendationVersion,
       contextVersion: baseValue.context.contextVersion,
       sourceActionId: baseValue.context.sourceActionId,
       sourceEntityType: baseValue.context.sourceEntityType,
@@ -138,6 +114,7 @@ export function ToolLaunchContextBoundary({ children }: { children: ReactNode })
       stage: 'STARTED',
       surface: lifecycle.surface,
       recommendationReason: lifecycle.recommendationReason,
+      recommendationVersion: lifecycle.recommendationVersion,
       contextVersion: lifecycle.contextVersion,
       sourceActionId: lifecycle.sourceActionId,
       sourceEntityType: lifecycle.sourceEntityType,
@@ -152,6 +129,7 @@ export function ToolLaunchContextBoundary({ children }: { children: ReactNode })
         stage: 'ABANDONED',
         surface: lifecycle.surface,
         recommendationReason: lifecycle.recommendationReason,
+        recommendationVersion: lifecycle.recommendationVersion,
         contextVersion: lifecycle.contextVersion,
         sourceActionId: lifecycle.sourceActionId,
         sourceEntityType: lifecycle.sourceEntityType,

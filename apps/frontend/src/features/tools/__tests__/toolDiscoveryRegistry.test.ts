@@ -64,7 +64,8 @@ describe('toolDiscoveryRegistry', () => {
       sourceActionId: 'action-1',
       sourceEntityId: 'furnace-1',
       contextVersion: 'context-v2',
-      recommendationReason: 'rule-v2:COVERAGE_GAPS_PRESENT',
+      recommendationReason: 'COVERAGE_GAPS_PRESENT',
+      recommendationVersion: 'capability-recommendation-v1',
     });
 
     expect(href).toContain('/dashboard/properties/property-1/tools/coverage-options');
@@ -72,6 +73,8 @@ describe('toolDiscoveryRegistry', () => {
     expect(href).toContain('sourceActionId=action-1');
     expect(href).toContain('sourceEntityId=furnace-1');
     expect(href).toContain('contextVersion=context-v2');
+    expect(href).toContain('recommendationReason=COVERAGE_GAPS_PRESENT');
+    expect(href).toContain('recommendationVersion=capability-recommendation-v1');
   });
 
   it('reports missing inputs without hiding a released tool', () => {

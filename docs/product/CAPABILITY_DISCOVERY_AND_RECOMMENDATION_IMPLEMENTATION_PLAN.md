@@ -93,6 +93,7 @@ Status as of July 24, 2026:
 | CAP-501 Unified Home renderer | Complete | Unified Home renders only the bounded server suggestion envelope with reviewed why-now, outcome, readiness, server launch destination, actual-view impressions, full launch lineage, source-action open recording, and an Explore Tools fallback |
 | CAP-502 property smart-context surface | Complete | Property detail requests the shared evaluator with the PROPERTY surface, renders a maximum of three server suggestions, records property-specific exposure and launch lineage, and retains the All Tools fallback on empty or failed responses |
 | CAP-503 selector retirement | Complete | Both frontend recommendation selectors and their selector-only tests are deleted; inventory classification now reads canonical backend definition groups, CI prevents selector restoration or imports, and server evaluator plus render-contract tests own coverage |
+| CAP-504 launch-context verification | Complete | A shared mapper and destination parser preserve source action, entity, context, journey, item, surface, reason, and recommendation version for every server source type; telemetry retains the same lineage and resume links are emitted only for authorized sources resolved from current responses |
 
 Explore Tools and homeowner command search now use the canonical catalog by default. Set
 `CAPABILITY_CATALOG_SOURCE=legacy` only for the temporary internal-beta rollback.
@@ -1050,6 +1051,14 @@ Extend existing launch-context tests for all server suggestions:
 - surface;
 - recommendation reason and version; and
 - safe source-resume behavior.
+
+Implementation: all server-rendered suggestion cards use one launch-context
+mapper and destinations use its paired parser. Recommendation reason and
+recommendation model version remain separate URL and lifecycle fields.
+Table-driven contract tests cover all six server source kinds and both primary
+surfaces. Source-action and journey resume links are withheld unless the
+referenced source is resolved from the current authorized Home or journey
+response; non-navigating entity prefill remains available.
 
 ### Cutover controls
 

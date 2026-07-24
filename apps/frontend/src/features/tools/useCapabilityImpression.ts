@@ -14,6 +14,7 @@ type CapabilityImpressionInput = {
     | 'workflow';
   registryVersion: string;
   recommendationReason?: string | null;
+  recommendationVersion?: string | null;
   contextVersion?: string | null;
   enabled?: boolean;
 };
@@ -77,6 +78,9 @@ export function useCapabilityImpression<T extends HTMLElement>(
         recommendationReasons: current.recommendationReason
           ? [current.recommendationReason]
           : undefined,
+        recommendationVersions: current.recommendationVersion
+          ? [current.recommendationVersion]
+          : undefined,
         contextVersion: current.contextVersion,
       });
     };
@@ -114,6 +118,7 @@ export function useCapabilityImpression<T extends HTMLElement>(
     input.enabled,
     input.propertyId,
     input.recommendationReason,
+    input.recommendationVersion,
     input.registryVersion,
     input.surface,
   ]);

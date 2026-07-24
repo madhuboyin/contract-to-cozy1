@@ -94,13 +94,11 @@ export function resolveToolDestinationContext(args: {
     journey?.explanation?.why ??
     journey?.strategicAdvice ??
     null;
-  const actionId = sourceAction?.id ?? context.sourceActionId ?? null;
-  const actionPlanHref = actionId
-    ? `/dashboard/properties/${encodeURIComponent(propertyId)}/action-plan?focusActionId=${encodeURIComponent(actionId)}`
+  const actionPlanHref = sourceAction
+    ? `/dashboard/properties/${encodeURIComponent(propertyId)}/action-plan?focusActionId=${encodeURIComponent(sourceAction.id)}`
     : null;
-  const resolvedJourneyId = journey?.id ?? context.journeyId ?? null;
-  const journeyHref = resolvedJourneyId
-    ? `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/guidance-overview?journeyId=${encodeURIComponent(resolvedJourneyId)}`
+  const journeyHref = journey
+    ? `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/guidance-overview?journeyId=${encodeURIComponent(journey.id)}`
     : null;
 
   return {

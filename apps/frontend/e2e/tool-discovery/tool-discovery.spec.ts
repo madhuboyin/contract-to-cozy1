@@ -14,7 +14,10 @@ test('Unified Home tools preserve recommendation and property context', async ({
   expect(coverageHref).toContain('sourceEntityId=furnace-1');
   expect(coverageHref).toContain('contextVersion=tool-context-v2');
   expect(coverageHref).toContain(
-    'recommendationReason=capability-recommendation-v1%3ACOVERAGE_GAPS_PRESENT',
+    'recommendationReason=COVERAGE_GAPS_PRESENT',
+  );
+  expect(coverageHref).toContain(
+    'recommendationVersion=capability-recommendation-v1',
   );
 });
 
