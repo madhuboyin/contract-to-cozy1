@@ -88,6 +88,7 @@ Status as of July 24, 2026:
 | CAP-405 ranking and diversity | Complete | Deterministic 100-point ranking exposes six bounded diagnostic components, applies a useful-result threshold, caps Home at three, and enforces capability, source, and outcome diversity with stable tie-breaking |
 | CAP-406 explanation builder | Complete | Narrow homeowner DTO uses reviewed templates and bounded structured context for why-now, outcome, readiness, authorized evidence, versions, source lineage, score band, and fully resolved same-origin launch paths without exposing raw ranking or policy diagnostics |
 | CAP-407 evaluator API | Complete | Authenticated property-scoped GET endpoint composes CAP-400–406 for five bounded surfaces using canonical actions, authorized context, optional workflow sources, lifecycle history, rollout availability, source scoping, private no-store caching, and fail-closed dependency behavior |
+| CAP-408 golden-home ranking fixtures | Complete | Nine deterministic homes cover every contextual capability and assert exact eligibility, needs-context behavior, bounded top sets, reviewed reasons, source lineage, governance state, and duplicate source-action suppression through the complete evaluator pipeline |
 
 Explore Tools and homeowner command search now use the canonical catalog by default. Set
 `CAPABILITY_CATALOG_SOURCE=legacy` only for the temporary internal-beta rollback.
@@ -932,6 +933,12 @@ For each golden home define:
 - readiness explanation; and
 - governance state.
 
+Implementation: `capabilityGoldenRanking.ts` runs all nine canonical homes
+through CAP-400–407 with stable timestamps and structured sources. The
+expectation contract covers all 24 contextual capabilities and deliberately
+injects an unavailable capability plus a source-action CTA duplicate into every
+home so both negative paths remain executable.
+
 ### Exit criteria
 
 - Ranking is deterministic.
@@ -946,7 +953,7 @@ For each golden home define:
 
 ```bash
 node --test apps/backend/tests/unit/toolCapabilityRecommendation.test.js
-node --test apps/backend/tests/unit/toolCapabilityGoldenHomes.test.js
+node --test apps/backend/tests/unit/capabilityGoldenRanking.test.js
 npm -C apps/backend run build
 ```
 

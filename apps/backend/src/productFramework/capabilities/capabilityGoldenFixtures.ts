@@ -5,10 +5,6 @@ export type CapabilityGoldenFixture = {
   needsContextCapabilityIds: readonly string[];
 };
 
-/**
- * Classification/readiness fixtures only. Ranking expectations are added in
- * WS4 after the evaluator and diversity policy exist.
- */
 export const CAPABILITY_GOLDEN_FIXTURES: readonly CapabilityGoldenFixture[] = [
   {
     id: 'older-home',
@@ -83,4 +79,179 @@ export const CAPABILITY_GOLDEN_FIXTURES: readonly CapabilityGoldenFixture[] = [
     contextualCapabilityIds: ['material-specs'],
     needsContextCapabilityIds: ['material-specs'],
   },
+];
+
+export type CapabilityGoldenRankingExpectation = {
+  fixtureId: string;
+  ineligibleCapabilityId: string;
+  duplicateCapabilityId: string;
+  expectedTopCapabilityIds: readonly string[];
+  expectedReasonCodes: Readonly<Record<string, string>>;
+  expectedSourceIdentities: Readonly<Record<string, {
+    kind: 'JOURNEY' | 'PROJECT';
+    id: string;
+  }>>;
+  expectedReadinessExplanations: Readonly<Record<string, readonly string[]>>;
+};
+
+function journeyId(fixtureId: string, capabilityId: string): string {
+  return `journey-${fixtureId}-${capabilityId}`;
+}
+
+function expectation(input: Omit<
+  CapabilityGoldenRankingExpectation,
+  'expectedSourceIdentities' | 'expectedReadinessExplanations'
+> & {
+  projectSourceCapabilityIds?: readonly string[];
+  readinessExplanations?: Readonly<Record<string, readonly string[]>>;
+}): CapabilityGoldenRankingExpectation {
+  return {
+    fixtureId: input.fixtureId,
+    ineligibleCapabilityId: input.ineligibleCapabilityId,
+    duplicateCapabilityId: input.duplicateCapabilityId,
+    expectedTopCapabilityIds: input.expectedTopCapabilityIds,
+    expectedReasonCodes: input.expectedReasonCodes,
+    expectedSourceIdentities: Object.fromEntries(
+      input.expectedTopCapabilityIds.map((capabilityId) => {
+        const projectSource = input.projectSourceCapabilityIds?.includes(
+          capabilityId,
+        );
+        return [capabilityId, {
+          kind: projectSource ? 'PROJECT' : 'JOURNEY',
+          id: projectSource
+            ? `project-${input.fixtureId}-${capabilityId}`
+            : journeyId(input.fixtureId, capabilityId),
+        }];
+      }),
+    ),
+    expectedReadinessExplanations: Object.fromEntries(
+      input.expectedTopCapabilityIds.map((capabilityId) => [
+        capabilityId,
+        input.readinessExplanations?.[capabilityId] ?? [],
+      ]),
+    ),
+  };
+}
+
+/**
+ * Executable CAP-408 expectations. The contextualCapabilityIds on the matching
+ * fixture are the exact eligible set; needsContextCapabilityIds are the exact
+ * safe-partial set. Every scenario also adds one unavailable candidate and one
+ * duplicate source-action CTA to prove those paths do not affect the top set.
+ */
+export const CAPABILITY_GOLDEN_RANKING_EXPECTATIONS:
+readonly CapabilityGoldenRankingExpectation[] = [
+  expectation({
+    fixtureId: 'older-home',
+    ineligibleCapabilityId: 'seller-prep',
+    duplicateCapabilityId: 'break-even',
+    expectedTopCapabilityIds: ['break-even', 'capital-timeline', 'cost-growth'],
+    expectedReasonCodes: {
+      'break-even': 'MATERIAL_DECISION_ACTIVE',
+      'capital-timeline': 'TRACKED_SYSTEMS_AVAILABLE',
+      'cost-growth': 'FINANCIAL_PRESSURE_ACTIVE',
+    },
+  }),
+  expectation({
+    fixtureId: 'sparse-new-home',
+    ineligibleCapabilityId: 'coverage-options',
+    duplicateCapabilityId: 'home-digital-twin',
+    expectedTopCapabilityIds: ['hidden-asset-finder', 'home-digital-twin'],
+    expectedReasonCodes: {
+      'hidden-asset-finder': 'PROPERTY_BENEFIT_EXPLORATION',
+      'home-digital-twin': 'PROPERTY_CONTEXT_INCOMPLETE',
+    },
+    readinessExplanations: {
+      'hidden-asset-finder': ['Add at least one home system.'],
+      'home-digital-twin': ['Add at least one verified Home Record fact.'],
+    },
+  }),
+  expectation({
+    fixtureId: 'property-preparing-for-sale',
+    ineligibleCapabilityId: 'home-digital-will',
+    duplicateCapabilityId: 'sell-hold-rent',
+    expectedTopCapabilityIds: ['sell-hold-rent', 'seller-prep'],
+    expectedReasonCodes: {
+      'sell-hold-rent': 'OWNERSHIP_OUTLOOK_SHIFT',
+      'seller-prep': 'SELLER_JOURNEY_ACTIVE',
+    },
+  }),
+  expectation({
+    fixtureId: 'completed-renovation',
+    ineligibleCapabilityId: 'hoa-compliance',
+    duplicateCapabilityId: 'capital-timeline',
+    expectedTopCapabilityIds: [
+      'material-specs',
+      'capital-timeline',
+      'project-tracker',
+    ],
+    expectedReasonCodes: {
+      'material-specs': 'MATERIAL_RECORD_NEEDED',
+      'capital-timeline': 'TRACKED_SYSTEMS_AVAILABLE',
+      'project-tracker': 'PROJECT_EXECUTION_STARTED',
+    },
+    projectSourceCapabilityIds: ['material-specs'],
+  }),
+  expectation({
+    fixtureId: 'minor-inspection-findings',
+    ineligibleCapabilityId: 'coverage-options',
+    duplicateCapabilityId: 'diy',
+    expectedTopCapabilityIds: [
+      'diy',
+      'inspection-hub',
+      'service-price-radar',
+    ],
+    expectedReasonCodes: {
+      diy: 'LOW_RISK_DIY_ELIGIBLE',
+      'inspection-hub': 'INSPECTION_DOCUMENT_AVAILABLE',
+      'service-price-radar': 'SERVICE_DECISION_ACTIVE',
+    },
+  }),
+  expectation({
+    fixtureId: 'hoa-governed-renovation',
+    ineligibleCapabilityId: 'diy',
+    duplicateCapabilityId: 'hoa-compliance',
+    expectedTopCapabilityIds: [
+      'hoa-compliance',
+      'home-renovation-risk-advisor',
+      'permits',
+    ],
+    expectedReasonCodes: {
+      'hoa-compliance': 'HOA_PROJECT_APPROVAL_REQUIRED',
+      'home-renovation-risk-advisor': 'ACTIVE_PROJECT_MOMENT',
+      permits: 'PERMIT_RELEVANT_PROJECT',
+    },
+  }),
+  expectation({
+    fixtureId: 'important-documents-and-trusted-contacts',
+    ineligibleCapabilityId: 'seller-prep',
+    duplicateCapabilityId: 'home-digital-will',
+    expectedTopCapabilityIds: ['home-digital-will'],
+    expectedReasonCodes: {
+      'home-digital-will': 'TRUSTED_TRANSFER_PREPARATION',
+    },
+  }),
+  expectation({
+    fixtureId: 'plant-suitable-room',
+    ineligibleCapabilityId: 'material-specs',
+    duplicateCapabilityId: 'plant-advisor',
+    expectedTopCapabilityIds: ['plant-advisor'],
+    expectedReasonCodes: {
+      'plant-advisor': 'PLANT_SUITABLE_ROOM_CONTEXT',
+    },
+  }),
+  expectation({
+    fixtureId: 'insufficient-material-context',
+    ineligibleCapabilityId: 'plant-advisor',
+    duplicateCapabilityId: 'material-specs',
+    expectedTopCapabilityIds: ['material-specs'],
+    expectedReasonCodes: {
+      'material-specs': 'MATERIAL_RECORD_NEEDED',
+    },
+    readinessExplanations: {
+      'material-specs': [
+        'Choose a project, room, or repair context before recording materials.',
+      ],
+    },
+  }),
 ];
