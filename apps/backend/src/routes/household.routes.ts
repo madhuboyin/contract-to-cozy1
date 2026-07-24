@@ -10,7 +10,6 @@ import {
   getMyMembership,
   updateMember,
   removeMember,
-  updateMyNotificationPrefs,
   sendInvite,
   listInvites,
   revokeInvite,
@@ -23,7 +22,6 @@ import {
 import {
   SendInviteSchema,
   UpdateMemberRoleSchema,
-  UpdateNotificationPrefsSchema,
   AssignTaskSchema,
 } from '../validators/household.validators';
 
@@ -52,13 +50,6 @@ router.get(
   '/properties/:propertyId/household/members/me',
   propertyAuthMiddleware,
   getMyMembership
-);
-
-router.patch(
-  '/properties/:propertyId/household/members/me/notifications',
-  propertyAuthMiddleware,
-  validateBody(UpdateNotificationPrefsSchema),
-  updateMyNotificationPrefs
 );
 
 router.patch(

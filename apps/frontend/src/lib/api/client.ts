@@ -4245,16 +4245,6 @@ class APIClient {
     await this.delete(`/api/properties/${propertyId}/household/members/${memberId}`);
   }
 
-  async updateMyNotificationPreferences(
-    propertyId: string,
-    prefs: Partial<import('@/types').HouseholdNotificationPrefs>,
-  ): Promise<void> {
-    await this.patch(
-      `/api/properties/${propertyId}/household/members/me/notifications`,
-      prefs,
-    );
-  }
-
   async sendHouseholdInvite(
     propertyId: string,
     payload: import('@/types').SendInvitePayload,

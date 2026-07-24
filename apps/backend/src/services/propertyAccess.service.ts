@@ -60,8 +60,6 @@ export async function resolvePropertyAccess(
         userId,
         role: 'OWNER',
         isPrimaryOwner: true,
-        notifyOnRiskChange: true,
-        notifyOnGuidanceUpdate: true,
         joinedAt: new Date(),
       },
       update: {},

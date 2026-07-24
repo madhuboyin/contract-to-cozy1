@@ -61,7 +61,7 @@ test('all notification producers use the canonical service and homeowner control
   ];
   for (const file of producerFiles) {
     const content = source(file);
-    assert.match(content, /NotificationService\.create/);
+    assert.match(content, /(?:NotificationService|notificationService)\.create/);
     assert.doesNotMatch(content, /notification\.create\(/);
   }
   const page = source('../../../frontend/src/app/(dashboard)/dashboard/notifications/page.tsx');
@@ -69,8 +69,34 @@ test('all notification producers use the canonical service and homeowner control
   assert.match(page, /PREFERENCE_CATEGORIES/);
   assert.match(page, /email is the only configurable external channel/i);
   assert.match(page, /Quiet hours start/);
-  assert.match(page, /Mute type/);
+  assert.match(page, /Mute email type/);
   assert.match(page, /Already handled/);
+});
+
+test('household notification controls use the canonical preference system only', () => {
+  const legacyReader = path.resolve(
+    __dirname,
+    '../../src/services/householdNotification.service.ts',
+  );
+  assert.equal(fs.existsSync(legacyReader), false);
+
+  const schema = source('../../prisma/schema.prisma');
+  const householdMember = schema.match(/model HouseholdMember \{[\s\S]*?\n\}/)?.[0] || '';
+  assert.doesNotMatch(householdMember, /notifyOn[A-Z]/);
+
+  const routes = source('../../src/routes/household.routes.ts');
+  assert.doesNotMatch(routes, /members\/me\/notifications|UpdateNotificationPrefsSchema/);
+
+  const householdPage = source(
+    '../../../frontend/src/app/(dashboard)/dashboard/properties/[id]/household/page.tsx',
+  );
+  const notificationPage = source(
+    '../../../frontend/src/app/(dashboard)/dashboard/notifications/page.tsx',
+  );
+  assert.match(householdPage, /\/dashboard\/notifications\?propertyId=/);
+  assert.doesNotMatch(householdPage, /notifyOn[A-Z]|updateMyNotificationPreferences/);
+  assert.match(notificationPage, /searchParams\.get\('propertyId'\)/);
+  assert.match(notificationPage, /propertyId,\s*\n\s*category:/);
 });
 
 test('Grounded Ask validates proposals and requires property context for material actions', () => {

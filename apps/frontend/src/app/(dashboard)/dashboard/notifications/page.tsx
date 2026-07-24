@@ -2,7 +2,7 @@
 'use client';
 
 import React from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { BellOff, Check, Circle, RotateCcw, ThumbsDown, ThumbsUp } from 'lucide-react';
 import { useNotifications } from '@/lib/notifications/NotificationContext';
 import { api } from '@/lib/api/client';
@@ -100,6 +100,9 @@ function renderSignalBadge(n: Notification) {
 
 export default function NotificationsPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const propertyId = searchParams.get('propertyId');
+  const preferenceScopeKey = propertyId ? `PROPERTY:${propertyId}` : 'GLOBAL';
   const { toast } = useToast();
   const { notifications, markRead, markAllRead, refresh } = useNotifications();
   const [selectedCategory, setSelectedCategory] = React.useState('ALL');
@@ -113,7 +116,7 @@ export default function NotificationsPage() {
     void refresh();
     void api.listNotificationPreferences().then((result) => {
       if (!result.success) return;
-      const preference = result.data.find((item: any) => item.scopeKey === 'GLOBAL' && item.category === selectedCategory && item.channel === 'EMAIL');
+      const preference = result.data.find((item: any) => item.scopeKey === preferenceScopeKey && item.category === selectedCategory && item.channel === 'EMAIL');
       const fallback = result.data.find((item: any) => item.scopeKey === 'GLOBAL' && item.category === 'ALL' && item.channel === 'EMAIL');
       const resolved = preference ?? fallback;
       if (resolved) {
@@ -126,12 +129,13 @@ export default function NotificationsPage() {
         setQuietEnd('07:00');
       }
     }).catch(() => undefined);
-  }, [refresh, selectedCategory]);
+  }, [preferenceScopeKey, refresh, selectedCategory]);
 
   const savePreference = async () => {
     setSavingPreference(true);
     try {
       await api.updateNotificationPreference({
+        propertyId,
         category: selectedCategory, channel: 'EMAIL', enabled: cadence !== 'MUTED', cadence,
         quietStart, quietEnd, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
       });
@@ -273,7 +277,9 @@ export default function NotificationsPage() {
     >
       <MobileCard className="space-y-3">
         <div>
-          <p className="font-semibold text-slate-900">Notification preferences</p>
+          <p className="font-semibold text-slate-900">
+            {propertyId ? 'Notification preferences for this home' : 'Notification preferences'}
+          </p>
           <p className="text-sm text-slate-600">Routine updates are bundled into your Home Brief. Urgent safety, active damage, material deadlines, and workflow changes can still arrive immediately.</p>
         </div>
         <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">

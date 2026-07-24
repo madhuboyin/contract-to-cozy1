@@ -7,7 +7,7 @@ import { reconcilePlanningOutput } from './reconciliation';
 
 export type PlanningContextFeature =
   | 'SELLER_PREP'
-  | 'HOME_BUYER'
+  | 'BUYER_ACQUISITION'
   | 'MOVING_PLAN'
   | 'NEIGHBORHOOD_RADAR'
   | 'LOCAL_UPDATES'
@@ -20,7 +20,7 @@ export type PlanningContextFeature =
 
 export const PLANNING_FEATURE_SCOPES: Record<PlanningContextFeature, PropertyContextScope[]> = {
   SELLER_PREP: ['CORE', 'LOCATION', 'INSPECTION', 'COMPLIANCE', 'PROJECTS', 'COVERAGE', 'EVENTS'],
-  HOME_BUYER: ['CORE', 'PRODUCT_CONTEXT'],
+  BUYER_ACQUISITION: ['CORE', 'PRODUCT_CONTEXT'],
   MOVING_PLAN: ['CORE', 'LOCATION', 'EVENTS'],
   NEIGHBORHOOD_RADAR: ['CORE', 'LOCATION', 'EVENTS'],
   LOCAL_UPDATES: ['CORE', 'LOCATION'],
@@ -38,7 +38,7 @@ const PLANNING_FEATURE_FACT_KEYS: Record<PlanningContextFeature, string[]> = {
     'inspection.openFindings', 'compliance.activePermits', 'compliance.openUnpermittedFlags',
     'projects.activeProjects', 'coverage.insurancePolicies',
   ],
-  HOME_BUYER: ['product.entryPath', 'product.ownershipState', 'core.activationStatus'],
+  BUYER_ACQUISITION: ['product.entryPath', 'product.ownershipState', 'core.activationStatus'],
   MOVING_PLAN: ['core.propertyUse', 'core.occupancyStatus', 'location.state', 'location.zipCode', 'location.city'],
   NEIGHBORHOOD_RADAR: ['location.zipCode', 'location.geocoded', 'core.propertyUse', 'events.activeRadarMatches'],
   LOCAL_UPDATES: ['location.city', 'location.state', 'location.zipCode', 'core.dwellingType'],
@@ -73,7 +73,7 @@ function featureContextVersion(
 
 const PRIMARY_DECISION_BY_FEATURE: Record<PlanningContextFeature, PlanningDecisionKey> = {
   SELLER_PREP: 'sellerPrepPlanning',
-  HOME_BUYER: 'homeBuyerWorkflow',
+  BUYER_ACQUISITION: 'homeBuyerWorkflow',
   MOVING_PLAN: 'movingPlanning',
   NEIGHBORHOOD_RADAR: 'neighborhoodRelevance',
   LOCAL_UPDATES: 'localUpdatesTargeting',

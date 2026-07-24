@@ -11892,15 +11892,6 @@ model HouseholdMember {
   isPrimaryOwner Boolean @default(false)
   displayName    String?
 
-  // Per-member notification preferences
-  notifyOnRiskChange     Boolean @default(false)
-  notifyOnTaskDue        Boolean @default(true)
-  notifyOnTaskAssigned   Boolean @default(true)
-  notifyOnGuidanceUpdate Boolean @default(false)
-  notifyOnIncident       Boolean @default(true)
-  notifyOnHomeEvent      Boolean @default(false)
-  notifyOnAlerts         Boolean @default(true)
-
   joinedAt  DateTime @default(now())
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

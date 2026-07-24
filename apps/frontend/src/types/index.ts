@@ -3791,16 +3791,6 @@ export type HouseholdActivityType =
   | 'HOME_EVENT_LOGGED' | 'INVENTORY_ITEM_ADDED' | 'INCIDENT_UPDATED'
   | 'CLAIM_FILED' | 'DOCUMENT_UPLOADED' | 'GUIDANCE_STEP_COMPLETED' | 'NOTE_ADDED';
 
-export interface HouseholdNotificationPrefs {
-  notifyOnRiskChange: boolean;
-  notifyOnTaskDue: boolean;
-  notifyOnTaskAssigned: boolean;
-  notifyOnGuidanceUpdate: boolean;
-  notifyOnIncident: boolean;
-  notifyOnHomeEvent: boolean;
-  notifyOnAlerts: boolean;
-}
-
 export interface HouseholdMemberUser {
   id: string;
   firstName: string;
@@ -3817,13 +3807,6 @@ export interface HouseholdMember {
   role: HouseholdRole;
   isPrimaryOwner: boolean;
   displayName?: string | null;
-  notifyOnRiskChange: boolean;
-  notifyOnTaskDue: boolean;
-  notifyOnTaskAssigned: boolean;
-  notifyOnGuidanceUpdate: boolean;
-  notifyOnIncident: boolean;
-  notifyOnHomeEvent: boolean;
-  notifyOnAlerts: boolean;
   joinedAt: string;
   createdAt: string;
   updatedAt: string;

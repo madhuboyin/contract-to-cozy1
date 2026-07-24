@@ -110,7 +110,6 @@ export const ROUTE_DISPOSITION_RULES = [
       '/dashboard/home-savings',
       '/dashboard/inventory',
       '/dashboard/maintenance',
-      '/dashboard/replace-repair',
       '/dashboard/risk-premium-optimizer',
       '/dashboard/vault',
     ]),
@@ -146,7 +145,7 @@ export const ROUTE_DISPOSITION_RULES = [
     id: 'contextual-execution-and-marketplace',
     disposition: 'CONTEXTUAL_ONLY',
     rationale: 'Execution, provider, pricing, and decision surfaces are invoked from a scoped action or journey.',
-    matches: matches(/^\/dashboard\/(providers|community-events|hoa|inspection-report|permits|quote-comparison)(?:\/|$)|^\/dashboard\/properties\/\[id\]\/(financial-efficiency|inspection-hub)(?:\/|$)/),
+    matches: matches(/^\/dashboard\/(providers|community-events|hoa|inspection-report|permits|quote-comparison|replace-repair)(?:\/|$)|^\/dashboard\/properties\/\[id\]\/(financial-efficiency|inspection-hub)(?:\/|$)/),
   },
   {
     id: 'validate-placement',
@@ -194,7 +193,6 @@ function auditRedirectImplementations(results) {
     /\bpermanentRedirect\s*\(/,
     /<JobHubRedirectPage\b/,
     /<PropertyScopedToolRedirectPage\b/,
-    /\brouter\.replace\s*\(/,
   ];
 
   return results

@@ -4,24 +4,13 @@ import { useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, UserPlus, ChevronDown, ChevronUp, Bell } from 'lucide-react';
-import type { HouseholdInvite, HouseholdMember, HouseholdNotificationPrefs } from '@/types';
+import type { HouseholdInvite, HouseholdMember } from '@/types';
 import { api } from '@/lib/api/client';
 import { Button } from '@/components/ui/button';
-import { Switch } from '@/components/ui/switch';
 import { toast } from '@/components/ui/use-toast';
 import MemberList from '@/components/features/household/MemberList';
 import InviteMemberSheet from '@/components/features/household/InviteMemberSheet';
 import { formatRelativeTime, ROLE_LABELS } from '@/components/features/household/HouseholdUtils';
-
-const NOTIF_PREFS: { key: keyof HouseholdNotificationPrefs; label: string }[] = [
-  { key: 'notifyOnRiskChange', label: 'Risk level changes' },
-  { key: 'notifyOnTaskDue', label: 'Tasks due' },
-  { key: 'notifyOnTaskAssigned', label: 'Tasks assigned to me' },
-  { key: 'notifyOnIncident', label: 'New incidents' },
-  { key: 'notifyOnGuidanceUpdate', label: 'Guidance updates' },
-  { key: 'notifyOnHomeEvent', label: 'Home events' },
-  { key: 'notifyOnAlerts', label: 'Smart home alerts' },
-];
 
 export default function HouseholdPage() {
   const { id: propertyId } = useParams<{ id: string }>();
@@ -33,8 +22,6 @@ export default function HouseholdPage() {
   const [loading, setLoading] = useState(true);
   const [inviteSheetOpen, setInviteSheetOpen] = useState(false);
   const [invitesExpanded, setInvitesExpanded] = useState(false);
-  const [notifsExpanded, setNotifsExpanded] = useState(false);
-  const [savingPrefs, setSavingPrefs] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -67,21 +54,6 @@ export default function HouseholdPage() {
       await load();
     } catch {
       toast({ title: 'Failed to revoke invite', variant: 'destructive' });
-    }
-  };
-
-  const handleToggleNotif = async (key: keyof HouseholdNotificationPrefs, value: boolean) => {
-    if (!myMembership) return;
-    setMyMembership((prev) => prev ? { ...prev, [key]: value } : prev);
-    setSavingPrefs(true);
-    try {
-      await api.updateMyNotificationPreferences(propertyId, { [key]: value });
-    } catch {
-      // Revert on failure
-      setMyMembership((prev) => prev ? { ...prev, [key]: !value } : prev);
-      toast({ title: 'Failed to update preference', variant: 'destructive' });
-    } finally {
-      setSavingPrefs(false);
     }
   };
 
@@ -159,33 +131,27 @@ export default function HouseholdPage() {
               </section>
             )}
 
-            {/* Notification preferences */}
+            {/* Canonical notification preferences */}
             {myMembership && (
-              <section className="bg-white rounded-2xl p-4 shadow-sm">
-                <button
-                  className="w-full flex items-center justify-between"
-                  onClick={() => setNotifsExpanded((p) => !p)}
-                >
-                  <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide flex items-center gap-2">
+              <section className="bg-white rounded-2xl p-4 shadow-sm space-y-3">
+                <div className="flex items-start gap-3">
+                  <div className="mt-0.5 rounded-lg bg-blue-50 p-2">
                     <Bell className="w-3.5 h-3.5" />
-                    My Notifications
-                  </h2>
-                  {notifsExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                </button>
-                {notifsExpanded && (
-                  <div className="mt-3 space-y-3">
-                    {NOTIF_PREFS.map(({ key, label }) => (
-                      <div key={key} className="flex items-center justify-between">
-                        <span className="text-sm text-gray-700">{label}</span>
-                        <Switch
-                          checked={myMembership[key] as boolean}
-                          onCheckedChange={(v) => handleToggleNotif(key, v)}
-                          disabled={savingPrefs}
-                        />
-                      </div>
-                    ))}
                   </div>
-                )}
+                  <div>
+                    <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">
+                      My Notifications
+                    </h2>
+                    <p className="mt-1 text-sm text-gray-600">
+                      Manage delivery channels, quiet hours, and notification categories in one place.
+                    </p>
+                  </div>
+                </div>
+                <Button asChild variant="outline" className="w-full">
+                  <Link href={`/dashboard/notifications?propertyId=${encodeURIComponent(propertyId)}`}>
+                    Manage notification settings
+                  </Link>
+                </Button>
               </section>
             )}
 

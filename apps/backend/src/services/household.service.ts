@@ -124,25 +124,6 @@ export class HouseholdService {
     });
   }
 
-  async updateNotificationPreferences(
-    propertyId: string,
-    userId: string,
-    prefs: Partial<{
-      notifyOnRiskChange: boolean;
-      notifyOnTaskDue: boolean;
-      notifyOnTaskAssigned: boolean;
-      notifyOnGuidanceUpdate: boolean;
-      notifyOnIncident: boolean;
-      notifyOnHomeEvent: boolean;
-      notifyOnAlerts: boolean;
-    }>
-  ) {
-    return prisma.householdMember.update({
-      where: { propertyId_userId: { propertyId, userId } },
-      data: prefs,
-    });
-  }
-
   // ── Invites ──────────────────────────────────────────────────────────────────
 
   async sendInvite(
@@ -402,8 +383,6 @@ export class HouseholdService {
         userId,
         role: 'OWNER',
         isPrimaryOwner: true,
-        notifyOnRiskChange: true,
-        notifyOnGuidanceUpdate: true,
         joinedAt: new Date(),
       },
       update: {},

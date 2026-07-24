@@ -3,10 +3,10 @@
  * PHASE 2 INTEGRATION: Orchestration → New Task Services
  * 
  * This service provides helper functions to route Action Center tasks
- * to the correct service based on user segment.
+ * to the correct service based on the property's operating mode.
  * 
  * Integration Points:
- * - Action Center "Add to Checklist" → Routes by segment
+ * - Action Center "Add to Checklist" → Routes by operating mode
  * - Deduplication via actionKey
  * - Backward compatibility with ChecklistService
  */
@@ -19,7 +19,7 @@ import { resolveHomeownerOperatingMode } from './entryContextPolicy';
 
 /**
  * Routes Action Center task creation to the appropriate service
- * based on user segment (HOME_BUYER vs EXISTING_OWNER).
+ * based on the property's current operating mode.
  * 
  * This is the MAIN integration point between Orchestration and Phase 2 services.
  */
@@ -38,7 +38,7 @@ export async function createTaskFromActionCenter(data: {
 }): Promise<{
   success: boolean;
   taskId: string;
-  source: 'HOME_BUYER' | 'EXISTING_OWNER';
+  source: 'BUYER_PLAN' | 'RECURRING_CARE';
   deduped: boolean;
 }> {
   // 1. Get property-scoped entry context.
@@ -60,10 +60,8 @@ export async function createTaskFromActionCenter(data: {
 
   // 2. Route based on the current property operating mode.
   if (operatingMode === 'PURCHASE' || operatingMode === 'EXPLORATION') {
-    // HOME_BUYER: Action Center tasks aren't typically used
-    // Most HOME_BUYER tasks are the 8 default tasks
-    // But if Action Center generates something, we can create a custom task
-    logger.info('⚠️  HOME_BUYER Action Center task - Creating custom task');
+    // Purchase and exploration modes use the buyer-plan task workflow.
+    logger.info('Creating buyer-plan task from Action Center');
     
     const task = await HomeBuyerTaskService.createTask(data.userId, data.propertyId, {
       title: data.title,
@@ -79,14 +77,14 @@ export async function createTaskFromActionCenter(data: {
     return {
       success: true,
       taskId: task.id,
-      source: 'HOME_BUYER',
+      source: 'BUYER_PLAN',
       deduped: false,
     };
   }
 
   if (operatingMode === 'OWNERSHIP') {
-    // EXISTING_OWNER: Use PropertyMaintenanceTaskService (idempotent)
-    logger.info('✅ EXISTING_OWNER Action Center task - Creating maintenance task');
+    // Ownership mode uses the recurring-care task workflow (idempotent).
+    logger.info('Creating recurring-care task from Action Center');
 
     // Convert priority string to MaintenanceTaskPriority
     const priorityMap: Record<string, any> = {
@@ -121,12 +119,12 @@ export async function createTaskFromActionCenter(data: {
     return {
       success: true,
       taskId: result.task.id,
-      source: 'EXISTING_OWNER',
+      source: 'RECURRING_CARE',
       deduped: result.deduped,
     };
   }
 
-  // Should never reach here — segment enum only has HOME_BUYER and EXISTING_OWNER
+  // The operating-mode resolver currently returns only the modes handled above.
   throw new Error(`Unhandled homeowner operating mode: ${operatingMode}`);
 }
 
@@ -193,11 +191,11 @@ export async function getActionsForProperty(
  * Converts tasks from new services to OrchestratedAction format
  * for backward compatibility with existing UI.
  */
-export function convertToOrchestratedAction(task: any, source: 'HOME_BUYER' | 'MAINTENANCE'): any {
-  if (source === 'HOME_BUYER') {
+export function convertToOrchestratedAction(task: any, source: 'BUYER_PLAN' | 'RECURRING_CARE'): any {
+  if (source === 'BUYER_PLAN') {
     return {
       id: `hb:${task.id}`,
-      actionKey: `HOME_BUYER:${task.id}`,
+      actionKey: `BUYER_PLAN:${task.id}`,
       source: 'CHECKLIST',
       propertyId: task.checklist?.propertyId || task.propertyId || 'unknown',
       title: task.title,
@@ -217,12 +215,12 @@ export function convertToOrchestratedAction(task: any, source: 'HOME_BUYER' | 'M
       confidence: {
         score: 70,
         level: 'MEDIUM',
-        explanation: ['Default home buyer task'],
+        explanation: ['Buyer-plan task'],
       },
     };
   }
 
-  // source === 'MAINTENANCE'
+  // source === 'RECURRING_CARE'
   const priorityScoreMap: Record<string, number> = {
     URGENT: 95,
     HIGH: 80,

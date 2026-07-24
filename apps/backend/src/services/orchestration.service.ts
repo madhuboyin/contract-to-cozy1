@@ -4,9 +4,9 @@
  * PHASE 2 INTEGRATION (Step 2.3)
  * ===============================
  * 
- * Orchestration Service now integrates with segment-specific task services:
- * - HOME_BUYER → HomeBuyerTaskService
- * - EXISTING_OWNER → PropertyMaintenanceTaskService
+ * Orchestration Service integrates with operating-mode-specific task services:
+ * - PURCHASE / EXPLORATION → HomeBuyerTaskService
+ * - OWNERSHIP → PropertyMaintenanceTaskService
  * 
  * Integration Point:
  * - Action Center "Add to Checklist" → createTaskFromOrchestration() helper
@@ -1510,7 +1510,7 @@ function countChecklistActions(items: any[]): number {
  * PHASE 2.3 HELPER: Create task from Action Center
  * 
  * This helper function routes task creation to the appropriate service
- * based on user segment. Called when user clicks "Add to Checklist"
+ * based on the property's operating mode. Called when user clicks "Add to Checklist"
  * in the Action Center UI.
  * 
  * @param userId - User ID
@@ -1523,7 +1523,7 @@ export async function createTaskFromOrchestration(
 ): Promise<{
   success: boolean;
   taskId: string;
-  source: 'HOME_BUYER' | 'EXISTING_OWNER' | 'LEGACY';
+  source: 'BUYER_PLAN' | 'RECURRING_CARE' | 'LEGACY';
   deduped: boolean;
 }> {
   logger.info({

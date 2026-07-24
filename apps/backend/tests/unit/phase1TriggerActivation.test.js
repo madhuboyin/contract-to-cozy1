@@ -70,6 +70,29 @@ test('operating-mode policy uses persisted orthogonal entry context', () => {
   assert.equal(supportsOwnershipCare({ ownershipState: 'RECENT_OWNER' }), true);
 });
 
+test('task orchestration uses operating modes instead of permanent homeowner segments', () => {
+  const integration = fs.readFileSync(
+    path.resolve(__dirname, '../../src/services/orchestrationIntegration.service.ts'),
+    'utf8',
+  );
+  const orchestration = fs.readFileSync(
+    path.resolve(__dirname, '../../src/services/orchestration.service.ts'),
+    'utf8',
+  );
+  const planningContext = fs.readFileSync(
+    path.resolve(__dirname, '../../src/services/planningContext/context.ts'),
+    'utf8',
+  );
+
+  assert.match(integration, /operatingMode === 'PURCHASE' \|\| operatingMode === 'EXPLORATION'/);
+  assert.match(integration, /operatingMode === 'OWNERSHIP'/);
+  assert.match(integration, /source: 'BUYER_PLAN' \| 'RECURRING_CARE'/);
+  assert.doesNotMatch(integration, /source: 'HOME_BUYER'|source: 'EXISTING_OWNER'/);
+  assert.doesNotMatch(orchestration, /source: 'HOME_BUYER'|source: 'EXISTING_OWNER'/);
+  assert.match(planningContext, /BUYER_ACQUISITION/);
+  assert.doesNotMatch(planningContext, /\bHOME_BUYER\b/);
+});
+
 test('deferred first action requires an explicit next trigger', () => {
   assert.equal(FirstActionResolutionSchema.safeParse({
     disposition: 'INTENTIONALLY_DEFERRED',

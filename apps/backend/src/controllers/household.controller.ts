@@ -36,17 +36,6 @@ export async function removeMember(req: CustomRequest, res: Response, next: Next
   } catch (err) { next(err); }
 }
 
-export async function updateMyNotificationPrefs(req: CustomRequest, res: Response, next: NextFunction) {
-  try {
-    const updated = await service.updateNotificationPreferences(
-      req.params.propertyId,
-      req.user!.userId,
-      req.body
-    );
-    res.json({ success: true, data: { member: updated } });
-  } catch (err) { next(err); }
-}
-
 // ── Invites ──────────────────────────────────────────────────────────────────
 
 export async function sendInvite(req: CustomRequest, res: Response, next: NextFunction) {
