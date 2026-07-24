@@ -105,15 +105,11 @@ export const ROUTE_DISPOSITION_RULES = [
       '/dashboard/coverage-intelligence',
       '/dashboard/documents',
       '/dashboard/fix',
-      '/dashboard/hoa',
       '/dashboard/home-event-radar',
       '/dashboard/home-renovation-risk-advisor',
       '/dashboard/home-savings',
-      '/dashboard/inspection-report',
       '/dashboard/inventory',
       '/dashboard/maintenance',
-      '/dashboard/permits',
-      '/dashboard/quote-comparison',
       '/dashboard/replace-repair',
       '/dashboard/risk-premium-optimizer',
       '/dashboard/vault',
@@ -129,7 +125,7 @@ export const ROUTE_DISPOSITION_RULES = [
     id: 'home-record',
     disposition: 'MERGE_HOME_RECORD',
     rationale: 'Property identity, systems, evidence, history, records, rooms, and household artifacts converge in Home Record.',
-    matches: matches(/^\/dashboard\/properties(?:\/new|\/\[id\](?:\/|$))?$|^\/dashboard\/properties\/\[id\]\/(edit|inventory|rooms|timeline|reports|vault|materials|home-score|health-score|environment-report)(?:\/|$)|^\/dashboard\/(expenses|insurance|warranties|modifications|financing)(?:\/|$)/),
+    matches: matches(/^\/dashboard\/properties(?:\/new|\/\[id\](?:\/|$))?$|^\/dashboard\/properties\/\[id\]\/(documents|edit|inventory|maintenance|rooms|timeline|reports|vault|materials|home-score|health-score|environment-report)(?:\/|$)|^\/dashboard\/(expenses|insurance|warranties|modifications|financing)(?:\/|$)/),
   },
   {
     id: 'home-attention',
@@ -150,7 +146,7 @@ export const ROUTE_DISPOSITION_RULES = [
     id: 'contextual-execution-and-marketplace',
     disposition: 'CONTEXTUAL_ONLY',
     rationale: 'Execution, provider, pricing, and decision surfaces are invoked from a scoped action or journey.',
-    matches: matches(/^\/dashboard\/(providers|community-events)(?:\/|$)|^\/dashboard\/permits\/|^\/dashboard\/properties\/\[id\]\/(financial-efficiency|inspection-hub)(?:\/|$)/),
+    matches: matches(/^\/dashboard\/(providers|community-events|hoa|inspection-report|permits|quote-comparison)(?:\/|$)|^\/dashboard\/properties\/\[id\]\/(financial-efficiency|inspection-hub)(?:\/|$)/),
   },
   {
     id: 'validate-placement',
@@ -189,6 +185,30 @@ export function auditRouteDisposition() {
   const results = routes.map(classifyRoute);
   const invalid = results.filter((result) => result.matched.length !== 1);
   return { routes, results, invalid };
+}
+
+function auditRedirectImplementations(results) {
+  const pageByRoute = new Map(walkPages(appRoot).map((file) => [pageFileToRoute(file), file]));
+  const redirectMarkers = [
+    /\bredirect\s*\(/,
+    /\bpermanentRedirect\s*\(/,
+    /<JobHubRedirectPage\b/,
+    /<PropertyScopedToolRedirectPage\b/,
+    /\brouter\.replace\s*\(/,
+  ];
+
+  return results
+    .filter((result) => result.disposition === 'REDIRECT_DUPLICATE')
+    .filter((result) => {
+      const file = pageByRoute.get(result.route);
+      if (!file) return true;
+      const source = fs.readFileSync(file, 'utf8');
+      return !redirectMarkers.some((marker) => marker.test(source));
+    })
+    .map((result) => ({
+      route: result.route,
+      issue: 'classified REDIRECT_DUPLICATE but page has no redirect implementation',
+    }));
 }
 
 function normalizeContractRoute(routePath) {
@@ -281,7 +301,8 @@ function auditPhase2RouteContracts(routes) {
 
 const { routes, results, invalid } = auditRouteDisposition();
 const routeContracts = auditPhase2RouteContracts(routes);
-if (invalid.length > 0 || routeContracts.invalid.length > 0) {
+const invalidRedirects = auditRedirectImplementations(results);
+if (invalid.length > 0 || invalidRedirects.length > 0 || routeContracts.invalid.length > 0) {
   console.error('[product-framework:routes] FAILED');
   for (const result of invalid) {
     const issue = result.matched.length === 0
@@ -291,6 +312,9 @@ if (invalid.length > 0 || routeContracts.invalid.length > 0) {
   }
   for (const contract of routeContracts.invalid) {
     console.error(`- ${contract.source} target ${contract.route}: no page matches ${contract.normalized}`);
+  }
+  for (const redirect of invalidRedirects) {
+    console.error(`- ${redirect.route}: ${redirect.issue}`);
   }
   process.exit(1);
 }

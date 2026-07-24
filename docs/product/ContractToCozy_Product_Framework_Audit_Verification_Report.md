@@ -15,6 +15,8 @@ method: "Seven independent code-verification passes, one per phase (0-6), each c
 
 **Overall verdict:** The self-reported status holds up better than typical self-grading. Most backend/data-layer claims (contracts, adapters, transactions, worker jobs, tests) are real and wired, not stubbed. The gaps that exist are concentrated exactly where a large refactor is most likely to cut corners under time pressure: user-facing navigation consolidation (Phase 2) and notification/cadence polish (Phase 4). One phase (5) overstates its test coverage. Several documentation-hygiene issues exist independent of the code itself.
 
+**Implementation follow-up — July 24, 2026:** The two findings selected for remediation are now closed. Global Protect, Save, Documents, and Maintenance pages are compatibility redirects to property-scoped Home Record destinations; Protect and Save resolve into the existing property-hub tabs; Documents and Maintenance retain their detailed workflows under property-scoped routes; and the legacy hubs no longer appear as Cmd+K shortcuts. The route audit now fails when a page classified `REDIRECT_DUPLICATE` does not implement a redirect. Weekly Home Brief notifications now persist/derive canonical attention priority and render ordered Soon, Plan, and Consider sections with weekly-specific copy. The original findings below are retained as the audit record.
+
 ---
 
 ## Phase-by-phase findings
@@ -149,8 +151,8 @@ Not independently located (but doesn't affect the above): a specific "buyer-plan
 
 ## Consolidated gap list, prioritized
 
-1. **Phase 2 — Navigation consolidation is the most significant overstatement in the whole audit.** `/dashboard/protect`, `/dashboard/save`, `/dashboard/documents`, `/dashboard/maintenance` remain live, independently reachable, actively-linked pages (including surfaced in the global Cmd+K palette as peers), directly contradicting "no more than five primary destinations" and "old parallel systems retired." The route-disposition CI check that's meant to catch this only verifies a URL resolves to *some* page file — it never checks that a page labeled `REDIRECT_DUPLICATE` actually redirects.
-2. **Phase 4 — Weekly Home Brief does not bundle by priority.** It's a flat, recency-ordered list with no Soon/Plan/Consider grouping, and the email footer still says "daily digest" on the weekly path — the specific requirement this feature exists to satisfy isn't implemented.
+1. **RESOLVED July 24, 2026 — Phase 2 navigation consolidation.** The original finding was valid. Global Protect, Save, Documents, and Maintenance now redirect to property-scoped canonical destinations, the Cmd+K peer shortcuts are removed, and route CI validates redirect implementation.
+2. **RESOLVED July 24, 2026 — Phase 4 Weekly Home Brief priority bundling.** The original finding was valid. Weekly output now groups Soon, Plan, and Consider items and uses weekly-specific footer copy.
 3. **Phase 5 — Acceptance tests don't execute the code they claim to verify.** Core lineage/idempotency assertions are regex matches against source text, not runtime calls into the service. The feature works; the test suite doesn't prove it the way "acceptance test" implies.
 4. **Phase 1 — Segmentation logic isn't actually gone, just its storage.** `HOME_BUYER`/`EXISTING_OWNER` string-literal branching persists throughout the codebase, now derived per-request rather than stored. Not wrong, but "complete removal of... segmentation" overstates what changed.
 5. **Phase 4 — `HouseholdNotificationService` is dead code that still bypasses the canonical notification preference service.** Harmless because it's never called, but it means the old fragmented reader was stranded, not removed as claimed.
@@ -164,8 +166,8 @@ No stub functions, orphaned adapters, hardcoded mock data standing in for "compl
 
 ## Recommended next actions
 
-1. Decide whether Protect/Save/Documents/Maintenance are genuinely staying as contextual tools (in which case remove them from the Cmd+K "Quick Shortcuts" peer treatment) or are permanent destinations (in which case update the "≤5 destinations" claim and the route-disposition labels to match reality).
-2. Fix the Weekly Home Brief to actually group by priority band, or de-scope the claim until it does.
+1. **Completed July 24, 2026:** Protect/Save/Documents/Maintenance were consolidated behind property-scoped destinations and removed from Cmd+K peer treatment.
+2. **Completed July 24, 2026:** Weekly Home Brief now groups by canonical priority band.
 3. Rewrite Phase 5's acceptance tests to call the real service functions rather than pattern-matching source text.
 4. Remove the dead `HouseholdNotificationService`, or wire it into the canonical preference service if it's still needed.
 5. Add an "Implementation status" line to Phase 5's section in the main audit doc, and do a pass updating §4/§7 gap-register rows to reflect actual phase completion so the document stops contradicting itself.

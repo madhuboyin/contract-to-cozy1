@@ -356,7 +356,7 @@ Automated acceptance rerun July 20, 2026 from commit `830f565`:
 - Backend Phase 2 contract suite: 48 passed.
 - Frontend tool-discovery and destination-context suites: 18 passed.
 - Backend build and frontend type-check: passed.
-- Product-framework route audit: 216 routes classified, passed.
+- Product-framework route audit: 219 routes classified, passed. Every route classified `REDIRECT_DUPLICATE` is also verified to contain redirect behavior.
 
 Use the package-scoped backend command below. Running the same test files directly
 from the repository root does not load `apps/backend/tsconfig.json` for `ts-node`

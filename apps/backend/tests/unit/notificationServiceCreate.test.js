@@ -21,6 +21,7 @@ require('ts-node/register');
 
 function policyFixture(overrides = {}) {
   return {
+    category: 'MAINTENANCE',
     urgency: 'MATERIAL',
     channels: [
       { channel: 'IN_APP', enabled: true, cadence: 'IMMEDIATE', deliverImmediately: true, quietHoursApplied: false },
@@ -171,6 +172,30 @@ test('ROUTINE urgency creates delivery rows but never enqueues immediate transpo
   const emailDelivery = calls.creates[0].data.deliveries.create.find((d) => d.channel === 'EMAIL');
   assert.equal(emailDelivery.status, 'PENDING');
   assert.equal(enqueued.email.length, 0);
+});
+
+test('persists a canonical attention priority for weekly Home Brief grouping', async () => {
+  const { NotificationService, calls } = loadService({
+    policy: policyFixture({ urgency: 'ROUTINE' }),
+  });
+
+  await NotificationService.create(baseInput({
+    metadata: { daysUntilDue: 21 },
+  }));
+
+  assert.equal(calls.creates[0].data.metadata.attentionPriority, 'SOON');
+});
+
+test('preserves an explicit canonical attention priority', async () => {
+  const { NotificationService, calls } = loadService({
+    policy: policyFixture({ urgency: 'ROUTINE', category: 'GENERAL' }),
+  });
+
+  await NotificationService.create(baseInput({
+    metadata: { attentionPriority: 'CONSIDER' },
+  }));
+
+  assert.equal(calls.creates[0].data.metadata.attentionPriority, 'CONSIDER');
 });
 
 test('requiredChannels force-adds a channel not already enabled by policy', async () => {

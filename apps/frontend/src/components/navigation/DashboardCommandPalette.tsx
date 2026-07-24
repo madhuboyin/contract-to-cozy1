@@ -122,13 +122,6 @@ export default function DashboardCommandPalette({ propertyId }: DashboardCommand
     resolvedPropertyId,
     '/dashboard/resolution-center'
   );
-  const protectionHref = buildPropertyAwareDashboardHref(
-    resolvedPropertyId,
-    '/dashboard/protect'
-  );
-  const saveHref = buildPropertyAwareDashboardHref(resolvedPropertyId, '/dashboard/save');
-  const vaultHref = buildPropertyAwareDashboardHref(resolvedPropertyId, '/dashboard/vault');
-  const homeLabHref = buildPropertyAwareDashboardHref(resolvedPropertyId, '/dashboard/home-lab');
   const riskReportHref = resolvedPropertyId
     ? `/dashboard/properties/${resolvedPropertyId}/risk-assessment`
     : '/dashboard/properties';
@@ -175,10 +168,6 @@ export default function DashboardCommandPalette({ propertyId }: DashboardCommand
       { id: 'quick-rooms', label: 'Open rooms', href: propertyRoomsHref, group: 'Quick Shortcuts' },
       { id: 'quick-inventory', label: 'Open inventory', href: inventoryHref, group: 'Quick Shortcuts' },
       { id: 'quick-resolution-center', label: 'Open resolution center', href: resolutionCenterHref, group: 'Quick Shortcuts' },
-      { id: 'quick-protection', label: 'Review protection', href: protectionHref, group: 'Quick Shortcuts' },
-      { id: 'quick-savings', label: 'Review savings', href: saveHref, group: 'Quick Shortcuts' },
-      { id: 'quick-vault', label: 'Open vault', href: vaultHref, group: 'Quick Shortcuts' },
-      { id: 'quick-home-lab', label: 'Open Home Lab', href: homeLabHref, group: 'Quick Shortcuts' },
       {
         id: 'quick-explore-tools',
         label: 'Explore all home tools',
@@ -198,17 +187,13 @@ export default function DashboardCommandPalette({ propertyId }: DashboardCommand
 
     return [...navItems, ...recent, ...quick, ...tools];
   }, [
-    homeLabHref,
     inventoryHref,
     isAdminNav,
     propertyRoomsHref,
-    protectionHref,
     recentActions,
     resolvedPropertyId,
     resolutionCenterHref,
     riskReportHref,
-    saveHref,
-    vaultHref,
     availabilityQuery.data,
   ]);
 

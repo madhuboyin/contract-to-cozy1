@@ -208,6 +208,43 @@ test('runWeeklyHomeBriefDigest: only includes users with WEEKLY_BRIEF cadence', 
   assert.deepEqual(calls.sentEmails.map((e) => e.to), ['u3@example.com']);
 });
 
+test('runWeeklyHomeBriefDigest: groups items into Soon, Plan, and Consider sections', async () => {
+  const weeklyPolicy = {
+    notificationPolicy: { channels: [{ channel: 'EMAIL', cadence: 'WEEKLY_BRIEF' }] },
+  };
+  const notification = (id, title, attentionPriority) => ({
+    id,
+    userId: 'user-3',
+    title,
+    message: `${title} details`,
+    actionUrl: null,
+    metadata: { ...weeklyPolicy, attentionPriority },
+    user: { email: 'u3@example.com', firstName: 'Casey' },
+  });
+  const deliveries = [
+    { id: 'soon', notification: notification('n-soon', 'Service HVAC', 'SOON') },
+    { id: 'plan', notification: notification('n-plan', 'Review reserve plan', 'PLAN') },
+    { id: 'consider', notification: notification('n-consider', 'Explore rebate', 'CONSIDER') },
+  ];
+  const { deps, calls } = fakeDeps({
+    seedDelivery: null,
+    digestPendingRows: [{ notification: { userId: 'user-3', metadata: weeklyPolicy } }],
+    digestDeliveriesByUser: { 'user-3': deliveries },
+  });
+
+  await runWeeklyHomeBriefDigest(deps);
+
+  assert.equal(calls.sentEmails.length, 1);
+  const html = calls.sentEmails[0].html;
+  assert.match(html, />Soon </);
+  assert.match(html, />Plan </);
+  assert.match(html, />Consider </);
+  assert.ok(html.indexOf('Service HVAC') < html.indexOf('Review reserve plan'));
+  assert.ok(html.indexOf('Review reserve plan') < html.indexOf('Explore rebate'));
+  assert.doesNotMatch(html, /daily notification digest/);
+  assert.match(html, /weekly Home Brief/);
+});
+
 test('digest: one user failing does not abort the digest run for the rest', async () => {
   const { deps, calls } = fakeDeps({
     seedDelivery: null,

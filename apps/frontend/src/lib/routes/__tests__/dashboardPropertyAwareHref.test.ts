@@ -29,6 +29,15 @@ describe('buildPropertyAwareDashboardHref', () => {
     expect(href).toBe('/dashboard/properties/property-123/save');
   });
 
+  it('maps consolidated global destinations to canonical property routes', () => {
+    expect(buildPropertyAwareDashboardHref('property-123', '/dashboard/protect'))
+      .toBe('/dashboard/properties/property-123/protect');
+    expect(buildPropertyAwareDashboardHref('property-123', '/dashboard/documents?action=upload'))
+      .toBe('/dashboard/properties/property-123/documents?action=upload');
+    expect(buildPropertyAwareDashboardHref('property-123', '/dashboard/maintenance?taskId=task-1'))
+      .toBe('/dashboard/properties/property-123/maintenance?taskId=task-1');
+  });
+
   it('preserves query params on mapped routes and removes propertyId from source query', () => {
     const href = buildPropertyAwareDashboardHref(
       'property-123',

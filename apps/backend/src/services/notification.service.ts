@@ -46,6 +46,38 @@ type NotificationSignalSource = {
   summary?: string;
   confidence?: number | null; // 0..1
 };
+
+type AttentionPriority = 'NOW' | 'SOON' | 'PLAN' | 'CONSIDER';
+
+function resolveAttentionPriority(
+  metadata: Record<string, any> | undefined,
+  category: NotificationCategory,
+  urgency: NotificationUrgency,
+): AttentionPriority {
+  const explicit = String(
+    metadata?.attentionPriority ??
+    metadata?.homeActionPriority ??
+    metadata?.priorityBand ??
+    '',
+  ).toUpperCase();
+  if (explicit === 'NOW') return 'NOW';
+  if (explicit === 'SOON' || explicit === 'HIGH') return 'SOON';
+  if (explicit === 'PLAN' || explicit === 'MEDIUM') return 'PLAN';
+  if (explicit === 'CONSIDER' || explicit === 'LOW') return 'CONSIDER';
+
+  const daysUntilDue = Number(metadata?.daysUntilDue);
+  if (Number.isFinite(daysUntilDue)) {
+    if (daysUntilDue <= 7) return 'NOW';
+    if (daysUntilDue <= 30) return 'SOON';
+    if (daysUntilDue <= 90) return 'PLAN';
+    return 'CONSIDER';
+  }
+
+  if (urgency === 'CRITICAL' || urgency === 'URGENT') return 'NOW';
+  if (urgency === 'MATERIAL') return 'SOON';
+  if (category === 'GENERAL' || category === 'NEIGHBORHOOD') return 'CONSIDER';
+  return 'PLAN';
+}
 /**
  * Notification types that MUST be delivered immediately
  * (affects EMAIL/SMS/PUSH urgency — NOT in-app behavior)
@@ -126,6 +158,7 @@ export class NotificationService {
     const mergedMetadata = {
       ...input.metadata,
       priority: isImportant ? 'HIGH' : 'LOW',
+      attentionPriority: resolveAttentionPriority(input.metadata, policy.category, policy.urgency),
       signalSource: input.signalSource ?? input.metadata?.signalSource ?? undefined,
       notificationPolicy: policy,
     };

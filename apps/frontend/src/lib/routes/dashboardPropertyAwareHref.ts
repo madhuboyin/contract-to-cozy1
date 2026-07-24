@@ -53,6 +53,21 @@ const DASHBOARD_ROUTE_RESOLVERS: Record<string, RouteResolver> = {
     toPropertyHref: (propertyId, query) =>
       buildHref(`/dashboard/properties/${propertyId}/save`, query),
   },
+  '/dashboard/protect': {
+    navTarget: 'protect',
+    toPropertyHref: (propertyId, query) =>
+      buildHref(`/dashboard/properties/${propertyId}/protect`, query),
+  },
+  '/dashboard/documents': {
+    navTarget: 'documents',
+    toPropertyHref: (propertyId, query) =>
+      buildHref(`/dashboard/properties/${propertyId}/documents`, query),
+  },
+  '/dashboard/maintenance': {
+    navTarget: 'maintenance',
+    toPropertyHref: (propertyId, query) =>
+      buildHref(`/dashboard/properties/${propertyId}/maintenance`, query),
+  },
   '/dashboard/vault': {
     navTarget: 'vault',
     toPropertyHref: (propertyId, query) =>
@@ -231,6 +246,9 @@ const NAV_TARGET_SUFFIXES: Record<string, string> = {
   'health-score': 'health-score',
   fix: 'fix',
   save: 'save',
+  protect: 'protect',
+  documents: 'documents',
+  maintenance: 'maintenance',
   vault: 'vault',
   'coverage-intelligence': 'tools/coverage-intelligence',
   'risk-premium-optimizer': 'tools/risk-premium-optimizer',

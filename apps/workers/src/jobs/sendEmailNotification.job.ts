@@ -2,7 +2,7 @@
 import { prisma } from '../lib/prisma';
 import { sendEmail } from '../email/email.service';
 import { DeliveryStatus, NotificationChannel } from '@prisma/client';
-import { buildDigestHtml, escapeHtml } from '../email/buildDigestHtml';
+import { buildDigestHtml, buildWeeklyHomeBriefHtml, escapeHtml } from '../email/buildDigestHtml';
 import { buildWeatherAlertCardHtml, isWeatherCardMetadata } from '../email/buildWeatherAlertCardHtml';
 import { logger } from '../lib/logger';
 import { filterDeliveriesByAggregationPolicy } from '../services/aggregationDeliveryPolicy';
@@ -319,10 +319,9 @@ async function sendUserDigest(userId: string, cadence: 'DAILY_DIGEST' | 'WEEKLY_
     ? 'Your weekly Home Brief from Contract to Cozy'
     : 'Your daily updates from Contract to Cozy';
 
-  const html = buildDigestHtml(
-    user.firstName || 'there',
-    notifications
-  );
+  const html = cadence === 'WEEKLY_BRIEF'
+    ? buildWeeklyHomeBriefHtml(user.firstName || 'there', notifications)
+    : buildDigestHtml(user.firstName || 'there', notifications);
 
   await sendEmail(user.email, subject, html);
 
