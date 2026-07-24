@@ -1,4 +1,6 @@
 import { sharedDataBackfillService } from '@worker-shared/services/sharedDataBackfill.service';
+import { isPropertyAllowlisted } from '@worker-shared/config/smokeTestConfig';
+import { generateSmokeCorrelationId } from '@worker-shared/lib/smokeTestCorrelation';
 import { logger, AppLogger } from '../lib/logger';
 
 type SharedDataBackfillJobResult = {
@@ -7,6 +9,7 @@ type SharedDataBackfillJobResult = {
   skippedProperties: number;
   erroredProperties: number;
   totalPropertiesConsidered: number;
+  smokeCorrelationId?: string;
 };
 
 // W4 item 1: small, job-scoped dependency interface (see
@@ -19,10 +22,17 @@ export interface SharedDataBackfillDeps {
 const defaultDeps: SharedDataBackfillDeps = { sharedDataBackfillService, logger };
 
 export async function runSharedDataBackfillJob(
-  opts?: { dryRun?: boolean },
+  opts?: { dryRun?: boolean; propertyId?: string },
   deps: SharedDataBackfillDeps = defaultDeps,
 ): Promise<SharedDataBackfillJobResult> {
   const { sharedDataBackfillService, logger } = deps;
+  if (opts?.propertyId && !isPropertyAllowlisted(opts.propertyId)) {
+    throw new Error(
+      `[shared-data-backfill] propertyId ${opts.propertyId} is not in SMOKE_TEST_PROPERTY_ALLOWLIST`,
+    );
+  }
+  const smokeCorrelationId = opts?.propertyId ? generateSmokeCorrelationId('shared-data-backfill') : undefined;
+
   const limitEnv = Number(process.env.SHARED_DATA_BACKFILL_LIMIT ?? '0');
   const limit = Number.isFinite(limitEnv) && limitEnv > 0 ? Math.floor(limitEnv) : undefined;
   // W4 item 8: the daily cron tick is always a real run (dryRun defaults
@@ -34,6 +44,7 @@ export async function runSharedDataBackfillJob(
   const summary = await sharedDataBackfillService.runBackfill({
     dryRun,
     limit,
+    propertyId: opts?.propertyId,
   });
 
   logger.info(
@@ -47,5 +58,6 @@ export async function runSharedDataBackfillJob(
     skippedProperties: summary.skippedProperties,
     erroredProperties: summary.erroredProperties,
     totalPropertiesConsidered: summary.totalPropertiesConsidered,
+    smokeCorrelationId,
   };
 }

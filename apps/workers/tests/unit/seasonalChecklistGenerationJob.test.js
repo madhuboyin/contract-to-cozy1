@@ -60,13 +60,17 @@ function fakeDeps({
     promotions: [],
     checklistUpdates: [],
     climateSettingCreates: [],
+    findManyArgs: [],
   };
 
   let checklistCreateCallCount = 0;
 
   const prisma = {
     property: {
-      findMany: async () => properties,
+      findMany: async (args) => {
+        calls.findManyArgs.push(args);
+        return properties;
+      },
       findUnique: async ({ where }) => properties.find((p) => p.id === where.id) ?? null,
     },
     propertyClimateSetting: {
@@ -135,7 +139,7 @@ test('creates a default climate setting with fallback region detection when none
     existingChecklistForUpcoming: { id: 'existing' }, // short-circuits generation, isolates this test to the create-setting behavior
   });
 
-  await generateSeasonalChecklists(deps);
+  await generateSeasonalChecklists(undefined, deps);
 
   assert.equal(calls.climateSettingCreates.length, 1);
   assert.equal(calls.climateSettingCreates[0].data.climateRegion, 'TROPICAL');
@@ -148,7 +152,7 @@ test('skips a property with autoGenerateChecklists=false without generating anyt
     climateSetting: { climateRegion: 'MODERATE', notificationTiming: 'STANDARD', autoGenerateChecklists: false, excludedTaskKeys: [] },
   });
 
-  await generateSeasonalChecklists(deps);
+  await generateSeasonalChecklists(undefined, deps);
 
   assert.equal(calls.checklistCreates.length, 0);
 });
@@ -161,7 +165,7 @@ test('generates the upcoming-season checklist when within the notification offse
     templates: [{ id: 'template-1', taskKey: 'clean-gutters', title: 'Clean gutters', description: null, priority: 'MEDIUM' }],
   });
 
-  await generateSeasonalChecklists(deps);
+  await generateSeasonalChecklists(undefined, deps);
 
   assert.equal(calls.checklistCreates.length, 1);
   assert.equal(calls.checklistCreates[0].data.season, 'FALL');
@@ -175,7 +179,7 @@ test('does not regenerate an upcoming-season checklist that already exists', asy
     existingChecklistForUpcoming: { id: 'existing-checklist' },
   });
 
-  await generateSeasonalChecklists(deps);
+  await generateSeasonalChecklists(undefined, deps);
 
   assert.equal(calls.checklistCreates.length, 0);
 });
@@ -189,7 +193,7 @@ test('falls back to generating the current-season checklist when outside the upc
     templates: [{ id: 'template-1', taskKey: 'clean-gutters', title: 'Clean gutters', description: null, priority: 'MEDIUM' }],
   });
 
-  await generateSeasonalChecklists(deps);
+  await generateSeasonalChecklists(undefined, deps);
 
   assert.equal(calls.checklistCreates.length, 1);
   assert.equal(calls.checklistCreates[0].data.season, 'SUMMER', 'must generate for the CURRENT season window, not upcoming');
@@ -208,7 +212,7 @@ test('one property failing does not abort checklist generation for the rest of t
     checklistCreateShouldFailFor: new Set([1]),
   });
 
-  await assert.doesNotReject(() => generateSeasonalChecklists(deps));
+  await assert.doesNotReject(() => generateSeasonalChecklists(undefined, deps));
 
   assert.equal(calls.checklistCreates.length, 1, 'the second (good) property must still succeed');
 });
@@ -226,7 +230,7 @@ test('excludes templates listed in excludedTaskKeys', async () => {
     ],
   });
 
-  await generateSeasonalChecklists(deps);
+  await generateSeasonalChecklists(undefined, deps);
 
   assert.equal(calls.itemCreates.length, 1);
   assert.equal(calls.itemCreates[0].data.taskKey, 'check-furnace');
@@ -241,7 +245,7 @@ test('excludes templates the applicability policy marks NOT_APPLICABLE', async (
     applicabilityResult: () => ({ status: 'NOT_APPLICABLE', reasonCodes: ['NO_AC'] }),
   });
 
-  await generateSeasonalChecklists(deps);
+  await generateSeasonalChecklists(undefined, deps);
 
   assert.equal(calls.itemCreates.length, 0);
   assert.equal(calls.checklistCreates.length, 0, 'unknown or inapplicable context must not create an empty checklist');
@@ -258,7 +262,7 @@ test('promotes each checklist item to a canonical maintenance task and records t
     ],
   });
 
-  await generateSeasonalChecklists(deps);
+  await generateSeasonalChecklists(undefined, deps);
 
   assert.equal(calls.promotions.length, 2);
   const tasksAddedUpdate = calls.checklistUpdates.find((u) => u.data.tasksAdded !== undefined);
@@ -277,9 +281,70 @@ test('one item failing promotion does not block the others, and tasksAdded only 
     promotionShouldFailFor: new Set(['item-1']),
   });
 
-  await assert.doesNotReject(() => generateSeasonalChecklists(deps));
+  await assert.doesNotReject(() => generateSeasonalChecklists(undefined, deps));
 
   assert.equal(calls.promotions.length, 2, 'both must still be attempted');
   const tasksAddedUpdate = calls.checklistUpdates.find((u) => u.data.tasksAdded !== undefined);
   assert.equal(tasksAddedUpdate.data.tasksAdded, 1, 'only the successful promotion counts');
+});
+
+// ── propertyId scoping (previously silently ignored — a "scoped smoke
+// run" from the admin console swept every property regardless) ────────
+
+test('a scoped propertyId is applied as a query filter', async () => {
+  const originalEnv = process.env.SMOKE_TEST_PROPERTY_ALLOWLIST;
+  process.env.SMOKE_TEST_PROPERTY_ALLOWLIST = 'property-allowed';
+  try {
+    const { deps, calls } = fakeDeps({
+      properties: [propertyFixture({ id: 'property-allowed' })],
+      climateSetting: { climateRegion: 'MODERATE', notificationTiming: 'STANDARD', autoGenerateChecklists: true, excludedTaskKeys: [] },
+      existingChecklistForUpcoming: { id: 'existing' },
+    });
+
+    await generateSeasonalChecklists({ propertyId: 'property-allowed' }, deps);
+
+    assert.equal(calls.findManyArgs[0].where.id, 'property-allowed');
+  } finally {
+    process.env.SMOKE_TEST_PROPERTY_ALLOWLIST = originalEnv;
+  }
+});
+
+test('a propertyId not in SMOKE_TEST_PROPERTY_ALLOWLIST is rejected outright, before any query runs', async () => {
+  const originalEnv = process.env.SMOKE_TEST_PROPERTY_ALLOWLIST;
+  process.env.SMOKE_TEST_PROPERTY_ALLOWLIST = 'some-other-property';
+  try {
+    const { deps, calls } = fakeDeps({ properties: [propertyFixture()] });
+
+    await assert.rejects(
+      () => generateSeasonalChecklists({ propertyId: 'property-not-allowed' }, deps),
+      /not in SMOKE_TEST_PROPERTY_ALLOWLIST/,
+    );
+    assert.equal(calls.findManyArgs.length, 0, 'must reject before querying, not after');
+  } finally {
+    process.env.SMOKE_TEST_PROPERTY_ALLOWLIST = originalEnv;
+  }
+});
+
+test('a scoped run tags the result with a smokeCorrelationId; an unscoped run tags nothing', async () => {
+  const originalEnv = process.env.SMOKE_TEST_PROPERTY_ALLOWLIST;
+  process.env.SMOKE_TEST_PROPERTY_ALLOWLIST = 'property-allowed';
+  try {
+    const scoped = fakeDeps({
+      properties: [propertyFixture({ id: 'property-allowed' })],
+      climateSetting: { climateRegion: 'MODERATE', notificationTiming: 'STANDARD', autoGenerateChecklists: true, excludedTaskKeys: [] },
+      existingChecklistForUpcoming: { id: 'existing' },
+    });
+    const scopedResult = await generateSeasonalChecklists({ propertyId: 'property-allowed' }, scoped.deps);
+    assert.match(scopedResult.smokeCorrelationId, /^smoke:seasonal-checklist-generation:/);
+
+    const unscoped = fakeDeps({
+      properties: [propertyFixture()],
+      climateSetting: { climateRegion: 'MODERATE', notificationTiming: 'STANDARD', autoGenerateChecklists: true, excludedTaskKeys: [] },
+      existingChecklistForUpcoming: { id: 'existing' },
+    });
+    const unscopedResult = await generateSeasonalChecklists(undefined, unscoped.deps);
+    assert.equal(unscopedResult.smokeCorrelationId, undefined);
+  } finally {
+    process.env.SMOKE_TEST_PROPERTY_ALLOWLIST = originalEnv;
+  }
 });

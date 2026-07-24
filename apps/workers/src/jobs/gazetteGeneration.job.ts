@@ -14,13 +14,25 @@ import { prisma } from '../lib/prisma';
 import { GazetteGenerationJobRunnerService } from '@worker-shared/modules/gazette/services/gazetteGenerationJobRunner.service';
 import { logger } from '../lib/logger';
 import { getAggregationContextBatch } from '@worker-shared/services/aggregationContext/batch';
+import { isPropertyAllowlisted } from '@worker-shared/config/smokeTestConfig';
+import { generateSmokeCorrelationId } from '@worker-shared/lib/smokeTestCorrelation';
 
-export async function runGazetteGenerationJob(): Promise<void> {
+export async function runGazetteGenerationJob(
+  opts?: { propertyId?: string },
+): Promise<{ published: number; skipped: number; alreadyPublished: number; failed: number; examined: number; smokeCorrelationId?: string }> {
+  if (opts?.propertyId && !isPropertyAllowlisted(opts.propertyId)) {
+    throw new Error(
+      `[GAZETTE-GENERATION] propertyId ${opts.propertyId} is not in SMOKE_TEST_PROPERTY_ALLOWLIST`,
+    );
+  }
+  const smokeCorrelationId = opts?.propertyId ? generateSmokeCorrelationId('home-gazette-generation') : undefined;
+
   const startedAt = new Date().toISOString();
-  logger.info(`[GAZETTE-GENERATION] Starting weekly generation at ${startedAt}`);
+  logger.info(`[GAZETTE-GENERATION] Starting weekly generation at ${startedAt}${opts?.propertyId ? ` (scoped to ${opts.propertyId})` : ''}`);
 
   const properties = await prisma.property.findMany({
     select: { id: true, homeownerProfile: { select: { userId: true } } },
+    ...(opts?.propertyId ? { where: { id: opts.propertyId } } : {}),
   });
 
   const batchContext = await getAggregationContextBatch(
@@ -77,4 +89,6 @@ export async function runGazetteGenerationJob(): Promise<void> {
     `Already published: ${alreadyPublished}, Failed: ${failed}, ` +
     `Total: ${properties.length}`,
   );
+
+  return { published, skipped, alreadyPublished, failed, examined: properties.length, smokeCorrelationId };
 }

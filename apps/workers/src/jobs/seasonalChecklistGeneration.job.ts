@@ -10,6 +10,8 @@ import {
   resolveCurrentSeasonWindow,
   resolveUpcomingSeasonWindow,
 } from '@worker-shared/services/seasonal/seasonWindow';
+import { isPropertyAllowlisted } from '@worker-shared/config/smokeTestConfig';
+import { generateSmokeCorrelationId } from '@worker-shared/lib/smokeTestCorrelation';
 
 // W4 item 1: small, job-scoped dependency interface (see
 // reserveFundBalanceReminder.job.ts for the pattern). The seasonWindow date
@@ -145,9 +147,19 @@ export function buildSeasonalPropertyContext(property: any, now: Date = new Date
  * - Generate checklist when days <= notification offset (not exact match)
  * - Skip if checklist already exists for that season/year
  */
-export async function generateSeasonalChecklists(deps: SeasonalChecklistGenerationDeps = defaultDeps) {
+export async function generateSeasonalChecklists(
+  opts?: { propertyId?: string },
+  deps: SeasonalChecklistGenerationDeps = defaultDeps,
+) {
   const { prisma, logger, resolveCurrentSeasonWindow, resolveUpcomingSeasonWindow } = deps;
-  logger.info('[SEASONAL] Starting checklist generation job...');
+  if (opts?.propertyId && !isPropertyAllowlisted(opts.propertyId)) {
+    throw new Error(
+      `[SEASONAL] propertyId ${opts.propertyId} is not in SMOKE_TEST_PROPERTY_ALLOWLIST`,
+    );
+  }
+  const smokeCorrelationId = opts?.propertyId ? generateSmokeCorrelationId('seasonal-checklist-generation') : undefined;
+
+  logger.info(`[SEASONAL] Starting checklist generation job...${opts?.propertyId ? ` (scoped to ${opts.propertyId})` : ''}`);
 
   try {
     const today = new Date();
@@ -159,6 +171,7 @@ export async function generateSeasonalChecklists(deps: SeasonalChecklistGenerati
         homeownerProfile: true,
         inventoryItems: true,
       },
+      ...(opts?.propertyId ? { where: { id: opts.propertyId } } : {}),
     });
 
     logger.info(`[SEASONAL] Found ${properties.length} properties to check`);
@@ -298,6 +311,8 @@ export async function generateSeasonalChecklists(deps: SeasonalChecklistGenerati
     logger.info(
       `[SEASONAL] Job complete. Generated: ${generated}, Skipped: ${skipped}, Errors: ${errors}`
     );
+
+    return { generated, skipped, failed: errors, examined: properties.length, smokeCorrelationId };
   } catch (error) {
     logger.error({ err: error }, '[SEASONAL] Fatal error in checklist generation job');
     throw error;

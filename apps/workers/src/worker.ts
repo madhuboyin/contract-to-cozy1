@@ -199,7 +199,11 @@ const CRON_HANDLERS: Record<string, (opts?: { dryRun?: boolean; propertyId?: str
   'weekly-home-brief-digest':        async () => { await runWeeklyHomeBriefDigest(); },
   'new-home-warranty-deadlines':     async (opts) => runNewHomeWarrantyDeadlineJob(opts),
   'seasonal-checklist-expiration':   async () => { await expireSeasonalChecklists(); },
-  'seasonal-checklist-generation':   async () => { await generateSeasonalChecklists(); },
+  'seasonal-checklist-generation':   async (opts) => {
+    const result = await generateSeasonalChecklists(opts);
+    logger.info({ ...result }, `[seasonal-checklist-generation] generated=${result?.generated} skipped=${result?.skipped} failed=${result?.failed}`);
+    return result;
+  },
   'seasonal-notifications':          async () => sendSeasonalNotifications(),
   'weekly-score-snapshots':          async () => { await captureWeeklyScoreSnapshotsJob(); },
   // WKR-008: this handler and the four below it (neighborhood-radar-refresh,
@@ -272,7 +276,11 @@ const CRON_HANDLERS: Record<string, (opts?: { dryRun?: boolean; propertyId?: str
     };
   },
   'tax-assessment-ingest':           async () => { await ingestTaxAssessmentEventsJob(); },
-  'home-gazette-generation':         async () => { await runGazetteGenerationJob(); },
+  'home-gazette-generation':         async (opts) => {
+    const result = await runGazetteGenerationJob(opts);
+    logger.info({ ...result }, `[home-gazette-generation] published=${result.published} skipped=${result.skipped} failed=${result.failed}`);
+    return result;
+  },
   'shared-data-backfill':            async (opts) => { await runSharedDataBackfillJob(opts); },
   'shared-data-consistency-audit':   async () => { await runSharedDataConsistencyAuditJob(); },
   'shared-signal-refresh':           async () => { await runSharedSignalRefreshJob(); },

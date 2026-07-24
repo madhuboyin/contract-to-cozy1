@@ -78,3 +78,52 @@ test('a non-boolean dryRun value (e.g. a stray truthy string from malformed job 
 
   assert.equal(calls.runBackfillArgs.dryRun, false);
 });
+
+// ── propertyId scoping (previously silently ignored — a "scoped smoke
+// run" from the admin console backfilled every property regardless) ────
+
+test('a scoped propertyId is forwarded to the service', async () => {
+  const originalEnv = process.env.SMOKE_TEST_PROPERTY_ALLOWLIST;
+  process.env.SMOKE_TEST_PROPERTY_ALLOWLIST = 'property-allowed';
+  try {
+    const { deps, calls } = fakeDeps({ summary: BASE_SUMMARY(true) });
+
+    await runSharedDataBackfillJob({ dryRun: true, propertyId: 'property-allowed' }, deps);
+
+    assert.equal(calls.runBackfillArgs.propertyId, 'property-allowed');
+  } finally {
+    process.env.SMOKE_TEST_PROPERTY_ALLOWLIST = originalEnv;
+  }
+});
+
+test('a propertyId not in SMOKE_TEST_PROPERTY_ALLOWLIST is rejected outright, before the service runs', async () => {
+  const originalEnv = process.env.SMOKE_TEST_PROPERTY_ALLOWLIST;
+  process.env.SMOKE_TEST_PROPERTY_ALLOWLIST = 'some-other-property';
+  try {
+    const { deps, calls } = fakeDeps({ summary: BASE_SUMMARY(true) });
+
+    await assert.rejects(
+      () => runSharedDataBackfillJob({ dryRun: true, propertyId: 'property-not-allowed' }, deps),
+      /not in SMOKE_TEST_PROPERTY_ALLOWLIST/,
+    );
+    assert.equal(calls.runBackfillArgs, null, 'must reject before the service runs');
+  } finally {
+    process.env.SMOKE_TEST_PROPERTY_ALLOWLIST = originalEnv;
+  }
+});
+
+test('a scoped run tags the result with a smokeCorrelationId; an unscoped run tags nothing', async () => {
+  const originalEnv = process.env.SMOKE_TEST_PROPERTY_ALLOWLIST;
+  process.env.SMOKE_TEST_PROPERTY_ALLOWLIST = 'property-allowed';
+  try {
+    const scoped = fakeDeps({ summary: BASE_SUMMARY(true) });
+    const scopedResult = await runSharedDataBackfillJob({ dryRun: true, propertyId: 'property-allowed' }, scoped.deps);
+    assert.match(scopedResult.smokeCorrelationId, /^smoke:shared-data-backfill:/);
+
+    const unscoped = fakeDeps({ summary: BASE_SUMMARY(false) });
+    const unscopedResult = await runSharedDataBackfillJob(undefined, unscoped.deps);
+    assert.equal(unscopedResult.smokeCorrelationId, undefined);
+  } finally {
+    process.env.SMOKE_TEST_PROPERTY_ALLOWLIST = originalEnv;
+  }
+});
