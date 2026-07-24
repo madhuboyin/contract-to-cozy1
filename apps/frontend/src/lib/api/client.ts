@@ -126,6 +126,7 @@ import {
 } from '@/types';
 import type { PropertyContextEnvelope } from '@/components/property-context/propertyContextTypes';
 import type { FeatureContextCaptureResult, FeatureContextEvaluation } from '@/components/property-context/featureContextTypes';
+import type { CapabilityCatalog } from '@/features/tools/capabilityTypes';
 
 // REMOVED: import { RiskReportSummary } from '@/app/(dashboard)/dashboard/types'; as it was not defined or needed.
 
@@ -2859,6 +2860,21 @@ class APIClient {
     );
     if (response.success && response.data) return response.data;
     throw new APIError('Failed to load tool availability', 'TOOL_DISCOVERY_AVAILABILITY_ERROR');
+  }
+
+  async getCapabilityCatalog(options: {
+    propertyId?: string;
+    includeWorkflowContext?: boolean;
+  } = {}): Promise<CapabilityCatalog> {
+    const query = this.buildQueryString({
+      propertyId: options.propertyId,
+      includeWorkflowContext: options.includeWorkflowContext ? 'true' : undefined,
+    });
+    const response = await this.request<CapabilityCatalog>(
+      `/api/tool-capabilities${query}`,
+    );
+    if (response.success && response.data) return response.data;
+    throw new APIError('Failed to load capability catalog', 'CAPABILITY_CATALOG_ERROR');
   }
 
   async recordToolLifecycleEvents(propertyId: string, events: ToolLifecycleEventDTO[]) {

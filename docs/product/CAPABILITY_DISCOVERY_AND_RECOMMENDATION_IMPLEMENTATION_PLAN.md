@@ -73,8 +73,15 @@ Status as of July 24, 2026:
 | CAP-202 legacy parity adapter | Complete | Test-only parity covers catalog identity, routes, rollout, lifecycle, and 31 related-tool mappings |
 | CAP-203 completeness CI | Complete | Capability QA runs generated inventory validation and canonical registry parity tests |
 | CAP-204 golden capability inventory | Complete | Nine fixtures cover every contextual definition and readiness reference |
+| CAP-300 catalog projection service | Complete | Narrow serializable projection filters through canonical availability and resolves property-preserving destinations |
+| CAP-301 authenticated catalog API | Complete | `GET /api/tool-capabilities` supports authorized property context, workflow inclusion, rollout filtering, cache variation, and registry version |
+| CAP-302 frontend catalog client | Complete | Narrow frontend types, API wrapper, and query hook consume the canonical catalog contract |
+| CAP-303 Explore Tools cutover | Pending | Existing frontend registry remains the active UI source |
+| CAP-304 command-search cutover | Pending | Existing frontend registry remains the active command source |
+| CAP-305 actual-view impressions | Pending | Current bulk impression behavior remains until the visibility primitive is integrated |
+| CAP-306 ProductTool synchronization | Pending | Knowledge Hub seed metadata remains separately maintained |
 
-No user-visible discovery or recommendation behavior has changed through WS2.
+No user-visible discovery or recommendation behavior has changed through CAP-302.
 
 ---
 
