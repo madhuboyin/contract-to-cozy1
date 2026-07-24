@@ -28,6 +28,7 @@ import basicAuth from 'express-basic-auth';
 import { prisma } from './lib/prisma';
 import { redis } from './lib/redis';
 import { runDeepHealthChecks } from './lib/deepHealth';
+import './productFramework/capabilities/canonicalCapabilityRegistry';
 
 // Import swagger config
 import { swaggerSpec } from './config/swagger.config';

@@ -12,7 +12,7 @@
     "qa:visual-drift": "node scripts/check-visual-drift.mjs",
     "qa:visual-drift:update": "node scripts/check-visual-drift.mjs --write-baseline",
     "qa:product-framework:routes": "node scripts/product-framework/check-route-disposition.mjs",
-    "qa:product-framework:capabilities": "node scripts/product-framework/inventory-tool-capabilities.mjs",
+    "qa:product-framework:capabilities": "node scripts/product-framework/check-tool-capabilities.mjs",
     "qa:sprint3:provider-smoke": "node scripts/sprint3/check-provider-smoke.mjs",
     "qa:sprint3:cta-traversal": "node scripts/sprint3/check-cta-traversal.mjs",
     "qa:sprint3:mobile-matrix": "node scripts/sprint3/generate-mobile-qa-matrix.mjs",

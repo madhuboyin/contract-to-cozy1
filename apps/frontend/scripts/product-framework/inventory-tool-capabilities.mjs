@@ -37,6 +37,10 @@ const backendCapabilityContractPath = path.join(
   repoRoot,
   'apps/backend/src/productFramework/capabilities/capability.contract.ts',
 );
+const backendLifecycleContractPath = path.join(
+  repoRoot,
+  'apps/backend/src/services/analytics/toolLifecycle.contract.ts',
+);
 
 const outputDirectory = path.join(repoRoot, 'docs/product/capability-discovery');
 const jsonOutputPath = path.join(outputDirectory, 'current-capability-inventory.json');
@@ -182,6 +186,10 @@ function buildInventory() {
   const relatedRegistryIds = parseStringArray(toolRegistrySource, 'TOOL_IDS');
   const unifiedSelectorIds = parseSelectorToolIds(read(unifiedSelectorPath));
   const smartSelectorIds = parseSelectorToolIds(read(smartSelectorPath));
+  const lifecycleCanonicalIds = parseStringSet(
+    read(backendLifecycleContractPath),
+    'DISCOVERABLE_TOOL_IDS',
+  );
   const pageRoutes = new Set(walkPages(appRoot).map(pageFileToRoute));
 
   const aiById = new Map(aiEntries.map((entry) => [entry.id, entry]));
@@ -230,6 +238,7 @@ function buildInventory() {
             ? 'SAFETY_EMERGENCY'
             : 'LOW_CONSEQUENCE',
       completionKind: completionByCategory[outcomeCategory] ?? null,
+      lifecycleCanonicalized: lifecycleCanonicalIds.has(id),
       relatedRegistryCoverage: relatedRegistryIds.has(id),
       selectorCoverage,
       plannedInitialTranche: plannedInitialTranche.has(id),
@@ -253,6 +262,9 @@ function buildInventory() {
     workflowOnly: capabilities.filter(
       (entry) => entry.recommendationDisposition === 'WORKFLOW_ONLY',
     ).length,
+    lifecycleCanonicalized: capabilities.filter(
+      (entry) => entry.lifecycleCanonicalized,
+    ).length,
     catalogOnlyPendingReview: capabilities.filter(
       (entry) => entry.recommendationDisposition === 'CATALOG_ONLY_PENDING_REVIEW',
     ).length,
@@ -266,6 +278,7 @@ function buildInventory() {
       path.relative(repoRoot, unifiedSelectorPath),
       path.relative(repoRoot, smartSelectorPath),
       path.relative(repoRoot, backendCapabilityContractPath),
+      path.relative(repoRoot, backendLifecycleContractPath),
       path.relative(repoRoot, capabilityIconRegistryPath),
     ],
     summary,
@@ -298,12 +311,13 @@ function renderMarkdown(inventory) {
     `| Existing contextual selector coverage | ${summary.existingContextualCoverage} |`,
     `| Planned contextual tranche | ${summary.plannedContextualTranche} |`,
     `| Workflow-only | ${summary.workflowOnly} |`,
+    `| Backend lifecycle canonicalized | ${summary.lifecycleCanonicalized} |`,
     `| Catalog-only pending review | ${summary.catalogOnlyPendingReview} |`,
     '',
     '## Capability Matrix',
     '',
-    '| ID | Label | Sources | Canonical route | Route | Outcome | Release | Safety | Completion | Related registry | Selector coverage | Planned tranche | Recommendation disposition |',
-    '| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |',
+    '| ID | Label | Sources | Canonical route | Route | Outcome | Release | Safety | Completion | Lifecycle | Related registry | Selector coverage | Planned tranche | Recommendation disposition |',
+    '| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |',
     ...capabilities.map((entry) => [
       markdownEscape(entry.id),
       markdownEscape(entry.label),
@@ -314,6 +328,7 @@ function renderMarkdown(inventory) {
       markdownEscape(entry.releaseStage),
       markdownEscape(entry.safetyTier),
       markdownEscape(entry.completionKind),
+      entry.lifecycleCanonicalized ? 'Canonical' : 'Missing',
       entry.relatedRegistryCoverage ? 'Yes' : 'No',
       entry.selectorCoverage.length > 0 ? entry.selectorCoverage.join(', ') : 'None',
       entry.plannedInitialTranche ? 'Yes' : 'No',
@@ -340,6 +355,7 @@ function validateInventory(inventory) {
     ids.add(capability.id);
     if (!capability.rolloutKey) errors.push(`Missing rollout key: ${capability.id}`);
     if (!capability.completionKind) errors.push(`Missing completion kind: ${capability.id}`);
+    if (!capability.lifecycleCanonicalized) errors.push(`Missing backend lifecycle canonicalization: ${capability.id}`);
     if (!capability.outcomeCategory) errors.push(`Missing outcome category: ${capability.id}`);
     if (!capability.routeVerified) errors.push(`Missing canonical page route: ${capability.id} (${capability.canonicalRoute})`);
   }

@@ -68,8 +68,13 @@ Status as of July 24, 2026:
 | CAP-102 availability adapter | Complete | Backend adapter preserves current rollout configuration and supports explicit beta-open and launch-closed failure modes |
 | CAP-103 icon and route contracts | Complete | Backend allowlists icon names and route parameters; frontend registry resolves serialized icons |
 | CAP-104 foundation tests | Complete | Product Framework suite includes focused capability contract tests |
+| CAP-200 canonical definitions | Complete | All 52 capabilities are registered in backend-owned outcome-grouped definition files |
+| CAP-201 recommendation classification | Complete | 24 contextual, one workflow-only, and 27 catalog-only definitions follow the conservative migration policy |
+| CAP-202 legacy parity adapter | Complete | Test-only parity covers catalog identity, routes, rollout, lifecycle, and 31 related-tool mappings |
+| CAP-203 completeness CI | Complete | Capability QA runs generated inventory validation and canonical registry parity tests |
+| CAP-204 golden capability inventory | Complete | Nine fixtures cover every contextual definition and readiness reference |
 
-No user-visible discovery or recommendation behavior has changed in the foundation slices.
+No user-visible discovery or recommendation behavior has changed through WS2.
 
 ---
 

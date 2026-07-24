@@ -1,0 +1,43 @@
+import { buildCapabilityDefinitions } from './capabilityDefinitionFactory';
+
+export const UNDERSTAND_HOME_CAPABILITIES = buildCapabilityDefinitions([
+  {
+    id: 'home-digital-will',
+    label: 'Home Digital Will',
+    description: 'Prepare critical home knowledge for trusted parties.',
+    routeTemplate: '/dashboard/properties/[id]/tools/home-digital-will',
+    outcomeCategory: 'UNDERSTAND_HOME',
+    rolloutKey: 'HOME_DIGITAL_WILL',
+    releaseStage: 'ACTIVE',
+    safetyTier: 'LOW_CONSEQUENCE',
+    completionKind: 'OUTPUT_VIEWED',
+    mode: 'CONTEXTUAL',
+    iconName: 'file-check',
+  },
+  {
+    id: 'home-risk-replay',
+    label: 'Home Risk Replay',
+    description: 'Review the events and risks this home has experienced.',
+    routeTemplate: '/dashboard/properties/[id]/tools/home-risk-replay',
+    outcomeCategory: 'UNDERSTAND_HOME',
+    rolloutKey: 'HOME_RISK_REPLAY',
+    releaseStage: 'ACTIVE',
+    safetyTier: 'LOW_CONSEQUENCE',
+    completionKind: 'OUTPUT_VIEWED',
+    mode: 'CONTEXTUAL',
+    iconName: 'shield-alert',
+  },
+  {
+    id: 'material-specs',
+    label: 'Material Specs',
+    description: 'Record finishes, products, colors, and supplier details.',
+    routeTemplate: '/dashboard/properties/[id]/materials',
+    outcomeCategory: 'UNDERSTAND_HOME',
+    rolloutKey: 'MATERIAL_SPECS',
+    releaseStage: 'ACTIVE',
+    safetyTier: 'LOW_CONSEQUENCE',
+    completionKind: 'OUTPUT_VIEWED',
+    mode: 'CONTEXTUAL',
+    iconName: 'layers',
+  },
+]);
