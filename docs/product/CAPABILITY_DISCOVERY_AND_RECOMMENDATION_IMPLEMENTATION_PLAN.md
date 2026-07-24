@@ -96,6 +96,7 @@ Status as of July 24, 2026:
 | CAP-504 launch-context verification | Complete | A shared mapper and destination parser preserve source action, entity, context, journey, item, surface, reason, and recommendation version for every server source type; telemetry retains the same lineage and resume links are emitted only for authorized sources resolved from current responses |
 | CAP-600 related resolver | Complete | Canonical manifest relationships, verified output compatibility, reviewed taxonomy similarity, and source context produce deterministic bounded results after release, readiness, governance, workflow-context, commercial, approval, and suppression gates |
 | CAP-601 RelatedTools cutover | Complete | The property-authorized related-capabilities endpoint composes current Property Context, readiness, release, governance, workflow, and recent-completion state; RelatedTools consumes its versioned projection with viewport gating, actual-view lifecycle telemetry, safe launch attribution, and no empty failure container |
+| CAP-602 inline suggestion primitive | Complete | Shared non-modal renderer consumes one server suggestion, preserves launch lineage and actual-view telemetry, and exposes dismiss or not-relevant controls only through caller-provided handlers |
 
 Explore Tools and homeowner command search now use the canonical catalog by default. Set
 `CAPABILITY_CATALOG_SOURCE=legacy` only for the temporary internal-beta rollback.
@@ -1168,6 +1169,16 @@ Proposed path:
 ```text
 apps/frontend/src/features/tools/InlineCapabilitySuggestion.tsx
 ```
+
+Implementation: the shared client component renders only a server-projected
+suggestion, resolves its canonical icon token, presents reviewed why-now,
+outcome, and readiness copy, and appends the complete launch lineage to the
+server destination. The enclosing non-modal article owns actual-view
+impressions while the CTA records the versioned click and source-action open.
+Dismiss and not-relevant controls are absent by default and appear only when
+the integrating feature supplies the corresponding permitted handler; feedback
+persistence remains outside the primitive until the canonical feedback
+contract is delivered.
 
 #### CAP-603: Inline integration contract
 
