@@ -527,6 +527,8 @@ test('unified Home uses one five-section responsive surface and five homeowner d
     assert.match(homeSurface, new RegExp(destination));
   }
   assert.match(dashboard, /return <UnifiedHomeSurface propertyId=/);
+  assert.match(dashboard, /propertyLoadRateLimited = true;[\s\S]*scoredProperties\.length === 0[\s\S]*throw error/);
+  assert.match(dashboard, /state="error"[\s\S]*onClick=\{\(\) => void fetchDashboardData\(\)\}/);
   for (const label of ['Home', 'Plan & Projects', 'Home Record', 'Ask', 'Profile & Settings']) {
     assert.match(navigation, new RegExp(`name: '${label.replace('&', '\\&')}'`));
   }

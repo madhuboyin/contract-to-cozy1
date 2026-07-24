@@ -788,6 +788,9 @@ export default function DashboardPage() {
       } catch (error) {
         if (isRateLimitedError(error)) {
           propertyLoadRateLimited = true;
+          if (scoredProperties.length === 0) {
+            throw error;
+          }
         } else if (scoredProperties.length === 0) {
           throw error;
         }
@@ -1224,7 +1227,18 @@ export default function DashboardPage() {
   }
 
   if (data.error) {
-    return <DashboardRouteState state="error" title="Could not load dashboard" description={data.error} />;
+    return (
+      <DashboardRouteState
+        state="error"
+        title="Could not load dashboard"
+        description={data.error}
+        action={
+          <Button type="button" onClick={() => void fetchDashboardData()}>
+            Try again
+          </Button>
+        }
+      />
+    );
   }
 
   if (showWelcomeScreen && user) return <WelcomeModal userFirstName={user.firstName} />;
