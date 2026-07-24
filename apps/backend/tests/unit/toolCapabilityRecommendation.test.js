@@ -8,7 +8,9 @@ const {
   CapabilityGovernanceResultSchema,
   CapabilityReadinessResultSchema,
   CapabilityRecommendationContextSchema,
+  CapabilitySuppressionResultSchema,
   applyCapabilityGovernancePolicy,
+  applyCapabilitySuppressionPolicy,
   buildCapabilityRecommendationContext,
   canonicalCapabilityRegistry,
   createToolCapabilityRegistry,
@@ -652,6 +654,14 @@ function govern(context, registry = canonicalCapabilityRegistry) {
   });
 }
 
+function suppress(context, registry = canonicalCapabilityRegistry) {
+  return applyCapabilitySuppressionPolicy({
+    registry,
+    context,
+    governanceResult: govern(context, registry),
+  });
+}
+
 function governedCoverageContext(overrides = {}) {
   const sourceAction = action({
     source: {
@@ -861,4 +871,205 @@ test('CAP-403 rejects stale readiness results before applying policy', () => {
     }),
     /context version is stale/,
   );
+});
+
+test('CAP-404 suppresses a capability already launched by its source action', () => {
+  const result = suppress(governedCoverageContext());
+  assert.doesNotThrow(() => CapabilitySuppressionResultSchema.parse(result));
+  const coverage = candidateById(result, 'coverage-options');
+
+  assert.equal(coverage.suppression.suppressed, true);
+  assert.deepEqual(coverage.suppression.reasonCodes, [
+    'SOURCE_ACTION_ALREADY_LAUNCHES_CAPABILITY',
+  ]);
+  assert.equal(
+    result.diagnostics.retainedCount + result.diagnostics.suppressedCount,
+    result.candidates.length,
+  );
+});
+
+test('CAP-404 rejects terminal and explicitly stale source actions', () => {
+  for (const fixture of [
+    {
+      state: 'COMPLETED',
+      freshness: 'CURRENT',
+      reason: 'SOURCE_ACTION_TERMINAL',
+    },
+    {
+      state: 'OPEN',
+      freshness: 'STALE',
+      reason: 'SOURCE_ACTION_STALE',
+    },
+  ]) {
+    const sourceAction = action({
+      state: fixture.state,
+      source: {
+        kind: 'COVERAGE',
+        entityId: 'item-1',
+        version: 'action-v2',
+      },
+      job: 'DECIDE',
+    });
+    const context = governedCoverageContext({
+      actions: [sourceAction],
+      actionSourceMetadata: [{
+        actionId: 'action-1',
+        freshness: fixture.freshness,
+        signalIntentFamilies: ['COVERAGE_GAPS_PRESENT'],
+      }],
+    });
+    const coverage = candidateById(suppress(context), 'coverage-options');
+    assert.equal(coverage.suppression.suppressed, true);
+    assert.equal(
+      coverage.suppression.reasonCodes.includes(fixture.reason),
+      true,
+    );
+  }
+});
+
+test('CAP-404 enforces dismissal cooldown and impression frequency caps', () => {
+  const context = governedCoverageContext({
+    actionSourceMetadata: [{
+      actionId: 'action-1',
+      signalIntentFamilies: ['COVERAGE_GAPS_PRESENT'],
+    }],
+    lifecycle: [{
+      capabilityId: 'coverage-options',
+      impressionCount30Days: 3,
+      lastImpressionAt: '2026-07-23T12:00:00.000Z',
+      lastDismissedAt: '2026-07-20T12:00:00.000Z',
+      lastCompletedAt: null,
+    }],
+  });
+  const coverage = candidateById(suppress(context), 'coverage-options');
+
+  assert.deepEqual(coverage.suppression.reasonCodes, [
+    'RECENTLY_DISMISSED',
+    'FREQUENCY_CAP_REACHED',
+  ]);
+});
+
+test('CAP-404 allows renewed relevance after completion and suppresses older signals', () => {
+  const contextFor = (lastEvaluatedAt) => governedCoverageContext({
+    actions: [action({
+      lastEvaluatedAt,
+      source: {
+        kind: 'COVERAGE',
+        entityId: 'item-1',
+        version: 'action-v2',
+      },
+      job: 'DECIDE',
+    })],
+    actionSourceMetadata: [{
+      actionId: 'action-1',
+      signalIntentFamilies: ['COVERAGE_GAPS_PRESENT'],
+    }],
+    lifecycle: [{
+      capabilityId: 'coverage-options',
+      impressionCount30Days: 0,
+      lastImpressionAt: null,
+      lastDismissedAt: null,
+      lastCompletedAt: '2026-07-22T12:00:00.000Z',
+    }],
+  });
+
+  const oldSignal = candidateById(
+    suppress(contextFor('2026-07-21T12:00:00.000Z')),
+    'coverage-options',
+  );
+  const renewedSignal = candidateById(
+    suppress(contextFor('2026-07-23T12:00:00.000Z')),
+    'coverage-options',
+  );
+  assert.equal(
+    oldSignal.suppression.reasonCodes.includes(
+      'COMPLETED_WITHOUT_RENEWED_RELEVANCE',
+    ),
+    true,
+  );
+  assert.deepEqual(renewedSignal.suppression, {
+    suppressed: false,
+    reasonCodes: [],
+  });
+});
+
+test('CAP-404 suppresses equivalent outcomes for one source deterministically', () => {
+  const coverage = structuredClone(
+    canonicalCapabilityRegistry.getById('coverage-options'),
+  );
+  const inspection = structuredClone(
+    canonicalCapabilityRegistry.getById('inspection-hub'),
+  );
+  for (const capability of [coverage, inspection]) {
+    capability.recommendation.sourceKinds = ['COVERAGE'];
+    capability.recommendation.jobs = ['DECIDE'];
+    capability.recommendation.triggerFamilies = ['COVERAGE_GAPS_PRESENT'];
+    capability.recommendation.readinessRequirements = [];
+    capability.presentation.outcomeCategory = 'SAVE_OPTIMIZE';
+    capability.recommendation.explicitRelatedCapabilityIds = [];
+  }
+  const registry = createToolCapabilityRegistry([coverage, inspection]);
+  const context = governedCoverageContext({
+    actionSourceMetadata: [{
+      actionId: 'action-1',
+      signalIntentFamilies: ['COVERAGE_GAPS_PRESENT'],
+    }],
+    availableCapabilityIds: ['coverage-options', 'inspection-hub'],
+    governance: {
+      canUseCapabilities: true,
+      allowedSafetyTiers: ['LOW_CONSEQUENCE', 'REGULATED_COVERAGE'],
+      enforceApprovals: false,
+      evidenceAccess: 'ALLOWED',
+      contextFreshness: 'CURRENT',
+    },
+  });
+  const result = suppress(context, registry);
+  const retained = result.candidates.filter(
+    (candidate) => !candidate.suppression.suppressed,
+  );
+  const duplicate = result.candidates.find((candidate) =>
+    candidate.suppression.reasonCodes.includes('EQUIVALENT_OUTCOME_DUPLICATE'));
+
+  assert.equal(retained.length, 1);
+  assert.equal(retained[0].capabilityId, 'coverage-options');
+  assert.equal(duplicate.capabilityId, 'inspection-hub');
+});
+
+test('CAP-404 keeps workflow-only capabilities out of non-workflow surfaces', () => {
+  const inspection = structuredClone(
+    canonicalCapabilityRegistry.getById('inspection-hub'),
+  );
+  const quoteComparison = structuredClone(
+    canonicalCapabilityRegistry.getById('quote-comparison'),
+  );
+  inspection.recommendation.explicitRelatedCapabilityIds = ['quote-comparison'];
+  quoteComparison.recommendation.explicitRelatedCapabilityIds = [];
+  const registry = createToolCapabilityRegistry([inspection, quoteComparison]);
+  const context = buildCapabilityRecommendationContext({
+    propertyId: 'property-1',
+    propertyContext: propertyContext(),
+    actions: [],
+    completions: [{
+      id: 'completion-1',
+      capabilityId: 'inspection-hub',
+      capabilityVersion: 1,
+      completionSignal: 'inspection_report_reviewed',
+      outputEntityType: 'DOCUMENT',
+      outputEntityId: 'report-1',
+      verifiedAt: NOW,
+    }],
+    availableCapabilityIds: ['quote-comparison'],
+    availabilityPolicyVersion: 'rollout-v2',
+    governance: {
+      canUseCapabilities: true,
+      allowedSafetyTiers: ['LOW_CONSEQUENCE'],
+      evidenceAccess: 'ALLOWED',
+    },
+    surface: 'HOME',
+  });
+  const quote = candidateById(suppress(context, registry), 'quote-comparison');
+
+  assert.deepEqual(quote.suppression.reasonCodes, [
+    'WORKFLOW_CONTEXT_REQUIRED',
+  ]);
 });

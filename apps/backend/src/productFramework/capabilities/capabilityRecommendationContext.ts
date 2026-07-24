@@ -35,6 +35,7 @@ const OptionalIdentifier = BoundedIdentifier.nullable();
 
 const CapabilityActionSourceMetadataSchema = z.object({
   actionId: BoundedIdentifier,
+  freshness: z.enum(['CURRENT', 'STALE', 'UNKNOWN']).default('CURRENT'),
   signalIntentFamilies: z.array(BoundedIdentifier).max(20).default([]),
   sourceEntityType: OptionalIdentifier.default(null),
   ctaCapabilityIds: z.array(BoundedIdentifier).max(20).default([]),
@@ -68,6 +69,7 @@ const NormalizedHomeActionSchema = z.object({
   missingFactKeys: z.array(BoundedIdentifier),
   relatedJourneyId: OptionalIdentifier,
   lastEvaluatedAt: z.string().datetime(),
+  freshness: z.enum(['CURRENT', 'STALE', 'UNKNOWN']),
 });
 
 const NormalizedPropertyFactSchema = z.object({
@@ -97,6 +99,7 @@ const JourneySourceSchema = z.object({
   sourceEntityType: OptionalIdentifier.default(null),
   sourceEntityId: OptionalIdentifier.default(null),
   signalIntentFamily: OptionalIdentifier.default(null),
+  observedAt: z.string().datetime().nullable().default(null),
 });
 
 const ProjectSourceSchema = z.object({
@@ -108,6 +111,7 @@ const ProjectSourceSchema = z.object({
   sourceActionId: OptionalIdentifier.default(null),
   sourceEntityType: OptionalIdentifier.default(null),
   sourceEntityId: OptionalIdentifier.default(null),
+  observedAt: z.string().datetime().nullable().default(null),
 });
 
 const PersonalizationSourceSchema = z.object({
@@ -319,6 +323,7 @@ export function buildCapabilityRecommendationContext(
         missingFactKeys: uniqueSorted(metadata?.missingFactKeys ?? []),
         relatedJourneyId: action.relatedJourneyId,
         lastEvaluatedAt: action.lastEvaluatedAt,
+        freshness: metadata?.freshness ?? 'CURRENT',
       };
     })
     .sort((left, right) => left.rank - right.rank || left.id.localeCompare(right.id));

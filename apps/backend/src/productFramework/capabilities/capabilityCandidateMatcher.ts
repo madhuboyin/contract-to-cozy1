@@ -52,6 +52,7 @@ const CapabilityCandidateSourceSchema = z.object({
   entityType: BoundedIdentifier.nullable(),
   entityId: BoundedIdentifier.nullable(),
   sourceVersion: BoundedIdentifier.nullable(),
+  observedAt: z.string().datetime().nullable(),
 });
 
 export const CapabilityCandidateSchema = z.object({
@@ -190,6 +191,7 @@ export function matchCapabilityCandidates(input: {
       entityType: action.source.entityType,
       entityId: action.source.entityId,
       sourceVersion: action.source.version,
+      observedAt: action.lastEvaluatedAt,
     };
     for (const capability of capabilities) {
       const sourceAndJob = (
@@ -235,6 +237,7 @@ export function matchCapabilityCandidates(input: {
       entityType: null,
       entityId: recommendation.id,
       sourceVersion: recommendation.recommendationVersion,
+      observedAt: recommendation.lastEvaluatedAt,
     };
     for (const capability of capabilities) {
       addMatches(candidates, capability, source, [{
@@ -256,6 +259,7 @@ export function matchCapabilityCandidates(input: {
       entityType: journey.sourceEntityType,
       entityId: journey.sourceEntityId,
       sourceVersion: journey.stage,
+      observedAt: journey.observedAt,
     };
     for (const capability of capabilities) {
       addMatches(candidates, capability, source, [
@@ -291,6 +295,7 @@ export function matchCapabilityCandidates(input: {
       entityType: project.sourceEntityType ?? 'PROJECT',
       entityId: project.sourceEntityId ?? project.id,
       sourceVersion: project.milestoneKind,
+      observedAt: project.observedAt,
     };
     const projectMatchCodes = [
       project.kind,
@@ -331,6 +336,7 @@ export function matchCapabilityCandidates(input: {
       entityType: completion.outputEntityType,
       entityId: completion.outputEntityId,
       sourceVersion: String(completion.capabilityVersion),
+      observedAt: completion.verifiedAt,
     };
     for (const capability of capabilities) {
       if (capability.id === completedCapability.id) continue;

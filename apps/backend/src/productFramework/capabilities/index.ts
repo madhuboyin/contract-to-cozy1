@@ -6,6 +6,7 @@ export * from './capabilityGoldenFixtures';
 export * from './capabilityGovernancePolicy';
 export * from './capabilityRecommendationContext';
 export * from './capabilityReadinessEvaluator';
+export * from './capabilitySuppressionPolicy';
 export * from './canonicalCapabilityRegistry';
 export * from './capabilityRegistry';
 export * from './definitions';
