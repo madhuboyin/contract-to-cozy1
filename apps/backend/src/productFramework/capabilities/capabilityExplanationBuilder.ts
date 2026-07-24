@@ -44,6 +44,7 @@ const CapabilitySuggestionSourceSchema = z.object({
   kind: z.enum(CAPABILITY_CONTEXT_SOURCE_KINDS),
   id: z.string().trim().min(1).max(160),
   actionId: OptionalIdentifier,
+  journeyId: OptionalIdentifier,
   entityType: OptionalIdentifier,
   entityId: OptionalIdentifier,
   sourceVersion: OptionalIdentifier,
@@ -195,6 +196,17 @@ function routeParameters(
   };
 }
 
+function suggestionJourneyId(
+  candidate: RankedCapabilityCandidate,
+  context: CapabilityRecommendationContext,
+): string | null {
+  if (candidate.source.kind === 'JOURNEY') return candidate.source.id;
+  if (!candidate.source.actionId) return null;
+  return context.actions.find(
+    (action) => action.id === candidate.source.actionId,
+  )?.relatedJourneyId ?? null;
+}
+
 function safeLaunchHref(input: {
   capability: ToolCapabilityDefinition;
   candidate: RankedCapabilityCandidate;
@@ -308,7 +320,10 @@ export function buildCapabilitySuggestionResponse(input: {
         expectedOutcome: capability.recommendation.expectedOutcome,
         readiness: readiness(candidate),
         evidence: evidence({ candidate, context }),
-        source: candidate.source,
+        source: {
+          ...candidate.source,
+          journeyId: suggestionJourneyId(candidate, context),
+        },
         launch: {
           label: `Open ${capability.presentation.label}`,
           href: safeLaunchHref({ capability, candidate, context }),

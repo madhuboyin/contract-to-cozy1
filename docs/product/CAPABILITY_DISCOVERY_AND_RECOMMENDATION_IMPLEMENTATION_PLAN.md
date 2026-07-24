@@ -89,6 +89,7 @@ Status as of July 24, 2026:
 | CAP-406 explanation builder | Complete | Narrow homeowner DTO uses reviewed templates and bounded structured context for why-now, outcome, readiness, authorized evidence, versions, source lineage, score band, and fully resolved same-origin launch paths without exposing raw ranking or policy diagnostics |
 | CAP-407 evaluator API | Complete | Authenticated property-scoped GET endpoint composes CAP-400–406 for five bounded surfaces using canonical actions, authorized context, optional workflow sources, lifecycle history, rollout availability, source scoping, private no-store caching, and fail-closed dependency behavior |
 | CAP-408 golden-home ranking fixtures | Complete | Nine deterministic homes cover every contextual capability and assert exact eligibility, needs-context behavior, bounded top sets, reviewed reasons, source lineage, governance state, and duplicate source-action suppression through the complete evaluator pipeline |
+| CAP-500 Unified Home response | Complete | Unified Home evaluates a versioned, maximum-three suggestion envelope from its already-authorized action and Property Context snapshot, preserves source lineage and context version, honors the server cutover flag, and fails closed without breaking ranked Home Actions |
 
 Explore Tools and homeowner command search now use the canonical catalog by default. Set
 `CAPABILITY_CATALOG_SOURCE=legacy` only for the temporary internal-beta rollback.
@@ -977,6 +978,12 @@ authorized service flow as ranked actions so they share:
 - journey identity;
 - release state; and
 - deduplication context.
+
+Implementation: the shared evaluator accepts an authorized source snapshot so
+Unified Home does not reload its required actions or Property Context.
+`capabilitySuggestions.status` distinguishes `AVAILABLE`, `DISABLED`, and
+`UNAVAILABLE`; disabled or failed evaluation returns a versioned empty
+Home-surface envelope while the rest of Unified Home remains available.
 
 #### CAP-501: Unified Home renderer
 

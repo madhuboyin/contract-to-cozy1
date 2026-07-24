@@ -341,6 +341,70 @@ export type HomeActionFeedDTO = {
   };
 };
 
+export type CapabilitySuggestionDTO = {
+  suggestionId: string;
+  capabilityId: string;
+  manifestVersion: number;
+  recommendationVersion: 'capability-recommendation-v1';
+  contextVersion: string;
+  rank: number;
+  scoreBand: 'LOW' | 'MEDIUM' | 'HIGH';
+  label: string;
+  shortDescription: string;
+  iconName: string;
+  outcomeCategory: string;
+  reasonCode: string;
+  whyNow: string;
+  expectedOutcome: string;
+  readiness: {
+    state: 'READY' | 'NEEDS_CONTEXT';
+    reasonCodes: string[];
+    missingFactKeys: string[];
+    explanations: string[];
+  };
+  evidence: {
+    mode: 'STRUCTURED_ONLY' | 'OMIT';
+    summary: string | null;
+    sourceObservedAt: string | null;
+    actionConfidence: {
+      score: number | null;
+      label: 'LOW' | 'MEDIUM' | 'HIGH';
+    } | null;
+    contextWarningCodes: Array<'CONFLICT' | 'STALE_SOURCE' | 'PARTIAL_SCOPE'>;
+  };
+  source: {
+    kind:
+      | 'HOME_ACTION'
+      | 'JOURNEY'
+      | 'PROJECT'
+      | 'PROPERTY_CONTEXT'
+      | 'PERSONALIZATION'
+      | 'COMPLETION';
+    id: string;
+    actionId: string | null;
+    journeyId: string | null;
+    entityType: string | null;
+    entityId: string | null;
+    sourceVersion: string | null;
+    observedAt: string | null;
+  };
+  launch: {
+    label: string;
+    href: string;
+  };
+};
+
+export type UnifiedHomeCapabilitySuggestionsDTO = {
+  status: 'AVAILABLE' | 'DISABLED' | 'UNAVAILABLE';
+  contractVersion: 'capability-suggestions-v1';
+  registryVersion: string;
+  recommendationVersion: 'capability-recommendation-v1';
+  contextVersion: string;
+  generatedAt: string;
+  surface: 'HOME';
+  suggestions: CapabilitySuggestionDTO[];
+};
+
 export type UnifiedHomeDTO = {
   contractVersion: 'phase2-home-v1';
   property: {
@@ -367,6 +431,7 @@ export type UnifiedHomeDTO = {
     firstValueInsight: HomeFirstValueInsightDTO | null;
   };
   decisions: RankedHomeActionDTO[];
+  capabilitySuggestions: UnifiedHomeCapabilitySuggestionsDTO;
   activeMajorMoment: null | {
     kind: 'PROJECT' | 'GUIDANCE_JOURNEY';
     id: string;

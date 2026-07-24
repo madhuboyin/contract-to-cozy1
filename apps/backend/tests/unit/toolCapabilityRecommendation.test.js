@@ -29,6 +29,7 @@ const {
 const {
   buildCapabilityActionSourceMetadata,
   getCapabilitySuggestions,
+  getCapabilitySuggestionsFromAuthorizedSources,
 } = require('../../src/services/capabilityRecommendation.service.ts');
 const {
   CapabilitySuggestionsQuerySchema,
@@ -1567,6 +1568,51 @@ test('CAP-407 orchestrates CAP-400 through CAP-406 into the API response', async
   assert.equal(result.suggestions.length, 1);
   assert.equal(result.suggestions[0].capabilityId, 'coverage-options');
   assert.equal(result.suggestions[0].source.id, 'action-1');
+});
+
+test('CAP-500 evaluates Unified Home suggestions from its authorized source snapshot', async () => {
+  let requiredSourceReloads = 0;
+  const sharedPropertyContext = propertyContext({
+    contextVersion: 'unified-home-context-v9',
+  });
+  const sharedAction = action({
+    id: 'unified-home-action-1',
+    relatedJourneyId: 'journey-unified-home-1',
+    source: {
+      kind: 'COVERAGE',
+      entityId: 'unified-home-item-1',
+      version: 'action-v9',
+    },
+    job: 'DECIDE',
+    primaryCta: {
+      kind: 'REVIEW',
+      label: 'Review source context',
+      href: '/dashboard/properties/property-1',
+    },
+  });
+  const result = await getCapabilitySuggestionsFromAuthorizedSources({
+    propertyId: 'property-1',
+    userId: 'user-1',
+    surface: 'HOME',
+    propertyContext: sharedPropertyContext,
+    actions: [sharedAction],
+  }, capabilityApiDependencies({
+    loadRequiredSources: async () => {
+      requiredSourceReloads += 1;
+      throw new Error('Unified Home must not reload required sources');
+    },
+  }));
+
+  assert.equal(requiredSourceReloads, 0);
+  assert.equal(result.contextVersion, sharedPropertyContext.contextVersion);
+  assert.equal(result.suggestions.length, 1);
+  assert.equal(result.suggestions[0].source.id, sharedAction.id);
+  assert.equal(result.suggestions[0].source.actionId, sharedAction.id);
+  assert.equal(
+    result.suggestions[0].source.journeyId,
+    sharedAction.relatedJourneyId,
+  );
+  assert.equal(result.suggestions[0].source.sourceVersion, 'action-v9');
 });
 
 test('CAP-407 scopes source-bound requests and fails optional sources closed', async () => {

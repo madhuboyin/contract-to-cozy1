@@ -502,18 +502,24 @@ function conservativeLifecycleFallback(
     }));
 }
 
-export async function getCapabilitySuggestions(input: {
+export interface CapabilitySuggestionsInput {
   propertyId: string;
   userId: string;
   surface: CapabilitySuggestionSurface;
   limit?: number;
   sourceContext?: CapabilityExplicitSourceContext | null;
-}, dependencies: CapabilityRecommendationDependencies = defaultDependencies()):
-Promise<CapabilitySuggestionResponse> {
-  const required = await dependencies.loadRequiredSources(
-    input.propertyId,
-    input.userId,
-  );
+}
+
+type AuthorizedCapabilitySources = Pick<
+  CapabilityRecommendationSourceBundle,
+  'propertyContext' | 'actions'
+>;
+
+async function evaluateCapabilitySuggestions(
+  input: CapabilitySuggestionsInput,
+  required: AuthorizedCapabilitySources,
+  dependencies: CapabilityRecommendationDependencies,
+): Promise<CapabilitySuggestionResponse> {
   const [journeys, projects, personalizationRecommendations, completions, lifecycle, readinessMetrics] =
     await Promise.all([
       optionalSource('journeys', input.propertyId, () =>
@@ -634,4 +640,34 @@ Promise<CapabilitySuggestionResponse> {
     context,
     rankingResult,
   });
+}
+
+export async function getCapabilitySuggestions(
+  input: CapabilitySuggestionsInput,
+  dependencies: CapabilityRecommendationDependencies = defaultDependencies(),
+): Promise<CapabilitySuggestionResponse> {
+  const required = await dependencies.loadRequiredSources(
+    input.propertyId,
+    input.userId,
+  );
+  return evaluateCapabilitySuggestions(input, required, dependencies);
+}
+
+/**
+ * Evaluates suggestions from sources already loaded inside an authorized
+ * parent response. This keeps Unified Home actions and Property Context on the
+ * exact same snapshot instead of reloading them through the standalone API.
+ */
+export async function getCapabilitySuggestionsFromAuthorizedSources(
+  input: CapabilitySuggestionsInput & AuthorizedCapabilitySources,
+  dependencies: CapabilityRecommendationDependencies = defaultDependencies(),
+): Promise<CapabilitySuggestionResponse> {
+  return evaluateCapabilitySuggestions(
+    input,
+    {
+      propertyContext: input.propertyContext,
+      actions: input.actions,
+    },
+    dependencies,
+  );
 }

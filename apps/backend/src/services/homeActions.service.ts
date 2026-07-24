@@ -29,6 +29,14 @@ import {
 } from './inventoryCoverageState.service';
 import { getEnvironmentReportForProperty } from './environmentReport.service';
 import { buildHomeFirstValueInsight } from './environment/environmentHomeOutlook.service';
+import {
+  CAPABILITY_RECOMMENDATION_VERSION,
+  canonicalCapabilityRegistry,
+  type CapabilitySuggestionResponse,
+} from '../productFramework/capabilities';
+import {
+  getCapabilitySuggestionsFromAuthorizedSources,
+} from './capabilityRecommendation.service';
 
 export const HOME_ACTION_COMMANDS = [
   'COMPLETE',
@@ -65,6 +73,78 @@ export const HomeActionCommandSchema = z.object({
 export const HomeActionInteractionSchema = z.object({
   interaction: z.literal('OPENED'),
 });
+
+export type UnifiedHomeCapabilitySuggestions =
+  CapabilitySuggestionResponse & {
+    status: 'AVAILABLE' | 'DISABLED' | 'UNAVAILABLE';
+  };
+
+export function capabilityRecommendationsEnabled(
+  env: NodeJS.ProcessEnv = process.env,
+): boolean {
+  return env.CAPABILITY_RECOMMENDATIONS_ENABLED?.trim().toLowerCase()
+    !== 'false';
+}
+
+function emptyUnifiedHomeCapabilitySuggestions(input: {
+  status: 'DISABLED' | 'UNAVAILABLE';
+  contextVersion: string;
+  generatedAt: string;
+}): UnifiedHomeCapabilitySuggestions {
+  return {
+    status: input.status,
+    contractVersion: 'capability-suggestions-v1',
+    registryVersion: canonicalCapabilityRegistry.version,
+    recommendationVersion: CAPABILITY_RECOMMENDATION_VERSION,
+    contextVersion: input.contextVersion,
+    generatedAt: input.generatedAt,
+    surface: 'HOME',
+    suggestions: [],
+  };
+}
+
+export async function getUnifiedHomeCapabilitySuggestions(input: {
+  propertyId: string;
+  userId: string;
+  propertyContext: Awaited<ReturnType<typeof getAggregationPropertyContext>>;
+  actions: RankedHomeAction[];
+}, options: {
+  enabled?: boolean;
+  now?: () => Date;
+  evaluate?: typeof getCapabilitySuggestionsFromAuthorizedSources;
+} = {}): Promise<UnifiedHomeCapabilitySuggestions> {
+  const generatedAt = (options.now ?? (() => new Date()))().toISOString();
+  if (!(options.enabled ?? capabilityRecommendationsEnabled())) {
+    return emptyUnifiedHomeCapabilitySuggestions({
+      status: 'DISABLED',
+      contextVersion: input.propertyContext.contextVersion,
+      generatedAt,
+    });
+  }
+  try {
+    const response = await (
+      options.evaluate ?? getCapabilitySuggestionsFromAuthorizedSources
+    )({
+      propertyId: input.propertyId,
+      userId: input.userId,
+      surface: 'HOME',
+      limit: 3,
+      propertyContext: input.propertyContext,
+      actions: input.actions,
+    });
+    return { status: 'AVAILABLE', ...response };
+  } catch (error) {
+    logger.warn(
+      { err: error, propertyId: input.propertyId, userId: input.userId },
+      'Unified Home capability suggestions failed closed',
+    );
+    return emptyUnifiedHomeCapabilitySuggestions({
+      status: 'UNAVAILABLE',
+      contextVersion: input.propertyContext.contextVersion,
+      generatedAt,
+    });
+  }
+}
 
 export type HomeActionCommandInput = z.infer<typeof HomeActionCommandSchema>;
 
@@ -443,6 +523,12 @@ export async function getUnifiedHome(propertyId: string, userId: string) {
   const stalePropertyFacts = contextCompleteness.scopes.reduce((sum, scope) => sum + scope.staleFactKeys.length, 0);
   const recordCompleteness = contextCompleteness.completenessPercent;
   const coverageGapCount = (await detectCoverageGaps(propertyId)).length;
+  const capabilitySuggestions = await getUnifiedHomeCapabilitySuggestions({
+    propertyId,
+    userId,
+    propertyContext: propertyContextSnapshot,
+    actions: feed.actions,
+  });
 
   const topAttentionActions = feed.actions.slice(0, 5);
   const attentionActionIds = new Set(topAttentionActions.map((action) => action.id));
@@ -506,6 +592,7 @@ export async function getUnifiedHome(propertyId: string, userId: string) {
       firstValueInsight: feed.firstValueInsight,
     },
     decisions,
+    capabilitySuggestions,
     activeMajorMoment,
     glance: {
       recordCompleteness,

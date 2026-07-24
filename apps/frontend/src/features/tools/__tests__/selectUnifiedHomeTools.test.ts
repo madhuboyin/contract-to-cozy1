@@ -53,6 +53,16 @@ function home(actions: RankedHomeActionDTO[]): UnifiedHomeDTO {
       firstValueInsight: null,
     },
     decisions: [],
+    capabilitySuggestions: {
+      status: 'AVAILABLE',
+      contractVersion: 'capability-suggestions-v1',
+      registryVersion: 'registry-v1',
+      recommendationVersion: 'capability-recommendation-v1',
+      contextVersion: 'context-1',
+      generatedAt: '2026-07-20T00:00:00.000Z',
+      surface: 'HOME',
+      suggestions: [],
+    },
     activeMajorMoment: null,
     glance: {
       recordCompleteness: 80,

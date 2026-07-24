@@ -48,6 +48,8 @@ require.cache[redisPath] = {
 const { goldenTestHomes } = require('../fixtures/productFramework/goldenTestHomes.js');
 const {
   HomeActionCommandSchema,
+  capabilityRecommendationsEnabled,
+  getUnifiedHomeCapabilitySuggestions,
   rankAndDeduplicateHomeActions,
   reconcileCoverageHomeActions,
   selectEligibleActiveJourney,
@@ -88,6 +90,44 @@ test('canonical feed ranks urgency and consequence with an explicit missing-cont
   assert.ok(urgentScore.score > plannedScore.score);
   assert.equal(plannedScore.components.missingContextPenalty, 6);
   assert.match(plannedScore.explanation, /missing context/i);
+});
+
+test('CAP-500 capability recommendation cutover flag defaults on and supports explicit disable', () => {
+  assert.equal(capabilityRecommendationsEnabled({}), true);
+  assert.equal(capabilityRecommendationsEnabled({
+    CAPABILITY_RECOMMENDATIONS_ENABLED: 'true',
+  }), true);
+  assert.equal(capabilityRecommendationsEnabled({
+    CAPABILITY_RECOMMENDATIONS_ENABLED: ' FALSE ',
+  }), false);
+});
+
+test('CAP-500 capability failures preserve Unified Home with a versioned empty envelope', async () => {
+  const propertyContext = {
+    propertyId: 'property-1',
+    contextVersion: 'context-v11',
+    generatedAt: '2026-07-24T12:00:00.000Z',
+    scopes: [],
+    facts: {},
+    warnings: [],
+  };
+  const failed = await getUnifiedHomeCapabilitySuggestions({
+    propertyId: 'property-1',
+    userId: 'user-1',
+    propertyContext,
+    actions: [],
+  }, {
+    enabled: true,
+    now: () => new Date('2026-07-24T12:00:00.000Z'),
+    evaluate: async () => {
+      throw new Error('capability dependency unavailable');
+    },
+  });
+
+  assert.equal(failed.status, 'UNAVAILABLE');
+  assert.equal(failed.contextVersion, propertyContext.contextVersion);
+  assert.equal(failed.surface, 'HOME');
+  assert.deepEqual(failed.suggestions, []);
 });
 
 test('NOW and SOON actions always precede PLAN and CONSIDER regardless of score', () => {

@@ -66,6 +66,7 @@ data:
   # Tool discovery remains open during beta. Before real-user launch, set
   # enforcement to true and control individual cohorts with TOOL_ROLLOUT_*.
   TOOL_DISCOVERY_ENABLED: "true"
+  CAPABILITY_RECOMMENDATIONS_ENABLED: "true"
   ENFORCE_TOOL_DISCOVERY_RELEASE_GATES: "false"
   TOOL_DISCOVERY_DISABLED_IDS: ""
 
