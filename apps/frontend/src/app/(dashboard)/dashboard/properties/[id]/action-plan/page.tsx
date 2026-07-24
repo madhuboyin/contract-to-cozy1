@@ -10,6 +10,7 @@ import {
   ActionCard,
   CoverageCorrectionGroupCard,
   CriticalWeatherActionCard,
+  EnvironmentActionCard,
   SeasonalChecklistActionCard,
   groupAttentionActions,
 } from '@/components/home/UnifiedHomeSurface';
@@ -239,6 +240,12 @@ export default function PrioritizedActionPlanPage() {
                   action={entry.action}
                   propertyId={propertyId}
                   showSupportingDetails
+                />
+              ) : entry.kind === 'ENVIRONMENT' ? (
+                <EnvironmentActionCard
+                  action={entry.action}
+                  propertyId={propertyId}
+                  onChanged={refreshPlan}
                 />
               ) : entry.kind === 'SEASONAL_CHECKLIST' ? (
                 <SeasonalChecklistActionCard

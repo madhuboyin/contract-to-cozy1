@@ -46,7 +46,12 @@ function home(actions: RankedHomeActionDTO[]): UnifiedHomeDTO {
       staleFactCount: 0,
       warningCount: 0,
     },
-    attention: { actions, totalCount: actions.length, planHref: '/dashboard/actions' },
+    attention: {
+      actions,
+      totalCount: actions.length,
+      planHref: '/dashboard/actions',
+      firstValueInsight: null,
+    },
     decisions: [],
     activeMajorMoment: null,
     glance: {

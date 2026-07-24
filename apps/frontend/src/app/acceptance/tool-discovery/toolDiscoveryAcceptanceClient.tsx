@@ -52,7 +52,12 @@ const home: UnifiedHomeDTO = {
     staleFactCount: 0,
     warningCount: 0,
   },
-  attention: { actions: [coverageAction], totalCount: 1, planHref: '/dashboard/actions' },
+  attention: {
+    actions: [coverageAction],
+    totalCount: 1,
+    planHref: '/dashboard/actions',
+    firstValueInsight: null,
+  },
   decisions: [],
   activeMajorMoment: null,
   glance: {
