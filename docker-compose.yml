@@ -114,6 +114,7 @@ services:
       REDIS_PORT: 6379
       REDIS_PASSWORD: ${REDIS_PASSWORD}
       JWT_SECRET: ${JWT_SECRET}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       ENFORCE_HUMAN_POLICY_APPROVALS: ${ENFORCE_HUMAN_POLICY_APPROVALS:-false}
       # Worker execution policy (see apps/backend/src/config/workerExecutionPolicy.ts).
       # Beta defaults — flip to "true" once a job group has been reviewed for this environment.
@@ -134,6 +135,13 @@ services:
       WORKER_JOB_MATERIAL_SPEC_EXPORT_CLEANUP_ENABLED: ${WORKER_JOB_MATERIAL_SPEC_EXPORT_CLEANUP_ENABLED:-true}
       WORKER_JOB_SEASONAL_CHECKLIST_GENERATION_ENABLED: ${WORKER_JOB_SEASONAL_CHECKLIST_GENERATION_ENABLED:-true}
       WORKER_JOB_HOME_GAZETTE_GENERATION_ENABLED: ${WORKER_JOB_HOME_GAZETTE_GENERATION_ENABLED:-true}
+      # Per-job overrides for the WORKER_EXTERNAL_INGEST_ENABLED=false group
+      # (see configmap.yaml) — reviewed individually rather than flipping
+      # the group flag, which would also enable every other external-
+      # provider job (recall-ingest, mortgage-rate-ingest, permit-fetch,
+      # generate-diy-ai-guide, etc.) without review.
+      WORKER_JOB_FREEZE_RISK_INCIDENTS_ENABLED: ${WORKER_JOB_FREEZE_RISK_INCIDENTS_ENABLED:-true}
+      WORKER_JOB_SEVERE_WEATHER_ALERTS_ENABLED: ${WORKER_JOB_SEVERE_WEATHER_ALERTS_ENABLED:-true}
     depends_on:
       postgres:
         condition: service_healthy

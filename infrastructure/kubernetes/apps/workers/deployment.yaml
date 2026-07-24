@@ -109,6 +109,21 @@ spec:
                 configMapKeyRef:
                   name: app-config
                   key: WORKER_JOB_HOME_GAZETTE_GENERATION_ENABLED
+            - name: WORKER_JOB_FREEZE_RISK_INCIDENTS_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: WORKER_JOB_FREEZE_RISK_INCIDENTS_ENABLED
+            - name: WORKER_JOB_SEVERE_WEATHER_ALERTS_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: WORKER_JOB_SEVERE_WEATHER_ALERTS_ENABLED
+            - name: GEMINI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: GEMINI_API_KEY
             - name: FRED_API_KEY
               valueFrom:
                 secretKeyRef:
