@@ -45,7 +45,7 @@ export type DiscoveryNudge =
       bonusMultiplier: number;
       actionType: 'TOGGLE';
       type: 'RESILIENCE';
-      field: 'hasSumpPumpBackup';
+      field: 'hasSumpPump' | 'hasSumpPumpBackup';
       options: Array<{ label: string; value: boolean | null }>;
     })
   | ({
@@ -215,10 +215,15 @@ async function getResilienceNudge(
 ): Promise<DiscoveryNudge | null> {
   const property = await prisma.property.findUnique({
     where: { id: propertyId },
-    select: { hasSumpPumpBackup: true, zipCode: true },
+    select: { hasSumpPump: true, hasSumpPumpBackup: true, isResilienceVerified: true, zipCode: true },
   });
 
-  if (!property || property.hasSumpPumpBackup !== null) return null;
+  if (
+    !property
+    || property.isResilienceVerified
+    || property.hasSumpPump === false
+    || (property.hasSumpPump === true && property.hasSumpPumpBackup !== null)
+  ) return null;
 
   const id = resilienceNudgeId(propertyId);
   if (isExcluded(id, excludedIds)) {
@@ -255,14 +260,16 @@ async function getResilienceNudge(
     type: 'RESILIENCE',
     title: 'Home resilience check',
     description: withStreakEncouragement(
-      `Heavy rain forecast${rainLocation} in the next 5 days. Do you have a battery backup for your sump pump? This unlocks better flood risk guidance.`,
+      property.hasSumpPump === true
+        ? `Heavy rain forecast${rainLocation} in the next 5 days. Does the confirmed sump pump have backup power?`
+        : `Heavy rain forecast${rainLocation} in the next 5 days. Confirm whether this home has a sump pump for more relevant guidance.`,
       streak.currentStreak
     ),
     currentStreak: streak.currentStreak,
     longestStreak: streak.longestStreak,
     bonusMultiplier: streak.bonusMultiplier,
     actionType: 'TOGGLE',
-    field: 'hasSumpPumpBackup',
+    field: property.hasSumpPump === true ? 'hasSumpPumpBackup' : 'hasSumpPump',
     options: [
       { label: 'Yes', value: true },
       { label: 'No', value: false },

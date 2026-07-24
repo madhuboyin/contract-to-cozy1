@@ -50,13 +50,17 @@ export interface EnvironmentInsightProperty {
   state: string;
   zipCode: string;
   hasDrainageIssues: boolean | null;
+  hasSumpPump: boolean | null;
   hasSumpPumpBackup: boolean | null;
+  isResilienceVerified: boolean;
   coolingType: string | null;
   heatingType: string | null;
   hvacInstallYear: number | null;
   roofType: string | null;
   roofReplacementYear: number | null;
   foundationType: FoundationType | null;
+  plumbingResponsibility?: string | null;
+  sharedSystemsResponsibility?: string | null;
   hasIrrigation: boolean | null;
   hasSecondaryHeat: boolean | null;
   hvacFilterLastCompletedDate: string | null;
@@ -64,6 +68,7 @@ export interface EnvironmentInsightProperty {
 
 export type EnvironmentQuestionField =
   | 'hasDrainageIssues'
+  | 'hasSumpPump'
   | 'hasSumpPumpBackup'
   | 'coolingType'
   | 'hvacInstallYear'
@@ -77,7 +82,7 @@ export type EnvironmentQuestionField =
 
 export interface EnvironmentQuestionOption {
   label: string;
-  value: string | number | boolean;
+  value: string | number | boolean | null;
 }
 
 export interface EnvironmentQuestion {
@@ -123,6 +128,59 @@ function isFloodZone(zone: string | null): boolean {
   return /^(A|AE|AH|AO|AR|A99|V|VE)$/i.test(zone.trim());
 }
 
+const managedElsewhere = (responsibility: string | null) =>
+  responsibility === 'ASSOCIATION' || responsibility === 'LANDLORD';
+
+const sumpPumpManagedElsewhere = (property: EnvironmentInsightProperty) =>
+  managedElsewhere(property.plumbingResponsibility ?? null)
+  || managedElsewhere(property.sharedSystemsResponsibility ?? null);
+
+const canHaveRelevantSumpContext = (foundationType: FoundationType | null) =>
+  foundationType === null
+  || foundationType === 'UNKNOWN'
+  || foundationType === 'BASEMENT'
+  || foundationType === 'CRAWL_SPACE'
+  || foundationType === 'MIXED'
+  || foundationType === 'OTHER';
+
+function rainAreaLabel(foundationType: FoundationType | null): string {
+  if (foundationType === 'BASEMENT') return 'Basement / foundation';
+  if (foundationType === 'CRAWL_SPACE') return 'Crawlspace / foundation';
+  if (foundationType === 'SLAB') return 'Foundation / exterior drainage';
+  return 'Lowest level / foundation';
+}
+
+function rainHomeImplication(foundationType: FoundationType | null): string {
+  if (foundationType === 'BASEMENT') {
+    return 'Heavy rainfall can overwhelm gutters and exterior drainage and may cause water intrusion around the basement or foundation.';
+  }
+  if (foundationType === 'CRAWL_SPACE') {
+    return 'Heavy rainfall can overwhelm gutters and exterior drainage and may cause water intrusion around the crawlspace or foundation.';
+  }
+  if (foundationType === 'SLAB') {
+    return 'Heavy rainfall can overwhelm gutters and exterior drainage and may cause water intrusion around the slab or building perimeter.';
+  }
+  return 'Heavy rainfall can overwhelm gutters and exterior drainage and may cause water intrusion around the home’s lowest level or foundation.';
+}
+
+function rainProtectionAction(property: EnvironmentInsightProperty): string {
+  if (property.hasSumpPump === true) {
+    if (sumpPumpManagedElsewhere(property)) {
+      return 'Confirm the responsible party has reviewed the sump pump and shared drainage systems.';
+    }
+    if (property.hasSumpPumpBackup === true) return 'Test the sump pump and backup power.';
+    if (property.hasSumpPumpBackup === false) return 'Test the sump pump and review the outage plan.';
+    return 'Test the sump pump and confirm it can discharge safely.';
+  }
+  if (property.foundationType === 'BASEMENT') {
+    return 'Check the basement and confirm water can drain away from the foundation.';
+  }
+  if (property.foundationType === 'CRAWL_SPACE') {
+    return 'Check the crawlspace and confirm water can drain away from the foundation.';
+  }
+  return 'Check the lowest level and confirm water can drain away from the foundation.';
+}
+
 export function deriveEnvironmentInsights(
   property: EnvironmentInsightProperty,
   sections: EnvironmentInsightSections
@@ -147,23 +205,21 @@ export function deriveEnvironmentInsights(
         summary: `About ${rainDay.precipitationSumIn.toFixed(1)} inches of rain is forecast.`,
         homeImplication: elevatedPropertyRisk
           ? `Water-intrusion risk may be higher for this home because of ${reasons.join(' and ')}.`
-          : 'Heavy rainfall can overwhelm gutters and exterior drainage and may cause basement or foundation water intrusion.',
+          : rainHomeImplication(property.foundationType),
         timeframe: dayLabel(rainDay.date),
         effectiveFrom: rainDay.date,
         effectiveTo: rainDay.date,
-        affectedSystems: ['Gutters', 'Drainage', 'Basement / foundation'],
+        affectedSystems: ['Gutters', 'Drainage', rainAreaLabel(property.foundationType)],
         recommendedActions: [
           'Clear gutters and exterior drains before the rain begins.',
-          property.hasSumpPumpBackup
-            ? 'Test the sump pump and backup power.'
-            : 'Check the basement or lowest level and confirm water can drain away from the foundation.',
+          rainProtectionAction(property),
           'Move valuables away from low floors and known leak areas.',
         ],
         actions: [
           { label: 'Start storm preparation', href: maintenanceHref(property.id), kind: 'primary' },
           { label: 'Check weather coverage', href: coverageHref(property.id), kind: 'secondary' },
         ],
-        source: elevatedPropertyRisk || property.hasSumpPumpBackup !== null
+        source: elevatedPropertyRisk || property.hasSumpPump !== null || property.foundationType !== null
           ? 'Open-Meteo forecast and property profile'
           : 'Open-Meteo forecast',
       });
@@ -359,15 +415,44 @@ export function deriveEnvironmentQuestions(
           options: [{ label: 'Yes', value: true }, { label: 'No', value: false }],
         });
       }
-      if (property.hasSumpPumpBackup === null) {
+      if (
+        property.hasSumpPump === null
+        && !property.isResilienceVerified
+        && canHaveRelevantSumpContext(property.foundationType)
+        && !sumpPumpManagedElsewhere(property)
+      ) {
+        add({
+          id: `${insight.id}-sump-presence`,
+          insightId: insight.id,
+          field: 'hasSumpPump',
+          prompt: 'Does this home have a sump pump?',
+          reason: 'We will only show sump-pump guidance when the home actually has one.',
+          inputType: 'choice',
+          options: [
+            { label: 'Yes', value: true },
+            { label: 'No', value: false },
+            { label: 'Not sure', value: null },
+          ],
+        });
+      }
+      if (
+        property.hasSumpPump === true
+        && property.hasSumpPumpBackup === null
+        && !property.isResilienceVerified
+        && !sumpPumpManagedElsewhere(property)
+      ) {
         add({
           id: `${insight.id}-sump-backup`,
           insightId: insight.id,
           field: 'hasSumpPumpBackup',
           prompt: 'Does the sump pump have battery or generator backup?',
-          reason: 'Backup power materially changes basement protection during a storm outage.',
+          reason: 'Backup power materially changes protection during a storm outage.',
           inputType: 'choice',
-          options: [{ label: 'Yes', value: true }, { label: 'No', value: false }],
+          options: [
+            { label: 'Yes', value: true },
+            { label: 'No', value: false },
+            { label: 'Not sure', value: null },
+          ],
         });
       }
     }

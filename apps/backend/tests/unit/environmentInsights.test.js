@@ -16,13 +16,17 @@ const property = {
   state: 'NJ',
   zipCode: '08540',
   hasDrainageIssues: false,
+  hasSumpPump: true,
   hasSumpPumpBackup: true,
+  isResilienceVerified: false,
   coolingType: 'CENTRAL_AIR',
   heatingType: 'FURNACE',
   hvacInstallYear: 2018,
   roofType: 'SHINGLE',
   roofReplacementYear: 2015,
   foundationType: 'BASEMENT',
+  plumbingResponsibility: 'OWNER',
+  sharedSystemsResponsibility: 'OWNER',
   hasIrrigation: false,
   hasSecondaryHeat: false,
   hvacFilterLastCompletedDate: '2026-06-15T12:00:00.000Z',
@@ -118,17 +122,102 @@ test('prioritizes action insights above watch insights', () => {
   assert.equal(insights[1].severity, 'watch');
 });
 
-test('asks at most two rain questions only when the relevant property data is missing', () => {
+test('asks for sump-pump presence before asking about backup power', () => {
   const rainInsight = {
     id: 'heavy-rain-2026-07-14',
     category: 'rain',
   };
-  const missingProperty = { ...property, hasDrainageIssues: null, hasSumpPumpBackup: null };
+  const missingProperty = {
+    ...property,
+    hasDrainageIssues: null,
+    hasSumpPump: null,
+    hasSumpPumpBackup: null,
+  };
   const questions = deriveEnvironmentQuestions(missingProperty, [rainInsight]);
 
   assert.equal(questions.length, 2);
-  assert.deepEqual(questions.map(question => question.field), ['hasDrainageIssues', 'hasSumpPumpBackup']);
+  assert.deepEqual(questions.map(question => question.field), ['hasDrainageIssues', 'hasSumpPump']);
+  assert.deepEqual(
+    deriveEnvironmentQuestions(
+      { ...property, hasSumpPump: true, hasSumpPumpBackup: null },
+      [rainInsight],
+    ).map(question => question.field),
+    ['hasSumpPumpBackup'],
+  );
   assert.equal(deriveEnvironmentQuestions(property, [rainInsight]).length, 0);
+  assert.equal(
+    deriveEnvironmentQuestions(
+      {
+        ...property,
+        hasDrainageIssues: false,
+        hasSumpPump: null,
+        hasSumpPumpBackup: null,
+        isResilienceVerified: true,
+      },
+      [rainInsight],
+    ).some(question => question.field === 'hasSumpPump'),
+    false,
+  );
+});
+
+test('suppresses sump questions and owner actions when they do not apply', () => {
+  const rainInsight = { id: 'heavy-rain-2026-07-14', category: 'rain' };
+  assert.equal(
+    deriveEnvironmentQuestions(
+      { ...property, foundationType: 'SLAB', hasSumpPump: null, hasSumpPumpBackup: null },
+      [rainInsight],
+    ).some(question => question.field === 'hasSumpPump'),
+    false,
+  );
+  assert.equal(
+    deriveEnvironmentQuestions(
+      {
+        ...property,
+        hasSumpPump: null,
+        hasSumpPumpBackup: null,
+        plumbingResponsibility: 'ASSOCIATION',
+      },
+      [rainInsight],
+    ).some(question => question.field === 'hasSumpPump'),
+    false,
+  );
+
+  const input = sections();
+  input.weather.data.tenDayForecast.push({
+    date: '2026-07-14',
+    tempMaxF: 78,
+    tempMinF: 66,
+    precipitationSumIn: 1.4,
+    weatherCode: 65,
+  });
+  const insight = deriveEnvironmentInsights(
+    {
+      ...property,
+      hasSumpPump: true,
+      hasSumpPumpBackup: null,
+      plumbingResponsibility: 'ASSOCIATION',
+    },
+    input,
+  )[0];
+  assert.match(insight.recommendedActions[1], /responsible party/i);
+});
+
+test('tailors heavy-rain language to the known foundation', () => {
+  const input = sections();
+  input.weather.data.tenDayForecast.push({
+    date: '2026-07-14',
+    tempMaxF: 78,
+    tempMinF: 66,
+    precipitationSumIn: 1.4,
+    weatherCode: 65,
+  });
+  const insight = deriveEnvironmentInsights(
+    { ...property, foundationType: 'SLAB', hasSumpPump: false, hasSumpPumpBackup: null },
+    input,
+  )[0];
+  assert.ok(insight.affectedSystems.includes('Foundation / exterior drainage'));
+  assert.doesNotMatch(insight.homeImplication, /basement/i);
+  assert.doesNotMatch(insight.recommendedActions.join(' '), /sump pump/i);
 });
 
 test('persists unknown enum choices conceptually by not asking when UNKNOWN is already stored', () => {

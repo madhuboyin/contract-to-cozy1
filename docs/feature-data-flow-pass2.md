@@ -9,7 +9,7 @@
 
 ## Feature: Risk Assessment
 - Inputs (models + fields read)
-  - `property`: ownership/primary checks, structural fields (`propertySize`, `yearBuilt`, `state`, `hasDrainageIssues`, `hasSumpPumpBackup`, etc.).
+  - `property`: ownership/primary checks, structural fields (`propertySize`, `yearBuilt`, `state`, `hasDrainageIssues`, `hasSumpPump`, `hasSumpPumpBackup`, etc.). Sump-pump presence and backup power are distinct tri-state facts; backup applicability requires confirmed presence.
   - `riskAssessmentReport`: `lastCalculatedAt`, existing cached report.
   - `inventoryItem`: appliance fields (`category`, `name`, `installedOn`, `purchasedOn`, `replacementCostCents`, `warrantyId`, `insurancePolicyId`).
   - `warranty`, `insurancePolicy` (included via property relations).
@@ -418,4 +418,3 @@
   - Routes: `apps/backend/src/routes/guidance.routes.ts`
   - Controller: `apps/backend/src/controllers/guidance.controller.ts`
   - Services: `apps/backend/src/services/guidanceEngine/guidanceJourney.service.ts`, `guidanceSignalResolver.service.ts`, `guidanceStepResolver.service.ts`, `guidanceBookingGuard.service.ts`
-

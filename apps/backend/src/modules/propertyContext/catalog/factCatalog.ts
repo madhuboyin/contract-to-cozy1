@@ -66,6 +66,7 @@ export const PROPERTY_FACT_CATALOG = [
   { key: 'safety.hasCoDetectors', scope: 'SAFETY', canonicalOwner: 'Property.hasCoDetectors', correctionPath: propertyPath('safety'), writable: true },
   { key: 'safety.hasSecuritySystem', scope: 'SAFETY', canonicalOwner: 'Property.hasSecuritySystem', correctionPath: propertyPath('safety'), writable: true },
   { key: 'safety.hasFireExtinguisher', scope: 'SAFETY', canonicalOwner: 'Property.hasFireExtinguisher', correctionPath: propertyPath('safety'), writable: true },
+  { key: 'safety.hasSumpPump', scope: 'SAFETY', canonicalOwner: 'Property.hasSumpPump', correctionPath: propertyPath('safety'), writable: true },
   { key: 'safety.hasSumpPumpBackup', scope: 'SAFETY', canonicalOwner: 'Property.hasSumpPumpBackup', correctionPath: propertyPath('safety'), writable: true },
   { key: 'maintenance.tasks', scope: 'MAINTENANCE', canonicalOwner: 'PropertyMaintenanceTask', correctionPath: '/dashboard/properties/:propertyId/maintenance', writable: false },
   { key: 'rooms.list', scope: 'ROOMS', canonicalOwner: 'InventoryRoom', correctionPath: '/dashboard/properties/:propertyId/rooms', writable: false },

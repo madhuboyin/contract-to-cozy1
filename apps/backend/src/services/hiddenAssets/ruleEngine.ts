@@ -97,6 +97,8 @@ const ATTRIBUTE_MAP: Record<string, keyof PropertyAttributeMap> = {
   'property.fireAlarm': 'fireAlarm',
   hasIrrigation: 'hasIrrigation',
   'property.hasIrrigation': 'hasIrrigation',
+  hasSumpPump: 'sumpPumpInstalled',
+  'property.hasSumpPump': 'sumpPumpInstalled',
   hasSumpPumpBackup: 'hasSumpPumpBackup',
   'property.hasSumpPumpBackup': 'hasSumpPumpBackup',
 
@@ -517,12 +519,15 @@ function generateMatchReason(
       return 'Leak detection status aligns with program criteria';
 
     // ── Sump / drainage ────────────────────────────────────────────────────
-    case 'hasSumpPumpBackup':
     case 'sumpPumpInstalled':
-      if (propValue === true) return 'Property has a sump pump backup system';
+      if (propValue === true) return 'Property has a sump pump';
       if (propValue === false)
         return 'No sump pump detected — program may support flood-mitigation installation';
       return 'Sump pump status aligns with program criteria';
+    case 'hasSumpPumpBackup':
+      if (propValue === true) return 'Property has a sump pump backup system';
+      if (propValue === false) return 'Sump pump has no backup power recorded';
+      return 'Sump pump backup status aligns with program criteria';
 
     // ── Storm resilience ──────────────────────────────────────────────────
     case 'impactWindows':
@@ -740,6 +745,7 @@ export function buildPropertyAttributeMap(
     roofReplacementYear?: number | null;
     hasSecuritySystem?: boolean | null;
     hasIrrigation?: boolean | null;
+    hasSumpPump?: boolean | null;
     hasSumpPumpBackup?: boolean | null;
     primaryHeatingFuel?: string | null;
     lastAppraisedValue?: number | null;
@@ -804,7 +810,7 @@ export function buildPropertyAttributeMap(
     // Derived systems
     heatPumpInstalled,
     heatPumpWaterHeaterInstalled,
-    sumpPumpInstalled: property.hasSumpPumpBackup ?? null,
+    sumpPumpInstalled: property.hasSumpPump ?? null,
 
     // Safety / smart home
     hasSecuritySystem: property.hasSecuritySystem ?? null,

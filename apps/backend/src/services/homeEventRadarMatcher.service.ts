@@ -26,6 +26,7 @@ interface PropertySnapshot {
   waterHeaterInstallYear: number | null;
   hasIrrigation: boolean | null;
   hasDrainageIssues: boolean | null;
+  hasSumpPump: boolean | null;
   hasSumpPumpBackup: boolean | null;
   primaryHeatingFuel: string | null;
   hasSecondaryHeat: boolean | null;
@@ -97,6 +98,7 @@ const PROPERTY_FIELDS_SELECT = {
   waterHeaterInstallYear: true,
   hasIrrigation: true,
   hasDrainageIssues: true,
+  hasSumpPump: true,
   hasSumpPumpBackup: true,
   primaryHeatingFuel: true,
   hasSecondaryHeat: true,
@@ -280,7 +282,7 @@ function computeWeatherFloodRain(p: PropertySnapshot, baseScore: number): EventI
     systems.push({ type: 'drainage', relevance: 'high' });
   }
 
-  if (p.hasSumpPumpBackup === false) {
+  if (p.hasSumpPump === true && p.hasSumpPumpBackup === false) {
     score += 0.1;
     drivers.push({ code: 'NO_SUMP_BACKUP', effect: 'increase', description: 'No sump pump backup recorded — basement flood risk higher if power fails.' });
     actions.push({ code: 'INSPECT_SUMP_PUMP', label: 'Test sump pump and consider a battery backup', priority: 'high' });

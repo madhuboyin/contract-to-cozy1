@@ -43,7 +43,7 @@ export interface PropertyAttributeMap {
   // ---------- Derived / inferred systems ----------
   heatPumpInstalled: boolean | null;            // derived: hvacType == HEAT_PUMP
   heatPumpWaterHeaterInstalled: boolean | null; // derived: waterHeaterType == HEAT_PUMP
-  sumpPumpInstalled: boolean | null;            // from hasSumpPumpBackup
+  sumpPumpInstalled: boolean | null;            // from hasSumpPump
 
   // ---------- Safety / smart home ----------
   hasSecuritySystem: boolean | null;

@@ -60,6 +60,7 @@ const PROPERTY_CONTEXT_SELECT = {
   foundationType: true,
   hasIrrigation: true,
   hasDrainageIssues: true,
+  hasSumpPump: true,
   hasSumpPumpBackup: true,
   hasSecondaryHeat: true,
   electricalPanelAge: true,
@@ -188,6 +189,7 @@ function buildPropertyContext(
     foundationType: property.foundationType,
     hasIrrigation: property.hasIrrigation,
     hasDrainageIssues: property.hasDrainageIssues,
+    hasSumpPump: property.hasSumpPump,
     hasSumpPumpBackup: property.hasSumpPumpBackup,
     hasSecondaryHeat: property.hasSecondaryHeat,
     electricalPanelAge: property.electricalPanelAge,
@@ -205,7 +207,7 @@ function buildPropertyContext(
       plumbing: makePropertySystem('plumbing', plumbingAsset, property.waterHeaterType ? 'Plumbing and water systems' : '', property.waterHeaterInstallYear),
       electrical: makePropertySystem('electrical', electricalAsset, property.electricalPanelAge !== null ? 'Electrical panel and branch circuits' : '', null),
       basement: hasBelowGradeSpace ? { type: 'basement', id: null, label: property.foundationType ?? 'Below-grade spaces', installationYear: null } : null,
-      drainage: property.hasDrainageIssues !== null || property.hasSumpPumpBackup !== null || property.hasIrrigation !== null
+      drainage: property.hasDrainageIssues !== null || property.hasSumpPump !== null || property.hasSumpPumpBackup !== null || property.hasIrrigation !== null
         ? { type: 'drainage', id: null, label: 'Drainage and water management', installationYear: null }
         : null,
     },

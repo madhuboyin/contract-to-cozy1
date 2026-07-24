@@ -234,13 +234,20 @@ export function HomeHealthNudge({ propertyId }: HomeHealthNudgeProps) {
   }, [propertyId, drawerItem, invalidateAfterNudgeAction, queryClient, triggerSuccessFeedback]);
 
   const handleResilienceChoice = useCallback(
-    async (value: boolean | null, choiceKey: string) => {
+    async (
+      field: 'hasSumpPump' | 'hasSumpPumpBackup',
+      value: boolean | null,
+      choiceKey: string
+    ) => {
       if (!propertyId) return;
       setResilienceChoiceSaving(choiceKey);
       try {
         const response = await api.patch(`/api/properties/${propertyId}`, {
-          hasSumpPumpBackup: value,
-          isResilienceVerified: true,
+          [field]: value,
+          isResilienceVerified:
+            field === 'hasSumpPump'
+              ? value !== true
+              : value !== null,
         });
         await triggerSuccessFeedback(deriveStreakFromPatchedProperty(response.data));
         await invalidateAfterNudgeAction();
@@ -424,21 +431,21 @@ export function HomeHealthNudge({ propertyId }: HomeHealthNudgeProps) {
             <p className="text-sm text-gray-700 mt-1">{nudge.description}</p>
             <div className="flex items-center gap-2 mt-3 flex-wrap">
               <button
-                onClick={() => handleResilienceChoice(true, 'yes')}
+                onClick={() => handleResilienceChoice(nudge.field, true, 'yes')}
                 disabled={!!resilienceChoiceSaving}
                 className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border border-cyan-300 px-3 py-1.5 text-sm font-medium text-cyan-700 transition-colors hover:bg-cyan-100 disabled:opacity-50"
               >
                 {resilienceChoiceSaving === 'yes' ? 'Saving...' : 'Yes'}
               </button>
               <button
-                onClick={() => handleResilienceChoice(false, 'no')}
+                onClick={() => handleResilienceChoice(nudge.field, false, 'no')}
                 disabled={!!resilienceChoiceSaving}
                 className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border border-cyan-300 px-3 py-1.5 text-sm font-medium text-cyan-700 transition-colors hover:bg-cyan-100 disabled:opacity-50"
               >
                 {resilienceChoiceSaving === 'no' ? 'Saving...' : 'No'}
               </button>
               <button
-                onClick={() => handleResilienceChoice(null, 'not-sure')}
+                onClick={() => handleResilienceChoice(nudge.field, null, 'not-sure')}
                 disabled={!!resilienceChoiceSaving}
                 className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-50"
               >

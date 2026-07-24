@@ -299,6 +299,7 @@ export const safetyAssembler: PropertyContextAssembler = {
           hasCoDetectors: true,
           hasSecuritySystem: true,
           hasFireExtinguisher: true,
+          hasSumpPump: true,
           hasSumpPumpBackup: true,
         },
       }),
@@ -310,6 +311,7 @@ export const safetyAssembler: PropertyContextAssembler = {
       'safety.hasCoDetectors': property.hasCoDetectors,
       'safety.hasSecuritySystem': property.hasSecuritySystem,
       'safety.hasFireExtinguisher': property.hasFireExtinguisher,
+      'safety.hasSumpPump': property.hasSumpPump,
       'safety.hasSumpPumpBackup': property.hasSumpPumpBackup,
     };
     return Object.entries(values).map(([key, value]) =>

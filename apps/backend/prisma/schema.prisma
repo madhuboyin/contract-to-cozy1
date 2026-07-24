@@ -2558,7 +2558,8 @@ model Property {
   hasFireExtinguisher Boolean?
 
   // Resilience Markers
-  hasSumpPumpBackup  Boolean? // For Resilience Nudge
+  hasSumpPump        Boolean? // Confirmed presence; null means unknown
+  hasSumpPumpBackup  Boolean? // Backup power, applicable only when hasSumpPump is true
   primaryHeatingFuel String? // For Utility Nudge (Gas, Electric, etc.)
   hasSecondaryHeat   Boolean? // (Wood stove, Generator)
 

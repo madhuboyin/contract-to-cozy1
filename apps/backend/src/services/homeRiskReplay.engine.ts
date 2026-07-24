@@ -55,6 +55,7 @@ export interface ReplayPropertyContext {
   foundationType: string | null;
   hasIrrigation: boolean | null;
   hasDrainageIssues: boolean | null;
+  hasSumpPump: boolean | null;
   hasSumpPumpBackup: boolean | null;
   hasSecondaryHeat: boolean | null;
   electricalPanelAge: number | null;
@@ -394,7 +395,7 @@ function computeWaterImpact(
     });
   }
 
-  if (context.hasSumpPumpBackup === false) {
+  if (context.hasSumpPump === true && context.hasSumpPumpBackup === false) {
     score += 0.1;
     drivers.push({
       code: 'NO_SUMP_BACKUP',
@@ -591,7 +592,7 @@ function computePowerImpact(
     });
   }
 
-  if (context.hasSumpPumpBackup === false) {
+  if (context.hasSumpPump === true && context.hasSumpPumpBackup === false) {
     score += 0.07;
     drivers.push({
       code: 'CRITICAL_PUMP_DEPENDENCY',

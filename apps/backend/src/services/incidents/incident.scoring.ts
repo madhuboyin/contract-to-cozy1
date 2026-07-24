@@ -36,6 +36,7 @@ export type IncidentScoringContext = {
 
 export type WeatherVulnerabilityProperty = {
   hasDrainageIssues?: boolean | null;
+  hasSumpPump?: boolean | null;
   hasSumpPumpBackup?: boolean | null;
   coolingType?: string | null;
   hvacInstallYear?: number | null;
@@ -66,7 +67,7 @@ export function computeWeatherPropertyVulnerability(args: {
       score += 5;
       reasons.push('recorded drainage issues');
     }
-    if (args.property.hasSumpPumpBackup === false) {
+    if (args.property.hasSumpPump === true && args.property.hasSumpPumpBackup === false) {
       score += 3;
       reasons.push('no sump-pump backup recorded');
     }

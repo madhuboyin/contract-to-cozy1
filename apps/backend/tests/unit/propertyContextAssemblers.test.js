@@ -32,6 +32,7 @@ const prismaMock = {
           hasCoDetectors: null,
           hasSecuritySystem: false,
           hasFireExtinguisher: true,
+          hasSumpPump: null,
           hasSumpPumpBackup: null,
         };
       }
@@ -163,6 +164,7 @@ test('SYSTEMS, SAFETY, and MAINTENANCE expose bounded preventive-care facts', as
   assert.equal(systems['systems.hasCooling'].value, true);
   assert.ok(systems['systems.installedItemTypes'].value.includes('FURNACE'));
   assert.equal(safety['safety.hasCoDetectors'].state, 'UNKNOWN');
+  assert.equal(safety['safety.hasSumpPump'].state, 'UNKNOWN');
   assert.equal(maintenance['maintenance.tasks'].value[0].seasonalTaskKey, 'SPRING_HVAC_AC_INSPECTION');
   assert.equal(maintenance['maintenance.tasks'].value[0].lastCompletedDate, '2026-06-01T00:00:00.000Z');
 });

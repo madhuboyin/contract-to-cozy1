@@ -165,7 +165,7 @@ function buildPropertyContextNote(property: Property | null | undefined): string
   if (property.roofReplacementYear) notes.push(`Roof updated ${property.roofReplacementYear}`);
   if (property.hvacInstallYear) notes.push(`HVAC context from ${property.hvacInstallYear}`);
   if (property.hasDrainageIssues) notes.push('Drainage issues on record');
-  if (property.hasSumpPumpBackup === false) notes.push('No sump backup recorded');
+  if (property.hasSumpPump === true && property.hasSumpPumpBackup === false) notes.push('No sump backup recorded');
 
   if (notes.length === 0) {
     return 'Replay uses location history and any available home system details.';

@@ -38,7 +38,7 @@ export interface AssetNudgeDTO extends DiscoveryNudgeBaseDTO, VerificationNudgeD
 
 export interface ResilienceNudgeDTO extends DiscoveryNudgeBaseDTO {
   type: 'RESILIENCE';
-  field: 'hasSumpPumpBackup';
+  field: 'hasSumpPump' | 'hasSumpPumpBackup';
   options: Array<{ label: string; value: boolean | null }>;
 }
 

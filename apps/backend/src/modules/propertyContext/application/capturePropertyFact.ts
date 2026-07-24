@@ -52,6 +52,7 @@ const propertyFacts = {
   'safety.hasCoDetectors': { field: 'hasCoDetectors', schema: nullableBoolean },
   'safety.hasSecuritySystem': { field: 'hasSecuritySystem', schema: nullableBoolean },
   'safety.hasFireExtinguisher': { field: 'hasFireExtinguisher', schema: nullableBoolean },
+  'safety.hasSumpPump': { field: 'hasSumpPump', schema: nullableBoolean },
   'safety.hasSumpPumpBackup': { field: 'hasSumpPumpBackup', schema: nullableBoolean },
 } as const;
 
@@ -118,6 +119,28 @@ export async function writeCanonicalFact(
   value: unknown,
 ): Promise<void> {
   if (factKey in propertyFacts) {
+    if (factKey === 'safety.hasSumpPump') {
+      await tx.property.update({
+        where: { id: propertyId },
+        data: {
+          hasSumpPump: value as boolean,
+          ...(value === false ? { hasSumpPumpBackup: null } : {}),
+          isResilienceVerified: value === false,
+        },
+      });
+      return;
+    }
+    if (factKey === 'safety.hasSumpPumpBackup') {
+      await tx.property.update({
+        where: { id: propertyId },
+        data: {
+          hasSumpPump: true,
+          hasSumpPumpBackup: value as boolean,
+          isResilienceVerified: true,
+        },
+      });
+      return;
+    }
     const mapping = propertyFacts[factKey as keyof typeof propertyFacts];
     await tx.property.update({ where: { id: propertyId }, data: { [mapping.field]: value } });
     return;
@@ -172,6 +195,13 @@ export async function capturePropertyFact(
         await tx.propertyFactEvidence.updateMany({
           where: { propertyId, factKey, supersededAt: null },
           data: { supersededAt: observedAt },
+        });
+      } else if (factKey === 'safety.hasSumpPump' || factKey === 'safety.hasSumpPumpBackup') {
+        // "Not sure" is an explicit response. Preserve the unknown physical
+        // fact while preventing repeated prompts until the homeowner edits it.
+        await tx.property.update({
+          where: { id: propertyId },
+          data: { isResilienceVerified: true },
         });
       }
       const evidence = await tx.propertyFactEvidence.create({

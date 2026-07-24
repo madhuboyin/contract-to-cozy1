@@ -10,7 +10,7 @@ export interface HabitTemplatePolicyInput {
 }
 
 const flagFactKeys: Record<PropertyContextFlag, string> = {
-  hasSumpPump: 'safety.hasSumpPumpBackup',
+  hasSumpPump: 'safety.hasSumpPump',
   hasFireExtinguisher: 'safety.hasFireExtinguisher',
   hasSmokeDetectors: 'safety.hasSmokeDetectors',
   hasCoDetectors: 'safety.hasCoDetectors',
@@ -155,7 +155,7 @@ function evaluateTemplatePresence(
     [/smoke_detector/i, 'safety.hasSmokeDetectors'],
     [/(^|_)co_detector/i, 'safety.hasCoDetectors'],
     [/fire_extinguisher/i, 'safety.hasFireExtinguisher'],
-    [/sump_pump/i, 'safety.hasSumpPumpBackup'],
+    [/sump_pump/i, 'safety.hasSumpPump'],
   ];
   for (const [pattern, key] of requiredSafety) {
     if (!pattern.test(template.key)) continue;
@@ -257,7 +257,7 @@ export function buildHabitEvaluationContext(
     coolingType: knownValue(context, 'systems.coolingType'),
     waterHeaterType: knownValue(context, 'systems.waterHeaterType'),
     roofType: knownValue(context, 'structure.roofType'),
-    hasSumpPump: knownValue(context, 'safety.hasSumpPumpBackup'),
+    hasSumpPump: knownValue(context, 'safety.hasSumpPump'),
     hasFireExtinguisher: knownValue(context, 'safety.hasFireExtinguisher'),
     hasSmokeDetectors: knownValue(context, 'safety.hasSmokeDetectors'),
     hasCoDetectors: knownValue(context, 'safety.hasCoDetectors'),

@@ -1443,6 +1443,7 @@ export interface Property {
   hasCoDetectors: boolean | null;
   hasSecuritySystem: boolean | null;
   hasFireExtinguisher: boolean | null;
+  hasSumpPump: boolean | null;
   hasSumpPumpBackup: boolean | null;
   primaryHeatingFuel: string | null;
   hasSecondaryHeat: boolean | null;
@@ -5401,6 +5402,7 @@ export interface EnvironmentInsight {
 
 export type EnvironmentQuestionField =
   | 'hasDrainageIssues'
+  | 'hasSumpPump'
   | 'hasSumpPumpBackup'
   | 'coolingType'
   | 'hvacInstallYear'
@@ -5419,6 +5421,6 @@ export interface EnvironmentQuestion {
   prompt: string;
   reason: string;
   inputType: 'choice' | 'year' | 'date' | 'text';
-  options?: Array<{ label: string; value: string | number | boolean }>;
+  options?: Array<{ label: string; value: string | number | boolean | null }>;
   placeholder?: string;
 }

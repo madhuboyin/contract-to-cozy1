@@ -19,6 +19,7 @@ export async function evaluateIncident(incidentId: string) {
       property: {
         select: {
           hasDrainageIssues: true,
+          hasSumpPump: true,
           hasSumpPumpBackup: true,
           coolingType: true,
           hvacInstallYear: true,

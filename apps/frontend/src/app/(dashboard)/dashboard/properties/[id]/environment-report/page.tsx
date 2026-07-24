@@ -42,7 +42,7 @@ function InlineInsightQuestions({
   const [values, setValues] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
 
-  const saveAnswer = async (question: EnvironmentQuestion, value: string | number | boolean) => {
+  const saveAnswer = async (question: EnvironmentQuestion, value: string | number | boolean | null) => {
     setError(null);
     setSavingId(question.id);
     try {
@@ -52,9 +52,15 @@ function InlineInsightQuestions({
           { field: question.field, completedDate: value }
         );
       } else {
+        const isSumpContext =
+          question.field === 'hasSumpPump'
+          || question.field === 'hasSumpPumpBackup';
         const response = await api.updateProperty(
           propertyId,
-          { [question.field]: value } as Parameters<typeof api.updateProperty>[1]
+          {
+            [question.field]: value,
+            ...(isSumpContext && value === null ? { isResilienceVerified: true } : {}),
+          } as Parameters<typeof api.updateProperty>[1]
         );
         if (!response.success) throw new Error('message' in response ? response.message : 'Unable to save answer');
       }

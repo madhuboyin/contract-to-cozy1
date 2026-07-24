@@ -86,13 +86,17 @@ interface GeocodableProperty {
   longitude: number | null;
   geocodedZipCode: string | null;
   hasDrainageIssues: boolean | null;
+  hasSumpPump: boolean | null;
   hasSumpPumpBackup: boolean | null;
+  isResilienceVerified: boolean;
   coolingType: string | null;
   heatingType: string | null;
   hvacInstallYear: number | null;
   roofType: string | null;
   roofReplacementYear: number | null;
   foundationType: FoundationType | null;
+  plumbingResponsibility?: string | null;
+  sharedSystemsResponsibility?: string | null;
   hasIrrigation: boolean | null;
   hasSecondaryHeat: boolean | null;
 }
@@ -153,12 +157,15 @@ export async function getEnvironmentReport(
   const contextualProperty: GeocodableProperty = {
     ...property,
     hasDrainageIssues: knownContextValue<boolean>(context, 'exterior.hasDrainageIssues') ?? null,
+    hasSumpPump: knownContextValue<boolean>(context, 'safety.hasSumpPump') ?? null,
     hasSumpPumpBackup: knownContextValue<boolean>(context, 'safety.hasSumpPumpBackup') ?? null,
     coolingType: knownContextValue<string>(context, 'systems.coolingType') ?? null,
     heatingType: knownContextValue<string>(context, 'systems.heatingType') ?? null,
     roofType: knownContextValue<string>(context, 'structure.roofType') ?? null,
     roofReplacementYear: knownContextValue<number>(context, 'structure.roofReplacementYear') ?? null,
     foundationType: (knownContextValue<string>(context, 'structure.foundationType') as FoundationType | undefined) ?? null,
+    plumbingResponsibility: knownContextValue<string>(context, 'responsibility.plumbing') ?? null,
+    sharedSystemsResponsibility: knownContextValue<string>(context, 'responsibility.sharedSystems') ?? null,
     hasIrrigation: knownContextValue<boolean>(context, 'exterior.hasIrrigation') ?? null,
   };
   const geo = await resolvePropertyGeo(contextualProperty);

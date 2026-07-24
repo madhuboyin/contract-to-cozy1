@@ -89,6 +89,7 @@ interface CreatePropertyData {
   hasCoDetectors?: boolean;
   hasSecuritySystem?: boolean;
   hasFireExtinguisher?: boolean;
+  hasSumpPump?: boolean | null;
   hasSumpPumpBackup?: boolean | null;
   primaryHeatingFuel?: string | null;
   hasSecondaryHeat?: boolean | null;
@@ -154,7 +155,8 @@ function capturedFactKeys(data: CreatePropertyData | UpdatePropertyData): string
     ['heatingType', 'systems.heatingType'], ['coolingType', 'systems.coolingType'],
     ['waterHeaterType', 'systems.waterHeaterType'], ['hasSmokeDetectors', 'safety.hasSmokeDetectors'],
     ['hasCoDetectors', 'safety.hasCoDetectors'], ['hasSecuritySystem', 'safety.hasSecuritySystem'],
-    ['hasFireExtinguisher', 'safety.hasFireExtinguisher'], ['hasSumpPumpBackup', 'safety.hasSumpPumpBackup'],
+    ['hasFireExtinguisher', 'safety.hasFireExtinguisher'], ['hasSumpPump', 'safety.hasSumpPump'],
+    ['hasSumpPumpBackup', 'safety.hasSumpPumpBackup'],
   ];
   const result = direct.filter(([field]) => data[field] !== undefined).map(([, factKey]) => factKey);
   const exteriorKeyByField: Record<string, string> = {
@@ -203,7 +205,7 @@ export type PropertyNudge =
       title: string;
       description: string;
       question: string;
-      field: 'hasSumpPumpBackup';
+      field: 'hasSumpPump' | 'hasSumpPumpBackup';
       options: Array<{ label: string; value: boolean | null }>;
     }
   | {
@@ -473,6 +475,9 @@ export async function createProperty(userId: string, data: CreatePropertyData): 
       hasCoDetectors: data.hasCoDetectors,
       hasSecuritySystem: data.hasSecuritySystem,
       hasFireExtinguisher: data.hasFireExtinguisher,
+      hasSumpPump:
+        data.hasSumpPump ??
+        (data.hasSumpPumpBackup === true ? true : null),
       hasSumpPumpBackup: data.hasSumpPumpBackup ?? null,
       primaryHeatingFuel: data.primaryHeatingFuel?.trim() || null,
       hasSecondaryHeat: data.hasSecondaryHeat ?? null,
@@ -623,6 +628,7 @@ export async function getNextPropertyNudge(propertyId: string): Promise<Property
   const property = await prisma.property.findUnique({
     where: { id: propertyId },
     select: {
+      hasSumpPump: true,
       hasSumpPumpBackup: true,
       primaryHeatingFuel: true,
       isResilienceVerified: true,
@@ -635,16 +641,31 @@ export async function getNextPropertyNudge(propertyId: string): Promise<Property
 
   if (!property) return null;
 
-  const isResilienceMissing =
-    property.hasSumpPumpBackup === null && !property.isResilienceVerified;
+  const isSumpPresenceMissing = property.hasSumpPump === null && !property.isResilienceVerified;
 
-  if (isResilienceMissing) {
+  if (isSumpPresenceMissing) {
     return {
       type: 'RESILIENCE_CHECK',
       source: 'PROPERTY',
       title: 'Home resilience check',
-      description: 'Do you have a battery backup for your sump pump? This improves flood-risk guidance.',
-      question: 'Do you have a battery backup for your sump pump?',
+      description: 'Confirm whether this home has a sump pump to improve heavy-rain guidance.',
+      question: 'Does this home have a sump pump?',
+      field: 'hasSumpPump',
+      options: [
+        { label: 'Yes', value: true },
+        { label: 'No', value: false },
+        { label: 'Not Sure', value: null },
+      ],
+    };
+  }
+
+  if (property.hasSumpPump === true && property.hasSumpPumpBackup === null && !property.isResilienceVerified) {
+    return {
+      type: 'RESILIENCE_CHECK',
+      source: 'PROPERTY',
+      title: 'Sump pump backup',
+      description: 'Backup power can keep a confirmed sump pump running during an outage.',
+      question: 'Does the sump pump have battery or generator backup?',
       field: 'hasSumpPumpBackup',
       options: [
         { label: 'Yes', value: true },
@@ -770,9 +791,11 @@ export async function updateProperty(
       : (existingProperty.primaryHeatingFuel?.trim() || null);
 
   const completedResilienceNudge =
-    existingProperty.hasSumpPumpBackup === null &&
-    data.hasSumpPumpBackup !== undefined &&
-    data.hasSumpPumpBackup !== null;
+    (existingProperty.hasSumpPump === null && data.hasSumpPump !== undefined && data.hasSumpPump !== null)
+    || (existingProperty.hasSumpPump === true
+      && existingProperty.hasSumpPumpBackup === null
+      && data.hasSumpPumpBackup !== undefined
+      && data.hasSumpPumpBackup !== null);
 
   const completedUtilityNudge = existingHeatingFuel.length === 0 && !!nextHeatingFuel;
 
@@ -832,8 +855,18 @@ export async function updateProperty(
   if (data.hasCoDetectors !== undefined) updatePayload.hasCoDetectors = data.hasCoDetectors;
   if (data.hasSecuritySystem !== undefined) updatePayload.hasSecuritySystem = data.hasSecuritySystem;
   if (data.hasFireExtinguisher !== undefined) updatePayload.hasFireExtinguisher = data.hasFireExtinguisher;
+  if (data.hasSumpPump !== undefined) {
+    updatePayload.hasSumpPump = data.hasSumpPump;
+    if (data.hasSumpPump === false) {
+      updatePayload.hasSumpPumpBackup = null;
+    }
+    if (data.isResilienceVerified === undefined) {
+      updatePayload.isResilienceVerified = data.hasSumpPump === false;
+    }
+  }
   if (data.hasSumpPumpBackup !== undefined) {
     updatePayload.hasSumpPumpBackup = data.hasSumpPumpBackup;
+    if (data.hasSumpPumpBackup === true) updatePayload.hasSumpPump = true;
     if (data.isResilienceVerified === undefined) {
       updatePayload.isResilienceVerified = data.hasSumpPumpBackup !== null;
     }
@@ -946,6 +979,7 @@ export async function updateProperty(
 
   const weatherContextFields = new Set([
     'hasDrainageIssues',
+    'hasSumpPump',
     'hasSumpPumpBackup',
     'coolingType',
     'hvacInstallYear',

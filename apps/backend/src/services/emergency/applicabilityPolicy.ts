@@ -18,6 +18,7 @@ export function evaluateEmergencyContext(context: PropertyContextSnapshot): Emer
     'safety.hasSmokeDetectors',
     'safety.hasCoDetectors',
     'safety.hasFireExtinguisher',
+    'safety.hasSumpPump',
     'safety.hasSumpPumpBackup',
   ];
   for (const key of keys) facts.read(key);

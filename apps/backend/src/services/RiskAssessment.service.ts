@@ -593,7 +593,11 @@ class RiskAssessmentService {
     const actionCta =
       property.hasSumpPumpBackup === true
         ? 'Maintain battery backup and test quarterly'
-        : 'Install sump pump battery backup';
+        : property.hasSumpPump === true
+          ? 'Review sump pump backup options'
+          : property.hasSumpPump === false
+            ? 'Review basement drainage and flood mitigation'
+            : 'Confirm basement drainage and sump pump setup';
 
     return {
       assetName: 'BASEMENT_FLOOD_RISK',

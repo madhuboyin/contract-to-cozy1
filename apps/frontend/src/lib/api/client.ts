@@ -1543,6 +1543,7 @@ class APIClient {
       hasCoDetectors?: boolean;
       hasSecuritySystem?: boolean;
       hasFireExtinguisher?: boolean;
+      hasSumpPump?: boolean | null;
       hasSumpPumpBackup?: boolean | null;
       primaryHeatingFuel?: string | null;
       hasSecondaryHeat?: boolean | null;

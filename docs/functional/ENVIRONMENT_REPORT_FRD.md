@@ -1007,6 +1007,22 @@ Example questions:
 - “Is this area part of a septic drain field?”
 - “Does your HOA restrict tree size or front-yard landscaping?”
 
+### Sump-pump context sequencing
+
+Heavy-rain guidance must not infer that a sump pump exists from an unknown
+backup-power field. The canonical property facts are:
+
+- `safety.hasSumpPump`: confirmed physical presence (`true`, `false`, or unknown);
+- `safety.hasSumpPumpBackup`: backup power for a confirmed pump (`true`,
+  `false`, or unknown).
+
+Just-in-time capture must establish presence before asking about battery or
+generator backup. A confirmed slab foundation suppresses the presence question
+unless other verified evidence establishes a pump. Association- or
+landlord-managed plumbing/shared systems suppress owner-specific pump questions
+and actions. Heavy-rain labels and preparation copy use the known foundation
+type (basement, crawlspace, slab, or neutral lowest-level language).
+
 #### 24.4.8 Recommendation Hierarchy
 
 Recommendations must be generated in this order:
