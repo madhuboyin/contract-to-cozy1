@@ -7,6 +7,7 @@ export * from './capabilityGoldenRanking';
 export * from './capabilityGovernancePolicy';
 export * from './capabilityExplanationBuilder';
 export * from './capabilityRecommendationContext';
+export * from './capabilityRelatedResolver';
 export * from './capabilityRanking';
 export * from './capabilityReadinessEvaluator';
 export * from './capabilitySuppressionPolicy';

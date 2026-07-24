@@ -20,6 +20,17 @@ function stableRegistryInput(capabilities: ToolCapabilityDefinition[]): string {
         routeTemplate: capability.destination.routeTemplate,
         routeAliases: [...capability.destination.routeAliases].sort(),
         rolloutKey: capability.governance.rolloutKey,
+        acceptedContext: [...capability.destination.acceptedContext].sort(),
+        workflowOnly: capability.destination.workflowOnly,
+        primaryJob: capability.productFramework.primaryJob,
+        primaryDestination: capability.productFramework.primaryDestination,
+        outcomeCategory: capability.presentation.outcomeCategory,
+        triggerFamilies: [...capability.recommendation.triggerFamilies].sort(),
+        explicitRelatedCapabilityIds: [
+          ...capability.recommendation.explicitRelatedCapabilityIds,
+        ],
+        safetyTier: capability.governance.safetyTier,
+        outputEntityTypes: [...capability.lifecycle.outputEntityTypes].sort(),
       }))
       .sort((left, right) => left.id.localeCompare(right.id)),
   );

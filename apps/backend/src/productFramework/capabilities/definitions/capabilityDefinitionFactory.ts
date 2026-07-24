@@ -73,6 +73,28 @@ const OUTPUT_BY_OUTCOME: Record<CapabilityOutcomeCategory, string> = {
   UNDERSTAND_HOME: 'A durable home record or explanatory view.',
 };
 
+/**
+ * Verified output identities used for related and post-completion
+ * compatibility. An empty entry is intentional: we do not infer an entity
+ * merely from a generic completion kind.
+ */
+const OUTPUT_ENTITY_TYPES: Record<
+  string,
+  ToolCapabilityDefinition['lifecycle']['outputEntityTypes']
+> = {
+  diy: ['PROJECT'],
+  'hidden-asset-finder': ['INVENTORY_ITEM'],
+  'hoa-compliance': ['DOCUMENT'],
+  'home-digital-will': ['DOCUMENT'],
+  'home-renovation-risk-advisor': ['PROJECT'],
+  'inspection-hub': ['ISSUE'],
+  'material-specs': ['DOCUMENT'],
+  permits: ['DOCUMENT'],
+  'project-tracker': ['PROJECT'],
+  'quote-comparison': ['SERVICE'],
+  'seller-prep': ['PROJECT'],
+};
+
 const CONTEXTUAL_DEFINITIONS: Record<string, ContextualDefinition> = {
   'break-even': {
     sourceKinds: ['GUIDANCE', 'PROJECT'],
@@ -359,7 +381,7 @@ export function buildCapabilityDefinition(seed: CapabilitySeed): ToolCapabilityD
       expectedOutput: output,
       completionKind: seed.completionKind,
       completionSignal: completionSignal(seed),
-      outputEntityTypes: [],
+      outputEntityTypes: OUTPUT_ENTITY_TYPES[seed.id] ?? [],
     },
   });
 }

@@ -94,6 +94,7 @@ Status as of July 24, 2026:
 | CAP-502 property smart-context surface | Complete | Property detail requests the shared evaluator with the PROPERTY surface, renders a maximum of three server suggestions, records property-specific exposure and launch lineage, and retains the All Tools fallback on empty or failed responses |
 | CAP-503 selector retirement | Complete | Both frontend recommendation selectors and their selector-only tests are deleted; inventory classification now reads canonical backend definition groups, CI prevents selector restoration or imports, and server evaluator plus render-contract tests own coverage |
 | CAP-504 launch-context verification | Complete | A shared mapper and destination parser preserve source action, entity, context, journey, item, surface, reason, and recommendation version for every server source type; telemetry retains the same lineage and resume links are emitted only for authorized sources resolved from current responses |
+| CAP-600 related resolver | Complete | Canonical manifest relationships, verified output compatibility, reviewed taxonomy similarity, and source context produce deterministic bounded results after release, readiness, governance, workflow-context, commercial, approval, and suppression gates |
 
 Explore Tools and homeowner command search now use the canonical catalog by default. Set
 `CAPABILITY_CATALOG_SOURCE=legacy` only for the temporary internal-beta rollback.
@@ -1116,6 +1117,17 @@ Implement:
 7. release/readiness/governance filtering.
 
 Return three by default and four at the absolute maximum.
+
+Implementation: the backend resolver reads only canonical manifests and
+caller-supplied authorized eligibility state. Explicit relationships lead in
+their reviewed order, verified output-to-input matches lead derived fallbacks,
+and the remaining score uses shared trigger family, primary job, source entity,
+destination, and outcome. It fails closed for missing availability or
+readiness, enforces permission, safety, approval, commercial, workflow-context,
+and suppression gates, excludes the current capability, returns three by
+default, and clamps all requests to four. Canonical manifests now declare
+verified entity outputs for compatibility, and those relationship semantics
+participate in the registry version hash.
 
 #### CAP-601: RelatedTools cutover
 
