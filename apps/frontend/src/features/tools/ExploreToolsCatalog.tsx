@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import type { ElementType } from 'react';
 import { Search } from 'lucide-react';
 import type { ToolDiscoveryAvailabilityDTO } from '@/types';
 import { Button } from '@/components/ui/button';
@@ -13,13 +14,90 @@ import {
   SummaryCard,
 } from '@/components/mobile/dashboard/MobilePrimitives';
 import { track } from '@/lib/analytics/events';
+import { resolveCapabilityIcon } from './capabilityIconRegistry';
+import {
+  appendCapabilityLaunchContext,
+  CAPABILITY_OUTCOME_CATEGORIES,
+  capabilityCatalogSource,
+  capabilitySearchTerms,
+  evaluateCapabilityReadiness,
+} from './capabilityCatalog';
 import {
   evaluateToolReadiness,
   getDiscoverableTools,
-  TOOL_OUTCOME_CATEGORIES,
   type ToolDiscoveryContext,
   type ToolLaunchContext,
 } from './toolDiscoveryRegistry';
+import { useCapabilityCatalog } from './useCapabilityCatalog';
+import { useCapabilityImpression } from './useCapabilityImpression';
+
+type ExploreCapability = {
+  id: string;
+  label: string;
+  description: string;
+  outcomeCategory: string;
+  aliases: string[];
+  searchTerms: string[];
+  icon: ElementType;
+  href: string;
+  badgeLabel: string | null;
+  readiness: { state: 'READY' | 'NEEDS_CONTEXT' | 'UNAVAILABLE'; reasons: string[] };
+};
+
+function ExploreCapabilityTile({
+  tool,
+  propertyId,
+  registryVersion,
+  position,
+  launchContext,
+}: {
+  tool: ExploreCapability;
+  propertyId?: string;
+  registryVersion: string;
+  position: number;
+  launchContext?: Omit<ToolLaunchContext, 'launchSurface'>;
+}) {
+  const impressionRef = useCapabilityImpression<HTMLDivElement>({
+    capabilityId: tool.id,
+    propertyId,
+    surface: 'explore_tools',
+    registryVersion,
+    recommendationReason: launchContext?.recommendationReason,
+    contextVersion: launchContext?.contextVersion,
+  });
+  const ToolIcon = tool.icon;
+
+  return (
+    <div ref={impressionRef} className="space-y-1.5">
+      <QuickActionTile
+        title={tool.label}
+        subtitle={`${tool.description}${tool.readiness.state === 'NEEDS_CONTEXT' ? ` · ${tool.readiness.reasons[0]}` : ''}`}
+        icon={<ToolIcon className="h-5 w-5" />}
+        href={tool.href}
+        onClick={() => track('tool_discovery_clicked', {
+          propertyId,
+          surface: 'explore_tools',
+          toolId: tool.id,
+          position,
+          recommendationReason: launchContext?.recommendationReason,
+          contextVersion: launchContext?.contextVersion,
+          sourceActionId: launchContext?.sourceActionId,
+        })}
+        badgeLabel={tool.readiness.state === 'READY' ? tool.badgeLabel : 'More context helps'}
+        variant="compact"
+      />
+      {tool.aliases.length > 0 ? (
+        <div className="flex flex-wrap gap-1 px-1" aria-label={`Ways to find ${tool.label}`}>
+          {tool.aliases.slice(0, 2).map((alias) => (
+            <span key={alias} className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-600">
+              {alias}
+            </span>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
 export function ExploreToolsCatalog({
   propertyId,
@@ -34,28 +112,72 @@ export function ExploreToolsCatalog({
 }) {
   const [query, setQuery] = React.useState('');
   const normalizedQuery = query.trim().toLowerCase();
-  const tools = React.useMemo(
+  const source = capabilityCatalogSource();
+  const catalogQuery = useCapabilityCatalog(
+    { propertyId },
+    { enabled: source === 'canonical' },
+  );
+  const legacyTools = React.useMemo(
     () => getDiscoverableTools({ availability }),
     [availability],
   );
-  const groupedTools = TOOL_OUTCOME_CATEGORIES.map((category) => ({
+  const tools = React.useMemo<ExploreCapability[]>(() => {
+    if (source === 'canonical') {
+      return (catalogQuery.data?.capabilities ?? []).map((capability) => ({
+        id: capability.id,
+        label: capability.label,
+        description: capability.shortDescription,
+        outcomeCategory: capability.outcomeCategory,
+        aliases: capability.intentAliases,
+        icon: resolveCapabilityIcon(capability.iconName),
+        href: appendCapabilityLaunchContext(capability.href, {
+          launchSurface: 'explore_tools',
+          ...launchContext,
+        }),
+        badgeLabel: capability.badges.includes('BETA') ? 'Beta' : null,
+        readiness: evaluateCapabilityReadiness(
+          capability,
+          context ?? { propertyId },
+        ),
+        searchTerms: capabilitySearchTerms(capability),
+      }));
+    }
+    return legacyTools.map((tool) => ({
+      id: tool.id,
+      label: tool.label,
+      description: tool.description,
+      outcomeCategory: tool.outcomeCategory,
+      aliases: [],
+      icon: tool.icon,
+      href: tool.buildHref(propertyId, {
+        launchSurface: 'explore_tools',
+        ...launchContext,
+      }),
+      badgeLabel: tool.releaseStage === 'BETA' ? 'Beta' : null,
+      readiness: evaluateToolReadiness(tool, context ?? { propertyId }, availability),
+      searchTerms: [tool.label, tool.description, tool.outcomeCategory.replace(/_/g, ' ')],
+    }));
+  }, [
+    availability,
+    catalogQuery.data?.capabilities,
+    context,
+    launchContext,
+    legacyTools,
+    propertyId,
+    source,
+  ]);
+  const groupedTools = CAPABILITY_OUTCOME_CATEGORIES.map((category) => ({
     ...category,
     items: tools.filter((tool) => {
       if (tool.outcomeCategory !== category.key) return false;
       if (!normalizedQuery) return true;
-      return `${tool.label} ${tool.description} ${category.title}`.toLowerCase().includes(normalizedQuery);
+      return [...tool.searchTerms, category.title]
+        .join(' ')
+        .toLowerCase()
+        .includes(normalizedQuery);
     }),
   })).filter((group) => group.items.length > 0);
   const visibleTools = groupedTools.flatMap((group) => group.items);
-
-  React.useEffect(() => {
-    if (tools.length === 0) return;
-    track('tool_discovery_impression', {
-      propertyId,
-      surface: 'explore_tools',
-      toolIds: tools.map((tool) => tool.id),
-    });
-  }, [propertyId, tools]);
 
   React.useEffect(() => {
     if (normalizedQuery.length < 2) return;
@@ -85,6 +207,30 @@ export function ExploreToolsCatalog({
         </div>
       </MobileSection>
 
+      {source === 'canonical' && catalogQuery.isLoading ? (
+        <MobileSection>
+          <SummaryCard
+            title="Loading tools"
+            subtitle="Preparing the tools available for this home."
+          >
+            <div className="h-2 w-full animate-pulse rounded-full bg-slate-100" />
+          </SummaryCard>
+        </MobileSection>
+      ) : null}
+
+      {source === 'canonical' && catalogQuery.isError ? (
+        <MobileSection>
+          <SummaryCard
+            title="Tool catalog temporarily unavailable"
+            subtitle="Your ranked Home actions are still available. Try loading the tool catalog again."
+          >
+            <Button variant="outline" onClick={() => void catalogQuery.refetch()}>
+              Try again
+            </Button>
+          </SummaryCard>
+        </MobileSection>
+      ) : null}
+
       {groupedTools.map((group) => (
         <MobileSection key={group.key}>
           <ExpandableSummaryCard
@@ -95,29 +241,14 @@ export function ExploreToolsCatalog({
           >
             <QuickActionGrid className="gap-2.5">
               {group.items.map((tool, index) => {
-                const ToolIcon = tool.icon;
-                const readiness = evaluateToolReadiness(tool, context ?? { propertyId }, availability);
                 return (
-                  <QuickActionTile
+                  <ExploreCapabilityTile
                     key={tool.id}
-                    title={tool.label}
-                    subtitle={`${tool.description}${readiness.state === 'NEEDS_CONTEXT' ? ` · ${readiness.reasons[0]}` : ''}`}
-                    icon={<ToolIcon className="h-5 w-5" />}
-                    href={tool.buildHref(propertyId, {
-                      launchSurface: 'explore_tools',
-                      ...launchContext,
-                    })}
-                    onClick={() => track('tool_discovery_clicked', {
-                      propertyId,
-                      surface: 'explore_tools',
-                      toolId: tool.id,
-                      position: index,
-                      recommendationReason: launchContext?.recommendationReason,
-                      contextVersion: launchContext?.contextVersion,
-                      sourceActionId: launchContext?.sourceActionId,
-                    })}
-                    badgeLabel={readiness.state === 'READY' ? '' : 'More context helps'}
-                    variant="compact"
+                    tool={tool}
+                    propertyId={propertyId}
+                    registryVersion={catalogQuery.data?.registryVersion ?? 'legacy-v2'}
+                    position={index}
+                    launchContext={launchContext}
                   />
                 );
               })}
@@ -126,7 +257,7 @@ export function ExploreToolsCatalog({
         </MobileSection>
       ))}
 
-      {groupedTools.length === 0 && (
+      {groupedTools.length === 0 && !catalogQuery.isLoading && !catalogQuery.isError && (
         <MobileSection>
           <SummaryCard title="No matching tools" subtitle="Try a broader goal such as cost, coverage, maintenance, risk, or project.">
             <Button variant="outline" onClick={() => setQuery('')}>Clear search</Button>

@@ -3,7 +3,10 @@
 import { useQuery } from '@tanstack/react-query';
 import { fetchCapabilityCatalog, type CapabilityCatalogRequest } from './capabilityApi';
 
-export function useCapabilityCatalog(request: CapabilityCatalogRequest = {}) {
+export function useCapabilityCatalog(
+  request: CapabilityCatalogRequest = {},
+  options: { enabled?: boolean } = {},
+) {
   return useQuery({
     queryKey: [
       'capability-catalog',
@@ -11,6 +14,7 @@ export function useCapabilityCatalog(request: CapabilityCatalogRequest = {}) {
       request.includeWorkflowContext ?? false,
     ],
     queryFn: () => fetchCapabilityCatalog(request),
+    enabled: options.enabled ?? true,
     staleTime: 5 * 60 * 1000,
     retry: 1,
   });

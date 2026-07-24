@@ -76,12 +76,13 @@ Status as of July 24, 2026:
 | CAP-300 catalog projection service | Complete | Narrow serializable projection filters through canonical availability and resolves property-preserving destinations |
 | CAP-301 authenticated catalog API | Complete | `GET /api/tool-capabilities` supports authorized property context, workflow inclusion, rollout filtering, cache variation, and registry version |
 | CAP-302 frontend catalog client | Complete | Narrow frontend types, API wrapper, and query hook consume the canonical catalog contract |
-| CAP-303 Explore Tools cutover | Pending | Existing frontend registry remains the active UI source |
-| CAP-304 command-search cutover | Pending | Existing frontend registry remains the active command source |
-| CAP-305 actual-view impressions | Pending | Current bulk impression behavior remains until the visibility primitive is integrated |
+| CAP-303 Explore Tools cutover | Complete | Canonical catalog drives outcome grouping, aliases, intent chips, readiness, beta badges, degraded state, and property-preserving links behind the rollback flag |
+| CAP-304 command-search cutover | Complete | Homeowner command search uses the same catalog and indexes descriptions, aliases, outcome, job, destination, and supported context |
+| CAP-305 actual-view impressions | Complete | Shared observer requires 50% visibility for 750 ms in an active document and deduplicates by session and registry version |
 | CAP-306 ProductTool synchronization | Pending | Knowledge Hub seed metadata remains separately maintained |
 
-No user-visible discovery or recommendation behavior has changed through CAP-302.
+Explore Tools and homeowner command search now use the canonical catalog by default. Set
+`CAPABILITY_CATALOG_SOURCE=legacy` only for the temporary internal-beta rollback.
 
 ---
 

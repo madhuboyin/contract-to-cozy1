@@ -21,6 +21,9 @@ const nextConfig = {
   },
   env: {
     NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
+    NEXT_PUBLIC_CAPABILITY_CATALOG_SOURCE:
+      process.env.CAPABILITY_CATALOG_SOURCE
+      || (process.env.TOOL_DISCOVERY_ACCEPTANCE_FIXTURE === '1' ? 'legacy' : 'canonical'),
   },
 
   async redirects() {

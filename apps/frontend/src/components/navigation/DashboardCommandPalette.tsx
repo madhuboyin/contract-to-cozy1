@@ -13,6 +13,13 @@ import { Command } from 'cmdk';
 import { getDiscoverableTools } from '@/features/tools/toolDiscoveryRegistry';
 import { useToolDiscoveryAvailability } from '@/features/tools/useToolDiscoveryAvailability';
 import { track } from '@/lib/analytics/events';
+import { useCapabilityCatalog } from '@/features/tools/useCapabilityCatalog';
+import {
+  appendCapabilityLaunchContext,
+  capabilityCatalogSource,
+  capabilitySearchTerms,
+} from '@/features/tools/capabilityCatalog';
+import { useCapabilityImpression } from '@/features/tools/useCapabilityImpression';
 
 type CommandItem = {
   id: string;
@@ -26,6 +33,36 @@ type CommandItem = {
 type DashboardCommandPaletteProps = {
   propertyId?: string;
 };
+
+function CapabilityCommandItem({
+  item,
+  propertyId,
+  registryVersion,
+  onSelect,
+}: {
+  item: CommandItem;
+  propertyId?: string;
+  registryVersion: string;
+  onSelect: (item: CommandItem) => void;
+}) {
+  const impressionRef = useCapabilityImpression<HTMLDivElement>({
+    capabilityId: item.toolId!,
+    propertyId,
+    surface: 'command_palette',
+    registryVersion,
+  });
+  return (
+    <Command.Item
+      ref={impressionRef}
+      value={item.label}
+      keywords={[item.group, item.href, ...(item.keywords ?? [])]}
+      onSelect={() => onSelect(item)}
+      className="flex cursor-pointer items-center rounded-md px-2 py-2 text-sm text-gray-700 outline-none transition-colors data-[selected=true]:bg-brand-50 data-[selected=true]:text-brand-700"
+    >
+      {item.label}
+    </Command.Item>
+  );
+}
 
 const PROPERTY_ID_IN_PATH = /\/dashboard\/properties\/([^/]+)/;
 
@@ -92,6 +129,12 @@ export default function DashboardCommandPalette({ propertyId }: DashboardCommand
     propertyId ||
     selectedPropertyId ||
     pathname?.match(PROPERTY_ID_IN_PATH)?.[1];
+  const isAdminNav = user?.role === 'ADMIN';
+  const catalogSource = capabilityCatalogSource();
+  const capabilityCatalogQuery = useCapabilityCatalog(
+    { propertyId: resolvedPropertyId },
+    { enabled: catalogSource === 'canonical' && !isAdminNav },
+  );
 
   React.useEffect(() => {
     setRecentActions(readRecentActions());
@@ -125,8 +168,6 @@ export default function DashboardCommandPalette({ propertyId }: DashboardCommand
   const riskReportHref = resolvedPropertyId
     ? `/dashboard/properties/${resolvedPropertyId}/risk-assessment`
     : '/dashboard/properties';
-
-  const isAdminNav = user?.role === 'ADMIN';
 
   const items = React.useMemo<CommandItem[]>(() => {
     // Admin gets its own dedicated command list — not the homeowner nav
@@ -176,14 +217,35 @@ export default function DashboardCommandPalette({ propertyId }: DashboardCommand
       },
     ];
 
-    const tools: CommandItem[] = getDiscoverableTools({ availability: availabilityQuery.data }).map((tool) => ({
-      id: `tool-${tool.id}`,
-      label: tool.label,
-      href: tool.buildHref(resolvedPropertyId, { launchSurface: 'command_palette' }),
-      group: 'Tools',
-      keywords: [tool.description, tool.outcomeCategory.replace(/_/g, ' ')],
-      toolId: tool.id,
-    }));
+    const tools: CommandItem[] = catalogSource === 'canonical'
+      ? (capabilityCatalogQuery.data?.capabilities ?? []).map((capability) => ({
+          id: `tool-${capability.id}`,
+          label: capability.label,
+          href: appendCapabilityLaunchContext(capability.href, {
+            launchSurface: 'command_palette',
+          }),
+          group: 'Tools',
+          keywords: capabilitySearchTerms(capability),
+          toolId: capability.id,
+        }))
+      : getDiscoverableTools({ availability: availabilityQuery.data }).map((tool) => ({
+          id: `tool-${tool.id}`,
+          label: tool.label,
+          href: tool.buildHref(resolvedPropertyId, { launchSurface: 'command_palette' }),
+          group: 'Tools',
+          keywords: [tool.description, tool.outcomeCategory.replace(/_/g, ' ')],
+          toolId: tool.id,
+        }));
+
+    if (catalogSource === 'canonical' && capabilityCatalogQuery.isError) {
+      tools.push({
+        id: 'tool-catalog-unavailable',
+        label: 'Tool catalog unavailable — open Explore Tools to retry',
+        href: `/dashboard/home-tools${resolvedPropertyId ? `?propertyId=${encodeURIComponent(resolvedPropertyId)}` : ''}`,
+        group: 'Tools',
+        keywords: ['tools unavailable retry'],
+      });
+    }
 
     return [...navItems, ...recent, ...quick, ...tools];
   }, [
@@ -195,20 +257,12 @@ export default function DashboardCommandPalette({ propertyId }: DashboardCommand
     resolutionCenterHref,
     riskReportHref,
     availabilityQuery.data,
+    capabilityCatalogQuery.data?.capabilities,
+    capabilityCatalogQuery.isError,
+    catalogSource,
   ]);
 
   const groups: Array<CommandItem['group']> = ['Navigation', 'Recent Actions', 'Quick Shortcuts', 'Tools'];
-
-  React.useEffect(() => {
-    if (!open || isAdminNav) return;
-    const toolIds = items.filter((item) => item.group === 'Tools' && item.toolId).map((item) => item.toolId!);
-    if (toolIds.length === 0) return;
-    track('tool_discovery_impression', {
-      propertyId: resolvedPropertyId,
-      surface: 'command_palette',
-      toolIds,
-    });
-  }, [isAdminNav, items, open, resolvedPropertyId]);
 
   const onSelect = (item: CommandItem) => {
     if (item.toolId) {
@@ -258,15 +312,25 @@ export default function DashboardCommandPalette({ propertyId }: DashboardCommand
               return (
                 <Command.Group key={group} heading={group} className="pt-2">
                   {groupItems.map((item) => (
-                    <Command.Item
-                      key={item.id}
-                      value={item.label}
-                      keywords={[item.group, item.href, ...(item.keywords ?? [])]}
-                      onSelect={() => onSelect(item)}
-                      className="flex cursor-pointer items-center rounded-md px-2 py-2 text-sm text-gray-700 outline-none transition-colors data-[selected=true]:bg-brand-50 data-[selected=true]:text-brand-700"
-                    >
-                      {item.label}
-                    </Command.Item>
+                    item.toolId ? (
+                      <CapabilityCommandItem
+                        key={item.id}
+                        item={item}
+                        propertyId={resolvedPropertyId}
+                        registryVersion={capabilityCatalogQuery.data?.registryVersion ?? 'legacy-v2'}
+                        onSelect={onSelect}
+                      />
+                    ) : (
+                      <Command.Item
+                        key={item.id}
+                        value={item.label}
+                        keywords={[item.group, item.href, ...(item.keywords ?? [])]}
+                        onSelect={() => onSelect(item)}
+                        className="flex cursor-pointer items-center rounded-md px-2 py-2 text-sm text-gray-700 outline-none transition-colors data-[selected=true]:bg-brand-50 data-[selected=true]:text-brand-700"
+                      >
+                        {item.label}
+                      </Command.Item>
+                    )
                   ))}
                 </Command.Group>
               );
