@@ -63,6 +63,7 @@ export async function resolvePropertyAccess(
         joinedAt: new Date(),
       },
       update: {},
+      select: { id: true },
     });
     return { propertyId, role: 'OWNER' };
   }

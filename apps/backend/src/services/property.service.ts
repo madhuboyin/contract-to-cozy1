@@ -17,7 +17,6 @@ import { incrementStreak } from './gamification.service';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from './analytics';
 import { generateHabitsForProperty } from './homeHabitCoach/habitGenerationEngine';
 import { getPropertyContext } from '../modules/propertyContext';
-import { HouseholdService } from './household.service';
 import { reevaluateActiveWeatherIncidentsForProperty } from './incidents/incident.evaluator';
 import { reconcileCoverageGuidanceJourneyApplicability } from './coverageJourneyReconciliation.service';
 import { SeasonalChecklistService } from './seasonalChecklist.service';
@@ -391,7 +390,8 @@ export async function getUserProperties(userId: string): Promise<ScoredProperty[
       userId,
       property: { homeownerProfileId: { not: homeownerProfileId } },
     },
-    include: {
+    select: {
+      role: true,
       property: { include: { warranties: true, coverPhoto: true, financingProfile: true, exteriorProfile: true, responsibilities: true } },
     },
   });
@@ -506,6 +506,16 @@ export async function createProperty(userId: string, data: CreatePropertyData): 
           verifiedAt: capturedAt,
         })),
       },
+      // Create the owner ACL in the same transaction as the property. A
+      // membership failure must never leave a partially-created property.
+      householdMembers: {
+        create: {
+          userId,
+          role: 'OWNER',
+          isPrimaryOwner: true,
+          joinedAt: capturedAt,
+        },
+      },
       // END PHASE 2 ADDITIONS
     },
   });
@@ -551,9 +561,6 @@ export async function createProperty(userId: string, data: CreatePropertyData): 
       yearBuilt: data.yearBuilt ?? null,
     },
   });
-
-  // Auto-create primary owner HouseholdMember row
-  await new HouseholdService().ensurePrimaryOwnerMember(property.id, userId);
 
   // Fire-and-forget: seed initial habits for the new property
   getPropertyContext(property.id, { userId }, {
@@ -612,7 +619,10 @@ export async function getPropertyById(propertyId: string, userId: string): Promi
     // Fallback: user is a household member of this property
     const membership = await prisma.householdMember.findUnique({
       where: { propertyId_userId: { propertyId, userId } },
-      include: { property: { include: { warranties: true, coverPhoto: true, financingProfile: true, exteriorProfile: true, responsibilities: true } } },
+      select: {
+        role: true,
+        property: { include: { warranties: true, coverPhoto: true, financingProfile: true, exteriorProfile: true, responsibilities: true } },
+      },
     });
     if (!membership) return null;
     property = membership.property as any;

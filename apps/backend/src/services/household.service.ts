@@ -386,6 +386,7 @@ export class HouseholdService {
         joinedAt: new Date(),
       },
       update: {},
+      select: { id: true },
     });
   }
 }

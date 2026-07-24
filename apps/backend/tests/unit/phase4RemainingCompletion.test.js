@@ -87,6 +87,15 @@ test('household notification controls use the canonical preference system only',
   const routes = source('../../src/routes/household.routes.ts');
   assert.doesNotMatch(routes, /members\/me\/notifications|UpdateNotificationPrefsSchema/);
 
+  const propertyService = source('../../src/services/property.service.ts');
+  const householdService = source('../../src/services/household.service.ts');
+  const propertyAccessService = source('../../src/services/propertyAccess.service.ts');
+  assert.match(propertyService, /householdMembers:\s*\{\s*create:/);
+  assert.doesNotMatch(propertyService, /new HouseholdService\(\)\.ensurePrimaryOwnerMember/);
+  assert.match(propertyService, /select:\s*\{\s*role: true,\s*property:/);
+  assert.match(householdService, /update: \{\},\s*select: \{ id: true \}/);
+  assert.match(propertyAccessService, /update: \{\},\s*select: \{ id: true \}/);
+
   const householdPage = source(
     '../../../frontend/src/app/(dashboard)/dashboard/properties/[id]/household/page.tsx',
   );
