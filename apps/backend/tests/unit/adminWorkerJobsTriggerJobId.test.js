@@ -103,7 +103,7 @@ test('triggerJob passes a deterministic jobId, not an auto-generated one', async
 
     assert.equal(calls.added.length, 1);
     assert.equal(typeof calls.added[0].opts.jobId, 'string');
-    assert.match(calls.added[0].opts.jobId, /^manual:test-job-id-job:true:property-1:\d+$/);
+    assert.match(calls.added[0].opts.jobId, /^manual-test-job-id-job-true-property-1-\d+$/);
   });
 });
 

@@ -323,7 +323,9 @@ export async function triggerJob(
   // completed job occupying that id (DEFAULT_JOB_RETENTION keeps up to 500
   // completed jobs, so a static id could stay "taken" indefinitely).
   const dedupBucket = Math.floor(Date.now() / MANUAL_TRIGGER_DEDUP_WINDOW_MS);
-  const jobId = `manual:${jobKey}:${dryRun}:${propertyId ?? 'none'}:${dedupBucket}`;
+  // BullMQ rejects ":" in custom job IDs ("Custom Id cannot contain :") — see the
+  // same note in workers/src/runners/highPriorityEmailEnqueue.poller.ts.
+  const jobId = `manual-${jobKey}-${dryRun}-${propertyId ?? 'none'}-${dedupBucket}`;
   const job = await q.add(
     entry.jobName,
     { dryRun, propertyId },
