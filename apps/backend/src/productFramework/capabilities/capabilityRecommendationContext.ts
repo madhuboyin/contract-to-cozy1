@@ -9,6 +9,9 @@ import {
   type HomeAction,
 } from '../homeAction.contract';
 import { RecommendationSafetyTierSchema } from '../recommendationGovernance.contract';
+import {
+  RECOMMENDATION_RESPONSE_STATUSES,
+} from '../recommendationResponse.contract';
 
 export const CAPABILITY_SUGGESTION_SURFACES = [
   'HOME',
@@ -57,7 +60,7 @@ const NormalizedHomeActionSchema = z.object({
     score: z.number().min(0).max(1).nullable(),
     label: z.enum(['LOW', 'MEDIUM', 'HIGH']),
   }),
-  recommendationStatus: z.enum(['AVAILABLE', 'DEGRADED', 'UNAVAILABLE']),
+  recommendationStatus: z.enum(RECOMMENDATION_RESPONSE_STATUSES),
   materialActionAllowed: z.boolean(),
   signalIntentFamilies: z.array(BoundedIdentifier),
   ctaCapabilityIds: z.array(BoundedIdentifier),
@@ -169,8 +172,17 @@ export const CapabilityRecommendationContextSchema = z.object({
   personalizationRecommendations: z.array(PersonalizationSourceSchema).max(100),
   completions: z.array(CompletionSourceSchema).max(200),
   availability: z.object({
+    status: z.enum(['EVALUATED', 'POLICY_UNAVAILABLE']),
     policyVersion: OptionalIdentifier,
     availableCapabilityIds: z.array(BoundedIdentifier),
+  }),
+  governance: z.object({
+    canUseCapabilities: z.boolean(),
+    allowedSafetyTiers: z.array(RecommendationSafetyTierSchema),
+    enforceApprovals: z.boolean(),
+    approvedCapabilityIds: z.array(BoundedIdentifier),
+    evidenceAccess: z.enum(['ALLOWED', 'REDACTED', 'DENIED']),
+    contextFreshness: z.enum(['CURRENT', 'STALE', 'UNKNOWN']),
   }),
   lifecycle: z.array(LifecycleSummarySchema).max(200),
   sourceContext: ExplicitSourceContextSchema.nullable(),
@@ -204,6 +216,15 @@ export interface BuildCapabilityRecommendationContextInput {
   completions?: readonly CapabilityCompletionSource[];
   availableCapabilityIds?: readonly string[];
   availabilityPolicyVersion?: string | null;
+  availabilityStatus?: 'EVALUATED' | 'POLICY_UNAVAILABLE';
+  governance?: {
+    canUseCapabilities?: boolean;
+    allowedSafetyTiers?: readonly z.infer<typeof RecommendationSafetyTierSchema>[];
+    enforceApprovals?: boolean;
+    approvedCapabilityIds?: readonly string[];
+    evidenceAccess?: 'ALLOWED' | 'REDACTED' | 'DENIED';
+    contextFreshness?: 'CURRENT' | 'STALE' | 'UNKNOWN';
+  };
   lifecycle?: readonly CapabilityLifecycleSummary[];
   sourceContext?: CapabilityExplicitSourceContext | null;
   surface: CapabilitySuggestionSurface;
@@ -335,8 +356,22 @@ export function buildCapabilityRecommendationContext(
     personalizationRecommendations: byId(input.personalizationRecommendations ?? []),
     completions: byId(input.completions ?? []),
     availability: {
+      status: input.availabilityStatus
+        ?? (input.availableCapabilityIds ? 'EVALUATED' : 'POLICY_UNAVAILABLE'),
       policyVersion: input.availabilityPolicyVersion ?? null,
       availableCapabilityIds: uniqueSorted(input.availableCapabilityIds ?? []),
+    },
+    governance: {
+      canUseCapabilities: input.governance?.canUseCapabilities ?? false,
+      allowedSafetyTiers: uniqueSorted(
+        input.governance?.allowedSafetyTiers ?? [],
+      ),
+      enforceApprovals: input.governance?.enforceApprovals ?? false,
+      approvedCapabilityIds: uniqueSorted(
+        input.governance?.approvedCapabilityIds ?? [],
+      ),
+      evidenceAccess: input.governance?.evidenceAccess ?? 'DENIED',
+      contextFreshness: input.governance?.contextFreshness ?? 'CURRENT',
     },
     lifecycle: [...(input.lifecycle ?? [])]
       .sort((left, right) => left.capabilityId.localeCompare(right.capabilityId)),

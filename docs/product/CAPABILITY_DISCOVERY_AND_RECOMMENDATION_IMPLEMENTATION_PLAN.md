@@ -83,6 +83,7 @@ Status as of July 24, 2026:
 | CAP-400 context source adapter | Complete | Privacy-safe evaluator input normalizes canonical actions, authorized fact quality, journeys, projects, personalization, completions, availability, and lifecycle without raw values or prose |
 | CAP-401 candidate matcher | Complete | Deterministic structured matching applies reviewed precedence across action CTAs, definitions, trigger families, source/job, entities, journeys, projects, and completion relationships without free-text eligibility |
 | CAP-402 readiness evaluator | Complete | Three-valued backend readiness evaluates property, facts, systems, coverage gaps, accepted/source context, and jurisdiction; only explicitly reviewed low-consequence capabilities may return safe partial value |
+| CAP-403 governance and availability | Complete | Pre-ranking policy gates release state, permissions, safety tiers, approvals, context freshness, degraded responses, CTA availability, and structured-evidence disclosure |
 
 Explore Tools and homeowner command search now use the canonical catalog by default. Set
 `CAPABILITY_CATALOG_SOURCE=legacy` only for the temporary internal-beta rollback.

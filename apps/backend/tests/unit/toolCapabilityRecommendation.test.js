@@ -5,8 +5,10 @@ require('ts-node/register');
 
 const {
   CapabilityCandidateMatchResultSchema,
+  CapabilityGovernanceResultSchema,
   CapabilityReadinessResultSchema,
   CapabilityRecommendationContextSchema,
+  applyCapabilityGovernancePolicy,
   buildCapabilityRecommendationContext,
   canonicalCapabilityRegistry,
   createToolCapabilityRegistry,
@@ -151,6 +153,15 @@ test('CAP-400 builds a deterministic normalized evaluator source contract', () =
     trackedSystemCount: null,
     coverageGapCount: null,
     jurisdictionStatus: 'UNKNOWN',
+  });
+  assert.equal(result.availability.status, 'EVALUATED');
+  assert.deepEqual(result.governance, {
+    canUseCapabilities: false,
+    allowedSafetyTiers: [],
+    enforceApprovals: false,
+    approvedCapabilityIds: [],
+    evidenceAccess: 'DENIED',
+    contextFreshness: 'CURRENT',
   });
 });
 
@@ -624,5 +635,230 @@ test('CAP-402 rejects stale registry and context versions', () => {
       matchResult: staleRegistryResult,
     }),
     /registry version/,
+  );
+});
+
+function govern(context, registry = canonicalCapabilityRegistry) {
+  const matchResult = matchCapabilityCandidates({ registry, context });
+  const readinessResult = evaluateCapabilityCandidateReadiness({
+    registry,
+    context,
+    matchResult,
+  });
+  return applyCapabilityGovernancePolicy({
+    registry,
+    context,
+    readinessResult,
+  });
+}
+
+function governedCoverageContext(overrides = {}) {
+  const sourceAction = action({
+    source: {
+      kind: 'COVERAGE',
+      entityId: 'item-1',
+      version: 'action-v2',
+    },
+    job: 'DECIDE',
+  });
+  return buildCapabilityRecommendationContext({
+    propertyId: 'property-1',
+    propertyContext: propertyContext(),
+    actions: [sourceAction],
+    actionSourceMetadata: [{
+      actionId: 'action-1',
+      signalIntentFamilies: ['COVERAGE_GAPS_PRESENT'],
+      ctaCapabilityIds: ['coverage-options'],
+    }],
+    readinessMetrics: {
+      coverageGapCount: 1,
+      jurisdictionStatus: 'KNOWN',
+    },
+    availableCapabilityIds: ['coverage-options'],
+    availabilityPolicyVersion: 'rollout-v2',
+    availabilityStatus: 'EVALUATED',
+    governance: {
+      canUseCapabilities: true,
+      allowedSafetyTiers: ['REGULATED_COVERAGE'],
+      enforceApprovals: true,
+      approvedCapabilityIds: ['coverage-options'],
+      evidenceAccess: 'ALLOWED',
+      contextFreshness: 'CURRENT',
+    },
+    surface: 'HOME',
+    ...overrides,
+  });
+}
+
+test('CAP-403 promotes only candidates passing release, permission, safety, and freshness gates', () => {
+  const result = govern(governedCoverageContext());
+  assert.doesNotThrow(() => CapabilityGovernanceResultSchema.parse(result));
+  const coverage = candidateById(result, 'coverage-options');
+  assert.deepEqual(coverage.policy, {
+    decision: 'PROMOTABLE',
+    reasonCodes: [],
+    ctaAllowed: true,
+    evidenceMode: 'STRUCTURED_ONLY',
+    policyVersion: 'rollout-v2',
+  });
+  assert.deepEqual(result.diagnostics, {
+    promotableCount: 1,
+    withheldCount: 0,
+    blockedCount: 1,
+  });
+});
+
+test('CAP-403 blocks unavailable, unauthorized, unapproved, and stale candidates', () => {
+  const cases = [
+    {
+      name: 'availability policy',
+      overrides: {
+        availabilityStatus: 'POLICY_UNAVAILABLE',
+      },
+      reason: 'RELEASE_POLICY_UNAVAILABLE',
+    },
+    {
+      name: 'capability rollout',
+      overrides: {
+        availableCapabilityIds: [],
+      },
+      reason: 'CAPABILITY_NOT_AVAILABLE',
+    },
+    {
+      name: 'permission',
+      overrides: {
+        governance: {
+          canUseCapabilities: false,
+          allowedSafetyTiers: ['REGULATED_COVERAGE'],
+          enforceApprovals: false,
+          evidenceAccess: 'ALLOWED',
+          contextFreshness: 'CURRENT',
+        },
+      },
+      reason: 'CAPABILITY_PERMISSION_DENIED',
+    },
+    {
+      name: 'safety tier',
+      overrides: {
+        governance: {
+          canUseCapabilities: true,
+          allowedSafetyTiers: ['LOW_CONSEQUENCE'],
+          enforceApprovals: false,
+          evidenceAccess: 'ALLOWED',
+          contextFreshness: 'CURRENT',
+        },
+      },
+      reason: 'SAFETY_TIER_NOT_PERMITTED',
+    },
+    {
+      name: 'approval',
+      overrides: {
+        governance: {
+          canUseCapabilities: true,
+          allowedSafetyTiers: ['REGULATED_COVERAGE'],
+          enforceApprovals: true,
+          approvedCapabilityIds: [],
+          evidenceAccess: 'ALLOWED',
+          contextFreshness: 'CURRENT',
+        },
+      },
+      reason: 'GOVERNANCE_APPROVAL_MISSING',
+    },
+    {
+      name: 'freshness',
+      overrides: {
+        governance: {
+          canUseCapabilities: true,
+          allowedSafetyTiers: ['REGULATED_COVERAGE'],
+          enforceApprovals: false,
+          evidenceAccess: 'ALLOWED',
+          contextFreshness: 'STALE',
+        },
+      },
+      reason: 'CONTEXT_STALE',
+    },
+  ];
+
+  for (const fixture of cases) {
+    const coverage = candidateById(
+      govern(governedCoverageContext(fixture.overrides)),
+      'coverage-options',
+    );
+    assert.equal(coverage.policy.decision, 'BLOCKED', fixture.name);
+    assert.equal(coverage.policy.ctaAllowed, false, fixture.name);
+    assert.equal(
+      coverage.policy.reasonCodes.includes(fixture.reason),
+      true,
+      fixture.name,
+    );
+  }
+});
+
+test('CAP-403 applies degraded-response withholding without exposing evidence', () => {
+  const degradedAction = action({
+    source: {
+      kind: 'COVERAGE',
+      entityId: 'item-1',
+      version: 'action-v2',
+    },
+    job: 'DECIDE',
+    recommendationResponse: {
+      ...action().recommendationResponse,
+      status: 'LOW_CONFIDENCE',
+      reasonCode: 'RECOMMENDATION_LOW_CONFIDENCE',
+      materialActionAllowed: false,
+    },
+  });
+  const context = governedCoverageContext({ actions: [degradedAction] });
+  const coverage = candidateById(govern(context), 'coverage-options');
+
+  assert.equal(coverage.policy.decision, 'WITHHELD');
+  assert.equal(coverage.policy.ctaAllowed, false);
+  assert.equal(coverage.policy.evidenceMode, 'OMIT');
+  assert.deepEqual(coverage.policy.reasonCodes, [
+    'SOURCE_RESPONSE_LOW_CONFIDENCE',
+    'SOURCE_MATERIAL_ACTION_WITHHELD',
+  ]);
+});
+
+test('CAP-403 can omit unauthorized evidence without blocking an otherwise safe CTA', () => {
+  const context = governedCoverageContext({
+    governance: {
+      canUseCapabilities: true,
+      allowedSafetyTiers: ['REGULATED_COVERAGE'],
+      enforceApprovals: false,
+      evidenceAccess: 'REDACTED',
+      contextFreshness: 'CURRENT',
+    },
+  });
+  const coverage = candidateById(govern(context), 'coverage-options');
+
+  assert.equal(coverage.policy.decision, 'PROMOTABLE');
+  assert.equal(coverage.policy.ctaAllowed, true);
+  assert.equal(coverage.policy.evidenceMode, 'OMIT');
+  assert.deepEqual(coverage.policy.reasonCodes, [
+    'EVIDENCE_ACCESS_RESTRICTED',
+  ]);
+});
+
+test('CAP-403 rejects stale readiness results before applying policy', () => {
+  const context = governedCoverageContext();
+  const matchResult = matchCapabilityCandidates({
+    registry: canonicalCapabilityRegistry,
+    context,
+  });
+  const readinessResult = evaluateCapabilityCandidateReadiness({
+    registry: canonicalCapabilityRegistry,
+    context,
+    matchResult,
+  });
+  readinessResult.contextVersion = 'context-v0';
+  assert.throws(
+    () => applyCapabilityGovernancePolicy({
+      registry: canonicalCapabilityRegistry,
+      context,
+      readinessResult,
+    }),
+    /context version is stale/,
   );
 });

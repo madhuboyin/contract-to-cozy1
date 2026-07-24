@@ -3,6 +3,7 @@ export * from './capabilityAvailability';
 export * from './capabilityCandidateMatcher';
 export * from './capabilityCatalog.service';
 export * from './capabilityGoldenFixtures';
+export * from './capabilityGovernancePolicy';
 export * from './capabilityRecommendationContext';
 export * from './capabilityReadinessEvaluator';
 export * from './canonicalCapabilityRegistry';
