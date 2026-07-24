@@ -137,7 +137,10 @@ function baseSuppressionReasons(input: {
   if (candidate.policy.decision === 'WITHHELD') {
     reasons.push('POLICY_WITHHELD');
   }
-  if (capability.destination.workflowOnly && context.surface !== 'WORKFLOW') {
+  if (
+    capability.destination.workflowOnly
+    && !['WORKFLOW', 'COMPLETION'].includes(context.surface)
+  ) {
     reasons.push('WORKFLOW_CONTEXT_REQUIRED');
   }
 

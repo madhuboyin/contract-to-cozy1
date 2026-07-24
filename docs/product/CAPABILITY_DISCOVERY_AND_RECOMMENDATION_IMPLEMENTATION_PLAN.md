@@ -98,6 +98,7 @@ Status as of July 24, 2026:
 | CAP-601 RelatedTools cutover | Complete | The property-authorized related-capabilities endpoint composes current Property Context, readiness, release, governance, workflow, and recent-completion state; RelatedTools consumes its versioned projection with viewport gating, actual-view lifecycle telemetry, safe launch attribution, and no empty failure container |
 | CAP-602 inline suggestion primitive | Complete | Shared non-modal renderer consumes one server suggestion, preserves launch lineage and actual-view telemetry, and exposes dismiss or not-relevant controls only through caller-provided handlers |
 | CAP-603 inline integration contract | Complete | Shared slot accepts only property, canonical source entity, optional action/journey, completion event, and placement context; it requests one server-selected capability and renders nothing for loading, failure, or empty results |
+| CAP-604 post-completion resolver | Complete | Authenticated record-and-resolve endpoint validates canonical completion/output compatibility, awaits lifecycle persistence, evaluates against the exact output with action hierarchy and recent-completion suppression, and returns zero or one next step plus Explore Tools |
 
 Explore Tools and homeowner command search now use the canonical catalog by default. Set
 `CAPABILITY_CATALOG_SOURCE=legacy` only for the temporary internal-beta rollback.
@@ -1213,6 +1214,18 @@ On meaningful completion:
 - suppress current or recently completed capabilities;
 - respect action hierarchy; and
 - render at most one primary next step plus Explore Tools.
+
+Implementation: a property-authorized POST endpoint accepts only a canonical
+capability completion whose kind and durable output entity type match the
+manifest. It awaits the existing analytics-backed lifecycle write before
+requesting the shared evaluator with an exact COMPLETION source, limit one,
+and preserved source-action lineage. The evaluator admits workflow-only
+capabilities on verified completion surfaces, excludes the just-completed
+capability through output compatibility, and applies existing recent
+completion and source-action CTA suppression. The frontend exposes an
+imperative completion mutation for use after the primary workflow commits and
+a bounded renderer for one next step plus the server-provided Explore Tools
+fallback.
 
 #### CAP-605: First integration anchors
 

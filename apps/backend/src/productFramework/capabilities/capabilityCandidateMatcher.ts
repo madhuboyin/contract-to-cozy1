@@ -332,7 +332,7 @@ export function matchCapabilityCandidates(input: {
     const source: CandidateSource = {
       kind: 'COMPLETION',
       id: completion.id,
-      actionId: null,
+      actionId: completion.sourceActionId,
       entityType: completion.outputEntityType,
       entityId: completion.outputEntityId,
       sourceVersion: String(completion.capabilityVersion),

@@ -313,7 +313,9 @@ async function loadDefaultCompletions(
       id: event.id,
       capabilityId: capability.id,
       capabilityVersion: capability.version,
+      completionKind: capability.lifecycle.completionKind,
       completionSignal: capability.lifecycle.completionSignal,
+      sourceActionId: metadataValue(event.metadataJson, 'sourceActionId'),
       outputEntityType:
         metadataValue(event.metadataJson, 'outputEntityType')
         ?? capability.lifecycle.outputEntityTypes[0]
@@ -477,6 +479,7 @@ function sourceScoped<T extends {
   sourceEntityId?: string | null;
   outputEntityType?: string | null;
   outputEntityId?: string | null;
+  completionKind?: string | null;
   completionSignal?: string | null;
 }>(values: readonly T[], source: CapabilityExplicitSourceContext | null): T[] {
   if (!source) return [...values];
@@ -493,7 +496,7 @@ function sourceScoped<T extends {
           && (!source.entityType || entityType === source.entityType)
         )
       )
-      && (!source.eventType || value.completionSignal === source.eventType)
+      && (!source.eventType || value.completionKind === source.eventType)
     );
   });
 }
@@ -573,7 +576,7 @@ async function evaluateCapabilitySuggestions(
     : required.actions;
   const availableCapabilityIds = dependencies.availableCapabilityIds(
     input.userId,
-    input.surface === 'WORKFLOW',
+    ['WORKFLOW', 'COMPLETION'].includes(input.surface),
   );
   const context = buildCapabilityRecommendationContext({
     propertyId: input.propertyId,

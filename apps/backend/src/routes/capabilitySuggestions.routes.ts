@@ -11,6 +11,10 @@ import {
 } from '../productFramework/capabilities';
 import { getCapabilitySuggestions } from '../services/capabilityRecommendation.service';
 import { getRelatedCapabilities } from '../services/capabilityRelated.service';
+import {
+  CapabilityCompletionNextInputSchema,
+  recordCapabilityCompletionAndResolveNext,
+} from '../services/capabilityCompletion.service';
 import type { CustomRequest } from '../types';
 import { logger } from '../lib/logger';
 
@@ -60,6 +64,36 @@ export const CapabilitySuggestionsQuerySchema = z.object({
 });
 
 const CapabilityContextTypeSchema = z.enum(CAPABILITY_CONTEXT_TYPES);
+
+export const CapabilityCompletionNextBodySchema =
+  CapabilityCompletionNextInputSchema.omit({
+    propertyId: true,
+    userId: true,
+  }).superRefine((value, ctx) => {
+    const capability = canonicalCapabilityRegistry.getById(value.capabilityId);
+    if (!capability) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['capabilityId'],
+        message: 'Unknown capability.',
+      });
+      return;
+    }
+    if (capability.lifecycle.completionKind !== value.completionKind) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['completionKind'],
+        message: 'Completion kind does not match the capability contract.',
+      });
+    }
+    if (!capability.lifecycle.outputEntityTypes.includes(value.outputEntityType)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['outputEntityType'],
+        message: 'Output entity type is not verified for this capability.',
+      });
+    }
+  });
 
 export const RelatedCapabilitiesQuerySchema = z.object({
   currentCapabilityId: z.string().trim().min(1).max(120).refine(
@@ -181,6 +215,56 @@ router.get(
         error: {
           code: 'CAPABILITY_SUGGESTIONS_UNAVAILABLE',
           message: 'Capability suggestions are temporarily unavailable.',
+        },
+      });
+    }
+  },
+);
+
+router.post(
+  '/properties/:propertyId/capability-completions/next',
+  authenticate,
+  propertyAuthMiddleware,
+  async (req: CustomRequest, res: Response): Promise<void> => {
+    const parsed = CapabilityCompletionNextBodySchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({
+        success: false,
+        error: {
+          code: 'INVALID_CAPABILITY_COMPLETION',
+          message: 'The capability completion is invalid.',
+          details: parsed.error.flatten(),
+        },
+      });
+      return;
+    }
+    const userId = req.user?.userId;
+    if (!userId) {
+      res.status(401).json({
+        success: false,
+        error: { code: 'AUTH_REQUIRED', message: 'Authentication required.' },
+      });
+      return;
+    }
+    try {
+      const data = await recordCapabilityCompletionAndResolveNext({
+        ...parsed.data,
+        propertyId: req.params.propertyId,
+        userId,
+      });
+      res.setHeader('Cache-Control', 'private, no-store');
+      res.setHeader('Vary', 'Authorization, Cookie');
+      res.status(201).json({ success: true, data });
+    } catch (error) {
+      logger.error(
+        { err: error, propertyId: req.params.propertyId, userId },
+        'Failed to record capability completion and resolve next step',
+      );
+      res.status(500).json({
+        success: false,
+        error: {
+          code: 'CAPABILITY_COMPLETION_UNAVAILABLE',
+          message: 'The next capability is temporarily unavailable.',
         },
       });
     }

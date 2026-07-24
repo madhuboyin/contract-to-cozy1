@@ -411,6 +411,24 @@ export type CapabilitySuggestionResponseDTO = {
   suggestions: CapabilitySuggestionDTO[];
 };
 
+export type CapabilityCompletionNextResponseDTO = {
+  contractVersion: 'capability-completion-next-v1';
+  propertyId: string;
+  recordedAt: string;
+  completion: {
+    capabilityId: string;
+    capabilityVersion: number;
+    completionKind: import('@/features/tools/capabilityTypes').CapabilityCompletionEventType;
+    outputEntityType: import('@/features/tools/capabilityTypes').CapabilityContextType;
+    outputEntityId: string;
+  };
+  registryVersion: string;
+  recommendationVersion: 'capability-recommendation-v1';
+  contextVersion: string;
+  suggestion: CapabilitySuggestionDTO | null;
+  exploreToolsHref: string;
+};
+
 export type UnifiedHomeCapabilitySuggestionsDTO =
   Omit<CapabilitySuggestionResponseDTO, 'surface'> & {
     status: 'AVAILABLE' | 'DISABLED' | 'UNAVAILABLE';

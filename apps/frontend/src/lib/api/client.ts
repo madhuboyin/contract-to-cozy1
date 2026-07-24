@@ -122,6 +122,7 @@ import {
   ActivationTriggerEvidenceInput,
   HomeActionCommand,
   HomeActionFeedDTO,
+  CapabilityCompletionNextResponseDTO,
   CapabilitySuggestionResponseDTO,
   CapabilitySuggestionSurfaceDTO,
   UnifiedHomeDTO,
@@ -2892,6 +2893,30 @@ class APIClient {
     throw new APIError(
       'Failed to load capability suggestions',
       'CAPABILITY_SUGGESTIONS_ERROR',
+    );
+  }
+
+  async recordCapabilityCompletionAndGetNext(
+    propertyId: string,
+    input: {
+      capabilityId: string;
+      completionKind: CapabilityCompletionEventType;
+      outputEntityType: CapabilityContextType;
+      outputEntityId: string;
+      sourceActionId?: string | null;
+      journeyId?: string | null;
+      surface?: string;
+      durationSeconds?: number | null;
+    },
+  ): Promise<CapabilityCompletionNextResponseDTO> {
+    const response = await this.request<CapabilityCompletionNextResponseDTO>(
+      `/api/properties/${encodeURIComponent(propertyId)}/capability-completions/next`,
+      { method: 'POST', body: JSON.stringify(input) },
+    );
+    if (response.success && response.data) return response.data;
+    throw new APIError(
+      'Failed to record capability completion',
+      'CAPABILITY_COMPLETION_ERROR',
     );
   }
 

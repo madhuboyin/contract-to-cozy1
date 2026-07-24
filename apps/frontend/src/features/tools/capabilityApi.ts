@@ -1,5 +1,6 @@
 import { api } from '@/lib/api/client';
 import type {
+  CapabilityCompletionNextResponseDTO,
   CapabilitySuggestionResponseDTO,
   CapabilitySuggestionSurfaceDTO,
 } from '@/types';
@@ -10,6 +11,33 @@ import type {
   CapabilityContextType,
   RelatedCapabilitiesResponse,
 } from './capabilityTypes';
+
+export type CapabilityCompletionNextRequest = {
+  propertyId: string;
+  capabilityId: string;
+  completionKind: CapabilityCompletionEventType;
+  outputEntityType: CapabilityContextType;
+  outputEntityId: string;
+  sourceActionId?: string | null;
+  journeyId?: string | null;
+  surface?: string;
+  durationSeconds?: number | null;
+};
+
+export async function recordCapabilityCompletionAndGetNext(
+  request: CapabilityCompletionNextRequest,
+): Promise<CapabilityCompletionNextResponseDTO> {
+  return api.recordCapabilityCompletionAndGetNext(request.propertyId, {
+    capabilityId: request.capabilityId,
+    completionKind: request.completionKind,
+    outputEntityType: request.outputEntityType,
+    outputEntityId: request.outputEntityId,
+    sourceActionId: request.sourceActionId,
+    journeyId: request.journeyId,
+    surface: request.surface,
+    durationSeconds: request.durationSeconds,
+  });
+}
 
 export type CapabilitySuggestionsRequest = {
   propertyId: string;

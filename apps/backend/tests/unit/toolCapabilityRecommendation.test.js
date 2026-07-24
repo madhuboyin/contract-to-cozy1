@@ -32,8 +32,12 @@ const {
   getCapabilitySuggestionsFromAuthorizedSources,
 } = require('../../src/services/capabilityRecommendation.service.ts');
 const {
+  CapabilityCompletionNextBodySchema,
   CapabilitySuggestionsQuerySchema,
 } = require('../../src/routes/capabilitySuggestions.routes.ts');
+const {
+  recordCapabilityCompletionAndResolveNext,
+} = require('../../src/services/capabilityCompletion.service.ts');
 const capabilitySuggestionsRouter =
   require('../../src/routes/capabilitySuggestions.routes.ts').default;
 const {
@@ -1094,6 +1098,40 @@ test('CAP-404 keeps workflow-only capabilities out of non-workflow surfaces', ()
   assert.deepEqual(quote.suppression.reasonCodes, [
     'WORKFLOW_CONTEXT_REQUIRED',
   ]);
+
+  const completionContext = buildCapabilityRecommendationContext({
+    propertyId: 'property-1',
+    propertyContext: propertyContext(),
+    actions: [],
+    completions: [{
+      id: 'completion-1',
+      capabilityId: 'inspection-hub',
+      capabilityVersion: 1,
+      completionKind: 'OUTPUT_VIEWED',
+      completionSignal: 'inspection_report_reviewed',
+      outputEntityType: 'DOCUMENT',
+      outputEntityId: 'report-1',
+      verifiedAt: NOW,
+    }],
+    availableCapabilityIds: ['quote-comparison'],
+    availabilityPolicyVersion: 'rollout-v2',
+    governance: {
+      canUseCapabilities: true,
+      allowedSafetyTiers: ['LOW_CONSEQUENCE'],
+      evidenceAccess: 'ALLOWED',
+    },
+    surface: 'COMPLETION',
+  });
+  const completionQuote = candidateById(
+    suppress(completionContext, registry),
+    'quote-comparison',
+  );
+  assert.equal(
+    completionQuote.suppression.reasonCodes.includes(
+      'WORKFLOW_CONTEXT_REQUIRED',
+    ),
+    false,
+  );
 });
 
 function rankingFixture() {
@@ -1783,6 +1821,106 @@ test('CAP-407 route requires authentication and property authorization', () => {
       && layer.route.methods?.get)
     ?.route;
   assert.ok(route, 'Expected capability suggestions GET route');
+  assert.equal(route.stack[0].handle, authenticate);
+  assert.equal(route.stack[1].handle, propertyAuthMiddleware);
+});
+
+test('CAP-604 records a verified completion before resolving one next step', async () => {
+  const order = [];
+  const response = await recordCapabilityCompletionAndResolveNext({
+    propertyId: 'property-1',
+    userId: 'user-1',
+    capabilityId: 'material-specs',
+    completionKind: 'OUTPUT_VIEWED',
+    outputEntityType: 'DOCUMENT',
+    outputEntityId: 'document-1',
+    sourceActionId: 'action-1',
+    journeyId: null,
+    surface: 'workflow',
+  }, {
+    registry: canonicalCapabilityRegistry,
+    now: () => new Date(NOW),
+    record: async (args) => {
+      order.push('record');
+      assert.equal(args.events.length, 1);
+      assert.deepEqual(args.events[0], {
+        toolId: 'material-specs',
+        stage: 'COMPLETED',
+        surface: 'workflow',
+        sourceActionId: 'action-1',
+        sourceEntityType: 'DOCUMENT',
+        sourceEntityId: 'document-1',
+        journeyId: null,
+        completionKind: 'OUTPUT_VIEWED',
+        outputKey: 'document-1',
+        durationSeconds: null,
+        metadata: {
+          outputEntityType: 'DOCUMENT',
+          outputEntityId: 'document-1',
+          recordedAt: NOW,
+        },
+      });
+    },
+    resolve: async (input) => {
+      order.push('resolve');
+      assert.equal(input.surface, 'COMPLETION');
+      assert.equal(input.limit, 1);
+      assert.deepEqual(input.sourceContext, {
+        kind: 'COMPLETION',
+        id: 'document-1',
+        actionId: 'action-1',
+        entityType: 'DOCUMENT',
+        entityId: 'document-1',
+        eventType: 'OUTPUT_VIEWED',
+      });
+      return {
+        contractVersion: 'capability-suggestions-v1',
+        registryVersion: canonicalCapabilityRegistry.version,
+        recommendationVersion: 'capability-recommendation-v1',
+        contextVersion: 'context-v7',
+        generatedAt: NOW,
+        surface: 'COMPLETION',
+        suggestions: [],
+      };
+    },
+  });
+
+  assert.deepEqual(order, ['record', 'resolve']);
+  assert.equal(response.contractVersion, 'capability-completion-next-v1');
+  assert.equal(response.suggestion, null);
+  assert.equal(
+    response.exploreToolsHref,
+    '/dashboard/home-tools?propertyId=property-1',
+  );
+});
+
+test('CAP-604 rejects unverified completion kinds and output identities', async () => {
+  assert.equal(CapabilityCompletionNextBodySchema.safeParse({
+    capabilityId: 'material-specs',
+    completionKind: 'OUTPUT_VIEWED',
+    outputEntityType: 'DOCUMENT',
+    outputEntityId: 'document-1',
+  }).success, true);
+  assert.equal(CapabilityCompletionNextBodySchema.safeParse({
+    capabilityId: 'material-specs',
+    completionKind: 'PLAN_CREATED',
+    outputEntityType: 'DOCUMENT',
+    outputEntityId: 'document-1',
+  }).success, false);
+  assert.equal(CapabilityCompletionNextBodySchema.safeParse({
+    capabilityId: 'material-specs',
+    completionKind: 'OUTPUT_VIEWED',
+    outputEntityType: 'PROJECT',
+    outputEntityId: 'project-1',
+  }).success, false);
+
+  const route = capabilitySuggestionsRouter.stack
+    .filter((layer) => layer.route)
+    .find((layer) =>
+      layer.route.path === '/properties/:propertyId/capability-completions/next'
+      && layer.route.methods?.post)
+    ?.route;
+  assert.ok(route, 'Expected capability completion POST route');
   assert.equal(route.stack[0].handle, authenticate);
   assert.equal(route.stack[1].handle, propertyAuthMiddleware);
 });

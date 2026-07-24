@@ -10,6 +10,9 @@ import {
 } from '../homeAction.contract';
 import { RecommendationSafetyTierSchema } from '../recommendationGovernance.contract';
 import {
+  CAPABILITY_COMPLETION_KINDS,
+} from './capability.contract';
+import {
   RECOMMENDATION_RESPONSE_STATUSES,
 } from '../recommendationResponse.contract';
 
@@ -127,7 +130,9 @@ const CompletionSourceSchema = z.object({
   id: BoundedIdentifier,
   capabilityId: BoundedIdentifier,
   capabilityVersion: z.number().int().positive(),
+  completionKind: z.enum(CAPABILITY_COMPLETION_KINDS).nullable().default(null),
   completionSignal: BoundedIdentifier,
+  sourceActionId: OptionalIdentifier.default(null),
   outputEntityType: BoundedIdentifier,
   outputEntityId: OptionalIdentifier.default(null),
   verifiedAt: z.string().datetime(),
