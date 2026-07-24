@@ -1,5 +1,44 @@
 # Postgres: local-path → Longhorn migration
 
+## Status: migration executed and verified (2026-07-23)
+
+- [x] Step 1 — dump taken: 19MB compressed (`-Fc`) from a 267MB live DB
+- [x] Step 2 — `statefulset.yaml` edited (`storageClassName: longhorn`, `nodeSelector` removed) — commit `9eb2536`
+- [x] Step 3 — old StatefulSet + `local-path` PVC deleted
+- [x] Step 4 — new StatefulSet applied; `postgres-0` came up Running on the new Longhorn-backed volume
+- [x] Step 5 — dump restored (see "grafana_user" note below for the expected/non-fatal errors during this step)
+- [x] Step 6 — verified: `pg_restore -l` vs. live `\dt` both show **320/320 tables** matching; DB size 187MB (down from 267MB — expected bloat/index reclamation from the dump/restore cycle itself, not data loss); `users` table has 102 rows
+- [ ] Step 7 — Longhorn replica health **not yet confirmed** via the UI (`kubectl port-forward svc/longhorn-frontend -n longhorn-system 8080:80`)
+- [ ] Follow-up — recreate the `grafana_user` role (deferred, see below)
+
+### Known follow-up: `grafana_user` role
+
+`pg_restore` reported 321 non-fatal errors during step 5, all of the form
+`role "grafana_user" does not exist` on `GRANT SELECT ON TABLE ... TO
+grafana_user` (and one final `ALTER DEFAULT PRIVILEGES ... GRANT SELECT ON
+TABLES TO grafana_user`). This is expected, not a sign of a bad restore:
+a per-database `pg_dump` captures GRANT statements referencing roles, but
+not the roles themselves (those are cluster-level, only captured by
+`pg_dumpall --roles-only`). `grafana_user` was created manually via
+pgAdmin SQL — it isn't tracked anywhere in this repo. It's likely used by
+Grafana's Postgres datasource querying the DB directly for dashboards;
+`postgres-exporter` (`infrastructure/kubernetes/monitoring/postgres/`)
+is unaffected — it authenticates via the existing `DATABASE_URL`/
+`POSTGRES_USER` secret, not this role.
+
+To recreate it with the same read-only access the dump's own GRANT
+statements show it had:
+
+```sql
+CREATE ROLE grafana_user WITH LOGIN PASSWORD '<password>';
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO grafana_user;
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT SELECT ON TABLES TO grafana_user;
+```
+
+Still to decide: reuse the original password if it's known, or set a new
+one — in which case Grafana's Postgres datasource config also needs
+updating to match.
+
 ## Why
 
 `postgres-0`'s volume currently uses the `local-path` StorageClass, which
