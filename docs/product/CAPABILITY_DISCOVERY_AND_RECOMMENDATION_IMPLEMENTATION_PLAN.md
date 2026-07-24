@@ -65,11 +65,11 @@ Status as of July 24, 2026:
 | CAP-002 initial change guard | Complete | Generated inventory check is included in frontend QA gates |
 | CAP-100 capability contract foundation | Complete | Zod contract covers framework, destination, recommendation, governance, readiness, and lifecycle metadata |
 | CAP-101 registry foundation | Complete | Deterministic registry validates IDs, routes, rollout keys, and related references |
-| CAP-102 availability adapter | Pending | Existing availability policy remains authoritative |
-| CAP-103 icon and route contracts | Partial | Route contract is implemented; frontend icon allowlist remains pending |
+| CAP-102 availability adapter | Complete | Backend adapter preserves current rollout configuration and supports explicit beta-open and launch-closed failure modes |
+| CAP-103 icon and route contracts | Complete | Backend allowlists icon names and route parameters; frontend registry resolves serialized icons |
 | CAP-104 foundation tests | Complete | Product Framework suite includes focused capability contract tests |
 
-No user-visible discovery or recommendation behavior has changed in this first slice.
+No user-visible discovery or recommendation behavior has changed in the foundation slices.
 
 ---
 

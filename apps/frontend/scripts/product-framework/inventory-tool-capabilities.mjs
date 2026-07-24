@@ -29,6 +29,14 @@ const smartSelectorPath = path.join(
   frontendRoot,
   'src/features/tools/selectSmartContextTools.ts',
 );
+const capabilityIconRegistryPath = path.join(
+  frontendRoot,
+  'src/features/tools/capabilityIconRegistry.ts',
+);
+const backendCapabilityContractPath = path.join(
+  repoRoot,
+  'apps/backend/src/productFramework/capabilities/capability.contract.ts',
+);
 
 const outputDirectory = path.join(repoRoot, 'docs/product/capability-discovery');
 const jsonOutputPath = path.join(outputDirectory, 'current-capability-inventory.json');
@@ -257,6 +265,8 @@ function buildInventory() {
       path.relative(repoRoot, toolRegistryPath),
       path.relative(repoRoot, unifiedSelectorPath),
       path.relative(repoRoot, smartSelectorPath),
+      path.relative(repoRoot, backendCapabilityContractPath),
+      path.relative(repoRoot, capabilityIconRegistryPath),
     ],
     summary,
     capabilities,
@@ -333,6 +343,26 @@ function validateInventory(inventory) {
     if (!capability.outcomeCategory) errors.push(`Missing outcome category: ${capability.id}`);
     if (!capability.routeVerified) errors.push(`Missing canonical page route: ${capability.id} (${capability.canonicalRoute})`);
   }
+
+  const backendIconNames = parseStringArray(
+    read(backendCapabilityContractPath),
+    'CAPABILITY_ICON_NAMES',
+  );
+  const frontendIconNames = parseStringArray(
+    read(capabilityIconRegistryPath),
+    'CAPABILITY_ICON_NAMES',
+  );
+  for (const iconName of backendIconNames) {
+    if (!frontendIconNames.has(iconName)) {
+      errors.push(`Backend capability icon is not registered by the frontend: ${iconName}`);
+    }
+  }
+  for (const iconName of frontendIconNames) {
+    if (!backendIconNames.has(iconName)) {
+      errors.push(`Frontend capability icon is not allowed by the backend: ${iconName}`);
+    }
+  }
+
   return errors;
 }
 

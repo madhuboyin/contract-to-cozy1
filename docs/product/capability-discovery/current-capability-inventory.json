@@ -4,7 +4,9 @@
     "apps/frontend/src/features/tools/toolDiscoveryRegistry.ts",
     "apps/frontend/src/features/tools/toolRegistry.ts",
     "apps/frontend/src/features/tools/selectUnifiedHomeTools.ts",
-    "apps/frontend/src/features/tools/selectSmartContextTools.ts"
+    "apps/frontend/src/features/tools/selectSmartContextTools.ts",
+    "apps/backend/src/productFramework/capabilities/capability.contract.ts",
+    "apps/frontend/src/features/tools/capabilityIconRegistry.ts"
   ],
   "summary": {
     "aiCatalogEntries": 40,

@@ -42,6 +42,68 @@ export const CAPABILITY_RECOMMENDATION_MODES = [
 
 export const CAPABILITY_RELEASE_STAGES = ['ACTIVE', 'BETA'] as const;
 
+export const CAPABILITY_ICON_NAMES = [
+  'alert-triangle',
+  'badge-check',
+  'bell',
+  'bell-ring',
+  'box',
+  'building',
+  'building-2',
+  'calendar',
+  'calendar-days',
+  'clipboard-check',
+  'clipboard-list',
+  'cloud',
+  'cloud-rain',
+  'credit-card',
+  'database',
+  'dollar-sign',
+  'droplet',
+  'eye',
+  'file-check',
+  'file-text',
+  'flame',
+  'globe',
+  'hammer',
+  'key',
+  'landmark',
+  'layers',
+  'layout-grid',
+  'leaf',
+  'lightbulb',
+  'list-checks',
+  'radar',
+  'receipt',
+  'refresh-cw',
+  'search',
+  'settings',
+  'shield',
+  'shield-alert',
+  'shield-check',
+  'siren',
+  'sparkles',
+  'sun',
+  'thermometer',
+  'tree-pine',
+  'umbrella',
+  'wind',
+  'wrench',
+  'zap',
+] as const;
+
+export const CAPABILITY_ROUTE_PARAMETERS = [
+  'id',
+  'itemId',
+  'projectId',
+  'documentId',
+  'inventoryItemId',
+  'issueId',
+  'journeyId',
+  'roomId',
+  'serviceId',
+] as const;
+
 export const CAPABILITY_COMPLETION_KINDS = [
   'OUTPUT_VIEWED',
   'OUTPUT_GENERATED',
@@ -75,6 +137,26 @@ const RouteTemplateSchema = z.string()
   .max(1000)
   .refine((value) => value.startsWith('/dashboard'), {
     message: 'Capability routes must be authenticated dashboard routes.',
+  })
+  .superRefine((value, ctx) => {
+    const routeParameters = [...value.matchAll(/\[([^\]]+)\]/g)].map((match) => match[1]);
+    const unknownParameters = routeParameters.filter(
+      (parameter) => !CAPABILITY_ROUTE_PARAMETERS.includes(
+        parameter as typeof CAPABILITY_ROUTE_PARAMETERS[number],
+      ),
+    );
+    if (unknownParameters.length > 0) {
+      ctx.addIssue({
+        code: 'custom',
+        message: `Unknown capability route parameter(s): ${[...new Set(unknownParameters)].join(', ')}`,
+      });
+    }
+    if (new Set(routeParameters).size !== routeParameters.length) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Capability route parameters must not be repeated.',
+      });
+    }
   });
 
 const CapabilityReadinessRequirementSchema = z.object({
@@ -110,7 +192,7 @@ export const ToolCapabilityDefinitionSchema = z.object({
     label: z.string().trim().min(1).max(120),
     shortDescription: z.string().trim().min(1).max(300),
     longDescription: z.string().trim().min(1).max(1200),
-    iconName: z.string().trim().min(1).max(120),
+    iconName: z.enum(CAPABILITY_ICON_NAMES),
     intentAliases: z.array(z.string().trim().min(1).max(160)).max(50),
     outcomeCategory: z.enum(CAPABILITY_OUTCOME_CATEGORIES),
     badges: z.array(z.enum(['NEW', 'BETA'])).max(2),

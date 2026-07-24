@@ -5,7 +5,9 @@ require('ts-node/register');
 
 const {
   ToolCapabilityDefinitionSchema,
+  createCapabilityAvailabilityAdapter,
   createToolCapabilityRegistry,
+  evaluateCapabilityAvailability,
 } = require('../../src/productFramework/index.ts');
 
 function capability(overrides = {}) {
@@ -98,6 +100,34 @@ test('workflow-only mode and destination must agree', () => {
   assert.match(result.error.issues.map((issue) => issue.message).join(' '), /workflow-only destination/i);
 });
 
+test('capability definitions reject unknown icons and route parameters', () => {
+  const unknownIcon = capability();
+  unknownIcon.presentation.iconName = 'made-up-icon';
+  const iconResult = ToolCapabilityDefinitionSchema.safeParse(unknownIcon);
+  assert.equal(iconResult.success, false);
+  assert.match(iconResult.error.issues.map((issue) => issue.message).join(' '), /invalid option/i);
+
+  const unknownRouteParameter = capability();
+  unknownRouteParameter.destination.routeTemplate =
+    '/dashboard/properties/[propertySlug]/materials';
+  const routeResult = ToolCapabilityDefinitionSchema.safeParse(unknownRouteParameter);
+  assert.equal(routeResult.success, false);
+  assert.match(
+    routeResult.error.issues.map((issue) => issue.message).join(' '),
+    /unknown capability route parameter.*propertySlug/i,
+  );
+
+  const repeatedRouteParameter = capability();
+  repeatedRouteParameter.destination.routeTemplate =
+    '/dashboard/properties/[id]/compare/[id]';
+  const repeatedResult = ToolCapabilityDefinitionSchema.safeParse(repeatedRouteParameter);
+  assert.equal(repeatedResult.success, false);
+  assert.match(
+    repeatedResult.error.issues.map((issue) => issue.message).join(' '),
+    /must not be repeated/i,
+  );
+});
+
 test('registry rejects duplicate IDs, rollout keys, and routes', () => {
   assert.throws(
     () => createToolCapabilityRegistry([capability(), capability()]),
@@ -172,4 +202,131 @@ test('registry output and version are deterministic regardless of input order', 
     ['material-specs', 'plant-advisor'],
   );
   assert.equal(first.getByRoute('/dashboard/properties/[id]/materials').id, 'material-specs');
+});
+
+test('availability preserves beta fail-open behavior and supports launch fail-closed behavior', () => {
+  const definition = capability();
+
+  assert.equal(
+    evaluateCapabilityAvailability(definition, undefined, 'BETA_FAIL_OPEN').available,
+    true,
+  );
+
+  const launchDecision = evaluateCapabilityAvailability(
+    definition,
+    undefined,
+    'LAUNCH_FAIL_CLOSED',
+  );
+  assert.equal(launchDecision.available, false);
+  assert.equal(launchDecision.reason, 'POLICY_UNAVAILABLE');
+});
+
+test('availability adapter applies its failure mode when the policy provider fails', () => {
+  const registry = createToolCapabilityRegistry([capability()]);
+  const failingLoader = () => {
+    throw new Error('configuration provider unavailable');
+  };
+  const betaAdapter = createCapabilityAvailabilityAdapter({
+    registry,
+    loadPolicy: failingLoader,
+    failureMode: 'BETA_FAIL_OPEN',
+  });
+  const launchAdapter = createCapabilityAvailabilityAdapter({
+    registry,
+    loadPolicy: failingLoader,
+    failureMode: 'LAUNCH_FAIL_CLOSED',
+  });
+
+  assert.equal(betaAdapter.resolve('material-specs').available, true);
+  assert.equal(launchAdapter.resolve('material-specs').available, false);
+  assert.equal(launchAdapter.resolve('material-specs').reason, 'POLICY_UNAVAILABLE');
+});
+
+test('availability applies global, explicit-disable, and rollout gates in order', () => {
+  const definition = capability();
+  const basePolicy = {
+    enabled: true,
+    enforceReleaseGates: true,
+    disabledToolIds: [],
+    rollouts: {
+      MATERIAL_SPECS: {
+        enabled: true,
+        cohort: 'FULL',
+        rolloutPct: 100,
+      },
+    },
+  };
+
+  assert.equal(evaluateCapabilityAvailability(definition, basePolicy).available, true);
+
+  const globallyDisabled = evaluateCapabilityAvailability(definition, {
+    ...basePolicy,
+    enabled: false,
+  });
+  assert.equal(globallyDisabled.reason, 'DISCOVERY_DISABLED');
+
+  const explicitlyDisabled = evaluateCapabilityAvailability(definition, {
+    ...basePolicy,
+    disabledToolIds: ['material-specs'],
+  });
+  assert.equal(explicitlyDisabled.reason, 'CAPABILITY_DISABLED');
+
+  const rolloutMissing = evaluateCapabilityAvailability(definition, {
+    ...basePolicy,
+    rollouts: {},
+  });
+  assert.equal(rolloutMissing.reason, 'ROLLOUT_MISSING');
+
+  const rolloutDisabled = evaluateCapabilityAvailability(definition, {
+    ...basePolicy,
+    rollouts: {
+      MATERIAL_SPECS: {
+        enabled: false,
+        cohort: 'BETA',
+        rolloutPct: 25,
+      },
+    },
+  });
+  assert.equal(rolloutDisabled.reason, 'ROLLOUT_DISABLED');
+});
+
+test('availability adapter filters workflow-only tools and resolves unknown IDs', () => {
+  const material = capability();
+  const workflow = capability({
+    id: 'project-tracker',
+    destination: {
+      ...capability().destination,
+      routeTemplate: '/dashboard/properties/[id]/projects',
+      navTarget: 'tool:project-tracker',
+      workflowOnly: true,
+    },
+    recommendation: {
+      ...capability().recommendation,
+      mode: 'WORKFLOW_ONLY',
+    },
+    governance: {
+      ...capability().governance,
+      rolloutKey: 'PROJECT_TRACKER',
+    },
+  });
+  const registry = createToolCapabilityRegistry([material, workflow]);
+  const adapter = createCapabilityAvailabilityAdapter({
+    registry,
+    loadPolicy: () => ({
+      enabled: true,
+      enforceReleaseGates: false,
+      disabledToolIds: [],
+      rollouts: {},
+    }),
+  });
+
+  assert.deepEqual(
+    adapter.listAvailable().map((entry) => entry.id),
+    ['material-specs'],
+  );
+  assert.deepEqual(
+    adapter.listAvailable({ includeWorkflowOnly: true }).map((entry) => entry.id),
+    ['material-specs', 'project-tracker'],
+  );
+  assert.equal(adapter.resolve('missing-tool').reason, 'UNKNOWN_CAPABILITY');
 });

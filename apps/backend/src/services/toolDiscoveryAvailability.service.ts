@@ -1,5 +1,11 @@
 import { checkRolloutStatus } from '../middleware/rollout.middleware';
 import { TOOL_FLAGS, type RolloutCohort } from '../config/featureFlags';
+import {
+  createCapabilityAvailabilityAdapter,
+  type CapabilityAvailabilityAdapter,
+  type CapabilityAvailabilityFailureMode,
+  type ToolCapabilityRegistry,
+} from '../productFramework/capabilities';
 
 export type ToolDiscoveryAvailability = {
   enabled: boolean;
@@ -47,4 +53,23 @@ export function getToolDiscoveryAvailability(
     rollouts,
     generatedAt: new Date().toISOString(),
   };
+}
+
+/**
+ * Keeps the current environment and cohort configuration authoritative while
+ * exposing capability-level decisions through the Product Framework boundary.
+ */
+export function createToolDiscoveryCapabilityAvailabilityAdapter(
+  registry: ToolCapabilityRegistry,
+  options: {
+    env?: NodeJS.ProcessEnv;
+    failureMode?: CapabilityAvailabilityFailureMode;
+  } = {},
+): CapabilityAvailabilityAdapter {
+  const env = options.env ?? process.env;
+  return createCapabilityAvailabilityAdapter({
+    registry,
+    failureMode: options.failureMode,
+    loadPolicy: (userId) => getToolDiscoveryAvailability(userId, env),
+  });
 }
