@@ -245,6 +245,13 @@ Implemented July 23, 2026:
 - Environment Report retains weather-relevant Plant Advisor discovery when no plant records exist, as required by the Environment Report product contract.
 - Environment Report preparation CTAs now create or resume a time-bound, property-aware checklist through the canonical Incident/IncidentAction lifecycle. They no longer land on an empty generic Maintenance page or create recurring maintenance records.
 - Weather checklist content applies responsibility context before presentation; association-, landlord-, and shared-managed work becomes a coordination step instead of an owner instruction.
+- Starting preparation snapshots the selected computed insight into a
+  `WEATHER_PREPARATION` Incident with `CHECKLIST_ITEM` actions. Repeated starts
+  resume the same plan, all-addressed plans become `MITIGATED`, and restoring a
+  step returns the plan to `ACTIONED`.
+- Weather preparation is intentionally time-bound and separate from recurring
+  Maintenance. It supports completed, restored, and not-applicable steps and
+  does not create `PropertyMaintenanceTask` rows.
 - The empty setup state is presented as optional tool discovery and no longer claims that the homeowner has plants or needs to prepare them.
 - Setup copy invites the homeowner to add plants for room-specific weather guidance; confirmed plants continue to receive plant- and room-specific care guidance.
 - Outdoor Plant Advisor execution remains gated by private outdoor-space and landscaping-responsibility Property Context, while indoor setup remains available without exterior ownership assumptions.

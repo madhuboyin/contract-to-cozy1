@@ -1188,7 +1188,7 @@ need.
 | Seasonal Maintenance | LOCATION, EXTERIOR, RESPONSIBILITY, SYSTEMS, SAFETY, MAINTENANCE, ENVIRONMENT | climate/task applicability, recent completion, responsibility |
 | Habit Coach | CORE, SYSTEMS, MAINTENANCE, GUIDANCE_STATE | appropriate preventive habit, fatigue, completion state |
 | Plant Advisor | CORE, EXTERIOR, RESPONSIBILITY, ROOMS, ENVIRONMENT | indoor/outdoor sections, private space, garden and weather care |
-| Environment Report and Climate Risk | LOCATION, STRUCTURE, EXTERIOR, SYSTEMS, SAFETY, ENVIRONMENT, MAINTENANCE | property vulnerability, freshness, preparation actions |
+| Environment Report and Climate Risk | LOCATION, STRUCTURE, EXTERIOR, RESPONSIBILITY, SYSTEMS, SAFETY, ENVIRONMENT, MAINTENANCE | property vulnerability, freshness, preparation actions, responsible-party substitution before checklist persistence |
 | Energy Audit and Home Upgrades | CORE, STRUCTURE, SYSTEMS, INVENTORY, LOCATION, PROJECTS | applicable measures, baseline confidence, completed upgrades |
 | DIY Project Center | STRUCTURE, SYSTEMS, INVENTORY, COMPLIANCE, PROJECTS | project applicability, safety/license/permit boundary |
 | Emergency Help | LOCATION, STRUCTURE, SYSTEMS, SAFETY, RISK | relevant emergency instructions without false certainty |

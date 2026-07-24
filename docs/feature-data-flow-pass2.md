@@ -95,6 +95,61 @@
 
 ---
 
+## Feature: Environment Report and Weather Preparation
+- Inputs (models + fields read)
+  - `property`: location/geocode, structure, drainage, sump-pump, HVAC,
+    heating, roof, foundation, irrigation, and resilience fields.
+  - Canonical Property Context snapshot across LOCATION, STRUCTURE, EXTERIOR,
+    RESPONSIBILITY, SYSTEMS, SAFETY, and MAINTENANCE scopes.
+  - External weather, air-quality, drought, flood/elevation, radon, hazard,
+    climate-normal, and hardiness providers.
+  - Open weather `incident` rows for official-alert correlation.
+  - Existing `WEATHER_PREPARATION` Incident and `CHECKLIST_ITEM` actions when a
+    homeowner resumes preparation.
+- Outputs (models written)
+  - Most report insights remain computed on read and are not persisted.
+  - Starting preparation creates one property/insight-scoped `incident` with
+    `typeKey=WEATHER_PREPARATION`.
+  - Property-aware preparation steps are snapshotted as `incidentAction` rows
+    with `type=CHECKLIST_ITEM`.
+  - Checklist interactions update action status (`CREATED`, `COMPLETED`, or
+    `CANCELED`) and move the Incident between `ACTIONED` and `MITIGATED`.
+  - Inline context capture updates canonical Property fields or the
+    filter-specific `propertyMaintenanceTask` where explicitly supported.
+- Derived Data (computed vs stored)
+  - Computed: provider sections, thresholds, priority, home implication,
+    questions, affected systems, recommended actions, and responsibility-aware
+    wording.
+  - Stored only after user intent: selected insight snapshot, checklist items,
+    and progress/lifecycle state.
+- User Inputs (explicit)
+  - `insightId` to start/resume preparation.
+  - Checklist item status: complete, restore, or not applicable.
+  - Inline Property Context answers and HVAC filter completion date.
+- Behavioral Signals (implicit)
+  - Repeated start is idempotent for the same property and insight.
+  - Completing or skipping every step mitigates the preparation Incident.
+  - Restoring a step reopens the preparation Incident.
+  - Event-specific preparation never creates a recurring maintenance task.
+- Property-context applicability
+  - Roof, building-exterior, plumbing, snow/ice, and shared-system
+    responsibility is evaluated before checklist persistence.
+  - Association-, landlord-, and shared-managed owner work is converted into a
+    coordination step.
+- Persistence pattern (stored vs computed)
+  - Hybrid: live environmental guidance is computed; an explicitly started
+    checklist is persisted through the canonical Incident lifecycle.
+- Code anchors
+  - Routes: `apps/backend/src/routes/environmentReport.routes.ts`
+  - Controller: `apps/backend/src/controllers/environmentReport.controller.ts`
+  - Services: `apps/backend/src/services/environmentReport.service.ts`,
+    `apps/backend/src/services/environment/environmentInsights.service.ts`,
+    `apps/backend/src/services/environment/weatherPreparation.service.ts`
+  - Frontend: `apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/environment-report/page.tsx`,
+    `apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/environment-report/preparation/page.tsx`
+
+---
+
 ## Feature: Negotiation Shield
 - Inputs (models + fields read)
   - `property` (ownership + context), `insurancePolicy`, `propertyMaintenanceTask`, `claim`, `homeEvent`.

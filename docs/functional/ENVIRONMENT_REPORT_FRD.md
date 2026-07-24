@@ -1,8 +1,8 @@
 # Environment Report — Functional Requirements Document
 
-**Version:** 1.1
-**Last Updated:** 2026-07-12  
-**Status:** Implemented baseline with documented future enhancements  
+**Version:** 1.2
+**Last Updated:** 2026-07-24
+**Status:** Implemented, including property-aware weather preparation checklists
 **Audience:** Product, design, frontend engineering, backend engineering, data engineering, QA, support
 
 ---
@@ -65,7 +65,7 @@ Environmental signal
   → Home-specific implication
   → Recommended preparation
   → Contextual CTA
-  → Follow-up / maintenance record
+  → Time-bound preparation checklist or other relevant workflow
 ```
 
 ### 1.2 Design Principles
@@ -195,6 +195,17 @@ The page hierarchy is:
 10. AQI gauge and trend
 11. Flood, drought, radon, EPA hazards, and climate sections
 12. Expandable raw data tables
+
+When an insight has concrete preparation steps, its CTA opens the focused
+property-scoped preparation route:
+
+```text
+/dashboard/properties/:propertyId/environment-report/preparation?insightId=:insightId
+```
+
+The checklist remains part of the Environment Report journey. It does not
+redirect to the generic Maintenance page and does not create recurring upkeep
+tasks.
 
 ### 6.1 Insight Card Anatomy
 
@@ -588,6 +599,21 @@ Checklist items use `IncidentAction` with `type=CHECKLIST_ITEM`. They may be com
 
 Responsibility is applied before checklist creation. Owner work is replaced by a coordination step when roof, exterior, plumbing, snow/ice, or shared-system responsibility belongs to an association, landlord, or shared party.
 
+Request and response behavior:
+
+- `POST .../preparations` accepts `{ "insightId": "..." }`.
+- Starting the same property/insight combination is idempotent and returns the
+  existing preparation plan.
+- If an existing plan is found, it can be resumed even after that forecast is
+  no longer returned by the live report.
+- A new plan is rejected when its source insight is no longer active.
+- `PATCH .../items/:itemId` accepts `CREATED`, `COMPLETED`, or `CANCELED`.
+  `CANCELED` represents a homeowner-confirmed “Not applicable” step.
+- Progress counts completed and not-applicable steps as addressed, while
+  preserving the distinction between them.
+- The server verifies property ownership and that the requested checklist item
+  belongs to the selected preparation Incident.
+
 ### 13.4 Property Capture
 
 Property answers use the existing property update endpoint:
@@ -779,6 +805,24 @@ Analytics listed here are future requirements unless already emitted by the unde
 - [ ] Raw detail tables remain accessible.
 - [ ] Mobile layout does not require horizontal scrolling.
 
+### 20.7 Weather Preparation Checklist
+
+- [ ] Preparation CTAs open the focused Environment Report checklist rather
+  than the generic Maintenance page.
+- [ ] Starting the same insight twice resumes one checklist without duplicate
+  IncidentAction rows.
+- [ ] Server-generated checklist text comes from the current property-aware
+  insight; the client cannot submit arbitrary checklist items.
+- [ ] Association-, landlord-, and shared-managed areas produce coordination
+  steps rather than owner-work instructions.
+- [ ] Complete, restore, and not-applicable controls update persisted progress.
+- [ ] Addressing every step moves the preparation Incident to `MITIGATED`;
+  restoring a step returns it to `ACTIONED`.
+- [ ] Preparation does not create a `PropertyMaintenanceTask`.
+- [ ] An inactive insight cannot create a new checklist, while an existing
+  checklist remains resumable.
+- [ ] The checklist has loading, retry, completed, and stale-insight states.
+
 ---
 
 ## 21. Testing Strategy
@@ -796,6 +840,8 @@ Analytics listed here are future requirements unless already emitted by the unde
 - HVAC-filter recent/old/missing behavior
 - Incident correlation and primary CTA
 - Weather property-vulnerability score and cap
+- Preparation-route derivation
+- Responsibility-aware rain, snow, and freeze checklist wording
 
 ### 21.2 Service Tests
 
@@ -804,6 +850,8 @@ Analytics listed here are future requirements unless already emitted by the unde
 - HVAC-filter maintenance upsert and date validation
 - Property authorization on report and maintenance-context endpoints
 - Incident reevaluation after relevant profile update
+- Idempotent `WEATHER_PREPARATION` creation/resume
+- Checklist ownership validation and Incident status transitions
 
 ### 21.3 Frontend Tests
 
@@ -813,6 +861,8 @@ Analytics listed here are future requirements unless already emitted by the unde
 - Raw detail disclosure controls
 - Mobile breakpoints
 - Accessible chart names and keyboard navigation
+- Preparation progress, complete/restore, and not-applicable interactions
+- Preparation loading, completion, and inactive-insight error states
 
 ### 21.4 End-to-End Scenarios
 
@@ -823,6 +873,12 @@ Analytics listed here are future requirements unless already emitted by the unde
 5. Confirm Incident-first CTA and dashboard consistency.
 6. Provider outage with remaining sections intact.
 7. EPA facility with and without coordinate data.
+8. Heavy-rain insight → start preparation → complete one step → reload and
+   verify progress resumes.
+9. Association-managed roof/exterior → start preparation and verify the
+   checklist requests coordination rather than gutter/roof owner work.
+10. Mark all steps complete or not applicable and verify no recurring
+    Maintenance task is created.
 
 ---
 
@@ -841,7 +897,11 @@ Analytics listed here are future requirements unless already emitted by the unde
 9. **Roof age of 20 years increases storm/snow inspection priority.** Material-specific useful life is not fully modeled in the current rule.
 10. **At most two questions protects the user from form fatigue.** Questions are sequential; lower-priority facts may appear only after higher-priority answers are saved.
 11. **User-entered answers are treated as canonical.** A future provenance model may distinguish user-confirmed, document-derived, professional-verified, and inferred data.
-12. **Generated insights are computed on read.** They are not yet persisted, acknowledged, snoozed, or audited as standalone records.
+12. **Generated insights are computed on read.** They are not persisted as
+standalone records unless the homeowner starts preparation. At that point the
+selected insight and its property-aware actions are snapshotted into a
+`WEATHER_PREPARATION` Incident with `CHECKLIST_ITEM` actions. The remaining
+insights continue to be computed-only.
 13. **Property vulnerability may only add Incident severity points.** It must not downgrade an official safety signal.
 14. **Facility proximity SVG is contextual, not a navigational map.** Coordinates are real, but it does not provide streets, parcel boundaries, or exposure modeling.
 
@@ -1260,13 +1320,15 @@ Support must be able to explain:
 | File | Responsibility |
 |---|---|
 | `apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/environment-report/page.tsx` | Report page, insight cards, inline capture, charts, tables, section UI |
+| `apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/environment-report/preparation/page.tsx` | Focused time-bound checklist, progress, completion, restore, and not-applicable controls |
 | `apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/components/EnvironmentReportDashboardCard.tsx` | Property-dashboard entry card and top insight summary |
 | `apps/frontend/src/lib/api/client.ts` | Environment and property API client methods |
 | `apps/frontend/src/types/index.ts` | Frontend report, insight, question, and environmental DTOs |
-| `apps/backend/src/routes/environmentReport.routes.ts` | Authenticated report and maintenance-context routes |
-| `apps/backend/src/controllers/environmentReport.controller.ts` | Property lookup, report controller, maintenance-context capture |
+| `apps/backend/src/routes/environmentReport.routes.ts` | Authenticated report, maintenance-context, and preparation-checklist routes |
+| `apps/backend/src/controllers/environmentReport.controller.ts` | Property lookup, report controller, maintenance-context capture, and checklist authorization |
 | `apps/backend/src/services/environmentReport.service.ts` | Section aggregation, maintenance-history lookup, Incident correlation, DTO assembly |
 | `apps/backend/src/services/environment/environmentInsights.service.ts` | Insight rules, personalization, questions, Incident attachment |
+| `apps/backend/src/services/environment/weatherPreparation.service.ts` | Idempotent preparation Incident creation/resume, checklist item persistence, progress, and lifecycle transitions |
 | `apps/backend/src/services/environment/weatherReport.service.ts` | Current/hourly/daily/history weather provider |
 | `apps/backend/src/services/environment/airQuality.service.ts` | AQI and particulate data |
 | `apps/backend/src/services/environment/drought.service.ts` | Drought data |
@@ -1286,4 +1348,4 @@ Support must be able to explain:
 
 ---
 
-*This FRD documents the Environment Report behavior implemented on `main` as of 2026-07-12 and distinguishes implemented functionality from proposed future enhancements.*
+*This FRD documents the Environment Report behavior implemented on `main` as of 2026-07-24 and distinguishes implemented functionality from proposed future enhancements.*
