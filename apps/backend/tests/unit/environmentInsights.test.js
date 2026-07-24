@@ -87,7 +87,34 @@ test('turns heavy rain into a property-aware action when flood exposure is prese
   assert.equal(insights[0].category, 'rain');
   assert.equal(insights[0].severity, 'action');
   assert.match(insights[0].homeImplication, /FEMA flood zone AE/);
+  assert.equal(
+    insights[0].actions[0].href,
+    '/dashboard/properties/property-1/environment-report/preparation?insightId=heavy-rain-2026-07-14',
+  );
   assert.equal(insights[0].actions[1].label, 'Check weather coverage');
+});
+
+test('turns owner work into coordination steps when exterior responsibility is managed elsewhere', () => {
+  const input = sections();
+  input.weather.data.tenDayForecast.push({
+    date: '2026-07-14',
+    tempMaxF: 78,
+    tempMinF: 66,
+    precipitationSumIn: 1.4,
+    weatherCode: 65,
+  });
+
+  const insight = deriveEnvironmentInsights(
+    {
+      ...property,
+      roofResponsibility: 'ASSOCIATION',
+      buildingExteriorResponsibility: 'ASSOCIATION',
+    },
+    input,
+  )[0];
+
+  assert.match(insight.recommendedActions[0], /responsible party/i);
+  assert.doesNotMatch(insight.recommendedActions[0], /^Clear gutters/i);
 });
 
 test('detects multi-day heat and recommends cooling-system preparation', () => {

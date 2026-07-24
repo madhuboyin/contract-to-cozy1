@@ -572,7 +572,23 @@ Current supported payload:
 
 The endpoint is authenticated and property-authorized.
 
-### 13.3 Property Capture
+### 13.3 Weather Preparation Checklist
+
+Time-bound Environment Report insights can launch a focused preparation checklist rather than redirecting to the generic Maintenance list:
+
+```http
+POST  /api/environment/report/:propertyId/preparations
+GET   /api/environment/report/:propertyId/preparations/:preparationId
+PATCH /api/environment/report/:propertyId/preparations/:preparationId/items/:itemId
+```
+
+Starting a checklist accepts the current `insightId`. The server re-computes the report, verifies that the insight is still active, and snapshots its property-aware recommended actions. A repeated start for the same property and forecast insight resumes the existing checklist.
+
+Checklist items use `IncidentAction` with `type=CHECKLIST_ITEM`. They may be completed, restored, or marked not applicable. Once every item is addressed, the containing `WEATHER_PREPARATION` Incident becomes `MITIGATED`. These event-specific actions do not create recurring `PropertyMaintenanceTask` records.
+
+Responsibility is applied before checklist creation. Owner work is replaced by a coordination step when roof, exterior, plumbing, snow/ice, or shared-system responsibility belongs to an association, landlord, or shared party.
+
+### 13.4 Property Capture
 
 Property answers use the existing property update endpoint:
 
@@ -593,12 +609,13 @@ The Environment Report currently uses the typed frontend `updateProperty` client
 | Severe weather lifecycle | `Incident` and `IncidentSignal` |
 | Weather guidance journey | Guidance Engine models |
 | Environmental provider data | Cached service response; not persisted as property facts |
-| Generated report insights | Computed on read; not currently persisted |
+| Generated report insights | Computed on read; the selected insight is snapshotted only when a user starts its time-bound preparation checklist |
+| Weather preparation progress | `Incident` (`typeKey=WEATHER_PREPARATION`) and `IncidentAction` (`type=CHECKLIST_ITEM`) |
 | Plant Advisor weather context | Existing `RoomPlantProfile`, `RoomPlantRecommendation`, `PlantCatalog`, and Plant Advisor `HomeEvent` records |
 | Confirmed indoor/outdoor plants and care history | `HomePlant` |
 | Outdoor sun, drainage, irrigation, and frost context | `GardenZone` |
 
-The original Environment Report baseline required no new schema. Plant-care Phases 2 and 3 add `HomePlant` and `GardenZone`; future insight lifecycle, snooze, and acknowledgement features may require additional persisted state.
+The original Environment Report baseline required no new schema. Weather preparation reuses the existing Incident and IncidentAction lifecycle. Plant-care Phases 2 and 3 add `HomePlant` and `GardenZone`; future insight lifecycle, snooze, and acknowledgement features may require additional persisted state.
 
 ---
 

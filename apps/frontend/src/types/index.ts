@@ -5400,6 +5400,28 @@ export interface EnvironmentInsight {
   };
 }
 
+export type WeatherPreparationItemStatus = 'CREATED' | 'COMPLETED' | 'CANCELED';
+
+export interface WeatherPreparationPlan {
+  id: string;
+  propertyId: string;
+  insightId: string;
+  title: string;
+  summary: string;
+  timeframe: string;
+  effectiveFrom: string;
+  effectiveTo: string;
+  source: string;
+  status: string;
+  progress: { completed: number; skipped: number; resolved: number; total: number };
+  items: Array<{
+    id: string;
+    label: string;
+    status: WeatherPreparationItemStatus;
+    sortOrder: number;
+  }>;
+}
+
 export type EnvironmentQuestionField =
   | 'hasDrainageIssues'
   | 'hasSumpPump'

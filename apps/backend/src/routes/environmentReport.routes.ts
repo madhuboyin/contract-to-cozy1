@@ -44,4 +44,25 @@ router.post(
   EnvironmentReportController.recordMaintenanceContext.bind(EnvironmentReportController)
 );
 
+router.post(
+  '/report/:propertyId/preparations',
+  authenticate,
+  propertyAuthMiddleware,
+  EnvironmentReportController.startPreparation.bind(EnvironmentReportController)
+);
+
+router.get(
+  '/report/:propertyId/preparations/:preparationId',
+  authenticate,
+  propertyAuthMiddleware,
+  EnvironmentReportController.getPreparation.bind(EnvironmentReportController)
+);
+
+router.patch(
+  '/report/:propertyId/preparations/:preparationId/items/:itemId',
+  authenticate,
+  propertyAuthMiddleware,
+  EnvironmentReportController.updatePreparationItem.bind(EnvironmentReportController)
+);
+
 export default router;

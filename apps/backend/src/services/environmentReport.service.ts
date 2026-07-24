@@ -95,7 +95,10 @@ interface GeocodableProperty {
   roofType: string | null;
   roofReplacementYear: number | null;
   foundationType: FoundationType | null;
+  roofResponsibility?: string | null;
+  buildingExteriorResponsibility?: string | null;
   plumbingResponsibility?: string | null;
+  snowIceResponsibility?: string | null;
   sharedSystemsResponsibility?: string | null;
   hasIrrigation: boolean | null;
   hasSecondaryHeat: boolean | null;
@@ -164,7 +167,10 @@ export async function getEnvironmentReport(
     roofType: knownContextValue<string>(context, 'structure.roofType') ?? null,
     roofReplacementYear: knownContextValue<number>(context, 'structure.roofReplacementYear') ?? null,
     foundationType: (knownContextValue<string>(context, 'structure.foundationType') as FoundationType | undefined) ?? null,
+    roofResponsibility: knownContextValue<string>(context, 'responsibility.roof') ?? null,
+    buildingExteriorResponsibility: knownContextValue<string>(context, 'responsibility.buildingExterior') ?? null,
     plumbingResponsibility: knownContextValue<string>(context, 'responsibility.plumbing') ?? null,
+    snowIceResponsibility: knownContextValue<string>(context, 'responsibility.snowIce') ?? null,
     sharedSystemsResponsibility: knownContextValue<string>(context, 'responsibility.sharedSystems') ?? null,
     hasIrrigation: knownContextValue<boolean>(context, 'exterior.hasIrrigation') ?? null,
   };

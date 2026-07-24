@@ -59,7 +59,10 @@ export interface EnvironmentInsightProperty {
   roofType: string | null;
   roofReplacementYear: number | null;
   foundationType: FoundationType | null;
+  roofResponsibility?: string | null;
+  buildingExteriorResponsibility?: string | null;
   plumbingResponsibility?: string | null;
+  snowIceResponsibility?: string | null;
   sharedSystemsResponsibility?: string | null;
   hasIrrigation: boolean | null;
   hasSecondaryHeat: boolean | null;
@@ -107,7 +110,8 @@ const dayLabel = (date: string) =>
   new Date(`${date}T12:00:00`).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
 
 const weatherHref = (propertyId: string) => `/dashboard/properties/${propertyId}?tab=incidents`;
-const maintenanceHref = (propertyId: string) => `/dashboard/maintenance?propertyId=${propertyId}`;
+const preparationHref = (propertyId: string, insightId: string) =>
+  `/dashboard/properties/${propertyId}/environment-report/preparation?insightId=${encodeURIComponent(insightId)}`;
 const providersHref = (propertyId: string) => `/dashboard/providers?propertyId=${propertyId}`;
 const coverageHref = (propertyId: string) =>
   `/dashboard/properties/${propertyId}/tools/coverage-intelligence`;
@@ -129,7 +133,11 @@ function isFloodZone(zone: string | null): boolean {
 }
 
 const managedElsewhere = (responsibility: string | null) =>
-  responsibility === 'ASSOCIATION' || responsibility === 'LANDLORD';
+  responsibility === 'ASSOCIATION' || responsibility === 'LANDLORD' || responsibility === 'SHARED';
+
+const exteriorManagedElsewhere = (property: EnvironmentInsightProperty) =>
+  managedElsewhere(property.roofResponsibility ?? null)
+  || managedElsewhere(property.buildingExteriorResponsibility ?? null);
 
 const sumpPumpManagedElsewhere = (property: EnvironmentInsightProperty) =>
   managedElsewhere(property.plumbingResponsibility ?? null)
@@ -192,13 +200,14 @@ export function deriveEnvironmentInsights(
   if (weather) {
     const rainDay = weather.tenDayForecast.find(day => day.precipitationSumIn >= 1);
     if (rainDay) {
+      const insightId = `heavy-rain-${rainDay.date}`;
       const elevatedPropertyRisk = Boolean(property.hasDrainageIssues || isFloodZone(flood?.femaFloodZone ?? null));
       const reasons = [
         property.hasDrainageIssues ? 'recorded drainage issues' : null,
         isFloodZone(flood?.femaFloodZone ?? null) ? `FEMA flood zone ${flood?.femaFloodZone}` : null,
       ].filter(Boolean);
       insights.push({
-        id: `heavy-rain-${rainDay.date}`,
+        id: insightId,
         category: 'rain',
         severity: elevatedPropertyRisk || rainDay.precipitationSumIn >= 2 ? 'action' : 'watch',
         title: `Heavy rain expected ${dayLabel(rainDay.date)}`,
@@ -211,12 +220,14 @@ export function deriveEnvironmentInsights(
         effectiveTo: rainDay.date,
         affectedSystems: ['Gutters', 'Drainage', rainAreaLabel(property.foundationType)],
         recommendedActions: [
-          'Clear gutters and exterior drains before the rain begins.',
+          exteriorManagedElsewhere(property)
+            ? 'Confirm the responsible party has a plan to clear gutters and exterior drains before the rain begins.'
+            : 'Clear gutters and exterior drains before the rain begins.',
           rainProtectionAction(property),
           'Move valuables away from low floors and known leak areas.',
         ],
         actions: [
-          { label: 'Start storm preparation', href: maintenanceHref(property.id), kind: 'primary' },
+          { label: 'Start storm preparation', href: preparationHref(property.id, insightId), kind: 'primary' },
           { label: 'Check weather coverage', href: coverageHref(property.id), kind: 'secondary' },
         ],
         source: elevatedPropertyRisk || property.hasSumpPump !== null || property.foundationType !== null
@@ -227,6 +238,8 @@ export function deriveEnvironmentInsights(
 
     const snowDay = weather.tenDayForecast.find(day => [71, 73, 75, 77, 85, 86].includes(day.weatherCode));
     if (snowDay) {
+      const insightId = `snow-${snowDay.date}`;
+      const snowManagedElsewhere = managedElsewhere(property.snowIceResponsibility ?? null);
       const roofAge = property.roofReplacementYear ? new Date().getFullYear() - property.roofReplacementYear : null;
       const elevatedRoofRisk = property.roofType === 'FLAT' || (roofAge !== null && roofAge >= 20);
       const roofContext = [
@@ -234,7 +247,7 @@ export function deriveEnvironmentInsights(
         roofAge !== null ? `approximately ${roofAge} years since replacement` : null,
       ].filter(Boolean).join(' with ');
       insights.push({
-        id: `snow-${snowDay.date}`,
+        id: insightId,
         category: 'snow',
         severity: snowDay.weatherCode === 75 || snowDay.weatherCode === 86 || elevatedRoofRisk ? 'action' : 'watch',
         title: `Snow expected ${dayLabel(snowDay.date)}`,
@@ -246,9 +259,19 @@ export function deriveEnvironmentInsights(
         effectiveFrom: snowDay.date,
         effectiveTo: snowDay.date,
         affectedSystems: ['Exterior plumbing', 'Roof', 'Walkways', 'Exterior vents'],
-        recommendedActions: ['Disconnect exterior hoses.', 'Check that exterior vents remain clear.', 'Prepare ice melt and snow-removal equipment.'],
+        recommendedActions: [
+          managedElsewhere(property.plumbingResponsibility ?? null)
+            ? 'Confirm the responsible party has protected exterior plumbing.'
+            : 'Disconnect exterior hoses.',
+          exteriorManagedElsewhere(property)
+            ? 'Confirm the responsible party will keep exterior vents clear.'
+            : 'Check that exterior vents remain clear.',
+          snowManagedElsewhere
+            ? 'Keep the association, landlord, or shared snow-removal contact available.'
+            : 'Prepare ice melt and snow-removal equipment.',
+        ],
         actions: [
-          { label: 'Prepare for snow', href: maintenanceHref(property.id), kind: 'primary' },
+          { label: 'Prepare for snow', href: preparationHref(property.id, insightId), kind: 'primary' },
           { label: 'Find snow or home help', href: providersHref(property.id), kind: 'secondary' },
         ],
         source: 'Open-Meteo forecast',
@@ -257,9 +280,11 @@ export function deriveEnvironmentInsights(
 
     const freezeDay = weather.tenDayForecast.find(day => day.tempMinF <= 28 && ![71, 73, 75, 77, 85, 86].includes(day.weatherCode));
     if (freezeDay) {
+      const insightId = `freeze-${freezeDay.date}`;
+      const plumbingManagedElsewhere = managedElsewhere(property.plumbingResponsibility ?? null);
       const heatPumpWithoutBackup = property.heatingType === 'HEAT_PUMP' && property.hasSecondaryHeat === false;
       insights.push({
-        id: `freeze-${freezeDay.date}`,
+        id: insightId,
         category: 'freeze',
         severity: freezeDay.tempMinF <= 20 || heatPumpWithoutBackup ? 'action' : 'watch',
         title: `Freeze risk ${dayLabel(freezeDay.date)}`,
@@ -273,8 +298,16 @@ export function deriveEnvironmentInsights(
         effectiveFrom: freezeDay.date,
         effectiveTo: freezeDay.date,
         affectedSystems: ['Plumbing', 'Exterior faucets', 'Heating'],
-        recommendedActions: ['Disconnect hoses and cover exterior faucets.', 'Keep vulnerable interior spaces heated.', 'Know where the main water shutoff is located.'],
-        actions: [{ label: 'Review freeze checklist', href: maintenanceHref(property.id), kind: 'primary' }],
+        recommendedActions: [
+          plumbingManagedElsewhere
+            ? 'Confirm the responsible party has protected exterior faucets and exposed plumbing.'
+            : 'Disconnect hoses and cover exterior faucets.',
+          'Keep vulnerable interior spaces heated.',
+          plumbingManagedElsewhere
+            ? 'Keep the building’s emergency maintenance contact available.'
+            : 'Know where the main water shutoff is located.',
+        ],
+        actions: [{ label: 'Review freeze checklist', href: preparationHref(property.id, insightId), kind: 'primary' }],
         source: 'Open-Meteo forecast',
       });
     }
@@ -282,6 +315,7 @@ export function deriveEnvironmentInsights(
     const heatDays = weather.tenDayForecast.filter(day => day.tempMaxF >= 95);
     if (heatDays.length > 0) {
       const first = heatDays[0];
+      const insightId = `heat-${first.date}`;
       const last = heatDays[heatDays.length - 1];
       const hvacAge = property.hvacInstallYear ? new Date().getFullYear() - property.hvacInstallYear : null;
       const olderHvac = hvacAge !== null && hvacAge >= 15;
@@ -302,7 +336,7 @@ export function deriveEnvironmentInsights(
           ? `This home uses ${property.coolingType.toLowerCase().replace('_', ' ')} cooling. Sustained heat can increase system demand, energy use, and indoor humidity.`
           : 'No cooling-system type is recorded for this home, so confirm there is a safe plan for keeping indoor temperatures down.';
       insights.push({
-        id: `heat-${first.date}`,
+        id: insightId,
         category: 'heat',
         severity: heatDays.length >= 2 || Math.max(...heatDays.map(day => day.tempMaxF)) >= 100 || olderHvac ? 'action' : 'watch',
         title: heatDays.length >= 2 ? 'Multi-day heat risk ahead' : `High heat expected ${dayLabel(first.date)}`,
@@ -314,7 +348,7 @@ export function deriveEnvironmentInsights(
         affectedSystems: ['Cooling system', 'Electrical', 'Indoor air'],
         recommendedActions: [filterAction, 'Keep outdoor condenser areas clear.', 'Use shades and avoid peak-hour heat-generating activities.'],
         actions: [
-          { label: 'Prepare the cooling system', href: maintenanceHref(property.id), kind: 'primary' },
+          { label: 'Prepare the cooling system', href: preparationHref(property.id, insightId), kind: 'primary' },
           { label: 'Find an HVAC professional', href: providersHref(property.id), kind: 'secondary' },
         ],
         source: filterDaysAgo !== null
@@ -359,7 +393,7 @@ export function deriveEnvironmentInsights(
       effectiveTo: sections.airQuality.data.current.observedAt,
       affectedSystems: ['Indoor air', 'HVAC filtration'],
       recommendedActions: ['Close windows while air quality remains poor.', 'Use HVAC recirculation where available.', 'Check or replace the HVAC filter if it is due.'],
-      actions: [{ label: 'Review indoor-air maintenance', href: maintenanceHref(property.id), kind: 'primary' }],
+      actions: [{ label: 'Review indoor-air maintenance', href: weatherHref(property.id), kind: 'primary' }],
       source: 'Open-Meteo air quality',
     });
   }
@@ -380,7 +414,7 @@ export function deriveEnvironmentInsights(
       effectiveTo: sections.drought.data.current!.date,
       affectedSystems: ['Foundation perimeter', 'Landscaping', 'Irrigation'],
       recommendedActions: ['Follow local watering restrictions.', 'Inspect for widening soil gaps near the foundation.', 'Avoid overwatering directly against the foundation.'],
-      actions: [{ label: 'Review exterior maintenance', href: maintenanceHref(property.id), kind: 'primary' }],
+      actions: [{ label: 'Review exterior maintenance', href: weatherHref(property.id), kind: 'primary' }],
       source: 'US Drought Monitor',
     });
   }
