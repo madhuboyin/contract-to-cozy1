@@ -1,5 +1,6 @@
 export * from './capability.contract';
 export * from './capabilityAvailability';
+export * from './capabilityCandidateMatcher';
 export * from './capabilityCatalog.service';
 export * from './capabilityGoldenFixtures';
 export * from './capabilityRecommendationContext';

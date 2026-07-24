@@ -101,6 +101,7 @@ const ProjectSourceSchema = z.object({
   kind: BoundedIdentifier,
   status: BoundedIdentifier,
   milestoneKind: OptionalIdentifier.default(null),
+  signalIntentFamilies: z.array(BoundedIdentifier).max(20).default([]),
   sourceActionId: OptionalIdentifier.default(null),
   sourceEntityType: OptionalIdentifier.default(null),
   sourceEntityId: OptionalIdentifier.default(null),

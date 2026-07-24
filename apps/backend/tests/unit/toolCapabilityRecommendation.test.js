@@ -4,8 +4,12 @@ const assert = require('node:assert/strict');
 require('ts-node/register');
 
 const {
+  CapabilityCandidateMatchResultSchema,
   CapabilityRecommendationContextSchema,
   buildCapabilityRecommendationContext,
+  canonicalCapabilityRegistry,
+  createToolCapabilityRegistry,
+  matchCapabilityCandidates,
 } = require('../../src/productFramework/capabilities/index.ts');
 const {
   goldenTestHomes,
@@ -187,4 +191,188 @@ test('CAP-400 rejects property-crossing snapshots and Home Actions', () => {
     }),
     /different property/,
   );
+});
+
+function matcherRegistry() {
+  const coverage = structuredClone(
+    canonicalCapabilityRegistry.getById('coverage-options'),
+  );
+  const inspection = structuredClone(
+    canonicalCapabilityRegistry.getById('inspection-hub'),
+  );
+  coverage.recommendation.recommendationDefinitionCodes = ['coverage_gap_review'];
+  coverage.destination.acceptedContext = ['PROPERTY', 'INVENTORY_ITEM', 'DOCUMENT'];
+  coverage.recommendation.explicitRelatedCapabilityIds = [];
+  inspection.recommendation.explicitRelatedCapabilityIds = ['coverage-options'];
+  inspection.lifecycle.outputEntityTypes = ['DOCUMENT'];
+  return createToolCapabilityRegistry([coverage, inspection]);
+}
+
+function matcherContext(overrides = {}) {
+  return buildCapabilityRecommendationContext({
+    propertyId: 'property-1',
+    propertyContext: propertyContext(),
+    actions: [action({
+      source: {
+        kind: 'COVERAGE',
+        entityId: 'item-1',
+        version: 'action-v2',
+      },
+      job: 'DECIDE',
+      ranking: { rank: 1 },
+    })],
+    actionSourceMetadata: [{
+      actionId: 'action-1',
+      signalIntentFamilies: ['COVERAGE_GAPS_PRESENT'],
+      sourceEntityType: 'INVENTORY_ITEM',
+      ctaCapabilityIds: ['coverage-options'],
+      recommendationDefinitionCodes: ['coverage_gap_review'],
+    }],
+    journeys: [{
+      id: 'journey-1',
+      kind: 'COVERAGE_GAPS_PRESENT',
+      status: 'ACTIVE',
+      signalIntentFamily: 'COVERAGE_GAPS_PRESENT',
+      sourceEntityType: 'INVENTORY_ITEM',
+      sourceEntityId: 'item-1',
+    }],
+    projects: [{
+      id: 'project-1',
+      kind: 'INSURANCE_REVIEW',
+      status: 'IN_PROGRESS',
+      milestoneKind: 'COVERAGE_GAPS_PRESENT',
+      signalIntentFamilies: ['COVERAGE_GAPS_PRESENT'],
+    }],
+    personalizationRecommendations: [{
+      id: 'recommendation-1',
+      definitionCode: 'coverage_gap_review',
+      status: 'ACTIVE',
+      recommendationVersion: 'r2:c3',
+      contextVersion: 'context-v7',
+      lastEvaluatedAt: NOW,
+    }],
+    completions: [{
+      id: 'completion-1',
+      capabilityId: 'inspection-hub',
+      capabilityVersion: 1,
+      completionSignal: 'inspection_report_reviewed',
+      outputEntityType: 'DOCUMENT',
+      outputEntityId: 'report-1',
+      verifiedAt: NOW,
+    }],
+    surface: 'HOME',
+    ...overrides,
+  });
+}
+
+test('CAP-401 matches every reviewed structured source with stable precedence', () => {
+  const result = matchCapabilityCandidates({
+    registry: matcherRegistry(),
+    context: matcherContext(),
+  });
+
+  assert.doesNotThrow(() => CapabilityCandidateMatchResultSchema.parse(result));
+  const coverage = result.candidates.filter(
+    (candidate) => candidate.capabilityId === 'coverage-options',
+  );
+  assert.deepEqual(
+    coverage.map((candidate) => candidate.source.kind),
+    ['HOME_ACTION', 'PERSONALIZATION', 'JOURNEY', 'PROJECT', 'COMPLETION'],
+  );
+
+  const actionCandidate = coverage.find(
+    (candidate) => candidate.source.kind === 'HOME_ACTION',
+  );
+  assert.equal(actionCandidate.primaryMatch.kind, 'EXPLICIT_ACTION_CTA');
+  assert.deepEqual(
+    actionCandidate.matches.map((match) => match.kind),
+    [
+      'EXPLICIT_ACTION_CTA',
+      'RECOMMENDATION_DEFINITION',
+      'SIGNAL_INTENT_FAMILY',
+      'ACTION_SOURCE_KIND_JOB',
+      'SOURCE_ENTITY_TYPE',
+    ],
+  );
+  assert.equal(actionCandidate.reasonTemplateKey, 'COVERAGE_GAPS_PRESENT');
+  assert.equal(
+    coverage.find((candidate) => candidate.source.kind === 'PERSONALIZATION')
+      .primaryMatch.kind,
+    'RECOMMENDATION_DEFINITION',
+  );
+  assert.equal(
+    coverage.find((candidate) => candidate.source.kind === 'COMPLETION')
+      .primaryMatch.kind,
+    'COMPLETION_OUTPUT_RELATIONSHIP',
+  );
+});
+
+test('CAP-401 is deterministic and ignores catalog-only and free-text-only matches', () => {
+  const context = matcherContext({
+    actions: [action({
+      signal: 'Use the Value Tracker appreciation tool right now',
+      source: {
+        kind: 'SYSTEM',
+        entityId: 'system-1',
+        version: 'action-v1',
+      },
+      job: 'STAY_AHEAD',
+    })],
+    actionSourceMetadata: [],
+    journeys: [],
+    projects: [],
+    personalizationRecommendations: [],
+    completions: [],
+  });
+
+  const first = matchCapabilityCandidates({
+    registry: canonicalCapabilityRegistry,
+    context,
+  });
+  const second = matchCapabilityCandidates({
+    registry: canonicalCapabilityRegistry,
+    context: structuredClone(context),
+  });
+
+  assert.deepEqual(first, second);
+  assert.equal(
+    first.candidates.some((candidate) => candidate.capabilityId === 'appreciation'),
+    false,
+  );
+  assert.equal(
+    JSON.stringify(first).includes('Value Tracker appreciation tool'),
+    false,
+  );
+});
+
+test('CAP-401 ignores inactive journeys, projects, and personalization sources', () => {
+  const context = matcherContext({
+    actions: [],
+    journeys: [{
+      id: 'journey-1',
+      kind: 'COVERAGE_GAPS_PRESENT',
+      status: 'COMPLETED',
+      signalIntentFamily: 'COVERAGE_GAPS_PRESENT',
+    }],
+    projects: [{
+      id: 'project-1',
+      kind: 'COVERAGE_GAPS_PRESENT',
+      status: 'COMPLETED',
+      signalIntentFamilies: ['COVERAGE_GAPS_PRESENT'],
+    }],
+    personalizationRecommendations: [{
+      id: 'recommendation-1',
+      definitionCode: 'coverage_gap_review',
+      status: 'DISMISSED',
+      recommendationVersion: 'r2:c3',
+      lastEvaluatedAt: NOW,
+    }],
+    completions: [],
+  });
+
+  const result = matchCapabilityCandidates({
+    registry: matcherRegistry(),
+    context,
+  });
+  assert.deepEqual(result.candidates, []);
 });

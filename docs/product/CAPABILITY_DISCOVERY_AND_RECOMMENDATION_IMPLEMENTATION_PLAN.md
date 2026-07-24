@@ -81,6 +81,7 @@ Status as of July 24, 2026:
 | CAP-305 actual-view impressions | Complete | Shared observer requires 50% visibility for 750 ms in an active document and deduplicates by session and registry version |
 | CAP-306 ProductTool synchronization | Complete | Knowledge Hub projects all 52 canonical capabilities, preserves published stable keys and three platform/report entries, and performs non-destructive upserts |
 | CAP-400 context source adapter | Complete | Privacy-safe evaluator input normalizes canonical actions, authorized fact quality, journeys, projects, personalization, completions, availability, and lifecycle without raw values or prose |
+| CAP-401 candidate matcher | Complete | Deterministic structured matching applies reviewed precedence across action CTAs, definitions, trigger families, source/job, entities, journeys, projects, and completion relationships without free-text eligibility |
 
 Explore Tools and homeowner command search now use the canonical catalog by default. Set
 `CAPABILITY_CATALOG_SOURCE=legacy` only for the temporary internal-beta rollback.
