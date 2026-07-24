@@ -79,7 +79,7 @@ Status as of July 24, 2026:
 | CAP-303 Explore Tools cutover | Complete | Canonical catalog drives outcome grouping, aliases, intent chips, readiness, beta badges, degraded state, and property-preserving links behind the rollback flag |
 | CAP-304 command-search cutover | Complete | Homeowner command search uses the same catalog and indexes descriptions, aliases, outcome, job, destination, and supported context |
 | CAP-305 actual-view impressions | Complete | Shared observer requires 50% visibility for 750 ms in an active document and deduplicates by session and registry version |
-| CAP-306 ProductTool synchronization | Pending | Knowledge Hub seed metadata remains separately maintained |
+| CAP-306 ProductTool synchronization | Complete | Knowledge Hub projects all 52 canonical capabilities, preserves published stable keys and three platform/report entries, and performs non-destructive upserts |
 
 Explore Tools and homeowner command search now use the canonical catalog by default. Set
 `CAPABILITY_CATALOG_SOURCE=legacy` only for the temporary internal-beta rollback.
