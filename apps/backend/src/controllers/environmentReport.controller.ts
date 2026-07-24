@@ -2,9 +2,11 @@
 
 import { Response } from 'express';
 import { CustomRequest } from '../types/express-extension.types';
-import { prisma } from '../lib/prisma';
 import { logger } from '../lib/logger';
-import { getEnvironmentReport, recordHvacFilterMaintenance } from '../services/environmentReport.service';
+import {
+  getEnvironmentReportForProperty,
+  recordHvacFilterMaintenance,
+} from '../services/environmentReport.service';
 import { getPropertyContext } from '../modules/propertyContext';
 import {
   getWeatherPreparation,
@@ -13,27 +15,6 @@ import {
   updateWeatherPreparationItem,
   type WeatherPreparationItemStatus,
 } from '../services/environment/weatherPreparation.service';
-
-async function loadEnvironmentReport(propertyId: string, userId: string) {
-  const property = await prisma.property.findUnique({
-    where: { id: propertyId },
-    select: {
-      id: true, name: true, address: true, city: true, state: true, zipCode: true,
-      latitude: true, longitude: true, geocodedZipCode: true,
-      hasDrainageIssues: true, hasSumpPump: true, hasSumpPumpBackup: true,
-      isResilienceVerified: true, coolingType: true, heatingType: true,
-      hvacInstallYear: true, roofType: true, roofReplacementYear: true,
-      foundationType: true, hasIrrigation: true, hasSecondaryHeat: true,
-    },
-  });
-  if (!property) return null;
-  const context = await getPropertyContext(
-    propertyId,
-    { userId },
-    { scopes: ['LOCATION', 'STRUCTURE', 'EXTERIOR', 'RESPONSIBILITY', 'SYSTEMS', 'SAFETY', 'MAINTENANCE'] },
-  );
-  return getEnvironmentReport(property, context);
-}
 
 class EnvironmentReportController {
   async recordMaintenanceContext(req: CustomRequest, res: Response) {
@@ -63,7 +44,7 @@ class EnvironmentReportController {
   async getReport(req: CustomRequest, res: Response) {
     try {
       const propertyId = req.property!.id;
-      const report = await loadEnvironmentReport(propertyId, req.user!.userId);
+      const report = await getEnvironmentReportForProperty(propertyId, req.user!.userId);
       if (!report) return res.status(404).json({ success: false, message: 'Property not found' });
       return res.json({ success: true, data: report });
     } catch (error: any) {
@@ -79,7 +60,7 @@ class EnvironmentReportController {
       if (!insightId) return res.status(400).json({ success: false, message: 'Insight ID is required.' });
       const existing = await getWeatherPreparationByInsight(propertyId, insightId);
       if (existing) return res.json({ success: true, data: existing });
-      const report = await loadEnvironmentReport(propertyId, req.user!.userId);
+      const report = await getEnvironmentReportForProperty(propertyId, req.user!.userId);
       if (!report) return res.status(404).json({ success: false, message: 'Property not found' });
       const insight = report.insights.find(candidate => candidate.id === insightId);
       if (!insight) {

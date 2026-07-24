@@ -32,7 +32,11 @@ import {
   getPlantAdvisorWeatherModules,
   PlantAdvisorWeatherModule,
 } from './environment/plantAdvisorWeather.service';
-import type { FeatureDecision, PropertyContextSnapshot } from '../modules/propertyContext';
+import {
+  getPropertyContext,
+  type FeatureDecision,
+  type PropertyContextSnapshot,
+} from '../modules/propertyContext';
 import { knownContextValue } from './propertyContextDecision';
 import { evaluateEnvironmentApplicability } from './environment/applicabilityPolicy';
 
@@ -102,6 +106,31 @@ interface GeocodableProperty {
   sharedSystemsResponsibility?: string | null;
   hasIrrigation: boolean | null;
   hasSecondaryHeat: boolean | null;
+}
+
+export async function getEnvironmentReportForProperty(
+  propertyId: string,
+  userId: string,
+): Promise<EnvironmentReportDTO | null> {
+  const property = await prisma.property.findUnique({
+    where: { id: propertyId },
+    select: {
+      id: true, name: true, address: true, city: true, state: true, zipCode: true,
+      latitude: true, longitude: true, geocodedZipCode: true,
+      hasDrainageIssues: true, hasSumpPump: true, hasSumpPumpBackup: true,
+      isResilienceVerified: true, coolingType: true, heatingType: true,
+      hvacInstallYear: true, roofType: true, roofReplacementYear: true,
+      foundationType: true, hasIrrigation: true, hasSecondaryHeat: true,
+    },
+  });
+  if (!property) return null;
+
+  const context = await getPropertyContext(
+    propertyId,
+    { userId },
+    { scopes: ['LOCATION', 'STRUCTURE', 'EXTERIOR', 'RESPONSIBILITY', 'SYSTEMS', 'SAFETY', 'MAINTENANCE'] },
+  );
+  return getEnvironmentReport(property, context);
 }
 
 const OPEN_METEO_GEOCODING_URL = 'https://geocoding-api.open-meteo.com/v1/search';

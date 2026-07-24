@@ -9,6 +9,7 @@ import { buildRecommendationResponseContract, resolveRecommendationResponseStatu
 import { getGuidanceJourneyDisplayTitle } from './guidanceEngine/guidanceTemplateRegistry';
 import { getHomeAssetDisplayLabel } from '../productFramework/homeAssetDisplay';
 import { findPersonalizationDefinition } from '../modules/personalization/catalog/personalizationDefinitions';
+import type { EnvironmentInsight } from './environment/environmentInsights.service';
 
 const DEFAULT_FEEDBACK: HomeAction['feedbackControls'] = [
   'COMPLETE', 'DEFER', 'SNOOZE', 'DISMISS', 'ALREADY_DONE', 'NOT_RELEVANT', 'CORRECT_FACT',
@@ -170,6 +171,116 @@ function confidenceLabel(score: number | null): HomeAction['confidence']['label'
   if (score == null || score < 0.55) return 'LOW';
   if (score < 0.8) return 'MEDIUM';
   return 'HIGH';
+}
+
+function environmentBoundary(value: string, endOfDay = false): Date | null {
+  const normalized = /^\d{4}-\d{2}-\d{2}$/.test(value)
+    ? `${value}T${endOfDay ? '23:59:59.999' : '00:00:00.000'}Z`
+    : value;
+  const parsed = new Date(normalized);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function environmentInsightExpiry(insight: EnvironmentInsight): Date | null {
+  const boundary = environmentBoundary(insight.effectiveTo, true);
+  if (!boundary) return null;
+  if (insight.category === 'air_quality' && !/^\d{4}-\d{2}-\d{2}$/.test(insight.effectiveTo)) {
+    return new Date(boundary.getTime() + 3 * 60 * 60 * 1000);
+  }
+  if (insight.category === 'drought') {
+    return new Date(boundary.getTime() + 7 * 24 * 60 * 60 * 1000);
+  }
+  return boundary;
+}
+
+export function adaptEnvironmentInsightsToHomeActions(
+  propertyId: string,
+  insights: readonly EnvironmentInsight[],
+  incidentActions: readonly HomeAction[],
+  evaluatedAt = new Date(),
+): HomeAction[] {
+  const activeIncidentIds = new Set(
+    incidentActions
+      .filter((action) => action.source.kind === 'INCIDENT')
+      .map((action) => action.source.entityId),
+  );
+  const activePreparationLineages = new Set(
+    incidentActions
+      .filter((action) => action.source.kind === 'INCIDENT')
+      .map((action) => action.lineageId),
+  );
+  const evaluatedAtIso = evaluatedAt.toISOString();
+  const today = evaluatedAtIso.slice(0, 10);
+
+  return insights
+    .filter((insight) => insight.severity === 'action')
+    .filter((insight) => {
+      const expiresAt = environmentInsightExpiry(insight);
+      return !expiresAt || expiresAt.getTime() >= evaluatedAt.getTime();
+    })
+    .filter((insight) => !insight.relatedIncident || !activeIncidentIds.has(insight.relatedIncident.id))
+    .filter((insight) => !activePreparationLineages.has(
+      `incident:weather-preparation:${propertyId}:${insight.id}`,
+    ))
+    .slice(0, 2)
+    .map((insight) => {
+      const windowStart = environmentBoundary(insight.effectiveFrom);
+      const windowEnd = environmentInsightExpiry(insight);
+      const primary = insight.actions.find((action) => action.kind === 'primary') ?? insight.actions[0];
+      const reportHref = `/dashboard/properties/${propertyId}/environment-report`;
+      const primaryHref = primary?.href ?? reportHref;
+      const primaryKind = primaryHref.includes('/environment-report/preparation')
+        ? 'START' as const
+        : 'REVIEW' as const;
+
+      return adaptHomeActionSource('MAINTENANCE', {
+        id: `environment:${insight.id}`,
+        propertyId,
+        lineageId: `environment:${propertyId}:${insight.category}:${insight.effectiveFrom}`,
+        sourceEntityId: insight.id,
+        sourceVersion: 'environment-v1',
+        state: 'OPEN',
+        priority: insight.category !== 'drought' && insight.effectiveFrom.slice(0, 10) <= today ? 'NOW' : 'SOON',
+        signal: insight.title,
+        whyItMatters: `${insight.summary} ${insight.homeImplication}`.trim(),
+        recommendedAction: insight.recommendedActions[0] ?? primary?.label ?? 'Review the environment outlook',
+        expectedOutcome: `Prepare the home for ${insight.timeframe.toLowerCase()} and reduce avoidable exposure.`,
+        timing: {
+          dueAt: windowStart?.toISOString() ?? null,
+          windowStart: windowStart?.toISOString() ?? null,
+          windowEnd: windowEnd?.toISOString() ?? null,
+          rationale: `This forecast-based recommendation is active for ${insight.timeframe}.`,
+        },
+        evidence: [{
+          id: insight.id,
+          type: 'EXTERNAL_SOURCE',
+          label: insight.title,
+          source: insight.source,
+          observedAt: evaluatedAtIso,
+          freshness: 'CURRENT',
+          confidence: 0.9,
+        }],
+        assumptions: [],
+        options: [],
+        tradeoffs: [],
+        confidence: { score: 0.9, label: 'HIGH', missing: [] },
+        governance: lowConsequenceGovernance('environment-v1'),
+        primaryCta: {
+          kind: primaryKind,
+          label: primary?.label ?? 'Review environment report',
+          href: primaryHref,
+        },
+        secondaryCtas: primaryHref === reportHref ? [] : [{
+          kind: 'REVIEW',
+          label: 'View environment report',
+          href: reportHref,
+        }],
+        feedbackControls: DEFAULT_FEEDBACK,
+        relatedJourneyId: null,
+        createdAt: evaluatedAtIso,
+        lastEvaluatedAt: evaluatedAtIso,
+      });
+    });
 }
 
 async function loadGuidanceActions(
@@ -777,7 +888,11 @@ async function loadProjectActions(propertyId: string, db: HomeActionSourceDb): P
 export async function getPromotedHomeActions(
   propertyId: string,
   db: HomeActionSourceDb = prisma,
-  options: { includePersonalization?: boolean } = {},
+  options: {
+    includePersonalization?: boolean;
+    environmentInsights?: readonly EnvironmentInsight[];
+    evaluatedAt?: Date;
+  } = {},
 ): Promise<{
   actions: HomeAction[];
   diagnostics: { candidateCount: number; suppressedCount: number; snoozedCount: number };
@@ -786,11 +901,18 @@ export async function getPromotedHomeActions(
   const activeWeatherIncidentIds = new Set(incidentActions
     .filter((action) => action.evidence.some((evidence) => evidence.source.includes('National Weather Service')))
     .map((action) => action.source.entityId));
+  const environmentActions = adaptEnvironmentInsightsToHomeActions(
+    propertyId,
+    options.environmentInsights ?? [],
+    incidentActions,
+    options.evaluatedAt,
+  );
   const groups = await Promise.all([
     loadGuidanceActions(propertyId, db, activeWeatherIncidentIds), Promise.resolve(incidentActions),
     loadRecallActions(propertyId, db), loadCoverageActions(propertyId, db),
     loadProjectActions(propertyId, db), loadSeasonalChecklistActions(propertyId, db),
     options.includePersonalization === false ? Promise.resolve([]) : loadPersonalizationActions(propertyId, db),
+    Promise.resolve(environmentActions),
   ]);
   const candidates = groups.flat();
   if (candidates.length === 0) {

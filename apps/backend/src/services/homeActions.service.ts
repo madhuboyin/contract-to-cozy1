@@ -27,6 +27,7 @@ import {
   buildInventoryCoveragePresentation,
   type InventoryCoveragePresentation,
 } from './inventoryCoverageState.service';
+import { getEnvironmentReportForProperty } from './environmentReport.service';
 
 export const HOME_ACTION_COMMANDS = [
   'COMPLETE',
@@ -246,6 +247,10 @@ export async function getHomeActionFeed(propertyId: string, userId: string) {
   // so the property does not depend on a buyer dashboard or a separate cron.
   await BuyerAcquisitionService.ensureRecurringHandoff(userId, propertyId).catch(() => null);
   await NewHomeSetupService.ensureRecurringHandoff(userId, propertyId).catch(() => null);
+  const environmentReportPromise = getEnvironmentReportForProperty(propertyId, userId).catch((error) => {
+    logger.warn({ err: error, propertyId, userId }, 'Unified Home environment insight evaluation failed closed');
+    return null;
+  });
   const orchestration = await getOrchestrationSummary(propertyId, userId);
   let personalization: Awaited<ReturnType<typeof materializeRecommendationsForProperty>> | null = null;
   let personalizationStatus: 'AVAILABLE' | 'PAUSED' | 'FAILED' = 'AVAILABLE';
@@ -256,8 +261,10 @@ export async function getHomeActionFeed(propertyId: string, userId: string) {
     personalizationStatus = 'FAILED';
     logger.warn({ err: error, propertyId, userId }, 'Unified Home personalization materialization failed closed');
   }
+  const environmentReport = await environmentReportPromise;
   const promoted = await getPromotedHomeActions(propertyId, prisma, {
     includePersonalization: Boolean(personalization && !personalization.paused),
+    environmentInsights: environmentReport?.insights ?? [],
   });
   const rawCandidates: HomeAction[] = [...orchestration.homeActions, ...promoted.actions];
   const entryContext = await getEntryContext(propertyId, userId);

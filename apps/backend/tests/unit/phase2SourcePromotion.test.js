@@ -2,10 +2,115 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 require('ts-node/register');
 
-const { getPromotedHomeActions } = require('../../src/services/homeActionSourcePromotion.service.ts');
+const {
+  adaptEnvironmentInsightsToHomeActions,
+  getPromotedHomeActions,
+} = require('../../src/services/homeActionSourcePromotion.service.ts');
 
 const NOW = new Date('2026-07-18T12:00:00.000Z');
 const LATER = new Date('2026-08-18T12:00:00.000Z');
+
+function environmentInsight(overrides = {}) {
+  return {
+    id: 'heat-2026-07-20',
+    category: 'heat',
+    severity: 'action',
+    title: 'Multi-day heat risk ahead',
+    summary: 'Two days may reach 95°F or higher.',
+    homeImplication: 'Sustained heat can increase cooling-system demand.',
+    timeframe: 'Monday, Jul 20 – Tuesday, Jul 21',
+    effectiveFrom: '2026-07-20',
+    effectiveTo: '2026-07-21',
+    affectedSystems: ['Cooling system'],
+    recommendedActions: ['Inspect the HVAC filter before the heat arrives.'],
+    actions: [{
+      label: 'Prepare the cooling system',
+      href: '/dashboard/properties/property-1/environment-report/preparation?insightId=heat-2026-07-20',
+      kind: 'primary',
+    }],
+    source: 'Open-Meteo forecast and property profile',
+    ...overrides,
+  };
+}
+
+test('promotes only current action-severity environment insights and caps the Home list at two', () => {
+  const actions = adaptEnvironmentInsightsToHomeActions('property-1', [
+    environmentInsight(),
+    environmentInsight({ id: 'watch-1', severity: 'watch' }),
+    environmentInsight({ id: 'storm-1', category: 'storm', effectiveFrom: '2026-07-22', effectiveTo: '2026-07-22' }),
+    environmentInsight({ id: 'rain-1', category: 'rain', effectiveFrom: '2026-07-23', effectiveTo: '2026-07-23' }),
+    environmentInsight({ id: 'expired-1', effectiveFrom: '2026-07-15', effectiveTo: '2026-07-16' }),
+  ], [], NOW);
+
+  assert.deepEqual(actions.map((action) => action.id), ['environment:heat-2026-07-20', 'environment:storm-1']);
+  assert.equal(actions[0].source.kind, 'MAINTENANCE');
+  assert.equal(actions[0].priority, 'SOON');
+  assert.equal(actions[0].primaryCta.kind, 'START');
+  assert.equal(actions[0].timing.windowEnd, '2026-07-21T23:59:59.999Z');
+});
+
+test('promotes an environment insight to NOW when its forecast window has started', () => {
+  const [action] = adaptEnvironmentInsightsToHomeActions('property-1', [
+    environmentInsight({ effectiveFrom: '2026-07-18', effectiveTo: '2026-07-19' }),
+  ], [], NOW);
+
+  assert.equal(action.priority, 'NOW');
+});
+
+test('keeps current air-quality and weekly drought insights active for their source freshness windows', () => {
+  const actions = adaptEnvironmentInsightsToHomeActions('property-1', [
+    environmentInsight({
+      id: 'air-quality-1',
+      category: 'air_quality',
+      effectiveFrom: '2026-07-18T11:00:00.000Z',
+      effectiveTo: '2026-07-18T11:00:00.000Z',
+    }),
+    environmentInsight({
+      id: 'drought-1',
+      category: 'drought',
+      effectiveFrom: '2026-07-14',
+      effectiveTo: '2026-07-14',
+    }),
+  ], [], NOW);
+
+  assert.deepEqual(actions.map((action) => action.id), ['environment:air-quality-1', 'environment:drought-1']);
+  assert.equal(actions[0].timing.windowEnd, '2026-07-18T14:00:00.000Z');
+  assert.equal(actions[1].priority, 'SOON');
+});
+
+test('suppresses environment insight duplicates when an incident or preparation is already active', () => {
+  const officialIncident = {
+    source: { kind: 'INCIDENT', entityId: 'incident-1' },
+    lineageId: 'incident:official-heat-alert',
+  };
+  const preparationIncident = {
+    source: { kind: 'INCIDENT', entityId: 'incident-2' },
+    lineageId: 'incident:weather-preparation:property-1:storm-1',
+  };
+  const actions = adaptEnvironmentInsightsToHomeActions('property-1', [
+    environmentInsight({ relatedIncident: { id: 'incident-1' } }),
+    environmentInsight({ id: 'storm-1', category: 'storm' }),
+  ], [officialIncident, preparationIncident], NOW);
+
+  assert.deepEqual(actions, []);
+});
+
+test('applies the canonical dismissed and snoozed lifecycle to environment actions', async () => {
+  const insight = environmentInsight();
+  const dismissed = await getPromotedHomeActions(
+    'property-1',
+    stubSources({ terminalActionKey: 'environment:heat-2026-07-20' }),
+    { environmentInsights: [insight], evaluatedAt: NOW },
+  );
+  const snoozed = await getPromotedHomeActions(
+    'property-1',
+    stubSources({ snoozedActionKey: 'environment:heat-2026-07-20' }),
+    { environmentInsights: [insight], evaluatedAt: NOW },
+  );
+
+  assert.equal(dismissed.actions.some((action) => action.id === 'environment:heat-2026-07-20'), false);
+  assert.equal(snoozed.actions.some((action) => action.id === 'environment:heat-2026-07-20'), false);
+});
 
 function stubSources({
   terminalActionKey = null,
