@@ -85,6 +85,7 @@ Status as of July 24, 2026:
 | CAP-402 readiness evaluator | Complete | Three-valued backend readiness evaluates property, facts, systems, coverage gaps, accepted/source context, and jurisdiction; only explicitly reviewed low-consequence capabilities may return safe partial value |
 | CAP-403 governance and availability | Complete | Pre-ranking policy gates release state, permissions, safety tiers, approvals, context freshness, degraded responses, CTA availability, and structured-evidence disclosure |
 | CAP-404 deduplication and suppression | Complete | Auditable suppression retains reason-coded diagnostics for CTA duplication, terminal/stale sources, dismissal cooldown, frequency caps, completion renewal, policy decisions, workflow compatibility, and deterministic equivalent-outcome deduplication |
+| CAP-405 ranking and diversity | Complete | Deterministic 100-point ranking exposes six bounded diagnostic components, applies a useful-result threshold, caps Home at three, and enforces capability, source, and outcome diversity with stable tie-breaking |
 
 Explore Tools and homeowner command search now use the canonical catalog by default. Set
 `CAPABILITY_CATALOG_SOURCE=legacy` only for the temporary internal-beta rollback.

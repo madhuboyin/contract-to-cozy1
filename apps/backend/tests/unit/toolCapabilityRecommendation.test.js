@@ -8,7 +8,10 @@ const {
   CapabilityGovernanceResultSchema,
   CapabilityReadinessResultSchema,
   CapabilityRecommendationContextSchema,
+  CapabilityRankingResultSchema,
   CapabilitySuppressionResultSchema,
+  CAPABILITY_MINIMUM_USEFUL_SCORE,
+  CAPABILITY_RANKING_COMPONENT_WEIGHTS,
   applyCapabilityGovernancePolicy,
   applyCapabilitySuppressionPolicy,
   buildCapabilityRecommendationContext,
@@ -16,6 +19,7 @@ const {
   createToolCapabilityRegistry,
   evaluateCapabilityCandidateReadiness,
   matchCapabilityCandidates,
+  rankCapabilityCandidates,
 } = require('../../src/productFramework/capabilities/index.ts');
 const {
   goldenTestHomes,
@@ -1072,4 +1076,264 @@ test('CAP-404 keeps workflow-only capabilities out of non-workflow surfaces', ()
   assert.deepEqual(quote.suppression.reasonCodes, [
     'WORKFLOW_CONTEXT_REQUIRED',
   ]);
+});
+
+function rankingFixture() {
+  const context = governedCoverageContext({
+    actionSourceMetadata: [{
+      actionId: 'action-1',
+      signalIntentFamilies: ['COVERAGE_GAPS_PRESENT'],
+    }],
+    limit: 10,
+  });
+  const suppressionResult = suppress(context);
+  const baseCandidate = candidateById(
+    suppressionResult,
+    'coverage-options',
+  );
+  return { context, suppressionResult, baseCandidate };
+}
+
+function rankingCandidate(baseCandidate, capabilityId, overrides = {}) {
+  const capability = canonicalCapabilityRegistry.getById(capabilityId);
+  assert.ok(capability, `Expected ${capabilityId} manifest`);
+  return {
+    ...structuredClone(baseCandidate),
+    capabilityId,
+    manifestVersion: capability.version,
+    outcomeCategory: capability.presentation.outcomeCategory,
+    safetyTier: capability.governance.safetyTier,
+    baseScore: capability.recommendation.baseScore,
+    source: {
+      kind: 'JOURNEY',
+      id: `journey-${capabilityId}`,
+      actionId: null,
+      entityType: 'JOURNEY',
+      entityId: `journey-${capabilityId}`,
+      sourceVersion: 'ACTIVE',
+      observedAt: NOW,
+    },
+    primaryMatch: {
+      kind: 'RECOMMENDATION_DEFINITION',
+      precedence: 2,
+      value: `definition-${capabilityId}`,
+    },
+    matches: [{
+      kind: 'RECOMMENDATION_DEFINITION',
+      precedence: 2,
+      value: `definition-${capabilityId}`,
+    }],
+    readiness: {
+      state: 'READY',
+      safePartialValue: false,
+      reasonCodes: [],
+      missingFactKeys: [],
+      checks: [{
+        kind: 'ACCEPTED_CONTEXT',
+        result: 'TRUE',
+        reasonCode: 'ACCEPTED_CONTEXT_TRUE',
+        explanation: 'The source context is ready.',
+        minimum: null,
+        observedCount: null,
+        contextType: 'JOURNEY',
+      }],
+    },
+    policy: {
+      decision: 'PROMOTABLE',
+      reasonCodes: [],
+      ctaAllowed: true,
+      evidenceMode: 'STRUCTURED_ONLY',
+      policyVersion: 'rollout-v2',
+    },
+    suppression: {
+      suppressed: false,
+      reasonCodes: [],
+    },
+    ...overrides,
+  };
+}
+
+function rankingSuppressionResult(candidates) {
+  return {
+    registryVersion: canonicalCapabilityRegistry.version,
+    contextVersion: 'context-v7',
+    candidates,
+    diagnostics: {
+      retainedCount: candidates.length,
+      suppressedCount: 0,
+    },
+  };
+}
+
+test('CAP-405 returns bounded named score components and selects useful results', () => {
+  const { context, suppressionResult } = rankingFixture();
+  const result = rankCapabilityCandidates({
+    registry: canonicalCapabilityRegistry,
+    context,
+    suppressionResult,
+  });
+  assert.doesNotThrow(() => CapabilityRankingResultSchema.parse(result));
+  const coverage = candidateById(result, 'coverage-options');
+  const componentTotal = Object.values(coverage.ranking.components)
+    .reduce((sum, score) => sum + score, 0);
+
+  assert.equal(
+    Object.values(CAPABILITY_RANKING_COMPONENT_WEIGHTS)
+      .reduce((sum, weight) => sum + weight, 0),
+    100,
+  );
+  assert.equal(coverage.ranking.totalScore, componentTotal);
+  assert.equal(coverage.ranking.selected, true);
+  assert.equal(coverage.ranking.selectedRank, 1);
+  assert.equal(coverage.ranking.totalScore >= CAPABILITY_MINIMUM_USEFUL_SCORE, true);
+});
+
+test('CAP-405 does not pad a surface with candidates below the useful threshold', () => {
+  const { context, baseCandidate } = rankingFixture();
+  const weak = rankingCandidate(baseCandidate, 'coverage-options', {
+    baseScore: 0,
+    source: {
+      kind: 'PERSONALIZATION',
+      id: 'weak-personalization',
+      actionId: null,
+      entityType: null,
+      entityId: 'weak-personalization',
+      sourceVersion: 'v1',
+      observedAt: NOW,
+    },
+    primaryMatch: {
+      kind: 'COMPLETION_OUTPUT_RELATIONSHIP',
+      precedence: 7,
+      value: 'weak-relationship',
+    },
+    matches: [{
+      kind: 'COMPLETION_OUTPUT_RELATIONSHIP',
+      precedence: 7,
+      value: 'weak-relationship',
+    }],
+    readiness: {
+      state: 'NEEDS_CONTEXT',
+      safePartialValue: true,
+      reasonCodes: ['ACCEPTED_CONTEXT_UNKNOWN'],
+      missingFactKeys: [],
+      checks: [{
+        kind: 'ACCEPTED_CONTEXT',
+        result: 'UNKNOWN',
+        reasonCode: 'ACCEPTED_CONTEXT_UNKNOWN',
+        explanation: 'More context is needed.',
+        minimum: null,
+        observedCount: null,
+        contextType: 'PROPERTY',
+      }],
+    },
+  });
+  const result = rankCapabilityCandidates({
+    registry: canonicalCapabilityRegistry,
+    context,
+    suppressionResult: rankingSuppressionResult([weak]),
+  });
+
+  assert.equal(result.diagnostics.selectedCount, 0);
+  assert.equal(result.diagnostics.belowQualityThresholdCount, 1);
+  assert.equal(result.candidates[0].ranking.scoreBand, 'LOW');
+  assert.equal(
+    result.candidates[0].ranking.selectionDecision,
+    'BELOW_QUALITY_THRESHOLD',
+  );
+});
+
+test('CAP-405 caps Home at three and prefers an alternative outcome', () => {
+  const { context, baseCandidate } = rankingFixture();
+  const candidates = [
+    rankingCandidate(baseCandidate, 'coverage-options', { baseScore: 100 }),
+    rankingCandidate(baseCandidate, 'cost-growth', { baseScore: 90 }),
+    rankingCandidate(baseCandidate, 'insurance-trend', { baseScore: 80 }),
+    rankingCandidate(baseCandidate, 'inspection-hub', { baseScore: 60 }),
+  ];
+  const result = rankCapabilityCandidates({
+    registry: canonicalCapabilityRegistry,
+    context,
+    suppressionResult: rankingSuppressionResult(candidates),
+  });
+  const selectedIds = result.candidates
+    .filter((candidate) => candidate.ranking.selected)
+    .sort((left, right) =>
+      left.ranking.selectedRank - right.ranking.selectedRank)
+    .map((candidate) => candidate.capabilityId);
+
+  assert.equal(result.maximumSelected, 3);
+  assert.deepEqual(selectedIds, [
+    'coverage-options',
+    'cost-growth',
+    'inspection-hub',
+  ]);
+  assert.equal(
+    candidateById(result, 'insurance-trend').ranking.selectionDecision,
+    'OUTCOME_DIVERSITY_DEFERRED',
+  );
+});
+
+test('CAP-405 avoids repeated source actions and breaks ties deterministically', () => {
+  const { context, baseCandidate } = rankingFixture();
+  const repeatedSource = {
+    kind: 'HOME_ACTION',
+    id: 'action-1',
+    actionId: 'action-1',
+    entityType: null,
+    entityId: 'item-1',
+    sourceVersion: 'action-v2',
+    observedAt: NOW,
+  };
+  const candidates = [
+    rankingCandidate(baseCandidate, 'coverage-options', {
+      source: repeatedSource,
+    }),
+    rankingCandidate(baseCandidate, 'inspection-hub', {
+      source: repeatedSource,
+    }),
+    rankingCandidate(baseCandidate, 'plant-advisor'),
+  ];
+  const rank = (values) => rankCapabilityCandidates({
+    registry: canonicalCapabilityRegistry,
+    context,
+    suppressionResult: rankingSuppressionResult(values),
+  });
+  const first = rank(candidates);
+  const second = rank([...candidates].reverse());
+
+  assert.deepEqual(first, second);
+  assert.equal(
+    candidateById(first, 'inspection-hub').ranking.selectionDecision,
+    'SOURCE_DIVERSITY_DEFERRED',
+  );
+  assert.equal(
+    candidateById(first, 'coverage-options').ranking.selected,
+    true,
+  );
+  assert.equal(candidateById(first, 'plant-advisor').ranking.selected, true);
+});
+
+test('CAP-405 rejects stale suppression contracts before scoring', () => {
+  const { context, suppressionResult } = rankingFixture();
+  const staleContextResult = structuredClone(suppressionResult);
+  staleContextResult.contextVersion = 'context-v0';
+  assert.throws(
+    () => rankCapabilityCandidates({
+      registry: canonicalCapabilityRegistry,
+      context,
+      suppressionResult: staleContextResult,
+    }),
+    /context version is stale/,
+  );
+
+  const staleRegistryResult = structuredClone(suppressionResult);
+  staleRegistryResult.registryVersion = 'registry-v0';
+  assert.throws(
+    () => rankCapabilityCandidates({
+      registry: canonicalCapabilityRegistry,
+      context,
+      suppressionResult: staleRegistryResult,
+    }),
+    /registry version/,
+  );
 });
