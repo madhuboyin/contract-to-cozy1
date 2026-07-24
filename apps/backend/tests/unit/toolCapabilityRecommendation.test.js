@@ -26,6 +26,21 @@ const {
 const {
   goldenTestHomes,
 } = require('../fixtures/productFramework/goldenTestHomes.js');
+const {
+  buildCapabilityActionSourceMetadata,
+  getCapabilitySuggestions,
+} = require('../../src/services/capabilityRecommendation.service.ts');
+const {
+  CapabilitySuggestionsQuerySchema,
+} = require('../../src/routes/capabilitySuggestions.routes.ts');
+const capabilitySuggestionsRouter =
+  require('../../src/routes/capabilitySuggestions.routes.ts').default;
+const {
+  authenticate,
+} = require('../../src/middleware/auth.middleware.ts');
+const {
+  propertyAuthMiddleware,
+} = require('../../src/middleware/propertyAuth.middleware.ts');
 
 const NOW = '2026-07-24T12:00:00.000Z';
 
@@ -1502,4 +1517,206 @@ test('CAP-406 rejects stale ranking contracts before building explanations', () 
     }),
     /context version is stale/,
   );
+});
+
+function capabilityApiDependencies(overrides = {}) {
+  return {
+    registry: canonicalCapabilityRegistry,
+    loadRequiredSources: async () => ({
+      propertyContext: propertyContext(),
+      actions: [action({
+        source: {
+          kind: 'COVERAGE',
+          entityId: 'item-1',
+          version: 'action-v2',
+        },
+        job: 'DECIDE',
+        primaryCta: {
+          kind: 'REVIEW',
+          label: 'Review coverage context',
+          href: '/dashboard/properties/property-1',
+        },
+      })],
+    }),
+    loadJourneys: async () => [],
+    loadProjects: async () => [],
+    loadPersonalizationRecommendations: async () => [],
+    loadCompletions: async () => [],
+    loadLifecycle: async () => [],
+    loadReadinessMetrics: async () => ({
+      trackedSystemCount: 2,
+      coverageGapCount: 1,
+      jurisdictionStatus: 'KNOWN',
+    }),
+    availableCapabilityIds: () => ['coverage-options'],
+    now: () => new Date(NOW),
+    ...overrides,
+  };
+}
+
+test('CAP-407 orchestrates CAP-400 through CAP-406 into the API response', async () => {
+  const result = await getCapabilitySuggestions({
+    propertyId: 'property-1',
+    userId: 'user-1',
+    surface: 'HOME',
+    limit: 3,
+  }, capabilityApiDependencies());
+
+  assert.doesNotThrow(() => CapabilitySuggestionResponseSchema.parse(result));
+  assert.equal(result.surface, 'HOME');
+  assert.equal(result.suggestions.length, 1);
+  assert.equal(result.suggestions[0].capabilityId, 'coverage-options');
+  assert.equal(result.suggestions[0].source.id, 'action-1');
+});
+
+test('CAP-407 scopes source-bound requests and fails optional sources closed', async () => {
+  const first = action({
+    id: 'action-1',
+    source: { kind: 'COVERAGE', entityId: 'item-1', version: 'action-v1' },
+    job: 'DECIDE',
+    primaryCta: {
+      kind: 'REVIEW',
+      label: 'Review first item',
+      href: '/dashboard/properties/property-1',
+    },
+  });
+  const second = action({
+    id: 'action-2',
+    lineageId: 'lineage-2',
+    source: { kind: 'COVERAGE', entityId: 'item-2', version: 'action-v1' },
+    job: 'DECIDE',
+    primaryCta: {
+      kind: 'REVIEW',
+      label: 'Review second item',
+      href: '/dashboard/properties/property-1',
+    },
+  });
+  const result = await getCapabilitySuggestions({
+    propertyId: 'property-1',
+    userId: 'user-1',
+    surface: 'RELATED',
+    sourceContext: {
+      kind: 'HOME_ACTION',
+      id: 'action-2',
+      actionId: 'action-2',
+      entityType: 'INVENTORY_ITEM',
+      entityId: 'item-2',
+    },
+  }, capabilityApiDependencies({
+    loadRequiredSources: async () => ({
+      propertyContext: propertyContext(),
+      actions: [first, second],
+    }),
+    loadJourneys: async () => {
+      throw new Error('journey dependency unavailable');
+    },
+  }));
+
+  assert.equal(result.suggestions.length, 1);
+  assert.equal(result.suggestions[0].source.id, 'action-2');
+  assert.equal(result.suggestions[0].source.entityId, 'item-2');
+
+  const unrelated = await getCapabilitySuggestions({
+    propertyId: 'property-1',
+    userId: 'user-1',
+    surface: 'RELATED',
+    sourceContext: {
+      kind: 'PROJECT',
+      id: 'project-not-found',
+      actionId: null,
+      entityType: 'PROJECT',
+      entityId: 'project-not-found',
+    },
+  }, capabilityApiDependencies({
+    loadRequiredSources: async () => ({
+      propertyContext: propertyContext(),
+      actions: [first, second],
+    }),
+  }));
+  assert.deepEqual(unrelated.suggestions, []);
+});
+
+test('CAP-407 derives duplicate CTA and trigger metadata from canonical routes', () => {
+  const sourceAction = action({
+    primaryCta: {
+      kind: 'REVIEW',
+      label: 'Compare coverage',
+      href: '/dashboard/properties/property-1/tools/coverage-options?from=home',
+    },
+  });
+  const metadata = buildCapabilityActionSourceMetadata({
+    actions: [sourceAction],
+    registry: canonicalCapabilityRegistry,
+    propertyId: 'property-1',
+  })[0];
+
+  assert.deepEqual(metadata.ctaCapabilityIds, ['coverage-options']);
+  assert.equal(
+    metadata.signalIntentFamilies.includes('COVERAGE_GAPS_PRESENT'),
+    true,
+  );
+});
+
+test('CAP-407 fails lifecycle history closed so frequency gates cannot be bypassed', async () => {
+  const result = await getCapabilitySuggestions({
+    propertyId: 'property-1',
+    userId: 'user-1',
+    surface: 'HOME',
+  }, capabilityApiDependencies({
+    loadLifecycle: async () => {
+      throw new Error('lifecycle dependency unavailable');
+    },
+  }));
+
+  assert.deepEqual(result.suggestions, []);
+});
+
+test('CAP-407 query contract supports every bounded surface and rejects partial lineage', () => {
+  for (const surface of [
+    'HOME',
+    'PROPERTY',
+    'WORKFLOW',
+    'RELATED',
+    'COMPLETION',
+  ]) {
+    const parsed = CapabilitySuggestionsQuerySchema.safeParse({
+      surface,
+      limit: '3',
+    });
+    assert.equal(parsed.success, true, surface);
+  }
+  assert.equal(
+    CapabilitySuggestionsQuerySchema.safeParse({ surface: 'home' }).success,
+    false,
+  );
+  assert.equal(
+    CapabilitySuggestionsQuerySchema.safeParse({ limit: '11' }).success,
+    false,
+  );
+  assert.equal(
+    CapabilitySuggestionsQuerySchema.safeParse({
+      sourceKind: 'HOME_ACTION',
+    }).success,
+    false,
+  );
+  assert.equal(
+    CapabilitySuggestionsQuerySchema.safeParse({
+      sourceKind: 'PROJECT',
+      sourceId: 'project-1',
+      sourceEntityType: 'PROJECT',
+    }).success,
+    false,
+  );
+});
+
+test('CAP-407 route requires authentication and property authorization', () => {
+  const route = capabilitySuggestionsRouter.stack
+    .filter((layer) => layer.route)
+    .find((layer) =>
+      layer.route.path === '/properties/:propertyId/capability-suggestions'
+      && layer.route.methods?.get)
+    ?.route;
+  assert.ok(route, 'Expected capability suggestions GET route');
+  assert.equal(route.stack[0].handle, authenticate);
+  assert.equal(route.stack[1].handle, propertyAuthMiddleware);
 });

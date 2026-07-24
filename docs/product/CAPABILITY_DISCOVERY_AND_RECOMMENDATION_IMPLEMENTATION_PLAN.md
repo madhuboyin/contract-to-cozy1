@@ -87,6 +87,7 @@ Status as of July 24, 2026:
 | CAP-404 deduplication and suppression | Complete | Auditable suppression retains reason-coded diagnostics for CTA duplication, terminal/stale sources, dismissal cooldown, frequency caps, completion renewal, policy decisions, workflow compatibility, and deterministic equivalent-outcome deduplication |
 | CAP-405 ranking and diversity | Complete | Deterministic 100-point ranking exposes six bounded diagnostic components, applies a useful-result threshold, caps Home at three, and enforces capability, source, and outcome diversity with stable tie-breaking |
 | CAP-406 explanation builder | Complete | Narrow homeowner DTO uses reviewed templates and bounded structured context for why-now, outcome, readiness, authorized evidence, versions, source lineage, score band, and fully resolved same-origin launch paths without exposing raw ranking or policy diagnostics |
+| CAP-407 evaluator API | Complete | Authenticated property-scoped GET endpoint composes CAP-400–406 for five bounded surfaces using canonical actions, authorized context, optional workflow sources, lifecycle history, rollout availability, source scoping, private no-store caching, and fail-closed dependency behavior |
 
 Explore Tools and homeowner command search now use the canonical catalog by default. Set
 `CAPABILITY_CATALOG_SOURCE=legacy` only for the temporary internal-beta rollback.
