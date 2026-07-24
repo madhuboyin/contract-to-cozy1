@@ -11,3 +11,4 @@ export * from './groundedAsk.contract';
 export * from './recommendationLaunchGate';
 export * from './buyerAcquisition.contract';
 export * from './newHomeSetup.contract';
+export * from './capabilities';

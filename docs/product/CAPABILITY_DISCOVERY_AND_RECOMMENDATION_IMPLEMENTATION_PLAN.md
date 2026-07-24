@@ -2,7 +2,7 @@
 title: "Capability Discovery and Recommendation Platform — Implementation Plan"
 version: "1.0"
 date: "July 24, 2026"
-status: "Proposed execution baseline"
+status: "Implementation in progress"
 frd: "Capability Discovery and Recommendation Platform FRD v1.0"
 framework: "ContractToCozy Product Framework v1.0"
 ---
@@ -53,6 +53,23 @@ These are planning ranges, not launch commitments. Each phase exits on evidence,
 - Analytics owner
 - Domain reviewers for the initial capability tranche
 - Trust/governance reviewer before real-user enforcement
+
+### Implementation progress
+
+Status as of July 24, 2026:
+
+| Work package | Status | Evidence |
+| --- | --- | --- |
+| CAP-000 inventory generator | Complete | Repeatable 52-capability JSON and Markdown inventory |
+| CAP-001 decision record | Complete | ADR-0001 establishes the backend-owned canonical registry |
+| CAP-002 initial change guard | Complete | Generated inventory check is included in frontend QA gates |
+| CAP-100 capability contract foundation | Complete | Zod contract covers framework, destination, recommendation, governance, readiness, and lifecycle metadata |
+| CAP-101 registry foundation | Complete | Deterministic registry validates IDs, routes, rollout keys, and related references |
+| CAP-102 availability adapter | Pending | Existing availability policy remains authoritative |
+| CAP-103 icon and route contracts | Partial | Route contract is implemented; frontend icon allowlist remains pending |
+| CAP-104 foundation tests | Complete | Product Framework suite includes focused capability contract tests |
+
+No user-visible discovery or recommendation behavior has changed in this first slice.
 
 ---
 

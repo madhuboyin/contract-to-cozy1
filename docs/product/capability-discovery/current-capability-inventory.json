@@ -1,0 +1,1070 @@
+{
+  "generatedFrom": [
+    "apps/frontend/src/components/mobile/dashboard/mobileToolCatalog.ts",
+    "apps/frontend/src/features/tools/toolDiscoveryRegistry.ts",
+    "apps/frontend/src/features/tools/toolRegistry.ts",
+    "apps/frontend/src/features/tools/selectUnifiedHomeTools.ts",
+    "apps/frontend/src/features/tools/selectSmartContextTools.ts"
+  ],
+  "summary": {
+    "aiCatalogEntries": 40,
+    "homeCatalogEntries": 37,
+    "overlappingEntries": 25,
+    "distinctCapabilities": 52,
+    "routeVerified": 52,
+    "relatedRegistryCoverage": 31,
+    "existingContextualCoverage": 15,
+    "plannedContextualTranche": 9,
+    "workflowOnly": 1,
+    "catalogOnlyPendingReview": 27
+  },
+  "capabilities": [
+    {
+      "id": "appreciation",
+      "label": "Value Tracker",
+      "sources": [
+        "ai"
+      ],
+      "canonicalRoute": "/dashboard/appreciation",
+      "routeVerified": true,
+      "workflowOnly": false,
+      "outcomeCategory": "PROTECT_MONITOR",
+      "rolloutKey": "VALUE_TRACKER",
+      "releaseStage": "ACTIVE",
+      "safetyTier": "LOW_CONSEQUENCE",
+      "completionKind": "OUTPUT_VIEWED",
+      "relatedRegistryCoverage": false,
+      "selectorCoverage": [],
+      "plannedInitialTranche": false,
+      "recommendationDisposition": "CATALOG_ONLY_PENDING_REVIEW"
+    },
+    {
+      "id": "break-even",
+      "label": "Break-Even",
+      "sources": [
+        "home",
+        "ai"
+      ],
+      "canonicalRoute": "/dashboard/properties/[id]/tools/break-even",
+      "routeVerified": true,
+      "workflowOnly": false,
+      "outcomeCategory": "SAVE_OPTIMIZE",
+      "rolloutKey": "BREAK_EVEN",
+      "releaseStage": "ACTIVE",
+      "safetyTier": "MATERIAL_FINANCIAL",
+      "completionKind": "OUTPUT_GENERATED",
+      "relatedRegistryCoverage": true,
+      "selectorCoverage": [
+        "unified_home",
+        "smart_context"
+      ],
+      "plannedInitialTranche": false,
+      "recommendationDisposition": "CONTEXTUAL_EXISTING"
+    },
+    {
+      "id": "budget",
+      "label": "Budget Planner",
+      "sources": [
+        "ai"
+      ],
+      "canonicalRoute": "/dashboard/budget",
+      "routeVerified": true,
+      "workflowOnly": false,
+      "outcomeCategory": "PLAN_BUDGET",
+      "rolloutKey": "BUDGET_PLANNER",
+      "releaseStage": "BETA",
+      "safetyTier": "LOW_CONSEQUENCE",
+      "completionKind": "PLAN_CREATED",
+      "relatedRegistryCoverage": false,
+      "selectorCoverage": [],
+      "plannedInitialTranche": false,
+      "recommendationDisposition": "CATALOG_ONLY_PENDING_REVIEW"
+    },
+    {
+      "id": "capital-timeline",
+      "label": "Home Capital Timeline",
+      "sources": [
+        "home",
+        "ai"
+      ],
+      "canonicalRoute": "/dashboard/properties/[id]/tools/capital-timeline",
+      "routeVerified": true,
+      "workflowOnly": false,
+      "outcomeCategory": "PLAN_BUDGET",
+      "rolloutKey": "HOME_CAPITAL_TIMELINE",
+      "releaseStage": "ACTIVE",
+      "safetyTier": "MATERIAL_FINANCIAL",
+      "completionKind": "PLAN_CREATED",
+      "relatedRegistryCoverage": true,
+      "selectorCoverage": [
+        "unified_home",
+        "smart_context"
+      ],
+      "plannedInitialTranche": false,
+      "recommendationDisposition": "CONTEXTUAL_EXISTING"
+    },
+    {
+      "id": "climate",
+      "label": "Climate Risk",
+      "sources": [
+        "ai"
+      ],
+      "canonicalRoute": "/dashboard/climate",
+      "routeVerified": true,
+      "workflowOnly": false,
+      "outcomeCategory": "PROTECT_MONITOR",
+      "rolloutKey": "CLIMATE_RISK",
+      "releaseStage": "BETA",
+      "safetyTier": "LOW_CONSEQUENCE",
+      "completionKind": "OUTPUT_VIEWED",
+      "relatedRegistryCoverage": false,
+      "selectorCoverage": [],
+      "plannedInitialTranche": false,
+      "recommendationDisposition": "CATALOG_ONLY_PENDING_REVIEW"
+    },
+    {
+      "id": "cost-explainer",
+      "label": "Cost Explainer",
+      "sources": [
+        "home",
+        "ai"
+      ],
+      "canonicalRoute": "/dashboard/properties/[id]/tools/cost-explainer",
+      "routeVerified": true,
+      "workflowOnly": false,
+      "outcomeCategory": "SAVE_OPTIMIZE",
+      "rolloutKey": "COST_EXPLAINER",
+      "releaseStage": "ACTIVE",
+      "safetyTier": "MATERIAL_FINANCIAL",
+      "completionKind": "OUTPUT_GENERATED",
+      "relatedRegistryCoverage": true,
+      "selectorCoverage": [],
+      "plannedInitialTranche": false,
+      "recommendationDisposition": "CATALOG_ONLY_PENDING_REVIEW"
+    },
+    {
+      "id": "cost-growth",
+      "label": "Cost Growth",
+      "sources": [
+        "home",
+        "ai"
+      ],
+      "canonicalRoute": "/dashboard/properties/[id]/tools/cost-growth",
+      "routeVerified": true,
+      "workflowOnly": false,
+      "outcomeCategory": "SAVE_OPTIMIZE",
+      "rolloutKey": "COST_GROWTH",
+      "releaseStage": "ACTIVE",
+      "safetyTier": "MATERIAL_FINANCIAL",
+      "completionKind": "OUTPUT_GENERATED",
+      "relatedRegistryCoverage": true,
+      "selectorCoverage": [
+        "smart_context"
+      ],
+      "plannedInitialTranche": false,
+      "recommendationDisposition": "CONTEXTUAL_EXISTING"
+    },
+    {
+      "id": "cost-volatility",
+      "label": "Volatility",
+      "sources": [
+        "home",
+        "ai"
+      ],
+      "canonicalRoute": "/dashboard/properties/[id]/tools/cost-volatility",
+      "routeVerified": true,
+      "workflowOnly": false,
+      "outcomeCategory": "SAVE_OPTIMIZE",
+      "rolloutKey": "COST_VOLATILITY",
+      "releaseStage": "ACTIVE",
+      "safetyTier": "MATERIAL_FINANCIAL",
+      "completionKind": "OUTPUT_GENERATED",
+      "relatedRegistryCoverage": true,
+      "selectorCoverage": [],
+      "plannedInitialTranche": false,
+      "recommendationDisposition": "CATALOG_ONLY_PENDING_REVIEW"
+    },
+    {
+      "id": "coverage-intelligence",
+      "label": "Coverage Intelligence",
+      "sources": [
+        "ai"
+      ],
+      "canonicalRoute": "/dashboard/coverage-intelligence",
+      "routeVerified": true,
+      "workflowOnly": false,
+      "outcomeCategory": "SAVE_OPTIMIZE",
+      "rolloutKey": "COVERAGE_INTELLIGENCE",
+      "releaseStage": "ACTIVE",
+      "safetyTier": "REGULATED_COVERAGE",
+      "completionKind": "OUTPUT_GENERATED",
+      "relatedRegistryCoverage": false,
+      "selectorCoverage": [],
+      "plannedInitialTranche": false,
+      "recommendationDisposition": "CATALOG_ONLY_PENDING_REVIEW"
+    },
+    {
+      "id": "coverage-options",
+      "label": "Coverage Options",
+      "sources": [
+        "home"
+      ],
+      "canonicalRoute": "/dashboard/properties/[id]/tools/coverage-options",
+      "routeVerified": true,
+      "workflowOnly": false,
+      "outcomeCategory": "SAVE_OPTIMIZE",
+      "rolloutKey": "COVERAGE_OPTIONS",
+      "releaseStage": "ACTIVE",
+      "safetyTier": "REGULATED_COVERAGE",
+      "completionKind": "OUTPUT_GENERATED",
+      "relatedRegistryCoverage": true,
+      "selectorCoverage": [
+        "unified_home"
+      ],
+      "plannedInitialTranche": false,
+      "recommendationDisposition": "CONTEXTUAL_EXISTING"
+    },
+    {
+      "id": "diy",
+      "label": "DIY Project Center",
+      "sources": [
+        "home"
+      ],
+      "canonicalRoute": "/dashboard/properties/[id]/tools/diy",
+      "routeVerified": true,
+      "workflowOnly": false,
+      "outcomeCategory": "PLAN_BUDGET",
+      "rolloutKey": "DIY",
+      "releaseStage": "ACTIVE",
+      "safetyTier": "LOW_CONSEQUENCE",
+      "completionKind": "PLAN_CREATED",
+      "relatedRegistryCoverage": false,
+      "selectorCoverage": [],
+      "plannedInitialTranche": true,
+      "recommendationDisposition": "CONTEXTUAL_PLANNED"
+    },
+    {
+      "id": "do-nothing-simulator",
+      "label": "Do-Nothing Simulator",
+      "sources": [
+        "ai"
+      ],
+      "canonicalRoute": "/dashboard/do-nothing-simulator",
+      "routeVerified": true,
+      "workflowOnly": false,
+      "outcomeCategory": "DECIDE_COMPARE",
+      "rolloutKey": "DO_NOTHING_SIMULATOR",
+      "releaseStage": "ACTIVE",
+      "safetyTier": "MATERIAL_FINANCIAL",
+      "completionKind": "DECISION_RECORDED",
+      "relatedRegistryCoverage": false,
+      "selectorCoverage": [],
+      "plannedInitialTranche": false,
+      "recommendationDisposition": "CATALOG_ONLY_PENDING_REVIEW"
+    },
+    {
+      "id": "documents",
+      "label": "Document Vault",
+      "sources": [
+        "ai"
+      ],
+      "canonicalRoute": "/dashboard/documents",
+      "routeVerified": true,
+      "workflowOnly": false,
+      "outcomeCategory": "PLAN_BUDGET",
+      "rolloutKey": "DOCUMENT_VAULT",
+      "releaseStage": "BETA",
+      "safetyTier": "LOW_CONSEQUENCE",
+      "completionKind": "PLAN_CREATED",
+      "relatedRegistryCoverage": false,
+      "selectorCoverage": [],
+      "plannedInitialTranche": false,
+      "recommendationDisposition": "CATALOG_ONLY_PENDING_REVIEW"
+    },
+    {
+      "id": "emergency",
+      "label": "Emergency Help",
+      "sources": [
+        "ai"
+      ],
+      "canonicalRoute": "/dashboard/emergency",
+      "routeVerified": true,
+      "workflowOnly": false,
+      "outcomeCategory": "PLAN_BUDGET",
+      "rolloutKey": "EMERGENCY_HELP",
+      "releaseStage": "BETA",
+      "safetyTier": "SAFETY_EMERGENCY",
+      "completionKind": "PLAN_CREATED",
+      "relatedRegistryCoverage": false,
+      "selectorCoverage": [],
+      "plannedInitialTranche": false,
+      "recommendationDisposition": "CATALOG_ONLY_PENDING_REVIEW"
+    },
+    {
+      "id": "energy",
+      "label": "Energy Audit",
+      "sources": [
+        "ai"
+      ],
+      "canonicalRoute": "/dashboard/energy",
+      "routeVerified": true,
+      "workflowOnly": false,
+      "outcomeCategory": "PROTECT_MONITOR",
+      "rolloutKey": "ENERGY_AUDIT",
+      "releaseStage": "BETA",
+      "safetyTier": "LOW_CONSEQUENCE",
+      "completionKind": "OUTPUT_VIEWED",
+      "relatedRegistryCoverage": false,
+      "selectorCoverage": [],
+      "plannedInitialTranche": false,
+      "recommendationDisposition": "CATALOG_ONLY_PENDING_REVIEW"
+    },
+    {
+      "id": "financing",
+      "label": "Financing Center",
+      "sources": [
+        "home"
+      ],
+      "canonicalRoute": "/dashboard/properties/[id]/tools/financing",
+      "routeVerified": true,
+      "workflowOnly": false,
+      "outcomeCategory": "SAVE_OPTIMIZE",
+      "rolloutKey": "FINANCING",
+      "releaseStage": "ACTIVE",
+      "safetyTier": "MATERIAL_FINANCIAL",
+      "completionKind": "OUTPUT_GENERATED",
+      "relatedRegistryCoverage": true,
+      "selectorCoverage": [],
+      "plannedInitialTranche": false,
+      "recommendationDisposition": "CATALOG_ONLY_PENDING_REVIEW"
+    },
+    {
+      "id": "guidance-overview",
+      "label": "Guidance Overview",
+      "sources": [
+        "home",
+        "ai"
+      ],
+      "canonicalRoute": "/dashboard/properties/[id]/tools/guidance-overview",
+      "routeVerified": true,
+      "workflowOnly": false,
+      "outcomeCategory": "PROTECT_MONITOR",
+      "rolloutKey": "GUIDANCE_OVERVIEW",
+      "releaseStage": "ACTIVE",
+      "safetyTier": "LOW_CONSEQUENCE",
+      "completionKind": "OUTPUT_VIEWED",
+      "relatedRegistryCoverage": true,
+      "selectorCoverage": [],
+      "plannedInitialTranche": false,
+      "recommendationDisposition": "CATALOG_ONLY_PENDING_REVIEW"
+    },
+    {
+      "id": "hidden-asset-finder",
+      "label": "Hidden Asset Finder",
+      "sources": [
+        "home",
+        "ai"
+      ],
+      "canonicalRoute": "/dashboard/properties/[id]/tools/hidden-asset-finder",
+      "routeVerified": true,
+      "workflowOnly": false,
+      "outcomeCategory": "SAVE_OPTIMIZE",
+      "rolloutKey": "HIDDEN_ASSET_FINDER",
+      "releaseStage": "ACTIVE",
+      "safetyTier": "LOW_CONSEQUENCE",
+      "completionKind": "OUTPUT_GENERATED",
+      "relatedRegistryCoverage": true,
+      "selectorCoverage": [
+        "unified_home"
+      ],
+      "plannedInitialTranche": false,
+      "recommendationDisposition": "CONTEXTUAL_EXISTING"
+    },
+    {
+      "id": "hoa-compliance",
+      "label": "HOA Compliance",
+      "sources": [
+        "home"
+      ],
+      "canonicalRoute": "/dashboard/properties/[id]/tools/hoa",
+      "routeVerified": true,
+      "workflowOnly": false,
+      "outcomeCategory": "PLAN_BUDGET",
+      "rolloutKey": "HOA_COMPLIANCE",
+      "releaseStage": "ACTIVE",
+      "safetyTier": "LOW_CONSEQUENCE",
+      "completionKind": "PLAN_CREATED",
+      "relatedRegistryCoverage": false,
+      "selectorCoverage": [],
+      "plannedInitialTranche": true,
+      "recommendationDisposition": "CONTEXTUAL_PLANNED"
+    },
+    {
+      "id": "home-digital-twin",
+      "label": "Home Digital Twin",
+      "sources": [
+        "home",
+        "ai"
+      ],
+      "canonicalRoute": "/dashboard/properties/[id]/tools/home-digital-twin",
+      "routeVerified": true,
+      "workflowOnly": false,
+      "outcomeCategory": "PROTECT_MONITOR",
+      "rolloutKey": "HOME_DIGITAL_TWIN",
+      "releaseStage": "ACTIVE",
+      "safetyTier": "LOW_CONSEQUENCE",
+      "completionKind": "OUTPUT_VIEWED",
+      "relatedRegistryCoverage": true,
+      "selectorCoverage": [
+        "unified_home"
+      ],
+      "plannedInitialTranche": false,
+      "recommendationDisposition": "CONTEXTUAL_EXISTING"
+    },
+    {
+      "id": "home-digital-will",
+      "label": "Home Digital Will",
+      "sources": [
+        "home",
+        "ai"
+      ],
+      "canonicalRoute": "/dashboard/properties/[id]/tools/home-digital-will",
+      "routeVerified": true,
+      "workflowOnly": false,
+      "outcomeCategory": "UNDERSTAND_HOME",
+      "rolloutKey": "HOME_DIGITAL_WILL",
+      "releaseStage": "ACTIVE",
+      "safetyTier": "LOW_CONSEQUENCE",
+      "completionKind": "OUTPUT_VIEWED",
+      "relatedRegistryCoverage": true,
+      "selectorCoverage": [],
+      "plannedInitialTranche": true,
+      "recommendationDisposition": "CONTEXTUAL_PLANNED"
+    },
+    {
+      "id": "home-event-radar",
+      "label": "Home Event Radar",
+      "sources": [
+        "home",
+        "ai"
+      ],
+      "canonicalRoute": "/dashboard/properties/[id]/tools/home-event-radar",
+      "routeVerified": true,
+      "workflowOnly": false,
+      "outcomeCategory": "PROTECT_MONITOR",
+      "rolloutKey": "HOME_EVENT_RADAR",
+      "releaseStage": "ACTIVE",
+      "safetyTier": "LOW_CONSEQUENCE",
+      "completionKind": "OUTPUT_VIEWED",
+      "relatedRegistryCoverage": true,
+      "selectorCoverage": [
+        "unified_home",
+        "smart_context"
+      ],
+      "plannedInitialTranche": false,
+      "recommendationDisposition": "CONTEXTUAL_EXISTING"
+    },
+    {
+      "id": "home-gazette",
+      "label": "Home Gazette",
+      "sources": [
+        "home",
+        "ai"
+      ],
+      "canonicalRoute": "/dashboard/properties/[id]/tools/home-gazette",
+      "routeVerified": true,
+      "workflowOnly": false,
+      "outcomeCategory": "PROTECT_MONITOR",
+      "rolloutKey": "HOME_GAZETTE",
+      "releaseStage": "ACTIVE",
+      "safetyTier": "LOW_CONSEQUENCE",
+      "completionKind": "OUTPUT_VIEWED",
+      "relatedRegistryCoverage": true,
+      "selectorCoverage": [],
+      "plannedInitialTranche": false,
+      "recommendationDisposition": "CATALOG_ONLY_PENDING_REVIEW"
+    },
+    {
+      "id": "home-habit-coach",
+      "label": "Home Habit Coach",
+      "sources": [
+        "home",
+        "ai"
+      ],
+      "canonicalRoute": "/dashboard/properties/[id]/tools/home-habit-coach",
+      "routeVerified": true,
+      "workflowOnly": false,
+      "outcomeCategory": "MAINTAIN_PREVENT",
+      "rolloutKey": "HOME_HABIT_COACH",
+      "releaseStage": "ACTIVE",
+      "safetyTier": "LOW_CONSEQUENCE",
+      "completionKind": "ACTION_INITIATED",
+      "relatedRegistryCoverage": true,
+      "selectorCoverage": [
+        "smart_context"
+      ],
+      "plannedInitialTranche": false,
+      "recommendationDisposition": "CONTEXTUAL_EXISTING"
+    },
+    {
+      "id": "home-renovation-risk-advisor",
+      "label": "Renovation Risk Advisor",
+      "sources": [
+        "home",
+        "ai"
+      ],
+      "canonicalRoute": "/dashboard/properties/[id]/tools/home-renovation-risk-advisor",
+      "routeVerified": true,
+      "workflowOnly": false,
+      "outcomeCategory": "PLAN_BUDGET",
+      "rolloutKey": "RENOVATION_RISK_ADVISOR",
+      "releaseStage": "ACTIVE",
+      "safetyTier": "LOW_CONSEQUENCE",
+      "completionKind": "PLAN_CREATED",
+      "relatedRegistryCoverage": true,
+      "selectorCoverage": [
+        "unified_home"
+      ],
+      "plannedInitialTranche": false,
+      "recommendationDisposition": "CONTEXTUAL_EXISTING"
+    },
+    {
+      "id": "home-risk-replay",
+      "label": "Home Risk Replay",
+      "sources": [
+        "home",
+        "ai"
+      ],
+      "canonicalRoute": "/dashboard/properties/[id]/tools/home-risk-replay",
+      "routeVerified": true,
+      "workflowOnly": false,
+      "outcomeCategory": "UNDERSTAND_HOME",
+      "rolloutKey": "HOME_RISK_REPLAY",
+      "releaseStage": "ACTIVE",
+      "safetyTier": "LOW_CONSEQUENCE",
+      "completionKind": "OUTPUT_VIEWED",
+      "relatedRegistryCoverage": true,
+      "selectorCoverage": [
+        "smart_context"
+      ],
+      "plannedInitialTranche": false,
+      "recommendationDisposition": "CONTEXTUAL_EXISTING"
+    },
+    {
+      "id": "home-savings",
+      "label": "Home Savings Check",
+      "sources": [
+        "ai"
+      ],
+      "canonicalRoute": "/dashboard/home-savings",
+      "routeVerified": true,
+      "workflowOnly": false,
+      "outcomeCategory": "SAVE_OPTIMIZE",
+      "rolloutKey": "HOME_SAVINGS",
+      "releaseStage": "ACTIVE",
+      "safetyTier": "LOW_CONSEQUENCE",
+      "completionKind": "OUTPUT_GENERATED",
+      "relatedRegistryCoverage": false,
+      "selectorCoverage": [],
+      "plannedInitialTranche": false,
+      "recommendationDisposition": "CATALOG_ONLY_PENDING_REVIEW"
+    },
+    {
+      "id": "home-timeline",
+      "label": "Home Timeline",
+      "sources": [
+        "home"
+      ],
+      "canonicalRoute": "/dashboard/properties/[id]/timeline",
+      "routeVerified": true,
+      "workflowOnly": false,
+      "outcomeCategory": "PLAN_BUDGET",
+      "rolloutKey": "HOME_TIMELINE",
+      "releaseStage": "ACTIVE",
+      "safetyTier": "LOW_CONSEQUENCE",
+      "completionKind": "PLAN_CREATED",
+      "relatedRegistryCoverage": true,
+      "selectorCoverage": [],
+      "plannedInitialTranche": false,
+      "recommendationDisposition": "CATALOG_ONLY_PENDING_REVIEW"
+    },
+    {
+      "id": "inspection-hub",
+      "label": "Inspection Hub",
+      "sources": [
+        "home"
+      ],
+      "canonicalRoute": "/dashboard/properties/[id]/inspection-hub",
+      "routeVerified": true,
+      "workflowOnly": false,
+      "outcomeCategory": "PLAN_BUDGET",
+      "rolloutKey": "INSPECTION_HUB",
+      "releaseStage": "ACTIVE",
+      "safetyTier": "LOW_CONSEQUENCE",
+      "completionKind": "PLAN_CREATED",
+      "relatedRegistryCoverage": false,
+      "selectorCoverage": [],
+      "plannedInitialTranche": true,
+      "recommendationDisposition": "CONTEXTUAL_PLANNED"
+    },
+    {
+      "id": "insurance-trend",
+      "label": "Insurance Trend",
+      "sources": [
+        "home",
+        "ai"
+      ],
+      "canonicalRoute": "/dashboard/properties/[id]/tools/insurance-trend",
+      "routeVerified": true,
+      "workflowOnly": false,
+      "outcomeCategory": "SAVE_OPTIMIZE",
+      "rolloutKey": "INSURANCE_TREND",
+      "releaseStage": "BETA",
+      "safetyTier": "REGULATED_COVERAGE",
+      "completionKind": "OUTPUT_GENERATED",
+      "relatedRegistryCoverage": true,
+      "selectorCoverage": [
+        "smart_context"
+      ],
+      "plannedInitialTranche": false,
+      "recommendationDisposition": "CONTEXTUAL_EXISTING"
+    },
+    {
+      "id": "material-specs",
+      "label": "Material Specs",
+      "sources": [
+        "home"
+      ],
+      "canonicalRoute": "/dashboard/properties/[id]/materials",
+      "routeVerified": true,
+      "workflowOnly": false,
+      "outcomeCategory": "UNDERSTAND_HOME",
+      "rolloutKey": "MATERIAL_SPECS",
+      "releaseStage": "ACTIVE",
+      "safetyTier": "LOW_CONSEQUENCE",
+      "completionKind": "OUTPUT_VIEWED",
+      "relatedRegistryCoverage": false,
+      "selectorCoverage": [],
+      "plannedInitialTranche": true,
+      "recommendationDisposition": "CONTEXTUAL_PLANNED"
+    },
+    {
+      "id": "modifications",
+      "label": "Home Upgrades",
+      "sources": [
+        "ai"
+      ],
+      "canonicalRoute": "/dashboard/modifications",
+      "routeVerified": true,
+      "workflowOnly": false,
+      "outcomeCategory": "PLAN_BUDGET",
+      "rolloutKey": "HOME_UPGRADES",
+      "releaseStage": "BETA",
+      "safetyTier": "LOW_CONSEQUENCE",
+      "completionKind": "PLAN_CREATED",
+      "relatedRegistryCoverage": false,
+      "selectorCoverage": [],
+      "plannedInitialTranche": false,
+      "recommendationDisposition": "CATALOG_ONLY_PENDING_REVIEW"
+    },
+    {
+      "id": "mortgage-refinance-radar",
+      "label": "Mortgage Refinance Radar",
+      "sources": [
+        "home",
+        "ai"
+      ],
+      "canonicalRoute": "/dashboard/properties/[id]/tools/mortgage-refinance-radar",
+      "routeVerified": true,
+      "workflowOnly": false,
+      "outcomeCategory": "SAVE_OPTIMIZE",
+      "rolloutKey": "MORTGAGE_REFINANCE_RADAR",
+      "releaseStage": "ACTIVE",
+      "safetyTier": "MATERIAL_FINANCIAL",
+      "completionKind": "OUTPUT_GENERATED",
+      "relatedRegistryCoverage": true,
+      "selectorCoverage": [],
+      "plannedInitialTranche": false,
+      "recommendationDisposition": "CATALOG_ONLY_PENDING_REVIEW"
+    },
+    {
+      "id": "negotiation-shield",
+      "label": "Negotiation Shield",
+      "sources": [
+        "home",
+        "ai"
+      ],
+      "canonicalRoute": "/dashboard/properties/[id]/tools/negotiation-shield",
+      "routeVerified": true,
+      "workflowOnly": false,
+      "outcomeCategory": "DECIDE_COMPARE",
+      "rolloutKey": "NEGOTIATION_SHIELD",
+      "releaseStage": "ACTIVE",
+      "safetyTier": "LOW_CONSEQUENCE",
+      "completionKind": "DECISION_RECORDED",
+      "relatedRegistryCoverage": true,
+      "selectorCoverage": [],
+      "plannedInitialTranche": false,
+      "recommendationDisposition": "CATALOG_ONLY_PENDING_REVIEW"
+    },
+    {
+      "id": "neighborhood-change-radar",
+      "label": "Neighborhood Change Radar",
+      "sources": [
+        "home",
+        "ai"
+      ],
+      "canonicalRoute": "/dashboard/properties/[id]/tools/neighborhood-change-radar",
+      "routeVerified": true,
+      "workflowOnly": false,
+      "outcomeCategory": "PROTECT_MONITOR",
+      "rolloutKey": "NEIGHBORHOOD_CHANGE_RADAR",
+      "releaseStage": "BETA",
+      "safetyTier": "LOW_CONSEQUENCE",
+      "completionKind": "OUTPUT_VIEWED",
+      "relatedRegistryCoverage": true,
+      "selectorCoverage": [
+        "smart_context"
+      ],
+      "plannedInitialTranche": false,
+      "recommendationDisposition": "CONTEXTUAL_EXISTING"
+    },
+    {
+      "id": "oracle",
+      "label": "Appliance Oracle",
+      "sources": [
+        "ai"
+      ],
+      "canonicalRoute": "/dashboard/oracle",
+      "routeVerified": true,
+      "workflowOnly": false,
+      "outcomeCategory": "PLAN_BUDGET",
+      "rolloutKey": "APPLIANCE_ORACLE",
+      "releaseStage": "ACTIVE",
+      "safetyTier": "LOW_CONSEQUENCE",
+      "completionKind": "PLAN_CREATED",
+      "relatedRegistryCoverage": false,
+      "selectorCoverage": [],
+      "plannedInitialTranche": false,
+      "recommendationDisposition": "CATALOG_ONLY_PENDING_REVIEW"
+    },
+    {
+      "id": "permits",
+      "label": "Permit Tracker",
+      "sources": [
+        "home"
+      ],
+      "canonicalRoute": "/dashboard/properties/[id]/tools/permits",
+      "routeVerified": true,
+      "workflowOnly": false,
+      "outcomeCategory": "PLAN_BUDGET",
+      "rolloutKey": "PERMITS",
+      "releaseStage": "ACTIVE",
+      "safetyTier": "LOW_CONSEQUENCE",
+      "completionKind": "PLAN_CREATED",
+      "relatedRegistryCoverage": false,
+      "selectorCoverage": [],
+      "plannedInitialTranche": true,
+      "recommendationDisposition": "CONTEXTUAL_PLANNED"
+    },
+    {
+      "id": "plant-advisor",
+      "label": "Plant Advisor",
+      "sources": [
+        "home",
+        "ai"
+      ],
+      "canonicalRoute": "/dashboard/properties/[id]/tools/plant-advisor",
+      "routeVerified": true,
+      "workflowOnly": false,
+      "outcomeCategory": "MAINTAIN_PREVENT",
+      "rolloutKey": "PLANT_ADVISOR",
+      "releaseStage": "ACTIVE",
+      "safetyTier": "LOW_CONSEQUENCE",
+      "completionKind": "ACTION_INITIATED",
+      "relatedRegistryCoverage": true,
+      "selectorCoverage": [],
+      "plannedInitialTranche": true,
+      "recommendationDisposition": "CONTEXTUAL_PLANNED"
+    },
+    {
+      "id": "price-finalization",
+      "label": "Price Finalization",
+      "sources": [
+        "home",
+        "ai"
+      ],
+      "canonicalRoute": "/dashboard/properties/[id]/tools/price-finalization",
+      "routeVerified": true,
+      "workflowOnly": false,
+      "outcomeCategory": "DECIDE_COMPARE",
+      "rolloutKey": "PRICE_FINALIZATION",
+      "releaseStage": "ACTIVE",
+      "safetyTier": "LOW_CONSEQUENCE",
+      "completionKind": "DECISION_RECORDED",
+      "relatedRegistryCoverage": true,
+      "selectorCoverage": [],
+      "plannedInitialTranche": false,
+      "recommendationDisposition": "CATALOG_ONLY_PENDING_REVIEW"
+    },
+    {
+      "id": "project-tracker",
+      "label": "Project Tracker",
+      "sources": [
+        "home"
+      ],
+      "canonicalRoute": "/dashboard/properties/[id]/projects",
+      "routeVerified": true,
+      "workflowOnly": false,
+      "outcomeCategory": "PLAN_BUDGET",
+      "rolloutKey": "PROJECT_TRACKER",
+      "releaseStage": "ACTIVE",
+      "safetyTier": "LOW_CONSEQUENCE",
+      "completionKind": "PLAN_CREATED",
+      "relatedRegistryCoverage": false,
+      "selectorCoverage": [],
+      "plannedInitialTranche": true,
+      "recommendationDisposition": "CONTEXTUAL_PLANNED"
+    },
+    {
+      "id": "property-tax",
+      "label": "Property Tax",
+      "sources": [
+        "home",
+        "ai"
+      ],
+      "canonicalRoute": "/dashboard/properties/[id]/tools/property-tax",
+      "routeVerified": true,
+      "workflowOnly": false,
+      "outcomeCategory": "SAVE_OPTIMIZE",
+      "rolloutKey": "PROPERTY_TAX",
+      "releaseStage": "ACTIVE",
+      "safetyTier": "MATERIAL_FINANCIAL",
+      "completionKind": "OUTPUT_GENERATED",
+      "relatedRegistryCoverage": true,
+      "selectorCoverage": [],
+      "plannedInitialTranche": false,
+      "recommendationDisposition": "CATALOG_ONLY_PENDING_REVIEW"
+    },
+    {
+      "id": "quote-comparison",
+      "label": "Quote Comparison",
+      "sources": [
+        "home",
+        "ai"
+      ],
+      "canonicalRoute": "/dashboard/properties/[id]/tools/quote-comparison",
+      "routeVerified": true,
+      "workflowOnly": true,
+      "outcomeCategory": "DECIDE_COMPARE",
+      "rolloutKey": "QUOTE_COMPARISON",
+      "releaseStage": "ACTIVE",
+      "safetyTier": "LOW_CONSEQUENCE",
+      "completionKind": "DECISION_RECORDED",
+      "relatedRegistryCoverage": true,
+      "selectorCoverage": [],
+      "plannedInitialTranche": false,
+      "recommendationDisposition": "WORKFLOW_ONLY"
+    },
+    {
+      "id": "replace-repair",
+      "label": "Repair vs Replace",
+      "sources": [
+        "ai"
+      ],
+      "canonicalRoute": "/dashboard/replace-repair",
+      "routeVerified": true,
+      "workflowOnly": false,
+      "outcomeCategory": "DECIDE_COMPARE",
+      "rolloutKey": "REPLACE_OR_REPAIR",
+      "releaseStage": "ACTIVE",
+      "safetyTier": "MATERIAL_FINANCIAL",
+      "completionKind": "DECISION_RECORDED",
+      "relatedRegistryCoverage": false,
+      "selectorCoverage": [],
+      "plannedInitialTranche": false,
+      "recommendationDisposition": "CATALOG_ONLY_PENDING_REVIEW"
+    },
+    {
+      "id": "reserve-fund",
+      "label": "Reserve Fund Planner",
+      "sources": [
+        "home"
+      ],
+      "canonicalRoute": "/dashboard/properties/[id]/tools/reserve-fund",
+      "routeVerified": true,
+      "workflowOnly": false,
+      "outcomeCategory": "PLAN_BUDGET",
+      "rolloutKey": "RESERVE_FUND",
+      "releaseStage": "ACTIVE",
+      "safetyTier": "MATERIAL_FINANCIAL",
+      "completionKind": "PLAN_CREATED",
+      "relatedRegistryCoverage": true,
+      "selectorCoverage": [],
+      "plannedInitialTranche": false,
+      "recommendationDisposition": "CATALOG_ONLY_PENDING_REVIEW"
+    },
+    {
+      "id": "risk-premium-optimizer",
+      "label": "Risk Optimizer",
+      "sources": [
+        "ai"
+      ],
+      "canonicalRoute": "/dashboard/risk-premium-optimizer",
+      "routeVerified": true,
+      "workflowOnly": false,
+      "outcomeCategory": "SAVE_OPTIMIZE",
+      "rolloutKey": "RISK_PREMIUM_OPTIMIZER",
+      "releaseStage": "ACTIVE",
+      "safetyTier": "REGULATED_COVERAGE",
+      "completionKind": "OUTPUT_GENERATED",
+      "relatedRegistryCoverage": false,
+      "selectorCoverage": [],
+      "plannedInitialTranche": false,
+      "recommendationDisposition": "CATALOG_ONLY_PENDING_REVIEW"
+    },
+    {
+      "id": "sell-hold-rent",
+      "label": "Sell / Hold / Rent",
+      "sources": [
+        "home",
+        "ai"
+      ],
+      "canonicalRoute": "/dashboard/properties/[id]/tools/sell-hold-rent",
+      "routeVerified": true,
+      "workflowOnly": false,
+      "outcomeCategory": "SAVE_OPTIMIZE",
+      "rolloutKey": "SELL_HOLD_RENT",
+      "releaseStage": "ACTIVE",
+      "safetyTier": "MATERIAL_FINANCIAL",
+      "completionKind": "OUTPUT_GENERATED",
+      "relatedRegistryCoverage": true,
+      "selectorCoverage": [
+        "smart_context"
+      ],
+      "plannedInitialTranche": false,
+      "recommendationDisposition": "CONTEXTUAL_EXISTING"
+    },
+    {
+      "id": "seller-prep",
+      "label": "Seller Prep",
+      "sources": [
+        "home"
+      ],
+      "canonicalRoute": "/dashboard/properties/[id]/seller-prep",
+      "routeVerified": true,
+      "workflowOnly": false,
+      "outcomeCategory": "PLAN_BUDGET",
+      "rolloutKey": "SELLER_PREP",
+      "releaseStage": "ACTIVE",
+      "safetyTier": "LOW_CONSEQUENCE",
+      "completionKind": "PLAN_CREATED",
+      "relatedRegistryCoverage": true,
+      "selectorCoverage": [],
+      "plannedInitialTranche": true,
+      "recommendationDisposition": "CONTEXTUAL_PLANNED"
+    },
+    {
+      "id": "service-price-radar",
+      "label": "Service Price Radar",
+      "sources": [
+        "home",
+        "ai"
+      ],
+      "canonicalRoute": "/dashboard/properties/[id]/tools/service-price-radar",
+      "routeVerified": true,
+      "workflowOnly": false,
+      "outcomeCategory": "DECIDE_COMPARE",
+      "rolloutKey": "SERVICE_PRICE_RADAR",
+      "releaseStage": "ACTIVE",
+      "safetyTier": "LOW_CONSEQUENCE",
+      "completionKind": "DECISION_RECORDED",
+      "relatedRegistryCoverage": true,
+      "selectorCoverage": [
+        "unified_home",
+        "smart_context"
+      ],
+      "plannedInitialTranche": false,
+      "recommendationDisposition": "CONTEXTUAL_EXISTING"
+    },
+    {
+      "id": "status-board",
+      "label": "Status Board",
+      "sources": [
+        "home"
+      ],
+      "canonicalRoute": "/dashboard/properties/[id]/status-board",
+      "routeVerified": true,
+      "workflowOnly": false,
+      "outcomeCategory": "PLAN_BUDGET",
+      "rolloutKey": "STATUS_BOARD",
+      "releaseStage": "ACTIVE",
+      "safetyTier": "LOW_CONSEQUENCE",
+      "completionKind": "PLAN_CREATED",
+      "relatedRegistryCoverage": true,
+      "selectorCoverage": [
+        "smart_context"
+      ],
+      "plannedInitialTranche": false,
+      "recommendationDisposition": "CONTEXTUAL_EXISTING"
+    },
+    {
+      "id": "tax-appeal",
+      "label": "Tax Appeals",
+      "sources": [
+        "ai"
+      ],
+      "canonicalRoute": "/dashboard/tax-appeal",
+      "routeVerified": true,
+      "workflowOnly": false,
+      "outcomeCategory": "PLAN_BUDGET",
+      "rolloutKey": "TAX_APPEAL",
+      "releaseStage": "ACTIVE",
+      "safetyTier": "LOW_CONSEQUENCE",
+      "completionKind": "PLAN_CREATED",
+      "relatedRegistryCoverage": false,
+      "selectorCoverage": [],
+      "plannedInitialTranche": false,
+      "recommendationDisposition": "CATALOG_ONLY_PENDING_REVIEW"
+    },
+    {
+      "id": "true-cost",
+      "label": "True Cost",
+      "sources": [
+        "home",
+        "ai"
+      ],
+      "canonicalRoute": "/dashboard/properties/[id]/tools/true-cost",
+      "routeVerified": true,
+      "workflowOnly": false,
+      "outcomeCategory": "SAVE_OPTIMIZE",
+      "rolloutKey": "TRUE_COST",
+      "releaseStage": "ACTIVE",
+      "safetyTier": "MATERIAL_FINANCIAL",
+      "completionKind": "OUTPUT_GENERATED",
+      "relatedRegistryCoverage": true,
+      "selectorCoverage": [],
+      "plannedInitialTranche": false,
+      "recommendationDisposition": "CATALOG_ONLY_PENDING_REVIEW"
+    },
+    {
+      "id": "visual-inspector",
+      "label": "Visual Inspector",
+      "sources": [
+        "ai"
+      ],
+      "canonicalRoute": "/dashboard/visual-inspector",
+      "routeVerified": true,
+      "workflowOnly": false,
+      "outcomeCategory": "PROTECT_MONITOR",
+      "rolloutKey": "VISUAL_INSPECTOR",
+      "releaseStage": "ACTIVE",
+      "safetyTier": "LOW_CONSEQUENCE",
+      "completionKind": "OUTPUT_VIEWED",
+      "relatedRegistryCoverage": false,
+      "selectorCoverage": [],
+      "plannedInitialTranche": false,
+      "recommendationDisposition": "CATALOG_ONLY_PENDING_REVIEW"
+    }
+  ]
+}
