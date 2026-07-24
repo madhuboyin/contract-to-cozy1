@@ -62,6 +62,43 @@ spec:
                 configMapKeyRef:
                   name: app-config
                   key: ENFORCE_WORKER_MANUAL_TRIGGER_APPROVALS
+            # Per-job overrides for the 7 reviewed-clean jobs in the
+            # WORKER_MUTATING_SWEEPS_ENABLED=false group (see configmap.yaml).
+            - name: WORKER_JOB_HIDDEN_ASSET_REFRESH_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: WORKER_JOB_HIDDEN_ASSET_REFRESH_ENABLED
+            - name: WORKER_JOB_HOME_HABIT_GENERATION_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: WORKER_JOB_HOME_HABIT_GENERATION_ENABLED
+            - name: WORKER_JOB_RESERVE_FUND_RECALCULATION_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: WORKER_JOB_RESERVE_FUND_RECALCULATION_ENABLED
+            - name: WORKER_JOB_PROVIDER_MISSING_CREDENTIAL_SWEEP_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: WORKER_JOB_PROVIDER_MISSING_CREDENTIAL_SWEEP_ENABLED
+            - name: WORKER_JOB_INVENTORY_DRAFT_CLEANUP_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: WORKER_JOB_INVENTORY_DRAFT_CLEANUP_ENABLED
+            - name: WORKER_JOB_REPORT_EXPORT_CLEANUP_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: WORKER_JOB_REPORT_EXPORT_CLEANUP_ENABLED
+            - name: WORKER_JOB_MATERIAL_SPEC_EXPORT_CLEANUP_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: WORKER_JOB_MATERIAL_SPEC_EXPORT_CLEANUP_ENABLED
             - name: FRED_API_KEY
               valueFrom:
                 secretKeyRef:

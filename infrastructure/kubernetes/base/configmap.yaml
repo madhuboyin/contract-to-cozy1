@@ -79,6 +79,19 @@ data:
   WORKER_MUTATING_SWEEPS_ENABLED: "false"
   WORKER_MANUAL_TRIGGERS_ENABLED: "true"
   ENFORCE_WORKER_MANUAL_TRIGGER_APPROVALS: "false"
+  # Per-job overrides for the WORKER_MUTATING_SWEEPS_ENABLED=false group —
+  # reviewed individually (correct propertyId scoping, dry-run behavior,
+  # per-item error isolation, narrow write/delete scope) and enabled ahead
+  # of the rest of the group. The other broadSweep/DESTRUCTIVE jobs
+  # (seasonal-checklist-generation, home-gazette-generation,
+  # shared-data-backfill) stay off pending a propertyId-forwarding fix.
+  WORKER_JOB_HIDDEN_ASSET_REFRESH_ENABLED: "true"
+  WORKER_JOB_HOME_HABIT_GENERATION_ENABLED: "true"
+  WORKER_JOB_RESERVE_FUND_RECALCULATION_ENABLED: "true"
+  WORKER_JOB_PROVIDER_MISSING_CREDENTIAL_SWEEP_ENABLED: "true"
+  WORKER_JOB_INVENTORY_DRAFT_CLEANUP_ENABLED: "true"
+  WORKER_JOB_REPORT_EXPORT_CLEANUP_ENABLED: "true"
+  WORKER_JOB_MATERIAL_SPEC_EXPORT_CLEANUP_ENABLED: "true"
 
   # Rate Limiting
   RATE_LIMIT_WINDOW_MS: "60000"
