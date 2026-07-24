@@ -323,6 +323,19 @@ The platform capabilities sit behind the customer jobs. Their purpose is to impr
 
 Users should understand the first two layers. The third layer should remain mostly invisible until a capability becomes relevant to the task at hand.
 
+#### Capability discovery and recommendation
+
+Home Actions determine what matters; registered capabilities help the homeowner resolve those
+actions. Every homeowner-facing tool should declare its primary customer job, homeowner outcome,
+product destination, contextual eligibility, readiness requirements, governance, expected output,
+and meaningful completion through one canonical capability contract. Valid registration should
+automatically provide catalog discovery, intent search, contextual suggestion eligibility,
+related-capability resolution, release gating, launch attribution, and lifecycle telemetry.
+
+The implementation requirements, target architecture, ranking policy, APIs, migration plan, and
+acceptance criteria are defined in the
+[Capability Discovery and Recommendation Platform FRD](./CAPABILITY_DISCOVERY_AND_RECOMMENDATION_PLATFORM_FRD.md).
+
 ### 11. The Living Home Record
 
 > **STRATEGIC ASSET** — A continuously improving, permissioned record of the home’s systems, documents, events, decisions, work, costs, providers, and changing condition.
