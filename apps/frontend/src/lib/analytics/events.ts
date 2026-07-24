@@ -219,6 +219,7 @@ export interface CtcEventProperties {
     sourceActionId?: string | null;
     sourceEntityType?: string | null;
     sourceEntityId?: string | null;
+    journeyId?: string | null;
   };
   tool_discovery_catalog_searched: {
     propertyId?: string | null;
@@ -326,6 +327,7 @@ export function track<E extends CtcEventName>(
       sourceActionId: attribution.sourceActionId,
       sourceEntityType: attribution.sourceEntityType,
       sourceEntityId: attribution.sourceEntityId,
+      journeyId: attribution.journeyId,
     }]);
   }
 
@@ -368,6 +370,7 @@ export function track<E extends CtcEventName>(
         sourceActionId: attribution?.sourceActionId ?? null,
         sourceEntityType: attribution?.sourceEntityType ?? null,
         sourceEntityId: attribution?.sourceEntityId ?? null,
+        journeyId: attribution?.journeyId ?? null,
         completionKind,
       },
       {
@@ -379,6 +382,7 @@ export function track<E extends CtcEventName>(
         sourceActionId: attribution?.sourceActionId ?? null,
         sourceEntityType: attribution?.sourceEntityType ?? null,
         sourceEntityId: attribution?.sourceEntityId ?? null,
+        journeyId: attribution?.journeyId ?? null,
         completionKind,
         durationSeconds: workflow.durationSeconds,
       },

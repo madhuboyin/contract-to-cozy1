@@ -13,7 +13,9 @@ test('Unified Home tools preserve recommendation and property context', async ({
   expect(coverageHref).toContain('sourceActionId=coverage-action-1');
   expect(coverageHref).toContain('sourceEntityId=furnace-1');
   expect(coverageHref).toContain('contextVersion=tool-context-v2');
-  expect(coverageHref).toContain('recommendationReason=unified-home-tools-v2');
+  expect(coverageHref).toContain(
+    'recommendationReason=capability-recommendation-v1%3ACOVERAGE_GAPS_PRESENT',
+  );
 });
 
 test('Explore tools searches the canonical registry and hides workflow-only tools', async ({ page }) => {

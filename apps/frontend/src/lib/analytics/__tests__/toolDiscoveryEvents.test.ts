@@ -23,7 +23,8 @@ describe('tool discovery analytics', () => {
       propertyId: 'property-1',
       surface: 'unified_home',
       toolId: 'coverage-options',
-      recommendationReason: 'unified-home-tools-v2:COVERAGE_GAPS_PRESENT',
+      recommendationReason: 'capability-recommendation-v1:COVERAGE_GAPS_PRESENT',
+      journeyId: 'journey-1',
     });
     track('workflow_completed', {
       tool: 'coverage-options',
@@ -39,7 +40,11 @@ describe('tool discovery analytics', () => {
     expect(mockPersistToolLifecycleEvents).toHaveBeenCalledWith(
       'property-1',
       expect.arrayContaining([
-        expect.objectContaining({ toolId: 'coverage-options', stage: 'COMPLETED' }),
+        expect.objectContaining({
+          toolId: 'coverage-options',
+          stage: 'COMPLETED',
+          journeyId: 'journey-1',
+        }),
       ]),
     );
   });

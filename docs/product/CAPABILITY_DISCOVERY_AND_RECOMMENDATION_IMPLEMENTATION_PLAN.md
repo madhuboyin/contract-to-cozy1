@@ -90,6 +90,7 @@ Status as of July 24, 2026:
 | CAP-407 evaluator API | Complete | Authenticated property-scoped GET endpoint composes CAP-400–406 for five bounded surfaces using canonical actions, authorized context, optional workflow sources, lifecycle history, rollout availability, source scoping, private no-store caching, and fail-closed dependency behavior |
 | CAP-408 golden-home ranking fixtures | Complete | Nine deterministic homes cover every contextual capability and assert exact eligibility, needs-context behavior, bounded top sets, reviewed reasons, source lineage, governance state, and duplicate source-action suppression through the complete evaluator pipeline |
 | CAP-500 Unified Home response | Complete | Unified Home evaluates a versioned, maximum-three suggestion envelope from its already-authorized action and Property Context snapshot, preserves source lineage and context version, honors the server cutover flag, and fails closed without breaking ranked Home Actions |
+| CAP-501 Unified Home renderer | Complete | Unified Home renders only the bounded server suggestion envelope with reviewed why-now, outcome, readiness, server launch destination, actual-view impressions, full launch lineage, source-action open recording, and an Explore Tools fallback |
 
 Explore Tools and homeowner command search now use the canonical catalog by default. Set
 `CAPABILITY_CATALOG_SOURCE=legacy` only for the temporary internal-beta rollback.
@@ -1001,6 +1002,12 @@ Preserve:
 - Explore Tools fallback.
 
 Remove local call to `selectUnifiedHomeTools`.
+
+Implementation: `UnifiedHomeToolsSection` consumes only
+`home.capabilitySuggestions`, limits defensively to three, and uses the shared
+actual-view impression hook. Click attribution carries recommendation and
+context versions plus action, entity, item, and journey lineage; empty,
+disabled, and unavailable envelopes retain the Explore Tools path.
 
 #### CAP-502: Property smart-context surface
 

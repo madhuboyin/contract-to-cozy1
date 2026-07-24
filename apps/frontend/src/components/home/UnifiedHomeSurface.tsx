@@ -31,7 +31,6 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/components/ui/use-toast';
 import { UnifiedHomeToolsSection } from '@/components/home/UnifiedHomeToolsSection';
-import { useToolDiscoveryAvailability } from '@/features/tools/useToolDiscoveryAvailability';
 import { resolveHomeActionPrimaryHref } from '@/lib/navigation/homeActionNavigation';
 
 function priorityTone(priority: RankedHomeActionDTO['priority']) {
@@ -500,7 +499,6 @@ export function ActionCard({
 
 export function UnifiedHomeSurface({ propertyId }: { propertyId: string }) {
   const { markReady: markPostLoginReady } = usePostLoginTransitionReadiness();
-  const toolAvailabilityQuery = useToolDiscoveryAvailability();
   const query = useQuery({
     queryKey: ['unified-home', propertyId],
     queryFn: () => api.getUnifiedHome(propertyId),
@@ -726,7 +724,6 @@ export function UnifiedHomeSurface({ propertyId }: { propertyId: string }) {
       <UnifiedHomeToolsSection
         home={home}
         propertyId={propertyId}
-        availability={toolAvailabilityQuery.data}
       />
 
       <Card className="rounded-[24px] border-teal-200 bg-teal-50/50 shadow-sm">

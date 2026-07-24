@@ -1,6 +1,11 @@
 'use client';
 
-import type { RankedHomeActionDTO, ToolDiscoveryAvailabilityDTO, UnifiedHomeDTO } from '@/types';
+import type {
+  CapabilitySuggestionDTO,
+  RankedHomeActionDTO,
+  ToolDiscoveryAvailabilityDTO,
+  UnifiedHomeDTO,
+} from '@/types';
 import { UnifiedHomeToolsSection } from '@/components/home/UnifiedHomeToolsSection';
 import { ExploreToolsCatalog } from '@/features/tools/ExploreToolsCatalog';
 import { contextFromUnifiedHome } from '@/features/tools/toolDiscoveryRegistry';
@@ -32,6 +37,53 @@ const coverageAction: RankedHomeActionDTO = {
   },
   deduplication: { canonicalKey: 'coverage:furnace', mergedActionIds: [] },
 };
+
+function serverSuggestion(input: {
+  capabilityId: string;
+  rank: number;
+  reasonCode: string;
+  source: CapabilitySuggestionDTO['source'];
+}): CapabilitySuggestionDTO {
+  return {
+    suggestionId:
+      `${input.capabilityId}:${input.source.kind}:${input.source.id}:tool-context-v2`,
+    capabilityId: input.capabilityId,
+    manifestVersion: 1,
+    recommendationVersion: 'capability-recommendation-v1',
+    contextVersion: 'tool-context-v2',
+    rank: input.rank,
+    scoreBand: 'HIGH',
+    label: input.capabilityId
+      .split('-')
+      .map((part) => part[0].toUpperCase() + part.slice(1))
+      .join(' '),
+    shortDescription: 'A server-provided capability suggestion.',
+    iconName: 'SPARKLES',
+    outcomeCategory: 'UNDERSTAND_HOME',
+    reasonCode: input.reasonCode,
+    whyNow: 'The current Home context makes this tool useful now.',
+    expectedOutcome: 'A clearer next step grounded in this home.',
+    readiness: {
+      state: 'READY',
+      reasonCodes: [],
+      missingFactKeys: [],
+      explanations: [],
+    },
+    evidence: {
+      mode: 'STRUCTURED_ONLY',
+      summary: 'Based on the authorized Home context.',
+      sourceObservedAt: '2026-07-20T00:00:00.000Z',
+      actionConfidence: null,
+      contextWarningCodes: [],
+    },
+    source: input.source,
+    launch: {
+      label: `Open ${input.capabilityId}`,
+      href:
+        `/dashboard/properties/tool-discovery-property/tools/${input.capabilityId}`,
+    },
+  };
+}
 
 const home: UnifiedHomeDTO = {
   contractVersion: 'phase2-home-v1',
@@ -67,7 +119,53 @@ const home: UnifiedHomeDTO = {
     contextVersion: 'tool-context-v2',
     generatedAt: '2026-07-20T00:00:00.000Z',
     surface: 'HOME',
-    suggestions: [],
+    suggestions: [
+      serverSuggestion({
+        capabilityId: 'coverage-options',
+        rank: 1,
+        reasonCode: 'COVERAGE_GAPS_PRESENT',
+        source: {
+          kind: 'HOME_ACTION',
+          id: 'coverage-action-1',
+          actionId: 'coverage-action-1',
+          journeyId: null,
+          entityType: 'INVENTORY_ITEM',
+          entityId: 'furnace-1',
+          sourceVersion: 'action-v1',
+          observedAt: '2026-07-20T00:00:00.000Z',
+        },
+      }),
+      serverSuggestion({
+        capabilityId: 'service-price-radar',
+        rank: 2,
+        reasonCode: 'SERVICE_DECISION_ACTIVE',
+        source: {
+          kind: 'JOURNEY',
+          id: 'journey-service-1',
+          actionId: null,
+          journeyId: 'journey-service-1',
+          entityType: 'SERVICE',
+          entityId: 'hvac-service',
+          sourceVersion: 'OPTIONS',
+          observedAt: '2026-07-20T00:00:00.000Z',
+        },
+      }),
+      serverSuggestion({
+        capabilityId: 'home-digital-twin',
+        rank: 3,
+        reasonCode: 'PROPERTY_CONTEXT_INCOMPLETE',
+        source: {
+          kind: 'PROPERTY_CONTEXT',
+          id: 'core.yearBuilt',
+          actionId: null,
+          journeyId: null,
+          entityType: null,
+          entityId: null,
+          sourceVersion: null,
+          observedAt: '2026-07-20T00:00:00.000Z',
+        },
+      }),
+    ],
   },
   activeMajorMoment: null,
   glance: {
@@ -109,7 +207,7 @@ export function ToolDiscoveryAcceptanceClient() {
   return (
     <main className="mx-auto max-w-6xl space-y-8 p-6">
       <h1 className="text-2xl font-semibold">Tool discovery acceptance</h1>
-      <UnifiedHomeToolsSection home={home} propertyId={home.property.id} availability={availability} />
+      <UnifiedHomeToolsSection home={home} propertyId={home.property.id} />
       <section aria-labelledby="catalog-heading" className="space-y-4">
         <h2 id="catalog-heading" className="text-xl font-semibold">Explore tools fixture</h2>
         <ExploreToolsCatalog
