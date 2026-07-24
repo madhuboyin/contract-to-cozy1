@@ -425,5 +425,5 @@ npm -C apps/backend run build
 npm -C apps/backend run test:phase2
 npx tsc --noEmit -p apps/frontend/tsconfig.json
 npm -C apps/frontend run qa:product-framework:routes
-npm -C apps/frontend test -- --runInBand src/features/tools/__tests__/toolDiscoveryRegistry.test.ts src/features/tools/__tests__/selectUnifiedHomeTools.test.ts src/features/tools/__tests__/toolDestinationContext.test.ts src/lib/analytics/__tests__/toolDiscoveryEvents.test.ts
+npm -C apps/frontend test -- --runInBand src/features/tools/__tests__/toolDiscoveryRegistry.test.ts src/features/tools/__tests__/toolDestinationContext.test.ts src/components/home/__tests__/UnifiedHomeToolsSection.test.tsx src/lib/analytics/__tests__/toolDiscoveryEvents.test.ts
 ```

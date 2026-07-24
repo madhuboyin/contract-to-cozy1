@@ -3,8 +3,12 @@
     "apps/frontend/src/components/mobile/dashboard/mobileToolCatalog.ts",
     "apps/frontend/src/features/tools/toolDiscoveryRegistry.ts",
     "apps/frontend/src/features/tools/toolRegistry.ts",
-    "apps/frontend/src/features/tools/selectUnifiedHomeTools.ts",
-    "apps/frontend/src/features/tools/selectSmartContextTools.ts",
+    "apps/backend/src/productFramework/capabilities/definitions/decideCompare.ts",
+    "apps/backend/src/productFramework/capabilities/definitions/maintainPrevent.ts",
+    "apps/backend/src/productFramework/capabilities/definitions/planBudget.ts",
+    "apps/backend/src/productFramework/capabilities/definitions/protectMonitor.ts",
+    "apps/backend/src/productFramework/capabilities/definitions/saveOptimize.ts",
+    "apps/backend/src/productFramework/capabilities/definitions/understandHome.ts",
     "apps/backend/src/productFramework/capabilities/capability.contract.ts",
     "apps/backend/src/services/analytics/toolLifecycle.contract.ts",
     "apps/frontend/src/features/tools/capabilityIconRegistry.ts"
@@ -16,11 +20,10 @@
     "distinctCapabilities": 52,
     "routeVerified": 52,
     "relatedRegistryCoverage": 31,
-    "existingContextualCoverage": 15,
-    "plannedContextualTranche": 9,
+    "contextualCapabilities": 24,
     "workflowOnly": 1,
     "lifecycleCanonicalized": 52,
-    "catalogOnlyPendingReview": 27
+    "catalogOnlyCapabilities": 27
   },
   "capabilities": [
     {
@@ -39,9 +42,7 @@
       "completionKind": "OUTPUT_VIEWED",
       "lifecycleCanonicalized": true,
       "relatedRegistryCoverage": false,
-      "selectorCoverage": [],
-      "plannedInitialTranche": false,
-      "recommendationDisposition": "CATALOG_ONLY_PENDING_REVIEW"
+      "recommendationDisposition": "CATALOG_ONLY"
     },
     {
       "id": "break-even",
@@ -60,12 +61,7 @@
       "completionKind": "OUTPUT_GENERATED",
       "lifecycleCanonicalized": true,
       "relatedRegistryCoverage": true,
-      "selectorCoverage": [
-        "unified_home",
-        "smart_context"
-      ],
-      "plannedInitialTranche": false,
-      "recommendationDisposition": "CONTEXTUAL_EXISTING"
+      "recommendationDisposition": "CONTEXTUAL_CANONICAL"
     },
     {
       "id": "budget",
@@ -83,9 +79,7 @@
       "completionKind": "PLAN_CREATED",
       "lifecycleCanonicalized": true,
       "relatedRegistryCoverage": false,
-      "selectorCoverage": [],
-      "plannedInitialTranche": false,
-      "recommendationDisposition": "CATALOG_ONLY_PENDING_REVIEW"
+      "recommendationDisposition": "CATALOG_ONLY"
     },
     {
       "id": "capital-timeline",
@@ -104,12 +98,7 @@
       "completionKind": "PLAN_CREATED",
       "lifecycleCanonicalized": true,
       "relatedRegistryCoverage": true,
-      "selectorCoverage": [
-        "unified_home",
-        "smart_context"
-      ],
-      "plannedInitialTranche": false,
-      "recommendationDisposition": "CONTEXTUAL_EXISTING"
+      "recommendationDisposition": "CONTEXTUAL_CANONICAL"
     },
     {
       "id": "climate",
@@ -127,9 +116,7 @@
       "completionKind": "OUTPUT_VIEWED",
       "lifecycleCanonicalized": true,
       "relatedRegistryCoverage": false,
-      "selectorCoverage": [],
-      "plannedInitialTranche": false,
-      "recommendationDisposition": "CATALOG_ONLY_PENDING_REVIEW"
+      "recommendationDisposition": "CATALOG_ONLY"
     },
     {
       "id": "cost-explainer",
@@ -148,9 +135,7 @@
       "completionKind": "OUTPUT_GENERATED",
       "lifecycleCanonicalized": true,
       "relatedRegistryCoverage": true,
-      "selectorCoverage": [],
-      "plannedInitialTranche": false,
-      "recommendationDisposition": "CATALOG_ONLY_PENDING_REVIEW"
+      "recommendationDisposition": "CATALOG_ONLY"
     },
     {
       "id": "cost-growth",
@@ -169,11 +154,7 @@
       "completionKind": "OUTPUT_GENERATED",
       "lifecycleCanonicalized": true,
       "relatedRegistryCoverage": true,
-      "selectorCoverage": [
-        "smart_context"
-      ],
-      "plannedInitialTranche": false,
-      "recommendationDisposition": "CONTEXTUAL_EXISTING"
+      "recommendationDisposition": "CONTEXTUAL_CANONICAL"
     },
     {
       "id": "cost-volatility",
@@ -192,9 +173,7 @@
       "completionKind": "OUTPUT_GENERATED",
       "lifecycleCanonicalized": true,
       "relatedRegistryCoverage": true,
-      "selectorCoverage": [],
-      "plannedInitialTranche": false,
-      "recommendationDisposition": "CATALOG_ONLY_PENDING_REVIEW"
+      "recommendationDisposition": "CATALOG_ONLY"
     },
     {
       "id": "coverage-intelligence",
@@ -212,9 +191,7 @@
       "completionKind": "OUTPUT_GENERATED",
       "lifecycleCanonicalized": true,
       "relatedRegistryCoverage": false,
-      "selectorCoverage": [],
-      "plannedInitialTranche": false,
-      "recommendationDisposition": "CATALOG_ONLY_PENDING_REVIEW"
+      "recommendationDisposition": "CATALOG_ONLY"
     },
     {
       "id": "coverage-options",
@@ -232,11 +209,7 @@
       "completionKind": "OUTPUT_GENERATED",
       "lifecycleCanonicalized": true,
       "relatedRegistryCoverage": true,
-      "selectorCoverage": [
-        "unified_home"
-      ],
-      "plannedInitialTranche": false,
-      "recommendationDisposition": "CONTEXTUAL_EXISTING"
+      "recommendationDisposition": "CONTEXTUAL_CANONICAL"
     },
     {
       "id": "diy",
@@ -254,9 +227,7 @@
       "completionKind": "PLAN_CREATED",
       "lifecycleCanonicalized": true,
       "relatedRegistryCoverage": false,
-      "selectorCoverage": [],
-      "plannedInitialTranche": true,
-      "recommendationDisposition": "CONTEXTUAL_PLANNED"
+      "recommendationDisposition": "CONTEXTUAL_CANONICAL"
     },
     {
       "id": "do-nothing-simulator",
@@ -274,9 +245,7 @@
       "completionKind": "DECISION_RECORDED",
       "lifecycleCanonicalized": true,
       "relatedRegistryCoverage": false,
-      "selectorCoverage": [],
-      "plannedInitialTranche": false,
-      "recommendationDisposition": "CATALOG_ONLY_PENDING_REVIEW"
+      "recommendationDisposition": "CATALOG_ONLY"
     },
     {
       "id": "documents",
@@ -294,9 +263,7 @@
       "completionKind": "PLAN_CREATED",
       "lifecycleCanonicalized": true,
       "relatedRegistryCoverage": false,
-      "selectorCoverage": [],
-      "plannedInitialTranche": false,
-      "recommendationDisposition": "CATALOG_ONLY_PENDING_REVIEW"
+      "recommendationDisposition": "CATALOG_ONLY"
     },
     {
       "id": "emergency",
@@ -314,9 +281,7 @@
       "completionKind": "PLAN_CREATED",
       "lifecycleCanonicalized": true,
       "relatedRegistryCoverage": false,
-      "selectorCoverage": [],
-      "plannedInitialTranche": false,
-      "recommendationDisposition": "CATALOG_ONLY_PENDING_REVIEW"
+      "recommendationDisposition": "CATALOG_ONLY"
     },
     {
       "id": "energy",
@@ -334,9 +299,7 @@
       "completionKind": "OUTPUT_VIEWED",
       "lifecycleCanonicalized": true,
       "relatedRegistryCoverage": false,
-      "selectorCoverage": [],
-      "plannedInitialTranche": false,
-      "recommendationDisposition": "CATALOG_ONLY_PENDING_REVIEW"
+      "recommendationDisposition": "CATALOG_ONLY"
     },
     {
       "id": "financing",
@@ -354,9 +317,7 @@
       "completionKind": "OUTPUT_GENERATED",
       "lifecycleCanonicalized": true,
       "relatedRegistryCoverage": true,
-      "selectorCoverage": [],
-      "plannedInitialTranche": false,
-      "recommendationDisposition": "CATALOG_ONLY_PENDING_REVIEW"
+      "recommendationDisposition": "CATALOG_ONLY"
     },
     {
       "id": "guidance-overview",
@@ -375,9 +336,7 @@
       "completionKind": "OUTPUT_VIEWED",
       "lifecycleCanonicalized": true,
       "relatedRegistryCoverage": true,
-      "selectorCoverage": [],
-      "plannedInitialTranche": false,
-      "recommendationDisposition": "CATALOG_ONLY_PENDING_REVIEW"
+      "recommendationDisposition": "CATALOG_ONLY"
     },
     {
       "id": "hidden-asset-finder",
@@ -396,11 +355,7 @@
       "completionKind": "OUTPUT_GENERATED",
       "lifecycleCanonicalized": true,
       "relatedRegistryCoverage": true,
-      "selectorCoverage": [
-        "unified_home"
-      ],
-      "plannedInitialTranche": false,
-      "recommendationDisposition": "CONTEXTUAL_EXISTING"
+      "recommendationDisposition": "CONTEXTUAL_CANONICAL"
     },
     {
       "id": "hoa-compliance",
@@ -418,9 +373,7 @@
       "completionKind": "PLAN_CREATED",
       "lifecycleCanonicalized": true,
       "relatedRegistryCoverage": false,
-      "selectorCoverage": [],
-      "plannedInitialTranche": true,
-      "recommendationDisposition": "CONTEXTUAL_PLANNED"
+      "recommendationDisposition": "CONTEXTUAL_CANONICAL"
     },
     {
       "id": "home-digital-twin",
@@ -439,11 +392,7 @@
       "completionKind": "OUTPUT_VIEWED",
       "lifecycleCanonicalized": true,
       "relatedRegistryCoverage": true,
-      "selectorCoverage": [
-        "unified_home"
-      ],
-      "plannedInitialTranche": false,
-      "recommendationDisposition": "CONTEXTUAL_EXISTING"
+      "recommendationDisposition": "CONTEXTUAL_CANONICAL"
     },
     {
       "id": "home-digital-will",
@@ -462,9 +411,7 @@
       "completionKind": "OUTPUT_VIEWED",
       "lifecycleCanonicalized": true,
       "relatedRegistryCoverage": true,
-      "selectorCoverage": [],
-      "plannedInitialTranche": true,
-      "recommendationDisposition": "CONTEXTUAL_PLANNED"
+      "recommendationDisposition": "CONTEXTUAL_CANONICAL"
     },
     {
       "id": "home-event-radar",
@@ -483,12 +430,7 @@
       "completionKind": "OUTPUT_VIEWED",
       "lifecycleCanonicalized": true,
       "relatedRegistryCoverage": true,
-      "selectorCoverage": [
-        "unified_home",
-        "smart_context"
-      ],
-      "plannedInitialTranche": false,
-      "recommendationDisposition": "CONTEXTUAL_EXISTING"
+      "recommendationDisposition": "CONTEXTUAL_CANONICAL"
     },
     {
       "id": "home-gazette",
@@ -507,9 +449,7 @@
       "completionKind": "OUTPUT_VIEWED",
       "lifecycleCanonicalized": true,
       "relatedRegistryCoverage": true,
-      "selectorCoverage": [],
-      "plannedInitialTranche": false,
-      "recommendationDisposition": "CATALOG_ONLY_PENDING_REVIEW"
+      "recommendationDisposition": "CATALOG_ONLY"
     },
     {
       "id": "home-habit-coach",
@@ -528,11 +468,7 @@
       "completionKind": "ACTION_INITIATED",
       "lifecycleCanonicalized": true,
       "relatedRegistryCoverage": true,
-      "selectorCoverage": [
-        "smart_context"
-      ],
-      "plannedInitialTranche": false,
-      "recommendationDisposition": "CONTEXTUAL_EXISTING"
+      "recommendationDisposition": "CONTEXTUAL_CANONICAL"
     },
     {
       "id": "home-renovation-risk-advisor",
@@ -551,11 +487,7 @@
       "completionKind": "PLAN_CREATED",
       "lifecycleCanonicalized": true,
       "relatedRegistryCoverage": true,
-      "selectorCoverage": [
-        "unified_home"
-      ],
-      "plannedInitialTranche": false,
-      "recommendationDisposition": "CONTEXTUAL_EXISTING"
+      "recommendationDisposition": "CONTEXTUAL_CANONICAL"
     },
     {
       "id": "home-risk-replay",
@@ -574,11 +506,7 @@
       "completionKind": "OUTPUT_VIEWED",
       "lifecycleCanonicalized": true,
       "relatedRegistryCoverage": true,
-      "selectorCoverage": [
-        "smart_context"
-      ],
-      "plannedInitialTranche": false,
-      "recommendationDisposition": "CONTEXTUAL_EXISTING"
+      "recommendationDisposition": "CONTEXTUAL_CANONICAL"
     },
     {
       "id": "home-savings",
@@ -596,9 +524,7 @@
       "completionKind": "OUTPUT_GENERATED",
       "lifecycleCanonicalized": true,
       "relatedRegistryCoverage": false,
-      "selectorCoverage": [],
-      "plannedInitialTranche": false,
-      "recommendationDisposition": "CATALOG_ONLY_PENDING_REVIEW"
+      "recommendationDisposition": "CATALOG_ONLY"
     },
     {
       "id": "home-timeline",
@@ -616,9 +542,7 @@
       "completionKind": "PLAN_CREATED",
       "lifecycleCanonicalized": true,
       "relatedRegistryCoverage": true,
-      "selectorCoverage": [],
-      "plannedInitialTranche": false,
-      "recommendationDisposition": "CATALOG_ONLY_PENDING_REVIEW"
+      "recommendationDisposition": "CATALOG_ONLY"
     },
     {
       "id": "inspection-hub",
@@ -636,9 +560,7 @@
       "completionKind": "PLAN_CREATED",
       "lifecycleCanonicalized": true,
       "relatedRegistryCoverage": false,
-      "selectorCoverage": [],
-      "plannedInitialTranche": true,
-      "recommendationDisposition": "CONTEXTUAL_PLANNED"
+      "recommendationDisposition": "CONTEXTUAL_CANONICAL"
     },
     {
       "id": "insurance-trend",
@@ -657,11 +579,7 @@
       "completionKind": "OUTPUT_GENERATED",
       "lifecycleCanonicalized": true,
       "relatedRegistryCoverage": true,
-      "selectorCoverage": [
-        "smart_context"
-      ],
-      "plannedInitialTranche": false,
-      "recommendationDisposition": "CONTEXTUAL_EXISTING"
+      "recommendationDisposition": "CONTEXTUAL_CANONICAL"
     },
     {
       "id": "material-specs",
@@ -679,9 +597,7 @@
       "completionKind": "OUTPUT_VIEWED",
       "lifecycleCanonicalized": true,
       "relatedRegistryCoverage": false,
-      "selectorCoverage": [],
-      "plannedInitialTranche": true,
-      "recommendationDisposition": "CONTEXTUAL_PLANNED"
+      "recommendationDisposition": "CONTEXTUAL_CANONICAL"
     },
     {
       "id": "modifications",
@@ -699,9 +615,7 @@
       "completionKind": "PLAN_CREATED",
       "lifecycleCanonicalized": true,
       "relatedRegistryCoverage": false,
-      "selectorCoverage": [],
-      "plannedInitialTranche": false,
-      "recommendationDisposition": "CATALOG_ONLY_PENDING_REVIEW"
+      "recommendationDisposition": "CATALOG_ONLY"
     },
     {
       "id": "mortgage-refinance-radar",
@@ -720,9 +634,7 @@
       "completionKind": "OUTPUT_GENERATED",
       "lifecycleCanonicalized": true,
       "relatedRegistryCoverage": true,
-      "selectorCoverage": [],
-      "plannedInitialTranche": false,
-      "recommendationDisposition": "CATALOG_ONLY_PENDING_REVIEW"
+      "recommendationDisposition": "CATALOG_ONLY"
     },
     {
       "id": "negotiation-shield",
@@ -741,9 +653,7 @@
       "completionKind": "DECISION_RECORDED",
       "lifecycleCanonicalized": true,
       "relatedRegistryCoverage": true,
-      "selectorCoverage": [],
-      "plannedInitialTranche": false,
-      "recommendationDisposition": "CATALOG_ONLY_PENDING_REVIEW"
+      "recommendationDisposition": "CATALOG_ONLY"
     },
     {
       "id": "neighborhood-change-radar",
@@ -762,11 +672,7 @@
       "completionKind": "OUTPUT_VIEWED",
       "lifecycleCanonicalized": true,
       "relatedRegistryCoverage": true,
-      "selectorCoverage": [
-        "smart_context"
-      ],
-      "plannedInitialTranche": false,
-      "recommendationDisposition": "CONTEXTUAL_EXISTING"
+      "recommendationDisposition": "CONTEXTUAL_CANONICAL"
     },
     {
       "id": "oracle",
@@ -784,9 +690,7 @@
       "completionKind": "PLAN_CREATED",
       "lifecycleCanonicalized": true,
       "relatedRegistryCoverage": false,
-      "selectorCoverage": [],
-      "plannedInitialTranche": false,
-      "recommendationDisposition": "CATALOG_ONLY_PENDING_REVIEW"
+      "recommendationDisposition": "CATALOG_ONLY"
     },
     {
       "id": "permits",
@@ -804,9 +708,7 @@
       "completionKind": "PLAN_CREATED",
       "lifecycleCanonicalized": true,
       "relatedRegistryCoverage": false,
-      "selectorCoverage": [],
-      "plannedInitialTranche": true,
-      "recommendationDisposition": "CONTEXTUAL_PLANNED"
+      "recommendationDisposition": "CONTEXTUAL_CANONICAL"
     },
     {
       "id": "plant-advisor",
@@ -825,9 +727,7 @@
       "completionKind": "ACTION_INITIATED",
       "lifecycleCanonicalized": true,
       "relatedRegistryCoverage": true,
-      "selectorCoverage": [],
-      "plannedInitialTranche": true,
-      "recommendationDisposition": "CONTEXTUAL_PLANNED"
+      "recommendationDisposition": "CONTEXTUAL_CANONICAL"
     },
     {
       "id": "price-finalization",
@@ -846,9 +746,7 @@
       "completionKind": "DECISION_RECORDED",
       "lifecycleCanonicalized": true,
       "relatedRegistryCoverage": true,
-      "selectorCoverage": [],
-      "plannedInitialTranche": false,
-      "recommendationDisposition": "CATALOG_ONLY_PENDING_REVIEW"
+      "recommendationDisposition": "CATALOG_ONLY"
     },
     {
       "id": "project-tracker",
@@ -866,9 +764,7 @@
       "completionKind": "PLAN_CREATED",
       "lifecycleCanonicalized": true,
       "relatedRegistryCoverage": false,
-      "selectorCoverage": [],
-      "plannedInitialTranche": true,
-      "recommendationDisposition": "CONTEXTUAL_PLANNED"
+      "recommendationDisposition": "CONTEXTUAL_CANONICAL"
     },
     {
       "id": "property-tax",
@@ -887,9 +783,7 @@
       "completionKind": "OUTPUT_GENERATED",
       "lifecycleCanonicalized": true,
       "relatedRegistryCoverage": true,
-      "selectorCoverage": [],
-      "plannedInitialTranche": false,
-      "recommendationDisposition": "CATALOG_ONLY_PENDING_REVIEW"
+      "recommendationDisposition": "CATALOG_ONLY"
     },
     {
       "id": "quote-comparison",
@@ -908,8 +802,6 @@
       "completionKind": "DECISION_RECORDED",
       "lifecycleCanonicalized": true,
       "relatedRegistryCoverage": true,
-      "selectorCoverage": [],
-      "plannedInitialTranche": false,
       "recommendationDisposition": "WORKFLOW_ONLY"
     },
     {
@@ -928,9 +820,7 @@
       "completionKind": "DECISION_RECORDED",
       "lifecycleCanonicalized": true,
       "relatedRegistryCoverage": false,
-      "selectorCoverage": [],
-      "plannedInitialTranche": false,
-      "recommendationDisposition": "CATALOG_ONLY_PENDING_REVIEW"
+      "recommendationDisposition": "CATALOG_ONLY"
     },
     {
       "id": "reserve-fund",
@@ -948,9 +838,7 @@
       "completionKind": "PLAN_CREATED",
       "lifecycleCanonicalized": true,
       "relatedRegistryCoverage": true,
-      "selectorCoverage": [],
-      "plannedInitialTranche": false,
-      "recommendationDisposition": "CATALOG_ONLY_PENDING_REVIEW"
+      "recommendationDisposition": "CATALOG_ONLY"
     },
     {
       "id": "risk-premium-optimizer",
@@ -968,9 +856,7 @@
       "completionKind": "OUTPUT_GENERATED",
       "lifecycleCanonicalized": true,
       "relatedRegistryCoverage": false,
-      "selectorCoverage": [],
-      "plannedInitialTranche": false,
-      "recommendationDisposition": "CATALOG_ONLY_PENDING_REVIEW"
+      "recommendationDisposition": "CATALOG_ONLY"
     },
     {
       "id": "sell-hold-rent",
@@ -989,11 +875,7 @@
       "completionKind": "OUTPUT_GENERATED",
       "lifecycleCanonicalized": true,
       "relatedRegistryCoverage": true,
-      "selectorCoverage": [
-        "smart_context"
-      ],
-      "plannedInitialTranche": false,
-      "recommendationDisposition": "CONTEXTUAL_EXISTING"
+      "recommendationDisposition": "CONTEXTUAL_CANONICAL"
     },
     {
       "id": "seller-prep",
@@ -1011,9 +893,7 @@
       "completionKind": "PLAN_CREATED",
       "lifecycleCanonicalized": true,
       "relatedRegistryCoverage": true,
-      "selectorCoverage": [],
-      "plannedInitialTranche": true,
-      "recommendationDisposition": "CONTEXTUAL_PLANNED"
+      "recommendationDisposition": "CONTEXTUAL_CANONICAL"
     },
     {
       "id": "service-price-radar",
@@ -1032,12 +912,7 @@
       "completionKind": "DECISION_RECORDED",
       "lifecycleCanonicalized": true,
       "relatedRegistryCoverage": true,
-      "selectorCoverage": [
-        "unified_home",
-        "smart_context"
-      ],
-      "plannedInitialTranche": false,
-      "recommendationDisposition": "CONTEXTUAL_EXISTING"
+      "recommendationDisposition": "CONTEXTUAL_CANONICAL"
     },
     {
       "id": "status-board",
@@ -1055,11 +930,7 @@
       "completionKind": "PLAN_CREATED",
       "lifecycleCanonicalized": true,
       "relatedRegistryCoverage": true,
-      "selectorCoverage": [
-        "smart_context"
-      ],
-      "plannedInitialTranche": false,
-      "recommendationDisposition": "CONTEXTUAL_EXISTING"
+      "recommendationDisposition": "CONTEXTUAL_CANONICAL"
     },
     {
       "id": "tax-appeal",
@@ -1077,9 +948,7 @@
       "completionKind": "PLAN_CREATED",
       "lifecycleCanonicalized": true,
       "relatedRegistryCoverage": false,
-      "selectorCoverage": [],
-      "plannedInitialTranche": false,
-      "recommendationDisposition": "CATALOG_ONLY_PENDING_REVIEW"
+      "recommendationDisposition": "CATALOG_ONLY"
     },
     {
       "id": "true-cost",
@@ -1098,9 +967,7 @@
       "completionKind": "OUTPUT_GENERATED",
       "lifecycleCanonicalized": true,
       "relatedRegistryCoverage": true,
-      "selectorCoverage": [],
-      "plannedInitialTranche": false,
-      "recommendationDisposition": "CATALOG_ONLY_PENDING_REVIEW"
+      "recommendationDisposition": "CATALOG_ONLY"
     },
     {
       "id": "visual-inspector",
@@ -1118,9 +985,7 @@
       "completionKind": "OUTPUT_VIEWED",
       "lifecycleCanonicalized": true,
       "relatedRegistryCoverage": false,
-      "selectorCoverage": [],
-      "plannedInitialTranche": false,
-      "recommendationDisposition": "CATALOG_ONLY_PENDING_REVIEW"
+      "recommendationDisposition": "CATALOG_ONLY"
     }
   ]
 }

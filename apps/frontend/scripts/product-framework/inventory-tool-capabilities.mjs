@@ -21,14 +21,18 @@ const toolRegistryPath = path.join(
   frontendRoot,
   'src/features/tools/toolRegistry.ts',
 );
-const unifiedSelectorPath = path.join(
-  frontendRoot,
-  'src/features/tools/selectUnifiedHomeTools.ts',
+const backendCapabilityDefinitionsDirectory = path.join(
+  repoRoot,
+  'apps/backend/src/productFramework/capabilities/definitions',
 );
-const smartSelectorPath = path.join(
-  frontendRoot,
-  'src/features/tools/selectSmartContextTools.ts',
-);
+const backendCapabilityDefinitionPaths = fs.readdirSync(
+  backendCapabilityDefinitionsDirectory,
+)
+  .filter((file) =>
+    file.endsWith('.ts')
+    && !['index.ts', 'capabilityDefinitionFactory.ts'].includes(file))
+  .sort()
+  .map((file) => path.join(backendCapabilityDefinitionsDirectory, file));
 const capabilityIconRegistryPath = path.join(
   frontendRoot,
   'src/features/tools/capabilityIconRegistry.ts',
@@ -45,18 +49,6 @@ const backendLifecycleContractPath = path.join(
 const outputDirectory = path.join(repoRoot, 'docs/product/capability-discovery');
 const jsonOutputPath = path.join(outputDirectory, 'current-capability-inventory.json');
 const markdownOutputPath = path.join(outputDirectory, 'current-capability-inventory.md');
-
-const plannedInitialTranche = new Set([
-  'material-specs',
-  'plant-advisor',
-  'home-digital-will',
-  'diy',
-  'seller-prep',
-  'permits',
-  'hoa-compliance',
-  'inspection-hub',
-  'project-tracker',
-]);
 
 function read(filePath) {
   return fs.readFileSync(filePath, 'utf8');
@@ -125,8 +117,25 @@ function parseStringArray(source, constName) {
   return new Set([...match[1].matchAll(/'([^']+)'/g)].map((entry) => entry[1]));
 }
 
-function parseSelectorToolIds(source) {
-  return new Set([...source.matchAll(/\btoolId:\s*'([^']+)'/g)].map((entry) => entry[1]));
+function parseCanonicalRecommendationModes(filePaths) {
+  const result = new Map();
+  const rowPattern =
+    /^\s*\['([^']+)'[^\n]*'(CATALOG_ONLY|CONTEXTUAL|WORKFLOW_ONLY)'\],?$/gm;
+  const objectPattern =
+    /\{\s*id:\s*'([^']+)'[\s\S]*?\bmode:\s*'(CATALOG_ONLY|CONTEXTUAL|WORKFLOW_ONLY)'[\s\S]*?\}/g;
+  for (const filePath of filePaths) {
+    const source = read(filePath);
+    for (const match of [
+      ...source.matchAll(rowPattern),
+      ...source.matchAll(objectPattern),
+    ]) {
+      if (result.has(match[1])) {
+        throw new Error(`Duplicate canonical capability mode: ${match[1]}`);
+      }
+      result.set(match[1], match[2]);
+    }
+  }
+  return result;
 }
 
 function walkPages(directory) {
@@ -184,8 +193,9 @@ function buildInventory() {
   const aiOutcomeByGroup = parseStringMap(discoverySource, 'AI_OUTCOME_BY_GROUP');
   const completionByCategory = parseStringMap(discoverySource, 'COMPLETION_KIND_BY_CATEGORY');
   const relatedRegistryIds = parseStringArray(toolRegistrySource, 'TOOL_IDS');
-  const unifiedSelectorIds = parseSelectorToolIds(read(unifiedSelectorPath));
-  const smartSelectorIds = parseSelectorToolIds(read(smartSelectorPath));
+  const canonicalRecommendationModes = parseCanonicalRecommendationModes(
+    backendCapabilityDefinitionPaths,
+  );
   const lifecycleCanonicalIds = parseStringSet(
     read(backendLifecycleContractPath),
     'DISCOVERABLE_TOOL_IDS',
@@ -207,18 +217,11 @@ function buildInventory() {
     const outcomeCategory = homeEntry
       ? homeOutcomeByGroup[homeEntry.group]
       : aiOutcomeByGroup[aiEntry.group];
-    const selectorCoverage = [
-      ...(unifiedSelectorIds.has(id) ? ['unified_home'] : []),
-      ...(smartSelectorIds.has(id) ? ['smart_context'] : []),
-    ];
     const route = canonicalRoute(entry);
-    const recommendationDisposition = entry.workflowOnly
-      ? 'WORKFLOW_ONLY'
-      : selectorCoverage.length > 0
-        ? 'CONTEXTUAL_EXISTING'
-        : plannedInitialTranche.has(id)
-          ? 'CONTEXTUAL_PLANNED'
-          : 'CATALOG_ONLY_PENDING_REVIEW';
+    const canonicalMode = canonicalRecommendationModes.get(id);
+    const recommendationDisposition = canonicalMode === 'CONTEXTUAL'
+      ? 'CONTEXTUAL_CANONICAL'
+      : canonicalMode;
 
     return {
       id,
@@ -240,8 +243,6 @@ function buildInventory() {
       completionKind: completionByCategory[outcomeCategory] ?? null,
       lifecycleCanonicalized: lifecycleCanonicalIds.has(id),
       relatedRegistryCoverage: relatedRegistryIds.has(id),
-      selectorCoverage,
-      plannedInitialTranche: plannedInitialTranche.has(id),
       recommendationDisposition,
     };
   });
@@ -253,11 +254,8 @@ function buildInventory() {
     distinctCapabilities: capabilities.length,
     routeVerified: capabilities.filter((entry) => entry.routeVerified).length,
     relatedRegistryCoverage: capabilities.filter((entry) => entry.relatedRegistryCoverage).length,
-    existingContextualCoverage: capabilities.filter(
-      (entry) => entry.recommendationDisposition === 'CONTEXTUAL_EXISTING',
-    ).length,
-    plannedContextualTranche: capabilities.filter(
-      (entry) => entry.recommendationDisposition === 'CONTEXTUAL_PLANNED',
+    contextualCapabilities: capabilities.filter(
+      (entry) => entry.recommendationDisposition === 'CONTEXTUAL_CANONICAL',
     ).length,
     workflowOnly: capabilities.filter(
       (entry) => entry.recommendationDisposition === 'WORKFLOW_ONLY',
@@ -265,8 +263,8 @@ function buildInventory() {
     lifecycleCanonicalized: capabilities.filter(
       (entry) => entry.lifecycleCanonicalized,
     ).length,
-    catalogOnlyPendingReview: capabilities.filter(
-      (entry) => entry.recommendationDisposition === 'CATALOG_ONLY_PENDING_REVIEW',
+    catalogOnlyCapabilities: capabilities.filter(
+      (entry) => entry.recommendationDisposition === 'CATALOG_ONLY',
     ).length,
   };
 
@@ -275,8 +273,8 @@ function buildInventory() {
       path.relative(repoRoot, catalogPath),
       path.relative(repoRoot, discoveryRegistryPath),
       path.relative(repoRoot, toolRegistryPath),
-      path.relative(repoRoot, unifiedSelectorPath),
-      path.relative(repoRoot, smartSelectorPath),
+      ...backendCapabilityDefinitionPaths.map((filePath) =>
+        path.relative(repoRoot, filePath)),
       path.relative(repoRoot, backendCapabilityContractPath),
       path.relative(repoRoot, backendLifecycleContractPath),
       path.relative(repoRoot, capabilityIconRegistryPath),
@@ -308,16 +306,15 @@ function renderMarkdown(inventory) {
     `| Distinct capabilities | ${summary.distinctCapabilities} |`,
     `| Canonical routes verified | ${summary.routeVerified} |`,
     `| Legacy related-registry coverage | ${summary.relatedRegistryCoverage} |`,
-    `| Existing contextual selector coverage | ${summary.existingContextualCoverage} |`,
-    `| Planned contextual tranche | ${summary.plannedContextualTranche} |`,
+    `| Canonical contextual capabilities | ${summary.contextualCapabilities} |`,
     `| Workflow-only | ${summary.workflowOnly} |`,
     `| Backend lifecycle canonicalized | ${summary.lifecycleCanonicalized} |`,
-    `| Catalog-only pending review | ${summary.catalogOnlyPendingReview} |`,
+    `| Canonical catalog-only capabilities | ${summary.catalogOnlyCapabilities} |`,
     '',
     '## Capability Matrix',
     '',
-    '| ID | Label | Sources | Canonical route | Route | Outcome | Release | Safety | Completion | Lifecycle | Related registry | Selector coverage | Planned tranche | Recommendation disposition |',
-    '| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |',
+    '| ID | Label | Sources | Canonical route | Route | Outcome | Release | Safety | Completion | Lifecycle | Related registry | Recommendation disposition |',
+    '| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |',
     ...capabilities.map((entry) => [
       markdownEscape(entry.id),
       markdownEscape(entry.label),
@@ -330,17 +327,14 @@ function renderMarkdown(inventory) {
       markdownEscape(entry.completionKind),
       entry.lifecycleCanonicalized ? 'Canonical' : 'Missing',
       entry.relatedRegistryCoverage ? 'Yes' : 'No',
-      entry.selectorCoverage.length > 0 ? entry.selectorCoverage.join(', ') : 'None',
-      entry.plannedInitialTranche ? 'Yes' : 'No',
       markdownEscape(entry.recommendationDisposition),
     ].join(' | ').replace(/^/, '| ').replace(/$/, ' |')),
     '',
     '## Interpretation',
     '',
-    '- `CONTEXTUAL_EXISTING` means at least one current central selector explicitly considers the capability.',
-    '- `CONTEXTUAL_PLANNED` means the approved initial niche tranche plans reviewed contextual activation.',
+    '- `CONTEXTUAL_CANONICAL` means the backend registry owns reviewed contextual recommendation behavior.',
     '- `WORKFLOW_ONLY` means general discovery is intentionally suppressed.',
-    '- `CATALOG_ONLY_PENDING_REVIEW` is the safe default until eligibility and suggestion behavior are reviewed.',
+    '- `CATALOG_ONLY` means contextual recommendation is disabled until reviewed metadata is added.',
     '- Route verification checks the current Next.js page inventory; it does not certify runtime behavior.',
     '',
   ];
@@ -357,6 +351,9 @@ function validateInventory(inventory) {
     if (!capability.completionKind) errors.push(`Missing completion kind: ${capability.id}`);
     if (!capability.lifecycleCanonicalized) errors.push(`Missing backend lifecycle canonicalization: ${capability.id}`);
     if (!capability.outcomeCategory) errors.push(`Missing outcome category: ${capability.id}`);
+    if (!capability.recommendationDisposition) {
+      errors.push(`Missing canonical recommendation mode: ${capability.id}`);
+    }
     if (!capability.routeVerified) errors.push(`Missing canonical page route: ${capability.id} (${capability.canonicalRoute})`);
   }
 

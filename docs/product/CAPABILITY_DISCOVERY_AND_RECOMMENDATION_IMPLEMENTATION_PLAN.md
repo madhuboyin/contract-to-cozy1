@@ -92,6 +92,7 @@ Status as of July 24, 2026:
 | CAP-500 Unified Home response | Complete | Unified Home evaluates a versioned, maximum-three suggestion envelope from its already-authorized action and Property Context snapshot, preserves source lineage and context version, honors the server cutover flag, and fails closed without breaking ranked Home Actions |
 | CAP-501 Unified Home renderer | Complete | Unified Home renders only the bounded server suggestion envelope with reviewed why-now, outcome, readiness, server launch destination, actual-view impressions, full launch lineage, source-action open recording, and an Explore Tools fallback |
 | CAP-502 property smart-context surface | Complete | Property detail requests the shared evaluator with the PROPERTY surface, renders a maximum of three server suggestions, records property-specific exposure and launch lineage, and retains the All Tools fallback on empty or failed responses |
+| CAP-503 selector retirement | Complete | Both frontend recommendation selectors and their selector-only tests are deleted; inventory classification now reads canonical backend definition groups, CI prevents selector restoration or imports, and server evaluator plus render-contract tests own coverage |
 
 Explore Tools and homeowner command search now use the canonical catalog by default. Set
 `CAPABILITY_CATALOG_SOURCE=legacy` only for the temporary internal-beta rollback.
@@ -160,8 +161,8 @@ Explore Tools and homeowner command search now use the canonical catalog by defa
 | `toolDiscoveryRegistry.ts` | Discoverability, readiness, rollout, route aliases, completion | Move to backend capability manifests |
 | `toolRegistry.ts` | Legacy related-tool IDs and route construction | Retire after route and relationship parity |
 | `contextToolMappings.ts` | Manual related-tool adjacency | Replace with explicit manifest edges plus derived fallback |
-| `selectUnifiedHomeTools.ts` | Unified Home deterministic candidates | Replace with backend evaluator |
-| `selectSmartContextTools.ts` | Property-page deterministic candidates | Replace with same backend evaluator |
+| `selectUnifiedHomeTools.ts` | Unified Home deterministic candidates | Retired in CAP-503 |
+| `selectSmartContextTools.ts` | Property-page deterministic candidates | Retired in CAP-503 |
 | `ProductTool` seed metadata | Knowledge Hub tool catalog | Synchronize as a projection of canonical registry |
 | Backend analytics aliases | Canonicalize tool lifecycle identifiers | Generate or validate against registry |
 | Rollout configuration | Release/cohort availability | Preserve; validate one-to-one registry parity |
@@ -1032,6 +1033,11 @@ After acceptance:
 - replace them with backend evaluator and frontend render-contract tests; and
 - ensure no frontend code imports either selector.
 
+Implementation: both selector modules and the remaining selector-specific test
+are deleted. Capability inventory generation now reads recommendation modes
+from the six canonical backend definition groups, and the capability QA gate
+fails if either retired selector file or a frontend reference reappears.
+
 #### CAP-504: Launch-context verification
 
 Extend existing launch-context tests for all server suggestions:
@@ -1564,6 +1570,9 @@ apps/frontend/src/features/tools/selectSmartContextTools.ts
 apps/frontend/src/features/tools/contextToolMappings.ts
 apps/frontend/src/features/tools/toolRegistry.ts
 ```
+
+The first two selectors were retired in CAP-503. Relationship mappings and the
+legacy route registry remain scheduled for the related-tools cutover.
 
 `mobileToolCatalog.ts` and `toolDiscoveryRegistry.ts` may temporarily retain presentation helpers
 while consumers migrate, but they shall not remain runtime data authorities.
