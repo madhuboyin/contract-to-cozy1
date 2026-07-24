@@ -1,6 +1,6 @@
 // apps/backend/src/services/property.service.ts
 
-import { Property, DwellingType, OwnershipForm, PropertyUse, OccupancyStatus, OutdoorSpaceType, HeatingType, CoolingType, WaterHeaterType, RoofType, FoundationType, Prisma, Warranty, DocumentType, PropertyResponsibilityScope, ResponsibleParty } from '@prisma/client';
+import { Property, DwellingType, OwnershipForm, PropertyUse, OccupancyStatus, OutdoorSpaceType, HeatingType, CoolingType, WaterHeaterType, RoofType, FoundationType, Prisma, Warranty, DocumentType, PropertyResponsibilityScope, ResponsibleParty, Season } from '@prisma/client';
 import { calculateHealthScore, HealthScoreResult } from '../utils/propertyScore.util'; 
 import JobQueueService from './JobQueue.service';
 import type { PropertyApplianceDTO } from './propertyApplianceInventory.service';
@@ -20,9 +20,30 @@ import { getPropertyContext } from '../modules/propertyContext';
 import { HouseholdService } from './household.service';
 import { reevaluateActiveWeatherIncidentsForProperty } from './incidents/incident.evaluator';
 import { reconcileCoverageGuidanceJourneyApplicability } from './coverageJourneyReconciliation.service';
+import { SeasonalChecklistService } from './seasonalChecklist.service';
+import { resolveCurrentSeasonWindow } from './seasonal/seasonWindow';
 
 import { prisma } from '../lib/prisma';
 import { logger } from '../lib/logger';
+
+async function reconcileCurrentSeasonalChecklist(propertyId: string, userId: string): Promise<void> {
+  const window = resolveCurrentSeasonWindow(new Date());
+  try {
+    await SeasonalChecklistService.generateSeasonalChecklist(
+      propertyId,
+      window.season as Season,
+      window.year,
+      userId,
+    );
+  } catch (error) {
+    // Property creation and editing remain successful if an auxiliary
+    // recommendation cannot be materialized. The daily worker can retry.
+    logger.warn(
+      { err: error, propertyId, season: window.season, year: window.year },
+      '[PROPERTY] Current seasonal checklist reconciliation deferred',
+    );
+  }
+}
 
 interface PropertyApplianceInput {
   id?: string; // Optional: Used for client-side tracking, ignored by service but kept for consistency
@@ -541,6 +562,9 @@ export async function createProperty(userId: string, data: CreatePropertyData): 
     await syncPropertyApplianceInventoryItems(property.id, data.majorAppliances || []);
   }
 
+  // Cold-start convergence: evaluate the current season before the newly
+  // created Home is returned, rather than waiting for the overnight worker.
+  await reconcileCurrentSeasonalChecklist(property.id, userId);
 
   // PHASE 2 ADDITION: FIX: Use the comprehensive job enqueuer
   // This triggers both Risk and FES calculations
@@ -915,6 +939,9 @@ export async function updateProperty(
   const hasResponsibilityUpdates = (data.responsibilities?.length ?? 0) > 0;
   if (Object.keys(propertyUpdateData).length > 0 || hasResponsibilityUpdates) {
       await JobQueueService.enqueuePropertyIntelligenceJobs(propertyId);
+      // A profile correction may turn UNKNOWN seasonal applicability into a
+      // supported task. Reconciliation is idempotent for the current season.
+      await reconcileCurrentSeasonalChecklist(propertyId, userId);
   }
 
   const weatherContextFields = new Set([

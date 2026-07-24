@@ -244,6 +244,7 @@ test('excludes templates the applicability policy marks NOT_APPLICABLE', async (
   await generateSeasonalChecklists(deps);
 
   assert.equal(calls.itemCreates.length, 0);
+  assert.equal(calls.checklistCreates.length, 0, 'unknown or inapplicable context must not create an empty checklist');
 });
 
 test('promotes each checklist item to a canonical maintenance task and records tasksAdded', async () => {

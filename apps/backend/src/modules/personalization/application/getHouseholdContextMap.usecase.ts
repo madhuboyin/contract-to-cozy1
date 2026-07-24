@@ -51,7 +51,12 @@ function toIso(value: Date | string | null | undefined): string | null {
 }
 
 function humanize(value: string): string {
-  return value.toLowerCase().split('_').map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(' ');
+  const words = value
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/[_-]+/g, ' ')
+    .trim()
+    .toLowerCase();
+  return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
 function safeScalar(value: unknown): string | undefined {
@@ -62,6 +67,42 @@ function safeScalar(value: unknown): string | undefined {
     return safeScalar((value as { value: unknown }).value);
   }
   return undefined;
+}
+
+const DERIVED_TRAIT_LABELS: Record<string, string> = {
+  roofageyears: 'Roof age',
+  roofreplacementoverdue: 'Roof replacement timing',
+  hvacfilterreplacementoverdue: 'HVAC filter replacement',
+  hvacfilterdayssinceserviced: 'Time since HVAC filter service',
+  smokedetectormissing: 'Smoke detectors',
+  smokedetectorbatteryoverdue: 'Smoke-detector battery check',
+  smokedetectorbatterydayssinceserviced: 'Time since smoke-detector battery service',
+  dryerventcleaningoverdue: 'Dryer-vent cleaning',
+  dryerventdayssinceserviced: 'Time since dryer-vent service',
+};
+
+function derivedTraitDetail(traitKey: string, value: unknown): string {
+  const normalizedKey = traitKey.replace(/[_-]+/g, '').toLowerCase();
+  const scalar = value && typeof value === 'object' && !Array.isArray(value) && 'value' in value
+    ? (value as { value: unknown }).value
+    : value;
+
+  if (normalizedKey === 'roofageyears' && typeof scalar === 'number') {
+    return `About ${scalar} year${scalar === 1 ? '' : 's'}`;
+  }
+  if (normalizedKey.endsWith('dayssinceserviced') && typeof scalar === 'number') {
+    return `${scalar} day${scalar === 1 ? '' : 's'} ago`;
+  }
+  if (normalizedKey === 'roofreplacementoverdue' && typeof scalar === 'boolean') {
+    return scalar ? 'May be overdue' : 'Not overdue';
+  }
+  if (normalizedKey === 'smokedetectormissing' && typeof scalar === 'boolean') {
+    return scalar ? 'Recorded as not installed' : 'Recorded as installed';
+  }
+  if (normalizedKey.endsWith('overdue') && typeof scalar === 'boolean') {
+    return scalar ? 'Due for attention' : 'Up to date';
+  }
+  return safeScalar(value) ?? 'Current property signal';
 }
 
 function profileAnswerDetail(value: unknown): string {
@@ -167,8 +208,8 @@ export async function getHouseholdContextMap(
   data.derivedTraits.forEach((row) => addRelatedNode(nodes, edges, {
     id: `trait:${row.traitKey.toLowerCase()}`,
     type: 'DERIVED_TRAIT',
-    label: humanize(row.traitKey),
-    detail: safeScalar(row.valueJson) ?? 'Current property signal',
+    label: DERIVED_TRAIT_LABELS[row.traitKey.replace(/[_-]+/g, '').toLowerCase()] ?? humanize(row.traitKey),
+    detail: derivedTraitDetail(row.traitKey, row.valueJson),
     source: row.source,
     validFrom: toIso(row.computedAt),
     validTo: null,

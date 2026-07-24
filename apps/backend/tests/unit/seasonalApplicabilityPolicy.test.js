@@ -139,3 +139,19 @@ test('seasonal generation no longer reads nonexistent property applicability fie
   assert.doesNotMatch(source, /property\.(hasPool|hasDeck|hasFireplace|hasDriveway|isCoastal)/);
   assert.doesNotMatch(source, /property\.lotSize\s*>\s*0/);
 });
+
+test('current-season generation withholds empty checklists and is reconciled during property cold start', () => {
+  const checklistSource = fs.readFileSync(
+    path.resolve(__dirname, '../../src/services/seasonalChecklist.service.ts'),
+    'utf8',
+  );
+  const propertySource = fs.readFileSync(
+    path.resolve(__dirname, '../../src/services/property.service.ts'),
+    'utf8',
+  );
+
+  assert.match(checklistSource, /filteredTemplates\.length === 0/);
+  assert.match(checklistSource, /Existing checklists are reconciled/);
+  assert.match(propertySource, /resolveCurrentSeasonWindow/);
+  assert.match(propertySource, /await reconcileCurrentSeasonalChecklist\(property\.id, userId\)/);
+});

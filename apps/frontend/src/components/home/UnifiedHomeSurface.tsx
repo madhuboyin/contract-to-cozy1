@@ -19,7 +19,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { api } from '@/lib/api/client';
-import type { HomeActionCommand, RankedHomeActionDTO } from '@/types';
+import type { HomeActionCommand, RankedHomeActionDTO, UnifiedHomeDTO } from '@/types';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -78,6 +78,20 @@ export function groupAttentionActions(actions: RankedHomeActionDTO[]): Attention
     inserted = true;
     return [{ kind: 'COVERAGE_CORRECTION_GROUP', actions: coverageActions, subjects }];
   });
+}
+
+export function resolveHomeAttentionState(
+  actionCount: number,
+  context: Pick<
+    UnifiedHomeDTO['propertyContext'],
+    'missingFactCount' | 'conflictedFactCount' | 'staleFactCount'
+  >,
+): 'ACTIONS' | 'SETUP' | 'ALL_CLEAR' {
+  if (actionCount > 0) return 'ACTIONS';
+  if (context.missingFactCount > 0 || context.conflictedFactCount > 0 || context.staleFactCount > 0) {
+    return 'SETUP';
+  }
+  return 'ALL_CLEAR';
 }
 
 function formattedAlertExpiry(value: string | null): string | null {
@@ -366,6 +380,17 @@ export function UnifiedHomeSurface({ propertyId }: { propertyId: string }) {
   const home = query.data;
   const attentionEntries = groupAttentionActions(home.attention.actions);
   const visibleAttentionEntries = attentionEntries.slice(0, 5);
+  const attentionState = resolveHomeAttentionState(home.attention.actions.length, home.propertyContext);
+  const setupMessage = home.propertyContext.conflictedFactCount > 0
+    ? 'Review conflicting home details so recommendations use the right information.'
+    : home.propertyContext.staleFactCount > 0
+      ? 'Refresh outdated home details so maintenance and seasonal guidance stays accurate.'
+      : 'Add a few missing home details to unlock applicable seasonal and maintenance guidance.';
+  const setupCtaLabel = home.propertyContext.conflictedFactCount > 0
+    ? 'Review conflicting details'
+    : home.propertyContext.staleFactCount > 0
+      ? 'Refresh home details'
+      : 'Continue home setup';
   const openAsk = () => {
     window.dispatchEvent(new CustomEvent('cozy-chat-open'));
   };
@@ -429,8 +454,35 @@ export function UnifiedHomeSurface({ propertyId }: { propertyId: string }) {
             </Button>
           )}
         </div>
-        {home.attention.actions.length === 0 ? (
-          <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-sm text-emerald-800">No action currently needs your attention.</div>
+        {attentionState === 'SETUP' ? (
+          <div className="rounded-[24px] border border-sky-200 bg-gradient-to-br from-white to-sky-50 p-5 shadow-sm">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-start gap-3">
+                <div className="rounded-2xl bg-sky-100 p-2.5 text-sky-700">
+                  <Sparkles className="h-5 w-5" />
+                </div>
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="font-semibold text-slate-950">Personalize your home guidance</p>
+                    <Badge variant="outline" className="rounded-full bg-white text-slate-600">
+                      {home.propertyContext.completenessPercent}% complete
+                    </Badge>
+                  </div>
+                  <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-600">{setupMessage}</p>
+                </div>
+              </div>
+              <Button asChild className="shrink-0 rounded-full bg-teal-700 hover:bg-teal-800">
+                <Link href={home.glance.recordHref}>
+                  {setupCtaLabel}
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Link>
+              </Button>
+            </div>
+          </div>
+        ) : attentionState === 'ALL_CLEAR' ? (
+          <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-sm text-emerald-800">
+            No action currently needs your attention.
+          </div>
         ) : visibleAttentionEntries.map((entry) => entry.kind === 'ACTION' ? (
           <ActionCard key={entry.action.id} action={entry.action} propertyId={propertyId} onChanged={() => query.refetch()} />
         ) : entry.kind === 'CRITICAL_WEATHER' ? (

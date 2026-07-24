@@ -72,9 +72,40 @@ test('builds a sanitized current-state map from consented relational records', a
     result.nodes.find((node) => node.id.startsWith('profile:household_size'))?.detail,
     '3',
   );
+  const hvacTrait = result.nodes.find((node) => node.id === 'trait:hvac_filter_replacement_overdue');
+  assert.equal(hvacTrait?.label, 'HVAC filter replacement');
+  assert.equal(hvacTrait?.detail, 'Due for attention');
   const serialized = JSON.stringify(result);
   assert.doesNotMatch(serialized, /property-secret|must-not-leak|asset-secret|rawAssetId|privateNote/);
   assert.match(serialized, /Current-state view only/);
+});
+
+test('presents camel-case property signals with homeowner-facing labels and values', async () => {
+  const data = {
+    source: null,
+    consentVersion: null,
+    consentedAt: null,
+    properties: [],
+    profileAnswers: [],
+    derivedTraits: [
+      { traitKey: 'roofAgeYears', valueJson: 2, source: 'PROPERTY_RECORD', computedAt: at },
+      { traitKey: 'roofReplacementOverdue', valueJson: false, source: 'PROPERTY_RECORD', computedAt: at },
+      { traitKey: 'smokeDetectorMissing', valueJson: false, source: 'PROPERTY_RECORD', computedAt: at },
+    ],
+    recommendations: [],
+  };
+  const { getHouseholdContextMap } = loadUseCase(data);
+  const result = await getHouseholdContextMap('property-secret', 'owner-1', at);
+  const traits = result.nodes.filter((node) => node.type === 'DERIVED_TRAIT');
+
+  assert.deepEqual(
+    traits.map(({ label, detail }) => ({ label, detail })),
+    [
+      { label: 'Roof age', detail: 'About 2 years' },
+      { label: 'Roof replacement timing', detail: 'Not overdue' },
+      { label: 'Smoke detectors', detail: 'Recorded as installed' },
+    ],
+  );
 });
 
 test('does not expose stored recommendation nodes while personalization is paused', async () => {

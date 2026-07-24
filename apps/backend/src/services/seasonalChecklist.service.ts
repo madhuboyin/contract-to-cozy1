@@ -69,7 +69,9 @@ export class SeasonalChecklistService {
     year: number,
     userId: string
   ) {
-    // Check if checklist already exists
+    // Existing checklists are reconciled instead of returned immediately.
+    // This lets a newly completed Property Context add tasks that were
+    // intentionally withheld while applicability was unknown.
     const existing = await prisma.seasonalChecklist.findUnique({
       where: {
         propertyId_season_year: {
@@ -78,11 +80,14 @@ export class SeasonalChecklistService {
           year,
         },
       },
+      include: {
+        items: {
+          select: {
+            seasonalTaskTemplateId: true,
+          },
+        },
+      },
     });
-
-    if (existing) {
-      return existing;
-    }
 
     // Get property and climate settings
     const property = await this.assertPropertyOwnership(propertyId, userId);
@@ -143,24 +148,30 @@ export class SeasonalChecklistService {
       'Seasonal templates evaluated against Property Context',
     );
 
-    // Create checklist
-    const checklist = await prisma.seasonalChecklist.create({
-      data: {
-        propertyId,
-        season,
-        year,
-        climateRegion: climateSettings.climateRegion,
-        seasonStartDate,
-        seasonEndDate,
-        status: 'PENDING',
-        totalTasks: filteredTemplates.length,
-        tasksAdded: 0,
-        tasksCompleted: 0,
-      },
-    });
+    // Do not manufacture an empty checklist. UNKNOWN context remains a
+    // setup opportunity on Home until enough facts exist to evaluate tasks.
+    if (filteredTemplates.length === 0) {
+      return existing;
+    }
 
-    // Create checklist items
-    const itemsData = filteredTemplates.map((template) => {
+    const checklist = existing ?? await prisma.seasonalChecklist.create({
+        data: {
+          propertyId,
+          season,
+          year,
+          climateRegion: climateSettings.climateRegion,
+          seasonStartDate,
+          seasonEndDate,
+          status: 'PENDING',
+          totalTasks: 0,
+          tasksAdded: 0,
+          tasksCompleted: 0,
+        },
+      });
+
+    const existingTemplateIds = new Set(existing?.items.map((item) => item.seasonalTaskTemplateId) ?? []);
+    const missingTemplates = filteredTemplates.filter((template) => !existingTemplateIds.has(template.id));
+    const itemsData = missingTemplates.map((template) => {
       const recommendedDate = new Date(seasonStartDate);
       recommendedDate.setDate(recommendedDate.getDate() + 7); // Recommend completion 1 week into season
 
@@ -177,11 +188,46 @@ export class SeasonalChecklistService {
       };
     });
 
-    await prisma.seasonalChecklistItem.createMany({
-      data: itemsData,
+    if (itemsData.length > 0) {
+      await prisma.seasonalChecklistItem.createMany({ data: itemsData });
+    }
+
+    const applicableItems = await prisma.seasonalChecklistItem.findMany({
+      where: {
+        seasonalChecklistId: checklist.id,
+        seasonalTaskTemplateId: { in: filteredTemplates.map((template) => template.id) },
+      },
+      include: {
+        maintenanceTask: true,
+      },
     });
 
-    return checklist;
+    for (const item of applicableItems) {
+      if (item.maintenanceTask || item.autoPromotionSkipped) continue;
+      try {
+        await addSeasonalTaskToMaintenance(userId, item.id);
+      } catch (error) {
+        logger.warn(
+          { err: error, itemId: item.id, propertyId },
+          'Seasonal maintenance-task promotion skipped during checklist generation',
+        );
+      }
+    }
+
+    const [totalTasks, tasksAdded] = await Promise.all([
+      prisma.seasonalChecklistItem.count({ where: { seasonalChecklistId: checklist.id } }),
+      prisma.seasonalChecklistItem.count({
+        where: {
+          seasonalChecklistId: checklist.id,
+          maintenanceTask: { isNot: null },
+        },
+      }),
+    ]);
+
+    return prisma.seasonalChecklist.update({
+      where: { id: checklist.id },
+      data: { totalTasks, tasksAdded },
+    });
   }
 
   /**

@@ -381,6 +381,15 @@ async function generateChecklistForProperty(
     `(excluded or inapplicable ${templates.length - filteredTemplates.length})`
   );
 
+  // UNKNOWN Property Context is not an empty checklist. Withhold the
+  // recommendation until enough facts exist to establish applicability.
+  if (filteredTemplates.length === 0) {
+    logger.info(
+      `[SEASONAL] No applicable ${season} ${year} tasks for property ${propertyId.substring(0, 8)}; checklist withheld`,
+    );
+    return;
+  }
+
   // Calculate season dates
   const seasonStartDate = getSeasonStartDate(season, year);
   const seasonEndDate = getSeasonEndDate(season, year);

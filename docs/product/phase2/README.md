@@ -320,6 +320,26 @@ Acceptance criteria:
 - Inline context capture remains on the Maintenance page and refreshes the suggestion without a redirect or full-page reload.
 - Safety boundaries remain accessible without dominating the default row presentation.
 
+## New-property guidance convergence
+
+Implemented July 23, 2026:
+
+- Personalized context signals use homeowner-facing labels and meaningful values instead of exposing internal camel-case trait keys such as `roofAgeYears`.
+- Property creation evaluates the current seasonal window before returning the new Home. Property edits reconcile the same checklist when newly supplied context makes a previously unknown task applicable.
+- Seasonal templates remain gated by canonical Property Context. Unknown, absent, association-managed, and landlord-managed features do not become speculative tasks.
+- A season with no proven-applicable templates does not create an empty checklist. The daily worker follows the same rule.
+- Home preserves action priority: canonical safety, incident, maintenance, seasonal, and other ranked actions render first.
+- Only when there are no ranked actions does incomplete Property Context replace the green all-clear state with a calm **Personalize your home guidance** setup card.
+- The green all-clear state is reserved for homes with no ranked actions and no missing, stale, or conflicting context.
+
+Acceptance criteria:
+
+- A new property does not wait for the overnight seasonal worker to receive currently applicable seasonal guidance.
+- Completing relevant property details can add newly applicable tasks without duplicating the current-season checklist or its maintenance tasks.
+- Missing context is never interpreted as proof that a feature exists or that a task applies.
+- Setup incompleteness never outranks a real action and does not increase the open-action count.
+- Context-map cards display labels such as **Roof age**, **Roof replacement timing**, and **Smoke detectors**, with values such as **About 2 years** and **Not overdue**.
+
 ## Validation
 
 Automated acceptance rerun July 20, 2026 from commit `830f565`:
