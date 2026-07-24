@@ -9,11 +9,13 @@ const {
   CapabilityReadinessResultSchema,
   CapabilityRecommendationContextSchema,
   CapabilityRankingResultSchema,
+  CapabilitySuggestionResponseSchema,
   CapabilitySuppressionResultSchema,
   CAPABILITY_MINIMUM_USEFUL_SCORE,
   CAPABILITY_RANKING_COMPONENT_WEIGHTS,
   applyCapabilityGovernancePolicy,
   applyCapabilitySuppressionPolicy,
+  buildCapabilitySuggestionResponse,
   buildCapabilityRecommendationContext,
   canonicalCapabilityRegistry,
   createToolCapabilityRegistry,
@@ -1335,5 +1337,169 @@ test('CAP-405 rejects stale suppression contracts before scoring', () => {
       suppressionResult: staleRegistryResult,
     }),
     /registry version/,
+  );
+});
+
+function buildRankedResult(context, registry = canonicalCapabilityRegistry) {
+  return rankCapabilityCandidates({
+    registry,
+    context,
+    suppressionResult: applyCapabilitySuppressionPolicy({
+      registry,
+      context,
+      governanceResult: govern(context, registry),
+    }),
+  });
+}
+
+function explain(context, registry = canonicalCapabilityRegistry) {
+  return buildCapabilitySuggestionResponse({
+    registry,
+    context,
+    rankingResult: buildRankedResult(context, registry),
+  });
+}
+
+test('CAP-406 builds a narrow suggestion from reviewed copy and structured lineage', () => {
+  const context = governedCoverageContext({
+    actionSourceMetadata: [{
+      actionId: 'action-1',
+      signalIntentFamilies: ['COVERAGE_GAPS_PRESENT'],
+    }],
+  });
+  const result = explain(context);
+  assert.doesNotThrow(() => CapabilitySuggestionResponseSchema.parse(result));
+  assert.equal(result.suggestions.length, 1);
+  const suggestion = result.suggestions[0];
+
+  assert.equal(suggestion.capabilityId, 'coverage-options');
+  assert.equal(suggestion.rank, 1);
+  assert.equal(suggestion.reasonCode, 'COVERAGE_GAPS_PRESENT');
+  assert.equal(
+    suggestion.whyNow,
+    'Confirmed coverage gaps make a coverage comparison useful now.',
+  );
+  assert.equal(suggestion.readiness.state, 'READY');
+  assert.equal(suggestion.source.actionId, 'action-1');
+  assert.equal(suggestion.contextVersion, 'context-v7');
+  assert.equal(suggestion.manifestVersion, 1);
+  assert.equal(
+    suggestion.launch.href,
+    '/dashboard/properties/property-1/tools/coverage-options',
+  );
+  assert.match(suggestion.recommendationVersion, /^capability-recommendation-v/);
+
+  const serialized = JSON.stringify(result);
+  assert.doesNotMatch(serialized, /totalScore|components|suppression|policy/);
+});
+
+test('CAP-406 explains bounded missing context for safe partial-value suggestions', () => {
+  const context = buildCapabilityRecommendationContext({
+    propertyId: 'property-1',
+    propertyContext: propertyContext(),
+    actions: [action({
+      source: {
+        kind: 'MAINTENANCE',
+        entityId: 'plant-context-1',
+        version: 'action-v1',
+      },
+      job: 'STAY_AHEAD',
+      priority: 'NOW',
+    })],
+    actionSourceMetadata: [{
+      actionId: 'action-1',
+      signalIntentFamilies: ['PLANT_SUITABLE_ROOM_CONTEXT'],
+    }],
+    availableCapabilityIds: ['plant-advisor'],
+    availabilityPolicyVersion: 'rollout-v2',
+    readinessMetrics: {
+      jurisdictionStatus: 'KNOWN',
+    },
+    governance: {
+      canUseCapabilities: true,
+      allowedSafetyTiers: ['LOW_CONSEQUENCE'],
+      evidenceAccess: 'ALLOWED',
+    },
+    surface: 'HOME',
+  });
+  const suggestion = explain(context).suggestions[0];
+
+  assert.equal(suggestion.capabilityId, 'plant-advisor');
+  assert.equal(suggestion.readiness.state, 'NEEDS_CONTEXT');
+  assert.equal(
+    suggestion.readiness.reasonCodes.includes('SOURCE_CONTEXT_UNKNOWN'),
+    true,
+  );
+  assert.equal(
+    suggestion.readiness.explanations.includes(
+      'Choose a room and provide its light context.',
+    ),
+    true,
+  );
+});
+
+test('CAP-406 omits evidence details when evidence access is restricted', () => {
+  const context = governedCoverageContext({
+    actionSourceMetadata: [{
+      actionId: 'action-1',
+      signalIntentFamilies: ['COVERAGE_GAPS_PRESENT'],
+    }],
+    governance: {
+      canUseCapabilities: true,
+      allowedSafetyTiers: ['REGULATED_COVERAGE'],
+      enforceApprovals: false,
+      evidenceAccess: 'REDACTED',
+      contextFreshness: 'CURRENT',
+    },
+  });
+  const suggestion = explain(context).suggestions[0];
+
+  assert.deepEqual(suggestion.evidence, {
+    mode: 'OMIT',
+    summary: null,
+    sourceObservedAt: null,
+    actionConfidence: null,
+    contextWarningCodes: [],
+  });
+});
+
+test('CAP-406 fails closed for unresolved route context', () => {
+  const coverage = structuredClone(
+    canonicalCapabilityRegistry.getById('coverage-options'),
+  );
+  coverage.destination.routeTemplate =
+    '/dashboard/properties/[id]/rooms/[roomId]/coverage';
+  coverage.recommendation.explicitRelatedCapabilityIds = [];
+  const registry = createToolCapabilityRegistry([coverage]);
+  const context = governedCoverageContext({
+    actionSourceMetadata: [{
+      actionId: 'action-1',
+      signalIntentFamilies: ['COVERAGE_GAPS_PRESENT'],
+    }],
+  });
+
+  assert.throws(
+    () => explain(context, registry),
+    /unresolved route parameters/,
+  );
+});
+
+test('CAP-406 rejects stale ranking contracts before building explanations', () => {
+  const context = governedCoverageContext({
+    actionSourceMetadata: [{
+      actionId: 'action-1',
+      signalIntentFamilies: ['COVERAGE_GAPS_PRESENT'],
+    }],
+  });
+  const rankingResult = buildRankedResult(context);
+  rankingResult.contextVersion = 'context-v0';
+
+  assert.throws(
+    () => buildCapabilitySuggestionResponse({
+      registry: canonicalCapabilityRegistry,
+      context,
+      rankingResult,
+    }),
+    /context version is stale/,
   );
 });

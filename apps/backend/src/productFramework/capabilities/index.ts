@@ -4,6 +4,7 @@ export * from './capabilityCandidateMatcher';
 export * from './capabilityCatalog.service';
 export * from './capabilityGoldenFixtures';
 export * from './capabilityGovernancePolicy';
+export * from './capabilityExplanationBuilder';
 export * from './capabilityRecommendationContext';
 export * from './capabilityRanking';
 export * from './capabilityReadinessEvaluator';
