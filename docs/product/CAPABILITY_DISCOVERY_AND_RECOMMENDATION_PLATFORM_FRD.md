@@ -11,6 +11,7 @@
 | Technical owners | Product Framework, Unified Home, Personalization, Frontend Platform |
 | Primary framework dependency | ContractToCozy Product Framework v1.0 |
 | Primary customer jobs | Stay Ahead; Decide With Confidence; Navigate Major Moments |
+| Implementation plan | [Capability Discovery and Recommendation Platform — Implementation Plan](./CAPABILITY_DISCOVERY_AND_RECOMMENDATION_IMPLEMENTATION_PLAN.md) |
 
 ---
 
