@@ -89,6 +89,49 @@ interface OpenMeteoArchiveResponse {
   };
 }
 
+type DailyWeatherArrays = NonNullable<OpenMeteoForecastResponse['daily']>;
+type HourlyWeatherArrays = NonNullable<OpenMeteoForecastResponse['hourly']>;
+
+export function upcomingHourlyWeather(
+  hourly: HourlyWeatherArrays,
+  currentLocalTime: string,
+): WeatherHourlyPoint[] {
+  return hourly.time
+    .map((time, i) => ({
+      time,
+      temperatureF: hourly.temperature_2m[i],
+      precipitationProbabilityPercent: hourly.precipitation_probability[i],
+      weatherCode: hourly.weather_code[i],
+    }))
+    .filter(point => point.time >= currentLocalTime)
+    .slice(0, 48);
+}
+
+export function partitionWeatherDays(
+  daily: DailyWeatherArrays,
+  localToday: string,
+  archivedHistory: WeatherHistoryPoint[] = [],
+): Pick<WeatherReportData, 'tenDayForecast' | 'thirtyDayHistory'> {
+  const allDaily = daily.time.map((date, i) => ({
+    date,
+    tempMaxF: daily.temperature_2m_max[i],
+    tempMinF: daily.temperature_2m_min[i],
+    precipitationSumIn: daily.precipitation_sum[i],
+    weatherCode: daily.weather_code[i],
+  }));
+  const tenDayForecast = allDaily.filter(day => day.date >= localToday);
+  const recentObserved = allDaily
+    .filter(day => day.date < localToday)
+    .map(({ weatherCode: _weatherCode, ...day }) => day);
+  const historyByDate = new Map(
+    [...archivedHistory, ...recentObserved].map(day => [day.date, day]),
+  );
+  const thirtyDayHistory = [...historyByDate.values()]
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .slice(-30);
+  return { tenDayForecast, thirtyDayHistory };
+}
+
 const cache = new TtlCache<WeatherReportData>(CACHE_TTL_MS);
 
 function cacheKey(lat: number, lon: number): string {
@@ -142,6 +185,9 @@ export async function getWeatherReport(lat: number, lon: number): Promise<Sectio
     forecastUrl.searchParams.set('hourly', 'temperature_2m,precipitation_probability,weather_code');
     forecastUrl.searchParams.set('daily', 'temperature_2m_max,temperature_2m_min,precipitation_sum,weather_code');
     forecastUrl.searchParams.set('forecast_days', '10');
+    // Forecast past-days are the authoritative source for the immediately
+    // preceding week. The archive API intentionally lags several days.
+    forecastUrl.searchParams.set('past_days', '7');
     forecastUrl.searchParams.set('temperature_unit', 'fahrenheit');
     forecastUrl.searchParams.set('wind_speed_unit', 'mph');
     forecastUrl.searchParams.set('precipitation_unit', 'inch');
@@ -184,22 +230,9 @@ export async function getWeatherReport(lat: number, lon: number): Promise<Sectio
       observedAt: forecast.current.time,
     };
 
-    const hourly: WeatherHourlyPoint[] = forecast.hourly.time.slice(0, 48).map((time, i) => ({
-      time,
-      temperatureF: forecast.hourly!.temperature_2m[i],
-      precipitationProbabilityPercent: forecast.hourly!.precipitation_probability[i],
-      weatherCode: forecast.hourly!.weather_code[i],
-    }));
+    const hourly = upcomingHourlyWeather(forecast.hourly, forecast.current.time);
 
-    const tenDayForecast: WeatherDailyForecastPoint[] = forecast.daily.time.map((date, i) => ({
-      date,
-      tempMaxF: forecast.daily!.temperature_2m_max[i],
-      tempMinF: forecast.daily!.temperature_2m_min[i],
-      precipitationSumIn: forecast.daily!.precipitation_sum[i],
-      weatherCode: forecast.daily!.weather_code[i],
-    }));
-
-    const thirtyDayHistory: WeatherHistoryPoint[] = archive?.daily
+    const archivedHistory: WeatherHistoryPoint[] = archive?.daily
       ? archive.daily.time.map((date, i) => ({
           date,
           tempMaxF: archive.daily!.temperature_2m_max[i],
@@ -207,6 +240,11 @@ export async function getWeatherReport(lat: number, lon: number): Promise<Sectio
           precipitationSumIn: archive.daily!.precipitation_sum[i],
         }))
       : []; // archive failing doesn't sink the whole section — current/forecast are the priority
+    const { tenDayForecast, thirtyDayHistory } = partitionWeatherDays(
+      forecast.daily,
+      forecast.current.time.slice(0, 10),
+      archivedHistory,
+    );
 
     const data: WeatherReportData = { current, hourly, tenDayForecast, thirtyDayHistory };
     cache.set(key, data);

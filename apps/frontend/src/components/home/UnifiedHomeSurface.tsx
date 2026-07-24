@@ -10,6 +10,7 @@ import {
   Check,
   Clock3,
   CloudLightning,
+  CloudSun,
   CalendarDays,
   FileCheck2,
   Home,
@@ -19,7 +20,12 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { api } from '@/lib/api/client';
-import type { HomeActionCommand, RankedHomeActionDTO, UnifiedHomeDTO } from '@/types';
+import type {
+  HomeActionCommand,
+  HomeFirstValueInsightDTO,
+  RankedHomeActionDTO,
+  UnifiedHomeDTO,
+} from '@/types';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -44,6 +50,10 @@ export function isSeasonalChecklistAction(action: RankedHomeActionDTO): boolean 
   return action.source.kind === 'MAINTENANCE' && action.id.startsWith('seasonal-checklist:');
 }
 
+export function isEnvironmentAction(action: RankedHomeActionDTO): boolean {
+  return action.source.kind === 'MAINTENANCE' && action.id.startsWith('environment:');
+}
+
 export function isCriticalWeatherAction(action: RankedHomeActionDTO): boolean {
   return action.source.kind === 'INCIDENT' &&
     action.governance.safetyTier === 'SAFETY_EMERGENCY' &&
@@ -54,10 +64,12 @@ export type AttentionEntry =
   | { kind: 'ACTION'; action: RankedHomeActionDTO }
   | { kind: 'SEASONAL_CHECKLIST'; action: RankedHomeActionDTO }
   | { kind: 'CRITICAL_WEATHER'; action: RankedHomeActionDTO }
+  | { kind: 'ENVIRONMENT'; action: RankedHomeActionDTO }
   | { kind: 'COVERAGE_CORRECTION_GROUP'; actions: RankedHomeActionDTO[]; subjects: string[] };
 
 function entryForAction(action: RankedHomeActionDTO): AttentionEntry {
   if (isCriticalWeatherAction(action)) return { kind: 'CRITICAL_WEATHER', action };
+  if (isEnvironmentAction(action)) return { kind: 'ENVIRONMENT', action };
   if (isSeasonalChecklistAction(action)) return { kind: 'SEASONAL_CHECKLIST', action };
   return { kind: 'ACTION', action };
 }
@@ -86,7 +98,11 @@ export function resolveHomeAttentionState(
     UnifiedHomeDTO['propertyContext'],
     'missingFactCount' | 'conflictedFactCount' | 'staleFactCount'
   >,
-): 'ACTIONS' | 'SETUP' | 'ALL_CLEAR' {
+  hasFirstValueInsight = false,
+  highPriorityActionCount = actionCount,
+): 'ACTIONS' | 'OUTLOOK' | 'SETUP' | 'ALL_CLEAR' {
+  if (highPriorityActionCount > 0) return 'ACTIONS';
+  if (hasFirstValueInsight) return 'OUTLOOK';
   if (actionCount > 0) return 'ACTIONS';
   if (context.missingFactCount > 0 || context.conflictedFactCount > 0 || context.staleFactCount > 0) {
     return 'SETUP';
@@ -137,6 +153,138 @@ export function CriticalWeatherActionCard({
               </Link>
             </Button>
           </div>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function formattedEnvironmentWindow(action: RankedHomeActionDTO): string | null {
+  const start = action.timing.windowStart ? new Date(action.timing.windowStart) : null;
+  const end = action.timing.windowEnd ? new Date(action.timing.windowEnd) : null;
+  if (start && !Number.isNaN(start.getTime()) && end && !Number.isNaN(end.getTime())) {
+    const startLabel = start.toLocaleDateString([], { month: 'short', day: 'numeric' });
+    const endLabel = end.toLocaleDateString([], { month: 'short', day: 'numeric' });
+    return startLabel === endLabel ? startLabel : `${startLabel}–${endLabel}`;
+  }
+  return formattedAlertExpiry(action.timing.dueAt);
+}
+
+export function EnvironmentActionCard({
+  action,
+  propertyId,
+  onChanged,
+}: {
+  action: RankedHomeActionDTO;
+  propertyId: string;
+  onChanged: () => Promise<unknown>;
+}) {
+  const { toast } = useToast();
+  const [pending, setPending] = React.useState<HomeActionCommand | null>(null);
+  const windowLabel = formattedEnvironmentWindow(action);
+  const canComplete = action.feedbackControls.includes('COMPLETE');
+  const windowEndMs = action.timing.windowEnd ? new Date(action.timing.windowEnd).getTime() : Number.NaN;
+  const canDefer = (action.feedbackControls.includes('DEFER') || action.feedbackControls.includes('SNOOZE')) &&
+    (Number.isNaN(windowEndMs) || windowEndMs > Date.now() + 2 * 60 * 60 * 1000);
+
+  const execute = async (command: HomeActionCommand) => {
+    setPending(command);
+    try {
+      let nextTriggerAt: string | null = null;
+      if (['DEFER', 'SNOOZE'].includes(command)) {
+        const tomorrow = Date.now() + 24 * 60 * 60 * 1000;
+        const expiry = action.timing.windowEnd ? new Date(action.timing.windowEnd).getTime() : Number.NaN;
+        const bounded = Number.isNaN(expiry) ? tomorrow : Math.min(tomorrow, expiry - 60 * 60 * 1000);
+        nextTriggerAt = new Date(Math.max(Date.now() + 60 * 60 * 1000, bounded)).toISOString();
+      }
+      const response = await api.executeHomeActionCommand(propertyId, action.id, {
+        command,
+        nextTriggerAt,
+        consequenceAcknowledged: ['DEFER', 'DISMISS', 'NOT_RELEVANT'].includes(command),
+      });
+      if (!response.success) throw new Error(response.message || 'Unable to update this action.');
+      toast({ title: command === 'COMPLETE' ? 'Preparation marked complete' : 'Weather action updated' });
+      await onChanged();
+    } catch (error) {
+      toast({
+        title: 'Unable to update weather action',
+        description: error instanceof Error ? error.message : 'Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setPending(null);
+    }
+  };
+
+  return (
+    <article className="rounded-2xl border-2 border-amber-300 bg-gradient-to-br from-amber-50 to-orange-50/70 p-5 shadow-sm" role="status">
+      <div className="flex items-start gap-3">
+        <div className="rounded-xl bg-amber-100 p-2.5 text-amber-700"><AlertTriangle className="h-5 w-5" /></div>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge className="rounded-full bg-amber-600 text-white hover:bg-amber-600">Environment action recommended</Badge>
+            <Badge variant="outline" className={priorityTone(action.priority)}>{action.priority}</Badge>
+            {windowLabel && <span className="text-xs font-medium text-amber-800">{windowLabel}</span>}
+          </div>
+          <h3 className="mt-3 text-lg font-semibold text-slate-950">{action.signal}</h3>
+          <p className="mt-1 text-sm leading-6 text-slate-700">{action.whyItMatters}</p>
+          <div className="mt-3 rounded-xl border border-amber-200 bg-white/80 p-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-amber-800">Recommended preparation</p>
+            <p className="mt-1 text-sm font-medium leading-6 text-slate-800">{action.recommendedAction}</p>
+          </div>
+          <p className="mt-2 text-xs text-slate-500">Source: {action.evidence[0]?.source}</p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Button asChild size="sm" className="rounded-full bg-amber-700 hover:bg-amber-800">
+              <Link href={action.primaryCta.href} onClick={() => { void api.recordHomeActionOpened(propertyId, action.id); }}>
+                {action.primaryCta.label}<ArrowRight className="ml-1 h-3.5 w-3.5" />
+              </Link>
+            </Button>
+            {canComplete && (
+              <Button size="sm" variant="outline" className="rounded-full bg-white" disabled={Boolean(pending)} onClick={() => execute('COMPLETE')}>
+                <Check className="mr-1 h-3.5 w-3.5" />Mark prepared
+              </Button>
+            )}
+            {canDefer && (
+              <Button size="sm" variant="outline" className="rounded-full bg-white" disabled={Boolean(pending)} onClick={() => execute(action.feedbackControls.includes('DEFER') ? 'DEFER' : 'SNOOZE')}>
+                <Clock3 className="mr-1 h-3.5 w-3.5" />Remind tomorrow
+              </Button>
+            )}
+            {action.feedbackControls.includes('NOT_RELEVANT') && (
+              <Button size="sm" variant="ghost" className="rounded-full text-slate-600" disabled={Boolean(pending)} onClick={() => execute('NOT_RELEVANT')}>
+                Not relevant
+              </Button>
+            )}
+          </div>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function HomeFirstValueInsightCard({ insight }: { insight: HomeFirstValueInsightDTO }) {
+  const watch = insight.kind === 'WATCH';
+  return (
+    <article className={watch
+      ? 'rounded-2xl border border-sky-200 bg-gradient-to-br from-white to-sky-50 p-5 shadow-sm'
+      : 'rounded-2xl border border-emerald-200 bg-gradient-to-br from-white to-emerald-50 p-5 shadow-sm'}>
+      <div className="flex items-start gap-3">
+        <div className={watch ? 'rounded-xl bg-sky-100 p-2.5 text-sky-700' : 'rounded-xl bg-emerald-100 p-2.5 text-emerald-700'}>
+          <CloudSun className="h-5 w-5" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="outline" className={watch ? 'border-sky-200 bg-sky-50 text-sky-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700'}>
+              {insight.badge}
+            </Badge>
+            {insight.timeframe && <span className="text-xs text-slate-500">{insight.timeframe}</span>}
+          </div>
+          <h3 className="mt-3 text-lg font-semibold text-slate-950">{insight.title}</h3>
+          <p className="mt-1 text-sm leading-6 text-slate-700">{insight.summary}</p>
+          <p className="mt-2 text-sm leading-6 text-slate-600">{insight.detail}</p>
+          <p className="mt-2 text-xs text-slate-500">Source: {insight.source}</p>
+          <Button asChild size="sm" variant="outline" className="mt-4 rounded-full bg-white">
+            <Link href={insight.href}>View full home outlook<ArrowRight className="ml-1 h-3.5 w-3.5" /></Link>
+          </Button>
         </div>
       </div>
     </article>
@@ -380,7 +528,12 @@ export function UnifiedHomeSurface({ propertyId }: { propertyId: string }) {
   const home = query.data;
   const attentionEntries = groupAttentionActions(home.attention.actions);
   const visibleAttentionEntries = attentionEntries.slice(0, 5);
-  const attentionState = resolveHomeAttentionState(home.attention.actions.length, home.propertyContext);
+  const attentionState = resolveHomeAttentionState(
+    home.attention.actions.length,
+    home.propertyContext,
+    Boolean(home.attention.firstValueInsight),
+    home.attention.actions.filter(action => action.priority === 'NOW' || action.priority === 'SOON').length,
+  );
   const setupMessage = home.propertyContext.conflictedFactCount > 0
     ? 'Review conflicting home details so recommendations use the right information.'
     : home.propertyContext.staleFactCount > 0
@@ -447,14 +600,38 @@ export function UnifiedHomeSurface({ propertyId }: { propertyId: string }) {
 
       <section aria-labelledby="attention-heading" className="space-y-3">
         <div className="flex items-end justify-between gap-4">
-          <div><h2 id="attention-heading" className="text-xl font-semibold text-slate-950">What needs attention</h2><p className="text-sm text-slate-500">A limited, ranked list with the reason and next move.</p></div>
+          <div>
+            <h2 id="attention-heading" className="text-xl font-semibold text-slate-950">
+              {attentionState === 'OUTLOOK' ? 'Your first home outlook' : 'What needs attention'}
+            </h2>
+            <p className="text-sm text-slate-500">
+              {attentionState === 'OUTLOOK'
+                ? 'A location-specific result based on current and recent area conditions.'
+                : 'A limited, ranked list with the reason and next move.'}
+            </p>
+          </div>
           {home.attention.totalCount > 0 && (
             <Button asChild variant="ghost" size="sm" className="rounded-full text-teal-700 hover:text-teal-800">
               <Link href={home.attention.planHref}>View full action plan</Link>
             </Button>
           )}
         </div>
-        {attentionState === 'SETUP' ? (
+        {attentionState === 'OUTLOOK' && home.attention.firstValueInsight ? (
+          <>
+            <HomeFirstValueInsightCard insight={home.attention.firstValueInsight} />
+            {(home.propertyContext.missingFactCount > 0 || home.propertyContext.conflictedFactCount > 0 || home.propertyContext.staleFactCount > 0) && (
+              <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="font-medium text-slate-900">Make future guidance more specific to this home</p>
+                  <p className="mt-0.5 text-slate-600">{setupMessage}</p>
+                </div>
+                <Button asChild size="sm" variant="outline" className="shrink-0 rounded-full">
+                  <Link href={home.glance.recordHref}>{setupCtaLabel}<ArrowRight className="ml-1 h-3.5 w-3.5" /></Link>
+                </Button>
+              </div>
+            )}
+          </>
+        ) : attentionState === 'SETUP' ? (
           <div className="rounded-[24px] border border-sky-200 bg-gradient-to-br from-white to-sky-50 p-5 shadow-sm">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-start gap-3">
@@ -487,6 +664,8 @@ export function UnifiedHomeSurface({ propertyId }: { propertyId: string }) {
           <ActionCard key={entry.action.id} action={entry.action} propertyId={propertyId} onChanged={() => query.refetch()} />
         ) : entry.kind === 'CRITICAL_WEATHER' ? (
           <CriticalWeatherActionCard key={entry.action.id} action={entry.action} propertyId={propertyId} />
+        ) : entry.kind === 'ENVIRONMENT' ? (
+          <EnvironmentActionCard key={entry.action.id} action={entry.action} propertyId={propertyId} onChanged={() => query.refetch()} />
         ) : entry.kind === 'SEASONAL_CHECKLIST' ? (
           <SeasonalChecklistActionCard key={entry.action.id} action={entry.action} propertyId={propertyId} />
         ) : (

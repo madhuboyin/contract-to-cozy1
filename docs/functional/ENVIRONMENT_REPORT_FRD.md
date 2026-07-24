@@ -1,6 +1,6 @@
 # Environment Report — Functional Requirements Document
 
-**Version:** 1.2
+**Version:** 1.3
 **Last Updated:** 2026-07-24
 **Status:** Implemented, including property-aware weather preparation checklists
 **Audience:** Product, design, frontend engineering, backend engineering, data engineering, QA, support
@@ -249,6 +249,9 @@ Every insight must support:
 - FR-3.4: `action` insights must sort before `watch`, and `watch` before `info`.
 - FR-3.5: Each insight must include category, severity, timing, affected systems, recommended actions, CTA, and source.
 - FR-3.6: Missing data must not prevent baseline safety guidance.
+- FR-3.7: Weather insight copy must be grounded in the property coordinates, the local forecast, and the immediately preceding seven days when recent history changes the interpretation.
+- FR-3.8: Season labels must follow the effective local forecast date. Out-of-season hazards may surface only when observed or forecast data crosses the normal hazard threshold, and must be labeled as unseasonable.
+- FR-3.9: Pleasant conditions must produce a verified outlook rather than a fabricated risk statement.
 
 ### FR-4: Property Personalization
 
@@ -326,6 +329,17 @@ Every insight must support:
 - FR-11.5: Seasonal guidance must remain conditional and direct homeowners to verify species suitability locally.
 - FR-11.6: Outdoor Resilience landscaping design remains future scope.
 
+### FR-12: Unified Home First Value and Priority
+
+- FR-12.1: Canonical `NOW` and `SOON` Home Actions must render before a passive first-value outlook.
+- FR-12.2: Official critical weather Incidents retain the red authoritative alert treatment and must not be relabeled as computed forecast insights.
+- FR-12.3: Computed `action` environment insights must use a prominent amber Environment Action card whose headline is the hazard signal, not an individual setup or maintenance question.
+- FR-12.4: Computed `watch` insights may provide first value when no `NOW` or `SOON` action exists.
+- FR-12.5: When no insight threshold is crossed, Home must explain the location-specific conditions and categories evaluated and provide a verified outlook.
+- FR-12.6: Property setup remains a secondary refinement prompt and must not replace a grounded outlook.
+- FR-12.7: Exploratory onboarding with `NONE_EXPLORING` must not manufacture a high-priority setup action.
+- FR-12.8: Environment action reminders must stay inside the effective weather window; a fixed seven-day reminder must not outlive the condition.
+
 ---
 
 ## 8. Insight and Personalization Rules
@@ -334,7 +348,7 @@ Every insight must support:
 
 | Category | Trigger | Default priority | Home-context modifiers |
 |---|---|---|---|
-| Heavy rain | Daily precipitation ≥ 1.0 inch | Watch | Action when ≥ 2.0 inches, drainage issue, or mapped high-exposure FEMA zone |
+| Heavy rain | Daily precipitation ≥ 1.0 inch, or ≥ 3.0 inches in the recent seven-day area history | Watch | Action when forecast ≥ 2.0 inches, recent rain ≥ 2.5 inches plus more rain forecast, drainage issue, or mapped high-exposure FEMA zone |
 | Snow | WMO snow code | Watch | Action for heavy snow, flat roof, or roof ≥ 20 years since replacement |
 | Freeze | Daily low ≤ 28°F without snow code | Watch | Action at ≤ 20°F or heat pump with no backup heat |
 | Heat | Daily high ≥ 95°F | Watch | Action for multi-day heat, ≥ 100°F, or HVAC ≥ 15 years old |
@@ -350,7 +364,15 @@ Every insight must support:
 
 Insight severity is not identical to Incident severity. Incident severity uses `INFO`, `WARNING`, and `CRITICAL` and includes authoritative alert inputs, exposure, likelihood, time sensitivity, coverage clarity, mitigation, and a bounded home-vulnerability adjustment.
 
-### 8.3 Explainability
+### 8.3 Season and Recent-Trend Semantics
+
+- The live Forecast API supplies seven past local days in the same request as the ten-day forecast. Past dates are partitioned into history, prepended past hours are excluded from the 48-hour forecast, and past values can never be evaluated as future threats.
+- Recent rainfall affects saturated-ground interpretation and may produce a bounded post-event drainage insight.
+- Recent hot-day counts add area-trend evidence to a forecast heat insight; they do not create a heat claim when current and forecast conditions remain below the heat threshold.
+- Season changes presentation and fallback categories, not the underlying evidence threshold. A real out-of-season threshold crossing remains visible and is labeled unseasonable.
+- A quiet outlook states that no configured threshold was crossed; it does not guarantee that no weather risk exists.
+
+### 8.4 Explainability
 
 Recommendations must be reconstructable from:
 
@@ -823,6 +845,17 @@ Analytics listed here are future requirements unless already emitted by the unde
   checklist remains resumable.
 - [ ] The checklist has loading, retry, completed, and stale-insight states.
 
+### 20.8 Unified Home First Value
+
+- [ ] `NOW` and `SOON` actions precede every outlook and lower-priority action.
+- [ ] Official critical alerts use the authoritative critical-weather card.
+- [ ] Computed action insights use the amber Environment Action card and show the hazard as the headline.
+- [ ] A watch insight becomes the first-value result only when no high-priority action exists.
+- [ ] Pleasant conditions produce a season- and area-specific verified outlook.
+- [ ] Setup guidance appears only as a secondary refinement prompt when an outlook is available.
+- [ ] Recent forecast past-days are history and never trigger a future-condition card.
+- [ ] Environment snooze/reminder timing cannot extend beyond the effective weather window.
+
 ---
 
 ## 21. Testing Strategy
@@ -887,7 +920,7 @@ Analytics listed here are future requirements unless already emitted by the unde
 ### 22.1 Implemented Assumptions
 
 1. **Weather thresholds are product heuristics, not official alert thresholds.** One inch of daily rain, 95°F heat, 28°F freeze, AQI > 100, and D2 drought are used to initiate preparation guidance.
-2. **Open-Meteo daily precipitation is sufficient for current heavy-rain detection.** Short-duration rainfall intensity is not yet available in the report contract.
+2. **Open-Meteo daily precipitation is sufficient for current heavy-rain detection.** The Forecast API supplies the immediately preceding seven local days and the Archive API supplies the older 30-day context. Short-duration rainfall intensity is not yet available in the report contract.
 3. **FEMA point-zone intersection represents mapped exposure at the supplied coordinate.** It does not prove the structure is inside a surveyed floodplain or predict damage.
 4. **EPA radon zone is regional potential, not a property test result.** Testing remains the only way to confirm property radon.
 5. **EPA ECHO facilities within one mile provide useful proximity context.** Presence does not by itself mean household exposure.
@@ -904,6 +937,8 @@ selected insight and its property-aware actions are snapshotted into a
 insights continue to be computed-only.
 13. **Property vulnerability may only add Incident severity points.** It must not downgrade an official safety signal.
 14. **Facility proximity SVG is contextual, not a navigational map.** Coordinates are real, but it does not provide streets, parcel boundaries, or exposure modeling.
+15. **A verified quiet outlook is a bounded threshold result, not a safety guarantee.** It names the location, window, categories, source, and current temperature used.
+16. **Exploratory setup is not an urgent action.** `NONE_EXPLORING` is `CONSIDER`; explicit homeowner triggers and canonical `NOW`/`SOON` work retain precedence.
 
 ### 22.2 Resolved Product Decisions
 
@@ -920,7 +955,7 @@ insights continue to be computed-only.
 
 | Limitation/risk | Impact | Mitigation/future direction |
 |---|---|---|
-| Fixed national trigger thresholds | Local expectations vary | Regional/seasonal calibration |
+| Fixed national trigger thresholds | Local expectations vary even though copy and recent-trend evidence are season/location aware | Regional thresholds calibrated against climate normals |
 | Daily rain total lacks intensity | Flash-flood risk may be understated | Add hourly precipitation amount and NWS alert context |
 | Filter thickness/household sensitivity not modeled | 30/90-day guidance is approximate | Capture filter type, pets, allergies, smoke exposure |
 | No persisted insight lifecycle | Cannot snooze/acknowledge insight itself | Add insight state model or reuse guidance lifecycle |
@@ -939,7 +974,7 @@ insights continue to be computed-only.
 
 - Persist insight acknowledgement, snooze, dismiss, and completion state.
 - Add structured explanation trace (`propertyReasons[]`, rule ID, threshold, confidence).
-- Add post-event follow-up: “Rain has passed—inspect basement and drainage.”
+- Expand the implemented recent-heavy-rain follow-up with persisted acknowledgement and completion analytics.
 - Add filter thickness, pets, allergies/sensitivity, and smoke-exposure context.
 - Add completed seasonal checklist and Habit Coach history to recommendations.
 - Add analytics events defined in Section 19.

@@ -349,6 +349,64 @@ Acceptance criteria:
 - Setup incompleteness never outranks a real action and does not increase the open-action count.
 - Context-map cards display labels such as **Roof age**, **Roof replacement timing**, and **Smoke detectors**, with values such as **About 2 years** and **Not overdue**.
 
+## Grounded first-value Home outlook and environment hierarchy
+
+Implemented July 24, 2026:
+
+- Canonical ranking now enforces the priority buckets before score:
+  `NOW`, `SOON`, `PLAN`, then `CONSIDER`. A high-scoring long-range action can
+  no longer render above time-sensitive work.
+- Official critical weather Incidents retain the red authoritative alert card.
+  Computed forecast/history insights use a distinct amber Environment Action
+  card, with the hazard signal as the headline and the maintenance/setup step as
+  supporting preparation.
+- Action-severity Environment insights remain canonical lifecycle-aware Home
+  Actions. Watch insights and verified quiet outlooks are passive first-value
+  content and do not inflate the open-action count.
+- When no `NOW` or `SOON` action exists, Home may lead with a location-specific
+  watch insight or a verified seasonal ten-day outlook. Property setup remains
+  available immediately below as a smaller refinement prompt.
+- `NONE_EXPLORING` onboarding is classified as `CONSIDER`, preventing a generic
+  setup action from displacing evidence-backed first value. Explicit homeowner
+  triggers retain their existing `NOW` or `SOON` behavior.
+- The Open-Meteo forecast request now includes seven local past days. The
+  backend partitions those dates into recent history before insight evaluation,
+  merges them with older archive data, excludes prepended past hours from the
+  48-hour forecast, and never interprets a past date as a future threat.
+- Heat and rain explanations incorporate recent area observations when the
+  trend changes the interpretation. Recent heavy rain can produce a bounded
+  post-event drainage insight; out-of-season heat, freeze, or snow is shown only
+  after a real threshold crossing and is labeled unseasonable.
+- Pleasant weather produces a bounded result that names the area, season,
+  ten-day window, categories evaluated, current temperature, and source. It does
+  not claim that all weather risk is absent.
+- Environment reminders use a one-day cadence bounded by the insight expiry
+  instead of the generic seven-day action deferral.
+
+Impact:
+
+- No Prisma migration or backfill is required.
+- No additional weather-provider request is introduced. Recent history is added
+  to the existing Forecast API call; the Archive API remains for older history.
+- The Unified Home response adds nullable `firstValueInsight` content. Existing
+  action arrays and counts retain their meaning.
+- Expected visible reordering is intentional anywhere a lower-priority action
+  previously outscored `NOW` or `SOON`.
+- Provider failure remains fail-closed for risk claims. Home shows a transparent
+  monitoring-ready state rather than fabricating local conditions.
+
+Acceptance criteria:
+
+- `NOW`/`SOON` work always precedes an outlook and `PLAN`/`CONSIDER` work.
+- Environment Action cards lead with the hazard, timing, and area evidence.
+- Official alerts are never relabeled as computed severe-weather alerts.
+- A new exploratory property receives a grounded watch/quiet outlook when live
+  evidence is available, even if Property Context is incomplete.
+- Setup remains secondary to useful evidence and never becomes a fabricated
+  urgency signal.
+- Winter does not receive generic heat-wave copy, and pleasant conditions do
+  not receive heavy-rain or severe-weather claims.
+
 ## Validation
 
 Automated acceptance rerun July 20, 2026 from commit `830f565`:

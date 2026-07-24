@@ -307,11 +307,24 @@ export type RankedHomeActionDTO = ActivationHomeActionDTO & {
   deduplication: { canonicalKey: string; mergedActionIds: string[] };
 };
 
+export type HomeFirstValueInsightDTO = {
+  kind: 'WATCH' | 'VERIFIED_OUTLOOK' | 'MONITORING_READY';
+  badge: string;
+  title: string;
+  summary: string;
+  detail: string;
+  timeframe: string | null;
+  source: string;
+  href: string;
+  generatedAt: string;
+};
+
 export type HomeActionFeedDTO = {
   contractVersion: 'phase2-v1';
   propertyId: string;
   generatedAt: string;
   actions: RankedHomeActionDTO[];
+  firstValueInsight: HomeFirstValueInsightDTO | null;
   buckets: Record<'NOW' | 'SOON' | 'PLAN' | 'CONSIDER', RankedHomeActionDTO[]>;
   diagnostics: {
     candidateCount: number;
@@ -351,6 +364,7 @@ export type UnifiedHomeDTO = {
     actions: RankedHomeActionDTO[];
     totalCount: number;
     planHref: string;
+    firstValueInsight: HomeFirstValueInsightDTO | null;
   };
   decisions: RankedHomeActionDTO[];
   activeMajorMoment: null | {

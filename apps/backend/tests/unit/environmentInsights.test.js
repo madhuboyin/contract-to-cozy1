@@ -131,6 +131,42 @@ test('detects multi-day heat and recommends cooling-system preparation', () => {
   assert.equal(insights[0].actions[1].label, 'Find an HVAC professional');
 });
 
+test('grounds heat guidance in recent area history and labels out-of-season anomalies', () => {
+  const input = sections();
+  input.weather.data.current.observedAt = '2026-01-12T12:00:00Z';
+  input.weather.data.thirtyDayHistory = [
+    { date: '2026-01-09', tempMaxF: 92, tempMinF: 70, precipitationSumIn: 0 },
+    { date: '2026-01-10', tempMaxF: 94, tempMinF: 71, precipitationSumIn: 0 },
+    { date: '2026-01-11', tempMaxF: 93, tempMinF: 72, precipitationSumIn: 0 },
+  ];
+  input.weather.data.tenDayForecast.push(
+    { date: '2026-01-13', tempMaxF: 96, tempMinF: 73, precipitationSumIn: 0, weatherCode: 0 },
+    { date: '2026-01-14', tempMaxF: 97, tempMinF: 74, precipitationSumIn: 0, weatherCode: 0 },
+  );
+
+  const insight = deriveEnvironmentInsights(property, input)[0];
+  assert.match(insight.title, /Unseasonable multi-day heat risk/i);
+  assert.match(insight.summary, /3 of the previous 3 days reached 90°F/i);
+  assert.match(insight.source, /recent history/i);
+});
+
+test('uses substantial recent area rainfall for a property-specific post-event insight', () => {
+  const input = sections();
+  input.weather.data.current.observedAt = '2026-07-18T12:00:00Z';
+  input.weather.data.thirtyDayHistory = [
+    { date: '2026-07-15', tempMaxF: 80, tempMinF: 68, precipitationSumIn: 1.4 },
+    { date: '2026-07-16', tempMaxF: 79, tempMinF: 67, precipitationSumIn: 1.1 },
+    { date: '2026-07-17', tempMaxF: 81, tempMinF: 69, precipitationSumIn: 0.8 },
+  ];
+
+  const insight = deriveEnvironmentInsights({ ...property, hasDrainageIssues: true }, input)[0];
+  assert.equal(insight.category, 'rain');
+  assert.equal(insight.severity, 'action');
+  assert.match(insight.title, /Recent heavy rain/i);
+  assert.match(insight.summary, /3.3 inches/i);
+  assert.match(insight.source, /recent history and property profile/i);
+});
+
 test('prioritizes action insights above watch insights', () => {
   const input = sections();
   input.weather.data.tenDayForecast.push({

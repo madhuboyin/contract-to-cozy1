@@ -28,6 +28,7 @@ import {
   type InventoryCoveragePresentation,
 } from './inventoryCoverageState.service';
 import { getEnvironmentReportForProperty } from './environmentReport.service';
+import { buildHomeFirstValueInsight } from './environment/environmentHomeOutlook.service';
 
 export const HOME_ACTION_COMMANDS = [
   'COMPLETE',
@@ -230,8 +231,17 @@ export function rankAndDeduplicateHomeActions(actions: HomeAction[]): RankedHome
     }
   }
 
+  const priorityOrder: Record<HomeAction['priority'], number> = {
+    NOW: 0,
+    SOON: 1,
+    PLAN: 2,
+    CONSIDER: 3,
+  };
   return [...byCanonicalKey.entries()]
-    .sort(([, a], [, b]) => b.score.score - a.score.score || a.winner.id.localeCompare(b.winner.id))
+    .sort(([, a], [, b]) =>
+      priorityOrder[a.winner.priority] - priorityOrder[b.winner.priority] ||
+      b.score.score - a.score.score ||
+      a.winner.id.localeCompare(b.winner.id))
     .map(([canonicalKey, entry], index) => ({
       ...entry.winner,
       ranking: { rank: index + 1, ...entry.score },
@@ -262,6 +272,7 @@ export async function getHomeActionFeed(propertyId: string, userId: string) {
     logger.warn({ err: error, propertyId, userId }, 'Unified Home personalization materialization failed closed');
   }
   const environmentReport = await environmentReportPromise;
+  const firstValueInsight = buildHomeFirstValueInsight(environmentReport);
   const promoted = await getPromotedHomeActions(propertyId, prisma, {
     includePersonalization: Boolean(personalization && !personalization.paused),
     environmentInsights: environmentReport?.insights ?? [],
@@ -303,6 +314,7 @@ export async function getHomeActionFeed(propertyId: string, userId: string) {
     propertyId,
     generatedAt: new Date().toISOString(),
     actions,
+    firstValueInsight,
     buckets: {
       NOW: actions.filter((action) => action.priority === 'NOW'),
       SOON: actions.filter((action) => action.priority === 'SOON'),
@@ -491,6 +503,7 @@ export async function getUnifiedHome(propertyId: string, userId: string) {
       actions: feed.actions,
       totalCount: feed.actions.length,
       planHref: `/dashboard/properties/${propertyId}/action-plan`,
+      firstValueInsight: feed.firstValueInsight,
     },
     decisions,
     activeMajorMoment,

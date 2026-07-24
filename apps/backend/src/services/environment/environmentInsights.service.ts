@@ -189,6 +189,44 @@ function rainProtectionAction(property: EnvironmentInsightProperty): string {
   return 'Check the lowest level and confirm water can drain away from the foundation.';
 }
 
+type MeteorologicalSeason = 'winter' | 'spring' | 'summer' | 'fall';
+
+export function meteorologicalSeason(dateValue: string): MeteorologicalSeason {
+  const month = Number(dateValue.slice(5, 7));
+  if ([12, 1, 2].includes(month)) return 'winter';
+  if ([3, 4, 5].includes(month)) return 'spring';
+  if ([6, 7, 8].includes(month)) return 'summer';
+  return 'fall';
+}
+
+function recentWeatherHistory(weather: WeatherReportData, days = 7) {
+  return [...weather.thirtyDayHistory]
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .slice(-days);
+}
+
+function recentRainContext(weather: WeatherReportData): { totalInches: number; sentence: string | null } {
+  const recent = recentWeatherHistory(weather);
+  const totalInches = recent.reduce((sum, day) => sum + day.precipitationSumIn, 0);
+  return {
+    totalInches,
+    sentence: totalInches >= 1.5 && recent.length > 0
+      ? `The area recorded about ${totalInches.toFixed(1)} inches of precipitation over the previous ${recent.length} days.`
+      : null,
+  };
+}
+
+function recentHeatContext(weather: WeatherReportData): { hotDayCount: number; sentence: string | null } {
+  const recent = recentWeatherHistory(weather);
+  const hotDayCount = recent.filter(day => day.tempMaxF >= 90).length;
+  return {
+    hotDayCount,
+    sentence: hotDayCount >= 2
+      ? `${hotDayCount} of the previous ${recent.length} days reached 90°F or higher in this area.`
+      : null,
+  };
+}
+
 export function deriveEnvironmentInsights(
   property: EnvironmentInsightProperty,
   sections: EnvironmentInsightSections
@@ -198,21 +236,28 @@ export function deriveEnvironmentInsights(
   const flood = sections.floodElevation.status === 'ok' ? sections.floodElevation.data : null;
 
   if (weather) {
+    const recentRain = recentRainContext(weather);
+    const recentHeat = recentHeatContext(weather);
     const rainDay = weather.tenDayForecast.find(day => day.precipitationSumIn >= 1);
     if (rainDay) {
       const insightId = `heavy-rain-${rainDay.date}`;
       const elevatedPropertyRisk = Boolean(property.hasDrainageIssues || isFloodZone(flood?.femaFloodZone ?? null));
+      const saturatedGroundRisk = recentRain.totalInches >= 2.5;
       const reasons = [
         property.hasDrainageIssues ? 'recorded drainage issues' : null,
         isFloodZone(flood?.femaFloodZone ?? null) ? `FEMA flood zone ${flood?.femaFloodZone}` : null,
+        saturatedGroundRisk ? 'substantial recent rainfall' : null,
       ].filter(Boolean);
       insights.push({
         id: insightId,
         category: 'rain',
-        severity: elevatedPropertyRisk || rainDay.precipitationSumIn >= 2 ? 'action' : 'watch',
+        severity: elevatedPropertyRisk || saturatedGroundRisk || rainDay.precipitationSumIn >= 2 ? 'action' : 'watch',
         title: `Heavy rain expected ${dayLabel(rainDay.date)}`,
-        summary: `About ${rainDay.precipitationSumIn.toFixed(1)} inches of rain is forecast.`,
-        homeImplication: elevatedPropertyRisk
+        summary: [
+          `About ${rainDay.precipitationSumIn.toFixed(1)} inches of rain is forecast for this area.`,
+          recentRain.sentence,
+        ].filter(Boolean).join(' '),
+        homeImplication: elevatedPropertyRisk || saturatedGroundRisk
           ? `Water-intrusion risk may be higher for this home because of ${reasons.join(' and ')}.`
           : rainHomeImplication(property.foundationType),
         timeframe: dayLabel(rainDay.date),
@@ -230,9 +275,37 @@ export function deriveEnvironmentInsights(
           { label: 'Start storm preparation', href: preparationHref(property.id, insightId), kind: 'primary' },
           { label: 'Check weather coverage', href: coverageHref(property.id), kind: 'secondary' },
         ],
-        source: elevatedPropertyRisk || property.hasSumpPump !== null || property.foundationType !== null
-          ? 'Open-Meteo forecast and property profile'
+        source: elevatedPropertyRisk || saturatedGroundRisk || property.hasSumpPump !== null || property.foundationType !== null
+          ? recentRain.sentence
+            ? 'Open-Meteo forecast and recent history, plus property profile'
+            : 'Open-Meteo forecast and property profile'
           : 'Open-Meteo forecast',
+      });
+    } else if (recentRain.totalInches >= 3) {
+      const today = weather.current.observedAt.slice(0, 10);
+      const insightId = `recent-heavy-rain-${today}`;
+      const elevatedPropertyRisk = Boolean(property.hasDrainageIssues || isFloodZone(flood?.femaFloodZone ?? null));
+      insights.push({
+        id: insightId,
+        category: 'rain',
+        severity: elevatedPropertyRisk ? 'action' : 'watch',
+        title: 'Recent heavy rain may leave drainage areas saturated',
+        summary: recentRain.sentence!,
+        homeImplication: elevatedPropertyRisk
+          ? 'This home has recorded drainage or flood exposure, so a post-rain check may catch standing water or intrusion early.'
+          : rainHomeImplication(property.foundationType),
+        timeframe: 'Recent seven-day trend',
+        effectiveFrom: today,
+        effectiveTo: today,
+        affectedSystems: ['Drainage', 'Gutters', rainAreaLabel(property.foundationType)],
+        recommendedActions: [
+          'Check drainage paths and the lowest level for standing water or signs of intrusion.',
+          'Document any new moisture or damage before cleanup.',
+        ],
+        actions: [{ label: 'Review drainage guidance', href: weatherHref(property.id), kind: 'primary' }],
+        source: elevatedPropertyRisk
+          ? 'Open-Meteo recent history and property profile'
+          : 'Open-Meteo recent history',
       });
     }
 
@@ -250,7 +323,7 @@ export function deriveEnvironmentInsights(
         id: insightId,
         category: 'snow',
         severity: snowDay.weatherCode === 75 || snowDay.weatherCode === 86 || elevatedRoofRisk ? 'action' : 'watch',
-        title: `Snow expected ${dayLabel(snowDay.date)}`,
+        title: `${meteorologicalSeason(snowDay.date) === 'winter' ? 'Snow expected' : 'Unseasonable snow expected'} ${dayLabel(snowDay.date)}`,
         summary: `Snow is forecast with temperatures between ${Math.round(snowDay.tempMinF)}° and ${Math.round(snowDay.tempMaxF)}°F.`,
         homeImplication: roofContext
           ? `This home has a ${roofContext}. Snow and refreezing may increase roof, vent, walkway, and plumbing exposure.`
@@ -287,7 +360,7 @@ export function deriveEnvironmentInsights(
         id: insightId,
         category: 'freeze',
         severity: freezeDay.tempMinF <= 20 || heatPumpWithoutBackup ? 'action' : 'watch',
-        title: `Freeze risk ${dayLabel(freezeDay.date)}`,
+        title: `${meteorologicalSeason(freezeDay.date) === 'winter' ? 'Freeze risk' : 'Unseasonable freeze risk'} ${dayLabel(freezeDay.date)}`,
         summary: `The low is forecast near ${Math.round(freezeDay.tempMinF)}°F.`,
         homeImplication: heatPumpWithoutBackup
           ? 'This home uses a heat pump and no backup heat source is recorded. Extreme cold can reduce heating performance while exposed plumbing remains vulnerable.'
@@ -339,8 +412,13 @@ export function deriveEnvironmentInsights(
         id: insightId,
         category: 'heat',
         severity: heatDays.length >= 2 || Math.max(...heatDays.map(day => day.tempMaxF)) >= 100 || olderHvac ? 'action' : 'watch',
-        title: heatDays.length >= 2 ? 'Multi-day heat risk ahead' : `High heat expected ${dayLabel(first.date)}`,
-        summary: `${heatDays.length} day${heatDays.length === 1 ? '' : 's'} may reach 95°F or higher.`,
+        title: meteorologicalSeason(first.date) === 'summer'
+          ? heatDays.length >= 2 ? 'Multi-day heat risk ahead' : `High heat expected ${dayLabel(first.date)}`
+          : heatDays.length >= 2 ? 'Unseasonable multi-day heat risk ahead' : `Unseasonable heat expected ${dayLabel(first.date)}`,
+        summary: [
+          `${heatDays.length} day${heatDays.length === 1 ? '' : 's'} may reach 95°F or higher in this area.`,
+          recentHeat.sentence,
+        ].filter(Boolean).join(' '),
         homeImplication: filterDaysAgo !== null ? `${baseImplication} Filter maintenance was recorded ${filterDaysAgo} days ago.` : baseImplication,
         timeframe: heatDays.length > 1 ? `${dayLabel(first.date)} – ${dayLabel(last.date)}` : dayLabel(first.date),
         effectiveFrom: first.date,
@@ -352,9 +430,9 @@ export function deriveEnvironmentInsights(
           { label: 'Find an HVAC professional', href: providersHref(property.id), kind: 'secondary' },
         ],
         source: filterDaysAgo !== null
-          ? 'Open-Meteo forecast, property profile, and maintenance history'
+          ? `Open-Meteo forecast${recentHeat.sentence ? ' and recent history' : ''}, property profile, and maintenance history`
           : olderHvac || (property.coolingType !== null && property.coolingType !== 'UNKNOWN')
-            ? 'Open-Meteo forecast and property profile'
+            ? `Open-Meteo forecast${recentHeat.sentence ? ' and recent history' : ''} and property profile`
             : 'Open-Meteo forecast',
       });
     }

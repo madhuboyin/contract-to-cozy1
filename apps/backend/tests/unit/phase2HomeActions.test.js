@@ -61,6 +61,7 @@ const { adaptHomeActionSource } = require('../../src/productFramework/homeAction
 const { buildRecommendationResponseContract } = require('../../src/productFramework/recommendationResponse.contract.ts');
 const { getGuidanceJourneyDisplayTitle } = require('../../src/services/guidanceEngine/guidanceTemplateRegistry.ts');
 const { getHomeAssetDisplayLabel } = require('../../src/productFramework/homeAssetDisplay.ts');
+const { activationPriorityForTrigger } = require('../../src/services/entryContext.service.ts');
 
 function actionFixture(id, overrides = {}) {
   const action = structuredClone(goldenTestHomes.find((item) => item.id === 'existing-repair').action);
@@ -87,6 +88,22 @@ test('canonical feed ranks urgency and consequence with an explicit missing-cont
   assert.ok(urgentScore.score > plannedScore.score);
   assert.equal(plannedScore.components.missingContextPenalty, 6);
   assert.match(plannedScore.explanation, /missing context/i);
+});
+
+test('NOW and SOON actions always precede PLAN and CONSIDER regardless of score', () => {
+  const soon = actionFixture('soon', { priority: 'SOON', signal: 'Time-sensitive HVAC preparation' });
+  const planned = actionFixture('planned-high-score', { priority: 'PLAN', signal: 'Long-term roof replacement decision' });
+  planned.governance.safetyTier = 'SAFETY_EMERGENCY';
+  planned.job = 'MAJOR_MOMENT';
+
+  const result = rankAndDeduplicateHomeActions([planned, soon]);
+  assert.deepEqual(result.map(action => action.id), ['soon', 'planned-high-score']);
+});
+
+test('exploratory onboarding does not manufacture a high-priority setup action', () => {
+  assert.equal(activationPriorityForTrigger('NONE_EXPLORING'), 'CONSIDER');
+  assert.equal(activationPriorityForTrigger('REPAIR'), 'NOW');
+  assert.equal(activationPriorityForTrigger('MAINTENANCE_BACKLOG'), 'SOON');
 });
 
 test('canonical feed surfaces one winner for duplicate cross-source signals and preserves merge diagnostics', () => {

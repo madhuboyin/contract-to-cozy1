@@ -426,6 +426,14 @@ function sourceAdapterForTrigger(type: EntryContextCaptureInput['activeTrigger']
   return 'GUIDANCE';
 }
 
+export function activationPriorityForTrigger(
+  type: EntryContextCaptureInput['activeTrigger']['type'],
+): HomeAction['priority'] {
+  if (type === 'REPAIR' || type === 'CLAIM_DAMAGE') return 'NOW';
+  if (type === 'NONE_EXPLORING') return 'CONSIDER';
+  return 'SOON';
+}
+
 function appendActivationHandoff(href: string, triggerId: string, triggerType: string): string {
   const separator = href.includes('?') ? '&' : '?';
   return `${href}${separator}activationTriggerId=${encodeURIComponent(triggerId)}&activationTriggerType=${encodeURIComponent(triggerType)}`;
@@ -489,9 +497,7 @@ export async function getActivationFirstValue(
     sourceVersion: 'phase1-v1',
     job: material ? 'DECIDE' : entryContext.entryPath === 'MAJOR_MOMENT' ? 'MAJOR_MOMENT' : 'STAY_AHEAD',
     state: 'OPEN',
-    priority: entryContext.activeTrigger.type === 'REPAIR' || entryContext.activeTrigger.type === 'CLAIM_DAMAGE'
-      ? 'NOW'
-      : 'SOON',
+    priority: activationPriorityForTrigger(entryContext.activeTrigger.type),
     signal: entryContext.activeTrigger.label,
     whyItMatters: copy.why,
     recommendedAction: copy.recommendation,
