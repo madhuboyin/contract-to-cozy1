@@ -204,14 +204,14 @@ export interface CtcEventProperties {
   action_completed: { tool: CtcTool; actionType: string; propertyId: string };
   tool_discovery_impression: {
     propertyId?: string | null;
-    surface: 'unified_home' | 'explore_tools' | 'command_palette' | 'workflow';
+    surface: 'unified_home' | 'property_detail' | 'explore_tools' | 'command_palette' | 'workflow';
     toolIds: string[];
     recommendationReasons?: string[];
     contextVersion?: string | null;
   };
   tool_discovery_clicked: {
     propertyId?: string | null;
-    surface: 'unified_home' | 'explore_tools' | 'command_palette' | 'workflow';
+    surface: 'unified_home' | 'property_detail' | 'explore_tools' | 'command_palette' | 'workflow';
     toolId: string;
     position?: number;
     recommendationReason?: string | null;

@@ -91,6 +91,7 @@ Status as of July 24, 2026:
 | CAP-408 golden-home ranking fixtures | Complete | Nine deterministic homes cover every contextual capability and assert exact eligibility, needs-context behavior, bounded top sets, reviewed reasons, source lineage, governance state, and duplicate source-action suppression through the complete evaluator pipeline |
 | CAP-500 Unified Home response | Complete | Unified Home evaluates a versioned, maximum-three suggestion envelope from its already-authorized action and Property Context snapshot, preserves source lineage and context version, honors the server cutover flag, and fails closed without breaking ranked Home Actions |
 | CAP-501 Unified Home renderer | Complete | Unified Home renders only the bounded server suggestion envelope with reviewed why-now, outcome, readiness, server launch destination, actual-view impressions, full launch lineage, source-action open recording, and an Explore Tools fallback |
+| CAP-502 property smart-context surface | Complete | Property detail requests the shared evaluator with the PROPERTY surface, renders a maximum of three server suggestions, records property-specific exposure and launch lineage, and retains the All Tools fallback on empty or failed responses |
 
 Explore Tools and homeowner command search now use the canonical catalog by default. Set
 `CAPABILITY_CATALOG_SOURCE=legacy` only for the temporary internal-beta rollback.
@@ -1015,6 +1016,11 @@ Refactor `SmartContextToolsSection.tsx` to request the shared suggestion endpoin
 surface.
 
 Remove local call to `selectSmartContextTools`.
+
+Implementation: the section uses a property-scoped React Query request for
+`surface=PROPERTY&limit=3`, renders reviewed server copy and readiness, and
+records actual-view and click lifecycle events under the `property_detail`
+surface. It no longer loads Guidance actions or references the local selector.
 
 #### CAP-503: Selector retirement
 

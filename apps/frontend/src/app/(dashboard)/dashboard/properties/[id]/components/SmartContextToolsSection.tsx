@@ -1,38 +1,60 @@
 'use client';
 
-import { useMemo } from 'react';
 import Link from 'next/link';
-import { ArrowRight } from 'lucide-react';
-import { useGuidance } from '@/features/guidance/hooks/useGuidance';
+import { useQuery } from '@tanstack/react-query';
+import { ArrowRight, Sparkles } from 'lucide-react';
+import type { CapabilitySuggestionDTO } from '@/types';
 import { Badge } from '@/components/ui/badge';
-import {
-  buildPropertyAwareToolHref,
-  getToolDefinition,
-} from '@/features/tools/toolRegistry';
-import {
-  selectSmartContextTools,
-  type SmartToolRecommendation,
-} from '@/features/tools/selectSmartContextTools';
+import { appendCapabilityLaunchContext } from '@/features/tools/capabilityCatalog';
+import { getDiscoverableTool } from '@/features/tools/toolDiscoveryRegistry';
+import { useCapabilityImpression } from '@/features/tools/useCapabilityImpression';
+import { api } from '@/lib/api/client';
+import { track } from '@/lib/analytics/events';
 
-// ---------------------------------------------------------------------------
-// Sub-components
-// ---------------------------------------------------------------------------
+function recommendationReason(suggestion: CapabilitySuggestionDTO): string {
+  return `${suggestion.recommendationVersion}:${suggestion.reasonCode}`;
+}
 
-type ToolRowProps = {
-  recommendation: SmartToolRecommendation;
+function ToolRow({
+  suggestion,
+  propertyId,
+  registryVersion,
+  position,
+  showExplainability = false,
+}: {
+  suggestion: CapabilitySuggestionDTO;
   propertyId: string;
+  registryVersion: string;
+  position: number;
   showExplainability?: boolean;
-};
-
-function ToolRow({ recommendation, propertyId, showExplainability = false }: ToolRowProps) {
-  const { toolId, trigger, value, confidence } = recommendation;
-  const def = getToolDefinition(toolId);
-  if (!def) return null;
-
-  const href = buildPropertyAwareToolHref(toolId, propertyId);
-  const Icon = def.icon;
-  const safeTrigger = trigger?.trim() || 'Current property signals indicate this tool may be timely.';
-  const safeValue = value?.trim() || 'Use this tool for a quick, focused decision pass.';
+}) {
+  const tool = getDiscoverableTool(suggestion.capabilityId);
+  const Icon = tool?.icon ?? Sparkles;
+  const reason = recommendationReason(suggestion);
+  const impressionRef = useCapabilityImpression<HTMLAnchorElement>({
+    capabilityId: suggestion.capabilityId,
+    propertyId,
+    surface: 'property_detail',
+    registryVersion,
+    recommendationReason: reason,
+    contextVersion: suggestion.contextVersion,
+  });
+  const href = appendCapabilityLaunchContext(suggestion.launch.href, {
+    launchSurface: 'property_detail',
+    sourceActionId: suggestion.source.actionId,
+    sourceEntityType: suggestion.source.entityType,
+    sourceEntityId: suggestion.source.entityId,
+    contextVersion: suggestion.contextVersion,
+    recommendationReason: reason,
+    journeyId: suggestion.source.journeyId,
+    itemId: suggestion.source.entityType === 'INVENTORY_ITEM'
+      ? suggestion.source.entityId
+      : null,
+  });
+  const readinessExplanation = suggestion.readiness.explanations[0]
+    ?? (suggestion.readiness.state === 'READY'
+      ? 'Ready with the current property context.'
+      : 'Add the requested context for a more useful result.');
 
   return (
     <article className="group rounded-lg border border-border/50 bg-background px-3.5 py-3 transition-colors hover:border-border hover:bg-muted/20">
@@ -42,37 +64,67 @@ function ToolRow({ recommendation, propertyId, showExplainability = false }: Too
         </span>
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-2">
-            <p className="truncate text-xs font-semibold text-foreground/90">{def.label}</p>
+            <p className="truncate text-xs font-semibold text-foreground/90">
+              {suggestion.label}
+            </p>
             <Badge
               variant="outline"
               className={
-                confidence === 'HIGH'
+                suggestion.readiness.state === 'READY'
                   ? 'border-emerald-200 bg-emerald-50 text-[11px] font-medium text-emerald-700'
                   : 'border-slate-200 bg-slate-50 text-[11px] font-medium text-slate-600'
               }
             >
-              {confidence === 'HIGH' ? 'Recommended' : 'Worth a look'}
+              {suggestion.readiness.state === 'READY'
+                ? 'Recommended'
+                : 'Needs context'}
             </Badge>
           </div>
           <p className="mt-1 line-clamp-2 text-[11px] leading-snug text-muted-foreground">
-            <span className="font-medium text-foreground/75">Why now:</span> {safeTrigger}
+            <span className="font-medium text-foreground/75">Why now:</span>{' '}
+            {suggestion.whyNow}
           </p>
           <p className="mt-0.5 line-clamp-2 text-[11px] leading-snug text-muted-foreground">
-            <span className="font-medium text-foreground/75">Value:</span> {safeValue}
+            <span className="font-medium text-foreground/75">Value:</span>{' '}
+            {suggestion.expectedOutcome}
           </p>
           {showExplainability ? (
             <details className="mt-1">
               <summary className="cursor-pointer select-none list-none text-[11px] text-muted-foreground/65 transition-colors hover:text-muted-foreground [&::-webkit-details-marker]:hidden">
-                <span className="underline decoration-dotted underline-offset-2">Why this recommendation?</span>
+                <span className="underline decoration-dotted underline-offset-2">
+                  Why this recommendation?
+                </span>
               </summary>
               <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
-                Based on your current dashboard signals, this tool is surfaced as a high-confidence fit for what needs attention now.
+                {readinessExplanation}
               </p>
             </details>
           ) : null}
         </div>
         <Link
+          ref={impressionRef}
           href={href}
+          data-testid={`smart-context-tool-${suggestion.capabilityId}`}
+          onClick={() => {
+            track('tool_discovery_clicked', {
+              propertyId,
+              surface: 'property_detail',
+              toolId: suggestion.capabilityId,
+              position,
+              recommendationReason: reason,
+              contextVersion: suggestion.contextVersion,
+              sourceActionId: suggestion.source.actionId,
+              sourceEntityType: suggestion.source.entityType,
+              sourceEntityId: suggestion.source.entityId,
+              journeyId: suggestion.source.journeyId,
+            });
+            if (suggestion.source.actionId) {
+              void api.recordHomeActionOpened(
+                propertyId,
+                suggestion.source.actionId,
+              ).catch(() => undefined);
+            }
+          }}
           className="mt-0.5 inline-flex min-h-[36px] shrink-0 items-center gap-1 rounded-md px-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
         >
           Open
@@ -83,28 +135,22 @@ function ToolRow({ recommendation, propertyId, showExplainability = false }: Too
   );
 }
 
-// ---------------------------------------------------------------------------
-// Main section — Level 3 (exploratory), visually de-emphasized
-// ---------------------------------------------------------------------------
-
 interface SmartContextToolsSectionProps {
   propertyId: string;
 }
 
-export function SmartContextToolsSection({ propertyId }: SmartContextToolsSectionProps) {
-  const { actions, isLoading, isError } = useGuidance(propertyId);
-
-  const recommendations = useMemo(
-    () => (isLoading ? [] : selectSmartContextTools(actions, 3)),
-    [actions, isLoading],
-  );
-
-  const renderableRecommendations = useMemo(
-    () => recommendations.filter((recommendation) => Boolean(getToolDefinition(recommendation.toolId))),
-    [recommendations],
-  );
-
-  const guidanceUnavailable = isError && !isLoading && actions.length === 0;
+export function SmartContextToolsSection({
+  propertyId,
+}: SmartContextToolsSectionProps) {
+  const query = useQuery({
+    queryKey: ['capability-suggestions', propertyId, 'PROPERTY', 3],
+    queryFn: () => api.getCapabilitySuggestions(propertyId, {
+      surface: 'PROPERTY',
+      limit: 3,
+    }),
+    staleTime: 2 * 60 * 1000,
+  });
+  const suggestions = query.data?.suggestions.slice(0, 3) ?? [];
 
   return (
     <section className="rounded-xl border border-border/60 bg-muted/20 px-3.5 py-3 sm:px-4">
@@ -117,26 +163,28 @@ export function SmartContextToolsSection({ propertyId }: SmartContextToolsSectio
         </p>
       </div>
 
-      {isLoading ? (
+      {query.isLoading ? (
         <div className="space-y-1.5">
           <div className="h-[76px] animate-pulse rounded-lg border border-border/60 bg-background/70" />
           <div className="h-[76px] animate-pulse rounded-lg border border-border/60 bg-background/70" />
         </div>
-      ) : guidanceUnavailable ? (
+      ) : query.isError ? (
         <div className="rounded-lg border border-border/60 bg-background px-3.5 py-3 text-xs text-muted-foreground">
           Smart tool recommendations are temporarily unavailable. You can still browse all tools.
         </div>
-      ) : renderableRecommendations.length === 0 ? (
+      ) : suggestions.length === 0 ? (
         <div className="rounded-lg border border-border/60 bg-muted/20 px-3.5 py-3 text-xs text-muted-foreground">
           No high-confidence tool picks right now. You can still explore the full tools library.
         </div>
       ) : (
         <div className="flex flex-col gap-1.5">
-          {renderableRecommendations.map((recommendation, index) => (
+          {suggestions.map((suggestion, index) => (
             <ToolRow
-              key={recommendation.toolId}
-              recommendation={recommendation}
+              key={suggestion.suggestionId}
+              suggestion={suggestion}
               propertyId={propertyId}
+              registryVersion={query.data!.registryVersion}
+              position={index}
               showExplainability={index === 0}
             />
           ))}
@@ -145,8 +193,8 @@ export function SmartContextToolsSection({ propertyId }: SmartContextToolsSectio
 
       <div className="mt-2 flex items-center justify-end">
         <Link
-          href={`/dashboard/home-tools?propertyId=${propertyId}`}
-          className="text-[11px] text-muted-foreground/70 hover:text-muted-foreground flex items-center gap-0.5 transition-colors"
+          href={`/dashboard/home-tools?propertyId=${encodeURIComponent(propertyId)}`}
+          className="flex items-center gap-0.5 text-[11px] text-muted-foreground/70 transition-colors hover:text-muted-foreground"
         >
           All tools
           <ArrowRight className="h-2.5 w-2.5" />

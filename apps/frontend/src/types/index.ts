@@ -394,16 +394,28 @@ export type CapabilitySuggestionDTO = {
   };
 };
 
-export type UnifiedHomeCapabilitySuggestionsDTO = {
-  status: 'AVAILABLE' | 'DISABLED' | 'UNAVAILABLE';
+export type CapabilitySuggestionSurfaceDTO =
+  | 'HOME'
+  | 'PROPERTY'
+  | 'WORKFLOW'
+  | 'RELATED'
+  | 'COMPLETION';
+
+export type CapabilitySuggestionResponseDTO = {
   contractVersion: 'capability-suggestions-v1';
   registryVersion: string;
   recommendationVersion: 'capability-recommendation-v1';
   contextVersion: string;
   generatedAt: string;
-  surface: 'HOME';
+  surface: CapabilitySuggestionSurfaceDTO;
   suggestions: CapabilitySuggestionDTO[];
 };
+
+export type UnifiedHomeCapabilitySuggestionsDTO =
+  Omit<CapabilitySuggestionResponseDTO, 'surface'> & {
+    status: 'AVAILABLE' | 'DISABLED' | 'UNAVAILABLE';
+    surface: 'HOME';
+  };
 
 export type UnifiedHomeDTO = {
   contractVersion: 'phase2-home-v1';

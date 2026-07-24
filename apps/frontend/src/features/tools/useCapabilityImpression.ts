@@ -6,7 +6,12 @@ import { track } from '@/lib/analytics/events';
 type CapabilityImpressionInput = {
   capabilityId: string;
   propertyId?: string | null;
-  surface: 'unified_home' | 'explore_tools' | 'command_palette' | 'workflow';
+  surface:
+    | 'unified_home'
+    | 'property_detail'
+    | 'explore_tools'
+    | 'command_palette'
+    | 'workflow';
   registryVersion: string;
   recommendationReason?: string | null;
   contextVersion?: string | null;

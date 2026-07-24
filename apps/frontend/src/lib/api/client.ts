@@ -122,6 +122,8 @@ import {
   ActivationTriggerEvidenceInput,
   HomeActionCommand,
   HomeActionFeedDTO,
+  CapabilitySuggestionResponseDTO,
+  CapabilitySuggestionSurfaceDTO,
   UnifiedHomeDTO,
 } from '@/types';
 import type { PropertyContextEnvelope } from '@/components/property-context/propertyContextTypes';
@@ -2852,6 +2854,27 @@ class APIClient {
     );
     if (response.success && response.data) return response.data;
     throw new APIError('Failed to load Home', 'UNIFIED_HOME_ERROR');
+  }
+
+  async getCapabilitySuggestions(
+    propertyId: string,
+    options: {
+      surface: CapabilitySuggestionSurfaceDTO;
+      limit?: number;
+    },
+  ): Promise<CapabilitySuggestionResponseDTO> {
+    const query = this.buildQueryString({
+      surface: options.surface,
+      limit: options.limit,
+    });
+    const response = await this.request<CapabilitySuggestionResponseDTO>(
+      `/api/properties/${encodeURIComponent(propertyId)}/capability-suggestions${query}`,
+    );
+    if (response.success && response.data) return response.data;
+    throw new APIError(
+      'Failed to load capability suggestions',
+      'CAPABILITY_SUGGESTIONS_ERROR',
+    );
   }
 
   async getToolDiscoveryAvailability(): Promise<ToolDiscoveryAvailabilityDTO> {

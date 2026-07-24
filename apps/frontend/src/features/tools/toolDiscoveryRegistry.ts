@@ -25,6 +25,7 @@ export type ToolDiscoverySurface =
   | 'guidance'
   | 'home_tools'
   | 'dashboard'
+  | 'property_detail'
   | 'unknown';
 export type ToolReleaseStage = 'ACTIVE' | 'BETA';
 export type ToolSafetyTier = 'LOW_CONSEQUENCE' | 'MATERIAL_FINANCIAL' | 'REGULATED_COVERAGE' | 'SAFETY_EMERGENCY';
