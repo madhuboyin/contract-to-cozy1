@@ -1,15 +1,14 @@
 import { api } from '@/lib/api/client';
-import type { PageContextId } from './contextToolMappings';
-import type { ToolId } from './toolRegistry';
+import type { PageContextId } from './pageContext';
 
 type RelatedToolsEventName = 'related_tools_impression' | 'related_tools_click';
 
 type TrackRelatedToolsInput = {
   propertyId?: string | null;
   pageContext: PageContextId;
-  currentToolId?: ToolId | null;
-  recommendedToolIds: ToolId[];
-  clickedToolId?: ToolId | null;
+  currentToolId?: string | null;
+  recommendedToolIds: string[];
+  clickedToolId?: string | null;
   positionIndex?: number;
 };
 

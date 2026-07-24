@@ -17,9 +17,9 @@ const discoveryRegistryPath = path.join(
   frontendRoot,
   'src/features/tools/toolDiscoveryRegistry.ts',
 );
-const toolRegistryPath = path.join(
-  frontendRoot,
-  'src/features/tools/toolRegistry.ts',
+const backendCapabilityFactoryPath = path.join(
+  repoRoot,
+  'apps/backend/src/productFramework/capabilities/definitions/capabilityDefinitionFactory.ts',
 );
 const backendCapabilityDefinitionsDirectory = path.join(
   repoRoot,
@@ -52,6 +52,16 @@ const markdownOutputPath = path.join(outputDirectory, 'current-capability-invent
 
 function read(filePath) {
   return fs.readFileSync(filePath, 'utf8');
+}
+
+function parseRelationshipOwnerIds(source) {
+  const body = source.match(
+    /const RELATED_CAPABILITIES[^=]*=\s*\{([\s\S]*?)\n\};/,
+  )?.[1] ?? '';
+  return new Set(
+    [...body.matchAll(/^\s*(?:'([^']+)'|([a-z][a-z0-9-]*)):\s*\[/gm)]
+      .map((match) => match[1] ?? match[2]),
+  );
 }
 
 function sliceBetween(source, startMarker, endMarker) {
@@ -170,7 +180,6 @@ function markdownEscape(value) {
 function buildInventory() {
   const catalogSource = read(catalogPath);
   const discoverySource = read(discoveryRegistryPath);
-  const toolRegistrySource = read(toolRegistryPath);
 
   const aiEntries = parseCatalogEntries(
     catalogSource,
@@ -192,7 +201,9 @@ function buildInventory() {
   const homeOutcomeByGroup = parseStringMap(discoverySource, 'HOME_OUTCOME_BY_GROUP');
   const aiOutcomeByGroup = parseStringMap(discoverySource, 'AI_OUTCOME_BY_GROUP');
   const completionByCategory = parseStringMap(discoverySource, 'COMPLETION_KIND_BY_CATEGORY');
-  const relatedRegistryIds = parseStringArray(toolRegistrySource, 'TOOL_IDS');
+  const canonicalRelationshipIds = parseRelationshipOwnerIds(
+    read(backendCapabilityFactoryPath),
+  );
   const canonicalRecommendationModes = parseCanonicalRecommendationModes(
     backendCapabilityDefinitionPaths,
   );
@@ -242,7 +253,7 @@ function buildInventory() {
             : 'LOW_CONSEQUENCE',
       completionKind: completionByCategory[outcomeCategory] ?? null,
       lifecycleCanonicalized: lifecycleCanonicalIds.has(id),
-      relatedRegistryCoverage: relatedRegistryIds.has(id),
+      canonicalRelationshipCoverage: canonicalRelationshipIds.has(id),
       recommendationDisposition,
     };
   });
@@ -253,7 +264,9 @@ function buildInventory() {
     overlappingEntries: aiEntries.filter((entry) => homeById.has(entry.id)).length,
     distinctCapabilities: capabilities.length,
     routeVerified: capabilities.filter((entry) => entry.routeVerified).length,
-    relatedRegistryCoverage: capabilities.filter((entry) => entry.relatedRegistryCoverage).length,
+    canonicalRelationshipCoverage: capabilities.filter(
+      (entry) => entry.canonicalRelationshipCoverage,
+    ).length,
     contextualCapabilities: capabilities.filter(
       (entry) => entry.recommendationDisposition === 'CONTEXTUAL_CANONICAL',
     ).length,
@@ -272,7 +285,7 @@ function buildInventory() {
     generatedFrom: [
       path.relative(repoRoot, catalogPath),
       path.relative(repoRoot, discoveryRegistryPath),
-      path.relative(repoRoot, toolRegistryPath),
+      path.relative(repoRoot, backendCapabilityFactoryPath),
       ...backendCapabilityDefinitionPaths.map((filePath) =>
         path.relative(repoRoot, filePath)),
       path.relative(repoRoot, backendCapabilityContractPath),
@@ -305,7 +318,7 @@ function renderMarkdown(inventory) {
     `| Overlapping entries | ${summary.overlappingEntries} |`,
     `| Distinct capabilities | ${summary.distinctCapabilities} |`,
     `| Canonical routes verified | ${summary.routeVerified} |`,
-    `| Legacy related-registry coverage | ${summary.relatedRegistryCoverage} |`,
+    `| Canonical explicit-relationship coverage | ${summary.canonicalRelationshipCoverage} |`,
     `| Canonical contextual capabilities | ${summary.contextualCapabilities} |`,
     `| Workflow-only | ${summary.workflowOnly} |`,
     `| Backend lifecycle canonicalized | ${summary.lifecycleCanonicalized} |`,
@@ -313,7 +326,7 @@ function renderMarkdown(inventory) {
     '',
     '## Capability Matrix',
     '',
-    '| ID | Label | Sources | Canonical route | Route | Outcome | Release | Safety | Completion | Lifecycle | Related registry | Recommendation disposition |',
+    '| ID | Label | Sources | Canonical route | Route | Outcome | Release | Safety | Completion | Lifecycle | Explicit relationships | Recommendation disposition |',
     '| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |',
     ...capabilities.map((entry) => [
       markdownEscape(entry.id),
@@ -326,7 +339,7 @@ function renderMarkdown(inventory) {
       markdownEscape(entry.safetyTier),
       markdownEscape(entry.completionKind),
       entry.lifecycleCanonicalized ? 'Canonical' : 'Missing',
-      entry.relatedRegistryCoverage ? 'Yes' : 'No',
+      entry.canonicalRelationshipCoverage ? 'Yes' : 'No',
       markdownEscape(entry.recommendationDisposition),
     ].join(' | ').replace(/^/, '| ').replace(/$/, ' |')),
     '',

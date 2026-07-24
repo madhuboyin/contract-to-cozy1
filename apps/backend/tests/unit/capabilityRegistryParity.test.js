@@ -19,24 +19,6 @@ const inventory = JSON.parse(fs.readFileSync(
   'utf8',
 ));
 
-function parseLegacyRelationships() {
-  const source = fs.readFileSync(
-    path.join(repoRoot, 'apps/frontend/src/features/tools/contextToolMappings.ts'),
-    'utf8',
-  );
-  const body = source.match(/CONTEXT_TOOL_MAPPINGS[^=]*=\s*\{([\s\S]*?)\n\};/)?.[1] ?? '';
-  const relationships = new Map();
-  for (const match of body.matchAll(/^\s*(?:'([^']+)'|([a-z][a-z0-9-]*)):\s*\[([^\]]*)\]/gm)) {
-    const id = match[1] ?? match[2];
-    if (!canonicalCapabilityRegistry.getById(id)) continue;
-    relationships.set(
-      id,
-      [...match[3].matchAll(/'([^']+)'/g)].map((entry) => entry[1]),
-    );
-  }
-  return relationships;
-}
-
 test('canonical registry has exact catalog identity, route, release, and lifecycle parity', () => {
   assert.equal(canonicalCapabilityRegistry.capabilities.length, 52);
   assert.equal(inventory.summary.distinctCapabilities, 52);
@@ -66,15 +48,23 @@ test('canonical registry has exact catalog identity, route, release, and lifecyc
   }
 });
 
-test('canonical explicit relationships preserve current related-tool edges', () => {
-  const relationships = parseLegacyRelationships();
-  assert.equal(relationships.size, 31);
-  for (const [id, expectedRelatedIds] of relationships) {
-    const actual = canonicalCapabilityRegistry.getById(id);
-    assert.deepEqual(
-      actual.recommendation.explicitRelatedCapabilityIds,
-      expectedRelatedIds,
-      `${id} related capabilities`,
+test('canonical explicit relationships retain the reviewed cutover baseline', () => {
+  const relationshipOwners = canonicalCapabilityRegistry.capabilities
+    .filter((capability) =>
+      capability.recommendation.explicitRelatedCapabilityIds.length > 0);
+  assert.equal(relationshipOwners.length, 31);
+  assert.ok(relationshipOwners.every((capability) =>
+    capability.recommendation.explicitRelatedCapabilityIds.length === 3));
+
+  for (const retiredPath of [
+    'apps/frontend/src/features/tools/contextToolMappings.ts',
+    'apps/frontend/src/features/tools/getRelatedTools.ts',
+    'apps/frontend/src/features/tools/toolRegistry.ts',
+  ]) {
+    assert.equal(
+      fs.existsSync(path.join(repoRoot, retiredPath)),
+      false,
+      `${retiredPath} must remain retired`,
     );
   }
 });

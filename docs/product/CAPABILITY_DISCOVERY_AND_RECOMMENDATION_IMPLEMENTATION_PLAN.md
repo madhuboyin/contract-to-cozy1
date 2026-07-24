@@ -95,6 +95,7 @@ Status as of July 24, 2026:
 | CAP-503 selector retirement | Complete | Both frontend recommendation selectors and their selector-only tests are deleted; inventory classification now reads canonical backend definition groups, CI prevents selector restoration or imports, and server evaluator plus render-contract tests own coverage |
 | CAP-504 launch-context verification | Complete | A shared mapper and destination parser preserve source action, entity, context, journey, item, surface, reason, and recommendation version for every server source type; telemetry retains the same lineage and resume links are emitted only for authorized sources resolved from current responses |
 | CAP-600 related resolver | Complete | Canonical manifest relationships, verified output compatibility, reviewed taxonomy similarity, and source context produce deterministic bounded results after release, readiness, governance, workflow-context, commercial, approval, and suppression gates |
+| CAP-601 RelatedTools cutover | Complete | The property-authorized related-capabilities endpoint composes current Property Context, readiness, release, governance, workflow, and recent-completion state; RelatedTools consumes its versioned projection with viewport gating, actual-view lifecycle telemetry, safe launch attribution, and no empty failure container |
 
 Explore Tools and homeowner command search now use the canonical catalog by default. Set
 `CAPABILITY_CATALOG_SOURCE=legacy` only for the temporary internal-beta rollback.
@@ -161,8 +162,8 @@ Explore Tools and homeowner command search now use the canonical catalog by defa
 | --- | --- | --- |
 | `mobileToolCatalog.ts` | AI and Home Tool presentation metadata | Retire as authority; UI projections consume API |
 | `toolDiscoveryRegistry.ts` | Discoverability, readiness, rollout, route aliases, completion | Move to backend capability manifests |
-| `toolRegistry.ts` | Legacy related-tool IDs and route construction | Retire after route and relationship parity |
-| `contextToolMappings.ts` | Manual related-tool adjacency | Replace with explicit manifest edges plus derived fallback |
+| `toolRegistry.ts` | Legacy related-tool IDs and route construction | Retired in CAP-601 |
+| `contextToolMappings.ts` | Manual related-tool adjacency | Retired in CAP-601 |
 | `selectUnifiedHomeTools.ts` | Unified Home deterministic candidates | Retired in CAP-503 |
 | `selectSmartContextTools.ts` | Property-page deterministic candidates | Retired in CAP-503 |
 | `ProductTool` seed metadata | Knowledge Hub tool catalog | Synchronize as a projection of canonical registry |
@@ -1137,6 +1138,18 @@ lifecycle attribution.
 Retire `contextToolMappings.ts` and the legacy `toolRegistry.ts` relationship authority after
 parity passes.
 
+Implementation: a bounded authenticated endpoint requires property
+authorization and a canonical current capability, loads the current Property
+Context, evaluates definition readiness, applies rollout and recently completed
+suppression state, and returns server-owned presentation plus safe resolved
+destinations. `RelatedTools` requests only when its configured viewport is
+active, renders no loading/error/empty promotion, preserves the existing
+related-tools analytics, and adds actual-view discovery impressions and
+versioned click/launch attribution. The manual context mapping, selector
+helper, selector tests, and legacy route/ID registry are deleted; canonical
+registry tests keep the 31 reviewed relationship sets and prevent restoration
+of the retired files.
+
 #### CAP-602: Inline suggestion primitive
 
 Create one shared component with:
@@ -1593,7 +1606,7 @@ apps/frontend/src/features/tools/toolRegistry.ts
 ```
 
 The first two selectors were retired in CAP-503. Relationship mappings and the
-legacy route registry remain scheduled for the related-tools cutover.
+legacy route registry were retired in CAP-601.
 
 `mobileToolCatalog.ts` and `toolDiscoveryRegistry.ts` may temporarily retain presentation helpers
 while consumers migrate, but they shall not remain runtime data authorities.

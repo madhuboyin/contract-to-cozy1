@@ -3,10 +3,13 @@ import { z } from 'zod';
 import { authenticate } from '../middleware/auth.middleware';
 import { propertyAuthMiddleware } from '../middleware/propertyAuth.middleware';
 import {
+  CAPABILITY_CONTEXT_TYPES,
   CAPABILITY_CONTEXT_SOURCE_KINDS,
   CAPABILITY_SUGGESTION_SURFACES,
+  canonicalCapabilityRegistry,
 } from '../productFramework/capabilities';
 import { getCapabilitySuggestions } from '../services/capabilityRecommendation.service';
+import { getRelatedCapabilities } from '../services/capabilityRelated.service';
 import type { CustomRequest } from '../types';
 import { logger } from '../lib/logger';
 
@@ -45,6 +48,21 @@ export const CapabilitySuggestionsQuerySchema = z.object({
       message: 'sourceEntityType and sourceEntityId must be provided together.',
     });
   }
+});
+
+const CapabilityContextTypeSchema = z.enum(CAPABILITY_CONTEXT_TYPES);
+
+export const RelatedCapabilitiesQuerySchema = z.object({
+  currentCapabilityId: z.string().trim().min(1).max(120).refine(
+    (value) => Boolean(canonicalCapabilityRegistry.getById(value)),
+    'Unknown current capability.',
+  ),
+  limit: z.coerce.number().int().min(1).max(4).default(3),
+  sourceEntityType: CapabilityContextTypeSchema.optional(),
+  workflowContextType: z.preprocess(
+    (value) => value == null ? [] : Array.isArray(value) ? value : [value],
+    z.array(CapabilityContextTypeSchema).max(CAPABILITY_CONTEXT_TYPES.length),
+  ),
 });
 
 /**
@@ -153,6 +171,59 @@ router.get(
         error: {
           code: 'CAPABILITY_SUGGESTIONS_UNAVAILABLE',
           message: 'Capability suggestions are temporarily unavailable.',
+        },
+      });
+    }
+  },
+);
+
+router.get(
+  '/properties/:propertyId/related-capabilities',
+  authenticate,
+  propertyAuthMiddleware,
+  async (req: CustomRequest, res: Response): Promise<void> => {
+    const parsed = RelatedCapabilitiesQuerySchema.safeParse(req.query);
+    if (!parsed.success) {
+      res.status(400).json({
+        success: false,
+        error: {
+          code: 'INVALID_RELATED_CAPABILITIES_QUERY',
+          message: 'The related-capabilities query is invalid.',
+          details: parsed.error.flatten(),
+        },
+      });
+      return;
+    }
+    const userId = req.user?.userId;
+    if (!userId) {
+      res.status(401).json({
+        success: false,
+        error: { code: 'AUTH_REQUIRED', message: 'Authentication required.' },
+      });
+      return;
+    }
+    try {
+      const data = await getRelatedCapabilities({
+        propertyId: req.params.propertyId,
+        userId,
+        currentCapabilityId: parsed.data.currentCapabilityId,
+        limit: parsed.data.limit,
+        sourceEntityType: parsed.data.sourceEntityType ?? null,
+        workflowContextTypes: parsed.data.workflowContextType,
+      });
+      res.setHeader('Cache-Control', 'private, no-store');
+      res.setHeader('Vary', 'Authorization, Cookie');
+      res.status(200).json({ success: true, data });
+    } catch (error) {
+      logger.error(
+        { err: error, propertyId: req.params.propertyId, userId },
+        'Failed to resolve related capabilities',
+      );
+      res.status(500).json({
+        success: false,
+        error: {
+          code: 'RELATED_CAPABILITIES_UNAVAILABLE',
+          message: 'Related capabilities are temporarily unavailable.',
         },
       });
     }

@@ -66,3 +66,27 @@ export type CapabilityCatalog = {
   workflowContextIncluded: boolean;
   capabilities: CapabilityCatalogItem[];
 };
+
+export type RelatedCapabilityItem = {
+  capabilityId: string;
+  manifestVersion: number;
+  label: string;
+  shortDescription: string;
+  iconName: string;
+  href: string;
+  readiness: 'READY' | 'NEEDS_CONTEXT';
+  reasonCode:
+    | 'EXPLICIT_RELATIONSHIP'
+    | 'OUTPUT_COMPATIBLE'
+    | 'SHARED_TRIGGER_FAMILY'
+    | 'TAXONOMY_SIMILARITY';
+  score: number;
+};
+
+export type RelatedCapabilitiesResponse = {
+  registryVersion: string;
+  recommendationVersion: 'capability-related-v1';
+  contextVersion: string;
+  currentCapabilityId: string;
+  suggestions: RelatedCapabilityItem[];
+};

@@ -1,4 +1,6 @@
-import type { PageContextId } from './contextToolMappings';
+import type { PageContextId } from './pageContext';
+
+export type { PageContextId } from './pageContext';
 
 export type ResolvePageContextInput = {
   pathname?: string;

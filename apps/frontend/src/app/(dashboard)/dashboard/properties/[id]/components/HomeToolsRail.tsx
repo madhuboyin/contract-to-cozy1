@@ -9,9 +9,7 @@ import { PanelBottomOpen } from 'lucide-react';
 import { MOBILE_HOME_TOOL_LINKS } from '@/components/mobile/dashboard/mobileToolCatalog';
 import RelatedTools from '@/components/tools/RelatedTools';
 import HomeToolHeader from '@/components/tools/HomeToolHeader';
-import type { PageContextId } from '@/features/tools/contextToolMappings';
-import type { ToolId } from '@/features/tools/toolRegistry';
-import { getContextToolId } from '@/features/tools/getRelatedTools';
+import type { PageContextId } from '@/features/tools/pageContext';
 import { resolvePageContext } from '@/features/tools/resolvePageContext';
 
 // shadcn/ui (already used elsewhere in your app)
@@ -100,14 +98,14 @@ export default function HomeToolsRail({
 }: {
   propertyId: string;
   context?: PageContextId | null;
-  currentToolId?: ToolId | null;
+  currentToolId?: string | null;
   showDesktop?: boolean;
 }) {
   const pathname = usePathname() || '';
   const resolvedContext = resolvePageContext({ pathname, explicitContext: context });
-  const resolvedToolId = currentToolId ?? getContextToolId(resolvedContext);
+  const resolvedToolId = currentToolId;
   const relatedToolsContext: PageContextId = context ?? resolvedContext ?? 'property-hub';
-  const relatedToolsCurrentToolId = currentToolId ?? getContextToolId(relatedToolsContext);
+  const relatedToolsCurrentToolId = currentToolId;
 
   const tools = HOME_TOOLS.map((t) => {
     const href = t.href(propertyId);

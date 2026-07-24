@@ -128,7 +128,11 @@ import {
 } from '@/types';
 import type { PropertyContextEnvelope } from '@/components/property-context/propertyContextTypes';
 import type { FeatureContextCaptureResult, FeatureContextEvaluation } from '@/components/property-context/featureContextTypes';
-import type { CapabilityCatalog } from '@/features/tools/capabilityTypes';
+import type {
+  CapabilityCatalog,
+  CapabilityContextType,
+  RelatedCapabilitiesResponse,
+} from '@/features/tools/capabilityTypes';
 
 // REMOVED: import { RiskReportSummary } from '@/app/(dashboard)/dashboard/types'; as it was not defined or needed.
 
@@ -2898,6 +2902,35 @@ class APIClient {
     );
     if (response.success && response.data) return response.data;
     throw new APIError('Failed to load capability catalog', 'CAPABILITY_CATALOG_ERROR');
+  }
+
+  async getRelatedCapabilities(
+    propertyId: string,
+    options: {
+      currentCapabilityId: string;
+      limit?: number;
+      sourceEntityType?: CapabilityContextType;
+      workflowContextTypes?: CapabilityContextType[];
+    },
+  ): Promise<RelatedCapabilitiesResponse> {
+    const params = new URLSearchParams({
+      currentCapabilityId: options.currentCapabilityId,
+    });
+    if (options.limit != null) params.set('limit', String(options.limit));
+    if (options.sourceEntityType) {
+      params.set('sourceEntityType', options.sourceEntityType);
+    }
+    for (const contextType of options.workflowContextTypes ?? []) {
+      params.append('workflowContextType', contextType);
+    }
+    const response = await this.request<RelatedCapabilitiesResponse>(
+      `/api/properties/${encodeURIComponent(propertyId)}/related-capabilities?${params.toString()}`,
+    );
+    if (response.success && response.data) return response.data;
+    throw new APIError(
+      'Failed to load related capabilities',
+      'RELATED_CAPABILITIES_ERROR',
+    );
   }
 
   async recordToolLifecycleEvents(propertyId: string, events: ToolLifecycleEventDTO[]) {

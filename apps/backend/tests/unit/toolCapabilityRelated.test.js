@@ -8,6 +8,13 @@ const {
   createToolCapabilityRegistry,
   resolveRelatedCapabilities,
 } = require('../../src/productFramework/capabilities/index.ts');
+const {
+  getRelatedCapabilities,
+} = require('../../src/services/capabilityRelated.service.ts');
+const relatedRouter = require('../../src/routes/capabilitySuggestions.routes.ts').default;
+const {
+  RelatedCapabilitiesQuerySchema,
+} = require('../../src/routes/capabilitySuggestions.routes.ts');
 
 const ALL_TIERS = [
   'LOW_CONSEQUENCE',
@@ -165,4 +172,100 @@ test('registry version changes when relationship or compatibility semantics chan
 
   const changed = createToolCapabilityRegistry(definitions);
   assert.notEqual(changed.version, canonicalCapabilityRegistry.version);
+});
+
+function serviceDependencies(overrides = {}) {
+  const ids = canonicalCapabilityRegistry.capabilities.map(({ id }) => id);
+  return {
+    registry: canonicalCapabilityRegistry,
+    loadPropertyContext: async (propertyId) => ({
+      propertyId,
+      contextVersion: 'context-related-v1',
+      generatedAt: '2026-07-24T12:00:00.000Z',
+      scopes: ['CORE'],
+      facts: {
+        'core.yearBuilt': {
+          key: 'core.yearBuilt',
+          value: 2005,
+          state: 'KNOWN',
+          source: 'PUBLIC_RECORD',
+          verified: true,
+          confidence: 0.9,
+          observedAt: '2026-07-24T12:00:00.000Z',
+          validUntil: null,
+          correctionPath: null,
+        },
+      },
+      warnings: [],
+    }),
+    loadReadinessMetrics: async () => ({
+      trackedSystemCount: 3,
+      coverageGapCount: 1,
+      jurisdictionStatus: 'KNOWN',
+    }),
+    availableCapabilityIds: () => ids,
+    loadRecentlyCompletedCapabilityIds: async () => [],
+    ...overrides,
+  };
+}
+
+test('CAP-601 service projects safe property destinations and versioned attribution', async () => {
+  const response = await getRelatedCapabilities({
+    propertyId: 'property-1',
+    userId: 'user-1',
+    currentCapabilityId: 'service-price-radar',
+  }, serviceDependencies());
+
+  assert.equal(response.recommendationVersion, 'capability-related-v1');
+  assert.equal(response.contextVersion, 'context-related-v1');
+  assert.deepEqual(
+    response.suggestions.map(({ capabilityId }) => capabilityId),
+    ['negotiation-shield', 'cost-explainer', 'true-cost'],
+  );
+  assert.ok(response.suggestions.every(({ href }) =>
+    href.startsWith('/dashboard/properties/property-1/')));
+  assert.ok(response.suggestions.every(({ reasonCode }) =>
+    reasonCode === 'EXPLICIT_RELATIONSHIP'));
+});
+
+test('CAP-601 service suppresses recently completed related capabilities', async () => {
+  const response = await getRelatedCapabilities({
+    propertyId: 'property-1',
+    userId: 'user-1',
+    currentCapabilityId: 'service-price-radar',
+  }, serviceDependencies({
+    loadRecentlyCompletedCapabilityIds: async () => ['negotiation-shield'],
+  }));
+
+  assert.equal(
+    response.suggestions.some(({ capabilityId }) =>
+      capabilityId === 'negotiation-shield'),
+    false,
+  );
+});
+
+test('CAP-601 query and route enforce bounded canonical property-scoped access', () => {
+  assert.equal(RelatedCapabilitiesQuerySchema.safeParse({
+    currentCapabilityId: 'service-price-radar',
+    limit: '4',
+    workflowContextType: ['PROPERTY', 'SERVICE'],
+  }).success, true);
+  assert.equal(RelatedCapabilitiesQuerySchema.safeParse({
+    currentCapabilityId: 'not-a-capability',
+  }).success, false);
+  assert.equal(RelatedCapabilitiesQuerySchema.safeParse({
+    currentCapabilityId: 'service-price-radar',
+    limit: '5',
+  }).success, false);
+
+  const route = relatedRouter.stack
+    .filter((layer) => layer.route)
+    .find((layer) =>
+      layer.route.path === '/properties/:propertyId/related-capabilities'
+      && layer.route.methods?.get)
+    ?.route;
+  assert.ok(route, 'Expected related capabilities GET route');
+  assert.equal(route.stack.length, 3);
+  assert.equal(route.stack[0].name, 'authenticate');
+  assert.equal(route.stack[1].name, 'propertyAuthMiddleware');
 });

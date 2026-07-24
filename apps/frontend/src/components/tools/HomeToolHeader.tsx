@@ -7,16 +7,15 @@ import { cn } from '@/lib/utils';
 import { api } from '@/lib/api/client';
 import RelatedTools from '@/components/tools/RelatedTools';
 import type { Property } from '@/types';
-import type { PageContextId } from '@/features/tools/contextToolMappings';
-import type { ToolId } from '@/features/tools/toolRegistry';
+import type { PageContextId } from '@/features/tools/pageContext';
 import { getDiscoverableTool } from '@/features/tools/toolDiscoveryRegistry';
 
 type HomeToolHeaderProps = {
-  toolId: ToolId;
+  toolId: string;
   propertyId?: string | null;
   monitoringAddress?: string | null;
   context?: PageContextId | null;
-  currentToolId?: ToolId | null;
+  currentToolId?: string | null;
   title?: string;
   description?: string;
   className?: string;

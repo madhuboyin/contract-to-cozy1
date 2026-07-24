@@ -2,7 +2,7 @@
   "generatedFrom": [
     "apps/frontend/src/components/mobile/dashboard/mobileToolCatalog.ts",
     "apps/frontend/src/features/tools/toolDiscoveryRegistry.ts",
-    "apps/frontend/src/features/tools/toolRegistry.ts",
+    "apps/backend/src/productFramework/capabilities/definitions/capabilityDefinitionFactory.ts",
     "apps/backend/src/productFramework/capabilities/definitions/decideCompare.ts",
     "apps/backend/src/productFramework/capabilities/definitions/maintainPrevent.ts",
     "apps/backend/src/productFramework/capabilities/definitions/planBudget.ts",
@@ -19,7 +19,7 @@
     "overlappingEntries": 25,
     "distinctCapabilities": 52,
     "routeVerified": 52,
-    "relatedRegistryCoverage": 31,
+    "canonicalRelationshipCoverage": 31,
     "contextualCapabilities": 24,
     "workflowOnly": 1,
     "lifecycleCanonicalized": 52,
@@ -41,7 +41,7 @@
       "safetyTier": "LOW_CONSEQUENCE",
       "completionKind": "OUTPUT_VIEWED",
       "lifecycleCanonicalized": true,
-      "relatedRegistryCoverage": false,
+      "canonicalRelationshipCoverage": false,
       "recommendationDisposition": "CATALOG_ONLY"
     },
     {
@@ -60,7 +60,7 @@
       "safetyTier": "MATERIAL_FINANCIAL",
       "completionKind": "OUTPUT_GENERATED",
       "lifecycleCanonicalized": true,
-      "relatedRegistryCoverage": true,
+      "canonicalRelationshipCoverage": true,
       "recommendationDisposition": "CONTEXTUAL_CANONICAL"
     },
     {
@@ -78,7 +78,7 @@
       "safetyTier": "LOW_CONSEQUENCE",
       "completionKind": "PLAN_CREATED",
       "lifecycleCanonicalized": true,
-      "relatedRegistryCoverage": false,
+      "canonicalRelationshipCoverage": false,
       "recommendationDisposition": "CATALOG_ONLY"
     },
     {
@@ -97,7 +97,7 @@
       "safetyTier": "MATERIAL_FINANCIAL",
       "completionKind": "PLAN_CREATED",
       "lifecycleCanonicalized": true,
-      "relatedRegistryCoverage": true,
+      "canonicalRelationshipCoverage": true,
       "recommendationDisposition": "CONTEXTUAL_CANONICAL"
     },
     {
@@ -115,7 +115,7 @@
       "safetyTier": "LOW_CONSEQUENCE",
       "completionKind": "OUTPUT_VIEWED",
       "lifecycleCanonicalized": true,
-      "relatedRegistryCoverage": false,
+      "canonicalRelationshipCoverage": false,
       "recommendationDisposition": "CATALOG_ONLY"
     },
     {
@@ -134,7 +134,7 @@
       "safetyTier": "MATERIAL_FINANCIAL",
       "completionKind": "OUTPUT_GENERATED",
       "lifecycleCanonicalized": true,
-      "relatedRegistryCoverage": true,
+      "canonicalRelationshipCoverage": true,
       "recommendationDisposition": "CATALOG_ONLY"
     },
     {
@@ -153,7 +153,7 @@
       "safetyTier": "MATERIAL_FINANCIAL",
       "completionKind": "OUTPUT_GENERATED",
       "lifecycleCanonicalized": true,
-      "relatedRegistryCoverage": true,
+      "canonicalRelationshipCoverage": true,
       "recommendationDisposition": "CONTEXTUAL_CANONICAL"
     },
     {
@@ -172,7 +172,7 @@
       "safetyTier": "MATERIAL_FINANCIAL",
       "completionKind": "OUTPUT_GENERATED",
       "lifecycleCanonicalized": true,
-      "relatedRegistryCoverage": true,
+      "canonicalRelationshipCoverage": true,
       "recommendationDisposition": "CATALOG_ONLY"
     },
     {
@@ -190,7 +190,7 @@
       "safetyTier": "REGULATED_COVERAGE",
       "completionKind": "OUTPUT_GENERATED",
       "lifecycleCanonicalized": true,
-      "relatedRegistryCoverage": false,
+      "canonicalRelationshipCoverage": false,
       "recommendationDisposition": "CATALOG_ONLY"
     },
     {
@@ -208,7 +208,7 @@
       "safetyTier": "REGULATED_COVERAGE",
       "completionKind": "OUTPUT_GENERATED",
       "lifecycleCanonicalized": true,
-      "relatedRegistryCoverage": true,
+      "canonicalRelationshipCoverage": true,
       "recommendationDisposition": "CONTEXTUAL_CANONICAL"
     },
     {
@@ -226,7 +226,7 @@
       "safetyTier": "LOW_CONSEQUENCE",
       "completionKind": "PLAN_CREATED",
       "lifecycleCanonicalized": true,
-      "relatedRegistryCoverage": false,
+      "canonicalRelationshipCoverage": false,
       "recommendationDisposition": "CONTEXTUAL_CANONICAL"
     },
     {
@@ -244,7 +244,7 @@
       "safetyTier": "MATERIAL_FINANCIAL",
       "completionKind": "DECISION_RECORDED",
       "lifecycleCanonicalized": true,
-      "relatedRegistryCoverage": false,
+      "canonicalRelationshipCoverage": false,
       "recommendationDisposition": "CATALOG_ONLY"
     },
     {
@@ -262,7 +262,7 @@
       "safetyTier": "LOW_CONSEQUENCE",
       "completionKind": "PLAN_CREATED",
       "lifecycleCanonicalized": true,
-      "relatedRegistryCoverage": false,
+      "canonicalRelationshipCoverage": false,
       "recommendationDisposition": "CATALOG_ONLY"
     },
     {
@@ -280,7 +280,7 @@
       "safetyTier": "SAFETY_EMERGENCY",
       "completionKind": "PLAN_CREATED",
       "lifecycleCanonicalized": true,
-      "relatedRegistryCoverage": false,
+      "canonicalRelationshipCoverage": false,
       "recommendationDisposition": "CATALOG_ONLY"
     },
     {
@@ -298,7 +298,7 @@
       "safetyTier": "LOW_CONSEQUENCE",
       "completionKind": "OUTPUT_VIEWED",
       "lifecycleCanonicalized": true,
-      "relatedRegistryCoverage": false,
+      "canonicalRelationshipCoverage": false,
       "recommendationDisposition": "CATALOG_ONLY"
     },
     {
@@ -316,7 +316,7 @@
       "safetyTier": "MATERIAL_FINANCIAL",
       "completionKind": "OUTPUT_GENERATED",
       "lifecycleCanonicalized": true,
-      "relatedRegistryCoverage": true,
+      "canonicalRelationshipCoverage": true,
       "recommendationDisposition": "CATALOG_ONLY"
     },
     {
@@ -335,7 +335,7 @@
       "safetyTier": "LOW_CONSEQUENCE",
       "completionKind": "OUTPUT_VIEWED",
       "lifecycleCanonicalized": true,
-      "relatedRegistryCoverage": true,
+      "canonicalRelationshipCoverage": true,
       "recommendationDisposition": "CATALOG_ONLY"
     },
     {
@@ -354,7 +354,7 @@
       "safetyTier": "LOW_CONSEQUENCE",
       "completionKind": "OUTPUT_GENERATED",
       "lifecycleCanonicalized": true,
-      "relatedRegistryCoverage": true,
+      "canonicalRelationshipCoverage": true,
       "recommendationDisposition": "CONTEXTUAL_CANONICAL"
     },
     {
@@ -372,7 +372,7 @@
       "safetyTier": "LOW_CONSEQUENCE",
       "completionKind": "PLAN_CREATED",
       "lifecycleCanonicalized": true,
-      "relatedRegistryCoverage": false,
+      "canonicalRelationshipCoverage": false,
       "recommendationDisposition": "CONTEXTUAL_CANONICAL"
     },
     {
@@ -391,7 +391,7 @@
       "safetyTier": "LOW_CONSEQUENCE",
       "completionKind": "OUTPUT_VIEWED",
       "lifecycleCanonicalized": true,
-      "relatedRegistryCoverage": true,
+      "canonicalRelationshipCoverage": true,
       "recommendationDisposition": "CONTEXTUAL_CANONICAL"
     },
     {
@@ -410,7 +410,7 @@
       "safetyTier": "LOW_CONSEQUENCE",
       "completionKind": "OUTPUT_VIEWED",
       "lifecycleCanonicalized": true,
-      "relatedRegistryCoverage": true,
+      "canonicalRelationshipCoverage": true,
       "recommendationDisposition": "CONTEXTUAL_CANONICAL"
     },
     {
@@ -429,7 +429,7 @@
       "safetyTier": "LOW_CONSEQUENCE",
       "completionKind": "OUTPUT_VIEWED",
       "lifecycleCanonicalized": true,
-      "relatedRegistryCoverage": true,
+      "canonicalRelationshipCoverage": true,
       "recommendationDisposition": "CONTEXTUAL_CANONICAL"
     },
     {
@@ -448,7 +448,7 @@
       "safetyTier": "LOW_CONSEQUENCE",
       "completionKind": "OUTPUT_VIEWED",
       "lifecycleCanonicalized": true,
-      "relatedRegistryCoverage": true,
+      "canonicalRelationshipCoverage": true,
       "recommendationDisposition": "CATALOG_ONLY"
     },
     {
@@ -467,7 +467,7 @@
       "safetyTier": "LOW_CONSEQUENCE",
       "completionKind": "ACTION_INITIATED",
       "lifecycleCanonicalized": true,
-      "relatedRegistryCoverage": true,
+      "canonicalRelationshipCoverage": true,
       "recommendationDisposition": "CONTEXTUAL_CANONICAL"
     },
     {
@@ -486,7 +486,7 @@
       "safetyTier": "LOW_CONSEQUENCE",
       "completionKind": "PLAN_CREATED",
       "lifecycleCanonicalized": true,
-      "relatedRegistryCoverage": true,
+      "canonicalRelationshipCoverage": true,
       "recommendationDisposition": "CONTEXTUAL_CANONICAL"
     },
     {
@@ -505,7 +505,7 @@
       "safetyTier": "LOW_CONSEQUENCE",
       "completionKind": "OUTPUT_VIEWED",
       "lifecycleCanonicalized": true,
-      "relatedRegistryCoverage": true,
+      "canonicalRelationshipCoverage": true,
       "recommendationDisposition": "CONTEXTUAL_CANONICAL"
     },
     {
@@ -523,7 +523,7 @@
       "safetyTier": "LOW_CONSEQUENCE",
       "completionKind": "OUTPUT_GENERATED",
       "lifecycleCanonicalized": true,
-      "relatedRegistryCoverage": false,
+      "canonicalRelationshipCoverage": false,
       "recommendationDisposition": "CATALOG_ONLY"
     },
     {
@@ -541,7 +541,7 @@
       "safetyTier": "LOW_CONSEQUENCE",
       "completionKind": "PLAN_CREATED",
       "lifecycleCanonicalized": true,
-      "relatedRegistryCoverage": true,
+      "canonicalRelationshipCoverage": true,
       "recommendationDisposition": "CATALOG_ONLY"
     },
     {
@@ -559,7 +559,7 @@
       "safetyTier": "LOW_CONSEQUENCE",
       "completionKind": "PLAN_CREATED",
       "lifecycleCanonicalized": true,
-      "relatedRegistryCoverage": false,
+      "canonicalRelationshipCoverage": false,
       "recommendationDisposition": "CONTEXTUAL_CANONICAL"
     },
     {
@@ -578,7 +578,7 @@
       "safetyTier": "REGULATED_COVERAGE",
       "completionKind": "OUTPUT_GENERATED",
       "lifecycleCanonicalized": true,
-      "relatedRegistryCoverage": true,
+      "canonicalRelationshipCoverage": true,
       "recommendationDisposition": "CONTEXTUAL_CANONICAL"
     },
     {
@@ -596,7 +596,7 @@
       "safetyTier": "LOW_CONSEQUENCE",
       "completionKind": "OUTPUT_VIEWED",
       "lifecycleCanonicalized": true,
-      "relatedRegistryCoverage": false,
+      "canonicalRelationshipCoverage": false,
       "recommendationDisposition": "CONTEXTUAL_CANONICAL"
     },
     {
@@ -614,7 +614,7 @@
       "safetyTier": "LOW_CONSEQUENCE",
       "completionKind": "PLAN_CREATED",
       "lifecycleCanonicalized": true,
-      "relatedRegistryCoverage": false,
+      "canonicalRelationshipCoverage": false,
       "recommendationDisposition": "CATALOG_ONLY"
     },
     {
@@ -633,7 +633,7 @@
       "safetyTier": "MATERIAL_FINANCIAL",
       "completionKind": "OUTPUT_GENERATED",
       "lifecycleCanonicalized": true,
-      "relatedRegistryCoverage": true,
+      "canonicalRelationshipCoverage": true,
       "recommendationDisposition": "CATALOG_ONLY"
     },
     {
@@ -652,7 +652,7 @@
       "safetyTier": "LOW_CONSEQUENCE",
       "completionKind": "DECISION_RECORDED",
       "lifecycleCanonicalized": true,
-      "relatedRegistryCoverage": true,
+      "canonicalRelationshipCoverage": true,
       "recommendationDisposition": "CATALOG_ONLY"
     },
     {
@@ -671,7 +671,7 @@
       "safetyTier": "LOW_CONSEQUENCE",
       "completionKind": "OUTPUT_VIEWED",
       "lifecycleCanonicalized": true,
-      "relatedRegistryCoverage": true,
+      "canonicalRelationshipCoverage": true,
       "recommendationDisposition": "CONTEXTUAL_CANONICAL"
     },
     {
@@ -689,7 +689,7 @@
       "safetyTier": "LOW_CONSEQUENCE",
       "completionKind": "PLAN_CREATED",
       "lifecycleCanonicalized": true,
-      "relatedRegistryCoverage": false,
+      "canonicalRelationshipCoverage": false,
       "recommendationDisposition": "CATALOG_ONLY"
     },
     {
@@ -707,7 +707,7 @@
       "safetyTier": "LOW_CONSEQUENCE",
       "completionKind": "PLAN_CREATED",
       "lifecycleCanonicalized": true,
-      "relatedRegistryCoverage": false,
+      "canonicalRelationshipCoverage": false,
       "recommendationDisposition": "CONTEXTUAL_CANONICAL"
     },
     {
@@ -726,7 +726,7 @@
       "safetyTier": "LOW_CONSEQUENCE",
       "completionKind": "ACTION_INITIATED",
       "lifecycleCanonicalized": true,
-      "relatedRegistryCoverage": true,
+      "canonicalRelationshipCoverage": true,
       "recommendationDisposition": "CONTEXTUAL_CANONICAL"
     },
     {
@@ -745,7 +745,7 @@
       "safetyTier": "LOW_CONSEQUENCE",
       "completionKind": "DECISION_RECORDED",
       "lifecycleCanonicalized": true,
-      "relatedRegistryCoverage": true,
+      "canonicalRelationshipCoverage": true,
       "recommendationDisposition": "CATALOG_ONLY"
     },
     {
@@ -763,7 +763,7 @@
       "safetyTier": "LOW_CONSEQUENCE",
       "completionKind": "PLAN_CREATED",
       "lifecycleCanonicalized": true,
-      "relatedRegistryCoverage": false,
+      "canonicalRelationshipCoverage": false,
       "recommendationDisposition": "CONTEXTUAL_CANONICAL"
     },
     {
@@ -782,7 +782,7 @@
       "safetyTier": "MATERIAL_FINANCIAL",
       "completionKind": "OUTPUT_GENERATED",
       "lifecycleCanonicalized": true,
-      "relatedRegistryCoverage": true,
+      "canonicalRelationshipCoverage": true,
       "recommendationDisposition": "CATALOG_ONLY"
     },
     {
@@ -801,7 +801,7 @@
       "safetyTier": "LOW_CONSEQUENCE",
       "completionKind": "DECISION_RECORDED",
       "lifecycleCanonicalized": true,
-      "relatedRegistryCoverage": true,
+      "canonicalRelationshipCoverage": true,
       "recommendationDisposition": "WORKFLOW_ONLY"
     },
     {
@@ -819,7 +819,7 @@
       "safetyTier": "MATERIAL_FINANCIAL",
       "completionKind": "DECISION_RECORDED",
       "lifecycleCanonicalized": true,
-      "relatedRegistryCoverage": false,
+      "canonicalRelationshipCoverage": false,
       "recommendationDisposition": "CATALOG_ONLY"
     },
     {
@@ -837,7 +837,7 @@
       "safetyTier": "MATERIAL_FINANCIAL",
       "completionKind": "PLAN_CREATED",
       "lifecycleCanonicalized": true,
-      "relatedRegistryCoverage": true,
+      "canonicalRelationshipCoverage": true,
       "recommendationDisposition": "CATALOG_ONLY"
     },
     {
@@ -855,7 +855,7 @@
       "safetyTier": "REGULATED_COVERAGE",
       "completionKind": "OUTPUT_GENERATED",
       "lifecycleCanonicalized": true,
-      "relatedRegistryCoverage": false,
+      "canonicalRelationshipCoverage": false,
       "recommendationDisposition": "CATALOG_ONLY"
     },
     {
@@ -874,7 +874,7 @@
       "safetyTier": "MATERIAL_FINANCIAL",
       "completionKind": "OUTPUT_GENERATED",
       "lifecycleCanonicalized": true,
-      "relatedRegistryCoverage": true,
+      "canonicalRelationshipCoverage": true,
       "recommendationDisposition": "CONTEXTUAL_CANONICAL"
     },
     {
@@ -892,7 +892,7 @@
       "safetyTier": "LOW_CONSEQUENCE",
       "completionKind": "PLAN_CREATED",
       "lifecycleCanonicalized": true,
-      "relatedRegistryCoverage": true,
+      "canonicalRelationshipCoverage": true,
       "recommendationDisposition": "CONTEXTUAL_CANONICAL"
     },
     {
@@ -911,7 +911,7 @@
       "safetyTier": "LOW_CONSEQUENCE",
       "completionKind": "DECISION_RECORDED",
       "lifecycleCanonicalized": true,
-      "relatedRegistryCoverage": true,
+      "canonicalRelationshipCoverage": true,
       "recommendationDisposition": "CONTEXTUAL_CANONICAL"
     },
     {
@@ -929,7 +929,7 @@
       "safetyTier": "LOW_CONSEQUENCE",
       "completionKind": "PLAN_CREATED",
       "lifecycleCanonicalized": true,
-      "relatedRegistryCoverage": true,
+      "canonicalRelationshipCoverage": true,
       "recommendationDisposition": "CONTEXTUAL_CANONICAL"
     },
     {
@@ -947,7 +947,7 @@
       "safetyTier": "LOW_CONSEQUENCE",
       "completionKind": "PLAN_CREATED",
       "lifecycleCanonicalized": true,
-      "relatedRegistryCoverage": false,
+      "canonicalRelationshipCoverage": false,
       "recommendationDisposition": "CATALOG_ONLY"
     },
     {
@@ -966,7 +966,7 @@
       "safetyTier": "MATERIAL_FINANCIAL",
       "completionKind": "OUTPUT_GENERATED",
       "lifecycleCanonicalized": true,
-      "relatedRegistryCoverage": true,
+      "canonicalRelationshipCoverage": true,
       "recommendationDisposition": "CATALOG_ONLY"
     },
     {
@@ -984,7 +984,7 @@
       "safetyTier": "LOW_CONSEQUENCE",
       "completionKind": "OUTPUT_VIEWED",
       "lifecycleCanonicalized": true,
-      "relatedRegistryCoverage": false,
+      "canonicalRelationshipCoverage": false,
       "recommendationDisposition": "CATALOG_ONLY"
     }
   ]

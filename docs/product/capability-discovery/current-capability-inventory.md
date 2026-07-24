@@ -12,7 +12,7 @@
 | Overlapping entries | 25 |
 | Distinct capabilities | 52 |
 | Canonical routes verified | 52 |
-| Legacy related-registry coverage | 31 |
+| Canonical explicit-relationship coverage | 31 |
 | Canonical contextual capabilities | 24 |
 | Workflow-only | 1 |
 | Backend lifecycle canonicalized | 52 |
@@ -20,7 +20,7 @@
 
 ## Capability Matrix
 
-| ID | Label | Sources | Canonical route | Route | Outcome | Release | Safety | Completion | Lifecycle | Related registry | Recommendation disposition |
+| ID | Label | Sources | Canonical route | Route | Outcome | Release | Safety | Completion | Lifecycle | Explicit relationships | Recommendation disposition |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | appreciation | Value Tracker | ai | `/dashboard/appreciation` | Verified | PROTECT_MONITOR | ACTIVE | LOW_CONSEQUENCE | OUTPUT_VIEWED | Canonical | No | CATALOG_ONLY |
 | break-even | Break-Even | home, ai | `/dashboard/properties/[id]/tools/break-even` | Verified | SAVE_OPTIMIZE | ACTIVE | MATERIAL_FINANCIAL | OUTPUT_GENERATED | Canonical | Yes | CONTEXTUAL_CANONICAL |
