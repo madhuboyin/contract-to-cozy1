@@ -8,8 +8,9 @@
 - [x] Step 4 — new StatefulSet applied; `postgres-0` came up Running on the new Longhorn-backed volume
 - [x] Step 5 — dump restored (see "grafana_user" note below for the expected/non-fatal errors during this step)
 - [x] Step 6 — verified: `pg_restore -l` vs. live `\dt` both show **320/320 tables** matching; DB size 187MB (down from 267MB — expected bloat/index reclamation from the dump/restore cycle itself, not data loss); `users` table has 102 rows
-- [ ] Step 7 — Longhorn replica health **not yet confirmed** via the UI (`kubectl port-forward svc/longhorn-frontend -n longhorn-system 8080:80`)
+- [x] Step 7 — Longhorn replica health confirmed 2026-07-24 (not via the UI as originally planned, but via `kubectl -n longhorn-system get replicas.longhorn.io` during the incident below): 3/3 replicas `running`, spread across `mb-09`, `mb-05`, `mb-02`
 - [ ] Follow-up — recreate the `grafana_user` role (deferred, see below)
+- [ ] Follow-up — set Longhorn's "Pod Deletion Policy When Node is Down" to auto-heal stale attachments (see "Known failure mode" below)
 
 ### Known follow-up: `grafana_user` role
 
@@ -200,3 +201,118 @@ gone (deleted in step 3) — the only way back is `pg_restore` from
 `./postgres-backup.dump` again into whatever state the new volume is in,
 or re-running from a clean `pg_restore --clean --if-exists` pass. Keep
 `postgres-backup.dump` until you're fully satisfied with step 6 and 7.
+
+## Known failure mode: stale volume attachment after ungraceful node loss
+
+### Incident, 2026-07-24
+
+`mb-06-rbp5-deb` (the node the migration was specifically meant to stop
+depending on) went `NotReady` again, and separately `mb-08-rbp5-deb` was
+also `NotReady`. `postgres-0` was rescheduled to `mb-07-rbp5-deb` but
+stuck in `ContainerCreating`:
+
+```
+Warning  FailedAttachVolume  ...  Multi-Attach error for volume
+"pvc-200d6ec4-ecac-4b3c-9395-e443f2d98d1e" Volume is already
+exclusively attached to one node and can't be attached to another
+```
+
+Root cause: Longhorn replicated the *data* fine (3/3 replicas healthy on
+`mb-09`/`mb-05`/`mb-02`, none on the dead nodes — that part of this
+migration worked exactly as intended). But the k8s `VolumeAttachment`
+object was still pointing at `mb-06` from before it died — 9 hours stale
+— and nothing forces that to clear on its own when a node goes
+unreachable rather than shutting down cleanly. `postgres-0` sat
+unschedulable until the stale attachment was cleared.
+
+In this incident the attachment actually self-cleared (Longhorn's own
+node-monitor timeout caught up) partway through diagnosis — the
+`kubectl delete volumeattachment` below returned `NotFound` by the time
+it was run. The workaround is still the right runbook if a future
+occurrence doesn't self-clear within a few minutes.
+
+### Workaround: manually clear a stuck attachment
+
+Use this if `kubectl describe pod postgres-0 -n production` shows a
+`FailedAttachVolume` / `Multi-Attach error` event and it hasn't
+self-resolved after a few minutes.
+
+**1. Confirm it's actually safe to clear** — check that no live pod is
+still using the volume, and that healthy replicas exist off whichever
+node(s) are down, before touching anything:
+
+```bash
+kubectl get nodes -o wide
+kubectl get pods -n production -o wide -l app=postgres
+
+kubectl -n longhorn-system get replicas.longhorn.io \
+  -l longhornvolume=<pvc-volume-name> \
+  -o custom-columns=NAME:.metadata.name,NODE:.spec.nodeID,STATE:.status.currentState
+```
+
+Don't proceed unless at least one replica is `running` on a `Ready`
+node.
+
+**2. Find the stale attachment:**
+
+```bash
+kubectl get volumeattachments -o wide | grep <pvc-volume-name>
+```
+
+`<pvc-volume-name>` is the PVC volume name from step 1, e.g.
+`pvc-200d6ec4-ecac-4b3c-9395-e443f2d98d1e`. Note the `NODE` column in the
+output — it should point at the dead node, not the one the pod is
+currently scheduled to.
+
+**3. Delete it:**
+
+```bash
+kubectl delete volumeattachment <attachment-name-from-step-2>
+```
+
+This just removes the stale k8s-level record of the old attachment — it
+doesn't touch the volume's data. The CSI attach-detach controller
+notices the pod is actually scheduled elsewhere and issues a fresh
+attach against that node.
+
+**4. Confirm recovery:**
+
+```bash
+kubectl get pod postgres-0 -n production -w
+# once Running:
+kubectl exec -n production postgres-0 -- sh -c \
+  'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT pg_size_pretty(pg_database_size(current_database()));"'
+```
+
+### Follow-up: make this self-heal instead of requiring manual triage
+
+Two complementary automatic fixes, neither applied yet:
+
+1. **Longhorn setting (primary fix)** — Longhorn UI → Settings → General
+   → **"Pod Deletion Policy When Node is Down"**. Currently unset/default
+   (`do-nothing`). Change to `delete-both-statefulset-and-deployment-pod`
+   so Longhorn's own node monitor force-deletes the pod (and releases the
+   stale attachment) as soon as *it* considers the node down, without
+   waiting on k8s' slower node-controller/kubelet-ack path. This is the
+   change that would have made this incident fully self-healing.
+
+2. **k8s non-graceful node shutdown (fallback, for manual/scripted use if
+   a node is confirmed dead)** — GA in k3s 1.33, no cluster config
+   needed:
+
+   ```bash
+   kubectl taint node <dead-node> node.kubernetes.io/out-of-service=nodeshutdown:NoExecute
+   ```
+
+   This tells the attach-detach controller to force-detach volumes and
+   the pod GC to delete pods on that node immediately, instead of waiting
+   for a kubelet ack that will never come. Remove the taint once the node
+   is back and healthy.
+
+Neither of these makes Postgres itself failover with zero downtime — pod
+reschedule + container start + Postgres crash-recovery still takes low
+tens of seconds. True zero-downtime would need a running standby with
+automatic promotion (e.g. Patroni or a Postgres operator with streaming
+replication), which is a materially bigger lift — extra replica pods,
+more RAM/CPU on hardware already capped at 2 vCPU / 4Gi per pod — and
+isn't scoped here.
