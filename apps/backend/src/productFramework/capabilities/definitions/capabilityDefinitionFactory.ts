@@ -23,6 +23,7 @@ type ContextualDefinition = {
   sourceKinds: ToolCapabilityDefinition['recommendation']['sourceKinds'];
   triggerFamily: string;
   reason: string;
+  safePartialValue?: boolean;
   acceptedContext?: ToolCapabilityDefinition['destination']['acceptedContext'];
   readinessRequirements?: ToolCapabilityDefinition['recommendation']['readinessRequirements'];
 };
@@ -109,6 +110,7 @@ const CONTEXTUAL_DEFINITIONS: Record<string, ContextualDefinition> = {
     sourceKinds: ['SYSTEM', 'PERSONALIZATION'],
     triggerFamily: 'PROPERTY_BENEFIT_EXPLORATION',
     reason: 'Existing systems can be checked for rebates, credits, and ownership benefits.',
+    safePartialValue: true,
     readinessRequirements: [
       { kind: 'TRACKED_SYSTEMS', minimum: 1, reason: 'Add at least one home system.' },
     ],
@@ -123,6 +125,7 @@ const CONTEXTUAL_DEFINITIONS: Record<string, ContextualDefinition> = {
     sourceKinds: ['SYSTEM', 'PERSONALIZATION'],
     triggerFamily: 'PROPERTY_CONTEXT_INCOMPLETE',
     reason: 'Known, missing, or conflicting Home Record facts can be reviewed together.',
+    safePartialValue: true,
     readinessRequirements: [
       { kind: 'KNOWN_FACTS', minimum: 1, reason: 'Add at least one verified Home Record fact.' },
     ],
@@ -169,6 +172,7 @@ const CONTEXTUAL_DEFINITIONS: Record<string, ContextualDefinition> = {
     sourceKinds: ['PROJECT', 'MAINTENANCE'],
     triggerFamily: 'MATERIAL_RECORD_NEEDED',
     reason: 'A completed project or repair needs a durable finish and product record.',
+    safePartialValue: true,
     acceptedContext: ['PROPERTY', 'PROJECT', 'ROOM', 'ISSUE'],
     readinessRequirements: [
       {
@@ -193,6 +197,7 @@ const CONTEXTUAL_DEFINITIONS: Record<string, ContextualDefinition> = {
     sourceKinds: ['MAINTENANCE', 'PERSONALIZATION'],
     triggerFamily: 'PLANT_SUITABLE_ROOM_CONTEXT',
     reason: 'Room light and maintenance context can support a plant recommendation.',
+    safePartialValue: true,
     acceptedContext: ['PROPERTY', 'ROOM'],
     readinessRequirements: [
       {
@@ -337,6 +342,7 @@ export function buildCapabilityDefinition(seed: CapabilitySeed): ToolCapabilityD
           : []),
         ...(contextual?.readinessRequirements ?? []),
       ],
+      safePartialValue: contextual?.safePartialValue ?? false,
       baseScore: contextual ? 60 : 0,
       explicitRelatedCapabilityIds: RELATED_CAPABILITIES[seed.id] ?? [],
       maxImpressionsPer30Days: contextual ? 3 : 0,

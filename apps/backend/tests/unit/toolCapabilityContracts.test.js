@@ -92,6 +92,28 @@ test('contextual capability requires a reviewed contextual source and reason tem
   assert.match(result.error.issues.map((issue) => issue.message).join(' '), /reason template/i);
 });
 
+test('safe partial value is explicit and limited to low-consequence contextual capabilities', () => {
+  const material = capability();
+  material.recommendation.safePartialValue = true;
+  material.governance.safetyTier = 'MATERIAL_FINANCIAL';
+  const materialResult = ToolCapabilityDefinitionSchema.safeParse(material);
+  assert.equal(materialResult.success, false);
+  assert.match(
+    materialResult.error.issues.map((issue) => issue.message).join(' '),
+    /safe partial value/i,
+  );
+
+  const catalogOnly = capability();
+  catalogOnly.recommendation.safePartialValue = true;
+  catalogOnly.recommendation.mode = 'CATALOG_ONLY';
+  const catalogResult = ToolCapabilityDefinitionSchema.safeParse(catalogOnly);
+  assert.equal(catalogResult.success, false);
+  assert.match(
+    catalogResult.error.issues.map((issue) => issue.message).join(' '),
+    /safe partial value/i,
+  );
+});
+
 test('workflow-only mode and destination must agree', () => {
   const fixture = capability();
   fixture.recommendation.mode = 'WORKFLOW_ONLY';

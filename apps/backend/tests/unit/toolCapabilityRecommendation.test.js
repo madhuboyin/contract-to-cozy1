@@ -5,10 +5,12 @@ require('ts-node/register');
 
 const {
   CapabilityCandidateMatchResultSchema,
+  CapabilityReadinessResultSchema,
   CapabilityRecommendationContextSchema,
   buildCapabilityRecommendationContext,
   canonicalCapabilityRegistry,
   createToolCapabilityRegistry,
+  evaluateCapabilityCandidateReadiness,
   matchCapabilityCandidates,
 } = require('../../src/productFramework/capabilities/index.ts');
 const {
@@ -145,6 +147,11 @@ test('CAP-400 builds a deterministic normalized evaluator source contract', () =
   ]);
   assert.equal(result.propertyContext.knownFactCount, 1);
   assert.equal(result.propertyContext.staleFactCount, 1);
+  assert.deepEqual(result.propertyContext.readinessMetrics, {
+    trackedSystemCount: null,
+    coverageGapCount: null,
+    jurisdictionStatus: 'UNKNOWN',
+  });
 });
 
 test('CAP-400 excludes raw values, action prose/evidence, and optional household scope', () => {
@@ -375,4 +382,247 @@ test('CAP-401 ignores inactive journeys, projects, and personalization sources',
     context,
   });
   assert.deepEqual(result.candidates, []);
+});
+
+function evaluateReadiness(context, registry = canonicalCapabilityRegistry) {
+  const matchResult = matchCapabilityCandidates({ registry, context });
+  return evaluateCapabilityCandidateReadiness({
+    registry,
+    context,
+    matchResult,
+  });
+}
+
+function candidateById(result, capabilityId) {
+  const candidate = result.candidates.find(
+    (item) => item.capabilityId === capabilityId,
+  );
+  assert.ok(candidate, `Expected ${capabilityId} candidate`);
+  return candidate;
+}
+
+test('CAP-402 returns READY when required structured context is satisfied', () => {
+  const context = buildCapabilityRecommendationContext({
+    propertyId: 'property-1',
+    propertyContext: propertyContext(),
+    actions: [action({
+      source: {
+        kind: 'COVERAGE',
+        entityId: 'item-1',
+        version: 'action-v2',
+      },
+      job: 'DECIDE',
+    })],
+    actionSourceMetadata: [{
+      actionId: 'action-1',
+      signalIntentFamilies: ['COVERAGE_GAPS_PRESENT'],
+      ctaCapabilityIds: ['coverage-options'],
+    }],
+    readinessMetrics: {
+      trackedSystemCount: 2,
+      coverageGapCount: 1,
+      jurisdictionStatus: 'KNOWN',
+    },
+    surface: 'HOME',
+  });
+
+  const result = evaluateReadiness(context);
+  assert.doesNotThrow(() => CapabilityReadinessResultSchema.parse(result));
+  const coverage = candidateById(result, 'coverage-options');
+  assert.equal(coverage.readiness.state, 'READY');
+  assert.equal(
+    coverage.readiness.checks.every((item) => item.result === 'TRUE'),
+    true,
+  );
+});
+
+test('CAP-402 fails closed for false or unknown regulated and material readiness', () => {
+  const coverageContext = buildCapabilityRecommendationContext({
+    propertyId: 'property-1',
+    propertyContext: propertyContext(),
+    actions: [action({
+      source: {
+        kind: 'COVERAGE',
+        entityId: 'item-1',
+        version: 'action-v2',
+      },
+      job: 'DECIDE',
+    })],
+    actionSourceMetadata: [{
+      actionId: 'action-1',
+      signalIntentFamilies: ['COVERAGE_GAPS_PRESENT'],
+    }],
+    readinessMetrics: { coverageGapCount: 0 },
+    surface: 'HOME',
+  });
+  const coverage = candidateById(
+    evaluateReadiness(coverageContext),
+    'coverage-options',
+  );
+  assert.equal(coverage.readiness.state, 'UNAVAILABLE');
+  assert.equal(
+    coverage.readiness.checks.find((item) => item.kind === 'COVERAGE_GAPS')
+      .result,
+    'FALSE',
+  );
+
+  const capitalContext = buildCapabilityRecommendationContext({
+    propertyId: 'property-1',
+    propertyContext: propertyContext(),
+    actions: [action({
+      source: {
+        kind: 'SYSTEM',
+        entityId: 'system-1',
+        version: 'action-v1',
+      },
+      job: 'MAJOR_MOMENT',
+    })],
+    actionSourceMetadata: [{
+      actionId: 'action-1',
+      signalIntentFamilies: ['TRACKED_SYSTEMS_AVAILABLE'],
+    }],
+    readinessMetrics: { trackedSystemCount: 0 },
+    surface: 'HOME',
+  });
+  const capital = candidateById(
+    evaluateReadiness(capitalContext),
+    'capital-timeline',
+  );
+  assert.equal(capital.readiness.state, 'UNAVAILABLE');
+  assert.equal(capital.readiness.safePartialValue, false);
+  assert.equal(
+    capital.readiness.checks.find((item) => item.kind === 'TRACKED_SYSTEMS')
+      .result,
+    'UNKNOWN',
+  );
+});
+
+test('CAP-402 allows NEEDS_CONTEXT only for explicitly reviewed safe partial value', () => {
+  const context = buildCapabilityRecommendationContext({
+    propertyId: 'property-1',
+    propertyContext: propertyContext(),
+    actions: [action({
+      source: {
+        kind: 'SYSTEM',
+        entityId: 'system-1',
+        version: 'action-v1',
+      },
+      job: 'DECIDE',
+    })],
+    actionSourceMetadata: [{
+      actionId: 'action-1',
+      signalIntentFamilies: ['PROPERTY_BENEFIT_EXPLORATION'],
+      missingFactKeys: ['systems.installedItemTypes'],
+    }],
+    readinessMetrics: { trackedSystemCount: 0 },
+    surface: 'HOME',
+  });
+  const hiddenAsset = candidateById(
+    evaluateReadiness(context),
+    'hidden-asset-finder',
+  );
+
+  assert.equal(hiddenAsset.readiness.state, 'NEEDS_CONTEXT');
+  assert.equal(hiddenAsset.readiness.safePartialValue, true);
+  assert.deepEqual(
+    hiddenAsset.readiness.missingFactKeys,
+    ['systems.installedItemTypes'],
+  );
+});
+
+test('CAP-402 evaluates required source context and jurisdiction without raw facts', () => {
+  const plantContext = buildCapabilityRecommendationContext({
+    propertyId: 'property-1',
+    propertyContext: propertyContext(),
+    actions: [action({
+      source: {
+        kind: 'MAINTENANCE',
+        entityId: 'task-1',
+        version: 'action-v1',
+      },
+      job: 'STAY_AHEAD',
+    })],
+    actionSourceMetadata: [{
+      actionId: 'action-1',
+      signalIntentFamilies: ['PLANT_SUITABLE_ROOM_CONTEXT'],
+    }],
+    surface: 'HOME',
+  });
+  const plant = candidateById(
+    evaluateReadiness(plantContext),
+    'plant-advisor',
+  );
+  assert.equal(plant.readiness.state, 'NEEDS_CONTEXT');
+  assert.equal(
+    plant.readiness.checks.find((item) => item.kind === 'SOURCE_CONTEXT')
+      .result,
+    'UNKNOWN',
+  );
+
+  const hiddenAsset = structuredClone(
+    canonicalCapabilityRegistry.getById('hidden-asset-finder'),
+  );
+  hiddenAsset.recommendation.readinessRequirements = [
+    { kind: 'JURISDICTION', reason: 'Confirm an eligible jurisdiction.' },
+  ];
+  hiddenAsset.recommendation.explicitRelatedCapabilityIds = [];
+  const jurisdictionRegistry = createToolCapabilityRegistry([hiddenAsset]);
+  const unsupportedContext = buildCapabilityRecommendationContext({
+    propertyId: 'property-1',
+    propertyContext: propertyContext(),
+    actions: [action({
+      source: {
+        kind: 'SYSTEM',
+        entityId: 'system-1',
+        version: 'action-v1',
+      },
+      job: 'DECIDE',
+    })],
+    actionSourceMetadata: [{
+      actionId: 'action-1',
+      signalIntentFamilies: ['PROPERTY_BENEFIT_EXPLORATION'],
+    }],
+    readinessMetrics: { jurisdictionStatus: 'UNSUPPORTED' },
+    surface: 'HOME',
+  });
+  const unsupported = candidateById(
+    evaluateReadiness(unsupportedContext, jurisdictionRegistry),
+    'hidden-asset-finder',
+  );
+  assert.equal(unsupported.readiness.state, 'UNAVAILABLE');
+  assert.equal(
+    unsupported.readiness.checks.find((item) => item.kind === 'JURISDICTION')
+      .result,
+    'FALSE',
+  );
+  assert.doesNotMatch(JSON.stringify(unsupported), /1987|SECRET/);
+});
+
+test('CAP-402 rejects stale registry and context versions', () => {
+  const context = matcherContext();
+  const matchResult = matchCapabilityCandidates({
+    registry: matcherRegistry(),
+    context,
+  });
+  const staleContext = structuredClone(context);
+  staleContext.contextVersion = 'context-v8';
+  assert.throws(
+    () => evaluateCapabilityCandidateReadiness({
+      registry: matcherRegistry(),
+      context: staleContext,
+      matchResult,
+    }),
+    /context version is stale/,
+  );
+
+  const staleRegistryResult = structuredClone(matchResult);
+  staleRegistryResult.registryVersion = 'registry-v0';
+  assert.throws(
+    () => evaluateCapabilityCandidateReadiness({
+      registry: matcherRegistry(),
+      context,
+      matchResult: staleRegistryResult,
+    }),
+    /registry version/,
+  );
 });

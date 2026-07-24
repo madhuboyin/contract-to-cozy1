@@ -222,6 +222,7 @@ export const ToolCapabilityDefinitionSchema = z.object({
     reasonTemplates: z.record(z.string(), z.string().trim().min(1).max(600)),
     expectedOutcome: NonEmptyBoundedString,
     readinessRequirements: z.array(CapabilityReadinessRequirementSchema).max(30),
+    safePartialValue: z.boolean().default(false),
     baseScore: z.number().min(0).max(100),
     explicitRelatedCapabilityIds: z.array(CapabilityIdSchema).max(30),
     maxImpressionsPer30Days: z.number().int().min(0).max(100),
@@ -261,6 +262,19 @@ export const ToolCapabilityDefinitionSchema = z.object({
       code: 'custom',
       path: ['recommendation', 'reasonTemplates'],
       message: 'Contextual capabilities require at least one reason template.',
+    });
+  }
+  if (
+    value.recommendation.safePartialValue
+    && (
+      value.recommendation.mode !== 'CONTEXTUAL'
+      || value.governance.safetyTier !== 'LOW_CONSEQUENCE'
+    )
+  ) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['recommendation', 'safePartialValue'],
+      message: 'Safe partial value is limited to explicitly reviewed low-consequence contextual capabilities.',
     });
   }
   if (

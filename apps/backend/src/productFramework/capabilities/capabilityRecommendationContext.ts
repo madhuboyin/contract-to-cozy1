@@ -157,6 +157,11 @@ export const CapabilityRecommendationContextSchema = z.object({
     conflictedFactCount: z.number().int().nonnegative(),
     staleFactCount: z.number().int().nonnegative(),
     warningCodes: z.array(z.enum(['CONFLICT', 'STALE_SOURCE', 'PARTIAL_SCOPE'])),
+    readinessMetrics: z.object({
+      trackedSystemCount: z.number().int().nonnegative().nullable(),
+      coverageGapCount: z.number().int().nonnegative().nullable(),
+      jurisdictionStatus: z.enum(['KNOWN', 'UNKNOWN', 'UNSUPPORTED']),
+    }),
   }),
   actions: z.array(NormalizedHomeActionSchema).max(200),
   journeys: z.array(JourneySourceSchema).max(100),
@@ -204,6 +209,11 @@ export interface BuildCapabilityRecommendationContextInput {
   surface: CapabilitySuggestionSurface;
   limit?: number;
   generatedAt?: string;
+  readinessMetrics?: {
+    trackedSystemCount?: number | null;
+    coverageGapCount?: number | null;
+    jurisdictionStatus?: 'KNOWN' | 'UNKNOWN' | 'UNSUPPORTED';
+  };
 }
 
 function uniqueSorted(values: readonly string[]): string[] {
@@ -312,6 +322,12 @@ export function buildCapabilityRecommendationContext(
       warningCodes: uniqueSorted(
         input.propertyContext.warnings.map((warning) => warning.code),
       ),
+      readinessMetrics: {
+        trackedSystemCount: input.readinessMetrics?.trackedSystemCount ?? null,
+        coverageGapCount: input.readinessMetrics?.coverageGapCount ?? null,
+        jurisdictionStatus:
+          input.readinessMetrics?.jurisdictionStatus ?? 'UNKNOWN',
+      },
     },
     actions,
     journeys: byId(input.journeys ?? []),
