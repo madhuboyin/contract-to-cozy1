@@ -1,5 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
 
 require('ts-node/register');
 
@@ -9,6 +10,10 @@ const {
 const {
   PRODUCT_TOOL_SEEDS,
 } = require('../../prisma/knowledgeHub.seed.ts');
+const {
+  KNOWLEDGE_HUB_PGADMIN_SEED_PATH,
+  renderKnowledgeHubPgAdminSeedSql,
+} = require('../../prisma/generateKnowledgeHubPgAdminSeed.ts');
 const {
   canonicalCapabilityRegistry,
 } = require('../../src/productFramework/capabilities/index.ts');
@@ -87,5 +92,16 @@ test('Knowledge Hub seed preserves three explicit platform entries without delet
   assert.equal(keys.has('REPORT_PACK'), true);
   for (const capabilitySeed of buildCapabilityProductToolSeeds()) {
     assert.equal(keys.has(capabilitySeed.key), true);
+  }
+});
+
+test('pgAdmin SQL seed is current with the canonical Knowledge Hub projection', () => {
+  const checkedInSql = fs.readFileSync(KNOWLEDGE_HUB_PGADMIN_SEED_PATH, 'utf8');
+  assert.equal(checkedInSql, renderKnowledgeHubPgAdminSeedSql());
+  assert.match(checkedInSql, /^BEGIN;$/m);
+  assert.match(checkedInSql, /^COMMIT;$/m);
+  assert.match(checkedInSql, /ON CONFLICT \("key"\) DO UPDATE SET/);
+  for (const productTool of PRODUCT_TOOL_SEEDS) {
+    assert.match(checkedInSql, new RegExp(`'${productTool.key}'`));
   }
 });

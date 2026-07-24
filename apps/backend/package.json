@@ -9,6 +9,7 @@
     "prisma:generate": "prisma generate --schema=./prisma/schema.prisma",
     "seed": "npx prisma db seed",
     "seed:knowledge-hub": "ts-node prisma/knowledgeHub.seed.ts",
+    "generate:knowledge-hub-pgadmin": "ts-node prisma/generateKnowledgeHubPgAdminSeed.ts",
     "pretest:unit": "npm run prisma:generate",
     "test": "node --test $(find tests -type f -name '*.test.js')",
     "test:unit": "node --test $(find tests/unit -type f -name '*.test.js')",

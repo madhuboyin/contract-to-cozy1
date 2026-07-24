@@ -73,7 +73,7 @@ type KnowledgeHubSeedSummary = {
   productTools: SeedCounts;
 };
 
-const KNOWLEDGE_CATEGORY_SEEDS: KnowledgeCategorySeed[] = [
+export const KNOWLEDGE_CATEGORY_SEEDS: KnowledgeCategorySeed[] = [
   {
     slug: 'maintenance',
     name: 'Maintenance',
@@ -132,7 +132,7 @@ const KNOWLEDGE_CATEGORY_SEEDS: KnowledgeCategorySeed[] = [
   },
 ];
 
-const KNOWLEDGE_TAG_SEEDS: KnowledgeTagSeed[] = [
+export const KNOWLEDGE_TAG_SEEDS: KnowledgeTagSeed[] = [
   { slug: 'roof-age', name: 'Roof Age', tagGroup: 'systems', isActive: true },
   { slug: 'hvac-age', name: 'HVAC Age', tagGroup: 'systems', isActive: true },
   { slug: 'water-heater', name: 'Water Heater', tagGroup: 'systems', isActive: true },
