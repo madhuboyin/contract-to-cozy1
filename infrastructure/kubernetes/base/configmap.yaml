@@ -74,11 +74,24 @@ data:
   # after reviewing that job group for this single shared environment.
   # Per-job overrides: WORKER_JOB_<NORMALIZED_KEY>_ENABLED=true|false.
   WORKER_AUTOMATION_ENABLED: "true"
-  WORKER_OUTBOUND_NOTIFICATIONS_ENABLED: "false"
+  # Synced from live 2026-07-24 — was hand-set to "true" directly on the
+  # cluster via Rancher, never reflected here. Adopting live as the
+  # baseline since there's no record of why; revisit if this should be
+  # reviewed as a fresh group-flag decision rather than grandfathered in.
+  WORKER_OUTBOUND_NOTIFICATIONS_ENABLED: "true"
+  # Deliberately kept "false" (not synced from live's "true") — the
+  # WORKER_JOB_FREEZE_RISK_INCIDENTS_ENABLED / WORKER_JOB_SEVERE_WEATHER_ALERTS_ENABLED
+  # per-job overrides below replace the group flag for those two jobs so
+  # the other external-ingest jobs (recall-ingest, mortgage-rate-ingest,
+  # permit-fetch, generate-diy-ai-guide, etc.) stay off pending review.
   WORKER_EXTERNAL_INGEST_ENABLED: "false"
   WORKER_MUTATING_SWEEPS_ENABLED: "false"
   WORKER_MANUAL_TRIGGERS_ENABLED: "true"
-  ENFORCE_WORKER_MANUAL_TRIGGER_APPROVALS: "false"
+  # Synced from live 2026-07-24 (was "false" here, "true" on the cluster).
+  # This blocks every HIGH_IMPACT_MANUAL job's manual trigger while no
+  # approval workflow exists (see workerExecutionPolicy.ts) — confirm this
+  # is still intended next time a HIGH_IMPACT_MANUAL job needs a manual run.
+  ENFORCE_WORKER_MANUAL_TRIGGER_APPROVALS: "true"
   # Per-job overrides for the WORKER_MUTATING_SWEEPS_ENABLED=false group —
   # reviewed individually (correct propertyId scoping, dry-run behavior,
   # per-item error isolation, narrow write/delete scope) and enabled ahead
@@ -122,3 +135,13 @@ data:
 
   # Weekly retention/activation report recipient (see workers weeklyRetentionReport.job.ts)
   RETENTION_REPORT_EMAIL: "madhuboyina@gmail.com"
+
+  # --- Synced from live 2026-07-24 — existed on the cluster (via Rancher)
+  # but were never tracked in this file. Values below are copied as-is
+  # from the live ConfigMap; confirm each is still correct/needed.
+  CPSC_RECALL_FEED_URL: "https://www.saferproducts.gov/RestWebServices/Recall?format=json&RecallDateStart=2025-01-01"
+  EVENTBRITE_MAX_PAGES: "5"
+  SMTP_USER: "9ec830001@smtp-brevo.com"
+  VAULT_BYPASS_PASSWORD: "true"
+  PREVIEW_KEY: "contract2cozy2025"
+  NEXT_PUBLIC_PREVIEW_KEY: "contract2cozy2025"
