@@ -2,6 +2,7 @@ export * from './capability.contract';
 export * from './capabilityAvailability';
 export * from './capabilityCatalog.service';
 export * from './capabilityGoldenFixtures';
+export * from './capabilityRecommendationContext';
 export * from './canonicalCapabilityRegistry';
 export * from './capabilityRegistry';
 export * from './definitions';
