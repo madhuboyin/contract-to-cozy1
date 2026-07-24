@@ -5,6 +5,7 @@ import { propertyAuthMiddleware } from '../middleware/propertyAuth.middleware';
 import {
   CAPABILITY_CONTEXT_TYPES,
   CAPABILITY_CONTEXT_SOURCE_KINDS,
+  CAPABILITY_COMPLETION_KINDS,
   CAPABILITY_SUGGESTION_SURFACES,
   canonicalCapabilityRegistry,
 } from '../productFramework/capabilities';
@@ -23,6 +24,7 @@ export const CapabilitySuggestionsQuerySchema = z.object({
   sourceActionId: z.string().trim().min(1).max(160).optional(),
   sourceEntityType: z.string().trim().min(1).max(160).optional(),
   sourceEntityId: z.string().trim().min(1).max(160).optional(),
+  sourceEventType: z.enum(CAPABILITY_COMPLETION_KINDS).optional(),
 }).superRefine((value, ctx) => {
   if (Boolean(value.sourceKind) !== Boolean(value.sourceId)) {
     ctx.addIssue({
@@ -46,6 +48,13 @@ export const CapabilitySuggestionsQuerySchema = z.object({
       code: 'custom',
       path: value.sourceEntityType ? ['sourceEntityId'] : ['sourceEntityType'],
       message: 'sourceEntityType and sourceEntityId must be provided together.',
+    });
+  }
+  if (value.sourceEventType && value.sourceKind !== 'COMPLETION') {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['sourceEventType'],
+      message: 'sourceEventType is valid only for a COMPLETION source.',
     });
   }
 });
@@ -155,6 +164,7 @@ router.get(
               actionId: query.sourceActionId ?? null,
               entityType: query.sourceEntityType ?? null,
               entityId: query.sourceEntityId ?? null,
+              eventType: query.sourceEventType ?? null,
             }
           : null,
       });

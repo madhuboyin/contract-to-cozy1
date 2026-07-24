@@ -97,6 +97,7 @@ Status as of July 24, 2026:
 | CAP-600 related resolver | Complete | Canonical manifest relationships, verified output compatibility, reviewed taxonomy similarity, and source context produce deterministic bounded results after release, readiness, governance, workflow-context, commercial, approval, and suppression gates |
 | CAP-601 RelatedTools cutover | Complete | The property-authorized related-capabilities endpoint composes current Property Context, readiness, release, governance, workflow, and recent-completion state; RelatedTools consumes its versioned projection with viewport gating, actual-view lifecycle telemetry, safe launch attribution, and no empty failure container |
 | CAP-602 inline suggestion primitive | Complete | Shared non-modal renderer consumes one server suggestion, preserves launch lineage and actual-view telemetry, and exposes dismiss or not-relevant controls only through caller-provided handlers |
+| CAP-603 inline integration contract | Complete | Shared slot accepts only property, canonical source entity, optional action/journey, completion event, and placement context; it requests one server-selected capability and renders nothing for loading, failure, or empty results |
 
 Explore Tools and homeowner command search now use the canonical catalog by default. Set
 `CAPABILITY_CATALOG_SOURCE=legacy` only for the temporary internal-beta rollback.
@@ -1192,6 +1193,15 @@ Feature modules provide only:
 
 Feature modules shall not hard-code the capability ID unless the relationship is an explicit,
 reviewed workflow edge.
+
+Implementation: a typed context adapter maps the feature-owned property,
+canonical entity, optional action or journey, completion event, and placement
+into a source-scoped evaluator request capped at one. The API client now
+preserves every lineage field, and the authenticated evaluator validates and
+uses completion-event scoping against the persisted output. A shared slot owns
+the query and delegates successful server selections to the CAP-602 primitive;
+loading, failed, and empty requests render no promotional container. The
+integration prop contract intentionally has no capability-ID field.
 
 #### CAP-604: Post-completion resolver
 

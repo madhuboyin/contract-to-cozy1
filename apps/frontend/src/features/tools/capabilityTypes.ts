@@ -26,6 +26,23 @@ export type CapabilityContextType =
   | 'SERVICE'
   | 'JOURNEY';
 
+export type CapabilityContextSourceKind =
+  | 'HOME_ACTION'
+  | 'JOURNEY'
+  | 'PROJECT'
+  | 'PROPERTY_CONTEXT'
+  | 'PERSONALIZATION'
+  | 'COMPLETION';
+
+export type CapabilityCompletionEventType =
+  | 'OUTPUT_VIEWED'
+  | 'OUTPUT_GENERATED'
+  | 'ARTIFACT_CREATED'
+  | 'DECISION_RECORDED'
+  | 'ACTION_INITIATED'
+  | 'ACTION_COMPLETED'
+  | 'PLAN_CREATED';
+
 export type CapabilityReadinessRequirement = {
   kind:
     | 'PROPERTY'

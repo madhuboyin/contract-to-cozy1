@@ -147,6 +147,7 @@ const ExplicitSourceContextSchema = z.object({
   actionId: OptionalIdentifier.default(null),
   entityType: OptionalIdentifier.default(null),
   entityId: OptionalIdentifier.default(null),
+  eventType: OptionalIdentifier.default(null),
 });
 
 export const CapabilityRecommendationContextSchema = z.object({

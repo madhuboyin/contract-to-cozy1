@@ -130,6 +130,8 @@ import type { PropertyContextEnvelope } from '@/components/property-context/prop
 import type { FeatureContextCaptureResult, FeatureContextEvaluation } from '@/components/property-context/featureContextTypes';
 import type {
   CapabilityCatalog,
+  CapabilityCompletionEventType,
+  CapabilityContextSourceKind,
   CapabilityContextType,
   RelatedCapabilitiesResponse,
 } from '@/features/tools/capabilityTypes';
@@ -2865,11 +2867,23 @@ class APIClient {
     options: {
       surface: CapabilitySuggestionSurfaceDTO;
       limit?: number;
+      sourceKind?: CapabilityContextSourceKind;
+      sourceId?: string;
+      sourceActionId?: string;
+      sourceEntityType?: CapabilityContextType;
+      sourceEntityId?: string;
+      sourceEventType?: CapabilityCompletionEventType;
     },
   ): Promise<CapabilitySuggestionResponseDTO> {
     const query = this.buildQueryString({
       surface: options.surface,
       limit: options.limit,
+      sourceKind: options.sourceKind,
+      sourceId: options.sourceId,
+      sourceActionId: options.sourceActionId,
+      sourceEntityType: options.sourceEntityType,
+      sourceEntityId: options.sourceEntityId,
+      sourceEventType: options.sourceEventType,
     });
     const response = await this.request<CapabilitySuggestionResponseDTO>(
       `/api/properties/${encodeURIComponent(propertyId)}/capability-suggestions${query}`,

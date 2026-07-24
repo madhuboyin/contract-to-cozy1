@@ -16,7 +16,7 @@ import { useCapabilityImpression } from './useCapabilityImpression';
 
 export type InlineCapabilitySuggestionSurface = Extract<
   ToolDiscoverySurface,
-  'workflow' | 'property_detail' | 'unified_home'
+  'workflow' | 'completion' | 'property_detail' | 'unified_home'
 >;
 
 export type InlineCapabilitySuggestionFeedback =

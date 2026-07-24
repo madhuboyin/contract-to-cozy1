@@ -204,7 +204,7 @@ export interface CtcEventProperties {
   action_completed: { tool: CtcTool; actionType: string; propertyId: string };
   tool_discovery_impression: {
     propertyId?: string | null;
-    surface: 'unified_home' | 'property_detail' | 'explore_tools' | 'command_palette' | 'workflow';
+    surface: 'unified_home' | 'property_detail' | 'explore_tools' | 'command_palette' | 'workflow' | 'completion';
     toolIds: string[];
     recommendationReasons?: string[];
     recommendationVersions?: string[];
@@ -212,7 +212,7 @@ export interface CtcEventProperties {
   };
   tool_discovery_clicked: {
     propertyId?: string | null;
-    surface: 'unified_home' | 'property_detail' | 'explore_tools' | 'command_palette' | 'workflow';
+    surface: 'unified_home' | 'property_detail' | 'explore_tools' | 'command_palette' | 'workflow' | 'completion';
     toolId: string;
     position?: number;
     recommendationReason?: string | null;

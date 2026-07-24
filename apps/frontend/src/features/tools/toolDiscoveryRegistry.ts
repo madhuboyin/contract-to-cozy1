@@ -21,6 +21,7 @@ export type ToolDiscoverySurface =
   | 'explore_tools'
   | 'command_palette'
   | 'workflow'
+  | 'completion'
   | 'direct'
   | 'guidance'
   | 'home_tools'

@@ -1753,6 +1753,26 @@ test('CAP-407 query contract supports every bounded surface and rejects partial 
     }).success,
     false,
   );
+  assert.equal(
+    CapabilitySuggestionsQuerySchema.safeParse({
+      surface: 'COMPLETION',
+      sourceKind: 'COMPLETION',
+      sourceId: 'output-1',
+      sourceEntityType: 'DOCUMENT',
+      sourceEntityId: 'output-1',
+      sourceEventType: 'ARTIFACT_CREATED',
+    }).success,
+    true,
+  );
+  assert.equal(
+    CapabilitySuggestionsQuerySchema.safeParse({
+      surface: 'WORKFLOW',
+      sourceKind: 'PROJECT',
+      sourceId: 'project-1',
+      sourceEventType: 'ACTION_COMPLETED',
+    }).success,
+    false,
+  );
 });
 
 test('CAP-407 route requires authentication and property authorization', () => {

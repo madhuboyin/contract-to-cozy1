@@ -1,9 +1,42 @@
 import { api } from '@/lib/api/client';
 import type {
+  CapabilitySuggestionResponseDTO,
+  CapabilitySuggestionSurfaceDTO,
+} from '@/types';
+import type {
   CapabilityCatalog,
+  CapabilityCompletionEventType,
+  CapabilityContextSourceKind,
   CapabilityContextType,
   RelatedCapabilitiesResponse,
 } from './capabilityTypes';
+
+export type CapabilitySuggestionsRequest = {
+  propertyId: string;
+  surface: CapabilitySuggestionSurfaceDTO;
+  limit?: number;
+  sourceKind?: CapabilityContextSourceKind;
+  sourceId?: string;
+  sourceActionId?: string;
+  sourceEntityType?: CapabilityContextType;
+  sourceEntityId?: string;
+  sourceEventType?: CapabilityCompletionEventType;
+};
+
+export async function fetchCapabilitySuggestions(
+  request: CapabilitySuggestionsRequest,
+): Promise<CapabilitySuggestionResponseDTO> {
+  return api.getCapabilitySuggestions(request.propertyId, {
+    surface: request.surface,
+    limit: request.limit,
+    sourceKind: request.sourceKind,
+    sourceId: request.sourceId,
+    sourceActionId: request.sourceActionId,
+    sourceEntityType: request.sourceEntityType,
+    sourceEntityId: request.sourceEntityId,
+    sourceEventType: request.sourceEventType,
+  });
+}
 
 export type CapabilityCatalogRequest = {
   propertyId?: string;

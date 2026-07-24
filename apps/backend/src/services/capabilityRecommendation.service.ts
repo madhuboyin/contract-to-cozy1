@@ -475,16 +475,27 @@ function sourceScoped<T extends {
   sourceActionId?: string | null;
   sourceEntityType?: string | null;
   sourceEntityId?: string | null;
+  outputEntityType?: string | null;
+  outputEntityId?: string | null;
+  completionSignal?: string | null;
 }>(values: readonly T[], source: CapabilityExplicitSourceContext | null): T[] {
   if (!source) return [...values];
-  return values.filter((value) =>
-    value.id === source.id
-    || (source.actionId && value.sourceActionId === source.actionId)
-    || (
-      source.entityId
-      && value.sourceEntityId === source.entityId
-      && (!source.entityType || value.sourceEntityType === source.entityType)
-  ));
+  return values.filter((value) => {
+    const entityType = value.sourceEntityType ?? value.outputEntityType;
+    const entityId = value.sourceEntityId ?? value.outputEntityId;
+    return (
+      (
+        value.id === source.id
+        || (source.actionId && value.sourceActionId === source.actionId)
+        || (
+          source.entityId
+          && entityId === source.entityId
+          && (!source.entityType || entityType === source.entityType)
+        )
+      )
+      && (!source.eventType || value.completionSignal === source.eventType)
+    );
+  });
 }
 
 function conservativeLifecycleFallback(

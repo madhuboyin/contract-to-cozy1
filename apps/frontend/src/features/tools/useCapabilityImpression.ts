@@ -11,7 +11,8 @@ type CapabilityImpressionInput = {
     | 'property_detail'
     | 'explore_tools'
     | 'command_palette'
-    | 'workflow';
+    | 'workflow'
+    | 'completion';
   registryVersion: string;
   recommendationReason?: string | null;
   recommendationVersion?: string | null;
