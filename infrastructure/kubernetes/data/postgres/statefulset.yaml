@@ -54,8 +54,6 @@ spec:
       labels:
         app: postgres
     spec:
-      nodeSelector:
-        role: database
       containers:
         - name: postgres
           image: postgres:15-alpine
@@ -118,7 +116,7 @@ spec:
       spec:
         accessModes: 
           - ReadWriteOnce
-        storageClassName: local-path
+        storageClassName: longhorn
         resources:
           requests:
             storage: 100Gi
