@@ -112,6 +112,7 @@ Status as of July 25, 2026:
 | CAP-902 capability human-policy attestations | Complete | Versioned role attestations are persisted and enforced at launch review and runtime recommendation boundaries |
 | CAP-903 elevated-risk and privacy validation | Complete | Structured material, regulated, safety, commercial, and privacy policy validation fails closed; Financing remains intentionally blocked on unrecorded business terms |
 | CAP-904 authenticated representative-property smoke | Complete | Read-only smoke runner validates at least three named properties, catalog and HOME/PROPERTY suggestion contracts, canonical registry/manifest parity, expected and forbidden outcomes, cache isolation, launch context, and an unauthorized-property probe |
+| CAP-905 supported-browser and mobile-PWA actual-view gate | Complete | Production-build Playwright acceptance validates viewport-qualified lifecycle payloads, no unseen bulk impressions, session deduplication, search behavior, manifest integrity, and standalone mobile behavior across Chromium, Firefox, WebKit, mobile Chrome, and mobile Safari |
 
 Explore Tools and homeowner command search now use the canonical catalog by default. Set
 `CAPABILITY_CATALOG_SOURCE=legacy` only for the temporary internal-beta rollback.
@@ -1922,6 +1923,47 @@ properties, users, lifecycle events, approvals, or smoke cleanup obligations.
 Its pass report is execution evidence, not a replacement for current human
 policy attestations, Admin release review, browser/PWA telemetry checks,
 accessibility review, or rollback and incident drills.
+
+No database schema, seed, SQL, or migration change is required for this slice.
+
+### CAP-905: Supported-browser and mobile-PWA actual-view gate
+
+Expanded the production-build Tool Discovery acceptance gate from one desktop
+Chromium project to:
+
+- desktop Chromium;
+- desktop Firefox;
+- desktop WebKit/Safari;
+- mobile Chrome emulation; and
+- mobile Safari emulation in standalone PWA display mode.
+
+The acceptance fixture begins with every capability card below the viewport.
+It captures the same enriched lifecycle payload that would be sent to the API,
+without posting synthetic Product Analytics rows. The matrix proves that:
+
+- rendered-but-unseen tools do not emit `DISCOVERED`;
+- a card emits only after the shared 50%-visible, 750-ms exposure contract;
+- the emitted payload retains property, registry, context, source-action, and
+  surface attribution;
+- Explore Tools emits only for the viewed tile rather than bulk-counting its
+  rendered catalog;
+- returning to a viewed card and reloading the same browser session do not
+  duplicate the actual view;
+- search filtering behaves consistently in each supported engine; and
+- standalone mobile mode retains actual-view behavior while the deployed web
+  manifest continues to declare `/dashboard`, root scope, and
+  `display: standalone`.
+
+The acceptance-only lifecycle sink is compiled in only when
+`TOOL_DISCOVERY_ACCEPTANCE_FIXTURE=1`; ordinary builds retain the real
+telemetry API path. The local HTTP fixture omits CSP
+`upgrade-insecure-requests` only on explicitly enabled acceptance routes so
+WebKit does not rewrite local scripts to unavailable HTTPS URLs. Normal routes
+and production deployments retain the directive.
+
+Frontend quality-gate CI now installs Chromium, Firefox, and WebKit and runs
+the complete Tool Discovery acceptance matrix. Mobile projects reuse the
+corresponding browser engines with reviewed device profiles.
 
 No database schema, seed, SQL, or migration change is required for this slice.
 

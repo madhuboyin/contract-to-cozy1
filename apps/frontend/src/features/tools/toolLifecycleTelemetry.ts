@@ -5,6 +5,15 @@ const SESSION_KEY = 'ctc:tool-lifecycle-session';
 const STARTED_AT_PREFIX = 'ctc:tool-started-at:';
 const RECENT_EVENT_PREFIX = 'ctc:tool-lifecycle-recent:';
 
+declare global {
+  interface Window {
+    __ctcToolLifecycleAcceptanceSink?: (
+      propertyId: string,
+      events: ToolLifecycleEventDTO[],
+    ) => void;
+  }
+}
+
 function randomId(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return crypto.randomUUID();
@@ -85,6 +94,14 @@ export function persistToolLifecycleEvents(
     .filter((event) => shouldSendEvent(propertyId, event))
     .map((event) => enrichEvent(propertyId, event));
   if (enriched.length === 0) return;
+  if (
+    process.env.NEXT_PUBLIC_TOOL_DISCOVERY_ACCEPTANCE_FIXTURE === '1'
+    && typeof window !== 'undefined'
+    && typeof window.__ctcToolLifecycleAcceptanceSink === 'function'
+  ) {
+    window.__ctcToolLifecycleAcceptanceSink(propertyId, enriched);
+    return;
+  }
   void api.recordToolLifecycleEvents(propertyId, enriched).catch(() => undefined);
 }
 

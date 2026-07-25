@@ -1,5 +1,6 @@
 'use client';
 
+import React from 'react';
 import type {
   CapabilitySuggestionDTO,
   RankedHomeActionDTO,
@@ -204,9 +205,23 @@ const availability: ToolDiscoveryAvailabilityDTO = {
 };
 
 export function ToolDiscoveryAcceptanceClient() {
+  const [hydrated, setHydrated] = React.useState(false);
+  React.useEffect(() => setHydrated(true), []);
+
   return (
-    <main className="mx-auto max-w-6xl space-y-8 p-6">
+    <main
+      className="mx-auto max-w-6xl space-y-8 p-6"
+      data-acceptance-hydrated={hydrated ? 'true' : 'false'}
+    >
       <h1 className="text-2xl font-semibold">Tool discovery acceptance</h1>
+      <section
+        aria-label="Telemetry viewport gate"
+        className="flex h-[1100px] items-start rounded-xl border border-dashed border-slate-200 p-4 text-sm text-slate-500"
+        data-testid="telemetry-viewport-gate"
+      >
+        Capability cards begin below the initial viewport so actual-view
+        acceptance can distinguish rendered items from viewed items.
+      </section>
       <UnifiedHomeToolsSection home={home} propertyId={home.property.id} />
       <section aria-labelledby="catalog-heading" className="space-y-4">
         <h2 id="catalog-heading" className="text-xl font-semibold">Explore tools fixture</h2>

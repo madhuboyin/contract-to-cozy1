@@ -150,6 +150,11 @@ function applySensitivePageHeaders(
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  const isEnabledAcceptanceRoute =
+    (pathname === '/acceptance/property-context' &&
+      process.env.PROPERTY_CONTEXT_ACCEPTANCE_FIXTURE === '1') ||
+    (pathname === '/acceptance/tool-discovery' &&
+      process.env.TOOL_DISCOVERY_ACCEPTANCE_FIXTURE === '1');
 
   // ------------------------------------------------------------------
   // 1. Generate CSP nonce and attach headers to the forwarded request
@@ -158,7 +163,12 @@ export function middleware(request: NextRequest) {
   const nonce = Buffer.from(crypto.randomUUID()).toString('base64');
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
   const faroUrl = process.env.NEXT_PUBLIC_FARO_URL || '';
-  const csp = buildCsp({ nonce, apiUrl, faroUrl });
+  const csp = buildCsp({
+    nonce,
+    apiUrl,
+    faroUrl,
+    upgradeInsecureRequests: !isEnabledAcceptanceRoute,
+  });
   const cspHeaderName = shouldUseReportOnly()
     ? 'Content-Security-Policy-Report-Only'
     : 'Content-Security-Policy';
@@ -198,11 +208,6 @@ export function middleware(request: NextRequest) {
     '/cookies',
   ];
 
-  const isEnabledAcceptanceRoute =
-    (pathname === '/acceptance/property-context' &&
-      process.env.PROPERTY_CONTEXT_ACCEPTANCE_FIXTURE === '1') ||
-    (pathname === '/acceptance/tool-discovery' &&
-      process.env.TOOL_DISCOVERY_ACCEPTANCE_FIXTURE === '1');
   const isPublicRoute =
     pathname === '/' ||
     publicRoutes.some((r) => pathname.startsWith(r)) ||

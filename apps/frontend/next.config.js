@@ -24,6 +24,8 @@ const nextConfig = {
     NEXT_PUBLIC_CAPABILITY_CATALOG_SOURCE:
       process.env.CAPABILITY_CATALOG_SOURCE
       || (process.env.TOOL_DISCOVERY_ACCEPTANCE_FIXTURE === '1' ? 'legacy' : 'canonical'),
+    NEXT_PUBLIC_TOOL_DISCOVERY_ACCEPTANCE_FIXTURE:
+      process.env.TOOL_DISCOVERY_ACCEPTANCE_FIXTURE === '1' ? '1' : '0',
   },
 
   async redirects() {

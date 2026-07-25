@@ -5,7 +5,12 @@ function normalizeUrl(url) {
   return typeof url === 'string' && /^https?:\/\//.test(url) ? url : '';
 }
 
-function buildCsp({ nonce, apiUrl, faroUrl }) {
+function buildCsp({
+  nonce,
+  apiUrl,
+  faroUrl,
+  upgradeInsecureRequests = true,
+}) {
   const normalizedApiUrl = normalizeUrl(apiUrl);
   const normalizedFaroUrl = normalizeUrl(faroUrl);
   const connectSrc = ["'self'"];
@@ -42,7 +47,7 @@ function buildCsp({ nonce, apiUrl, faroUrl }) {
     // Re-enable once Next.js ships a Turbopack-compatible TrustedScriptURL policy.
     // "require-trusted-types-for 'script'",
     // `trusted-types ${TRUSTED_TYPES_POLICIES.join(' ')}`,
-    'upgrade-insecure-requests',
+    ...(upgradeInsecureRequests ? ['upgrade-insecure-requests'] : []),
     `report-uri ${reportUri}`,
     `report-to ${REPORTING_ENDPOINT_NAME}`,
   ].join('; ');

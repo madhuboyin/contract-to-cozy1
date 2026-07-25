@@ -293,6 +293,45 @@ that human governance reviews, accessibility, supported-browser telemetry,
 analytics denominators, kill switches, rollback, or the incident drill passed.
 Do not store the bearer token with the report.
 
+## 5.4 Supported-browser and mobile-PWA telemetry gate
+
+CAP-905 makes the actual-view check a blocking production-build acceptance
+matrix:
+
+```bash
+cd apps/frontend
+npx playwright install chromium firefox webkit
+npm run test:tool-discovery:e2e
+```
+
+The command builds with `TOOL_DISCOVERY_ACCEPTANCE_FIXTURE=1` and runs desktop
+Chromium, Firefox, WebKit, mobile Chrome, and standalone-mode mobile Safari.
+CI installs the same engines with their Linux system dependencies.
+
+Required evidence is a complete pass with:
+
+- no lifecycle event while rendered cards remain below the viewport;
+- `DISCOVERED` only for cards at least 50% visible for 750 continuous
+  milliseconds in the active document;
+- correct property, registry, context, source, and surface lineage;
+- no bulk Explore Tools impressions;
+- no repeated event after returning to the tile or reloading the session;
+- functioning catalog search in every engine; and
+- a valid standalone PWA manifest plus actual-view event in the mobile Safari
+  project.
+
+The acceptance build diverts lifecycle payloads to an in-page capture sink and
+does not post Product Analytics. The sink is unavailable in normal builds.
+Acceptance pages remain `404` unless their explicit fixture flag is enabled.
+The CSP exception removes `upgrade-insecure-requests` only for the enabled
+local HTTP acceptance document; never copy that exception to homeowner or
+deployed production routes.
+
+If WebKit renders server HTML but does not hydrate, inspect its trace for local
+assets rewritten from HTTP to HTTPS before changing observer timeouts. If a
+mobile comparison observes an adjacent stacked card, allow the full exposure
+window before comparing the viewport with emitted events.
+
 ## 6. Incident playbooks
 
 ### 6.1 Broken destination

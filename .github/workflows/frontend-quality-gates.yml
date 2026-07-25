@@ -32,3 +32,8 @@ jobs:
       - name: QA + Governance Gates
         run: npm run qa:gates
 
+      - name: Install capability acceptance browsers
+        run: npx playwright install --with-deps chromium firefox webkit
+
+      - name: Capability discovery browser and PWA acceptance
+        run: npm run test:tool-discovery:e2e
