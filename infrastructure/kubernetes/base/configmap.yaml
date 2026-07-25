@@ -63,11 +63,11 @@ data:
   # Beta governance switch. Set to "true" before admitting any real users.
   # Technical safety and evidence validation remain enforced in both modes.
   ENFORCE_HUMAN_POLICY_APPROVALS: "false"
-  # Tool discovery remains open during beta. Before real-user launch, set
-  # enforcement to true and control individual cohorts with TOOL_ROLLOUT_*.
+  # Real-user discovery fails closed unless policy and rollout gates are valid.
+  TOOL_DISCOVERY_RELEASE_MODE: "REAL_USER_LAUNCH"
   TOOL_DISCOVERY_ENABLED: "true"
   CAPABILITY_RECOMMENDATIONS_ENABLED: "true"
-  ENFORCE_TOOL_DISCOVERY_RELEASE_GATES: "false"
+  ENFORCE_TOOL_DISCOVERY_RELEASE_GATES: "true"
   TOOL_DISCOVERY_DISABLED_IDS: ""
   # Runtime containment lists. Values are comma-separated canonical
   # capability IDs; keep the complete intended list when changing one.

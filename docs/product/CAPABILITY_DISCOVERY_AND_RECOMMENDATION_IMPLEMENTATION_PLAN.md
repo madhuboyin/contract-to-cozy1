@@ -1770,6 +1770,28 @@ The platform shall not admit real users when:
 | 4 | Revert catalog source if still inside cutover window | Temporary internal-beta recovery only |
 | 5 | Disable capability discovery globally | Canonical Home Actions remain operational |
 
+### CAP-900: Fail-closed real-user availability
+
+Implemented the first WS9 launch-hardening slice at the canonical availability
+boundary:
+
+- `TOOL_DISCOVERY_RELEASE_MODE` defaults to `REAL_USER_LAUNCH`; only the
+  explicit value `INTERNAL_BETA` enables beta fail-open behavior;
+- real-user mode suppresses every capability when release-gate enforcement is
+  disabled, policy loading fails, or configuration integrity is invalid;
+- the tracked Kubernetes configuration selects real-user mode and enables
+  release-gate enforcement, while local Docker Compose explicitly selects
+  internal beta;
+- availability diagnostics expose the effective release mode, failure mode,
+  launch readiness, and stable launch-blocker codes; and
+- Admin Release Gates displays real-user readiness and the blocking controls so
+  operators do not have to infer launch state from individual flags.
+
+This slice does not declare the platform ready for real users. The remaining
+WS9 human approvals, browser/PWA telemetry checks, accessibility validation,
+kill-switch drills, representative-property smoke tests, and support incident
+exercise remain required.
+
 ---
 
 ## 15. Repository Change Plan

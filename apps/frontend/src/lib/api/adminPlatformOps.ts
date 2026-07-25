@@ -96,12 +96,17 @@ export interface ReleaseGateSummary {
   failing: number;
   byRolloutCohort: Record<string, number>;
   operationalControls: {
+    releaseMode: 'INTERNAL_BETA' | 'REAL_USER_LAUNCH';
+    failureMode: 'BETA_FAIL_OPEN' | 'LAUNCH_FAIL_CLOSED';
+    releaseReady: boolean;
+    releaseBlockers: string[];
     globalEnabled: boolean;
     releaseGateEnforced: boolean;
     registryVersion: string;
     expectedRegistryVersion: string | null;
     registryVersionMatches: boolean;
     configurationValid: boolean;
+    invalidConfigurationEntries: string[];
     invalidManifestVersionEntries: string[];
     rolloutKeyParity: {
       valid: boolean;

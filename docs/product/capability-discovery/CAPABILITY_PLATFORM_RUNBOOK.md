@@ -90,6 +90,8 @@ do not overwrite another active incident's containment.
 
 | Control | Effect |
 |---|---|
+| `TOOL_DISCOVERY_RELEASE_MODE=REAL_USER_LAUNCH` | Default mode. Fails closed when policy is unavailable, invalid, or release-gate enforcement is off |
+| `TOOL_DISCOVERY_RELEASE_MODE=INTERNAL_BETA` | Explicit internal/test-only mode that preserves beta fail-open behavior |
 | `TOOL_DISCOVERY_ENABLED=false` | Globally removes capabilities from catalog and recommendation availability |
 | `TOOL_DISCOVERY_DISABLED_IDS` | Disables specific capabilities without changing Home Actions |
 | `TOOL_DISCOVERY_BROKEN_ROUTE_IDS` | Suppresses capabilities with known-broken destinations |
@@ -97,6 +99,11 @@ do not overwrite another active incident's containment.
 | `ENFORCE_TOOL_DISCOVERY_RELEASE_GATES=true` | Enforces rollout cohorts and explicit release blocks |
 | `TOOL_DISCOVERY_EXPECTED_REGISTRY_VERSION` | Fails closed when the deployed registry hash differs |
 | `TOOL_DISCOVERY_MANIFEST_VERSIONS` | Pins `capability-id:version` pairs; mismatches are suppressed |
+
+The authenticated availability endpoint and Admin Release Gates report
+`releaseReady` plus stable `releaseBlockers`. A deployment must not admit real
+users unless the effective mode is `REAL_USER_LAUNCH`, `releaseReady` is true,
+and the remaining WS9 launch gates have independently passed.
 
 For an emergency global shutdown:
 

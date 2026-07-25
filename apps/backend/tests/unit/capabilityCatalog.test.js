@@ -13,7 +13,7 @@ const {
 function availability(options = {}) {
   return createCapabilityAvailabilityAdapter({
     registry: canonicalCapabilityRegistry,
-    failureMode: 'LAUNCH_FAIL_CLOSED',
+    failureMode: options.failureMode ?? 'BETA_FAIL_OPEN',
     loadPolicy: () => ({
       enabled: options.enabled ?? true,
       enforceReleaseGates: options.enforceReleaseGates ?? false,
@@ -92,6 +92,7 @@ test('catalog applies global, individual, and release availability filtering', (
   const releaseGated = buildCapabilityCatalog({
     registry: canonicalCapabilityRegistry,
     availability: availability({
+      failureMode: 'LAUNCH_FAIL_CLOSED',
       enforceReleaseGates: true,
       rollouts: {
         MATERIAL_SPECS: { enabled: true, cohort: 'FULL', rolloutPct: 100 },

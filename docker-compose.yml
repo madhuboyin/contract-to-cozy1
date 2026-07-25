@@ -71,7 +71,8 @@ services:
       SWAGGER_PASSWORD: ${SWAGGER_PASSWORD:-}
       ENFORCE_HUMAN_POLICY_APPROVALS: ${ENFORCE_HUMAN_POLICY_APPROVALS:-false}
       # Capability discovery operational controls. Keep defaults aligned with
-      # infrastructure/kubernetes/base/configmap.yaml.
+      # launch behavior unless local internal-beta behavior is explicitly used.
+      TOOL_DISCOVERY_RELEASE_MODE: ${TOOL_DISCOVERY_RELEASE_MODE:-INTERNAL_BETA}
       TOOL_DISCOVERY_ENABLED: ${TOOL_DISCOVERY_ENABLED:-true}
       CAPABILITY_RECOMMENDATIONS_ENABLED: ${CAPABILITY_RECOMMENDATIONS_ENABLED:-true}
       ENFORCE_TOOL_DISCOVERY_RELEASE_GATES: ${ENFORCE_TOOL_DISCOVERY_RELEASE_GATES:-false}

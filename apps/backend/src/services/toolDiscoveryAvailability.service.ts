@@ -8,7 +8,19 @@ import {
   type ToolCapabilityRegistry,
 } from '../productFramework/capabilities';
 
+export const TOOL_DISCOVERY_RELEASE_MODES = [
+  'INTERNAL_BETA',
+  'REAL_USER_LAUNCH',
+] as const;
+
+export type ToolDiscoveryReleaseMode =
+  typeof TOOL_DISCOVERY_RELEASE_MODES[number];
+
 export type ToolDiscoveryAvailability = {
+  releaseMode: ToolDiscoveryReleaseMode;
+  failureMode: CapabilityAvailabilityFailureMode;
+  releaseReady: boolean;
+  releaseBlockers: string[];
   enabled: boolean;
   enforceReleaseGates: boolean;
   disabledToolIds: string[];
@@ -20,6 +32,7 @@ export type ToolDiscoveryAvailability = {
   manifestVersions: Record<string, number>;
   manifestVersionMismatchedToolIds: string[];
   configurationValid: boolean;
+  invalidConfigurationEntries: string[];
   manifestVersionConfigValid: boolean;
   invalidManifestVersionEntries: string[];
   rolloutKeyParity: {
@@ -35,11 +48,39 @@ export type ToolDiscoveryAvailability = {
   generatedAt: string;
 };
 
+function readReleaseMode(value: string | undefined): {
+  mode: ToolDiscoveryReleaseMode;
+  valid: boolean;
+} {
+  const normalized = value?.trim().toUpperCase();
+  if (!normalized || normalized === 'REAL_USER_LAUNCH') {
+    return { mode: 'REAL_USER_LAUNCH', valid: true };
+  }
+  if (normalized === 'INTERNAL_BETA') {
+    return { mode: 'INTERNAL_BETA', valid: true };
+  }
+  return { mode: 'REAL_USER_LAUNCH', valid: false };
+}
+
+function failureModeForReleaseMode(
+  releaseMode: ToolDiscoveryReleaseMode,
+): CapabilityAvailabilityFailureMode {
+  return releaseMode === 'INTERNAL_BETA'
+    ? 'BETA_FAIL_OPEN'
+    : 'LAUNCH_FAIL_CLOSED';
+}
+
 function readBoolean(value: string | undefined, fallback: boolean): boolean {
   if (value === undefined || value.trim() === '') return fallback;
   if (value.trim().toLowerCase() === 'true') return true;
   if (value.trim().toLowerCase() === 'false') return false;
   return fallback;
+}
+
+function booleanSettingIsValid(value: string | undefined): boolean {
+  if (value === undefined || value.trim() === '') return true;
+  const normalized = value.trim().toLowerCase();
+  return normalized === 'true' || normalized === 'false';
 }
 
 function readDisabledToolIds(value: string | undefined): string[] {
@@ -86,6 +127,11 @@ export function getToolDiscoveryAvailability(
   env: NodeJS.ProcessEnv = process.env,
   registry: ToolCapabilityRegistry = canonicalCapabilityRegistry,
 ): ToolDiscoveryAvailability {
+  const releaseModeSetting = readReleaseMode(
+    env.TOOL_DISCOVERY_RELEASE_MODE,
+  );
+  const releaseMode = releaseModeSetting.mode;
+  const failureMode = failureModeForReleaseMode(releaseMode);
   const enabled = readBoolean(env.TOOL_DISCOVERY_ENABLED, true);
   const enforceReleaseGates = readBoolean(env.ENFORCE_TOOL_DISCOVERY_RELEASE_GATES, false);
   const disabledToolIds = readDisabledToolIds(env.TOOL_DISCOVERY_DISABLED_IDS);
@@ -134,8 +180,36 @@ export function getToolDiscoveryAvailability(
   const rollouts = Object.fromEntries(
     Object.keys(TOOL_FLAGS).map((flagKey) => [flagKey, checkRolloutStatus(flagKey, userId)]),
   );
+  const invalidConfigurationEntries = [
+    ...(!releaseModeSetting.valid ? ['TOOL_DISCOVERY_RELEASE_MODE'] : []),
+    ...(!booleanSettingIsValid(env.TOOL_DISCOVERY_ENABLED)
+      ? ['TOOL_DISCOVERY_ENABLED']
+      : []),
+    ...(!booleanSettingIsValid(env.ENFORCE_TOOL_DISCOVERY_RELEASE_GATES)
+      ? ['ENFORCE_TOOL_DISCOVERY_RELEASE_GATES']
+      : []),
+    ...(invalidManifestVersionEntries.length > 0
+      ? ['TOOL_DISCOVERY_MANIFEST_VERSIONS']
+      : []),
+  ];
+  const configurationValid = invalidConfigurationEntries.length === 0;
+  const releaseBlockers = [
+    ...(!enabled ? ['DISCOVERY_DISABLED'] : []),
+    ...(!enforceReleaseGates ? ['RELEASE_GATES_NOT_ENFORCED'] : []),
+    ...(!configurationValid ? ['CONFIGURATION_INVALID'] : []),
+    ...(!registryVersionMatches ? ['REGISTRY_VERSION_MISMATCH'] : []),
+    ...(missingKeys.length > 0 ? ['ROLLOUT_KEYS_MISSING'] : []),
+    ...(unknownKeys.length > 0 ? ['ROLLOUT_KEYS_UNKNOWN'] : []),
+    ...(manifestVersionMismatchedToolIds.length > 0
+      ? ['MANIFEST_VERSION_MISMATCH']
+      : []),
+  ];
 
   return {
+    releaseMode,
+    failureMode,
+    releaseReady: releaseBlockers.length === 0,
+    releaseBlockers,
     enabled,
     enforceReleaseGates,
     disabledToolIds,
@@ -146,7 +220,8 @@ export function getToolDiscoveryAvailability(
     registryVersionMatches,
     manifestVersions,
     manifestVersionMismatchedToolIds,
-    configurationValid: invalidManifestVersionEntries.length === 0,
+    configurationValid,
+    invalidConfigurationEntries,
     manifestVersionConfigValid:
       invalidManifestVersionEntries.length === 0,
     invalidManifestVersionEntries,
@@ -172,9 +247,11 @@ export function createToolDiscoveryCapabilityAvailabilityAdapter(
   } = {},
 ): CapabilityAvailabilityAdapter {
   const env = options.env ?? process.env;
+  const releaseMode = readReleaseMode(env.TOOL_DISCOVERY_RELEASE_MODE).mode;
   return createCapabilityAvailabilityAdapter({
     registry,
-    failureMode: options.failureMode,
+    failureMode:
+      options.failureMode ?? failureModeForReleaseMode(releaseMode),
     loadPolicy: (userId) =>
       getToolDiscoveryAvailability(userId, env, registry),
   });

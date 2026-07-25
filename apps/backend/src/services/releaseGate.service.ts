@@ -7,7 +7,10 @@ import { prisma } from '../lib/prisma';
 import { TOOL_FLAGS, cohortFromPct, RolloutCohort } from '../config/featureFlags';
 import { logger } from '../lib/logger';
 import { canonicalCapabilityRegistry } from '../productFramework/capabilities';
-import { getToolDiscoveryAvailability } from './toolDiscoveryAvailability.service';
+import {
+  getToolDiscoveryAvailability,
+  type ToolDiscoveryAvailability,
+} from './toolDiscoveryAvailability.service';
 
 // ============================================================================
 // INTERFACES
@@ -137,12 +140,17 @@ export async function getReleaseSummary(): Promise<{
   failing: number;
   byRolloutCohort: Record<RolloutCohort, number>;
   operationalControls: {
+    releaseMode: ToolDiscoveryAvailability['releaseMode'];
+    failureMode: ToolDiscoveryAvailability['failureMode'];
+    releaseReady: boolean;
+    releaseBlockers: string[];
     globalEnabled: boolean;
     releaseGateEnforced: boolean;
     registryVersion: string;
     expectedRegistryVersion: string | null;
     registryVersionMatches: boolean;
     configurationValid: boolean;
+    invalidConfigurationEntries: string[];
     invalidManifestVersionEntries: string[];
     rolloutKeyParity: {
       valid: boolean;
@@ -183,12 +191,18 @@ export async function getReleaseSummary(): Promise<{
     failing,
     byRolloutCohort,
     operationalControls: {
+      releaseMode: availability.releaseMode,
+      failureMode: availability.failureMode,
+      releaseReady: availability.releaseReady,
+      releaseBlockers: availability.releaseBlockers,
       globalEnabled: availability.enabled,
       releaseGateEnforced: availability.enforceReleaseGates,
       registryVersion: availability.registryVersion,
       expectedRegistryVersion: availability.expectedRegistryVersion,
       registryVersionMatches: availability.registryVersionMatches,
       configurationValid: availability.configurationValid,
+      invalidConfigurationEntries:
+        availability.invalidConfigurationEntries,
       invalidManifestVersionEntries:
         availability.invalidManifestVersionEntries,
       rolloutKeyParity: availability.rolloutKeyParity,

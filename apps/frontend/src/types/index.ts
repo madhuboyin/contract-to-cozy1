@@ -512,6 +512,10 @@ export type UnifiedHomeDTO = {
 };
 
 export type ToolDiscoveryAvailabilityDTO = {
+  releaseMode?: 'INTERNAL_BETA' | 'REAL_USER_LAUNCH';
+  failureMode?: 'BETA_FAIL_OPEN' | 'LAUNCH_FAIL_CLOSED';
+  releaseReady?: boolean;
+  releaseBlockers?: string[];
   enabled: boolean;
   enforceReleaseGates: boolean;
   disabledToolIds: string[];
@@ -523,6 +527,7 @@ export type ToolDiscoveryAvailabilityDTO = {
   manifestVersions?: Record<string, number>;
   manifestVersionMismatchedToolIds?: string[];
   configurationValid?: boolean;
+  invalidConfigurationEntries?: string[];
   manifestVersionConfigValid?: boolean;
   invalidManifestVersionEntries?: string[];
   rolloutKeyParity?: {

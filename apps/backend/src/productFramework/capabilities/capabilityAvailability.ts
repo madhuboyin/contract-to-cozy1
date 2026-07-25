@@ -33,6 +33,7 @@ export const CAPABILITY_UNAVAILABLE_REASONS = [
   'DISCOVERY_DISABLED',
   'CONFIGURATION_INVALID',
   'REGISTRY_VERSION_MISMATCH',
+  'RELEASE_GATES_NOT_ENFORCED',
   'CAPABILITY_DISABLED',
   'ROUTE_UNAVAILABLE',
   'MANIFEST_VERSION_MISMATCH',
@@ -109,6 +110,13 @@ export function evaluateCapabilityAvailability(
 
   if (policy.registryVersionMatches === false) {
     return unavailable(capability.id, 'REGISTRY_VERSION_MISMATCH', true);
+  }
+
+  if (
+    !policy.enforceReleaseGates
+    && failureMode === 'LAUNCH_FAIL_CLOSED'
+  ) {
+    return unavailable(capability.id, 'RELEASE_GATES_NOT_ENFORCED', true);
   }
 
   if (policy.disabledToolIds.includes(capability.id)) {

@@ -312,6 +312,32 @@ test('availability applies global, explicit-disable, and rollout gates in order'
   assert.equal(rolloutDisabled.reason, 'ROLLOUT_DISABLED');
 });
 
+test('launch availability rejects policy that does not enforce release gates', () => {
+  const definition = capability();
+  const policy = {
+    enabled: true,
+    enforceReleaseGates: false,
+    disabledToolIds: [],
+    rollouts: {},
+  };
+
+  const launchDecision = evaluateCapabilityAvailability(
+    definition,
+    policy,
+    'LAUNCH_FAIL_CLOSED',
+  );
+  assert.equal(launchDecision.available, false);
+  assert.equal(launchDecision.reason, 'RELEASE_GATES_NOT_ENFORCED');
+
+  const betaDecision = evaluateCapabilityAvailability(
+    definition,
+    policy,
+    'BETA_FAIL_OPEN',
+  );
+  assert.equal(betaDecision.available, true);
+  assert.equal(betaDecision.reason, null);
+});
+
 test('CAP-704 operational guards precede cohort availability', () => {
   const definition = capability();
   const basePolicy = {

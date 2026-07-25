@@ -150,7 +150,11 @@ Closure increment implemented July 20, 2026:
 
 - Expanded the canonical discovery registry with release stage, rollout key, safety tier, minimum useful context, expected output, completion signal, and route aliases.
 - Connected discovery to the existing backend cohort rollout registry through authenticated `/api/tool-discovery/availability` without adding a database table or migration.
-- Added beta-safe configuration: `TOOL_DISCOVERY_ENABLED=true`, `ENFORCE_TOOL_DISCOVERY_RELEASE_GATES=false`, and an empty `TOOL_DISCOVERY_DISABLED_IDS` list. Enforcement can be enabled before real-user launch, and arbitrary `TOOL_ROLLOUT_*` keys can be supplied through `app-config`.
+- Added explicit release-mode configuration. Tracked Kubernetes configuration
+  uses `TOOL_DISCOVERY_RELEASE_MODE=REAL_USER_LAUNCH` with
+  `ENFORCE_TOOL_DISCOVERY_RELEASE_GATES=true`; local internal testing must opt
+  into `TOOL_DISCOVERY_RELEASE_MODE=INTERNAL_BETA`. Arbitrary
+  `TOOL_ROLLOUT_*` keys can be supplied through `app-config`.
 - Filtered Unified Home, Explore tools, command search, and workflow-level Related Tools using the same availability response. Availability failures remain fail-open only while beta enforcement is disabled.
 - Added readiness evaluation so released tools can explain missing property, fact, system, or coverage context without disappearing unnecessarily.
 - Hardened deterministic selection with explicit rule versioning, active project moments, material decisions, availability filtering, and alias-aware CTA deduplication.
@@ -176,8 +180,12 @@ Outcome-telemetry and destination-context increment implemented July 20, 2026:
 
 Operational launch note:
 
-- Keep `ENFORCE_TOOL_DISCOVERY_RELEASE_GATES=false` during the current beta so incomplete cohort configuration cannot block testing.
-- Before admitting real users, set it to `true`, review every `TOOL_ROLLOUT_*` value, and use `TOOL_DISCOVERY_DISABLED_IDS` as an immediate discovery kill list when a tool must remain reachable only through an existing workflow.
+- Use `TOOL_DISCOVERY_RELEASE_MODE=INTERNAL_BETA` only for explicit internal
+  testing. Real-user mode fails closed when release-gate enforcement is off.
+- Before admitting real users, confirm `releaseReady=true`, review every
+  `TOOL_ROLLOUT_*` value, and use `TOOL_DISCOVERY_DISABLED_IDS` as an immediate
+  discovery kill list when a tool must remain reachable only through an
+  existing workflow.
 - Tool discovery does not require a Prisma schema change or migration.
 - Lifecycle telemetry also reuses the existing product analytics event table; deployment does not require a Prisma schema change, migration, or separate test database.
 

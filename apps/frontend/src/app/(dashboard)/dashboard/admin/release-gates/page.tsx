@@ -72,6 +72,20 @@ export default function AdminReleaseGatesPage() {
       {s ? (
         <div className="mb-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="flex flex-wrap items-center gap-2">
+            <Badge className={s.operationalControls.releaseReady
+              ? 'bg-emerald-50 text-emerald-700'
+              : 'bg-rose-50 text-rose-700'}
+            >
+              Real-user launch {s.operationalControls.releaseReady ? 'ready' : 'blocked'}
+            </Badge>
+            <Badge className={s.operationalControls.releaseMode === 'REAL_USER_LAUNCH'
+              ? 'bg-sky-50 text-sky-700'
+              : 'bg-amber-50 text-amber-700'}
+            >
+              Mode {s.operationalControls.releaseMode === 'REAL_USER_LAUNCH'
+                ? 'real-user'
+                : 'internal beta'}
+            </Badge>
             <Badge className={s.operationalControls.globalEnabled
               ? 'bg-emerald-50 text-emerald-700'
               : 'bg-rose-50 text-rose-700'}
@@ -109,6 +123,11 @@ export default function AdminReleaseGatesPage() {
               ? ` · expected ${s.operationalControls.expectedRegistryVersion}`
               : ' · no deployment pin'}
           </p>
+          {!s.operationalControls.releaseReady ? (
+            <p className="mt-2 text-xs font-medium text-rose-700">
+              Launch blockers: {s.operationalControls.releaseBlockers.join(', ') || 'unknown policy failure'}
+            </p>
+          ) : null}
           {[
             ['Disabled capabilities', s.operationalControls.disabledCapabilityIds],
             ['Broken-route suppression', s.operationalControls.brokenRouteCapabilityIds],
@@ -132,6 +151,11 @@ export default function AdminReleaseGatesPage() {
           {s.operationalControls.invalidManifestVersionEntries.length > 0 ? (
             <p className="mt-2 text-xs font-medium text-rose-700">
               Invalid manifest pins: {s.operationalControls.invalidManifestVersionEntries.join(', ')}
+            </p>
+          ) : null}
+          {s.operationalControls.invalidConfigurationEntries.length > 0 ? (
+            <p className="mt-2 text-xs font-medium text-rose-700">
+              Invalid configuration: {s.operationalControls.invalidConfigurationEntries.join(', ')}
             </p>
           ) : null}
           {!s.operationalControls.rolloutKeyParity.valid ? (
