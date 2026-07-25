@@ -467,7 +467,10 @@ app.get('/', (req: Request, res: Response) => {
 app.get('/api/csrf-token', getCsrfToken);
 
 app.use('/api/auth', authRoutes);
-app.use('/api', mfaRoutes);
+// Keep the router-wide MFA limiter scoped to MFA endpoints. Mounting this
+// router at /api would apply its 20-per-15-minute auth limiter to every API
+// request before Express continued to the remaining feature routers.
+app.use('/api/auth/mfa', mfaRoutes);
 app.use('/api/providers', providerRoutes);
 app.use('/api/bookings', bookingRoutes);
 // Keep vault public and mount before any generic '/api' routers that apply auth middleware.

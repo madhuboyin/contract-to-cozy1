@@ -72,7 +72,7 @@ router.use(authRateLimiter);
  *       401:
  *         description: Invalid or expired challenge token / invalid TOTP code
  */
-router.post('/auth/mfa/challenge', validateBody(mfaChallengeSchema), verifyMfaChallenge);
+router.post('/challenge', validateBody(mfaChallengeSchema), verifyMfaChallenge);
 
 /**
  * @swagger
@@ -100,7 +100,7 @@ router.post('/auth/mfa/challenge', validateBody(mfaChallengeSchema), verifyMfaCh
  *         description: Invalid or expired challenge token / invalid recovery code
  */
 router.post(
-  '/auth/mfa/challenge/recovery',
+  '/challenge/recovery',
   validateBody(mfaRecoveryChallengeSchema),
   verifyMfaRecoveryChallenge,
 );
@@ -119,7 +119,7 @@ router.post(
  *       409:
  *         description: MFA already enabled
  */
-router.post('/auth/mfa/setup', authenticate, setupMfa);
+router.post('/setup', authenticate, setupMfa);
 
 /**
  * @swagger
@@ -145,7 +145,7 @@ router.post('/auth/mfa/setup', authenticate, setupMfa);
  *       401:
  *         description: Invalid TOTP code
  */
-router.post('/auth/mfa/setup/verify', authenticate, validateBody(totpCodeSchema), verifyMfaSetup);
+router.post('/setup/verify', authenticate, validateBody(totpCodeSchema), verifyMfaSetup);
 
 /**
  * @swagger
@@ -156,7 +156,7 @@ router.post('/auth/mfa/setup/verify', authenticate, validateBody(totpCodeSchema)
  *     security:
  *       - bearerAuth: []
  */
-router.get('/auth/mfa/status', authenticate, getMfaStatus);
+router.get('/status', authenticate, getMfaStatus);
 
 /**
  * @swagger
@@ -168,7 +168,7 @@ router.get('/auth/mfa/status', authenticate, getMfaStatus);
  *       - bearerAuth: []
  */
 router.post(
-  '/auth/mfa/recovery-codes/regenerate',
+  '/recovery-codes/regenerate',
   authenticate,
   validateBody(totpCodeSchema),
   regenerateMfaRecoveryCodes,
@@ -198,6 +198,6 @@ router.post(
  *       401:
  *         description: Invalid TOTP code
  */
-router.post('/auth/mfa/disable', authenticate, validateBody(totpCodeSchema), disableMfa);
+router.post('/disable', authenticate, validateBody(totpCodeSchema), disableMfa);
 
 export default router;
