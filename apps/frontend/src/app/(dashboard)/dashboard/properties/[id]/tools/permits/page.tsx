@@ -1,15 +1,21 @@
 'use client';
 import { useEffect } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import { forwardComplianceLaunchQuery } from '@/features/tools/complianceLaunchContext';
 
 export default function PropertyPermitToolPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const propertyId = params.id;
+  const launchQuery = searchParams.toString();
 
   useEffect(() => {
-    router.replace(`/dashboard/permits?propertyId=${propertyId}`);
-  }, [propertyId, router]);
+    router.replace(`/dashboard/permits?${forwardComplianceLaunchQuery(
+      new URLSearchParams(launchQuery),
+      propertyId,
+    )}`);
+  }, [launchQuery, propertyId, router]);
 
   return (
     <div className="flex h-48 items-center justify-center">

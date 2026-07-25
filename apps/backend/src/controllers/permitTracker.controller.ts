@@ -11,6 +11,8 @@ import {
   getProjectComplianceEnvelope,
 } from '../services/projectCompliance/context';
 import { evaluateFeatureContext } from '../modules/propertyContext/application/evaluateFeatureContext';
+import { recordToolLifecycleEvents } from '../services/analytics/toolLifecycle';
+import { permitRecordCompletionEvent } from '../services/analytics/permitHoaLifecycle';
 
 // ── Open Data Fetch ────────────────────────────────────────────────────────────
 
@@ -105,6 +107,17 @@ export async function createManualPermit(req: Request, res: Response, next: Next
       moduleKey: AnalyticsModule.PROJECT_MGMT,
       featureKey: AnalyticsFeature.PERMIT_TRACKER,
       metadataJson: { actionType: 'create_manual_permit', permitId: (permit as any)?.id },
+    });
+    void recordToolLifecycleEvents({
+      userId: req.user!.userId,
+      propertyId: req.params.propertyId,
+      events: [permitRecordCompletionEvent({
+        recordId: (permit as any).id,
+        sourceActionId: req.body.sourceActionId,
+        sourceEntityType: req.body.sourceEntityType,
+        sourceEntityId: req.body.sourceEntityId,
+        sourceJourneyId: req.body.sourceJourneyId,
+      })],
     });
 
     res.status(201).json({ success: true, data: { permit, propertyContext } });

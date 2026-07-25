@@ -1657,6 +1657,20 @@ script, per the project migration policy. Rollout and rollback remain governed b
 - Neither tool promises legal compliance.
 - Creating a tracked approval/permit record is meaningful completion.
 
+**CAP-805 implementation status: Complete.** Versioned Permit Tracker and HOA Compliance
+manifests now own homeowner-language discovery aliases, their respective Home Record reads and
+writes, explicit reviewed triggers, and tracked-record completion signals. Project work types are
+classified once and activate the tools independently: likely permit work can promote Permit
+Tracker without an HOA, while HOA promotion additionally requires a known association and an
+approval-relevant exterior or structural project. Unknown association state produces no HOA
+promotion, and unknown jurisdiction leaves Permit Tracker unavailable until state context is
+confirmed. Both tools describe record tracking and local verification without representing legal
+compliance. Property-scoped redirects preserve the full recommendation query contract, and permit
+or approval creation persists action, entity, and journey lineage. Creating either tracked record
+emits canonical `TOOL_COMPLETED` analytics as `PLAN_CREATED`. The Prisma schema is updated without
+a migration script, per the project migration policy. Rollout and rollback remain independently
+governed by `PERMITS` and `HOA_COMPLIANCE`.
+
 #### Inspection Hub
 
 - Inspection document or inspection-led journey creates a valid suggestion.

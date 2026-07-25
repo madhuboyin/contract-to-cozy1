@@ -31,6 +31,7 @@ const inspectionStageType = z.enum([
 ]);
 
 const strArr = z.union([z.string(), z.array(z.string())]).optional();
+const lineageId = z.string().trim().min(1).max(160).optional();
 
 export const TriggerFetchSchema = z.object({});
 
@@ -64,6 +65,10 @@ export const CreateManualPermitSchema = z.object({
   documentIds: z.array(z.string()).default([]),
   notes: z.string().optional(),
   renovationAdvisorSessionId: z.string().optional(),
+  sourceActionId: lineageId,
+  sourceEntityType: lineageId,
+  sourceEntityId: lineageId,
+  sourceJourneyId: lineageId,
 });
 
 export const UpdatePermitSchema = z.object({

@@ -12,6 +12,7 @@ const hoaApprovalStatus = z.enum([
   'NOT_SUBMITTED', 'SUBMITTED', 'UNDER_REVIEW', 'APPROVED',
   'APPROVED_WITH_CONDITIONS', 'DENIED', 'EXPIRED',
 ]);
+const lineageId = z.string().trim().min(1).max(160).optional();
 
 export const UpsertAssociationSchema = z.object({
   name: z.string().min(1).max(200),
@@ -34,6 +35,10 @@ export const CreateApprovalRecordSchema = z.object({
   documentIds: z.array(z.string()).default([]),
   notes: z.string().optional(),
   renovationAdvisorSessionId: z.string().optional(),
+  sourceActionId: lineageId,
+  sourceEntityType: lineageId,
+  sourceEntityId: lineageId,
+  sourceJourneyId: lineageId,
 });
 
 export const UpdateApprovalRecordSchema = z.object({

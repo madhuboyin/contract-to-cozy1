@@ -8,6 +8,8 @@ import {
 } from '../services/projectCompliance/context';
 import { evaluateFeatureContext } from '../modules/propertyContext/application/evaluateFeatureContext';
 import { APIError } from '../middleware/error.middleware';
+import { recordToolLifecycleEvents } from '../services/analytics/toolLifecycle';
+import { hoaApprovalRecordCompletionEvent } from '../services/analytics/permitHoaLifecycle';
 
 export async function getAssociation(req: Request, res: Response, next: NextFunction) {
   try {
@@ -102,6 +104,17 @@ export async function createApprovalRecord(req: Request, res: Response, next: Ne
       moduleKey: AnalyticsModule.COMMUNITY,
       featureKey: AnalyticsFeature.HOA_COMPLIANCE,
       metadataJson: { actionType: 'create_approval_record', recordId: (record as any)?.id },
+    });
+    void recordToolLifecycleEvents({
+      userId: req.user!.userId,
+      propertyId: req.params.propertyId,
+      events: [hoaApprovalRecordCompletionEvent({
+        recordId: (record as any).id,
+        sourceActionId: req.body.sourceActionId,
+        sourceEntityType: req.body.sourceEntityType,
+        sourceEntityId: req.body.sourceEntityId,
+        sourceJourneyId: req.body.sourceJourneyId,
+      })],
     });
 
     res.status(201).json({ success: true, data: { record, propertyContext } });

@@ -14,6 +14,7 @@ import {
   evaluateCapabilityCandidateReadiness,
   matchCapabilityCandidates,
   rankCapabilityCandidates,
+  enrichProjectComplianceCapabilitySources,
   type BuildCapabilityRecommendationContextInput,
   type CapabilityActionSourceMetadata,
   type CapabilityCompletionSource,
@@ -756,6 +757,10 @@ async function evaluateCapabilitySuggestions(
         }),
     ]);
   const sourceContext = input.sourceContext ?? null;
+  const contextualProjects = enrichProjectComplianceCapabilitySources(
+    required.propertyContext,
+    projects,
+  );
   const contextualPersonalizationRecommendations = [
     ...personalizationRecommendations,
     ...buildPropertyContextCapabilitySources(required.propertyContext),
@@ -796,9 +801,9 @@ async function evaluateCapabilitySuggestions(
       : journeys,
     projects: sourceContext
       ? sourceContext.kind === 'PROJECT'
-        ? sourceScoped(projects, sourceContext)
+        ? sourceScoped(contextualProjects, sourceContext)
         : []
-      : projects,
+      : contextualProjects,
     personalizationRecommendations:
       sourceContext
         ? sourceContext.kind === 'PERSONALIZATION'

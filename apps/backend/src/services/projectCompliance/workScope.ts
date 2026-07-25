@@ -230,6 +230,21 @@ const PROJECT_TYPE_PERMIT_WORK: Record<string, string[]> = {
   STRUCTURAL_REPAIR_MAJOR: ['STRUCTURAL_REPAIR'],
 };
 
+const PROJECT_TYPE_HOA_WORK: Record<string, string[]> = {
+  ROOF_REPLACEMENT: ['ROOFING'],
+  WINDOW_REPLACEMENT: ['WINDOWS_DOORS'],
+  PAINTING_EXTERIOR: ['EXTERIOR_PAINT'],
+  DECK_PATIO: ['DECK_PATIO'],
+  ADDITION: ['ROOM_ADDITION'],
+  SOLAR_INSTALLATION: ['SOLAR'],
+  LANDSCAPING_MAJOR: ['LANDSCAPING'],
+  ROOM_ADDITION: ['ROOM_ADDITION'],
+  BATHROOM_ADDITION: ['ROOM_ADDITION'],
+  ADU_CONSTRUCTION: ['ROOM_ADDITION'],
+  DECK_ADDITION: ['DECK_PATIO'],
+  PATIO_MAJOR_ADDITION: ['DECK_PATIO'],
+};
+
 const SERVICE_CATEGORY_PERMIT_WORK: Record<string, string[]> = {
   ROOFING: ['ROOF_REPLACEMENT'],
   HVAC: ['HVAC_REPLACEMENT'],
@@ -247,6 +262,24 @@ export function resolvePermitWorkTypes(work?: ProjectComplianceWorkInput): strin
   if (work?.projectType) PROJECT_TYPE_PERMIT_WORK[work.projectType]?.forEach((type) => types.add(type));
   if (work?.serviceCategory) SERVICE_CATEGORY_PERMIT_WORK[work.serviceCategory]?.forEach((type) => types.add(type));
   return [...types];
+}
+
+export function resolveHoaWorkTypes(work?: ProjectComplianceWorkInput): string[] {
+  const types = new Set(work?.hoaWorkTypes ?? []);
+  if (work?.projectType) {
+    PROJECT_TYPE_HOA_WORK[work.projectType]?.forEach((type) => types.add(type));
+  }
+  return [...types];
+}
+
+export function isPermitRelevantWork(work?: ProjectComplianceWorkInput): boolean {
+  return ['REQUIRED', 'LIKELY_REQUIRED'].includes(
+    classifyPermitApplicability(resolvePermitWorkTypes(work)),
+  );
+}
+
+export function isHoaApprovalRelevantWork(work?: ProjectComplianceWorkInput): boolean {
+  return resolveHoaWorkTypes(work).length > 0;
 }
 
 export function classifyPermitApplicability(workTypes?: string[] | null): PermitApplicabilityClass {

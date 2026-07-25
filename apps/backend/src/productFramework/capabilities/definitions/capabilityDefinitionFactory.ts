@@ -153,6 +153,7 @@ const CONTEXTUAL_DEFINITIONS: Record<string, ContextualDefinition> = {
     sourceKinds: ['PROJECT'],
     triggerFamily: 'HOA_PROJECT_APPROVAL_REQUIRED',
     reason: 'An HOA-governed project may require approval before work starts.',
+    requiresExplicitTrigger: true,
     acceptedContext: ['PROPERTY', 'PROJECT', 'DOCUMENT'],
   },
   'home-digital-twin': {
@@ -225,7 +226,14 @@ const CONTEXTUAL_DEFINITIONS: Record<string, ContextualDefinition> = {
     sourceKinds: ['PROJECT'],
     triggerFamily: 'PERMIT_RELEVANT_PROJECT',
     reason: 'The planned work may require permit research or inspection tracking.',
+    requiresExplicitTrigger: true,
     acceptedContext: ['PROPERTY', 'PROJECT', 'DOCUMENT', 'ISSUE'],
+    readinessRequirements: [
+      {
+        kind: 'JURISDICTION',
+        reason: 'Confirm the property state before researching local permit requirements.',
+      },
+    ],
   },
   'plant-advisor': {
     sourceKinds: ['MAINTENANCE', 'PERSONALIZATION'],

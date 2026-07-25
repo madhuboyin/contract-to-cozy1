@@ -7,11 +7,17 @@ import { api } from '@/lib/api/client';
 import type { CreatePermitPayload, PermitWorkType } from '@/types';
 import AddPermitForm from '@/components/features/permits/AddPermitForm';
 import { PropertyContextCapturePanel } from '@/components/property-context/PropertyContextCapturePanel';
+import {
+  complianceLaunchLineage,
+  forwardComplianceLaunchQuery,
+} from '@/features/tools/complianceLaunchContext';
 
 export default function AddPermitPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const propertyId = searchParams.get('propertyId') ?? '';
+  const launchLineage = complianceLaunchLineage(searchParams);
+  const returnQuery = forwardComplianceLaunchQuery(searchParams, propertyId);
   const formRef = useRef<HTMLFormElement>(null);
   const [workTypes, setWorkTypes] = useState<PermitWorkType[]>(['OTHER']);
   const [contextInvoked, setContextInvoked] = useState(false);
@@ -41,14 +47,14 @@ export default function AddPermitPage() {
       setResumeRequested(true);
       return;
     }
-    await api.createManualPermit(propertyId, payload);
-    router.push(`/dashboard/permits?propertyId=${propertyId}`);
+    await api.createManualPermit(propertyId, { ...payload, ...launchLineage });
+    router.push(`/dashboard/permits?${returnQuery}`);
   }
 
   return (
     <div className="p-4 pb-10">
       <div className="mb-4 flex items-center gap-2">
-        <Link href={`/dashboard/permits?propertyId=${propertyId}`} className="flex items-center gap-1 text-sm text-[hsl(var(--mobile-text-secondary))]">
+        <Link href={`/dashboard/permits?${returnQuery}`} className="flex items-center gap-1 text-sm text-[hsl(var(--mobile-text-secondary))]">
           <ChevronLeft className="h-4 w-4" />
           Back
         </Link>
@@ -70,7 +76,7 @@ export default function AddPermitPage() {
         ref={formRef}
         onSubmit={handleSubmit}
         onWorkTypesChange={handleWorkTypesChange}
-        onCancel={() => router.push(`/dashboard/permits?propertyId=${propertyId}`)}
+        onCancel={() => router.push(`/dashboard/permits?${returnQuery}`)}
       />
     </div>
   );

@@ -190,6 +190,10 @@ export class PermitTrackerService {
         documentIds: payload.documentIds ?? [],
         notes: payload.notes,
         renovationAdvisorSessionId: payload.renovationAdvisorSessionId,
+        sourceActionId: payload.sourceActionId,
+        sourceEntityType: payload.sourceEntityType,
+        sourceEntityId: payload.sourceEntityId,
+        sourceJourneyId: payload.sourceJourneyId,
       },
     });
 

@@ -12683,6 +12683,10 @@ model PropertyPermitRecord {
   isActive    Boolean  @default(true)
 
   renovationAdvisorSessionId String?
+  sourceActionId              String?
+  sourceEntityType            String?
+  sourceEntityId              String?
+  sourceJourneyId             String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -12700,6 +12704,7 @@ model PropertyPermitRecord {
   @@index([status])
   @@index([source])
   @@index([issueDate])
+  @@index([sourceEntityType, sourceEntityId])
   @@map("property_permit_records")
 }
 
@@ -12938,6 +12943,10 @@ model HoaApprovalRecord {
   notes       String?
 
   renovationAdvisorSessionId String? // optional link, same pattern as PropertyPermitRecord.renovationAdvisorSessionId
+  sourceActionId              String?
+  sourceEntityType            String?
+  sourceEntityId              String?
+  sourceJourneyId             String?
 
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
@@ -12949,6 +12958,7 @@ model HoaApprovalRecord {
 
   @@index([propertyId])
   @@index([hoaAssociationId, status])
+  @@index([sourceEntityType, sourceEntityId])
   @@map("hoa_approval_records")
 }
 

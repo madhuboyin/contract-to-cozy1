@@ -9,6 +9,7 @@ import PermitCard from '@/components/features/permits/PermitCard';
 import FetchStatusBanner from '@/components/features/permits/FetchStatusBanner';
 import DisclosureExportButton from '@/components/features/permits/DisclosureExportButton';
 import { track } from '@/lib/analytics/events';
+import { forwardComplianceLaunchQuery } from '@/features/tools/complianceLaunchContext';
 
 const ACTIVE_STATUSES = ['ISSUED', 'INSPECTION_PENDING', 'INSPECTION_FAILED', 'APPLIED'];
 
@@ -16,6 +17,7 @@ export default function PermitHubPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const propertyId = searchParams.get('propertyId') ?? '';
+  const addPermitQuery = forwardComplianceLaunchQuery(searchParams, propertyId);
 
   const [permits, setPermits] = useState<PermitSummary[]>([]);
   const [fetchJob, setFetchJob] = useState<PermitFetchJobSummary | null>(null);
@@ -100,6 +102,9 @@ export default function PermitHubPage() {
         <h1 className="text-xl font-bold">Permit Tracker</h1>
         <p className="text-sm text-[hsl(var(--mobile-text-secondary))]">
           Permit history, inspection readiness checks, and disclosure export
+        </p>
+        <p className="mt-1 text-xs text-[hsl(var(--mobile-text-muted))]">
+          Record-tracking only. Verify permit requirements with the local authority.
         </p>
       </div>
 
@@ -230,7 +235,7 @@ export default function PermitHubPage() {
       {/* FAB */}
       <div className="fixed bottom-20 right-4 z-50">
         <Link
-          href={`/dashboard/permits/add?propertyId=${propertyId}`}
+          href={`/dashboard/permits/add?${addPermitQuery}`}
           className="flex items-center gap-2 rounded-full bg-[hsl(var(--mobile-brand-strong))] px-4 py-3 text-sm font-semibold text-white shadow-lg"
         >
           <Plus className="h-4 w-4" />

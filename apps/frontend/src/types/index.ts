@@ -4702,6 +4702,10 @@ export interface CreateHoaApprovalRecordPayload {
   documentIds?: string[];
   notes?: string;
   renovationAdvisorSessionId?: string;
+  sourceActionId?: string;
+  sourceEntityType?: string;
+  sourceEntityId?: string;
+  sourceJourneyId?: string;
 }
 
 export interface UpdateHoaApprovalRecordPayload {
@@ -4817,6 +4821,10 @@ export interface CreatePermitPayload {
   finalCostCents?: number;
   documentIds?: string[];
   notes?: string;
+  sourceActionId?: string;
+  sourceEntityType?: string;
+  sourceEntityId?: string;
+  sourceJourneyId?: string;
 }
 
 export interface UpdatePermitPayload {

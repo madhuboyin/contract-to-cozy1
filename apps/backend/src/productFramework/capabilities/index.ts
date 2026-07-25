@@ -11,6 +11,7 @@ export * from './capabilityRelatedResolver';
 export * from './capabilityRanking';
 export * from './capabilityReadinessEvaluator';
 export * from './capabilitySuppressionPolicy';
+export * from './projectComplianceCapabilitySources';
 export * from './canonicalCapabilityRegistry';
 export * from './capabilityRegistry';
 export * from './definitions';

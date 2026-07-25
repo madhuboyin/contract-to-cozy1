@@ -17,10 +17,12 @@ import ApprovalRecordList from '@/components/features/hoa/ApprovalRecordList';
 import ReportViolationModal from '@/components/features/hoa/ReportViolationModal';
 import ViolationHistoryList from '@/components/features/hoa/ViolationHistoryList';
 import { track } from '@/lib/analytics/events';
+import { complianceLaunchLineage } from '@/features/tools/complianceLaunchContext';
 
 export default function HoaCompliancePage() {
   const searchParams = useSearchParams();
   const propertyId = searchParams.get('propertyId') ?? '';
+  const launchLineage = complianceLaunchLineage(searchParams);
 
   const [association, setAssociation] = useState<HoaAssociation | null>(null);
   const [records, setRecords] = useState<HoaApprovalRecord[]>([]);
@@ -60,7 +62,10 @@ export default function HoaCompliancePage() {
   }
 
   async function handleAddRecord(payload: CreateHoaApprovalRecordPayload) {
-    const record = await api.createHoaApprovalRecord(propertyId, payload);
+    const record = await api.createHoaApprovalRecord(propertyId, {
+      ...payload,
+      ...launchLineage,
+    });
     setRecords((prev) => [record, ...prev]);
     track('action_completed', { tool: 'hoa', actionType: 'add_approval_record', propertyId });
   }
@@ -102,6 +107,9 @@ export default function HoaCompliancePage() {
         <h1 className="text-xl font-bold">HOA Compliance</h1>
         <p className="text-sm text-[hsl(var(--mobile-text-secondary))]">
           Track association approvals and violations before they turn into fines
+        </p>
+        <p className="mt-1 text-xs text-[hsl(var(--mobile-text-muted))]">
+          Record-tracking only. Verify approval requirements with your association.
         </p>
       </div>
 
