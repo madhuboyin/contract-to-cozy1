@@ -408,7 +408,7 @@
       "rolloutKey": "HOME_DIGITAL_WILL",
       "releaseStage": "ACTIVE",
       "safetyTier": "LOW_CONSEQUENCE",
-      "completionKind": "OUTPUT_VIEWED",
+      "completionKind": "ARTIFACT_CREATED",
       "lifecycleCanonicalized": true,
       "canonicalRelationshipCoverage": true,
       "recommendationDisposition": "CONTEXTUAL_CANONICAL"

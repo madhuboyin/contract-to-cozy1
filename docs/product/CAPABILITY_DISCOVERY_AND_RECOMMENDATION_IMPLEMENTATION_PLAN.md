@@ -1589,6 +1589,19 @@ change or migration is required. Rollout and rollback remain governed by `PLANT_
 - Viewer permissions do not expose restricted preparation context.
 - Creating the governed handoff artifact is meaningful completion.
 
+**CAP-802 implementation status: Complete.** The versioned Home Digital Will manifest now owns
+reviewed homeowner-language aliases, its property/document/trusted-contact read model, governed
+handoff writes, and `home_digital_will_published` as an `ARTIFACT_CREATED` completion. Golden-home
+coverage continues to verify trusted-transfer eligibility, ranking, reason code, and source lineage.
+Document-sourced launches focus the Critical Information section through the shared destination
+context. Full preparation data now requires `CONTRIBUTOR`; trusted-contact scoped preview is
+`OWNER`-only and strips the entire private contact roster, access-grant notes, email addresses, and
+phone numbers from the transferable response. Publication is a dedicated governed operation that
+requires an emergency instruction plus a reachable primary trusted contact; generic metadata
+updates cannot bypass it. Successful publication activates and timestamps the artifact and emits
+canonical `TOOL_COMPLETED` analytics. Existing Digital Will models are reused, so no schema change
+or migration is required. Rollout and rollback remain governed by `HOME_DIGITAL_WILL`.
+
 #### DIY Project Center
 
 - Only reviewed low-risk tasks or findings qualify.

@@ -78,6 +78,39 @@ export type DigitalWillDTO = Pick<
   counts: DigitalWillCounts;
 };
 
+export type HomeDigitalWillHandoffReadiness = {
+  state: 'READY' | 'NEEDS_CONTEXT';
+  missingRequirements: string[];
+};
+
+export function evaluateHomeDigitalWillHandoffReadiness(
+  will: Pick<DigitalWillDTO, 'sections' | 'trustedContacts'>,
+): HomeDigitalWillHandoffReadiness {
+  const emergencySection = will.sections.find(
+    (section) => section.type === 'EMERGENCY' && section.isEnabled,
+  );
+  const hasEmergencyInstruction = Boolean(
+    emergencySection?.entries.some((entry) => entry.isEmergency),
+  );
+  const primaryContact = will.trustedContacts.find(
+    (contact) => contact.isPrimary,
+  );
+  const hasReachablePrimary = Boolean(
+    primaryContact && (primaryContact.email || primaryContact.phone),
+  );
+  const missingRequirements = [
+    ...(!hasEmergencyInstruction ? ['emergency-instruction'] : []),
+    ...(!primaryContact ? ['primary-trusted-contact'] : []),
+    ...(primaryContact && !hasReachablePrimary
+      ? ['primary-contact-method']
+      : []),
+  ];
+  return {
+    state: missingRequirements.length === 0 ? 'READY' : 'NEEDS_CONTEXT',
+    missingRequirements,
+  };
+}
+
 // ─── Default section definitions ─────────────────────────────────────────────
 
 const DEFAULT_SECTIONS: Array<{ type: HomeDigitalWillSectionType; title: string; sortOrder: number }> = [
@@ -187,6 +220,36 @@ export function scopeTrustedContactSections(
   return scoped;
 }
 
+export function buildTrustedContactScopedWill(
+  full: DigitalWillDTO,
+  accessLevel: HomeDigitalWillAccessLevel,
+  sectionType?: HomeDigitalWillSectionType,
+): DigitalWillDTO {
+  const sections = scopeTrustedContactSections(
+    full.sections,
+    accessLevel,
+    sectionType,
+  );
+  return {
+    ...full,
+    sections,
+    // Contact roster, grant notes, email, and phone are preparation-private.
+    // A transferable view contains only the explicitly scoped property content.
+    trustedContacts: [],
+    counts: {
+      ...full.counts,
+      sectionCount: sections.length,
+      entryCount: sections.reduce(
+        (sum, section) => sum + section.entries.length,
+        0,
+      ),
+      trustedContactCount: 0,
+      hasEmergencyEntries: sections.some((section) =>
+        section.entries.some((entry) => entry.isEmergency)),
+    },
+  };
+}
+
 // ─── Entry ordering helper ────────────────────────────────────────────────────
 
 const PRIORITY_ORDER: Record<string, number> = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
@@ -215,7 +278,7 @@ export class HomeDigitalWillService {
    * Resolve a digital will and assert the requesting user has property access
    * (owner OR household collaborator), at or above minRole. Not owner-only.
    */
-  private async assertWillOwnership(willId: string, userId: string, minRole: HouseholdRole = 'VIEWER') {
+  private async assertWillOwnership(willId: string, userId: string, minRole: HouseholdRole = 'CONTRIBUTOR') {
     const will = await prisma.homeDigitalWill.findUnique({ where: { id: willId } });
     if (!will) {
       throw new APIError('Digital will not found', 404, 'NOT_FOUND');
@@ -228,7 +291,7 @@ export class HomeDigitalWillService {
   }
 
   /** Assert a section belongs to a will the user has property access to (owner OR household collaborator), returns the section. */
-  private async assertSectionOwnership(sectionId: string, userId: string, minRole: HouseholdRole = 'VIEWER') {
+  private async assertSectionOwnership(sectionId: string, userId: string, minRole: HouseholdRole = 'CONTRIBUTOR') {
     const section = await prisma.homeDigitalWillSection.findUnique({
       where: { id: sectionId },
       include: { digitalWill: true },
@@ -244,7 +307,7 @@ export class HomeDigitalWillService {
   }
 
   /** Assert an entry belongs to a section in a will the user has property access to (owner OR household collaborator). */
-  private async assertEntryOwnership(entryId: string, userId: string, minRole: HouseholdRole = 'VIEWER') {
+  private async assertEntryOwnership(entryId: string, userId: string, minRole: HouseholdRole = 'CONTRIBUTOR') {
     const entry = await prisma.homeDigitalWillEntry.findUnique({
       where: { id: entryId },
       include: {
@@ -337,7 +400,7 @@ export class HomeDigitalWillService {
     contactId: string,
     sectionType?: HomeDigitalWillSectionType,
   ): Promise<DigitalWillDTO> {
-    await this.assertWillOwnership(willId, userId);
+    await this.assertWillOwnership(willId, userId, 'OWNER');
 
     const contact = await prisma.homeDigitalWillTrustedContact.findFirst({
       where: {
@@ -352,18 +415,11 @@ export class HomeDigitalWillService {
 
     const full = await this.loadFullWill(willId);
 
-    const sections = scopeTrustedContactSections(full.sections, contact.accessLevel, sectionType);
-
-    return {
-      ...full,
-      sections,
-      counts: {
-        ...full.counts,
-        sectionCount: sections.length,
-        entryCount: sections.reduce((sum, section) => sum + section.entries.length, 0),
-        hasEmergencyEntries: sections.some((section) => section.entries.some((entry) => entry.isEmergency)),
-      },
-    };
+    return buildTrustedContactScopedWill(
+      full,
+      contact.accessLevel,
+      sectionType,
+    );
   }
 
   async getOrCreateByProperty(propertyId: string, body: CreateDigitalWillBody): Promise<DigitalWillDTO> {
@@ -389,6 +445,17 @@ export class HomeDigitalWillService {
 
   async updateWill(willId: string, userId: string, body: UpdateDigitalWillBody): Promise<DigitalWillDTO> {
     await this.assertWillOwnership(willId, userId, 'CONTRIBUTOR');
+    if (
+      body.status === 'ACTIVE'
+      || body.readiness === 'READY'
+      || body.publishedAt
+    ) {
+      throw new APIError(
+        'Publish the governed handoff after its readiness checks pass.',
+        400,
+        'USE_DIGITAL_WILL_PUBLISH',
+      );
+    }
 
     const data: Record<string, unknown> = {};
     if (body.title !== undefined) data.title = body.title;
@@ -400,6 +467,40 @@ export class HomeDigitalWillService {
     if (body.publishedAt !== undefined) data.publishedAt = body.publishedAt ? new Date(body.publishedAt) : null;
 
     await prisma.homeDigitalWill.update({ where: { id: willId }, data });
+    return this.loadFullWill(willId);
+  }
+
+  async publishWill(willId: string, userId: string): Promise<DigitalWillDTO> {
+    await this.assertWillOwnership(willId, userId, 'OWNER');
+    const will = await this.loadFullWill(willId);
+    if (will.status === 'ACTIVE' && will.publishedAt) {
+      throw new APIError(
+        'The governed handoff is already published.',
+        409,
+        'HOME_DIGITAL_WILL_ALREADY_PUBLISHED',
+      );
+    }
+    const readiness = evaluateHomeDigitalWillHandoffReadiness(will);
+    if (readiness.state === 'NEEDS_CONTEXT') {
+      throw new APIError(
+        'Complete the required handoff information before publishing.',
+        422,
+        'HOME_DIGITAL_WILL_NOT_READY',
+        readiness,
+      );
+    }
+    const now = new Date();
+    await prisma.homeDigitalWill.update({
+      where: { id: willId },
+      data: {
+        status: 'ACTIVE',
+        readiness: 'READY',
+        completionPercent: 100,
+        setupCompletedAt: will.setupCompletedAt ?? now,
+        lastReviewedAt: now,
+        publishedAt: now,
+      },
+    });
     return this.loadFullWill(willId);
   }
 

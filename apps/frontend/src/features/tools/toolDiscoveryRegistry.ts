@@ -218,6 +218,7 @@ const COMPLETION_KIND_BY_CATEGORY: Record<ToolOutcomeCategory, ToolCompletionKin
 };
 
 const COMPLETION_KIND_OVERRIDES: Record<string, ToolCompletionKind> = {
+  'home-digital-will': 'ARTIFACT_CREATED',
   'material-specs': 'ARTIFACT_CREATED',
   'plant-advisor': 'OUTPUT_GENERATED',
 };

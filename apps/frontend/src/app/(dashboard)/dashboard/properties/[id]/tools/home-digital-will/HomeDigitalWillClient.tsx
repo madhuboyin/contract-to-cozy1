@@ -64,6 +64,7 @@ import {
 } from '@/components/mobile/dashboard/MobilePrimitives';
 import { MOBILE_CARD_RADIUS, MOBILE_TYPE_TOKENS } from '@/components/mobile/dashboard/mobileDesignTokens';
 import HomeToolHeader from '@/components/tools/HomeToolHeader';
+import { useToolLaunchContext } from '@/features/tools/ToolLaunchContextBoundary';
 import {
   createEntry,
   createTrustedContact,
@@ -71,6 +72,7 @@ import {
   deleteTrustedContact,
   getDigitalWill,
   getOrCreateDigitalWill,
+  publishDigitalWill,
   updateDigitalWill,
   updateEntry,
   updateTrustedContact,
@@ -91,6 +93,10 @@ import type {
   UpdateTrustedContactInput,
   UpdateWillInput,
 } from './types';
+import {
+  homeDigitalWillDestinationSection,
+  homeDigitalWillHandoffReadiness,
+} from './homeDigitalWillActivation';
 
 // ─── Display config ───────────────────────────────────────────────────────────
 
@@ -628,10 +634,14 @@ function WillHeader({
   will,
   onEditMetadata,
   onOpenEmergencyView,
+  onPublish,
+  isPublishing,
 }: {
   will: DigitalWill;
   onEditMetadata: () => void;
   onOpenEmergencyView: () => void;
+  onPublish: () => void;
+  isPublishing: boolean;
 }) {
   const readinessTone = READINESS_TONE[will.readiness] ?? 'info';
   const readinessLabel = READINESS_LABEL[will.readiness] ?? will.readiness;
@@ -639,6 +649,7 @@ function WillHeader({
   const primaryContact = will.trustedContacts.find((c) => c.isPrimary);
   const hasContent =
     will.counts.entryCount > 0 || will.trustedContacts.length > 0;
+  const handoffReadiness = homeDigitalWillHandoffReadiness(will);
 
   return (
     <MobileCard className={cn(MOBILE_CARD_RADIUS, 'border border-gray-200 bg-white p-5')}>
@@ -696,6 +707,26 @@ function WillHeader({
               <Siren className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">Emergency</span>
               <span className="sm:hidden">View</span>
+            </Button>
+          )}
+          {will.status !== 'ACTIVE' && (
+            <Button
+              size="sm"
+              onClick={onPublish}
+              disabled={
+                isPublishing
+                || handoffReadiness.state === 'NEEDS_CONTEXT'
+              }
+              title={
+                handoffReadiness.missingRequirements.join(' ')
+                || 'Publish governed handoff'
+              }
+              className="gap-1.5"
+            >
+              {isPublishing
+                ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                : <Shield className="h-3.5 w-3.5" />}
+              Publish handoff
             </Button>
           )}
         </div>
@@ -1913,14 +1944,19 @@ function WillMetadataSheet({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSave({
+    const data: UpdateWillInput = {
       title: form.title.trim() || undefined,
-      status: form.status as UpdateWillInput['status'],
-      readiness: form.readiness as UpdateWillInput['readiness'],
       lastReviewedAt: form.lastReviewedAt
         ? new Date(form.lastReviewedAt).toISOString()
         : null,
-    });
+    };
+    if (form.status !== 'ACTIVE') {
+      data.status = form.status as UpdateWillInput['status'];
+    }
+    if (form.readiness !== 'READY') {
+      data.readiness = form.readiness as UpdateWillInput['readiness'];
+    }
+    onSave(data);
   };
 
   return (
@@ -1956,7 +1992,7 @@ function WillMetadataSheet({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="DRAFT">Draft — still being filled in</SelectItem>
-                  <SelectItem value="ACTIVE">Active — ready for use</SelectItem>
+                  <SelectItem value="ACTIVE" disabled>Active — publish using readiness checks</SelectItem>
                   <SelectItem value="ARCHIVED">Archived — no longer current</SelectItem>
                 </SelectContent>
               </Select>
@@ -1974,7 +2010,7 @@ function WillMetadataSheet({
                 <SelectContent>
                   <SelectItem value="NOT_STARTED">Not started</SelectItem>
                   <SelectItem value="IN_PROGRESS">In progress</SelectItem>
-                  <SelectItem value="READY">Ready</SelectItem>
+                  <SelectItem value="READY" disabled>Ready — managed by publishing</SelectItem>
                   <SelectItem value="NEEDS_REVIEW">Needs review</SelectItem>
                 </SelectContent>
               </Select>
@@ -2280,6 +2316,7 @@ function ContactEditorSheet({
 
 export default function HomeDigitalWillClient() {
   const { id: propertyId } = useParams<{ id: string }>();
+  const toolLaunchContext = useToolLaunchContext();
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -2306,6 +2343,7 @@ export default function HomeDigitalWillClient() {
   const [deletingEntryId, setDeletingEntryId] = React.useState<string | null>(null);
   const [deletingContactId, setDeletingContactId] = React.useState<string | null>(null);
   const [updatingContactId, setUpdatingContactId] = React.useState<string | null>(null);
+  const appliedDestinationContextRef = React.useRef(false);
 
   // ─── Query ─────────────────────────────────────────────────────────────────
 
@@ -2325,6 +2363,20 @@ export default function HomeDigitalWillClient() {
       setSelectedSectionId(will.sections[0].id);
     }
   }, [will, selectedSectionId, showContactsPanel]);
+
+  React.useEffect(() => {
+    if (!will || appliedDestinationContextRef.current) return;
+    const targetType = homeDigitalWillDestinationSection({
+      toolId: toolLaunchContext?.toolId,
+      resolved: toolLaunchContext?.resolved,
+    });
+    if (!targetType) return;
+    const target = will.sections.find((section) => section.type === targetType);
+    if (!target) return;
+    appliedDestinationContextRef.current = true;
+    setShowContactsPanel(false);
+    setSelectedSectionId(target.id);
+  }, [toolLaunchContext?.resolved, toolLaunchContext?.toolId, will]);
 
   const selectedSection =
     selectedSectionId && !showContactsPanel
@@ -2368,6 +2420,23 @@ export default function HomeDigitalWillClient() {
     },
     onError: () => {
       toast({ title: 'Failed to update will details', variant: 'destructive' });
+    },
+  });
+
+  const publishWillMutation = useMutation({
+    mutationFn: () => publishDigitalWill(will!.id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['home-digital-will', propertyId] });
+      toast({
+        title: 'Governed handoff published',
+        description: 'Trusted-contact access rules are now active.',
+      });
+    },
+    onError: () => {
+      toast({
+        title: 'Complete the emergency instruction and primary contact first.',
+        variant: 'destructive',
+      });
     },
   });
 
@@ -2604,6 +2673,8 @@ export default function HomeDigitalWillClient() {
             will={will}
             onEditMetadata={() => setMetadataEditorOpen(true)}
             onOpenEmergencyView={() => setEmergencyMode(true)}
+            onPublish={() => publishWillMutation.mutate()}
+            isPublishing={publishWillMutation.isPending}
           />
         </div>
 

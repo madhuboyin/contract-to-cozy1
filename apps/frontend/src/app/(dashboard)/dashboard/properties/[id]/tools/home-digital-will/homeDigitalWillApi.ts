@@ -41,6 +41,14 @@ export async function updateDigitalWill(
   return res.data;
 }
 
+export async function publishDigitalWill(willId: string): Promise<DigitalWill> {
+  const res = await api.post<DigitalWill>(
+    `/api/home-digital-wills/${willId}/publish`,
+    {},
+  );
+  return res.data;
+}
+
 export async function createEntry(
   sectionId: string,
   data: CreateEntryInput,

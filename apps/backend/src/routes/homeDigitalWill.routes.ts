@@ -9,6 +9,7 @@ import {
   getTrustedContactScopedWill,
   createDigitalWillForProperty,
   updateDigitalWill,
+  publishDigitalWill,
   listSections,
   createSection,
   updateSection,
@@ -48,6 +49,7 @@ router.use(authenticate);
 router.get(
   '/properties/:propertyId/home-digital-will',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   getDigitalWillByProperty,
 );
 
@@ -65,6 +67,11 @@ router.patch(
   '/home-digital-wills/:id',
   validateBody(updateDigitalWillBodySchema),
   updateDigitalWill,
+);
+
+router.post(
+  '/home-digital-wills/:id/publish',
+  publishDigitalWill,
 );
 
 // ─── Sections ─────────────────────────────────────────────────────────────────

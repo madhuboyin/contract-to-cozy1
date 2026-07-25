@@ -3,6 +3,7 @@ import { buildCapabilityDefinitions } from './capabilityDefinitionFactory';
 export const UNDERSTAND_HOME_CAPABILITIES = buildCapabilityDefinitions([
   {
     id: 'home-digital-will',
+    version: 2,
     label: 'Home Digital Will',
     description: 'Prepare critical home knowledge for trusted parties.',
     routeTemplate: '/dashboard/properties/[id]/tools/home-digital-will',
@@ -10,9 +11,34 @@ export const UNDERSTAND_HOME_CAPABILITIES = buildCapabilityDefinitions([
     rolloutKey: 'HOME_DIGITAL_WILL',
     releaseStage: 'ACTIVE',
     safetyTier: 'LOW_CONSEQUENCE',
-    completionKind: 'OUTPUT_VIEWED',
+    completionKind: 'ARTIFACT_CREATED',
     mode: 'CONTEXTUAL',
     iconName: 'file-check',
+    intentAliases: [
+      'home digital will',
+      'prepare home information for an emergency',
+      'trusted contact home access',
+      'critical home documents handoff',
+      'what someone needs to manage my home',
+      'property knowledge transfer',
+      'home emergency instructions',
+    ],
+    homeownerOutcome:
+      'Publish a governed property handoff that gives trusted people only the home knowledge they are authorized to receive.',
+    livingHomeRecordReads: [
+      'property-context',
+      'critical-property-document',
+      'trusted-contact-readiness',
+      'emergency-instruction',
+    ],
+    livingHomeRecordWrites: [
+      'governed-home-handoff',
+      'trusted-contact-access-policy',
+    ],
+    expectedOutput:
+      'A validated, access-scoped Home Digital Will handoff artifact for trusted property continuity.',
+    completionSignal: 'home_digital_will_published',
+    outputEntityTypes: ['DOCUMENT'],
   },
   {
     id: 'home-risk-replay',
