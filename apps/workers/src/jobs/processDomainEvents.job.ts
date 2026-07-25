@@ -1,6 +1,10 @@
 import { prisma } from '../lib/prisma';
 import { NotificationService } from '@worker-shared/services/notification.service';
 import { claimDetailUrl } from '../lib/deepLinks';
+import {
+  processRefinanceTransitionAlert,
+  type RefinanceAlertTransition,
+} from './refinanceTransitionAlert.job';
 
 type DomainEventStatus = 'PENDING' | 'PROCESSING' | 'PROCESSED' | 'FAILED' | 'DEAD_LETTER';
 type DomainEventType =
@@ -19,9 +23,14 @@ export const MAX_DOMAIN_EVENT_ATTEMPTS = 8;
 export interface ProcessDomainEventsDeps {
   prisma: Pick<typeof prisma, 'notification' | 'domainEvent'>;
   notificationService: Pick<typeof NotificationService, 'create'>;
+  refinanceTransitionAlert?: typeof processRefinanceTransitionAlert;
 }
 
-const defaultDeps: ProcessDomainEventsDeps = { prisma, notificationService: NotificationService };
+const defaultDeps: ProcessDomainEventsDeps = {
+  prisma,
+  notificationService: NotificationService,
+  refinanceTransitionAlert: processRefinanceTransitionAlert,
+};
 
 function computeBackoffMinutes(attempts: number) {
   if (attempts <= 0) return 0;
@@ -186,7 +195,11 @@ async function handleClaimClosed(ev: any, deps: ProcessDomainEventsDeps) {
   }, deps);
 }
 
-function handleRefinanceTransition(ev: any, expectedTransition: 'OPEN' | 'UPDATE' | 'CLOSED') {
+async function handleRefinanceTransition(
+  ev: any,
+  expectedTransition: 'OPEN' | 'UPDATE' | 'CLOSED',
+  deps: ProcessDomainEventsDeps,
+) {
   const propertyId = ev.propertyId ?? ev.payload?.propertyId;
   const snapshotId = ev.payload?.snapshotId;
   const transitionType = ev.payload?.transitionType;
@@ -199,10 +212,19 @@ function handleRefinanceTransition(ev: any, expectedTransition: 'OPEN' | 'UPDATE
     );
   }
 
-  // Radar state and the outbox row are persisted in the same transaction.
-  // Home and Gazette already project from that canonical current-state row,
-  // so the first consumer only needs to durably acknowledge the transition.
-  // Notification policy can be added here later without changing producers.
+  // CLOSED updates the canonical Home projection silently. OPEN and material
+  // UPDATE transitions may enter the separately gated external-alert policy.
+  if (expectedTransition !== 'CLOSED' && deps.refinanceTransitionAlert) {
+    await deps.refinanceTransitionAlert({
+      domainEventId: ev.id,
+      propertyId,
+      snapshotId,
+      transitionType: expectedTransition as RefinanceAlertTransition,
+      materialChangeReasons: Array.isArray(ev.payload?.materialChangeReasons)
+        ? ev.payload.materialChangeReasons
+        : [],
+    });
+  }
 }
 
 function handleRefinanceDataRequired(ev: any) {
@@ -273,13 +295,13 @@ export async function processDomainEventsJob(
           await handleClaimClosed(ev, deps);
           break;
         case 'REFINANCE_OPPORTUNITY_OPENED':
-          handleRefinanceTransition(ev, 'OPEN');
+          await handleRefinanceTransition(ev, 'OPEN', deps);
           break;
         case 'REFINANCE_OPPORTUNITY_UPDATED':
-          handleRefinanceTransition(ev, 'UPDATE');
+          await handleRefinanceTransition(ev, 'UPDATE', deps);
           break;
         case 'REFINANCE_OPPORTUNITY_CLOSED':
-          handleRefinanceTransition(ev, 'CLOSED');
+          await handleRefinanceTransition(ev, 'CLOSED', deps);
           break;
         case 'REFINANCE_DATA_REQUIRED':
           handleRefinanceDataRequired(ev);

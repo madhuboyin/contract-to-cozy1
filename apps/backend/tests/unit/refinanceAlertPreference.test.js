@@ -113,6 +113,13 @@ test('freshness and sensitivity are enforced after explicit consent', () => {
     confidenceLevel: RefinanceConfidenceLevel.GOOD,
     deliveryEnabled: true,
   }), { eligible: true, suppressionReason: null });
+  assert.deepEqual(decideRefinanceExternalAlert({
+    preference: balanced,
+    alertReadiness: 'READY',
+    confidenceLevel: RefinanceConfidenceLevel.STRONG,
+    deliveryEnabled: true,
+    cooldownActive: true,
+  }), { eligible: false, suppressionReason: 'COOLDOWN_ACTIVE' });
 });
 
 test('refinance alert preference reads and writes are property-authorized', () => {

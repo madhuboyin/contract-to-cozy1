@@ -37,7 +37,7 @@ function eventFixture(overrides = {}) {
 }
 
 function fakeDeps({ pendingEvents, existingNotification = null, notificationCreateShouldFailFor = new Set(), lockShouldFail = false }) {
-  const calls = { updates: [], creates: [], notificationFindFirstArgs: [] };
+  const calls = { updates: [], creates: [], notificationFindFirstArgs: [], refinanceAlerts: [] };
 
   const deps = {
     prisma: {
@@ -65,6 +65,10 @@ function fakeDeps({ pendingEvents, existingNotification = null, notificationCrea
         if (notificationCreateShouldFailFor.has(input.entityId)) throw new Error(`create failed for ${input.entityId}`);
         return { id: `notification-${calls.creates.length}` };
       },
+    },
+    refinanceTransitionAlert: async (input) => {
+      calls.refinanceAlerts.push(input);
+      return { status: 'SUPPRESSED', reason: 'DELIVERY_DISABLED' };
     },
   };
   return { deps, calls };
@@ -101,7 +105,7 @@ for (const [type, transitionType] of [
   ['REFINANCE_OPPORTUNITY_UPDATED', 'UPDATE'],
   ['REFINANCE_OPPORTUNITY_CLOSED', 'CLOSED'],
 ]) {
-  test(`acknowledges a valid ${type} event without creating a notification`, async () => {
+  test(`acknowledges a valid ${type} event with the expected alert behavior`, async () => {
     const { deps, calls } = fakeDeps({
       pendingEvents: [
         eventFixture({
@@ -115,6 +119,7 @@ for (const [type, transitionType] of [
 
     assert.equal(result.processed, 1);
     assert.equal(calls.creates.length, 0);
+    assert.equal(calls.refinanceAlerts.length, transitionType === 'CLOSED' ? 0 : 1);
     const terminal = calls.updates.find((update) => update.kind === 'terminal');
     assert.equal(terminal.args.data.status, 'PROCESSED');
   });

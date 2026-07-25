@@ -237,6 +237,8 @@ COPY apps/backend/src/neighborhoodIntelligence/neighborhoodPropertyMatchService.
 # Copy refinanceRadar files needed by ingestion and post-ingestion evaluation.
 COPY apps/backend/src/refinanceRadar/refinanceRadar.service.ts \
      apps/backend/src/refinanceRadar/refinanceRadarTransition.ts \
+     apps/backend/src/refinanceRadar/refinanceAlertPreference.service.ts \
+     apps/backend/src/refinanceRadar/refinanceFreshness.ts \
      src/shared/backend/refinanceRadar/
 COPY apps/backend/src/refinanceRadar/engine/mortgageRate.service.ts \
      apps/backend/src/refinanceRadar/engine/refinanceCalculation.engine.ts \

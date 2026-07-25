@@ -1,0 +1,160 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+
+require('ts-node/register');
+require('tsconfig-paths/register');
+
+const {
+  NotificationCadence,
+  NotificationSensitivity,
+  RefinanceConfidenceLevel,
+} = require('@prisma/client');
+const {
+  areRefinanceExternalAlertsEnabled,
+  processRefinanceTransitionAlert,
+  REFINANCE_EXTERNAL_ALERT_COOLDOWN_DAYS,
+} = require('../../src/jobs/refinanceTransitionAlert.job.ts');
+
+function context(overrides = {}) {
+  return {
+    propertyId: 'property-1',
+    ownerUserId: 'owner-1',
+    address: '94 Ashford Dr',
+    confidenceLevel: RefinanceConfidenceLevel.STRONG,
+    mortgageDataAsOf: '2026-07-20T00:00:00.000Z',
+    marketDataAsOf: '2026-07-24T00:00:00.000Z',
+    marketDataSource: 'FREDDIE_MAC_PMMS',
+    preference: {
+      homeEnabled: true,
+      emailEnabled: true,
+      pushAvailable: false,
+      cadence: NotificationCadence.IMMEDIATE,
+      sensitivity: NotificationSensitivity.CONSERVATIVE,
+      quietStart: '21:00',
+      quietEnd: '07:00',
+      timezone: 'America/New_York',
+      explicitEmailConsent: true,
+      externalDeliveryEnabled: false,
+    },
+    ...overrides,
+  };
+}
+
+function deps(overrides = {}) {
+  const calls = { creates: [], cooldownSince: null };
+  return {
+    calls,
+    value: {
+      deliveryEnabled: () => true,
+      now: () => new Date('2026-07-25T12:00:00.000Z'),
+      loadContext: async () => context(),
+      hasRecentAlert: async (_userId, _propertyId, since) => {
+        calls.cooldownSince = since;
+        return false;
+      },
+      createNotification: async (input) => {
+        calls.creates.push(input);
+        return { id: 'notification-1' };
+      },
+      ...overrides,
+    },
+  };
+}
+
+const event = {
+  domainEventId: 'event-1',
+  propertyId: 'property-1',
+  snapshotId: 'snapshot-1',
+  transitionType: 'OPEN',
+  materialChangeReasons: ['OPPORTUNITY_THRESHOLD_MET'],
+};
+
+test('refinance external alerts require both fail-closed feature flags', () => {
+  assert.equal(areRefinanceExternalAlertsEnabled({}), false);
+  assert.equal(areRefinanceExternalAlertsEnabled({
+    REFINANCE_EXTERNAL_ALERTS_ENABLED: 'true',
+    WORKER_OUTBOUND_NOTIFICATIONS_ENABLED: 'false',
+  }), false);
+  assert.equal(areRefinanceExternalAlertsEnabled({
+    REFINANCE_EXTERNAL_ALERTS_ENABLED: 'true',
+    WORKER_OUTBOUND_NOTIFICATIONS_ENABLED: 'true',
+  }), true);
+});
+
+test('suppresses before loading financial context while delivery is disabled', async () => {
+  let loaded = false;
+  const { value, calls } = deps({
+    deliveryEnabled: () => false,
+    loadContext: async () => {
+      loaded = true;
+      return context();
+    },
+  });
+  const result = await processRefinanceTransitionAlert(event, value);
+  assert.deepEqual(result, { status: 'SUPPRESSED', reason: 'DELIVERY_DISABLED' });
+  assert.equal(loaded, false);
+  assert.equal(calls.creates.length, 0);
+});
+
+test('creates a consented, current, high-confidence OPEN alert without financial values in metadata', async () => {
+  const { value, calls } = deps();
+  const result = await processRefinanceTransitionAlert(event, value);
+
+  assert.deepEqual(result, { status: 'CREATED', reason: null });
+  assert.equal(calls.creates.length, 1);
+  assert.equal(calls.creates[0].category, 'REFINANCE');
+  assert.equal(calls.creates[0].transportEnabled, true);
+  assert.equal(calls.creates[0].metadata.domainEventId, 'event-1');
+  assert.equal('monthlySavings' in calls.creates[0].metadata, false);
+  assert.equal('loanBalance' in calls.creates[0].metadata, false);
+  assert.equal(
+    calls.cooldownSince.toISOString(),
+    new Date(
+      new Date('2026-07-25T12:00:00.000Z').getTime() -
+        REFINANCE_EXTERNAL_ALERT_COOLDOWN_DAYS * 86400000,
+    ).toISOString(),
+  );
+});
+
+test('suppresses alert when explicit email consent is absent', async () => {
+  const { value, calls } = deps({
+    loadContext: async () => context({
+      preference: {
+        ...context().preference,
+        emailEnabled: false,
+        cadence: NotificationCadence.MUTED,
+        explicitEmailConsent: false,
+      },
+    }),
+  });
+  const result = await processRefinanceTransitionAlert(event, value);
+  assert.deepEqual(result, { status: 'SUPPRESSED', reason: 'NO_EXPLICIT_CONSENT' });
+  assert.equal(calls.creates.length, 0);
+});
+
+test('reports central notification-policy suppression without retrying the event', async () => {
+  const { value } = deps({ createNotification: async () => null });
+  assert.deepEqual(
+    await processRefinanceTransitionAlert(event, value),
+    { status: 'SUPPRESSED', reason: 'NOTIFICATION_POLICY' },
+  );
+});
+
+test('suppresses stale mortgage inputs and active 30-day cooldowns', async () => {
+  const stale = deps({
+    loadContext: async () => context({
+      mortgageDataAsOf: '2025-01-01T00:00:00.000Z',
+    }),
+  });
+  assert.deepEqual(
+    await processRefinanceTransitionAlert(event, stale.value),
+    { status: 'SUPPRESSED', reason: 'INPUTS_NOT_CURRENT' },
+  );
+
+  const cooldown = deps({ hasRecentAlert: async () => true });
+  assert.deepEqual(
+    await processRefinanceTransitionAlert(event, cooldown.value),
+    { status: 'SUPPRESSED', reason: 'COOLDOWN_ACTIVE' },
+  );
+  assert.equal(cooldown.calls.creates.length, 0);
+});

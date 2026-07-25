@@ -40,6 +40,36 @@ export function defaultRefinanceAlertPreference(): RefinanceAlertPreferenceDTO {
   return { ...DEFAULT_PREFERENCE };
 }
 
+type StoredRefinanceAlertPreference = {
+  enabled: boolean;
+  cadence: NotificationCadence;
+  sensitivity: NotificationSensitivity | null;
+  quietStart: string | null;
+  quietEnd: string | null;
+  timezone: string;
+};
+
+export function mapRefinanceAlertPreference(
+  preference: StoredRefinanceAlertPreference | null,
+): RefinanceAlertPreferenceDTO {
+  if (!preference) return defaultRefinanceAlertPreference();
+  const optedIn =
+    preference.enabled && preference.cadence !== NotificationCadence.MUTED;
+  return {
+    homeEnabled: true,
+    emailEnabled: optedIn,
+    pushAvailable: false,
+    cadence: preference.cadence,
+    sensitivity:
+      preference.sensitivity ?? NotificationSensitivity.CONSERVATIVE,
+    quietStart: preference.quietStart,
+    quietEnd: preference.quietEnd,
+    timezone: preference.timezone,
+    explicitEmailConsent: optedIn,
+    externalDeliveryEnabled: false,
+  };
+}
+
 export async function getRefinanceAlertPreference(
   userId: string,
   propertyId: string,
@@ -54,22 +84,7 @@ export async function getRefinanceAlertPreference(
       },
     },
   });
-  if (!preference) return defaultRefinanceAlertPreference();
-  return {
-    homeEnabled: true,
-    emailEnabled:
-      preference.enabled && preference.cadence !== NotificationCadence.MUTED,
-    pushAvailable: false,
-    cadence: preference.cadence,
-    sensitivity:
-      preference.sensitivity ?? NotificationSensitivity.CONSERVATIVE,
-    quietStart: preference.quietStart,
-    quietEnd: preference.quietEnd,
-    timezone: preference.timezone,
-    explicitEmailConsent:
-      preference.enabled && preference.cadence !== NotificationCadence.MUTED,
-    externalDeliveryEnabled: false,
-  };
+  return mapRefinanceAlertPreference(preference);
 }
 
 export async function updateRefinanceAlertPreference(
@@ -131,6 +146,7 @@ export function decideRefinanceExternalAlert(input: {
   alertReadiness: RefinanceAlertReadiness;
   confidenceLevel: RefinanceConfidenceLevel | null;
   deliveryEnabled: boolean;
+  cooldownActive?: boolean;
 }): {
   eligible: boolean;
   suppressionReason:
@@ -138,6 +154,7 @@ export function decideRefinanceExternalAlert(input: {
     | 'NO_EXPLICIT_CONSENT'
     | 'INPUTS_NOT_CURRENT'
     | 'CONFIDENCE_BELOW_PREFERENCE'
+    | 'COOLDOWN_ACTIVE'
     | null;
 } {
   if (!input.deliveryEnabled) {
@@ -148,6 +165,9 @@ export function decideRefinanceExternalAlert(input: {
   }
   if (input.alertReadiness !== 'READY') {
     return { eligible: false, suppressionReason: 'INPUTS_NOT_CURRENT' };
+  }
+  if (input.cooldownActive) {
+    return { eligible: false, suppressionReason: 'COOLDOWN_ACTIVE' };
   }
   const minimum = MINIMUM_CONFIDENCE[input.preference.sensitivity];
   if (

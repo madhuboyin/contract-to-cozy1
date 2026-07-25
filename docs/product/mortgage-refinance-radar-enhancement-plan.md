@@ -58,6 +58,16 @@ push as unavailable until a provider exists. Refinance no longer inherits
 legacy email defaults. External delivery remains disabled during the pilot;
 the stored preference and policy contract are ready for a later cooldown-gated
 delivery slice.
+The guarded delivery consumer is now implemented for durable OPEN and material
+UPDATE events. It reloads canonical property state at consumption time,
+addresses only the owning homeowner, requires the explicit property-scoped
+email preference, current mortgage and market inputs, configured confidence,
+and a 30-day property cooldown. CLOSED and DATA_REQUIRED remain Home-only.
+Notification metadata intentionally omits balances, rates, and savings. Two
+independent fail-closed controls—`REFINANCE_EXTERNAL_ALERTS_ENABLED` and
+`WORKER_OUTBOUND_NOTIFICATIONS_ENABLED`—must both be exactly `true`; therefore
+external delivery remains off by default. Existing notification policy applies
+the homeowner's cadence, timezone, and quiet hours once the alert is admitted.
 
 ## Executive recommendation
 
