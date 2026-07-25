@@ -6,7 +6,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useQuery } from '@tanstack/react-query';
+import { useQueries, useQuery } from '@tanstack/react-query';
 import { BarChart2, ChevronRight } from 'lucide-react';
 import { MobileCard, StatusChip } from '@/components/mobile/dashboard/MobilePrimitives';
 import {
@@ -14,6 +14,87 @@ import {
   type RadarStatusAvailable,
 } from '../tools/mortgage-refinance-radar/mortgageRefinanceRadarApi';
 import { FEATURE_FLAGS } from '@/lib/featureFlags';
+
+type RefinancePortfolioProperty = {
+  id: string;
+  address: string;
+};
+
+function confidenceRank(value: RadarStatusAvailable['confidenceLevel']): number {
+  return value === 'STRONG' ? 3 : value === 'GOOD' ? 2 : 1;
+}
+
+export function RefinanceRadarPortfolioCard({
+  properties,
+}: {
+  properties: RefinancePortfolioProperty[];
+}) {
+  const queries = useQueries({
+    queries: properties.map((property) => ({
+      queryKey: ['refinance-radar-status', property.id],
+      queryFn: () => getRadarStatus(property.id),
+      enabled: Boolean(property.id) && FEATURE_FLAGS.MORTGAGE_REFINANCE_RADAR,
+      staleTime: 10 * 60 * 1000,
+    })),
+  });
+  const ranked = properties
+    .map((property, index) => {
+      const status = queries[index]?.data;
+      return status?.available && status.radarState === 'OPEN'
+        ? { property, status: status as RadarStatusAvailable }
+        : null;
+    })
+    .filter((value): value is {
+      property: RefinancePortfolioProperty;
+      status: RadarStatusAvailable;
+    } => Boolean(value))
+    .sort((left, right) =>
+      right.status.monthlySavings - left.status.monthlySavings ||
+      confidenceRank(right.status.confidenceLevel) -
+        confidenceRank(left.status.confidenceLevel) ||
+      (left.status.breakEvenMonths ?? Number.MAX_SAFE_INTEGER) -
+        (right.status.breakEvenMonths ?? Number.MAX_SAFE_INTEGER),
+    );
+
+  if (queries.some((query) => query.isLoading)) {
+    return <div className="h-16 animate-pulse rounded-[22px] bg-slate-100" aria-hidden="true" />;
+  }
+  const best = ranked[0];
+  if (!best) return null;
+
+  return (
+    <Link
+      href={`/dashboard/properties/${best.property.id}/tools/mortgage-refinance-radar`}
+      className="no-brand-style block"
+    >
+      <MobileCard variant="standard" className="space-y-2.5 transition-colors hover:bg-[hsl(var(--mobile-bg-muted))]">
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <p className="mb-0 text-sm font-semibold text-[hsl(var(--mobile-text-primary))]">
+              Best refinance opportunity
+            </p>
+            <p className="mb-0 mt-0.5 text-xs text-[hsl(var(--mobile-text-secondary))]">
+              {best.property.address}
+              {ranked.length > 1 ? ` · highest value across ${ranked.length} homes` : ''}
+            </p>
+          </div>
+          <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" aria-hidden="true" />
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <StatusChip tone="good">
+            {(best.status.confidenceLevel ?? 'WEAK').toLowerCase()} confidence
+          </StatusChip>
+          <span className="text-sm font-semibold text-emerald-600">
+            ${Math.round(best.status.monthlySavings).toLocaleString()}/mo estimated savings
+          </span>
+        </div>
+        <p className="mb-0 text-[13px] font-medium text-[hsl(var(--mobile-brand-strong))]">
+          Review the highest-value opportunity
+        </p>
+      </MobileCard>
+    </Link>
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Component

@@ -4,6 +4,7 @@
 // Mortgage Refinance Radar feature. All methods are property-scoped.
 
 import {
+  Prisma,
   PropertyMortgageStatus,
   RefinanceConfidenceLevel,
   RefinanceRadarState,
@@ -42,6 +43,7 @@ import {
   RefinanceTransitionDTO,
 } from './types/refinanceRadar.types';
 import { DEFAULT_CLOSING_COST_PCT } from './config/refinanceRadar.config';
+import { compareRefinanceDecisionAlternatives } from './refinanceAlternativeComparison';
 import {
   buildRefinanceTransitionOutboxEvent,
   detectRefinanceTransition,
@@ -209,6 +211,9 @@ export class RefinanceRadarService {
     const property = await prisma.property.findUnique({
       where: { id: propertyId },
       select: {
+        state: true,
+        dwellingType: true,
+        occupancyStatus: true,
         lastAppraisedValue: true,
         lastAppraisalDate: true,
         financingProfile: {
@@ -218,6 +223,7 @@ export class RefinanceRadarService {
             hasSecondMortgage: true,
             secondMortgageBalanceCents: true,
             hasPMI: true,
+            mortgageType: true,
           },
         },
       },
@@ -241,6 +247,12 @@ export class RefinanceRadarService {
           ? null
           : profile.secondMortgageBalanceCents / 100,
       hasMortgageInsurance: profile?.hasPMI ?? false,
+      occupancyStatus: property?.occupancyStatus ?? 'UNKNOWN',
+      propertyType: property?.dwellingType ?? 'UNKNOWN',
+      propertyState: property?.state ?? 'UNKNOWN',
+      loanType: profile?.mortgageType ?? 'UNKNOWN',
+      conformingLimitUsd:
+        Number(process.env.REFINANCE_BASELINE_CONFORMING_LIMIT_USD) || null,
     });
   }
 
@@ -678,6 +690,13 @@ export class RefinanceRadarService {
       discountPoints?: number;
       additionalFeesAmount?: number;
       lenderCreditsAmount?: number;
+      escrowFundingAmount?: number;
+      prepaymentPenaltyAmount?: number;
+      extraPrincipalAmount?: number;
+      recastPrincipalAmount?: number;
+      recastFeeAmount?: number;
+      cashOutAmount?: number;
+      borrowerCreditBand: ScenarioAssumptions['borrowerCreditBand'];
       objective: RefinanceObjective;
       saveScenario: boolean;
       propertyContextVersion: string;
@@ -720,6 +739,8 @@ export class RefinanceRadarService {
       discountPoints: input.discountPoints,
       additionalFeesUsd: input.additionalFeesAmount,
       lenderCreditsUsd: input.lenderCreditsAmount,
+      escrowFundingUsd: input.escrowFundingAmount,
+      prepaymentPenaltyUsd: input.prepaymentPenaltyAmount,
     });
     const termComparison = compareRefinanceTerms({
       loanBalance: mortgageContext.loanBalance,
@@ -732,9 +753,26 @@ export class RefinanceRadarService {
       discountPoints: input.discountPoints,
       additionalFeesUsd: input.additionalFeesAmount,
       lenderCreditsUsd: input.lenderCreditsAmount,
+      escrowFundingUsd: input.escrowFundingAmount,
+      prepaymentPenaltyUsd: input.prepaymentPenaltyAmount,
       objective: input.objective,
     });
     const scenarioDate = new Date();
+    const decisionAlternatives = compareRefinanceDecisionAlternatives({
+      loanBalanceUsd: mortgageContext.loanBalance,
+      currentRatePct: mortgageContext.currentRatePct,
+      remainingTermMonths: mortgageContext.remainingTermMonths,
+      currentMonthlyPaymentUsd: calcResult.currentMonthlyPayment,
+      targetRatePct: input.targetRate,
+      targetTermMonths,
+      refinanceMonthlyPaymentUsd: calcResult.newMonthlyPayment,
+      refinanceTotalInterestUsd: calcResult.totalInterestNewLoan,
+      refinanceCashToCloseUsd: calcResult.cashToCloseUsd,
+      extraPrincipalUsd: input.extraPrincipalAmount,
+      recastPrincipalUsd: input.recastPrincipalAmount,
+      recastFeeUsd: input.recastFeeAmount,
+      cashOutAmountUsd: input.cashOutAmount,
+    });
     const estimatedPayoffDate = (months: number) => {
       const value = new Date(scenarioDate);
       value.setUTCMonth(value.getUTCMonth() + months);
@@ -770,9 +808,17 @@ export class RefinanceRadarService {
               ...alternative,
               tradeoffs: [...alternative.tradeoffs],
             })),
+            decisionAlternatives,
+            escrowFundingUsd: input.escrowFundingAmount ?? 0,
+            prepaymentPenaltyUsd: input.prepaymentPenaltyAmount ?? 0,
+            extraPrincipalUsd: input.extraPrincipalAmount ?? 0,
+            recastPrincipalUsd: input.recastPrincipalAmount ?? 0,
+            recastFeeUsd: input.recastFeeAmount ?? 0,
+            cashOutAmountUsd: input.cashOutAmount ?? 0,
+            borrowerCreditBand: input.borrowerCreditBand,
             computedAt: new Date().toISOString(),
             propertyContextVersion: input.propertyContextVersion,
-          },
+          } as unknown as Prisma.InputJsonValue,
         },
       });
     }
@@ -804,6 +850,7 @@ export class RefinanceRadarService {
       recommendedTerm: termComparison.recommendedTerm,
       recommendationExplanation: termComparison.recommendationExplanation,
       alternatives: termComparison.alternatives,
+      decisionAlternatives,
       assumptions: {
         loanBalance: mortgageContext.loanBalance,
         currentRatePct: mortgageContext.currentRatePct,
@@ -813,6 +860,12 @@ export class RefinanceRadarService {
         discountPoints: calcResult.costBreakdown.discountPoints,
         additionalFeesUsd: calcResult.costBreakdown.additionalFeesUsd,
         lenderCreditsUsd: calcResult.costBreakdown.lenderCreditsUsd,
+        escrowFundingUsd: calcResult.costBreakdown.escrowFundingUsd,
+        prepaymentPenaltyUsd: calcResult.costBreakdown.prepaymentPenaltyUsd,
+        extraPrincipalUsd: input.extraPrincipalAmount ?? 0,
+        recastPrincipalUsd: input.recastPrincipalAmount ?? 0,
+        cashOutAmountUsd: input.cashOutAmount ?? 0,
+        borrowerCreditBand: input.borrowerCreditBand,
         aprMethodology:
           'MODELED_FROM_NOTE_PAYMENT_AND_NET_UPFRONT_COSTS',
       },

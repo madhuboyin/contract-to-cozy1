@@ -65,6 +65,16 @@ export const runScenarioSchema = z
       .min(0, 'lenderCreditsAmount cannot be negative')
       .max(500_000, 'lenderCreditsAmount seems unrealistic')
       .optional(),
+    escrowFundingAmount: z.number().min(0).max(500_000).optional(),
+    prepaymentPenaltyAmount: z.number().min(0).max(500_000).optional(),
+    extraPrincipalAmount: z.number().min(0).max(5_000_000).optional(),
+    recastPrincipalAmount: z.number().min(0).max(5_000_000).optional(),
+    recastFeeAmount: z.number().min(0).max(25_000).optional(),
+    cashOutAmount: z.number().min(0).max(5_000_000).optional(),
+    borrowerCreditBand: z
+      .enum(['EXCELLENT', 'GOOD', 'FAIR', 'LIMITED', 'UNKNOWN'])
+      .optional()
+      .default('UNKNOWN'),
     objective: z
       .enum(['BALANCED', 'LOWER_PAYMENT', 'FASTER_PAYOFF', 'LOWER_TOTAL_COST'])
       .optional()

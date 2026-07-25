@@ -215,7 +215,7 @@ async function handleRefinanceTransition(
   // CLOSED updates the canonical Home projection silently. OPEN and material
   // UPDATE transitions may enter the separately gated external-alert policy.
   if (expectedTransition !== 'CLOSED' && deps.refinanceTransitionAlert) {
-    await deps.refinanceTransitionAlert({
+    return deps.refinanceTransitionAlert({
       domainEventId: ev.id,
       propertyId,
       snapshotId,
@@ -225,6 +225,7 @@ async function handleRefinanceTransition(
         : [],
     });
   }
+  return null;
 }
 
 function handleRefinanceDataRequired(ev: any) {
@@ -287,6 +288,7 @@ export async function processDomainEventsJob(
     try {
       const type = ev.type as DomainEventType;
 
+      let processingOutcome: unknown = null;
       switch (type) {
         case 'CLAIM_SUBMITTED':
           await handleClaimSubmitted(ev, deps);
@@ -295,13 +297,13 @@ export async function processDomainEventsJob(
           await handleClaimClosed(ev, deps);
           break;
         case 'REFINANCE_OPPORTUNITY_OPENED':
-          await handleRefinanceTransition(ev, 'OPEN', deps);
+          processingOutcome = await handleRefinanceTransition(ev, 'OPEN', deps);
           break;
         case 'REFINANCE_OPPORTUNITY_UPDATED':
-          await handleRefinanceTransition(ev, 'UPDATE', deps);
+          processingOutcome = await handleRefinanceTransition(ev, 'UPDATE', deps);
           break;
         case 'REFINANCE_OPPORTUNITY_CLOSED':
-          await handleRefinanceTransition(ev, 'CLOSED', deps);
+          processingOutcome = await handleRefinanceTransition(ev, 'CLOSED', deps);
           break;
         case 'REFINANCE_DATA_REQUIRED':
           handleRefinanceDataRequired(ev);
@@ -316,6 +318,16 @@ export async function processDomainEventsJob(
           status: 'PROCESSED' as DomainEventStatus,
           processedAt: new Date(),
           lastError: null,
+          ...(processingOutcome
+            ? {
+                payload: {
+                  ...(ev.payload && typeof ev.payload === 'object'
+                    ? ev.payload
+                    : {}),
+                  processingOutcome,
+                },
+              }
+            : {}),
         },
       });
 

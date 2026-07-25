@@ -1354,5 +1354,13 @@ export default function DashboardPage() {
     return <DashboardRouteState state="empty" title="Add your first home" description="Add an address to begin building your Home record and action plan." />;
   }
 
-  return <UnifiedHomeSurface propertyId={effectiveSelectedPropertyId} />;
+  return (
+    <UnifiedHomeSurface
+      propertyId={effectiveSelectedPropertyId}
+      properties={properties.map((property) => ({
+        id: property.id,
+        address: property.address,
+      }))}
+    />
+  );
 }

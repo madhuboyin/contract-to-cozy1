@@ -444,6 +444,18 @@ function EligibilityContextCard({
           <span className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
             Mortgage insurance: {context.hasMortgageInsurance ? 'recorded' : 'not recorded'}
           </span>
+          <span className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+            Loan: {context.loanType.replace(/_/g, ' ')}
+          </span>
+          <span className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+            Occupancy: {context.occupancyStatus.replace(/_/g, ' ')}
+          </span>
+          <span className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+            Property: {context.propertyType.replace(/_/g, ' ')} · {context.propertyState}
+          </span>
+          <span className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+            Conforming context: {context.conformingContext.replace(/_/g, ' ').toLowerCase()}
+          </span>
         </div>
 
         {context.warnings.length > 0 && (
@@ -636,7 +648,11 @@ function AlertPreferencesCard({
           Intl.DateTimeFormat().resolvedOptions().timeZone || preference.timezone,
       });
       setPreference(saved);
-      setMessage('Preferences saved. Email delivery remains disabled during the pilot.');
+      setMessage(
+        saved.externalDeliveryEnabled
+          ? 'Preferences saved. Eligible email alerts are active.'
+          : 'Preferences saved. Email delivery remains disabled during the pilot.',
+      );
     } catch (error) {
       setMessage(
         error instanceof Error ? error.message : 'Unable to save alert preferences.',
@@ -648,14 +664,19 @@ function AlertPreferencesCard({
 
   return (
     <GlassCard>
-      <div className="space-y-4 p-5 sm:p-6">
+      <div
+        id="refinance-alert-preferences"
+        className="scroll-mt-24 space-y-4 p-5 sm:p-6"
+      >
         <div>
           <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
             <Bell className="h-4 w-4 text-blue-600" aria-hidden="true" />
             Refinance alert preferences
           </h3>
           <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-            Home monitoring stays on. Email is explicit opt-in and will activate only after the delivery pilot is approved.
+            {preference?.externalDeliveryEnabled
+              ? 'Home monitoring stays on. Email is explicit opt-in and follows your cadence and quiet hours.'
+              : 'Home monitoring stays on. Email is explicit opt-in and will activate only after the delivery pilot is approved.'}
           </p>
         </div>
 
@@ -868,6 +889,14 @@ function ScenarioCalculator({
   const [discountPoints, setDiscountPoints] = useState('');
   const [additionalFees, setAdditionalFees] = useState('');
   const [lenderCredits, setLenderCredits] = useState('');
+  const [escrowFunding, setEscrowFunding] = useState('');
+  const [prepaymentPenalty, setPrepaymentPenalty] = useState('');
+  const [extraPrincipal, setExtraPrincipal] = useState('');
+  const [recastPrincipal, setRecastPrincipal] = useState('');
+  const [cashOut, setCashOut] = useState('');
+  const [creditBand, setCreditBand] = useState<
+    'EXCELLENT' | 'GOOD' | 'FAIR' | 'LIMITED' | 'UNKNOWN'
+  >('UNKNOWN');
   const [showCostDetails, setShowCostDetails] = useState(false);
   const [saveComparison, setSaveComparison] = useState(false);
   const [lastRunSaved, setLastRunSaved] = useState(false);
@@ -902,6 +931,11 @@ function ScenarioCalculator({
       const discountPointsValue = optionalNumber(discountPoints, 'Discount points', 5);
       const additionalFeesAmount = optionalNumber(additionalFees, 'Additional fees', 500_000);
       const lenderCreditsAmount = optionalNumber(lenderCredits, 'Lender credits', 500_000);
+      const escrowFundingAmount = optionalNumber(escrowFunding, 'Escrow funding', 500_000);
+      const prepaymentPenaltyAmount = optionalNumber(prepaymentPenalty, 'Prepayment penalty', 500_000);
+      const extraPrincipalAmount = optionalNumber(extraPrincipal, 'Extra principal', 5_000_000);
+      const recastPrincipalAmount = optionalNumber(recastPrincipal, 'Recast principal', 5_000_000);
+      const cashOutAmount = optionalNumber(cashOut, 'Cash-out amount', 5_000_000);
       const scenario = await runScenario(propertyId, {
         targetRate: rate,
         targetTerm,
@@ -911,6 +945,12 @@ function ScenarioCalculator({
         discountPoints: discountPointsValue,
         additionalFeesAmount,
         lenderCreditsAmount,
+        escrowFundingAmount,
+        prepaymentPenaltyAmount,
+        extraPrincipalAmount,
+        recastPrincipalAmount,
+        cashOutAmount,
+        borrowerCreditBand: creditBand,
         objective,
         saveScenario: saveComparison,
       });
@@ -1059,6 +1099,50 @@ function ScenarioCalculator({
                 />
                 <p className="mt-1 text-[11px] text-slate-500">1 point = 1% of balance</p>
               </div>
+              {[
+                ['Escrow funding', escrowFunding, setEscrowFunding, 'Initial taxes and insurance'],
+                ['Prepayment penalty', prepaymentPenalty, setPrepaymentPenalty, 'Only if your current loan requires it'],
+                ['Extra principal', extraPrincipal, setExtraPrincipal, 'Compare keeping the current loan'],
+                ['Recast principal', recastPrincipal, setRecastPrincipal, 'Compare a servicer-approved recast'],
+                ['Cash-out amount', cashOut, setCashOut, 'Compare increased refinance principal'],
+              ].map(([label, value, setter, placeholder]) => (
+                <div key={label as string}>
+                  <label className="mb-1 block text-xs font-medium text-slate-700 dark:text-slate-300">
+                    {label as string} (USD)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="100"
+                    inputMode="decimal"
+                    value={value as string}
+                    onChange={(event) =>
+                      (setter as React.Dispatch<React.SetStateAction<string>>)(event.target.value)
+                    }
+                    placeholder={placeholder as string}
+                    className="w-full rounded-lg border border-slate-200/80 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                  />
+                </div>
+              ))}
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-700 dark:text-slate-300">
+                  Broad credit band
+                </label>
+                <select
+                  value={creditBand}
+                  onChange={(event) => setCreditBand(event.target.value as typeof creditBand)}
+                  className="w-full rounded-lg border border-slate-200/80 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                >
+                  <option value="UNKNOWN">Prefer not to say / unknown</option>
+                  <option value="EXCELLENT">Excellent</option>
+                  <option value="GOOD">Good</option>
+                  <option value="FAIR">Fair</option>
+                  <option value="LIMITED">Limited history</option>
+                </select>
+                <p className="mt-1 text-[11px] text-slate-500">
+                  Planning context only; this does not imply lender approval.
+                </p>
+              </div>
               <div>
                 <label className="mb-1 block text-xs font-medium text-slate-700 dark:text-slate-300">
                   Other fees (USD)
@@ -1199,6 +1283,41 @@ function ScenarioCalculator({
                   />
                 </div>
 
+                <div className="mt-4 rounded-xl border border-violet-200/80 bg-violet-50/60 p-3 dark:border-violet-900/70 dark:bg-violet-950/25">
+                  <p className="text-xs font-semibold text-violet-900 dark:text-violet-200">
+                    Refinance and non-refinance alternatives
+                  </p>
+                  <div className="mt-3 overflow-x-auto">
+                    <table className="min-w-[650px] w-full text-left text-xs" aria-label="Mortgage decision alternatives">
+                      <thead className="text-violet-800/80 dark:text-violet-300/80">
+                        <tr>
+                          <th className="pb-2">Option</th>
+                          <th className="pb-2">Payment</th>
+                          <th className="pb-2">Upfront cash</th>
+                          <th className="pb-2">Payoff</th>
+                          <th className="pb-2">Est. interest</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-violet-200/60">
+                        {result.decisionAlternatives.map((alternative) => (
+                          <tr key={alternative.kind}>
+                            <th className="py-2 pr-3 font-semibold">{alternative.label}</th>
+                            <td className="py-2 pr-3">{usd(alternative.monthlyPaymentUsd)}</td>
+                            <td className="py-2 pr-3">{usd(alternative.upfrontCashUsd)}</td>
+                            <td className="py-2 pr-3">{months(alternative.payoffMonths)}</td>
+                            <td className="py-2">{usd(alternative.estimatedTotalInterestUsd)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <ul className="mt-2 space-y-1 text-[11px] text-violet-800 dark:text-violet-300">
+                    {result.decisionAlternatives.map((alternative) => (
+                      <li key={`${alternative.kind}-guidance`}>• {alternative.guidance}</li>
+                    ))}
+                  </ul>
+                </div>
+
                 <div className="mt-4 rounded-xl border border-blue-200/80 bg-blue-50/70 p-3 dark:border-blue-900/70 dark:bg-blue-950/30">
                   <p className="text-xs font-semibold text-blue-900 dark:text-blue-200">
                     Objective-aware comparison: {TERM_LABELS[result.recommendedTerm]}
@@ -1276,6 +1395,14 @@ function ScenarioCalculator({
                     <div className="flex justify-between gap-3">
                       <dt>Other entered fees</dt>
                       <dd>{usd(result.costBreakdown.additionalFeesUsd)}</dd>
+                    </div>
+                    <div className="flex justify-between gap-3">
+                      <dt>Initial escrow funding</dt>
+                      <dd>{usd(result.costBreakdown.escrowFundingUsd)}</dd>
+                    </div>
+                    <div className="flex justify-between gap-3">
+                      <dt>Prepayment constraint</dt>
+                      <dd>{usd(result.costBreakdown.prepaymentPenaltyUsd)}</dd>
                     </div>
                     <div className="flex justify-between gap-3">
                       <dt>Lender credits</dt>

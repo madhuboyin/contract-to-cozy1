@@ -23,6 +23,12 @@ export interface RefinanceEligibilityContext {
   hasSecondMortgage: boolean;
   secondMortgageBalanceUsd: number | null;
   hasMortgageInsurance: boolean;
+  occupancyStatus: string;
+  propertyType: string;
+  propertyState: string;
+  loanType: string;
+  conformingLimitUsd: number | null;
+  conformingContext: 'WITHIN_CONFIGURED_LIMIT' | 'ABOVE_CONFIGURED_LIMIT' | 'NOT_CONFIGURED';
   warnings: string[];
   followUpActions: Array<
     | 'UPDATE_PROPERTY_VALUE'
@@ -60,6 +66,11 @@ export function buildRefinanceEligibilityContext(
     hasSecondMortgage: boolean;
     secondMortgageBalanceUsd?: number | null;
     hasMortgageInsurance: boolean;
+    occupancyStatus?: string | null;
+    propertyType?: string | null;
+    propertyState?: string | null;
+    loanType?: string | null;
+    conformingLimitUsd?: number | null;
   },
   now = new Date(),
 ): RefinanceEligibilityContext {
@@ -114,6 +125,20 @@ export function buildRefinanceEligibilityContext(
 
   const warnings: string[] = [];
   const followUpActions: RefinanceEligibilityContext['followUpActions'] = [];
+  const conformingLimitUsd = validPositive(input.conformingLimitUsd);
+  const conformingContext = conformingLimitUsd == null
+    ? 'NOT_CONFIGURED'
+    : input.currentMortgageBalanceUsd <= conformingLimitUsd
+      ? 'WITHIN_CONFIGURED_LIMIT'
+      : 'ABOVE_CONFIGURED_LIMIT';
+  if (conformingContext === 'ABOVE_CONFIGURED_LIMIT') {
+    warnings.push(
+      'The current balance is above the configured baseline conforming limit; high-cost-area and lender-specific limits may differ.',
+    );
+  }
+  if (!input.loanType || input.loanType === 'UNKNOWN') {
+    warnings.push('Loan type is not recorded, so program-specific refinance paths cannot be screened.');
+  }
 
   if (!estimatedPropertyValueUsd) {
     warnings.push(
@@ -170,6 +195,12 @@ export function buildRefinanceEligibilityContext(
       ? knownSecondBalance
       : null,
     hasMortgageInsurance: input.hasMortgageInsurance,
+    occupancyStatus: input.occupancyStatus ?? 'UNKNOWN',
+    propertyType: input.propertyType ?? 'UNKNOWN',
+    propertyState: input.propertyState ?? 'UNKNOWN',
+    loanType: input.loanType ?? 'UNKNOWN',
+    conformingLimitUsd,
+    conformingContext,
     warnings,
     followUpActions: [...new Set(followUpActions)],
   };

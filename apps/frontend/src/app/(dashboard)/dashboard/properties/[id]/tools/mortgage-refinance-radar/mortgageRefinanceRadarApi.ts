@@ -78,6 +78,15 @@ export type RadarStatusAvailable = {
     hasSecondMortgage: boolean;
     secondMortgageBalanceUsd: number | null;
     hasMortgageInsurance: boolean;
+    occupancyStatus: string;
+    propertyType: string;
+    propertyState: string;
+    loanType: string;
+    conformingLimitUsd: number | null;
+    conformingContext:
+      | 'WITHIN_CONFIGURED_LIMIT'
+      | 'ABOVE_CONFIGURED_LIMIT'
+      | 'NOT_CONFIGURED';
     warnings: string[];
     followUpActions: Array<
       | 'UPDATE_PROPERTY_VALUE'
@@ -133,6 +142,12 @@ export type ScenarioAssumptions = {
   discountPoints: number;
   additionalFeesUsd: number;
   lenderCreditsUsd: number;
+  escrowFundingUsd: number;
+  prepaymentPenaltyUsd: number;
+  extraPrincipalUsd: number;
+  recastPrincipalUsd: number;
+  cashOutAmountUsd: number;
+  borrowerCreditBand: 'EXCELLENT' | 'GOOD' | 'FAIR' | 'LIMITED' | 'UNKNOWN';
   aprMethodology: 'MODELED_FROM_NOTE_PAYMENT_AND_NET_UPFRONT_COSTS';
 };
 
@@ -141,6 +156,8 @@ export type RefinanceCostBreakdown = {
   discountPoints: number;
   discountPointsUsd: number;
   additionalFeesUsd: number;
+  escrowFundingUsd: number;
+  prepaymentPenaltyUsd: number;
   lenderCreditsUsd: number;
   grossClosingCostsUsd: number;
   netClosingCostsUsd: number;
@@ -183,6 +200,16 @@ export type RefinanceScenarioResult = {
     estimatedAprPct: number;
     isRecommended: boolean;
     tradeoffs: string[];
+  }>;
+  decisionAlternatives: Array<{
+    kind: 'RETAIN_CURRENT' | 'EXTRA_PRINCIPAL' | 'RECAST' | 'CASH_OUT_REFINANCE';
+    label: string;
+    principalAfterActionUsd: number;
+    monthlyPaymentUsd: number;
+    upfrontCashUsd: number;
+    estimatedTotalInterestUsd: number;
+    payoffMonths: number;
+    guidance: string;
   }>;
   assumptions: ScenarioAssumptions;
   disclaimer: string;
@@ -250,7 +277,7 @@ export type RefinanceAlertPreferenceDTO = {
   quietEnd: string | null;
   timezone: string;
   explicitEmailConsent: boolean;
-  externalDeliveryEnabled: false;
+  externalDeliveryEnabled: boolean;
 };
 
 // ─── API Functions ────────────────────────────────────────────────────────────
@@ -332,6 +359,13 @@ export async function runScenario(
     discountPoints?: number;
     additionalFeesAmount?: number;
     lenderCreditsAmount?: number;
+    escrowFundingAmount?: number;
+    prepaymentPenaltyAmount?: number;
+    extraPrincipalAmount?: number;
+    recastPrincipalAmount?: number;
+    recastFeeAmount?: number;
+    cashOutAmount?: number;
+    borrowerCreditBand?: 'EXCELLENT' | 'GOOD' | 'FAIR' | 'LIMITED' | 'UNKNOWN';
     objective?: RefinanceObjective;
     saveScenario?: boolean;
   },

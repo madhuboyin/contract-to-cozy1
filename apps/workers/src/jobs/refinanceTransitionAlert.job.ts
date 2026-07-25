@@ -17,6 +17,8 @@ import { buildRefinanceFreshness } from '@worker-shared/refinanceRadar/refinance
 export const REFINANCE_EXTERNAL_ALERT_COOLDOWN_DAYS = 30;
 export const REFINANCE_EXTERNAL_ALERT_FLAG =
   'REFINANCE_EXTERNAL_ALERTS_ENABLED';
+export const REFINANCE_ALERT_PREFERENCE_ANCHOR =
+  'refinance-alert-preferences';
 
 export type RefinanceAlertTransition = 'OPEN' | 'UPDATE';
 
@@ -179,6 +181,18 @@ export type RefinanceTransitionAlertResult =
         | 'NOTIFICATION_POLICY';
     };
 
+export function hasMaterialRefinanceImprovement(
+  reasons: string[] = [],
+): boolean {
+  return reasons.some((reason) =>
+    [
+      'MONTHLY_SAVINGS_IMPROVED',
+      'BREAK_EVEN_IMPROVED',
+      'MARKET_RATE_IMPROVED',
+    ].includes(reason),
+  );
+}
+
 export async function processRefinanceTransitionAlert(
   input: {
     domainEventId: string;
@@ -204,11 +218,17 @@ export async function processRefinanceTransitionAlert(
     now.getTime() -
       REFINANCE_EXTERNAL_ALERT_COOLDOWN_DAYS * 24 * 60 * 60 * 1000,
   );
-  const cooldownActive = await deps.hasRecentAlert(
+  const recentAlertExists = await deps.hasRecentAlert(
     context.ownerUserId,
     input.propertyId,
     cooldownSince,
   );
+  const cooldownActive =
+    recentAlertExists &&
+    !(
+      input.transitionType === 'UPDATE' &&
+      hasMaterialRefinanceImprovement(input.materialChangeReasons)
+    );
   const freshness = buildRefinanceFreshness(
     {
       mortgageDataAsOf: context.mortgageDataAsOf,
@@ -256,6 +276,8 @@ export async function processRefinanceTransitionAlert(
       snapshotId: input.snapshotId,
       transitionType: input.transitionType,
       materialChangeReasons: input.materialChangeReasons ?? [],
+      preferenceUrl:
+        `/dashboard/properties/${input.propertyId}/tools/mortgage-refinance-radar#${REFINANCE_ALERT_PREFERENCE_ANCHOR}`,
       confidenceLevel: context.confidenceLevel,
       alertReadiness: freshness.alertReadiness,
       // Exact balance, rate, and savings values intentionally stay out of

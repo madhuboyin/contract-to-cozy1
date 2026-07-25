@@ -74,7 +74,12 @@ export function detectRefinanceTransition(input: {
     Math.abs(input.previousOpportunity.monthlySavings) *
       REFINANCE_UPDATE_THRESHOLDS.MONTHLY_SAVINGS_RATIO,
   );
-  if (savingsDelta >= savingsThreshold) reasons.push('MONTHLY_SAVINGS_CHANGED');
+  if (savingsDelta >= savingsThreshold) {
+    reasons.push('MONTHLY_SAVINGS_CHANGED');
+    if (input.nextOpportunity.monthlySavings > input.previousOpportunity.monthlySavings) {
+      reasons.push('MONTHLY_SAVINGS_IMPROVED');
+    }
+  }
 
   if (
     input.nextOpportunity.breakEvenMonths != null &&
@@ -85,6 +90,9 @@ export function detectRefinanceTransition(input: {
     ) >= REFINANCE_UPDATE_THRESHOLDS.BREAK_EVEN_MONTHS
   ) {
     reasons.push('BREAK_EVEN_CHANGED');
+    if (input.nextOpportunity.breakEvenMonths < input.previousOpportunity.breakEvenMonths) {
+      reasons.push('BREAK_EVEN_IMPROVED');
+    }
   }
 
   if (
@@ -94,6 +102,9 @@ export function detectRefinanceTransition(input: {
     ) >= REFINANCE_UPDATE_THRESHOLDS.MARKET_RATE_PCT
   ) {
     reasons.push('MARKET_RATE_CHANGED');
+    if (input.nextOpportunity.marketRatePct < input.previousOpportunity.marketRatePct) {
+      reasons.push('MARKET_RATE_IMPROVED');
+    }
   }
 
   if (

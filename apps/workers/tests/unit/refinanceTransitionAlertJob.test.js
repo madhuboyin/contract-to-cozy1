@@ -158,3 +158,20 @@ test('suppresses stale mortgage inputs and active 30-day cooldowns', async () =>
   );
   assert.equal(cooldown.calls.creates.length, 0);
 });
+
+test('materially improved UPDATE bypasses cooldown and exposes a preference path', async () => {
+  const setup = deps({
+    hasRecentAlert: async () => true,
+  });
+  const result = await processRefinanceTransitionAlert({
+    ...event,
+    transitionType: 'UPDATE',
+    materialChangeReasons: ['MONTHLY_SAVINGS_CHANGED', 'MONTHLY_SAVINGS_IMPROVED'],
+  }, setup.value);
+
+  assert.equal(result.status, 'CREATED');
+  assert.match(
+    setup.calls.creates[0].metadata.preferenceUrl,
+    /#refinance-alert-preferences$/,
+  );
+});

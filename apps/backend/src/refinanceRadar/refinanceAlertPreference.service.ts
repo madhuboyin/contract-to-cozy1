@@ -20,24 +20,31 @@ export interface RefinanceAlertPreferenceDTO {
   quietEnd: string | null;
   timezone: string;
   explicitEmailConsent: boolean;
-  externalDeliveryEnabled: false;
+  externalDeliveryEnabled: boolean;
 }
 
-const DEFAULT_PREFERENCE: RefinanceAlertPreferenceDTO = {
-  homeEnabled: true,
-  emailEnabled: false,
-  pushAvailable: false,
-  cadence: NotificationCadence.MUTED,
-  sensitivity: NotificationSensitivity.CONSERVATIVE,
-  quietStart: '21:00',
-  quietEnd: '07:00',
-  timezone: 'UTC',
-  explicitEmailConsent: false,
-  externalDeliveryEnabled: false,
-};
+export function isRefinanceExternalDeliveryEnabled(
+  env: NodeJS.ProcessEnv = process.env,
+): boolean {
+  return (
+    env.REFINANCE_EXTERNAL_ALERTS_ENABLED === 'true' &&
+    env.WORKER_OUTBOUND_NOTIFICATIONS_ENABLED === 'true'
+  );
+}
 
 export function defaultRefinanceAlertPreference(): RefinanceAlertPreferenceDTO {
-  return { ...DEFAULT_PREFERENCE };
+  return {
+    homeEnabled: true,
+    emailEnabled: false,
+    pushAvailable: false,
+    cadence: NotificationCadence.MUTED,
+    sensitivity: NotificationSensitivity.CONSERVATIVE,
+    quietStart: '21:00',
+    quietEnd: '07:00',
+    timezone: 'UTC',
+    explicitEmailConsent: false,
+    externalDeliveryEnabled: isRefinanceExternalDeliveryEnabled(),
+  };
 }
 
 type StoredRefinanceAlertPreference = {
@@ -66,7 +73,7 @@ export function mapRefinanceAlertPreference(
     quietEnd: preference.quietEnd,
     timezone: preference.timezone,
     explicitEmailConsent: optedIn,
-    externalDeliveryEnabled: false,
+    externalDeliveryEnabled: isRefinanceExternalDeliveryEnabled(),
   };
 }
 

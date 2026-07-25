@@ -72,8 +72,11 @@ test('emits UPDATE with every material change reason', () => {
   assert.equal(transition.kind, 'UPDATE');
   assert.deepEqual(transition.materialChangeReasons, [
     'MONTHLY_SAVINGS_CHANGED',
+    'MONTHLY_SAVINGS_IMPROVED',
     'BREAK_EVEN_CHANGED',
+    'BREAK_EVEN_IMPROVED',
     'MARKET_RATE_CHANGED',
+    'MARKET_RATE_IMPROVED',
     'CONFIDENCE_CHANGED',
   ]);
   assert.equal(domainEventTypeForRefinanceTransition(transition.kind), 'REFINANCE_OPPORTUNITY_UPDATED');

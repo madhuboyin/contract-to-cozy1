@@ -84,6 +84,8 @@ export interface RefinanceScenarioInput {
   discountPoints?: number;        // Mortgage points, e.g., 1 = 1% of balance
   additionalFeesUsd?: number;     // Appraisal, title, taxes, and other entered fees
   lenderCreditsUsd?: number;      // Credits that reduce cash due at closing
+  escrowFundingUsd?: number;      // Initial escrow funding due at closing
+  prepaymentPenaltyUsd?: number;  // Existing-loan payoff constraint, if confirmed
 }
 
 /**
@@ -148,6 +150,8 @@ export function calcRefinanceScenario(input: RefinanceScenarioInput): RefinanceC
     discountPoints,
     additionalFeesUsd,
     lenderCreditsUsd,
+    escrowFundingUsd,
+    prepaymentPenaltyUsd,
   } = input;
 
   // ── Input guardrails — clamp to safe ranges ──
@@ -180,8 +184,20 @@ export function calcRefinanceScenario(input: RefinanceScenarioInput): RefinanceC
     Math.max(lenderCreditsUsd ?? 0, 0),
     loanBalance,
   );
+  const safeEscrowFundingUsd = Math.min(
+    Math.max(escrowFundingUsd ?? 0, 0),
+    loanBalance,
+  );
+  const safePrepaymentPenaltyUsd = Math.min(
+    Math.max(prepaymentPenaltyUsd ?? 0, 0),
+    loanBalance,
+  );
   const grossClosingCostsUsd =
-    baseClosingCostsUsd + discountPointsUsd + safeAdditionalFeesUsd;
+    baseClosingCostsUsd +
+    discountPointsUsd +
+    safeAdditionalFeesUsd +
+    safeEscrowFundingUsd +
+    safePrepaymentPenaltyUsd;
   const effectiveClosingCostUsd = Math.max(
     0,
     grossClosingCostsUsd - safeLenderCreditsUsd,
@@ -250,6 +266,8 @@ export function calcRefinanceScenario(input: RefinanceScenarioInput): RefinanceC
       discountPoints: safeDiscountPoints,
       discountPointsUsd,
       additionalFeesUsd: safeAdditionalFeesUsd,
+      escrowFundingUsd: safeEscrowFundingUsd,
+      prepaymentPenaltyUsd: safePrepaymentPenaltyUsd,
       lenderCreditsUsd: safeLenderCreditsUsd,
       grossClosingCostsUsd,
       netClosingCostsUsd: effectiveClosingCostUsd,

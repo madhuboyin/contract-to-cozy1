@@ -16,6 +16,7 @@ function build(overrides = {}) {
     hasSecondMortgage: false,
     secondMortgageBalanceUsd: null,
     hasMortgageInsurance: false,
+    loanType: 'CONVENTIONAL_30_FIXED',
     ...overrides,
   }, now);
 }

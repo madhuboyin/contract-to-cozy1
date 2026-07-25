@@ -4,6 +4,7 @@
 // These define internal domain objects and API response shapes.
 
 import { RefinanceConfidenceLevel, RefinanceRadarState, RefinanceScenarioTerm } from '@prisma/client';
+import type { RefinanceDecisionAlternative } from '../refinanceAlternativeComparison';
 import type { RefinanceFreshnessContract } from '../refinanceFreshness';
 import type { RefinanceEligibilityContext } from '../refinanceEligibilityContext';
 import type {
@@ -49,6 +50,8 @@ export interface RefinanceCostBreakdown {
   discountPoints: number;
   discountPointsUsd: number;
   additionalFeesUsd: number;
+  escrowFundingUsd: number;
+  prepaymentPenaltyUsd: number;
   lenderCreditsUsd: number;
   grossClosingCostsUsd: number;
   netClosingCostsUsd: number;
@@ -200,6 +203,7 @@ export interface RefinanceScenarioResult {
   recommendedTerm: RefinanceScenarioTerm;
   recommendationExplanation: string;
   alternatives: RefinanceTermAlternative[];
+  decisionAlternatives: RefinanceDecisionAlternative[];
   assumptions: ScenarioAssumptions;
   disclaimer: string;
 }
@@ -213,6 +217,12 @@ export interface ScenarioAssumptions {
   discountPoints: number;
   additionalFeesUsd: number;
   lenderCreditsUsd: number;
+  escrowFundingUsd: number;
+  prepaymentPenaltyUsd: number;
+  extraPrincipalUsd: number;
+  recastPrincipalUsd: number;
+  cashOutAmountUsd: number;
+  borrowerCreditBand: 'EXCELLENT' | 'GOOD' | 'FAIR' | 'LIMITED' | 'UNKNOWN';
   aprMethodology: 'MODELED_FROM_NOTE_PAYMENT_AND_NET_UPFRONT_COSTS';
 }
 
