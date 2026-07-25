@@ -19,6 +19,7 @@ export function inferNotificationCategory(type: string): NotificationCategory {
   if (/BOOKING|CLAIM|WORKFLOW|ACTION_CREATED|CANCELLED|CONFIRMED/.test(normalized)) return 'WORKFLOW';
   if (/RECALL/.test(normalized)) return 'RECALL';
   if (/COVERAGE|INSURANCE|WARRANTY/.test(normalized)) return 'COVERAGE';
+  if (/REFINANCE|MORTGAGE_RATE/.test(normalized)) return 'REFINANCE';
   if (/PROJECT|QUOTE|PROVIDER/.test(normalized)) return 'PROJECT';
   if (/MAINTENANCE|SEASONAL|HABIT/.test(normalized)) return 'MAINTENANCE';
   if (/ACCOUNT|SECURITY|PASSWORD|EMAIL/.test(normalized)) return 'ACCOUNT';
@@ -33,6 +34,14 @@ export function inferNotificationUrgency(type: string, metadata?: Record<string,
   if (category === 'SAFETY' || category === 'ACTIVE_DAMAGE') return 'URGENT';
   if (category === 'MATERIAL_DEADLINE' || category === 'WORKFLOW') return 'MATERIAL';
   return 'ROUTINE';
+}
+
+export function notificationPreferenceCategories(
+  category: NotificationCategory,
+): NotificationCategory[] {
+  // Financial opportunities require category-specific consent. A broad
+  // "ALL routine email" preference must never opt someone into refinance.
+  return category === 'REFINANCE' ? ['REFINANCE'] : [category, 'ALL'];
 }
 
 function isQuietNow(preference: { quietStart: string | null; quietEnd: string | null; timezone: string }, now: Date) {
@@ -79,13 +88,22 @@ export async function resolveNotificationPolicy(input: {
   const urgency = input.urgency ?? inferNotificationUrgency(input.type);
   const scopeKeys = [notificationScopeKey(input), input.propertyId ? `PROPERTY:${input.propertyId}` : null, input.memberUserId ? `MEMBER:${input.memberUserId}` : null, 'GLOBAL'].filter(Boolean) as string[];
   const preferences = await prisma.notificationPreference.findMany({
-    where: { userId: input.userId, scopeKey: { in: scopeKeys }, category: { in: [category, 'ALL'] } },
+    where: {
+      userId: input.userId,
+      scopeKey: { in: scopeKeys },
+      category: { in: notificationPreferenceCategories(category) },
+    },
   });
   const specificity = (preference: { scopeKey: string; category: string }) =>
     (scopeKeys.length - scopeKeys.indexOf(preference.scopeKey)) * 10 + (preference.category === category ? 1 : 0);
   preferences.sort((a, b) => specificity(b) - specificity(a));
   const defaultCadence: Cadence = IMMEDIATE_CATEGORIES.has(category) || urgency !== 'ROUTINE' ? 'IMMEDIATE' : 'WEEKLY_BRIEF';
-  const channelDefaults: Array<keyof typeof NotificationChannel> = ['IN_APP', ...(input.legacyEmailEnabled ? ['EMAIL' as const] : [])];
+  // Refinance email is explicit opt-in only. Never inherit the legacy global
+  // email default for a financial opportunity.
+  const channelDefaults: Array<keyof typeof NotificationChannel> = [
+    'IN_APP',
+    ...(category !== 'REFINANCE' && input.legacyEmailEnabled ? ['EMAIL' as const] : []),
+  ];
   const configuredChannels = preferences.map((preference) => preference.channel as keyof typeof NotificationChannel);
   const channels = [...new Set([...channelDefaults, ...configuredChannels])].map((channel) => {
     const preference = preferences.find((candidate) => candidate.channel === channel);

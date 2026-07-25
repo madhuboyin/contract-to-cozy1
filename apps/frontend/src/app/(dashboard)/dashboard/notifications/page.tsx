@@ -43,6 +43,7 @@ const PREFERENCE_CATEGORIES = [
   { value: 'COVERAGE', label: 'Coverage' },
   { value: 'PROJECT', label: 'Projects' },
   { value: 'RECALL', label: 'Recalls' },
+  { value: 'REFINANCE', label: 'Mortgage refinance' },
   { value: 'GENERAL', label: 'General updates' },
 ] as const;
 

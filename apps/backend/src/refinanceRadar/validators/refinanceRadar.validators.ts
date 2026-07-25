@@ -3,7 +3,12 @@
 // Zod v4 request schemas for the Mortgage Refinance Radar feature.
 
 import { z } from 'zod';
-import { MortgageRateSource, RefinanceScenarioTerm } from '@prisma/client';
+import {
+  MortgageRateSource,
+  NotificationCadence,
+  NotificationSensitivity,
+  RefinanceScenarioTerm,
+} from '@prisma/client';
 
 // ─── Rate Ingestion (Admin) ──────────────────────────────────────────────────
 
@@ -56,6 +61,50 @@ export const runScenarioSchema = z
   );
 
 export type RunScenarioBody = z.infer<typeof runScenarioSchema>;
+
+// ─── Alert Preferences ───────────────────────────────────────────────────────
+
+const quietTimeSchema = z
+  .string()
+  .regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'quiet hour must use HH:mm');
+
+export const refinanceAlertPreferenceSchema = z
+  .object({
+    emailEnabled: z.boolean(),
+    cadence: z.nativeEnum(NotificationCadence),
+    sensitivity: z.nativeEnum(NotificationSensitivity),
+    quietStart: quietTimeSchema.nullable().optional(),
+    quietEnd: quietTimeSchema.nullable().optional(),
+    timezone: z.string().trim().min(1).max(100),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    if (Boolean(value.quietStart) !== Boolean(value.quietEnd)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['quietStart'],
+        message: 'quietStart and quietEnd must be provided together',
+      });
+    }
+    if (!value.emailEnabled && value.cadence !== NotificationCadence.MUTED) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['cadence'],
+        message: 'cadence must be MUTED when email alerts are disabled',
+      });
+    }
+    if (value.emailEnabled && value.cadence === NotificationCadence.MUTED) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['cadence'],
+        message: 'choose a delivery cadence when email alerts are enabled',
+      });
+    }
+  });
+
+export type RefinanceAlertPreferenceBody = z.infer<
+  typeof refinanceAlertPreferenceSchema
+>;
 
 // ─── History / List Query ──────────────────────────────────────────────────────
 

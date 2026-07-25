@@ -16,16 +16,22 @@ import {
   Info,
   ShieldCheck,
   AlertTriangle,
+  Bell,
+  Mail,
+  Smartphone,
 } from 'lucide-react';
 import HomeToolsRail from '../../components/HomeToolsRail';
 import { PropertyContextStatusNotice } from '@/components/property-context/PropertyContextStatusNotice';
 import {
   evaluateRadar,
+  getRefinanceAlertPreference,
   getFinancingMortgageProfile,
   getRadarStatus,
   getRateHistory,
   runScenario,
   saveFinancingProfile,
+  updateRefinanceAlertPreference,
+  type RefinanceAlertPreferenceDTO,
   type RadarStatusAvailable,
   type RadarStatusDTO,
   type RadarStatusUnavailable,
@@ -429,6 +435,197 @@ function DataFreshnessCard({
             </Link>
           </Button>
         )}
+      </div>
+    </GlassCard>
+  );
+}
+
+function AlertPreferencesCard({
+  propertyId,
+  alertReadiness,
+}: {
+  propertyId: string;
+  alertReadiness: RadarStatusAvailable['alertReadiness'];
+}) {
+  const [preference, setPreference] =
+    useState<RefinanceAlertPreferenceDTO | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    void getRefinanceAlertPreference(propertyId)
+      .then((result) => {
+        if (active) setPreference(result);
+      })
+      .catch(() => {
+        if (active) setMessage('Alert preferences could not be loaded.');
+      });
+    return () => {
+      active = false;
+    };
+  }, [propertyId]);
+
+  async function save() {
+    if (!preference) return;
+    setSaving(true);
+    setMessage(null);
+    try {
+      const saved = await updateRefinanceAlertPreference(propertyId, {
+        emailEnabled: preference.emailEnabled,
+        cadence: preference.emailEnabled ? preference.cadence : 'MUTED',
+        sensitivity: preference.sensitivity,
+        quietStart: preference.quietStart,
+        quietEnd: preference.quietEnd,
+        timezone:
+          Intl.DateTimeFormat().resolvedOptions().timeZone || preference.timezone,
+      });
+      setPreference(saved);
+      setMessage('Preferences saved. Email delivery remains disabled during the pilot.');
+    } catch (error) {
+      setMessage(
+        error instanceof Error ? error.message : 'Unable to save alert preferences.',
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <GlassCard>
+      <div className="space-y-4 p-5 sm:p-6">
+        <div>
+          <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
+            <Bell className="h-4 w-4 text-blue-600" aria-hidden="true" />
+            Refinance alert preferences
+          </h3>
+          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+            Home monitoring stays on. Email is explicit opt-in and will activate only after the delivery pilot is approved.
+          </p>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-3">
+          <label className="flex items-start gap-3 rounded-xl border border-emerald-200/70 bg-emerald-50/50 p-3 dark:border-emerald-900/60 dark:bg-emerald-950/20">
+            <input type="checkbox" checked disabled className="mt-1" />
+            <span>
+              <span className="flex items-center gap-1.5 text-sm font-semibold text-slate-800 dark:text-slate-100">
+                <Bell className="h-3.5 w-3.5" aria-hidden="true" /> Home
+              </span>
+              <span className="mt-1 block text-xs text-slate-600 dark:text-slate-300">
+                Always available in your action feed.
+              </span>
+            </span>
+          </label>
+          <label className="flex items-start gap-3 rounded-xl border border-slate-200/70 bg-white/60 p-3 dark:border-slate-700/70 dark:bg-slate-950/30">
+            <input
+              type="checkbox"
+              className="mt-1"
+              checked={preference?.emailEnabled ?? false}
+              disabled={!preference}
+              onChange={(event) => setPreference((current) => current && ({
+                ...current,
+                emailEnabled: event.target.checked,
+                cadence: event.target.checked
+                  ? current.cadence === 'MUTED' ? 'IMMEDIATE' : current.cadence
+                  : 'MUTED',
+              }))}
+            />
+            <span>
+              <span className="flex items-center gap-1.5 text-sm font-semibold text-slate-800 dark:text-slate-100">
+                <Mail className="h-3.5 w-3.5" aria-hidden="true" /> Email
+              </span>
+              <span className="mt-1 block text-xs text-slate-600 dark:text-slate-300">
+                Opt in now; delivery is not active yet.
+              </span>
+            </span>
+          </label>
+          <div className="flex items-start gap-3 rounded-xl border border-slate-200/70 bg-slate-50/60 p-3 opacity-70 dark:border-slate-700/70 dark:bg-slate-900/30">
+            <input type="checkbox" disabled className="mt-1" aria-label="Push alerts unavailable" />
+            <span>
+              <span className="flex items-center gap-1.5 text-sm font-semibold text-slate-800 dark:text-slate-100">
+                <Smartphone className="h-3.5 w-3.5" aria-hidden="true" /> Push
+              </span>
+              <span className="mt-1 block text-xs text-slate-600 dark:text-slate-300">
+                Available after a push provider is integrated.
+              </span>
+            </span>
+          </div>
+        </div>
+
+        {preference && (
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="text-xs font-medium text-slate-700 dark:text-slate-300">
+              Opportunity sensitivity
+              <select
+                value={preference.sensitivity}
+                onChange={(event) => setPreference({
+                  ...preference,
+                  sensitivity: event.target.value as RefinanceAlertPreferenceDTO['sensitivity'],
+                })}
+                className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm dark:border-slate-700 dark:bg-slate-900"
+              >
+                <option value="CONSERVATIVE">Conservative — strong confidence only</option>
+                <option value="BALANCED">Balanced — good or strong confidence</option>
+                <option value="EARLY">Early signal — include weak confidence</option>
+              </select>
+            </label>
+            <label className="text-xs font-medium text-slate-700 dark:text-slate-300">
+              Email cadence
+              <select
+                value={preference.cadence}
+                disabled={!preference.emailEnabled}
+                onChange={(event) => setPreference({
+                  ...preference,
+                  cadence: event.target.value as RefinanceAlertPreferenceDTO['cadence'],
+                })}
+                className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900"
+              >
+                <option value="IMMEDIATE">When a qualified window opens</option>
+                <option value="DAILY_DIGEST">Daily digest</option>
+                <option value="WEEKLY_BRIEF">Weekly brief</option>
+              </select>
+            </label>
+            <label className="text-xs font-medium text-slate-700 dark:text-slate-300">
+              Quiet hours start
+              <input
+                type="time"
+                value={preference.quietStart ?? '21:00'}
+                disabled={!preference.emailEnabled}
+                onChange={(event) => setPreference({ ...preference, quietStart: event.target.value })}
+                className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900"
+              />
+            </label>
+            <label className="text-xs font-medium text-slate-700 dark:text-slate-300">
+              Quiet hours end
+              <input
+                type="time"
+                value={preference.quietEnd ?? '07:00'}
+                disabled={!preference.emailEnabled}
+                onChange={(event) => setPreference({ ...preference, quietEnd: event.target.value })}
+                className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900"
+              />
+            </label>
+          </div>
+        )}
+
+        {alertReadiness !== 'READY' && (
+          <p className="text-xs text-amber-700 dark:text-amber-300">
+            Alerts will remain suppressed until mortgage and market inputs are current.
+          </p>
+        )}
+        {message && (
+          <p className="text-xs text-slate-600 dark:text-slate-300" role="status">
+            {message}
+          </p>
+        )}
+        <Button
+          type="button"
+          size="sm"
+          onClick={save}
+          disabled={!preference || saving}
+        >
+          {saving ? 'Saving…' : 'Save alert preferences'}
+        </Button>
       </div>
     </GlassCard>
   );
@@ -1208,7 +1405,13 @@ export default function MortgageRefinanceRadarClient() {
             <DataFreshnessCard data={available} propertyId={propertyId} />
           )}
 
-          {/* 4. Scenario planner */}
+          {/* 4. Alert preferences */}
+          <AlertPreferencesCard
+            propertyId={propertyId}
+            alertReadiness={available.alertReadiness}
+          />
+
+          {/* 5. Scenario planner */}
           <ScenarioCalculator propertyId={propertyId} contextData={available} />
 
           {/* 3b. Steps to act — shown when opportunity is open */}

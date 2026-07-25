@@ -14,6 +14,7 @@ import {
   historyQuerySchema,
   ingestRateSnapshotSchema,
   rateHistoryQuerySchema,
+  refinanceAlertPreferenceSchema,
   runScenarioSchema,
 } from './validators/refinanceRadar.validators';
 
@@ -69,6 +70,21 @@ router.post(
   authenticate,
   propertyAuthMiddleware,
   RefinanceRadarController.evaluate,
+);
+
+router.get(
+  '/properties/:propertyId/refinance-radar/alert-preferences',
+  authenticate,
+  propertyAuthMiddleware,
+  RefinanceRadarController.getAlertPreference,
+);
+
+router.put(
+  '/properties/:propertyId/refinance-radar/alert-preferences',
+  authenticate,
+  propertyAuthMiddleware,
+  validateBody(refinanceAlertPreferenceSchema),
+  RefinanceRadarController.updateAlertPreference,
 );
 
 // ─── Property-Scoped: History & Insights ────────────────────────────────────

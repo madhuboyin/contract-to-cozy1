@@ -51,7 +51,13 @@ benchmark as CURRENT, AGING, STALE, or UNKNOWN. An external-alert-readiness
 contract fails closed for any non-current market input or an unverified,
 aging, or stale mortgage balance, while keeping in-product monitoring and
 estimates available with calm warnings and a direct path to confirm the
-canonical Financing record.
+canonical Financing record. Property-scoped alert preferences now keep Home
+monitoring always on, require explicit email opt-in, offer immediate/digest
+cadence, quiet hours, and conservative/balanced/early sensitivity, and expose
+push as unavailable until a provider exists. Refinance no longer inherits
+legacy email defaults. External delivery remains disabled during the pilot;
+the stored preference and policy contract are ready for a later cooldown-gated
+delivery slice.
 
 ## Executive recommendation
 

@@ -5369,6 +5369,12 @@ enum NotificationCadence {
   MUTED
 }
 
+enum NotificationSensitivity {
+  CONSERVATIVE
+  BALANCED
+  EARLY
+}
+
 enum NotificationOutcomeType {
   OPENED
   USEFUL
@@ -5391,6 +5397,7 @@ model NotificationPreference {
   quietStart   String?
   quietEnd     String?
   timezone     String              @default("UTC")
+  sensitivity NotificationSensitivity?
   createdAt    DateTime            @default(now())
   updatedAt    DateTime            @updatedAt
 

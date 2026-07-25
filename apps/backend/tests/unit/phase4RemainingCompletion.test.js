@@ -11,7 +11,11 @@ const {
   NotificationPreferenceInputSchema,
   notificationScopeKey,
 } = require('../../src/productFramework/index.ts');
-const { inferNotificationCategory, inferNotificationUrgency } = require('../../src/services/notificationPreference.service.ts');
+const {
+  inferNotificationCategory,
+  inferNotificationUrgency,
+  notificationPreferenceCategories,
+} = require('../../src/services/notificationPreference.service.ts');
 const { goldenTestHomes } = require('../fixtures/productFramework/goldenTestHomes.js');
 
 function source(relativePath) {
@@ -39,6 +43,9 @@ test('every source adapter withholds degraded material actions through one trust
 test('canonical notification policy supports scope, cadence, quiet hours, and urgency classification', () => {
   assert.equal(notificationScopeKey({ propertyId: 'p1', memberUserId: 'u2' }), 'PROPERTY:p1:MEMBER:u2');
   assert.equal(inferNotificationCategory('SEVERE_WEATHER_ALERT'), 'SAFETY');
+  assert.equal(inferNotificationCategory('REFINANCE_OPPORTUNITY_OPENED'), 'REFINANCE');
+  assert.deepEqual(notificationPreferenceCategories('REFINANCE'), ['REFINANCE']);
+  assert.deepEqual(notificationPreferenceCategories('MAINTENANCE'), ['MAINTENANCE', 'ALL']);
   assert.equal(inferNotificationUrgency('CLAIM_SUBMITTED'), 'MATERIAL');
   assert.equal(NotificationPreferenceInputSchema.safeParse({
     category: 'ALL', channel: 'EMAIL', enabled: true, cadence: 'WEEKLY_BRIEF',

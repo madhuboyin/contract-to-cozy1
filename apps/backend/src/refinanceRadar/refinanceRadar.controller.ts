@@ -10,6 +10,7 @@ import {
   HistoryQuery,
   IngestRateSnapshotBody,
   RateHistoryQuery,
+  RefinanceAlertPreferenceBody,
   RunScenarioBody,
 } from './validators/refinanceRadar.validators';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
@@ -19,6 +20,10 @@ import {
   getFinancialContextDecisions,
   getFinancialContextEnvelope,
 } from '../services/financialContext/context';
+import {
+  getRefinanceAlertPreference,
+  updateRefinanceAlertPreference,
+} from './refinanceAlertPreference.service';
 
 const service = new RefinanceRadarService();
 
@@ -29,6 +34,41 @@ function requireUserId(req: AuthRequest): string {
 }
 
 export class RefinanceRadarController {
+  static async getAlertPreference(
+    req: AuthRequest,
+    res: Response,
+    next: NextFunction,
+  ) {
+    try {
+      const userId = requireUserId(req);
+      const preference = await getRefinanceAlertPreference(
+        userId,
+        req.params.propertyId,
+      );
+      res.json({ success: true, data: { preference } });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  static async updateAlertPreference(
+    req: AuthRequest,
+    res: Response,
+    next: NextFunction,
+  ) {
+    try {
+      const userId = requireUserId(req);
+      const preference = await updateRefinanceAlertPreference(
+        userId,
+        req.params.propertyId,
+        req.body as RefinanceAlertPreferenceBody,
+      );
+      res.json({ success: true, data: { preference } });
+    } catch (err) {
+      next(err);
+    }
+  }
+
   // ── GET /api/properties/:propertyId/refinance-radar ──────────────────────────
   // Returns current radar status (reads from persisted state; evaluates if none exists).
   static async getStatus(req: AuthRequest, res: Response, next: NextFunction) {

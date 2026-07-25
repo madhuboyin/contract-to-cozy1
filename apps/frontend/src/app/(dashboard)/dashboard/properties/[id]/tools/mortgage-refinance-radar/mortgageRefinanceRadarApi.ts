@@ -170,6 +170,19 @@ export type OpportunityHistoryDTO = {
   offset: number;
 };
 
+export type RefinanceAlertPreferenceDTO = {
+  homeEnabled: true;
+  emailEnabled: boolean;
+  pushAvailable: false;
+  cadence: 'IMMEDIATE' | 'DAILY_DIGEST' | 'WEEKLY_BRIEF' | 'MUTED';
+  sensitivity: 'CONSERVATIVE' | 'BALANCED' | 'EARLY';
+  quietStart: string | null;
+  quietEnd: string | null;
+  timezone: string;
+  explicitEmailConsent: boolean;
+  externalDeliveryEnabled: false;
+};
+
 // ─── API Functions ────────────────────────────────────────────────────────────
 
 export async function getRadarStatus(propertyId: string): Promise<RadarStatusDTO | null> {
@@ -210,6 +223,34 @@ export async function getRateHistory(
     `/api/properties/${propertyId}/refinance-radar/rates?limit=${limit}`,
   );
   return res.data as RateHistoryDTO;
+}
+
+export async function getRefinanceAlertPreference(
+  propertyId: string,
+): Promise<RefinanceAlertPreferenceDTO> {
+  const res = await api.get(
+    `/api/properties/${propertyId}/refinance-radar/alert-preferences`,
+  );
+  return res.data.preference as RefinanceAlertPreferenceDTO;
+}
+
+export async function updateRefinanceAlertPreference(
+  propertyId: string,
+  preference: Pick<
+    RefinanceAlertPreferenceDTO,
+    | 'emailEnabled'
+    | 'cadence'
+    | 'sensitivity'
+    | 'quietStart'
+    | 'quietEnd'
+    | 'timezone'
+  >,
+): Promise<RefinanceAlertPreferenceDTO> {
+  const res = await api.put(
+    `/api/properties/${propertyId}/refinance-radar/alert-preferences`,
+    preference,
+  );
+  return res.data.preference as RefinanceAlertPreferenceDTO;
 }
 
 export async function runScenario(
