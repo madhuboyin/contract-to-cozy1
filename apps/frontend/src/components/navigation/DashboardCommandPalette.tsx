@@ -10,13 +10,10 @@ import { usePropertyContext } from '@/lib/property/PropertyContext';
 import { buildPropertyAwareDashboardHref } from '@/lib/routes/dashboardPropertyAwareHref';
 import { ADMIN_NAV } from '@/lib/navigation/adminNavigation';
 import { Command } from 'cmdk';
-import { getDiscoverableTools } from '@/features/tools/toolDiscoveryRegistry';
-import { useToolDiscoveryAvailability } from '@/features/tools/useToolDiscoveryAvailability';
 import { track } from '@/lib/analytics/events';
 import { useCapabilityCatalog } from '@/features/tools/useCapabilityCatalog';
 import {
   appendCapabilityLaunchContext,
-  capabilityCatalogSource,
   capabilitySearchTerms,
 } from '@/features/tools/capabilityCatalog';
 import { useCapabilityImpression } from '@/features/tools/useCapabilityImpression';
@@ -121,7 +118,6 @@ export default function DashboardCommandPalette({ propertyId }: DashboardCommand
   const pathname = usePathname();
   const { user } = useAuth();
   const { selectedPropertyId } = usePropertyContext();
-  const availabilityQuery = useToolDiscoveryAvailability();
   const [open, setOpen] = React.useState(false);
   const [query, setQuery] = React.useState('');
   const [recentActions, setRecentActions] = React.useState<Array<{ id: string; label: string }>>([]);
@@ -130,10 +126,9 @@ export default function DashboardCommandPalette({ propertyId }: DashboardCommand
     selectedPropertyId ||
     pathname?.match(PROPERTY_ID_IN_PATH)?.[1];
   const isAdminNav = user?.role === 'ADMIN';
-  const catalogSource = capabilityCatalogSource();
   const capabilityCatalogQuery = useCapabilityCatalog(
     { propertyId: resolvedPropertyId },
-    { enabled: catalogSource === 'canonical' && !isAdminNav },
+    { enabled: !isAdminNav },
   );
 
   React.useEffect(() => {
@@ -217,27 +212,19 @@ export default function DashboardCommandPalette({ propertyId }: DashboardCommand
       },
     ];
 
-    const tools: CommandItem[] = catalogSource === 'canonical'
-      ? (capabilityCatalogQuery.data?.capabilities ?? []).map((capability) => ({
-          id: `tool-${capability.id}`,
-          label: capability.label,
-          href: appendCapabilityLaunchContext(capability.href, {
-            launchSurface: 'command_palette',
-          }),
-          group: 'Tools',
-          keywords: capabilitySearchTerms(capability),
-          toolId: capability.id,
-        }))
-      : getDiscoverableTools({ availability: availabilityQuery.data }).map((tool) => ({
-          id: `tool-${tool.id}`,
-          label: tool.label,
-          href: tool.buildHref(resolvedPropertyId, { launchSurface: 'command_palette' }),
-          group: 'Tools',
-          keywords: [tool.description, tool.outcomeCategory.replace(/_/g, ' ')],
-          toolId: tool.id,
-        }));
+    const tools: CommandItem[] =
+      (capabilityCatalogQuery.data?.capabilities ?? []).map((capability) => ({
+        id: `tool-${capability.id}`,
+        label: capability.label,
+        href: appendCapabilityLaunchContext(capability.href, {
+          launchSurface: 'command_palette',
+        }),
+        group: 'Tools',
+        keywords: capabilitySearchTerms(capability),
+        toolId: capability.id,
+      }));
 
-    if (catalogSource === 'canonical' && capabilityCatalogQuery.isError) {
+    if (capabilityCatalogQuery.isError) {
       tools.push({
         id: 'tool-catalog-unavailable',
         label: 'Tool catalog unavailable — open Explore Tools to retry',
@@ -256,10 +243,8 @@ export default function DashboardCommandPalette({ propertyId }: DashboardCommand
     resolvedPropertyId,
     resolutionCenterHref,
     riskReportHref,
-    availabilityQuery.data,
     capabilityCatalogQuery.data?.capabilities,
     capabilityCatalogQuery.isError,
-    catalogSource,
   ]);
 
   const groups: Array<CommandItem['group']> = ['Navigation', 'Recent Actions', 'Quick Shortcuts', 'Tools'];
@@ -317,7 +302,7 @@ export default function DashboardCommandPalette({ propertyId }: DashboardCommand
                         key={item.id}
                         item={item}
                         propertyId={resolvedPropertyId}
-                        registryVersion={capabilityCatalogQuery.data?.registryVersion ?? 'legacy-v2'}
+                        registryVersion={capabilityCatalogQuery.data?.registryVersion ?? 'canonical-unavailable'}
                         onSelect={onSelect}
                       />
                     ) : (

@@ -14,6 +14,13 @@ const retiredSelectors = [
   'selectUnifiedHomeTools',
   'selectSmartContextTools',
 ];
+const retiredCatalogSourceTokens = [
+  'capabilityCatalogSource',
+  'evaluateToolReadiness',
+  'getDiscoverableTools',
+  'NEXT_PUBLIC_CAPABILITY_CATALOG_SOURCE',
+  'useToolDiscoveryAvailability',
+];
 
 function sourceFiles(directory) {
   return fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
@@ -37,6 +44,19 @@ for (const selector of retiredSelectors) {
   if (consumer) {
     throw new Error(
       `Frontend source still references retired selector ${selector}: `
+      + path.relative(frontendRoot, consumer),
+    );
+  }
+}
+
+for (const token of retiredCatalogSourceTokens) {
+  const consumer = [
+    ...sourceFiles(frontendSourceRoot),
+    path.join(frontendRoot, 'next.config.js'),
+  ].find((filePath) => fs.readFileSync(filePath, 'utf8').includes(token));
+  if (consumer) {
+    throw new Error(
+      `Retired legacy catalog source token ${token} was restored: `
       + path.relative(frontendRoot, consumer),
     );
   }

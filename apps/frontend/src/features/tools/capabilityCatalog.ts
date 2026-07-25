@@ -21,12 +21,6 @@ export const CAPABILITY_OUTCOME_CATEGORIES: Array<{
   { key: 'UNDERSTAND_HOME', title: 'Understand your home', summary: 'Explore the records, history, and systems behind decisions.' },
 ];
 
-export function capabilityCatalogSource(): 'legacy' | 'canonical' {
-  return process.env.NEXT_PUBLIC_CAPABILITY_CATALOG_SOURCE === 'legacy'
-    ? 'legacy'
-    : 'canonical';
-}
-
 export function capabilitySearchTerms(capability: CapabilityCatalogItem): string[] {
   return [
     capability.label,

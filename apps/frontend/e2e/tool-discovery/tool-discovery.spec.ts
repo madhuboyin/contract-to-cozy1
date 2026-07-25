@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import axeCore from 'axe-core';
+import type { CapabilityCatalog } from '../../src/features/tools/capabilityTypes';
 
 type CapturedLifecycleBatch = {
   propertyId: string;
@@ -11,6 +12,134 @@ type CapturedLifecycleBatch = {
     contextVersion?: string | null;
     sourceActionId?: string | null;
   }>;
+};
+
+const canonicalCatalogFixture: CapabilityCatalog = {
+  registryVersion: 'acceptance-canonical-registry-v1',
+  propertyId: 'tool-discovery-property',
+  workflowContextIncluded: false,
+  capabilities: [
+    {
+      id: 'seller-prep',
+      version: 1,
+      label: 'Seller Prep',
+      shortDescription: 'Prepare the home and records for a sale.',
+      longDescription: 'Organize sale preparation around the home, its records, and the expected timeline.',
+      iconName: 'clipboard-check',
+      outcomeCategory: 'DECIDE_COMPARE',
+      primaryJob: 'MAJOR_MOMENT',
+      primaryDestination: 'PLAN_PROJECTS',
+      intentAliases: ['prepare to sell', 'seller checklist'],
+      supportedContext: ['PROPERTY', 'PROJECT', 'JOURNEY'],
+      readinessRequirements: [{ kind: 'PROPERTY', reason: 'Select a property first.' }],
+      expectedOutput: 'A prioritized seller preparation plan.',
+      routeTemplate: '/dashboard/properties/[id]/seller-prep',
+      href: '/dashboard/properties/tool-discovery-property/seller-prep',
+      workflowOnly: false,
+      releaseStage: 'ACTIVE',
+      badges: [],
+    },
+    {
+      id: 'home-digital-will',
+      version: 1,
+      label: 'Home Digital Will',
+      shortDescription: 'Prepare critical home records for trusted access.',
+      longDescription: 'Organize critical documents, trusted contacts, and transfer instructions for the home.',
+      iconName: 'file-check',
+      outcomeCategory: 'PROTECT_MONITOR',
+      primaryJob: 'STAY_AHEAD',
+      primaryDestination: 'HOME_RECORD',
+      intentAliases: ['emergency home documents', 'trusted home contacts'],
+      supportedContext: ['PROPERTY', 'DOCUMENT'],
+      readinessRequirements: [{ kind: 'PROPERTY', reason: 'Select a property first.' }],
+      expectedOutput: 'A durable trusted-access plan.',
+      routeTemplate: '/dashboard/properties/[id]/tools/home-digital-will',
+      href: '/dashboard/properties/tool-discovery-property/tools/home-digital-will',
+      workflowOnly: false,
+      releaseStage: 'ACTIVE',
+      badges: [],
+    },
+    {
+      id: 'plant-advisor',
+      version: 1,
+      label: 'Plant Advisor',
+      shortDescription: 'Match plant care to room and light context.',
+      longDescription: 'Use room, light, and seasonal context to plan practical plant care.',
+      iconName: 'leaf',
+      outcomeCategory: 'MAINTAIN_PREVENT',
+      primaryJob: 'STAY_AHEAD',
+      primaryDestination: 'HOME_RECORD',
+      intentAliases: ['plant care', 'room light'],
+      supportedContext: ['PROPERTY', 'ROOM'],
+      readinessRequirements: [{ kind: 'PROPERTY', reason: 'Select a property first.' }],
+      expectedOutput: 'A room-aware plant care recommendation.',
+      routeTemplate: '/dashboard/properties/[id]/tools/plant-advisor',
+      href: '/dashboard/properties/tool-discovery-property/tools/plant-advisor',
+      workflowOnly: false,
+      releaseStage: 'ACTIVE',
+      badges: [],
+    },
+    {
+      id: 'permits',
+      version: 1,
+      label: 'Permit Tracker',
+      shortDescription: 'Track permit requirements and status.',
+      longDescription: 'Keep permit-relevant projects, inspections, and supporting records organized.',
+      iconName: 'clipboard-list',
+      outcomeCategory: 'PLAN_BUDGET',
+      primaryJob: 'MAJOR_MOMENT',
+      primaryDestination: 'PLAN_PROJECTS',
+      intentAliases: ['permit status', 'project permits'],
+      supportedContext: ['PROPERTY', 'PROJECT', 'DOCUMENT'],
+      readinessRequirements: [{ kind: 'PROPERTY', reason: 'Select a property first.' }],
+      expectedOutput: 'A current permit and inspection record.',
+      routeTemplate: '/dashboard/properties/[id]/tools/permits',
+      href: '/dashboard/properties/tool-discovery-property/tools/permits',
+      workflowOnly: false,
+      releaseStage: 'ACTIVE',
+      badges: [],
+    },
+    {
+      id: 'cost-growth',
+      version: 1,
+      label: 'Cost Growth',
+      shortDescription: 'Model long-term ownership cost trends.',
+      longDescription: 'Review how recurring ownership costs may change over time.',
+      iconName: 'dollar-sign',
+      outcomeCategory: 'SAVE_OPTIMIZE',
+      primaryJob: 'DECIDE',
+      primaryDestination: 'PLAN_PROJECTS',
+      intentAliases: ['future home costs', 'ownership cost trend'],
+      supportedContext: ['PROPERTY'],
+      readinessRequirements: [{ kind: 'PROPERTY', reason: 'Select a property first.' }],
+      expectedOutput: 'A long-term ownership cost projection.',
+      routeTemplate: '/dashboard/properties/[id]/tools/cost-growth',
+      href: '/dashboard/properties/tool-discovery-property/tools/cost-growth',
+      workflowOnly: false,
+      releaseStage: 'ACTIVE',
+      badges: [],
+    },
+    {
+      id: 'material-specs',
+      version: 1,
+      label: 'Material Specs',
+      shortDescription: 'Record finishes and products used in the home.',
+      longDescription: 'Create a durable record of paint, flooring, finishes, products, and suppliers.',
+      iconName: 'layers',
+      outcomeCategory: 'UNDERSTAND_HOME',
+      primaryJob: 'STAY_AHEAD',
+      primaryDestination: 'HOME_RECORD',
+      intentAliases: ['what paint did I use', 'match a repair finish'],
+      supportedContext: ['PROPERTY', 'PROJECT', 'ROOM'],
+      readinessRequirements: [{ kind: 'PROPERTY', reason: 'Select a property first.' }],
+      expectedOutput: 'A durable material record.',
+      routeTemplate: '/dashboard/properties/[id]/materials',
+      href: '/dashboard/properties/tool-discovery-property/materials',
+      workflowOnly: false,
+      releaseStage: 'ACTIVE',
+      badges: [],
+    },
+  ],
 };
 
 async function installLifecycleCapture(page: import('@playwright/test').Page) {
@@ -72,6 +201,25 @@ async function centerInViewport(
 
 test.beforeEach(async ({ page }) => {
   await installLifecycleCapture(page);
+  await page.route('**/api/tool-capabilities*', async (route) => {
+    const headers = {
+      'access-control-allow-credentials': 'true',
+      'access-control-allow-origin': 'http://127.0.0.1:3107',
+    };
+    if (route.request().method() === 'OPTIONS') {
+      await route.fulfill({ status: 204, headers });
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      headers,
+      body: JSON.stringify({
+        success: true,
+        data: canonicalCatalogFixture,
+      }),
+    });
+  });
 });
 
 test('Unified Home tools preserve recommendation and property context', async ({ page }) => {

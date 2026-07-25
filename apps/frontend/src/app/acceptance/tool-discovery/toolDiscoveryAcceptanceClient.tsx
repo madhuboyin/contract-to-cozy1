@@ -4,7 +4,6 @@ import React from 'react';
 import type {
   CapabilitySuggestionDTO,
   RankedHomeActionDTO,
-  ToolDiscoveryAvailabilityDTO,
   UnifiedHomeDTO,
 } from '@/types';
 import { UnifiedHomeToolsSection } from '@/components/home/UnifiedHomeToolsSection';
@@ -197,14 +196,6 @@ const home: UnifiedHomeDTO = {
   generatedAt: '2026-07-20T00:00:00.000Z',
 };
 
-const availability: ToolDiscoveryAvailabilityDTO = {
-  enabled: true,
-  enforceReleaseGates: false,
-  disabledToolIds: [],
-  rollouts: {},
-  generatedAt: '2026-07-20T00:00:00.000Z',
-};
-
 export function ToolDiscoveryAcceptanceClient() {
   const [hydrated, setHydrated] = React.useState(false);
   const [feedback, setFeedback] = React.useState('No feedback selected.');
@@ -245,7 +236,6 @@ export function ToolDiscoveryAcceptanceClient() {
         <h2 id="catalog-heading" className="text-xl font-semibold">Explore tools fixture</h2>
         <ExploreToolsCatalog
           propertyId={home.property.id}
-          availability={availability}
           context={contextFromUnifiedHome(home)}
           launchContext={{ contextVersion: home.propertyContext.contextVersion }}
         />

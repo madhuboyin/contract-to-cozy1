@@ -6,17 +6,17 @@ export default defineConfig({
   retries: 0,
   reporter: 'line',
   use: {
-    baseURL: 'http://127.0.0.1:3000',
+    baseURL: 'http://127.0.0.1:3107',
     trace: 'retain-on-failure',
   },
   webServer: {
     command: 'node scripts/start-tool-discovery-acceptance.js',
     env: {
       HOSTNAME: '127.0.0.1',
-      PORT: '3000',
+      PORT: '3107',
       TOOL_DISCOVERY_ACCEPTANCE_FIXTURE: '1',
     },
-    url: 'http://127.0.0.1:3000/acceptance/tool-discovery',
+    url: 'http://127.0.0.1:3107/acceptance/tool-discovery',
     reuseExistingServer: false,
     timeout: 120_000,
   },

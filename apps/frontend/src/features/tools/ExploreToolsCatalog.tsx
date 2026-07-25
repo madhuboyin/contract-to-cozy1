@@ -3,7 +3,6 @@
 import React from 'react';
 import type { ElementType } from 'react';
 import { Search } from 'lucide-react';
-import type { ToolDiscoveryAvailabilityDTO } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -18,13 +17,10 @@ import { resolveCapabilityIcon } from './capabilityIconRegistry';
 import {
   appendCapabilityLaunchContext,
   CAPABILITY_OUTCOME_CATEGORIES,
-  capabilityCatalogSource,
   capabilitySearchTerms,
   evaluateCapabilityReadiness,
 } from './capabilityCatalog';
 import {
-  evaluateToolReadiness,
-  getDiscoverableTools,
   type ToolDiscoveryContext,
   type ToolLaunchContext,
 } from './toolDiscoveryRegistry';
@@ -103,71 +99,37 @@ function ExploreCapabilityTile({
 
 export function ExploreToolsCatalog({
   propertyId,
-  availability,
   context,
   launchContext,
 }: {
   propertyId?: string;
-  availability?: ToolDiscoveryAvailabilityDTO;
   context?: ToolDiscoveryContext;
   launchContext?: Omit<ToolLaunchContext, 'launchSurface'>;
 }) {
   const [query, setQuery] = React.useState('');
   const normalizedQuery = query.trim().toLowerCase();
-  const source = capabilityCatalogSource();
-  const catalogQuery = useCapabilityCatalog(
-    { propertyId },
-    { enabled: source === 'canonical' },
-  );
-  const legacyTools = React.useMemo(
-    () => getDiscoverableTools({ availability }),
-    [availability],
-  );
-  const tools = React.useMemo<ExploreCapability[]>(() => {
-    if (source === 'canonical') {
-      return (catalogQuery.data?.capabilities ?? []).map((capability) => ({
-        id: capability.id,
-        label: capability.label,
-        description: capability.shortDescription,
-        outcomeCategory: capability.outcomeCategory,
-        aliases: capability.intentAliases,
-        icon: resolveCapabilityIcon(capability.iconName),
-        href: appendCapabilityLaunchContext(capability.href, {
-          launchSurface: 'explore_tools',
-          ...launchContext,
-        }),
-        badgeLabel: capability.badges.includes('BETA') ? 'Beta' : null,
-        readiness: evaluateCapabilityReadiness(
-          capability,
-          context ?? { propertyId },
-        ),
-        searchTerms: capabilitySearchTerms(capability),
-      }));
-    }
-    return legacyTools.map((tool) => ({
-      id: tool.id,
-      label: tool.label,
-      description: tool.description,
-      outcomeCategory: tool.outcomeCategory,
-      aliases: [],
-      icon: tool.icon,
-      href: tool.buildHref(propertyId, {
+  const catalogQuery = useCapabilityCatalog({ propertyId });
+  const tools = React.useMemo<ExploreCapability[]>(
+    () => (catalogQuery.data?.capabilities ?? []).map((capability) => ({
+      id: capability.id,
+      label: capability.label,
+      description: capability.shortDescription,
+      outcomeCategory: capability.outcomeCategory,
+      aliases: capability.intentAliases,
+      icon: resolveCapabilityIcon(capability.iconName),
+      href: appendCapabilityLaunchContext(capability.href, {
         launchSurface: 'explore_tools',
         ...launchContext,
       }),
-      badgeLabel: tool.releaseStage === 'BETA' ? 'Beta' : null,
-      readiness: evaluateToolReadiness(tool, context ?? { propertyId }, availability),
-      searchTerms: [tool.label, tool.description, tool.outcomeCategory.replace(/_/g, ' ')],
-    }));
-  }, [
-    availability,
-    catalogQuery.data?.capabilities,
-    context,
-    launchContext,
-    legacyTools,
-    propertyId,
-    source,
-  ]);
+      badgeLabel: capability.badges.includes('BETA') ? 'Beta' : null,
+      readiness: evaluateCapabilityReadiness(
+        capability,
+        context ?? { propertyId },
+      ),
+      searchTerms: capabilitySearchTerms(capability),
+    })),
+    [catalogQuery.data?.capabilities, context, launchContext, propertyId],
+  );
   const groupedTools = CAPABILITY_OUTCOME_CATEGORIES.map((category) => ({
     ...category,
     items: tools.filter((tool) => {
@@ -209,7 +171,7 @@ export function ExploreToolsCatalog({
         </div>
       </MobileSection>
 
-      {source === 'canonical' && catalogQuery.isLoading ? (
+      {catalogQuery.isLoading ? (
         <MobileSection>
           <SummaryCard
             title="Loading tools"
@@ -220,7 +182,7 @@ export function ExploreToolsCatalog({
         </MobileSection>
       ) : null}
 
-      {source === 'canonical' && catalogQuery.isError ? (
+      {catalogQuery.isError ? (
         <MobileSection>
           <SummaryCard
             title="Tool catalog temporarily unavailable"
@@ -248,7 +210,7 @@ export function ExploreToolsCatalog({
                     key={tool.id}
                     tool={tool}
                     propertyId={propertyId}
-                    registryVersion={catalogQuery.data?.registryVersion ?? 'legacy-v2'}
+                    registryVersion={catalogQuery.data?.registryVersion ?? 'canonical-unavailable'}
                     position={index}
                     launchContext={launchContext}
                   />

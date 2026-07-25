@@ -15,13 +15,11 @@ import {
 } from '@/components/mobile/dashboard/MobilePrimitives';
 import { ExploreToolsCatalog } from '@/features/tools/ExploreToolsCatalog';
 import { contextFromUnifiedHome } from '@/features/tools/toolDiscoveryRegistry';
-import { useToolDiscoveryAvailability } from '@/features/tools/useToolDiscoveryAvailability';
 import { api } from '@/lib/api/client';
 
 export default function HomeToolsPage() {
   const searchParams = useSearchParams();
   const { selectedPropertyId } = usePropertyContext();
-  const availabilityQuery = useToolDiscoveryAvailability();
   const propertyIdFromQuery = searchParams.get('propertyId') || undefined;
   const guidanceJourneyId = searchParams.get('guidanceJourneyId') || undefined;
   const guidanceStepKey = searchParams.get('guidanceStepKey') || undefined;
@@ -52,7 +50,6 @@ export default function HomeToolsPage() {
 
       <ExploreToolsCatalog
         propertyId={resolvedPropertyId}
-        availability={availabilityQuery.data}
         context={homeQuery.data ? contextFromUnifiedHome(homeQuery.data) : { propertyId: resolvedPropertyId }}
         launchContext={{
           journeyId: guidanceJourneyId,

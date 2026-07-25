@@ -1,6 +1,5 @@
 import {
   appendCapabilityLaunchContext,
-  capabilityCatalogSource,
   capabilitySearchTerms,
   evaluateCapabilityReadiness,
 } from '../capabilityCatalog';
@@ -69,15 +68,5 @@ describe('canonical capability catalog helpers', () => {
         'Choose a project, room, or repair context.',
       ],
     });
-  });
-
-  it('defaults to canonical and preserves the explicit legacy rollback', () => {
-    const previous = process.env.NEXT_PUBLIC_CAPABILITY_CATALOG_SOURCE;
-    delete process.env.NEXT_PUBLIC_CAPABILITY_CATALOG_SOURCE;
-    expect(capabilityCatalogSource()).toBe('canonical');
-    process.env.NEXT_PUBLIC_CAPABILITY_CATALOG_SOURCE = 'legacy';
-    expect(capabilityCatalogSource()).toBe('legacy');
-    if (previous === undefined) delete process.env.NEXT_PUBLIC_CAPABILITY_CATALOG_SOURCE;
-    else process.env.NEXT_PUBLIC_CAPABILITY_CATALOG_SOURCE = previous;
   });
 });

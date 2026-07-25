@@ -1,5 +1,5 @@
 import type { ElementType } from 'react';
-import type { ToolDiscoveryAvailabilityDTO, UnifiedHomeDTO } from '@/types';
+import type { UnifiedHomeDTO } from '@/types';
 import {
   MOBILE_AI_TOOL_CATALOG,
   MOBILE_HOME_TOOL_LINKS,
@@ -89,19 +89,6 @@ export type ToolReadiness = {
   state: 'READY' | 'NEEDS_CONTEXT' | 'UNAVAILABLE';
   reasons: string[];
 };
-
-export const TOOL_OUTCOME_CATEGORIES: Array<{
-  key: ToolOutcomeCategory;
-  title: string;
-  summary: string;
-}> = [
-  { key: 'DECIDE_COMPARE', title: 'Decide and compare', summary: 'Evaluate options, quotes, and consequential choices.' },
-  { key: 'PROTECT_MONITOR', title: 'Protect and monitor', summary: 'Watch risks, coverage, and changes affecting this home.' },
-  { key: 'MAINTAIN_PREVENT', title: 'Maintain and prevent', summary: 'Build routines that reduce avoidable issues.' },
-  { key: 'PLAN_BUDGET', title: 'Plan and budget', summary: 'Prepare for projects, replacements, and future costs.' },
-  { key: 'SAVE_OPTIMIZE', title: 'Save and optimize', summary: 'Find savings, benefits, and better ownership economics.' },
-  { key: 'UNDERSTAND_HOME', title: 'Understand your home', summary: 'Explore the records, history, and systems behind decisions.' },
-];
 
 const HOME_OUTCOME_BY_GROUP: Record<MobileHomeToolGroupKey, ToolOutcomeCategory> = {
   monitoring: 'PROTECT_MONITOR',
@@ -342,54 +329,6 @@ export function canonicalizeDiscoverableToolId(toolId: string): string | null {
   const normalized = toolId.trim().toLowerCase().replace(/_/g, '-');
   const canonical = TOOL_ID_ALIASES[normalized] ?? normalized;
   return DISCOVERABLE_TOOLS.some((tool) => tool.id === canonical) ? canonical : null;
-}
-
-export function isToolReleased(
-  tool: DiscoverableToolDefinition,
-  availability?: ToolDiscoveryAvailabilityDTO,
-): boolean {
-  // Availability is deliberately fail-open while beta enforcement is disabled.
-  if (!availability) return true;
-  if (!availability.enabled) return false;
-  if (availability.configurationValid === false) return false;
-  if (availability.registryVersionMatches === false) return false;
-  if (availability.disabledToolIds.includes(tool.id)) return false;
-  if (availability.brokenRouteToolIds?.includes(tool.id)) return false;
-  if (availability.manifestVersionMismatchedToolIds?.includes(tool.id)) {
-    return false;
-  }
-  if (!availability.enforceReleaseGates) return true;
-  if (availability.releaseGateBlockedToolIds?.includes(tool.id)) return false;
-  if (!tool.rolloutKey) return false;
-  return availability.rollouts[tool.rolloutKey]?.enabled === true;
-}
-
-export function evaluateToolReadiness(
-  tool: DiscoverableToolDefinition,
-  context: ToolDiscoveryContext = {},
-  availability?: ToolDiscoveryAvailabilityDTO,
-): ToolReadiness {
-  if (!isToolReleased(tool, availability)) return { state: 'UNAVAILABLE', reasons: ['Not available in this release cohort.'] };
-
-  const reasons: string[] = [];
-  if (tool.requirements.property && !context.propertyId) reasons.push('Select a property first.');
-  if ((context.knownFactCount ?? 0) < tool.requirements.minimumKnownFacts) reasons.push('Add more verified Home Record facts.');
-  if ((context.trackedSystems ?? 0) < tool.requirements.minimumTrackedSystems) reasons.push('Add at least one home system.');
-  if ((context.coverageGapCount ?? 0) < tool.requirements.minimumCoverageGaps) reasons.push('No applicable coverage gap is currently identified.');
-
-  return reasons.length > 0 ? { state: 'NEEDS_CONTEXT', reasons } : { state: 'READY', reasons: [] };
-}
-
-export function getDiscoverableTools(options: {
-  includeWorkflowOnly?: boolean;
-  includeUnavailable?: boolean;
-  availability?: ToolDiscoveryAvailabilityDTO;
-} = {}): DiscoverableToolDefinition[] {
-  return DISCOVERABLE_TOOLS.filter((tool) => {
-    if (!options.includeWorkflowOnly && tool.workflowOnly) return false;
-    if (!options.includeUnavailable && !isToolReleased(tool, options.availability)) return false;
-    return true;
-  });
 }
 
 export function getDiscoverableTool(toolId: string): DiscoverableToolDefinition | undefined {

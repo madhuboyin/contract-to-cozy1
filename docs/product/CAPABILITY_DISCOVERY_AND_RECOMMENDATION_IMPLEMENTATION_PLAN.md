@@ -120,8 +120,8 @@ Status as of July 25, 2026:
 | CAP-910 accessibility acceptance matrix | Complete | Axe WCAG A/AA checks plus heading, keyboard, live-region, feedback-control, search, and target-size assertions run across the five supported desktop/mobile browser projects |
 | CAP-911 support and incident drill | Complete | Machine-readable SEV-1/SEV-2 scenarios exercise detection, classification, containment, Home Action continuity, escalation, recovery, evidence safety, and closure |
 
-Explore Tools and homeowner command search now use the canonical catalog by default. Set
-`CAPABILITY_CATALOG_SOURCE=legacy` only for the temporary internal-beta rollback.
+Explore Tools and homeowner command search use the canonical catalog exclusively. The temporary
+legacy catalog rollback was retired after acceptance.
 
 ---
 
@@ -774,19 +774,9 @@ Guardrails:
 
 ### Cutover
 
-Use an internal-beta flag:
-
-```text
-CAPABILITY_CATALOG_SOURCE=canonical
-```
-
-Allowed values during cutover:
-
-- `legacy`
-- `canonical`
-
-Remove `legacy` after acceptance. This is a temporary UI-source flag, not a long-lived dual-read
-system.
+Cutover is complete. Explore Tools and command search always consume the
+backend-owned canonical catalog. The temporary `CAPABILITY_CATALOG_SOURCE`
+dual-read flag and legacy discovery fallback were removed after acceptance.
 
 ### Exit criteria
 
@@ -1780,8 +1770,7 @@ The platform shall not admit real users when:
 | 1 | Disable one capability ID | Tool remains reachable only if explicitly permitted; no promotion |
 | 2 | Set capability to catalog-only | Removes contextual and inline suggestions |
 | 3 | Disable contextual recommendations | Home Actions and Explore Tools remain |
-| 4 | Revert catalog source if still inside cutover window | Temporary internal-beta recovery only |
-| 5 | Disable capability discovery globally | Canonical Home Actions remain operational |
+| 4 | Disable capability discovery globally | Canonical Home Actions remain operational |
 
 ### CAP-900: Fail-closed real-user availability
 
