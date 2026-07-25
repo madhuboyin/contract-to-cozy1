@@ -28,8 +28,11 @@ property/snapshot/transition idempotency key. The shared domain-event worker
 acknowledges these events with its existing multi-worker claim, exponential
 backoff, and failure isolation behavior; events that fail eight attempts now
 move to a terminal dead-letter state with run-level observability. Durable
-per-property evaluation leases, notification policy, and chart transition
-markers remain next steps.
+refinance transitions are now exposed through the property-scoped rate-history
+contract and replayed on the chart: OPEN uses a diamond, material UPDATE a
+ring, and CLOSED a square, with shaded opportunity windows, keyboard labels,
+and equivalent table values. Durable per-property evaluation leases and
+notification policy remain next steps.
 
 ## Executive recommendation
 

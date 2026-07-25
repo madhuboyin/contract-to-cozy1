@@ -133,9 +133,22 @@ export type MortgageRateSnapshotDTO = {
   createdAt: string;
 };
 
+export type RefinanceTransitionDTO = {
+  id: string;
+  transitionType: 'OPEN' | 'UPDATE' | 'CLOSED';
+  previousState: RefinanceRadarState | null;
+  nextState: RefinanceRadarState;
+  snapshotId: string;
+  opportunityId: string | null;
+  materialChangeReasons: string[];
+  occurredAt: string;
+};
+
 export type RateHistoryDTO = {
   snapshots: MortgageRateSnapshotDTO[];
   trendSummary: RateTrendSummary;
+  transitions?: RefinanceTransitionDTO[];
+  initialRadarState?: RefinanceRadarState;
 };
 
 export type OpportunityHistoryDTO = {

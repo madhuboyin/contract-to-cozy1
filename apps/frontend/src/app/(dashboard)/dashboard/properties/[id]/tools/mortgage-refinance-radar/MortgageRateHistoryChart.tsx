@@ -47,11 +47,13 @@ export function MortgageRateHistoryChart({
   const model = useMemo(
     () => buildMortgageRateChartModel({
       snapshots: rateData.snapshots,
+      transitions: rateData.transitions ?? [],
+      initialRadarState: rateData.initialRadarState,
       product,
       range,
       currentMortgageRatePct,
     }),
-    [currentMortgageRatePct, product, range, rateData.snapshots],
+    [currentMortgageRatePct, product, range, rateData.snapshots, rateData.transitions],
   );
 
   if (model.points.length === 0) return null;
@@ -67,6 +69,7 @@ export function MortgageRateHistoryChart({
     .map((point, index) => `${index === 0 ? 'M' : 'L'} ${xFor(index)} ${yFor(point.value)}`)
     .join(' ');
   const selectedPoint = activeIndex == null ? null : model.points[activeIndex] ?? null;
+  const hasTransitions = model.points.some((point) => point.transitions.length > 0);
   const productLabel = product === '30YR' ? '30-year fixed benchmark' : '15-year fixed benchmark';
   const rangeLabel = range === '1Y' ? 'one year' : 'three months';
   const change = model.changePctPoints;
@@ -165,6 +168,22 @@ export function MortgageRateHistoryChart({
             <title id="mortgage-rate-chart-title">
               {productLabel} with the homeowner&apos;s current mortgage rate
             </title>
+            {model.opportunityWindows.map((window, index) => {
+              const startX = xFor(window.startIndex);
+              const endX = xFor(window.endIndex);
+              return (
+                <rect
+                  key={`${window.startIndex}-${window.endIndex}-${index}`}
+                  x={Math.max(PAD.left, startX - 4)}
+                  y={PAD.top}
+                  width={Math.max(8, endX - startX + 8)}
+                  height={innerHeight}
+                  fill="#10b981"
+                  fillOpacity="0.08"
+                  aria-hidden="true"
+                />
+              );
+            })}
             {model.yTicks.map((tick) => (
               <g key={tick}>
                 <line
@@ -235,6 +254,64 @@ export function MortgageRateHistoryChart({
               strokeLinecap="round"
               strokeLinejoin="round"
             />
+            {model.points.flatMap((point, index) =>
+              point.transitions.map((transition) => {
+                const x = xFor(index);
+                const y = yFor(point.value);
+                const label =
+                  `${transition.transitionType} refinance transition on ${formatDate(point.date, true)}. ` +
+                  `${transition.materialChangeReasons.join(', ').toLowerCase().replace(/_/g, ' ') || 'Radar state changed'}.`;
+                if (transition.transitionType === 'OPEN') {
+                  return (
+                    <path
+                      key={transition.id}
+                      d={`M ${x} ${y - 9} L ${x + 7} ${y} L ${x} ${y + 9} L ${x - 7} ${y} Z`}
+                      fill="#059669"
+                      stroke="white"
+                      strokeWidth="2"
+                      tabIndex={0}
+                      aria-label={label}
+                      onFocus={() => setActiveIndex(index)}
+                      onBlur={() => setActiveIndex(null)}
+                    />
+                  );
+                }
+                if (transition.transitionType === 'CLOSED') {
+                  return (
+                    <rect
+                      key={transition.id}
+                      x={x - 7}
+                      y={y - 7}
+                      width="14"
+                      height="14"
+                      rx="2"
+                      fill="#dc2626"
+                      stroke="white"
+                      strokeWidth="2"
+                      tabIndex={0}
+                      aria-label={label}
+                      onFocus={() => setActiveIndex(index)}
+                      onBlur={() => setActiveIndex(null)}
+                    />
+                  );
+                }
+                return (
+                  <circle
+                    key={transition.id}
+                    cx={x}
+                    cy={y}
+                    r="7"
+                    fill="white"
+                    stroke="#d97706"
+                    strokeWidth="4"
+                    tabIndex={0}
+                    aria-label={label}
+                    onFocus={() => setActiveIndex(index)}
+                    onBlur={() => setActiveIndex(null)}
+                  />
+                );
+              }),
+            )}
             {activeIndex != null && (
               <line
                 x1={xFor(activeIndex)}
@@ -283,6 +360,17 @@ export function MortgageRateHistoryChart({
                   <strong>{(currentMortgageRatePct - selectedPoint.value).toFixed(3)}pp</strong>
                 </span>
               )}
+              {selectedPoint.transitions.map((transition) => (
+                <span
+                  key={transition.id}
+                  className="font-semibold text-slate-800 dark:text-slate-100"
+                >
+                  Radar {transition.transitionType.toLowerCase()}:{' '}
+                  {transition.materialChangeReasons
+                    .map((reason) => reason.toLowerCase().replace(/_/g, ' '))
+                    .join(', ')}
+                </span>
+              ))}
             </div>
           )}
         </div>
@@ -297,6 +385,26 @@ export function MortgageRateHistoryChart({
               <span className="w-5 border-t-2 border-dashed border-violet-600" />
               Your current note rate
             </span>
+          )}
+          {hasTransitions && (
+            <>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="h-3 w-3 rotate-45 bg-emerald-600" />
+                Window opened
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="h-3 w-3 rounded-full border-[3px] border-amber-600 bg-white" />
+                Material update
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="h-3 w-3 rounded-[2px] bg-red-600" />
+                Window closed
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="h-3 w-5 bg-emerald-100" />
+                Opportunity window
+              </span>
+            </>
           )}
         </div>
 
@@ -335,6 +443,7 @@ export function MortgageRateHistoryChart({
                   <th scope="col" className="px-3 py-2 font-semibold">Observation date</th>
                   <th scope="col" className="px-3 py-2 font-semibold">30-year</th>
                   <th scope="col" className="px-3 py-2 font-semibold">15-year</th>
+                  <th scope="col" className="px-3 py-2 font-semibold">Radar transition</th>
                   <th scope="col" className="px-3 py-2 font-semibold">Source</th>
                 </tr>
               </thead>
@@ -344,6 +453,9 @@ export function MortgageRateHistoryChart({
                     <td className="px-3 py-2">{formatDate(point.date, true)}</td>
                     <td className="px-3 py-2 font-medium">{point.rate30yr.toFixed(3)}%</td>
                     <td className="px-3 py-2 font-medium">{point.rate15yr.toFixed(3)}%</td>
+                    <td className="px-3 py-2">
+                      {point.transitions.map((transition) => transition.transitionType).join(', ') || '—'}
+                    </td>
                     <td className="px-3 py-2">{point.source}</td>
                   </tr>
                 ))}

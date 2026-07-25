@@ -111,8 +111,9 @@ export class RefinanceRadarController {
   // Returns recent market rate history and trend summary.
   static async getRates(req: AuthRequest, res: Response, next: NextFunction) {
     try {
+      const { propertyId } = req.params;
       const { limit } = req.query as unknown as RateHistoryQuery;
-      const result = await service.getRateHistory(limit ?? 12);
+      const result = await service.getRateHistory(propertyId, limit ?? 12);
       res.json({ success: true, data: result });
     } catch (err) {
       next(err);

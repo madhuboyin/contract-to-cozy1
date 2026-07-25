@@ -1,5 +1,6 @@
 import { RefinanceConfidenceLevel, RefinanceRadarState } from '@prisma/client';
 import { REFINANCE_UPDATE_THRESHOLDS } from './config/refinanceRadar.config';
+import { RefinanceTransitionDTO } from './types/refinanceRadar.types';
 
 export type RefinanceTransitionKind = 'OPEN' | 'UPDATE' | 'CLOSED';
 
@@ -152,5 +153,64 @@ export function buildRefinanceTransitionOutboxEvent(input: {
       materialChangeReasons: input.transition.materialChangeReasons,
       occurredAt: input.occurredAt.toISOString(),
     },
+  };
+}
+
+function record(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
+
+export function mapRefinanceTransitionDomainEvent(input: {
+  id: string;
+  type: string;
+  payload: unknown;
+  createdAt: Date;
+}): RefinanceTransitionDTO | null {
+  const payload = record(input.payload);
+  if (!payload) return null;
+
+  const typeByEvent: Record<string, RefinanceTransitionKind> = {
+    REFINANCE_OPPORTUNITY_OPENED: 'OPEN',
+    REFINANCE_OPPORTUNITY_UPDATED: 'UPDATE',
+    REFINANCE_OPPORTUNITY_CLOSED: 'CLOSED',
+  };
+  const transitionType = typeByEvent[input.type];
+  const snapshotId = typeof payload.snapshotId === 'string' ? payload.snapshotId : null;
+  if (!transitionType || !snapshotId) return null;
+
+  const previousState =
+    payload.previousState === RefinanceRadarState.OPEN ||
+    payload.previousState === RefinanceRadarState.CLOSED
+      ? payload.previousState
+      : null;
+  const nextState =
+    payload.nextState === RefinanceRadarState.OPEN ||
+    payload.nextState === RefinanceRadarState.CLOSED
+      ? payload.nextState
+      : transitionType === 'CLOSED'
+        ? RefinanceRadarState.CLOSED
+        : RefinanceRadarState.OPEN;
+  const occurredAtCandidate =
+    typeof payload.occurredAt === 'string' ? new Date(payload.occurredAt) : input.createdAt;
+  const occurredAt = Number.isNaN(occurredAtCandidate.getTime())
+    ? input.createdAt
+    : occurredAtCandidate;
+
+  return {
+    id: input.id,
+    transitionType,
+    previousState,
+    nextState,
+    snapshotId,
+    opportunityId:
+      typeof payload.opportunityId === 'string' ? payload.opportunityId : null,
+    materialChangeReasons: Array.isArray(payload.materialChangeReasons)
+      ? payload.materialChangeReasons.filter(
+          (reason): reason is string => typeof reason === 'string',
+        )
+      : [],
+    occurredAt: occurredAt.toISOString(),
   };
 }

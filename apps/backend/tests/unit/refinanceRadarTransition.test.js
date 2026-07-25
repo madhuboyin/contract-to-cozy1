@@ -8,6 +8,7 @@ const {
   buildRefinanceTransitionOutboxEvent,
   detectRefinanceTransition,
   domainEventTypeForRefinanceTransition,
+  mapRefinanceTransitionDomainEvent,
 } = require('../../dist/refinanceRadar/refinanceRadarTransition');
 
 function opportunity(overrides = {}) {
@@ -116,4 +117,52 @@ test('builds a stable property/snapshot/transition outbox contract', () => {
     materialChangeReasons: ['OPPORTUNITY_THRESHOLD_MET'],
     occurredAt: '2026-07-25T18:00:00.000Z',
   });
+});
+
+test('maps a durable domain event into the public transition contract', () => {
+  const transition = mapRefinanceTransitionDomainEvent({
+    id: 'event-1',
+    type: 'REFINANCE_OPPORTUNITY_UPDATED',
+    payload: {
+      previousState: 'OPEN',
+      nextState: 'OPEN',
+      snapshotId: 'snapshot-1',
+      opportunityId: 'opportunity-1',
+      materialChangeReasons: ['MONTHLY_SAVINGS_CHANGED', 42],
+      occurredAt: '2026-07-25T18:00:00.000Z',
+    },
+    createdAt: new Date('2026-07-25T18:01:00.000Z'),
+  });
+
+  assert.deepEqual(transition, {
+    id: 'event-1',
+    transitionType: 'UPDATE',
+    previousState: RefinanceRadarState.OPEN,
+    nextState: RefinanceRadarState.OPEN,
+    snapshotId: 'snapshot-1',
+    opportunityId: 'opportunity-1',
+    materialChangeReasons: ['MONTHLY_SAVINGS_CHANGED'],
+    occurredAt: '2026-07-25T18:00:00.000Z',
+  });
+});
+
+test('rejects malformed or unrelated domain events from transition history', () => {
+  assert.equal(
+    mapRefinanceTransitionDomainEvent({
+      id: 'event-1',
+      type: 'CLAIM_CLOSED',
+      payload: { snapshotId: 'snapshot-1' },
+      createdAt: new Date(),
+    }),
+    null,
+  );
+  assert.equal(
+    mapRefinanceTransitionDomainEvent({
+      id: 'event-2',
+      type: 'REFINANCE_OPPORTUNITY_OPENED',
+      payload: {},
+      createdAt: new Date(),
+    }),
+    null,
+  );
 });

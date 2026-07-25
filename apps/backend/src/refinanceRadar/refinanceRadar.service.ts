@@ -32,11 +32,15 @@ import {
   ScenarioAssumptions,
 } from './types/refinanceRadar.types';
 import { IngestSnapshotInput } from './engine/mortgageRate.service';
-import { MortgageRateSnapshotDTO } from './types/refinanceRadar.types';
+import {
+  MortgageRateSnapshotDTO,
+  RefinanceTransitionDTO,
+} from './types/refinanceRadar.types';
 import { DEFAULT_CLOSING_COST_PCT } from './config/refinanceRadar.config';
 import {
   buildRefinanceTransitionOutboxEvent,
   detectRefinanceTransition,
+  mapRefinanceTransitionDomainEvent,
 } from './refinanceRadarTransition';
 
 // ─── Phase-3: Loan product spread modeling ───────────────────────────────────
@@ -510,11 +514,66 @@ export class RefinanceRadarService {
    * Return recent market rate snapshots and trend summary.
    */
   async getRateHistory(
+    propertyId: string,
     limit: number,
-  ): Promise<{ snapshots: MortgageRateSnapshotDTO[]; trendSummary: ReturnType<MortgageRateService['computeTrendSummary']> }> {
-    const snapshots = await this.rateService.getRecentSnapshots(limit);
+  ): Promise<{
+    snapshots: MortgageRateSnapshotDTO[];
+    trendSummary: ReturnType<MortgageRateService['computeTrendSummary']>;
+    transitions: RefinanceTransitionDTO[];
+    initialRadarState: RefinanceRadarState;
+  }> {
+    const [snapshots, transitionRows] = await Promise.all([
+      this.rateService.getRecentSnapshots(limit),
+      prisma.domainEvent.findMany({
+        where: {
+          propertyId,
+          type: {
+            in: [
+              'REFINANCE_OPPORTUNITY_OPENED',
+              'REFINANCE_OPPORTUNITY_UPDATED',
+              'REFINANCE_OPPORTUNITY_CLOSED',
+            ],
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 200,
+        select: {
+          id: true,
+          type: true,
+          payload: true,
+          createdAt: true,
+        },
+      }),
+    ]);
     const trendSummary = this.rateService.computeTrendSummary(snapshots);
-    return { snapshots, trendSummary };
+    const snapshotIds = new Set(snapshots.map((snapshot) => snapshot.id));
+    const mappedTransitions = transitionRows
+      .map((event) => mapRefinanceTransitionDomainEvent({
+        ...event,
+        type: String(event.type),
+      }))
+      .filter((transition): transition is RefinanceTransitionDTO => transition !== null)
+      .sort((a, b) => Date.parse(a.occurredAt) - Date.parse(b.occurredAt));
+    const oldestSnapshotCreatedAt = snapshots[snapshots.length - 1]?.createdAt;
+    const priorTransition = oldestSnapshotCreatedAt
+      ? [...mappedTransitions]
+          .reverse()
+          .find(
+            (transition) =>
+              !snapshotIds.has(transition.snapshotId) &&
+              Date.parse(transition.occurredAt) <= Date.parse(oldestSnapshotCreatedAt),
+          )
+      : null;
+    const transitions = mappedTransitions.filter(
+        (transition): transition is RefinanceTransitionDTO =>
+          snapshotIds.has(transition.snapshotId),
+      );
+    return {
+      snapshots,
+      trendSummary,
+      transitions,
+      initialRadarState: priorTransition?.nextState ?? RefinanceRadarState.CLOSED,
+    };
   }
 
   /**

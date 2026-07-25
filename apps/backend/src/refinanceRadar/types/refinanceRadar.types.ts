@@ -199,3 +199,14 @@ export interface MortgageRateSnapshotDTO {
   sourceRef: string | null;
   createdAt: string;
 }
+
+export interface RefinanceTransitionDTO {
+  id: string;
+  transitionType: 'OPEN' | 'UPDATE' | 'CLOSED';
+  previousState: RefinanceRadarState | null;
+  nextState: RefinanceRadarState;
+  snapshotId: string;
+  opportunityId: string | null;
+  materialChangeReasons: string[];
+  occurredAt: string;
+}
