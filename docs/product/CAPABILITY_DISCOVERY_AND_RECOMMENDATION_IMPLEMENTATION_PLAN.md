@@ -1635,6 +1635,21 @@ Rollout and rollback remain governed by `DIY`.
 - Seller Prep does not duplicate Sell/Hold/Rent when the latter is already the action CTA.
 - Creating or materially advancing the prep plan is meaningful completion.
 
+**CAP-804 implementation status: Complete.** The versioned Seller Prep manifest now owns
+homeowner-language sale-preparation aliases, property/sale-intent/journey/open-work/market reads,
+prep-plan and progress writes, and `seller_prep_plan_created_or_advanced` as a `PLAN_CREATED`
+completion. A confirmed `core.propertyUse = FOR_SALE` Home Record fact is converted into the
+reviewed `SELLER_SALE_INTENT_ACTIVE` recommendation source without exposing raw property facts to
+the candidate matcher; an active reviewed seller journey remains the alternative trigger. Seller
+Prep requires explicit trigger evidence, so generic appreciation, personalization, or project
+activity cannot promote it. The reusable `sourceCtaExclusionCapabilityIds` manifest policy makes
+Seller Prep defer when Sell/Hold/Rent is already the source action CTA. Contextual launches carry
+action, journey, and project lineage into the durable prep plan. Saving the seller preferences
+creates the meaningful plan completion, and completing a checklist item records material plan
+advancement through canonical `TOOL_COMPLETED` analytics. `SellerPrepPlan` now persists source
+lineage and enforces one plan per user/property; the Prisma schema is updated without a migration
+script, per the project migration policy. Rollout and rollback remain governed by `SELLER_PREP`.
+
 #### Permit Tracker and HOA Compliance
 
 - Jurisdiction and HOA applicability are checked independently.

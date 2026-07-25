@@ -224,6 +224,7 @@ export const ToolCapabilityDefinitionSchema = z.object({
     readinessRequirements: z.array(CapabilityReadinessRequirementSchema).max(30),
     safePartialValue: z.boolean().default(false),
     requiresExplicitTrigger: z.boolean().default(false),
+    sourceCtaExclusionCapabilityIds: z.array(CapabilityIdSchema).max(30).default([]),
     baseScore: z.number().min(0).max(100),
     explicitRelatedCapabilityIds: z.array(CapabilityIdSchema).max(30),
     maxImpressionsPer30Days: z.number().int().min(0).max(100),

@@ -208,6 +208,10 @@ export function matchCapabilityCandidates(input: {
       observedAt: action.lastEvaluatedAt,
     };
     for (const capability of capabilities) {
+      if (intersections(
+        action.ctaCapabilityIds,
+        capability.recommendation.sourceCtaExclusionCapabilityIds,
+      ).length > 0) continue;
       const sourceAndJob = (
         capability.recommendation.sourceKinds.includes(action.source.kind)
         && capability.recommendation.jobs.includes(action.job)

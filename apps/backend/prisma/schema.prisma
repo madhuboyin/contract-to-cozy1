@@ -3648,12 +3648,18 @@ model SellerPrepPlan {
   preferences    Json? // ADD THIS LINE
   // Property Context version at generation; used to reconcile stale plans.
   contextVersion String?
+  sourceActionId String?
+  sourceJourneyId String?
+  sourceProjectId String?
   createdAt      DateTime @default(now())
 
   items      SellerPrepPlanItem[]
   interviews AgentInterview[]
 
-  @@index([userId, propertyId])
+  @@unique([userId, propertyId])
+  @@index([sourceActionId])
+  @@index([sourceJourneyId])
+  @@index([sourceProjectId])
 }
 
 model SellerPrepPlanItem {

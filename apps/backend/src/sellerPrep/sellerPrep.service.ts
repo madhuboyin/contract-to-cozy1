@@ -157,10 +157,19 @@ export class SellerPrepService {
       updateData.skippedAt = null;
     }
 
-    return prisma.sellerPrepPlanItem.update({
+    const updated = await prisma.sellerPrepPlanItem.update({
       where: { id: itemId },
       data: updateData,
     });
+    return {
+      item: updated,
+      previousStatus: item.status,
+      planId: item.plan.id,
+      propertyId: item.plan.propertyId,
+      sourceActionId: item.plan.sourceActionId,
+      sourceJourneyId: item.plan.sourceJourneyId,
+      sourceProjectId: item.plan.sourceProjectId,
+    };
   }
 
   /**

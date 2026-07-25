@@ -38,6 +38,7 @@ import {
 } from './analytics/toolLifecycle';
 import { detectCoverageGaps } from './coverageGap.service';
 import { visibleInventoryItemWhere } from './riskAssetApplicability';
+import { buildPropertyContextCapabilitySources } from '../productFramework/capabilities/propertyContextCapabilitySources';
 
 const EVALUATOR_SCOPES = PROPERTY_CONTEXT_SCOPES.filter(
   (scope) => scope !== 'OPTIONAL_HOUSEHOLD',
@@ -755,6 +756,10 @@ async function evaluateCapabilitySuggestions(
         }),
     ]);
   const sourceContext = input.sourceContext ?? null;
+  const contextualPersonalizationRecommendations = [
+    ...personalizationRecommendations,
+    ...buildPropertyContextCapabilitySources(required.propertyContext),
+  ];
   const actions = sourceContext
     ? required.actions.filter((action) =>
         action.id === sourceContext.actionId
@@ -797,9 +802,9 @@ async function evaluateCapabilitySuggestions(
     personalizationRecommendations:
       sourceContext
         ? sourceContext.kind === 'PERSONALIZATION'
-          ? sourceScoped(personalizationRecommendations, sourceContext)
+          ? sourceScoped(contextualPersonalizationRecommendations, sourceContext)
           : []
-        : personalizationRecommendations,
+        : contextualPersonalizationRecommendations,
     completions: sourceContext
       ? sourceContext.kind === 'COMPLETION'
         ? sourceScoped(completions, sourceContext)

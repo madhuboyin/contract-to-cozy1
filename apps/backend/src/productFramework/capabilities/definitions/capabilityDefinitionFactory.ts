@@ -33,6 +33,8 @@ type ContextualDefinition = {
   reason: string;
   safePartialValue?: boolean;
   requiresExplicitTrigger?: boolean;
+  recommendationDefinitionCodes?: string[];
+  sourceCtaExclusionCapabilityIds?: string[];
   acceptedContext?: ToolCapabilityDefinition['destination']['acceptedContext'];
   readinessRequirements?: ToolCapabilityDefinition['recommendation']['readinessRequirements'];
 };
@@ -254,6 +256,9 @@ const CONTEXTUAL_DEFINITIONS: Record<string, ContextualDefinition> = {
     sourceKinds: ['PERSONALIZATION', 'PROJECT'],
     triggerFamily: 'SELLER_JOURNEY_ACTIVE',
     reason: 'Sale intent or a moving timeline makes seller preparation relevant.',
+    requiresExplicitTrigger: true,
+    recommendationDefinitionCodes: ['SELLER_SALE_INTENT_ACTIVE'],
+    sourceCtaExclusionCapabilityIds: ['sell-hold-rent'],
     acceptedContext: ['PROPERTY', 'JOURNEY', 'PROJECT'],
   },
   'service-price-radar': {
@@ -369,7 +374,8 @@ export function buildCapabilityDefinition(seed: CapabilitySeed): ToolCapabilityD
       sourceKinds: contextual?.sourceKinds ?? [],
       jobs: contextual ? [primaryJob] : [],
       triggerFamilies: contextual ? [contextual.triggerFamily] : [],
-      recommendationDefinitionCodes: [],
+      recommendationDefinitionCodes:
+        contextual?.recommendationDefinitionCodes ?? [],
       reasonTemplates: contextual
         ? { [contextual.triggerFamily]: contextual.reason }
         : {},
@@ -382,6 +388,8 @@ export function buildCapabilityDefinition(seed: CapabilitySeed): ToolCapabilityD
       ],
       safePartialValue: contextual?.safePartialValue ?? false,
       requiresExplicitTrigger: contextual?.requiresExplicitTrigger ?? false,
+      sourceCtaExclusionCapabilityIds:
+        contextual?.sourceCtaExclusionCapabilityIds ?? [],
       baseScore: contextual ? 60 : 0,
       explicitRelatedCapabilityIds: RELATED_CAPABILITIES[seed.id] ?? [],
       maxImpressionsPer30Days: contextual ? 3 : 0,

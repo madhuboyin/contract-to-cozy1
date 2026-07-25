@@ -24,6 +24,8 @@ import { SellerPrepIntakeForm } from "@/components/seller-prep/SellerPrepIntakeF
 import { SellerPrepDisclaimer } from "@/components/seller-prep/SellerPrepDisclaimer";
 import { useMilestones } from "@/hooks/useMilestones";
 import { CapabilityDiscoveryAnchor } from "@/features/tools/CapabilityDiscoveryAnchor";
+import { useToolLaunchContext } from "@/features/tools/ToolLaunchContextBoundary";
+import { sellerPrepSourceLineage } from "@/features/tools/sellerPrepLaunchContext";
 // Note: this page used to mount its own seller-prep-scoped FeedbackWidget
 // here. That's superseded by the app-wide FeedbackWidget now mounted once
 // in app/(dashboard)/layout.tsx — kept here would double-mount it on this page.
@@ -64,6 +66,8 @@ interface ReadinessReport {
 export default function SellerPrepPage() {
   const params = useParams();
   const propertyId = Array.isArray(params.id) ? (params.id[0] ?? '') : (params.id ?? '');
+  const launchContext = useToolLaunchContext();
+  const sourceLineage = sellerPrepSourceLineage(launchContext);
   const [showIntakeForm, setShowIntakeForm] = useState(false);
   const [hasCheckedPreferences, setHasCheckedPreferences] = useState(false);
   const [contextReady, setContextReady] = useState(false);
@@ -195,6 +199,7 @@ export default function SellerPrepPage() {
           open={showIntakeForm}
           onComplete={handleIntakeComplete}
           onSkip={() => setShowIntakeForm(false)}
+          sourceLineage={sourceLineage}
         />
       )}
 

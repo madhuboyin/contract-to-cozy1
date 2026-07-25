@@ -6,6 +6,14 @@ import { prisma } from '../lib/prisma';
 import { generateRoiChecklist } from './engines/roiRules.engine';
 import { logger } from '../lib/logger';
 import { evaluateFeatureContext } from '../modules/propertyContext/application/evaluateFeatureContext';
+import { recordToolLifecycleEvents } from '../services/analytics/toolLifecycle';
+import { sellerPrepPlanCompletionEvent } from '../services/analytics/sellerPrepLifecycle';
+
+function optionalLineageId(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const normalized = value.trim();
+  return normalized && normalized.length <= 160 ? normalized : null;
+}
 
 export class SellerPrepController {
   private static async requirePlanContext(req: AuthRequest, res: Response): Promise<boolean> {
@@ -57,11 +65,25 @@ export class SellerPrepController {
         });
       }
 
-      await SellerPrepService.updateItemStatus(
+      const result = await SellerPrepService.updateItemStatus(
         req.user!.userId,
         itemId,
         status
       );
+      if (status === 'DONE' && result.previousStatus !== 'DONE') {
+        void recordToolLifecycleEvents({
+          userId: req.user!.userId,
+          propertyId: result.propertyId,
+          events: [sellerPrepPlanCompletionEvent({
+            planId: result.planId,
+            operation: 'checklist_item_completed',
+            itemId: result.item.id,
+            sourceActionId: result.sourceActionId,
+            sourceJourneyId: result.sourceJourneyId,
+            sourceProjectId: result.sourceProjectId,
+          })],
+        });
+      }
 
       res.json({
         success: true,
@@ -156,7 +178,16 @@ export class SellerPrepController {
       const { propertyId } = req.params;
       const userId = req.user!.userId;
       if (!(await SellerPrepController.requirePlanContext(req, res))) return;
-      const { timeline, budget, propertyType, priority, condition } = req.body;
+      const {
+        timeline,
+        budget,
+        propertyType,
+        priority,
+        condition,
+      } = req.body;
+      const sourceActionId = optionalLineageId(req.body.sourceActionId);
+      const sourceJourneyId = optionalLineageId(req.body.sourceJourneyId);
+      const sourceProjectId = optionalLineageId(req.body.sourceProjectId);
 
       // Validate required fields
       if (!timeline || !budget || !propertyType || !priority || !condition) {
@@ -170,12 +201,28 @@ export class SellerPrepController {
       let plan = await prisma.sellerPrepPlan.findFirst({
         where: { userId, propertyId }
       });
+      const previousPreferences =
+        plan?.preferences
+        && typeof plan.preferences === 'object'
+        && !Array.isArray(plan.preferences)
+          ? plan.preferences as Record<string, unknown>
+          : null;
+      const materiallyChanged = !previousPreferences || [
+        ['timeline', timeline],
+        ['budget', budget],
+        ['propertyType', propertyType],
+        ['priority', priority],
+        ['condition', condition],
+      ].some(([key, value]) => previousPreferences[key] !== value);
 
       if (plan) {
         // Update existing plan with preferences
         plan = await prisma.sellerPrepPlan.update({
           where: { id: plan.id },
           data: {
+            sourceActionId: sourceActionId ?? plan.sourceActionId,
+            sourceJourneyId: sourceJourneyId ?? plan.sourceJourneyId,
+            sourceProjectId: sourceProjectId ?? plan.sourceProjectId,
             preferences: {
               timeline,
               budget,
@@ -213,6 +260,9 @@ export class SellerPrepController {
           data: {
             userId,
             propertyId,
+            sourceActionId,
+            sourceJourneyId,
+            sourceProjectId,
             preferences: {
               timeline,
               budget,
@@ -233,6 +283,19 @@ export class SellerPrepController {
             },
           },
           include: { items: true },
+        });
+      }
+      if (materiallyChanged) {
+        void recordToolLifecycleEvents({
+          userId,
+          propertyId,
+          events: [sellerPrepPlanCompletionEvent({
+            planId: plan.id,
+            operation: 'preferences_saved',
+            sourceActionId: plan.sourceActionId,
+            sourceJourneyId: plan.sourceJourneyId,
+            sourceProjectId: plan.sourceProjectId,
+          })],
         });
       }
 

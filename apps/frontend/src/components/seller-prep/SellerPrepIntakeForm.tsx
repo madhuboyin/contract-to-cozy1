@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Loader2 } from "lucide-react";
 import { api } from "@/lib/api/client";
+import type { SellerPrepSourceLineage } from "@/features/tools/sellerPrepLaunchContext";
 
 interface IntakeFormData {
   timeline: string;
@@ -29,6 +30,7 @@ interface SellerPrepIntakeFormProps {
   open: boolean;
   onComplete: (data: IntakeFormData) => void;
   onSkip: () => void;
+  sourceLineage?: SellerPrepSourceLineage;
 }
 
 export function SellerPrepIntakeForm({
@@ -36,6 +38,7 @@ export function SellerPrepIntakeForm({
   open,
   onComplete,
   onSkip,
+  sourceLineage = {},
 }: SellerPrepIntakeFormProps) {
   const [formData, setFormData] = useState<IntakeFormData>(({
     timeline: "",
@@ -50,7 +53,10 @@ export function SellerPrepIntakeForm({
 
   const mutation = useMutation({
     mutationFn: async (data: IntakeFormData) => {
-      return api.saveSellerPrepPreferences(propertyId, data);
+      return api.saveSellerPrepPreferences(propertyId, {
+        ...data,
+        ...sourceLineage,
+      });
     },
     onSuccess: () => {
       onComplete(formData);

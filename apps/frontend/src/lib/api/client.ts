@@ -2698,6 +2698,9 @@ class APIClient {
       propertyType: string;
       priority: string;
       condition: string;
+      sourceActionId?: string;
+      sourceJourneyId?: string;
+      sourceProjectId?: string;
     }
   ): Promise<APIResponse<any>> {
     return this.request(`/api/seller-prep/preferences/${propertyId}`, {

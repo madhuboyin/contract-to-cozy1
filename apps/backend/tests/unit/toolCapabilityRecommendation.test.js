@@ -385,6 +385,66 @@ test('CAP-803 explicit-trigger policy does not promote DIY from generic maintena
   assert.equal(reviewed.candidates[0].primaryMatch.kind, 'SIGNAL_INTENT_FAMILY');
 });
 
+test('CAP-804 Seller Prep defers when Sell/Hold/Rent is already the source action CTA', () => {
+  const sellerPrep = structuredClone(
+    canonicalCapabilityRegistry.getById('seller-prep'),
+  );
+  const sellHoldRent = structuredClone(
+    canonicalCapabilityRegistry.getById('sell-hold-rent'),
+  );
+  sellerPrep.recommendation.explicitRelatedCapabilityIds = [];
+  sellHoldRent.recommendation.explicitRelatedCapabilityIds = [];
+  const registry = createToolCapabilityRegistry([sellerPrep, sellHoldRent]);
+  const sellerAction = action({
+    source: {
+      kind: 'PERSONALIZATION',
+      entityId: 'sale-intent-1',
+      version: 'sale-intent-v1',
+    },
+    job: 'MAJOR_MOMENT',
+  });
+  const base = {
+    actions: [sellerAction],
+    journeys: [],
+    projects: [],
+    personalizationRecommendations: [],
+    completions: [],
+  };
+
+  const decisionFirst = matchCapabilityCandidates({
+    registry,
+    context: matcherContext({
+      ...base,
+      actionSourceMetadata: [{
+        actionId: 'action-1',
+        ctaCapabilityIds: ['sell-hold-rent'],
+        signalIntentFamilies: ['SELLER_JOURNEY_ACTIVE'],
+      }],
+    }),
+  });
+  assert.equal(
+    decisionFirst.candidates.some((candidate) =>
+      candidate.capabilityId === 'seller-prep'),
+    false,
+  );
+
+  const prepOnly = matchCapabilityCandidates({
+    registry,
+    context: matcherContext({
+      ...base,
+      actionSourceMetadata: [{
+        actionId: 'action-1',
+        signalIntentFamilies: ['SELLER_JOURNEY_ACTIVE'],
+      }],
+    }),
+  });
+  assert.equal(
+    prepOnly.candidates.some((candidate) =>
+      candidate.capabilityId === 'seller-prep'),
+    true,
+  );
+});
+
 test('CAP-401 matches every reviewed structured source with stable precedence', () => {
   const result = matchCapabilityCandidates({
     registry: matcherRegistry(),

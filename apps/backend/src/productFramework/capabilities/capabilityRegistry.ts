@@ -25,7 +25,17 @@ function stableRegistryInput(capabilities: ToolCapabilityDefinition[]): string {
         primaryJob: capability.productFramework.primaryJob,
         primaryDestination: capability.productFramework.primaryDestination,
         outcomeCategory: capability.presentation.outcomeCategory,
+        sourceKinds: [...capability.recommendation.sourceKinds].sort(),
+        recommendationJobs: [...capability.recommendation.jobs].sort(),
         triggerFamilies: [...capability.recommendation.triggerFamilies].sort(),
+        recommendationDefinitionCodes: [
+          ...capability.recommendation.recommendationDefinitionCodes,
+        ].sort(),
+        requiresExplicitTrigger:
+          capability.recommendation.requiresExplicitTrigger,
+        sourceCtaExclusionCapabilityIds: [
+          ...capability.recommendation.sourceCtaExclusionCapabilityIds,
+        ].sort(),
         explicitRelatedCapabilityIds: [
           ...capability.recommendation.explicitRelatedCapabilityIds,
         ],
@@ -77,6 +87,16 @@ export function createToolCapabilityRegistry(
       if (!byId.has(relatedId)) {
         throw new Error(
           `Capability ${capability.id} references unknown related capability ${relatedId}`,
+        );
+      }
+    }
+    for (const excludedId of capability.recommendation.sourceCtaExclusionCapabilityIds) {
+      if (excludedId === capability.id) {
+        throw new Error(`Capability ${capability.id} cannot exclude itself as a source CTA`);
+      }
+      if (!byId.has(excludedId)) {
+        throw new Error(
+          `Capability ${capability.id} references unknown source CTA exclusion ${excludedId}`,
         );
       }
     }
