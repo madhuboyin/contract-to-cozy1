@@ -10,8 +10,12 @@ export default defineConfig({
     trace: 'retain-on-failure',
   },
   webServer: {
-    command: 'npm run start -- --hostname 127.0.0.1',
-    env: { TOOL_DISCOVERY_ACCEPTANCE_FIXTURE: '1' },
+    command: 'node scripts/start-tool-discovery-acceptance.js',
+    env: {
+      HOSTNAME: '127.0.0.1',
+      PORT: '3000',
+      TOOL_DISCOVERY_ACCEPTANCE_FIXTURE: '1',
+    },
     url: 'http://127.0.0.1:3000/acceptance/tool-discovery',
     reuseExistingServer: false,
     timeout: 120_000,

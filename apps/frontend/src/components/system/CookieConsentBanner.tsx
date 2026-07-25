@@ -59,14 +59,14 @@ export function CookieConsentBanner() {
             to track errors and improve performance.{' '}
             <a
               href="/privacy"
-              className="underline underline-offset-2 hover:text-teal-600 dark:hover:text-teal-400"
+              className="!text-slate-700 underline underline-offset-2 hover:!text-teal-800 dark:!text-slate-200 dark:hover:!text-teal-300"
             >
               Privacy Policy
             </a>
             {' · '}
             <a
               href="/cookies"
-              className="underline underline-offset-2 hover:text-teal-600 dark:hover:text-teal-400"
+              className="!text-slate-700 underline underline-offset-2 hover:!text-teal-800 dark:!text-slate-200 dark:hover:!text-teal-300"
             >
               Cookie Policy
             </a>
@@ -81,7 +81,7 @@ export function CookieConsentBanner() {
             </button>
             <button
               onClick={grantAll}
-              className="rounded-md bg-teal-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2"
+              className="rounded-md bg-teal-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-teal-800 focus:outline-none focus:ring-2 focus:ring-teal-700 focus:ring-offset-2"
             >
               Accept all
             </button>

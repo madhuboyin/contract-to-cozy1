@@ -417,6 +417,59 @@ comma-separated list. A timeout, partial restart, unexpected Home Action
 change, isolation failure, or incomplete restoration fails the launch gate and
 requires containment under the incident playbook.
 
+## 5.7 Catalog-only rollback drill
+
+Run:
+
+```bash
+npm -C apps/backend run drill:capability-catalog-only
+```
+
+The report must show all five promotion surfaces suppressed, the canonical
+catalog unchanged, and restoration exact. In a deployed exercise, set
+`CAPABILITY_RECOMMENDATIONS_ENABLED=false`, restart the API, verify HOME,
+PROPERTY, WORKFLOW, RELATED, and COMPLETION return empty suggestion envelopes,
+and verify Explore Tools and Home Actions remain available. Restore the prior
+value and repeat the checks.
+
+## 5.8 Capability copy review
+
+Run:
+
+```bash
+npm -C apps/backend run review:capability-copy
+```
+
+Preserve the passing report with product review evidence. Automated policy
+rejects promotional claims, pressure language, exclamation urgency, all-caps
+copy, excessive length, and unapproved template parameters across every
+manifest. It does not authorize material or regulated claims; those still
+require the role attestations in section 5.1.
+
+## 5.9 Accessibility acceptance
+
+Run the production-build browser matrix from section 5.4. The same command now
+includes axe WCAG A/AA, heading-order, keyboard, live-region, search,
+feedback-control, and minimum-target checks across all five browser projects.
+Do not suppress a serious axe violation merely because it originates in a
+shared global component; correct the shared component and rerun the matrix.
+
+## 5.10 Support and incident drill
+
+Run:
+
+```bash
+npm -C apps/backend run drill:capability-incident
+```
+
+The report must pass broken-destination, unauthorized-evidence, systemic-match,
+and lifecycle-overcount scenarios from detection through closure. Preserve it
+with the kill-switch and catalog-only reports. Before launch, an authorized
+operator must repeat one SEV-1 and one SEV-2 scenario against the candidate
+deployment, without introducing real user/property evidence, and record
+response timestamps, owners, containment confirmation, restoration, and any
+analytics caveat.
+
 ## 6. Incident playbooks
 
 ### 6.1 Broken destination

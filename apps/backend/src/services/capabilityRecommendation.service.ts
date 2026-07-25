@@ -10,6 +10,8 @@ import {
   applyCapabilitySuppressionPolicy,
   buildCapabilityRecommendationContext,
   buildCapabilitySuggestionResponse,
+  CAPABILITY_RECOMMENDATION_VERSION,
+  CapabilitySuggestionResponseSchema,
   canonicalCapabilityRegistry,
   evaluateCapabilityCandidateReadiness,
   matchCapabilityCandidates,
@@ -46,6 +48,7 @@ import { visibleInventoryItemWhere } from './riskAssetApplicability';
 import { buildPropertyContextCapabilitySources } from '../productFramework/capabilities/propertyContextCapabilitySources';
 import { APP_CONFIG } from '../config/appConfig';
 import { loadApprovedCapabilityIds } from './capabilityGovernanceReview.service';
+import { capabilityRecommendationsEnabled } from './capabilityPromotionPolicy.service';
 
 const EVALUATOR_SCOPES = PROPERTY_CONTEXT_SCOPES.filter(
   (scope) => scope !== 'OPTIONAL_HOUSEHOLD',
@@ -93,6 +96,7 @@ export interface CapabilityRecommendationDependencies {
     propertyId: string;
     events: ToolLifecycleEventInput[];
   }) => Promise<unknown>;
+  recommendationsEnabled?: () => boolean;
 }
 
 const LIFECYCLE_SURFACE_BY_RECOMMENDATION_SURFACE: Record<
@@ -916,6 +920,17 @@ export async function getCapabilitySuggestions(
   input: CapabilitySuggestionsInput,
   dependencies: CapabilityRecommendationDependencies = defaultDependencies(),
 ): Promise<CapabilitySuggestionResponse> {
+  if (!(dependencies.recommendationsEnabled ?? capabilityRecommendationsEnabled)()) {
+    return CapabilitySuggestionResponseSchema.parse({
+      contractVersion: 'capability-suggestions-v1',
+      registryVersion: dependencies.registry.version,
+      recommendationVersion: CAPABILITY_RECOMMENDATION_VERSION,
+      contextVersion: 'catalog-only',
+      generatedAt: dependencies.now().toISOString(),
+      surface: input.surface,
+      suggestions: [],
+    });
+  }
   const required = await dependencies.loadRequiredSources(
     input.propertyId,
     input.userId,
@@ -932,6 +947,17 @@ export async function getCapabilitySuggestionsFromAuthorizedSources(
   input: CapabilitySuggestionsInput & AuthorizedCapabilitySources,
   dependencies: CapabilityRecommendationDependencies = defaultDependencies(),
 ): Promise<CapabilitySuggestionResponse> {
+  if (!(dependencies.recommendationsEnabled ?? capabilityRecommendationsEnabled)()) {
+    return CapabilitySuggestionResponseSchema.parse({
+      contractVersion: 'capability-suggestions-v1',
+      registryVersion: dependencies.registry.version,
+      recommendationVersion: CAPABILITY_RECOMMENDATION_VERSION,
+      contextVersion: input.propertyContext.contextVersion,
+      generatedAt: dependencies.now().toISOString(),
+      surface: input.surface,
+      suggestions: [],
+    });
+  }
   return evaluateCapabilitySuggestions(
     input,
     {

@@ -37,6 +37,8 @@ import {
 import {
   getCapabilitySuggestionsFromAuthorizedSources,
 } from './capabilityRecommendation.service';
+import { capabilityRecommendationsEnabled } from './capabilityPromotionPolicy.service';
+export { capabilityRecommendationsEnabled } from './capabilityPromotionPolicy.service';
 
 export const HOME_ACTION_COMMANDS = [
   'COMPLETE',
@@ -78,13 +80,6 @@ export type UnifiedHomeCapabilitySuggestions =
   CapabilitySuggestionResponse & {
     status: 'AVAILABLE' | 'DISABLED' | 'UNAVAILABLE';
   };
-
-export function capabilityRecommendationsEnabled(
-  env: NodeJS.ProcessEnv = process.env,
-): boolean {
-  return env.CAPABILITY_RECOMMENDATIONS_ENABLED?.trim().toLowerCase()
-    !== 'false';
-}
 
 function emptyUnifiedHomeCapabilitySuggestions(input: {
   status: 'DISABLED' | 'UNAVAILABLE';

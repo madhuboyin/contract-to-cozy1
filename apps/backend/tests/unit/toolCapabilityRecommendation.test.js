@@ -1926,6 +1926,45 @@ test('CAP-407 orchestrates CAP-400 through CAP-406 into the API response', async
   assert.equal(result.suggestions[0].source.id, 'action-1');
 });
 
+test('CAP-908 catalog-only rollback suppresses every evaluator surface before source loading', async () => {
+  for (const surface of ['HOME', 'PROPERTY', 'WORKFLOW', 'RELATED', 'COMPLETION']) {
+    let sourceLoads = 0;
+    const result = await getCapabilitySuggestions({
+      propertyId: 'property-1',
+      userId: 'user-1',
+      surface,
+      limit: 3,
+    }, capabilityApiDependencies({
+      recommendationsEnabled: () => false,
+      loadRequiredSources: async () => {
+        sourceLoads += 1;
+        throw new Error('catalog-only mode must not load recommendation sources');
+      },
+    }));
+
+    assert.equal(result.surface, surface);
+    assert.equal(result.contextVersion, 'catalog-only');
+    assert.deepEqual(result.suggestions, []);
+    assert.equal(sourceLoads, 0);
+  }
+});
+
+test('CAP-908 catalog-only rollback suppresses authorized-snapshot evaluation', async () => {
+  const result = await getCapabilitySuggestionsFromAuthorizedSources({
+    propertyId: 'property-1',
+    userId: 'user-1',
+    surface: 'HOME',
+    limit: 3,
+    propertyContext: propertyContext({ contextVersion: 'authorized-context-v8' }),
+    actions: [],
+  }, capabilityApiDependencies({
+    recommendationsEnabled: () => false,
+  }));
+
+  assert.equal(result.contextVersion, 'authorized-context-v8');
+  assert.deepEqual(result.suggestions, []);
+});
+
 test('CAP-902 enforced human policy approvals gate runtime capability promotion', async () => {
   const blocked = await getCapabilitySuggestions({
     propertyId: 'property-1',

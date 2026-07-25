@@ -244,6 +244,25 @@ test('CAP-601 service suppresses recently completed related capabilities', async
   );
 });
 
+test('CAP-908 catalog-only rollback suppresses related resolution before context loading', async () => {
+  let contextLoads = 0;
+  const response = await getRelatedCapabilities({
+    propertyId: 'property-1',
+    userId: 'user-1',
+    currentCapabilityId: 'service-price-radar',
+  }, serviceDependencies({
+    recommendationsEnabled: () => false,
+    loadPropertyContext: async () => {
+      contextLoads += 1;
+      throw new Error('catalog-only mode must not load related context');
+    },
+  }));
+
+  assert.equal(response.contextVersion, 'catalog-only');
+  assert.deepEqual(response.suggestions, []);
+  assert.equal(contextLoads, 0);
+});
+
 test('CAP-601 query and route enforce bounded canonical property-scoped access', () => {
   assert.equal(RelatedCapabilitiesQuerySchema.safeParse({
     currentCapabilityId: 'service-price-radar',

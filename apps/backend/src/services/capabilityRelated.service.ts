@@ -18,6 +18,7 @@ import { RECOMMENDATION_SAFETY_TIERS } from '../productFramework/recommendationG
 import { detectCoverageGaps } from './coverageGap.service';
 import { visibleInventoryItemWhere } from './riskAssetApplicability';
 import { createToolDiscoveryCapabilityAvailabilityAdapter } from './toolDiscoveryAvailability.service';
+import { capabilityRecommendationsEnabled } from './capabilityPromotionPolicy.service';
 
 const RELATED_RECOMMENDATION_VERSION = 'capability-related-v1' as const;
 const RELATED_CONTEXT_SCOPES = PROPERTY_CONTEXT_SCOPES.filter(
@@ -73,6 +74,7 @@ export interface CapabilityRelatedDependencies {
     propertyId: string,
     userId: string,
   ) => Promise<string[]>;
+  recommendationsEnabled?: () => boolean;
 }
 
 function knownFactCount(snapshot: PropertyContextSnapshot): number {
@@ -218,6 +220,15 @@ export async function getRelatedCapabilities(
   const current = dependencies.registry.getById(input.currentCapabilityId);
   if (!current) {
     throw new Error(`Unknown current capability: ${input.currentCapabilityId}`);
+  }
+  if (!(dependencies.recommendationsEnabled ?? capabilityRecommendationsEnabled)()) {
+    return RelatedCapabilitiesResponseSchema.parse({
+      registryVersion: dependencies.registry.version,
+      recommendationVersion: RELATED_RECOMMENDATION_VERSION,
+      contextVersion: 'catalog-only',
+      currentCapabilityId: current.id,
+      suggestions: [],
+    });
   }
   const [snapshot, completedCapabilityIds] = await Promise.all([
     dependencies.loadPropertyContext(input.propertyId, input.userId),

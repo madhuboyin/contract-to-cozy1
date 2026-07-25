@@ -115,6 +115,10 @@ Status as of July 25, 2026:
 | CAP-905 supported-browser and mobile-PWA actual-view gate | Complete | Production-build Playwright acceptance validates viewport-qualified lifecycle payloads, no unseen bulk impressions, session deduplication, search behavior, manifest integrity, and standalone mobile behavior across Chromium, Firefox, WebKit, mobile Chrome, and mobile Safari |
 | CAP-906 real-user analytics population gate | Complete | Canonical lifecycle audience metadata and one shared repository predicate exclude synthetic QA from every funnel projection while Admin Analytics reports included and excluded population counts |
 | CAP-907 registry-wide kill-switch drill | Complete | Read-only launch drill exercises individual containment for every canonical capability, global discovery shutdown, catalog suppression, isolation, and restoration; registry iteration automatically includes future tools |
+| CAP-908 platform-wide catalog-only rollback | Complete | One promotion policy suppresses HOME, PROPERTY, WORKFLOW, RELATED, and COMPLETION suggestions before context loading while preserving and restoring the canonical catalog |
+| CAP-909 registry-wide copy review | Complete | Every current and future manifest inherits calmness, comprehension, pressure-language, promotional-claim, length, and template-parameter validation with a machine-readable report |
+| CAP-910 accessibility acceptance matrix | Complete | Axe WCAG A/AA checks plus heading, keyboard, live-region, feedback-control, search, and target-size assertions run across the five supported desktop/mobile browser projects |
+| CAP-911 support and incident drill | Complete | Machine-readable SEV-1/SEV-2 scenarios exercise detection, classification, containment, Home Action continuity, escalation, recovery, evidence safety, and closure |
 
 Explore Tools and homeowner command search now use the canonical catalog by default. Set
 `CAPABILITY_CATALOG_SOURCE=legacy` only for the temporary internal-beta rollback.
@@ -1796,10 +1800,10 @@ boundary:
 - Admin Release Gates displays real-user readiness and the blocking controls so
   operators do not have to infer launch state from individual flags.
 
-This slice does not declare the platform ready for real users. The remaining
-WS9 human approvals, browser/PWA telemetry checks, accessibility validation,
-kill-switch drills, representative-property smoke tests, and support incident
-exercise remain required.
+This slice alone does not declare the platform ready for real users. The
+subsequent CAP-901–911 gates supply repository controls and repeatable
+acceptance; deployed smoke, human approvals, authorized live-control exercises,
+and launch-owner sign-off remain environment-specific requirements.
 
 ### CAP-901: Canonical capability launch review
 
@@ -2032,6 +2036,42 @@ deployed ConfigMap/restart/API verification in the platform runbook before
 real-user launch.
 
 No database schema, seed, SQL, or migration change is required for this slice.
+
+### CAP-908: Platform-wide catalog-only rollback
+
+`CAPABILITY_RECOMMENDATIONS_ENABLED=false` now applies at the shared evaluator
+boundary before private source loading and at the related-capability boundary.
+HOME, PROPERTY, WORKFLOW, RELATED, and COMPLETION return valid empty envelopes,
+while Explore Tools retains the canonical catalog. The rollback drill proves
+catalog preservation, all-surface suppression, and exact restoration.
+
+### CAP-909: Registry-wide copy review
+
+A canonical copy policy iterates every manifest and every homeowner-facing
+description, outcome, output, reason template, and readiness explanation. It
+rejects promotional or pressure language, exclamation-based urgency, all-caps
+copy, excessive length, and unapproved template parameters. The report and
+unit gate inherit future capabilities through the registry.
+
+### CAP-910: Accessibility acceptance matrix
+
+The production-build Playwright matrix now runs axe WCAG A/AA rules against
+cards, explanations, catalog search, inline suggestions, and feedback
+controls. It additionally verifies heading order, keyboard operation, polite
+feedback announcements, and minimum target sizes in Chromium, Firefox,
+WebKit, mobile Chrome, and standalone mobile Safari. Initial execution found
+and corrected global cookie-banner and fixture contrast defects.
+
+### CAP-911: Support and incident drill
+
+A machine-readable drill covers broken destinations, unauthorized evidence,
+systemic incorrect recommendations, and lifecycle overcount. Each scenario
+must pass detection, severity classification, narrow or global containment,
+Home Action continuity, owner escalation, recovery, and closure. Evidence
+contracts prohibit raw property evidence and credentials and require an
+analytics caveat for lifecycle corruption.
+
+CAP-908–911 require no database schema, seed, SQL, or migration changes.
 
 ---
 

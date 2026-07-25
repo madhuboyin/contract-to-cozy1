@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import axeCore from 'axe-core';
 
 type CapturedLifecycleBatch = {
   propertyId: string;
@@ -109,6 +110,75 @@ test('Explore tools searches the canonical registry and hides workflow-only tool
   const costGrowthLink = page.getByRole('link', { name: /Cost Growth/ });
   await expect(costGrowthLink).toHaveAttribute('href', /launchSurface=explore_tools/);
   await expect(costGrowthLink).toHaveAttribute('href', /contextVersion=tool-context-v2/);
+});
+
+test('cards, search, explanations, and feedback controls meet the accessibility gate', async ({ page }) => {
+  await page.goto('/acceptance/tool-discovery');
+  await waitForAcceptanceHydration(page);
+  await page.addScriptTag({ content: axeCore.source });
+
+  const results = await page.evaluate(async () => {
+    const axe = (window as typeof window & {
+      axe: {
+        run: (
+          root: Document,
+          options: Record<string, unknown>,
+        ) => Promise<{
+          violations: Array<{
+            id: string;
+            impact: string | null;
+            help: string;
+            nodes: Array<{ target: string[]; failureSummary?: string }>;
+          }>;
+        }>;
+      };
+    }).axe;
+    return axe.run(document, {
+      runOnly: {
+        type: 'tag',
+        values: ['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa'],
+      },
+    });
+  });
+  expect(
+    results.violations,
+    JSON.stringify(results.violations, null, 2),
+  ).toEqual([]);
+
+  const headingLevels = await page
+    .getByRole('heading')
+    .evaluateAll((headings) =>
+      headings.map((heading) => Number(heading.tagName.slice(1))));
+  expect(headingLevels[0]).toBe(1);
+  for (let index = 1; index < headingLevels.length; index += 1) {
+    expect(headingLevels[index] - headingLevels[index - 1]).toBeLessThanOrEqual(1);
+  }
+
+  const search = page.getByLabel('Search home tools');
+  await centerInViewport(search);
+  await search.focus();
+  await expect(search).toBeFocused();
+  await page.keyboard.type('cost growth');
+  await expect(page.getByText('Cost Growth', { exact: true })).toBeVisible();
+
+  const inline = page.getByTestId('inline-capability-coverage-options');
+  await centerInViewport(inline);
+  const notRelevant = inline.getByRole('button', { name: 'Not relevant' });
+  const dismiss = inline.getByRole('button', { name: 'Dismiss' });
+  await expect(notRelevant).toBeVisible();
+  await notRelevant.focus();
+  await expect(notRelevant).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByText('Suggestion marked not relevant.')).toBeVisible();
+  await dismiss.focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByText('Suggestion dismissed.')).toBeVisible();
+
+  for (const control of [search, notRelevant, dismiss]) {
+    const box = await control.boundingBox();
+    expect(box?.width ?? 0).toBeGreaterThanOrEqual(24);
+    expect(box?.height ?? 0).toBeGreaterThanOrEqual(24);
+  }
 });
 
 test('actual-view telemetry records only viewport-qualified tools and deduplicates the session', async ({ page }) => {

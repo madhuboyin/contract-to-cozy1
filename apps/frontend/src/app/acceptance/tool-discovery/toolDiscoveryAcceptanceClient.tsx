@@ -9,6 +9,7 @@ import type {
 } from '@/types';
 import { UnifiedHomeToolsSection } from '@/components/home/UnifiedHomeToolsSection';
 import { ExploreToolsCatalog } from '@/features/tools/ExploreToolsCatalog';
+import { InlineCapabilitySuggestion } from '@/features/tools/InlineCapabilitySuggestion';
 import { contextFromUnifiedHome } from '@/features/tools/toolDiscoveryRegistry';
 
 const coverageAction: RankedHomeActionDTO = {
@@ -206,6 +207,7 @@ const availability: ToolDiscoveryAvailabilityDTO = {
 
 export function ToolDiscoveryAcceptanceClient() {
   const [hydrated, setHydrated] = React.useState(false);
+  const [feedback, setFeedback] = React.useState('No feedback selected.');
   React.useEffect(() => setHydrated(true), []);
 
   return (
@@ -216,13 +218,29 @@ export function ToolDiscoveryAcceptanceClient() {
       <h1 className="text-2xl font-semibold">Tool discovery acceptance</h1>
       <section
         aria-label="Telemetry viewport gate"
-        className="flex h-[1100px] items-start rounded-xl border border-dashed border-slate-200 p-4 text-sm text-slate-500"
+        className="flex h-[1100px] items-start rounded-xl border border-dashed border-slate-200 p-4 text-sm text-slate-600"
         data-testid="telemetry-viewport-gate"
       >
         Capability cards begin below the initial viewport so actual-view
         acceptance can distinguish rendered items from viewed items.
       </section>
       <UnifiedHomeToolsSection home={home} propertyId={home.property.id} />
+      <section aria-labelledby="inline-heading" className="space-y-4">
+        <h2 id="inline-heading" className="text-xl font-semibold">
+          Inline suggestion and feedback fixture
+        </h2>
+        <InlineCapabilitySuggestion
+          suggestion={home.capabilitySuggestions.suggestions[0]}
+          propertyId={home.property.id}
+          registryVersion={home.capabilitySuggestions.registryVersion}
+          surface="workflow"
+          onDismiss={() => setFeedback('Suggestion dismissed.')}
+          onNotRelevant={() => setFeedback('Suggestion marked not relevant.')}
+        />
+        <p aria-live="polite" className="text-sm text-slate-600">
+          {feedback}
+        </p>
+      </section>
       <section aria-labelledby="catalog-heading" className="space-y-4">
         <h2 id="catalog-heading" className="text-xl font-semibold">Explore tools fixture</h2>
         <ExploreToolsCatalog
