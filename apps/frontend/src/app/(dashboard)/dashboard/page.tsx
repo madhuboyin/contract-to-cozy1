@@ -647,7 +647,7 @@ export default function DashboardPage() {
   // should land on the admin console instead.
   useEffect(() => {
     if (!userLoading && user?.role === 'ADMIN') {
-      router.replace('/dashboard/knowledge-admin');
+      router.replace('/dashboard/admin');
     }
   }, [userLoading, user, router]);
 

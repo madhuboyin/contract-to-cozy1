@@ -40,7 +40,7 @@ export default function LoginPage() {
       if (user.role === 'PROVIDER') {
         router.replace('/providers/dashboard');
       } else if (user.role === 'ADMIN') {
-        router.replace('/dashboard/knowledge-admin');
+        router.replace('/dashboard/admin');
       } else {
         router.replace('/dashboard');
       }
@@ -77,7 +77,7 @@ export default function LoginPage() {
         if (userRole === 'PROVIDER') {
           destination = '/providers/dashboard';
         } else if (userRole === 'ADMIN') {
-          destination = '/dashboard/knowledge-admin';
+          destination = '/dashboard/admin';
         }
 
         if (typeof window !== 'undefined' && userRole !== 'PROVIDER' && userRole !== 'ADMIN') {
@@ -116,7 +116,7 @@ export default function LoginPage() {
       if (userRole === 'PROVIDER') {
         destination = '/providers/dashboard';
       } else if (userRole === 'ADMIN') {
-        destination = '/dashboard/knowledge-admin';
+        destination = '/dashboard/admin';
       }
 
       if (typeof window !== 'undefined' && userRole !== 'PROVIDER' && userRole !== 'ADMIN') {

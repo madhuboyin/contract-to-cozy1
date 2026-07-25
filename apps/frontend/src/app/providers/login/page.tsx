@@ -18,7 +18,7 @@ type FieldErrors = Partial<Record<FieldName, string>>;
 
 function destinationForRole(role: UserRole): string {
   if (role === 'PROVIDER') return '/providers/dashboard';
-  if (role === 'ADMIN') return '/dashboard/knowledge-admin';
+  if (role === 'ADMIN') return '/dashboard/admin';
   return '/dashboard';
 }
 
