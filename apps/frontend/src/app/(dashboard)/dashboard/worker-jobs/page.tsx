@@ -5,16 +5,8 @@
 // Admin-only worker jobs operations console.
 // Optimized for status scanning, failure identification, and job re-runs.
 
-import React, { useState, useCallback } from 'react';
-import {
-  CheckCircle2,
-  Clock,
-  Cpu,
-  Loader2,
-  Play,
-  RefreshCw,
-  XCircle,
-} from 'lucide-react';
+import React, { useCallback, useMemo, useState } from 'react';
+import { Cpu, RefreshCw } from 'lucide-react';
 import { useAdminGuard } from '@/hooks/useAdminGuard';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
@@ -22,544 +14,19 @@ import {
   useWorkerJobs,
   useTriggerWorkerJob,
   useWorkerGovernance,
-  usePreviewSmokeCleanup,
-  useDeleteSmokeCleanup,
 } from '@/hooks/useAdminWorkerJobs';
-import type { WorkerJobDetail, JobCategory, RecentRun } from '@/lib/api/adminWorkerJobs';
+import type { WorkerJobDetail, JobCategory } from '@/lib/api/adminWorkerJobs';
 import { AdminConsoleShell, AdminRouteState } from '@/components/ops/AdminConsoleShell';
-
-// W6: the 4 lowest-risk jobs (one per customerJob domain) wired end-to-end
-// for controlled smoke validation — see docs/product/ContractToCozy_W6_Smoke_Runbook.md.
-const SMOKE_CHECKLIST_JOB_KEYS = new Set([
-  'permit-inspection-reminders',
-  'new-home-warranty-deadlines',
-  'mortgage-rate-ingest',
-  'shared-data-consistency-audit',
-]);
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-const CATEGORY_LABELS: Record<JobCategory, string> = {
-  PROPERTY_INTELLIGENCE: 'Property Intelligence',
-  RECALLS: 'Recalls',
-  NOTIFICATIONS: 'Notifications',
-  MAINTENANCE: 'Maintenance',
-  RISK_SAFETY: 'Risk & Safety',
-  NEIGHBORHOOD: 'Neighborhood',
-  HOME_CARE: 'Home Care',
-  FINANCIAL_MARKET: 'Financial Market',
-  HOME_INTELLIGENCE: 'Home Intelligence',
-  DIY_TEMPLATES: 'DIY Templates',
-};
-
-const CATEGORY_ORDER: JobCategory[] = [
-  'PROPERTY_INTELLIGENCE',
-  'RECALLS',
-  'NOTIFICATIONS',
-  'MAINTENANCE',
-  'RISK_SAFETY',
-  'NEIGHBORHOOD',
-  'HOME_CARE',
-  'FINANCIAL_MARKET',
-  'HOME_INTELLIGENCE',
-  'DIY_TEMPLATES',
-];
-
-function fmtDuration(ms: number | null): string {
-  if (ms == null) return '—';
-  if (ms < 1000) return `${ms}ms`;
-  if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`;
-  return `${(ms / 60_000).toFixed(1)}m`;
-}
-
-function timeAgo(ts: number | null): string {
-  if (!ts) return '—';
-  const diffMs = Date.now() - ts;
-  const diffMin = Math.floor(diffMs / 60_000);
-  if (diffMin < 1) return 'just now';
-  if (diffMin < 60) return `${diffMin}m ago`;
-  const diffH = Math.floor(diffMin / 60);
-  if (diffH < 24) return `${diffH}h ago`;
-  return `${Math.floor(diffH / 24)}d ago`;
-}
-
-function fmtRefreshedAt(ts: number): string {
-  return new Date(ts).toLocaleTimeString('en-US', {
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  });
-}
-
-/** Derive next-run label from a simple 5-part cron expression. */
-function getNextRunLabel(cronExpr: string): string | null {
-  if (!cronExpr) return null;
-  const parts = cronExpr.trim().split(/\s+/);
-  if (parts.length !== 5) return null;
-  const [minuteStr, hourStr, , , dowStr] = parts;
-  const minute = parseInt(minuteStr, 10);
-  const hour = parseInt(hourStr, 10);
-  if (isNaN(minute) || isNaN(hour)) return null;
-
-  const now = new Date();
-  const next = new Date();
-  next.setSeconds(0, 0);
-  next.setMinutes(minute);
-  next.setHours(hour);
-
-  if (dowStr === '*') {
-    // Daily
-    if (next <= now) next.setDate(next.getDate() + 1);
-  } else {
-    // Weekly
-    const targetDow = parseInt(dowStr, 10);
-    if (isNaN(targetDow)) return null;
-    const curDow = now.getDay();
-    let diff = targetDow - curDow;
-    if (diff < 0 || (diff === 0 && next <= now)) diff += 7;
-    next.setDate(next.getDate() + diff);
-  }
-
-  const diffMs = next.getTime() - now.getTime();
-  const diffH = Math.floor(diffMs / 3_600_000);
-  const diffMin = Math.floor((diffMs % 3_600_000) / 60_000);
-
-  if (diffH === 0) return `in ${diffMin}m`;
-  if (diffH < 24) return diffMin > 0 ? `in ${diffH}h ${diffMin}m` : `in ${diffH}h`;
-  const days = Math.floor(diffH / 24);
-  return `in ${days}d`;
-}
-
-/** Derive human-readable trigger type label. */
-function getTriggerType(job: WorkerJobDetail): string {
-  if (job.type === 'cron') return 'Cron';
-  if (!job.cronExpression) return 'Event-driven';
-  return 'Queue';
-}
-
-/** Derive health status from recent runs. */
-type HealthStatus = 'healthy' | 'warning' | 'failing' | 'idle';
-
-function getHealth(runs: RecentRun[]): HealthStatus {
-  if (runs.length === 0) return 'idle';
-  const failed = runs.filter((r) => r.status === 'failed').length;
-  if (failed === 0) return 'healthy';
-  if (failed === runs.length) return 'failing';
-  return 'warning';
-}
-
-const HEALTH_DOT: Record<HealthStatus, string> = {
-  healthy: 'bg-emerald-400',
-  warning: 'bg-amber-400',
-  failing: 'bg-rose-500',
-  idle: 'bg-slate-300',
-};
-
-const HEALTH_BORDER: Record<HealthStatus, string> = {
-  healthy: 'border-l-emerald-400',
-  warning: 'border-l-amber-400',
-  failing: 'border-l-rose-500',
-  idle: 'border-l-slate-200',
-};
-
-// ─── Job Card ─────────────────────────────────────────────────────────────────
-
-// ─── Smoke Checklist (W6) ───────────────────────────────────────────────────
-//
-// Prerequisites / planned effects / actual result for the 4 representative
-// jobs — reuses the existing dry-run trigger + recentRuns plumbing rather
-// than inventing a parallel surface. "Planned effects" is the dry-run
-// trigger's returned WorkerRunResult (surfaced via recentRuns once the
-// BullMQ job completes); "actual result" is the same recentRuns list for a
-// non-dry-run scoped trigger.
-
-function SmokeChecklistPanel({
-  job,
-  onRunScopedLive,
-  triggering,
-}: {
-  job: WorkerJobDetail;
-  onRunScopedLive: (propertyId?: string) => void;
-  triggering: boolean;
-}) {
-  const [propertyId, setPropertyId] = useState('');
-  const preview = usePreviewSmokeCleanup();
-  const del = useDeleteSmokeCleanup();
-  const { toast } = useToast();
-
-  const lastRun = job.recentRuns[0] ?? null;
-  const lastResult = (lastRun?.result ?? null) as { smokeCorrelationId?: string } | null;
-  const correlationId = lastResult?.smokeCorrelationId;
-
-  const prereqs: Array<{ label: string; ok: boolean }> = [
-    { label: 'Dry-run supported', ok: job.supportsDryRun },
-    { label: 'Job enabled', ok: job.effectiveEnabled },
-    { label: 'Smoke allowlists configured', ok: job.smokeAllowlistConfigured },
-  ];
-
-  function handleCleanup() {
-    if (!correlationId) return;
-    preview.mutate(correlationId, {
-      onSuccess: (data) => {
-        const total = data.notificationIds.length + data.mortgageRateSnapshotIds.length;
-        if (total === 0) {
-          toast({ title: 'Nothing to clean up', description: 'No records found for this correlation ID.' });
-          return;
-        }
-        del.mutate(correlationId, {
-          onSuccess: () => toast({ title: 'Cleaned up', description: `Deleted ${total} record(s).` }),
-          onError: (err: any) => toast({ title: 'Cleanup failed', description: err?.message, variant: 'destructive' }),
-        });
-      },
-      onError: (err: any) => toast({ title: 'Preview failed', description: err?.message, variant: 'destructive' }),
-    });
-  }
-
-  return (
-    <div className="mt-3 rounded-xl border border-dashed border-slate-200 bg-slate-50/70 p-2.5">
-      <p className="mb-1.5 text-[11px] font-semibold tracking-normal text-slate-500">Smoke checklist</p>
-
-      <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px]">
-        {prereqs.map((p) => (
-          <span key={p.label} className="flex items-center gap-1">
-            {p.ok ? (
-              <CheckCircle2 className="h-2.5 w-2.5 text-emerald-500" />
-            ) : (
-              <XCircle className="h-2.5 w-2.5 text-rose-400" />
-            )}
-            <span className={p.ok ? 'text-slate-500' : 'text-rose-600'}>{p.label}</span>
-          </span>
-        ))}
-      </div>
-
-      {job.supportsPropertyScope && (
-        <div className="mt-2 flex items-center gap-1.5">
-          <input
-            type="text"
-            placeholder="Allowlisted property ID"
-            value={propertyId}
-            onChange={(e) => setPropertyId(e.target.value)}
-            className="h-6 flex-1 rounded border border-slate-300 px-1.5 text-[11px]"
-          />
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-6 shrink-0 rounded px-2 text-[10px] font-semibold"
-            disabled={triggering || !propertyId.trim()}
-            onClick={() => onRunScopedLive(propertyId.trim())}
-          >
-            Run scoped live
-          </Button>
-        </div>
-      )}
-
-      {lastRun && (
-        <div className="mt-2 text-[11px] text-slate-500">
-          <span className="font-medium text-slate-600">Last result{lastRun.dryRun ? ' (dry run)' : ''}:</span>{' '}
-          <span className="font-mono text-slate-500">
-            {lastResult ? JSON.stringify(lastResult) : '—'}
-          </span>
-        </div>
-      )}
-
-      {correlationId && (
-        <Button
-          size="sm"
-          variant="outline"
-          className="mt-1.5 h-6 rounded px-2 text-[10px] font-semibold"
-          disabled={preview.isPending || del.isPending}
-          onClick={handleCleanup}
-        >
-          {preview.isPending || del.isPending ? 'Cleaning up...' : 'Clean up this run'}
-        </Button>
-      )}
-    </div>
-  );
-}
-
-function JobCard({
-  job,
-  onTrigger,
-  triggering,
-  triggerSuccess,
-}: {
-  job: WorkerJobDetail;
-  onTrigger: (key: string, dryRun?: boolean, propertyId?: string) => void;
-  triggering: boolean;
-  triggerSuccess: boolean;
-}) {
-  const health = getHealth(job.recentRuns);
-  const lastRun = job.recentRuns[0] ?? null;
-  const triggerType = getTriggerType(job);
-  const nextRun = getNextRunLabel(job.cronExpression);
-  const [dryRun, setDryRun] = useState(job.supportsDryRun);
-
-  const failureCount = job.queueStats?.failed ?? null;
-  const successCount = job.queueStats?.completed ?? null;
-
-  return (
-    <div
-      className={`rounded-2xl border border-slate-200/80 border-l-[3px] bg-white shadow-sm ${HEALTH_BORDER[health]}`}
-    >
-      <div className="p-4">
-        {/* ── Row 1: title + type chip + action ── */}
-        <div className="flex items-center gap-2">
-          {/* Health dot */}
-          <span className={`h-2 w-2 shrink-0 rounded-full ${HEALTH_DOT[health]}`} />
-
-          {/* Job name */}
-          <h3 className="flex-1 truncate text-[13px] font-semibold text-slate-900">
-            {job.name}
-          </h3>
-
-          {/* Disabled-by-policy chip */}
-          {!job.effectiveEnabled && (
-            <span
-              className="shrink-0 rounded bg-slate-800 px-1.5 py-0.5 text-[11px] font-semibold text-white"
-              title={job.disabledReason}
-            >
-              Disabled
-            </span>
-          )}
-
-          {/* Type chip */}
-          <span
-            className={`shrink-0 rounded px-1.5 py-0.5 text-[11px] font-semibold ${
-              triggerType === 'Queue'
-                ? 'bg-blue-50 text-blue-700'
-                : triggerType === 'Event-driven'
-                ? 'bg-purple-50 text-purple-700'
-                : 'bg-slate-100 text-slate-500'
-            }`}
-          >
-            {triggerType}
-          </span>
-
-          {/* Run Job button */}
-          {job.triggerSupported ? (
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-7 shrink-0 rounded px-2.5 text-[11px] font-semibold"
-              disabled={triggering}
-              onClick={() => onTrigger(job.key, job.supportsDryRun ? dryRun : undefined)}
-            >
-              {triggering ? (
-                <Loader2 className="mr-1 h-3 w-3 animate-spin" />
-              ) : triggerSuccess ? (
-                <CheckCircle2 className="mr-1 h-3 w-3 text-emerald-500" />
-              ) : (
-                <Play className="mr-1 h-3 w-3" />
-              )}
-              {triggerSuccess ? 'Queued' : dryRun && job.supportsDryRun ? 'Dry Run' : 'Run Job'}
-            </Button>
-          ) : null}
-        </div>
-        {job.triggerSupported && job.supportsDryRun && (
-          <label className="mt-1.5 flex items-center gap-1.5 text-[11px] text-slate-500">
-            <input
-              type="checkbox"
-              className="h-3 w-3 rounded border-slate-300"
-              checked={dryRun}
-              onChange={(e) => setDryRun(e.target.checked)}
-            />
-            Dry run (no writes/sends)
-          </label>
-        )}
-
-        {/* ── Row 2: description ── */}
-        <p className="mt-1.5 line-clamp-2 text-[11px] leading-[1.55] text-slate-500">
-          {job.description}
-        </p>
-        {!job.effectiveEnabled && job.disabledReason && (
-          <p className="mt-1 text-[11px] font-medium text-slate-500">
-            Disabled: {job.disabledReason}
-          </p>
-        )}
-
-        {/* ── Row 3: last run + counts ── */}
-        <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px]">
-          {/* Last run */}
-          <span className="flex items-center gap-1">
-            <span className="font-medium text-slate-600">Last run:</span>
-            {lastRun ? (
-              <>
-                {lastRun.status === 'completed' ? (
-                  <CheckCircle2 className="h-3 w-3 text-emerald-500" />
-                ) : (
-                  <XCircle className="h-3 w-3 text-rose-500" />
-                )}
-                <span
-                  className={
-                    lastRun.status === 'failed' ? 'text-rose-600 font-semibold' : 'text-emerald-700'
-                  }
-                >
-                  {lastRun.status === 'completed' ? 'Success' : 'Failed'}
-                </span>
-                <span className="text-slate-400">·</span>
-                <span className="text-slate-500">{timeAgo(lastRun.finishedAt)}</span>
-              </>
-            ) : (
-              <span className="text-slate-400">Never run</span>
-            )}
-          </span>
-
-          {/* Failure / success counts (queue jobs only) */}
-          {failureCount !== null && (
-            <span className="text-slate-500">
-              <span className={failureCount > 0 ? 'font-semibold text-rose-600' : 'text-slate-400'}>
-                Failures: {failureCount}
-              </span>
-              <span className="mx-1 text-slate-300">|</span>
-              <span className="text-slate-500">Success: {successCount ?? 0}</span>
-            </span>
-          )}
-        </div>
-
-        {/* ── Row 4: schedule + next run ── */}
-        {job.schedule && (
-          <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-slate-400">
-            <span className="flex items-center gap-1">
-              <Clock className="h-2.5 w-2.5" />
-              {job.schedule}
-            </span>
-            {nextRun && (
-              <span className="text-slate-400">
-                Next: <span className="font-medium text-slate-600">{nextRun}</span>
-              </span>
-            )}
-            {/* Active indicator */}
-            {job.queueStats && job.queueStats.active > 0 && (
-              <span className="font-semibold text-blue-600">
-                {job.queueStats.active} running
-              </span>
-            )}
-            {job.queueStats && job.queueStats.waiting > 0 && (
-              <span className="font-semibold text-amber-600">
-                {job.queueStats.waiting} waiting
-              </span>
-            )}
-          </div>
-        )}
-
-        {/* ── Row 5: recent runs (secondary) ── */}
-        <div className="mt-3 border-t border-slate-100 pt-2.5">
-          <p className="mb-1 text-[11px] font-semibold tracking-normal text-slate-300">
-            Recent runs
-          </p>
-          {job.recentRuns.length === 0 ? (
-            <p className="text-[11px] text-slate-400">No recent runs</p>
-          ) : (
-            <div className="space-y-0.5">
-              {job.recentRuns.map((run) => (
-                <div key={run.id} className="flex items-center gap-1.5 text-[11px]">
-                  {run.status === 'completed' ? (
-                    <CheckCircle2 className="h-2.5 w-2.5 shrink-0 text-emerald-500" />
-                  ) : (
-                    <XCircle className="h-2.5 w-2.5 shrink-0 text-rose-500" />
-                  )}
-                  <span className={run.status === 'failed' ? 'font-medium text-rose-600' : 'text-slate-500'}>
-                    {run.status === 'completed' ? 'Success' : 'Failed'}
-                  </span>
-                  <span className="text-slate-300">·</span>
-                  <span className="text-slate-400">{timeAgo(run.finishedAt)}</span>
-                  <span className="text-slate-300">·</span>
-                  <span className="font-mono text-slate-400">{fmtDuration(run.durationMs)}</span>
-                  {run.dryRun && (
-                    <span className="rounded bg-slate-200 px-1 text-[10px] font-semibold text-slate-600">dry run</span>
-                  )}
-                  {run.status === 'failed' && run.failReason && (
-                    <>
-                      <span className="text-slate-300">·</span>
-                      <span
-                        className="max-w-[140px] truncate text-rose-500"
-                        title={run.failReason}
-                      >
-                        {run.failReason}
-                      </span>
-                    </>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {SMOKE_CHECKLIST_JOB_KEYS.has(job.key) && (
-          <SmokeChecklistPanel
-            job={job}
-            triggering={triggering}
-            onRunScopedLive={(propertyId) => onTrigger(job.key, false, propertyId)}
-          />
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ─── Category Section ─────────────────────────────────────────────────────────
-
-function CategorySection({
-  category,
-  jobs,
-  triggeringKey,
-  triggeredKey,
-  onTrigger,
-}: {
-  category: JobCategory;
-  jobs: WorkerJobDetail[];
-  triggeringKey: string | null;
-  triggeredKey: string | null;
-  onTrigger: (key: string, dryRun?: boolean, propertyId?: string) => void;
-}) {
-  return (
-    <div>
-      <h2 className="mb-2 text-[11px] font-semibold tracking-normal text-slate-400">
-        {CATEGORY_LABELS[category]}
-      </h2>
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-        {jobs.map((job) => (
-          <JobCard
-            key={job.key}
-            job={job}
-            onTrigger={onTrigger}
-            triggering={triggeringKey === job.key}
-            triggerSuccess={triggeredKey === job.key}
-          />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// ─── Skeleton ─────────────────────────────────────────────────────────────────
-
-function PageSkeleton() {
-  return (
-    <div className="space-y-7">
-      {[1, 2, 3].map((g) => (
-        <div key={g}>
-          <div className="mb-2 h-2.5 w-24 animate-pulse rounded-full bg-slate-200" />
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="rounded-2xl border border-slate-200 border-l-[3px] border-l-slate-200 bg-white p-4 shadow-sm">
-                <div className="flex items-center gap-2">
-                  <div className="h-2 w-2 rounded-full bg-slate-200" />
-                  <div className="h-3.5 flex-1 animate-pulse rounded bg-slate-200" />
-                </div>
-                <div className="mt-2 h-2.5 w-full animate-pulse rounded bg-slate-100" />
-                <div className="mt-1 h-2.5 w-4/5 animate-pulse rounded bg-slate-100" />
-                <div className="mt-3 h-2.5 w-2/3 animate-pulse rounded bg-slate-100" />
-              </div>
-            ))}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-// ─── Main Page ────────────────────────────────────────────────────────────────
+import { CategorySection } from '@/components/ops/worker-jobs/CategorySection';
+import { JobsToolbar } from '@/components/ops/worker-jobs/JobsToolbar';
+import { PageSkeleton } from '@/components/ops/worker-jobs/PageSkeleton';
+import {
+  CATEGORY_LABELS,
+  CATEGORY_ORDER,
+  fmtRefreshedAt,
+  getHealth,
+  HealthStatus,
+} from '@/components/ops/worker-jobs/workerJobsUtils';
 
 export default function WorkerJobsPage() {
   const guard = useAdminGuard({
@@ -576,6 +43,12 @@ export default function WorkerJobsPage() {
   const [triggeredKey, setTriggeredKey] = useState<string | null>(null);
   const [lastRefreshed, setLastRefreshed] = useState<number | null>(null);
 
+  const [search, setSearch] = useState('');
+  const [healthFilter, setHealthFilter] = useState<HealthStatus | 'all'>('all');
+  const [categoryFilter, setCategoryFilter] = useState<JobCategory | 'all'>('all');
+  const [view, setView] = useState<'cards' | 'list'>('cards');
+  const [collapsedCategories, setCollapsedCategories] = useState<Set<JobCategory>>(new Set());
+
   const handleRefresh = useCallback(() => {
     jobsQ.refetch().then(() => setLastRefreshed(Date.now()));
   }, [jobsQ]);
@@ -584,6 +57,59 @@ export default function WorkerJobsPage() {
   React.useEffect(() => {
     if (jobsQ.data && !lastRefreshed) setLastRefreshed(Date.now());
   }, [jobsQ.data, lastRefreshed]);
+
+  const allJobs: WorkerJobDetail[] = useMemo(() => jobsQ.data ?? [], [jobsQ.data]);
+
+  const availableCategories = useMemo(
+    () => CATEGORY_ORDER.filter((c) => allJobs.some((j) => j.category === c)),
+    [allJobs],
+  );
+
+  // Search + category filtered (health filter excluded) — drives the
+  // faceted counts shown on the health pills themselves.
+  const searchedAndCategoryFiltered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return allJobs.filter((j) => {
+      if (categoryFilter !== 'all' && j.category !== categoryFilter) return false;
+      if (q && !j.name.toLowerCase().includes(q) && !j.description.toLowerCase().includes(q)) return false;
+      return true;
+    });
+  }, [allJobs, search, categoryFilter]);
+
+  const healthCounts = useMemo(() => {
+    const counts: Record<HealthStatus, number> = { healthy: 0, warning: 0, failing: 0, idle: 0 };
+    searchedAndCategoryFiltered.forEach((j) => counts[getHealth(j.recentRuns)]++);
+    return counts;
+  }, [searchedAndCategoryFiltered]);
+
+  const filteredJobs = useMemo(() => {
+    if (healthFilter === 'all') return searchedAndCategoryFiltered;
+    return searchedAndCategoryFiltered.filter((j) => getHealth(j.recentRuns) === healthFilter);
+  }, [searchedAndCategoryFiltered, healthFilter]);
+
+  const byCategory = useMemo(() => {
+    const acc: Record<string, WorkerJobDetail[]> = {};
+    CATEGORY_ORDER.forEach((cat) => {
+      acc[cat] = filteredJobs.filter((j) => j.category === cat);
+    });
+    return acc;
+  }, [filteredJobs]);
+
+  const visibleCategories = CATEGORY_ORDER.filter((cat) => byCategory[cat]?.length > 0);
+  const allCollapsed = visibleCategories.length > 0 && visibleCategories.every((c) => collapsedCategories.has(c));
+
+  function toggleCategoryCollapsed(cat: JobCategory) {
+    setCollapsedCategories((prev) => {
+      const next = new Set(prev);
+      if (next.has(cat)) next.delete(cat);
+      else next.add(cat);
+      return next;
+    });
+  }
+
+  function toggleCollapseAll() {
+    setCollapsedCategories(allCollapsed ? new Set() : new Set(visibleCategories));
+  }
 
   if (guard.status !== 'ready') return guard.node;
 
@@ -610,19 +136,9 @@ export default function WorkerJobsPage() {
     );
   }
 
-  const jobs: WorkerJobDetail[] = jobsQ.data ?? [];
-
-  const byCategory = CATEGORY_ORDER.reduce<Record<string, WorkerJobDetail[]>>(
-    (acc, cat) => {
-      acc[cat] = jobs.filter((j) => j.category === cat);
-      return acc;
-    },
-    {} as Record<string, WorkerJobDetail[]>,
-  );
-
-  // Summary counts
-  const failing = jobs.filter((j) => getHealth(j.recentRuns) === 'failing').length;
-  const warning = jobs.filter((j) => getHealth(j.recentRuns) === 'warning').length;
+  // Summary counts (over all jobs, unaffected by filters)
+  const failing = allJobs.filter((j) => getHealth(j.recentRuns) === 'failing').length;
+  const warning = allJobs.filter((j) => getHealth(j.recentRuns) === 'warning').length;
 
   return (
     <AdminConsoleShell
@@ -644,10 +160,10 @@ export default function WorkerJobsPage() {
         <>
           <span className="inline-flex items-center gap-1 rounded bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
             <Cpu className="h-3 w-3" />
-            {jobs.length} jobs
+            {allJobs.length} jobs
           </span>
           <span className="inline-flex items-center gap-1 rounded bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
-            {jobs.filter((j) => j.triggerSupported).length} triggerable
+            {allJobs.filter((j) => j.triggerSupported).length} triggerable
           </span>
           {failing > 0 ? (
             <span className="inline-flex items-center gap-1 rounded bg-rose-50 px-2 py-0.5 text-[11px] font-semibold text-rose-600">
@@ -690,8 +206,8 @@ export default function WorkerJobsPage() {
       {/* Loading */}
       {jobsQ.isLoading ? <PageSkeleton /> : null}
 
-      {/* Empty */}
-      {!jobsQ.isLoading && !jobsQ.isError && jobs.length === 0 ? (
+      {/* Empty (no jobs registered at all) */}
+      {!jobsQ.isLoading && !jobsQ.isError && allJobs.length === 0 ? (
         <AdminRouteState
           state="empty"
           title="No worker jobs available"
@@ -700,19 +216,46 @@ export default function WorkerJobsPage() {
       ) : null}
 
       {/* Content */}
-      {!jobsQ.isLoading && !jobsQ.isError && jobs.length > 0 && (
-        <div className="space-y-7">
-          {CATEGORY_ORDER.filter((cat) => byCategory[cat]?.length > 0).map((cat) => (
-            <CategorySection
-              key={cat}
-              category={cat}
-              jobs={byCategory[cat]}
-              triggeringKey={triggeringKey}
-              triggeredKey={triggeredKey}
-              onTrigger={handleTrigger}
-            />
-          ))}
-        </div>
+      {!jobsQ.isLoading && !jobsQ.isError && allJobs.length > 0 && (
+        <>
+          <JobsToolbar
+            search={search}
+            onSearchChange={setSearch}
+            healthFilter={healthFilter}
+            onHealthFilterChange={setHealthFilter}
+            healthCounts={healthCounts}
+            totalCount={searchedAndCategoryFiltered.length}
+            categoryFilter={categoryFilter}
+            onCategoryFilterChange={setCategoryFilter}
+            availableCategories={availableCategories}
+            view={view}
+            onViewChange={setView}
+            allCollapsed={allCollapsed}
+            onToggleCollapseAll={toggleCollapseAll}
+          />
+
+          {visibleCategories.length === 0 ? (
+            <p className="py-10 text-center text-[12px] text-slate-400">
+              No jobs match “{search || CATEGORY_LABELS[categoryFilter as JobCategory] || healthFilter}”. Try clearing a filter.
+            </p>
+          ) : (
+            <div className="space-y-6">
+              {visibleCategories.map((cat) => (
+                <CategorySection
+                  key={cat}
+                  category={cat}
+                  jobs={byCategory[cat]}
+                  view={view}
+                  collapsed={collapsedCategories.has(cat)}
+                  onToggleCollapsed={() => toggleCategoryCollapsed(cat)}
+                  triggeringKey={triggeringKey}
+                  triggeredKey={triggeredKey}
+                  onTrigger={handleTrigger}
+                />
+              ))}
+            </div>
+          )}
+        </>
       )}
 
       {/* Governance flags summary (WKR-004/WKR-005) */}
@@ -755,8 +298,8 @@ export default function WorkerJobsPage() {
       )}
 
       {/* Footer note */}
-      {!jobsQ.isLoading && !jobsQ.isError && jobs.length > 0 && (
-        <p className="mt-4 text-[11px] text-slate-400 text-center">
+      {!jobsQ.isLoading && !jobsQ.isError && allJobs.length > 0 && (
+        <p className="mt-4 text-center text-[11px] text-slate-400">
           Cron jobs run on schedule via node-cron. Queue stats and run history available for BullMQ-backed jobs only. Run Job available for recall jobs only.
         </p>
       )}
