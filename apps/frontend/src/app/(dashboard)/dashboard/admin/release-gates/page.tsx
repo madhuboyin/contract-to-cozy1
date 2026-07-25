@@ -7,34 +7,20 @@
 // (RELEASE_GATE_VIEW): per-tool gate status, rollout cohort, and blocking
 // issues. Gate rules live server-side (flag registry + incident checks).
 
-import React from 'react';
+import { useMemo, useState } from 'react';
 import { Loader2, RefreshCw, ShieldEllipsis } from 'lucide-react';
 import { useAdminGuard } from '@/hooks/useAdminGuard';
 import { AdminConsoleShell, AdminRouteState } from '@/components/ops/AdminConsoleShell';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import {
   useRecordCapabilityGovernanceReview,
   useReleaseGateSummary,
 } from '@/hooks/useAdminPlatformOps';
-import type { CapabilityGovernanceReviewRole } from '@/lib/api/adminPlatformOps';
-
-const COHORT_BADGE: Record<string, string> = {
-  DISABLED: 'bg-slate-100 text-slate-600',
-  INTERNAL: 'bg-indigo-50 text-indigo-700',
-  BETA: 'bg-amber-50 text-amber-700',
-  FULL: 'bg-emerald-50 text-emerald-700',
-};
-
-const REVIEW_BADGE: Record<string, string> = {
-  READY: 'bg-emerald-50 text-emerald-700',
-  HELD: 'bg-slate-100 text-slate-700',
-  BLOCKED: 'bg-rose-50 text-rose-700',
-};
-
-function fmtDate(value: string): string {
-  return new Date(value).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' });
-}
+import type { CapabilityGovernanceReviewRole, CapabilityLaunchReview, CapabilityLaunchReviewState } from '@/lib/api/adminPlatformOps';
+import { ReadinessPanel } from '@/components/ops/release-gates/ReadinessPanel';
+import { GatesToolbar } from '@/components/ops/release-gates/GatesToolbar';
+import { StateSection } from '@/components/ops/release-gates/StateSection';
+import { STATE_ORDER } from '@/components/ops/release-gates/releaseGatesUtils';
 
 export default function AdminReleaseGatesPage() {
   const guard = useAdminGuard({
@@ -45,9 +31,59 @@ export default function AdminReleaseGatesPage() {
   const summaryQ = useReleaseGateSummary();
   const governanceReviewMutation = useRecordCapabilityGovernanceReview();
 
-  if (guard.status !== 'ready') return guard.node;
+  const [search, setSearch] = useState('');
+  const [stateFilter, setStateFilter] = useState<CapabilityLaunchReviewState | 'all'>('all');
+  const [cohortFilter, setCohortFilter] = useState<string>('all');
+  const [collapsedStates, setCollapsedStates] = useState<Set<CapabilityLaunchReviewState>>(new Set());
 
   const s = summaryQ.data;
+
+  const allReviews: CapabilityLaunchReview[] = useMemo(() => s?.capabilityReviews ?? [], [s]);
+
+  const searchedAndCohortFiltered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return allReviews.filter((r) => {
+      if (cohortFilter !== 'all' && (r.rollout?.cohort ?? 'DISABLED') !== cohortFilter) return false;
+      if (q && !r.label.toLowerCase().includes(q) && !r.capabilityId.toLowerCase().includes(q)) return false;
+      return true;
+    });
+  }, [allReviews, search, cohortFilter]);
+
+  const stateCounts = useMemo(() => {
+    const counts: Record<CapabilityLaunchReviewState, number> = { READY: 0, HELD: 0, BLOCKED: 0 };
+    searchedAndCohortFiltered.forEach((r) => counts[r.state]++);
+    return counts;
+  }, [searchedAndCohortFiltered]);
+
+  const filteredReviews = useMemo(() => {
+    if (stateFilter === 'all') return searchedAndCohortFiltered;
+    return searchedAndCohortFiltered.filter((r) => r.state === stateFilter);
+  }, [searchedAndCohortFiltered, stateFilter]);
+
+  const byState = useMemo(() => {
+    const acc: Record<CapabilityLaunchReviewState, CapabilityLaunchReview[]> = { BLOCKED: [], HELD: [], READY: [] };
+    filteredReviews.forEach((r) => acc[r.state].push(r));
+    return acc;
+  }, [filteredReviews]);
+
+  const visibleStates = STATE_ORDER.filter((st) => byState[st].length > 0);
+  const allCollapsed = visibleStates.length > 0 && visibleStates.every((st) => collapsedStates.has(st));
+
+  if (guard.status !== 'ready') return guard.node;
+
+  function toggleStateCollapsed(st: CapabilityLaunchReviewState) {
+    setCollapsedStates((prev) => {
+      const next = new Set(prev);
+      if (next.has(st)) next.delete(st);
+      else next.add(st);
+      return next;
+    });
+  }
+
+  function toggleCollapseAll() {
+    setCollapsedStates(allCollapsed ? new Set() : new Set(visibleStates));
+  }
+
   const recordReview = (
     capabilityId: string,
     role: CapabilityGovernanceReviewRole,
@@ -76,25 +112,11 @@ export default function AdminReleaseGatesPage() {
         </span>
       }
     >
-      <div className="mb-4 flex flex-wrap items-center gap-2">
-        {s
-          ? Object.entries(s.byRolloutCohort).map(([cohort, count]) => (
-              <span key={cohort} className={`rounded px-2 py-0.5 text-[11px] font-semibold ${COHORT_BADGE[cohort] ?? 'bg-slate-100 text-slate-600'}`}>
-                {cohort}: {count}
-              </span>
-            ))
-          : null}
-        {s
-          ? Object.entries(s.capabilityReviewCounts).map(([state, count]) => (
-              <span key={state} className={`rounded px-2 py-0.5 text-[11px] font-semibold ${REVIEW_BADGE[state] ?? 'bg-slate-100 text-slate-600'}`}>
-                {state}: {count}
-              </span>
-            ))
-          : null}
+      <div className="mb-4 flex justify-end">
         <Button
           size="sm"
           variant="outline"
-          className="ml-auto h-8"
+          className="h-8"
           onClick={() => summaryQ.refetch()}
           disabled={summaryQ.isFetching}
         >
@@ -103,125 +125,7 @@ export default function AdminReleaseGatesPage() {
         </Button>
       </div>
 
-      {s ? (
-        <div className="mb-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge className={s.operationalControls.releaseReady
-              ? 'bg-emerald-50 text-emerald-700'
-              : 'bg-rose-50 text-rose-700'}
-            >
-              Real-user launch {s.operationalControls.releaseReady ? 'ready' : 'blocked'}
-            </Badge>
-            <Badge className={s.operationalControls.releaseMode === 'REAL_USER_LAUNCH'
-              ? 'bg-sky-50 text-sky-700'
-              : 'bg-amber-50 text-amber-700'}
-            >
-              Mode {s.operationalControls.releaseMode === 'REAL_USER_LAUNCH'
-                ? 'real-user'
-                : 'internal beta'}
-            </Badge>
-            <Badge className={s.operationalControls.globalEnabled
-              ? 'bg-emerald-50 text-emerald-700'
-              : 'bg-rose-50 text-rose-700'}
-            >
-              Discovery {s.operationalControls.globalEnabled ? 'enabled' : 'disabled'}
-            </Badge>
-            <Badge className={s.operationalControls.releaseGateEnforced
-              ? 'bg-emerald-50 text-emerald-700'
-              : 'bg-amber-50 text-amber-700'}
-            >
-              Release gates {s.operationalControls.releaseGateEnforced ? 'enforced' : 'advisory'}
-            </Badge>
-            <Badge className={s.operationalControls.humanPolicyApprovalEnforced
-              && s.operationalControls.governanceReviewSourceAvailable
-              ? 'bg-emerald-50 text-emerald-700'
-              : 'bg-rose-50 text-rose-700'}
-            >
-              Human policy {s.operationalControls.humanPolicyApprovalEnforced
-                ? s.operationalControls.governanceReviewSourceAvailable
-                  ? 'enforced'
-                  : 'unavailable'
-                : 'advisory'}
-            </Badge>
-            <Badge className={s.operationalControls.rolloutKeyParity.valid
-              ? 'bg-emerald-50 text-emerald-700'
-              : 'bg-rose-50 text-rose-700'}
-            >
-              Rollout parity {s.operationalControls.rolloutKeyParity.valid ? 'valid' : 'invalid'}
-            </Badge>
-            <Badge className={s.operationalControls.registryVersionMatches
-              ? 'bg-emerald-50 text-emerald-700'
-              : 'bg-rose-50 text-rose-700'}
-            >
-              Registry {s.operationalControls.registryVersionMatches ? 'matched' : 'mismatch'}
-            </Badge>
-            <Badge className={s.operationalControls.configurationValid
-              ? 'bg-emerald-50 text-emerald-700'
-              : 'bg-rose-50 text-rose-700'}
-            >
-              Configuration {s.operationalControls.configurationValid ? 'valid' : 'invalid'}
-            </Badge>
-          </div>
-          <p className="mt-3 font-mono text-[11px] text-slate-500">
-            Registry {s.operationalControls.registryVersion}
-            {s.operationalControls.expectedRegistryVersion
-              ? ` · expected ${s.operationalControls.expectedRegistryVersion}`
-              : ' · no deployment pin'}
-          </p>
-          {!s.operationalControls.releaseReady ? (
-            <p className="mt-2 text-xs font-medium text-rose-700">
-              Launch blockers: {s.operationalControls.releaseBlockers.join(', ') || 'unknown policy failure'}
-            </p>
-          ) : null}
-          {[
-            ['Disabled capabilities', s.operationalControls.disabledCapabilityIds],
-            ['Broken-route suppression', s.operationalControls.brokenRouteCapabilityIds],
-            ['Release-gate blocks', s.operationalControls.releaseGateBlockedCapabilityIds],
-          ].map(([label, values]) => (
-            (values as string[]).length > 0 ? (
-              <p key={label as string} className="mt-2 text-xs text-slate-600">
-                <span className="font-semibold">{label as string}:</span>{' '}
-                {(values as string[]).join(', ')}
-              </p>
-            ) : null
-          ))}
-          {s.operationalControls.manifestVersionMismatches.length > 0 ? (
-            <p className="mt-2 text-xs font-medium text-rose-700">
-              Manifest pin mismatch:{' '}
-              {s.operationalControls.manifestVersionMismatches.map((entry) =>
-                `${entry.capabilityId} (current ${entry.currentVersion}, expected ${entry.expectedVersion})`,
-              ).join(', ')}
-            </p>
-          ) : null}
-          {s.operationalControls.invalidManifestVersionEntries.length > 0 ? (
-            <p className="mt-2 text-xs font-medium text-rose-700">
-              Invalid manifest pins: {s.operationalControls.invalidManifestVersionEntries.join(', ')}
-            </p>
-          ) : null}
-          {s.operationalControls.invalidConfigurationEntries.length > 0 ? (
-            <p className="mt-2 text-xs font-medium text-rose-700">
-              Invalid configuration: {s.operationalControls.invalidConfigurationEntries.join(', ')}
-            </p>
-          ) : null}
-          {[
-            ['Unknown disabled IDs', s.operationalControls.unknownDisabledCapabilityIds],
-            ['Unknown broken-route IDs', s.operationalControls.unknownBrokenRouteCapabilityIds],
-            ['Unknown release-gate IDs', s.operationalControls.unknownReleaseGateBlockedCapabilityIds],
-          ].map(([label, values]) => (
-            (values as string[]).length > 0 ? (
-              <p key={label as string} className="mt-2 text-xs font-medium text-rose-700">
-                {label as string}: {(values as string[]).join(', ')}
-              </p>
-            ) : null
-          ))}
-          {!s.operationalControls.rolloutKeyParity.valid ? (
-            <p className="mt-2 text-xs font-medium text-rose-700">
-              Missing rollout keys: {s.operationalControls.rolloutKeyParity.missingKeys.join(', ') || 'none'}.
-              {' '}Unknown rollout keys: {s.operationalControls.rolloutKeyParity.unknownKeys.join(', ') || 'none'}.
-            </p>
-          ) : null}
-        </div>
-      ) : null}
+      {s ? <ReadinessPanel controls={s.operationalControls} /> : null}
 
       {summaryQ.isLoading ? (
         <div className="flex items-center gap-2 p-6 text-sm text-slate-500">
@@ -238,107 +142,38 @@ export default function AdminReleaseGatesPage() {
       ) : null}
 
       {s ? (
-        <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <table className="w-full min-w-[900px] text-left text-xs">
-            <thead>
-              <tr className="border-b border-slate-100 text-[11px] uppercase tracking-wide text-slate-400">
-                <th className="px-3 py-2.5">Capability</th>
-                <th className="px-3 py-2.5">Readiness</th>
-                <th className="px-3 py-2.5">Policy</th>
-                <th className="px-3 py-2.5">Approvals</th>
-                <th className="px-3 py-2.5">Cohort</th>
-                <th className="px-3 py-2.5">Rollout</th>
-                <th className="px-3 py-2.5">Active incidents</th>
-                <th className="px-3 py-2.5">Blockers</th>
-                <th className="px-3 py-2.5">Checked</th>
-              </tr>
-            </thead>
-            <tbody>
-              {s.capabilityReviews.map((review) => (
-                <tr key={review.capabilityId} className="border-b border-slate-50">
-                  <td className="px-3 py-2.5">
-                    <p className="font-semibold text-slate-800">{review.label}</p>
-                    <p className="text-[10px] text-slate-400">{review.capabilityId} · {review.owner}</p>
-                  </td>
-                  <td className="px-3 py-2.5">
-                    <Badge className={`text-[10px] ${REVIEW_BADGE[review.state] ?? ''}`}>
-                      {review.state}
-                    </Badge>
-                  </td>
-                  <td className="px-3 py-2.5">
-                    <p className="text-slate-600">{review.releaseStage} · {review.recommendationMode}</p>
-                    <p className="text-[10px] text-slate-400">{review.safetyTier}</p>
-                    <p className="text-[10px] text-slate-400">
-                      {review.governanceDefinition.dataSensitivity} · {review.governanceDefinition.policyVersion}
-                    </p>
-                    {!review.governanceDefinition.valid ? (
-                      <p className="mt-1 text-[10px] font-medium text-rose-700">
-                        {review.governanceDefinition.issues.join(', ')}
-                      </p>
-                    ) : null}
-                  </td>
-                  <td className="px-3 py-2.5">
-                    <div className="space-y-1">
-                      {review.governanceReview.requiredRoles.map((role) => {
-                        const approved = review.governanceReview.approvedRoles.includes(role);
-                        const rejected = review.governanceReview.rejectedRoles.includes(role);
-                        return (
-                          <div key={role} className="flex items-center gap-1">
-                            <Badge className={`text-[9px] ${
-                              approved
-                                ? 'bg-emerald-50 text-emerald-700'
-                                : rejected
-                                  ? 'bg-rose-50 text-rose-700'
-                                  : 'bg-amber-50 text-amber-700'
-                            }`}>
-                              {role}
-                            </Badge>
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="ghost"
-                              className="h-5 px-1.5 text-[9px]"
-                              disabled={governanceReviewMutation.isPending || approved}
-                              onClick={() => recordReview(review.capabilityId, role, 'APPROVED')}
-                            >
-                              Approve
-                            </Button>
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="ghost"
-                              className="h-5 px-1.5 text-[9px] text-rose-700"
-                              disabled={governanceReviewMutation.isPending || rejected}
-                              onClick={() => recordReview(review.capabilityId, role, 'REJECTED')}
-                            >
-                              Reject
-                            </Button>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </td>
-                  <td className="px-3 py-2.5">
-                    <Badge className={`text-[10px] ${COHORT_BADGE[review.rollout?.cohort ?? 'DISABLED'] ?? ''}`}>
-                      {review.rollout?.cohort ?? 'MISSING'}
-                    </Badge>
-                    <p className="mt-1 text-[10px] text-slate-400">{review.rolloutKey}</p>
-                  </td>
-                  <td className="px-3 py-2.5 text-slate-600">{review.rollout?.rolloutPct ?? 0}%</td>
-                  <td className={`px-3 py-2.5 ${(review.incidentGate?.activeIncidentCount ?? 0) > 0 ? 'font-semibold text-rose-700' : 'text-slate-600'}`}>
-                    {review.incidentGate?.activeIncidentCount ?? '—'}
-                  </td>
-                  <td className="px-3 py-2.5 text-slate-500">
-                    {review.blockers.length === 0 ? '—' : review.blockers.join(', ')}
-                  </td>
-                  <td className="px-3 py-2.5 text-slate-400">
-                    {review.incidentGate ? fmtDate(review.incidentGate.checkedAt) : '—'}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <>
+          <GatesToolbar
+            search={search}
+            onSearchChange={setSearch}
+            stateFilter={stateFilter}
+            onStateFilterChange={setStateFilter}
+            stateCounts={stateCounts}
+            totalCount={searchedAndCohortFiltered.length}
+            cohortFilter={cohortFilter}
+            onCohortFilterChange={setCohortFilter}
+            allCollapsed={allCollapsed}
+            onToggleCollapseAll={toggleCollapseAll}
+          />
+
+          {visibleStates.length === 0 ? (
+            <p className="py-10 text-center text-[12px] text-slate-400">
+              No capabilities match your filters.
+            </p>
+          ) : (
+            visibleStates.map((st) => (
+              <StateSection
+                key={st}
+                state={st}
+                reviews={byState[st]}
+                collapsed={collapsedStates.has(st)}
+                onToggleCollapsed={() => toggleStateCollapsed(st)}
+                onRecordReview={recordReview}
+                reviewPending={governanceReviewMutation.isPending}
+              />
+            ))
+          )}
+        </>
       ) : null}
     </AdminConsoleShell>
   );
