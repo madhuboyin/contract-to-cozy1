@@ -750,6 +750,7 @@ export interface CapabilitySuggestionsInput {
   surface: CapabilitySuggestionSurface;
   limit?: number;
   sourceContext?: CapabilityExplicitSourceContext | null;
+  recordEligibility?: boolean;
 }
 
 type AuthorizedCapabilitySources = Pick<
@@ -901,7 +902,7 @@ async function evaluateCapabilitySuggestions(
     context,
     rankingResult,
   });
-  if (dependencies.recordEligibility) {
+  if (input.recordEligibility !== false && dependencies.recordEligibility) {
     await recordEligibleSuggestions(
       input,
       response,

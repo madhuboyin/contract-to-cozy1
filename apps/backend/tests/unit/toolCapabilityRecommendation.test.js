@@ -1985,6 +1985,24 @@ test('CAP-703 records selected recommendation eligibility with canonical lineage
   }]);
 });
 
+test('CAP-904 smoke evaluation suppresses synthetic eligibility writes', async () => {
+  const recorded = [];
+  const result = await getCapabilitySuggestions({
+    propertyId: 'property-1',
+    userId: 'user-1',
+    surface: 'HOME',
+    limit: 3,
+    recordEligibility: false,
+  }, capabilityApiDependencies({
+    recordEligibility: async (input) => {
+      recorded.push(input);
+    },
+  }));
+
+  assert.equal(result.suggestions.length, 1);
+  assert.deepEqual(recorded, []);
+});
+
 test('CAP-500 evaluates Unified Home suggestions from its authorized source snapshot', async () => {
   let requiredSourceReloads = 0;
   const sharedPropertyContext = propertyContext({

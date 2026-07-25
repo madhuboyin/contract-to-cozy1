@@ -21,8 +21,13 @@ import {
 } from '../services/capabilityFeedback.service';
 import type { CustomRequest } from '../types';
 import { logger } from '../lib/logger';
+import { isPropertyAllowlisted } from '../config/smokeTestConfig';
 
 const router = Router();
+const capabilitySmokeCorrelationSchema = z.string()
+  .trim()
+  .regex(/^capability-smoke:[a-zA-Z0-9._:-]+$/)
+  .max(160);
 
 export const CapabilitySuggestionsQuerySchema = z.object({
   surface: z.enum(CAPABILITY_SUGGESTION_SURFACES).default('HOME'),
@@ -188,6 +193,26 @@ router.get(
       });
       return;
     }
+    const smokeHeader = req.header('x-capability-smoke-run');
+    const smokeCorrelation = smokeHeader
+      ? capabilitySmokeCorrelationSchema.safeParse(smokeHeader)
+      : null;
+    if (
+      smokeHeader
+      && (
+        !smokeCorrelation?.success
+        || !isPropertyAllowlisted(req.params.propertyId)
+      )
+    ) {
+      res.status(403).json({
+        success: false,
+        error: {
+          code: 'CAPABILITY_SMOKE_SCOPE_DENIED',
+          message: 'Capability smoke is not permitted for this property.',
+        },
+      });
+      return;
+    }
     try {
       const query = parsed.data;
       const data = await getCapabilitySuggestions({
@@ -205,6 +230,7 @@ router.get(
               eventType: query.sourceEventType ?? null,
             }
           : null,
+        recordEligibility: !smokeCorrelation?.success,
       });
       res.setHeader('Cache-Control', 'private, no-store');
       res.setHeader('Vary', 'Authorization, Cookie');

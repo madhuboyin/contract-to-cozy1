@@ -6,6 +6,7 @@ export * from './capabilityGoldenFixtures';
 export * from './capabilityGoldenRanking';
 export * from './capabilityGovernancePolicy';
 export * from './capabilityGovernanceDefinition';
+export * from './capabilitySmokeCheck';
 export * from './capabilityExplanationBuilder';
 export * from './capabilityRecommendationContext';
 export * from './capabilityRelatedResolver';

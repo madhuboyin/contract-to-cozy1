@@ -1,7 +1,7 @@
 ---
 title: "Capability Discovery and Recommendation Platform — Implementation Plan"
 version: "1.0"
-date: "July 24, 2026"
+date: "July 25, 2026"
 status: "Implementation in progress"
 frd: "Capability Discovery and Recommendation Platform FRD v1.0"
 framework: "ContractToCozy Product Framework v1.0"
@@ -56,7 +56,7 @@ These are planning ranges, not launch commitments. Each phase exits on evidence,
 
 ### Implementation progress
 
-Status as of July 24, 2026:
+Status as of July 25, 2026:
 
 | Work package | Status | Evidence |
 | --- | --- | --- |
@@ -106,6 +106,12 @@ Status as of July 24, 2026:
 | CAP-703 admin analytics | Complete | The existing Tool Discovery Funnel now reports server-recorded eligibility, actual-view coverage, engagement and outcome stages, feedback, readiness, reasons, source mix, and repeated recommendation scopes from Product Analytics |
 | CAP-704 operational controls | Complete | Availability now fails closed for configured registry or manifest mismatches, malformed rollback pins, known-broken routes, release-gate blocks, global or per-capability disables, missing cohorts, and paused recommendation definitions; Admin Release Gates exposes control and parity status |
 | CAP-705 incident and support runbook | Complete | The capability platform runbook defines severity, evidence handling, containment, diagnosis, rollback, verification, escalation, and closure for all required discovery and recommendation incident classes |
+| CAP-800–807 niche-tool activation tranche | Complete | Material Specs, Plant Advisor, Home Digital Will, DIY, Seller Prep, Permit Tracker, HOA Compliance, Inspection Hub, and Project Tracker inherit the canonical recommendation model with reviewed triggers, completion, lineage, rollout, and acceptance coverage |
+| CAP-900 fail-closed real-user availability | Complete | Real-user mode fails closed on disabled enforcement, policy load failure, or configuration integrity failure |
+| CAP-901 canonical capability launch review | Complete | Admin launch review evaluates every current and future canonical capability as READY, HELD, or BLOCKED with stable blocker codes |
+| CAP-902 capability human-policy attestations | Complete | Versioned role attestations are persisted and enforced at launch review and runtime recommendation boundaries |
+| CAP-903 elevated-risk and privacy validation | Complete | Structured material, regulated, safety, commercial, and privacy policy validation fails closed; Financing remains intentionally blocked on unrecorded business terms |
+| CAP-904 authenticated representative-property smoke | Complete | Read-only smoke runner validates at least three named properties, catalog and HOME/PROPERTY suggestion contracts, canonical registry/manifest parity, expected and forbidden outcomes, cache isolation, launch context, and an unauthorized-property probe |
 
 Explore Tools and homeowner command search now use the canonical catalog by default. Set
 `CAPABILITY_CATALOG_SOURCE=legacy` only for the temporary internal-beta rollback.
@@ -1881,6 +1887,43 @@ does not invent those business facts.
 No database schema change or migration is required for this slice. The
 canonical Knowledge Hub pgAdmin seed SQL was regenerated because manifest
 governance changes update the registry projection.
+
+### CAP-904: Authenticated representative-property smoke
+
+Implemented a read-only deployed-environment smoke runner for representative
+properties:
+
+- configuration requires at least three uniquely named, uniquely identified
+  authorized properties plus one property the bearer must not be able to
+  access;
+- the bearer token is accepted only through
+  `CAPABILITY_SMOKE_TOKEN` and is never written to configuration or the
+  machine-readable pass report;
+- the runner verifies the authenticated availability, canonical catalog, and
+  HOME and PROPERTY suggestion endpoints through their production contracts;
+- deployed registry and manifest versions must match the runner's canonical
+  registry, workflow-only capabilities cannot leak into the homeowner
+  catalog, suggestion ranks must be contiguous, and property-bound launch
+  paths must retain the property;
+- each scenario can require minimum suggestion counts and name expected and
+  forbidden capabilities without embedding property evidence;
+- every request carries a bounded smoke correlation ID; authorized scenario
+  properties must be present in `SMOKE_TEST_PROPERTY_ALLOWLIST`, and the
+  recommendation route suppresses its normal eligibility event for that
+  controlled smoke request so QA does not alter funnel denominators;
+- private cache variation is required for catalog and suggestion responses,
+  while suggestions additionally require `no-store`; and
+- both the catalog and recommendation endpoint must conceal the unauthorized
+  property with `404`.
+
+The runner defaults to requiring `REAL_USER_LAUNCH`, valid rollout parity, and
+technical release readiness. It performs GET requests only and does not create
+properties, users, lifecycle events, approvals, or smoke cleanup obligations.
+Its pass report is execution evidence, not a replacement for current human
+policy attestations, Admin release review, browser/PWA telemetry checks,
+accessibility review, or rollback and incident drills.
+
+No database schema, seed, SQL, or migration change is required for this slice.
 
 ---
 

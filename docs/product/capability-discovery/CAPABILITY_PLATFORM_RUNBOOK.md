@@ -200,6 +200,99 @@ Financing is intentionally blocked until accountable owners replace
 `NOT_RECORDED` with the actual commercial relationship and verify the
 compensation disclosure. Do not guess these terms merely to clear the gate.
 
+## 5.3 Authenticated representative-property smoke
+
+CAP-904 provides a read-only smoke runner. Run it after deploying the exact
+candidate build and applying tracked configuration, before admitting real
+users.
+
+Choose at least three test properties owned by the same non-admin smoke
+account. The set should exercise materially different structured states, for
+example a sparse/new home, an established home with systems and documents, and
+an active decision or project. Do not place addresses, property facts,
+document text, or bearer tokens in the scenario file.
+
+Before deploying, ensure the smoke account already has explicit
+`HouseholdMember` access to each representative property and place all three
+IDs in `SMOKE_TEST_PROPERTY_ALLOWLIST`. Do not allowlist the unauthorized probe
+property. The runner sends a bounded `X-Capability-Smoke-Run` correlation
+header; the API accepts it only for an allowlisted authorized property and
+suppresses the normal server-owned eligibility event. A missing allowlist or
+forged smoke scope fails with `403` rather than silently polluting analytics.
+
+Create a temporary JSON file outside the repository:
+
+```json
+{
+  "contractVersion": "capability-smoke-v1",
+  "unauthorizedPropertyId": "property-not-owned-by-smoke-account",
+  "requireRealUserLaunchMode": true,
+  "requireReleaseReady": true,
+  "scenarios": [
+    {
+      "name": "sparse new home",
+      "propertyId": "authorized-property-1",
+      "expectedCapabilityIds": [],
+      "forbiddenCapabilityIds": [],
+      "minimumHomeSuggestions": 0,
+      "minimumPropertySuggestions": 0
+    },
+    {
+      "name": "established home",
+      "propertyId": "authorized-property-2",
+      "expectedCapabilityIds": ["material-specs"],
+      "forbiddenCapabilityIds": [],
+      "minimumHomeSuggestions": 1,
+      "minimumPropertySuggestions": 1
+    },
+    {
+      "name": "active seller decision",
+      "propertyId": "authorized-property-3",
+      "expectedCapabilityIds": ["seller-prep"],
+      "forbiddenCapabilityIds": ["financing"],
+      "minimumHomeSuggestions": 1,
+      "minimumPropertySuggestions": 1
+    }
+  ]
+}
+```
+
+Expected and forbidden IDs must reflect reviewed structured state in the
+target environment. An empty expectation is valid for a deliberately sparse
+property; do not add facts merely to make a smoke case pass.
+
+Run from `apps/backend`, placing the opaque bearer token only in the process
+environment:
+
+```bash
+CAPABILITY_SMOKE_BASE_URL=https://api.contracttocozy.com \
+CAPABILITY_SMOKE_TOKEN='<opaque-smoke-account-token>' \
+CAPABILITY_SMOKE_SCENARIOS_FILE=/absolute/path/to/capability-smoke.json \
+npm run smoke:capability-discovery
+```
+
+The runner allows plain HTTP only for `localhost` and loopback addresses. It
+uses GET requests exclusively. A pass report includes scenario names,
+property IDs, bounded capability IDs/counts, registry version, request count,
+smoke correlation ID, and check time; it never includes the token or property
+evidence.
+
+A failure is blocking when it indicates:
+
+- authentication or authorization drift;
+- an unauthorized property returning anything other than `404`;
+- launch mode, release readiness, configuration, or rollout parity failure;
+- deployed registry or manifest drift;
+- a stale, unknown, unavailable, duplicate, or workflow-only capability;
+- missing expected or present forbidden capability;
+- broken property launch context or mixed context versions; or
+- missing private/no-store cache isolation.
+
+Preserve the pass report with the deployment evidence. Do not treat it as proof
+that human governance reviews, accessibility, supported-browser telemetry,
+analytics denominators, kill switches, rollback, or the incident drill passed.
+Do not store the bearer token with the report.
+
 ## 6. Incident playbooks
 
 ### 6.1 Broken destination
