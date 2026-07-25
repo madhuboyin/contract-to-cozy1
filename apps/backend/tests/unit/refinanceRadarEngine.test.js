@@ -10,7 +10,9 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const {
+  calculateTriggerRate,
   classifyConfidence,
+  RefinanceRadarEngine,
 } = require('../../dist/refinanceRadar/engine/refinanceRadar.engine');
 
 const {
@@ -149,4 +151,72 @@ test('qualification: MIN_MONTHLY_SAVINGS_USD > 0', () => {
 
 test('qualification: MIN_LIFETIME_SAVINGS_USD > 0', () => {
   assert.ok(REFINANCE_THRESHOLDS.MIN_LIFETIME_SAVINGS_USD > 0);
+});
+
+test('trigger rate returns the highest approximate benchmark that clears every OPEN gate', () => {
+  const triggerRate = calculateTriggerRate({
+    loanBalance: 320_000,
+    currentRatePct: 6.5,
+    remainingTermMonths: 300,
+  });
+
+  assert.ok(triggerRate != null);
+  assert.ok(triggerRate < 6);
+  assert.ok(triggerRate > 4.5);
+});
+
+test('trigger rate is unavailable when non-rate loan facts cannot clear qualification gates', () => {
+  assert.equal(calculateTriggerRate({
+    loanBalance: REFINANCE_THRESHOLDS.MIN_LOAN_BALANCE_USD - 1,
+    currentRatePct: 7,
+    remainingTermMonths: 300,
+  }), null);
+  assert.equal(calculateTriggerRate({
+    loanBalance: 320_000,
+    currentRatePct: 7,
+    remainingTermMonths: REFINANCE_THRESHOLDS.MIN_REMAINING_TERM_MONTHS - 1,
+  }), null);
+});
+
+test('evaluation returns an ordered closed-state explanation and personalized trigger rate', async () => {
+  const engine = new RefinanceRadarEngine({
+    getLatestSnapshot: async () => ({
+      id: 'snapshot-1',
+      rate30yr: 6.25,
+      rate15yr: 5.5,
+    }),
+  });
+  const result = await engine.evaluate({
+    loanBalance: 320_000,
+    currentRatePct: 6.5,
+    remainingTermMonths: 300,
+  });
+
+  assert.equal(result.radarState, 'CLOSED');
+  assert.ok(result.triggerRatePct < result.marketRatePct);
+  assert.ok(result.topDecisionFactors.length > 0);
+  assert.ok(result.topDecisionFactors.length <= 3);
+  assert.match(result.topDecisionFactors[0], /Rate gap/);
+  assert.match(result.triggerRateExplanation, /would need to reach approximately/i);
+});
+
+test('evaluation explains the three factors supporting an open window', async () => {
+  const engine = new RefinanceRadarEngine({
+    getLatestSnapshot: async () => ({
+      id: 'snapshot-1',
+      rate30yr: 4.75,
+      rate15yr: 4,
+    }),
+  });
+  const result = await engine.evaluate({
+    loanBalance: 320_000,
+    currentRatePct: 6.5,
+    remainingTermMonths: 300,
+  });
+
+  assert.equal(result.radarState, 'OPEN');
+  assert.equal(result.topDecisionFactors.length, 3);
+  assert.match(result.topDecisionFactors[0], /below your current rate/i);
+  assert.match(result.topDecisionFactors[1], /per month/i);
+  assert.match(result.topDecisionFactors[2], /closing costs/i);
 });

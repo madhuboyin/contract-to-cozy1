@@ -45,6 +45,9 @@ export type RadarStatusAvailable = {
   radarSummary: string;
   missedOpportunitySummary: MissedOpportunityInsight | null;
   notQualifiedReasons: string[];
+  triggerRatePct?: number | null;
+  triggerRateExplanation?: string;
+  topDecisionFactors?: string[];
   disclaimer: string;
 };
 

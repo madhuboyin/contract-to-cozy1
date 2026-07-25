@@ -404,6 +404,9 @@ export class RefinanceRadarService {
       radarSummary: evalResult.summary,
       missedOpportunitySummary: missedOpportunity.hasMissedOpportunity ? missedOpportunity : null,
       notQualifiedReasons: evalResult.notQualifiedReasons,
+      triggerRatePct: evalResult.triggerRatePct,
+      triggerRateExplanation: evalResult.triggerRateExplanation,
+      topDecisionFactors: evalResult.topDecisionFactors,
       disclaimer: REFINANCE_DISCLAIMER,
       rateDataFreshnessAt: latestSnapshot?.date ?? null,
       loanProducts,
@@ -432,9 +435,10 @@ export class RefinanceRadarService {
       return this.evaluateProperty(propertyId, propertyContextVersion);
     }
 
-    const [recentSnapshots, missedOpportunity] = await Promise.all([
+    const [recentSnapshots, missedOpportunity, currentExplanation] = await Promise.all([
       this.rateService.getRecentSnapshots(RATE_TREND_LOOKBACK_SNAPSHOTS),
       this.engine.evaluateMissedOpportunity(mortgageContext),
+      this.engine.evaluate(mortgageContext, radarState.radarState),
     ]);
     const trendSummary = this.rateService.computeTrendSummary(recentSnapshots);
 
@@ -446,7 +450,7 @@ export class RefinanceRadarService {
       const savedBreakEven = opp.breakEvenMonths;
       radarSummary = `A refinance window is open — break-even estimated at ${savedBreakEven} months with approximately $${Math.round(opp.monthlySavings.toNumber()).toLocaleString()}/month in savings.`;
     } else {
-      radarSummary = 'No actionable refinance opportunity detected at the last evaluation.';
+      radarSummary = currentExplanation.summary;
     }
 
     const latestSnapshot = recentSnapshots[0] ?? null;
@@ -462,18 +466,22 @@ export class RefinanceRadarService {
       confidenceLevel: opp?.confidenceLevel ?? null,
       currentRatePct: mortgageContext.currentRatePct,
       marketRatePct: marketRate30yr,
-      rateGapPct: opp?.rateGap ?? 0,
+      rateGapPct: opp?.rateGap ?? currentExplanation.rateGapPct,
       loanBalance: opp?.loanBalance.toNumber() ?? mortgageContext.loanBalance,
-      monthlySavings: opp?.monthlySavings.toNumber() ?? 0,
-      breakEvenMonths: opp?.breakEvenMonths ?? null,
-      lifetimeSavings: opp?.lifetimeSavings.toNumber() ?? 0,
-      closingCostAssumptionUsd: opp?.closingCostAssumption?.toNumber() ?? 0,
+      monthlySavings: opp?.monthlySavings.toNumber() ?? currentExplanation.monthlySavings,
+      breakEvenMonths: opp?.breakEvenMonths ?? currentExplanation.breakEvenMonths,
+      lifetimeSavings: opp?.lifetimeSavings.toNumber() ?? currentExplanation.lifetimeSavings,
+      closingCostAssumptionUsd:
+        opp?.closingCostAssumption?.toNumber() ?? currentExplanation.effectiveClosingCostUsd,
       remainingTermMonths: opp?.remainingTermMonths ?? mortgageContext.remainingTermMonths,
       lastEvaluatedAt: radarState.lastEvaluatedAt?.toISOString() ?? null,
       trendSummary,
       radarSummary,
       missedOpportunitySummary: missedOpportunity.hasMissedOpportunity ? missedOpportunity : null,
-      notQualifiedReasons: [],
+      notQualifiedReasons: currentExplanation.notQualifiedReasons,
+      triggerRatePct: currentExplanation.triggerRatePct,
+      triggerRateExplanation: currentExplanation.triggerRateExplanation,
+      topDecisionFactors: currentExplanation.topDecisionFactors,
       disclaimer: REFINANCE_DISCLAIMER,
       rateDataFreshnessAt: latestSnapshot?.date ?? null,
       loanProducts,

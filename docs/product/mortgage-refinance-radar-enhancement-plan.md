@@ -41,7 +41,11 @@ projects those events through a stable action key so canonical snooze and
 dismissal controls apply, suppresses the action as soon as the profile is
 complete, and lets a homeowner record that the property has no mortgage so
 future radar prompts stop. External-notification policy remains a later,
-explicitly opt-in step.
+explicitly opt-in step. The radar now also calculates the highest approximate
+30-year benchmark that clears every existing OPEN gate under the homeowner's
+current saved assumptions. Fresh and read-only status responses expose that
+personalized monitoring threshold plus the top three ordered decision factors;
+the UI labels the result as modeled market context rather than a lender quote.
 
 ## Executive recommendation
 

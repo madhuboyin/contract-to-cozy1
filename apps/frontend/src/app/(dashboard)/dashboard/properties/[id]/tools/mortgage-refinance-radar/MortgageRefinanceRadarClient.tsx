@@ -212,6 +212,9 @@ function RadarStatusHero({ data }: { data: RadarStatusAvailable }) {
 
 function KeyMetricsCard({ data }: { data: RadarStatusAvailable }) {
   const isOpen = data.radarState === 'OPEN';
+  const decisionFactors = data.topDecisionFactors?.length
+    ? data.topDecisionFactors
+    : data.notQualifiedReasons.slice(0, 3);
 
   return (
     <GlassCard>
@@ -222,41 +225,58 @@ function KeyMetricsCard({ data }: { data: RadarStatusAvailable }) {
         </div>
 
         {isOpen ? (
-          <div className="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-4">
-            <KpiTile
-              label="Rate Gap"
-              value={pct(data.rateGapPct, 2)}
-              sub={`${pct(data.currentRatePct, 3)} -> ${pct(data.marketRatePct, 3)}`}
-              highlight="blue"
-            />
-            <KpiTile
-              label="Monthly Savings"
-              value={usd(data.monthlySavings)}
-              highlight="green"
-            />
-            <KpiTile
-              label="Break-Even"
-              value={months(data.breakEvenMonths)}
-              sub="to recover closing costs"
-            />
-            <KpiTile
-              label="Lifetime Savings"
-              value={usd(data.lifetimeSavings)}
-              highlight="green"
-            />
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-4">
+              <KpiTile
+                label="Rate Gap"
+                value={pct(data.rateGapPct, 2)}
+                sub={`${pct(data.currentRatePct, 3)} -> ${pct(data.marketRatePct, 3)}`}
+                highlight="blue"
+              />
+              <KpiTile
+                label="Monthly Savings"
+                value={usd(data.monthlySavings)}
+                highlight="green"
+              />
+              <KpiTile
+                label="Break-Even"
+                value={months(data.breakEvenMonths)}
+                sub="to recover closing costs"
+              />
+              <KpiTile
+                label="Lifetime Savings"
+                value={usd(data.lifetimeSavings)}
+                highlight="green"
+              />
+            </div>
+            {decisionFactors.length > 0 && (
+              <div>
+                <p className="mb-2 text-xs font-medium tracking-normal text-slate-500 dark:text-slate-400">
+                  Why this window is open
+                </p>
+                <ul className="space-y-1">
+                  {decisionFactors.map((factor, i) => (
+                    <li key={i} className="flex items-start gap-2 text-sm text-slate-600 dark:text-slate-300">
+                      <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500" />
+                      {factor}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
         ) : (
           <div className="space-y-3">
             <p className="text-sm text-slate-600 dark:text-slate-300">
               No compelling savings signal yet under current market conditions.
             </p>
-            {data.notQualifiedReasons.length > 0 && (
+            {decisionFactors.length > 0 && (
               <div>
                 <p className="mb-2 text-xs font-medium tracking-normal text-slate-500 dark:text-slate-400">
-                  Why not yet
+                  Top decision factors
                 </p>
                 <ul className="space-y-1">
-                  {data.notQualifiedReasons.map((reason, i) => (
+                  {decisionFactors.map((reason, i) => (
                     <li key={i} className="flex items-start gap-2 text-sm text-slate-600 dark:text-slate-300">
                       <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-slate-400" />
                       {reason}
@@ -267,6 +287,21 @@ function KeyMetricsCard({ data }: { data: RadarStatusAvailable }) {
             )}
           </div>
         )}
+
+        <div className="mt-4 rounded-xl border border-blue-200/70 bg-blue-50/70 p-3 dark:border-blue-900/60 dark:bg-blue-950/20">
+          <p className="text-xs font-semibold text-blue-900 dark:text-blue-200">
+            Personalized monitoring threshold
+          </p>
+          <p className="mt-1 text-sm text-blue-800 dark:text-blue-300">
+            {data.triggerRateExplanation ??
+              (data.triggerRatePct != null
+                ? `Approximate 30-year benchmark trigger: ${pct(data.triggerRatePct, 2)} or lower.`
+                : 'A rate-only trigger is not available under the current mortgage assumptions.')}
+          </p>
+          <p className="mt-1 text-[11px] text-blue-700/80 dark:text-blue-400">
+            Modeled market context, not a lender quote or approval.
+          </p>
+        </div>
 
         <div className="mt-4 flex flex-wrap gap-x-6 gap-y-1.5 border-t border-slate-200/70 pt-4 text-xs text-slate-500 dark:border-slate-700/70 dark:text-slate-400">
           <span>Balance: {usd(data.loanBalance)}</span>

@@ -47,6 +47,144 @@ export function classifyConfidence(
   return RefinanceConfidenceLevel.WEAK;
 }
 
+type QualificationResult = {
+  calculation: ReturnType<typeof calcRefinanceScenario>;
+  notQualifiedReasons: string[];
+};
+
+function evaluateScenarioQualification(
+  mortgageInput: MortgageInputContext,
+  targetRatePct: number,
+  rateGapThreshold: number,
+): QualificationResult {
+  const calculation = calcRefinanceScenario({
+    loanBalance: mortgageInput.loanBalance,
+    currentRatePct: mortgageInput.currentRatePct,
+    remainingTermMonths: mortgageInput.remainingTermMonths,
+    currentMonthlyPayment: mortgageInput.currentMonthlyPayment,
+    targetRatePct,
+    targetTermMonths: 360,
+  });
+  const notQualifiedReasons: string[] = [];
+
+  if (calculation.rateGapPct < rateGapThreshold) {
+    notQualifiedReasons.push(
+      `Rate gap (${calculation.rateGapPct.toFixed(2)}%) is below the minimum threshold.`,
+    );
+  }
+  if (mortgageInput.remainingTermMonths < REFINANCE_THRESHOLDS.MIN_REMAINING_TERM_MONTHS) {
+    notQualifiedReasons.push(
+      `Remaining term (${mortgageInput.remainingTermMonths} months) is too short for refinancing to make sense.`,
+    );
+  }
+  if (mortgageInput.loanBalance < REFINANCE_THRESHOLDS.MIN_LOAN_BALANCE_USD) {
+    notQualifiedReasons.push(
+      `Loan balance ($${mortgageInput.loanBalance.toLocaleString()}) is below the minimum for a meaningful refinance.`,
+    );
+  }
+  if (calculation.monthlySavings < REFINANCE_THRESHOLDS.MIN_MONTHLY_SAVINGS_USD) {
+    notQualifiedReasons.push(
+      `Estimated monthly savings ($${Math.round(calculation.monthlySavings)}) are below the minimum required.`,
+    );
+  }
+  if (calculation.lifetimeSavings < REFINANCE_THRESHOLDS.MIN_LIFETIME_SAVINGS_USD) {
+    notQualifiedReasons.push(
+      `Projected lifetime savings ($${Math.round(calculation.lifetimeSavings).toLocaleString()}) are below the minimum required.`,
+    );
+  }
+  if (
+    calculation.breakEvenMonths !== null &&
+    calculation.breakEvenMonths > REFINANCE_THRESHOLDS.MAX_BREAK_EVEN_MONTHS_OPPORTUNITY
+  ) {
+    notQualifiedReasons.push(
+      `Break-even period (${calculation.breakEvenMonths} months) is too long to be practical.`,
+    );
+  }
+
+  return { calculation, notQualifiedReasons };
+}
+
+/**
+ * Find the highest modeled 30-year benchmark rate that passes every OPEN gate.
+ * A bounded binary search keeps scheduled portfolio evaluation inexpensive;
+ * the result is rounded down to a basis point to avoid overstating precision
+ * or returning a rate that narrowly misses a gate.
+ */
+export function calculateTriggerRate(
+  mortgageInput: MortgageInputContext,
+): number | null {
+  if (
+    mortgageInput.remainingTermMonths < REFINANCE_THRESHOLDS.MIN_REMAINING_TERM_MONTHS ||
+    mortgageInput.loanBalance < REFINANCE_THRESHOLDS.MIN_LOAN_BALANCE_USD
+  ) {
+    return null;
+  }
+
+  const highestCandidate =
+    mortgageInput.currentRatePct - REFINANCE_THRESHOLDS.MIN_RATE_GAP_PCT;
+  const lowestCandidate = 0.5;
+  if (highestCandidate < lowestCandidate) return null;
+
+  const qualifies = (candidateRate: number) =>
+    evaluateScenarioQualification(
+      mortgageInput,
+      candidateRate,
+      REFINANCE_THRESHOLDS.MIN_RATE_GAP_PCT,
+    ).notQualifiedReasons.length === 0;
+
+  if (!qualifies(lowestCandidate)) return null;
+  if (qualifies(highestCandidate)) {
+    return Math.floor(highestCandidate * 100) / 100;
+  }
+
+  let qualifyingRate = lowestCandidate;
+  let nonQualifyingRate = highestCandidate;
+  for (let iteration = 0; iteration < 16; iteration++) {
+    const candidateRate = (qualifyingRate + nonQualifyingRate) / 2;
+    if (qualifies(candidateRate)) {
+      qualifyingRate = candidateRate;
+    } else {
+      nonQualifyingRate = candidateRate;
+    }
+  }
+  return Math.floor(qualifyingRate * 100) / 100;
+}
+
+function buildDecisionExplanation(
+  mortgageInput: MortgageInputContext,
+  marketRatePct: number,
+  calculation: ReturnType<typeof calcRefinanceScenario>,
+  notQualifiedReasons: string[],
+) {
+  const triggerRatePct = calculateTriggerRate(mortgageInput);
+  const isOpportunity = notQualifiedReasons.length === 0;
+  const topDecisionFactors = isOpportunity
+    ? [
+        `The modeled market benchmark is ${calculation.rateGapPct.toFixed(2)} percentage points below your current rate.`,
+        `Estimated principal-and-interest savings are about $${Math.round(calculation.monthlySavings).toLocaleString()} per month.`,
+        calculation.breakEvenMonths == null
+          ? 'The modeled payment does not recover estimated closing costs through monthly savings.'
+          : `Estimated closing costs are recovered in about ${calculation.breakEvenMonths} months.`,
+      ]
+    : notQualifiedReasons.slice(0, 3);
+  let triggerRateExplanation: string;
+  if (triggerRatePct == null) {
+    triggerRateExplanation =
+      'A rate-only trigger is not currently available because balance, remaining term, or modeled savings would still miss an opportunity gate.';
+  } else if (isOpportunity && marketRatePct > triggerRatePct) {
+    triggerRateExplanation =
+      `The existing window remains open under the stability buffer; a new window would open near ${triggerRatePct.toFixed(2)}% or lower under current assumptions.`;
+  } else if (marketRatePct <= triggerRatePct) {
+    triggerRateExplanation =
+      `The current benchmark is at or below the approximate ${triggerRatePct.toFixed(2)}% monitoring threshold.`;
+  } else {
+    triggerRateExplanation =
+      `The 30-year benchmark would need to reach approximately ${triggerRatePct.toFixed(2)}% or lower under current assumptions.`;
+  }
+
+  return { triggerRatePct, triggerRateExplanation, topDecisionFactors };
+}
+
 // ─── Radar Summary Text ───────────────────────────────────────────────────────
 
 /**
@@ -133,22 +271,14 @@ export class RefinanceRadarEngine {
         radarState: RefinanceRadarState.CLOSED,
         confidenceLevel: null,
         notQualifiedReasons: ['No market rate data available. Ingest a rate snapshot first.'],
+        triggerRatePct: calculateTriggerRate(mortgageInput),
+        triggerRateExplanation: 'Current market data is unavailable, so the monitoring threshold cannot be compared.',
+        topDecisionFactors: ['No current market rate is available for comparison.'],
       };
       return { ...empty, summary: empty.notQualifiedReasons[0], latestSnapshotId: null };
     }
 
     const marketRatePct = latestSnapshot.rate30yr;
-
-    const calcResult = calcRefinanceScenario({
-      loanBalance: mortgageInput.loanBalance,
-      currentRatePct: mortgageInput.currentRatePct,
-      remainingTermMonths: mortgageInput.remainingTermMonths,
-      currentMonthlyPayment: mortgageInput.currentMonthlyPayment,
-      targetRatePct: marketRatePct,
-      targetTermMonths: 360, // 30-year refinance as radar benchmark
-    });
-
-    const notQualifiedReasons: string[] = [];
 
     // ── Hysteresis: apply lower close threshold if window is currently OPEN ──
     // This prevents the radar from toggling rapidly when rates hover near the threshold.
@@ -156,41 +286,8 @@ export class RefinanceRadarEngine {
       currentRadarState === RefinanceRadarState.OPEN
         ? REFINANCE_THRESHOLDS.CLOSE_RATE_GAP_PCT
         : REFINANCE_THRESHOLDS.MIN_RATE_GAP_PCT;
-
-    if (calcResult.rateGapPct < rateGapThreshold) {
-      notQualifiedReasons.push(
-        `Rate gap (${calcResult.rateGapPct.toFixed(2)}%) is below the minimum threshold.`,
-      );
-    }
-
-    if (mortgageInput.remainingTermMonths < REFINANCE_THRESHOLDS.MIN_REMAINING_TERM_MONTHS) {
-      notQualifiedReasons.push(
-        `Remaining term (${mortgageInput.remainingTermMonths} months) is too short for refinancing to make sense.`,
-      );
-    }
-    if (mortgageInput.loanBalance < REFINANCE_THRESHOLDS.MIN_LOAN_BALANCE_USD) {
-      notQualifiedReasons.push(
-        `Loan balance ($${mortgageInput.loanBalance.toLocaleString()}) is below the minimum for a meaningful refinance.`,
-      );
-    }
-    if (calcResult.monthlySavings < REFINANCE_THRESHOLDS.MIN_MONTHLY_SAVINGS_USD) {
-      notQualifiedReasons.push(
-        `Estimated monthly savings ($${Math.round(calcResult.monthlySavings)}) are below the minimum required.`,
-      );
-    }
-    if (calcResult.lifetimeSavings < REFINANCE_THRESHOLDS.MIN_LIFETIME_SAVINGS_USD) {
-      notQualifiedReasons.push(
-        `Projected lifetime savings ($${Math.round(calcResult.lifetimeSavings).toLocaleString()}) are below the minimum required.`,
-      );
-    }
-    if (
-      calcResult.breakEvenMonths !== null &&
-      calcResult.breakEvenMonths > REFINANCE_THRESHOLDS.MAX_BREAK_EVEN_MONTHS_OPPORTUNITY
-    ) {
-      notQualifiedReasons.push(
-        `Break-even period (${calcResult.breakEvenMonths} months) is too long to be practical.`,
-      );
-    }
+    const { calculation: calcResult, notQualifiedReasons } =
+      evaluateScenarioQualification(mortgageInput, marketRatePct, rateGapThreshold);
 
     const isOpportunity = notQualifiedReasons.length === 0;
     const radarState = isOpportunity ? RefinanceRadarState.OPEN : RefinanceRadarState.CLOSED;
@@ -214,6 +311,12 @@ export class RefinanceRadarEngine {
       radarState,
       confidenceLevel,
       notQualifiedReasons,
+      ...buildDecisionExplanation(
+        mortgageInput,
+        marketRatePct,
+        calcResult,
+        notQualifiedReasons,
+      ),
     };
 
     return {

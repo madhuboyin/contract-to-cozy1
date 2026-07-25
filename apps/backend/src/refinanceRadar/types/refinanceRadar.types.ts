@@ -51,6 +51,9 @@ export interface RadarEvaluationResult {
   radarState: RefinanceRadarState;
   confidenceLevel: RefinanceConfidenceLevel | null;
   notQualifiedReasons: string[];
+  triggerRatePct: number | null;
+  triggerRateExplanation: string;
+  topDecisionFactors: string[];
 }
 
 /**
@@ -110,6 +113,9 @@ export interface RadarStatusResponse {
   radarSummary: string;
   missedOpportunitySummary: MissedOpportunityInsight | null;
   notQualifiedReasons: string[];
+  triggerRatePct: number | null;
+  triggerRateExplanation: string;
+  topDecisionFactors: string[];
   disclaimer: string;
   // Phase-3 additive fields
   rateDataFreshnessAt: string | null;   // ISO date of latest rate snapshot
