@@ -17,7 +17,10 @@ const assert = require('node:assert/strict');
 
 require('ts-node/register');
 
-const { processDomainEventsJob } = require('../../src/jobs/processDomainEvents.job.ts');
+const {
+  MAX_DOMAIN_EVENT_ATTEMPTS,
+  processDomainEventsJob,
+} = require('../../src/jobs/processDomainEvents.job.ts');
 
 function eventFixture(overrides = {}) {
   return {
@@ -93,6 +96,48 @@ test('processes a CLAIM_CLOSED event correctly', async () => {
   assert.equal(calls.creates[0].title, 'Claim closed');
 });
 
+for (const [type, transitionType] of [
+  ['REFINANCE_OPPORTUNITY_OPENED', 'OPEN'],
+  ['REFINANCE_OPPORTUNITY_UPDATED', 'UPDATE'],
+  ['REFINANCE_OPPORTUNITY_CLOSED', 'CLOSED'],
+]) {
+  test(`acknowledges a valid ${type} event without creating a notification`, async () => {
+    const { deps, calls } = fakeDeps({
+      pendingEvents: [
+        eventFixture({
+          type,
+          payload: { propertyId: 'property-1', snapshotId: 'snapshot-1', transitionType },
+        }),
+      ],
+    });
+
+    const result = await processDomainEventsJob(undefined, deps);
+
+    assert.equal(result.processed, 1);
+    assert.equal(calls.creates.length, 0);
+    const terminal = calls.updates.find((update) => update.kind === 'terminal');
+    assert.equal(terminal.args.data.status, 'PROCESSED');
+  });
+}
+
+test('a malformed refinance transition is retried as FAILED', async () => {
+  const { deps, calls } = fakeDeps({
+    pendingEvents: [
+      eventFixture({
+        type: 'REFINANCE_OPPORTUNITY_OPENED',
+        payload: { propertyId: 'property-1', snapshotId: 'snapshot-1', transitionType: 'CLOSED' },
+      }),
+    ],
+  });
+
+  const result = await processDomainEventsJob(undefined, deps);
+
+  assert.equal(result.failed, 1);
+  const terminal = calls.updates.find((update) => update.kind === 'terminal');
+  assert.equal(terminal.args.data.status, 'FAILED');
+  assert.match(terminal.args.data.lastError, /transition mismatch/);
+});
+
 test('idempotency: does not create a duplicate notification when one already exists for this domain event', async () => {
   const { deps, calls } = fakeDeps({
     pendingEvents: [eventFixture()],
@@ -159,6 +204,23 @@ test('a FAILED event past its backoff window is retried', async () => {
   const result = await processDomainEventsJob(undefined, deps);
 
   assert.equal(result.processed, 1);
+});
+
+test('moves a repeatedly failing event to DEAD_LETTER after the final attempt', async () => {
+  const { deps, calls } = fakeDeps({
+    pendingEvents: [
+      eventFixture({
+        type: 'SOMETHING_UNKNOWN',
+        attempts: MAX_DOMAIN_EVENT_ATTEMPTS - 1,
+      }),
+    ],
+  });
+
+  const result = await processDomainEventsJob(undefined, deps);
+
+  assert.equal(result.deadLettered, 1);
+  const terminal = calls.updates.find((update) => update.kind === 'terminal');
+  assert.equal(terminal.args.data.status, 'DEAD_LETTER');
 });
 
 test('a lost claim race (another replica already locked it) is skipped without double-processing', async () => {

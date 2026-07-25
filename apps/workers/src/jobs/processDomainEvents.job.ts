@@ -2,8 +2,16 @@ import { prisma } from '../lib/prisma';
 import { NotificationService } from '@worker-shared/services/notification.service';
 import { claimDetailUrl } from '../lib/deepLinks';
 
-type DomainEventStatus = 'PENDING' | 'PROCESSING' | 'PROCESSED' | 'FAILED';
-type DomainEventType = 'CLAIM_SUBMITTED' | 'CLAIM_CLOSED' | 'FOLLOW_UP_DUE';
+type DomainEventStatus = 'PENDING' | 'PROCESSING' | 'PROCESSED' | 'FAILED' | 'DEAD_LETTER';
+type DomainEventType =
+  | 'CLAIM_SUBMITTED'
+  | 'CLAIM_CLOSED'
+  | 'FOLLOW_UP_DUE'
+  | 'REFINANCE_OPPORTUNITY_OPENED'
+  | 'REFINANCE_OPPORTUNITY_UPDATED'
+  | 'REFINANCE_OPPORTUNITY_CLOSED';
+
+export const MAX_DOMAIN_EVENT_ATTEMPTS = 8;
 
 // W4 item 1: small, job-scoped dependency interface (see
 // reserveFundBalanceReminder.job.ts for the pattern).
@@ -177,6 +185,25 @@ async function handleClaimClosed(ev: any, deps: ProcessDomainEventsDeps) {
   }, deps);
 }
 
+function handleRefinanceTransition(ev: any, expectedTransition: 'OPEN' | 'UPDATE' | 'CLOSED') {
+  const propertyId = ev.propertyId ?? ev.payload?.propertyId;
+  const snapshotId = ev.payload?.snapshotId;
+  const transitionType = ev.payload?.transitionType;
+
+  mustHave(propertyId, 'Refinance DomainEvent missing propertyId');
+  mustHave(snapshotId, 'Refinance DomainEvent payload missing snapshotId');
+  if (transitionType !== expectedTransition) {
+    throw new Error(
+      `Refinance DomainEvent transition mismatch: expected ${expectedTransition}, received ${safeString(transitionType) || 'missing'}`,
+    );
+  }
+
+  // Radar state and the outbox row are persisted in the same transaction.
+  // Home and Gazette already project from that canonical current-state row,
+  // so the first consumer only needs to durably acknowledge the transition.
+  // Notification policy can be added here later without changing producers.
+}
+
 /**
  * Poll + process a batch of DomainEvent rows.
  * Safe for multiple replicas via PROCESSING "lock".
@@ -199,6 +226,8 @@ export async function processDomainEventsJob(
   if (pending.length === 0) return { processed: 0 };
 
   let processed = 0;
+  let failed = 0;
+  let deadLettered = 0;
 
   for (const ev of pending) {
     if (ev.status === 'FAILED') {
@@ -228,6 +257,15 @@ export async function processDomainEventsJob(
         case 'CLAIM_CLOSED':
           await handleClaimClosed(ev, deps);
           break;
+        case 'REFINANCE_OPPORTUNITY_OPENED':
+          handleRefinanceTransition(ev, 'OPEN');
+          break;
+        case 'REFINANCE_OPPORTUNITY_UPDATED':
+          handleRefinanceTransition(ev, 'UPDATE');
+          break;
+        case 'REFINANCE_OPPORTUNITY_CLOSED':
+          handleRefinanceTransition(ev, 'CLOSED');
+          break;
         default:
           throw new Error(`Unhandled DomainEvent type: ${type}`);
       }
@@ -244,15 +282,20 @@ export async function processDomainEventsJob(
       processed += 1;
     } catch (err: any) {
       const msg = err?.message ? String(err.message) : 'Unknown error';
+      const nextAttempts = (ev.attempts ?? 0) + 1;
+      const terminalStatus: DomainEventStatus =
+        nextAttempts >= MAX_DOMAIN_EVENT_ATTEMPTS ? 'DEAD_LETTER' : 'FAILED';
       await prisma.domainEvent.update({
         where: { id: ev.id },
         data: {
-          status: 'FAILED' as DomainEventStatus,
+          status: terminalStatus,
           lastError: msg.slice(0, 2000),
         },
       });
+      if (terminalStatus === 'DEAD_LETTER') deadLettered += 1;
+      else failed += 1;
     }
   }
 
-  return { processed };
+  return { processed, failed, deadLettered };
 }

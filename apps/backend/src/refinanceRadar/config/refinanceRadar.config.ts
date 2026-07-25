@@ -79,6 +79,14 @@ export const RATE_TREND_LOOKBACK_SNAPSHOTS = 12;
  */
 export const DATA_REQUIRED_MIN_RATE_DECLINE_PCT = 0.25;
 
+/** Materiality gates for emitting UPDATE while an opportunity remains OPEN. */
+export const REFINANCE_UPDATE_THRESHOLDS = {
+  MONTHLY_SAVINGS_USD: 50,
+  MONTHLY_SAVINGS_RATIO: 0.1,
+  BREAK_EVEN_MONTHS: 6,
+  MARKET_RATE_PCT: 0.125,
+} as const;
+
 export function shouldPromptForMissingMortgageDetails(input: {
   missingFieldCount: number;
   trend: 'RISING' | 'FALLING' | 'STABLE' | 'UNKNOWN';

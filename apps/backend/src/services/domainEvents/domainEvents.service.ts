@@ -2,7 +2,13 @@
 import { prisma } from '../../lib/prisma';
 
 export type EmitDomainEventInput = {
-  type: 'CLAIM_SUBMITTED' | 'CLAIM_CLOSED' | 'FOLLOW_UP_DUE';
+  type:
+    | 'CLAIM_SUBMITTED'
+    | 'CLAIM_CLOSED'
+    | 'FOLLOW_UP_DUE'
+    | 'REFINANCE_OPPORTUNITY_OPENED'
+    | 'REFINANCE_OPPORTUNITY_UPDATED'
+    | 'REFINANCE_OPPORTUNITY_CLOSED';
   propertyId?: string | null;
   userId?: string | null;
   idempotencyKey?: string | null;

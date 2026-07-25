@@ -14,9 +14,10 @@ export function startDomainEventsPoller(opts?: StartOpts) {
   const runOnce = async () => {
     try {
       const res = await processDomainEventsJob({ batchSize });
-      if (res.processed > 0) {
-        // keep logs minimal
-        logger.info(`[domain-events] processed=${res.processed}`);
+      if (res.processed > 0 || (res.failed ?? 0) > 0 || (res.deadLettered ?? 0) > 0) {
+        logger.info(
+          `[domain-events] processed=${res.processed} failed=${res.failed ?? 0} deadLettered=${res.deadLettered ?? 0}`,
+        );
       }
     } catch (e: any) {
       logger.error({ err: e }, '[domain-events] error');

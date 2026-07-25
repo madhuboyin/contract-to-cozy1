@@ -34,6 +34,10 @@ import {
 import { IngestSnapshotInput } from './engine/mortgageRate.service';
 import { MortgageRateSnapshotDTO } from './types/refinanceRadar.types';
 import { DEFAULT_CLOSING_COST_PCT } from './config/refinanceRadar.config';
+import {
+  buildRefinanceTransitionOutboxEvent,
+  detectRefinanceTransition,
+} from './refinanceRadarTransition';
 
 // ─── Phase-3: Loan product spread modeling ───────────────────────────────────
 // These spreads are historical median differentials off the 30yr conventional
@@ -189,89 +193,134 @@ export class RefinanceRadarService {
     propertyContextVersion: string,
   ): Promise<void> {
     const now = new Date();
-
-    // Normalize evaluation date to midnight UTC
     const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
 
-    const currentState = await prisma.propertyRefinanceRadarState.findUnique({
-      where: { propertyId },
-    });
-
-    const previousRadarState: RefinanceRadarState | null = currentState?.radarState ?? null;
-    const isTransitionToOpen =
-      evalResult.radarState === RefinanceRadarState.OPEN &&
-      previousRadarState !== RefinanceRadarState.OPEN;
-    const isTransitionToClose =
-      evalResult.radarState === RefinanceRadarState.CLOSED &&
-      previousRadarState === RefinanceRadarState.OPEN;
-
-    // Create opportunity record only when:
-    // - transitioning to OPEN (new window opened), or
-    // - already OPEN and a new day (preserves historical trail, avoids same-day dupes)
-    let newOpportunityId: string | null = null;
-
-    if (evalResult.isOpportunity) {
-      // Check for same-day record to avoid noisy duplicate creation
-      const existingTodayOpportunity = await prisma.refinanceOpportunity.findFirst({
-        where: {
-          propertyId,
-          evaluationDate: today,
-          radarState: RefinanceRadarState.OPEN,
-        },
-        select: { id: true },
+    await prisma.$transaction(async (tx) => {
+      const currentState = await tx.propertyRefinanceRadarState.findUnique({
+        where: { propertyId },
+        include: { currentOpportunity: true },
       });
+      const previousRadarState: RefinanceRadarState | null =
+        currentState?.radarState ?? null;
+      const isTransitionToOpen =
+        evalResult.radarState === RefinanceRadarState.OPEN &&
+        previousRadarState !== RefinanceRadarState.OPEN;
+      const isTransitionToClose =
+        evalResult.radarState === RefinanceRadarState.CLOSED &&
+        previousRadarState === RefinanceRadarState.OPEN;
 
-      if (!existingTodayOpportunity) {
-        const created = await prisma.refinanceOpportunity.create({
-          data: {
+      let newOpportunityId: string | null = null;
+
+      if (evalResult.isOpportunity) {
+        const opportunityData = {
+          currentRate: evalResult.currentRatePct,
+          marketRate: evalResult.marketRatePct,
+          rateGap: evalResult.rateGapPct,
+          loanBalance: evalResult.loanBalance,
+          monthlySavings: evalResult.monthlySavings,
+          breakEvenMonths: evalResult.breakEvenMonths ?? 0,
+          lifetimeSavings: evalResult.lifetimeSavings,
+          confidenceLevel: evalResult.confidenceLevel as RefinanceConfidenceLevel,
+          radarState: RefinanceRadarState.OPEN,
+          closingCostAssumption: evalResult.effectiveClosingCostUsd,
+          remainingTermMonths: evalResult.remainingTermMonths,
+          metadataJson: { propertyContextVersion },
+        };
+        const existingTodayOpportunity = await tx.refinanceOpportunity.findFirst({
+          where: {
             propertyId,
-            currentRate: evalResult.currentRatePct,
-            marketRate: evalResult.marketRatePct,
-            rateGap: evalResult.rateGapPct,
-            loanBalance: evalResult.loanBalance,
-            monthlySavings: evalResult.monthlySavings,
-            breakEvenMonths: evalResult.breakEvenMonths ?? 0,
-            lifetimeSavings: evalResult.lifetimeSavings,
-            confidenceLevel: evalResult.confidenceLevel as RefinanceConfidenceLevel,
-            radarState: RefinanceRadarState.OPEN,
             evaluationDate: today,
-            triggerDate: isTransitionToOpen ? now : undefined,
-            closingCostAssumption: evalResult.effectiveClosingCostUsd,
-            remainingTermMonths: evalResult.remainingTermMonths,
-            metadataJson: { propertyContextVersion },
+            radarState: RefinanceRadarState.OPEN,
           },
           select: { id: true },
         });
-        newOpportunityId = created.id;
-      } else {
-        newOpportunityId = existingTodayOpportunity.id;
-        await prisma.refinanceOpportunity.update({
-          where: { id: existingTodayOpportunity.id },
-          data: { metadataJson: { propertyContextVersion } },
+
+        if (!existingTodayOpportunity) {
+          const created = await tx.refinanceOpportunity.create({
+            data: {
+              propertyId,
+              ...opportunityData,
+              evaluationDate: today,
+              triggerDate: isTransitionToOpen ? now : undefined,
+            },
+            select: { id: true },
+          });
+          newOpportunityId = created.id;
+        } else {
+          newOpportunityId = existingTodayOpportunity.id;
+          await tx.refinanceOpportunity.update({
+            where: { id: existingTodayOpportunity.id },
+            data: opportunityData,
+          });
+        }
+      }
+
+      const currentOpportunityId = evalResult.isOpportunity
+        ? (newOpportunityId ?? currentState?.currentOpportunityId ?? null)
+        : null;
+      const radarStateUpdate = {
+        radarState: evalResult.radarState,
+        lastEvaluatedAt: now,
+        lastRateSnapshotId: latestSnapshotId,
+        propertyContextVersion,
+        currentOpportunityId,
+        ...(isTransitionToOpen && { lastOpenedAt: now }),
+        ...(isTransitionToClose && { lastClosedAt: now }),
+      };
+
+      await tx.propertyRefinanceRadarState.upsert({
+        where: { propertyId },
+        create: {
+          propertyId,
+          ...radarStateUpdate,
+        },
+        update: radarStateUpdate,
+      });
+
+      const transition = detectRefinanceTransition({
+        previousState: previousRadarState,
+        nextState: evalResult.radarState,
+        previousOpportunity: currentState?.currentOpportunity
+          ? {
+              monthlySavings: currentState.currentOpportunity.monthlySavings.toNumber(),
+              breakEvenMonths: currentState.currentOpportunity.breakEvenMonths,
+              marketRatePct: currentState.currentOpportunity.marketRate,
+              confidenceLevel: currentState.currentOpportunity.confidenceLevel,
+            }
+          : null,
+        nextOpportunity: evalResult.isOpportunity
+          ? {
+              monthlySavings: evalResult.monthlySavings,
+              breakEvenMonths: evalResult.breakEvenMonths,
+              marketRatePct: evalResult.marketRatePct,
+              confidenceLevel: evalResult.confidenceLevel,
+            }
+          : null,
+      });
+
+      // The market snapshot is the stable event-generation boundary. Without
+      // one there is no durable observation to key an outbox event against.
+      if (transition && latestSnapshotId) {
+        const outboxEvent = buildRefinanceTransitionOutboxEvent({
+          propertyId,
+          snapshotId: latestSnapshotId,
+          opportunityId:
+            currentOpportunityId ?? currentState?.currentOpportunityId ?? null,
+          transition,
+          occurredAt: now,
+        });
+        await tx.domainEvent.upsert({
+          where: { idempotencyKey: outboxEvent.idempotencyKey },
+          update: {},
+          create: {
+            type: outboxEvent.type as any,
+            status: 'PENDING',
+            propertyId,
+            idempotencyKey: outboxEvent.idempotencyKey,
+            payload: outboxEvent.payload,
+          },
         });
       }
-    }
-
-    // Upsert the current radar state
-    const radarStateUpdate = {
-      radarState: evalResult.radarState,
-      lastEvaluatedAt: now,
-      lastRateSnapshotId: latestSnapshotId,
-      propertyContextVersion,
-      currentOpportunityId: evalResult.isOpportunity
-        ? (newOpportunityId ?? currentState?.currentOpportunityId ?? null)
-        : null,
-      ...(isTransitionToOpen && { lastOpenedAt: now }),
-      ...(isTransitionToClose && { lastClosedAt: now }),
-    };
-
-    await prisma.propertyRefinanceRadarState.upsert({
-      where: { propertyId },
-      create: {
-        propertyId,
-        ...radarStateUpdate,
-      },
-      update: radarStateUpdate,
     });
   }
 

@@ -22,8 +22,14 @@ weekly observations and renders a personalized one-year rate chart with
 30-/15-year and 3-month/1-year controls, a current-note-rate benchmark,
 freshness/source details, keyboard-accessible data points, and a table
 fallback—including beneath an incomplete-mortgage setup state. Outbox-backed
-transition delivery and durable per-property leases/dead-letter handling
-remain next steps.
+OPEN, material UPDATE, and CLOSED transitions are now written atomically with
+the current radar state and opportunity record, using a stable
+property/snapshot/transition idempotency key. The shared domain-event worker
+acknowledges these events with its existing multi-worker claim, exponential
+backoff, and failure isolation behavior; events that fail eight attempts now
+move to a terminal dead-letter state with run-level observability. Durable
+per-property evaluation leases, notification policy, and chart transition
+markers remain next steps.
 
 ## Executive recommendation
 
