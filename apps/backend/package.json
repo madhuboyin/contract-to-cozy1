@@ -22,6 +22,7 @@
     "smoke:health-score-ui": "node scripts/healthScoreUiSmokeCheck.js",
     "acceptance:phase8": "node scripts/phase8-runtime-acceptance.js",
     "smoke:capability-discovery": "ts-node scripts/capability-discovery-smoke.ts",
+    "drill:capability-kill-switches": "ts-node scripts/capability-kill-switch-drill.ts",
     "acceptance:phase3": "node --test tests/integration/phase3VerifiedClosure.db.test.js",
     "acceptance:phase6": "node --test tests/integration/phase6NewHomeControlledPilot.db.test.js",
     "lint:ssrf": "node scripts/check-ssrf-guards.js",

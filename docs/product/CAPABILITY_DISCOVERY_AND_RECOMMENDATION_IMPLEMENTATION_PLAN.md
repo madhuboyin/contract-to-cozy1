@@ -114,6 +114,7 @@ Status as of July 25, 2026:
 | CAP-904 authenticated representative-property smoke | Complete | Read-only smoke runner validates at least three named properties, catalog and HOME/PROPERTY suggestion contracts, canonical registry/manifest parity, expected and forbidden outcomes, cache isolation, launch context, and an unauthorized-property probe |
 | CAP-905 supported-browser and mobile-PWA actual-view gate | Complete | Production-build Playwright acceptance validates viewport-qualified lifecycle payloads, no unseen bulk impressions, session deduplication, search behavior, manifest integrity, and standalone mobile behavior across Chromium, Firefox, WebKit, mobile Chrome, and mobile Safari |
 | CAP-906 real-user analytics population gate | Complete | Canonical lifecycle audience metadata and one shared repository predicate exclude synthetic QA from every funnel projection while Admin Analytics reports included and excluded population counts |
+| CAP-907 registry-wide kill-switch drill | Complete | Read-only launch drill exercises individual containment for every canonical capability, global discovery shutdown, catalog suppression, isolation, and restoration; registry iteration automatically includes future tools |
 
 Explore Tools and homeowner command search now use the canonical catalog by default. Set
 `CAPABILITY_CATALOG_SOURCE=legacy` only for the temporary internal-beta rollback.
@@ -1992,6 +1993,43 @@ The authenticated smoke runner continues to suppress eligibility writes, and
 the browser acceptance build continues to divert lifecycle payloads to its
 in-page sink. CAP-906 is a defensive reporting boundary for any other
 controlled QA that deliberately persists lifecycle events.
+
+No database schema, seed, SQL, or migration change is required for this slice.
+
+### CAP-907: Registry-wide kill-switch drill
+
+Implemented a deterministic, read-only drill over the canonical availability
+and catalog boundaries:
+
+- the baseline pins the current registry and every manifest, enables
+  real-user release-gate enforcement, and must report launch-ready
+  configuration before the drill can pass;
+- every canonical capability is placed in
+  `TOOL_DISCOVERY_DISABLED_IDS` individually and must resolve as
+  `CAPABILITY_DISABLED`, disappear from the workflow-inclusive catalog, and
+  leave every other capability decision unchanged;
+- `TOOL_DISCOVERY_ENABLED=false` must resolve every capability as
+  `DISCOVERY_DISABLED` and produce an empty catalog;
+- restoring the baseline must reproduce the exact availability decisions and
+  catalog projection; and
+- the machine-readable report records registry version, check time, all
+  per-capability results, global suppression, and restoration evidence.
+
+The drill iterates `canonicalCapabilityRegistry.capabilities`; it contains no
+reviewed subset or hard-coded tool count in the implementation. The unit gate
+runs with the complete backend suite, so adding a capability without rollout
+parity or inherited kill-switch behavior fails CI automatically.
+
+Run it with:
+
+```bash
+npm -C apps/backend run drill:capability-kill-switches
+```
+
+This repository drill does not mutate deployment configuration. An authorized
+operator must still preserve the JSON report and perform the controlled
+deployed ConfigMap/restart/API verification in the platform runbook before
+real-user launch.
 
 No database schema, seed, SQL, or migration change is required for this slice.
 

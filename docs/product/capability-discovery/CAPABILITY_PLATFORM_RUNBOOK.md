@@ -366,6 +366,57 @@ node --test \
   tests/unit/adminToolLifecycleMetrics.test.js
 ```
 
+## 5.6 Per-capability and global kill-switch drill
+
+Run the read-only registry-wide drill against the exact artifact intended for
+deployment:
+
+```bash
+npm -C apps/backend run drill:capability-kill-switches \
+  > capability-kill-switch-drill.json
+```
+
+The command exits non-zero unless:
+
+- release-mode configuration, registry/manifest pins, and rollout-key parity
+  are launch-ready;
+- every current canonical capability resolves as `CAPABILITY_DISABLED` when it
+  is the sole disabled ID;
+- the selected capability disappears from the workflow-inclusive catalog
+  without changing any other capability decision;
+- global disable resolves every capability as `DISCOVERY_DISABLED` and leaves
+  the catalog empty; and
+- restoring the baseline reproduces the original decisions and catalog.
+
+Review `capabilityCount`, every `perCapability[].passed`, `global.passed`,
+`restoration.passed`, and the top-level `passed`. Preserve the JSON with the
+artifact digest. Because the drill reads the canonical registry, future tools
+inherit it without being added to a separate checklist.
+
+Before real-user launch, an authorized operator must also perform one
+controlled deployed exercise during a maintenance window:
+
+1. Record the existing complete containment values and baseline authenticated
+   catalog, suggestion, Home Action, availability, and Admin Release Gates
+   responses.
+2. Add one reviewed low-consequence capability to the complete
+   `TOOL_DISCOVERY_DISABLED_IDS` list, restart the API, and verify that only
+   that capability is absent from catalog and suggestions while Home Actions
+   continue.
+3. Restore the exact prior disabled list, restart, and verify the baseline
+   projection returns.
+4. Set `TOOL_DISCOVERY_ENABLED=false`, restart, and verify the authenticated
+   catalog and capability suggestions are empty, availability reports
+   `DISCOVERY_DISABLED`, and canonical Home Actions continue.
+5. Restore the exact prior global value, restart, and verify catalog,
+   suggestions, and Admin Release Gates return to baseline.
+
+Do not let the repository drill patch Kubernetes, and do not run the deployed
+exercise without change authority. Preserve existing incident entries in every
+comma-separated list. A timeout, partial restart, unexpected Home Action
+change, isolation failure, or incomplete restoration fails the launch gate and
+requires containment under the incident playbook.
+
 ## 6. Incident playbooks
 
 ### 6.1 Broken destination
