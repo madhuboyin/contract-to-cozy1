@@ -48,6 +48,10 @@ import {
   mapRefinanceTransitionDomainEvent,
 } from './refinanceRadarTransition';
 import { buildRefinanceFreshness } from './refinanceFreshness';
+import {
+  buildRefinanceEligibilityContext,
+  type RefinanceEligibilityContext,
+} from './refinanceEligibilityContext';
 
 // ─── Phase-3: Loan product spread modeling ───────────────────────────────────
 // These spreads are historical median differentials off the 30yr conventional
@@ -193,6 +197,47 @@ export class RefinanceRadarService {
         priorRatePct: trendSummary.prior30yr,
       }),
     };
+  }
+
+  private async getEligibilityContext(
+    propertyId: string,
+  ): Promise<RefinanceEligibilityContext> {
+    const property = await prisma.property.findUnique({
+      where: { id: propertyId },
+      select: {
+        lastAppraisedValue: true,
+        lastAppraisalDate: true,
+        financingProfile: {
+          select: {
+            currentMortgageBalanceCents: true,
+            purchasePriceCents: true,
+            hasSecondMortgage: true,
+            secondMortgageBalanceCents: true,
+            hasPMI: true,
+          },
+        },
+      },
+    });
+    const profile = property?.financingProfile;
+    return buildRefinanceEligibilityContext({
+      currentMortgageBalanceUsd:
+        (profile?.currentMortgageBalanceCents ?? 0) / 100,
+      appraisedValueUsd:
+        property?.lastAppraisedValue == null
+          ? null
+          : property.lastAppraisedValue / 100,
+      appraisalDate: property?.lastAppraisalDate?.toISOString() ?? null,
+      purchasePriceUsd:
+        profile?.purchasePriceCents == null
+          ? null
+          : profile.purchasePriceCents / 100,
+      hasSecondMortgage: profile?.hasSecondMortgage ?? false,
+      secondMortgageBalanceUsd:
+        profile?.secondMortgageBalanceCents == null
+          ? null
+          : profile.secondMortgageBalanceCents / 100,
+      hasMortgageInsurance: profile?.hasPMI ?? false,
+    });
   }
 
   // ── Radar State Persistence ───────────────────────────────────────────────────
@@ -370,9 +415,10 @@ export class RefinanceRadarService {
     await this.persistEvaluationResult(propertyId, evalResult, evalResult.latestSnapshotId, propertyContextVersion);
 
     // Load trend and missed opportunity in parallel
-    const [recentSnapshots, missedOpportunity] = await Promise.all([
+    const [recentSnapshots, missedOpportunity, eligibilityContext] = await Promise.all([
       this.rateService.getRecentSnapshots(RATE_TREND_LOOKBACK_SNAPSHOTS),
       this.engine.evaluateMissedOpportunity(mortgageContext),
+      this.getEligibilityContext(propertyId),
     ]);
     const trendSummary = this.rateService.computeTrendSummary(recentSnapshots);
 
@@ -419,6 +465,7 @@ export class RefinanceRadarService {
       rateDataFreshnessAt: latestSnapshot?.date ?? null,
       loanProducts,
       propertyContextVersion,
+      eligibilityContext,
     };
   }
 
@@ -443,10 +490,11 @@ export class RefinanceRadarService {
       return this.evaluateProperty(propertyId, propertyContextVersion);
     }
 
-    const [recentSnapshots, missedOpportunity, currentExplanation] = await Promise.all([
+    const [recentSnapshots, missedOpportunity, currentExplanation, eligibilityContext] = await Promise.all([
       this.rateService.getRecentSnapshots(RATE_TREND_LOOKBACK_SNAPSHOTS),
       this.engine.evaluateMissedOpportunity(mortgageContext),
       this.engine.evaluate(mortgageContext, radarState.radarState),
+      this.getEligibilityContext(propertyId),
     ]);
     const trendSummary = this.rateService.computeTrendSummary(recentSnapshots);
 
@@ -501,6 +549,7 @@ export class RefinanceRadarService {
       loanProducts,
       propertyContextVersion:
         readContextVersion(opp?.metadataJson) ?? radarState.propertyContextVersion,
+      eligibilityContext,
     };
   }
 

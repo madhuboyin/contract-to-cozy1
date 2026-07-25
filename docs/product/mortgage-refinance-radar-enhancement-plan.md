@@ -76,6 +76,14 @@ the current versus refinanced payoff date. Saved scenarios retain this detail
 in the existing metadata JSON, so no database schema change or migration is
 required. APR remains clearly labeled as an educational estimate rather than a
 lender disclosure.
+The next eligibility-context slice now reuses canonical Property and Financing
+facts to show first-lien LTV, combined LTV, estimated equity, second liens, and
+recorded mortgage insurance. A dated appraisal is preferred; purchase price is
+used only as an explicitly low-confidence fallback. If a second lien is known
+but its balance is missing, combined LTV and equity fail closed instead of
+assuming zero. Stale or missing values link back to the existing Property or
+Financing records for correction. These signals remain planning context—not an
+approval, appraisal, or program-eligibility claim—and require no schema change.
 
 ## Executive recommendation
 

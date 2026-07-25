@@ -57,6 +57,29 @@ export type RadarStatusAvailable = {
   marketDataSource?: string | null;
   alertReadiness?: 'READY' | 'REVIEW_MORTGAGE_DATA' | 'WAITING_FOR_MARKET_DATA';
   freshnessWarnings?: string[];
+  eligibilityContext?: {
+    valueSource: 'APPRAISED_VALUE' | 'PURCHASE_PRICE_FALLBACK' | 'UNKNOWN';
+    valueConfidence: 'HIGH' | 'MEDIUM' | 'LOW' | 'UNKNOWN';
+    estimatedPropertyValueUsd: number | null;
+    propertyValueAsOf: string | null;
+    firstLienLtvPct: number | null;
+    combinedLtvPct: number | null;
+    estimatedEquityUsd: number | null;
+    leverageBand:
+      | 'LOWER_LEVERAGE'
+      | 'HIGHER_LEVERAGE'
+      | 'VERY_HIGH_LEVERAGE'
+      | 'UNKNOWN';
+    hasSecondMortgage: boolean;
+    secondMortgageBalanceUsd: number | null;
+    hasMortgageInsurance: boolean;
+    warnings: string[];
+    followUpActions: Array<
+      | 'UPDATE_PROPERTY_VALUE'
+      | 'CONFIRM_SECOND_LIEN_BALANCE'
+      | 'REVIEW_MORTGAGE_INSURANCE'
+    >;
+  };
   disclaimer: string;
 };
 

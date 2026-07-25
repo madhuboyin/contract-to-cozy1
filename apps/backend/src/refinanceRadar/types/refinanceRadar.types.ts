@@ -5,6 +5,7 @@
 
 import { RefinanceConfidenceLevel, RefinanceRadarState, RefinanceScenarioTerm } from '@prisma/client';
 import type { RefinanceFreshnessContract } from '../refinanceFreshness';
+import type { RefinanceEligibilityContext } from '../refinanceEligibilityContext';
 
 // ─── Internal Domain Objects ─────────────────────────────────────────────────
 
@@ -136,6 +137,7 @@ export interface RadarStatusResponse extends RefinanceFreshnessContract {
   rateDataFreshnessAt: string | null;   // ISO date of latest rate snapshot
   loanProducts: LoanProductRate[];       // Modeled rates for multiple loan products
   propertyContextVersion: string | null;
+  eligibilityContext: RefinanceEligibilityContext;
 }
 
 export interface RadarUnavailableResponse {

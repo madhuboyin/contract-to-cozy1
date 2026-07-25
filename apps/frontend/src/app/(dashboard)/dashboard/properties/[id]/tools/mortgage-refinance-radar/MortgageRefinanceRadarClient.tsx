@@ -330,6 +330,134 @@ function KeyMetricsCard({ data }: { data: RadarStatusAvailable }) {
   );
 }
 
+function EligibilityContextCard({
+  data,
+  propertyId,
+}: {
+  data: RadarStatusAvailable;
+  propertyId: string;
+}) {
+  const context = data.eligibilityContext;
+  if (!context) return null;
+  const valueSourceLabel = {
+    APPRAISED_VALUE: 'Recorded appraisal',
+    PURCHASE_PRICE_FALLBACK: 'Purchase-price fallback',
+    UNKNOWN: 'Value not recorded',
+  }[context.valueSource];
+  const leverageLabel = {
+    LOWER_LEVERAGE: 'At or below 80% combined LTV',
+    HIGHER_LEVERAGE: 'Above 80% combined LTV',
+    VERY_HIGH_LEVERAGE: 'Above 95% combined LTV',
+    UNKNOWN: 'Combined LTV unavailable',
+  }[context.leverageBand];
+  const needsValue =
+    context.followUpActions.includes('UPDATE_PROPERTY_VALUE');
+  const needsFinancing =
+    context.followUpActions.includes('CONFIRM_SECOND_LIEN_BALANCE') ||
+    context.followUpActions.includes('REVIEW_MORTGAGE_INSURANCE');
+
+  return (
+    <GlassCard>
+      <div className="p-5 sm:p-6">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="h-4 w-4 text-indigo-500" />
+              <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                Equity and loan context
+              </h3>
+            </div>
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+              Planning context only—not a lender qualification or appraisal.
+            </p>
+          </div>
+          <span className="rounded-full border border-slate-200/80 bg-white/70 px-2.5 py-1 text-xs font-medium text-slate-600 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-300">
+            {context.valueConfidence.toLowerCase()} value confidence
+          </span>
+        </div>
+
+        <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <KpiTile
+            label="Property value"
+            value={usd(context.estimatedPropertyValueUsd)}
+            sub={`${valueSourceLabel}${context.propertyValueAsOf ? ` · ${freshnessDate(context.propertyValueAsOf)}` : ''}`}
+          />
+          <KpiTile
+            label="First-lien LTV"
+            value={context.firstLienLtvPct == null ? '—' : pct(context.firstLienLtvPct, 1)}
+            sub="mortgage ÷ value"
+          />
+          <KpiTile
+            label="Combined LTV"
+            value={context.combinedLtvPct == null ? '—' : pct(context.combinedLtvPct, 1)}
+            sub={leverageLabel}
+            highlight={
+              context.leverageBand === 'VERY_HIGH_LEVERAGE'
+                ? 'red'
+                : context.leverageBand === 'LOWER_LEVERAGE'
+                  ? 'green'
+                  : undefined
+            }
+          />
+          <KpiTile
+            label="Estimated equity"
+            value={usd(context.estimatedEquityUsd)}
+            sub={context.combinedLtvPct == null ? 'Needs complete lien data' : 'value minus recorded liens'}
+          />
+        </div>
+
+        <div className="mt-4 flex flex-wrap gap-2 text-xs">
+          <span className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+            Second mortgage: {context.hasSecondMortgage
+              ? context.secondMortgageBalanceUsd == null
+                ? 'balance needed'
+                : usd(context.secondMortgageBalanceUsd)
+              : 'none recorded'}
+          </span>
+          <span className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+            Mortgage insurance: {context.hasMortgageInsurance ? 'recorded' : 'not recorded'}
+          </span>
+        </div>
+
+        {context.warnings.length > 0 && (
+          <ul className="mt-4 space-y-2">
+            {context.warnings.map((warning) => (
+              <li
+                key={warning}
+                className="flex gap-2 text-xs leading-relaxed text-amber-800 dark:text-amber-300"
+              >
+                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                <span>{warning}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {(needsValue || needsFinancing) && (
+          <div className="mt-4 flex flex-wrap gap-2">
+            {needsValue && (
+              <Link
+                href={`/dashboard/properties/${propertyId}/edit`}
+                className="inline-flex min-h-[36px] items-center rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+              >
+                Update property value
+              </Link>
+            )}
+            {needsFinancing && (
+              <Link
+                href={`/dashboard/properties/${propertyId}/tools/financing/profile`}
+                className="inline-flex min-h-[36px] items-center rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+              >
+                Review mortgage details
+              </Link>
+            )}
+          </div>
+        )}
+      </div>
+    </GlassCard>
+  );
+}
+
 function FreshnessBadge({
   state,
 }: {
@@ -1538,13 +1666,16 @@ export default function MortgageRefinanceRadarClient() {
             <DataFreshnessCard data={available} propertyId={propertyId} />
           )}
 
-          {/* 4. Alert preferences */}
+          {/* 4. Equity, lien, and mortgage-insurance context */}
+          <EligibilityContextCard data={available} propertyId={propertyId} />
+
+          {/* 5. Alert preferences */}
           <AlertPreferencesCard
             propertyId={propertyId}
             alertReadiness={available.alertReadiness}
           />
 
-          {/* 5. Scenario planner */}
+          {/* 6. Scenario planner */}
           <ScenarioCalculator propertyId={propertyId} contextData={available} />
 
           {/* 3b. Steps to act — shown when opportunity is open */}
