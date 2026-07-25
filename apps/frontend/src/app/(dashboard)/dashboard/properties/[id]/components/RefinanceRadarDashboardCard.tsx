@@ -48,14 +48,16 @@ export default function RefinanceRadarDashboardCard({
 
   // --- Unavailable state (no mortgage or rate data yet) ---
   if (!data || !data.available) {
+    // Durable DATA_REQUIRED events are projected into the canonical Home
+    // action feed, where snooze, dismissal, cooldown, and no-mortgage controls
+    // are enforced. Keep this card for the property overview only.
+    if (homePromotion) {
+      return null;
+    }
     const shouldPromptForMortgageDetails =
       data?.available === false &&
       data.reason === 'MISSING_MORTGAGE_DATA' &&
       data.shouldPromptForMortgageDetails === true;
-
-    if (homePromotion && !shouldPromptForMortgageDetails) {
-      return null;
-    }
 
     const missingLabels = data?.available === false
       ? data.missingFields?.map((field) => ({

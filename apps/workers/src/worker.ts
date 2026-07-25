@@ -47,6 +47,7 @@ import { ingestNeighborhoodDummyEventsJob } from './jobs/ingestNeighborhoodDummy
 import { runHabitGenerationJob } from './jobs/habitGeneration.job';
 import { ingestMortgageRatesJob } from './jobs/ingestMortgageRates.job';
 import { evaluateRefinanceRadarForSnapshot } from './jobs/evaluateRefinanceRadar.job';
+import { evaluateRefinanceDataRequiredForSnapshot } from './jobs/evaluateRefinanceDataRequired.job';
 import { runGazetteGenerationJob } from './jobs/gazetteGeneration.job';
 import { runWeeklyRetentionReportJob } from './jobs/weeklyRetentionReport.job';
 import { expireGuidanceSignalsJob } from './jobs/expireGuidanceSignals.job';
@@ -270,14 +271,21 @@ const CRON_HANDLERS: Record<string, (opts?: { dryRun?: boolean; propertyId?: str
     const evaluation = result.snapshotId
       ? await evaluateRefinanceRadarForSnapshot(result.snapshotId)
       : null;
+    const dataRequired = result.snapshotId
+      ? await evaluateRefinanceDataRequiredForSnapshot(result.snapshotId)
+      : null;
     // MortgageRateIngestResult isn't WorkerRunResult-shaped (no `examined`)
     // — map it so the admin smoke checklist can still show what happened,
     // without changing the never-fails-the-run leniency this job already had.
     return {
-      examined: 1 + (evaluation?.examined ?? 0),
-      created: result.created ? 1 : 0,
+      examined: 1 + (evaluation?.examined ?? 0) + (dataRequired?.examined ?? 0),
+      created: (result.created ? 1 : 0) + (dataRequired?.created ?? 0),
       refreshed: evaluation?.evaluated ?? 0,
-      skipped: (result.skipped ? 1 : 0) + (evaluation?.skipped ?? 0),
+      skipped:
+        (result.skipped ? 1 : 0) +
+        (evaluation?.skipped ?? 0) +
+        (dataRequired?.skipped ?? 0) +
+        (dataRequired?.cooldownSuppressed ?? 0),
       failed: evaluation?.failed ?? 0,
       reason: result.reason ?? `${result.source} ${result.date ?? ''} 30yr=${result.rate30yr ?? '—'}% 15yr=${result.rate15yr ?? '—'}%`,
       smokeCorrelationId: result.smokeCorrelationId,

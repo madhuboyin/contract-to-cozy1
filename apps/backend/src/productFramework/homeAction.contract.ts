@@ -34,6 +34,7 @@ export const HOME_ACTION_FEEDBACK_CONTROLS = [
   'DISMISS',
   'ALREADY_DONE',
   'NOT_RELEVANT',
+  'NO_MORTGAGE',
   'CORRECT_FACT',
 ] as const;
 

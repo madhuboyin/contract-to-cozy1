@@ -6052,6 +6052,7 @@ enum DomainEventType {
   REFINANCE_OPPORTUNITY_OPENED
   REFINANCE_OPPORTUNITY_UPDATED
   REFINANCE_OPPORTUNITY_CLOSED
+  REFINANCE_DATA_REQUIRED
 }
 
 enum DomainEventStatus {
@@ -12027,6 +12028,12 @@ enum MortgageType {
   OTHER
 }
 
+enum PropertyMortgageStatus {
+  UNKNOWN
+  MORTGAGED
+  NO_MORTGAGE
+}
+
 enum FinancingScenarioStatus {
   DRAFT
   SAVED
@@ -12057,6 +12064,7 @@ model PropertyFinancingProfile {
   id         String @id @default(cuid())
   propertyId String @unique
 
+  mortgageStatus               PropertyMortgageStatus @default(UNKNOWN)
   purchasePriceCents           Int?
   purchaseDate                 DateTime?
   mortgageType                 MortgageType?

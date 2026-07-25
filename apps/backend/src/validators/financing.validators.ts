@@ -2,6 +2,7 @@
 import { z } from 'zod';
 import {
   MortgageType,
+  PropertyMortgageStatus,
   FinancingOptionType,
   FinancingScenarioStatus,
   FinancingEntryPoint,
@@ -9,6 +10,7 @@ import {
 } from '@prisma/client';
 
 export const UpsertFinancingProfileSchema = z.object({
+  mortgageStatus: z.nativeEnum(PropertyMortgageStatus).optional(),
   purchasePriceCents: z.number().int().min(0).optional(),
   purchaseDate: z.string().datetime({ offset: true }).optional(),
   mortgageType: z.nativeEnum(MortgageType).optional(),

@@ -503,6 +503,10 @@ test('canonical lifecycle commands require safe deferment and dismissal inputs',
   assert.equal(HomeActionCommandSchema.safeParse({
     command: 'NOT_RELEVANT', consequenceAcknowledged: true,
   }).success, true);
+  assert.equal(HomeActionCommandSchema.safeParse({ command: 'NO_MORTGAGE' }).success, false);
+  assert.equal(HomeActionCommandSchema.safeParse({
+    command: 'NO_MORTGAGE', consequenceAcknowledged: true,
+  }).success, true);
   assert.equal(HomeActionCommandSchema.safeParse({ command: 'CORRECT_FACT' }).success, true);
 });
 

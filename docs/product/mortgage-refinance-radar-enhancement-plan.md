@@ -34,8 +34,14 @@ ring, and CLOSED a square, with shaded opportunity windows, keyboard labels,
 and equivalent table values. Property/snapshot evaluation work now uses durable
 lease-token claims with expiry recovery, bounded attempts, and dead-letter
 state; rerunning ingestion for an existing snapshot resumes unfinished
-properties instead of waiting for the next weekly observation. Durable
-DATA_REQUIRED actions and notification policy remain next steps.
+properties instead of waiting for the next weekly observation. A separate
+post-ingestion sweep now persists DATA_REQUIRED events for incomplete profiles
+only after a meaningful rate decline, with a 30-day event cooldown. Home
+projects those events through a stable action key so canonical snooze and
+dismissal controls apply, suppresses the action as soon as the profile is
+complete, and lets a homeowner record that the property has no mortgage so
+future radar prompts stop. External-notification policy remains a later,
+explicitly opt-in step.
 
 ## Executive recommendation
 

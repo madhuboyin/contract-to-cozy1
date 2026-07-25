@@ -200,7 +200,7 @@ export function EnvironmentActionCard({
       const response = await api.executeHomeActionCommand(propertyId, action.id, {
         command,
         nextTriggerAt,
-        consequenceAcknowledged: ['DEFER', 'DISMISS', 'NOT_RELEVANT'].includes(command),
+        consequenceAcknowledged: ['DEFER', 'DISMISS', 'NOT_RELEVANT', 'NO_MORTGAGE'].includes(command),
       });
       if (!response.success) throw new Error(response.message || 'Unable to update this action.');
       toast({ title: command === 'COMPLETE' ? 'Preparation marked complete' : 'Weather action updated' });
@@ -408,7 +408,7 @@ export function ActionCard({
       const response = await api.executeHomeActionCommand(propertyId, action.id, {
         command,
         nextTriggerAt,
-        consequenceAcknowledged: ['DEFER', 'DISMISS', 'NOT_RELEVANT'].includes(command),
+        consequenceAcknowledged: ['DEFER', 'DISMISS', 'NOT_RELEVANT', 'NO_MORTGAGE'].includes(command),
       });
       if (!response.success) throw new Error(response.message || 'Unable to update this action.');
       toast({ title: command === 'COMPLETE' ? 'Action completed' : 'Action updated' });
@@ -486,6 +486,11 @@ export function ActionCard({
         {action.feedbackControls.includes('NOT_RELEVANT') && (
           <Button size="sm" variant="ghost" className="rounded-full text-slate-500" disabled={Boolean(pending)} onClick={() => execute('NOT_RELEVANT')}>
             Not relevant
+          </Button>
+        )}
+        {action.feedbackControls.includes('NO_MORTGAGE') && (
+          <Button size="sm" variant="ghost" className="rounded-full text-slate-500" disabled={Boolean(pending)} onClick={() => execute('NO_MORTGAGE')}>
+            I don&apos;t have a mortgage
           </Button>
         )}
         {correctionHref && (

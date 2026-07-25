@@ -9,7 +9,8 @@ type DomainEventType =
   | 'FOLLOW_UP_DUE'
   | 'REFINANCE_OPPORTUNITY_OPENED'
   | 'REFINANCE_OPPORTUNITY_UPDATED'
-  | 'REFINANCE_OPPORTUNITY_CLOSED';
+  | 'REFINANCE_OPPORTUNITY_CLOSED'
+  | 'REFINANCE_DATA_REQUIRED';
 
 export const MAX_DOMAIN_EVENT_ATTEMPTS = 8;
 
@@ -204,6 +205,20 @@ function handleRefinanceTransition(ev: any, expectedTransition: 'OPEN' | 'UPDATE
   // Notification policy can be added here later without changing producers.
 }
 
+function handleRefinanceDataRequired(ev: any) {
+  const propertyId = ev.propertyId ?? ev.payload?.propertyId;
+  const snapshotId = ev.payload?.snapshotId;
+  const missingFields = ev.payload?.missingFields;
+
+  mustHave(propertyId, 'Refinance DATA_REQUIRED event missing propertyId');
+  mustHave(snapshotId, 'Refinance DATA_REQUIRED payload missing snapshotId');
+  if (!Array.isArray(missingFields) || missingFields.length === 0) {
+    throw new Error('Refinance DATA_REQUIRED payload missing missingFields');
+  }
+  // The durable event is projected into the canonical Home action feed.
+  // External delivery remains intentionally disabled.
+}
+
 /**
  * Poll + process a batch of DomainEvent rows.
  * Safe for multiple replicas via PROCESSING "lock".
@@ -265,6 +280,9 @@ export async function processDomainEventsJob(
           break;
         case 'REFINANCE_OPPORTUNITY_CLOSED':
           handleRefinanceTransition(ev, 'CLOSED');
+          break;
+        case 'REFINANCE_DATA_REQUIRED':
+          handleRefinanceDataRequired(ev);
           break;
         default:
           throw new Error(`Unhandled DomainEvent type: ${type}`);

@@ -1,6 +1,11 @@
 // apps/backend/src/services/financing.service.ts
 import { prisma } from '../lib/prisma';
-import { RateConfigType, FinancingScenarioStatus, FinancingEntryPoint } from '@prisma/client';
+import {
+  RateConfigType,
+  FinancingScenarioStatus,
+  FinancingEntryPoint,
+  PropertyMortgageStatus,
+} from '@prisma/client';
 import {
   FinancingCalculatorService,
   RateSnapshot,
@@ -76,6 +81,7 @@ export async function getProfile(propertyId: string) {
 export async function upsertProfile(
   propertyId: string,
   payload: {
+    mortgageStatus?: PropertyMortgageStatus;
     purchasePriceCents?: number;
     purchaseDate?: string;
     mortgageType?: string;
@@ -90,7 +96,17 @@ export async function upsertProfile(
     hasPMI?: boolean;
   },
 ) {
+  const containsMortgageFacts = [
+    payload.mortgageType,
+    payload.originalMortgageBalanceCents,
+    payload.currentMortgageBalanceCents,
+    payload.interestRateBps,
+    payload.remainingTermMonths,
+    payload.monthlyPaymentCents,
+  ].some((value) => value !== undefined);
   const data: any = {
+    mortgageStatus: payload.mortgageStatus ??
+      (containsMortgageFacts ? PropertyMortgageStatus.MORTGAGED : undefined),
     ...(payload.purchasePriceCents !== undefined && { purchasePriceCents: payload.purchasePriceCents }),
     ...(payload.purchaseDate && { purchaseDate: new Date(payload.purchaseDate) }),
     ...(payload.mortgageType && { mortgageType: payload.mortgageType }),
@@ -117,6 +133,29 @@ export async function upsertProfile(
     where: { propertyId },
     create: { propertyId, ...data },
     update: data,
+  });
+}
+
+export async function markPropertyAsHavingNoMortgage(propertyId: string) {
+  return prisma.propertyFinancingProfile.upsert({
+    where: { propertyId },
+    create: {
+      propertyId,
+      mortgageStatus: PropertyMortgageStatus.NO_MORTGAGE,
+    },
+    update: {
+      mortgageStatus: PropertyMortgageStatus.NO_MORTGAGE,
+      mortgageType: null,
+      originalMortgageBalanceCents: null,
+      currentMortgageBalanceCents: null,
+      mortgageBalanceAsOfDate: null,
+      interestRateBps: null,
+      remainingTermMonths: null,
+      monthlyPaymentCents: null,
+      hasSecondMortgage: false,
+      secondMortgageBalanceCents: null,
+      hasPMI: false,
+    },
   });
 }
 

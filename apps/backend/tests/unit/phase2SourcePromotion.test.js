@@ -436,3 +436,93 @@ test('honors terminal and active-snooze lifecycle suppression for promoted sourc
   assert.equal(actions.length, 4);
   assert.deepEqual(result.diagnostics, { candidateCount: 6, suppressedCount: 1, snoozedCount: 1 });
 });
+
+function addRefinanceDataRequiredSource(db, {
+  mortgageStatus = 'UNKNOWN',
+  currentMortgageBalanceCents = null,
+  interestRateBps = 650,
+  remainingTermMonths = null,
+} = {}) {
+  db.domainEvent = {
+    findFirst: async () => ({
+      id: 'refinance-data-event-1',
+      payload: {
+        missingFields: ['currentMortgageBalance', 'remainingTerm'],
+        rateDeclinePct: 0.75,
+      },
+      createdAt: NOW,
+      updatedAt: NOW,
+    }),
+  };
+  db.propertyFinancingProfile = {
+    findUnique: async () => ({
+      mortgageStatus,
+      currentMortgageBalanceCents,
+      interestRateBps,
+      remainingTermMonths,
+    }),
+  };
+  return db;
+}
+
+test('promotes durable refinance DATA_REQUIRED events with correction and no-mortgage controls', async () => {
+  const result = await getPromotedHomeActions(
+    'property-1',
+    addRefinanceDataRequiredSource(stubSources()),
+  );
+  const action = result.actions.find(
+    (candidate) => candidate.id === 'refinance-data-required:property-1',
+  );
+
+  assert.ok(action);
+  assert.equal(action.source.kind, 'SYSTEM');
+  assert.equal(action.priority, 'CONSIDER');
+  assert.equal(action.primaryCta.kind, 'CORRECT_FACT');
+  assert.match(action.whyItMatters, /current mortgage balance, remaining mortgage term/);
+  assert.deepEqual(action.feedbackControls, [
+    'SNOOZE',
+    'DISMISS',
+    'NOT_RELEVANT',
+    'NO_MORTGAGE',
+    'CORRECT_FACT',
+  ]);
+});
+
+test('suppresses refinance DATA_REQUIRED after completion or an explicit no-mortgage response', async () => {
+  const complete = await getPromotedHomeActions(
+    'property-1',
+    addRefinanceDataRequiredSource(stubSources(), {
+      mortgageStatus: 'MORTGAGED',
+      currentMortgageBalanceCents: 32_000_000,
+      interestRateBps: 650,
+      remainingTermMonths: 300,
+    }),
+  );
+  const noMortgage = await getPromotedHomeActions(
+    'property-1',
+    addRefinanceDataRequiredSource(stubSources(), {
+      mortgageStatus: 'NO_MORTGAGE',
+    }),
+  );
+
+  assert.equal(complete.actions.some((action) => action.id.startsWith('refinance-data-required:')), false);
+  assert.equal(noMortgage.actions.some((action) => action.id.startsWith('refinance-data-required:')), false);
+});
+
+test('applies terminal dismissal and active snooze to the stable refinance DATA_REQUIRED action key', async () => {
+  const dismissed = await getPromotedHomeActions(
+    'property-1',
+    addRefinanceDataRequiredSource(stubSources({
+      terminalActionKey: 'refinance-data-required:property-1',
+    })),
+  );
+  const snoozed = await getPromotedHomeActions(
+    'property-1',
+    addRefinanceDataRequiredSource(stubSources({
+      snoozedActionKey: 'refinance-data-required:property-1',
+    })),
+  );
+
+  assert.equal(dismissed.actions.some((action) => action.id.startsWith('refinance-data-required:')), false);
+  assert.equal(snoozed.actions.some((action) => action.id.startsWith('refinance-data-required:')), false);
+});

@@ -19,10 +19,14 @@ import { getHomeAssetDisplayLabel } from '../productFramework/homeAssetDisplay';
 import { materializeRecommendationsForProperty } from '../modules/personalization/application/materializeRecommendations.usecase';
 import { getAggregationPropertyContext } from './aggregationContext/context';
 import { getContextCompleteness } from '../modules/propertyContext/application/getContextCompleteness';
-import { applyPersonalizationHomeActionLifecycle } from '../modules/personalization/application/applyHomeActionLifecycle.usecase';
+import {
+  applyPersonalizationHomeActionLifecycle,
+  type PersonalizationHomeCommand,
+} from '../modules/personalization/application/applyHomeActionLifecycle.usecase';
 import { logger } from '../lib/logger';
 import { visibleInventoryItemWhere } from './riskAssetApplicability';
 import { detectCoverageGaps } from './coverageGap.service';
+import { markPropertyAsHavingNoMortgage } from './financing.service';
 import {
   buildInventoryCoveragePresentation,
   type InventoryCoveragePresentation,
@@ -47,6 +51,7 @@ export const HOME_ACTION_COMMANDS = [
   'DISMISS',
   'ALREADY_DONE',
   'NOT_RELEVANT',
+  'NO_MORTGAGE',
   'CORRECT_FACT',
 ] as const;
 
@@ -63,7 +68,10 @@ export const HomeActionCommandSchema = z.object({
       message: `${value.command} requires a next trigger date.`,
     });
   }
-  if (['DEFER', 'DISMISS', 'NOT_RELEVANT'].includes(value.command) && !value.consequenceAcknowledged) {
+  if (
+    ['DEFER', 'DISMISS', 'NOT_RELEVANT', 'NO_MORTGAGE'].includes(value.command) &&
+    !value.consequenceAcknowledged
+  ) {
     ctx.addIssue({
       code: 'custom',
       path: ['consequenceAcknowledged'],
@@ -677,6 +685,13 @@ export async function executeHomeActionCommand(
     ? validateNextTriggerAt(input.nextTriggerAt)
     : null;
 
+  if (
+    action.id === `refinance-data-required:${propertyId}` &&
+    input.command === 'NO_MORTGAGE'
+  ) {
+    await markPropertyAsHavingNoMortgage(propertyId);
+  }
+
   if (action.id.startsWith('activation:')) {
     const result = await recordFirstActionResolution(propertyId, userId, {
       disposition: resolutionDisposition(input.command),
@@ -687,13 +702,13 @@ export async function executeHomeActionCommand(
     return { ...result, command: input.command };
   }
 
-  if (action.source.kind === 'PERSONALIZATION') {
+  if (action.source.kind === 'PERSONALIZATION' && input.command !== 'NO_MORTGAGE') {
     const personalizationLifecycle = await applyPersonalizationHomeActionLifecycle({
       recommendationId: action.source.entityId,
       propertyId,
       actionKey: action.id,
       userId,
-      command: input.command as Exclude<HomeActionCommandInput['command'], 'CORRECT_FACT'>,
+      command: input.command as PersonalizationHomeCommand,
       reason,
       nextTriggerAt,
     });

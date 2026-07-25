@@ -3,7 +3,12 @@
 // Orchestrates radar evaluation, DB persistence, and read APIs for the
 // Mortgage Refinance Radar feature. All methods are property-scoped.
 
-import { RefinanceConfidenceLevel, RefinanceRadarState, RefinanceScenarioTerm } from '@prisma/client';
+import {
+  PropertyMortgageStatus,
+  RefinanceConfidenceLevel,
+  RefinanceRadarState,
+  RefinanceScenarioTerm,
+} from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { APIError } from '../middleware/error.middleware';
 import {
@@ -124,6 +129,7 @@ export class RefinanceRadarService {
 
     if (
       !profile ||
+      profile.mortgageStatus === PropertyMortgageStatus.NO_MORTGAGE ||
       profile.currentMortgageBalanceCents == null ||
       profile.interestRateBps == null ||
       profile.remainingTermMonths == null
@@ -148,6 +154,7 @@ export class RefinanceRadarService {
       prisma.propertyFinancingProfile.findUnique({
         where: { propertyId },
         select: {
+          mortgageStatus: true,
           currentMortgageBalanceCents: true,
           interestRateBps: true,
           remainingTermMonths: true,
@@ -155,6 +162,13 @@ export class RefinanceRadarService {
       }),
       this.rateService.getRecentSnapshots(RATE_TREND_LOOKBACK_SNAPSHOTS),
     ]);
+
+    if (profile?.mortgageStatus === PropertyMortgageStatus.NO_MORTGAGE) {
+      return {
+        available: false,
+        reason: 'NO_MORTGAGE',
+      };
+    }
 
     const missingFields: NonNullable<
       Extract<RadarStatusResult, { available: false }>['missingFields']

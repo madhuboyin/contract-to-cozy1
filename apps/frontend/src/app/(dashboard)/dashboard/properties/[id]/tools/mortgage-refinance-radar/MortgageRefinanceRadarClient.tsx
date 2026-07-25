@@ -797,6 +797,10 @@ function UnavailableCard({ reason }: { reason: string }) {
       title: 'Mortgage data not set up',
       body: 'Add your mortgage details in the property financial overview to enable the refinance radar.',
     },
+    NO_MORTGAGE: {
+      title: 'No mortgage recorded',
+      body: 'Refinance monitoring is paused. Add a mortgage in Financing if this changes.',
+    },
     NO_RATE_DATA: {
       title: 'No market rate data available',
       body: 'Market rate snapshots have not been ingested yet. Check back soon.',

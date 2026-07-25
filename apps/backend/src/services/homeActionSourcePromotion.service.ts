@@ -17,7 +17,8 @@ const DEFAULT_FEEDBACK: HomeAction['feedbackControls'] = [
 
 export type HomeActionSourceDb = Pick<typeof prisma,
   'guidanceJourney' | 'incident' | 'recallMatch' | 'coverageAnalysis' | 'projectRecord' |
-  'seasonalChecklist' | 'personalizedRecommendation' | 'orchestrationActionEvent' | 'orchestrationActionSnooze'>;
+  'seasonalChecklist' | 'personalizedRecommendation' | 'orchestrationActionEvent' | 'orchestrationActionSnooze'> &
+  Partial<Pick<typeof prisma, 'domainEvent' | 'propertyFinancingProfile'>>;
 
 function lowConsequenceGovernance(policyVersion = 'phase2-v1'): HomeAction['governance'] {
   return {
@@ -885,6 +886,137 @@ async function loadProjectActions(propertyId: string, db: HomeActionSourceDb): P
   });
 }
 
+function refinanceMissingFieldLabels(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  const labels: Record<string, string> = {
+    currentMortgageBalance: 'current mortgage balance',
+    interestRate: 'current interest rate',
+    remainingTerm: 'remaining mortgage term',
+  };
+  return value
+    .filter((field): field is string => typeof field === 'string')
+    .map((field) => labels[field])
+    .filter((label): label is string => Boolean(label));
+}
+
+async function loadRefinanceDataRequiredActions(
+  propertyId: string,
+  db: HomeActionSourceDb,
+): Promise<HomeAction[]> {
+  if (!db.domainEvent || !db.propertyFinancingProfile) return [];
+  const [event, profile] = await Promise.all([
+    db.domainEvent.findFirst({
+      where: {
+        propertyId,
+        type: 'REFINANCE_DATA_REQUIRED',
+        status: { not: 'DEAD_LETTER' },
+      },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        payload: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    }),
+    db.propertyFinancingProfile.findUnique({
+      where: { propertyId },
+      select: {
+        mortgageStatus: true,
+        currentMortgageBalanceCents: true,
+        interestRateBps: true,
+        remainingTermMonths: true,
+      },
+    }),
+  ]);
+  if (
+    !event ||
+    profile?.mortgageStatus === 'NO_MORTGAGE' ||
+    (
+      profile?.currentMortgageBalanceCents != null &&
+      profile.interestRateBps != null &&
+      profile.remainingTermMonths != null
+    )
+  ) {
+    return [];
+  }
+
+  const payload =
+    event.payload && typeof event.payload === 'object' && !Array.isArray(event.payload)
+      ? event.payload as Record<string, unknown>
+      : {};
+  const missing = refinanceMissingFieldLabels(payload.missingFields);
+  const decline = typeof payload.rateDeclinePct === 'number'
+    ? payload.rateDeclinePct
+    : null;
+  const missingSummary = missing.length > 0
+    ? missing.join(', ')
+    : 'the remaining mortgage details';
+
+  return [adaptHomeActionSource('SYSTEM', {
+    id: `refinance-data-required:${propertyId}`,
+    propertyId,
+    lineageId: `refinance-data-required:${propertyId}`,
+    sourceEntityId: event.id,
+    sourceVersion: event.updatedAt.toISOString(),
+    job: 'DECIDE',
+    state: 'OPEN',
+    priority: 'CONSIDER',
+    signal: decline == null
+      ? 'Mortgage rates moved lower while refinance inputs are incomplete.'
+      : `Mortgage rates moved ${decline.toFixed(2)} percentage points lower while refinance inputs are incomplete.`,
+    whyItMatters:
+      `Add ${missingSummary} to check whether current market conditions could reduce your mortgage cost. Known Financing details will be reused.`,
+    recommendedAction: 'Complete the mortgage details needed for refinance monitoring',
+    expectedOutcome:
+      'ContractToCozy can evaluate this property after future rate updates without asking for the same facts again.',
+    timing: {
+      dueAt: null,
+      windowStart: event.createdAt.toISOString(),
+      windowEnd: null,
+      rationale: 'This is a low-urgency setup action triggered by a meaningful market-rate decline.',
+    },
+    evidence: [{
+      id: event.id,
+      type: 'SYSTEM_DERIVATION',
+      label: 'Meaningful mortgage-rate decline',
+      source: 'Mortgage Refinance Radar',
+      observedAt: event.createdAt.toISOString(),
+      freshness: 'CURRENT',
+      confidence: 1,
+    }],
+    assumptions: [],
+    options: [],
+    tradeoffs: [],
+    confidence: {
+      score: 1,
+      label: 'HIGH',
+      missing,
+    },
+    governance: lowConsequenceGovernance('refinance-data-required-v1'),
+    primaryCta: {
+      kind: 'CORRECT_FACT',
+      label: 'Add mortgage details',
+      href: `/dashboard/properties/${propertyId}/tools/mortgage-refinance-radar`,
+    },
+    secondaryCtas: [{
+      kind: 'CORRECT_FACT',
+      label: 'Review Financing profile',
+      href: `/dashboard/properties/${propertyId}/tools/financing/profile`,
+    }],
+    feedbackControls: [
+      'SNOOZE',
+      'DISMISS',
+      'NOT_RELEVANT',
+      'NO_MORTGAGE',
+      'CORRECT_FACT',
+    ],
+    relatedJourneyId: null,
+    createdAt: event.createdAt.toISOString(),
+    lastEvaluatedAt: event.updatedAt.toISOString(),
+  })];
+}
+
 export async function getPromotedHomeActions(
   propertyId: string,
   db: HomeActionSourceDb = prisma,
@@ -912,6 +1044,7 @@ export async function getPromotedHomeActions(
     loadRecallActions(propertyId, db), loadCoverageActions(propertyId, db),
     loadProjectActions(propertyId, db), loadSeasonalChecklistActions(propertyId, db),
     options.includePersonalization === false ? Promise.resolve([]) : loadPersonalizationActions(propertyId, db),
+    loadRefinanceDataRequiredActions(propertyId, db),
     Promise.resolve(environmentActions),
   ]);
   const candidates = groups.flat();

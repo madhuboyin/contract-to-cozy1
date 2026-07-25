@@ -282,6 +282,7 @@ export type HomeActionCommand =
   | 'DISMISS'
   | 'ALREADY_DONE'
   | 'NOT_RELEVANT'
+  | 'NO_MORTGAGE'
   | 'CORRECT_FACT';
 
 export type RankedHomeActionDTO = ActivationHomeActionDTO & {
@@ -4040,6 +4041,8 @@ export type MortgageType =
   | 'ARM_7'
   | 'OTHER';
 
+export type PropertyMortgageStatus = 'UNKNOWN' | 'MORTGAGED' | 'NO_MORTGAGE';
+
 export type FinancingScenarioStatus = 'DRAFT' | 'SAVED' | 'ARCHIVED';
 
 export type FinancingEntryPoint =
@@ -4054,6 +4057,7 @@ export interface PropertyFinancingProfile {
   propertyContext?: import('@/components/property-context/propertyContextTypes').PropertyContextEnvelope;
   id: string;
   propertyId: string;
+  mortgageStatus?: PropertyMortgageStatus;
   purchasePriceCents?: number;
   purchaseDate?: string;
   mortgageType?: MortgageType;
@@ -4166,6 +4170,7 @@ export interface FinancingScenario extends FinancingScenarioSummary {
 }
 
 export interface FinancingProfilePayload {
+  mortgageStatus?: PropertyMortgageStatus;
   purchasePriceCents?: number;
   purchaseDate?: string;
   mortgageType?: MortgageType;

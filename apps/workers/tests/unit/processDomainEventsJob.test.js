@@ -120,6 +120,29 @@ for (const [type, transitionType] of [
   });
 }
 
+test('acknowledges a valid REFINANCE_DATA_REQUIRED event without external delivery', async () => {
+  const { deps, calls } = fakeDeps({
+    pendingEvents: [
+      eventFixture({
+        type: 'REFINANCE_DATA_REQUIRED',
+        payload: {
+          propertyId: 'property-1',
+          snapshotId: 'snapshot-1',
+          transitionType: 'DATA_REQUIRED',
+          missingFields: ['interestRate'],
+        },
+      }),
+    ],
+  });
+
+  const result = await processDomainEventsJob(undefined, deps);
+
+  assert.equal(result.processed, 1);
+  assert.equal(calls.creates.length, 0);
+  const terminal = calls.updates.find((update) => update.kind === 'terminal');
+  assert.equal(terminal.args.data.status, 'PROCESSED');
+});
+
 test('a malformed refinance transition is retried as FAILED', async () => {
   const { deps, calls } = fakeDeps({
     pendingEvents: [

@@ -50,7 +50,7 @@ export type RadarStatusAvailable = {
 
 export type RadarStatusUnavailable = {
   available: false;
-  reason: 'MISSING_MORTGAGE_DATA' | 'NO_RATE_DATA' | 'PROPERTY_NOT_FOUND';
+  reason: 'MISSING_MORTGAGE_DATA' | 'NO_MORTGAGE' | 'NO_RATE_DATA' | 'PROPERTY_NOT_FOUND';
   missingFields?: Array<'currentMortgageBalance' | 'interestRate' | 'remainingTerm'>;
   trendSummary?: RateTrendSummary;
   rateDataFreshnessAt?: string | null;
