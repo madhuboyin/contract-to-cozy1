@@ -60,10 +60,11 @@ data:
   ENABLE_CHAT: "true"
   # Pilot-only authentication switch. Set to "false" before general availability.
   DISABLE_EMAIL_VERIFICATION: "true"
-  # Real-user launch requires current manifest- and policy-version attestations.
-  ENFORCE_HUMAN_POLICY_APPROVALS: "true"
-  # Real-user discovery fails closed unless policy and rollout gates are valid.
-  TOOL_DISCOVERY_RELEASE_MODE: "REAL_USER_LAUNCH"
+  # No external users are admitted yet. Enable only with current human
+  # attestations when an explicit real-user launch is approved.
+  ENFORCE_HUMAN_POLICY_APPROVALS: "false"
+  # Keep the deployed pilot in internal beta until launch-owner sign-off.
+  TOOL_DISCOVERY_RELEASE_MODE: "INTERNAL_BETA"
   TOOL_DISCOVERY_ENABLED: "true"
   CAPABILITY_RECOMMENDATIONS_ENABLED: "true"
   ENFORCE_TOOL_DISCOVERY_RELEASE_GATES: "true"

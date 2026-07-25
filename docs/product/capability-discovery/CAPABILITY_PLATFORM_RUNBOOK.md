@@ -84,14 +84,17 @@ evidence may be involved.
 ## 5. Containment controls
 
 The tracked defaults live in
-`infrastructure/kubernetes/base/configmap.yaml`. Lists contain comma-separated
-canonical capability IDs. When changing a list, preserve every existing entry;
-do not overwrite another active incident's containment.
+`infrastructure/kubernetes/base/configmap.yaml`. The current deployment remains
+in `INTERNAL_BETA` with human attestations disabled because no external users
+are admitted. Moving to `REAL_USER_LAUNCH` and enabling human attestations
+requires an explicit launch decision and current approvals. Lists contain
+comma-separated canonical capability IDs. When changing a list, preserve every
+existing entry; do not overwrite another active incident's containment.
 
 | Control | Effect |
 |---|---|
-| `TOOL_DISCOVERY_RELEASE_MODE=REAL_USER_LAUNCH` | Default mode. Fails closed when policy is unavailable, invalid, or release-gate enforcement is off |
-| `TOOL_DISCOVERY_RELEASE_MODE=INTERNAL_BETA` | Explicit internal/test-only mode that preserves beta fail-open behavior |
+| `TOOL_DISCOVERY_RELEASE_MODE=REAL_USER_LAUNCH` | Launch mode. Fails closed when policy is unavailable, invalid, or release-gate enforcement is off |
+| `TOOL_DISCOVERY_RELEASE_MODE=INTERNAL_BETA` | Current internal/test-only mode that preserves beta fail-open behavior |
 | `TOOL_DISCOVERY_ENABLED=false` | Globally removes capabilities from catalog and recommendation availability |
 | `TOOL_DISCOVERY_DISABLED_IDS` | Disables specific capabilities without changing Home Actions |
 | `TOOL_DISCOVERY_BROKEN_ROUTE_IDS` | Suppresses capabilities with known-broken destinations |

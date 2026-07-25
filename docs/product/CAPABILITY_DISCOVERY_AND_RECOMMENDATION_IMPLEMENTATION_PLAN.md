@@ -1781,9 +1781,10 @@ boundary:
   explicit value `INTERNAL_BETA` enables beta fail-open behavior;
 - real-user mode suppresses every capability when release-gate enforcement is
   disabled, policy loading fails, or configuration integrity is invalid;
-- the tracked Kubernetes configuration selects real-user mode and enables
-  release-gate enforcement, while local Docker Compose explicitly selects
-  internal beta;
+- the tracked Kubernetes configuration remains in internal-beta mode while
+  there are no external users, with release-gate enforcement retained; an
+  explicit launch change must select real-user mode and enable current human
+  attestations;
 - availability diagnostics expose the effective release mode, failure mode,
   launch readiness, and stable launch-blocker codes; and
 - Admin Release Gates displays real-user readiness and the blocking controls so
