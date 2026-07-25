@@ -2720,12 +2720,13 @@ model Property {
   renovationAdvisorSessions HomeRenovationAdvisorSession[]
 
   // Mortgage Refinance Radar
-  refinanceOpportunities RefinanceOpportunity[]
-  refinanceRadarState    PropertyRefinanceRadarState?
-  refinanceScenarios     RefinanceScenarioSnapshot[]
-  preferenceProfiles     PreferenceProfile[]
-  assumptionSets         AssumptionSet[]
-  signals                Signal[]
+  refinanceOpportunities    RefinanceOpportunity[]
+  refinanceRadarState       PropertyRefinanceRadarState?
+  refinanceEvaluationClaims RefinanceEvaluationClaim[]
+  refinanceScenarios        RefinanceScenarioSnapshot[]
+  preferenceProfiles        PreferenceProfile[]
+  assumptionSets            AssumptionSet[]
+  signals                   Signal[]
 
   // Incident Lifecycle Management
   incidentAutoResolutionNotifications IncidentAutoResolutionNotification[]
@@ -11240,6 +11241,14 @@ enum RefinanceConfidenceLevel {
   STRONG // Clear, high-confidence savings window with solid inputs
 }
 
+enum RefinanceEvaluationClaimStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  DEAD_LETTER
+}
+
 // Source of a mortgage rate market snapshot.
 enum MortgageRateSource {
   FREDDIE_MAC // Freddie Mac Primary Mortgage Market Survey
@@ -11272,7 +11281,8 @@ model MortgageRateSnapshot {
   updatedAt DateTime @updatedAt
 
   // Back-relations from radar state records that reference this snapshot
-  radarStates PropertyRefinanceRadarState[] @relation("LastRateSnapshot")
+  radarStates      PropertyRefinanceRadarState[] @relation("LastRateSnapshot")
+  evaluationClaims RefinanceEvaluationClaim[]
 
   @@unique([source, date])
   @@index([date(sort: Desc)])
@@ -11353,6 +11363,34 @@ model PropertyRefinanceRadarState {
   @@index([radarState])
   @@index([lastEvaluatedAt])
   @@map("property_refinance_radar_states")
+}
+
+// Durable, property-scoped work claim for a single market snapshot.
+// The lease token prevents a stale worker from completing work after another
+// worker has reclaimed an expired lease.
+model RefinanceEvaluationClaim {
+  id         String @id @default(uuid())
+  propertyId String
+  snapshotId String
+
+  status         RefinanceEvaluationClaimStatus @default(PENDING)
+  attempts       Int                            @default(0)
+  leaseToken     String?
+  leaseExpiresAt DateTime?
+  startedAt      DateTime?
+  completedAt    DateTime?
+  lastError      String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  property Property             @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  snapshot MortgageRateSnapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+
+  @@unique([propertyId, snapshotId])
+  @@index([snapshotId, status])
+  @@index([status, leaseExpiresAt])
+  @@map("refinance_evaluation_claims")
 }
 
 // D. User-run refinance scenario comparison — persisted for later review.

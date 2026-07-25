@@ -31,8 +31,11 @@ move to a terminal dead-letter state with run-level observability. Durable
 refinance transitions are now exposed through the property-scoped rate-history
 contract and replayed on the chart: OPEN uses a diamond, material UPDATE a
 ring, and CLOSED a square, with shaded opportunity windows, keyboard labels,
-and equivalent table values. Durable per-property evaluation leases and
-notification policy remain next steps.
+and equivalent table values. Property/snapshot evaluation work now uses durable
+lease-token claims with expiry recovery, bounded attempts, and dead-letter
+state; rerunning ingestion for an existing snapshot resumes unfinished
+properties instead of waiting for the next weekly observation. Durable
+DATA_REQUIRED actions and notification policy remain next steps.
 
 ## Executive recommendation
 

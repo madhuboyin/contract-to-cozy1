@@ -264,7 +264,10 @@ const CRON_HANDLERS: Record<string, (opts?: { dryRun?: boolean; propertyId?: str
     if (!result.success) {
       logger.warn({ reason: result.reason }, '[mortgage-rate-ingest] No rates ingested');
     }
-    const evaluation = result.created && result.snapshotId
+    // Resume the property sweep even when this observation already exists.
+    // A prior run may have persisted the snapshot and then stopped before all
+    // durable property claims reached COMPLETED.
+    const evaluation = result.snapshotId
       ? await evaluateRefinanceRadarForSnapshot(result.snapshotId)
       : null;
     // MortgageRateIngestResult isn't WorkerRunResult-shaped (no `examined`)

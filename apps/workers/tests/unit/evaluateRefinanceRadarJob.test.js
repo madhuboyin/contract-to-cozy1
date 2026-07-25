@@ -43,6 +43,8 @@ test('evaluates complete profiles in pages and reports state transitions and iso
   ];
   const cursors = [];
   const evaluated = [];
+  const completedClaims = [];
+  const failedClaims = [];
 
   const result = await evaluateRefinanceRadarForSnapshot(
     'snapshot-1',
@@ -50,6 +52,19 @@ test('evaluates complete profiles in pages and reports state transitions and iso
       loadEligibleProfiles: async (cursor) => {
         cursors.push(cursor);
         return pages.shift() ?? [];
+      },
+      acquireEvaluationClaim: async (propertyId) => ({
+        claimId: `claim-${propertyId}`,
+        leaseToken: `lease-${propertyId}`,
+        attempt: 1,
+      }),
+      completeEvaluationClaim: async (lease) => {
+        completedClaims.push(lease.claimId);
+        return true;
+      },
+      failEvaluationClaim: async (lease) => {
+        failedClaims.push(lease.claimId);
+        return { updated: true, deadLettered: false };
       },
       evaluateProperty: async (propertyId, propertyContextVersion) => {
         evaluated.push({ propertyId, propertyContextVersion });
@@ -77,9 +92,11 @@ test('evaluates complete profiles in pages and reports state transitions and iso
     'failed properties should be retried within the same snapshot run',
   );
   assert.match(evaluated[0].propertyContextVersion, /^financing-profile:/);
+  assert.deepEqual(completedClaims.sort(), ['claim-property-close', 'claim-property-open']);
+  assert.deepEqual(failedClaims, ['claim-property-fail']);
 });
 
-test('skips a property already evaluated for the snapshot', async () => {
+test('skips a property when its durable claim is already completed or actively leased', async () => {
   let evaluateCalls = 0;
   let page = 0;
 
@@ -96,6 +113,9 @@ test('skips a property already evaluated for the snapshot', async () => {
             })]
           : [];
       },
+      acquireEvaluationClaim: async () => null,
+      completeEvaluationClaim: async () => true,
+      failEvaluationClaim: async () => ({ updated: true, deadLettered: false }),
       evaluateProperty: async () => {
         evaluateCalls++;
         return { available: true, radarState: 'CLOSED' };
@@ -110,4 +130,83 @@ test('skips a property already evaluated for the snapshot', async () => {
   assert.equal(result.evaluated, 0);
   assert.equal(result.skipped, 1);
   assert.equal(result.failed, 0);
+});
+
+test('retries an existing snapshot when the durable property claim is still available', async () => {
+  let page = 0;
+  let evaluateCalls = 0;
+  let completedClaims = 0;
+
+  const result = await evaluateRefinanceRadarForSnapshot(
+    'snapshot-1',
+    {
+      loadEligibleProfiles: async () => {
+        page++;
+        return page === 1
+          ? [profile({
+              id: 'a',
+              propertyId: 'property-a',
+              lastRateSnapshotId: 'snapshot-1',
+            })]
+          : [];
+      },
+      acquireEvaluationClaim: async () => ({
+        claimId: 'claim-a',
+        leaseToken: 'lease-a',
+        attempt: 2,
+      }),
+      completeEvaluationClaim: async () => {
+        completedClaims++;
+        return true;
+      },
+      failEvaluationClaim: async () => ({ updated: true, deadLettered: false }),
+      evaluateProperty: async () => {
+        evaluateCalls++;
+        return { available: true, radarState: 'CLOSED' };
+      },
+      logger: noopLogger,
+    },
+  );
+
+  assert.equal(evaluateCalls, 1);
+  assert.equal(completedClaims, 1);
+  assert.equal(result.evaluated, 1);
+  assert.equal(result.skipped, 0);
+});
+
+test('dead-letters a property claim after its final durable attempt fails', async () => {
+  let page = 0;
+  const failures = [];
+
+  const result = await evaluateRefinanceRadarForSnapshot(
+    'snapshot-1',
+    {
+      loadEligibleProfiles: async () => {
+        page++;
+        return page === 1
+          ? [profile({ id: 'a', propertyId: 'property-a' })]
+          : [];
+      },
+      acquireEvaluationClaim: async () => ({
+        claimId: 'claim-a',
+        leaseToken: 'lease-a',
+        attempt: 2,
+      }),
+      completeEvaluationClaim: async () => true,
+      failEvaluationClaim: async (lease, error, maxDurableAttempts) => {
+        failures.push({ lease, error, maxDurableAttempts });
+        return { updated: true, deadLettered: true };
+      },
+      evaluateProperty: async () => {
+        throw new Error('permanent failure');
+      },
+      logger: noopLogger,
+    },
+    { maxAttempts: 1, maxDurableAttempts: 2 },
+  );
+
+  assert.equal(result.failed, 1);
+  assert.equal(result.deadLettered, 1);
+  assert.equal(failures.length, 1);
+  assert.equal(failures[0].maxDurableAttempts, 2);
 });
