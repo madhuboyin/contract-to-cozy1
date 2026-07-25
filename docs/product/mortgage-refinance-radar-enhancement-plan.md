@@ -17,9 +17,13 @@ newly persisted mortgage-rate snapshot now triggers a paginated, bounded
 evaluation sweep of complete canonical Financing profiles, with per-snapshot
 idempotency and run totals. The current radar card is mounted on Home and the
 property overview; Home suppresses CLOSED monitoring and requests missing
-mortgage facts only after a meaningful rate decline. Outbox-backed transition
-delivery, durable per-property leases/dead-letter handling, and the one-year
-chart remain next steps.
+mortgage facts only after a meaningful rate decline. The radar now requests 52
+weekly observations and renders a personalized one-year rate chart with
+30-/15-year and 3-month/1-year controls, a current-note-rate benchmark,
+freshness/source details, keyboard-accessible data points, and a table
+fallback—including beneath an incomplete-mortgage setup state. Outbox-backed
+transition delivery and durable per-property leases/dead-letter handling
+remain next steps.
 
 ## Executive recommendation
 

@@ -37,6 +37,7 @@ import ToolWorkspaceTemplate from '../../components/route-templates/ToolWorkspac
 import HomeToolHeader from '@/components/tools/HomeToolHeader';
 import { refinanceLoopTrust, trustDateLabel } from '@/lib/trust/trustPresets';
 import { track } from '@/lib/analytics/events';
+import { MortgageRateHistoryChart } from './MortgageRateHistoryChart';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -546,61 +547,6 @@ function ScenarioCalculator({
   );
 }
 
-// ─── Rate Trend (rates endpoint) ──────────────────────────────────────────────
-
-function RateHistoryCard({ rateData }: { rateData: RateHistoryDTO }) {
-  const [expanded, setExpanded] = useState(false);
-  const snapshots = rateData.snapshots.slice(0, expanded ? 12 : 4);
-
-  return (
-    <GlassCard>
-      <div className="p-5">
-        <h3 className="mb-3 text-sm font-semibold text-slate-900 dark:text-slate-100">
-          Rate History
-        </h3>
-        <div className="space-y-2">
-          {snapshots.map((snap) => (
-            <div
-              key={snap.id}
-              className="flex items-center justify-between rounded-lg px-3 py-2 text-sm odd:bg-white/40 even:bg-transparent dark:odd:bg-slate-900/30"
-            >
-              <span className="text-slate-500 dark:text-slate-400 text-xs">
-                {new Date(snap.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-              </span>
-              <div className="flex gap-4">
-                <span className="text-xs">
-                  <span className="text-slate-400">30yr: </span>
-                  <span className="font-medium text-slate-900 dark:text-slate-100">{pct(snap.rate30yr, 3)}</span>
-                </span>
-                <span className="text-xs">
-                  <span className="text-slate-400">15yr: </span>
-                  <span className="font-medium text-slate-900 dark:text-slate-100">{pct(snap.rate15yr, 3)}</span>
-                </span>
-              </div>
-            </div>
-          ))}
-        </div>
-        {rateData.snapshots.length > 4 && (
-          <button
-            onClick={() => setExpanded((p) => !p)}
-            className="mt-3 inline-flex min-h-[36px] items-center gap-1 text-xs font-medium text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
-          >
-            {expanded ? (
-              <>
-                <ChevronUp className="h-3.5 w-3.5" /> Show less
-              </>
-            ) : (
-              <>
-                <ChevronDown className="h-3.5 w-3.5" /> Show all {rateData.snapshots.length} snapshots
-              </>
-            )}
-          </button>
-        )}
-      </div>
-    </GlassCard>
-  );
-}
-
 // ─── Mortgage Setup Form ──────────────────────────────────────────────────────
 
 const TERM_MONTH_OPTIONS: { label: string; value: number }[] = [
@@ -901,7 +847,7 @@ export default function MortgageRefinanceRadarClient() {
       const reqId = ++reqRef.current;
       const [initialStatus, rates, profile] = await Promise.all([
         getRadarStatus(propertyId),
-        getRateHistory(propertyId, 12).catch(() => null),
+        getRateHistory(propertyId, 52).catch(() => null),
         getFinancingMortgageProfile(propertyId).catch(() => null),
       ]);
       if (reqId !== reqRef.current) return;
@@ -1057,11 +1003,23 @@ export default function MortgageRefinanceRadarClient() {
       {data && !data.available && !loading && (
         (data as RadarStatusUnavailable).reason === 'MISSING_MORTGAGE_DATA'
           ? (
-            <MortgageSetupForm
-              propertyId={propertyId}
-              initial={mortgageProfile}
-              onSaved={handleEvaluate}
-            />
+            <div className="space-y-4">
+              <MortgageSetupForm
+                propertyId={propertyId}
+                initial={mortgageProfile}
+                onSaved={handleEvaluate}
+              />
+              {rateData && rateData.snapshots.length > 0 && (
+                <MortgageRateHistoryChart
+                  rateData={rateData}
+                  currentMortgageRatePct={
+                    mortgageProfile?.interestRateBps == null
+                      ? null
+                      : mortgageProfile.interestRateBps / 100
+                  }
+                />
+              )}
+            </div>
           )
           : <UnavailableCard reason={(data as RadarStatusUnavailable).reason} />
       )}
@@ -1131,7 +1089,10 @@ export default function MortgageRefinanceRadarClient() {
             <MissedOpportunityCard data={available} />
 
             {rateData && rateData.snapshots.length > 0 && (
-              <RateHistoryCard rateData={rateData} />
+              <MortgageRateHistoryChart
+                rateData={rateData}
+                currentMortgageRatePct={available.currentRatePct}
+              />
             )}
           </section>
 
