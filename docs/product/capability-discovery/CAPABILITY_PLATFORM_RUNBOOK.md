@@ -121,6 +121,125 @@ Containment values must be canonical capability IDs. Unknown values in
 fail closed. Copy IDs from Admin Release Gates or the canonical capability
 registry rather than entering route names or rollout keys.
 
+## 5.0 Internal beta and production cutover
+
+The tracked ConfigMap is the source of truth for the intended environment
+mode. Use the following matrix; do not infer the mode from traffic, DNS, or the
+presence of production infrastructure.
+
+| Setting | Internal beta (current) | Production cutover | External-user incident |
+|---|---|---|---|
+| `TOOL_DISCOVERY_RELEASE_MODE` | `INTERNAL_BETA` | `REAL_USER_LAUNCH` | Keep `REAL_USER_LAUNCH` |
+| `ENFORCE_HUMAN_POLICY_APPROVALS` | `false` | `true` | Keep `true` |
+| `TOOL_DISCOVERY_ENABLED` | `true` | `true` | Set `false` only for a global discovery shutdown |
+| `CAPABILITY_RECOMMENDATIONS_ENABLED` | `true` | `true` | Set `false` for catalog-only containment |
+| `ENFORCE_TOOL_DISCOVERY_RELEASE_GATES` | `true` | `true` | Keep `true` |
+
+The remaining containment lists and version pins are not environment-mode
+switches. Keep their intentional values through cutover:
+
+- `TOOL_DISCOVERY_DISABLED_IDS`, `TOOL_DISCOVERY_BROKEN_ROUTE_IDS`, and
+  `TOOL_DISCOVERY_RELEASE_GATE_BLOCKED_IDS` contain active holds only and are
+  normally empty;
+- `TOOL_DISCOVERY_EXPECTED_REGISTRY_VERSION` and
+  `TOOL_DISCOVERY_MANIFEST_VERSIONS` pin the approved release when the launch
+  decision requires immutable version pins; copy values from the candidate's
+  Admin Release Gates output and never invent them; and
+- an intentionally held capability may remain `HELD`, but every unexpected
+  `BLOCKED` capability must be resolved before launch-owner sign-off.
+
+### Production-cutover prerequisites
+
+Before changing either mode switch:
+
+1. Deploy the exact candidate build and apply the database schema containing
+   `capability_governance_reviews`.
+2. Confirm Admin Release Gates can load all canonical capabilities and that
+   every capability intended for launch has current approvals for its displayed
+   manifest and policy versions.
+3. Review every `READY`, `HELD`, and `BLOCKED` row. Record the reason and owner
+   for each intentional hold. Do not create fictitious commercial facts or
+   attestations to clear a gate; Financing remains held until its real
+   relationship and compensation terms are recorded.
+4. Confirm `releaseReady=true` for the launch scope and complete the
+   representative-property smoke, authorization, browser/PWA, analytics,
+   accessibility, privacy, and containment drills in this runbook.
+5. Record the launch owner, approved candidate identifier, effective
+   configuration, evidence links, and rollback owner.
+
+### Apply the production mode
+
+In `infrastructure/kubernetes/base/configmap.yaml`, change the first two values
+and confirm all five values match the following production state:
+
+```yaml
+ENFORCE_HUMAN_POLICY_APPROVALS: "true"
+TOOL_DISCOVERY_RELEASE_MODE: "REAL_USER_LAUNCH"
+TOOL_DISCOVERY_ENABLED: "true"
+CAPABILITY_RECOMMENDATIONS_ENABLED: "true"
+ENFORCE_TOOL_DISCOVERY_RELEASE_GATES: "true"
+```
+
+Do not edit the API or worker Deployment YAML for this cutover. Both
+deployments already consume the relevant ConfigMap value.
+
+Apply the tracked ConfigMap and restart both API and worker deployments. A
+ConfigMap-only change does not currently alter the pod template, so applying it
+does not automatically restart existing pods.
+
+```bash
+kubectl apply -f infrastructure/kubernetes/base/configmap.yaml
+kubectl rollout restart deployment/api-deployment -n production
+kubectl rollout restart deployment/worker-deployment -n production
+kubectl rollout status deployment/api-deployment -n production
+kubectl rollout status deployment/worker-deployment -n production
+```
+
+Verify the effective API values:
+
+```bash
+kubectl exec -n production deployment/api-deployment -- \
+  printenv TOOL_DISCOVERY_RELEASE_MODE \
+    ENFORCE_HUMAN_POLICY_APPROVALS \
+    TOOL_DISCOVERY_ENABLED \
+    CAPABILITY_RECOMMENDATIONS_ENABLED \
+    ENFORCE_TOOL_DISCOVERY_RELEASE_GATES
+```
+
+The output must be, in order:
+
+```text
+REAL_USER_LAUNCH
+true
+true
+true
+true
+```
+
+Re-open Admin Release Gates against the deployed environment, confirm
+`releaseReady=true`, rerun the representative-property smoke, and verify one
+eligible contextual recommendation plus one intentionally ineligible case
+before admitting external users.
+
+### Rollback after cutover
+
+Do not switch an environment with external users back to `INTERNAL_BETA` or
+turn human approvals off. That would restore beta fail-open behavior. Instead:
+
+1. Set `CAPABILITY_RECOMMENDATIONS_ENABLED=false` to retain Explore Tools while
+   removing contextual promotion.
+2. Add specific canonical IDs to the appropriate containment list for a narrow
+   incident.
+3. Set `TOOL_DISCOVERY_ENABLED=false` only when all capability discovery must
+   be removed.
+4. Restart the API deployment and verify the effective value and user-visible
+   behavior. Restart workers as well whenever
+   `ENFORCE_HUMAN_POLICY_APPROVALS` changes.
+
+Reverting to `INTERNAL_BETA` and
+`ENFORCE_HUMAN_POLICY_APPROVALS=false` is permitted only after external access
+has been removed and the environment has formally returned to internal testing.
+
 For an emergency global shutdown:
 
 ```bash

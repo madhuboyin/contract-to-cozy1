@@ -17,6 +17,7 @@ import {
   capabilitySearchTerms,
 } from '@/features/tools/capabilityCatalog';
 import { useCapabilityImpression } from '@/features/tools/useCapabilityImpression';
+import { resolveDashboardCommandPaletteCatalog } from './dashboardCommandPaletteCatalog';
 
 type CommandItem = {
   id: string;
@@ -60,8 +61,6 @@ function CapabilityCommandItem({
     </Command.Item>
   );
 }
-
-const PROPERTY_ID_IN_PATH = /\/dashboard\/properties\/([^/]+)/;
 
 function readRecentActions(): Array<{ id: string; label: string }> {
   if (typeof window === 'undefined') return [];
@@ -121,14 +120,21 @@ export default function DashboardCommandPalette({ propertyId }: DashboardCommand
   const [open, setOpen] = React.useState(false);
   const [query, setQuery] = React.useState('');
   const [recentActions, setRecentActions] = React.useState<Array<{ id: string; label: string }>>([]);
-  const resolvedPropertyId =
-    propertyId ||
-    selectedPropertyId ||
-    pathname?.match(PROPERTY_ID_IN_PATH)?.[1];
   const isAdminNav = user?.role === 'ADMIN';
+  const catalogContext = resolveDashboardCommandPaletteCatalog({
+    explicitPropertyId: propertyId,
+    pathname,
+    selectedPropertyId,
+    isAdmin: isAdminNav,
+    open,
+  });
+  const resolvedPropertyId = catalogContext.propertyId;
   const capabilityCatalogQuery = useCapabilityCatalog(
     { propertyId: resolvedPropertyId },
-    { enabled: !isAdminNav },
+    // The catalog is used only inside the palette. Keeping this query disabled
+    // while the overlay is closed prevents every tool navigation from loading
+    // the entire catalog again.
+    { enabled: catalogContext.enabled },
   );
 
   React.useEffect(() => {

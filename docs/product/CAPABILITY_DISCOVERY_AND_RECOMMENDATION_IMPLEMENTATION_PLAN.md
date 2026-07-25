@@ -1795,6 +1795,26 @@ subsequent CAP-901–911 gates supply repository controls and repeatable
 acceptance; deployed smoke, human approvals, authorized live-control exercises,
 and launch-owner sign-off remain environment-specific requirements.
 
+The production-cutover contract is explicit:
+
+- internal testing uses `TOOL_DISCOVERY_RELEASE_MODE=INTERNAL_BETA` and
+  `ENFORCE_HUMAN_POLICY_APPROVALS=false`;
+- before external users are admitted, operators must complete the launch gates,
+  record current human attestations, and change those values to
+  `REAL_USER_LAUNCH` and `true`;
+- release-gate enforcement, discovery, and recommendations remain on for a
+  normal cutover;
+- ConfigMap changes require explicit API and worker rollouts because the
+  deployments do not currently use a ConfigMap checksum annotation; and
+- after external users are admitted, incidents use catalog-only, capability
+  holds, or the global discovery kill switch. Operators must not restore
+  internal-beta fail-open behavior as a rollback.
+
+The authoritative prerequisites, exact values, commands, verification output,
+and rollback sequence are maintained in
+`docs/product/capability-discovery/CAPABILITY_PLATFORM_RUNBOOK.md`, section
+5.0.
+
 ### CAP-901: Canonical capability launch review
 
 Implemented a capability-centric launch review that automatically evaluates

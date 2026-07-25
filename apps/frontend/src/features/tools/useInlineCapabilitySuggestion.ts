@@ -9,6 +9,7 @@ import {
   buildInlineCapabilityRequest,
   type InlineCapabilityContext,
 } from './inlineCapabilityContext';
+import { shouldRetryCapabilityQuery } from './capabilityQueryPolicy';
 
 export function useInlineCapabilitySuggestion(
   context: InlineCapabilityContext | null,
@@ -33,6 +34,6 @@ export function useInlineCapabilitySuggestion(
     queryFn: () => fetchCapabilitySuggestions(request!),
     enabled: Boolean(request) && (options.enabled ?? true),
     staleTime: 2 * 60 * 1000,
-    retry: 1,
+    retry: shouldRetryCapabilityQuery,
   });
 }

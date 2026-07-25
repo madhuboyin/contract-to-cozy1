@@ -83,6 +83,55 @@ kubectl rollout restart deployment/api-deployment -n production
 kubectl rollout status deployment/api-deployment -n production
 ```
 
+## Capability discovery environment mode
+
+The tracked configuration intentionally starts in internal-beta mode while no
+external users are admitted:
+
+```yaml
+TOOL_DISCOVERY_RELEASE_MODE: "INTERNAL_BETA"
+ENFORCE_HUMAN_POLICY_APPROVALS: "false"
+TOOL_DISCOVERY_ENABLED: "true"
+CAPABILITY_RECOMMENDATIONS_ENABLED: "true"
+ENFORCE_TOOL_DISCOVERY_RELEASE_GATES: "true"
+```
+
+For production cutover, change only the first two values to
+`REAL_USER_LAUNCH` and `true`. Keep discovery, recommendations, and release-gate
+enforcement on for normal production operation. Complete the governance,
+release-readiness, smoke, and sign-off prerequisites in
+`docs/product/capability-discovery/CAPABILITY_PLATFORM_RUNBOOK.md`, section
+5.0, before making that change. No Deployment YAML edit is required; the API
+and worker deployments already read the applicable value from `app-config`.
+
+Apply the ConfigMap and restart both consumers. Applying the ConfigMap alone
+does not restart existing pods:
+
+```bash
+kubectl apply -f infrastructure/kubernetes/base/configmap.yaml
+kubectl rollout restart deployment/api-deployment -n production
+kubectl rollout restart deployment/worker-deployment -n production
+kubectl rollout status deployment/api-deployment -n production
+kubectl rollout status deployment/worker-deployment -n production
+```
+
+Verify the effective API configuration:
+
+```bash
+kubectl exec -n production deployment/api-deployment -- \
+  printenv TOOL_DISCOVERY_RELEASE_MODE \
+    ENFORCE_HUMAN_POLICY_APPROVALS \
+    TOOL_DISCOVERY_ENABLED \
+    CAPABILITY_RECOMMENDATIONS_ENABLED \
+    ENFORCE_TOOL_DISCOVERY_RELEASE_GATES
+```
+
+Production output must be `REAL_USER_LAUNCH` followed by four `true` values.
+Once external users are present, never roll back by selecting `INTERNAL_BETA`
+or disabling human approvals. Use catalog-only containment
+(`CAPABILITY_RECOMMENDATIONS_ENABLED=false`), a capability-specific hold, or
+the global discovery kill switch instead.
+
 ## Logs
 
 ```bash

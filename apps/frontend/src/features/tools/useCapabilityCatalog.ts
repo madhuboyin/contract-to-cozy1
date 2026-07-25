@@ -2,6 +2,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { fetchCapabilityCatalog, type CapabilityCatalogRequest } from './capabilityApi';
+import { shouldRetryCapabilityQuery } from './capabilityQueryPolicy';
 
 export function useCapabilityCatalog(
   request: CapabilityCatalogRequest = {},
@@ -16,6 +17,6 @@ export function useCapabilityCatalog(
     queryFn: () => fetchCapabilityCatalog(request),
     enabled: options.enabled ?? true,
     staleTime: 5 * 60 * 1000,
-    retry: 1,
+    retry: shouldRetryCapabilityQuery,
   });
 }

@@ -5,6 +5,7 @@ import {
   fetchRelatedCapabilities,
   type RelatedCapabilitiesRequest,
 } from './capabilityApi';
+import { shouldRetryCapabilityQuery } from './capabilityQueryPolicy';
 
 export function useRelatedCapabilities(
   request: RelatedCapabilitiesRequest | null,
@@ -22,6 +23,6 @@ export function useRelatedCapabilities(
     queryFn: () => fetchRelatedCapabilities(request!),
     enabled: Boolean(request) && (options.enabled ?? true),
     staleTime: 2 * 60 * 1000,
-    retry: 1,
+    retry: shouldRetryCapabilityQuery,
   });
 }
