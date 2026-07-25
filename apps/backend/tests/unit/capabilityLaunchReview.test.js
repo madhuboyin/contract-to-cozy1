@@ -75,10 +75,13 @@ test('CAP-901 reviews every canonical capability exactly once', () => {
 
   assert.equal(reviews.length, canonicalCapabilityRegistry.capabilities.length);
   assert.equal(new Set(reviews.map((review) => review.capabilityId)).size, reviews.length);
+  const financing = reviews.find((review) => review.capabilityId === 'financing');
   assert.equal(
-    reviews.every((review) => review.state === 'READY'),
-    true,
+    reviews.filter((review) => review.state === 'READY').length,
+    reviews.length - 1,
   );
+  assert.equal(financing.state, 'BLOCKED');
+  assert.deepEqual(financing.blockers, ['DEFINITION_GOVERNANCE_INVALID']);
 });
 
 test('CAP-901 distinguishes intentional holds from launch blockers', () => {

@@ -878,6 +878,24 @@ test('CAP-403 promotes only candidates passing release, permission, safety, and 
   });
 });
 
+test('CAP-903 invalid governance definition blocks runtime promotion', () => {
+  const coverage = structuredClone(
+    canonicalCapabilityRegistry.getById('coverage-options'),
+  );
+  coverage.governance.professionalBoundary = null;
+  coverage.recommendation.explicitRelatedCapabilityIds = [];
+  const registry = createToolCapabilityRegistry([coverage]);
+  const candidate = candidateById(
+    govern(governedCoverageContext(), registry),
+    'coverage-options',
+  );
+
+  assert.equal(candidate.policy.decision, 'BLOCKED');
+  assert.ok(
+    candidate.policy.reasonCodes.includes('GOVERNANCE_DEFINITION_INVALID'),
+  );
+});
+
 test('CAP-403 blocks unavailable, unauthorized, unapproved, and stale candidates', () => {
   const cases = [
     {

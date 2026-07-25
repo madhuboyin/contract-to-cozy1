@@ -130,6 +130,12 @@ export interface CapabilityLaunchReview {
     rejectedRoles: CapabilityGovernanceReviewRole[];
     missingRoles: CapabilityGovernanceReviewRole[];
   };
+  governanceDefinition: {
+    valid: boolean;
+    issues: string[];
+    policyVersion: string;
+    dataSensitivity: 'STANDARD' | 'SENSITIVE' | 'HIGHLY_SENSITIVE';
+  };
 }
 
 export interface ReleaseGateSummary {

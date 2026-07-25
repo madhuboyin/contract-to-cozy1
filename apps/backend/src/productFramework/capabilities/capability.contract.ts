@@ -41,6 +41,26 @@ export const CAPABILITY_RECOMMENDATION_MODES = [
 ] as const;
 
 export const CAPABILITY_RELEASE_STAGES = ['ACTIVE', 'BETA'] as const;
+export const CAPABILITY_JURISDICTION_POLICIES = [
+  'NOT_REQUIRED',
+  'SOURCE_VERIFIED',
+  'PROPERTY_STATE_REQUIRED',
+  'LOCAL_JURISDICTION_REQUIRED',
+] as const;
+export const CAPABILITY_COMMERCIAL_RELATIONSHIPS = [
+  'NONE',
+  'OWNED',
+  'REFERRAL_FEE',
+  'COMMISSION',
+  'AFFILIATE',
+  'OTHER',
+  'NOT_RECORDED',
+] as const;
+export const CAPABILITY_DATA_SENSITIVITY = [
+  'STANDARD',
+  'SENSITIVE',
+  'HIGHLY_SENSITIVE',
+] as const;
 
 export const CAPABILITY_ICON_NAMES = [
   'alert-triangle',
@@ -236,6 +256,34 @@ export const ToolCapabilityDefinitionSchema = z.object({
     rolloutKey: z.string().trim().min(1).max(160),
     releaseStage: z.enum(CAPABILITY_RELEASE_STAGES),
     commercialAction: z.boolean(),
+    professionalBoundary: z.string().trim().min(1).max(600).nullable().default(null),
+    jurisdictionPolicy: z.enum(CAPABILITY_JURISDICTION_POLICIES).default('NOT_REQUIRED'),
+    conservativeFallback: z.string().trim().min(1).max(600).nullable().default(null),
+    emergencyEscalation: z.string().trim().min(1).max(600).nullable().default(null),
+    commercialDisclosure: z.object({
+      relationshipType: z.enum(CAPABILITY_COMMERCIAL_RELATIONSHIPS),
+      compensationMayOccur: z.boolean(),
+      rankingInfluenced: z.boolean(),
+      summary: z.string().trim().min(1).max(500),
+      nonCommercialAlternative: z.string().trim().min(1).max(500).nullable(),
+    }).default({
+      relationshipType: 'NONE',
+      compensationMayOccur: false,
+      rankingInfluenced: false,
+      summary: 'This capability does not include a commercial action.',
+      nonCommercialAlternative: null,
+    }),
+    privacy: z.object({
+      dataSensitivity: z.enum(CAPABILITY_DATA_SENSITIVITY),
+      allowedPurpose: z.string().trim().min(1).max(500),
+      sharingBoundary: z.string().trim().min(1).max(500),
+      retentionBoundary: z.string().trim().min(1).max(500),
+    }).default({
+      dataSensitivity: 'STANDARD',
+      allowedPurpose: 'Use property context only to provide the requested homeowner capability.',
+      sharingBoundary: 'Do not share property context outside authorized users and required service processors.',
+      retentionBoundary: 'Retain capability data only under the applicable account and property retention policy.',
+    }),
   }),
   lifecycle: z.object({
     expectedOutput: NonEmptyBoundedString,

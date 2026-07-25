@@ -176,6 +176,30 @@ Approval completion does not replace the technical tests or drills elsewhere
 in WS9. An approved capability remains blocked by rollout, route, manifest,
 incident, privacy, authorization, or telemetry failures.
 
+## 5.2 Governance definition review
+
+Before recording role attestations, review the structured definition shown in
+Admin Release Gates:
+
+- material and regulated capabilities must state a professional boundary;
+- regulated capabilities must state how jurisdiction is verified;
+- safety capabilities must state both conservative fallback and emergency
+  escalation;
+- commercial actions must record the actual relationship, possible
+  compensation, ranking influence, disclosure, and a non-commercial
+  alternative; and
+- privacy classification and purpose/sharing/retention boundaries must match
+  the declared records handled by the capability.
+
+`DEFINITION_GOVERNANCE_INVALID` cannot be overridden by a human approval. Fix
+the canonical manifest, advance its policy or manifest version, deploy it, and
+repeat the required reviews. The current policy version is
+`capability-governance-v2`; earlier capability attestations are stale.
+
+Financing is intentionally blocked until accountable owners replace
+`NOT_RECORDED` with the actual commercial relationship and verify the
+compensation disclosure. Do not guess these terms merely to clear the gate.
+
 ## 6. Incident playbooks
 
 ### 6.1 Broken destination

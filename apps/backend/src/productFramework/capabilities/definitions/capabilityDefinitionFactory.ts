@@ -84,6 +84,90 @@ const OUTPUT_BY_OUTCOME: Record<CapabilityOutcomeCategory, string> = {
   UNDERSTAND_HOME: 'A durable home record or explanatory view.',
 };
 
+const DATA_SENSITIVITY_BY_CAPABILITY_ID: Record<
+  string,
+  ToolCapabilityDefinition['governance']['privacy']['dataSensitivity']
+> = {
+  'coverage-intelligence': 'SENSITIVE',
+  'coverage-options': 'SENSITIVE',
+  documents: 'SENSITIVE',
+  diy: 'SENSITIVE',
+  financing: 'HIGHLY_SENSITIVE',
+  'hoa-compliance': 'SENSITIVE',
+  'home-digital-twin': 'SENSITIVE',
+  'home-digital-will': 'HIGHLY_SENSITIVE',
+  'inspection-hub': 'SENSITIVE',
+  'insurance-trend': 'SENSITIVE',
+  'mortgage-refinance-radar': 'HIGHLY_SENSITIVE',
+  permits: 'SENSITIVE',
+  'project-tracker': 'HIGHLY_SENSITIVE',
+  'property-tax': 'SENSITIVE',
+  'quote-comparison': 'SENSITIVE',
+  'risk-premium-optimizer': 'SENSITIVE',
+  'seller-prep': 'SENSITIVE',
+  'tax-appeal': 'SENSITIVE',
+};
+
+function governanceDefinition(
+  seed: CapabilitySeed,
+): Pick<
+  ToolCapabilityDefinition['governance'],
+  | 'professionalBoundary'
+  | 'jurisdictionPolicy'
+  | 'conservativeFallback'
+  | 'emergencyEscalation'
+  | 'commercialDisclosure'
+  | 'privacy'
+> {
+  const material = seed.safetyTier === 'MATERIAL_FINANCIAL';
+  const regulated = seed.safetyTier === 'REGULATED_COVERAGE';
+  const safety = seed.safetyTier === 'SAFETY_EMERGENCY';
+  const commercialAction = seed.id === 'financing';
+  const dataSensitivity =
+    DATA_SENSITIVITY_BY_CAPABILITY_ID[seed.id] ?? 'STANDARD';
+
+  return {
+    professionalBoundary: material
+      ? 'Estimates and comparisons are educational planning inputs, not financial, tax, valuation, or investment advice.'
+      : regulated
+        ? 'Coverage information is educational and is not licensed insurance, legal, or coverage advice.'
+        : null,
+    jurisdictionPolicy: regulated ? 'SOURCE_VERIFIED' : 'NOT_REQUIRED',
+    conservativeFallback: safety
+      ? 'Do not perform work or remain in an unsafe area when conditions may threaten people or property.'
+      : null,
+    emergencyEscalation: safety
+      ? 'For immediate danger, leave the area and contact emergency services or the appropriate utility.'
+      : null,
+    commercialDisclosure: commercialAction
+      ? {
+          relationshipType: 'NOT_RECORDED',
+          compensationMayOccur: true,
+          rankingInfluenced: false,
+          summary:
+            'Commercial relationship and compensation terms must be recorded before this capability is approved for launch.',
+          nonCommercialAlternative:
+            'The homeowner can compare independent lenders or consult a financial professional without using this capability.',
+        }
+      : {
+          relationshipType: 'NONE',
+          compensationMayOccur: false,
+          rankingInfluenced: false,
+          summary: 'This capability does not include a commercial action.',
+          nonCommercialAlternative: null,
+        },
+    privacy: {
+      dataSensitivity,
+      allowedPurpose:
+        'Use the minimum property and workflow data needed to provide the homeowner-requested capability.',
+      sharingBoundary:
+        'Do not share capability data outside authorized household access and required service processors.',
+      retentionBoundary:
+        'Retain capability data only under the applicable account, property record, and verified privacy-request policy.',
+    },
+  };
+}
+
 /**
  * Verified output identities used for related and post-completion
  * compatibility. An empty entry is intentional: we do not infer an entity
@@ -408,10 +492,11 @@ export function buildCapabilityDefinition(seed: CapabilitySeed): ToolCapabilityD
     },
     governance: {
       safetyTier: seed.safetyTier,
-      policyVersion: 'capability-registry-v1',
+      policyVersion: 'capability-governance-v2',
       rolloutKey: seed.rolloutKey,
       releaseStage: seed.releaseStage,
       commercialAction: seed.id === 'financing',
+      ...governanceDefinition(seed),
     },
     lifecycle: {
       expectedOutput: seed.expectedOutput ?? output,

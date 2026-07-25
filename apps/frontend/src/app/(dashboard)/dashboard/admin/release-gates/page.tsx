@@ -268,6 +268,14 @@ export default function AdminReleaseGatesPage() {
                   <td className="px-3 py-2.5">
                     <p className="text-slate-600">{review.releaseStage} · {review.recommendationMode}</p>
                     <p className="text-[10px] text-slate-400">{review.safetyTier}</p>
+                    <p className="text-[10px] text-slate-400">
+                      {review.governanceDefinition.dataSensitivity} · {review.governanceDefinition.policyVersion}
+                    </p>
+                    {!review.governanceDefinition.valid ? (
+                      <p className="mt-1 text-[10px] font-medium text-rose-700">
+                        {review.governanceDefinition.issues.join(', ')}
+                      </p>
+                    ) : null}
                   </td>
                   <td className="px-3 py-2.5">
                     <div className="space-y-1">

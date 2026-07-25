@@ -1847,6 +1847,41 @@ This slice provides and enforces the approval mechanism; it does not claim that
 the required product, domain, trust, legal/compliance, or commercial reviews
 have been completed.
 
+### CAP-903: Elevated-risk and privacy definition validation
+
+Extended the canonical capability manifest with structured governance
+definitions for:
+
+- professional boundaries on material-financial and regulated guidance;
+- jurisdiction policy on regulated/coverage capabilities;
+- conservative fallback and emergency escalation on safety capabilities;
+- commercial relationship, compensation, ranking influence, disclosure, and
+  non-commercial alternatives; and
+- data sensitivity, allowed purpose, sharing boundary, and retention boundary.
+
+The validator evaluates every canonical manifest and is part of the standard
+Product Framework suite. It also infers a minimum privacy classification from
+declared Living Home Record reads/writes and capability identity, preventing a
+future tool from declaring standard sensitivity while handling documents,
+coverage, tax, trusted contacts, contracts, or payments.
+
+Admin Release Gates exposes definition-policy version, data sensitivity, and
+stable validation issues. An invalid definition receives
+`DEFINITION_GOVERNANCE_INVALID` and blocks aggregate real-user readiness before
+human approval is considered. The governance policy version advances to
+`capability-governance-v2`, intentionally invalidating any earlier capability
+attestations.
+
+All canonical definitions pass material, regulated, safety, and privacy
+validation. Financing remains deliberately blocked with
+`COMMERCIAL_RELATIONSHIP_NOT_RECORDED`; accountable owners must record the
+actual relationship and compensation terms before it can be approved. Code
+does not invent those business facts.
+
+No database schema change or migration is required for this slice. The
+canonical Knowledge Hub pgAdmin seed SQL was regenerated because manifest
+governance changes update the registry projection.
+
 ---
 
 ## 15. Repository Change Plan

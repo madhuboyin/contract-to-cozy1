@@ -8,6 +8,8 @@ import { TOOL_FLAGS, cohortFromPct, RolloutCohort } from '../config/featureFlags
 import { logger } from '../lib/logger';
 import {
   canonicalCapabilityRegistry,
+  validateCapabilityGovernanceDefinition,
+  type CapabilityGovernanceDefinitionIssue,
   type ToolCapabilityDefinition,
 } from '../productFramework/capabilities';
 import {
@@ -62,6 +64,7 @@ export const CAPABILITY_LAUNCH_BLOCKER_CODES = [
   'GOVERNANCE_REVIEW_SOURCE_UNAVAILABLE',
   'GOVERNANCE_APPROVAL_MISSING',
   'GOVERNANCE_APPROVAL_REJECTED',
+  'DEFINITION_GOVERNANCE_INVALID',
 ] as const;
 
 export type CapabilityLaunchBlockerCode =
@@ -94,6 +97,13 @@ export interface CapabilityLaunchReview {
     approvedRoles: string[];
     rejectedRoles: string[];
     missingRoles: string[];
+  };
+  governanceDefinition: {
+    valid: boolean;
+    issues: CapabilityGovernanceDefinitionIssue[];
+    policyVersion: string;
+    dataSensitivity:
+      ToolCapabilityDefinition['governance']['privacy']['dataSensitivity'];
   };
 }
 
@@ -135,7 +145,12 @@ export function buildCapabilityLaunchReviews(
       availability.rollouts[capability.governance.rolloutKey] ?? null;
     const governanceReview =
       options.governanceReadiness?.get(capability.id) ?? null;
+    const governanceDefinition =
+      validateCapabilityGovernanceDefinition(capability);
 
+    if (!governanceDefinition.valid) {
+      blockers.push('DEFINITION_GOVERNANCE_INVALID');
+    }
     if (!enforceHumanPolicyApprovals) {
       blockers.push('HUMAN_POLICY_APPROVALS_NOT_ENFORCED');
     } else if (!governanceReviewSourceAvailable) {
@@ -209,6 +224,11 @@ export function buildCapabilityLaunchReviews(
         approvedRoles: governanceReview?.approvedRoles ?? [],
         rejectedRoles: governanceReview?.rejectedRoles ?? [],
         missingRoles: governanceReview?.missingRoles ?? [],
+      },
+      governanceDefinition: {
+        ...governanceDefinition,
+        policyVersion: capability.governance.policyVersion,
+        dataSensitivity: capability.governance.privacy.dataSensitivity,
       },
     };
   });
@@ -423,6 +443,10 @@ export async function getReleaseSummary(): Promise<{
       review.blockers.includes('GOVERNANCE_APPROVAL_MISSING')
       || review.blockers.includes('GOVERNANCE_APPROVAL_REJECTED'))
       ? ['CAPABILITY_GOVERNANCE_BLOCKED']
+      : []),
+    ...(capabilityReviews.some((review) =>
+      review.blockers.includes('DEFINITION_GOVERNANCE_INVALID'))
+      ? ['CAPABILITY_DEFINITION_GOVERNANCE_INVALID']
       : []),
     ...(capabilityReviews.some((review) =>
       review.blockers.includes('INCIDENT_GATE_FAILED'))

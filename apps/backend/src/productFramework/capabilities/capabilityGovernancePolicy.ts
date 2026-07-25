@@ -10,6 +10,10 @@ import {
   type CapabilityReadyCandidate,
 } from './capabilityReadinessEvaluator';
 import type { ToolCapabilityRegistry } from './capabilityRegistry';
+import {
+  validateCapabilityGovernanceDefinition,
+} from './capabilityGovernanceDefinition';
+import type { ToolCapabilityDefinition } from './capability.contract';
 
 export const CAPABILITY_POLICY_DECISIONS = [
   'PROMOTABLE',
@@ -24,6 +28,7 @@ export const CAPABILITY_POLICY_REASON_CODES = [
   'CAPABILITY_PERMISSION_DENIED',
   'SAFETY_TIER_NOT_PERMITTED',
   'GOVERNANCE_APPROVAL_MISSING',
+  'GOVERNANCE_DEFINITION_INVALID',
   'CONTEXT_STALE',
   'CONTEXT_FRESHNESS_UNKNOWN',
   'SOURCE_RESPONSE_LOW_CONFIDENCE',
@@ -76,6 +81,7 @@ function sourceAction(
 function policyFor(
   candidate: CapabilityReadyCandidate,
   context: CapabilityRecommendationContext,
+  capability: ToolCapabilityDefinition,
 ): z.infer<typeof CapabilityPolicySchema> {
   const blockReasons: Array<
     typeof CAPABILITY_POLICY_REASON_CODES[number]
@@ -109,6 +115,9 @@ function policyFor(
     && !governance.approvedCapabilityIds.includes(candidate.capabilityId)
   ) {
     blockReasons.push('GOVERNANCE_APPROVAL_MISSING');
+  }
+  if (!validateCapabilityGovernanceDefinition(capability).valid) {
+    blockReasons.push('GOVERNANCE_DEFINITION_INVALID');
   }
   if (governance.contextFreshness === 'STALE') {
     blockReasons.push('CONTEXT_STALE');
@@ -176,7 +185,7 @@ export function applyCapabilityGovernancePolicy(input: {
     }
     return {
       ...candidate,
-      policy: policyFor(candidate, context),
+      policy: policyFor(candidate, context, capability),
     };
   });
   const count = (decision: CapabilityPolicyDecision) =>
