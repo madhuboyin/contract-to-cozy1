@@ -59,7 +59,7 @@
 | neighborhood-change-radar | Neighborhood Change Radar | home, ai | `/dashboard/properties/[id]/tools/neighborhood-change-radar` | Verified | PROTECT_MONITOR | BETA | LOW_CONSEQUENCE | OUTPUT_VIEWED | Canonical | Yes | CONTEXTUAL_CANONICAL |
 | oracle | Appliance Oracle | ai | `/dashboard/oracle` | Verified | PLAN_BUDGET | ACTIVE | LOW_CONSEQUENCE | PLAN_CREATED | Canonical | No | CATALOG_ONLY |
 | permits | Permit Tracker | home | `/dashboard/properties/[id]/tools/permits` | Verified | PLAN_BUDGET | ACTIVE | LOW_CONSEQUENCE | PLAN_CREATED | Canonical | No | CONTEXTUAL_CANONICAL |
-| plant-advisor | Plant Advisor | home, ai | `/dashboard/properties/[id]/tools/plant-advisor` | Verified | MAINTAIN_PREVENT | ACTIVE | LOW_CONSEQUENCE | ACTION_INITIATED | Canonical | Yes | CONTEXTUAL_CANONICAL |
+| plant-advisor | Plant Advisor | home, ai | `/dashboard/properties/[id]/tools/plant-advisor` | Verified | MAINTAIN_PREVENT | ACTIVE | LOW_CONSEQUENCE | OUTPUT_GENERATED | Canonical | Yes | CONTEXTUAL_CANONICAL |
 | price-finalization | Price Finalization | home, ai | `/dashboard/properties/[id]/tools/price-finalization` | Verified | DECIDE_COMPARE | ACTIVE | LOW_CONSEQUENCE | DECISION_RECORDED | Canonical | Yes | CATALOG_ONLY |
 | project-tracker | Project Tracker | home | `/dashboard/properties/[id]/projects` | Verified | PLAN_BUDGET | ACTIVE | LOW_CONSEQUENCE | PLAN_CREATED | Canonical | No | CONTEXTUAL_CANONICAL |
 | property-tax | Property Tax | home, ai | `/dashboard/properties/[id]/tools/property-tax` | Verified | SAVE_OPTIMIZE | ACTIVE | MATERIAL_FINANCIAL | OUTPUT_GENERATED | Canonical | Yes | CATALOG_ONLY |

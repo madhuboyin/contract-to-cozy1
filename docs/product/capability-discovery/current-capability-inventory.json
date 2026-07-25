@@ -724,7 +724,7 @@
       "rolloutKey": "PLANT_ADVISOR",
       "releaseStage": "ACTIVE",
       "safetyTier": "LOW_CONSEQUENCE",
-      "completionKind": "ACTION_INITIATED",
+      "completionKind": "OUTPUT_GENERATED",
       "lifecycleCanonicalized": true,
       "canonicalRelationshipCoverage": true,
       "recommendationDisposition": "CONTEXTUAL_CANONICAL"

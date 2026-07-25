@@ -1570,6 +1570,18 @@ lineage, and Home Record write identity. Rollout and rollback remain governed by
 - Maintenance context can surface Plant Advisor without making it a maintenance priority.
 - Generating a reviewed recommendation or care plan is meaningful completion.
 
+**CAP-801 implementation status: Complete.** The versioned Plant Advisor manifest now owns
+homeowner-language aliases, the room and plant records it reads and writes, a room output identity,
+and `plant_recommendations_generated` as its `OUTPUT_GENERATED` completion. The plant-suitable-room
+golden fixture continues to verify contextual eligibility, ranking, reason code, and room lineage.
+Canonical recommendation launches now select the source room through the shared destination-context
+contract while legacy room links remain compatible. Both the UI and service return
+`NEEDS_CONTEXT` when room light is missing; the ranking engine does not guess this safety-critical
+fit input. Successful non-empty recommendation generation emits canonical `TOOL_COMPLETED`
+analytics with room lineage, output identity, recommendation IDs, and Home Record writes. The
+existing room profile, recommendation, Home Plant, and care-plan models are reused, so no schema
+change or migration is required. Rollout and rollback remain governed by `PLANT_ADVISOR`.
+
 #### Home Digital Will
 
 - Relevant trusted-contact or critical-document state can create a suggestion.

@@ -49,6 +49,17 @@ type AddToHomeInput = {
   occurredAt?: string;
 };
 
+export function plantAdvisorGrowingContextReadiness(profile: {
+  lightLevel?: PlantLightLevel | null;
+}) {
+  return profile.lightLevel
+    ? { state: 'READY' as const, missingFields: [] as string[] }
+    : {
+        state: 'NEEDS_CONTEXT' as const,
+        missingFields: ['lightLevel'],
+      };
+}
+
 const LIGHT_SCORE: Record<PlantLightLevel, number> = {
   LOW: 0,
   MEDIUM: 1,
@@ -969,6 +980,18 @@ export class RoomPlantAdvisorService {
   async generateRecommendations(propertyId: string, roomId: string, input: GenerateInput) {
     const room = await this.assertRoomBelongs(propertyId, roomId);
     const profile = await this.ensureProfile(propertyId, roomId, input.profile);
+    const readiness = plantAdvisorGrowingContextReadiness(profile);
+    if (readiness.state === 'NEEDS_CONTEXT') {
+      throw new APIError(
+        'Choose the room light level before generating plant recommendations.',
+        422,
+        'PLANT_ADVISOR_CONTEXT_REQUIRED',
+        {
+          readiness: readiness.state,
+          missingFields: readiness.missingFields,
+        },
+      );
+    }
     const limit = clamp(input.limit ?? 8, 1, 24);
 
     const plants = await prisma.plantCatalog.findMany({

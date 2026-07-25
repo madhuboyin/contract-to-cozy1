@@ -197,7 +197,6 @@ const REQUIREMENT_OVERRIDES: Record<string, Partial<DiscoverableToolDefinition['
   'reserve-fund': { minimumTrackedSystems: 1 },
   'hidden-asset-finder': { minimumTrackedSystems: 1 },
   'home-digital-twin': { minimumKnownFacts: 1 },
-  'plant-advisor': { minimumKnownFacts: 1 },
 };
 
 const OUTPUT_BY_CATEGORY: Record<ToolOutcomeCategory, string> = {
@@ -220,6 +219,7 @@ const COMPLETION_KIND_BY_CATEGORY: Record<ToolOutcomeCategory, ToolCompletionKin
 
 const COMPLETION_KIND_OVERRIDES: Record<string, ToolCompletionKind> = {
   'material-specs': 'ARTIFACT_CREATED',
+  'plant-advisor': 'OUTPUT_GENERATED',
 };
 
 function appendLaunchContext(href: string, context?: ToolLaunchContext): string {

@@ -3,6 +3,8 @@ import { CustomRequest } from '../types';
 import { RoomPlantAdvisorService } from '../services/roomPlantAdvisor.service';
 import { PlantCarePlannerService } from '../services/plantCarePlanner.service';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
+import { recordToolLifecycleEvents } from '../services/analytics/toolLifecycle';
+import { plantAdvisorCompletionEvent } from '../services/analytics/plantAdvisorLifecycle';
 
 const service = new RoomPlantAdvisorService();
 const carePlanner = new PlantCarePlannerService();
@@ -102,6 +104,17 @@ export async function generateRoomPlantRecommendations(req: CustomRequest, res: 
       featureKey: AnalyticsFeature.ROOM_PLANT_ADVISOR,
       metadataJson: { actionType: 'generate_recommendations', roomId },
     });
+    if (data.recommendations.length > 0) {
+      void recordToolLifecycleEvents({
+        userId: req.user!.userId,
+        propertyId,
+        events: [plantAdvisorCompletionEvent({
+          roomId,
+          profileId: data.profile.id,
+          recommendationIds: data.recommendations.map((item) => item.id),
+        })],
+      }).catch(() => undefined);
+    }
 
     res.status(201).json({ success: true, data });
   } catch (err) {

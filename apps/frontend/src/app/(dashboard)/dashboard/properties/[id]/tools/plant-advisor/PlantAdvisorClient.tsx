@@ -52,6 +52,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/components/ui/use-toast';
 import { track } from '@/lib/analytics/events';
 import { api } from '@/lib/api/client';
+import { useToolLaunchContext } from '@/features/tools/ToolLaunchContextBoundary';
 import {
   addRoomPlantRecommendationToHome,
   dismissRoomPlantRecommendation,
@@ -75,6 +76,10 @@ import type {
   RoomPlantRecommendationDTO,
   RoomType,
 } from './types';
+import {
+  plantAdvisorGrowingContextState,
+  plantAdvisorRoomPrefill,
+} from './plantAdvisorLaunchContext';
 
 type RecommendationFilter = 'ALL' | PlantRecommendationStatus;
 
@@ -395,8 +400,13 @@ export default function PlantAdvisorClient() {
   const params = useParams<{ id: string }>();
   const searchParams = useSearchParams();
   const propertyId = params.id;
+  const toolLaunchContext = useToolLaunchContext();
   const launchSurface = searchParams.get('launchSurface') ?? 'direct';
-  const prefillRoomId = searchParams.get('roomId');
+  const canonicalRoomId = plantAdvisorRoomPrefill({
+    toolId: toolLaunchContext?.toolId,
+    resolved: toolLaunchContext?.resolved,
+  });
+  const prefillRoomId = searchParams.get('roomId') ?? canonicalRoomId;
   const prefillRoomType = parseRoomType(searchParams.get('roomType'));
   const weatherContext = parseWeatherContext(searchParams.get('weatherContext'));
   const weatherContextLabel = weatherContext ? WEATHER_CONTEXT_LABELS[weatherContext] : 'Weather';
@@ -725,6 +735,7 @@ export default function PlantAdvisorClient() {
   const hasProfile = Boolean(roomState?.profile);
   const hasRecommendations = recommendations.length > 0;
   const hasGeneratedRecommendations = Boolean(roomState?.room.lastRecommendationGeneratedAt);
+  const growingContext = plantAdvisorGrowingContextState(draft.lightLevel);
 
   function handleGenerateClick(source: 'primary' | 'refresh') {
     trackEvent('PLANT_ADVISOR_GENERATE_CLICKED', 'recommendations', {
@@ -1147,7 +1158,10 @@ export default function PlantAdvisorClient() {
                       <Button
                         className="min-h-[44px]"
                         onClick={() => handleGenerateClick('primary')}
-                        disabled={generateMutation.isPending}
+                        disabled={
+                          generateMutation.isPending
+                          || growingContext.state === 'NEEDS_CONTEXT'
+                        }
                       >
                         {generateMutation.isPending ? (
                           <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
@@ -1173,6 +1187,15 @@ export default function PlantAdvisorClient() {
                       </Button>
                     }
                   />
+                  {growingContext.state === 'NEEDS_CONTEXT' ? (
+                    <div
+                      className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900"
+                      role="status"
+                    >
+                      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                      <span>{growingContext.reason}</span>
+                    </div>
+                  ) : null}
                 </MobileCard>
               </MobileSection>
 
@@ -1185,7 +1208,10 @@ export default function PlantAdvisorClient() {
                   <Button
                     variant="outline"
                     size="sm"
-                    disabled={generateMutation.isPending}
+                    disabled={
+                      generateMutation.isPending
+                      || growingContext.state === 'NEEDS_CONTEXT'
+                    }
                     onClick={() => handleGenerateClick('refresh')}
                   >
                     <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
