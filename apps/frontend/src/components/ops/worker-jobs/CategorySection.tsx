@@ -53,15 +53,21 @@ export function CategorySection({
       {!collapsed && (
         <div className="mt-2">
           {view === 'cards' ? (
-            <div className="grid items-start gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            // Multi-column ("masonry") layout, not CSS grid: cards vary a lot in
+            // height (smoke-checklist jobs, expanded Details, dry-run controls),
+            // and a grid row sizes to its tallest cell — leaving dead space under
+            // every shorter card in that row. Columns pack each card by its own
+            // height instead.
+            <div className="columns-1 gap-3 sm:columns-2 xl:columns-3">
               {jobs.map((job) => (
-                <JobCard
-                  key={job.key}
-                  job={job}
-                  onTrigger={onTrigger}
-                  triggering={triggeringKey === job.key}
-                  triggerSuccess={triggeredKey === job.key}
-                />
+                <div key={job.key} className="mb-3 break-inside-avoid">
+                  <JobCard
+                    job={job}
+                    onTrigger={onTrigger}
+                    triggering={triggeringKey === job.key}
+                    triggerSuccess={triggeredKey === job.key}
+                  />
+                </div>
               ))}
             </div>
           ) : (
