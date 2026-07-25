@@ -884,6 +884,40 @@ class APIClient {
     return { data: payload as T };
   }
 
+  async postText(
+    endpoint: string,
+    data?: any,
+  ): Promise<{ data: string; filename: string | null }> {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      Accept: 'text/markdown',
+    };
+    if (this.shouldAttachCsrf(endpoint, 'POST')) {
+      const csrfToken = await this.getCsrfToken();
+      if (csrfToken) headers['x-csrf-token'] = csrfToken;
+    }
+    const response = await fetch(`${this.baseURL}${endpoint}`, {
+      method: 'POST',
+      credentials: 'include',
+      headers,
+      body: JSON.stringify(data ?? {}),
+    });
+    const text = await response.text();
+    if (!response.ok) {
+      let message = `Request failed (${response.status})`;
+      try {
+        const parsed = JSON.parse(text);
+        message = parsed?.error?.message ?? parsed?.message ?? message;
+      } catch {
+        // Keep the status-based error when the server did not return JSON.
+      }
+      throw new APIError(message, response.status);
+    }
+    const disposition = response.headers.get('content-disposition');
+    const filename = disposition?.match(/filename="([^"]+)"/i)?.[1] ?? null;
+    return { data: text, filename };
+  }
+
   /**
    * Generic PUT request
    */

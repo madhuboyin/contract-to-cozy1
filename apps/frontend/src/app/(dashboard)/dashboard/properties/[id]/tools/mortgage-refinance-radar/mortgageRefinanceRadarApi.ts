@@ -282,8 +282,12 @@ export type RefinanceAlertPreferenceDTO = {
 
 // ─── API Functions ────────────────────────────────────────────────────────────
 
-export async function getRadarStatus(propertyId: string): Promise<RadarStatusDTO | null> {
-  const res = await api.get(`/api/properties/${propertyId}/refinance-radar`);
+export async function getRadarStatus(
+  propertyId: string,
+  source?: 'direct' | 'property_overview' | 'home_portfolio',
+): Promise<RadarStatusDTO | null> {
+  const query = source ? `?source=${encodeURIComponent(source)}` : '';
+  const res = await api.get(`/api/properties/${propertyId}/refinance-radar${query}`);
   const status = res.data?.radarStatus as RadarStatusDTO | undefined;
   return status ? { ...status, propertyContext: res.data?.propertyContext } : null;
 }
@@ -375,6 +379,31 @@ export async function runScenario(
     ...(res.data?.scenario as RefinanceScenarioResult),
     propertyContext: res.data?.propertyContext,
   };
+}
+
+export async function exportScenarioMarkdown(
+  propertyId: string,
+  body: Parameters<typeof runScenario>[1],
+): Promise<{ markdown: string; filename: string }> {
+  const response = await api.postText(
+    `/api/properties/${propertyId}/refinance-scenario/export-markdown`,
+    { ...body, saveScenario: false },
+  );
+  return {
+    markdown: response.data,
+    filename:
+      response.filename ?? `mortgage-refinance-scenario-${propertyId}.md`,
+  };
+}
+
+export async function recordRefinanceFeedback(
+  propertyId: string,
+  body: {
+    feedback: 'HELPFUL' | 'NOT_NOW' | 'NOT_RELEVANT';
+    context: 'RADAR' | 'OPPORTUNITY' | 'SCENARIO';
+  },
+): Promise<void> {
+  await api.post(`/api/properties/${propertyId}/refinance-radar/feedback`, body);
 }
 
 export async function getSavedScenarios(

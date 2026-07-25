@@ -19,16 +19,19 @@ import {
   Bell,
   Mail,
   Smartphone,
+  Download,
 } from 'lucide-react';
 import HomeToolsRail from '../../components/HomeToolsRail';
 import { PropertyContextStatusNotice } from '@/components/property-context/PropertyContextStatusNotice';
 import {
   evaluateRadar,
+  exportScenarioMarkdown,
   getRefinanceAlertPreference,
   getFinancingMortgageProfile,
   getRadarStatus,
   getRateHistory,
   runScenario,
+  recordRefinanceFeedback,
   saveFinancingProfile,
   updateRefinanceAlertPreference,
   type RefinanceAlertPreferenceDTO,
@@ -807,6 +810,72 @@ function AlertPreferencesCard({
   );
 }
 
+function RefinanceFeedbackCard({
+  propertyId,
+  context,
+}: {
+  propertyId: string;
+  context: 'RADAR' | 'OPPORTUNITY' | 'SCENARIO';
+}) {
+  const [recorded, setRecorded] = useState<string | null>(null);
+  const [sending, setSending] = useState(false);
+
+  async function submit(
+    feedback: 'HELPFUL' | 'NOT_NOW' | 'NOT_RELEVANT',
+  ) {
+    setSending(true);
+    try {
+      await recordRefinanceFeedback(propertyId, { feedback, context });
+      setRecorded(feedback);
+      track('action_completed', {
+        tool: 'mortgage-refinance-radar',
+        actionType: `feedback_${feedback.toLowerCase()}`,
+        propertyId,
+      });
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return (
+    <GlassCard>
+      <div className="flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+            Was this refinance guidance useful?
+          </h3>
+          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+            Your response improves opportunity thresholds and alert quality.
+          </p>
+        </div>
+        {recorded ? (
+          <p role="status" className="text-sm font-semibold text-emerald-700 dark:text-emerald-300">
+            Feedback recorded. Thank you.
+          </p>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {[
+              ['HELPFUL', 'Helpful'],
+              ['NOT_NOW', 'Not now'],
+              ['NOT_RELEVANT', 'Not relevant'],
+            ].map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                disabled={sending}
+                onClick={() => submit(value as 'HELPFUL' | 'NOT_NOW' | 'NOT_RELEVANT')}
+                className="min-h-[36px] rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </GlassCard>
+  );
+}
+
 // ─── Rate Trend Card ──────────────────────────────────────────────────────────
 
 function RateTrendCard({ data }: { data: RadarStatusAvailable }) {
@@ -901,7 +970,11 @@ function ScenarioCalculator({
   const [saveComparison, setSaveComparison] = useState(false);
   const [lastRunSaved, setLastRunSaved] = useState(false);
   const [running, setRunning] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [result, setResult] = useState<RefinanceScenarioResult | null>(null);
+  const [lastScenarioInput, setLastScenarioInput] = useState<
+    Parameters<typeof runScenario>[1] | null
+  >(null);
   const [error, setError] = useState<string | null>(null);
   const [showResult, setShowResult] = useState(true);
 
@@ -936,7 +1009,7 @@ function ScenarioCalculator({
       const extraPrincipalAmount = optionalNumber(extraPrincipal, 'Extra principal', 5_000_000);
       const recastPrincipalAmount = optionalNumber(recastPrincipal, 'Recast principal', 5_000_000);
       const cashOutAmount = optionalNumber(cashOut, 'Cash-out amount', 5_000_000);
-      const scenario = await runScenario(propertyId, {
+      const scenarioInput: Parameters<typeof runScenario>[1] = {
         targetRate: rate,
         targetTerm,
         closingCostAmount: closingCostAmount && closingCostAmount > 0
@@ -953,15 +1026,56 @@ function ScenarioCalculator({
         borrowerCreditBand: creditBand,
         objective,
         saveScenario: saveComparison,
-      });
+      };
+      const scenario = await runScenario(propertyId, scenarioInput);
       setResult(scenario);
+      setLastScenarioInput(scenarioInput);
       setLastRunSaved(saveComparison);
       setShowResult(true);
       track('action_completed', { tool: 'mortgage-refinance-radar', actionType: 'run_scenario', propertyId });
+      if (scenario.monthlySavings > 0) {
+        track('savings_projected', {
+          tool: 'mortgage-refinance-radar',
+          amountUsd: scenario.monthlySavings,
+          propertyId,
+        });
+      }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Scenario calculation failed.');
     } finally {
       setRunning(false);
+    }
+  }
+
+  async function handleExportMarkdown() {
+    if (!lastScenarioInput) return;
+    setExporting(true);
+    setError(null);
+    try {
+      const exported = await exportScenarioMarkdown(propertyId, lastScenarioInput);
+      const url = URL.createObjectURL(
+        new Blob([exported.markdown], { type: 'text/markdown;charset=utf-8' }),
+      );
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = exported.filename;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+      track('action_completed', {
+        tool: 'mortgage-refinance-radar',
+        actionType: 'export_markdown',
+        propertyId,
+      });
+    } catch (exportError) {
+      setError(
+        exportError instanceof Error
+          ? exportError.message
+          : 'Unable to export the Markdown summary.',
+      );
+    } finally {
+      setExporting(false);
     }
   }
 
@@ -1236,6 +1350,15 @@ function ScenarioCalculator({
                 Comparison saved
               </span>
             )}
+            <button
+              type="button"
+              onClick={handleExportMarkdown}
+              disabled={exporting || !lastScenarioInput}
+              className="ml-2 inline-flex min-h-[34px] items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+            >
+              <Download className="h-3.5 w-3.5" aria-hidden="true" />
+              {exporting ? 'Exporting…' : 'Export Markdown'}
+            </button>
 
             {showResult && (
               <InnerCard className="p-4">
@@ -1952,6 +2075,11 @@ export default function MortgageRefinanceRadarClient() {
 
           {/* 6. Scenario planner */}
           <ScenarioCalculator propertyId={propertyId} contextData={available} />
+
+          <RefinanceFeedbackCard
+            propertyId={propertyId}
+            context={available.radarState === 'OPEN' ? 'OPPORTUNITY' : 'RADAR'}
+          />
 
           {/* 3b. Steps to act — shown when opportunity is open */}
           {available.radarState === 'OPEN' && (

@@ -91,6 +91,13 @@ export const runScenarioSchema = z
 
 export type RunScenarioBody = z.infer<typeof runScenarioSchema>;
 
+export const refinanceFeedbackSchema = z.object({
+  feedback: z.enum(['HELPFUL', 'NOT_NOW', 'NOT_RELEVANT']),
+  context: z.enum(['RADAR', 'OPPORTUNITY', 'SCENARIO']).default('RADAR'),
+});
+
+export type RefinanceFeedbackBody = z.infer<typeof refinanceFeedbackSchema>;
+
 // ─── Alert Preferences ───────────────────────────────────────────────────────
 
 const quietTimeSchema = z

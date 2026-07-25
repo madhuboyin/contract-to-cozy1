@@ -11,6 +11,7 @@ import {
   IngestRateSnapshotBody,
   RateHistoryQuery,
   RefinanceAlertPreferenceBody,
+  RefinanceFeedbackBody,
   RunScenarioBody,
 } from './validators/refinanceRadar.validators';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
@@ -24,6 +25,8 @@ import {
   getRefinanceAlertPreference,
   updateRefinanceAlertPreference,
 } from './refinanceAlertPreference.service';
+import { buildRefinanceScenarioMarkdown } from './refinanceScenarioMarkdown';
+import { prisma } from '../lib/prisma';
 
 const service = new RefinanceRadarService();
 
@@ -82,11 +85,21 @@ export class RefinanceRadarController {
 
       analyticsEmitter.track({
         eventType: AnalyticsEvent.TOOL_USED,
+        eventName: req.query.source === 'home_portfolio'
+          ? 'refinance_home_status_checked'
+          : result.available && result.radarState === 'OPEN'
+            ? 'refinance_opportunity_viewed'
+            : 'refinance_radar_viewed',
         userId: req.user?.userId,
         propertyId,
         moduleKey: AnalyticsModule.FINANCIAL,
         featureKey: AnalyticsFeature.MORTGAGE_REFINANCE_RADAR,
-        metadataJson: {},
+        source: typeof req.query.source === 'string' ? req.query.source : 'direct',
+        metadataJson: {
+          available: result.available,
+          radarState: result.available ? result.radarState : null,
+          confidenceLevel: result.available ? result.confidenceLevel : null,
+        },
       });
 
       res.json({ success: true, data: { radarStatus: result, propertyContext } });
@@ -190,11 +203,15 @@ export class RefinanceRadarController {
 
       analyticsEmitter.track({
         eventType: AnalyticsEvent.ACTION_COMPLETED,
+        eventName: body.saveScenario
+          ? 'refinance_scenario_saved'
+          : 'refinance_scenario_run',
         userId: req.user?.userId,
         propertyId,
         moduleKey: AnalyticsModule.FINANCIAL,
         featureKey: AnalyticsFeature.MORTGAGE_REFINANCE_RADAR,
         metadataJson: { actionType: 'run_scenario', saved: body.saveScenario ?? false },
+        valueNumeric: result.monthlySavings,
       });
 
       const propertyContext = await getFinancialContextEnvelope(
@@ -204,6 +221,104 @@ export class RefinanceRadarController {
         result.propertyContextVersion,
       );
       res.json({ success: true, data: { scenario: result, propertyContext } });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  static async exportScenarioMarkdown(
+    req: AuthRequest,
+    res: Response,
+    next: NextFunction,
+  ) {
+    try {
+      const { propertyId } = req.params;
+      const userId = requireUserId(req);
+      const body = req.body as RunScenarioBody;
+      const currentContext = await assertFinancialContextApplicable(
+        propertyId,
+        userId,
+        'REFINANCE_RADAR',
+        'mortgageModeling',
+      );
+      const result = await service.runScenario(propertyId, {
+        targetRate: body.targetRate,
+        targetTerm: body.targetTerm,
+        closingCostAmount: body.closingCostAmount,
+        closingCostPercent: body.closingCostPercent,
+        discountPoints: body.discountPoints,
+        additionalFeesAmount: body.additionalFeesAmount,
+        lenderCreditsAmount: body.lenderCreditsAmount,
+        escrowFundingAmount: body.escrowFundingAmount,
+        prepaymentPenaltyAmount: body.prepaymentPenaltyAmount,
+        extraPrincipalAmount: body.extraPrincipalAmount,
+        recastPrincipalAmount: body.recastPrincipalAmount,
+        recastFeeAmount: body.recastFeeAmount,
+        cashOutAmount: body.cashOutAmount,
+        borrowerCreditBand: body.borrowerCreditBand,
+        objective: body.objective,
+        saveScenario: false,
+        propertyContextVersion: currentContext.contextVersion,
+      });
+      const property = await prisma.property.findUnique({
+        where: { id: propertyId },
+        select: { address: true, city: true, state: true, zipCode: true },
+      });
+      const propertyLabel = property
+        ? `${property.address}, ${property.city}, ${property.state} ${property.zipCode}`
+        : `Property ${propertyId}`;
+      const markdown = buildRefinanceScenarioMarkdown({
+        propertyLabel,
+        generatedAt: new Date(),
+        result,
+      });
+
+      analyticsEmitter.track({
+        eventType: AnalyticsEvent.ACTION_COMPLETED,
+        eventName: 'refinance_scenario_markdown_exported',
+        userId,
+        propertyId,
+        moduleKey: AnalyticsModule.FINANCIAL,
+        featureKey: AnalyticsFeature.MORTGAGE_REFINANCE_RADAR,
+        source: 'scenario_result',
+        metadataJson: {
+          targetTerm: body.targetTerm,
+          objective: body.objective,
+          includedAlternativeCount: result.decisionAlternatives.length,
+        },
+      });
+
+      res.setHeader('Content-Type', 'text/markdown; charset=utf-8');
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename="mortgage-refinance-scenario-${propertyId}.md"`,
+      );
+      res.status(200).send(markdown);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  static async recordFeedback(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const userId = requireUserId(req);
+      const { propertyId } = req.params;
+      const body = req.body as RefinanceFeedbackBody;
+      analyticsEmitter.track({
+        eventType: AnalyticsEvent.ACTION_COMPLETED,
+        eventName: 'refinance_feedback_recorded',
+        userId,
+        propertyId,
+        moduleKey: AnalyticsModule.FINANCIAL,
+        featureKey: AnalyticsFeature.MORTGAGE_REFINANCE_RADAR,
+        source: 'radar',
+        metadataJson: {
+          feedback: body.feedback,
+          context: body.context,
+        },
+        valueText: body.feedback,
+      });
+      res.json({ success: true, data: { recorded: true } });
     } catch (err) {
       next(err);
     }

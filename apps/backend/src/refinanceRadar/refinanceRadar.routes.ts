@@ -15,6 +15,7 @@ import {
   ingestRateSnapshotSchema,
   rateHistoryQuerySchema,
   refinanceAlertPreferenceSchema,
+  refinanceFeedbackSchema,
   runScenarioSchema,
 } from './validators/refinanceRadar.validators';
 
@@ -173,6 +174,22 @@ router.post(
   propertyAuthMiddleware,
   validateBody(runScenarioSchema),
   RefinanceRadarController.runScenario,
+);
+
+router.post(
+  '/properties/:propertyId/refinance-scenario/export-markdown',
+  authenticate,
+  propertyAuthMiddleware,
+  validateBody(runScenarioSchema),
+  RefinanceRadarController.exportScenarioMarkdown,
+);
+
+router.post(
+  '/properties/:propertyId/refinance-radar/feedback',
+  authenticate,
+  propertyAuthMiddleware,
+  validateBody(refinanceFeedbackSchema),
+  RefinanceRadarController.recordFeedback,
 );
 
 /**

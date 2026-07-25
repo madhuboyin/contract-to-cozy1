@@ -10,9 +10,11 @@ _PRODUCT & ENGINEERING ENHANCEMENT PLAN_
 
 **Baseline:** main @ c5c9332 — canonical mortgage sync and Gazette correctness fix
 
-**Status:** Recommended roadmap for prioritization
+**Status:** Active implementation roadmap
 
-**Implementation status (July 25, 2026):** P0 implementation has started. A
+**Implementation status (July 25, 2026):** The correctness and always-on
+foundation is implemented, and the explainability and personalization roadmap
+is substantially delivered. A
 newly persisted mortgage-rate snapshot now triggers a paginated, bounded
 evaluation sweep of complete canonical Financing profiles, with per-snapshot
 idempotency and run totals. The current radar card is mounted on Home and the
@@ -40,8 +42,8 @@ only after a meaningful rate decline, with a 30-day event cooldown. Home
 projects those events through a stable action key so canonical snooze and
 dismissal controls apply, suppresses the action as soon as the profile is
 complete, and lets a homeowner record that the property has no mortgage so
-future radar prompts stop. External-notification policy remains a later,
-explicitly opt-in step. The radar now also calculates the highest approximate
+future radar prompts stop. External-notification rollout remains explicitly
+opt-in and operationally gated. The radar now also calculates the highest approximate
 30-year benchmark that clears every existing OPEN gate under the homeowner's
 current saved assumptions. Fresh and read-only status responses expose that
 personalized monitoring threshold plus the top three ordered decision factors;
@@ -94,11 +96,35 @@ option that lowers payment exists. The interface explicitly warns that lender
 rates and fees vary by term. Objective and comparison details use existing
 scenario metadata JSON, so no schema change or migration is required.
 
+### Current completion matrix
+
+| Capability | Status | Current implementation or remaining gate |
+| --- | --- | --- |
+| Canonical Financing reuse and known-field prefill | Complete | Radar and Financing use the same property financing profile. |
+| Weekly ingestion and property evaluation | Complete | Paginated durable claims, retries, dead-letter handling, resumability, and run totals are implemented. |
+| OPEN, material UPDATE, CLOSED, and DATA_REQUIRED transitions | Complete | Durable outbox events and replay-safe chart history are implemented. |
+| Home opportunity and missing-data promotion | Complete | Home shows actionable states, honors feedback controls, and ranks the highest-value OPEN opportunity across properties. |
+| One-year rate graph and personalized trigger rate | Complete | Accessible chart, table fallback, transition markers, source/freshness, and trigger-rate explanation are implemented. |
+| Alert preferences and guarded email delivery | Implemented; rollout gated | Consent, confidence, freshness, cadence, quiet hours, sensitivity, cooldown, material-improvement override, and preference deep link are implemented. Production flags and provider readiness remain operational gates. |
+| Cost, payoff, APR, escrow, and prepayment modeling | Complete for planning | Detailed educational estimates are implemented; official lender disclosures remain authoritative. |
+| LTV, liens, PMI, occupancy, property type, loan type, and conforming context | Complete for broad context | The configured conforming baseline must be supplied operationally; program and high-cost-area limits require lender confirmation. |
+| Term and objective comparison | Complete | Balanced, lower-payment, faster-payoff, and lower-total-cost modes compare 15-, 20-, and 30-year terms. |
+| Retain, extra-principal, recast, and cash-out alternatives | Complete for planning | Recast and cash-out results remain conditional on servicer/lender eligibility. |
+| Lender-ready Markdown export | Complete | Recomputes against canonical context and exports assumptions, costs, alternatives, questions, and disclaimers as Markdown only. |
+| Funnel and trust instrumentation | Complete for product events | Opportunity views, Home conversion, scenario runs/saves, projected savings, exports, feedback, and durable alert-suppression outcomes are captured. Reporting dashboards remain an analytics-operations follow-up. |
+| FHA, VA, jumbo, ARM, and multiple-mortgage program rules | Pending | Add program-specific eligibility ranges without implying approval. |
+| Push notifications | Deferred | Requires a configured push provider and consent contract. |
+| Lender-offer and Loan Estimate comparison | Deferred | Begin only after trust and usefulness guardrails demonstrate readiness. |
+
 ## Executive recommendation
 
 > **Decision:** Fund a three-release evolution that makes the radar genuinely proactive: evaluate every eligible property after each rate update, promote state transitions onto Home, and explain the decision with a one-year rate view and complete cost assumptions.
 
-The feature already has a sound calculation foundation, conservative opportunity thresholds, hysteresis, market-rate ingestion, scenario analysis, and persisted opportunity history. Its primary weakness is orchestration: fresh rates do not automatically reevaluate eligible homes, and Home does not consistently surface current opportunities or intelligently request missing mortgage facts.
+The feature now has the calculation, orchestration, Home promotion, proactive
+data capture, explainability, Markdown export, and feedback foundations required
+for an always-on product. Remaining product work is concentrated in
+program-specific eligibility, analytics reporting, push delivery, and eventual
+lender-offer comparison.
 
 - Treat Financing Center as the only owner of mortgage facts; never ask users to duplicate known information.
 

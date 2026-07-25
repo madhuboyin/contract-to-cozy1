@@ -14,6 +14,7 @@ import {
   type RadarStatusAvailable,
 } from '../tools/mortgage-refinance-radar/mortgageRefinanceRadarApi';
 import { FEATURE_FLAGS } from '@/lib/featureFlags';
+import { track } from '@/lib/analytics/events';
 
 type RefinancePortfolioProperty = {
   id: string;
@@ -32,7 +33,7 @@ export function RefinanceRadarPortfolioCard({
   const queries = useQueries({
     queries: properties.map((property) => ({
       queryKey: ['refinance-radar-status', property.id],
-      queryFn: () => getRadarStatus(property.id),
+      queryFn: () => getRadarStatus(property.id, 'home_portfolio'),
       enabled: Boolean(property.id) && FEATURE_FLAGS.MORTGAGE_REFINANCE_RADAR,
       staleTime: 10 * 60 * 1000,
     })),
@@ -66,6 +67,13 @@ export function RefinanceRadarPortfolioCard({
     <Link
       href={`/dashboard/properties/${best.property.id}/tools/mortgage-refinance-radar`}
       className="no-brand-style block"
+      onClick={() =>
+        track('action_taken', {
+          tool: 'mortgage-refinance-radar',
+          actionType: 'open_from_home_portfolio',
+          propertyId: best.property.id,
+        })
+      }
     >
       <MobileCard variant="standard" className="space-y-2.5 transition-colors hover:bg-[hsl(var(--mobile-bg-muted))]">
         <div className="flex items-start justify-between gap-2">
@@ -115,7 +123,7 @@ export default function RefinanceRadarDashboardCard({
 
   const { data, isLoading } = useQuery({
     queryKey: ['refinance-radar-status', propertyId],
-    queryFn: () => getRadarStatus(propertyId),
+    queryFn: () => getRadarStatus(propertyId, 'property_overview'),
     enabled: Boolean(propertyId) && FEATURE_FLAGS.MORTGAGE_REFINANCE_RADAR,
     staleTime: 10 * 60 * 1000,
   });
