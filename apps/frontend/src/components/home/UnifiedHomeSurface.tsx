@@ -32,6 +32,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { useToast } from '@/components/ui/use-toast';
 import { UnifiedHomeToolsSection } from '@/components/home/UnifiedHomeToolsSection';
 import { resolveHomeActionPrimaryHref } from '@/lib/navigation/homeActionNavigation';
+import RefinanceRadarDashboardCard from '@/app/(dashboard)/dashboard/properties/[id]/components/RefinanceRadarDashboardCard';
 
 function priorityTone(priority: RankedHomeActionDTO['priority']) {
   if (priority === 'NOW') return 'border-rose-200 bg-rose-50 text-rose-700';
@@ -675,6 +676,8 @@ export function UnifiedHomeSurface({ propertyId }: { propertyId: string }) {
           />
         ))}
       </section>
+
+      <RefinanceRadarDashboardCard propertyId={propertyId} homePromotion />
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Card className="rounded-[24px] border-slate-200 shadow-sm">

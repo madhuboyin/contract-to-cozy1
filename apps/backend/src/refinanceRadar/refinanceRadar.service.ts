@@ -6,7 +6,11 @@
 import { RefinanceConfidenceLevel, RefinanceRadarState, RefinanceScenarioTerm } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { APIError } from '../middleware/error.middleware';
-import { REFINANCE_DISCLAIMER, RATE_TREND_LOOKBACK_SNAPSHOTS } from './config/refinanceRadar.config';
+import {
+  REFINANCE_DISCLAIMER,
+  RATE_TREND_LOOKBACK_SNAPSHOTS,
+  shouldPromptForMissingMortgageDetails,
+} from './config/refinanceRadar.config';
 import {
   calcRefinanceScenario,
   TERM_TO_MONTHS,
@@ -129,6 +133,44 @@ export class RefinanceRadarService {
     };
   }
 
+  private async getMissingMortgageStatus(
+    propertyId: string,
+  ): Promise<RadarStatusResult> {
+    const [profile, recentSnapshots] = await Promise.all([
+      prisma.propertyFinancingProfile.findUnique({
+        where: { propertyId },
+        select: {
+          currentMortgageBalanceCents: true,
+          interestRateBps: true,
+          remainingTermMonths: true,
+        },
+      }),
+      this.rateService.getRecentSnapshots(RATE_TREND_LOOKBACK_SNAPSHOTS),
+    ]);
+
+    const missingFields: NonNullable<
+      Extract<RadarStatusResult, { available: false }>['missingFields']
+    > = [];
+    if (profile?.currentMortgageBalanceCents == null) missingFields.push('currentMortgageBalance');
+    if (profile?.interestRateBps == null) missingFields.push('interestRate');
+    if (profile?.remainingTermMonths == null) missingFields.push('remainingTerm');
+
+    const trendSummary = this.rateService.computeTrendSummary(recentSnapshots);
+    return {
+      available: false,
+      reason: 'MISSING_MORTGAGE_DATA',
+      missingFields,
+      trendSummary,
+      rateDataFreshnessAt: recentSnapshots[0]?.date ?? null,
+      shouldPromptForMortgageDetails: shouldPromptForMissingMortgageDetails({
+        missingFieldCount: missingFields.length,
+        trend: trendSummary.trend30yr,
+        currentRatePct: trendSummary.current30yr,
+        priorRatePct: trendSummary.prior30yr,
+      }),
+    };
+  }
+
   // ── Radar State Persistence ───────────────────────────────────────────────────
 
   /**
@@ -243,7 +285,7 @@ export class RefinanceRadarService {
   async evaluateProperty(propertyId: string, propertyContextVersion: string): Promise<RadarStatusResult> {
     const mortgageContext = await this.getMortgageContext(propertyId);
     if (!mortgageContext) {
-      return { available: false, reason: 'MISSING_MORTGAGE_DATA' };
+      return this.getMissingMortgageStatus(propertyId);
     }
 
     // Read the current persisted radar state before evaluating so the engine
@@ -310,7 +352,7 @@ export class RefinanceRadarService {
   async getCurrentStatus(propertyId: string, propertyContextVersion: string): Promise<RadarStatusResult> {
     const mortgageContext = await this.getMortgageContext(propertyId);
     if (!mortgageContext) {
-      return { available: false, reason: 'MISSING_MORTGAGE_DATA' };
+      return this.getMissingMortgageStatus(propertyId);
     }
 
     const radarState = await prisma.propertyRefinanceRadarState.findUnique({

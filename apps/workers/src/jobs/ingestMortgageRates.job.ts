@@ -46,6 +46,7 @@ export interface MortgageRateIngestResult {
   rate30yr: number | null;
   rate15yr: number | null;
   created: boolean;   // false if snapshot already existed for this date
+  snapshotId?: string;
   skipped: boolean;
   reason?: string;
   /** Present when this run was manually/admin-triggered (W6 item 3) — lets a smoke run's writes be found and cleaned up by exact ID. */
@@ -191,6 +192,7 @@ export async function ingestMortgageRatesJob(
           rate30yr: snapshot.rate30yr,
           rate15yr: snapshot.rate15yr,
           created,
+          snapshotId: snapshot.id,
           skipped: false,
           smokeCorrelationId,
         };
@@ -252,6 +254,7 @@ export async function ingestMortgageRatesJob(
       rate30yr: snapshot.rate30yr,
       rate15yr: snapshot.rate15yr,
       created,
+      snapshotId: snapshot.id,
       skipped: false,
       smokeCorrelationId,
     };

@@ -12,6 +12,15 @@ _PRODUCT & ENGINEERING ENHANCEMENT PLAN_
 
 **Status:** Recommended roadmap for prioritization
 
+**Implementation status (July 25, 2026):** P0 implementation has started. A
+newly persisted mortgage-rate snapshot now triggers a paginated, bounded
+evaluation sweep of complete canonical Financing profiles, with per-snapshot
+idempotency and run totals. The current radar card is mounted on Home and the
+property overview; Home suppresses CLOSED monitoring and requests missing
+mortgage facts only after a meaningful rate decline. Outbox-backed transition
+delivery, durable per-property leases/dead-letter handling, and the one-year
+chart remain next steps.
+
 ## Executive recommendation
 
 > **Decision:** Fund a three-release evolution that makes the radar genuinely proactive: evaluate every eligible property after each rate update, promote state transitions onto Home, and explain the decision with a one-year rate view and complete cost assumptions.

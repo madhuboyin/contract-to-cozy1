@@ -79,6 +79,7 @@ RUN mkdir -p src/shared/backend/utils \
              src/shared/backend/neighborhoodIntelligence \
              src/shared/backend/refinanceRadar/engine \
              src/shared/backend/refinanceRadar/config \
+             src/shared/backend/refinanceRadar/mappers \
              src/shared/backend/refinanceRadar/types \
              src/shared/backend/services/permitAdapters \
              src/shared/backend/services/taxAssessorAdapters
@@ -233,10 +234,15 @@ COPY apps/backend/src/neighborhoodIntelligence/neighborhoodPropertyMatchService.
      apps/backend/src/neighborhoodIntelligence/types.ts \
      apps/backend/src/neighborhoodIntelligence/eventConfidence.ts \
      src/shared/backend/neighborhoodIntelligence/
-# Copy refinanceRadar files needed by ingestMortgageRates.job.ts
-COPY apps/backend/src/refinanceRadar/engine/mortgageRate.service.ts src/shared/backend/refinanceRadar/engine/
+# Copy refinanceRadar files needed by ingestion and post-ingestion evaluation.
+COPY apps/backend/src/refinanceRadar/refinanceRadar.service.ts src/shared/backend/refinanceRadar/
+COPY apps/backend/src/refinanceRadar/engine/mortgageRate.service.ts \
+     apps/backend/src/refinanceRadar/engine/refinanceCalculation.engine.ts \
+     apps/backend/src/refinanceRadar/engine/refinanceRadar.engine.ts \
+     src/shared/backend/refinanceRadar/engine/
 COPY apps/backend/src/refinanceRadar/config/refinanceRadar.config.ts src/shared/backend/refinanceRadar/config/
 COPY apps/backend/src/refinanceRadar/types/refinanceRadar.types.ts src/shared/backend/refinanceRadar/types/
+COPY apps/backend/src/refinanceRadar/mappers/refinanceRadar.mapper.ts src/shared/backend/refinanceRadar/mappers/
 # Copy gazette module files needed by gazetteGeneration.job.ts
 COPY apps/backend/src/modules/gazette/services/gazetteGenerationJobRunner.service.ts \
      apps/backend/src/modules/gazette/services/gazetteSignalCollector.service.ts \

@@ -71,6 +71,32 @@ export const MISSED_OPPORTUNITY_MIN_SAVINGS_DELTA_USD = 50;
 /** Number of recent rate snapshots to include in trend data. */
 export const RATE_TREND_LOOKBACK_SNAPSHOTS = 12;
 
+/**
+ * A missing-mortgage-data prompt is promoted onto Home only after the
+ * 30-year benchmark has fallen by at least this many percentage points
+ * across the configured trend lookback. A normal weekly wobble should not
+ * create setup work for the homeowner.
+ */
+export const DATA_REQUIRED_MIN_RATE_DECLINE_PCT = 0.25;
+
+export function shouldPromptForMissingMortgageDetails(input: {
+  missingFieldCount: number;
+  trend: 'RISING' | 'FALLING' | 'STABLE' | 'UNKNOWN';
+  currentRatePct: number | null;
+  priorRatePct: number | null;
+}): boolean {
+  if (
+    input.missingFieldCount <= 0 ||
+    input.trend !== 'FALLING' ||
+    input.currentRatePct == null ||
+    input.priorRatePct == null
+  ) {
+    return false;
+  }
+
+  return input.priorRatePct - input.currentRatePct >= DATA_REQUIRED_MIN_RATE_DECLINE_PCT;
+}
+
 /** Standard disclaimer appended to all refinance API responses. */
 export const REFINANCE_DISCLAIMER =
   'These estimates are for informational purposes only and are based on simplified ' +

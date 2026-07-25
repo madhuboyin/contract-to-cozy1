@@ -21,8 +21,14 @@ import { FEATURE_FLAGS } from '@/lib/featureFlags';
 
 export default function RefinanceRadarDashboardCard({
   propertyId,
+  homePromotion = false,
 }: {
   propertyId: string;
+  /**
+   * Home should contain only actionable radar states. Closed monitoring and
+   * generic setup prompts remain available in the property finance area.
+   */
+  homePromotion?: boolean;
 }) {
   const toolHref = `/dashboard/properties/${propertyId}/tools/mortgage-refinance-radar`;
 
@@ -42,6 +48,26 @@ export default function RefinanceRadarDashboardCard({
 
   // --- Unavailable state (no mortgage or rate data yet) ---
   if (!data || !data.available) {
+    const shouldPromptForMortgageDetails =
+      data?.available === false &&
+      data.reason === 'MISSING_MORTGAGE_DATA' &&
+      data.shouldPromptForMortgageDetails === true;
+
+    if (homePromotion && !shouldPromptForMortgageDetails) {
+      return null;
+    }
+
+    const missingLabels = data?.available === false
+      ? data.missingFields?.map((field) => ({
+          currentMortgageBalance: 'balance',
+          interestRate: 'interest rate',
+          remainingTerm: 'remaining term',
+        })[field])
+      : [];
+    const missingText = missingLabels && missingLabels.length > 0
+      ? ` Add your ${missingLabels.join(', ')} to check this home.`
+      : '';
+
     return (
       <Link href={toolHref} className="no-brand-style block">
         <MobileCard
@@ -57,7 +83,9 @@ export default function RefinanceRadarDashboardCard({
             </p>
             <p className="mb-0 mt-0.5 text-[12px] text-[hsl(var(--mobile-text-secondary))]">
               {data?.available === false && (data as { reason?: string }).reason === 'MISSING_MORTGAGE_DATA'
-                ? 'Add mortgage details to enable refinance monitoring'
+                ? shouldPromptForMortgageDetails
+                  ? `Rates have moved lower.${missingText}`
+                  : 'Add mortgage details to enable refinance monitoring'
                 : 'Mortgage monitoring not yet available'}
             </p>
           </div>
@@ -72,6 +100,9 @@ export default function RefinanceRadarDashboardCard({
 
   // --- Monitoring state (data available but no opportunity) ---
   if (!isOpen) {
+    if (homePromotion) {
+      return null;
+    }
     return (
       <Link href={toolHref} className="no-brand-style block">
         <MobileCard
