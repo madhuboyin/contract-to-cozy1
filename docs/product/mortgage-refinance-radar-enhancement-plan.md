@@ -84,6 +84,15 @@ but its balance is missing, combined LTV and equity fail closed instead of
 assuming zero. Stale or missing values link back to the existing Property or
 Financing records for correction. These signals remain planning context—not an
 approval, appraisal, or program-eligibility claim—and require no schema change.
+The objective layer is now implemented in the scenario planner. Homeowners can
+prioritize balanced savings, lower monthly payment, faster payoff, or lower
+total cost. Every run compares 15-, 20-, and 30-year terms under the same
+entered rate and cost assumptions, returns an accessible side-by-side table,
+and explains the recommended term's payment, payoff, and lifetime-cost
+tradeoffs. Balanced mode will not recommend a modeled payment increase when an
+option that lowers payment exists. The interface explicitly warns that lender
+rates and fees vary by term. Objective and comparison details use existing
+scenario metadata JSON, so no schema change or migration is required.
 
 ## Executive recommendation
 

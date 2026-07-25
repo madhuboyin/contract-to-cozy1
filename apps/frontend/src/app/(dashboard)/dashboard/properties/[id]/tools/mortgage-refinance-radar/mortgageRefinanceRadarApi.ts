@@ -8,6 +8,11 @@ import type { PropertyFinancingProfile } from '@/types';
 export type RefinanceRadarState = 'OPEN' | 'CLOSED';
 export type RefinanceConfidenceLevel = 'WEAK' | 'GOOD' | 'STRONG';
 export type RefinanceScenarioTerm = 'THIRTY_YEAR' | 'TWENTY_YEAR' | 'FIFTEEN_YEAR';
+export type RefinanceObjective =
+  | 'BALANCED'
+  | 'LOWER_PAYMENT'
+  | 'FASTER_PAYOFF'
+  | 'LOWER_TOTAL_COST';
 
 export type RateTrendSummary = {
   current30yr: number | null;
@@ -163,6 +168,22 @@ export type RefinanceScenarioResult = {
   scenarioDate: string;
   currentEstimatedPayoffDate: string;
   newEstimatedPayoffDate: string;
+  objective: RefinanceObjective;
+  recommendedTerm: RefinanceScenarioTerm;
+  recommendationExplanation: string;
+  alternatives: Array<{
+    targetTerm: RefinanceScenarioTerm;
+    targetTermMonths: number;
+    newMonthlyPayment: number;
+    monthlySavings: number;
+    breakEvenMonths: number | null;
+    lifetimeSavings: number;
+    payoffDeltaMonths: number;
+    totalInterestNewLoan: number;
+    estimatedAprPct: number;
+    isRecommended: boolean;
+    tradeoffs: string[];
+  }>;
   assumptions: ScenarioAssumptions;
   disclaimer: string;
 };
@@ -311,6 +332,7 @@ export async function runScenario(
     discountPoints?: number;
     additionalFeesAmount?: number;
     lenderCreditsAmount?: number;
+    objective?: RefinanceObjective;
     saveScenario?: boolean;
   },
 ): Promise<RefinanceScenarioResult> {

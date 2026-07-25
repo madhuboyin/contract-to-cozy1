@@ -65,6 +65,10 @@ export const runScenarioSchema = z
       .min(0, 'lenderCreditsAmount cannot be negative')
       .max(500_000, 'lenderCreditsAmount seems unrealistic')
       .optional(),
+    objective: z
+      .enum(['BALANCED', 'LOWER_PAYMENT', 'FASTER_PAYOFF', 'LOWER_TOTAL_COST'])
+      .optional()
+      .default('BALANCED'),
     saveScenario: z.boolean().optional().default(false),
   })
   .refine(

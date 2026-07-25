@@ -176,6 +176,7 @@ export class RefinanceRadarController {
         discountPoints: body.discountPoints,
         additionalFeesAmount: body.additionalFeesAmount,
         lenderCreditsAmount: body.lenderCreditsAmount,
+        objective: body.objective,
         saveScenario: body.saveScenario ?? false,
         propertyContextVersion: currentContext.contextVersion,
       });

@@ -35,3 +35,12 @@ test('scenario validation rejects excessive points and negative fees or credits'
     lenderCreditsAmount: -1,
   }).success, false);
 });
+
+test('scenario validation defaults to a balanced objective and rejects unknown objectives', () => {
+  const parsed = runScenarioSchema.parse(base);
+  assert.equal(parsed.objective, 'BALANCED');
+  assert.equal(runScenarioSchema.safeParse({
+    ...base,
+    objective: 'MAXIMUM_CASH_OUT',
+  }).success, false);
+});

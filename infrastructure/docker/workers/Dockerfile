@@ -240,6 +240,7 @@ COPY apps/backend/src/refinanceRadar/refinanceRadar.service.ts \
      apps/backend/src/refinanceRadar/refinanceAlertPreference.service.ts \
      apps/backend/src/refinanceRadar/refinanceFreshness.ts \
      apps/backend/src/refinanceRadar/refinanceEligibilityContext.ts \
+     apps/backend/src/refinanceRadar/refinanceObjectiveComparison.ts \
      src/shared/backend/refinanceRadar/
 COPY apps/backend/src/refinanceRadar/engine/mortgageRate.service.ts \
      apps/backend/src/refinanceRadar/engine/refinanceCalculation.engine.ts \

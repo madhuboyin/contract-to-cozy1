@@ -6,6 +6,10 @@
 import { RefinanceConfidenceLevel, RefinanceRadarState, RefinanceScenarioTerm } from '@prisma/client';
 import type { RefinanceFreshnessContract } from '../refinanceFreshness';
 import type { RefinanceEligibilityContext } from '../refinanceEligibilityContext';
+import type {
+  RefinanceObjective,
+  RefinanceTermAlternative,
+} from '../refinanceObjectiveComparison';
 
 // ─── Internal Domain Objects ─────────────────────────────────────────────────
 
@@ -192,6 +196,10 @@ export interface RefinanceScenarioResult {
   scenarioDate: string;
   currentEstimatedPayoffDate: string;
   newEstimatedPayoffDate: string;
+  objective: RefinanceObjective;
+  recommendedTerm: RefinanceScenarioTerm;
+  recommendationExplanation: string;
+  alternatives: RefinanceTermAlternative[];
   assumptions: ScenarioAssumptions;
   disclaimer: string;
 }

@@ -52,6 +52,10 @@ import {
   buildRefinanceEligibilityContext,
   type RefinanceEligibilityContext,
 } from './refinanceEligibilityContext';
+import {
+  compareRefinanceTerms,
+  type RefinanceObjective,
+} from './refinanceObjectiveComparison';
 
 // ─── Phase-3: Loan product spread modeling ───────────────────────────────────
 // These spreads are historical median differentials off the 30yr conventional
@@ -674,6 +678,7 @@ export class RefinanceRadarService {
       discountPoints?: number;
       additionalFeesAmount?: number;
       lenderCreditsAmount?: number;
+      objective: RefinanceObjective;
       saveScenario: boolean;
       propertyContextVersion: string;
     },
@@ -716,6 +721,19 @@ export class RefinanceRadarService {
       additionalFeesUsd: input.additionalFeesAmount,
       lenderCreditsUsd: input.lenderCreditsAmount,
     });
+    const termComparison = compareRefinanceTerms({
+      loanBalance: mortgageContext.loanBalance,
+      currentRatePct: mortgageContext.currentRatePct,
+      remainingTermMonths: mortgageContext.remainingTermMonths,
+      currentMonthlyPayment: mortgageContext.currentMonthlyPayment,
+      targetRatePct: input.targetRate,
+      closingCostUsd: input.closingCostAmount,
+      closingCostPct: input.closingCostPercent,
+      discountPoints: input.discountPoints,
+      additionalFeesUsd: input.additionalFeesAmount,
+      lenderCreditsUsd: input.lenderCreditsAmount,
+      objective: input.objective,
+    });
     const scenarioDate = new Date();
     const estimatedPayoffDate = (months: number) => {
       const value = new Date(scenarioDate);
@@ -744,6 +762,14 @@ export class RefinanceRadarService {
             costBreakdown: { ...calcResult.costBreakdown },
             estimatedAprPct: calcResult.estimatedAprPct,
             cashToCloseUsd: calcResult.cashToCloseUsd,
+            objective: termComparison.objective,
+            recommendedTerm: termComparison.recommendedTerm,
+            recommendationExplanation:
+              termComparison.recommendationExplanation,
+            alternatives: termComparison.alternatives.map((alternative) => ({
+              ...alternative,
+              tradeoffs: [...alternative.tradeoffs],
+            })),
             computedAt: new Date().toISOString(),
             propertyContextVersion: input.propertyContextVersion,
           },
@@ -774,6 +800,10 @@ export class RefinanceRadarService {
         mortgageContext.remainingTermMonths,
       ),
       newEstimatedPayoffDate: estimatedPayoffDate(targetTermMonths),
+      objective: termComparison.objective,
+      recommendedTerm: termComparison.recommendedTerm,
+      recommendationExplanation: termComparison.recommendationExplanation,
+      alternatives: termComparison.alternatives,
       assumptions: {
         loanBalance: mortgageContext.loanBalance,
         currentRatePct: mortgageContext.currentRatePct,

@@ -38,6 +38,7 @@ import {
   type RateHistoryDTO,
   type RefinanceScenarioResult,
   type RefinanceScenarioTerm,
+  type RefinanceObjective,
 } from './mortgageRefinanceRadarApi';
 import type { PropertyFinancingProfile } from '@/types';
 import { Button } from '@/components/ui/button';
@@ -88,6 +89,32 @@ const TERM_LABELS: Record<RefinanceScenarioTerm, string> = {
 };
 
 const TERM_OPTIONS: RefinanceScenarioTerm[] = ['THIRTY_YEAR', 'TWENTY_YEAR', 'FIFTEEN_YEAR'];
+const OBJECTIVE_OPTIONS: Array<{
+  value: RefinanceObjective;
+  label: string;
+  description: string;
+}> = [
+  {
+    value: 'BALANCED',
+    label: 'Balanced',
+    description: 'Avoid a higher payment, then favor lifetime savings.',
+  },
+  {
+    value: 'LOWER_PAYMENT',
+    label: 'Lower payment',
+    description: 'Prioritize the largest modeled monthly reduction.',
+  },
+  {
+    value: 'FASTER_PAYOFF',
+    label: 'Faster payoff',
+    description: 'Prioritize the shortest modeled repayment term.',
+  },
+  {
+    value: 'LOWER_TOTAL_COST',
+    label: 'Lower total cost',
+    description: 'Prioritize the greatest modeled lifetime savings.',
+  },
+];
 
 // ─── Badge Components ─────────────────────────────────────────────────────────
 
@@ -836,11 +863,14 @@ function ScenarioCalculator({
 }) {
   const [targetRate, setTargetRate] = useState('');
   const [targetTerm, setTargetTerm] = useState<RefinanceScenarioTerm>('THIRTY_YEAR');
+  const [objective, setObjective] = useState<RefinanceObjective>('BALANCED');
   const [closingCost, setClosingCost] = useState('');
   const [discountPoints, setDiscountPoints] = useState('');
   const [additionalFees, setAdditionalFees] = useState('');
   const [lenderCredits, setLenderCredits] = useState('');
   const [showCostDetails, setShowCostDetails] = useState(false);
+  const [saveComparison, setSaveComparison] = useState(false);
+  const [lastRunSaved, setLastRunSaved] = useState(false);
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<RefinanceScenarioResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -881,8 +911,11 @@ function ScenarioCalculator({
         discountPoints: discountPointsValue,
         additionalFeesAmount,
         lenderCreditsAmount,
+        objective,
+        saveScenario: saveComparison,
       });
       setResult(scenario);
+      setLastRunSaved(saveComparison);
       setShowResult(true);
       track('action_completed', { tool: 'mortgage-refinance-radar', actionType: 'run_scenario', propertyId });
     } catch (e: unknown) {
@@ -907,6 +940,34 @@ function ScenarioCalculator({
 
         {/* Input rows */}
         <div className="space-y-3">
+          <fieldset>
+            <legend className="mb-1.5 text-xs font-medium text-slate-700 dark:text-slate-300">
+              What matters most?
+            </legend>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {OBJECTIVE_OPTIONS.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => setObjective(option.value)}
+                  aria-pressed={objective === option.value}
+                  className={`rounded-xl border p-3 text-left transition ${
+                    objective === option.value
+                      ? 'border-blue-400 bg-blue-50/80 dark:border-blue-600 dark:bg-blue-950/35'
+                      : 'border-slate-200/80 bg-white/70 hover:border-slate-300 dark:border-slate-700 dark:bg-slate-900/50'
+                  }`}
+                >
+                  <span className="block text-xs font-semibold text-slate-900 dark:text-slate-100">
+                    {option.label}
+                  </span>
+                  <span className="mt-0.5 block text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">
+                    {option.description}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </fieldset>
+
           {/* Target rate */}
           <div>
             <label className="mb-1 block text-xs font-medium text-slate-700 dark:text-slate-300">
@@ -934,6 +995,7 @@ function ScenarioCalculator({
               {TERM_OPTIONS.map((t) => (
                 <button
                   key={t}
+                  type="button"
                   onClick={() => setTargetTerm(t)}
                   className={`inline-flex min-h-[36px] items-center rounded-full border px-3 text-xs font-medium transition-all ${
                     targetTerm === t
@@ -1039,6 +1101,23 @@ function ScenarioCalculator({
           <p className="mt-3 text-xs font-medium text-red-600 dark:text-red-400">{error}</p>
         )}
 
+        <label className="mt-4 flex cursor-pointer items-start gap-2.5 rounded-xl border border-slate-200/70 bg-white/60 p-3 dark:border-slate-700/70 dark:bg-slate-900/45">
+          <input
+            type="checkbox"
+            checked={saveComparison}
+            onChange={(event) => setSaveComparison(event.target.checked)}
+            className="mt-0.5 h-4 w-4 rounded border-slate-300 text-blue-600"
+          />
+          <span>
+            <span className="block text-xs font-semibold text-slate-800 dark:text-slate-200">
+              Save this comparison
+            </span>
+            <span className="mt-0.5 block text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">
+              Keep the selected scenario, objective, assumptions, and term comparison for later review.
+            </span>
+          </span>
+        </label>
+
         {/* Run button */}
         <button
           onClick={handleRun}
@@ -1065,6 +1144,14 @@ function ScenarioCalculator({
               {showResult ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
               Scenario Result — {TERM_LABELS[result.targetTerm]} @ {pct(result.targetRatePct, 3)}
             </button>
+            {lastRunSaved && (
+              <span
+                role="status"
+                className="ml-2 inline-flex rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300"
+              >
+                Comparison saved
+              </span>
+            )}
 
             {showResult && (
               <InnerCard className="p-4">
@@ -1110,6 +1197,67 @@ function ScenarioCalculator({
                     label="Interest Saved"
                     value={usd(result.totalInterestRemainingCurrent - result.totalInterestNewLoan)}
                   />
+                </div>
+
+                <div className="mt-4 rounded-xl border border-blue-200/80 bg-blue-50/70 p-3 dark:border-blue-900/70 dark:bg-blue-950/30">
+                  <p className="text-xs font-semibold text-blue-900 dark:text-blue-200">
+                    Objective-aware comparison: {TERM_LABELS[result.recommendedTerm]}
+                  </p>
+                  <p className="mt-1 text-xs leading-relaxed text-blue-800 dark:text-blue-300">
+                    {result.recommendationExplanation}
+                  </p>
+                  <div className="mt-3 overflow-x-auto">
+                    <table
+                      className="min-w-[680px] w-full text-left text-xs"
+                      aria-label="Refinance term comparison"
+                    >
+                      <thead className="text-blue-800/80 dark:text-blue-300/80">
+                        <tr>
+                          <th className="pb-2 font-medium">Term</th>
+                          <th className="pb-2 font-medium">Payment</th>
+                          <th className="pb-2 font-medium">Monthly change</th>
+                          <th className="pb-2 font-medium">Break-even</th>
+                          <th className="pb-2 font-medium">Lifetime savings</th>
+                          <th className="pb-2 font-medium">Payoff change</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-blue-200/60 text-slate-700 dark:divide-blue-900/50 dark:text-slate-300">
+                        {result.alternatives.map((alternative) => (
+                          <tr key={alternative.targetTerm}>
+                            <th className="py-2 pr-3 font-semibold">
+                              {TERM_LABELS[alternative.targetTerm]}
+                              {alternative.isRecommended && (
+                                <span className="ml-1.5 rounded-full bg-blue-600 px-1.5 py-0.5 text-[10px] text-white">
+                                  Best fit
+                                </span>
+                              )}
+                            </th>
+                            <td className="py-2 pr-3">{usd(alternative.newMonthlyPayment)}</td>
+                            <td className="py-2 pr-3">
+                              {alternative.monthlySavings >= 0 ? '−' : '+'}
+                              {usd(Math.abs(alternative.monthlySavings))}
+                            </td>
+                            <td className="py-2 pr-3">{months(alternative.breakEvenMonths)}</td>
+                            <td className="py-2 pr-3">{usd(alternative.lifetimeSavings)}</td>
+                            <td className="py-2">
+                              {alternative.payoffDeltaMonths === 0
+                                ? 'Same'
+                                : alternative.payoffDeltaMonths < 0
+                                  ? `${months(Math.abs(alternative.payoffDeltaMonths))} sooner`
+                                  : `${months(alternative.payoffDeltaMonths)} later`}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <ul className="mt-3 space-y-1 text-[11px] leading-relaxed text-blue-800 dark:text-blue-300">
+                    {result.alternatives
+                      .find((alternative) => alternative.isRecommended)
+                      ?.tradeoffs.map((tradeoff) => (
+                        <li key={tradeoff}>• {tradeoff}</li>
+                      ))}
+                  </ul>
                 </div>
 
                 <div className="mt-4 rounded-xl border border-slate-200/70 bg-white/60 p-3 text-xs dark:border-slate-700/70 dark:bg-slate-950/30">
